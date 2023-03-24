@@ -22,10 +22,9 @@ use futures::{task::Poll, Future, TryFutureExt as _};
 use log::{debug, info};
 use parking_lot::Mutex;
 use sc_client_api::{Backend, CallExecutor};
-use sc_network::{config::NetworkConfiguration, multiaddr};
-use sc_network_common::{
-	config::{MultiaddrWithPeerId, TransportConfig},
-	service::{NetworkBlock, NetworkPeers, NetworkStateInfo},
+use sc_network::{
+	config::{MultiaddrWithPeerId, NetworkConfiguration, TransportConfig},
+	multiaddr, NetworkBlock, NetworkPeers, NetworkStateInfo,
 };
 use sc_network_sync::SyncingService;
 use sc_service::{
@@ -243,7 +242,6 @@ fn node_config<
 		tokio_handle,
 		transaction_pool: Default::default(),
 		network: network_config,
-		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::Path { path: root.join("key"), password: None },
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
 		trie_cache_maximum_size: Some(16 * 1024 * 1024),

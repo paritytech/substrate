@@ -83,21 +83,20 @@ cargo-check-benches:
     - .collect-artifacts
     - .pipeline-stopper-artifacts
   before_script:
+    - !reference [.timestamp, before_script]
     # perform rusty-cachier operations before any further modifications to the git repo to make cargo feel cheated not so much
     - !reference [.rust-info-script, script]
     - !reference [.job-switcher, before_script]
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
     # merges in the master branch on PRs
-    - |
-      export BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${$CI_COMMIT_REF_NAME} | jq .base.ref)
-    - if [ $CI_COMMIT_REF_NAME != "master" ]; then
-      git fetch origin +${BASE}:${BASE};
-      git fetch origin +$CI_COMMIT_REF_NAME:$CI_COMMIT_REF_NAME;
-      git checkout ${BASE};
+    - 'if [ $CI_COMMIT_REF_NAME != "master" ]; then
+      BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq -r .base.ref);
+      printf "Merging base branch %s\n" "${BASE:=master}";
       git config user.email "ci@gitlab.parity.io";
-      git merge $CI_COMMIT_REF_NAME --verbose --no-edit;
-      fi
+      git fetch origin "refs/heads/${BASE}";
+      git merge --verbose --no-edit FETCH_HEAD;
+      fi'
   parallel: 2
   script:
     - rusty-cachier snapshot create
@@ -145,7 +144,8 @@ node-bench-regression-guard:
       artifacts: true
   variables:
     CI_IMAGE: "paritytech/node-bench-regression-guard:latest"
-  before_script: [""]
+  before_script:
+    - !reference [.timestamp, before_script]
   script:
     - echo "------- IMPORTANT -------"
     - echo "node-bench-regression-guard depends on the results of a cargo-check-benches job"
@@ -419,6 +419,7 @@ cargo-check-each-crate-macos:
     - .collect-artifacts
     - .pipeline-stopper-artifacts
   before_script:
+    # skip timestamp script, the osx bash doesn't support printf %()T
     - !reference [.job-switcher, before_script]
     - !reference [.rust-info-script, script]
     - !reference [.pipeline-stopper-vars, script]

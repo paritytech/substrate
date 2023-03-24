@@ -606,9 +606,10 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum TokenError {
 	/// Funds are unavailable.
-	NoFunds,
-	/// Account that must exist would die.
-	WouldDie,
+	FundsUnavailable,
+	/// Some part of the balance gives the only provider reference to the account and thus cannot
+	/// be (re)moved.
+	OnlyProvider,
 	/// Account cannot exist with the funds that would be given.
 	BelowMinimum,
 	/// Account cannot be created.
@@ -619,18 +620,25 @@ pub enum TokenError {
 	Frozen,
 	/// Operation is not supported by the asset.
 	Unsupported,
+	/// Account cannot be created for a held balance.
+	CannotCreateHold,
+	/// Withdrawal would cause unwanted loss of account.
+	NotExpendable,
 }
 
 impl From<TokenError> for &'static str {
 	fn from(e: TokenError) -> &'static str {
 		match e {
-			TokenError::NoFunds => "Funds are unavailable",
-			TokenError::WouldDie => "Account that must exist would die",
+			TokenError::FundsUnavailable => "Funds are unavailable",
+			TokenError::OnlyProvider => "Account that must exist would die",
 			TokenError::BelowMinimum => "Account cannot exist with the funds that would be given",
 			TokenError::CannotCreate => "Account cannot be created",
 			TokenError::UnknownAsset => "The asset in question is unknown",
 			TokenError::Frozen => "Funds exist but are frozen",
 			TokenError::Unsupported => "Operation is not supported by the asset",
+			TokenError::CannotCreateHold =>
+				"Account cannot be created for recording amount on hold",
+			TokenError::NotExpendable => "Account that is desired to remain would die",
 		}
 	}
 }
@@ -994,8 +1002,8 @@ mod tests {
 			Module(ModuleError { index: 2, error: [1, 0, 0, 0], message: None }),
 			ConsumerRemaining,
 			NoProviders,
-			Token(TokenError::NoFunds),
-			Token(TokenError::WouldDie),
+			Token(TokenError::FundsUnavailable),
+			Token(TokenError::OnlyProvider),
 			Token(TokenError::BelowMinimum),
 			Token(TokenError::CannotCreate),
 			Token(TokenError::UnknownAsset),

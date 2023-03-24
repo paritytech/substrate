@@ -23,24 +23,22 @@ use sp_core::crypto::{CryptoType, CryptoTypeId, IsWrappedBy, KeyTypeId, Public};
 use sp_std::{fmt::Debug, vec::Vec};
 
 /// An application-specific key.
-pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
-	/// The corresponding type as a generic crypto type.
-	type UntypedGeneric: IsWrappedBy<Self>;
+pub trait AppCrypto: 'static + Send + Sync + Sized + CryptoType + Clone {
+	/// Identifier for application-specific key type.
+	const ID: KeyTypeId;
+
+	/// Identifier of the crypto type of this application-specific key type.
+	const CRYPTO_ID: CryptoTypeId;
 
 	/// The corresponding public key type in this application scheme.
 	type Public: AppPublic;
 
-	/// The corresponding key pair type in this application scheme.
-	#[cfg(feature = "full_crypto")]
-	type Pair: AppPair;
-
 	/// The corresponding signature type in this application scheme.
 	type Signature: AppSignature;
 
-	/// An identifier for this application-specific key type.
-	const ID: KeyTypeId;
-	/// The identifier of the crypto type of this application-specific key type.
-	const CRYPTO_ID: CryptoTypeId;
+	/// The corresponding key pair type in this application scheme.
+	#[cfg(feature = "full_crypto")]
+	type Pair: AppPair;
 }
 
 /// Type which implements Hash in std, not when no-std (std variant).
@@ -63,7 +61,7 @@ impl<T: sp_std::hash::Hash> MaybeDebugHash for T {}
 
 /// A application's public key.
 pub trait AppPublic:
-	AppKey + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + codec::Codec
+	AppCrypto + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + codec::Codec
 {
 	/// The wrapped type which is just a plain instance of `Public`.
 	type Generic: IsWrappedBy<Self>
@@ -79,14 +77,15 @@ pub trait AppPublic:
 
 /// A application's key pair.
 #[cfg(feature = "full_crypto")]
-pub trait AppPair: AppKey + Pair<Public = <Self as AppKey>::Public> {
+pub trait AppPair: AppCrypto + Pair<Public = <Self as AppCrypto>::Public> {
 	/// The wrapped type which is just a plain instance of `Pair`.
 	type Generic: IsWrappedBy<Self>
-		+ Pair<Public = <<Self as AppKey>::Public as AppPublic>::Generic>;
+		+ Pair<Public = <<Self as AppCrypto>::Public as AppPublic>::Generic>
+		+ Pair<Signature = <<Self as AppCrypto>::Signature as AppSignature>::Generic>;
 }
 
 /// A application's signature.
-pub trait AppSignature: AppKey + Eq + PartialEq + Debug + MaybeHash {
+pub trait AppSignature: AppCrypto + Eq + PartialEq + Debug + MaybeHash {
 	/// The wrapped type which is just a plain instance of `Signature`.
 	type Generic: IsWrappedBy<Self> + Eq + PartialEq + Debug + MaybeHash;
 }

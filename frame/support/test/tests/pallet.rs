@@ -25,8 +25,8 @@ use frame_support::{
 	pallet_prelude::{StorageInfoTrait, ValueQuery},
 	storage::unhashed,
 	traits::{
-		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
-		OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
+		ConstU32, GetCallIndex, GetCallName, GetStorageVersion, OnFinalize, OnGenesis,
+		OnInitialize, OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
 	},
 	weights::{RuntimeDbWeight, Weight},
 };
@@ -36,6 +36,9 @@ use sp_io::{
 	TestExternalities,
 };
 use sp_runtime::{DispatchError, ModuleError};
+
+/// Latest stable metadata version used for testing.
+const LATEST_METADATA_VERSION: u32 = 14;
 
 pub struct SomeType1;
 impl From<SomeType1> for u64 {
@@ -101,6 +104,10 @@ impl SomeAssociation2 for u64 {
 }
 
 #[frame_support::pallet]
+/// Pallet documentation
+// Comments should not be included in the pallet documentation
+#[pallet_doc("../../README.md")]
+#[doc = include_str!("../../README.md")]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
@@ -158,7 +165,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -223,6 +229,12 @@ pub mod pallet {
 			}
 
 			Ok(().into())
+		}
+
+		#[pallet::call_index(4)]
+		#[pallet::weight(1)]
+		pub fn foo_index_out_of_order(_origin: OriginFor<T>) -> DispatchResult {
+			Ok(())
 		}
 
 		// Test for DispatchResult return type
@@ -496,7 +508,6 @@ pub mod pallet2 {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -723,8 +734,25 @@ fn call_expand() {
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
 		pallet::Call::<Runtime>::get_call_names(),
-		&["foo", "foo_storage_layer", "foo_no_post_info", "check_for_dispatch_context"],
+		&[
+			"foo",
+			"foo_storage_layer",
+			"foo_index_out_of_order",
+			"foo_no_post_info",
+			"check_for_dispatch_context"
+		],
 	);
+
+	assert_eq!(call_foo.get_call_index(), 0u8);
+	assert_eq!(pallet::Call::<Runtime>::get_call_indices(), &[0u8, 1u8, 4u8, 2u8, 3u8])
+}
+
+#[test]
+fn call_expand_index() {
+	let call_foo = pallet::Call::<Runtime>::foo_index_out_of_order {};
+
+	assert_eq!(call_foo.get_call_index(), 4u8);
+	assert_eq!(pallet::Call::<Runtime>::get_call_indices(), &[0u8, 1u8, 4u8, 2u8, 3u8])
 }
 
 #[test]
@@ -944,15 +972,6 @@ fn validate_unsigned_expand() {
 
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::External, &call).unwrap();
 	assert_eq!(validity, ValidTransaction::default());
-}
-
-#[test]
-fn trait_store_expand() {
-	TestExternalities::default().execute_with(|| {
-		<pallet::Pallet<Runtime> as pallet::Store>::Value::get();
-		<pallet::Pallet<Runtime> as pallet::Store>::Map::get(1);
-		<pallet::Pallet<Runtime> as pallet::Store>::DoubleMap::get(1, 2);
-	})
 }
 
 #[test]
@@ -1598,6 +1617,51 @@ fn metadata() {
 	};
 
 	pretty_assertions::assert_eq!(actual_metadata.pallets, expected_metadata.pallets);
+}
+
+#[test]
+fn metadata_at_version() {
+	use frame_support::metadata::*;
+	use sp_core::Decode;
+
+	let metadata = Runtime::metadata();
+	let at_metadata = match Runtime::metadata_at_version(LATEST_METADATA_VERSION) {
+		Some(opaque) => {
+			let bytes = &*opaque;
+			let metadata: RuntimeMetadataPrefixed = Decode::decode(&mut &bytes[..]).unwrap();
+			metadata
+		},
+		_ => panic!("metadata has been bumped, test needs to be updated"),
+	};
+
+	assert_eq!(metadata, at_metadata);
+}
+
+#[test]
+fn metadata_versions() {
+	assert_eq!(vec![LATEST_METADATA_VERSION], Runtime::metadata_versions());
+}
+
+#[test]
+fn metadata_ir_pallet_runtime_docs() {
+	let ir = Runtime::metadata_ir();
+	let pallet = ir
+		.pallets
+		.iter()
+		.find(|pallet| pallet.name == "Example")
+		.expect("Pallet should be present");
+
+	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
+	let expected = vec![" Pallet documentation", readme, readme];
+	assert_eq!(pallet.docs, expected);
+}
+
+#[test]
+fn test_pallet_runtime_docs() {
+	let docs = crate::pallet::Pallet::<Runtime>::pallet_documentation_metadata();
+	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
+	let expected = vec![" Pallet documentation", readme, readme];
+	assert_eq!(docs, expected);
 }
 
 #[test]

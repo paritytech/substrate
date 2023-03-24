@@ -74,12 +74,12 @@ impl std::fmt::Display for WasmExecutionMethod {
 /// into an execution method which can be used internally.
 pub fn execution_method_from_cli(
 	execution_method: WasmExecutionMethod,
-	_instantiation_strategy: WasmtimeInstantiationStrategy,
+	instantiation_strategy: WasmtimeInstantiationStrategy,
 ) -> sc_service::config::WasmExecutionMethod {
 	match execution_method {
 		WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
 		WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled {
-			instantiation_strategy: match _instantiation_strategy {
+			instantiation_strategy: match instantiation_strategy {
 				WasmtimeInstantiationStrategy::PoolingCopyOnWrite =>
 					sc_service::config::WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
 				WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite =>
@@ -251,19 +251,15 @@ pub enum SyncMode {
 	Warp,
 }
 
-impl Into<sc_network_common::config::SyncMode> for SyncMode {
-	fn into(self) -> sc_network_common::config::SyncMode {
+impl Into<sc_network::config::SyncMode> for SyncMode {
+	fn into(self) -> sc_network::config::SyncMode {
 		match self {
-			SyncMode::Full => sc_network_common::config::SyncMode::Full,
-			SyncMode::Fast => sc_network_common::config::SyncMode::Fast {
-				skip_proofs: false,
-				storage_chain_mode: false,
-			},
-			SyncMode::FastUnsafe => sc_network_common::config::SyncMode::Fast {
-				skip_proofs: true,
-				storage_chain_mode: false,
-			},
-			SyncMode::Warp => sc_network_common::config::SyncMode::Warp,
+			SyncMode::Full => sc_network::config::SyncMode::Full,
+			SyncMode::Fast =>
+				sc_network::config::SyncMode::Fast { skip_proofs: false, storage_chain_mode: false },
+			SyncMode::FastUnsafe =>
+				sc_network::config::SyncMode::Fast { skip_proofs: true, storage_chain_mode: false },
+			SyncMode::Warp => sc_network::config::SyncMode::Warp,
 		}
 	}
 }

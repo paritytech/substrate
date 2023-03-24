@@ -18,13 +18,15 @@
 
 use futures::{channel::oneshot, StreamExt};
 use libp2p::PeerId;
-use sc_network_common::{
-	protocol::ProtocolName,
+
+use sc_network::{
 	request_responses::{IfDisconnected, RequestFailure},
-	service::{NetworkNotification, NetworkPeers, NetworkRequest},
+	types::ProtocolName,
+	NetworkNotification, NetworkPeers, NetworkRequest,
 };
 use sc_peerset::ReputationChange;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+
 use std::sync::Arc;
 
 /// Network-related services required by `sc-network-sync`
