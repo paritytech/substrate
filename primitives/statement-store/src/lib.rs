@@ -38,6 +38,8 @@ pub type Hash = [u8; 32];
 pub type BlockHash = [u8; 32];
 /// Account id
 pub type AccountId = [u8; 32];
+/// Statement channel.
+pub type Channel = [u8; 32];
 
 #[cfg(feature = "std")]
 pub use store_api::{
@@ -122,16 +124,20 @@ pub enum Field {
 	AuthenticityProof(Proof) = 0,
 	/// An identifier for the key that `Data` field may be decrypted with.
 	DecryptionKey(DecryptionKey) = 1,
+	/// Priority when competing with other messages from the same sender.
+	Priority(u32) = 2,
+	/// Account channel to use. Only one message per `(account, channel)` pair is allowed.
+	Channel(Channel) = 3,
 	/// First statement topic.
-	Topic1(Topic) = 2,
+	Topic1(Topic) = 4,
 	/// Second statement topic.
-	Topic2(Topic) = 3,
+	Topic2(Topic) = 5,
 	/// Third statement topic.
-	Topic3(Topic) = 4,
+	Topic3(Topic) = 6,
 	/// Fourth statement topic.
-	Topic4(Topic) = 5,
+	Topic4(Topic) = 7,
 	/// Additional data.
-	Data(Vec<u8>) = 6,
+	Data(Vec<u8>) = 8,
 }
 
 #[derive(TypeInfo, sp_core::RuntimeDebug, PassByCodec, Clone, PartialEq, Eq, Default)]
@@ -139,6 +145,8 @@ pub enum Field {
 pub struct Statement {
 	proof: Option<Proof>,
 	decryption_key: Option<DecryptionKey>,
+	channel: Option<Channel>,
+	priority: Option<u32>,
 	num_topics: u8,
 	topics: [Topic; 4],
 	data: Option<Vec<u8>>,
@@ -155,6 +163,8 @@ impl Decode for Statement {
 			match field {
 				Field::AuthenticityProof(p) => statement.set_proof(p),
 				Field::DecryptionKey(key) => statement.set_decryption_key(key),
+				Field::Priority(p) => statement.set_priority(p),
+				Field::Channel(c) => statement.set_channel(c),
 				Field::Topic1(t) => statement.set_topic(0, t),
 				Field::Topic2(t) => statement.set_topic(1, t),
 				Field::Topic3(t) => statement.set_topic(2, t),
@@ -354,6 +364,16 @@ impl Statement {
 		self.proof = Some(proof)
 	}
 
+	/// Set statement priority.
+	pub fn set_priority(&mut self, priority: u32) {
+		self.priority = Some(priority)
+	}
+
+	/// Set statement channel.
+	pub fn set_channel(&mut self, channel: Channel) {
+		self.channel = Some(channel)
+	}
+
 	/// Set topic by index.
 	pub fn set_topic(&mut self, index: usize, topic: Topic) {
 		if index <= 4 {
@@ -377,6 +397,8 @@ impl Statement {
 		// will be a prefix of vector length.
 		let num_fields = if with_proof && self.proof.is_some() { 1 } else { 0 } +
 			if self.decryption_key.is_some() { 1 } else { 0 } +
+			if self.priority.is_some() { 1 } else { 0 } +
+			if self.channel.is_some() { 1 } else { 0 } +
 			if self.data.is_some() { 1 } else { 0 } +
 			self.num_topics as u32;
 
@@ -394,12 +416,20 @@ impl Statement {
 			1u8.encode_to(&mut output);
 			decryption_key.encode_to(&mut output);
 		}
+		if let Some(priority) = &self.priority {
+			2u8.encode_to(&mut output);
+			priority.encode_to(&mut output);
+		}
+		if let Some(channel) = &self.channel {
+			3u8.encode_to(&mut output);
+			channel.encode_to(&mut output);
+		}
 		for t in 0..self.num_topics {
-			(2u8 + t).encode_to(&mut output);
+			(4u8 + t).encode_to(&mut output);
 			self.topics[t as usize].encode_to(&mut output);
 		}
 		if let Some(data) = &self.data {
-			6u8.encode_to(&mut output);
+			8u8.encode_to(&mut output);
 			data.encode_to(&mut output);
 		}
 		output
@@ -422,9 +452,13 @@ mod test {
 		let topic1 = [0x01; 32];
 		let topic2 = [0x02; 32];
 		let data = vec![55, 99];
+		let priority = 999;
+		let channel = [0xcc; 32];
 
 		statement.set_proof(proof.clone());
 		statement.set_decryption_key(decryption_key.clone());
+		statement.set_priority(priority);
+		statement.set_channel(channel.clone());
 		statement.set_topic(0, topic1.clone());
 		statement.set_topic(1, topic2.clone());
 		statement.set_plain_data(data.clone());
@@ -432,6 +466,8 @@ mod test {
 		let fields = vec![
 			Field::AuthenticityProof(proof.clone()),
 			Field::DecryptionKey(decryption_key.clone()),
+			Field::Priority(priority),
+			Field::Channel(channel),
 			Field::Topic1(topic1.clone()),
 			Field::Topic2(topic2.clone()),
 			Field::Data(data.clone()),

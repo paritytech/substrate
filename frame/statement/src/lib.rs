@@ -114,7 +114,6 @@ where
 		log::debug!(target: LOG_TARGET, "Validating statement {:?}", statement);
 		let account: T::AccountId = match statement.proof() {
 			Some(Proof::OnChain { who, block_hash, event_index }) => {
-				// block_hash and event_index should be checked by the host
 				if frame_system::Pallet::<T>::parent_hash().as_ref() != block_hash.as_slice() {
 					log::debug!(target: LOG_TARGET, "Bad block hash.");
 					return Err(InvalidStatement::BadProof)

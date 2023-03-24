@@ -46,9 +46,9 @@ const CURRENT_VERSION: u32 = 1;
 
 const LOG_TARGET: &str = "statement-store";
 
-const EXPIRE_AFTER: u64 = 24 * 60 * 60; //24h
 const PURGE_AFTER: u64 = 2 * 24 * 60 * 60; //48h
 const MAX_LIVE_STATEMENTS: usize = 8192;
+const MAX_TOTAL_SIZE: usize = 2 * 1024 * 1024 * 1024;
 
 /// Suggested maintenance period. A good value to call `Store::maintain` with.
 #[allow(dead_code)]
@@ -57,15 +57,15 @@ pub const MAINTENANCE_PERIOD: std::time::Duration = std::time::Duration::from_se
 mod col {
 	pub const META: u8 = 0;
 	pub const STATEMENTS: u8 = 1;
+	pub const EXPIRED: u8 = 2;
 
-	pub const COUNT: u8 = 2;
+	pub const COUNT: u8 = 3;
 }
 
 #[derive(PartialEq, Eq)]
 struct EvictionPriority {
 	hash: Hash,
 	priority: u64,
-	timestamp: u64,
 }
 
 impl PartialOrd for EvictionPriority {
@@ -73,7 +73,6 @@ impl PartialOrd for EvictionPriority {
 		Some(
 			self.priority
 				.cmp(&other.priority)
-				.then_with(|| self.timestamp.cmp(&other.timestamp))
 				.reverse(),
 		)
 	}
@@ -83,7 +82,6 @@ impl Ord for EvictionPriority {
 	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
 		self.priority
 			.cmp(&other.priority)
-			.then_with(|| self.timestamp.cmp(&other.timestamp))
 			.reverse()
 	}
 }
@@ -95,7 +93,7 @@ struct Index {
 	all_topics: HashMap<Hash, ([Option<Topic>; 4], Option<DecryptionKey>)>,
 	by_priority: BinaryHeap<EvictionPriority>,
 	entries: HashMap<Hash, StatementMeta>,
-	expired: HashMap<Hash, StatementMeta>,
+	expired: HashMap<Hash, u64>, // Value is expiration timestamp.
 	max_entries: usize,
 }
 
@@ -149,7 +147,6 @@ pub struct Store {
 #[derive(Encode, Decode, Clone)]
 struct StatementMeta {
 	priority: u64,
-	timestamp: u64,
 }
 
 #[derive(Encode, Decode)]
@@ -161,7 +158,7 @@ struct StatementWithMeta {
 enum IndexQuery {
 	Unknown,
 	Exists(u64),
-	Expired(u64),
+	Expired,
 }
 
 impl Index {
@@ -186,7 +183,6 @@ impl Index {
 			self.by_priority.push(EvictionPriority {
 				hash,
 				priority: meta.priority,
-				timestamp: meta.timestamp,
 			});
 		}
 	}
@@ -195,14 +191,14 @@ impl Index {
 		if let Some(meta) = self.entries.get(hash) {
 			return IndexQuery::Exists(meta.priority)
 		}
-		if let Some(meta) = self.expired.get(hash) {
-			return IndexQuery::Expired(meta.priority)
+		if let Some(_) = self.expired.get(hash) {
+			return IndexQuery::Expired
 		}
 		IndexQuery::Unknown
 	}
 
-	fn insert_expired(&mut self, hash: Hash, meta: StatementMeta) {
-		self.expired.insert(hash, meta);
+	fn insert_expired(&mut self, hash: Hash, timestamp: u64) {
+		self.expired.insert(hash, timestamp);
 	}
 
 	fn is_expired(&self, hash: &Hash) -> bool {
@@ -261,61 +257,54 @@ impl Index {
 		Ok(())
 	}
 
-	fn maintain(&mut self, current_time: u64) -> Vec<(parity_db::ColId, Vec<u8>, Option<Vec<u8>>)> {
+	fn maintain(&mut self, current_time: u64) -> Vec<Hash> {
 		// Purge previously expired messages.
 		let mut purged = Vec::new();
-		self.expired.retain(|hash, meta| {
-			if meta.timestamp + PURGE_AFTER <= current_time {
-				purged.push((col::STATEMENTS, hash.to_vec(), None));
+		self.expired.retain(|hash, timestamp| {
+			if *timestamp + PURGE_AFTER <= current_time {
+				purged.push(hash.clone());
 				log::trace!(target: LOG_TARGET, "Purged statement {:?}", HexDisplay::from(hash));
 				false
 			} else {
 				true
 			}
 		});
+		purged
+	}
 
-		// Expire messages.
-		let mut num_expired = 0;
-		self.entries.retain(|hash, meta| {
-			if meta.timestamp + EXPIRE_AFTER <= current_time {
-				if let Some((topics, key)) = self.all_topics.remove(hash) {
-					for t in topics {
-						if let Some(t) = t {
-							if let Some(set) = self.by_topic.get_mut(&t) {
-								set.remove(hash);
-							}
-						}
-					}
-					if let Some(k) = key {
-						if let Some(set) = self.by_dec_key.get_mut(&k) {
+	fn make_expired(&mut self, hash: &Hash, current_time: u64) -> bool {
+		if let Some(_) = self.entries.remove(hash) {
+			if let Some((topics, key)) = self.all_topics.remove(hash) {
+				for t in topics {
+					if let Some(t) = t {
+						if let Some(set) = self.by_topic.get_mut(&t) {
 							set.remove(hash);
 						}
 					}
 				}
-				log::trace!(target: LOG_TARGET, "Expired statement {:?}", HexDisplay::from(hash));
-				self.expired.insert(hash.clone(), meta.clone());
-				num_expired += 1;
-				false
-			} else {
-				true
+				if let Some(k) = key {
+					if let Some(set) = self.by_dec_key.get_mut(&k) {
+						set.remove(hash);
+					}
+				}
 			}
-		});
-		if num_expired > 0 {
-			// Rebuild the priority queue
+			self.expired.insert(hash.clone(), current_time);
+			log::trace!(target: LOG_TARGET, "Expired statement {:?}", HexDisplay::from(hash));
 			self.by_priority = self
 				.entries
 				.iter()
 				.map(|(hash, meta)| EvictionPriority {
 					hash: hash.clone(),
 					priority: meta.priority,
-					timestamp: meta.timestamp,
 				})
-				.collect();
+			.collect();
+			true
+		} else {
+			false
 		}
-		purged
 	}
 
-	fn evict(&mut self) -> Vec<(parity_db::ColId, Vec<u8>, Option<Vec<u8>>)> {
+	fn evict(&mut self) -> Vec<Hash> {
 		let mut evicted_set = Vec::new();
 
 		while self.by_priority.len() >= self.max_entries {
@@ -340,7 +329,8 @@ impl Index {
 						}
 					}
 				}
-				evicted_set.push((col::STATEMENTS, evicted.hash.to_vec(), None));
+				//evicted_set.push((col::STATEMENTS, evicted.hash.to_vec(), None));
+				evicted_set.push(evicted.hash);
 			} else {
 				break
 			}
@@ -445,25 +435,32 @@ impl Store {
 						StatementWithMeta::decode(&mut statement.as_slice())
 					{
 						let hash = statement_with_meta.statement.hash();
-						if statement_with_meta.meta.timestamp + EXPIRE_AFTER < current_time {
-							log::trace!(
-								target: LOG_TARGET,
-								"Statement loaded (expired): {:?}",
-								HexDisplay::from(&hash)
-							);
-							index.insert_expired(hash, statement_with_meta.meta);
-						} else {
-							log::trace!(
-								target: LOG_TARGET,
-								"Statement loaded {:?}",
-								HexDisplay::from(&hash)
-							);
-							index.insert_with_meta(hash, statement_with_meta);
-						}
+						log::trace!(
+							target: LOG_TARGET,
+							"Statement loaded {:?}",
+							HexDisplay::from(&hash)
+						);
+						index.insert_with_meta(hash, statement_with_meta);
 					}
 					true
 				})
 				.map_err(|e| Error::Db(e.to_string()))?;
+			self.db
+				.iter_column_while(col::EXPIRED, |item| {
+					let expired_info = item.value;
+					if let Ok((hash, timestamp)) =
+						<(Hash, u64)>::decode(&mut expired_info.as_slice())
+					{
+						log::trace!(
+							target: LOG_TARGET,
+							"Statement loaded (expired): {:?}",
+							HexDisplay::from(&hash)
+						);
+						index.insert_expired(hash, timestamp);
+					}
+					true
+				})
+			.map_err(|e| Error::Db(e.to_string()))?;
 		}
 
 		self.maintain();
@@ -512,6 +509,7 @@ impl Store {
 	pub fn maintain(&self) {
 		log::trace!(target: LOG_TARGET, "Started store maintenance");
 		let deleted = self.index.write().maintain(self.timestamp());
+		let deleted: Vec<_> = deleted.into_iter().map(|hash| (col::EXPIRED, hash.to_vec(), None)).collect();
 		let count = deleted.len() as u64;
 		if let Err(e) = self.db.commit(deleted) {
 			log::warn!(target: LOG_TARGET, "Error writing to the statement database: {:?}", e);
@@ -632,73 +630,77 @@ impl StatementStore for Store {
 	/// Submit a statement to the store. Validates the statement and returns validation result.
 	fn submit(&self, statement: Statement, source: StatementSource) -> SubmitResult {
 		let hash = statement.hash();
-		let priority = match self.index.read().query(&hash) {
-			IndexQuery::Expired(priority) => {
+		match self.index.read().query(&hash) {
+			IndexQuery::Expired => {
 				if !source.can_be_resubmitted() {
 					return SubmitResult::KnownExpired
 				}
-				priority
 			},
-			IndexQuery::Exists(priority) => {
+			IndexQuery::Exists(_) => {
 				if !source.can_be_resubmitted() {
 					return SubmitResult::Known
 				}
-				priority
 			},
-			IndexQuery::Unknown => {
-				// Validate.
-				let at_block = if let Some(Proof::OnChain { block_hash, .. }) = statement.proof() {
-					Some(block_hash.clone())
-				} else {
-					None
-				};
-				let validation_result = (self.validate_fn)(at_block, source, statement.clone());
-				match validation_result {
-					Ok(ValidStatement { priority }) => priority,
-					Err(InvalidStatement::BadProof) => {
-						log::debug!(
-							target: LOG_TARGET,
-							"Statement validation failed: BadProof, {:?}",
-							statement
-						);
-						self.metrics.report(|metrics| metrics.validations_invalid.inc());
-						return SubmitResult::Bad("Bad statement proof")
-					},
-					Err(InvalidStatement::NoProof) => {
-						log::debug!(
-							target: LOG_TARGET,
-							"Statement validation failed: NoProof, {:?}",
-							statement
-						);
-						self.metrics.report(|metrics| metrics.validations_invalid.inc());
-						return SubmitResult::Bad("Missing statement proof")
-					},
-					Err(InvalidStatement::InternalError) =>
-						return SubmitResult::InternalError(Error::Runtime),
-				}
+			IndexQuery::Unknown => {},
+		}
+		// Validate.
+		let at_block = if let Some(Proof::OnChain { block_hash, .. }) = statement.proof() {
+			Some(block_hash.clone())
+		} else {
+			None
+		};
+		let validation_result = (self.validate_fn)(at_block, source, statement.clone());
+		let priority = match validation_result {
+			Ok(ValidStatement { priority }) => priority,
+			Err(InvalidStatement::BadProof) => {
+				log::debug!(
+					target: LOG_TARGET,
+					"Statement validation failed: BadProof, {:?}",
+					statement
+				);
+				self.metrics.report(|metrics| metrics.validations_invalid.inc());
+				return SubmitResult::Bad("Bad statement proof")
 			},
+			Err(InvalidStatement::NoProof) => {
+				log::debug!(
+					target: LOG_TARGET,
+					"Statement validation failed: NoProof, {:?}",
+					statement
+				);
+				self.metrics.report(|metrics| metrics.validations_invalid.inc());
+				return SubmitResult::Bad("Missing statement proof")
+			},
+			Err(InvalidStatement::InternalError) =>
+				return SubmitResult::InternalError(Error::Runtime),
 		};
 
-		// Commit to the db prior to locking the index.
 		let statement_with_meta = StatementWithMeta {
-			meta: StatementMeta { priority, timestamp: self.timestamp() },
+			meta: StatementMeta { priority },
 			statement,
 		};
 
-		let mut commit = self.index.write().evict();
+		let current_time = self.timestamp();
+		let mut commit = Vec::new();
 		commit.push((col::STATEMENTS, hash.to_vec(), Some(statement_with_meta.encode())));
-		if let Err(e) = self.db.commit(commit) {
-			log::debug!(
-				target: LOG_TARGET,
-				"Statement validation failed: database error {}, {:?}",
-				e,
-				statement_with_meta.statement
-			);
-			return SubmitResult::InternalError(Error::Db(e.to_string()))
+		commit.push((col::EXPIRED, hash.to_vec(), None));
+		{
+			let mut index = self.index.write();
+			for hash in index.evict() {
+				commit.push((col::STATEMENTS, hash.to_vec(), None));
+				commit.push((col::EXPIRED, hash.to_vec(), Some((hash, current_time).encode())));
+			}
+			if let Err(e) = self.db.commit(commit) {
+				log::debug!(
+					target: LOG_TARGET,
+					"Statement validation failed: database error {}, {:?}",
+					e,
+					statement_with_meta.statement
+				);
+				return SubmitResult::InternalError(Error::Db(e.to_string()))
+			}
+			index.insert_with_meta(hash, statement_with_meta);
 		}
 		self.metrics.report(|metrics| metrics.submitted_statements.inc());
-		let mut index = self.index.write();
-		index.insert_with_meta(hash, statement_with_meta);
 		let network_priority =
 			if priority > 0 { NetworkPriority::High } else { NetworkPriority::Low };
 		log::trace!(target: LOG_TARGET, "Statement submitted: {:?}", HexDisplay::from(&hash));
