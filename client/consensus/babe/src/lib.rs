@@ -117,10 +117,7 @@ use sp_blockchain::{
 use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
-use sp_core::{
-	crypto::{ByteArray, Wraps},
-	ExecutionContext,
-};
+use sp_core::{crypto::Wraps, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::KeystorePtr;
 use sp_runtime::{
@@ -840,12 +837,12 @@ where
 				public.as_inner_ref(),
 				header_hash.as_ref(),
 			)
-			.map_err(|e| ConsensusError::CannotSign(public.to_raw_vec(), e.to_string()))?
+			.map_err(|e| ConsensusError::CannotSign(format!("{}. Key: {:?}", e, public)))?
 			.ok_or_else(|| {
-				ConsensusError::CannotSign(
-					public.to_raw_vec(),
-					"Could not find key in keystore.".into(),
-				)
+				ConsensusError::CannotSign(format!(
+					"Could not find key in keystore. Key: {:?}",
+					public
+				))
 			})?;
 
 		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
@@ -891,11 +888,7 @@ where
 	}
 
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
-		Box::pin(
-			self.env
-				.init(block)
-				.map_err(|e| ConsensusError::ClientImport(e.to_string())),
-		)
+		Box::pin(self.env.init(block).map_err(|e| ConsensusError::ClientImport(e.to_string())))
 	}
 
 	fn telemetry(&self) -> Option<TelemetryHandle> {
