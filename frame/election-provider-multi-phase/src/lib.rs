@@ -2161,9 +2161,6 @@ mod tests {
 				assert!(!MultiPhase::emergency_phase_throttling());
 				assert_err!(MultiPhase::elect(), ElectionError::Fallback("NoFallback."));
 				assert!(MultiPhase::current_phase().is_emergency());
-
-				// reset current phase.
-				MultiPhase::phase_transition(Phase::Off);
 			})
 	}
 
@@ -2181,9 +2178,12 @@ mod tests {
 				assert_err!(MultiPhase::elect(), ElectionError::Fallback("NoFallback."));
 				assert!(MultiPhase::current_phase().is_emergency());
 
-				// reset current phase.
-				MultiPhase::phase_transition(Phase::Off);
-				MultiPhase::rotate_round();
+				// recovers from emergency phase through governance fallback.
+				assert_ok!(MultiPhase::governance_fallback(RuntimeOrigin::root(), None, None));
+				assert!(MultiPhase::queued_solution().is_some());
+				assert!(MultiPhase::elect().is_ok());
+				assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
 				roll_to_signed();
 				assert!(MultiPhase::current_phase().is_signed());
 
