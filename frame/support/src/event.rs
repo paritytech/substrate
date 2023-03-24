@@ -134,6 +134,7 @@ macro_rules! decl_event {
 		/// Events for this module.
 		///
 		$(#[$attr])*
+		#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead.")]
 		pub enum Event {
 			$(
 				$events

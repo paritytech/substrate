@@ -2586,6 +2586,7 @@ macro_rules! decl_module {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq, $crate::RuntimeDebug)]
 		$( #[$attr] )*
+		#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead.")]
 		pub struct $mod_type<
 			$trait_instance: $trait_name
 			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?

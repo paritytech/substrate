@@ -296,6 +296,7 @@ fn counter_prefix(prefix: &str) -> String {
 /// }
 /// ```
 #[proc_macro]
+#[deprecated(note = "This will be removed soon. Use the attribute `#[pallet]` macro instead.")]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::decl_storage_impl(input)
 }

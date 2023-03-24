@@ -92,6 +92,7 @@ macro_rules! decl_error {
 			$crate::PalletError,
 		)]
 		#[scale_info(skip_type_params($generic $(, $inst_generic)?), capture_docs = "always")]
+		#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead.")]
 		pub enum $error<$generic: $trait $(, $inst_generic: $instance)?>
 		$( where $( $where_ty: $where_bound ),* )?
 		{
