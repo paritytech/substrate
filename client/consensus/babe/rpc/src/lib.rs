@@ -30,7 +30,7 @@ use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges}
 use sc_rpc_api::DenyUnsafe;
 use serde::{Deserialize, Serialize};
 use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::AppKey;
+use sp_application_crypto::AppCrypto;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{Error as ConsensusError, SelectChain};
 use sp_consensus_babe::{

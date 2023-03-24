@@ -181,19 +181,6 @@ impl TaskExecutorExt {
 	}
 }
 
-/// Runtime spawn extension.
-pub trait RuntimeSpawn: Send {
-	/// Create new runtime instance and use dynamic dispatch to invoke with specified payload.
-	///
-	/// Returns handle of the spawned task.
-	///
-	/// Function pointers (`dispatcher_ref`, `func`) are WASM pointer types.
-	fn spawn_call(&self, dispatcher_ref: u32, func: u32, payload: Vec<u8>) -> u64;
-
-	/// Join the result of previously created runtime instance invocation.
-	fn join(&self, handle: u64) -> Vec<u8>;
-}
-
 /// Something that can spawn tasks (blocking and non-blocking) with an assigned name
 /// and optional group.
 #[dyn_clonable::clonable]

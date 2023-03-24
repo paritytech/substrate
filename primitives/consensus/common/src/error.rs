@@ -48,8 +48,8 @@ pub enum Error {
 	#[error("Chain lookup failed: {0}")]
 	ChainLookup(String),
 	/// Signing failed.
-	#[error("Failed to sign using key: {0:?}. Reason: {1}")]
-	CannotSign(Vec<u8>, String),
+	#[error("Failed to sign: {0}")]
+	CannotSign(String),
 	/// Some other error.
 	#[error(transparent)]
 	Other(#[from] Box<dyn std::error::Error + Sync + Send + 'static>),
