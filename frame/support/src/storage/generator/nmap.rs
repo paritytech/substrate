@@ -460,6 +460,8 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 /// Test iterators for StorageNMap
 #[cfg(test)]
 mod test_iterators {
+	#![allow(deprecated)]
+
 	use crate::{
 		hash::StorageHasher,
 		storage::{generator::StorageNMap, unhashed, IterableStorageNMap},

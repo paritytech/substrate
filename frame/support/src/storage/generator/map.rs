@@ -347,6 +347,8 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 /// Test iterators for StorageMap
 #[cfg(test)]
 mod test_iterators {
+	#![allow(deprecated)]
+
 	use crate::{
 		hash::StorageHasher,
 		storage::{generator::StorageMap, unhashed, IterableStorageMap},

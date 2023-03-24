@@ -20,6 +20,7 @@
 //! * integrity test is generated
 
 #![recursion_limit = "128"]
+#![allow(deprecated)]
 
 use codec::MaxEncodedLen;
 use frame_support::{parameter_types, traits::PalletInfo as _};
@@ -40,6 +41,8 @@ parameter_types! {
 }
 
 mod module1 {
+	#![allow(deprecated)]
+
 	use super::*;
 
 	pub trait Config<I>: system::Config {}
@@ -80,6 +83,8 @@ mod module1 {
 }
 
 mod module2 {
+	#![allow(deprecated)]
+
 	use super::*;
 
 	pub trait Config: system::Config {}
@@ -125,6 +130,8 @@ mod nested {
 	use super::*;
 
 	pub mod module3 {
+		#![allow(deprecated)]
+
 		use super::*;
 
 		pub trait Config: system::Config {}
@@ -171,6 +178,8 @@ mod nested {
 }
 
 pub mod module3 {
+	#![allow(deprecated)]
+
 	use super::*;
 
 	pub trait Config: system::Config {}
