@@ -18,7 +18,7 @@
 //! Implementation of the `derive_impl` attribute macro.
 
 use frame_support_procedural_tools::generate_crate_access_2018;
-use macro_magic::import_tokens_indirect;
+use macro_magic::import_tokens_attr;
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 use syn::{
