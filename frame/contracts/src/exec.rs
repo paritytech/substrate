@@ -2198,6 +2198,43 @@ mod tests {
 	}
 
 	#[test]
+	fn caller_is_root_returns_proper_values() {
+		let code_charlie = MockLoader::insert(Call, |ctx, _| {
+			// BOB is not the origin of the stack call
+			assert!(!ctx.ext.caller_is_root());
+			exec_success()
+		});
+
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			// root is the origin of the call stack
+			assert!(ctx.ext.caller_is_root());
+			// BOB calls CHARLIE
+			ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true)
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_bob);
+			place_contract(&CHARLIE, code_charlie);
+			let contract_origin = ContractOrigin::Root;
+			let mut storage_meter = storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			// root -> BOB (caller is root) -> CHARLIE (caller is not origin)
+			let result = MockStack::run_call(
+				contract_origin,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![0],
+				None,
+				Determinism::Deterministic,
+			);
+			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
 	fn address_returns_proper_values() {
 		let bob_ch = MockLoader::insert(Call, |ctx, _| {
 			// Verify that address matches BOB.
