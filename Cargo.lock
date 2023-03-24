@@ -779,7 +779,7 @@ version = "0.64.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4243e6031260db77ede97ad86c27e501d646a27ab57b59a574f725d98ab1fb4"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "cexpr",
  "clang-sys",
  "lazy_static",
@@ -798,12 +798,6 @@ name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
-
-[[package]]
-name = "bitflags"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "487f1e0fcbe47deb8b0574e646def1c903389d95241dd1bbcc6ce4a715dfc0c1"
 
 [[package]]
 name = "bitvec"
@@ -1120,7 +1114,7 @@ name = "chain-spec-builder"
 version = "2.0.0"
 dependencies = [
  "ansi_term",
- "clap 4.1.11",
+ "clap 4.1.13",
  "node-cli",
  "rand 0.8.5",
  "sc-chain-spec",
@@ -1238,7 +1232,7 @@ version = "3.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71655c45cb9845d3270c9d6df84ebe72b4dad3c2ba3f7023ad47c144e4e473a5"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "clap_lex 0.2.4",
  "indexmap",
  "textwrap",
@@ -1246,11 +1240,11 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.1.11"
+version = "4.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42dfd32784433290c51d92c438bb72ea5063797fc3cc9a21a8c4346bebbb2098"
+checksum = "3c911b090850d79fc64fe9ea01e28e465f65e821e08813ced95bced72f7a8a9b"
 dependencies = [
- "bitflags 2.0.2",
+ "bitflags",
  "clap_derive",
  "clap_lex 0.3.3",
  "is-terminal",
@@ -1265,20 +1259,19 @@ version = "4.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37686beaba5ac9f3ab01ee3172f792fc6ffdd685bfb9e63cfef02c0571a4e8e1"
 dependencies = [
- "clap 4.1.11",
+ "clap 4.1.13",
 ]
 
 [[package]]
 name = "clap_derive"
-version = "4.1.9"
+version = "4.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fddf67631444a3a3e3e5ac51c36a5e01335302de677bd78759eaa90ab1f46644"
+checksum = "9a932373bab67b984c790ddf2c9ca295d8e3af3b7ef92de5a5bacdccdee4b09b"
 dependencies = [
  "heck",
- "proc-macro-error",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.8",
 ]
 
 [[package]]
@@ -2502,7 +2495,7 @@ dependencies = [
  "Inflector",
  "array-bytes",
  "chrono",
- "clap 4.1.11",
+ "clap 4.1.13",
  "comfy-table",
  "frame-benchmarking",
  "frame-support",
@@ -2593,7 +2586,7 @@ dependencies = [
 name = "frame-election-solution-type-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 4.1.11",
+ "clap 4.1.13",
  "frame-election-provider-solution-type",
  "frame-election-provider-support",
  "frame-support",
@@ -2662,7 +2655,7 @@ name = "frame-support"
 version = "4.0.0-dev"
 dependencies = [
  "assert_matches",
- "bitflags 1.3.2",
+ "bitflags",
  "environmental",
  "frame-metadata",
  "frame-support-procedural",
@@ -3107,7 +3100,7 @@ version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccf7f68c2995f392c49fffb4f95ae2c873297830eb25c6bc4c114ce8f4562acc"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "libc",
  "libgit2-sys",
  "log",
@@ -5054,7 +5047,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9ea4302b9759a7a88242299225ea3688e63c85ea136371bb6cf94fd674efaab"
 dependencies = [
  "anyhow",
- "bitflags 1.3.2",
+ "bitflags",
  "byteorder",
  "libc",
  "netlink-packet-core",
@@ -5107,7 +5100,7 @@ version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa52e972a9a719cecb6864fb88568781eb706bac2cd1d4f04a648542dbf78069"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "cfg-if",
  "libc",
  "memoffset 0.6.5",
@@ -5119,7 +5112,7 @@ version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfdda3d196821d6af13126e40375cdf7da646a96114af134d5f417a9a1dc8e1a"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "cfg-if",
  "libc",
  "memoffset 0.7.1",
@@ -5132,7 +5125,7 @@ name = "node-bench"
 version = "0.9.0-dev"
 dependencies = [
  "array-bytes",
- "clap 4.1.11",
+ "clap 4.1.13",
  "derive_more",
  "fs_extra",
  "futures",
@@ -5169,7 +5162,7 @@ version = "3.0.0-dev"
 dependencies = [
  "array-bytes",
  "assert_cmd",
- "clap 4.1.11",
+ "clap 4.1.13",
  "clap_complete",
  "criterion",
  "frame-benchmarking-cli",
@@ -5290,7 +5283,7 @@ dependencies = [
 name = "node-inspect"
 version = "0.9.0-dev"
 dependencies = [
- "clap 4.1.11",
+ "clap 4.1.13",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-api",
@@ -5349,7 +5342,7 @@ dependencies = [
 name = "node-runtime-generate-bags"
 version = "3.0.0"
 dependencies = [
- "clap 4.1.11",
+ "clap 4.1.13",
  "generate-bags",
  "kitchensink-runtime",
 ]
@@ -5358,7 +5351,7 @@ dependencies = [
 name = "node-template"
 version = "4.0.0-dev"
 dependencies = [
- "clap 4.1.11",
+ "clap 4.1.13",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-system",
@@ -6020,7 +6013,7 @@ version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
  "assert_matches",
- "bitflags 1.3.2",
+ "bitflags",
  "env_logger 0.9.3",
  "environmental",
  "frame-benchmarking",
@@ -6057,7 +6050,7 @@ dependencies = [
 name = "pallet-contracts-primitives"
 version = "7.0.0"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "parity-scale-codec",
  "scale-info",
  "sp-runtime",
@@ -7550,7 +7543,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e1f879b2998099c2d69ab9605d145d5b661195627eccc680002c4918a7fb6fa"
 dependencies = [
  "autocfg",
- "bitflags 1.3.2",
+ "bitflags",
  "cfg-if",
  "concurrent-queue",
  "libc",
@@ -8050,7 +8043,7 @@ version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb5a58c1855b4b6819d59012155603f0b22ad30cad752600aadfcb695265519a"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
 ]
 
 [[package]]
@@ -8128,7 +8121,7 @@ version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76e189c2369884dce920945e2ddf79b3dff49e071a167dd1817fa9c4c00d512e"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "libc",
  "mach",
  "winapi",
@@ -8302,7 +8295,7 @@ version = "0.35.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "727a1a6d65f786ec22df8a81ca3121107f235970dc1705ed681d3e6e8b9cd5f9"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "errno 0.2.8",
  "io-lifetimes 0.7.5",
  "libc",
@@ -8316,7 +8309,7 @@ version = "0.36.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db4165c9963ab29e422d6c26fbc1d37f15bace6b2810221f9d925023480fcf0e"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "errno 0.2.8",
  "io-lifetimes 1.0.9",
  "libc",
@@ -8330,7 +8323,7 @@ version = "0.37.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62b24138615de35e32031d041a09032ef3487a616d901ca4db224e7d557efae2"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "errno 0.3.0",
  "io-lifetimes 1.0.9",
  "libc",
@@ -8560,7 +8553,7 @@ version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
  "chrono",
- "clap 4.1.11",
+ "clap 4.1.13",
  "fdlimit",
  "futures",
  "futures-timer",
@@ -9229,7 +9222,7 @@ version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
  "async-trait",
- "bitflags 1.3.2",
+ "bitflags",
  "bytes",
  "futures",
  "futures-timer",
@@ -9674,7 +9667,7 @@ dependencies = [
 name = "sc-storage-monitor"
 version = "0.1.0"
 dependencies = [
- "clap 4.1.11",
+ "clap 4.1.13",
  "fs4",
  "futures",
  "log",
@@ -10013,7 +10006,7 @@ version = "2.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a332be01508d814fed64bf28f798a146d73792121129962fdf335bb3c49a4254"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "core-foundation",
  "core-foundation-sys",
  "libc",
@@ -10404,7 +10397,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#0a7ee08b6d7651b07b92637aa7fd24a9fe668625"
+source = "git+https://github.com/paritytech/ark-substrate#dcedc5acbd7fa621fca8ec9ac5cbdba3bf79177f"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
@@ -10419,7 +10412,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#0a7ee08b6d7651b07b92637aa7fd24a9fe668625"
+source = "git+https://github.com/paritytech/ark-substrate#dcedc5acbd7fa621fca8ec9ac5cbdba3bf79177f"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -10434,7 +10427,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#0a7ee08b6d7651b07b92637aa7fd24a9fe668625"
+source = "git+https://github.com/paritytech/ark-substrate#dcedc5acbd7fa621fca8ec9ac5cbdba3bf79177f"
 dependencies = [
  "ark-bw6-761",
  "ark-ff",
@@ -10448,7 +10441,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#0a7ee08b6d7651b07b92637aa7fd24a9fe668625"
+source = "git+https://github.com/paritytech/ark-substrate#dcedc5acbd7fa621fca8ec9ac5cbdba3bf79177f"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
@@ -10462,7 +10455,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#0a7ee08b6d7651b07b92637aa7fd24a9fe668625"
+source = "git+https://github.com/paritytech/ark-substrate#dcedc5acbd7fa621fca8ec9ac5cbdba3bf79177f"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
@@ -10493,7 +10486,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-models"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#0a7ee08b6d7651b07b92637aa7fd24a9fe668625"
+source = "git+https://github.com/paritytech/ark-substrate#dcedc5acbd7fa621fca8ec9ac5cbdba3bf79177f"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -10509,7 +10502,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-utils"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#0a7ee08b6d7651b07b92637aa7fd24a9fe668625"
+source = "git+https://github.com/paritytech/ark-substrate#dcedc5acbd7fa621fca8ec9ac5cbdba3bf79177f"
 dependencies = [
  "ark-serialize",
  "ark-std",
@@ -10722,7 +10715,7 @@ version = "7.0.0"
 dependencies = [
  "array-bytes",
  "base58",
- "bitflags 1.3.2",
+ "bitflags",
  "blake2",
  "bounded-collections",
  "criterion",
@@ -10924,7 +10917,7 @@ dependencies = [
 name = "sp-npos-elections-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 4.1.11",
+ "clap 4.1.13",
  "honggfuzz",
  "parity-scale-codec",
  "rand 0.8.5",
@@ -11338,7 +11331,7 @@ version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a2a1c578e98c1c16fc3b8ec1328f7659a500737d7a0c6d625e73e830ff9c1f6"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "cfg_aliases",
  "libc",
  "parking_lot 0.11.2",
@@ -11411,7 +11404,7 @@ dependencies = [
 name = "subkey"
 version = "3.0.0"
 dependencies = [
- "clap 4.1.11",
+ "clap 4.1.13",
  "sc-cli",
 ]
 
@@ -11439,7 +11432,7 @@ dependencies = [
 name = "substrate-frame-cli"
 version = "4.0.0-dev"
 dependencies = [
- "clap 4.1.11",
+ "clap 4.1.13",
  "frame-support",
  "frame-system",
  "sc-cli",
@@ -11738,7 +11731,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d75182f12f490e953596550b65ee31bda7c8e043d9386174b353bda50838c3fd"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "core-foundation",
  "system-configuration-sys",
 ]
@@ -12053,7 +12046,7 @@ version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f873044bf02dd1e8239e9c1293ea39dad76dc594ec16185d0a1bf31d8dc8d858"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "bytes",
  "futures-core",
  "futures-util",
@@ -12288,7 +12281,7 @@ name = "try-runtime-cli"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "clap 4.1.11",
+ "clap 4.1.13",
  "frame-remote-externalities",
  "frame-try-runtime",
  "hex",
@@ -13243,7 +13236,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93f1db1727772c05cf7a2cfece52c3aca8045ca1e176cd517d323489aa3c6d87"
 dependencies = [
  "async-trait",
- "bitflags 1.3.2",
+ "bitflags",
  "bytes",
  "cc",
  "ipnet",
