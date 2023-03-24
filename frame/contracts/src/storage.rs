@@ -209,6 +209,7 @@ impl<T: Config> ContractInfo<T> {
 		Ok(())
 	}
 
+	/// TODO revisit this
 	/// Calculates the weight that is necessary to remove one key from the trie and how many
 	/// of those keys can be deleted from the deletion queue given the supplied queue length
 	/// and weight limit.
@@ -241,10 +242,11 @@ impl<T: Config> ContractInfo<T> {
 		if queue_len == 0 {
 			return Weight::zero()
 		}
-		//
+
 		let (weight_per_key, mut remaining_key_budget) =
 			Self::deletion_budget(queue_len, weight_limit);
 
+		// TODO revisit this
 		// We want to check whether we have enough weight to decode the queue before
 		// proceeding. Too little weight for decoding might happen during runtime upgrades
 		// which consume the whole block before the other `on_initialize` blocks are called.
@@ -271,6 +273,7 @@ impl<T: Config> ContractInfo<T> {
 			};
 			remaining_key_budget = remaining_key_budget.saturating_sub(keys_removed);
 		}
+
 		weight_limit.saturating_sub(weight_per_key.saturating_mul(u64::from(remaining_key_budget)))
 	}
 
