@@ -319,9 +319,9 @@ pub mod pallet {
 		Issued { amount: T::Balance },
 		/// Total issuance was decreased by `amount`, creating a debt to be balanced.
 		Rescinded { amount: T::Balance },
-		/// Some free balance was locked out from specific operations.
+		/// Some balance was locked.
 		Locked { who: T::AccountId, amount: T::Balance },
-		/// Some balance that was locked out from specific operations was freed.
+		/// Some balance was unlocked.
 		Unlocked { who: T::AccountId, amount: T::Balance },
 	}
 
