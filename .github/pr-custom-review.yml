@@ -9,7 +9,7 @@ rules:
     condition:
       include: .*
       # excluding files from 'CI team' rules
-      exclude: ^\.gitlab-ci\.yml|^scripts/ci/.*|^\.github/.*
+      exclude: ^\.gitlab-ci\.yml|^scripts/ci/.*|^\.github/.*|^\.config/nextest.toml
     min_approvals: 2
     teams:
       - core-devs
@@ -17,7 +17,7 @@ rules:
   - name: CI team
     check_type: changed_files
     condition:
-      include: ^\.gitlab-ci\.yml|^scripts/ci/.*|^\.github/.*
+      include: ^\.gitlab-ci\.yml|^scripts/ci/.*|^\.github/.*|^\.config/nextest.toml
     min_approvals: 2
     teams:
       - ci

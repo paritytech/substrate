@@ -33,7 +33,7 @@ array-bytes = "4.1"
 pretty_assertions = "1.2.1"
 rand = "0.8.5"
 sp-runtime = { version = "7.0.0", path = "../runtime" }
-trie-db = "0.27.0"
+trie-db = "0.27.1"
 assert_matches = "1.5"
 
 [features]

@@ -40,7 +40,7 @@ use sp_consensus_grandpa::{
 };
 use sp_core::H256;
 use sp_keyring::Ed25519Keyring;
-use sp_keystore::{testing::KeyStore as TestKeyStore, SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{testing::MemoryKeystore, Keystore, KeystorePtr};
 use sp_runtime::{
 	codec::Encode,
 	generic::{BlockId, DigestItem},
@@ -280,11 +280,12 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|&key| key.public().into()).map(|id| (id, 1)).collect()
 }
 
-fn create_keystore(authority: Ed25519Keyring) -> SyncCryptoStorePtr {
-	let keystore = Arc::new(TestKeyStore::new());
-	SyncCryptoStore::ed25519_generate_new(&*keystore, GRANDPA, Some(&authority.to_seed()))
-		.expect("Creates authority key");
+fn create_keystore(authority: Ed25519Keyring) -> KeystorePtr {
+	let keystore = MemoryKeystore::new();
 	keystore
+		.ed25519_generate_new(GRANDPA, Some(&authority.to_seed()))
+		.expect("Creates authority key");
+	keystore.into()
 }
 
 async fn run_until_complete(future: impl Future + Unpin, net: &Arc<Mutex<GrandpaTestNet>>) {
@@ -1376,7 +1377,7 @@ type TestEnvironment<N, S, SC, VR> =
 
 fn test_environment_with_select_chain<N, S, VR, SC>(
 	link: &TestLinkHalf,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	network_service: N,
 	sync_service: S,
 	select_chain: SC,
@@ -1428,7 +1429,7 @@ where
 
 fn test_environment<N, S, VR>(
 	link: &TestLinkHalf,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	network_service: N,
 	sync_service: S,
 	voting_rule: VR,
