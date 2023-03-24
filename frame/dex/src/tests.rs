@@ -1100,3 +1100,14 @@ fn can_not_swap_same_asset() {
 		);
 	});
 }
+
+#[test]
+fn validate_pool_id_sorting() {
+	new_test_ext().execute_with(|| {
+		use crate::NativeOrAssetId::{Asset, Native};
+		assert_eq!(Dex::get_pool_id(Native, Asset(2)), (Native, Asset(2)));
+		assert_eq!(Dex::get_pool_id(Asset(2), Native), (Native, Asset(2)));
+		assert_eq!(Dex::get_pool_id(Native, Native), (Native, Native));
+		assert_eq!(Dex::get_pool_id(Asset(2), Asset(1)), (Asset(1), Asset(2)));
+	});
+}

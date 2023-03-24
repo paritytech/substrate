@@ -17,7 +17,7 @@
 
 use super::*;
 use core::{fmt::Display, marker::PhantomData};
-use sp_std::fmt::Formatter;
+use sp_std::{cmp::Ordering, fmt::Formatter};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::traits::fungibles::Inspect;
@@ -45,32 +45,44 @@ pub trait MultiAssetIdConverter<MultiAssetId, AssetId> {
 }
 
 /// An implementation of MultiAssetId that chooses between Native and an asset.
-#[derive(
-	Decode,
-	Encode,
-	Default,
-	PartialEq,
-	Eq,
-	MaxEncodedLen,
-	TypeInfo,
-	Clone,
-	Copy,
-	Debug,
-	Ord,
-	PartialOrd,
-)]
-pub enum NativeOrAssetId<AssetId> {
-	/// Native asset. For example on statemint this would be dot.
+#[derive(Decode, Encode, Default, MaxEncodedLen, TypeInfo, Clone, Copy, Debug)]
+pub enum NativeOrAssetId<AssetId>
+where
+	AssetId: Ord,
+{
+	/// Native asset. For example, on statemint this would be dot.
 	#[default]
 	Native,
 	Asset(AssetId),
 }
 
+impl<AssetId: Ord> Ord for NativeOrAssetId<AssetId> {
+	fn cmp(&self, other: &Self) -> Ordering {
+		match (self, other) {
+			(Self::Native, Self::Native) => Ordering::Equal,
+			(Self::Native, Self::Asset(_)) => Ordering::Less,
+			(Self::Asset(_), Self::Native) => Ordering::Greater,
+			(Self::Asset(id1), Self::Asset(id2)) => <AssetId as Ord>::cmp(id1, id2),
+		}
+	}
+}
+impl<AssetId: Ord> PartialOrd for NativeOrAssetId<AssetId> {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(<Self as Ord>::cmp(self, other))
+	}
+}
+impl<AssetId: Ord> PartialEq for NativeOrAssetId<AssetId> {
+	fn eq(&self, other: &Self) -> bool {
+		self.cmp(other) == Ordering::Equal
+	}
+}
+impl<AssetId: Ord> Eq for NativeOrAssetId<AssetId> {}
+
 pub struct NativeOrAssetIdConverter<AssetId> {
 	_phantom: PhantomData<AssetId>,
 }
 
-impl<AssetId> MultiAssetIdConverter<NativeOrAssetId<AssetId>, AssetId>
+impl<AssetId: Ord> MultiAssetIdConverter<NativeOrAssetId<AssetId>, AssetId>
 	for NativeOrAssetIdConverter<AssetId>
 {
 	fn get_native() -> NativeOrAssetId<AssetId> {
@@ -89,7 +101,7 @@ impl<AssetId> MultiAssetIdConverter<NativeOrAssetId<AssetId>, AssetId>
 	}
 }
 
-impl<AssetId> Display for NativeOrAssetId<AssetId> {
+impl<AssetId: Ord> Display for NativeOrAssetId<AssetId> {
 	fn fmt(&self, _: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
 		todo!()
 	}
