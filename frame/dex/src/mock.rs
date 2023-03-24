@@ -161,7 +161,7 @@ impl Config for Test {
 	type PoolAssets = PoolAssets;
 	type PalletId = DexPalletId;
 	type WeightInfo = ();
-	type LPFee = ConstU32<3>;
+	type LPFee = ConstU32<3>; // means 0.3%
 	type PoolSetupFee = ConstU128<5>;
 	type PoolSetupFeeReceiver = DexOrigin;
 	type AllowMultiAssetPools = AllowMultiAssetPools;

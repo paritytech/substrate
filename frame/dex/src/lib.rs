@@ -143,7 +143,7 @@ pub mod pallet {
 			+ Create<Self::AccountId>
 			+ Mutate<Self::AccountId>;
 
-		/// Units are 10ths of a percent.
+		/// A % the liquidity providers will take of every swap. Represents 10ths of a percent.
 		type LPFee: Get<u32>;
 
 		/// A one-time fee to setup the pool.
