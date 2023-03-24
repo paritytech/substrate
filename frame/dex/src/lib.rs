@@ -232,10 +232,14 @@ pub mod pallet {
 		PoolNotFound,
 		/// An overflow happened.
 		Overflow,
-		/// Insufficient amount provided for the first token in the pair.
-		InsufficientAmountReturnedForAmount1,
-		/// Insufficient amount provided for the second token in the pair.
-		InsufficientAmountReturnedForAmount2,
+		/// The minimal amount requirement for the first token in the pair wasn't met.
+		AssetOneDepositDidNotMeetMinimum,
+		/// The minimal amount requirement for the second token in the pair wasn't met.
+		AssetTwoDepositDidNotMeetMinimum,
+		/// The minimal amount requirement for the first token in the pair wasn't met.
+		AssetOneWithdrawalDidNotMeetMinimum,
+		/// The minimal amount requirement for the second token in the pair wasn't met.
+		AssetTwoWithdrawalDidNotMeetMinimum,
 		/// Optimal calculated amount is less than desired.
 		OptimalAmountLessThanDesired,
 		/// Insufficient liquidity minted.
@@ -355,7 +359,7 @@ pub mod pallet {
 				if amount2_optimal <= amount2_desired {
 					ensure!(
 						amount2_optimal >= amount2_min,
-						Error::<T>::InsufficientAmountReturnedForAmount2
+						Error::<T>::AssetTwoDepositDidNotMeetMinimum
 					);
 					amount1 = amount1_desired;
 					amount2 = amount2_optimal;
@@ -367,7 +371,7 @@ pub mod pallet {
 					);
 					ensure!(
 						amount1_optimal >= amount1_min,
-						Error::<T>::InsufficientAmountReturnedForAmount1
+						Error::<T>::AssetOneDepositDidNotMeetMinimum
 					);
 					amount1 = amount1_optimal;
 					amount2 = amount2_desired;
@@ -452,11 +456,11 @@ pub mod pallet {
 
 			ensure!(
 				!amount1.is_zero() && amount1 >= amount1_min_receive,
-				Error::<T>::InsufficientAmountReturnedForAmount1
+				Error::<T>::AssetOneWithdrawalDidNotMeetMinimum
 			);
 			ensure!(
 				!amount2.is_zero() && amount2 >= amount2_min_receive,
-				Error::<T>::InsufficientAmountReturnedForAmount2
+				Error::<T>::AssetTwoWithdrawalDidNotMeetMinimum
 			);
 
 			T::PoolAssets::burn_from(
