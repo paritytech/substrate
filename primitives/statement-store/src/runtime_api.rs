@@ -20,10 +20,12 @@
 use crate::{Hash, Statement, Topic};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sp_externalities::ExternalitiesExt;
 use sp_runtime::RuntimeDebug;
 use sp_runtime_interface::{pass_by::PassByEnum, runtime_interface};
 use sp_std::vec::Vec;
+
+#[cfg(feature = "std")]
+use sp_externalities::ExternalitiesExt;
 
 /// Information concerning a valid statement.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
