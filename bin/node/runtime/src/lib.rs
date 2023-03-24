@@ -1542,7 +1542,7 @@ impl pallet_dex::Config for Runtime {
 	type MultiAssetId = NativeOrAssetId<u32>;
 	type PoolAssetId = <Self as pallet_assets::Config<Instance2>>::AssetId;
 	type PalletId = DexPalletId;
-	type LPFee = ConstU32<3>;
+	type LPFee = ConstU32<3>; // means 0.3%
 	type PoolSetupFee = PoolSetupFee;
 	type PoolSetupFeeReceiver = DexOrigin;
 	type WeightInfo = pallet_dex::weights::SubstrateWeight<Runtime>;
