@@ -1435,6 +1435,23 @@ impl<T: Config> Pallet<T> {
 		let voters = T::DataProvider::electing_voters(election_bounds.voters)
 			.map_err(ElectionError::DataProvider)?;
 
+		// check that data from data provider is within the requested bounds.
+		let mut voters_size: usize = 0;
+		for v in &voters {
+			let votes_len = &v.2.len();
+			voters_size = voters_size
+				.saturating_add(sp_npos_elections::Voter::<T::AccountId>::encoded_size(*votes_len));
+		}
+		if voters_size >
+			election_bounds
+				.voters
+				.size
+				.unwrap_or(u32::MAX.into())
+				.0
+				.saturated_into::<usize>()
+		{
+			return Err(ElectionError::DataProvider("Snapshot in MBs too big for submission."))
+		}
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
 		}

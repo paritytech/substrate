@@ -300,7 +300,7 @@ pub mod weights;
 mod pallet;
 
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
-use frame_election_provider_support::{DataProviderBounds, SizeBound, VoteWeight};
+use frame_election_provider_support::{DataProviderBounds, IdentifierT, SizeBound};
 use frame_support::{
 	traits::{ConstU32, Currency, Defensive, Get},
 	weights::Weight,
@@ -812,7 +812,10 @@ pub(crate) struct ElectionSizeTracker<AccountId> {
 	_marker: sp_std::marker::PhantomData<AccountId>,
 }
 
-impl<AccountId> ElectionSizeTracker<AccountId> {
+impl<AccountId> ElectionSizeTracker<AccountId>
+where
+	AccountId: IdentifierT,
+{
 	pub(crate) fn new() -> Self {
 		ElectionSizeTracker { size: 0, _marker: Default::default() }
 	}
@@ -838,21 +841,7 @@ impl<AccountId> ElectionSizeTracker<AccountId> {
 
 	/// Returns the size taken by a voter with `votes`.
 	fn voter_size(votes: usize) -> usize {
-		Self::length_prefix(votes)
-			// and each element
-			.saturating_add(votes * sp_std::mem::size_of::<AccountId>())
-			// 1 vote-weight
-			.saturating_add(sp_std::mem::size_of::<VoteWeight>())
-			// 1 voter account
-			.saturating_add(sp_std::mem::size_of::<AccountId>())
-	}
-
-	/// The length prefix of a vector with the given length.
-	#[inline]
-	pub(crate) fn length_prefix(length: usize) -> usize {
-		use codec::{Compact, CompactLen};
-		let length = length as u32;
-		Compact::<u32>::compact_len(&length)
+		sp_npos_elections::Voter::<AccountId>::encoded_size(votes)
 	}
 }
 

@@ -75,7 +75,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, MaxEncodedLen, Compact, CompactLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -404,7 +404,18 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 		})
 	}
 
-	/// This voter's budget
+	/// Returns the size in MBs of the scale encoded structure that stores a `Voter` with a given
+	/// number of cast `votes`.
+	#[inline]
+	pub fn encoded_size(votes: usize) -> usize {
+		// prefix size.
+		Compact::<u32>::compact_len(&(votes as u32))
+			.saturating_add(votes * sp_std::mem::size_of::<AccountId>())
+			.saturating_add(votes * sp_std::mem::size_of::<VoteWeight>())
+			.saturating_add(sp_std::mem::size_of::<AccountId>())
+	}
+
+	/// This voter's budget.
 	#[inline]
 	pub fn budget(&self) -> ExtendedBalance {
 		self.budget
