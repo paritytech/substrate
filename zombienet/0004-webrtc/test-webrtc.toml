@@ -19,6 +19,7 @@ chain_spec_path = "zombienet/0004-webrtc/chain-spec.json"
   validator = false
   db_snapshot="https://storage.googleapis.com/zombienet-db-snaps/substrate/0001-basic-warp-sync/chains-a233bbacff650aac6bcb56b4e4ef7db7dc143cfb.tgz"
   args = ["--listen-addr",  "/ip4/0.0.0.0/udp/30333/webrtc", "-l sub-libp2p=trace"]
+  p2p_cert_hash = "uEiAvF2IuPZJuKkdb5E-gSM_AmumLi3P5ZR_fvZGPE3vJEA"
 
   #we need at least 3 nodes for warp sync
   [[relaychain.nodes]]
@@ -26,8 +27,10 @@ chain_spec_path = "zombienet/0004-webrtc/chain-spec.json"
   validator = false
   db_snapshot="https://storage.googleapis.com/zombienet-db-snaps/substrate/0001-basic-warp-sync/chains-a233bbacff650aac6bcb56b4e4ef7db7dc143cfb.tgz"
   args = ["--listen-addr",  "/ip4/0.0.0.0/udp/30333/webrtc"]
+  p2p_cert_hash = "uEiAvF2IuPZJuKkdb5E-gSM_AmumLi3P5ZR_fvZGPE3vJEA"
 
   [[relaychain.nodes]]
   name = "dave"
   validator = false
   args = ["--listen-addr",  "/ip4/0.0.0.0/udp/30333/webrtc", "--sync warp"]
+  p2p_cert_hash = "uEiAvF2IuPZJuKkdb5E-gSM_AmumLi3P5ZR_fvZGPE3vJEA"
