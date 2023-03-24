@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Preimage test environment.
+//! # Statement pallet test environment.
 
 use super::*;
 

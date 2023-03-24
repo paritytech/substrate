@@ -694,7 +694,6 @@ where
 	}
 	if let Some(store) = statement_store {
 		let store = sc_rpc::statement::StatementStore::new(store, deny_unsafe).into_rpc();
-
 		rpc_api.merge(store).map_err(|e| Error::Application(e.into()))?;
 	}
 
@@ -950,7 +949,7 @@ where
 			spawn_handle.spawn("network-statement-validator", Some("networking"), fut);
 		})
 	};
-	// crate statement goissip protocol and add it to the list of supported protocols of
+	// crate statement gossip protocol and add it to the list of supported protocols of
 	// `network_params`
 	let (statement_handler, statement_handler_controller) = statement_handler_proto.build(
 		network.clone(),

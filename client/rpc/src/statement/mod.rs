@@ -18,10 +18,6 @@
 
 //! Substrate statement store API.
 
-#[cfg(test)]
-mod tests;
-
-//use self::error::Error;
 use jsonrpsee::core::{async_trait, RpcResult};
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::statement::{error::Error, StatementApiServer};
