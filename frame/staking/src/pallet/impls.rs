@@ -760,11 +760,7 @@ impl<T: Config> Pallet<T> {
 
 		let max_allowed_len = {
 			let all_voter_count = T::VoterList::count();
-			bounds
-				.count
-				.unwrap_or(all_voter_count.into())
-				.min(all_voter_count.into())
-				.0
+			bounds.count.unwrap_or(all_voter_count.into()).min(all_voter_count.into()).0
 		};
 
 		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len as usize);
@@ -797,8 +793,7 @@ impl<T: Config> Pallet<T> {
 					// voter at this point and accept all the current nominations. The nomination
 					// quota is only enforced at `nominate` time.
 
-					if voters_size_tracker.try_register_voter(targets.len(), bounds).is_err()
-					{
+					if voters_size_tracker.try_register_voter(targets.len(), bounds).is_err() {
 						// no more space left for the election result, stop iterating.
 						Self::deposit_event(Event::<T>::SnapshotVotersSizeExceeded {
 							size: voters_size_tracker.size as u32,

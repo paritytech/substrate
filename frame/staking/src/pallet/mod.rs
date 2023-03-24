@@ -271,15 +271,6 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-	/// Maximum limit of nominations per nominator, regardless of `T::NominationsQuota`.
-	#[pallet::extra_constants]
-	impl<T: Config> Pallet<T> {
-		#[pallet::constant_name(MaxNominations)]
-		fn absolute_max_nominations() -> u32 {
-			<T::NominationsQuota as NominationsQuota<BalanceOf<T>>>::MaxNominations::get()
-		}
-	}
-
 	/// The ideal number of active validators.
 	#[pallet::storage]
 	#[pallet::getter(fn validator_count)]

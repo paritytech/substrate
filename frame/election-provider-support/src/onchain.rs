@@ -159,8 +159,8 @@ impl<T: Config> InstantElectionProvider for OnChainExecution<T> {
 		forced_input_targets_bounds: DataProviderBounds,
 	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		let elections_bounds = ElectionBoundsBuilder::from(T::Bounds::get())
-			.max_voters(forced_input_voters_bounds)
-			.max_targets(forced_input_targets_bounds)
+			.voters_or_lower(forced_input_voters_bounds)
+			.targets_or_lower(forced_input_targets_bounds)
 			.build();
 
 		elect_with_input_bounds::<T>(elections_bounds)

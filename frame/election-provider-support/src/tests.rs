@@ -495,12 +495,12 @@ mod elections_bounds {
 		let bounds = ElectionBoundsBuilder::new()
 			.voters_count(10.into())
 			.voters_size(10.into())
-			.max_voters(DataProviderBounds {
+			.voters_or_lower(DataProviderBounds {
 				count: CountBound(5).into(),
 				size: SizeBound(20).into(),
 			})
 			.targets_count(20.into())
-			.max_targets(DataProviderBounds {
+			.targets_or_lower(DataProviderBounds {
 				count: CountBound(30).into(),
 				size: SizeBound(30).into(),
 			})
@@ -513,11 +513,11 @@ mod elections_bounds {
 
 		// note that unbounded bounds (None) are equivalent to maximum value.
 		let bounds = ElectionBoundsBuilder::new()
-			.max_voters(DataProviderBounds {
+			.voters_or_lower(DataProviderBounds {
 				count: CountBound(5).into(),
 				size: SizeBound(20).into(),
 			})
-			.max_targets(DataProviderBounds {
+			.targets_or_lower(DataProviderBounds {
 				count: CountBound(10).into(),
 				size: SizeBound(10).into(),
 			})

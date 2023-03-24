@@ -301,7 +301,8 @@ parameter_types! {
 	#[derive(Debug)]
 	pub static MaxWinners: u32 = 200;
 	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
-	pub static ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::new().build();
+	pub static ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::new()
+		.targets_count(5_000.into()).voters_count(1_250.into()).build();
 
 	pub static EpochLength: u64 = 30;
 	pub static OnChainFallback: bool = true;

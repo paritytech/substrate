@@ -755,15 +755,21 @@ impl DataProviderBounds {
 	}
 
 	/// Returns an instance of `Self` that is constructed by capping both the `count` and `size`
-	/// fields.
+	/// fields. If `self` is None, overwrite it with the provided bounds.
 	pub fn max(self, bounds: DataProviderBounds) -> Self {
 		DataProviderBounds {
-			count: self.count.map(|c| {
-				c.clamp(CountBound::zero(), bounds.count.unwrap_or(CountBound(u32::MAX))).into()
-			}),
-			size: self.size.map(|c| {
-				c.clamp(SizeBound::zero(), bounds.size.unwrap_or(SizeBound(u32::MAX))).into()
-			}),
+			count: self
+				.count
+				.map(|c| {
+					c.clamp(CountBound::zero(), bounds.count.unwrap_or(CountBound(u32::MAX))).into()
+				})
+				.or(bounds.count),
+			size: self
+				.size
+				.map(|c| {
+					c.clamp(SizeBound::zero(), bounds.size.unwrap_or(SizeBound(u32::MAX))).into()
+				})
+				.or(bounds.size),
 		}
 	}
 }
@@ -856,17 +862,23 @@ impl ElectionBoundsBuilder {
 
 	/// Caps the number of the voters bounds in self to `voters` bounds. If `voters` bounds are
 	/// higher than the self bounds, keeps it. Note that `None` bounds are equivalent to maximum
-    /// and should be treated as such.
-	pub fn max_voters(mut self, voters: DataProviderBounds) -> Self {
-		self.voters = self.voters.map_or(None, |v| Some(v.max(voters)));
+	/// and should be treated as such.
+	pub fn voters_or_lower(mut self, voters: DataProviderBounds) -> Self {
+		self.voters = match self.voters {
+			None => Some(voters),
+			Some(v) => Some(v.max(voters)),
+		};
 		self
 	}
 
-	/// Caps the number of the voters bounds in self to `voters` bounds. If `voters` bounds are
+	/// Caps the number of the target bounds in self to `voters` bounds. If `voters` bounds are
 	/// higher than the self bounds, keeps it. Note that `None` bounds are equivalent to maximum
-    /// and should be treated as such.
-	pub fn max_targets(mut self, targets: DataProviderBounds) -> Self {
-		self.targets = self.targets.map_or(None, |t| Some(t.max(targets)));
+	/// and should be treated as such.
+	pub fn targets_or_lower(mut self, targets: DataProviderBounds) -> Self {
+		self.targets = match self.targets {
+			None => Some(targets),
+			Some(t) => Some(t.max(targets)),
+		};
 		self
 	}
 
