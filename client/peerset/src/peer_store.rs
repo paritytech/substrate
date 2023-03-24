@@ -187,6 +187,14 @@ impl PeerStoreInner {
 			.iter_mut()
 			.for_each(|(_, reputation)| reputation.decay(seconds_passed));
 		self.reputations.retain(|_, reputation| reputation.value() != 0);
+
+		// TODO: we likely need to also account for another condition when removing nodes, like it
+		// was done in `PeerSet` with `last_connected_or_discovered` and `FORGET_AFTER`. Otherwise,
+		// bootnodes will be deleted at startup without a chance of being connected. As another
+		// alternative, we can give bootnodes some initial reputation, enough for them to get
+		// connected. This alternative is questionable, because we are limited to 1100 seconds of
+		// reputation decay even for max reputation, which is less than one hour of lifetime in the
+		// original `PeerSet`.
 	}
 }
 
