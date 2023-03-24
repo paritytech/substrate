@@ -124,7 +124,8 @@ impl PeerStoreInner {
 			.reputations
 			.iter()
 			.filter_map(|(peer_id, reputation)| {
-				(!reputation.is_banned() && !ignored.contains(peer_id)).then_some((*peer_id, *reputation))
+				(!reputation.is_banned() && !ignored.contains(peer_id))
+					.then_some((*peer_id, *reputation))
 			})
 			.collect::<Vec<_>>();
 		candidates.partial_sort(count, |(_, rep1), (_, rep2)| rep1.cmp(rep2));
