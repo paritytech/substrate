@@ -829,6 +829,11 @@ macro_rules! assert_error_encoded_size {
 #[doc(hidden)]
 pub use serde::{Deserialize, Serialize};
 
+#[doc(hidden)]
+pub mod macro_magic {
+	pub use ::macro_magic::*;
+}
+
 #[cfg(test)]
 pub mod tests {
 	use super::*;

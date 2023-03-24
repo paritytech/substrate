@@ -16,8 +16,7 @@
 // limitations under the License.
 
 use crate::pallet::Def;
-use frame_support_procedural_tools::get_doc_literals;
-use macro_magic::core::export_tokens_internal;
+use frame_support_procedural_tools::{generate_crate_access_2018, get_doc_literals};
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{parse_quote, Item};
@@ -59,25 +58,17 @@ pub fn expand_config(def: &mut Def) -> TokenStream {
 		let _const_names = Vec::<syn::Ident>::default();
 		let _fn_names = Vec::<syn::Ident>::default();
 
-		// tokens we want to pass to derive_impl, exclude docs
-		let stripped_config_tokens = quote! {
-			pub trait Config {
-				#(#trait_items)*
-			}
-		};
-
-		let Ok((_item, tokens_const_decl)) = export_tokens_internal(stripped_config_tokens, quote!(), "#[pallet::config]") else {
-			unreachable!("stripped_config_tokens is quoted and thus will parse correctly, QED");
+		// get reference to frame_support
+		let support = match generate_crate_access_2018("frame-support") {
+			Ok(krate) => krate,
+			Err(err) => return err.to_compile_error(),
 		};
 
 		quote!(
+			#[#support::macro_magic::export_tokens]
 			pub trait DefaultConfig {
 				#(#trait_items)*
 			}
-
-			#[allow(unused)]
-			#[doc(hidden)]
-			#tokens_const_decl
 
 			#[macro_export]
 			#[doc(hidden)]
