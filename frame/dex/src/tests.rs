@@ -907,7 +907,7 @@ fn swap_tokens_for_exact_tokens_should_not_work_if_too_much_slippage() {
 				user,
 				true
 			),
-			Error::<Test>::ExcessiveInputAmount
+			Error::<Test>::ProvidedMaximumNotSufficientForSwap
 		);
 	});
 }

@@ -248,8 +248,8 @@ pub mod pallet {
 		InsufficientOutputAmount,
 		/// Insufficient liquidity in the pool.
 		InsufficientLiquidity,
-		/// Excessive input amount.
-		ExcessiveInputAmount,
+		/// Provided maximum amount is not sufficient for swap.
+		ProvidedMaximumNotSufficientForSwap,
 		/// Only pools with native on one side are valid.
 		PoolMustContainNativeCurrency,
 		/// The provided path must consists of 2 assets at least.
@@ -538,7 +538,7 @@ pub mod pallet {
 
 			let amounts = Self::get_amounts_in(&amount_out, &path)?;
 			let amount_in = *amounts.first().expect("Always has more than one element");
-			ensure!(amount_in <= amount_in_max, Error::<T>::ExcessiveInputAmount);
+			ensure!(amount_in <= amount_in_max, Error::<T>::ProvidedMaximumNotSufficientForSwap);
 
 			Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
 
@@ -938,7 +938,7 @@ where
 		let amounts = Self::get_amounts_in(&amount_out, &path)?;
 		let amount_in = *amounts.first().expect("Always has more than one element");
 		if let Some(amount_in_max) = amount_in_max {
-			ensure!(amount_in <= amount_in_max, Error::<T>::ExcessiveInputAmount);
+			ensure!(amount_in <= amount_in_max, Error::<T>::ProvidedMaximumNotSufficientForSwap);
 		}
 
 		Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
