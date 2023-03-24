@@ -504,19 +504,18 @@ mod tests {
 		block_import::{
 			BlockCheckParams, BlockImport, BlockImportParams, ImportResult, JustificationImport,
 		},
-		import_queue::{CacheKeyId, Verifier},
+		import_queue::Verifier,
 	};
 	use futures::{executor::block_on, Future};
 	use sp_test_primitives::{Block, BlockNumber, Extrinsic, Hash, Header};
-	use std::collections::HashMap;
 
 	#[async_trait::async_trait]
 	impl Verifier<Block> for () {
 		async fn verify(
 			&mut self,
 			block: BlockImportParams<Block, ()>,
-		) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-			Ok((BlockImportParams::new(block.origin, block.header), None))
+		) -> Result<BlockImportParams<Block, ()>, String> {
+			Ok(BlockImportParams::new(block.origin, block.header))
 		}
 	}
 
@@ -535,7 +534,6 @@ mod tests {
 		async fn import_block(
 			&mut self,
 			_block: BlockImportParams<Block, Self::Transaction>,
-			_cache: HashMap<CacheKeyId, Vec<u8>>,
 		) -> Result<ImportResult, Self::Error> {
 			Ok(ImportResult::imported(true))
 		}

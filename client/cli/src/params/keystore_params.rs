@@ -68,9 +68,7 @@ pub fn secret_string_from_str(s: &str) -> std::result::Result<SecretString, Stri
 
 impl KeystoreParams {
 	/// Get the keystore configuration for the parameters
-	///
-	/// Returns a vector of remote-urls and the local Keystore configuration
-	pub fn keystore_config(&self, config_dir: &Path) -> Result<(Option<String>, KeystoreConfig)> {
+	pub fn keystore_config(&self, config_dir: &Path) -> Result<KeystoreConfig> {
 		let password = if self.password_interactive {
 			Some(SecretString::new(input_keystore_password()?))
 		} else if let Some(ref file) = self.password_filename {
@@ -85,7 +83,7 @@ impl KeystoreParams {
 			.clone()
 			.unwrap_or_else(|| config_dir.join(DEFAULT_KEYSTORE_CONFIG_PATH));
 
-		Ok((self.keystore_uri.clone(), KeystoreConfig::Path { path, password }))
+		Ok(KeystoreConfig::Path { path, password })
 	}
 
 	/// helper method to fetch password from `KeyParams` or read from stdin

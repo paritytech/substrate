@@ -41,10 +41,8 @@ use futures::{channel::mpsc, pin_mut, FutureExt, StreamExt};
 use jsonrpsee::{core::Error as JsonRpseeError, RpcModule};
 use log::{debug, error, warn};
 use sc_client_api::{blockchain::HeaderBackend, BlockBackend, BlockchainEvents, ProofProvider};
-use sc_network::{NetworkStateInfo, PeerId};
-use sc_network_common::{
-	config::MultiaddrWithPeerId,
-	service::{NetworkBlock, NetworkPeers},
+use sc_network::{
+	config::MultiaddrWithPeerId, NetworkBlock, NetworkPeers, NetworkStateInfo, PeerId,
 };
 use sc_network_sync::SyncingService;
 use sc_utils::mpsc::TracingUnboundedReceiver;

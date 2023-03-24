@@ -248,36 +248,40 @@ mod behaviour;
 mod discovery;
 mod peer_info;
 mod protocol;
-mod request_responses;
 mod service;
 mod transport;
 
 pub mod config;
+pub mod error;
+pub mod event;
 pub mod network_state;
+pub mod request_responses;
+pub mod types;
+pub mod utils;
 
+pub use event::{DhtEvent, Event};
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
+pub use request_responses::{IfDisconnected, RequestFailure, RequestResponseConfig};
 pub use sc_network_common::{
-	protocol::{
-		event::{DhtEvent, Event},
-		role::ObservedRole,
-		ProtocolName,
-	},
-	request_responses::{IfDisconnected, RequestFailure},
-	service::{
-		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkRequest, NetworkSigner,
-		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest, Signature,
-		SigningError,
-	},
+	role::ObservedRole,
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
 		ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState, SyncStatusProvider,
 	},
 };
 pub use service::{
-	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender,
-	NotificationSenderReady, OutboundFailure, PublicKey,
+	signature::Signature,
+	traits::{
+		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkEventStream, NetworkNotification,
+		NetworkPeers, NetworkRequest, NetworkSigner, NetworkStateInfo, NetworkStatus,
+		NetworkStatusProvider, NetworkSyncForkRequest, NotificationSender as NotificationSenderT,
+		NotificationSenderError, NotificationSenderReady,
+	},
+	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender, OutboundFailure,
+	PublicKey,
 };
+pub use types::ProtocolName;
 
 pub use sc_peerset::ReputationChange;
 

@@ -31,10 +31,8 @@ use node_primitives::Block;
 use sc_client_api::BlockBackend;
 use sc_consensus_babe::{self, SlotProportion};
 use sc_executor::NativeElseWasmExecutor;
-use sc_network::NetworkService;
-use sc_network_common::{
-	protocol::event::Event, service::NetworkEventStream, sync::warp::WarpSyncParams,
-};
+use sc_network::{event::Event, NetworkEventStream, NetworkService};
+use sc_network_common::sync::warp::WarpSyncParams;
 use sc_network_sync::SyncingService;
 use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
@@ -253,7 +251,7 @@ pub fn new_partial(
 		let client = client.clone();
 		let pool = transaction_pool.clone();
 		let select_chain = select_chain.clone();
-		let keystore = keystore_container.sync_keystore();
+		let keystore = keystore_container.keystore();
 		let chain_spec = config.chain_spec.cloned_box();
 
 		let rpc_backend = backend.clone();
@@ -388,7 +386,7 @@ pub fn new_full_base(
 		config,
 		backend,
 		client: client.clone(),
-		keystore: keystore_container.sync_keystore(),
+		keystore: keystore_container.keystore(),
 		network: network.clone(),
 		rpc_builder: Box::new(rpc_builder),
 		transaction_pool: transaction_pool.clone(),
@@ -433,7 +431,7 @@ pub fn new_full_base(
 		let client_clone = client.clone();
 		let slot_duration = babe_link.config().slot_duration();
 		let babe_config = sc_consensus_babe::BabeParams {
-			keystore: keystore_container.sync_keystore(),
+			keystore: keystore_container.keystore(),
 			client: client.clone(),
 			select_chain,
 			env: proposer,
@@ -509,8 +507,7 @@ pub fn new_full_base(
 
 	// if the node isn't actively participating in consensus then it doesn't
 	// need a keystore, regardless of which protocol we use below.
-	let keystore =
-		if role.is_authority() { Some(keystore_container.sync_keystore()) } else { None };
+	let keystore = if role.is_authority() { Some(keystore_container.keystore()) } else { None };
 
 	let config = grandpa::Config {
 		// FIXME #1578 make this available through chainspec
@@ -595,10 +592,10 @@ mod tests {
 	use sc_service_test::TestNetNode;
 	use sc_transaction_pool_api::{ChainEvent, MaintainedTransactionPool};
 	use sp_consensus::{BlockOrigin, Environment, Proposer};
-	use sp_core::{crypto::Pair as CryptoPair, Public};
+	use sp_core::crypto::Pair;
 	use sp_inherents::InherentDataProvider;
 	use sp_keyring::AccountKeyring;
-	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+	use sp_keystore::KeystorePtr;
 	use sp_runtime::{
 		generic::{Digest, Era, SignedPayload},
 		key_types::BABE,
@@ -618,12 +615,13 @@ mod tests {
 		sp_tracing::try_init_simple();
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore: SyncCryptoStorePtr =
-			Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
-		let alice: sp_consensus_babe::AuthorityId =
-			SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
-				.expect("Creates authority pair")
-				.into();
+		let keystore: KeystorePtr = LocalKeystore::open(keystore_path.path(), None)
+			.expect("Creates keystore")
+			.into();
+		let alice: sp_consensus_babe::AuthorityId = keystore
+			.sr25519_generate_new(BABE, Some("//Alice"))
+			.expect("Creates authority pair")
+			.into();
 
 		let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
 
@@ -738,17 +736,11 @@ mod tests {
 				// sign the pre-sealed hash of the block and then
 				// add it to a digest item.
 				let to_sign = pre_hash.encode();
-				let signature = SyncCryptoStore::sign_with(
-					&*keystore,
-					sp_consensus_babe::AuthorityId::ID,
-					&alice.to_public_crypto_pair(),
-					&to_sign,
-				)
-				.unwrap()
-				.unwrap()
-				.try_into()
-				.unwrap();
-				let item = <DigestItem as CompatibleDigestItem>::babe_seal(signature);
+				let signature = keystore
+					.sr25519_sign(sp_consensus_babe::AuthorityId::ID, alice.as_ref(), &to_sign)
+					.unwrap()
+					.unwrap();
+				let item = <DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
 				slot += 1;
 
 				let mut params = BlockImportParams::new(BlockOrigin::File, new_header);
@@ -760,7 +752,7 @@ mod tests {
 				);
 				params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-				futures::executor::block_on(block_import.import_block(params, Default::default()))
+				futures::executor::block_on(block_import.import_block(params))
 					.expect("error importing test block");
 			},
 			|service, _| {
@@ -775,7 +767,7 @@ mod tests {
 				};
 				let signer = charlie.clone();
 
-				let function = RuntimeCall::Balances(BalancesCall::transfer {
+				let function = RuntimeCall::Balances(BalancesCall::transfer_allow_death {
 					dest: to.into(),
 					value: amount,
 				});

@@ -29,9 +29,9 @@
 //!
 //! Some resources about the above:
 //!
-//! 1. <https://docs.substrate.io/v3/tools/try-runtime>
+//! 1. <https://docs.substrate.io/reference/command-line-tools/try-runtime/>
 //! 2. <https://www.crowdcast.io/e/substrate-seminar/41>
-//! 3. <https://docs.substrate.io/v3/advanced/executor>
+//! 3. <https://docs.substrate.io/fundamentals/runtime-development/>
 //!
 //! ---
 //!
@@ -134,10 +134,10 @@
 //!
 //! ```ignore
 //! 
-//! #[cfg(feature = try-runtime)]
+//! #[cfg(feature = "try-runtime")]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
-//! #[cfg(feature = try-runtime)]
+//! #[cfg(feature = "try-runtime")]
 //! fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {}
 //! ```
 //!
@@ -152,9 +152,9 @@
 //!
 //! Similarly, each pallet can expose a function in `#[pallet::hooks]` section as follows:
 //!
-//! ```
-//! #[cfg(feature = try-runtime)]
-//! fn try_state(_) -> Result<(), &'static str> {}
+//! ```ignore
+//! #[cfg(feature = "try-runtime")]
+//! fn try_state(_: BlockNumber) -> Result<(), &'static str> {}
 //! ```
 //!
 //! which is called on numerous code paths in the try-runtime tool. These checks should ensure that
@@ -383,7 +383,7 @@ use sp_core::{
 };
 use sp_externalities::Extensions;
 use sp_inherents::InherentData;
-use sp_keystore::{testing::KeyStore, KeystoreExt};
+use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, NumberFor},
 	DeserializeOwned, Digest,
@@ -599,8 +599,6 @@ pub struct LiveState {
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum State {
 	/// Use a state snapshot as the source of runtime state.
-	///
-	/// This can be crated by passing a value to [`State::Live::snapshot_path`].
 	Snap {
 		#[arg(short, long)]
 		snapshot_path: PathBuf,
@@ -818,9 +816,10 @@ pub(crate) fn full_extensions() -> Extensions {
 	extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
 	let (offchain, _offchain_state) = TestOffchainExt::new();
 	let (pool, _pool_state) = TestTransactionPoolExt::new();
+	let keystore = MemoryKeystore::new();
 	extensions.register(OffchainDbExt::new(offchain.clone()));
 	extensions.register(OffchainWorkerExt::new(offchain));
-	extensions.register(KeystoreExt(std::sync::Arc::new(KeyStore::new())));
+	extensions.register(KeystoreExt::new(keystore));
 	extensions.register(TransactionPoolExt::new(pool));
 
 	extensions

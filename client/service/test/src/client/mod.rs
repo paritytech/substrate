@@ -30,7 +30,7 @@ use sc_consensus::{
 };
 use sc_service::client::{new_in_mem, Client, LocalCallExecutor};
 use sp_api::ProvideRuntimeApi;
-use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError, SelectChain};
+use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
 use sp_core::{testing::TaskExecutor, traits::CallContext, H256};
 use sp_runtime::{
 	generic::BlockId,
@@ -930,7 +930,7 @@ fn finality_target_with_best_not_on_longest_chain() {
 	let mut import_params = BlockImportParams::new(BlockOrigin::Own, header);
 	import_params.body = Some(extrinsics);
 	import_params.fork_choice = Some(ForkChoiceStrategy::Custom(false));
-	block_on(client.import_block(import_params, Default::default())).unwrap();
+	block_on(client.import_block(import_params)).unwrap();
 
 	// double check that B3 is still the best...
 	assert_eq!(client.info().best_hash, b3.hash());
@@ -1567,7 +1567,11 @@ fn respects_block_rules() {
 }
 
 #[test]
+#[cfg(disable_flaky)]
+#[allow(dead_code)]
+// FIXME: https://github.com/paritytech/substrate/issues/11321
 fn returns_status_for_pruned_blocks() {
+	use sc_consensus::BlockStatus;
 	sp_tracing::try_init_simple();
 	let tmp = tempfile::tempdir().unwrap();
 
@@ -1963,7 +1967,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-		block_on(client.import_block(import, Default::default())).unwrap();
+		block_on(client.import_block(import)).unwrap();
 	};
 
 	// after importing a block we should still have 4 notification sinks
