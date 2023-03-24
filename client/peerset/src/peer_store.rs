@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::DropReason;
 use libp2p::PeerId;
 use partial_sort::PartialSort;
 use std::{
@@ -41,7 +40,7 @@ pub trait PeerReputationProvider {
 	fn is_banned(&self, peer_id: PeerId) -> bool;
 
 	/// Report the peer disconnect for reputation adjustement.
-	fn report_disconnect(&self, peer_id: PeerId, reason: DropReason);
+	fn report_disconnect(&self, peer_id: PeerId);
 
 	/// Get the candidates for initiating outgoing connections.
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId>;
@@ -109,14 +108,11 @@ impl PeerStoreInner {
 		self.reputations.get(peer_id).cloned().unwrap_or_default().is_banned()
 	}
 
-	fn report_disconnect(&mut self, peer_id: PeerId, reason: DropReason) {
+	fn report_disconnect(&mut self, peer_id: PeerId) {
 		self.reputations
 			.entry(peer_id)
 			.or_default()
 			.add_reputation(DISCONNECT_REPUTATION_CHANGE);
-		// FIXME: in the original `PeerSet`, `DropReason` was used to remove peers
-		// connection attempts to which were rejected. As connection management logic was moved
-		// to `ProtocolController`, I don't think we need this in `PeerStore`.
 	}
 
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId> {

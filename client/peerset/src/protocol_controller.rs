@@ -48,7 +48,7 @@ enum Action {
 	SetReservedOnly(bool),
 	DisconnectPeer(PeerId),
 	IncomingConnection(PeerId, IncomingIndex),
-	Dropped(PeerId, DropReason),
+	Dropped(PeerId),
 }
 
 /// Shared handle to [`ProtocolController`]. Distributed around the code outside of the
@@ -101,8 +101,8 @@ impl ProtocolHandle {
 	}
 
 	/// Notify that connection was dropped (eithere refused or disconnected).
-	pub fn dropped(&self, peer_id: PeerId, reason: DropReason) {
-		let _ = self.to_controller.unbounded_send(Action::Dropped(peer_id, reason));
+	pub fn dropped(&self, peer_id: PeerId) {
+		let _ = self.to_controller.unbounded_send(Action::Dropped(peer_id));
 	}
 }
 
@@ -228,15 +228,14 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 			Action::DisconnectPeer(peer_id) => self.on_disconnect_peer(peer_id),
 			Action::IncomingConnection(peer_id, index) =>
 				self.on_incoming_connection(peer_id, index),
-			Action::Dropped(peer_id, reason) =>
-				self.on_peer_dropped(peer_id, reason).unwrap_or_else(|peer_id| {
-					debug_assert!(false, "Received Action::Dropped for non-connected peer.");
-					error!(
-						target: "peerset",
-						"Received Action::Dropped for non-connected peer {} on {:?}.",
-						peer_id, self.set_id,
-					)
-				}),
+			Action::Dropped(peer_id) => self.on_peer_dropped(peer_id).unwrap_or_else(|peer_id| {
+				debug_assert!(false, "Received Action::Dropped for non-connected peer.");
+				error!(
+					target: "peerset",
+					"Received Action::Dropped for non-connected peer {} on {:?}.",
+					peer_id, self.set_id,
+				)
+			}),
 		}
 		true
 	}
@@ -265,10 +264,10 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 			.unbounded_send(Message::Drop { set_id: self.set_id, peer_id });
 	}
 
-	/// Report peer disconnect event to `Peerset` for it to update peer's reputation accordingly.
+	/// Report peer disconnect event to `PeerStore` for it to update peer's reputation accordingly.
 	/// Should only be called if the remote node disconnected us, not the other way around.
-	fn report_disconnect(&self, peer_id: PeerId, reason: DropReason) {
-		self.peer_store.report_disconnect(peer_id, reason);
+	fn report_disconnect(&self, peer_id: PeerId) {
+		self.peer_store.report_disconnect(peer_id);
 	}
 
 	/// Ask `Peerset` if the peer has a reputation value not sufficent for connection with it.
@@ -442,10 +441,10 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 
 	/// Indicate that a connection with the peer was dropped.
 	/// Returns `Err(PeerId)` if the peer wasn't connected or is not known to us.
-	fn on_peer_dropped(&mut self, peer_id: PeerId, reason: DropReason) -> Result<(), PeerId> {
+	fn on_peer_dropped(&mut self, peer_id: PeerId) -> Result<(), PeerId> {
 		if self.drop_reserved_peer(&peer_id)? || self.drop_regular_peer(&peer_id) {
 			// The peer found and disconnected.
-			self.report_disconnect(peer_id, reason);
+			self.report_disconnect(peer_id);
 			Ok(())
 		} else {
 			// The peer was not found in neither regular or reserved lists.
@@ -562,7 +561,7 @@ mod tests {
 
 		impl PeerReputationProvider for PeerStoreHandle {
 			fn is_banned(&self, peer_id: PeerId) -> bool;
-			fn report_disconnect(&self, peer_id: PeerId, reason: DropReason);
+			fn report_disconnect(&self, peer_id: PeerId);
 			fn outgoing_candidates<'a>(&self, count: usize, ignored: HashSet<&'a PeerId>) -> Vec<PeerId>;
 		}
 	}
@@ -607,8 +606,8 @@ mod tests {
 		assert_eq!(controller.num_in, 0);
 
 		// Drop connections to be able to accept reserved nodes.
-		controller.on_peer_dropped(reserved1, DropReason::Refused);
-		controller.on_peer_dropped(reserved2, DropReason::Unknown);
+		controller.on_peer_dropped(reserved1);
+		controller.on_peer_dropped(reserved2);
 
 		// Incoming connection from `reserved1`.
 		let incoming1 = IncomingIndex(1);
@@ -714,8 +713,8 @@ mod tests {
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
 
 		// Drop both reserved nodes.
-		controller.on_peer_dropped(reserved1, DropReason::Refused);
-		controller.on_peer_dropped(reserved2, DropReason::Unknown);
+		controller.on_peer_dropped(reserved1);
+		controller.on_peer_dropped(reserved2);
 
 		// Initiate connections.
 		controller.alloc_slots();
@@ -873,8 +872,8 @@ mod tests {
 		assert_eq!(controller.num_in, 0);
 
 		// Drop peers.
-		controller.on_peer_dropped(peer1.clone(), DropReason::Unknown);
-		controller.on_peer_dropped(peer2.clone(), DropReason::Refused);
+		controller.on_peer_dropped(peer1.clone());
+		controller.on_peer_dropped(peer2.clone());
 
 		// Slots are freed.
 		assert_eq!(controller.num_out, 0);
@@ -1356,14 +1355,14 @@ mod tests {
 		assert_eq!(controller.num_in, 1);
 		assert_eq!(controller.num_out, 1);
 
-		controller.on_peer_dropped(peer1, DropReason::Refused);
+		controller.on_peer_dropped(peer1);
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert_eq!(controller.nodes.len(), 1);
 		assert!(!controller.nodes.contains_key(&peer1));
 		assert_eq!(controller.num_in, 1);
 		assert_eq!(controller.num_out, 0);
 
-		controller.on_peer_dropped(peer2, DropReason::Unknown);
+		controller.on_peer_dropped(peer2);
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert_eq!(controller.nodes.len(), 0);
 		assert_eq!(controller.num_in, 0);
