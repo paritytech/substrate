@@ -21,32 +21,67 @@ use partial_sort::PartialSort;
 use std::{
 	cmp::{Ord, Ordering, PartialOrd},
 	collections::{HashMap, HashSet},
+	sync::{Arc, Mutex},
+	time::{Duration, Instant},
 };
+use wasm_timer::Delay;
+
+use crate::ReputationChange;
 
 /// We don't accept nodes whose reputation is under this value.
 const BANNED_THRESHOLD: i32 = 82 * (i32::MIN / 100);
 /// Reputation change for a node when we get disconnected from it.
 const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
-/// Relative decrement of a reputation that is applied every second. I.e., for inverse decrement of
-/// 50 we decrease absolute value of the reputation by 1/50. This corresponds to a factor of `k =
-/// 0.98`. It takes `ln(0.5) / ln(k)` seconds to reduce the reputation by half, or 34.3 seconds for
-/// the values above. In this setup the maximum allowed absolute value of `i32::MAX` becomes 0 in
-/// ~1100 seconds, and this is the maximun time records live in the hash map if they are not
-/// updated.
+/// Relative decrement of a reputation value that is applied every second. I.e., for inverse
+/// decrement of 50 we decrease absolute value of the reputation by 1/50. This corresponds to a
+/// factor of `k = 0.98`. It takes `ln(0.5) / ln(k)` seconds to reduce the reputation by half, or
+/// 34.3 seconds for the values above. In this setup the maximum allowed absolute value of
+/// `i32::MAX` becomes 0 in ~1100 seconds, and this is the maximun time records live in the hash map
+/// if they are not updated.
 const INVERSE_DECREMENT: i32 = 50;
 
 pub trait PeerReputationProvider {
 	/// Check whether the peer is banned.
-	fn is_banned(&self, peer_id: PeerId) -> bool;
+	fn is_banned(&self, peer_id: &PeerId) -> bool;
 
 	/// Report the peer disconnect for reputation adjustement.
-	fn report_disconnect(&self, peer_id: PeerId);
+	fn report_disconnect(&mut self, peer_id: PeerId);
+
+	/// Adjust peer reputation value.
+	fn report_peer(&mut self, peer_id: PeerId, change: ReputationChange);
+
+	/// Get peer reputation.
+	fn peer_reputation(&self, peer_id: &PeerId) -> i32;
 
 	/// Get the candidates for initiating outgoing connections.
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId>;
 }
 
-pub struct PeerStoreHandle {}
+pub struct PeerStoreHandle {
+	inner: Arc<Mutex<PeerStoreInner>>,
+}
+
+impl PeerReputationProvider for PeerStoreHandle {
+	fn is_banned(&self, peer_id: &PeerId) -> bool {
+		self.inner.lock().unwrap().is_banned(peer_id)
+	}
+
+	fn report_disconnect(&mut self, peer_id: PeerId) {
+		self.inner.lock().unwrap().report_disconnect(peer_id)
+	}
+
+	fn report_peer(&mut self, peer_id: PeerId, change: ReputationChange) {
+		self.inner.lock().unwrap().report_peer(peer_id, change)
+	}
+
+	fn peer_reputation(&self, peer_id: &PeerId) -> i32 {
+		self.inner.lock().unwrap().peer_reputation(peer_id)
+	}
+
+	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId> {
+		self.inner.lock().unwrap().outgoing_candidates(count, ignored)
+	}
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Reputation(i32);
@@ -79,7 +114,11 @@ impl Reputation {
 		self.0 = self.0.saturating_add(increment);
 	}
 
-	fn decay(&mut self, seconds_passed: u32) {
+	fn value(&self) -> i32 {
+		self.0
+	}
+
+	fn decay(&mut self, seconds_passed: u64) {
 		let reputation = &mut self.0;
 
 		for _ in 0..seconds_passed {
@@ -115,6 +154,14 @@ impl PeerStoreInner {
 			.add_reputation(DISCONNECT_REPUTATION_CHANGE);
 	}
 
+	fn report_peer(&mut self, peer_id: PeerId, change: ReputationChange) {
+		self.reputations.entry(peer_id).or_default().add_reputation(change.value);
+	}
+
+	fn peer_reputation(&self, peer_id: &PeerId) -> i32 {
+		self.reputations.get(peer_id).cloned().unwrap_or(Reputation::default()).0
+	}
+
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId> {
 		let mut candidates = self
 			.reputations
@@ -127,7 +174,50 @@ impl PeerStoreInner {
 		candidates.partial_sort(count, |(_, rep1), (_, rep2)| rep1.cmp(rep2));
 		candidates.iter().take(count).map(|(peer_id, _)| *peer_id).collect()
 
-		// FIXME: depending on usage patterns, it might be more efficient to always maintain peers
-		// sorted.
+		// FIXME: depending on the usage patterns, it might be more efficient to always maintain
+		// peers sorted.
+	}
+
+	fn progress_time(&mut self, seconds_passed: u64) {
+		if seconds_passed == 0 {
+			return
+		}
+
+		self.reputations
+			.iter_mut()
+			.for_each(|(_, reputation)| reputation.decay(seconds_passed));
+		self.reputations.retain(|_, reputation| reputation.value() != 0);
+	}
+}
+
+struct PeerStore {
+	inner: Arc<Mutex<PeerStoreInner>>,
+}
+
+impl PeerStore {
+	pub fn new() -> Self {
+		PeerStore { inner: Arc::new(Mutex::new(PeerStoreInner { reputations: HashMap::new() })) }
+	}
+
+	pub fn handle(&self) -> PeerStoreHandle {
+		PeerStoreHandle { inner: self.inner.clone() }
+	}
+
+	pub async fn run(self) {
+		let started = Instant::now();
+		let mut latest_time_update = started;
+		loop {
+			let now = Instant::now();
+			// We basically do `(now - self.latest_update).as_secs()`, except that by the way we do
+			// it we know that we're not going to miss seconds because of rounding to integers.
+			let seconds_passed = {
+				let elapsed_latest = latest_time_update - started;
+				let elapsed_now = now - started;
+				latest_time_update = now;
+				elapsed_now.as_secs() - elapsed_latest.as_secs()
+			};
+			self.inner.lock().unwrap().progress_time(seconds_passed);
+			let _ = Delay::new(Duration::from_secs(1)).await;
+		}
 	}
 }

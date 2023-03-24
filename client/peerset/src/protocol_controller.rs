@@ -266,12 +266,12 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 
 	/// Report peer disconnect event to `PeerStore` for it to update peer's reputation accordingly.
 	/// Should only be called if the remote node disconnected us, not the other way around.
-	fn report_disconnect(&self, peer_id: PeerId) {
+	fn report_disconnect(&mut self, peer_id: PeerId) {
 		self.peer_store.report_disconnect(peer_id);
 	}
 
 	/// Ask `Peerset` if the peer has a reputation value not sufficent for connection with it.
-	fn is_banned(&self, peer_id: PeerId) -> bool {
+	fn is_banned(&self, peer_id: &PeerId) -> bool {
 		self.peer_store.is_banned(peer_id)
 	}
 
@@ -408,7 +408,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 				PeerState::NotConnected => {
 					// It's questionable whether we should check a reputation of reserved node.
 					// FIXME: unable to call `self.is_banned()` because of borrowed `self`.
-					if self.peer_store.is_banned(peer_id) {
+					if self.peer_store.is_banned(&peer_id) {
 						self.reject_connection(incoming_index);
 					} else {
 						*state = PeerState::Connected(Direction::Inbound);
@@ -429,7 +429,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 			return
 		}
 
-		if self.is_banned(peer_id) {
+		if self.is_banned(&peer_id) {
 			self.reject_connection(incoming_index);
 			return
 		}
@@ -490,7 +490,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 		self.reserved_nodes
 			.iter_mut()
 			.filter_map(|(peer_id, state)| {
-				(matches!(state, PeerState::NotConnected) && !self.peer_store.is_banned(*peer_id))
+				(matches!(state, PeerState::NotConnected) && !self.peer_store.is_banned(peer_id))
 					.then(|| {
 						*state = PeerState::Connected(Direction::Outbound);
 						peer_id
@@ -508,7 +508,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 			return
 		}
 
-		// Fill available slots with non-reserved nodes
+		// Fill available slots.
 		let available_slots = (self.max_out - self.num_out).saturated_into();
 
 		// Ignore reserved nodes (connected above) and already connected nodes.
@@ -559,7 +559,8 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 mod tests {
 	use super::{Direction, PeerState, ProtocolController};
 	use crate::{
-		peer_store::PeerReputationProvider, DropReason, IncomingIndex, Message, SetConfig, SetId,
+		peer_store::PeerReputationProvider, DropReason, IncomingIndex, Message, ReputationChange,
+		SetConfig, SetId,
 	};
 	use futures::FutureExt;
 	use libp2p::PeerId;
@@ -570,8 +571,10 @@ mod tests {
 		pub PeerStoreHandle {}
 
 		impl PeerReputationProvider for PeerStoreHandle {
-			fn is_banned(&self, peer_id: PeerId) -> bool;
-			fn report_disconnect(&self, peer_id: PeerId);
+			fn is_banned(&self, peer_id: &PeerId) -> bool;
+			fn report_disconnect(&mut self, peer_id: PeerId);
+			fn report_peer(&mut self, peer_id: PeerId, change: ReputationChange);
+			fn peer_reputation(&self, peer_id: &PeerId) -> i32;
 			fn outgoing_candidates<'a>(&self, count: usize, ignored: HashSet<&'a PeerId>) -> Vec<PeerId>;
 		}
 	}
