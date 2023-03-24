@@ -18,10 +18,10 @@
 //! Local keystore implementation
 
 use parking_lot::RwLock;
-use sp_application_crypto::{ecdsa, ed25519, sr25519, AppCrypto, AppPair, IsWrappedBy};
+use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
 use sp_core::{
-	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as PairT, SecretString},
-	sr25519::{Pair as Sr25519Pair, Public as Sr25519Public},
+	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString},
+	ecdsa, ed25519, sr25519,
 };
 use sp_keystore::{
 	vrf::{make_transcript, VRFSignature, VRFTranscriptData},
@@ -115,10 +115,10 @@ impl Keystore for LocalKeystore {
 	fn sr25519_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
-		public: &Sr25519Public,
+		public: &sr25519::Public,
 		transcript_data: VRFTranscriptData,
 	) -> std::result::Result<Option<VRFSignature>, TraitError> {
-		let res = self.0.read().key_pair_by_type::<Sr25519Pair>(public, key_type)?.map(|pair| {
+		let res = self.0.read().key_pair_by_type::<sr25519::Pair>(public, key_type)?.map(|pair| {
 			let transcript = make_transcript(transcript_data);
 			let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
 			VRFSignature { output: inout.to_output(), proof }
@@ -298,7 +298,12 @@ impl KeystoreInner {
 	/// Insert the given public/private key pair with the given key type.
 	///
 	/// Does not place it into the file system store.
-	fn insert_ephemeral_pair<Pair: PairT>(&mut self, pair: &Pair, seed: &str, key_type: KeyTypeId) {
+	fn insert_ephemeral_pair<Pair: CorePair>(
+		&mut self,
+		pair: &Pair,
+		seed: &str,
+		key_type: KeyTypeId,
+	) {
 		let key = (key_type, pair.public().to_raw_vec());
 		self.additional.insert(key, seed.into());
 	}
@@ -318,7 +323,7 @@ impl KeystoreInner {
 	///
 	/// Places it into the file system store, if a path is configured. Otherwise insert
 	/// it into the memory cache only.
-	fn generate_by_type<Pair: PairT>(&mut self, key_type: KeyTypeId) -> Result<Pair> {
+	fn generate_by_type<Pair: CorePair>(&mut self, key_type: KeyTypeId) -> Result<Pair> {
 		let (pair, phrase, _) = Pair::generate_with_phrase(self.password());
 		if let Some(path) = self.key_file_path(pair.public().as_slice(), key_type) {
 			Self::write_to_file(path, &phrase)?;
@@ -347,7 +352,7 @@ impl KeystoreInner {
 	/// Create a new key from seed.
 	///
 	/// Does not place it into the file system store.
-	fn insert_ephemeral_from_seed_by_type<Pair: PairT>(
+	fn insert_ephemeral_from_seed_by_type<Pair: CorePair>(
 		&mut self,
 		seed: &str,
 		key_type: KeyTypeId,
@@ -379,7 +384,7 @@ impl KeystoreInner {
 	}
 
 	/// Get a key pair for the given public key and key type.
-	fn key_pair_by_type<Pair: PairT>(
+	fn key_pair_by_type<Pair: CorePair>(
 		&self,
 		public: &Pair::Public,
 		key_type: KeyTypeId,
