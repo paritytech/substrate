@@ -28,7 +28,6 @@
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{traits::Zero, SaturatedConversion},
-	sp_tracing::{enter_span, Level},
 	traits::Currency,
 };
 use frame_system::pallet_prelude::*;
@@ -112,8 +111,6 @@ where
 		mut statement: Statement,
 	) -> Result<ValidStatement, InvalidStatement> {
 		sp_io::init_tracing();
-
-		enter_span! { Level::TRACE, "validate_statement" };
 		log::debug!(target: LOG_TARGET, "Validating statement {:?}", statement);
 		let account: T::AccountId = match statement.proof() {
 			Some(Proof::OnChain { who, block_hash, event_index }) => {
