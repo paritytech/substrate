@@ -592,7 +592,7 @@ mod tests {
 	use sc_service_test::TestNetNode;
 	use sc_transaction_pool_api::{ChainEvent, MaintainedTransactionPool};
 	use sp_consensus::{BlockOrigin, Environment, Proposer};
-	use sp_core::{crypto::Pair as CryptoPair, Public};
+	use sp_core::crypto::Pair;
 	use sp_inherents::InherentDataProvider;
 	use sp_keyring::AccountKeyring;
 	use sp_keystore::KeystorePtr;
@@ -737,16 +737,10 @@ mod tests {
 				// add it to a digest item.
 				let to_sign = pre_hash.encode();
 				let signature = keystore
-					.sign_with(
-						sp_consensus_babe::AuthorityId::ID,
-						&alice.to_public_crypto_pair(),
-						&to_sign,
-					)
+					.sr25519_sign(sp_consensus_babe::AuthorityId::ID, alice.as_ref(), &to_sign)
 					.unwrap()
-					.unwrap()
-					.try_into()
 					.unwrap();
-				let item = <DigestItem as CompatibleDigestItem>::babe_seal(signature);
+				let item = <DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
 				slot += 1;
 
 				let mut params = BlockImportParams::new(BlockOrigin::File, new_header);

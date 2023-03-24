@@ -1,6 +1,9 @@
+use crate::chain_head::test_utils::ChainHeadMockClient;
+
 use super::*;
 use assert_matches::assert_matches;
 use codec::{Decode, Encode};
+use futures::Future;
 use jsonrpsee::{
 	core::{error::Error, server::rpc_module::Subscription as RpcSubscription},
 	types::{error::CallError, EmptyServerParams as EmptyParams},
@@ -33,12 +36,18 @@ const CHILD_STORAGE_KEY: &[u8] = b"child";
 const CHILD_VALUE: &[u8] = b"child value";
 
 async fn get_next_event<T: serde::de::DeserializeOwned>(sub: &mut RpcSubscription) -> T {
-	let (event, _sub_id) = tokio::time::timeout(std::time::Duration::from_secs(1), sub.next())
+	let (event, _sub_id) = tokio::time::timeout(std::time::Duration::from_secs(60), sub.next())
 		.await
 		.unwrap()
 		.unwrap()
 		.unwrap();
 	event
+}
+
+async fn run_with_timeout<F: Future>(future: F) -> <F as Future>::Output {
+	tokio::time::timeout(std::time::Duration::from_secs(60 * 10), future)
+		.await
+		.unwrap()
 }
 
 async fn setup_api() -> (
@@ -1314,6 +1323,98 @@ async fn follow_report_multiple_pruned_block() {
 	let expected = FollowEvent::Finalized(Finalized {
 		finalized_block_hashes: vec![format!("{:?}", block_6_hash)],
 		pruned_block_hashes: vec![format!("{:?}", block_4_hash), format!("{:?}", block_5_hash)],
+	});
+	assert_eq!(event, expected);
+}
+
+#[tokio::test]
+async fn follow_finalized_before_new_block() {
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let mut client = Arc::new(builder.build());
+
+	let client_mock = Arc::new(ChainHeadMockClient::new(client.clone()));
+
+	let api = ChainHead::new(
+		client_mock.clone(),
+		backend,
+		Arc::new(TaskExecutor::default()),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+	)
+	.into_rpc();
+
+	// Make sure the block is imported for it to be pinned.
+	let block_1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_1_hash = block_1.header.hash();
+	client.import(BlockOrigin::Own, block_1.clone()).await.unwrap();
+
+	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+
+	// Trigger the `FinalizedNotification` for block 1 before the `BlockImportNotification`, and
+	// expect for the `chainHead` to generate `NewBlock`, `BestBlock` and `Finalized` events.
+
+	// Trigger the Finalized notification before the NewBlock one.
+	run_with_timeout(client_mock.trigger_finality_stream(block_1.header.clone())).await;
+
+	// Initialized must always be reported first.
+	let finalized_hash = client.info().finalized_hash;
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::Initialized(Initialized {
+		finalized_block_hash: format!("{:?}", finalized_hash),
+		finalized_block_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+
+	// Block 1 must be reported because we triggered the finalized notification.
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::NewBlock(NewBlock {
+		block_hash: format!("{:?}", block_1_hash),
+		parent_block_hash: format!("{:?}", finalized_hash),
+		new_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::BestBlockChanged(BestBlockChanged {
+		best_block_hash: format!("{:?}", block_1_hash),
+	});
+	assert_eq!(event, expected);
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::Finalized(Finalized {
+		finalized_block_hashes: vec![format!("{:?}", block_1_hash)],
+		pruned_block_hashes: vec![],
+	});
+	assert_eq!(event, expected);
+
+	let block_2 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_2_hash = block_2.header.hash();
+	client.import(BlockOrigin::Own, block_2.clone()).await.unwrap();
+
+	// Triggering the `BlockImportNotification` notification for block 1 should have no effect
+	// on the notification because the events were handled by the `FinalizedNotification`.
+	// Also trigger the `BlockImportNotification` notification for block 2 to ensure
+	// `NewBlock and `BestBlock` events are generated.
+
+	// Trigger NewBlock notification for block 1 and block 2.
+	run_with_timeout(client_mock.trigger_import_stream(block_1.header)).await;
+	run_with_timeout(client_mock.trigger_import_stream(block_2.header)).await;
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::NewBlock(NewBlock {
+		block_hash: format!("{:?}", block_2_hash),
+		parent_block_hash: format!("{:?}", block_1_hash),
+		new_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::BestBlockChanged(BestBlockChanged {
+		best_block_hash: format!("{:?}", block_2_hash),
 	});
 	assert_eq!(event, expected);
 }
