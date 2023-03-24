@@ -894,7 +894,7 @@ where
 		Box::pin(
 			self.env
 				.init(block)
-				.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e))),
+				.map_err(|e| ConsensusError::ClientImport(e.to_string())),
 		)
 	}
 
