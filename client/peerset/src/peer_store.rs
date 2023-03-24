@@ -205,6 +205,7 @@ struct PeerStore {
 impl PeerStore {
 	/// Create new empty peer store.
 	pub fn new() -> Self {
+		// TODO: pass bootnodes.
 		PeerStore { inner: Arc::new(Mutex::new(PeerStoreInner { reputations: HashMap::new() })) }
 	}
 
