@@ -50,7 +50,7 @@ pub trait PeerReputationProvider {
 	/// Adjust peer reputation value.
 	fn report_peer(&mut self, peer_id: PeerId, change: ReputationChange);
 
-	/// Get peer reputation.
+	/// Get peer reputation value.
 	fn peer_reputation(&self, peer_id: &PeerId) -> i32;
 
 	/// Get the candidates for initiating outgoing connections.
@@ -195,14 +195,17 @@ struct PeerStore {
 }
 
 impl PeerStore {
+	/// Create new empty peer store.
 	pub fn new() -> Self {
 		PeerStore { inner: Arc::new(Mutex::new(PeerStoreInner { reputations: HashMap::new() })) }
 	}
 
+	/// Get `PeerStoreHandle`.
 	pub fn handle(&self) -> PeerStoreHandle {
 		PeerStoreHandle { inner: self.inner.clone() }
 	}
 
+	/// Drive the `PeerStore`, decaying reputation values over time and removing expired entries.
 	pub async fn run(self) {
 		let started = Instant::now();
 		let mut latest_time_update = started;
