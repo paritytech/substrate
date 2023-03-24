@@ -571,8 +571,11 @@ mod tests {
 			}
 			Ok(result)
 		}
-		fn caller(&self) -> &AccountIdOf<Self::T> {
-			&ALICE
+		fn caller(&self) -> Option<&AccountIdOf<Self::T>> {
+			Some(&ALICE)
+		}
+		fn ensure_caller(&self) -> Result<&AccountIdOf<Self::T>, DispatchError> {
+			Ok(&ALICE)
 		}
 		fn is_contract(&self, _address: &AccountIdOf<Self::T>) -> bool {
 			true
@@ -585,6 +588,9 @@ mod tests {
 			&HASH
 		}
 		fn caller_is_origin(&self) -> bool {
+			false
+		}
+		fn caller_is_root(&self) -> bool {
 			false
 		}
 		fn address(&self) -> &AccountIdOf<Self::T> {

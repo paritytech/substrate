@@ -901,6 +901,8 @@ pub mod pallet {
 		Indeterministic,
 		/// Root origin is not allowed here.
 		RootOriginNotAllowed,
+		/// There is no account id associated
+		NoAccountId,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -983,18 +985,6 @@ impl<T: Config> ContractOrigin<T> {
 		ContractOrigin::Signed(account_id)
 	}
 }
-// todo: this is not working, need to figure out why
-// impl<T: Config> TryFrom<T::RuntimeOrigin> for ContractOrigin<T> {
-// 	type Error = BadOrigin;
-
-// 	fn try_from(origin: T::RuntimeOrigin) -> Result<Self, Self::Error> {
-// 		match origin {
-// 			Ok(T::RuntimeOrigin::Root) => Ok(ContractOrigin::Root),
-// 			Ok(T::RuntimeOrigin::Signed(t)) => Ok(ContractOrigin::Signed(t)),
-// 			_ => Err(BadOrigin),
-// 		}
-// 	}
-// }
 
 /// Helper function to ensure that the origin is either a regular signed account or root
 /// and return the origin as a `ContractOrigin`.
@@ -1142,7 +1132,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 		let mut storage_deposit = Default::default();
 		let try_exec = || {
 			// Root origin is not allowed here
-			let origin = match common.origin {
+			let origin = match &common.origin {
 				ContractOrigin::Signed(t) => t,
 				ContractOrigin::Root => return Err(ExecError {
 					error: <Error<T>>::RootOriginNotAllowed.into(),

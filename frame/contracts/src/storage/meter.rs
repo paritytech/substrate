@@ -669,7 +669,7 @@ mod tests {
 	fn new_reserves_balance_works() {
 		clear_ext();
 
-		TestMeter::new(&ContractOrigin::Signed(ALICE), Some(1_000), 0).unwrap();
+		TestMeter::new(&ContractOrigin::from_account_id(ALICE), Some(1_000), 0).unwrap();
 
 		assert_eq!(
 			TestExtTestValue::get(),
@@ -684,7 +684,7 @@ mod tests {
 	fn empty_charge_works() {
 		clear_ext();
 
-		let mut meter = TestMeter::new(&ContractOrigin::Signed(ALICE), Some(1_000), 0).unwrap();
+		let mut meter = TestMeter::new(&ContractOrigin::from_account_id(ALICE), Some(1_000), 0).unwrap();
 		assert_eq!(meter.available(), 1_000);
 
 		// an empty charge does not create a `Charge` entry
@@ -705,7 +705,7 @@ mod tests {
 	fn charging_works() {
 		clear_ext();
 
-		let mut meter = TestMeter::new(&ContractOrigin::Signed(ALICE), Some(100), 0).unwrap();
+		let mut meter = TestMeter::new(&ContractOrigin::from_account_id(ALICE), Some(100), 0).unwrap();
 		assert_eq!(meter.available(), 100);
 
 		let mut nested0_info =
@@ -734,7 +734,7 @@ mod tests {
 		nested0.enforce_limit(Some(&mut nested0_info)).unwrap();
 		meter.absorb(nested0, DepositAccount(BOB), Some(&mut nested0_info));
 
-		meter.into_deposit(&ContractOrigin::Signed(ALICE));
+		meter.into_deposit(&ContractOrigin::from_account_id(ALICE));
 
 		assert_eq!(nested0_info.extra_deposit(), 112);
 		assert_eq!(nested1_info.extra_deposit(), 110);
@@ -772,7 +772,7 @@ mod tests {
 	fn termination_works() {
 		clear_ext();
 
-		let mut meter = TestMeter::new(&ContractOrigin::Signed(ALICE), Some(1_000), 0).unwrap();
+		let mut meter = TestMeter::new(&ContractOrigin::from_account_id(ALICE), Some(1_000), 0).unwrap();
 		assert_eq!(meter.available(), 1_000);
 
 		let mut nested0 = meter.nested();
@@ -794,7 +794,7 @@ mod tests {
 		nested0.absorb(nested1, DepositAccount(CHARLIE), None);
 
 		meter.absorb(nested0, DepositAccount(BOB), None);
-		meter.into_deposit(&ContractOrigin::Signed(ALICE));
+		meter.into_deposit(&ContractOrigin::from_account_id(ALICE));
 
 		assert_eq!(
 			TestExtTestValue::get(),
