@@ -237,9 +237,9 @@ pub mod pallet {
 
 		/// The minimum amount required to keep an account open. MUST BE GREATER THAN ZERO!
 		///
-		/// If you *really* need it to be zero, you can enable the feature `zero_ed` for this
-		/// pallet. However, you do so at your own risk: this will open up a major DoS vector. In
-		/// case you have multiple sources of provider references, you may also get unexpected
+		/// If you *really* need it to be zero, you can enable the feature `insecure_zero_ed` for
+		/// this pallet. However, you do so at your own risk: this will open up a major DoS vector.
+		/// In case you have multiple sources of provider references, you may also get unexpected
 		/// behaviour if you set this to zero.
 		///
 		/// Bottom line: Do yourself a favour and make it at least one!
@@ -506,7 +506,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
-		#[cfg(not(feature = "zero_ed"))]
+		#[cfg(not(feature = "insecure_zero_ed"))]
 		fn integrity_test() {
 			assert!(
 				!<T as Config<I>>::ExistentialDeposit::get().is_zero(),
@@ -890,16 +890,16 @@ pub mod pallet {
 			Self::try_mutate_account(who, |a, _| -> Result<R, DispatchError> { Ok(f(a)) })
 		}
 
-		/// Returns `true` when `who` has some providers or `zero_ed` feature is disnabled. Returns
-		/// `false` otherwise.
-		#[cfg(not(feature = "zero_ed"))]
+		/// Returns `true` when `who` has some providers or `insecure_zero_ed` feature is disnabled.
+		/// Returns `false` otherwise.
+		#[cfg(not(feature = "insecure_zero_ed"))]
 		fn have_providers_or_no_zero_ed(_: &T::AccountId) -> bool {
 			true
 		}
 
-		/// Returns `true` when `who` has some providers or `zero_ed` feature is disnabled. Returns
-		/// `false` otherwise.
-		#[cfg(feature = "zero_ed")]
+		/// Returns `true` when `who` has some providers or `insecure_zero_ed` feature is disnabled.
+		/// Returns `false` otherwise.
+		#[cfg(feature = "insecure_zero_ed")]
 		fn have_providers_or_no_zero_ed(who: &T::AccountId) -> bool {
 			frame_system::Pallet::<T>::providers(who) > 0
 		}
