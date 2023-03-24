@@ -233,9 +233,9 @@ pub mod pallet {
 		/// An overflow happened.
 		Overflow,
 		/// Insufficient amount provided for the first token in the pair.
-		InsufficientAmountParam1,
+		InsufficientAmountReturnedForAmount1,
 		/// Insufficient amount provided for the second token in the pair.
-		InsufficientAmountParam2,
+		InsufficientAmountReturnedForAmount2,
 		/// Optimal calculated amount is less than desired.
 		OptimalAmountLessThanDesired,
 		/// Insufficient liquidity minted.
@@ -353,7 +353,10 @@ pub mod pallet {
 				let amount2_optimal = Self::quote(&amount1_desired, &reserve1, &reserve2)?;
 
 				if amount2_optimal <= amount2_desired {
-					ensure!(amount2_optimal >= amount2_min, Error::<T>::InsufficientAmountParam2);
+					ensure!(
+						amount2_optimal >= amount2_min,
+						Error::<T>::InsufficientAmountReturnedForAmount2
+					);
 					amount1 = amount1_desired;
 					amount2 = amount2_optimal;
 				} else {
@@ -362,7 +365,10 @@ pub mod pallet {
 						amount1_optimal <= amount1_desired,
 						Error::<T>::OptimalAmountLessThanDesired
 					);
-					ensure!(amount1_optimal >= amount1_min, Error::<T>::InsufficientAmountParam1);
+					ensure!(
+						amount1_optimal >= amount1_min,
+						Error::<T>::InsufficientAmountReturnedForAmount1
+					);
 					amount1 = amount1_optimal;
 					amount2 = amount2_desired;
 				}
@@ -446,11 +452,11 @@ pub mod pallet {
 
 			ensure!(
 				!amount1.is_zero() && amount1 >= amount1_min_receive,
-				Error::<T>::InsufficientAmountParam1
+				Error::<T>::InsufficientAmountReturnedForAmount1
 			);
 			ensure!(
 				!amount2.is_zero() && amount2 >= amount2_min_receive,
-				Error::<T>::InsufficientAmountParam2
+				Error::<T>::InsufficientAmountReturnedForAmount2
 			);
 
 			T::PoolAssets::burn_from(
