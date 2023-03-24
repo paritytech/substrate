@@ -104,11 +104,24 @@ impl<OverweightAddr> ServiceQueues for NoopServiceQueues<OverweightAddr> {
 	}
 }
 
-/// The resource footprint of a queue.
+/// The resource footprint of a bunch of blobs. We assume only the number of blobs and their total
+/// size in bytes matter.
 #[derive(Default, Copy, Clone, Eq, PartialEq, RuntimeDebug)]
 pub struct Footprint {
+	/// The number of blobs.
 	pub count: u64,
+	/// The total size of the blobs in bytes.
 	pub size: u64,
+}
+
+impl Footprint {
+	pub fn from_parts(items: usize, len: usize) -> Self {
+		Self { count: items as u64, size: len as u64 }
+	}
+
+	pub fn from_encodable(e: impl Encode) -> Self {
+		Self::from_parts(1, e.encoded_size())
+	}
 }
 
 /// Can enqueue messages for multiple origins.

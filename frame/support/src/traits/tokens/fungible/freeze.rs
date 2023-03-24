@@ -18,7 +18,13 @@
 //! The traits for putting freezes within a single fungible token class.
 
 use scale_info::TypeInfo;
-use sp_runtime::DispatchResult;
+use sp_arithmetic::{
+	traits::{CheckedAdd, CheckedSub},
+	ArithmeticError,
+};
+use sp_runtime::{DispatchResult, TokenError};
+
+use crate::ensure;
 
 /// Trait for inspecting a fungible asset which can be frozen. Freezing is essentially setting a
 /// minimum balance bellow which the total balance (inclusive of any funds placed on hold) may not
@@ -65,4 +71,21 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 
 	/// Remove an existing lock.
 	fn thaw(id: &Self::Id, who: &AccountId) -> DispatchResult;
+
+	/// Reduce an existing lock.
+	fn decrease_frozen(id: &Self::Id, who: &AccountId, amount: Self::Balance) -> DispatchResult {
+		let a = Self::balance_frozen(id, who)
+			.checked_sub(&amount)
+			.ok_or(ArithmeticError::Underflow)?;
+		Self::set_freeze(id, who, a)
+	}
+
+	/// Reduce an existing lock.
+	fn increase_frozen(id: &Self::Id, who: &AccountId, amount: Self::Balance) -> DispatchResult {
+		let a = Self::balance_frozen(id, who)
+			.checked_add(&amount)
+			.ok_or(ArithmeticError::Overflow)?;
+		ensure!(Self::balance_freezable(who) >= a, TokenError::FundsUnavailable);
+		Self::set_freeze(id, who, a)
+	}
 }

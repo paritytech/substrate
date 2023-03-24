@@ -17,9 +17,13 @@
 
 //! Traits for encoding data related to pallet's storage items.
 
+use super::Footprint;
 use crate::sp_std::collections::btree_set::BTreeSet;
+use codec::{FullCodec, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
+use scale_info::TypeInfo;
 pub use sp_core::storage::TrackedStorageKey;
+use sp_runtime::{traits::Member, DispatchError};
 use sp_std::prelude::*;
 
 /// An instance of a pallet in the storage.
@@ -120,3 +124,24 @@ impl WhitelistedStorageKeys for Tuple {
 		combined_keys.into_iter().collect::<Vec<_>>()
 	}
 }
+
+pub trait Consideration<AccountId> {
+	type Ticket: Member + FullCodec + TypeInfo + MaxEncodedLen + Default;
+
+	fn update(
+		who: &AccountId,
+		old: Option<Self::Ticket>,
+		new: Option<Footprint>,
+	) -> Result<Self::Ticket, DispatchError>;
+
+	fn new(who: &AccountId, new: Footprint) -> Result<Self::Ticket, DispatchError> {
+		Self::update(who, None, Some(new))
+	}
+
+	fn drop(who: &AccountId, old: Self::Ticket) -> Result<Self::Ticket, DispatchError> {
+		Self::update(who, Some(old), None)
+	}
+}
+
+#[test]
+fn it_builds() {}

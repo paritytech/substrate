@@ -24,11 +24,11 @@ use crate::mock::*;
 
 use frame_support::{
 	assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_vec,
-	traits::{Bounded, BoundedInline, Hash as PreimageHash},
+	traits::{fungible::InspectFreeze, Bounded, BoundedInline, Hash as PreimageHash},
 	StorageNoopGuard,
 };
-use pallet_balances::Error as BalancesError;
 use sp_core::{blake2_256, H256};
+use sp_runtime::TokenError;
 
 /// Returns one `Inline`, `Lookup` and `Legacy` item each with different data and hash.
 pub fn make_bounded_values() -> (Bounded<Vec<u8>>, Bounded<Vec<u8>>, Bounded<Vec<u8>>) {
@@ -51,8 +51,8 @@ pub fn make_bounded_values() -> (Bounded<Vec<u8>>, Bounded<Vec<u8>>, Bounded<Vec
 fn user_note_preimage_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1]));
-		assert_eq!(Balances::reserved_balance(2), 3);
-		assert_eq!(Balances::free_balance(2), 97);
+		assert_eq!(Balances::balance_frozen(&(), &2), 3);
+		assert_eq!(Balances::free_balance(2), 100);
 
 		let h = hashed([1]);
 		assert!(Preimage::have_preimage(&h));
@@ -60,11 +60,11 @@ fn user_note_preimage_works() {
 
 		assert_noop!(
 			Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1]),
-			Error::<Test>::AlreadyNoted
+			Error::<Test>::AlreadyNoted,
 		);
 		assert_noop!(
 			Preimage::note_preimage(RuntimeOrigin::signed(0), vec![2]),
-			BalancesError::<Test>::InsufficientBalance
+			TokenError::FundsUnavailable,
 		);
 	});
 }
@@ -170,7 +170,7 @@ fn request_note_order_makes_no_difference() {
 		assert_ok!(Preimage::request_preimage(RuntimeOrigin::signed(1), hashed([1])));
 		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1]));
 		(
-			StatusFor::<Test>::iter().collect::<Vec<_>>(),
+			RequestStatusFor::<Test>::iter().collect::<Vec<_>>(),
 			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
 		)
 	});
@@ -179,7 +179,7 @@ fn request_note_order_makes_no_difference() {
 		assert_ok!(Preimage::request_preimage(RuntimeOrigin::signed(1), hashed([1])));
 		assert_ok!(Preimage::unnote_preimage(RuntimeOrigin::signed(2), hashed([1])));
 		let other_way = (
-			StatusFor::<Test>::iter().collect::<Vec<_>>(),
+			RequestStatusFor::<Test>::iter().collect::<Vec<_>>(),
 			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
 		);
 		assert_eq!(one_way, other_way);
@@ -206,7 +206,7 @@ fn request_user_note_order_makes_no_difference() {
 		assert_ok!(Preimage::request_preimage(RuntimeOrigin::signed(1), hashed([1])));
 		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1]));
 		(
-			StatusFor::<Test>::iter().collect::<Vec<_>>(),
+			RequestStatusFor::<Test>::iter().collect::<Vec<_>>(),
 			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
 		)
 	});
@@ -215,7 +215,7 @@ fn request_user_note_order_makes_no_difference() {
 		assert_ok!(Preimage::request_preimage(RuntimeOrigin::signed(1), hashed([1])));
 		assert_ok!(Preimage::unnote_preimage(RuntimeOrigin::signed(2), hashed([1])));
 		let other_way = (
-			StatusFor::<Test>::iter().collect::<Vec<_>>(),
+			RequestStatusFor::<Test>::iter().collect::<Vec<_>>(),
 			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
 		);
 		assert_eq!(one_way, other_way);
@@ -248,13 +248,14 @@ fn unrequest_preimage_works() {
 fn user_noted_then_requested_preimage_is_refunded_once_only() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1; 3]));
+		assert_eq!(Balances::balance_frozen(&(), &2), 5);
 		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1]));
+		assert_eq!(Balances::balance_frozen(&(), &2), 8);
 		assert_ok!(Preimage::request_preimage(RuntimeOrigin::signed(1), hashed([1])));
 		assert_ok!(Preimage::unrequest_preimage(RuntimeOrigin::signed(1), hashed([1])));
 		assert_ok!(Preimage::unnote_preimage(RuntimeOrigin::signed(2), hashed([1])));
-		// Still have reserve from `vec[1; 3]`.
-		assert_eq!(Balances::reserved_balance(2), 5);
-		assert_eq!(Balances::free_balance(2), 95);
+		// Still have freeze from `vec[1; 3]`.
+		assert_eq!(Balances::balance_frozen(&(), &2), 5);
 	});
 }
 
@@ -269,7 +270,7 @@ fn noted_preimage_use_correct_map() {
 		assert_eq!(PreimageFor::<Test>::iter().count(), 8);
 
 		// All are present
-		assert_eq!(StatusFor::<Test>::iter().count(), 8);
+		assert_eq!(RequestStatusFor::<Test>::iter().count(), 8);
 
 		// Now start removing them again...
 		for i in 0..7 {
@@ -286,7 +287,7 @@ fn noted_preimage_use_correct_map() {
 		assert_eq!(PreimageFor::<Test>::iter().count(), 0);
 
 		// All are gone
-		assert_eq!(StatusFor::<Test>::iter().count(), 0);
+		assert_eq!(RequestStatusFor::<Test>::iter().count(), 0);
 	});
 }
 
@@ -326,20 +327,20 @@ fn query_and_store_preimage_workflow() {
 		Preimage::request(&hash);
 		// It is requested thrice.
 		assert!(matches!(
-			StatusFor::<Test>::get(&hash).unwrap(),
+			RequestStatusFor::<Test>::get(&hash).unwrap(),
 			RequestStatus::Requested { count: 3, .. }
 		));
 
 		// It can be realized and decoded correctly.
 		assert_eq!(Preimage::realize::<Vec<u8>>(&bound).unwrap(), (data.clone(), Some(len)));
 		assert!(matches!(
-			StatusFor::<Test>::get(&hash).unwrap(),
+			RequestStatusFor::<Test>::get(&hash).unwrap(),
 			RequestStatus::Requested { count: 2, .. }
 		));
 		// Dropping should unrequest.
 		Preimage::drop(&bound);
 		assert!(matches!(
-			StatusFor::<Test>::get(&hash).unwrap(),
+			RequestStatusFor::<Test>::get(&hash).unwrap(),
 			RequestStatus::Requested { count: 1, .. }
 		));
 
@@ -380,7 +381,7 @@ fn query_preimage_request_works() {
 		assert!(<Preimage as QueryPreimage>::len(&hash).is_none());
 		assert_noop!(<Preimage as QueryPreimage>::fetch(&hash, None), DispatchError::Unavailable);
 		// But there is only one entry in the map.
-		assert_eq!(StatusFor::<Test>::iter().count(), 1);
+		assert_eq!(RequestStatusFor::<Test>::iter().count(), 1);
 
 		// Un-request the preimage.
 		<Preimage as QueryPreimage>::unrequest(&hash);
@@ -391,7 +392,7 @@ fn query_preimage_request_works() {
 		// It is not requested anymore.
 		assert!(!<Preimage as QueryPreimage>::is_requested(&hash));
 		// And there is no entry in the map.
-		assert_eq!(StatusFor::<Test>::iter().count(), 0);
+		assert_eq!(RequestStatusFor::<Test>::iter().count(), 0);
 	});
 }
 
@@ -412,7 +413,7 @@ fn query_preimage_hold_and_drop_work() {
 		assert!(<Preimage as QueryPreimage>::is_requested(&legacy.hash()));
 
 		// There are two values requested in total.
-		assert_eq!(StatusFor::<Test>::iter().count(), 2);
+		assert_eq!(RequestStatusFor::<Test>::iter().count(), 2);
 
 		// Cleanup by dropping both.
 		<Preimage as QueryPreimage>::drop(&lookup);
@@ -421,7 +422,7 @@ fn query_preimage_hold_and_drop_work() {
 		assert!(!<Preimage as QueryPreimage>::is_requested(&legacy.hash()));
 
 		// There are no values requested anymore.
-		assert_eq!(StatusFor::<Test>::iter().count(), 0);
+		assert_eq!(RequestStatusFor::<Test>::iter().count(), 0);
 	});
 }
 
