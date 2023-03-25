@@ -34,9 +34,10 @@ use frame_support::{
 	traits::{
 		fungible::ItemOf,
 		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount},
-		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
-		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
-		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
+		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Contains, Currency,
+		EitherOfDiverse, EqualPrivilegeOnly, Imbalance, InsideBoth, InstanceFilter,
+		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
+		WithdrawReasons,
 	},
 	weights::{
 		constants::{
@@ -59,11 +60,12 @@ use pallet_nis::WithMaximumOf;
 use pallet_session::historical as pallet_session_historical;
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
+use pallet_tx_pause::FullNameOf;
 use scale_info::TypeInfo;
 use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, ed25519::Public, OpaqueMetadata};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
 	create_runtime_str,
@@ -214,41 +216,30 @@ parameter_types! {
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 
-/// Filter to block balance pallet calls
-/// Used for both SafeMode and TxPause pallets
-/// Therefor we include both so they cannot affect each other
-pub struct WhitelistedCalls;
-impl Contains<RuntimeCall> for WhitelistedCalls {
+/// Calls that can bypass the safe-mode pallet.
+pub struct SafeModeWhitelistedCalls;
+impl Contains<RuntimeCall> for SafeModeWhitelistedCalls {
 	fn contains(call: &RuntimeCall) -> bool {
 		match call {
 			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) | RuntimeCall::TxPause(_) => true,
 			RuntimeCall::Balances(_) => false,
+			// ... governance et al
 			_ => false,
 		}
 	}
 }
 
-use pallet_tx_pause::FullNameOf;
-pub struct WhitelistedCalls;
+/// Calls that cannot be paused by the tx-pause pallet.
+pub struct TxPauseWhitelistedCalls;
 /// Whitelist `Balances::transfer_keep_alive`, all others are pauseable.
-impl Contains<FullNameOf<Runtime>> for WhitelistedCalls {
+impl Contains<FullNameOf<Runtime>> for TxPauseWhitelistedCalls {
 	fn contains(full_name: &FullNameOf<Runtime>) -> bool {
 		let unpausables: Vec<FullNameOf<Runtime>> = vec![(
 			b"Balances".to_vec().try_into().unwrap(),
-			Some(b"transfer_keep_alive".to_vec().try_into().unwrap()),
+			b"transfer_keep_alive".to_vec().try_into().unwrap(),
 		)];
 
-		for unpausable_call in unpausables {
-			let (pallet_name, maybe_call_name) = full_name;
-			if pallet_name == &unpausable_call.0 {
-				if unpausable_call.1.is_none() {
-					return true
-				}
-				return maybe_call_name == &unpausable_call.1
-			}
-		}
-
-		false
+		unpausables.contains(full_name)
 	}
 }
 
@@ -257,7 +248,7 @@ impl pallet_tx_pause::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type PauseOrigin = EnsureRoot<AccountId>;
 	type UnpauseOrigin = EnsureRoot<AccountId>;
-	type WhitelistedCalls = WhitelistedCalls;
+	type WhitelistedCalls = TxPauseWhitelistedCalls;
 	type MaxNameLen = ConstU32<256>;
 	type PauseTooLongNames = ConstBool<true>;
 	type WeightInfo = pallet_tx_pause::weights::SubstrateWeight<Runtime>;
@@ -287,12 +278,12 @@ impl ForceEnterOrigin {
 		}
 	}
 
-	/// Account id of the origin.
+	/// Dummy account id of the origin.
 	pub fn acc(&self) -> AccountId {
 		match self {
-			Self::Weak => sp_core::ed25519::Public::from_raw([0; 32]).into(),
-			Self::Medium => sp_core::ed25519::Public::from_raw([1; 32]).into(),
-			Self::Strong => sp_core::ed25519::Public::from_raw([2; 32]).into(),
+			Self::Weak => Public::from_raw([0; 32]).into(),
+			Self::Medium => Public::from_raw([1; 32]).into(),
+			Self::Strong => Public::from_raw([2; 32]).into(),
 		}
 	}
 
@@ -312,12 +303,12 @@ impl ForceExtendOrigin {
 		}
 	}
 
-	/// Account id of the origin.
+	/// A dummy id for this origin.
 	pub fn acc(&self) -> AccountId {
 		match self {
-			Self::Weak => sp_core::ed25519::Public::from_raw([0; 32]).into(),
-			Self::Medium => sp_core::ed25519::Public::from_raw([1; 32]).into(),
-			Self::Strong => sp_core::ed25519::Public::from_raw([2; 32]).into(),
+			Self::Weak => Public::from_raw([0; 32]).into(),
+			Self::Medium => Public::from_raw([1; 32]).into(),
+			Self::Strong => Public::from_raw([2; 32]).into(),
 		}
 	}
 
@@ -327,19 +318,18 @@ impl ForceExtendOrigin {
 	}
 }
 
+// FAIL-CI can probably feature gate
 impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> EnsureOrigin<O>
 	for ForceEnterOrigin
 {
 	type Success = u32;
 
 	fn try_origin(o: O) -> Result<Self::Success, O> {
+		use ForceEnterOrigin::*;
 		o.into().and_then(|o| match o {
-			RawOrigin::Signed(acc) if acc == ForceEnterOrigin::Weak.acc() =>
-				Ok(ForceEnterOrigin::Weak.duration()),
-			RawOrigin::Signed(acc) if acc == ForceEnterOrigin::Medium.acc() =>
-				Ok(ForceEnterOrigin::Medium.duration()),
-			RawOrigin::Signed(acc) if acc == ForceEnterOrigin::Strong.acc() =>
-				Ok(ForceEnterOrigin::Strong.duration()),
+			RawOrigin::Signed(acc) if acc == Weak.acc() => Ok(Weak.duration()),
+			RawOrigin::Signed(acc) if acc == Medium.acc() => Ok(Medium.duration()),
+			RawOrigin::Signed(acc) if acc == Strong.acc() => Ok(Strong.duration()),
 			r => Err(O::from(r)),
 		})
 	}
@@ -356,13 +346,11 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> Ensu
 	type Success = u32;
 
 	fn try_origin(o: O) -> Result<Self::Success, O> {
+		use ForceEnterOrigin::*;
 		o.into().and_then(|o| match o {
-			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Weak.acc() =>
-				Ok(ForceExtendOrigin::Weak.duration()),
-			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Medium.acc() =>
-				Ok(ForceExtendOrigin::Medium.duration()),
-			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Strong.acc() =>
-				Ok(ForceExtendOrigin::Strong.duration()),
+			RawOrigin::Signed(acc) if acc == Weak.acc() => Ok(Weak.duration()),
+			RawOrigin::Signed(acc) if acc == Medium.acc() => Ok(Medium.duration()),
+			RawOrigin::Signed(acc) if acc == Strong.acc() => Ok(Strong.duration()),
 			r => Err(O::from(r)),
 		})
 	}
@@ -370,6 +358,14 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> Ensu
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<O, ()> {
 		Ok(O::from(RawOrigin::Signed(ForceEnterOrigin::Strong.acc())))
+	}
+}
+
+impl pallet_safe_mode::CausalHoldReason<u32> for HoldReason {
+	type Reason = HoldReason;
+
+	fn cause(block: u32) -> Self::Reason {
+		Self::SafeModeStake { block }
 	}
 }
 
@@ -384,7 +380,8 @@ parameter_types! {
 impl pallet_safe_mode::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type WhitelistedCalls = WhitelistedCalls;
+	type HoldReason = HoldReason;
+	type WhitelistedCalls = SafeModeWhitelistedCalls;
 	type EnterDuration = ConstU32<{ 2 * DAYS }>;
 	type EnterStakeAmount = EnterStakeAmount;
 	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
@@ -398,7 +395,7 @@ impl pallet_safe_mode::Config for Runtime {
 }
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = InsideBoth<SafeMode, TxPause>; // TODO consider Exclude or NotInside for WhitelistedCalls -> see TheseExcept )
+	type BaseCallFilter = InsideBoth<SafeMode, TxPause>;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type DbWeight = RocksDbWeight;
@@ -458,11 +455,6 @@ parameter_types! {
 	pub const AnnouncementDepositBase: Balance = deposit(1, 8);
 	pub const AnnouncementDepositFactor: Balance = deposit(0, 66);
 }
-
-// pub enum PausePresets {
-// 	..., // todo
-
-// }
 
 /// The type used to represent the kinds of proxying allowed.
 #[derive(
@@ -628,6 +620,9 @@ parameter_types! {
 pub enum HoldReason {
 	/// The NIS Pallet has reserved it for a non-fungible receipt.
 	Nis,
+	SafeModeStake {
+		block: u32,
+	},
 }
 
 impl pallet_balances::Config for Runtime {
