@@ -55,9 +55,9 @@ pub trait WeightInfo {
 	fn extend() -> Weight;
 	fn force_extend() -> Weight;
 	fn force_exit() -> Weight;
-	fn release_reservation() -> Weight;
-	fn force_release_reservation() -> Weight;
-	fn force_slash_reservation() -> Weight;
+	fn release_stake() -> Weight;
+	fn force_release_stake() -> Weight;
+	fn force_slash_stake() -> Weight;
 }
 
 /// Weights for pallet_safe_mode using the Substrate node and recommended hardware.
@@ -153,7 +153,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: SafeMode EnteredUntil (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
 	/// Storage: Balances Reserves (r:1 w:1)
 	/// Proof: Balances Reserves (max_values: None, max_size: Some(1049), added: 3524, mode: MaxEncodedLen)
-	fn release_reservation() -> Weight {
+	fn release_stake() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `2080`
 		//  Estimated: `6566`
@@ -166,7 +166,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: SafeMode Reservations (max_values: None, max_size: Some(68), added: 2543, mode: MaxEncodedLen)
 	/// Storage: Balances Reserves (r:1 w:1)
 	/// Proof: Balances Reserves (max_values: None, max_size: Some(1049), added: 3524, mode: MaxEncodedLen)
-	fn force_release_reservation() -> Weight {
+	fn force_release_stake() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `2080`
 		//  Estimated: `6067`
@@ -179,7 +179,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: SafeMode Reservations (max_values: None, max_size: Some(68), added: 2543, mode: MaxEncodedLen)
 	/// Storage: Balances Reserves (r:1 w:1)
 	/// Proof: Balances Reserves (max_values: None, max_size: Some(1049), added: 3524, mode: MaxEncodedLen)
-	fn force_slash_reservation() -> Weight {
+	fn force_slash_stake() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `2083`
 		//  Estimated: `6067`
@@ -282,7 +282,7 @@ impl WeightInfo for () {
 	/// Proof: SafeMode EnteredUntil (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
 	/// Storage: Balances Reserves (r:1 w:1)
 	/// Proof: Balances Reserves (max_values: None, max_size: Some(1049), added: 3524, mode: MaxEncodedLen)
-	fn release_reservation() -> Weight {
+	fn release_stake() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `2080`
 		//  Estimated: `6566`
@@ -295,7 +295,7 @@ impl WeightInfo for () {
 	/// Proof: SafeMode Reservations (max_values: None, max_size: Some(68), added: 2543, mode: MaxEncodedLen)
 	/// Storage: Balances Reserves (r:1 w:1)
 	/// Proof: Balances Reserves (max_values: None, max_size: Some(1049), added: 3524, mode: MaxEncodedLen)
-	fn force_release_reservation() -> Weight {
+	fn force_release_stake() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `2080`
 		//  Estimated: `6067`
@@ -308,7 +308,7 @@ impl WeightInfo for () {
 	/// Proof: SafeMode Reservations (max_values: None, max_size: Some(68), added: 2543, mode: MaxEncodedLen)
 	/// Storage: Balances Reserves (r:1 w:1)
 	/// Proof: Balances Reserves (max_values: None, max_size: Some(1049), added: 3524, mode: MaxEncodedLen)
-	fn force_slash_reservation() -> Weight {
+	fn force_slash_stake() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `2083`
 		//  Estimated: `6067`

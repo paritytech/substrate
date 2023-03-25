@@ -24,11 +24,7 @@ use frame_benchmarking::benchmarks;
 benchmarks! {
 	pause {
 		let full_name: FullNameOf<T> = (name::<T>(b"SomePalletName"), name::<T>(b"SomePalletName"));
-		// let pallet_name: PalletNameOf<T> = name::<T>(b"SomePalletName");
-		// let maybe_call_name: Option<CallNameOf<T>> = Some(name::<T>(b"some_call_name"));
 		let origin = T::PauseOrigin::try_successful_origin().expect("Tx-pause pallet does not make sense without pause origin");
-		// let call = Call::<T>::pause { full_name: full_name.clone() };
-		// let call = Call::<T>::pause { pallet_name: pallet_name.clone(), maybe_call_name: maybe_call_name.clone() };
 
 	}: _<T::RuntimeOrigin>(origin, full_name.clone())
 	verify {
@@ -37,7 +33,6 @@ benchmarks! {
 
   unpause {
 		let full_name: FullNameOf<T> = (name::<T>(b"SomePalletName"), name::<T>(b"SomePalletName"));
-		// tODO
 		let pause_origin = T::PauseOrigin::try_successful_origin().expect("Tx-pause pallet does not make sense without pause origin");
 
 		TxPause::<T>::pause(

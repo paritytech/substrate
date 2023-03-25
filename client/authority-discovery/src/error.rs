@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -17,8 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Authority discovery errors.
-
-use sp_core::crypto::CryptoTypePublicPair;
 
 /// AuthorityDiscovery Result.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -59,11 +57,8 @@ pub enum Error {
 	#[error("Failed to parse a libp2p key.")]
 	ParsingLibp2pIdentity(#[from] libp2p::identity::error::DecodingError),
 
-	#[error("Failed to sign using a specific public key.")]
-	MissingSignature(CryptoTypePublicPair),
-
-	#[error("Failed to sign using all public keys.")]
-	Signing,
+	#[error("Failed to sign: {0}.")]
+	CannotSign(String),
 
 	#[error("Failed to register Prometheus metric.")]
 	Prometheus(#[from] prometheus_endpoint::PrometheusError),

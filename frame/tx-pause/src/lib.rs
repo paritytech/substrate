@@ -29,7 +29,7 @@
 //! The Transaction Pause pallet provides functions for:
 //!
 //! - Setting a dynamic list of [`FullNameOf`] items that are matched against to filter these calls.
-//! - Setting [`Config::WhitelistCallNames`] that cannot be paused by this pallet.
+//! - Setting [`Config::WhitelistedCalls`] that cannot be paused by this pallet.
 //! - Repatriating a reserved balance to a beneficiary account that exists.
 //! - Transferring a balance between accounts (when not reserved).
 //! - Slashing an account balance.
@@ -99,6 +99,7 @@ pub use weights::*;
 
 /// The stringy name of a pallet from [`GetCallMetadata`] for [`Config::RuntimeCall`] variants.
 pub type PalletNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
+
 /// The stringy name of a call (within a pallet) from [`GetCallMetadata`] for
 /// [`Config::RuntimeCall`] variants.
 pub type CallNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
@@ -112,7 +113,6 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]
@@ -139,27 +139,32 @@ pub mod pallet {
 		///
 		/// The `TxMode` pallet cannot pause it's own calls, and does not need to be explicitly
 		/// added here.
-		type WhitelistCallNames: Contains<FullNameOf<Self>>;
+		type WhitelistedCalls: Contains<FullNameOf<Self>>;
 
 		/// Maximum length for pallet and call SCALE encoded string names.
 		///
-		/// Too long names will not be truncated but handled like
-		/// [`Self::PauseTooLongNames`] specifies.
+		/// Too long names will not be truncated but handled like [`Self::PauseTooLongNames`]
+		/// specifies.
 		#[pallet::constant]
 		type MaxNameLen: Get<u32>;
 
 		/// Specifies if functions and pallets with too long names should be treated as paused.
 		///
-		/// Setting this to `true` ensures that all calls that
-		/// are callable, are also pause-able.
-		/// Otherwise there could be a situation where a call
-		/// is callable but not pause-able, which would could be exploited.
+		/// Setting this to `true` ensures that all calls that are callable, are also pause-able.
+		/// Otherwise there could be a situation where a call is callable but not pause-able, which
+		/// would could be exploited.
 		#[pallet::constant]
 		type PauseTooLongNames: Get<bool>;
 
 		// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
+
+	/// The set of calls that are explicitly paused.
+	#[pallet::storage]
+	#[pallet::getter(fn paused_calls)]
+	pub type PausedCalls<T: Config> =
+		StorageMap<_, Blake2_128Concat, FullNameOf<T>, (), OptionQuery>;
 
 	#[pallet::error]
 	pub enum Error<T> {
@@ -184,12 +189,6 @@ pub mod pallet {
 		/// This pallet, or a specific call is now unpaused.
 		CallUnpaused { full_name: FullNameOf<T> },
 	}
-
-	/// The set of calls that are explicitly paused.
-	#[pallet::storage]
-	#[pallet::getter(fn paused_calls)]
-	pub type PausedCalls<T: Config> =
-		StorageMap<_, Blake2_128Concat, FullNameOf<T>, (), OptionQuery>;
 
 	/// Configure the initial state of this pallet in the genesis block.
 	#[pallet::genesis_config]
@@ -254,34 +253,33 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Return whether this call is paused.
-	pub fn is_paused_unbound(pallet_name: Vec<u8>, call_name: Vec<u8>) -> bool {
-		let pallet_name = PalletNameOf::<T>::try_from(pallet_name);
-		let call_name = CallNameOf::<T>::try_from(call_name);
+	pub fn is_paused_unbound(pallet: Vec<u8>, call: Vec<u8>) -> bool {
+		let pallet = PalletNameOf::<T>::try_from(pallet);
+		let call = CallNameOf::<T>::try_from(call);
 
-		match (pallet_name, call_name) {
-			(Ok(pallet_name), Ok(call_name)) =>
-				Self::is_paused(&&<FullNameOf<T>>::from((pallet_name.clone(), call_name.clone()))),
+		match (pallet, call) {
+			(Ok(pallet), Ok(call)) => Self::is_paused(&(pallet, call)),
 			_ => T::PauseTooLongNames::get(),
 		}
 	}
 
 	/// Return whether this call is paused.
 	pub fn is_paused(full_name: &FullNameOf<T>) -> bool {
-		if T::WhitelistCallNames::contains(full_name) {
+		if T::WhitelistedCalls::contains(full_name) {
 			return false
 		}
 
 		<PausedCalls<T>>::contains_key(full_name)
 	}
 
-	/// Ensure that this pallet or call can be paused.
+	/// Ensure that this call can be paused.
 	pub fn ensure_can_pause(full_name: &FullNameOf<T>) -> Result<(), Error<T>> {
-		// The `TxPause` pallet can never be paused.
+		// SAFETY: The `TxPause` pallet can never pause itself.
 		if full_name.0.as_ref() == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
 			return Err(Error::<T>::Unpausable)
 		}
 
-		if T::WhitelistCallNames::contains(&full_name) {
+		if T::WhitelistedCalls::contains(&full_name) {
 			return Err(Error::<T>::Unpausable)
 		}
 		if Self::is_paused(&full_name) {

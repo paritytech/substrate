@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2024 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +17,6 @@
 
 /// The ident used for the block generic parameter.
 pub const BLOCK_GENERIC_IDENT: &str = "Block";
-
-/// Unique identifier used to make the hidden includes unique for this macro.
-pub const HIDDEN_INCLUDES_ID: &str = "DECL_RUNTIME_APIS";
 
 /// The `core_trait` attribute.
 pub const CORE_TRAIT_ATTRIBUTE: &str = "core_trait";
