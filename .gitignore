@@ -27,3 +27,4 @@ rls*.log
 scripts/ci/node-template-release/Cargo.lock
 bin/node-template/Cargo.lock
 substrate.code-workspace
+result
