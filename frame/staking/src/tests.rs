@@ -4608,13 +4608,17 @@ mod election_data_provider {
 	#[test]
 	fn respects_snapshot_size_limits() {
 		ExtBuilder::default().build_and_execute(|| {
-			let bounds_builder = ElectionBoundsBuilder::new();
-			assert_eq!(
-				Staking::electing_voters(bounds_builder.voters_size(25.into()).build().voters)
-					.unwrap()
-					.len(),
-				1
-			);
+			// set size bounds that allows only for 1 voter.
+			let bounds = ElectionBoundsBuilder::new().voters_size(26.into()).build();
+			let elected = Staking::electing_voters(bounds.voters).unwrap();
+			assert!(elected.encoded_size() <= 26 as usize);
+			let prev_len = elected.len();
+
+			// larger size bounds means more quota for voters.
+			let bounds = ElectionBoundsBuilder::new().voters_size(100.into()).build();
+			let elected = Staking::electing_voters(bounds.voters).unwrap();
+			assert!(elected.encoded_size() <= 100 as usize);
+			assert!(elected.len() > 1 && elected.len() > prev_len);
 		});
 	}
 
@@ -5906,18 +5910,84 @@ mod election_size_tracker {
 
 	#[test]
 	pub fn election_size_tracker_works() {
+		let mut voters: Vec<(u64, u64, Vec<u64>)> = vec![];
+		let mut size_tracker = ElectionSizeTracker::<AccountId>::new();
+		let voter_bounds = ElectionBoundsBuilder::new().voters_size(1_50.into()).build().voters;
+
+		// register 1 voter with 1 vote.
+		voters.push((1, 10, vec![2]));
+		assert!(size_tracker.try_register_voter(1, voter_bounds).is_ok());
+		assert_eq!(
+			ElectionSizeTracker::<AccountId>::final_byte_size_of(
+				size_tracker.num_voters,
+				size_tracker.size
+			),
+			voters.encoded_size()
+		);
+
+		// register another voter, now with 3 votes.
+		voters.push((2, 20, vec![3, 4, 5]));
+		assert!(size_tracker.try_register_voter(3, voter_bounds).is_ok());
+		assert_eq!(
+			ElectionSizeTracker::<AccountId>::final_byte_size_of(
+				size_tracker.num_voters,
+				size_tracker.size
+			),
+			voters.encoded_size()
+		);
+
+		// register noop vote (unlikely to happen).
+		voters.push((3, 30, vec![]));
+		assert!(size_tracker.try_register_voter(0, voter_bounds).is_ok());
+		assert_eq!(
+			ElectionSizeTracker::<AccountId>::final_byte_size_of(
+				size_tracker.num_voters,
+				size_tracker.size
+			),
+			voters.encoded_size()
+		);
+	}
+
+	#[test]
+	pub fn election_size_bounds_works() {
+		let mut voters: Vec<(u64, u64, Vec<u64>)> = vec![];
 		let mut size_tracker = ElectionSizeTracker::<AccountId>::new();
 		let voter_bounds = ElectionBoundsBuilder::new().voters_size(1_00.into()).build().voters;
 
+		voters.push((1, 10, vec![2]));
 		assert!(size_tracker.try_register_voter(1, voter_bounds).is_ok());
-		assert!(size_tracker.try_register_voter(2, voter_bounds).is_ok());
+		assert_eq!(
+			ElectionSizeTracker::<AccountId>::final_byte_size_of(
+				size_tracker.num_voters,
+				size_tracker.size
+			),
+			voters.encoded_size()
+		);
+
 		assert!(size_tracker.size > 0 && size_tracker.size < 1_00);
 		let size_before_overflow = size_tracker.size;
 
 		// try many voters that will overflow the tracker's buffer.
+		voters.push((2, 10, vec![2, 3, 4, 5, 6, 7]));
 		assert!(size_tracker.try_register_voter(10, voter_bounds).is_err());
 		assert!(size_tracker.size > 0 && size_tracker.size < 1_00);
+
+		// size of the tracker did not update when trying to register votes failed.
 		assert_eq!(size_tracker.size, size_before_overflow);
+	}
+
+	#[test]
+	fn len_prefix_works() {
+		let length_samples =
+			vec![0usize, 1, 62, 63, 64, 16383, 16384, 16385, 1073741822, 1073741823, 1073741824];
+
+		for s in length_samples {
+			// the encoded size of a vector of n bytes should be n + the length prefix
+			assert_eq!(
+				vec![1u8; s].encoded_size(),
+				ElectionSizeTracker::<u64>::length_prefix(s) + s
+			);
+		}
 	}
 }
 

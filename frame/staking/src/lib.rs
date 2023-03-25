@@ -807,8 +807,10 @@ impl<Balance, const MAX: u32> NominationsQuota<Balance> for FixedNominationsQuot
 /// Whilst doing this, [`size`] will track the entire size of the `Vec<Voter>`, except for the
 /// length prefix of the outer `Vec`. To get the final size at any point, use
 /// [`final_byte_size_of`].
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct ElectionSizeTracker<AccountId> {
 	pub size: usize,
+	pub num_voters: usize,
 	_marker: sp_std::marker::PhantomData<AccountId>,
 }
 
@@ -817,7 +819,7 @@ where
 	AccountId: IdentifierT,
 {
 	pub(crate) fn new() -> Self {
-		ElectionSizeTracker { size: 0, _marker: Default::default() }
+		ElectionSizeTracker { size: 0, num_voters: 0, _marker: Default::default() }
 	}
 
 	/// Attempts to register a new voter with `votes` for a given election `bounds`. Returns an
@@ -827,21 +829,32 @@ where
 		votes: usize,
 		bounds: DataProviderBounds,
 	) -> Result<(), ()> {
-		let voter_size = Self::voter_size(votes);
-		let size_after = self.size.saturating_add(voter_size);
+		let voter_size = sp_npos_elections::Voter::<AccountId>::encoded_size(votes);
+		let voters_size_after = self.size.saturating_add(voter_size);
 
-		match bounds.size_exhausted(SizeBound(size_after as u32)) {
+		// the total encoded size takes into consideration the prefix of the outer vec, which
+		// contains all the voters.
+		let total_size_after = Self::final_byte_size_of(self.num_voters + 1, voters_size_after);
+
+		match bounds.size_exhausted(SizeBound(total_size_after as u32)) {
 			true => Err(()),
 			false => {
-				self.size = size_after;
+				self.size = voters_size_after;
+				self.num_voters += 1;
 				Ok(())
 			},
 		}
 	}
 
-	/// Returns the size taken by a voter with `votes`.
-	fn voter_size(votes: usize) -> usize {
-		sp_npos_elections::Voter::<AccountId>::encoded_size(votes)
+	// Size of the SCALE encoded prefix with a given length.
+	#[inline]
+	pub(crate) fn length_prefix(len: usize) -> usize {
+		use codec::{Compact, CompactLen};
+		Compact::<u32>::compact_len(&(len as u32))
+	}
+
+	pub(crate) fn final_byte_size_of(num_voters: usize, size: usize) -> usize {
+		Self::length_prefix(num_voters).saturating_add(size)
 	}
 }
 

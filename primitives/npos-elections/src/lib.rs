@@ -75,7 +75,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode, MaxEncodedLen, Compact, CompactLen};
+use codec::{Compact, CompactLen, Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -411,7 +411,7 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 		// prefix size.
 		Compact::<u32>::compact_len(&(votes as u32))
 			.saturating_add(votes * sp_std::mem::size_of::<AccountId>())
-			.saturating_add(votes * sp_std::mem::size_of::<VoteWeight>())
+			.saturating_add(sp_std::mem::size_of::<VoteWeight>())
 			.saturating_add(sp_std::mem::size_of::<AccountId>())
 	}
 
