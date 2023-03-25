@@ -829,8 +829,7 @@ where
 		votes: usize,
 		bounds: DataProviderBounds,
 	) -> Result<(), ()> {
-		let voter_size = sp_npos_elections::Voter::<AccountId>::encoded_size(votes);
-		let voters_size_after = self.size.saturating_add(voter_size);
+		let voters_size_after = self.size.saturating_add(Self::encoded_size(votes));
 
 		// the total encoded size takes into consideration the prefix of the outer vec, which
 		// contains all the voters.
@@ -846,6 +845,14 @@ where
 		}
 	}
 
+	/// Returns the size in MBs of the scale encoded structure that stores a `Voter` with a given
+	/// number of cast `votes`.
+	pub fn encoded_size(votes: usize) -> usize {
+		Self::length_prefix(votes)
+			.saturating_add(votes * sp_std::mem::size_of::<AccountId>())
+			.saturating_add(sp_std::mem::size_of::<frame_election_provider_support::VoteWeight>())
+			.saturating_add(sp_std::mem::size_of::<AccountId>())
+	}
 	// Size of the SCALE encoded prefix with a given length.
 	#[inline]
 	pub(crate) fn length_prefix(len: usize) -> usize {

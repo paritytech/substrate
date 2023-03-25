@@ -5964,6 +5964,27 @@ mod election_size_tracker {
 	use super::*;
 
 	#[test]
+	pub fn encoded_size_works() {
+		let voter: (u64, u64, Vec<u64>) = (1, 100, vec![]);
+		assert_eq!(
+			voter.encoded_size(),
+			ElectionSizeTracker::<AccountId>::encoded_size(voter.2.len())
+		);
+
+		let voter: (u64, u64, Vec<u64>) = (1, 100, vec![2]);
+		assert_eq!(
+			voter.encoded_size(),
+			ElectionSizeTracker::<AccountId>::encoded_size(voter.2.len())
+		);
+
+		let voter: (u64, u64, Vec<u64>) = (1, 100, vec![1, 2, 3, 4]);
+		assert_eq!(
+			voter.encoded_size(),
+			ElectionSizeTracker::<AccountId>::encoded_size(voter.2.len())
+		);
+	}
+
+	#[test]
 	pub fn election_size_tracker_works() {
 		let mut voters: Vec<(u64, u64, Vec<u64>)> = vec![];
 		let mut size_tracker = ElectionSizeTracker::<AccountId>::new();
@@ -6004,7 +6025,7 @@ mod election_size_tracker {
 	}
 
 	#[test]
-	pub fn election_size_bounds_works() {
+	pub fn election_size_tracker_bounds_works() {
 		let mut voters: Vec<(u64, u64, Vec<u64>)> = vec![];
 		let mut size_tracker = ElectionSizeTracker::<AccountId>::new();
 		let voter_bounds = ElectionBoundsBuilder::new().voters_size(1_00.into()).build().voters;
