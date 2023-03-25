@@ -45,7 +45,10 @@ fn set_recovered_works() {
 		// Root can set a recovered account though
 		assert_ok!(Recovery::set_recovered(RuntimeOrigin::root(), 5, 1));
 		// Account 1 should now be able to make a call through account 5
-		let call = Box::new(RuntimeCall::Balances(BalancesCall::transfer { dest: 1, value: 100 }));
+		let call = Box::new(RuntimeCall::Balances(BalancesCall::transfer_allow_death {
+			dest: 1,
+			value: 100,
+		}));
 		assert_ok!(Recovery::as_recovered(RuntimeOrigin::signed(1), 5, call));
 		// Account 1 has successfully drained the funds from account 5
 		assert_eq!(Balances::free_balance(1), 200);
@@ -93,7 +96,10 @@ fn recovery_life_cycle_works() {
 		assert_ok!(Recovery::as_recovered(RuntimeOrigin::signed(1), 5, call));
 		// Account 1 should now be able to make a call through account 5 to get all of their funds
 		assert_eq!(Balances::free_balance(5), 110);
-		let call = Box::new(RuntimeCall::Balances(BalancesCall::transfer { dest: 1, value: 110 }));
+		let call = Box::new(RuntimeCall::Balances(BalancesCall::transfer_allow_death {
+			dest: 1,
+			value: 110,
+		}));
 		assert_ok!(Recovery::as_recovered(RuntimeOrigin::signed(1), 5, call));
 		// All funds have been fully recovered!
 		assert_eq!(Balances::free_balance(1), 200);

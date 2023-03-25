@@ -20,7 +20,7 @@
 pub mod meter;
 
 use crate::{
-	exec::{AccountIdOf, StorageKey},
+	exec::{AccountIdOf, Key},
 	weights::WeightInfo,
 	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, Pallet,
 	TrieId, SENTINEL,
@@ -132,7 +132,7 @@ impl<T: Config> ContractInfo<T> {
 	///
 	/// The read is performed from the `trie_id` only. The `address` is not necessary. If the
 	/// contract doesn't store under the given `key` `None` is returned.
-	pub fn read<K: StorageKey<T>>(&self, key: &K) -> Option<Vec<u8>> {
+	pub fn read(&self, key: &Key<T>) -> Option<Vec<u8>> {
 		child::get_raw(&self.child_trie_info(), key.hash().as_slice())
 	}
 
@@ -140,7 +140,7 @@ impl<T: Config> ContractInfo<T> {
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	pub fn size<K: StorageKey<T>>(&self, key: &K) -> Option<u32> {
+	pub fn size(&self, key: &Key<T>) -> Option<u32> {
 		child::len(&self.child_trie_info(), key.hash().as_slice())
 	}
 
@@ -151,9 +151,9 @@ impl<T: Config> ContractInfo<T> {
 	///
 	/// This function also records how much storage was created or removed if a `storage_meter`
 	/// is supplied. It should only be absent for testing or benchmarking code.
-	pub fn write<K: StorageKey<T>>(
+	pub fn write(
 		&self,
-		key: &K,
+		key: &Key<T>,
 		new_value: Option<Vec<u8>>,
 		storage_meter: Option<&mut meter::NestedMeter<T>>,
 		take: bool,
