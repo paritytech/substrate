@@ -64,7 +64,7 @@
               lockFile = ./Cargo.lock;
             };
             doCheck = false;
-            cargoBuildFlags = "--package subkey";
+            cargoBuildFlags = "--package ${name}";
           });
 
         in
