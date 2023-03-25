@@ -4542,6 +4542,61 @@ mod election_data_provider {
 		})
 	}
 
+	// Tests the criteria that in `ElectionDataProvider::voters` function, we try to get at most
+	// `maybe_max_len` voters, and if some of them end up being skipped, we iterate at most `2 *
+	// maybe_max_len`.
+	#[test]
+	fn only_iterates_max_2_times_max_allowed_len() {
+		ExtBuilder::default()
+			.nominate(false)
+			// the best way to invalidate a bunch of nominators is to have them nominate a lot of
+			// ppl, but then lower the MaxNomination limit.
+			.add_staker(
+				61,
+				60,
+				2_000,
+				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
+			)
+			.add_staker(
+				71,
+				70,
+				2_000,
+				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
+			)
+			.add_staker(
+				81,
+				80,
+				2_000,
+				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
+			)
+			.build_and_execute(|| {
+				let bounds_builder = ElectionBoundsBuilder::new();
+				// all voters ordered by stake,
+				assert_eq!(
+					<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
+					vec![61, 71, 81, 11, 21, 31]
+				);
+
+				AbsoluteMaxNominations::set(2);
+
+				// we want 2 voters now, and in maximum we allow 4 iterations. This is what happens:
+				// 61 is pruned;
+				// 71 is pruned;
+				// 81 is pruned;
+				// 11 is taken;
+				// we finish since the 2x limit is reached.
+				assert_eq!(
+					Staking::electing_voters(bounds_builder.voters_count(2.into()).build().voters)
+						.unwrap()
+						.iter()
+						.map(|(stash, _, _)| stash)
+						.copied()
+						.collect::<Vec<_>>(),
+					vec![11],
+				);
+			});
+	}
+
 	#[test]
 	fn respects_snapshot_count_limits() {
 		ExtBuilder::default()
@@ -5153,7 +5208,7 @@ fn min_commission_works() {
 }
 
 #[test]
-fn change_of_max_nominations() {
+fn change_of_absolute_max_nominations() {
 	use frame_election_provider_support::ElectionDataProvider;
 	ExtBuilder::default()
 		.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
@@ -5161,7 +5216,7 @@ fn change_of_max_nominations() {
 		.balance_factor(10)
 		.build_and_execute(|| {
 			// pre-condition
-			assert_eq!(MaxNominations::get(), 16);
+			assert_eq!(AbsoluteMaxNominations::get(), 16);
 
 			assert_eq!(
 				Nominators::<Test>::iter()
@@ -5176,7 +5231,7 @@ fn change_of_max_nominations() {
 			assert_eq!(Staking::electing_voters(bounds).unwrap().len(), 3 + 3);
 
 			// abrupt change from 16 to 4, everyone should be fine.
-			MaxNominations::set(4);
+			AbsoluteMaxNominations::set(4);
 
 			assert_eq!(
 				Nominators::<Test>::iter()
@@ -5187,7 +5242,7 @@ fn change_of_max_nominations() {
 			assert_eq!(Staking::electing_voters(bounds).unwrap().len(), 3 + 3);
 
 			// abrupt change from 4 to 3, everyone should be fine.
-			MaxNominations::set(3);
+			AbsoluteMaxNominations::set(3);
 
 			assert_eq!(
 				Nominators::<Test>::iter()
@@ -5199,7 +5254,7 @@ fn change_of_max_nominations() {
 
 			// abrupt change from 3 to 2, this should cause some nominators to be non-decodable, and
 			// thus non-existent unless if they update.
-			MaxNominations::set(2);
+			AbsoluteMaxNominations::set(2);
 
 			assert_eq!(
 				Nominators::<Test>::iter()
@@ -5217,7 +5272,7 @@ fn change_of_max_nominations() {
 
 			// abrupt change from 2 to 1, this should cause some nominators to be non-decodable, and
 			// thus non-existent unless if they update.
-			MaxNominations::set(1);
+			AbsoluteMaxNominations::set(1);
 
 			assert_eq!(
 				Nominators::<Test>::iter()

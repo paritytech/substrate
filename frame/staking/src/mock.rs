@@ -236,7 +236,7 @@ parameter_types! {
 	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 	pub static MaxWinners: u32 = 100;
 	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
-	pub static MaxNominations: u32 = 16;
+	pub static AbsoluteMaxNominations: u32 = 16;
 }
 
 type VoterBagsListInstance = pallet_bags_list::Instance1;
@@ -313,7 +313,7 @@ impl<Balance, const MAX: u32> NominationsQuota<Balance> for WeightedNominationsQ
 where
 	u128: From<Balance>,
 {
-	type MaxNominations = MaxNominations;
+	type MaxNominations = AbsoluteMaxNominations;
 
 	fn curve(balance: Balance) -> u32 {
 		match balance.into() {
