@@ -556,7 +556,7 @@ dependencies = [
  "anstyle",
  "bstr",
  "doc-comment",
- "predicates 3.0.1",
+ "predicates 3.0.2",
  "predicates-core",
  "predicates-tree",
  "wait-timeout",
@@ -632,13 +632,13 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.67"
+version = "0.1.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86ea188f25f0255d8f92797797c97ebf5631fa88178beb1a46fdf5622c9a00e4"
+checksum = "b9ccdd8f2a161be9bd5c023df56f1b2a0bd1d83872ae53b71a84a12c9bf6e842"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.8",
+ "syn 2.0.10",
 ]
 
 [[package]]
@@ -1271,7 +1271,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 2.0.8",
+ "syn 2.0.10",
 ]
 
 [[package]]
@@ -1370,9 +1370,9 @@ dependencies = [
 
 [[package]]
 name = "cpufeatures"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28d997bd5e24a5928dd43e46dc529867e207907fe0b239c3477d924f7f2ca320"
+checksum = "280a9f2d8b3a38871a3c8a46fb80db65e5e5ed97da80c4d08bf27fb63e35e181"
 dependencies = [
  "libc",
 ]
@@ -1724,7 +1724,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "scratch",
- "syn 2.0.8",
+ "syn 2.0.10",
 ]
 
 [[package]]
@@ -1741,7 +1741,7 @@ checksum = "631569015d0d8d54e6c241733f944042623ab6df7bc3be7466874b05fcdb1c5f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.8",
+ "syn 2.0.10",
 ]
 
 [[package]]
@@ -3513,9 +3513,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.9.2"
+version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1885e79c1fc4b10f0e172c475f458b7f7b93061064d98c3293e98c5ba0c8b399"
+checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
 dependencies = [
  "autocfg",
  "hashbrown 0.12.3",
@@ -7644,9 +7644,9 @@ dependencies = [
 
 [[package]]
 name = "predicates"
-version = "3.0.1"
+version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ba7d6ead3e3966038f68caa9fc1f860185d95a793180bbcfe0d0da47b3961ed"
+checksum = "c575290b64d24745b6c57a12a31465f0a66f3a4799686a6921526a33b0797965"
 dependencies = [
  "anstyle",
  "difflib",
@@ -8109,7 +8109,7 @@ checksum = "8d2275aab483050ab2a7364c1a46604865ee7d6906684e08db0f090acf74f9e7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.8",
+ "syn 2.0.10",
 ]
 
 [[package]]
@@ -8126,9 +8126,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.7.2"
+version = "1.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cce168fea28d3e05f158bda4576cf0c844d5045bc2cc3620fa0292ed5bb5814c"
+checksum = "8b1f693b24f6ac912f4893ef08244d70b6067480d2f1a46e950c9691e6749d1d"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -10108,7 +10108,7 @@ checksum = "e801c1712f48475582b7696ac71e0ca34ebb30e09338425384269d9717c62cad"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.8",
+ "syn 2.0.10",
 ]
 
 [[package]]
@@ -10435,7 +10435,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#dcedc5acbd7fa621fca8ec9ac5cbdba3bf79177f"
+source = "git+https://github.com/paritytech/ark-substrate#8977ff99ed1fe3464e97e03217cecc632c062f4d"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
@@ -10450,7 +10450,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#dcedc5acbd7fa621fca8ec9ac5cbdba3bf79177f"
+source = "git+https://github.com/paritytech/ark-substrate#8977ff99ed1fe3464e97e03217cecc632c062f4d"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -10465,7 +10465,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#dcedc5acbd7fa621fca8ec9ac5cbdba3bf79177f"
+source = "git+https://github.com/paritytech/ark-substrate#8977ff99ed1fe3464e97e03217cecc632c062f4d"
 dependencies = [
  "ark-bw6-761",
  "ark-ff",
@@ -10479,7 +10479,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#dcedc5acbd7fa621fca8ec9ac5cbdba3bf79177f"
+source = "git+https://github.com/paritytech/ark-substrate#8977ff99ed1fe3464e97e03217cecc632c062f4d"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
@@ -10493,7 +10493,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#dcedc5acbd7fa621fca8ec9ac5cbdba3bf79177f"
+source = "git+https://github.com/paritytech/ark-substrate#8977ff99ed1fe3464e97e03217cecc632c062f4d"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
@@ -10524,7 +10524,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-models"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#dcedc5acbd7fa621fca8ec9ac5cbdba3bf79177f"
+source = "git+https://github.com/paritytech/ark-substrate#8977ff99ed1fe3464e97e03217cecc632c062f4d"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -10540,7 +10540,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-utils"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#dcedc5acbd7fa621fca8ec9ac5cbdba3bf79177f"
+source = "git+https://github.com/paritytech/ark-substrate#8977ff99ed1fe3464e97e03217cecc632c062f4d"
 dependencies = [
  "ark-serialize",
  "ark-std",
@@ -11742,9 +11742,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.8"
+version = "2.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bcc02725fd69ab9f26eab07fad303e2497fad6fb9eba4f96c4d1687bdf704ad9"
+checksum = "5aad1363ed6d37b84299588d62d3a7d95b5a5c2d9aad5c85609fda12afaa1f40"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -11847,7 +11847,7 @@ checksum = "f9456a42c5b0d803c8cd86e73dd7cc9edd429499f37a3550d286d5e86720569f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.8",
+ "syn 2.0.10",
 ]
 
 [[package]]
