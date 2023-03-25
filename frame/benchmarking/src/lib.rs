@@ -157,7 +157,7 @@ pub use v1::*;
 /// _(RawOrigin::Signed(whitelisted_caller()), 0u32.into(), 0);
 /// ```
 ///
-/// The underscore will beu substituted with the name of the benchmark  (i.e. the name of the
+/// The underscore will be substituted with the name of the benchmark  (i.e. the name of the
 /// function in the benchmark function definition).
 ///
 /// Regardless of whether `#[extrinsic_call]` or `#[block]` is used, this attribute also serves
