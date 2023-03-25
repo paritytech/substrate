@@ -17,6 +17,8 @@
 
 //! Test utilities for transaction pause (tx pause) pallet.
 
+#![cfg(test)]
+
 use super::*;
 use crate as pallet_tx_pause;
 

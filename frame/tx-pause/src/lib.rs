@@ -15,73 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Transaction Pause Pallet
-//!
-//! The Transaction Pause pallet provides a dynamic call filter that can be controlled with
-//! extrinsics. This pallet may be used to disable dispatch of specific calls within a runtime.
-//!
-//! - [`Config`]
-//! - [`Call`]
-//! - [`Pallet`]
-//!
-//! ## Overview
-//!
-//! The Transaction Pause pallet provides functions for:
-//!
-//! - Setting a dynamic list of [`FullNameOf`] items that are matched against to filter these calls.
-//! - Setting [`Config::WhitelistedCalls`] that cannot be paused by this pallet.
-//! - Repatriating a reserved balance to a beneficiary account that exists.
-//! - Transferring a balance between accounts (when not reserved).
-//! - Slashing an account balance.
-//! - Account creation and removal.
-//! - Managing total issuance.
-//! - Setting and managing locks.
-//!
-//! Can also be used as call-filter by the runtime together with the SafeMode
-//!
-//! TODO expand an link to safe mode in docs.
-//!
-//! ### Terminology
-//!
-//! - **Pause**: The ability to dispatch of a specific call becomes disabled.
-//! - **Unpause**: The ability to dispatch of a specific call becomes enabled, if it was paused.
-//!
-//! ## Interface
-//!
-//! ### Dispatchable Functions
-//!
-//! - `pause` - Pause a pallet or optionally a specific call within a pallet.
-//! - `unpause` - Unpause a pallet or optionally a specific call within a pallet.
-//!
-//! ## Usage
-//!
-//! The following examples show how to use the Transaction Pause pallet in your custom pallet.
-//! TODO check doc links
-//! ### Example within a runtime's [`pallet-frame-system::BaseCallFilter`] configuration:
-//!
-//! ```ignore
-//! impl frame_system::Config for Runtime {
-//! 	…
-//! 	type BaseCallFilter = InsideBoth<DefaultFilter, InsideBoth<TxPause, SafeMode>>;
-//! 	…
-//! }
-//! ```
-//!
-//! ## Genesis config
-//!
-//! The Transaction Pause pallet may be configured to pause calls on genesis with it's
-//! [`GenesisConfig`].
-//!
-//! ## Assumptions
-//!
-//! * TODO
-
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
-#[cfg(test)]
 pub mod mock;
-#[cfg(test)]
 mod tests;
 pub mod weights;
 

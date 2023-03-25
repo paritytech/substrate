@@ -17,6 +17,8 @@
 
 //! Test utilities for the safe mode pallet.
 
+#![cfg(test)]
+
 use super::*;
 use crate::mock::{RuntimeCall, *};
 
@@ -117,7 +119,7 @@ fn fails_to_force_release_stakes_with_wrong_block() {
 				0,
 				activated_at_block + 1
 			),
-			Error::<Test>::NoReservation
+			Error::<Test>::NoStake
 		);
 
 		assert_err!(
@@ -126,7 +128,7 @@ fn fails_to_force_release_stakes_with_wrong_block() {
 				0,
 				activated_at_block + 1
 			),
-			Error::<Test>::NoReservation
+			Error::<Test>::NoStake
 		);
 	});
 }
@@ -448,7 +450,7 @@ fn can_release_stake_while_entered() {
 				0,
 				1
 			),
-			Error::<Test>::NoReservation
+			Error::<Test>::NoStake
 		);
 	});
 }
@@ -478,7 +480,7 @@ fn can_slash_stake_while_entered() {
 		// ... it wont work ever again.
 		assert_err!(
 			SafeMode::force_slash_stake(RuntimeOrigin::signed(mock::StakeSlashOrigin::get()), 0, 1),
-			Error::<Test>::NoReservation
+			Error::<Test>::NoStake
 		);
 	});
 }
@@ -507,7 +509,7 @@ fn can_slash_stake_from_extend_block() {
 		// But never again.
 		assert_err!(
 			SafeMode::force_slash_stake(RuntimeOrigin::signed(mock::StakeSlashOrigin::get()), 0, 1),
-			Error::<Test>::NoReservation
+			Error::<Test>::NoStake
 		);
 	});
 }

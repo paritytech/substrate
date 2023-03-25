@@ -17,6 +17,8 @@
 
 //! Test utilities for safe mode pallet.
 
+#![cfg(test)]
+
 use super::*;
 use crate as pallet_safe_mode;
 
