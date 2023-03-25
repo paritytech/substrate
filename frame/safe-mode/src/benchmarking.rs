@@ -20,11 +20,13 @@
 use super::{Pallet as SafeMode, *};
 
 use frame_benchmarking::v2::*;
-use frame_support::traits::{Currency, UnfilteredDispatchable};
+use frame_support::traits::{fungible::Mutate as FunMutate, UnfilteredDispatchable};
 use frame_system::{Pallet as System, RawOrigin};
 use sp_runtime::traits::{Bounded, One, Zero};
 
-#[benchmarks]
+#[benchmarks(
+	where T::Currency: FunMutate<T::AccountId>,
+)]
 mod benchmarks {
 	use super::*;
 
@@ -53,7 +55,7 @@ mod benchmarks {
 	fn enter() {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 
 		#[extrinsic_call]
 		_(origin);
@@ -65,7 +67,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn force_enter() {
+	fn force_enter() -> Result<(), BenchmarkError> {
 		let force_origin =
 			T::ForceEnterOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let duration = T::ForceEnterOrigin::ensure_origin(force_origin.clone()).unwrap();
@@ -77,13 +79,14 @@ mod benchmarks {
 		}
 
 		assert_eq!(SafeMode::<T>::active_until().unwrap(), System::<T>::block_number() + duration);
+		Ok(())
 	}
 
 	#[benchmark]
 	fn extend() {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 
 		System::<T>::set_block_number(1u32.into());
 		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
@@ -101,7 +104,7 @@ mod benchmarks {
 	fn force_extend() -> Result<(), BenchmarkError> {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 
 		System::<T>::set_block_number(1u32.into());
 		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
@@ -120,13 +123,14 @@ mod benchmarks {
 			SafeMode::<T>::active_until().unwrap(),
 			System::<T>::block_number() + T::EnterDuration::get() + extension
 		);
+		Ok(())
 	}
 
 	#[benchmark]
-	fn force_exit() {
+	fn force_exit() -> Result<(), BenchmarkError> {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 
 		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
 
@@ -140,21 +144,22 @@ mod benchmarks {
 		}
 
 		assert_eq!(SafeMode::<T>::active_until(), None);
+		Ok(())
 	}
 
 	#[benchmark]
-	fn release_reservation() -> Result<(), BenchmarkError> {
+	fn release_stake() -> Result<(), BenchmarkError> {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 
-		let enterd_at_block: T::BlockNumber = System::<T>::block_number();
+		let entered_at_block: T::BlockNumber = System::<T>::block_number();
 		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
-		let current_reservation =
-			Reservations::<T>::get(&caller, enterd_at_block).unwrap_or_default();
+		let current_stake = Stakes::<T>::get(&caller, entered_at_block).unwrap_or_default();
+		assert_eq!(current_stake, T::EnterStakeAmount::get().unwrap());
 		assert_eq!(
-			T::Currency::free_balance(&caller),
-			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()
+			T::Currency::balance(&caller),
+			BalanceOf::<T>::max_value() / 2u32.into() - T::EnterStakeAmount::get().unwrap()
 		);
 
 		let force_origin =
@@ -167,32 +172,32 @@ mod benchmarks {
 		System::<T>::on_initialize(System::<T>::block_number());
 		SafeMode::<T>::on_initialize(System::<T>::block_number());
 
-		let call = Call::<T>::release_reservation {
-			account: caller.clone(),
-			block: enterd_at_block.clone(),
-		};
+		let call =
+			Call::<T>::release_stake { account: caller.clone(), block: entered_at_block.clone() };
 
 		#[block]
 		{
 			call.dispatch_bypass_filter(origin.into())?;
 		}
 
-		assert_eq!(T::Currency::free_balance(&caller), BalanceOf::<T>::max_value());
+		assert!(!Stakes::<T>::contains_key(&caller, entered_at_block));
+		assert_eq!(T::Currency::balance(&caller), BalanceOf::<T>::max_value() / 2u32.into());
+		Ok(())
 	}
 
 	#[benchmark]
-	fn force_release_reservation() -> Result<(), BenchmarkError> {
+	fn force_release_stake() -> Result<(), BenchmarkError> {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 
-		let enterd_at_block: T::BlockNumber = System::<T>::block_number();
+		let entered_at_block: T::BlockNumber = System::<T>::block_number();
 		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
-		let current_reservation =
-			Reservations::<T>::get(&caller, enterd_at_block).unwrap_or_default();
+		let current_stake = Stakes::<T>::get(&caller, entered_at_block).unwrap_or_default();
+		assert_eq!(current_stake, T::EnterStakeAmount::get().unwrap());
 		assert_eq!(
-			T::Currency::free_balance(&caller),
-			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()
+			T::Currency::balance(&caller),
+			BalanceOf::<T>::max_value() / 2u32.into() - T::EnterStakeAmount::get().unwrap()
 		);
 
 		// TODO
@@ -204,11 +209,11 @@ mod benchmarks {
 		System::<T>::on_initialize(System::<T>::block_number());
 		SafeMode::<T>::on_initialize(System::<T>::block_number());
 
-		let release_origin = T::ReservationSlashOrigin::try_successful_origin()
-			.map_err(|_| BenchmarkError::Weightless)?;
-		let call = Call::<T>::force_release_reservation {
+		let release_origin =
+			T::StakeSlashOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		let call = Call::<T>::force_release_stake {
 			account: caller.clone(),
-			block: enterd_at_block.clone(),
+			block: entered_at_block.clone(),
 		};
 
 		#[block]
@@ -216,22 +221,25 @@ mod benchmarks {
 			call.dispatch_bypass_filter(release_origin)?;
 		}
 
-		assert_eq!(T::Currency::free_balance(&caller), BalanceOf::<T>::max_value());
+		assert!(!Stakes::<T>::contains_key(&caller, entered_at_block));
+		assert_eq!(T::Currency::balance(&caller), BalanceOf::<T>::max_value() / 2u32.into());
+		Ok(())
 	}
 
 	#[benchmark]
-	fn force_slash_reservation() -> Result<(), BenchmarkError> {
+	fn force_slash_stake() -> Result<(), BenchmarkError> {
+		// FAIL-CI disable if uncallable
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 
-		let enterd_at_block: T::BlockNumber = System::<T>::block_number();
+		let entered_at_block: T::BlockNumber = System::<T>::block_number();
 		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
-		let current_reservation =
-			Reservations::<T>::get(&caller, enterd_at_block).unwrap_or_default();
+		let current_stake = Stakes::<T>::get(&caller, entered_at_block).unwrap_or_default();
+		assert_eq!(current_stake, T::EnterStakeAmount::get().unwrap());
 		assert_eq!(
-			T::Currency::free_balance(&caller),
-			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()
+			T::Currency::balance(&caller),
+			BalanceOf::<T>::max_value() / 2u32.into() - T::EnterStakeAmount::get().unwrap()
 		);
 
 		// TODO
@@ -239,11 +247,11 @@ mod benchmarks {
 			T::ForceExitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		assert!(SafeMode::<T>::force_exit(force_origin.clone()).is_ok());
 
-		let release_origin = T::ReservationSlashOrigin::try_successful_origin()
-			.map_err(|_| BenchmarkError::Weightless)?;
-		let call = Call::<T>::force_slash_reservation {
+		let release_origin =
+			T::StakeSlashOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		let call = Call::<T>::force_slash_stake {
 			account: caller.clone(),
-			block: enterd_at_block.clone(),
+			block: entered_at_block.clone(),
 		};
 
 		#[block]
@@ -251,10 +259,12 @@ mod benchmarks {
 			call.dispatch_bypass_filter(release_origin)?;
 		}
 
+		assert!(!Stakes::<T>::contains_key(&caller, entered_at_block));
 		assert_eq!(
-			T::Currency::free_balance(&caller),
-			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()
+			T::Currency::balance(&caller),
+			BalanceOf::<T>::max_value() / 2u32.into() - T::EnterStakeAmount::get().unwrap()
 		);
+		Ok(())
 	}
 
 	impl_benchmark_test_suite!(SafeMode, crate::mock::new_test_ext(), crate::mock::Test);

@@ -75,6 +75,10 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = MaxLocks;
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
+	type HoldIdentifier = ();
+	type FreezeIdentifier = ();
+	type MaxHolds = ConstU32<0>;
+	type MaxFreezes = ConstU32<0>;
 }
 
 impl pallet_utility::Config for Test {
@@ -144,11 +148,11 @@ parameter_types! {
 }
 
 #[derive(Copy, Clone, Encode, Decode, RuntimeDebug, MaxEncodedLen, scale_info::TypeInfo)]
-pub struct WhitelistCallNames;
+pub struct WhitelistedCalls;
 
 /// Contains used by `BaseCallFiler` so this impl whitelists `Balances::transfer_keep_alive`. All
 /// others may be paused.
-impl Contains<FullNameOf<Test>> for WhitelistCallNames {
+impl Contains<FullNameOf<Test>> for WhitelistedCalls {
 	fn contains(full_name: &FullNameOf<Test>) -> bool {
 		let unpausables: Vec<FullNameOf<Test>> = vec![(
 			b"Balances".to_vec().try_into().unwrap(),
@@ -180,7 +184,7 @@ impl Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type PauseOrigin = EnsureSignedBy<PauseOrigin, Self::AccountId>;
 	type UnpauseOrigin = EnsureSignedBy<UnpauseOrigin, Self::AccountId>;
-	type WhitelistCallNames = WhitelistCallNames;
+	type WhitelistedCalls = WhitelistedCalls;
 	type MaxNameLen = MaxNameLen;
 	type PauseTooLongNames = PauseTooLongNames;
 	type WeightInfo = ();

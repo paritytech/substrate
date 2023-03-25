@@ -75,6 +75,10 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = MaxReserves;
 	type ReserveIdentifier = Self::BlockNumber;
+	type HoldIdentifier = HoldIdentifier;
+	type FreezeIdentifier = ();
+	type MaxHolds = ConstU32<10>;
+	type MaxFreezes = ConstU32<0>;
 }
 
 impl pallet_utility::Config for Test {
@@ -260,10 +264,10 @@ impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>>> EnsureOrigin<O>
 parameter_types! {
 	pub const EnterDuration: u64 = 3;
 	pub const ExtendDuration: u64 = 30;
-	pub const ActivateReservationAmount: u64 = 100;
-	pub const ExtendReservationAmount: u64 = 100;
+	pub const EnterStakeAmount: u64 = 100;
+	pub const ExtendStakeAmount: u64 = 100;
 	pub const ForceExitOrigin: u64 = 3;
-	pub const ReservationSlashOrigin: u64 = 4;
+	pub const StakeSlashOrigin: u64 = 4;
 	pub const ReleaseDelay: u64 = 2;
 }
 
@@ -275,7 +279,7 @@ impl SortedMembers<u64> for ForceExitOrigin {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add(_m: &u64) {}
 }
-impl SortedMembers<u64> for ReservationSlashOrigin {
+impl SortedMembers<u64> for StakeSlashOrigin {
 	fn sorted_members() -> Vec<u64> {
 		vec![Self::get()]
 	}
@@ -283,18 +287,34 @@ impl SortedMembers<u64> for ReservationSlashOrigin {
 	fn add(_m: &u64) {}
 }
 
+#[derive(
+	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, Debug, TypeInfo,
+)]
+pub enum HoldIdentifier {
+	SafeModeStake { block: u64 },
+}
+
+impl crate::CausalHoldReason<u64> for HoldIdentifier {
+	type Reason = HoldIdentifier;
+
+	fn cause(block: u64) -> Self::Reason {
+		Self::SafeModeStake { block }
+	}
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
+	type HoldReason = HoldIdentifier;
 	type WhitelistedCalls = WhitelistedCalls;
 	type EnterDuration = EnterDuration;
-	type ActivateReservationAmount = ActivateReservationAmount;
+	type EnterStakeAmount = EnterStakeAmount;
 	type ExtendDuration = ExtendDuration;
-	type ExtendReservationAmount = ExtendReservationAmount;
+	type ExtendStakeAmount = ExtendStakeAmount;
 	type ForceEnterOrigin = ForceEnterOrigin;
 	type ForceExtendOrigin = ForceExtendOrigin;
 	type ForceExitOrigin = EnsureSignedBy<ForceExitOrigin, Self::AccountId>;
-	type ReservationSlashOrigin = EnsureSignedBy<ReservationSlashOrigin, Self::AccountId>;
+	type StakeSlashOrigin = EnsureSignedBy<StakeSlashOrigin, Self::AccountId>;
 	type ReleaseDelay = ReleaseDelay;
 	type WeightInfo = ();
 }

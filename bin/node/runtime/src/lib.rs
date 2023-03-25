@@ -229,9 +229,9 @@ impl Contains<RuntimeCall> for WhitelistedCalls {
 }
 
 use pallet_tx_pause::FullNameOf;
-pub struct WhitelistCallNames;
+pub struct WhitelistedCalls;
 /// Whitelist `Balances::transfer_keep_alive`, all others are pauseable.
-impl Contains<FullNameOf<Runtime>> for WhitelistCallNames {
+impl Contains<FullNameOf<Runtime>> for WhitelistedCalls {
 	fn contains(full_name: &FullNameOf<Runtime>) -> bool {
 		let unpausables: Vec<FullNameOf<Runtime>> = vec![(
 			b"Balances".to_vec().try_into().unwrap(),
@@ -257,7 +257,7 @@ impl pallet_tx_pause::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type PauseOrigin = EnsureRoot<AccountId>;
 	type UnpauseOrigin = EnsureRoot<AccountId>;
-	type WhitelistCallNames = WhitelistCallNames;
+	type WhitelistedCalls = WhitelistedCalls;
 	type MaxNameLen = ConstU32<256>;
 	type PauseTooLongNames = ConstBool<true>;
 	type WeightInfo = pallet_tx_pause::weights::SubstrateWeight<Runtime>;
@@ -376,8 +376,8 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> Ensu
 parameter_types! {
 	pub const SignedEnterDuration: u32 = 10;
 	pub const ExtendDuration: u32 = 20;
-	pub const ActivateReservationAmount: Balance = 10 * DOLLARS;
-	pub const ExtendReservationAmount: Balance = 15 * DOLLARS;
+	pub const EnterStakeAmount: Balance = 10 * DOLLARS;
+	pub const ExtendStakeAmount: Balance = 15 * DOLLARS;
 	pub const ReleaseDelay: u32 = 15;
 }
 
@@ -386,13 +386,13 @@ impl pallet_safe_mode::Config for Runtime {
 	type Currency = Balances;
 	type WhitelistedCalls = WhitelistedCalls;
 	type EnterDuration = ConstU32<{ 2 * DAYS }>;
-	type ActivateReservationAmount = ActivateReservationAmount;
+	type EnterStakeAmount = EnterStakeAmount;
 	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
-	type ExtendReservationAmount = ExtendReservationAmount;
+	type ExtendStakeAmount = ExtendStakeAmount;
 	type ForceEnterOrigin = ForceEnterOrigin;
 	type ForceExtendOrigin = ForceExtendOrigin;
 	type ForceExitOrigin = EnsureRoot<Self::AccountId>;
-	type ReservationSlashOrigin = EnsureRoot<Self::AccountId>;
+	type StakeSlashOrigin = EnsureRoot<Self::AccountId>;
 	type ReleaseDelay = ReleaseDelay;
 	type WeightInfo = pallet_safe_mode::weights::SubstrateWeight<Runtime>;
 }

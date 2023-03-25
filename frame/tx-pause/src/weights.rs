@@ -64,13 +64,13 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: TxPause PausedCalls (r:2 w:1)
 	fn pause() -> Weight {
-		Weight::from_ref_time(61_745_000 as u64)
+		Weight::from_parts(61_745_000 as u64, 0)
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: TxPause PausedCalls (r:2 w:1)
 	fn unpause() -> Weight {
-		Weight::from_ref_time(55_117_000 as u64)
+		Weight::from_parts(55_117_000 as u64, 0)
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
@@ -80,13 +80,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	// Storage: TxPause PausedCalls (r:2 w:1)
 	fn pause() -> Weight {
-		Weight::from_ref_time(61_745_000 as u64)
+		Weight::from_parts(61_745_000 as u64, 0)
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: TxPause PausedCalls (r:2 w:1)
 	fn unpause() -> Weight {
-		Weight::from_ref_time(55_117_000 as u64)
+		Weight::from_parts(55_117_000 as u64, 0)
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
