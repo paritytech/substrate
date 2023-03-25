@@ -132,8 +132,6 @@ pub trait RuntimePublic: Sized {
 pub trait RuntimeAppPublic: Sized {
 	/// An identifier for this application-specific key type.
 	const ID: KeyTypeId;
-	/// The identifier of the crypto type of this application-specific key type.
-	const CRYPTO_ID: CryptoTypeId;
 
 	/// The signature that will be generated when signing with the corresponding private key.
 	type Signature: Codec + Debug + MaybeHash + Eq + PartialEq + Clone + scale_info::TypeInfo;
@@ -163,7 +161,7 @@ pub trait RuntimeAppPublic: Sized {
 	fn to_raw_vec(&self) -> Vec<u8>;
 }
 
-/// Something that bound to a fixed [`RuntimeAppPublic`].
+/// Something that is bound to a fixed [`RuntimeAppPublic`].
 pub trait BoundToRuntimeAppPublic {
 	/// The [`RuntimeAppPublic`] this type is bound to.
 	type Public: RuntimeAppPublic;
