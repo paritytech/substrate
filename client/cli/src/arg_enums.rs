@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -74,12 +74,12 @@ impl std::fmt::Display for WasmExecutionMethod {
 /// into an execution method which can be used internally.
 pub fn execution_method_from_cli(
 	execution_method: WasmExecutionMethod,
-	_instantiation_strategy: WasmtimeInstantiationStrategy,
+	instantiation_strategy: WasmtimeInstantiationStrategy,
 ) -> sc_service::config::WasmExecutionMethod {
 	match execution_method {
 		WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
 		WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled {
-			instantiation_strategy: match _instantiation_strategy {
+			instantiation_strategy: match instantiation_strategy {
 				WasmtimeInstantiationStrategy::PoolingCopyOnWrite =>
 					sc_service::config::WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
 				WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite =>
