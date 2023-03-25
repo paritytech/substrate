@@ -45,6 +45,7 @@ use sp_runtime::{
 
 mod currency_tests;
 mod dispatchable_tests;
+mod fungible_conformance_tests;
 mod fungible_tests;
 mod reentrancy_tests;
 
