@@ -31,7 +31,7 @@ sp_api::decl_runtime_apis! {
 		fn nominations_quota(balance: Balance) -> u32;
 
 		/// Returns the full exposure of a validator at a given era.
-		fn eras_stakers(era: sp_staking::EraIndex, account: AccountId) -> pallet_staking::Exposure<AccountId, Balance>;
+		fn eras_stakers(era: sp_staking::EraIndex, account: AccountId) -> sp_staking::Exposure<AccountId, Balance>;
 
 		/// Returns the count of pages exposure of the validator is split into.
 		fn era_page_count(era: sp_staking::EraIndex, account: AccountId) -> sp_staking::PageIndex;

@@ -6789,7 +6789,6 @@ dependencies = [
 name = "pallet-staking-runtime-api"
 version = "4.0.0-dev"
 dependencies = [
- "pallet-staking",
  "parity-scale-codec",
  "sp-api",
  "sp-staking",
