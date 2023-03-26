@@ -548,3 +548,83 @@ pub mod v4 {
 		}
 	}
 }
+
+pub mod v5 {
+	use super::*;
+
+	#[derive(Decode)]
+	pub struct OldRewardPool<T: Config> {
+		last_recorded_reward_counter: T::RewardCounter,
+		last_recorded_total_payouts: BalanceOf<T>,
+		total_rewards_claimed: BalanceOf<T>,
+	}
+
+	impl<T: Config> OldRewardPool<T> {
+		fn migrate_to_v5(self) -> RewardPool<T> {
+			RewardPool {
+				last_recorded_reward_counter: self.last_recorded_reward_counter,
+				last_recorded_total_payouts: self.last_recorded_total_payouts,
+				total_rewards_claimed: self.total_rewards_claimed,
+				total_commission_pending: Zero::zero(),
+				total_commission_claimed: Zero::zero(),
+			}
+		}
+	}
+
+	/// This migration adds`total_commission_pending` and `total_commission_claimed` field to every
+	/// `RewardPool`, if any. any.
+	pub struct MigrateToV5<T, U>(sp_std::marker::PhantomData<(T, U)>);
+	impl<T: Config, U: Get<Perbill>> OnRuntimeUpgrade for MigrateToV5<T, U> {
+		fn on_runtime_upgrade() -> Weight {
+			let current = Pallet::<T>::current_storage_version();
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
+			log!(
+				info,
+				"Running migration with current storage version {:?} / onchain {:?}",
+				current,
+				onchain
+			);
+
+			if current == 5 && onchain == 4 {
+				let mut translated = 0u64;
+				RewardPools::<T>::translate::<OldRewardPool<T>, _>(|_key, old_value| {
+					translated.saturating_inc();
+					Some(old_value.migrate_to_v5())
+				});
+
+				current.put::<Pallet<T>>();
+				log!(info, "Upgraded {} pools, storage to version {:?}", translated, current);
+
+				// reads: translated + onchain version.
+				// writes: translated + current.put.
+				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
+			} else {
+				log!(info, "Migration did not execute. This probably should be removed");
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			ensure!(
+				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
+				"the on_chain version is equal or more than the current one"
+			);
+			Ok(Vec::new())
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+			// ensure all BondedPools items now contain an `inner.commission: Commission` field.
+			ensure!(
+				RewardPools::<T>::iter()
+					.all(|(_, inner)| inner.total_commission_pending.is_zero() &&
+						inner.total_commission_claimed.max.is_zero()),
+				"a commission value has been incorrectly set"
+			);
+			ensure!(Pallet::<T>::on_chain_storage_version() == 5, "wrong storage version");
+			Ok(())
+		}
+	}
+}
