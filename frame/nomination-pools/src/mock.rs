@@ -55,30 +55,16 @@ impl sp_staking::StakingInterface for StakingMock {
 		StakingMinBond::get()
 	}
 
-	fn stash_by_ctrl(_controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
+	fn desired_validator_count() -> u32 {
 		unimplemented!("method currently not used in testing")
-	}
-
-	fn bonding_duration() -> EraIndex {
-		BondingDuration::get()
 	}
 
 	fn current_era() -> EraIndex {
 		CurrentEra::get()
 	}
 
-	fn bond(stash: &Self::AccountId, value: Self::Balance, _: &Self::AccountId) -> DispatchResult {
-		StakingMock::set_bonded_balance(*stash, value);
-		Ok(())
-	}
-
-	fn nominate(_: &Self::AccountId, nominations: Vec<Self::AccountId>) -> DispatchResult {
-		Nominations::set(&Some(nominations));
-		Ok(())
-	}
-
-	fn chill(_: &Self::AccountId) -> sp_runtime::DispatchResult {
-		Ok(())
+	fn bonding_duration() -> EraIndex {
+		BondingDuration::get()
 	}
 
 	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
@@ -98,6 +84,10 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
+	fn chill(_: &Self::AccountId) -> sp_runtime::DispatchResult {
+		Ok(())
+	}
+
 	fn withdraw_unbonded(who: Self::AccountId, _: u32) -> Result<bool, DispatchError> {
 		// Simulates removing unlocking chunks and only having the bonded balance locked
 		let mut x = UnbondingBalanceMap::get();
@@ -107,14 +97,29 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(UnbondingBalanceMap::get().is_empty() && BondedBalanceMap::get().is_empty())
 	}
 
-	fn desired_validator_count() -> u32 {
+	fn bond(stash: &Self::AccountId, value: Self::Balance, _: &Self::AccountId) -> DispatchResult {
+		StakingMock::set_bonded_balance(*stash, value);
+		Ok(())
+	}
+
+	fn nominate(_: &Self::AccountId, nominations: Vec<Self::AccountId>) -> DispatchResult {
+		Nominations::set(&Some(nominations));
+		Ok(())
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn nominations(_: Self::AccountId) -> Option<Vec<Self::AccountId>> {
+		Nominations::get()
+	}
+
+	fn stash_by_ctrl(_controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
 		unimplemented!("method currently not used in testing")
 	}
 
 	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
 		match (
-			UnbondingBalanceMap::get().get(who).copied(),
-			BondedBalanceMap::get().get(who).copied(),
+		UnbondingBalanceMap::get().get(who).copied(),
+		BondedBalanceMap::get().get(who).copied(),
 		) {
 			(None, None) => Err(DispatchError::Other("balance not found")),
 			(Some(v), None) => Ok(Stake { total: v, active: 0, stash: *who }),
@@ -136,26 +141,21 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn nominations(_: Self::AccountId) -> Option<Vec<Self::AccountId>> {
-		Nominations::get()
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn max_exposure_page_size() -> sp_staking::PageIndex {
-		unimplemented!("method currently not used in testing")
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
 	fn add_era_stakers(
-		_current_era: &EraIndex,
-		_stash: &Self::AccountId,
-		_exposures: Vec<(Self::AccountId, Self::Balance)>,
+	_current_era: &EraIndex,
+	_stash: &Self::AccountId,
+	_exposures: Vec<(Self::AccountId, Self::Balance)>,
 	) {
 		unimplemented!("method currently not used in testing")
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_current_era(_era: EraIndex) {
+		unimplemented!("method currently not used in testing")
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn max_exposure_page_size() -> sp_staking::PageIndex {
 		unimplemented!("method currently not used in testing")
 	}
 }
