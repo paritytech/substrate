@@ -3933,7 +3933,7 @@ fn test_multi_page_payout_stakers_by_page() {
 
 		// verify we clean up history as we go
 		for era in 0..15 {
-			assert_eq!(Staking::claimed_rewards(era, &11), Vec::<PageIndex>::new());
+			assert_eq!(Staking::claimed_rewards(era, &11), Vec::<sp_staking::PageIndex>::new());
 		}
 
 		// verify only page 0 is marked as claimed
@@ -4143,7 +4143,7 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 
 		// verify we clean up history as we go
 		for era in 0..15 {
-			assert_eq!(Staking::claimed_rewards(era, &11), Vec::<PageIndex>::new());
+			assert_eq!(Staking::claimed_rewards(era, &11), Vec::<sp_staking::PageIndex>::new());
 		}
 
 		// verify only page 0 is marked as claimed
