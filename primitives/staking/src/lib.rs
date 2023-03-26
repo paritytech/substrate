@@ -248,7 +248,7 @@ impl<
 
 		for chunk in individual_chunks {
 			let mut page_total: Balance = Zero::zero();
-			let mut others: Vec<IndividualExposure<AccountId, Balance>> = Vec::with_capacity(chunks.len());
+			let mut others: Vec<IndividualExposure<AccountId, Balance>> = Vec::with_capacity(chunk.len());
 			for individual in chunk.iter() {
 				page_total.saturating_accrue(individual.value);
 				others.push(IndividualExposure {
