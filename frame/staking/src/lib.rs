@@ -319,7 +319,7 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
-	EraIndex, ExposureOverview, ExposurePage, PageIndex, SessionIndex,
+	EraIndex, ExposureOverview, ExposurePage, SessionIndex,
 };
 pub use sp_staking::{Exposure, IndividualExposure};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
