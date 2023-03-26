@@ -572,7 +572,7 @@ pub mod v5 {
 	}
 
 	/// This migration adds`total_commission_pending` and `total_commission_claimed` field to every
-	/// `RewardPool`, if any. any.
+	/// `RewardPool`, if any.
 	pub struct MigrateToV5<T, U>(sp_std::marker::PhantomData<(T, U)>);
 	impl<T: Config, U: Get<Perbill>> OnRuntimeUpgrade for MigrateToV5<T, U> {
 		fn on_runtime_upgrade() -> Weight {
