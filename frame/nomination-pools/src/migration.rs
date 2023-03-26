@@ -621,11 +621,52 @@ pub mod v5 {
 				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
 				"the on_chain version is equal or more than the current one"
 			);
-			Ok(Vec::new())
+
+			let rpool_keys = RewardPools::<T>::iter_keys().len();
+			let rpool_values = RewardPools::<T>::iter_values().len();
+			if rpool_keys != rpool_values {
+				log!(info, "🔥 There are {} undecodable RewardPools in storage. This migration will try to correct them. keys: {}, values: {}", rpool_keys.saturating_sub(rpool_values), rpool_keys, rpool_values);
+			}
+
+			ensure!(
+				PoolMembers::<T>::iter_keys().len() == PoolMembers::iter_values().len(),
+				"There are undecodable PoolMembers in storage. This migration will not fix that."
+			);
+			ensure!(
+				BoundedPools::<T>::iter_keys().len() == BoundedPools::<T>::iter_values().len(),
+				"There are undecodable BoundedPools in storage. This migration will not fix that."
+			);
+			ensure!(
+				SubPoolsStorage::<T>::iter_keys().len() ==
+					SubPoolsStorage::<T>::iter_values().len(),
+				"There are undecodable SubPools in storage. This migration will not fix that."
+			);
+			ensure!(
+				Metadata::<T>::iter_keys().len() == Metadata::<T>::iter_values().len(),
+				"There are undecodable Metadata in storage. This migration will not fix that."
+			);
+
+			Ok((rpool_values as u64).encode())
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+			let old_rpool_values = Decode::<u64>::decode(&mut &data[..]).unwrap();
+			let rpool_keys = RewardPools::<T>::iter_keys().len();
+			let rpool_values = RewardPools::<T>::iter_values().len();
+			ensure!(
+				rpool_keys == rpool_values,
+				"There are STILL undecodable RewardPools - migration failed"
+			);
+
+			if old_rpool_values != rpool_values {
+				log!(
+					info,
+					"🎉 Fixed {} undecodable RewardPools.",
+					rpool_values.saturating_sub(old_rpool_values)
+				);
+			}
+
 			// ensure all RewardPools items now contain `total_commission_pending` and
 			// `total_commission_claimed` field.
 			ensure!(
@@ -637,6 +678,26 @@ pub mod v5 {
 				"a commission value has been incorrectly set"
 			);
 			ensure!(Pallet::<T>::on_chain_storage_version() == 5, "wrong storage version");
+
+			// These should not have been touched - just in case.
+			ensure!(
+				PoolMembers::<T>::iter_keys().len() == PoolMembers::iter_values().len(),
+				"There are undecodable PoolMembers in storage."
+			);
+			ensure!(
+				BoundedPools::<T>::iter_keys().len() == BoundedPools::<T>::iter_values().len(),
+				"There are undecodable BoundedPools in storage."
+			);
+			ensure!(
+				SubPoolsStorage::<T>::iter_keys().len() ==
+					SubPoolsStorage::<T>::iter_values().len(),
+				"There are undecodable SubPools in storage."
+			);
+			ensure!(
+				Metadata::<T>::iter_keys().len() == Metadata::<T>::iter_values().len(),
+				"There are undecodable Metadata in storage."
+			);
+
 			Ok(())
 		}
 	}
