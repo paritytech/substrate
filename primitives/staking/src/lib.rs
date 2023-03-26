@@ -250,7 +250,7 @@ impl<
 			let mut page_total: Balance = Zero::zero();
 			let mut others: Vec<IndividualExposure<AccountId, Balance>> = Vec::with_capacity(chunks.len());
 			for individual in chunk.iter() {
-				page_total = page_total.saturating_add(individual.value);
+				page_total.saturating_accrue(individual.value);
 				others.push(IndividualExposure {
 					who: individual.who.clone(),
 					value: individual.value,
