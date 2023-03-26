@@ -588,7 +588,7 @@ pub mod v5 {
 
 			if current == 5 && onchain == 4 {
 				let mut translated = 0u64;
-				RewardPools::<T>::translate::<OldRewardPool<T>, _>(|_key, old_value| {
+				RewardPools::<T>::translate::<OldRewardPool<T>, _>(|_id, old_value| {
 					translated.saturating_inc();
 					Some(old_value.migrate_to_v5())
 				});
@@ -616,11 +616,14 @@ pub mod v5 {
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
-			// ensure all BondedPools items now contain an `inner.commission: Commission` field.
+			// ensure all RewardPools items now contain `total_commission_pending` and
+			// `total_commission_claimed` field.
 			ensure!(
-				RewardPools::<T>::iter()
-					.all(|(_, inner)| inner.total_commission_pending.is_zero() &&
-						inner.total_commission_claimed.is_zero()),
+				RewardPools::<T>::iter().all(|(_, reward_pool)| reward_pool
+					.total_commission_pending
+					.is_zero() && reward_pool
+					.total_commission_claimed
+					.is_zero()),
 				"a commission value has been incorrectly set"
 			);
 			ensure!(Pallet::<T>::on_chain_storage_version() == 5, "wrong storage version");
