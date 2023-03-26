@@ -620,7 +620,7 @@ pub mod v5 {
 			ensure!(
 				RewardPools::<T>::iter()
 					.all(|(_, inner)| inner.total_commission_pending.is_zero() &&
-						inner.total_commission_claimed.max.is_zero()),
+						inner.total_commission_claimed.is_zero()),
 				"a commission value has been incorrectly set"
 			);
 			ensure!(Pallet::<T>::on_chain_storage_version() == 5, "wrong storage version");
