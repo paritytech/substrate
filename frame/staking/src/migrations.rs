@@ -14,7 +14,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 
-//! Storage migrations for the Staking pallet.
+//! Storage migrations for the Staking pallet. The changelog for this is maintained at
+//! [CHANGELOG.md](https://github.com/paritytech/substrate/blob/master/frame/staking/CHANGELOG.md).
 
 use super::*;
 use frame_election_provider_support::SortedListProvider;
@@ -52,6 +53,8 @@ impl Default for ObsoleteReleases {
 #[storage_alias]
 type StorageVersion<T: Config> = StorageValue<Pallet<T>, ObsoleteReleases, ValueQuery>;
 
+/// Migration of era exposure storage items to paged exposures.
+/// Changelog: [v14.](https://github.com/paritytech/substrate/blob/ankan/paged-rewards-rebased2/frame/staking/CHANGELOG.md#14)
 pub mod v14 {
 	use super::*;
 

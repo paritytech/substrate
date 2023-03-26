@@ -7,7 +7,7 @@ on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). We maintain a
 single integer version number for staking pallet to keep track of all storage
 migrations.
 
-## [14]
+## [v14]
 
 ### Added
 
@@ -24,4 +24,4 @@ migrations.
 - Field `claimed_rewards` in item `Ledger` is renamed
   to `legacy_claimed_rewards` and may be removed after 84 eras.
 
-[14]: https://github.com/paritytech/substrate/pull/13059
+[v14]: https://github.com/paritytech/substrate/pull/13498
