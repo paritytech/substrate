@@ -118,8 +118,8 @@ impl sp_staking::StakingInterface for StakingMock {
 
 	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
 		match (
-		UnbondingBalanceMap::get().get(who).copied(),
-		BondedBalanceMap::get().get(who).copied(),
+			UnbondingBalanceMap::get().get(who).copied(),
+			BondedBalanceMap::get().get(who).copied(),
 		) {
 			(None, None) => Err(DispatchError::Other("balance not found")),
 			(Some(v), None) => Ok(Stake { total: v, active: 0, stash: *who }),
@@ -142,9 +142,9 @@ impl sp_staking::StakingInterface for StakingMock {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_era_stakers(
-	_current_era: &EraIndex,
-	_stash: &Self::AccountId,
-	_exposures: Vec<(Self::AccountId, Self::Balance)>,
+		_current_era: &EraIndex,
+		_stash: &Self::AccountId,
+		_exposures: Vec<(Self::AccountId, Self::Balance)>,
 	) {
 		unimplemented!("method currently not used in testing")
 	}
