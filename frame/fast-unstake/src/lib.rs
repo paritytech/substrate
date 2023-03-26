@@ -139,10 +139,6 @@ pub mod pallet {
 		/// Maximum value for `ErasToCheckPerBlock`. This should be as close as possible, but more
 		/// than the actual value, in order to have accurate benchmarks.
 		type MaxErasToCheckPerBlock: Get<u32>;
-
-		/// Use only for benchmarking.
-		#[cfg(feature = "runtime-benchmarks")]
-		type MaxExposurePageSize: Get<u32>;
 	}
 
 	/// The current "head of the queue" being unstaked.
