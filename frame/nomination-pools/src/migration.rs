@@ -503,7 +503,7 @@ pub mod v4 {
 			);
 
 			if current == 4 && onchain == 3 {
-				log!(warning, "Please run MigrateToV5 immediately after this migration. See github.com/paritytech/substrate/pull/13715");
+				log!(warn, "Please run MigrateToV5 immediately after this migration. See github.com/paritytech/substrate/pull/13715");
 				let initial_global_max_commission = U::get();
 				GlobalMaxCommission::<T>::set(Some(initial_global_max_commission));
 				log!(
@@ -622,27 +622,27 @@ pub mod v5 {
 				"the on_chain version is equal or more than the current one"
 			);
 
-			let rpool_keys = RewardPools::<T>::iter_keys().len();
-			let rpool_values = RewardPools::<T>::iter_values().len();
+			let rpool_keys = RewardPools::<T>::iter_keys().count();
+			let rpool_values = RewardPools::<T>::iter_values().count();
 			if rpool_keys != rpool_values {
 				log!(info, "🔥 There are {} undecodable RewardPools in storage. This migration will try to correct them. keys: {}, values: {}", rpool_keys.saturating_sub(rpool_values), rpool_keys, rpool_values);
 			}
 
 			ensure!(
-				PoolMembers::<T>::iter_keys().len() == PoolMembers::iter_values().len(),
+				PoolMembers::<T>::iter_keys().count() == PoolMembers::<T>::iter_values().count(),
 				"There are undecodable PoolMembers in storage. This migration will not fix that."
 			);
 			ensure!(
-				BoundedPools::<T>::iter_keys().len() == BoundedPools::<T>::iter_values().len(),
-				"There are undecodable BoundedPools in storage. This migration will not fix that."
+				BondedPools::<T>::iter_keys().count() == BondedPools::<T>::iter_values().count(),
+				"There are undecodable BondedPools in storage. This migration will not fix that."
 			);
 			ensure!(
-				SubPoolsStorage::<T>::iter_keys().len() ==
-					SubPoolsStorage::<T>::iter_values().len(),
+				SubPoolsStorage::<T>::iter_keys().count() ==
+					SubPoolsStorage::<T>::iter_values().count(),
 				"There are undecodable SubPools in storage. This migration will not fix that."
 			);
 			ensure!(
-				Metadata::<T>::iter_keys().len() == Metadata::<T>::iter_values().len(),
+				Metadata::<T>::iter_keys().count() == Metadata::<T>::iter_values().count(),
 				"There are undecodable Metadata in storage. This migration will not fix that."
 			);
 
@@ -650,10 +650,10 @@ pub mod v5 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
-			let old_rpool_values = Decode::<u64>::decode(&mut &data[..]).unwrap();
-			let rpool_keys = RewardPools::<T>::iter_keys().len();
-			let rpool_values = RewardPools::<T>::iter_values().len();
+		fn post_upgrade(data: Vec<u8>) -> Result<(), &'static str> {
+			let old_rpool_values: u64 = Decode::decode(&mut &data[..]).unwrap();
+			let rpool_keys = RewardPools::<T>::iter_keys().count() as u64;
+			let rpool_values = RewardPools::<T>::iter_values().count() as u64;
 			ensure!(
 				rpool_keys == rpool_values,
 				"There are STILL undecodable RewardPools - migration failed"
@@ -681,20 +681,20 @@ pub mod v5 {
 
 			// These should not have been touched - just in case.
 			ensure!(
-				PoolMembers::<T>::iter_keys().len() == PoolMembers::iter_values().len(),
+				PoolMembers::<T>::iter_keys().count() == PoolMembers::<T>::iter_values().count(),
 				"There are undecodable PoolMembers in storage."
 			);
 			ensure!(
-				BoundedPools::<T>::iter_keys().len() == BoundedPools::<T>::iter_values().len(),
-				"There are undecodable BoundedPools in storage."
+				BondedPools::<T>::iter_keys().count() == BondedPools::<T>::iter_values().count(),
+				"There are undecodable BondedPools in storage."
 			);
 			ensure!(
-				SubPoolsStorage::<T>::iter_keys().len() ==
-					SubPoolsStorage::<T>::iter_values().len(),
+				SubPoolsStorage::<T>::iter_keys().count() ==
+					SubPoolsStorage::<T>::iter_values().count(),
 				"There are undecodable SubPools in storage."
 			);
 			ensure!(
-				Metadata::<T>::iter_keys().len() == Metadata::<T>::iter_values().len(),
+				Metadata::<T>::iter_keys().count() == Metadata::<T>::iter_values().count(),
 				"There are undecodable Metadata in storage."
 			);
 
