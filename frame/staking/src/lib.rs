@@ -319,8 +319,9 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
-	EraIndex, PageIndex, SessionIndex,
+	EraIndex, ExposureOverview, ExposurePage, PageIndex, SessionIndex,
 };
+pub use sp_staking::{Exposure, IndividualExposure};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
 
@@ -710,122 +711,6 @@ pub struct Nominations<T: Config> {
 	///
 	/// NOTE: this for future proofing and is thus far not used.
 	pub suppressed: bool,
-}
-
-/// The amount of exposure (to slashing) than an individual nominator has.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct IndividualExposure<AccountId, Balance: HasCompact> {
-	/// The stash account of the nominator in question.
-	pub who: AccountId,
-	/// Amount of funds exposed.
-	#[codec(compact)]
-	pub value: Balance,
-}
-
-/// A snapshot of the stake backing a single validator in the system.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct Exposure<AccountId, Balance: HasCompact> {
-	/// The total balance backing this validator.
-	#[codec(compact)]
-	pub total: Balance,
-	/// The validator's own stash that is exposed.
-	#[codec(compact)]
-	pub own: Balance,
-	/// The portions of nominators stashes that are exposed.
-	pub others: Vec<IndividualExposure<AccountId, Balance>>,
-}
-
-impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, Balance> {
-	fn default() -> Self {
-		Self { total: Default::default(), own: Default::default(), others: vec![] }
-	}
-}
-
-impl<
-		AccountId: Clone,
-		Balance: HasCompact + AtLeast32BitUnsigned + Copy + codec::MaxEncodedLen,
-	> Exposure<AccountId, Balance>
-{
-	/// Splits an `Exposure` into `ExposureOverview` and multiple chunks of `IndividualExposure`
-	/// with each chunk having maximum of `page_size` elements.
-	fn into_pages(
-		self,
-		page_size: u32,
-	) -> (ExposureOverview<Balance>, Vec<ExposurePage<AccountId, Balance>>) {
-		let individual_chunks = self.others.chunks(page_size as usize);
-		let mut exposure_pages: Vec<ExposurePage<AccountId, Balance>> =
-			Vec::with_capacity(individual_chunks.len());
-
-		for chunk in individual_chunks {
-			let mut page_total: Balance = Zero::zero();
-			let mut others: Vec<IndividualExposure<AccountId, Balance>> = vec![];
-			for individual in chunk.iter() {
-				page_total = page_total.saturating_add(individual.value);
-				others.push(IndividualExposure {
-					who: individual.who.clone(),
-					value: individual.value,
-				})
-			}
-
-			exposure_pages.push(ExposurePage { page_total, others });
-		}
-
-		(
-			ExposureOverview {
-				total: self.total,
-				own: self.own,
-				nominator_count: self.others.len() as u32,
-				page_count: exposure_pages.len() as PageIndex,
-			},
-			exposure_pages,
-		)
-	}
-}
-
-/// A snapshot of the stake backing a single validator in the system.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct ExposurePage<AccountId, Balance: HasCompact> {
-	/// The total balance of this chunk/page.
-	#[codec(compact)]
-	pub page_total: Balance,
-	/// The portions of nominators stashes that are exposed.
-	pub others: Vec<IndividualExposure<AccountId, Balance>>,
-}
-
-impl<A, B: Default + HasCompact> Default for ExposurePage<A, B> {
-	fn default() -> Self {
-		ExposurePage { page_total: Default::default(), others: vec![] }
-	}
-}
-
-/// An overview of stake backing a single validator.
-///
-/// It, in combination with a list of `ExposurePage`s, can be used to reconstruct a full `Exposure`
-/// struct. This is useful for cases where we want to query a single page of `Exposure`s.
-#[derive(
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Clone,
-	Encode,
-	Decode,
-	RuntimeDebug,
-	TypeInfo,
-	Default,
-	MaxEncodedLen,
-)]
-pub struct ExposureOverview<Balance: HasCompact + codec::MaxEncodedLen> {
-	/// The total balance backing this validator.
-	#[codec(compact)]
-	pub total: Balance,
-	/// The validator's own stash that is exposed.
-	#[codec(compact)]
-	pub own: Balance,
-	/// Number of nominators backing this validator.
-	pub nominator_count: u32,
-	/// Number of pages of nominators.
-	pub page_count: PageIndex,
 }
 
 /// Extended view of Exposure comprising of `ExposureOverview` and a single page of `ExposurePage`.
