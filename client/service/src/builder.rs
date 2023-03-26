@@ -631,12 +631,8 @@ where
 
 	let (chain, state, child_state) = {
 		let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone()).into_rpc();
-		let (state, child_state) = sc_rpc::state::new_full(
-			client.clone(),
-			task_executor.clone(),
-			deny_unsafe,
-			config.rpc_max_payload,
-		);
+		let (state, child_state) =
+			sc_rpc::state::new_full(client.clone(), task_executor.clone(), deny_unsafe);
 		let state = state.into_rpc();
 		let child_state = child_state.into_rpc();
 

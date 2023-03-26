@@ -29,7 +29,8 @@ pub use crate::{
 		result,
 	},
 	traits::{
-		CallMetadata, GetCallMetadata, GetCallName, GetStorageVersion, UnfilteredDispatchable,
+		CallMetadata, GetCallIndex, GetCallMetadata, GetCallName, GetStorageVersion,
+		UnfilteredDispatchable,
 	},
 };
 #[cfg(feature = "std")]

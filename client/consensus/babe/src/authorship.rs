@@ -22,7 +22,7 @@ use super::Epoch;
 use codec::Encode;
 use sc_consensus_epochs::Epoch as EpochT;
 use schnorrkel::{keys::PublicKey, vrf::VRFInOut};
-use sp_application_crypto::AppKey;
+use sp_application_crypto::AppCrypto;
 use sp_consensus_babe::{
 	digests::{PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest},
 	make_transcript, make_transcript_data, AuthorityId, BabeAuthorityWeight, Slot, BABE_VRF_PREFIX,
