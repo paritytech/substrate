@@ -478,9 +478,18 @@ pub mod v4 {
 		}
 	}
 
+	/// # Warning
+	///
+	/// Please update to V5 immediately afterwards via `MigrateToV5`. See
+	/// github.com/paritytech/substrate/pull/13715
+	///
 	/// This migration adds a `commission` field to every `BondedPoolInner`, if
 	/// any.
+	#[deprecated(
+		note = "This migration MUST be followed by `MigrateToV5` to avoid mangled storage. See: github.com/paritytech/substrate/pull/13715"
+	)]
 	pub struct MigrateToV4<T, U>(sp_std::marker::PhantomData<(T, U)>);
+	#[allow(deprecated)]
 	impl<T: Config, U: Get<Perbill>> OnRuntimeUpgrade for MigrateToV4<T, U> {
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
@@ -494,6 +503,7 @@ pub mod v4 {
 			);
 
 			if current == 4 && onchain == 3 {
+				log!(warning, "Please run MigrateToV5 immediately after this migration. See github.com/paritytech/substrate/pull/13715");
 				let initial_global_max_commission = U::get();
 				GlobalMaxCommission::<T>::set(Some(initial_global_max_commission));
 				log!(
