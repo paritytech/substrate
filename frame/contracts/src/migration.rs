@@ -59,7 +59,11 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			v9::migrate::<T>(&mut weight);
 		}
 
-		StorageVersion::new(9).put::<Pallet<T>>();
+		if version < 10 {
+			v10::migrate::<T>(&mut weight);
+		}
+
+		StorageVersion::new(10).put::<Pallet<T>>();
 		weight.saturating_accrue(T::DbWeight::get().writes(1));
 
 		weight
@@ -397,6 +401,30 @@ mod v9 {
 				determinism: Determinism::Enforced,
 			})
 		});
+	}
+}
+
+mod v10 {
+
+	use super::*;
+	use crate::storage::DeletedContract;
+
+	#[storage_alias]
+	type DeletionQueue<T: Config> = StorageValue<Pallet<T>, Vec<DeletedContract>>;
+
+	pub fn migrate<T: Config>(weight: &mut Weight) {
+		let Some(contracts) = DeletionQueue::<T>::take() else { return };
+		weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+
+		let mut queue = crate::DeletionQueue::<T>::load();
+		weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 0));
+
+		let queue_len = contracts.len() as u64;
+		for contract in contracts {
+			queue.insert(contract);
+		}
+
+		weight.saturating_accrue(T::DbWeight::get().reads_writes(0, queue_len + 1));
 	}
 }
 

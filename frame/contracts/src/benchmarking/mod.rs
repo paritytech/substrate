@@ -219,6 +219,7 @@ benchmarks! {
 		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
+	// TODO simplify this
 	#[pov_mode = Measured]
 	on_initialize_per_queue_item {
 		let q in 0..1024.min(T::DeletionQueueDepth::get());

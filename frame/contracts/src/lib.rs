@@ -906,10 +906,12 @@ pub mod pallet {
 	/// Evicted contracts that await child trie deletion.
 	///
 	/// Child trie deletion is a heavy operation depending on the amount of storage items
-	/// stored in said trie. Therefore this operation is performed lazily in `on_initialize`.
+	/// stored in said trie. Therefore this operation is performed lazily in `on_idle`.
 	#[pallet::storage]
 	pub(crate) type DeletionQueueMap<T: Config> = StorageMap<_, Twox64Concat, u64, DeletedContract>;
 
+	/// A pair of monotonic counters used to index the latest contract marked for deletion
+	/// and the latest deleted contract
 	#[pallet::storage]
 	pub(crate) type DeletionQueueNonce<T: Config> =
 		StorageValue<_, DeletionQueueNonces, ValueQuery>;
@@ -917,65 +919,81 @@ pub mod pallet {
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Default)]
 struct DeletionQueueNonces {
+	/// Monotonic counter used as a key for inserting new deleted contract in the DeletionQueueMap.
+	/// The nonce is incremented after each insertion
 	insert_nonce: u64,
+	/// the index used to read the next element to be deleted
+	/// the nonce is incremented after each deletion
 	delete_nonce: u64,
 }
 
 impl DeletionQueueNonces {
-	fn delete_plus_one(&mut self) -> &mut Self {
-		self.delete_nonce.saturating_plus_one();
-		self
+	/// increment the delete nonce and return the new value
+	fn delete_inc(&mut self) -> Self {
+		self.delete_nonce = self.delete_nonce.wrapping_add(1);
+		self.clone()
 	}
 
-	fn insert_plus_one(&mut self) -> &mut Self {
-		self.insert_nonce.saturating_plus_one();
-		self
+	/// increment the insert nonce and return the new value
+	fn insert_inc(&mut self) -> Self {
+		self.insert_nonce = self.insert_nonce.wrapping_add(1);
+		self.clone()
 	}
 }
 
+/// Utility struct to manage the deletion queue
 struct DeletionQueue<T: Config> {
 	nonces: DeletionQueueNonces,
 	_phantom: PhantomData<T>,
 }
-//
+
+/// View on a contract that is marked for deletion
+/// The struct takes a mutable reference to the deletion queue so that the contract can be removed,
+/// and none can be added in the meantime.
 struct DeletionQueueEntry<'a, T: Config> {
 	contract: DeletedContract,
 	queue: &'a mut DeletionQueue<T>,
 }
 
 impl<'a, T: Config> DeletionQueueEntry<'a, T> {
-	fn get(&self) -> &DeletedContract {
+	/// Get a reference to the contract that is marked for deletion.
+	fn contract(&self) -> &DeletedContract {
 		&self.contract
 	}
 
+	/// Remove the contract from the deletion queue.
 	fn remove(self) {
 		<DeletionQueueMap<T>>::remove(self.queue.nonces.delete_nonce);
-		<DeletionQueueNonce<T>>::set(self.queue.nonces.delete_plus_one().clone());
+		<DeletionQueueNonce<T>>::set(self.queue.nonces.delete_inc());
 	}
 }
 
 impl<T: Config> DeletionQueue<T> {
+	/// Load the Deletion Queue nonces.
 	fn load() -> Self {
 		let nonces = <DeletionQueueNonce<T>>::get();
 		Self { nonces, _phantom: PhantomData }
 	}
 
+	/// The number of contracts marked for deletion.
 	fn len(&self) -> u64 {
-		self.nonces.insert_nonce - self.nonces.delete_nonce
+		self.nonces.insert_nonce.wrapping_sub(self.nonces.insert_nonce)
 	}
 
-	fn is_empty(&self) -> bool {
-		self.nonces.insert_nonce == self.nonces.delete_nonce
-	}
-
+	/// Insert a contract in the deletion queue.
 	fn insert(&mut self, contract: DeletedContract) {
 		<DeletionQueueMap<T>>::insert(self.nonces.insert_nonce, contract);
-		<DeletionQueueNonce<T>>::set(self.nonces.insert_plus_one().clone());
+		<DeletionQueueNonce<T>>::set(self.nonces.insert_inc());
 	}
 
-	fn next(&mut self) -> DeletionQueueEntry<T> {
-		let contract = <DeletionQueueMap<T>>::get(self.nonces.delete_nonce).unwrap(); // TODO
-		DeletionQueueEntry { contract, queue: self }
+	/// Fetch the next contract to be deleted.
+	fn next(&mut self) -> Option<DeletionQueueEntry<T>> {
+		if self.len() == 0 {
+			return None
+		}
+
+		<DeletionQueueMap<T>>::get(self.nonces.delete_nonce)
+			.map(|contract| DeletionQueueEntry { contract, queue: self })
 	}
 }
 
