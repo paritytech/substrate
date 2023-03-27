@@ -41,8 +41,7 @@ use sp_consensus_vrf::schnorrkel::VRFOutput;
 use sp_core::crypto::Pair;
 use sp_keyring::Sr25519Keyring;
 use sp_keystore::{
-	testing::KeyStore as TestKeyStore, vrf::make_transcript as transcript_from_data,
-	SyncCryptoStore,
+	testing::MemoryKeystore, vrf::make_transcript as transcript_from_data, Keystore,
 };
 use sp_runtime::{
 	generic::{Digest, DigestItem},
@@ -207,9 +206,8 @@ where
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<TestBlock, Self::Transaction>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		Ok(self.0.import_block(block, new_cache).await.expect("importing block failed"))
+		Ok(self.0.import_block(block).await.expect("importing block failed"))
 	}
 
 	async fn check_block(
@@ -256,7 +254,7 @@ impl Verifier<TestBlock> for TestVerifier {
 	async fn verify(
 		&mut self,
 		mut block: BlockImportParams<TestBlock, ()>,
-	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<BlockImportParams<TestBlock, ()>, String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
 		(self.mutator)(&mut block.header, Stage::PostSeal);
 		self.inner.verify(block).await
@@ -348,6 +346,11 @@ impl TestNetFactory for BabeTestNet {
 		&self.peers
 	}
 
+	fn peers_mut(&mut self) -> &mut Vec<BabePeer> {
+		trace!(target: "babe", "Retrieving peers, mutable");
+		&mut self.peers
+	}
+
 	fn mut_peers<F: FnOnce(&mut Vec<BabePeer>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
@@ -364,11 +367,12 @@ async fn rejects_empty_block() {
 	})
 }
 
-fn create_keystore(authority: Sr25519Keyring) -> SyncCryptoStorePtr {
-	let keystore = Arc::new(TestKeyStore::new());
-	SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(&authority.to_seed()))
-		.expect("Generates authority key");
+fn create_keystore(authority: Sr25519Keyring) -> KeystorePtr {
+	let keystore = MemoryKeystore::new();
 	keystore
+		.sr25519_generate_new(BABE, Some(&authority.to_seed()))
+		.expect("Generates authority key");
+	keystore.into()
 }
 
 async fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static) {
@@ -633,7 +637,8 @@ fn claim_vrf_check() {
 		v => panic!("Unexpected pre-digest variant {:?}", v),
 	};
 	let transcript = make_transcript_data(&epoch.randomness.clone(), 0.into(), epoch.epoch_index);
-	let sign = SyncCryptoStore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+	let sign = keystore
+		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
@@ -644,7 +649,8 @@ fn claim_vrf_check() {
 		v => panic!("Unexpected pre-digest variant {:?}", v),
 	};
 	let transcript = make_transcript_data(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
-	let sign = SyncCryptoStore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+	let sign = keystore
+		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
@@ -657,7 +663,8 @@ fn claim_vrf_check() {
 	};
 	let fixed_epoch = epoch.clone_for_slot(slot);
 	let transcript = make_transcript_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
-	let sign = SyncCryptoStore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+	let sign = keystore
+		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);
@@ -671,7 +678,8 @@ fn claim_vrf_check() {
 	};
 	let fixed_epoch = epoch.clone_for_slot(slot);
 	let transcript = make_transcript_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
-	let sign = SyncCryptoStore::sr25519_vrf_sign(&*keystore, AuthorityId::ID, &public, transcript)
+	let sign = keystore
+		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);
@@ -737,7 +745,7 @@ async fn propose_and_import_block<Transaction: Send + 'static>(
 	import
 		.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<TestBlock> { epoch_descriptor });
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-	let import_result = block_import.import_block(import, Default::default()).await.unwrap();
+	let import_result = block_import.import_block(import).await.unwrap();
 
 	match import_result {
 		ImportResult::Imported(_) => {},

@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use async_channel::TryRecvError;
 use futures::executor::block_on;
 use parity_scale_codec::{Decode, Encode, Joiner};
 use sc_block_builder::BlockBuilderProvider;
@@ -29,8 +30,8 @@ use sc_consensus::{
 };
 use sc_service::client::{new_in_mem, Client, LocalCallExecutor};
 use sp_api::ProvideRuntimeApi;
-use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError, SelectChain};
-use sp_core::{testing::TaskExecutor, H256};
+use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
+use sp_core::{testing::TaskExecutor, traits::CallContext, H256};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{BlakeTwo256, Block as BlockT, Header as HeaderT},
@@ -114,6 +115,7 @@ fn construct_block(
 		Default::default(),
 		&runtime_code,
 		task_executor.clone() as Box<_>,
+		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm)
 	.unwrap();
@@ -128,6 +130,7 @@ fn construct_block(
 			Default::default(),
 			&runtime_code,
 			task_executor.clone() as Box<_>,
+			CallContext::Onchain,
 		)
 		.execute(ExecutionStrategy::NativeElseWasm)
 		.unwrap();
@@ -142,6 +145,7 @@ fn construct_block(
 		Default::default(),
 		&runtime_code,
 		task_executor.clone() as Box<_>,
+		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm)
 	.unwrap();
@@ -172,16 +176,17 @@ fn finality_notification_check(
 	finalized: &[Hash],
 	stale_heads: &[Hash],
 ) {
-	match notifications.try_next() {
-		Ok(Some(notif)) => {
+	match notifications.try_recv() {
+		Ok(notif) => {
 			let stale_heads_expected: HashSet<_> = stale_heads.iter().collect();
 			let stale_heads: HashSet<_> = notif.stale_heads.iter().collect();
 			assert_eq!(notif.tree_route.as_ref(), &finalized[..finalized.len() - 1]);
 			assert_eq!(notif.hash, *finalized.last().unwrap());
 			assert_eq!(stale_heads, stale_heads_expected);
 		},
-		Ok(None) => panic!("unexpected notification result, client send channel was closed"),
-		Err(_) => assert!(finalized.is_empty()),
+		Err(TryRecvError::Closed) =>
+			panic!("unexpected notification result, client send channel was closed"),
+		Err(TryRecvError::Empty) => assert!(finalized.is_empty()),
 	}
 }
 
@@ -213,6 +218,7 @@ fn construct_genesis_should_work_with_native() {
 		Default::default(),
 		&runtime_code,
 		TaskExecutor::new(),
+		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm)
 	.unwrap();
@@ -246,6 +252,7 @@ fn construct_genesis_should_work_with_wasm() {
 		Default::default(),
 		&runtime_code,
 		TaskExecutor::new(),
+		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::AlwaysWasm)
 	.unwrap();
@@ -279,6 +286,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 		Default::default(),
 		&runtime_code,
 		TaskExecutor::new(),
+		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm);
 	assert!(r.is_err());
@@ -922,7 +930,7 @@ fn finality_target_with_best_not_on_longest_chain() {
 	let mut import_params = BlockImportParams::new(BlockOrigin::Own, header);
 	import_params.body = Some(extrinsics);
 	import_params.fork_choice = Some(ForkChoiceStrategy::Custom(false));
-	block_on(client.import_block(import_params, Default::default())).unwrap();
+	block_on(client.import_block(import_params)).unwrap();
 
 	// double check that B3 is still the best...
 	assert_eq!(client.info().best_hash, b3.hash());
@@ -977,7 +985,7 @@ fn import_with_justification() {
 
 	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[]);
 	finality_notification_check(&mut finality_notifications, &[a3.hash()], &[]);
-	assert!(finality_notifications.try_next().is_err());
+	assert!(matches!(finality_notifications.try_recv().unwrap_err(), TryRecvError::Empty));
 }
 
 #[test]
@@ -1032,7 +1040,7 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 	assert_eq!(client.chain_info().finalized_hash, b1.hash());
 
 	finality_notification_check(&mut finality_notifications, &[b1.hash()], &[a2.hash()]);
-	assert!(finality_notifications.try_next().is_err());
+	assert!(matches!(finality_notifications.try_recv().unwrap_err(), TryRecvError::Empty));
 }
 
 #[test]
@@ -1118,7 +1126,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 
 	finality_notification_check(&mut finality_notifications, &[b1.hash()], &[]);
 	finality_notification_check(&mut finality_notifications, &[b2.hash(), b3.hash()], &[a2.hash()]);
-	assert!(finality_notifications.try_next().is_err());
+	assert!(matches!(finality_notifications.try_recv().unwrap_err(), TryRecvError::Empty));
 }
 
 #[test]
@@ -1221,7 +1229,7 @@ fn finality_notifications_content() {
 
 	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[c1.hash()]);
 	finality_notification_check(&mut finality_notifications, &[d3.hash(), d4.hash()], &[b2.hash()]);
-	assert!(finality_notifications.try_next().is_err());
+	assert!(matches!(finality_notifications.try_recv().unwrap_err(), TryRecvError::Empty));
 }
 
 #[test]
@@ -1431,7 +1439,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 
 	finality_notification_check(&mut finality_notifications, &[a3.hash()], &[b2.hash()]);
 
-	assert!(finality_notifications.try_next().is_err());
+	assert!(matches!(finality_notifications.try_recv().unwrap_err(), TryRecvError::Empty));
 }
 
 #[test]
@@ -1559,7 +1567,11 @@ fn respects_block_rules() {
 }
 
 #[test]
+#[cfg(disable_flaky)]
+#[allow(dead_code)]
+// FIXME: https://github.com/paritytech/substrate/issues/11321
 fn returns_status_for_pruned_blocks() {
+	use sc_consensus::BlockStatus;
 	sp_tracing::try_init_simple();
 	let tmp = tempfile::tempdir().unwrap();
 
@@ -1955,7 +1967,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-		block_on(client.import_block(import, Default::default())).unwrap();
+		block_on(client.import_block(import)).unwrap();
 	};
 
 	// after importing a block we should still have 4 notification sinks

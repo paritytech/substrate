@@ -16,8 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::protocol::notifications::handler::{
-	self, NotificationsSink, NotifsHandlerIn, NotifsHandlerOut, NotifsHandlerProto,
+use crate::{
+	protocol::notifications::handler::{
+		self, NotificationsSink, NotifsHandlerIn, NotifsHandlerOut, NotifsHandlerProto,
+	},
+	types::ProtocolName,
 };
 
 use bytes::BytesMut;
@@ -35,7 +38,6 @@ use libp2p::{
 use log::{error, trace, warn};
 use parking_lot::RwLock;
 use rand::distributions::{Distribution as _, Uniform};
-use sc_network_common::protocol::ProtocolName;
 use sc_peerset::DropReason;
 use smallvec::SmallVec;
 use std::{
@@ -415,17 +417,11 @@ impl Notifications {
 	/// Disconnects the given peer if we are connected to it.
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId, set_id: sc_peerset::SetId) {
 		trace!(target: "sub-libp2p", "External API => Disconnect({}, {:?})", peer_id, set_id);
-		self.disconnect_peer_inner(peer_id, set_id, None);
+		self.disconnect_peer_inner(peer_id, set_id);
 	}
 
-	/// Inner implementation of `disconnect_peer`. If `ban` is `Some`, we ban the peer
-	/// for the specific duration.
-	fn disconnect_peer_inner(
-		&mut self,
-		peer_id: &PeerId,
-		set_id: sc_peerset::SetId,
-		ban: Option<Duration>,
-	) {
+	/// Inner implementation of `disconnect_peer`.
+	fn disconnect_peer_inner(&mut self, peer_id: &PeerId, set_id: sc_peerset::SetId) {
 		let mut entry = if let Entry::Occupied(entry) = self.peers.entry((*peer_id, set_id)) {
 			entry
 		} else {
@@ -443,12 +439,8 @@ impl Notifications {
 			PeerState::DisabledPendingEnable { connections, timer_deadline, timer: _ } => {
 				trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
 				self.peerset.dropped(set_id, *peer_id, DropReason::Unknown);
-				let backoff_until = Some(if let Some(ban) = ban {
-					cmp::max(timer_deadline, Instant::now() + ban)
-				} else {
-					timer_deadline
-				});
-				*entry.into_mut() = PeerState::Disabled { connections, backoff_until }
+				*entry.into_mut() =
+					PeerState::Disabled { connections, backoff_until: Some(timer_deadline) }
 			},
 
 			// Enabled => Disabled.
@@ -496,8 +488,7 @@ impl Notifications {
 					.iter()
 					.any(|(_, s)| matches!(s, ConnectionState::Opening)));
 
-				let backoff_until = ban.map(|dur| Instant::now() + dur);
-				*entry.into_mut() = PeerState::Disabled { connections, backoff_until }
+				*entry.into_mut() = PeerState::Disabled { connections, backoff_until: None }
 			},
 
 			// Incoming => Disabled.
@@ -532,13 +523,6 @@ impl Notifications {
 					*connec_state = ConnectionState::Closing;
 				}
 
-				let backoff_until = match (backoff_until, ban) {
-					(Some(a), Some(b)) => Some(cmp::max(a, Instant::now() + b)),
-					(Some(a), None) => Some(a),
-					(None, Some(b)) => Some(Instant::now() + b),
-					(None, None) => None,
-				};
-
 				debug_assert!(!connections
 					.iter()
 					.any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote)));
@@ -554,48 +538,6 @@ impl Notifications {
 	/// Returns the list of reserved peers.
 	pub fn reserved_peers(&self, set_id: sc_peerset::SetId) -> impl Iterator<Item = &PeerId> {
 		self.peerset.reserved_peers(set_id)
-	}
-
-	/// Sends a notification to a peer.
-	///
-	/// Has no effect if the custom protocol is not open with the given peer.
-	///
-	/// Also note that even if we have a valid open substream, it may in fact be already closed
-	/// without us knowing, in which case the packet will not be received.
-	///
-	/// The `fallback` parameter is used for backwards-compatibility reason if the remote doesn't
-	/// support our protocol. One needs to pass the equivalent of what would have been passed
-	/// with `send_packet`.
-	pub fn write_notification(
-		&mut self,
-		target: &PeerId,
-		set_id: sc_peerset::SetId,
-		message: impl Into<Vec<u8>>,
-	) {
-		let notifs_sink = match self.peers.get(&(*target, set_id)).and_then(|p| p.get_open()) {
-			None => {
-				trace!(
-					target: "sub-libp2p",
-					"Tried to sent notification to {:?} without an open channel.",
-					target,
-				);
-				return
-			},
-			Some(sink) => sink,
-		};
-
-		let message = message.into();
-
-		trace!(
-			target: "sub-libp2p",
-			"External API => Notification({:?}, {:?}, {} bytes)",
-			target,
-			set_id,
-			message.len(),
-		);
-		trace!(target: "sub-libp2p", "Handler({:?}) <= Sync notification", target);
-
-		notifs_sink.send_sync_notification(message);
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
@@ -3076,7 +3018,13 @@ mod tests {
 			panic!("invalid state");
 		}
 
-		notif.write_notification(&peer, set_id, vec![1, 3, 3, 7]);
+		notif
+			.peers
+			.get(&(peer, set_id))
+			.unwrap()
+			.get_open()
+			.unwrap()
+			.send_sync_notification(vec![1, 3, 3, 7]);
 		assert_eq!(conn_yielder.get_next_event(peer, set_id.into()).await, Some(vec![1, 3, 3, 7]));
 	}
 

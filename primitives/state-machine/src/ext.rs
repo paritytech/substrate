@@ -19,7 +19,9 @@
 
 #[cfg(feature = "std")]
 use crate::overlayed_changes::OverlayedExtensions;
-use crate::{backend::Backend, IndexOperation, OverlayedChanges, StorageKey, StorageValue};
+use crate::{
+	backend::Backend, IndexOperation, IterArgs, OverlayedChanges, StorageKey, StorageValue,
+};
 use codec::{Decode, Encode, EncodeAppend};
 use hash_db::Hasher;
 #[cfg(feature = "std")]
@@ -750,40 +752,54 @@ where
 {
 	fn limit_remove_from_backend(
 		&mut self,
-		maybe_child: Option<&ChildInfo>,
-		maybe_prefix: Option<&[u8]>,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
 		maybe_limit: Option<u32>,
-		maybe_cursor: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 	) -> (Option<Vec<u8>>, u32, u32) {
+		let iter = match self.backend.keys(IterArgs {
+			child_info: child_info.cloned(),
+			prefix,
+			start_at,
+			..IterArgs::default()
+		}) {
+			Ok(iter) => iter,
+			Err(error) => {
+				log::debug!(target: "trie", "Error while iterating the storage: {}", error);
+				return (None, 0, 0)
+			},
+		};
+
 		let mut delete_count: u32 = 0;
 		let mut loop_count: u32 = 0;
 		let mut maybe_next_key = None;
-		let result =
-			self.backend
-				.apply_to_keys_while(maybe_child, maybe_prefix, maybe_cursor, |key| {
-					if maybe_limit.map_or(false, |limit| loop_count == limit) {
-						maybe_next_key = Some(key.to_vec());
-						return false
-					}
-					let overlay = match maybe_child {
-						Some(child_info) => self.overlay.child_storage(child_info, key),
-						None => self.overlay.storage(key),
-					};
-					if !matches!(overlay, Some(None)) {
-						// not pending deletion from the backend - delete it.
-						if let Some(child_info) = maybe_child {
-							self.overlay.set_child_storage(child_info, key.to_vec(), None);
-						} else {
-							self.overlay.set_storage(key.to_vec(), None);
-						}
-						delete_count = delete_count.saturating_add(1);
-					}
-					loop_count = loop_count.saturating_add(1);
-					true
-				});
+		for key in iter {
+			let key = match key {
+				Ok(key) => key,
+				Err(error) => {
+					log::debug!(target: "trie", "Error while iterating the storage: {}", error);
+					break
+				},
+			};
 
-		if let Err(error) = result {
-			log::debug!(target: "trie", "Error while iterating the storage: {}", error);
+			if maybe_limit.map_or(false, |limit| loop_count == limit) {
+				maybe_next_key = Some(key);
+				break
+			}
+			let overlay = match child_info {
+				Some(child_info) => self.overlay.child_storage(child_info, &key),
+				None => self.overlay.storage(&key),
+			};
+			if !matches!(overlay, Some(None)) {
+				// not pending deletion from the backend - delete it.
+				if let Some(child_info) = child_info {
+					self.overlay.set_child_storage(child_info, key, None);
+				} else {
+					self.overlay.set_storage(key, None);
+				}
+				delete_count = delete_count.saturating_add(1);
+			}
+			loop_count = loop_count.saturating_add(1);
 		}
 
 		(maybe_next_key, delete_count, loop_count)
