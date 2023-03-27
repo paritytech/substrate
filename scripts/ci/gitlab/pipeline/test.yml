@@ -237,7 +237,7 @@ test-frame-support:
     SUPER_SKIP: 0
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    # RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE: 1
     WASM_BUILD_NO_COLOR: 1
     WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
