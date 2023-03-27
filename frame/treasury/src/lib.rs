@@ -256,9 +256,8 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Proposals that have been made.
+	/// PendingPayments that have been made.
 	#[pallet::storage]
-	#[pallet::getter(fn pending_payments)]
 	pub type PendingPayments<T: Config<I>, I: 'static = ()> = CountedStorageMap<
 		_,
 		Twox64Concat,
@@ -348,13 +347,21 @@ pub mod pallet {
 			amount: BalanceOf<T, I>,
 			beneficiary: T::AccountId,
 		},
+		/// The inactive funds of the pallet have been updated.
+		UpdatedInactive { reactivated: BalanceOf<T, I>, deactivated: BalanceOf<T, I> },
+		/// The payment has been queued to be paid out at the next Spend Period
 		QueuedPayment {
 			proposal_index: ProposalIndex,
+			asset_kind: T::AssetKind,
 			amount: PayBalanceOf<T, I>,
 			beneficiary: T::AccountId,
 		},
-		/// The inactive funds of the pallet have been updated.
-		UpdatedInactive { reactivated: BalanceOf<T, I>, deactivated: BalanceOf<T, I> },
+		/// The has been processed but awaiting payment status.
+		TriggerPayment {
+			proposal_index: ProposalIndex,
+			asset_kind: T::AssetKind,
+			amount: PayBalanceOf<T, I>,
+		},
 		/// The proposal was paid successfully
 		ProposalPaymentSuccess {
 			proposal_index: ProposalIndex,
@@ -549,6 +556,7 @@ pub mod pallet {
 		/// Propose and approve a spend of treasury funds.
 		///
 		/// - `origin`: Must be `SpendOrigin` with the `Success` value being at least `amount`.
+		/// - `asset_kind`: An indicator of the specific asset class which should be spent
 		/// - `amount`: The amount to be transferred from the treasury to the `beneficiary`.
 		/// - `beneficiary`: The destination account for the transfer.
 		///
@@ -602,6 +610,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::QueuedPayment {
 				proposal_index: next_index,
+				asset_kind,
 				amount,
 				beneficiary,
 			});
@@ -679,6 +688,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						if let Ok(id) = T::Paymaster::pay(&p.beneficiary, p.asset_kind, p.value) {
 							total_spent += p.normalized_value;
 							p.payment_id = Some(id);
+							Self::deposit_event(Event::TriggerPayment {
+								proposal_index: key,
+								asset_kind: p.asset_kind,
+								amount: p.value,
+							});
 							PendingPayments::<T, I>::set(key, Some(p));
 						} else {
 							missed_proposals = missed_proposals.saturating_add(1);
