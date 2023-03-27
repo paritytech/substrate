@@ -220,7 +220,7 @@ pub trait Ext: sealing::Sealed {
 	/// However, this function does not require any storage lookup and therefore uses less weight.
 	fn caller_is_origin(&self) -> bool;
 
-	/// Check if the origin is the root origin.
+	/// Check if the caller is origin, and this origin is root.
 	fn caller_is_root(&self) -> bool;
 
 	/// Returns a reference to the account id of the current contract.
@@ -1061,6 +1061,10 @@ where
 			return Ok(());
 		}
 
+		// todo: is this okay? should we bypass if root?
+		if self.caller_is_root() {
+			return Ok(());
+		}
 		let value = frame.value_transferred;
 		let caller = self.ensure_caller()?;
 		Self::transfer(ExistenceRequirement::KeepAlive, caller, &frame.account_id, value)
@@ -1301,6 +1305,10 @@ where
 	}
 
 	fn caller_is_root(&self) -> bool {
+		// it the caller isn't origin, then it can't be root.
+		if !self.caller_is_origin() {
+			return false;
+		}
 		matches!(self.origin, ContractOrigin::Root)
 	}
 
@@ -2171,16 +2179,46 @@ mod tests {
 				0,
 				vec![0],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
 	}
 
 	#[test]
+	fn root_caller_traps() {
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			// root is the origin of the call stack
+			assert!(ctx.ext.caller_is_root());
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_bob);
+			let contract_origin = ContractOrigin::Root;
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			// root -> BOB (caller is root)
+			let result = MockStack::run_call(
+				contract_origin,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![0],
+				None,
+				Determinism::Enforced,
+			);
+			assert_eq!(result, Err(Error::<Test>::NoAccountId.into()));
+		});
+	}
+
+	#[test]
 	fn caller_is_root_returns_proper_values() {
 		let code_charlie = MockLoader::insert(Call, |ctx, _| {
-			// BOB is not the origin of the stack call
+			// BOB is not root
 			assert!(!ctx.ext.caller_is_root());
 			exec_success()
 		});
@@ -2199,7 +2237,7 @@ mod tests {
 			let contract_origin = ContractOrigin::Root;
 			let mut storage_meter =
 				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
-			// root -> BOB (caller is root) -> CHARLIE (caller is not origin)
+			// root -> BOB (caller is root) -> CHARLIE (caller is not root)
 			let result = MockStack::run_call(
 				contract_origin,
 				BOB,
