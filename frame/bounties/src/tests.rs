@@ -60,7 +60,7 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 	pub TreasuryAccount: u128 = Treasury::account_id();
-	pub Treasury1Account: u128 = Treasury1::account_id();
+	pub TreasuryAccount1: u128 = Treasury1::account_id();
 }
 
 type Balance = u64;
@@ -141,7 +141,7 @@ impl pallet_treasury::Config for Test {
 impl pallet_treasury::Config<Instance1> for Test {
 	type PalletId = TreasuryPalletId2;
 	type AssetKind = ();
-	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount1>;
 	type BalanceConverter = ();
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
