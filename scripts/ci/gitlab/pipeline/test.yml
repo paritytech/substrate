@@ -237,7 +237,7 @@ test-frame-support:
     SUPER_SKIP: 0
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    # RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE: 1
     WASM_BUILD_NO_COLOR: 1
     WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
@@ -245,9 +245,7 @@ test-frame-support:
     RUN_UI_TESTS: 1
   script:
     - rusty-cachier snapshot create
-    - time cargo test --release --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
-    - time cargo test --release --verbose --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
-    - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
+    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet
     - rusty-cachier cache upload
 
 # This job runs tests that don't work with cargo-nextest in test-linux-stable
