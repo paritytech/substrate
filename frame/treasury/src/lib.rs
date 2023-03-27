@@ -502,7 +502,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Propose and approve a spend of treasury funds.
+		/// Propose and approve a spend of treasury funds. This is a legacy extrinsic which might be
+		/// removed in the future.
 		///
 		/// - `origin`: Must be `SpendOrigin` with the `Success` value being at least `amount`.
 		/// - `amount`: The amount to be transferred from the treasury to the `beneficiary`.
@@ -559,9 +560,6 @@ pub mod pallet {
 		/// - `asset_kind`: An indicator of the specific asset class which should be spent
 		/// - `amount`: The amount to be transferred from the treasury to the `beneficiary`.
 		/// - `beneficiary`: The destination account for the transfer.
-		///
-		/// NOTE: For record-keeping purposes, the proposer is deemed to be equivalent to the
-		/// beneficiary.
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::spend())]
 		pub fn spend(
