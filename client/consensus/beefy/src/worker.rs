@@ -18,7 +18,7 @@
 
 use crate::{
 	communication::{
-		gossip::{topic, GossipValidator, GossipVoteFilter},
+		gossip::{votes_topic, GossipMessage, GossipValidator, GossipVoteFilter},
 		request_response::outgoing_requests_engine::OnDemandJustificationsEngine,
 	},
 	error::Error,
@@ -759,18 +759,23 @@ where
 		);
 
 		let message = VoteMessage { commitment, id: authority_id, signature };
-
-		let encoded_message = message.encode();
+		let gossip_vote = GossipMessage::<B>::Vote(message);
+		let encoded_vote = gossip_vote.encode();
+		let vote = if let GossipMessage::<B>::Vote(message) = gossip_vote {
+			message
+		} else {
+			unreachable!("GossipMessage::Vote() hardcoded above. qed.")
+		};
 
 		metric_inc!(self, beefy_votes_sent);
 
-		debug!(target: LOG_TARGET, "🥩 Sent vote message: {:?}", message);
+		debug!(target: LOG_TARGET, "🥩 Sent vote message: {:?}", vote);
 
-		if let Err(err) = self.handle_vote(message) {
+		if let Err(err) = self.handle_vote(vote) {
 			error!(target: LOG_TARGET, "🥩 Error handling self vote: {}", err);
 		}
 
-		self.gossip_engine.gossip_message(topic::<B>(), encoded_message, false);
+		self.gossip_engine.gossip_message(votes_topic::<B>(), encoded_vote, false);
 
 		// Persist state after vote to avoid double voting in case of voter restarts.
 		self.persisted_state.best_voted = target_number;
@@ -816,12 +821,14 @@ where
 
 		let mut votes = Box::pin(
 			self.gossip_engine
-				.messages_for(topic::<B>())
+				.messages_for(votes_topic::<B>())
 				.filter_map(|notification| async move {
-					let vote = VoteMessage::<NumberFor<B>, AuthorityId, Signature>::decode(
-						&mut &notification.message[..],
-					)
-					.ok();
+					let vote = GossipMessage::<B>::decode(&mut &notification.message[..])
+						.ok()
+						.and_then(|message| match message {
+							GossipMessage::<B>::Vote(vote) => Some(vote),
+							GossipMessage::<B>::SignedCommitment(_) => None,
+						});
 					trace!(target: LOG_TARGET, "🥩 Got vote message: {:?}", vote);
 					vote
 				})

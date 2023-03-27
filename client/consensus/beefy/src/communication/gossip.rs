@@ -31,7 +31,7 @@ use wasm_timer::Instant;
 use crate::{communication::peers::KnownPeers, keystore::BeefyKeystore, LOG_TARGET};
 use sp_consensus_beefy::{
 	crypto::{Public, Signature},
-	ValidatorSetId, VoteMessage,
+	SignedCommitment, ValidatorSetId, VoteMessage,
 };
 
 // Timeout for rebroadcasting messages.
@@ -40,12 +40,29 @@ const REBROADCAST_AFTER: Duration = Duration::from_secs(60);
 #[cfg(test)]
 const REBROADCAST_AFTER: Duration = Duration::from_secs(5);
 
-/// Gossip engine messages topic
-pub(crate) fn topic<B: Block>() -> B::Hash
+/// BEEFY gossip message type that gets encoded and sent on the network.
+#[derive(Debug, Encode, Decode)]
+pub(crate) enum GossipMessage<B: Block> {
+	/// BEEFY message with commitment and single signature.
+	Vote(VoteMessage<NumberFor<B>, Public, Signature>),
+	/// BEEFY justification with commitment and signatures.
+	SignedCommitment(SignedCommitment<NumberFor<B>, Signature>),
+}
+
+/// Gossip engine votes messages topic
+pub(crate) fn votes_topic<B: Block>() -> B::Hash
 where
 	B: Block,
 {
-	<<B::Header as Header>::Hashing as Hash>::hash(b"beefy")
+	<<B::Header as Header>::Hashing as Hash>::hash(b"beefy-votes")
+}
+
+/// Gossip engine justifications messages topic
+pub(crate) fn justifs_topic<B: Block>() -> B::Hash
+where
+	B: Block,
+{
+	<<B::Header as Header>::Hashing as Hash>::hash(b"beefy-justifications")
 }
 
 #[derive(Debug)]
@@ -58,12 +75,12 @@ pub(crate) struct GossipVoteFilter<B: Block> {
 /// A type that represents hash of the message.
 pub type MessageHash = [u8; 8];
 
-struct VotesFilter<B: Block> {
+struct GossipFilter<B: Block> {
 	filter: Option<GossipVoteFilter<B>>,
 	live: BTreeMap<NumberFor<B>, fnv::FnvHashSet<MessageHash>>,
 }
 
-impl<B: Block> VotesFilter<B> {
+impl<B: Block> GossipFilter<B> {
 	pub fn new() -> Self {
 		Self { filter: None, live: BTreeMap::new() }
 	}
@@ -108,8 +125,9 @@ pub(crate) struct GossipValidator<B>
 where
 	B: Block,
 {
-	topic: B::Hash,
-	votes_filter: RwLock<VotesFilter<B>>,
+	votes_topic: B::Hash,
+	justifs_topic: B::Hash,
+	gossip_filter: RwLock<GossipFilter<B>>,
 	next_rebroadcast: Mutex<Instant>,
 	known_peers: Arc<Mutex<KnownPeers<B>>>,
 }
@@ -120,8 +138,9 @@ where
 {
 	pub fn new(known_peers: Arc<Mutex<KnownPeers<B>>>) -> GossipValidator<B> {
 		GossipValidator {
-			topic: topic::<B>(),
-			votes_filter: RwLock::new(VotesFilter::new()),
+			votes_topic: votes_topic::<B>(),
+			justifs_topic: justifs_topic::<B>(),
+			gossip_filter: RwLock::new(GossipFilter::new()),
 			next_rebroadcast: Mutex::new(Instant::now() + REBROADCAST_AFTER),
 			known_peers,
 		}
@@ -132,7 +151,7 @@ where
 	/// Only votes for `set_id` and rounds `start <= round <= end` will be accepted.
 	pub(crate) fn update_filter(&self, filter: GossipVoteFilter<B>) {
 		debug!(target: LOG_TARGET, "🥩 New gossip filter {:?}", filter);
-		self.votes_filter.write().update(filter);
+		self.gossip_filter.write().update(filter);
 	}
 }
 
@@ -150,57 +169,67 @@ where
 		sender: &PeerId,
 		mut data: &[u8],
 	) -> ValidationResult<B::Hash> {
-		if let Ok(msg) = VoteMessage::<NumberFor<B>, Public, Signature>::decode(&mut data) {
-			let msg_hash = twox_64(data);
-			let round = msg.commitment.block_number;
-			let set_id = msg.commitment.validator_set_id;
-			self.known_peers.lock().note_vote_for(*sender, round);
+		match GossipMessage::<B>::decode(&mut data) {
+			Ok(GossipMessage::Vote(msg)) => {
+				let msg_hash = twox_64(data);
+				let round = msg.commitment.block_number;
+				let set_id = msg.commitment.validator_set_id;
+				self.known_peers.lock().note_vote_for(*sender, round);
 
-			// Verify general usefulness of the message.
-			// We are going to discard old votes right away (without verification)
-			// Also we keep track of already received votes to avoid verifying duplicates.
-			{
-				let filter = self.votes_filter.read();
+				// Verify general usefulness of the message.
+				// We are going to discard old votes right away (without verification)
+				// Also we keep track of already received votes to avoid verifying duplicates.
+				{
+					let filter = self.gossip_filter.read();
 
-				if !filter.is_live(round, set_id) {
-					return ValidationResult::Discard
+					if !filter.is_live(round, set_id) {
+						return ValidationResult::Discard
+					}
+
+					if filter.is_known(round, &msg_hash) {
+						return ValidationResult::ProcessAndKeep(self.votes_topic)
+					}
 				}
 
-				if filter.is_known(round, &msg_hash) {
-					return ValidationResult::ProcessAndKeep(self.topic)
+				if BeefyKeystore::verify(&msg.id, &msg.signature, &msg.commitment.encode()) {
+					self.gossip_filter.write().add_known(round, msg_hash);
+					ValidationResult::ProcessAndKeep(self.votes_topic)
+				} else {
+					// TODO: report peer
+					debug!(
+						target: LOG_TARGET,
+						"🥩 Bad signature on message: {:?}, from: {:?}", msg, sender
+					);
+					ValidationResult::Discard
 				}
-			}
-
-			if BeefyKeystore::verify(&msg.id, &msg.signature, &msg.commitment.encode()) {
-				self.votes_filter.write().add_known(round, msg_hash);
-				return ValidationResult::ProcessAndKeep(self.topic)
-			} else {
-				// TODO: report peer
-				debug!(
-					target: LOG_TARGET,
-					"🥩 Bad signature on message: {:?}, from: {:?}", msg, sender
-				);
-			}
+			},
+			Ok(GossipMessage::SignedCommitment(_justification)) => ValidationResult::Discard,
+			Err(e) => {
+				debug!(target: LOG_TARGET, "Error decoding message: {}", e);
+				ValidationResult::Discard
+			},
 		}
-
-		ValidationResult::Discard
 	}
 
 	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {
-		let filter = self.votes_filter.read();
-		Box::new(move |_topic, mut data| {
-			let msg = match VoteMessage::<NumberFor<B>, Public, Signature>::decode(&mut data) {
-				Ok(vote) => vote,
-				Err(_) => return true,
-			};
+		let filter = self.gossip_filter.read();
+		Box::new(move |_topic, mut data| match GossipMessage::<B>::decode(&mut data) {
+			Ok(GossipMessage::Vote(msg)) => {
+				let round = msg.commitment.block_number;
+				let set_id = msg.commitment.validator_set_id;
+				let expired = !filter.is_live(round, set_id);
 
-			let round = msg.commitment.block_number;
-			let set_id = msg.commitment.validator_set_id;
-			let expired = !filter.is_live(round, set_id);
+				trace!(
+					target: LOG_TARGET,
+					"🥩 Vote message for round #{} expired: {}",
+					round,
+					expired
+				);
 
-			trace!(target: LOG_TARGET, "🥩 Message for round #{} expired: {}", round, expired);
-
-			expired
+				expired
+			},
+			Ok(GossipMessage::SignedCommitment(_justification)) => true,
+			Err(_) => true,
 		})
 	}
 
@@ -219,24 +248,30 @@ where
 			}
 		};
 
-		let filter = self.votes_filter.read();
+		let filter = self.gossip_filter.read();
 		Box::new(move |_who, intent, _topic, mut data| {
 			if let MessageIntent::PeriodicRebroadcast = intent {
 				return do_rebroadcast
 			}
 
-			let msg = match VoteMessage::<NumberFor<B>, Public, Signature>::decode(&mut data) {
-				Ok(vote) => vote,
-				Err(_) => return false,
-			};
+			match GossipMessage::<B>::decode(&mut data) {
+				Ok(GossipMessage::Vote(msg)) => {
+					let round = msg.commitment.block_number;
+					let set_id = msg.commitment.validator_set_id;
+					let allowed = filter.is_live(round, set_id);
 
-			let round = msg.commitment.block_number;
-			let set_id = msg.commitment.validator_set_id;
-			let allowed = filter.is_live(round, set_id);
+					trace!(
+						target: LOG_TARGET,
+						"🥩 Message for round #{} allowed: {}",
+						round,
+						allowed
+					);
 
-			trace!(target: LOG_TARGET, "🥩 Message for round #{} allowed: {}", round, allowed);
-
-			allowed
+					allowed
+				},
+				Ok(GossipMessage::SignedCommitment(_justification)) => false,
+				Err(_) => false,
+			}
 		})
 	}
 }
@@ -254,33 +289,33 @@ mod tests {
 
 	#[test]
 	fn known_votes_insert_remove() {
-		let mut kv = VotesFilter::<Block>::new();
+		let mut filter = GossipFilter::<Block>::new();
 		let msg_hash = twox_64(b"data");
 
-		kv.add_known(1, msg_hash);
-		kv.add_known(1, msg_hash);
-		kv.add_known(2, msg_hash);
-		assert_eq!(kv.live.len(), 2);
+		filter.add_known(1, msg_hash);
+		filter.add_known(1, msg_hash);
+		filter.add_known(2, msg_hash);
+		assert_eq!(filter.live.len(), 2);
 
-		kv.add_known(3, msg_hash);
-		assert!(kv.is_known(3, &msg_hash));
-		assert!(!kv.is_known(3, &twox_64(b"other")));
-		assert!(!kv.is_known(4, &msg_hash));
-		assert_eq!(kv.live.len(), 3);
+		filter.add_known(3, msg_hash);
+		assert!(filter.is_known(3, &msg_hash));
+		assert!(!filter.is_known(3, &twox_64(b"other")));
+		assert!(!filter.is_known(4, &msg_hash));
+		assert_eq!(filter.live.len(), 3);
 
-		assert!(kv.filter.is_none());
-		assert!(!kv.is_live(1, 1));
+		assert!(filter.filter.is_none());
+		assert!(!filter.is_live(1, 1));
 
-		kv.update(GossipVoteFilter { start: 3, end: 10, validator_set_id: 1 });
-		assert_eq!(kv.live.len(), 1);
-		assert!(kv.live.contains_key(&3));
-		assert!(!kv.is_live(2, 1));
-		assert!(kv.is_live(3, 1));
-		assert!(kv.is_live(4, 1));
-		assert!(!kv.is_live(4, 2));
+		filter.update(GossipVoteFilter { start: 3, end: 10, validator_set_id: 1 });
+		assert_eq!(filter.live.len(), 1);
+		assert!(filter.live.contains_key(&3));
+		assert!(!filter.is_live(2, 1));
+		assert!(filter.is_live(3, 1));
+		assert!(filter.is_live(4, 1));
+		assert!(!filter.is_live(4, 2));
 
-		kv.update(GossipVoteFilter { start: 5, end: 10, validator_set_id: 2 });
-		assert!(kv.live.is_empty());
+		filter.update(GossipVoteFilter { start: 5, end: 10, validator_set_id: 2 });
+		assert!(filter.live.is_empty());
 	}
 
 	struct TestContext;
@@ -328,18 +363,19 @@ mod tests {
 		let mut context = TestContext;
 
 		let vote = dummy_vote(3);
+		let gossip_vote = GossipMessage::<Block>::Vote(vote.clone());
 
 		// first time the cache should be populated
-		let res = gv.validate(&mut context, &sender, &vote.encode());
+		let res = gv.validate(&mut context, &sender, &gossip_vote.encode());
 
 		assert!(matches!(res, ValidationResult::ProcessAndKeep(_)));
 		assert_eq!(
-			gv.votes_filter.read().live.get(&vote.commitment.block_number).map(|x| x.len()),
+			gv.gossip_filter.read().live.get(&vote.commitment.block_number).map(|x| x.len()),
 			Some(1)
 		);
 
 		// second time we should hit the cache
-		let res = gv.validate(&mut context, &sender, &vote.encode());
+		let res = gv.validate(&mut context, &sender, &gossip_vote.encode());
 
 		assert!(matches!(res, ValidationResult::ProcessAndKeep(_)));
 
@@ -348,7 +384,7 @@ mod tests {
 
 		let number = vote.commitment.block_number;
 		let set_id = vote.commitment.validator_set_id;
-		assert!(!gv.votes_filter.read().is_live(number, set_id));
+		assert!(!gv.gossip_filter.read().is_live(number, set_id));
 
 		let res = gv.validate(&mut context, &sender, &vote.encode());
 
@@ -374,25 +410,25 @@ mod tests {
 
 		// inactive round 1 -> expired
 		let vote = dummy_vote(1);
-		let mut encoded_vote = vote.encode();
+		let mut encoded_vote = GossipMessage::<Block>::Vote(vote).encode();
 		assert!(!allowed(&sender, intent, &topic, &mut encoded_vote));
 		assert!(expired(topic, &mut encoded_vote));
 
 		// active round 2 -> !expired - concluded but still gossiped
 		let vote = dummy_vote(2);
-		let mut encoded_vote = vote.encode();
+		let mut encoded_vote = GossipMessage::<Block>::Vote(vote).encode();
 		assert!(allowed(&sender, intent, &topic, &mut encoded_vote));
 		assert!(!expired(topic, &mut encoded_vote));
 
 		// in progress round 3 -> !expired
 		let vote = dummy_vote(3);
-		let mut encoded_vote = vote.encode();
+		let mut encoded_vote = GossipMessage::<Block>::Vote(vote).encode();
 		assert!(allowed(&sender, intent, &topic, &mut encoded_vote));
 		assert!(!expired(topic, &mut encoded_vote));
 
 		// unseen round 4 -> !expired
 		let vote = dummy_vote(3);
-		let mut encoded_vote = vote.encode();
+		let mut encoded_vote = GossipMessage::<Block>::Vote(vote).encode();
 		assert!(allowed(&sender, intent, &topic, &mut encoded_vote));
 		assert!(!expired(topic, &mut encoded_vote));
 	}
