@@ -478,15 +478,19 @@ pub mod v4 {
 		}
 	}
 
+	/// Migrates from `v3` directly to `v5` to avoid the broken `v4` migration.
+	#[allow(deprecated)]
+	pub type MigrateV3ToV5<T, U> = (v4::MigrateToV4<T, U>, v5::MigrateToV5<T>);
+
 	/// # Warning
 	///
-	/// Please update to V5 immediately afterwards via `MigrateToV5`. See
-	/// github.com/paritytech/substrate/pull/13715
+	/// To avoid mangled storage please use `MigrateV3ToV5` instead.
+	/// See: github.com/paritytech/substrate/pull/13715
 	///
 	/// This migration adds a `commission` field to every `BondedPoolInner`, if
 	/// any.
 	#[deprecated(
-		note = "This migration MUST be followed by `MigrateToV5` to avoid mangled storage. See: github.com/paritytech/substrate/pull/13715"
+		note = "To avoid mangled storage please use `MigrateV3ToV5` instead. See: github.com/paritytech/substrate/pull/13715"
 	)]
 	pub struct MigrateToV4<T, U>(sp_std::marker::PhantomData<(T, U)>);
 	#[allow(deprecated)]
