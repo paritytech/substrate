@@ -234,7 +234,6 @@ test-frame-support:
     - .docker-env
     - .test-refs
   variables:
-    SUPER_SKIP: 0
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
     RUSTFLAGS: "-C debug-assertions -D warnings"
@@ -244,6 +243,7 @@ test-frame-support:
     # Ensure we run the UI tests.
     RUN_UI_TESTS: 1
   script:
+    - echo $RUSTFLAGS
     - rusty-cachier snapshot create
     - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
     - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet
