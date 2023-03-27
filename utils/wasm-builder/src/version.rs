@@ -65,7 +65,7 @@ impl Version {
 
 		let date_parts = date
 			.split("-")
-			.filter_map(|v| v.strip_suffix(")").unwrap_or(v).parse().ok())
+			.filter_map(|v| v.trim().strip_suffix(")").unwrap_or(v).parse().ok())
 			.collect::<Vec<u32>>();
 
 		if date_parts.len() != 3 {
@@ -176,5 +176,22 @@ mod tests {
 			version_1_66_0_nightly_older_date,
 		];
 		assert_eq!(expected_versions_order, versions);
+	}
+
+	#[test]
+	fn parse_with_newline() {
+		let version_1_66_0 = Version::extract("cargo 1.66.0 (d65d197ad 2022-11-15)\n").unwrap();
+		assert_eq!(
+			Version {
+				major: 1,
+				minor: 66,
+				patch: 0,
+				is_nightly: false,
+				year: 2022,
+				month: 11,
+				day: 15
+			},
+			version_1_66_0
+		);
 	}
 }
