@@ -1,0 +1,24 @@
+[package]
+name = "mangata-support"
+version = "0.1.0"
+authors = ['Mangata team']
+edition = "2018"
+
+[dependencies]
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+mangata-types = { default-features = false, path = "../../primitives/mangata-types" }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
+sp-core = { default-features = false, version = '7.0.0' , path = "../../primitives/core" }
+
+[features]
+default = ["std"]
+std = [
+    'sp-std/std',
+    'sp-runtime/std',
+    'frame-support/std',
+    'mangata-types/std',
+    "codec/std",
+    "sp-core/std"
+]

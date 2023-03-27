@@ -148,6 +148,7 @@ members = [
 	"frame/sudo-mangata",
 	"frame/root-offences",
 	"frame/root-testing",
+	"frame/mangata-support",
 	"frame/support",
 	"frame/support/procedural",
 	"frame/support/procedural/tools",

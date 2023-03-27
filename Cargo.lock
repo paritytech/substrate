@@ -3879,6 +3879,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mangata-support"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "mangata-types 0.1.0",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "mangata-types"
 version = "0.1.0"
 dependencies = [
@@ -3886,6 +3898,7 @@ dependencies = [
  "scale-info",
  "sp-core",
  "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
