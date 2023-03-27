@@ -986,19 +986,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Looking at proposals:
 	///
 	/// * Each hash of a proposal that is stored inside `Proposals` must have a
-	/// call mapped to it inside the `ProposalsOf` storage map.
+	/// call mapped to it inside the `ProposalOf` storage map.
 	/// * `ProposalCount` must always be more or equal to the number of
 	/// proposals inside the `Proposals` storage value. The reason why
 	/// `ProposalCount` can be more is because when a proposal is removed the
 	/// count is not deducted.
+	/// * Count of `ProposalOf` should match the count of `Proposals`
 	///
 	/// Looking at votes:
 	/// * The sum of aye and nay votes for a proposal can never exceed
 	///  `MaxMembers`.
 	/// * The proposal index inside the `Voting` storage map must be unique.
+	/// * All proposal hashes inside `Voting` must exist in `Proposals`.
 	///
 	/// Looking at members:
 	/// * The members count must never exceed `MaxMembers`.
+	/// * All the members must be sorted by value.
 	///
 	/// Looking at prime account:
 	/// * The prime account must be a member of the collective.
@@ -1009,6 +1012,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		assert!(Self::proposals().into_iter().count() <= Self::proposal_count() as usize);
+		assert!(Self::proposals().into_iter().count() == <ProposalOf<T, I>>::iter_keys().count());
 
 		Self::proposals().into_iter().for_each(|proposal| {
 			if let Some(votes) = Self::voting(proposal) {
@@ -1027,7 +1031,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		});
 
+		<Voting<T, I>>::iter_keys().for_each(|proposal_hash| {
+			assert!(Self::proposals().contains(&proposal_hash));
+		});
+
 		assert!(Self::members().len() <= T::MaxMembers::get() as usize);
+
+		assert!(Self::members().windows(2).all(|members| members[0] <= members[1]));
 
 		if let Some(prime) = Self::prime() {
 			assert!(Self::members().contains(&prime));
