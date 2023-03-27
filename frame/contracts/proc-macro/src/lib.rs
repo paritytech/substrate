@@ -610,20 +610,6 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		// wrapped host function body call with host function traces
 		// see https://github.com/paritytech/substrate/tree/master/frame/contracts#host-function-tracing
 		let wrapped_body_with_trace = {
-			let params_fmt_str = params.clone().filter_map(|arg| match arg {
-				syn::FnArg::Receiver(_) => None,
-				syn::FnArg::Typed(p) => {
-					match *p.pat.clone() {
-						syn::Pat::Ident(ref pat_ident) => Some(pat_ident.ident.to_string()),
-						_ => None,
-					}
-				},
-			})
-			.map(|s| format!("{s}: {{:?}}"))
-			.collect::<Vec<_>>()
-			.join(", ");
-
-			let trace_fmt_str = format!("{}::{}({}) = {{:?}}\n", module, name, params_fmt_str);
 			let trace_fmt_args = params.clone().filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
 				syn::FnArg::Typed(p) => {
@@ -633,6 +619,9 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 					}
 				},
 			});
+
+			let params_fmt_str = trace_fmt_args.clone().map(|s| format!("{s}: {{:?}}")).collect::<Vec<_>>().join(", ");
+			let trace_fmt_str = format!("{}::{}({}) = {{:?}}\n", module, name, params_fmt_str);
 
 			quote! {
 				if ::log::log_enabled!(target: "runtime::contracts::strace", ::log::Level::Trace) {
