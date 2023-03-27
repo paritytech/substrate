@@ -179,7 +179,7 @@ pub mod pallet {
 		/// The means by which we can make payments to beneficiaries.
 		/// This can be implmented over fungibles or some other means.
 		type Paymaster: Pay<
-			Beneficiary = <Self as frame_system::Config>::AccountId,
+			Beneficiary = Self::AccountId,
 			AssetKind = Self::AssetKind,
 		>;
 

@@ -21,7 +21,7 @@
 
 use frame_support::{
 	assert_err_ignore_postinfo, assert_noop, assert_ok,
-	pallet_prelude::{GenesisBuild, PhantomData},
+	pallet_prelude::GenesisBuild,
 	parameter_types,
 	traits::{
 		fungibles::*,
