@@ -372,7 +372,7 @@ pub mod pallet {
 		/// The given length bound for the proposal was too low.
 		WrongProposalLength,
 		/// Requires foundation account or root
-		NotFoundationAccountOrRoot
+		NotFoundationAccountOrRoot,
 	}
 
 	// Note that councillor operations are assigned to the operational class.
@@ -882,8 +882,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Only allow actual closing of the proposal after the voting period has ended.
 		ensure!(
 			(frame_system::Pallet::<T>::block_number() >=
-				proposal_proposed_time.saturating_add(T::ProposalCloseDelay::get()))
-				||
+				proposal_proposed_time.saturating_add(T::ProposalCloseDelay::get())) ||
 				(T::FoundationAccountsProvider::get().contains(&caller)),
 			Error::<T, I>::TooEarlyToCloseByNonFoundationAccount
 		);

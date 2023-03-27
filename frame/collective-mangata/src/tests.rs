@@ -61,7 +61,8 @@ mod mock_democracy {
 
 		#[pallet::config]
 		pub trait Config: frame_system::Config + Sized {
-			type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+			type RuntimeEvent: From<Event<Self>>
+				+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 			type ExternalMajorityOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 		}
 
@@ -190,7 +191,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn make_proposal(value: u64) -> RuntimeCall {
-	RuntimeCall::System(frame_system::Call::remark_with_event { remark: value.to_be_bytes().to_vec() })
+	RuntimeCall::System(frame_system::Call::remark_with_event {
+		remark: value.to_be_bytes().to_vec(),
+	})
 }
 
 fn record(event: RuntimeEvent) -> EventRecord<RuntimeEvent, H256> {
@@ -229,7 +232,13 @@ fn close_works() {
 		);
 
 		System::set_block_number(4);
-		assert_ok!(Collective::close(RuntimeOrigin::signed(4), hash, 0, proposal_weight, proposal_len));
+		assert_ok!(Collective::close(
+			RuntimeOrigin::signed(4),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
 
 		assert_eq!(
 			System::events(),
@@ -259,7 +268,9 @@ fn close_works() {
 					yes: 2,
 					no: 1
 				})),
-				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved { proposal_hash: hash }))
+				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved {
+					proposal_hash: hash
+				}))
 			]
 		);
 	});
@@ -283,10 +294,19 @@ fn proposal_close_delay_avoided_by_foundation_account_works() {
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 0, true));
 
 		System::set_block_number(2);
-		assert_noop!(Collective::close(RuntimeOrigin::signed(4), hash, 0, proposal_weight, proposal_len), Error::<Test, Instance1>::TooEarlyToCloseByNonFoundationAccount);
+		assert_noop!(
+			Collective::close(RuntimeOrigin::signed(4), hash, 0, proposal_weight, proposal_len),
+			Error::<Test, Instance1>::TooEarlyToCloseByNonFoundationAccount
+		);
 
 		let foundation_account = FoundationAccountsProvider::<Test>::get().pop().unwrap();
-		assert_ok!(Collective::close(RuntimeOrigin::signed(foundation_account), hash, 0, proposal_weight, proposal_len));
+		assert_ok!(Collective::close(
+			RuntimeOrigin::signed(foundation_account),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
 
 		assert_eq!(
 			System::events(),
@@ -344,10 +364,19 @@ fn proposal_close_delay_works() {
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 0, true));
 
 		System::set_block_number(2);
-		assert_noop!(Collective::close(RuntimeOrigin::signed(4), hash, 0, proposal_weight, proposal_len), Error::<Test, Instance1>::TooEarlyToCloseByNonFoundationAccount);
+		assert_noop!(
+			Collective::close(RuntimeOrigin::signed(4), hash, 0, proposal_weight, proposal_len),
+			Error::<Test, Instance1>::TooEarlyToCloseByNonFoundationAccount
+		);
 
 		System::set_block_number(3);
-		assert_ok!(Collective::close(RuntimeOrigin::signed(4), hash, 0, proposal_weight, proposal_len));
+		assert_ok!(Collective::close(
+			RuntimeOrigin::signed(4),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
 
 		assert_eq!(
 			System::events(),
@@ -419,7 +448,13 @@ fn proposal_weight_limit_works_on_approve() {
 			),
 			Error::<Test, Instance1>::WrongProposalWeight
 		);
-		assert_ok!(Collective::close(RuntimeOrigin::signed(4), hash, 0, proposal_weight, proposal_len));
+		assert_ok!(Collective::close(
+			RuntimeOrigin::signed(4),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
 	})
 }
 
@@ -477,7 +512,13 @@ fn close_with_prime_works() {
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 0, true));
 
 		System::set_block_number(4);
-		assert_ok!(Collective::close(RuntimeOrigin::signed(4), hash, 0, proposal_weight, proposal_len));
+		assert_ok!(Collective::close(
+			RuntimeOrigin::signed(4),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
 
 		assert_eq!(
 			System::events(),
@@ -511,7 +552,9 @@ fn close_with_prime_works() {
 					yes: 2,
 					no: 1
 				})),
-				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved { proposal_hash: hash }))
+				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved {
+					proposal_hash: hash
+				}))
 			]
 		);
 	});
@@ -541,7 +584,13 @@ fn close_with_voting_prime_works() {
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 0, true));
 
 		System::set_block_number(4);
-		assert_ok!(Collective::close(RuntimeOrigin::signed(4), hash, 0, proposal_weight, proposal_len));
+		assert_ok!(Collective::close(
+			RuntimeOrigin::signed(4),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
 
 		assert_eq!(
 			System::events(),
@@ -624,7 +673,9 @@ fn close_with_no_prime_but_majority_works() {
 				record(RuntimeEvent::CollectiveMajority(CollectiveEvent::MembersChanged {
 					new_members: vec![1, 2, 3, 4, 5]
 				})),
-				record(RuntimeEvent::CollectiveMajority(CollectiveEvent::PrimeSet { new_prime: Some(5) })),
+				record(RuntimeEvent::CollectiveMajority(CollectiveEvent::PrimeSet {
+					new_prime: Some(5)
+				})),
 				record(RuntimeEvent::CollectiveMajority(CollectiveEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
@@ -736,7 +787,12 @@ fn removal_of_old_voters_votes_works_with_set_members() {
 			Collective::voting(&hash),
 			Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![], end })
 		);
-		assert_ok!(Collective::set_members(RuntimeOrigin::root(), vec![2, 3, 4], None, MaxMembers::get()));
+		assert_ok!(Collective::set_members(
+			RuntimeOrigin::root(),
+			vec![2, 3, 4],
+			None,
+			MaxMembers::get()
+		));
 		assert_eq!(
 			Collective::voting(&hash),
 			Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![], end })
@@ -757,7 +813,12 @@ fn removal_of_old_voters_votes_works_with_set_members() {
 			Collective::voting(&hash),
 			Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3], end })
 		);
-		assert_ok!(Collective::set_members(RuntimeOrigin::root(), vec![2, 4], None, MaxMembers::get()));
+		assert_ok!(Collective::set_members(
+			RuntimeOrigin::root(),
+			vec![2, 4],
+			None,
+			MaxMembers::get()
+		));
 		assert_eq!(
 			Collective::voting(&hash),
 			Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![], end })
@@ -813,7 +874,12 @@ fn limit_active_proposals() {
 		let proposal = make_proposal(MaxProposals::get() as u64 + 1);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		assert_noop!(
-			Collective::propose(RuntimeOrigin::signed(1), 3, Box::new(proposal.clone()), proposal_len),
+			Collective::propose(
+				RuntimeOrigin::signed(1),
+				3,
+				Box::new(proposal.clone()),
+				proposal_len
+			),
 			Error::<Test, Instance1>::TooManyProposals
 		);
 	})
@@ -828,7 +894,12 @@ fn correct_validate_and_get_proposal() {
 			old_count: MaxMembers::get(),
 		});
 		let length = proposal.encode().len() as u32;
-		assert_ok!(Collective::propose(RuntimeOrigin::signed(1), 3, Box::new(proposal.clone()), length));
+		assert_ok!(Collective::propose(
+			RuntimeOrigin::signed(1),
+			3,
+			Box::new(proposal.clone()),
+			length
+		));
 
 		let hash = BlakeTwo256::hash_of(&proposal);
 		let weight = proposal.get_dispatch_info().weight;
@@ -866,7 +937,12 @@ fn motions_ignoring_non_collective_proposals_works() {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		assert_noop!(
-			Collective::propose(RuntimeOrigin::signed(42), 3, Box::new(proposal.clone()), proposal_len),
+			Collective::propose(
+				RuntimeOrigin::signed(42),
+				3,
+				Box::new(proposal.clone()),
+				proposal_len
+			),
 			Error::<Test, Instance1>::NotMember
 		);
 	});
@@ -1056,7 +1132,13 @@ fn motions_reproposing_disapproved_works() {
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 0, false));
 
 		System::set_block_number(3);
-		assert_ok!(Collective::close(RuntimeOrigin::signed(2), hash, 0, proposal_weight, proposal_len));
+		assert_ok!(Collective::close(
+			RuntimeOrigin::signed(2),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
 		assert_eq!(*Collective::proposals(), vec![]);
 		assert_ok!(Collective::propose(
 			RuntimeOrigin::signed(1),
@@ -1090,7 +1172,13 @@ fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 0, true));
 
 		System::set_block_number(3);
-		assert_ok!(Collective::close(RuntimeOrigin::signed(2), hash, 0, proposal_weight, proposal_len));
+		assert_ok!(Collective::close(
+			RuntimeOrigin::signed(2),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
 		assert_eq!(
 			System::events(),
 			vec![
@@ -1141,7 +1229,13 @@ fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(3), hash, 1, true));
 
 		System::set_block_number(5);
-		assert_ok!(Collective::close(RuntimeOrigin::signed(2), hash, 1, proposal_weight, proposal_len));
+		assert_ok!(Collective::close(
+			RuntimeOrigin::signed(2),
+			hash,
+			1,
+			proposal_weight,
+			proposal_len
+		));
 		assert_eq!(
 			System::events(),
 			vec![
@@ -1178,7 +1272,9 @@ fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 					no: 0
 				})),
 				record(RuntimeEvent::Collective(CollectiveEvent::Approved { proposal_hash: hash })),
-				record(RuntimeEvent::Democracy(mock_democracy::pallet::Event::<Test>::ExternalProposed)),
+				record(RuntimeEvent::Democracy(
+					mock_democracy::pallet::Event::<Test>::ExternalProposed
+				)),
 				record(RuntimeEvent::Collective(CollectiveEvent::Executed {
 					proposal_hash: hash,
 					result: Ok(())
@@ -1205,7 +1301,13 @@ fn motions_disapproval_works() {
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 0, false));
 
 		System::set_block_number(3);
-		assert_ok!(Collective::close(RuntimeOrigin::signed(2), hash, 0, proposal_weight, proposal_len));
+		assert_ok!(Collective::close(
+			RuntimeOrigin::signed(2),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
 
 		assert_eq!(
 			System::events(),
@@ -1235,7 +1337,9 @@ fn motions_disapproval_works() {
 					yes: 1,
 					no: 1
 				})),
-				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved { proposal_hash: hash })),
+				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved {
+					proposal_hash: hash
+				})),
 			]
 		);
 	});
@@ -1258,7 +1362,13 @@ fn motions_approval_works() {
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 0, true));
 
 		System::set_block_number(3);
-		assert_ok!(Collective::close(RuntimeOrigin::signed(2), hash, 0, proposal_weight, proposal_len));
+		assert_ok!(Collective::close(
+			RuntimeOrigin::signed(2),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
 
 		assert_eq!(
 			System::events(),
@@ -1334,7 +1444,13 @@ fn motion_with_no_votes_closes_with_disapproval() {
 		let closing_block = System::block_number() + MotionDuration::get();
 		System::set_block_number(closing_block);
 		// we can successfully close the motion.
-		assert_ok!(Collective::close(RuntimeOrigin::signed(2), hash, 0, proposal_weight, proposal_len));
+		assert_ok!(Collective::close(
+			RuntimeOrigin::signed(2),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
 
 		// Events show that the close ended in a disapproval.
 		assert_eq!(
@@ -1405,9 +1521,15 @@ fn disapprove_proposal_with_foundation_account_works() {
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(1), hash, 0, true));
 		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 0, true));
 		let foundation_account = FoundationAccountsProvider::<Test>::get().pop().unwrap();
-		assert_noop!(Collective::disapprove_proposal(RuntimeOrigin::signed(0u64.into()), hash), Error::<Test, Instance1>::NotFoundationAccountOrRoot);
+		assert_noop!(
+			Collective::disapprove_proposal(RuntimeOrigin::signed(0u64.into()), hash),
+			Error::<Test, Instance1>::NotFoundationAccountOrRoot
+		);
 		// But Root can disapprove and remove it anyway
-		assert_ok!(Collective::disapprove_proposal(RuntimeOrigin::signed(foundation_account), hash));
+		assert_ok!(Collective::disapprove_proposal(
+			RuntimeOrigin::signed(foundation_account),
+			hash
+		));
 		assert_eq!(
 			System::events(),
 			vec![
@@ -1431,7 +1553,9 @@ fn disapprove_proposal_with_foundation_account_works() {
 					yes: 2,
 					no: 0
 				})),
-				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved { proposal_hash: hash })),
+				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved {
+					proposal_hash: hash
+				})),
 			]
 		);
 	})
@@ -1477,7 +1601,9 @@ fn disapprove_proposal_works() {
 					yes: 2,
 					no: 0
 				})),
-				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved { proposal_hash: hash })),
+				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved {
+					proposal_hash: hash
+				})),
 			]
 		);
 	})
