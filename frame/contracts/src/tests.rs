@@ -25,8 +25,8 @@ use crate::{
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Code, CodeStorage, Config, ContractInfo, ContractInfoOf, DefaultAddressGenerator,
-	DeletionQueue, Error, Pallet, Schedule,
+	BalanceOf, Caller, Code, CodeStorage, Config, ContractInfo, ContractInfoOf,
+	DefaultAddressGenerator, DeletionQueue, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -961,7 +961,7 @@ fn deploy_and_call_other_contract() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: caller_addr.clone(),
+						caller: Caller::from_account_id(caller_addr.clone()),
 						contract: callee_addr.clone(),
 					}),
 					topics: vec![hash(&caller_addr), hash(&callee_addr)],
@@ -969,7 +969,7 @@ fn deploy_and_call_other_contract() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Caller::from_account_id(ALICE),
 						contract: caller_addr.clone(),
 					}),
 					topics: vec![hash(&ALICE), hash(&caller_addr)],
@@ -1280,7 +1280,7 @@ fn self_destruct_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Caller::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
 					topics: vec![hash(&ALICE), hash(&addr)],
@@ -2515,8 +2515,8 @@ fn reinstrument_does_charge() {
 		assert!(result2.gas_consumed.ref_time() > result1.gas_consumed.ref_time());
 		assert_eq!(
 			result2.gas_consumed.ref_time(),
-			result1.gas_consumed.ref_time() +
-				<Test as Config>::WeightInfo::reinstrument(code_len).ref_time(),
+			result1.gas_consumed.ref_time()
+				+ <Test as Config>::WeightInfo::reinstrument(code_len).ref_time(),
 		);
 	});
 }
@@ -3452,7 +3452,7 @@ fn storage_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Caller::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
 					topics: vec![hash(&ALICE), hash(&addr)],
@@ -3469,7 +3469,7 @@ fn storage_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Caller::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
 					topics: vec![hash(&ALICE), hash(&addr)],
@@ -3486,7 +3486,7 @@ fn storage_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Caller::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
 					topics: vec![hash(&ALICE), hash(&addr)],
@@ -3888,7 +3888,7 @@ fn set_code_hash() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Caller::from_account_id(ALICE),
 						contract: contract_addr.clone(),
 					}),
 					topics: vec![hash(&ALICE), hash(&contract_addr)],
@@ -3896,7 +3896,7 @@ fn set_code_hash() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Caller::from_account_id(ALICE),
 						contract: contract_addr.clone(),
 					}),
 					topics: vec![hash(&ALICE), hash(&contract_addr)],

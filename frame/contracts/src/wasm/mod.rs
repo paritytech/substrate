@@ -370,7 +370,7 @@ mod tests {
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
-		BalanceOf, CodeHash, Error, Pallet as Contracts,
+		BalanceOf, Caller, CodeHash, Error, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
 	use frame_support::{
@@ -544,11 +544,8 @@ mod tests {
 			}
 			Ok(result)
 		}
-		fn caller(&self) -> Option<&AccountIdOf<Self::T>> {
-			Some(&ALICE)
-		}
-		fn ensure_caller(&self) -> Result<&AccountIdOf<Self::T>, DispatchError> {
-			Ok(&ALICE)
+		fn caller(&self) -> Caller<Self::T> {
+			Caller::from_account_id(ALICE)
 		}
 		fn is_contract(&self, _address: &AccountIdOf<Self::T>) -> bool {
 			true

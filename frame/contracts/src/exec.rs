@@ -18,8 +18,8 @@
 use crate::{
 	gas::GasMeter,
 	storage::{self, DepositAccount, WriteOutcome},
-	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, ContractOrigin, DebugBufferVec,
-	Determinism, Error, Event, Nonce, Pallet as Contracts, Schedule, System,
+	BalanceOf, Caller, CodeHash, Config, ContractInfo, ContractInfoOf, ContractOrigin,
+	DebugBufferVec, Determinism, Error, Event, Nonce, Pallet as Contracts, Schedule, System,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -196,12 +196,9 @@ pub trait Ext: sealing::Sealed {
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError>;
 
-	/// Returns a reference to the account id of the caller.
-	fn caller(&self) -> Option<&AccountIdOf<Self::T>>;
-
-	/// Returns a reference to the account id of the caller
+	/// Returns a reference to the account id of the caller if it has one
 	/// errors otherwise.
-	fn ensure_caller(&self) -> Result<&AccountIdOf<Self::T>, DispatchError>;
+	fn caller(&self) -> Caller<Self::T>;
 
 	/// Check if a contract lives at the specified `address`.
 	fn is_contract(&self, address: &AccountIdOf<Self::T>) -> bool;
@@ -843,7 +840,7 @@ where
 				// Root origin is not allowed here
 				let origin = match &self.origin {
 					ContractOrigin::Signed(origin) => origin,
-					ContractOrigin::Root => return Err(Error::<T>::RootOriginNotAllowed.into()),
+					ContractOrigin::Root => return Err(Error::<T>::RootOrigin.into()),
 				};
 				frame.nested_storage.charge_instantiate(
 					origin,
@@ -883,7 +880,7 @@ where
 						return Err(Error::<T>::TerminatedInConstructor.into());
 					}
 
-					let caller = self.ensure_caller()?;
+					let caller = &self.caller().account_id()?;
 
 					// Deposit an instantiation event.
 					Contracts::<T>::deposit_event(
@@ -901,9 +898,9 @@ where
 					);
 				},
 				(ExportedFunction::Call, None) => {
-					let caller = self.ensure_caller()?;
+					let caller = self.caller();
 					Contracts::<T>::deposit_event(
-						vec![T::Hashing::hash_of(caller), T::Hashing::hash_of(account_id)],
+						vec![T::Hashing::hash_of(&caller), T::Hashing::hash_of(account_id)],
 						Event::Called { caller: caller.clone(), contract: account_id.clone() },
 					);
 				},
@@ -1061,13 +1058,14 @@ where
 			return Ok(());
 		}
 
-		// todo: is this okay? should we bypass if root?
-		if self.caller_is_root() {
-			return Ok(());
-		}
+		// If there is no account id, the the origin is root and we don't need to transfer
+		let caller = match self.caller() {
+			Caller::Account(caller) => caller,
+			Caller::Root => return Ok(()),
+		};
+
 		let value = frame.value_transferred;
-		let caller = self.ensure_caller()?;
-		Self::transfer(ExistenceRequirement::KeepAlive, caller, &frame.account_id, value)
+		Self::transfer(ExistenceRequirement::KeepAlive, &caller, &frame.account_id, value)
 	}
 
 	/// Reference to the current (top) frame.
@@ -1172,7 +1170,7 @@ where
 		let contract_info = top_frame.contract_info().clone();
 		let account_id = top_frame.account_id.clone();
 		let value = top_frame.value_transferred;
-		let caller = self.ensure_caller()?;
+		let caller = self.caller().account_id()?;
 		let executable = self.push_frame(
 			FrameArgs::Call {
 				dest: account_id,
@@ -1269,21 +1267,16 @@ where
 		&self.top_frame().account_id
 	}
 
-	fn caller(&self) -> Option<&T::AccountId> {
+	fn caller(&self) -> Caller<T> {
 		if let Some(caller) = &self.top_frame().delegate_caller {
-			Some(caller)
+			Caller::Account(caller.clone())
 		} else {
-			self.frames().nth(1).map(|f| Some(&f.account_id)).unwrap_or(match &self.origin {
-				ContractOrigin::Signed(origin) => Some(&origin),
-				ContractOrigin::Root => None,
-			})
-		}
-	}
-
-	fn ensure_caller(&self) -> Result<&T::AccountId, DispatchError> {
-		match self.caller() {
-			Some(caller) => Ok(caller),
-			None => Err(Error::<T>::NoAccountId.into()),
+			self.frames().nth(1).map(|f| Caller::Account(f.account_id.clone())).unwrap_or(
+				match &self.origin {
+					ContractOrigin::Signed(origin) => Caller::Account(origin.clone()),
+					ContractOrigin::Root => Caller::Root,
+				},
+			)
 		}
 	}
 
@@ -1300,8 +1293,11 @@ where
 	}
 
 	fn caller_is_origin(&self) -> bool {
-		// todo: if both are None, then it is root. Is it okay to return true?
-		self.caller() == self.origin.account_id()
+		match (&self.origin, &self.caller()) {
+			(ContractOrigin::Signed(origin), Caller::Account(caller)) => origin == caller,
+			(ContractOrigin::Root, Caller::Root) => true,
+			_ => false,
+		}
 	}
 
 	fn caller_is_root(&self) -> bool {
@@ -2012,7 +2008,9 @@ mod tests {
 
 		let bob_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for bob.
-			WitnessedCallerBob::mutate(|caller| *caller = Some(ctx.ext.caller().unwrap().clone()));
+			WitnessedCallerBob::mutate(|caller| {
+				*caller = Some(ctx.ext.caller().account_id().unwrap().clone())
+			});
 
 			// Call into CHARLIE contract.
 			assert_matches!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), Ok(_));
@@ -2021,7 +2019,7 @@ mod tests {
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for charlie.
 			WitnessedCallerCharlie::mutate(|caller| {
-				*caller = Some(ctx.ext.caller().unwrap().clone())
+				*caller = Some(ctx.ext.caller().account_id().unwrap().clone())
 			});
 			exec_success()
 		});
@@ -2186,7 +2184,7 @@ mod tests {
 	}
 
 	#[test]
-	fn root_caller_traps() {
+	fn root_caller_succeeds() {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			// root is the origin of the call stack
 			assert!(ctx.ext.caller_is_root());
@@ -2211,12 +2209,12 @@ mod tests {
 				None,
 				Determinism::Enforced,
 			);
-			assert_eq!(result, Err(Error::<Test>::NoAccountId.into()));
+			assert_matches!(result, Ok(_));
 		});
 	}
 
 	#[test]
-	fn caller_is_root_returns_proper_values() {
+	fn root_caller_succeeds_with_consecutive_calls() {
 		let code_charlie = MockLoader::insert(Call, |ctx, _| {
 			// BOB is not root
 			assert!(!ctx.ext.caller_is_root());
@@ -2472,7 +2470,7 @@ mod tests {
 				&events(),
 				&[
 					Event::Instantiated { deployer: BOB, contract: instantiated_contract_address },
-					Event::Called { caller: ALICE, contract: BOB },
+					Event::Called { caller: Caller::from_account_id(ALICE), contract: BOB },
 				]
 			);
 		});
@@ -2528,7 +2526,10 @@ mod tests {
 
 			// The contract wasn't instantiated so we don't expect to see an instantiation
 			// event here.
-			assert_eq!(&events(), &[Event::Called { caller: ALICE, contract: BOB },]);
+			assert_eq!(
+				&events(),
+				&[Event::Called { caller: Caller::from_account_id(ALICE), contract: BOB },]
+			);
 		});
 	}
 
@@ -2902,7 +2903,7 @@ mod tests {
 					EventRecord {
 						phase: Phase::Initialization,
 						event: MetaEvent::Contracts(crate::Event::Called {
-							caller: ALICE,
+							caller: Caller::from_account_id(ALICE),
 							contract: BOB,
 						}),
 						topics: vec![hash(&ALICE), hash(&BOB)],
@@ -3002,7 +3003,7 @@ mod tests {
 					EventRecord {
 						phase: Phase::Initialization,
 						event: MetaEvent::Contracts(crate::Event::Called {
-							caller: ALICE,
+							caller: Caller::from_account_id(ALICE),
 							contract: BOB,
 						}),
 						topics: vec![hash(&ALICE), hash(&BOB)],

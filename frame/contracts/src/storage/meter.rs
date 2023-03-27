@@ -343,7 +343,7 @@ where
 				match limit {
 					// If the limit is specified, that the root's limit
 					Some(l) => Ok(Self { limit: l, ..Default::default() }),
-					None => Err(DispatchError::Other("limit must be specified for root origin")), // todo: custom error with doc comment
+					None => Err(<Error<T>>::StorageDepositLimitRequired.into()),
 				}
 			},
 			ContractOrigin::Signed(o) => {

@@ -106,10 +106,10 @@ use crate::{
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
 	weights::WeightInfo,
 };
-use codec::{Codec, Encode, HasCompact};
+use codec::{Codec, Decode, Encode, HasCompact};
 use environmental::*;
 use frame_support::{
-	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
+	dispatch::{DispatchError, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
 	ensure,
 	traits::{
 		tokens::fungible::Inspect, ConstU32, Contains, Currency, Get, Randomness,
@@ -795,7 +795,7 @@ pub mod pallet {
 		/// rolled back.
 		Called {
 			/// The account that called the `contract`.
-			caller: T::AccountId,
+			caller: Caller<T>,
 			/// The contract that was called.
 			contract: T::AccountId,
 		},
@@ -881,6 +881,8 @@ pub mod pallet {
 		StorageDepositNotEnoughFunds,
 		/// More storage was created than allowed by the storage deposit limit.
 		StorageDepositLimitExhausted,
+		/// The storage deposit limit needs to be specified
+		StorageDepositLimitRequired,
 		/// Code removal was denied because the code is still in use by at least one contract.
 		CodeInUse,
 		/// The contract ran to completion but decided to revert its storage changes.
@@ -899,10 +901,8 @@ pub mod pallet {
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
-		/// Root origin is not allowed here.
-		RootOriginNotAllowed,
-		/// There is no account id associated
-		NoAccountId,
+		/// Root origin is not allowed.
+		RootOrigin,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -969,17 +969,6 @@ pub enum ContractOrigin<T: Config> {
 }
 
 impl<T: Config> ContractOrigin<T> {
-	/// Returns the account id of the origin if it is a signed origin.
-	pub fn account_id(&self) -> Option<&T::AccountId> {
-		match self {
-			ContractOrigin::Signed(account) => Some(account),
-			ContractOrigin::Root => None,
-		}
-	}
-	/// Check if the origin is root
-	pub fn is_root(&self) -> bool {
-		matches!(self, ContractOrigin::Root)
-	}
 	/// Creates a new Signed ContractOrigin from an AccountId
 	pub fn from_account_id(account_id: T::AccountId) -> Self {
 		ContractOrigin::Signed(account_id)
@@ -994,6 +983,40 @@ fn contract_ensure_signed_or_root<T: Config>(
 	match ensure_signed_or_root(origin)? {
 		Some(t) => Ok(ContractOrigin::Signed(t)),
 		None => Ok(ContractOrigin::Root),
+	}
+}
+
+/// The types of callers supported by the contracts pallet.
+#[derive(Clone, Encode, Decode, PartialEq, TypeInfo)]
+pub enum Caller<T: Config> {
+	Account(T::AccountId),
+	Root,
+}
+
+impl<T: Config> Caller<T> {
+	/// Creates a new Signed ContractOrigin from an AccountId
+	pub fn from_account_id(account_id: T::AccountId) -> Self {
+		Caller::Account(account_id)
+	}
+}
+
+impl<T: Config> sp_std::fmt::Debug for Caller<T> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+		match self {
+			Caller::Account(id) => write!(f, "Caller::Account({:?})", id),
+			Caller::Root => write!(f, "Caller::Root"),
+		}
+	}
+}
+
+impl<T: Config> Caller<T> {
+	/// Returns the account id of the caller if it has one
+	/// it errors otherwise
+	pub fn account_id(&self) -> Result<T::AccountId, DispatchError> {
+		match self {
+			Caller::Account(id) => Ok(id.clone()),
+			Caller::Root => Err(<Error<T>>::RootOrigin.into()),
+		}
 	}
 }
 
@@ -1137,7 +1160,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 				ContractOrigin::Signed(t) => t,
 				ContractOrigin::Root => {
 					return Err(ExecError {
-						error: <Error<T>>::RootOriginNotAllowed.into(),
+						error: <Error<T>>::RootOrigin.into(),
 						origin: ErrorOrigin::Caller,
 					})
 				},
