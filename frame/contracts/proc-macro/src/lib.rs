@@ -623,7 +623,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 			.collect::<Vec<_>>()
 			.join(", ");
 
-			let trace_fmt_str = format!("{}::{}({}) = {{:?}}", module, name, params_fmt_str);
+			let trace_fmt_str = format!("{}::{}({}) = {{:?}}\n", module, name, params_fmt_str);
 			let trace_fmt_args = params.clone().filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
 				syn::FnArg::Typed(p) => {
@@ -634,16 +634,13 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 				},
 			});
 
-			let debug_buffer_fmt_str = format!("{}\n", trace_fmt_str);
-			let debug_buffer_fmt_args = trace_fmt_args.clone();
-
 			quote! {
 				if ::log::log_enabled!(target: "runtime::contracts::strace", ::log::Level::Trace) {
 					let result = #body;
 					{
 						use sp_std::fmt::Write;
 						let mut w = sp_std::Writer::default();
-						let _ = core::write!(&mut w, #debug_buffer_fmt_str, #( #debug_buffer_fmt_args, )* result);
+						let _ = core::write!(&mut w, #trace_fmt_str, #( #trace_fmt_args, )* result);
 						let msg = core::str::from_utf8(&w.inner()).unwrap_or_default();
 						ctx.ext().append_debug_buffer(msg);
 					}
