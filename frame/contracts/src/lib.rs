@@ -249,8 +249,7 @@ pub mod pallet {
 		///
 		/// The amount of weight that is dedicated per block to work on the deletion queue. Larger
 		/// values allow more trie keys to be deleted in each block but reduce the amount of
-		/// weight that is left for transactions. See [`Self::DeletionQueue`] for more
-		/// information about the deletion queue.
+		/// weight that is left for transactions.
 		#[pallet::constant]
 		type DeletionWeightLimit: Get<Weight>;
 
