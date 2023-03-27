@@ -1181,8 +1181,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - `Members(Allies)` should keep to `MaxAllies` limit.
 	#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
 	pub fn do_try_state() -> Result<(), &'static str> {
-		let fellows = Members::<T, I>::take(MemberRole::Fellow);
-		let allies = Members::<T, I>::take(MemberRole::Ally);
+		let fellows = Members::<T, I>::get(MemberRole::Fellow);
+		let allies = Members::<T, I>::get(MemberRole::Ally);
 
 		assert!(
 			fellows.len() as u32 <= T::MaxFellows::get(),
