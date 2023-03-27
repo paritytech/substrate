@@ -325,6 +325,11 @@ pub mod pallet {
 				T::MaxVotesPerVoter::get(),
 			);
 		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
+			Self::do_try_state()
+		}
 	}
 
 	#[pallet::call]
@@ -1192,6 +1197,48 @@ impl<T: Config> ContainsLengthBound for Pallet<T> {
 	}
 }
 
+#[cfg(feature = "try-runtime")]
+impl<T: Config> Pallet<T> {
+	fn do_try_state() -> Result<(), &'static str> {
+		Self::try_state_members()?;
+		Self::try_state_runners_up()?;
+		Self::try_state_candidates()
+	}
+
+	// [`Members`] state checks. Invariants:
+	//  - Members are always sorted based on account ID.
+	fn try_state_members() -> Result<(), &'static str> {
+		let mut members = Members::<T>::get().clone();
+		members.sort_by_key(|m| m.who.clone());
+
+		if Members::<T>::get() == members {
+			Ok(())
+		} else {
+			Err("try_state checks: Members must be always sorted by account ID")
+		}
+	}
+
+	// [`RunnersUp`] state checks. Invariants:
+	//  - Elements are sorted based on rank;
+	//  - Upon removal of a member, the last runner-up will be replaced.
+	fn try_state_runners_up() -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	// [`Candidates`] state checks. Invariants:
+	//  - Always sorted based on account ID.
+	fn try_state_candidates() -> Result<(), &'static str> {
+		let mut candidates = Candidates::<T>::get().clone();
+		candidates.sort_by_key(|(c, _)| c.clone());
+
+		if Candidates::<T>::get() == candidates {
+			Ok(())
+		} else {
+			Err("try_state checks: Candidates must be always sorted by account ID")
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -1418,7 +1465,14 @@ mod tests {
 			.into();
 			ext.execute_with(pre_conditions);
 			ext.execute_with(test);
-			ext.execute_with(post_conditions)
+			ext.execute_with(post_conditions);
+
+			#[cfg(feature = "try-runtime")]
+			ext.execute_with(|| {
+				assert_ok!(<Elections as frame_support::traits::Hooks<u64>>::try_state(
+					System::block_number()
+				));
+			});
 		}
 	}
 
