@@ -137,7 +137,7 @@ to `error` in order to prevent them from spamming the console.
 
 ## Host function tracing
 
-For contract authors, it can be a helpful debugging tool to see which host functions are called, with which arguments, and what was the result. 
+For contract authors, it can be a helpful debugging tool to see which host functions are called, with which arguments, and what the result was. 
 
 In order to see these messages on the node console, the log level for the `runtime::contracts::strace` target needs to be raised to the `trace` level. 
 
