@@ -143,8 +143,8 @@ pub struct Proposal<AccountId, Balance> {
 pub struct PendingPayment<AccountId, Balance, AssetKind, AssetBalance, PaymentId> {
 	/// The account to whom the payment should be made if the proposal is accepted.
 	beneficiary: AccountId,
-	/// The asset_id of the amount to be paid
-	asset_id: AssetKind,
+	/// The asset_kind of the amount to be paid
+	asset_kind: AssetKind,
 	/// The (total) amount that should be paid.
 	value: AssetBalance,
 	/// The amount to be paid, but normalized to the native asset class
@@ -178,10 +178,7 @@ pub mod pallet {
 
 		/// The means by which we can make payments to beneficiaries.
 		/// This can be implmented over fungibles or some other means.
-		type Paymaster: Pay<
-			Beneficiary = Self::AccountId,
-			AssetKind = Self::AssetKind,
-		>;
+		type Paymaster: Pay<Beneficiary = Self::AccountId, AssetKind = Self::AssetKind>;
 
 		// THe means of knowing what is the equivalent native Balance of a given asset id Balance.
 		type BalanceConverter: BalanceConversion<
@@ -361,13 +358,13 @@ pub mod pallet {
 		/// The proposal was paid successfully
 		ProposalPaymentSuccess {
 			proposal_index: ProposalIndex,
-			asset_id: T::AssetKind,
+			asset_kind: T::AssetKind,
 			amount: PayBalanceOf<T, I>,
 		},
 		/// The proposal payment failed. Payment will be retried in next spend period.
 		ProposalPaymentFailure {
 			proposal_index: ProposalIndex,
-			asset_id: T::AssetKind,
+			asset_kind: T::AssetKind,
 			amount: PayBalanceOf<T, I>,
 		},
 	}
@@ -561,12 +558,12 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::spend())]
 		pub fn spend(
 			origin: OriginFor<T>,
-			asset_id: T::AssetKind,
+			asset_kind: T::AssetKind,
 			#[pallet::compact] amount: PayBalanceOf<T, I>,
 			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
-			let normalized_amount = T::BalanceConverter::to_asset_balance(amount, asset_id)
+			let normalized_amount = T::BalanceConverter::to_asset_balance(amount, asset_kind)
 				.map_err(|_| Error::<T, I>::BalanceConversionFailed)?;
 			ensure!(normalized_amount <= max_amount, Error::<T, I>::InsufficientPermission);
 
@@ -592,18 +589,22 @@ pub mod pallet {
 
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
-			let proposal = PendingPayment {
-				asset_id,
+			let pending_payment = PendingPayment {
+				asset_kind,
 				value: amount,
 				beneficiary: beneficiary.clone(),
 				normalized_value: normalized_amount,
 				payment_id: None,
 			};
 
-			let proposal_index = PendingPayments::<T, I>::count();
-			PendingPayments::<T, I>::insert(proposal_index, proposal);
+			let next_index = PendingPayments::<T, I>::count();
+			PendingPayments::<T, I>::insert(next_index, pending_payment);
 
-			Self::deposit_event(Event::QueuedPayment { proposal_index, amount, beneficiary });
+			Self::deposit_event(Event::QueuedPayment {
+				proposal_index: next_index,
+				amount,
+				beneficiary,
+			});
 			Ok(())
 		}
 
@@ -675,7 +676,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if let Some(mut p) = PendingPayments::<T, I>::get(key) {
 				match p.payment_id {
 					None =>
-						if let Ok(id) = T::Paymaster::pay(&p.beneficiary, p.asset_id, p.value) {
+						if let Ok(id) = T::Paymaster::pay(&p.beneficiary, p.asset_kind, p.value) {
 							total_spent += p.normalized_value;
 							p.payment_id = Some(id);
 							PendingPayments::<T, I>::set(key, Some(p));
@@ -688,7 +689,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							missed_proposals = missed_proposals.saturating_add(1);
 							Self::deposit_event(Event::ProposalPaymentFailure {
 								proposal_index: key,
-								asset_id: p.asset_id,
+								asset_kind: p.asset_kind,
 								amount: p.value,
 							});
 							// Force the payment to none, so a fresh payment is sent during the next
@@ -700,7 +701,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							PendingPayments::<T, I>::remove(key);
 							Self::deposit_event(Event::ProposalPaymentSuccess {
 								proposal_index: key,
-								asset_id: p.asset_id,
+								asset_kind: p.asset_kind,
 								amount: p.value,
 							});
 						},
