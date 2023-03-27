@@ -502,7 +502,7 @@ pub mod v4 {
 				onchain
 			);
 
-			if current == 4 && onchain == 3 {
+			if onchain == 3 {
 				log!(warn, "Please run MigrateToV5 immediately after this migration. See github.com/paritytech/substrate/pull/13715");
 				let initial_global_max_commission = U::get();
 				GlobalMaxCommission::<T>::set(Some(initial_global_max_commission));
@@ -518,7 +518,7 @@ pub mod v4 {
 					Some(old_value.migrate_to_v4())
 				});
 
-				current.put::<Pallet<T>>();
+				StorageVersion::new(4).put::<Pallet<T>>();
 				log!(info, "Upgraded {} pools, storage to version {:?}", translated, current);
 
 				// reads: translated + onchain version.
