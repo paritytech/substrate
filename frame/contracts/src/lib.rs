@@ -154,7 +154,7 @@ type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 ///
 /// This is a copy of the [`frame_support::weights::OldWeight`] type since the contracts pallet
 /// needs to support it indefinitely.
-pub type OldWeight = u64;
+type OldWeight = u64;
 
 /// Used as a sentinel value when reading and writing contract memory.
 ///
