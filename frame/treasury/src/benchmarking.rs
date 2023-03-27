@@ -55,6 +55,16 @@ fn create_approved_proposals<T: Config<I>, I: 'static>(n: u32) -> Result<(), &'s
 	Ok(())
 }
 
+// Create pending payments that are approved for use in `on_initialize`.
+fn create_pending_payments<T: Config<I>, I: 'static>(n: u32) -> Result<(), &'static str> {
+	for i in 0..n {
+		let (caller, value, lookup) = setup_proposal::<T, I>(i);
+		Treasury::<T, I>::spend(RawOrigin::Signed(caller).into(), 0, value, lookup)?;
+	}
+	ensure!(<PendingPayments<T, I>>::count() == n as usize, "Not all approved");
+	Ok(())
+}
+
 fn setup_pot_account<T: Config<I>, I: 'static>() {
 	let pot_account = Treasury::<T, I>::account_id();
 	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
@@ -134,6 +144,13 @@ benchmarks_instance_pallet! {
 		let p in 0 .. T::MaxApprovals::get();
 		setup_pot_account::<T, _>();
 		create_approved_proposals::<T, _>(p)?;
+	}: {
+		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
+	}
+
+	on_initialize_pending_payments {
+		let p in 0 .. T::MaxApprovals::get();
+		create_pending_payments::<T, _>(p)?;
 	}: {
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 	}

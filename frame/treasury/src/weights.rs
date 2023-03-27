@@ -58,6 +58,7 @@ pub trait WeightInfo {
 	fn approve_proposal(p: u32, ) -> Weight;
 	fn remove_approval() -> Weight;
 	fn on_initialize_proposals(p: u32, ) -> Weight;
+    fn on_initialize_pending_payments(p: u32, ) -> Weight;
 }
 
 /// Weights for pallet_treasury using the Substrate node and recommended hardware.
@@ -154,6 +155,31 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: Bounties BountyApprovals (max_values: Some(1), max_size: Some(402), added: 897, mode: MaxEncodedLen)
 	/// The range of component `p` is `[0, 100]`.
 	fn on_initialize_proposals(p: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `387 + p * (251 ±0)`
+		//  Estimated: `7255 + p * (7789 ±0)`
+		// Minimum execution time: 43_781_000 picoseconds.
+		Weight::from_parts(68_521_487, 7255)
+			// Standard Error: 58_804
+			.saturating_add(Weight::from_parts(33_271_211, 0).saturating_mul(p.into()))
+			.saturating_add(T::DbWeight::get().reads(3_u64))
+			.saturating_add(T::DbWeight::get().reads((3_u64).saturating_mul(p.into())))
+			.saturating_add(T::DbWeight::get().writes(3_u64))
+			.saturating_add(T::DbWeight::get().writes((3_u64).saturating_mul(p.into())))
+			.saturating_add(Weight::from_parts(0, 7789).saturating_mul(p.into()))
+	}
+	/// Storage: Treasury Deactivated (r:1 w:1)
+	/// Proof: Treasury Deactivated (max_values: Some(1), max_size: Some(16), added: 511, mode: MaxEncodedLen)
+	/// Storage: Treasury Approvals (r:1 w:1)
+	/// Proof: Treasury Approvals (max_values: Some(1), max_size: Some(402), added: 897, mode: MaxEncodedLen)
+	/// Storage: Treasury Proposals (r:100 w:100)
+	/// Proof: Treasury Proposals (max_values: None, max_size: Some(108), added: 2583, mode: MaxEncodedLen)
+	/// Storage: System Account (r:200 w:200)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	/// Storage: Bounties BountyApprovals (r:1 w:1)
+	/// Proof: Bounties BountyApprovals (max_values: Some(1), max_size: Some(402), added: 897, mode: MaxEncodedLen)
+	/// The range of component `p` is `[0, 100]`.
+	fn on_initialize_pending_payments(p: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `387 + p * (251 ±0)`
 		//  Estimated: `7255 + p * (7789 ±0)`
@@ -269,6 +295,26 @@ impl WeightInfo for () {
 		Weight::from_parts(68_521_487, 7255)
 			// Standard Error: 58_804
 			.saturating_add(Weight::from_parts(33_271_211, 0).saturating_mul(p.into()))
+			.saturating_add(RocksDbWeight::get().reads(3_u64))
+			.saturating_add(RocksDbWeight::get().reads((3_u64).saturating_mul(p.into())))
+			.saturating_add(RocksDbWeight::get().writes(3_u64))
+			.saturating_add(RocksDbWeight::get().writes((3_u64).saturating_mul(p.into())))
+			.saturating_add(Weight::from_parts(0, 7789).saturating_mul(p.into()))
+	}
+    /// Storage: Treasury Deactivated (r:1 w:1)
+	/// Proof: Treasury Deactivated (max_values: Some(1), max_size: Some(16), added: 511, mode: MaxEncodedLen)
+	/// Storage: Treasury PendingPayments (r:100 w:100)
+	/// Proof: Treasury PendingPayments (max_values: None, max_size: Some(108), added: 2583, mode: MaxEncodedLen)
+	/// Storage: System Account (r:200 w:200)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	/// The range of component `p` is `[0, 100]`.
+	fn on_initialize_pending_payments(p: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `387 + p * (251 ±0)`
+		//  Estimated: `7255 + p * (7789 ±0)`
+		// Minimum execution time: 43_781_000 picoseconds.
+		Weight::from_parts(68_521_487, 7255)
+			// Standard Error: 58_804
 			.saturating_add(RocksDbWeight::get().reads(3_u64))
 			.saturating_add(RocksDbWeight::get().reads((3_u64).saturating_mul(p.into())))
 			.saturating_add(RocksDbWeight::get().writes(3_u64))

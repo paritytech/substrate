@@ -727,7 +727,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 
-		total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
+		total_weight += T::WeightInfo::on_initialize_pending_payments(proposals_len);
 
 		Self::deposit_event(Event::RolloverPayments {
 			rollover_proposals: missed_proposals,
