@@ -523,6 +523,7 @@ where
 			state: sync_state,
 			best_seen_block,
 			num_peers: self.peers.len() as u32,
+			num_connected_peers: 0u32,
 			queued_blocks: self.queue_blocks.len() as u32,
 			state_sync: self.state_sync.as_ref().map(|s| s.progress()),
 			warp_sync: warp_sync_progress,

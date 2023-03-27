@@ -406,7 +406,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 	}
 
 	fn prune(&mut self, commit: &mut CommitSet<Key>) -> Result<(), Error<D::Error>> {
-		if let (&mut Some(ref mut pruning), &PruningMode::Constrained(ref constraints)) =
+		if let (&mut Some(ref mut pruning), PruningMode::Constrained(constraints)) =
 			(&mut self.pruning, &self.mode)
 		{
 			loop {

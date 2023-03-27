@@ -155,52 +155,6 @@ impl<'a, T: Config> ContractModule<'a, T> {
 		Ok(())
 	}
 
-	/// Ensures that no floating point types are in use.
-	fn ensure_no_floating_types(&self) -> Result<(), &'static str> {
-		if let Some(global_section) = self.module.global_section() {
-			for global in global_section.entries() {
-				match global.global_type().content_type() {
-					ValueType::F32 | ValueType::F64 =>
-						return Err("use of floating point type in globals is forbidden"),
-					_ => {},
-				}
-			}
-		}
-
-		if let Some(code_section) = self.module.code_section() {
-			for func_body in code_section.bodies() {
-				for local in func_body.locals() {
-					match local.value_type() {
-						ValueType::F32 | ValueType::F64 =>
-							return Err("use of floating point type in locals is forbidden"),
-						_ => {},
-					}
-				}
-			}
-		}
-
-		if let Some(type_section) = self.module.type_section() {
-			for wasm_type in type_section.types() {
-				match wasm_type {
-					Type::Function(func_type) => {
-						let return_type = func_type.results().get(0);
-						for value_type in func_type.params().iter().chain(return_type) {
-							match value_type {
-								ValueType::F32 | ValueType::F64 =>
-									return Err(
-										"use of floating point type in function types is forbidden",
-									),
-								_ => {},
-							}
-						}
-					},
-				}
-			}
-		}
-
-		Ok(())
-	}
-
 	/// Ensure that no function exists that has more parameters than allowed.
 	fn ensure_parameter_limit(&self, limit: u32) -> Result<(), &'static str> {
 		let type_section = if let Some(type_section) = self.module.type_section() {
@@ -411,10 +365,9 @@ where
 		memory64: false,
 		extended_const: false,
 		component_model: false,
-		// This is not our only defense: We check for float types later in the preparation
-		// process. Additionally, all instructions explicitly  need to have weights assigned
+		// This is not our only defense: All instructions explicitly need to have weights assigned
 		// or the deployment will fail. We have none assigned for float instructions.
-		deterministic_only: matches!(determinism, Determinism::Deterministic),
+		floats: matches!(determinism, Determinism::Relaxed),
 		mutable_global: false,
 		saturating_float_to_int: false,
 		sign_extension: false,
@@ -422,6 +375,7 @@ where
 		multi_value: false,
 		reference_types: false,
 		simd: false,
+		memory_control: false,
 	})
 	.validate_all(original_code)
 	.map_err(|err| {
@@ -438,10 +392,6 @@ where
 		contract_module.ensure_local_variable_limit(schedule.limits.locals)?;
 		contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
 		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
-
-		if matches!(determinism, Determinism::Deterministic) {
-			contract_module.ensure_no_floating_types()?;
-		}
 
 		// We disallow importing `gas` function here since it is treated as implementation detail.
 		let disallowed_imports = [b"gas".as_ref()];
@@ -608,7 +558,7 @@ pub mod benchmarking {
 				deposit: Default::default(),
 				refcount: 0,
 			}),
-			determinism: Determinism::Deterministic,
+			determinism: Determinism::Enforced,
 		})
 	}
 }
@@ -682,7 +632,7 @@ mod tests {
 					wasm,
 					&schedule,
 					ALICE,
-					Determinism::Deterministic,
+					Determinism::Enforced,
 					TryInstantiate::Instantiate,
 				);
 				assert_matches::assert_matches!(r.map_err(|(_, msg)| msg), $($expected)*);
@@ -704,7 +654,7 @@ mod tests {
 			)
 			(func (export "deploy"))
 		)"#,
-		Err("gas instrumentation failed")
+		Err("validation of new code failed")
 	);
 
 	mod functions {
@@ -1214,7 +1164,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("use of floating point type in globals is forbidden")
+			Err("validation of new code failed")
 		);
 
 		prepare_test!(
@@ -1226,7 +1176,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("use of floating point type in locals is forbidden")
+			Err("validation of new code failed")
 		);
 
 		prepare_test!(
@@ -1238,7 +1188,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("use of floating point type in function types is forbidden")
+			Err("validation of new code failed")
 		);
 
 		prepare_test!(
@@ -1250,7 +1200,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("use of floating point type in function types is forbidden")
+			Err("validation of new code failed")
 		);
 	}
 }

@@ -18,8 +18,6 @@
 
 //! Authority discovery errors.
 
-use sp_core::crypto::CryptoTypePublicPair;
-
 /// AuthorityDiscovery Result.
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -59,11 +57,8 @@ pub enum Error {
 	#[error("Failed to parse a libp2p key.")]
 	ParsingLibp2pIdentity(#[from] libp2p::identity::error::DecodingError),
 
-	#[error("Failed to sign using a specific public key.")]
-	MissingSignature(CryptoTypePublicPair),
-
-	#[error("Failed to sign using all public keys.")]
-	Signing,
+	#[error("Failed to sign: {0}.")]
+	CannotSign(String),
 
 	#[error("Failed to register Prometheus metric.")]
 	Prometheus(#[from] prometheus_endpoint::PrometheusError),

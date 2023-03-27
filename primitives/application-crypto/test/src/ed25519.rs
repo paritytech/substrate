@@ -18,8 +18,11 @@
 //! Integration tests for ed25519
 
 use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::ed25519::{AppPair, AppPublic};
-use sp_core::{crypto::Pair, testing::ED25519};
+use sp_application_crypto::ed25519::AppPair;
+use sp_core::{
+	crypto::{ByteArray, Pair},
+	testing::ED25519,
+};
 use sp_keystore::{testing::MemoryKeystore, Keystore};
 use std::sync::Arc;
 use substrate_test_runtime_client::{
@@ -35,7 +38,7 @@ fn ed25519_works_in_runtime() {
 		.test_ed25519_crypto(test_client.chain_info().genesis_hash)
 		.expect("Tests `ed25519` crypto.");
 
-	let supported_keys = Keystore::keys(&*keystore, ED25519).unwrap();
-	assert!(supported_keys.contains(&public.clone().into()));
-	assert!(AppPair::verify(&signature, "ed25519", &AppPublic::from(public)));
+	let supported_keys = keystore.keys(ED25519).unwrap();
+	assert!(supported_keys.contains(&public.to_raw_vec()));
+	assert!(AppPair::verify(&signature, "ed25519", &public));
 }
