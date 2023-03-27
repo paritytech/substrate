@@ -26,16 +26,18 @@ use sp_runtime::{
 	MAX_MODULE_ERROR_ENCODED_SIZE,
 };
 sp_api::decl_runtime_apis! {
-	pub trait Interface {
+	pub trait Interface<View>
+		where View: sp_api::Decode + View
+	{
 
 		// TOOD: Macro does not handle that well
-		//fn view(view: Self::View) -> Result<Vec<u8>, InterfaceError>;
-		fn view(view: u32) -> u32;
+		//fn view(view: Self::View) -> Result<Vec<u8>, Error>;
+		fn view(view: View) -> InterfaceViewResult;
 	}
 }
 
-pub type InterfaceResult = Result<(), InterfaceError>;
-pub type InterfaceViewResult = Result<Vec<u8>, InterfaceError>;
+pub type InterfaceResult = Result<(), Error>;
+pub type InterfaceViewResult = Result<Vec<u8>, Error>;
 pub type InterfaceResultWithPostInfo = InterfaceErrorWithPostInfo<PostDispatchInfo>;
 
 #[derive(
@@ -53,11 +55,11 @@ where
 	Info: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable,
 {
 	pub post_info: Info,
-	pub error: InterfaceError,
+	pub error: Error,
 }
 
-impl From<InterfaceError> for InterfaceErrorWithPostInfo<PostDispatchInfo> {
-	fn from(error: InterfaceError) -> Self {
+impl From<Error> for InterfaceErrorWithPostInfo<PostDispatchInfo> {
+	fn from(error: Error) -> Self {
 		InterfaceErrorWithPostInfo { post_info: PostDispatchInfo::default(), error }
 	}
 }
@@ -81,14 +83,14 @@ pub trait Call {
 pub trait View {
 	type Selectable: From<H256> + Into<H256>;
 
-	fn view(self) -> Result<Vec<u8>, InterfaceError>;
+	fn view(self) -> Result<Vec<u8>, Error>;
 }
 
 pub trait Selector {
 	type Selectable;
 	type Selected;
 
-	fn select(&self, selectable: Self::Selectable) -> Result<Self::Selected, InterfaceError>;
+	fn select(&self, selectable: Self::Selectable) -> Result<Self::Selected, Error>;
 }
 
 /// The "high-level" error enum of interfaces
@@ -104,44 +106,61 @@ pub trait Selector {
 	frame_support::RuntimeDebug,
 	frame_support::scale_info::TypeInfo,
 )]
-pub enum InterfaceError {
-	SelectorMismatch {
-		provided: H256,
-	},
-	Interface {
-		index: u8,
-		/// Module specific error value.
-		error: [u8; MAX_MODULE_ERROR_ENCODED_SIZE],
-		// Optional error message.
-		//message: Option<&'static str>,
-	},
+pub enum Error {
+	SelectorMismatch { provided: H256 },
+	Interface(InterfaceError),
 	Module(ModuleError),
 }
 
-impl From<ModuleError> for InterfaceError {
+/// Reason why a pallet call failed.
+#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct InterfaceError {
+	/// Module index, matching the metadata module index.
+	pub index: u8,
+	/// Module specific error value.
+	pub error: [u8; MAX_MODULE_ERROR_ENCODED_SIZE],
+	/// Optional error message.
+	#[codec(skip)]
+	#[cfg_attr(feature = "std", serde(skip_deserializing))]
+	pub message: Option<&'static str>,
+}
+
+impl From<ModuleError> for Error {
 	fn from(m: ModuleError) -> Self {
 		Self::Module(m)
 	}
 }
 
+impl From<InterfaceError> for Error {
+	fn from(m: InterfaceError) -> Self {
+		Self::Interface(m)
+	}
+}
+
 // THis is then used in the uper level logic
-impl From<InterfaceError> for DispatchError {
-	fn from(value: InterfaceError) -> Self {
+impl From<Error> for DispatchError {
+	fn from(value: Error) -> Self {
 		todo!()
 	}
 }
 
 pub struct EmptySelector;
 
+impl EmptySelector {
+	pub fn new() -> Self {
+		EmptySelector {}
+	}
+}
+
 impl Selector for EmptySelector {
 	type Selectable = H256;
 	type Selected = ();
 
-	fn select(&self, from: Self::Selectable) -> Result<Self::Selected, InterfaceError> {
-		let zero = H256::zero();
+	fn select(&self, from: Self::Selectable) -> Result<Self::Selected, Error> {
 		match from {
-			zero => Ok(()),
-			_ => Err(InterfaceError::SelectorMismatch { provided: from }),
+			x if x == H256::zero() => Ok(()),
+			_ => Err(Error::SelectorMismatch { provided: from }),
 		}
 	}
 }
@@ -156,7 +175,7 @@ impl<T> Select<T> {
 		Select { from, selector }
 	}
 
-	pub fn select(&self) -> Result<T, InterfaceError> {
+	pub fn select(&self) -> Result<T, Error> {
 		self.selector.as_ref().select(self.from)
 	}
 }
@@ -166,7 +185,7 @@ mod tests {
 	mod int_123 {
 		use frame_support::{
 			dispatch::DispatchResult,
-			interface::{InterfaceError, InterfaceResult, InterfaceResultWithPostInfo, Select},
+			interface::{Error, InterfaceResult, InterfaceResultWithPostInfo, Select},
 			Parameter,
 		};
 
@@ -179,33 +198,29 @@ mod tests {
 
 			#[interface::selector(SelectCurrency)]
 			#[interface::default_selector]
-			fn select_currency(
-				selectable: Self::Selectable,
-			) -> Result<Self::Currency, InterfaceError>;
+			fn select_currency(selectable: Self::Selectable) -> Result<Self::Currency, Error>;
 
 			#[interface::selector(RestrictedCurrency)]
 			fn select_restricted_currency(
 				selectable: Self::Selectable,
-			) -> Result<Self::Currency, InterfaceError>;
+			) -> Result<Self::Currency, Error>;
 
 			#[interface::selector(SelectAccount)]
-			fn select_account(
-				selectable: Self::Selectable,
-			) -> Result<Self::AccountId, InterfaceError>;
+			fn select_account(selectable: Self::Selectable) -> Result<Self::AccountId, Error>;
 
 			#[interface::view]
 			#[interface::view_index(0)]
 			fn free_balance(
 				currency: Select<Self::Currency>,
 				who: Self::AccountId,
-			) -> Result<Self::Balance, InterfaceError>;
+			) -> Result<Self::Balance, Error>;
 
 			#[interface::view]
 			#[interface::view_index(1)]
 			#[interface::no_selector]
 			fn balances(
 				who: Self::AccountId,
-			) -> Result<Vec<(Self::Currency, Self::Balance)>, InterfaceError>;
+			) -> Result<Vec<(Self::Currency, Self::Balance)>, Error>;
 
 			#[interface::call]
 			#[interface::call_index(0)]
@@ -362,7 +377,7 @@ pub mod pip721 {
 		impl<Runtime: Pip721 + Core> View for View<Runtime> {
 			type Selectable = <Runtime as Core>::Selectable;
 
-			fn view(&self) -> Result<Vec<u8>, InterfaceError> {
+			fn view(&self) -> Result<Vec<u8>, Error> {
 				match self {
 					View::Holdings { who } => Ok(<Runtime as Pip721>::holdings(who).encode()),
 				}
@@ -406,13 +421,13 @@ pub mod pip20 {
 
 		#[interface::selector(SelectCurrency)]
 		#[interface::default_selector]
-		fn select_currency(selectable: Self::Selectable) -> Result<Self::Currency, InterfaceError>;
+		fn select_currency(selectable: Self::Selectable) -> Result<Self::Currency, Error>;
 
 		#[interface::selector(RestrictedCurrency)]
-		fn select_restricted_currency(selectable:  Self::Selectable) -> Result<Self::Currency, InterfaceError>;
+		fn select_restricted_currency(selectable:  Self::Selectable) -> Result<Self::Currency, Error>;
 
 		#[interface::selector(SelectAccount)]
-		fn select_account(selectable:  Self::Selectable) -> Result<Self::Account, InterfaceError>;
+		fn select_account(selectable:  Self::Selectable) -> Result<Self::Account, Error>;
 
 		#[interface::view]
 		#[interface::view_index(0)]
@@ -528,7 +543,7 @@ pub mod pip20 {
 		impl<Runtime: Pip20 + Core> View for View<Runtime> {
 			type Selectable = <Runtime as Core>::Selectable;
 
-			fn view(&self, selectable: Self::Selectable) -> Result<Vec<u8>, InterfaceError> {
+			fn view(&self, selectable: Self::Selectable) -> Result<Vec<u8>, Error> {
 				match self {
 					View::FreeBalance { who } => {
 						let select = Select::new(selector, Box::new(SelectCurrency::<Runtime> {}));
