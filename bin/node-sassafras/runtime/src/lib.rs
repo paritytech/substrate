@@ -28,7 +28,7 @@ use pallet_transaction_payment::CurrencyAdapter;
 
 use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{ConstU128, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem},
+	traits::{ConstU128, ConstU32, ConstU64, ConstU8},
 	weights::{
 		constants::{RocksDbWeight, WEIGHT_REF_TIME_PER_SECOND},
 		IdentityFee, Weight,
@@ -209,17 +209,11 @@ impl pallet_sassafras::Config for Runtime {
 
 impl pallet_grandpa::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type KeyOwnerProofSystem = ();
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		GrandpaId,
-	)>>::IdentificationTuple;
-	type HandleEquivocation = ();
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 	type MaxSetIdSessionEntries = ConstU64<0>;
+	type KeyOwnerProof = sp_core::Void;
+	type EquivocationReportSystem = ();
 }
 
 impl pallet_timestamp::Config for Runtime {
@@ -239,6 +233,10 @@ impl pallet_balances::Config for Runtime {
 	type ExistentialDeposit = ConstU128<500>;
 	type AccountStore = System;
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 impl pallet_transaction_payment::Config for Runtime {
@@ -339,6 +337,14 @@ impl_runtime_apis! {
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
 			OpaqueMetadata::new(Runtime::metadata().into())
+		}
+
+		fn metadata_at_version(version: u32) -> Option<OpaqueMetadata> {
+			Runtime::metadata_at_version(version)
+		}
+
+		fn metadata_versions() -> sp_std::vec::Vec<u32> {
+			Runtime::metadata_versions()
 		}
 	}
 

@@ -250,8 +250,9 @@ impl Epoch {
 	}
 }
 
-/// Read latest finalized protocol configuration.
-pub fn configuration<B, C>(client: &C) -> ClientResult<SassafrasConfiguration>
+/// Read protocol configuration from the blockchain state corresponding
+/// to the last finalized block
+pub fn finalized_configuration<B, C>(client: &C) -> ClientResult<SassafrasConfiguration>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + UsageProvider<B>,

@@ -238,7 +238,7 @@ impl TestContext {
 		// Note: configuration is loaded using the `TestClient` instance as the runtime-api
 		// provider. In practice this will use the values defined within the test runtime
 		// defined in the `substrate_test_runtime` crate.
-		let config = crate::configuration(&*client).expect("config available");
+		let config = crate::finalized_configuration(&*client).expect("config available");
 
 		let (block_import, link) = create_test_block_import(client.clone(), config.clone());
 
@@ -848,7 +848,7 @@ impl TestNetFactory for SassafrasTestNet {
 	) {
 		let client = client.as_client();
 
-		let config = crate::configuration(&*client).expect("config available");
+		let config = crate::finalized_configuration(&*client).expect("config available");
 		let (block_import, link) = create_test_block_import(client.clone(), config);
 
 		(BlockImportAdapter::new(block_import.clone()), None, Some(PeerData { link, block_import }))
@@ -859,7 +859,7 @@ impl TestNetFactory for SassafrasTestNet {
 
 		let data = maybe_link.as_ref().expect("data provided to verifier instantiation");
 
-		let config = crate::configuration(&*client).expect("config available");
+		let config = crate::finalized_configuration(&*client).expect("config available");
 		create_test_verifier(client.clone(), &data.link, config)
 	}
 

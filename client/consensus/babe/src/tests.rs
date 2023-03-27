@@ -36,7 +36,6 @@ use sp_consensus_babe::{
 	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
 	AuthorityId, AuthorityPair, Slot,
 };
-use sp_consensus_slots::SlotDuration;
 use sp_consensus_vrf::schnorrkel::VRFOutput;
 use sp_core::crypto::Pair;
 use sp_keyring::Sr25519Keyring;

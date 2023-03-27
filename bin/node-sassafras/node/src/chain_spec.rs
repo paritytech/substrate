@@ -5,9 +5,9 @@ use node_sassafras_runtime::{
 #[cfg(feature = "use-session-pallet")]
 use node_sassafras_runtime::{SessionConfig, SessionKeys};
 use sc_service::ChainType;
+use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_consensus_sassafras::{AuthorityId as SassafrasId, SassafrasEpochConfiguration};
 use sp_core::{sr25519, Pair, Public};
-use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 
 // Genesis constants for Sassafras parameters configuration.
