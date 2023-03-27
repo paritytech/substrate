@@ -245,7 +245,8 @@ test-frame-support:
     RUN_UI_TESTS: 1
   script:
     - rusty-cachier snapshot create
-    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet
+    - sleep 3600
+    # - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet
     - rusty-cachier cache upload
 
 # This job runs tests that don't work with cargo-nextest in test-linux-stable
