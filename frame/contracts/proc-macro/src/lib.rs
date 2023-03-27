@@ -610,7 +610,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		// wrapped host function body call with host function traces
 		// see https://github.com/paritytech/substrate/tree/master/frame/contracts#host-function-tracing
 		let wrapped_body_with_trace = {
-			let trace_params = params.clone().filter_map(|arg| match arg {
+			let params_fmt_str = params.clone().filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
 				syn::FnArg::Typed(p) => {
 					match *p.pat.clone() {
@@ -618,10 +618,24 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 						_ => None,
 					}
 				},
+			})
+			.map(|s| format!("{s}: {{:?}}"))
+			.collect::<Vec<_>>()
+			.join(", ");
+
+			let trace_fmt_str = format!("{}::{}({}) = {{:?}}", module, name, params_fmt_str);
+			let trace_fmt_args = params.clone().filter_map(|arg| match arg {
+				syn::FnArg::Receiver(_) => None,
+				syn::FnArg::Typed(p) => {
+					match *p.pat.clone() {
+						syn::Pat::Ident(ref pat_ident) => Some(pat_ident.ident.clone()),
+						_ => None,
+					}
+				},
 			});
 
-			let trace_fmt_str = trace_params.clone().map(|s| format!("{s}: {{:?}}")).collect::<Vec<_>>().join(", ");
-			let trace_fmt_str = format!("{}::{}({}) = {{:?}}\n", module, name, trace_fmt_str);
+			let debug_buffer_fmt_str = format!("{}\n", trace_fmt_str);
+			let debug_buffer_fmt_args = trace_fmt_args.clone();
 
 			quote! {
 				if ::log::log_enabled!(target: "runtime::contracts::strace", ::log::Level::Trace) {
@@ -629,7 +643,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 					{
 						use sp_std::fmt::Write;
 						let mut w = sp_std::Writer::default();
-						let _ = core::write!(&mut w, #trace_fmt_str, #( #trace_params, )* result);
+						let _ = core::write!(&mut w, #debug_buffer_fmt_str, #( #debug_buffer_fmt_args, )* result);
 						let msg = core::str::from_utf8(&w.inner()).unwrap_or_default();
 						ctx.ext().append_debug_buffer(msg);
 					}
