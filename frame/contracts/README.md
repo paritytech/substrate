@@ -5,7 +5,7 @@ The Contract module provides functionality for the runtime to deploy and execute
 - [`Call`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Call.html)
 - [`Config`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/trait.Config.html)
 - [`Error`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Error.html)
-- [`Event`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Error.html)
+- [`Event`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Event.html)
 
 ## Overview
 
