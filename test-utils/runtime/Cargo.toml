@@ -18,7 +18,7 @@ sp-application-crypto = { version = "7.0.0", default-features = false, path = ".
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura" }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
 sp-consensus-beefy = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/beefy" }
-sp-consensus-sassafras = { version = "0.3.2-dev", default-features = false, path = "../../primitives/consensus/sassafras" }
+sp-consensus-sassafras = { version = "0.3.1-dev", default-features = false, path = "../../primitives/consensus/sassafras" }
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }

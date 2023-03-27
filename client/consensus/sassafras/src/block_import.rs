@@ -251,7 +251,6 @@ where
 	async fn import_state(
 		&mut self,
 		mut block: BlockImportParams<Block, sp_api::TransactionFor<Client, Block>>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, ConsensusError> {
 		let hash = block.post_hash();
 		let parent_hash = *block.header.parent_hash();
@@ -271,7 +270,7 @@ where
 		});
 
 		// First make the client import the state
-		let aux = match self.inner.import_block(block, new_cache).await {
+		let aux = match self.inner.import_block(block).await {
 			Ok(ImportResult::Imported(aux)) => aux,
 			Ok(r) =>
 				return Err(ConsensusError::ClientImport(format!(
@@ -321,7 +320,6 @@ where
 	async fn import_block(
 		&mut self,
 		mut block: BlockImportParams<Block, Self::Transaction>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
@@ -343,11 +341,11 @@ where
 			// In case of initial sync intermediates should not be present...
 			let _ = block.remove_intermediate::<SassafrasIntermediate<Block>>(INTERMEDIATE_KEY);
 			block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
-			return self.inner.import_block(block, new_cache).await.map_err(Into::into)
+			return self.inner.import_block(block).await.map_err(Into::into)
 		}
 
 		if block.with_state() {
-			return self.import_state(block, new_cache).await
+			return self.import_state(block).await
 		}
 
 		let viable_epoch_desc = block
@@ -443,7 +441,7 @@ where
 		let is_new_best = self.is_new_best(total_weight, number, parent_hash)?;
 		block.fork_choice = Some(ForkChoiceStrategy::Custom(is_new_best));
 
-		let import_result = self.inner.import_block(block, new_cache).await;
+		let import_result = self.inner.import_block(block).await;
 
 		// Revert to the original epoch changes in case there's an error
 		// importing the block

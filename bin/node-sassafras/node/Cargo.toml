@@ -30,8 +30,8 @@ sc-consensus-sassafras = { version = "0.3.1-dev", path = "../../../client/consen
 sp-consensus-sassafras = { version = "0.3.1-dev", path = "../../../primitives/consensus/sassafras" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
-sc-finality-grandpa = { version = "0.10.0-dev", path = "../../../client/finality-grandpa" }
-sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
+sc-consensus-grandpa = { version = "0.10.0-dev", path = "../../../client/consensus/grandpa" }
+sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/grandpa" }
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }

@@ -36,15 +36,13 @@ use sp_blockchain::Error as TestError;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_sassafras::{inherents::InherentDataProvider, vrf::make_slot_transcript_data};
 use sp_keyring::Sr25519Keyring;
-use sp_keystore::testing::KeyStore as TestKeyStore;
+use sp_keystore::{testing::MemoryKeystore, Keystore};
 use sp_runtime::{Digest, DigestItem};
 use sp_timestamp::Timestamp;
 
 use substrate_test_runtime_client::{runtime::Block as TestBlock, Backend as TestBackend};
 
-// Monomorphization of generic structures for the test context.
-
-type BlockId = crate::BlockId<TestBlock>;
+// Monomorphization of generic structures for test context.
 
 type TestHeader = <TestBlock as BlockT>::Header;
 
@@ -65,7 +63,7 @@ type TestBlockImportParams = BlockImportParams<TestBlock, TestTransaction>;
 
 type TestViableEpochDescriptor = sc_consensus_epochs::ViableEpochDescriptor<Hash, u64, Epoch>;
 
-// Monomorphization of Sassafras structures for the test context.
+// Monomorphization of Sassafras structures for test context.
 
 type SassafrasIntermediate = crate::SassafrasIntermediate<TestBlock>;
 
@@ -121,10 +119,8 @@ impl Proposer<TestBlock> for TestProposer {
 		_: Duration,
 		_: Option<usize>,
 	) -> Self::Proposal {
-		let block_builder = self
-			.client
-			.new_block_at(&BlockId::Hash(self.parent_hash), inherent_digests, false)
-			.unwrap();
+		let block_builder =
+			self.client.new_block_at(self.parent_hash, inherent_digests, false).unwrap();
 
 		let mut block = match block_builder.build().map_err(|e| e.into()) {
 			Ok(b) => b.block,
@@ -176,6 +172,7 @@ struct TestContext {
 	link: SassafrasLink,
 	block_import: SassafrasBlockImport,
 	verifier: SassafrasVerifier,
+	keystore: KeystorePtr,
 }
 
 fn create_test_verifier(
@@ -213,6 +210,26 @@ fn create_test_block_import(
 		.expect("can initialize block-import")
 }
 
+fn create_test_keystore(authority: Sr25519Keyring) -> KeystorePtr {
+	let keystore = MemoryKeystore::new();
+	keystore.sr25519_generate_new(SASSAFRAS, Some(&authority.to_seed())).unwrap();
+	keystore.into()
+}
+
+fn create_test_config() -> SassafrasConfiguration {
+	SassafrasConfiguration {
+		slot_duration: SLOT_DURATION,
+		epoch_duration: EPOCH_DURATION,
+		authorities: vec![
+			(Sr25519Keyring::Alice.public().into(), 1),
+			(Sr25519Keyring::Bob.public().into(), 1),
+			(Sr25519Keyring::Charlie.public().into(), 1),
+		],
+		randomness: [0; 32],
+		threshold_params: SassafrasEpochConfiguration { redundancy_factor: 1, attempts_number: 32 },
+	}
+}
+
 impl TestContext {
 	fn new() -> Self {
 		let (client, backend) = TestClientBuilder::with_default_backend().build_with_backend();
@@ -225,20 +242,24 @@ impl TestContext {
 
 		let (block_import, link) = create_test_block_import(client.clone(), config.clone());
 
+		// Create a keystore with default testing key
+		let keystore = create_test_keystore(Sr25519Keyring::Alice);
+
 		let verifier = create_test_verifier(client.clone(), &link, config.clone());
 
-		Self { client, backend, link, block_import, verifier }
+		Self { client, backend, link, block_import, verifier, keystore }
 	}
 
 	// This is a bit hacky solution to use `TestContext` as an `Environment` implementation
-	fn new_with_pre_built_data(
+	fn new_with_pre_built_components(
 		client: Arc<TestClient>,
 		backend: Arc<TestBackend>,
 		link: SassafrasLink,
 		block_import: SassafrasBlockImport,
+		keystore: KeystorePtr,
 	) -> Self {
 		let verifier = create_test_verifier(client.clone(), &link, link.genesis_config.clone());
-		Self { client, backend, link, block_import, verifier }
+		Self { client, backend, link, block_import, verifier, keystore }
 	}
 
 	fn import_block(&mut self, mut params: TestBlockImportParams) -> Hash {
@@ -253,7 +274,7 @@ impl TestContext {
 			}
 		}
 
-		match block_on(self.block_import.import_block(params, Default::default())).unwrap() {
+		match block_on(self.block_import.import_block(params)).unwrap() {
 			ImportResult::Imported(_) => (),
 			_ => panic!("expected block to be imported"),
 		}
@@ -263,7 +284,7 @@ impl TestContext {
 
 	fn verify_block(&mut self, params: TestBlockImportParams) -> TestBlockImportParams {
 		let tmp_params = params.clear_storage_changes_and_mutate();
-		let (tmp_params, _) = block_on(self.verifier.verify(tmp_params)).unwrap();
+		let tmp_params = block_on(self.verifier.verify(tmp_params)).unwrap();
 		tmp_params.clear_storage_changes_and_mutate()
 	}
 
@@ -306,8 +327,7 @@ impl TestContext {
 		let parent_header = self.client.header(parent_hash).unwrap().unwrap();
 		let parent_number = *parent_header.number();
 
-		let authority = Sr25519Keyring::Alice;
-		let keystore = create_keystore(authority);
+		let public = self.keystore.sr25519_public_keys(SASSAFRAS)[0];
 
 		let proposer = block_on(self.init(&parent_header)).unwrap();
 
@@ -319,14 +339,11 @@ impl TestContext {
 		let epoch = self.epoch_data(&parent_hash, parent_number, slot);
 		let transcript_data =
 			make_slot_transcript_data(&self.link.genesis_config.randomness, slot, epoch.epoch_idx);
-		let signature = SyncCryptoStore::sr25519_vrf_sign(
-			&*keystore,
-			SASSAFRAS,
-			&authority.public(),
-			transcript_data,
-		)
-		.unwrap()
-		.unwrap();
+		let signature = self
+			.keystore
+			.sr25519_vrf_sign(SASSAFRAS, &public, transcript_data)
+			.unwrap()
+			.unwrap();
 
 		let pre_digest = PreDigest {
 			slot,
@@ -345,13 +362,13 @@ impl TestContext {
 
 		// Sign the pre-sealed hash of the block and then add it to a digest item.
 		let hash = block.header.hash();
-		let public_type_pair = authority.public().into();
-		let signature =
-			SyncCryptoStore::sign_with(&*keystore, SASSAFRAS, &public_type_pair, hash.as_ref())
-				.unwrap()
-				.unwrap()
-				.try_into()
-				.unwrap();
+		let signature = self
+			.keystore
+			.sr25519_sign(SASSAFRAS, &public, hash.as_ref())
+			.unwrap()
+			.unwrap()
+			.try_into()
+			.unwrap();
 		let seal = DigestItem::sassafras_seal(signature);
 		block.header.digest_mut().push(seal);
 
@@ -384,37 +401,19 @@ impl TestContext {
 	}
 }
 
-fn create_keystore(authority: Sr25519Keyring) -> SyncCryptoStorePtr {
-	let keystore = Arc::new(TestKeyStore::new());
-	SyncCryptoStore::sr25519_generate_new(&*keystore, SASSAFRAS, Some(&authority.to_seed()))
-		.expect("Creates authority key");
-	keystore
-}
-
+// Check that protocol config returned by the runtime interface is equal to the expected one
 #[test]
 fn tests_assumptions_sanity_check() {
 	let env = TestContext::new();
 	let config = env.link.genesis_config;
+	let test_config = create_test_config();
 
-	// Check that genesis configuration read from test runtime has the expected values
-	assert_eq!(
-		config.authorities,
-		vec![
-			(Sr25519Keyring::Alice.public().into(), 1),
-			(Sr25519Keyring::Bob.public().into(), 1),
-			(Sr25519Keyring::Charlie.public().into(), 1),
-		]
-	);
-	assert_eq!(config.epoch_duration, EPOCH_DURATION);
-	assert_eq!(config.slot_duration, SLOT_DURATION);
-	assert_eq!(config.randomness, [0; 32]);
-	// TODO-SASS-P3: check threshold params
+	assert_eq!(config, test_config);
 }
 
 #[test]
 fn claim_secondary_slots_works() {
-	let env = TestContext::new();
-	let mut config = env.link.genesis_config.clone();
+	let mut config = create_test_config();
 	config.randomness = [2; 32];
 
 	let authorities = [Sr25519Keyring::Alice, Sr25519Keyring::Bob, Sr25519Keyring::Charlie];
@@ -429,7 +428,7 @@ fn claim_secondary_slots_works() {
 	let mut assignments = vec![usize::MAX; config.epoch_duration as usize];
 
 	for (auth_idx, auth_id) in authorities.iter().enumerate() {
-		let keystore = create_keystore(*auth_id);
+		let keystore = create_test_keystore(*auth_id);
 
 		for slot in 0..config.epoch_duration {
 			if let Some((claim, auth_id2)) =
@@ -453,12 +452,11 @@ fn claim_secondary_slots_works() {
 
 #[test]
 fn claim_primary_slots_works() {
-	// Here the test is very deterministic.
+	// Here the test is deterministic.
 	// If a node has in its epoch `tickets_aux` the information corresponding to the
 	// ticket that is presented. Then the claim ticket should just return the
 	// ticket auxiliary information.
-	let env = TestContext::new();
-	let mut config = env.link.genesis_config.clone();
+	let mut config = create_test_config();
 	config.randomness = [2; 32];
 
 	let mut epoch = Epoch {
@@ -468,7 +466,7 @@ fn claim_primary_slots_works() {
 		tickets_aux: Default::default(),
 	};
 
-	let keystore = create_keystore(Sr25519Keyring::Alice);
+	let keystore = create_test_keystore(Sr25519Keyring::Alice);
 
 	// Success if we have ticket data and the key in our keystore
 
@@ -800,6 +798,7 @@ fn verify_block_claimed_via_secondary_method() {
 // More complex tests involving communication between multiple nodes.
 //
 // These tests are performed via a specially crafted test network.
+// Closer to integration test than unit tests...
 //=================================================================================================
 
 impl Environment<TestBlock> for TestContext {
@@ -872,6 +871,10 @@ impl TestNetFactory for SassafrasTestNet {
 		&self.peers
 	}
 
+	fn peers_mut(&mut self) -> &mut Vec<SassafrasPeer> {
+		&mut self.peers
+	}
+
 	fn mut_peers<F: FnOnce(&mut Vec<SassafrasPeer>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
@@ -894,16 +897,15 @@ async fn sassafras_network_progress() {
 		let client = peer.client().as_client();
 		let backend = peer.client().as_backend();
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
-
-		let keystore = create_keystore(*auth_id);
-
+		let keystore = create_test_keystore(*auth_id);
 		let data = peer.data.as_ref().expect("sassafras link set up during initialization");
 
-		let env = TestContext::new_with_pre_built_data(
+		let env = TestContext::new_with_pre_built_components(
 			client.clone(),
 			backend.clone(),
 			data.link.clone(),
 			data.block_import.clone(),
+			keystore.clone(),
 		);
 
 		// Run the imported block number is less than five and we don't receive a block produced

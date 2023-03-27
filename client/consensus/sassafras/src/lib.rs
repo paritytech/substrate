@@ -25,7 +25,7 @@
 #![forbid(unsafe_code, missing_docs)]
 
 use std::{
-	collections::{BTreeMap, HashMap},
+	collections::BTreeMap,
 	future::Future,
 	sync::Arc,
 	task::{Context, Poll},
@@ -58,17 +58,16 @@ use sc_consensus_epochs::{
 use sc_consensus_slots::{CheckedHeader, InherentDataProviderExt, SlotInfo, StorageChanges};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
 use sp_api::{ApiExt, ProvideRuntimeApi};
-use sp_application_crypto::AppKey;
+use sp_application_crypto::AppCrypto;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::{
-	BlockOrigin, CacheKeyId, Environment, Error as ConsensusError, Proposer, SelectChain,
-	SyncOracle,
+	BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle,
 };
 use sp_consensus_slots::Slot;
 use sp_core::{crypto::ByteArray, ExecutionContext, Pair};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
 	traits::{Block as BlockT, Header, NumberFor, One, Zero},

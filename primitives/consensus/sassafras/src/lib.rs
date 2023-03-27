@@ -115,6 +115,7 @@ pub struct Epoch {
 }
 
 /// Configuration data used by the Sassafras consensus engine that can be modified on epoch change.
+// TODO-SASS-P3: rename to something better... like LotteryConfig
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SassafrasEpochConfiguration {

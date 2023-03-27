@@ -99,7 +99,6 @@ pub mod pallet {
 
 	/// The Sassafras pallet.
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	/// Configuration parameters.

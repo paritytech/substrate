@@ -44,7 +44,7 @@ pub(crate) fn claim_slot(
 	slot: Slot,
 	epoch: &Epoch,
 	ticket: Option<Ticket>,
-	keystore: &SyncCryptoStorePtr,
+	keystore: &KeystorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let config = &epoch.config;
 
@@ -69,14 +69,10 @@ pub(crate) fn claim_slot(
 	let authority_id = config.authorities.get(authority_idx as usize).map(|auth| &auth.0)?;
 
 	let transcript_data = make_slot_transcript_data(&config.randomness, slot, epoch.epoch_idx);
-	let signature = SyncCryptoStore::sr25519_vrf_sign(
-		&**keystore,
-		AuthorityId::ID,
-		authority_id.as_ref(),
-		transcript_data,
-	)
-	.ok()
-	.flatten()?;
+	let signature = keystore
+		.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), transcript_data)
+		.ok()
+		.flatten()?;
 
 	let pre_digest = PreDigest {
 		authority_idx,
@@ -92,7 +88,7 @@ pub(crate) fn claim_slot(
 /// Generate the tickets for the given epoch.
 /// Tickets additional information will be stored within the `Epoch` structure.
 /// The additional information will be used later during session to claim slots.
-fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) -> Vec<TicketEnvelope> {
+fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<TicketEnvelope> {
 	let config = &epoch.config;
 	let max_attempts = config.threshold_params.attempts_number;
 	let redundancy_factor = config.threshold_params.redundancy_factor;
@@ -109,8 +105,7 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) -> V
 
 	let authorities = config.authorities.iter().enumerate().map(|(index, a)| (index, &a.0));
 	for (authority_idx, authority_id) in authorities {
-		if !SyncCryptoStore::has_keys(&**keystore, &[(authority_id.to_raw_vec(), AuthorityId::ID)])
-		{
+		if !keystore.has_keys(&[(authority_id.to_raw_vec(), AuthorityId::ID)]) {
 			continue
 		}
 
@@ -120,13 +115,9 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) -> V
 
 			// TODO-SASS-P4: can be a good idea to replace `vrf_sign` with `vrf_sign_after_check`,
 			// But we need to modify the CryptoStore interface first.
-			let signature = SyncCryptoStore::sr25519_vrf_sign(
-				&**keystore,
-				AuthorityId::ID,
-				authority_id.as_ref(),
-				transcript_data.clone(),
-			)
-			.ok()??;
+			let signature = keystore
+				.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), transcript_data.clone())
+				.ok()??;
 
 			let ticket = VRFOutput(signature.output);
 			if !sp_consensus_sassafras::check_threshold(&ticket, threshold) {
@@ -163,7 +154,7 @@ struct SlotWorker<B: BlockT, C, E, I, SO, L> {
 	sync_oracle: SO,
 	justification_sync_link: L,
 	force_authoring: bool,
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	genesis_config: SassafrasConfiguration,
@@ -187,7 +178,7 @@ where
 	type SyncOracle = SO;
 	type JustificationSyncLink = L;
 	type CreateProposer =
-		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>;
+		Pin<Box<dyn Future<Output = Result<E::Proposer, ConsensusError>> + Send + 'static>>;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
 	type AuxData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
@@ -210,7 +201,7 @@ where
 				slot,
 			)
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
-			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
+			.ok_or(ConsensusError::InvalidAuthoritiesSet)
 	}
 
 	fn authorities_len(&self, epoch_descriptor: &Self::AuxData) -> Option<usize> {
@@ -282,28 +273,28 @@ where
 		epoch_descriptor: Self::AuxData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
-		sp_consensus::Error,
+		ConsensusError,
 	> {
-		// Sign the pre-sealed hash of the block and then add it to a digest item.
-		let public_type_pair = public.clone().into();
-		let public = public.to_raw_vec();
-		let signature = SyncCryptoStore::sign_with(
-			&*self.keystore,
-			<AuthorityId as AppKey>::ID,
-			&public_type_pair,
-			header_hash.as_ref(),
-		)
-		.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
-		.ok_or_else(|| {
-			sp_consensus::Error::CannotSign(
-				public.clone(),
-				"Could not find key in keystore.".into(),
+		let signature = self
+			.keystore
+			.sign_with(
+				<AuthorityId as AppCrypto>::ID,
+				<AuthorityId as AppCrypto>::CRYPTO_ID,
+				public.as_ref(),
+				header_hash.as_ref(),
 			)
-		})?;
+			.map_err(|e| ConsensusError::CannotSign(format!("{}. Key {:?}", e, public)))?
+			.ok_or_else(|| {
+				ConsensusError::CannotSign(format!(
+					"Could not find key in keystore. Key {:?}",
+					public
+				))
+			})?;
 		let signature: AuthoritySignature = signature
 			.clone()
 			.try_into()
-			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
+			.map_err(|_| ConsensusError::InvalidSignature(signature, public.to_raw_vec()))?;
+
 		let digest_item = <DigestItem as CompatibleDigestItem>::sassafras_seal(signature);
 
 		let mut block = BlockImportParams::new(BlockOrigin::Own, header);
@@ -338,7 +329,7 @@ where
 		Box::pin(
 			self.env
 				.init(block)
-				.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e))),
+				.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e))),
 		)
 	}
 
@@ -373,7 +364,7 @@ where
 /// and are volatile.
 async fn start_tickets_worker<B, C, SC>(
 	client: Arc<C>,
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	select_chain: SC,
 ) where
@@ -487,7 +478,7 @@ pub struct SassafrasWorkerParams<B: BlockT, C, SC, EN, I, SO, L, CIDP> {
 	/// The client to use
 	pub client: Arc<C>,
 	/// The keystore that manages the keys of the node.
-	pub keystore: SyncCryptoStorePtr,
+	pub keystore: KeystorePtr,
 	/// The chain selection strategy
 	pub select_chain: SC,
 	/// The environment we are producing blocks for.
@@ -522,7 +513,7 @@ pub fn start_sassafras<B, C, SC, EN, I, SO, CIDP, L, ER>(
 		force_authoring,
 		sassafras_link,
 	}: SassafrasWorkerParams<B, C, SC, EN, I, SO, L, CIDP>,
-) -> Result<SassafrasWorker<B>, sp_consensus::Error>
+) -> Result<SassafrasWorker<B>, ConsensusError>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B>

@@ -978,22 +978,34 @@ cfg_if! {
 				}
 
 				fn current_epoch() -> sp_consensus_sassafras::Epoch {
+					// Defaults
 					let authorities = system::authorities().into_iter().map(|x| {
 						let authority: sr25519::Public = x.into();
 						(SassafrasId::from(authority), 1)
 					}).collect();
+					let params = sp_consensus_sassafras::SassafrasEpochConfiguration {
+						redundancy_factor: 1,
+						attempts_number: 32,
+					};
 					let mut epoch = <pallet_sassafras::Pallet<Runtime>>::current_epoch();
 					epoch.config.authorities = authorities;
+					epoch.config.threshold_params = params;
 					epoch
 				}
 
 				fn next_epoch() -> sp_consensus_sassafras::Epoch {
+					// Defaults
 					let authorities = system::authorities().into_iter().map(|x| {
 						let authority: sr25519::Public = x.into();
 						(SassafrasId::from(authority), 1)
 					}).collect();
+					let params = sp_consensus_sassafras::SassafrasEpochConfiguration {
+						redundancy_factor: 1,
+						attempts_number: 32,
+					};
 					let mut epoch = <pallet_sassafras::Pallet<Runtime>>::next_epoch();
 					epoch.config.authorities = authorities;
+					epoch.config.threshold_params = params;
 					epoch
 				}
 

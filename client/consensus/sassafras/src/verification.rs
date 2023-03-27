@@ -281,9 +281,6 @@ where
 	}
 }
 
-type BlockVerificationResult<Block> =
-	Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
-
 #[async_trait::async_trait]
 impl<Block, Client, SelectChain, CIDP> Verifier<Block>
 	for SassafrasVerifier<Block, Client, SelectChain, CIDP>
@@ -303,7 +300,7 @@ where
 	async fn verify(
 		&mut self,
 		mut block: BlockImportParams<Block, ()>,
-	) -> BlockVerificationResult<Block> {
+	) -> Result<BlockImportParams<Block, ()>, String> {
 		trace!(
 			target: "sassafras",
 			"🌳 Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
@@ -321,7 +318,7 @@ where
 			// Just insert a tag to notify that this is indeed a Sassafras block to the
 			// `BlockImport` implementation.
 			block.insert_intermediate(INTERMEDIATE_KEY, ());
-			return Ok((block, Default::default()))
+			return Ok(block)
 		}
 
 		let hash = block.header.hash();
@@ -438,7 +435,7 @@ where
 					SassafrasIntermediate::<Block> { epoch_descriptor },
 				);
 
-				Ok((block, Default::default()))
+				Ok(block)
 			},
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "sassafras", "🌳 Checking {:?} failed; {:?}, {:?}.", hash, a, b);
