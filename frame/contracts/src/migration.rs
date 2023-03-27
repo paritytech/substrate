@@ -405,7 +405,6 @@ mod v9 {
 }
 
 mod v10 {
-
 	use super::*;
 	use crate::storage::DeletedContract;
 
