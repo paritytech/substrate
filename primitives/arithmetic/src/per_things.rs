@@ -26,7 +26,7 @@ use codec::{CompactAs, Encode};
 use num_traits::{Pow, SaturatingAdd, SaturatingSub};
 use sp_std::{
 	fmt, ops,
-	ops::{Add, AddAssign, Div, Rem, Sub},
+	ops::{Add, Sub},
 	prelude::*,
 };
 
@@ -46,6 +46,7 @@ pub trait RationalArg:
 	+ Unsigned
 	+ Zero
 	+ One
+	+ crate::MultiplyRational
 {
 }
 
@@ -58,7 +59,8 @@ impl<
 			+ ops::AddAssign<Self>
 			+ Unsigned
 			+ Zero
-			+ One,
+			+ One
+			+ crate::MultiplyRational,
 	> RationalArg for T
 {
 }
@@ -105,7 +107,7 @@ pub trait PerThing:
 	+ Pow<usize, Output = Self>
 {
 	/// The data type used to build this per-thingy.
-	type Inner: BaseArithmetic + Unsigned + Copy + Into<u128> + fmt::Debug;
+	type Inner: BaseArithmetic + Unsigned + Copy + Into<u128> + fmt::Debug + crate::MultiplyRational;
 
 	/// A data type larger than `Self::Inner`, used to avoid overflow in some computations.
 	/// It must be able to compute `ACCURACY^2`.
@@ -115,7 +117,8 @@ pub trait PerThing:
 		+ TryInto<Self::Inner>
 		+ UniqueSaturatedInto<Self::Inner>
 		+ Unsigned
-		+ fmt::Debug;
+		+ fmt::Debug
+		+ crate::MultiplyRational;
 
 	/// The accuracy of this type.
 	const ACCURACY: Self::Inner;
@@ -538,39 +541,6 @@ where
 	rem_mul_div_inner.into()
 }
 
-/// Just a simple generic integer divide with custom rounding.
-fn div_rounded<N>(n: N, d: N, r: Rounding) -> N
-where
-	N: Clone
-		+ Eq
-		+ Ord
-		+ Zero
-		+ One
-		+ AddAssign
-		+ Add<Output = N>
-		+ Rem<Output = N>
-		+ Div<Output = N>,
-{
-	let mut o = n.clone() / d.clone();
-	use Rounding::*;
-	let two = || N::one() + N::one();
-	if match r {
-		Up => !((n % d).is_zero()),
-		NearestPrefDown => {
-			let rem = n % d.clone();
-			rem > d / two()
-		},
-		NearestPrefUp => {
-			let rem = n % d.clone();
-			rem >= d.clone() / two() + d % two()
-		},
-		Down => false,
-	} {
-		o += N::one()
-	}
-	o
-}
-
 macro_rules! implement_per_thing {
 	(
 		$name:ident,
@@ -687,7 +657,8 @@ macro_rules! implement_per_thing {
 					+ ops::AddAssign<N>
 					+ Unsigned
 					+ Zero
-					+ One,
+					+ One
+					+ $crate::MultiplyRational,
 				Self::Inner: Into<N>
 			{
 				// q cannot be zero.
@@ -695,30 +666,8 @@ macro_rules! implement_per_thing {
 				// p should not be bigger than q.
 				if p > q { return Err(()) }
 
-				let factor = div_rounded::<N>(q.clone(), $max.into(), Rounding::Up).max(One::one());
-
-				// q cannot overflow: (q / (q/$max)) < $max. p < q hence p also cannot overflow.
-				let q_reduce: $type = div_rounded(q, factor.clone(), r)
-					.try_into()
-					.map_err(|_| "Failed to convert")
-					.expect(
-						"`q / ceil(q/$max) < $max`; macro prevents any type being created that \
-						does not satisfy this; qed"
-					);
-				let p_reduce: $type = div_rounded(p, factor, r)
-					.try_into()
-					.map_err(|_| "Failed to convert")
-					.expect(
-						"`p / ceil(p/$max) < $max`; macro prevents any type being created that \
-						does not satisfy this; qed"
-					);
-
-				// `p_reduced` and `q_reduced` are within `Self::Inner`. Multiplication by another
-				// `$max` will always fit in `$upper_type`. This is guaranteed by the macro tests.
-				let n = p_reduce as $upper_type * <$upper_type>::from($max);
-				let d = q_reduce as $upper_type;
-				let part = div_rounded(n, d, r);
-				Ok($name(part as Self::Inner))
+				let max: N = $max.into();
+				max.multiply_rational(p, q, r).ok_or(())?.try_into().map(|x| $name(x)).map_err(|_| ())
 			}
 		}
 
@@ -1860,6 +1809,22 @@ fn from_rational_with_rounding_works_in_extreme_case() {
 		Perbill::from_rational_with_rounding(u64::max_value() - 1, u64::max_value(), r).unwrap();
 		Perbill::from_rational_with_rounding(u32::max_value() - 1, u32::max_value(), r).unwrap();
 	}
+}
+
+#[test]
+fn from_rational_with_rounding_breakage() {
+	let n = 372633774963620730670986667244911905u128;
+	let d = 512593663333074177468745541591173060u128;
+	let q = Perquintill::from_rational_with_rounding(n, d, Rounding::Down).unwrap();
+	assert!(q * d <= n);
+}
+
+#[test]
+fn from_rational_with_rounding_breakage_2() {
+	let n = 36893488147419103230u128;
+	let d = 36893488147419103630u128;
+	let q = Perquintill::from_rational_with_rounding(n, d, Rounding::Up).unwrap();
+	assert!(q * d >= n);
 }
 
 implement_per_thing!(Percent, test_per_cent, [u32, u64, u128], 100u8, u8, u16, "_Percent_",);

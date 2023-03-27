@@ -33,9 +33,6 @@ use sp_std::prelude::*;
 
 /// Something to identify a block.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub enum BlockId<Block: BlockT> {
 	/// Identify by block header hash.
 	Hash(Block::Hash),
@@ -45,12 +42,12 @@ pub enum BlockId<Block: BlockT> {
 
 impl<Block: BlockT> BlockId<Block> {
 	/// Create a block ID from a hash.
-	pub fn hash(hash: Block::Hash) -> Self {
+	pub const fn hash(hash: Block::Hash) -> Self {
 		BlockId::Hash(hash)
 	}
 
 	/// Create a block ID from a number.
-	pub fn number(number: NumberFor<Block>) -> Self {
+	pub const fn number(number: NumberFor<Block>) -> Self {
 		BlockId::Number(number)
 	}
 

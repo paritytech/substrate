@@ -17,15 +17,15 @@
 
 use std::vec;
 
-use beefy_primitives::mmr::MmrLeafVersion;
 use codec::Encode;
 use frame_support::{
 	construct_runtime, parameter_types,
 	sp_io::TestExternalities,
-	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem},
+	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild},
 	BasicExternalities,
 };
-use sp_core::{crypto::KeyTypeId, Hasher, H256};
+use sp_consensus_beefy::mmr::MmrLeafVersion;
+use sp_core::{Hasher, H256};
 use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	impl_opaque_keys,
@@ -35,7 +35,7 @@ use sp_runtime::{
 
 use crate as pallet_beefy_mmr;
 
-pub use beefy_primitives::{
+pub use sp_consensus_beefy::{
 	crypto::AuthorityId as BeefyId, mmr::BeefyDataProvider, ConsensusLog, BEEFY_ENGINE_ID,
 };
 
@@ -101,7 +101,7 @@ impl pallet_session::Config for Test {
 	type WeightInfo = ();
 }
 
-pub type MmrLeaf = beefy_primitives::mmr::MmrLeaf<
+pub type MmrLeaf = sp_consensus_beefy::mmr::MmrLeaf<
 	<Test as frame_system::Config>::BlockNumber,
 	<Test as frame_system::Config>::Hash,
 	<Test as pallet_mmr::Config>::Hash,
@@ -124,18 +124,12 @@ impl pallet_mmr::Config for Test {
 
 impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
-	type KeyOwnerProofSystem = ();
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, BeefyId)>>::Proof;
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		BeefyId,
-	)>>::IdentificationTuple;
-	type HandleEquivocation = ();
 	type MaxAuthorities = ConstU32<100>;
 	type MaxSetIdSessionEntries = ConstU64<100>;
 	type OnNewValidatorSet = BeefyMmr;
 	type WeightInfo = ();
+	type KeyOwnerProof = sp_core::Void;
+	type EquivocationReportSystem = ();
 }
 
 parameter_types! {

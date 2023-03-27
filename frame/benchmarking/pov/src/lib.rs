@@ -32,7 +32,6 @@ pub mod pallet {
 	use sp_std::prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]
@@ -106,6 +105,11 @@ pub mod pallet {
 	#[pallet::unbounded]
 	pub(crate) type UnboundedMap2<T: Config> =
 		StorageMap<Hasher = Blake2_256, Key = u32, Value = Vec<u32>, QueryKind = OptionQuery>;
+
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub(crate) type UnboundedMapTwox<T: Config> =
+		StorageMap<Hasher = Twox64Concat, Key = u32, Value = Vec<u32>, QueryKind = OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]

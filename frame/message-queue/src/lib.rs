@@ -39,7 +39,7 @@
 //! which queue it will be stored. Messages are stored by being appended to the last [`Page`] of a
 //! book. Each book keeps track of its pages by indexing `Pages`. The `ReadyRing` contains all
 //! queues which hold at least one unprocessed message and are thereby *ready* to be serviced. The
-//! `ServiceHead` indicates which *ready* queue is the next to be serviced.  
+//! `ServiceHead` indicates which *ready* queue is the next to be serviced.
 //! The pallet implements [`frame_support::traits::EnqueueMessage`],
 //! [`frame_support::traits::ServiceQueues`] and has [`frame_support::traits::ProcessMessage`] and
 //! [`OnQueueChanged`] hooks to communicate with the outside world.
@@ -56,7 +56,7 @@
 //! **Pagination**
 //!
 //! Queues are stored in a *paged* manner by splitting their messages into [`Page`]s. This results
-//! in a lot of complexity when implementing the pallet but is completely necessary to archive the
+//! in a lot of complexity when implementing the pallet but is completely necessary to achieve the
 //! second #[Design Goal](design-goals). The problem comes from the fact a message can *possibly* be
 //! quite large, lets say 64KiB. This then results in a *MEL* of at least 64KiB which results in a
 //! PoV of at least 64KiB. Now we have the assumption that most messages are much shorter than their
@@ -438,7 +438,6 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	/// The module configuration trait.
@@ -533,6 +532,11 @@ pub mod pallet {
 		Queued,
 		/// There is temporarily not enough weight to continue servicing messages.
 		InsufficientWeight,
+		/// This message is temporarily unprocessable.
+		///
+		/// Such errors are expected, but not guaranteed, to resolve themselves eventually through
+		/// retrying.
+		TemporarilyUnprocessable,
 	}
 
 	/// The index of the first and last (non-empty) pages.
@@ -588,6 +592,9 @@ pub mod pallet {
 
 		/// Execute an overweight message.
 		///
+		/// Temporary processing errors will be propagated whereas permanent errors are treated
+		/// as success condition.
+		///
 		/// - `origin`: Must be `Signed`.
 		/// - `message_origin`: The origin from which the message to be executed arrived.
 		/// - `page`: The page in the queue in which the message to be executed is sitting.
@@ -621,6 +628,10 @@ pub mod pallet {
 enum PageExecutionStatus {
 	/// The execution bailed because there was not enough weight remaining.
 	Bailed,
+	/// The page did not make any progress on its execution.
+	///
+	/// This is a transient condition and can be handled by retrying - exactly like [Bailed].
+	NoProgress,
 	/// No more messages could be loaded. This does _not_ imply `page.is_complete()`.
 	///
 	/// The reasons for this status are:
@@ -634,6 +645,10 @@ enum PageExecutionStatus {
 enum ItemExecutionStatus {
 	/// The execution bailed because there was not enough weight remaining.
 	Bailed,
+	/// The item did not make any progress on its execution.
+	///
+	/// This is a transient condition and can be handled by retrying - exactly like [Bailed].
+	NoProgress,
 	/// The item was not found.
 	NoItem,
 	/// Whether the execution of an item resulted in it being processed.
@@ -651,8 +666,8 @@ enum MessageExecutionStatus {
 	Overweight,
 	/// The message was processed successfully.
 	Processed,
-	/// The message was processed and resulted in a permanent error.
-	Unprocessable,
+	/// The message was processed and resulted in a, possibly permanent, error.
+	Unprocessable { permanent: bool },
 }
 
 impl<T: Config> Pallet<T> {
@@ -814,7 +829,8 @@ impl<T: Config> Pallet<T> {
 			// additional overweight event being deposited.
 		) {
 			Overweight | InsufficientWeight => Err(Error::<T>::InsufficientWeight),
-			Unprocessable | Processed => {
+			Unprocessable { permanent: false } => Err(Error::<T>::TemporarilyUnprocessable),
+			Unprocessable { permanent: true } | Processed => {
 				page.note_processed_at_pos(pos);
 				book_state.message_count.saturating_dec();
 				book_state.size.saturating_reduce(payload_len);
@@ -921,6 +937,7 @@ impl<T: Config> Pallet<T> {
 		weight: &mut WeightMeter,
 		overweight_limit: Weight,
 	) -> (bool, Option<MessageOriginOf<T>>) {
+		use PageExecutionStatus::*;
 		if !weight.check_accrue(
 			T::WeightInfo::service_queue_base().saturating_add(T::WeightInfo::ready_ring_unknit()),
 		) {
@@ -936,18 +953,18 @@ impl<T: Config> Pallet<T> {
 			total_processed.saturating_accrue(processed);
 			match status {
 				// Store the page progress and do not go to the next one.
-				PageExecutionStatus::Bailed => break,
+				Bailed | NoProgress => break,
 				// Go to the next page if this one is at the end.
-				PageExecutionStatus::NoMore => (),
+				NoMore => (),
 			};
 			book_state.begin.saturating_inc();
 		}
 		let next_ready = book_state.ready_neighbours.as_ref().map(|x| x.next.clone());
-		if book_state.begin >= book_state.end && total_processed > 0 {
+		if book_state.begin >= book_state.end {
 			// No longer ready - unknit.
 			if let Some(neighbours) = book_state.ready_neighbours.take() {
 				Self::ready_ring_unknit(&origin, neighbours);
-			} else {
+			} else if total_processed > 0 {
 				defensive!("Freshly processed queue must have been ready");
 			}
 		}
@@ -1003,6 +1020,7 @@ impl<T: Config> Pallet<T> {
 			) {
 				Bailed => break PageExecutionStatus::Bailed,
 				NoItem => break PageExecutionStatus::NoMore,
+				NoProgress => break PageExecutionStatus::NoProgress,
 				// Keep going as long as we make progress...
 				Executed(true) => total_processed.saturating_inc(),
 				Executed(false) => (),
@@ -1053,7 +1071,8 @@ impl<T: Config> Pallet<T> {
 			overweight_limit,
 		) {
 			InsufficientWeight => return ItemExecutionStatus::Bailed,
-			Processed | Unprocessable => true,
+			Unprocessable { permanent: false } => return ItemExecutionStatus::NoProgress,
+			Processed | Unprocessable { permanent: true } => true,
 			Overweight => false,
 		};
 
@@ -1125,12 +1144,14 @@ impl<T: Config> Pallet<T> {
 		page_index: PageIndex,
 		message_index: T::Size,
 		message: &[u8],
-		weight: &mut WeightMeter,
+		meter: &mut WeightMeter,
 		overweight_limit: Weight,
 	) -> MessageExecutionStatus {
 		let hash = T::Hashing::hash(message);
-		use ProcessMessageError::Overweight;
-		match T::MessageProcessor::process_message(message, origin.clone(), weight.remaining()) {
+		use ProcessMessageError::*;
+		let prev_consumed = meter.consumed;
+
+		match T::MessageProcessor::process_message(message, origin.clone(), meter) {
 			Err(Overweight(w)) if w.any_gt(overweight_limit) => {
 				// Permanently overweight.
 				Self::deposit_event(Event::<T>::OverweightEnqueued {
@@ -1146,16 +1167,19 @@ impl<T: Config> Pallet<T> {
 				// queue.
 				MessageExecutionStatus::InsufficientWeight
 			},
-			Err(error) => {
+			Err(Yield) => {
+				// Processing should be reattempted later.
+				MessageExecutionStatus::Unprocessable { permanent: false }
+			},
+			Err(error @ BadFormat | error @ Corrupt | error @ Unsupported) => {
 				// Permanent error - drop
 				Self::deposit_event(Event::<T>::ProcessingFailed { hash, origin, error });
-				MessageExecutionStatus::Unprocessable
+				MessageExecutionStatus::Unprocessable { permanent: true }
 			},
-			Ok((success, weight_used)) => {
+			Ok(success) => {
 				// Success
-				weight.defensive_saturating_accrue(weight_used);
-				let event = Event::<T>::Processed { hash, origin, weight_used, success };
-				Self::deposit_event(event);
+				let weight_used = meter.consumed.saturating_sub(prev_consumed);
+				Self::deposit_event(Event::<T>::Processed { hash, origin, weight_used, success });
 				MessageExecutionStatus::Processed
 			},
 		}

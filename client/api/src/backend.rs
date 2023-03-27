@@ -18,12 +18,10 @@
 
 //! Substrate Client data backend
 
-use crate::{
-	blockchain::{well_known_cache_keys, Backend as BlockchainBackend},
-	UsageInfo,
-};
+use std::collections::HashSet;
+
 use parking_lot::RwLock;
-use sp_blockchain;
+
 use sp_consensus::BlockOrigin;
 use sp_core::offchain::OffchainStorage;
 use sp_runtime::{
@@ -35,7 +33,8 @@ use sp_state_machine::{
 	OffchainChangesCollection, StorageCollection, StorageIterator,
 };
 use sp_storage::{ChildInfo, StorageData, StorageKey};
-use std::collections::{HashMap, HashSet};
+
+use crate::{blockchain::Backend as BlockchainBackend, UsageInfo};
 
 pub use sp_state_machine::{Backend as StateBackend, KeyValueStates};
 
@@ -47,6 +46,19 @@ pub type TransactionForSB<B, Block> = <B as StateBackend<HashFor<Block>>>::Trans
 
 /// Extracts the transaction for the given backend.
 pub type TransactionFor<B, Block> = TransactionForSB<StateBackendFor<B, Block>, Block>;
+
+/// Describes which block import notification stream should be notified.
+#[derive(Debug, Clone, Copy)]
+pub enum ImportNotificationAction {
+	/// Notify only when the node has synced to the tip or there is a re-org.
+	RecentBlock,
+	/// Notify for every single block no matter what the sync state is.
+	EveryBlock,
+	/// Both block import notifications above should be fired.
+	Both,
+	/// No block import notification should be fired.
+	None,
+}
 
 /// Import operation summary.
 ///
@@ -67,6 +79,8 @@ pub struct ImportSummary<Block: BlockT> {
 	///
 	/// If `None`, there was no re-org while importing.
 	pub tree_route: Option<sp_blockchain::TreeRoute<Block>>,
+	/// What notify action to take for this import.
+	pub import_notification_action: ImportNotificationAction,
 }
 
 /// Finalization operation summary.
@@ -163,9 +177,6 @@ pub trait BlockImportOperation<Block: BlockT> {
 		justifications: Option<Justifications>,
 		state: NewBlockState,
 	) -> sp_blockchain::Result<()>;
-
-	/// Update cached data.
-	fn update_cache(&mut self, cache: HashMap<well_known_cache_keys::Id, Vec<u8>>);
 
 	/// Inject storage data into the database.
 	fn update_db_storage(
@@ -309,7 +320,6 @@ where
 {
 	inner: <State as StateBackend<HashFor<Block>>>::RawIter,
 	state: State,
-	skip_if_first: Option<StorageKey>,
 }
 
 impl<State, Block> KeysIter<State, Block>
@@ -326,13 +336,9 @@ where
 		let mut args = IterArgs::default();
 		args.prefix = prefix.as_ref().map(|prefix| prefix.0.as_slice());
 		args.start_at = start_at.as_ref().map(|start_at| start_at.0.as_slice());
+		args.start_at_exclusive = true;
 
-		let start_at = args.start_at;
-		Ok(Self {
-			inner: state.raw_iter(args)?,
-			state,
-			skip_if_first: start_at.map(|key| StorageKey(key.to_vec())),
-		})
+		Ok(Self { inner: state.raw_iter(args)?, state })
 	}
 
 	/// Create a new iterator over a child storage's keys.
@@ -346,13 +352,9 @@ where
 		args.prefix = prefix.as_ref().map(|prefix| prefix.0.as_slice());
 		args.start_at = start_at.as_ref().map(|start_at| start_at.0.as_slice());
 		args.child_info = Some(child_info);
+		args.start_at_exclusive = true;
 
-		let start_at = args.start_at;
-		Ok(Self {
-			inner: state.raw_iter(args)?,
-			state,
-			skip_if_first: start_at.map(|key| StorageKey(key.to_vec())),
-		})
+		Ok(Self { inner: state.raw_iter(args)?, state })
 	}
 }
 
@@ -364,15 +366,7 @@ where
 	type Item = StorageKey;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let key = self.inner.next_key(&self.state)?.ok().map(StorageKey)?;
-
-		if let Some(skipped_key) = self.skip_if_first.take() {
-			if key == skipped_key {
-				return self.next()
-			}
-		}
-
-		Some(key)
+		self.inner.next_key(&self.state)?.ok().map(StorageKey)
 	}
 }
 
@@ -384,7 +378,6 @@ where
 {
 	inner: <State as StateBackend<HashFor<Block>>>::RawIter,
 	state: State,
-	skip_if_first: Option<StorageKey>,
 }
 
 impl<State, Block> Iterator for PairsIter<State, Block>
@@ -395,19 +388,10 @@ where
 	type Item = (StorageKey, StorageData);
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let (key, value) = self
-			.inner
+		self.inner
 			.next_pair(&self.state)?
 			.ok()
-			.map(|(key, value)| (StorageKey(key), StorageData(value)))?;
-
-		if let Some(skipped_key) = self.skip_if_first.take() {
-			if key == skipped_key {
-				return self.next()
-			}
-		}
-
-		Some((key, value))
+			.map(|(key, value)| (StorageKey(key), StorageData(value)))
 	}
 }
 
@@ -425,13 +409,9 @@ where
 		let mut args = IterArgs::default();
 		args.prefix = prefix.as_ref().map(|prefix| prefix.0.as_slice());
 		args.start_at = start_at.as_ref().map(|start_at| start_at.0.as_slice());
+		args.start_at_exclusive = true;
 
-		let start_at = args.start_at;
-		Ok(Self {
-			inner: state.raw_iter(args)?,
-			state,
-			skip_if_first: start_at.map(|key| StorageKey(key.to_vec())),
-		})
+		Ok(Self { inner: state.raw_iter(args)?, state })
 	}
 }
 

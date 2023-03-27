@@ -114,7 +114,6 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, T::AccountId, (BoundedVec<u8, T::MaxLength>, BalanceOf<T>)>;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::call]
@@ -296,6 +295,10 @@ mod tests {
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
 		type WeightInfo = ();
+		type FreezeIdentifier = ();
+		type MaxFreezes = ();
+		type HoldIdentifier = ();
+		type MaxHolds = ();
 	}
 
 	ord_parameter_types! {

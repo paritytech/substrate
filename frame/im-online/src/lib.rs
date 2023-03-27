@@ -101,7 +101,7 @@ use sp_runtime::{
 	PerThing, Perbill, Permill, RuntimeDebug, SaturatedConversion,
 };
 use sp_staking::{
-	offence::{Kind, Offence, ReportOffence},
+	offence::{DisableStrategy, Kind, Offence, ReportOffence},
 	SessionIndex,
 };
 use sp_std::prelude::*;
@@ -313,7 +313,6 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -949,6 +948,10 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 
 	fn time_slot(&self) -> Self::TimeSlot {
 		self.session_index
+	}
+
+	fn disable_strategy(&self) -> DisableStrategy {
+		DisableStrategy::Never
 	}
 
 	fn slash_fraction(&self, offenders: u32) -> Perbill {

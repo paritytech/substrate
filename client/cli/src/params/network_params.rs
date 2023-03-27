@@ -19,10 +19,11 @@
 use crate::{arg_enums::SyncMode, params::node_key_params::NodeKeyParams};
 use clap::Args;
 use sc_network::{
-	config::{NetworkConfiguration, NodeKeyConfig},
+	config::{
+		NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, SetConfig, TransportConfig,
+	},
 	multiaddr::Protocol,
 };
-use sc_network_common::config::{NonReservedPeerMode, SetConfig, TransportConfig};
 use sc_service::{
 	config::{Multiaddr, MultiaddrWithPeerId},
 	ChainSpec, ChainType,
@@ -82,11 +83,11 @@ pub struct NetworkParams {
 	pub allow_private_ip: bool,
 
 	/// Specify the number of outgoing connections we're trying to maintain.
-	#[arg(long, value_name = "COUNT", default_value_t = 15)]
+	#[arg(long, value_name = "COUNT", default_value_t = 8)]
 	pub out_peers: u32,
 
 	/// Maximum number of inbound full nodes peers.
-	#[arg(long, value_name = "COUNT", default_value_t = 25)]
+	#[arg(long, value_name = "COUNT", default_value_t = 32)]
 	pub in_peers: u32,
 
 	/// Maximum number of inbound light nodes peers.

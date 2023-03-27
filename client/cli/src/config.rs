@@ -185,10 +185,10 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// By default this is retrieved from `KeystoreParams` if it is available. Otherwise it uses
 	/// `KeystoreConfig::InMemory`.
-	fn keystore_config(&self, config_dir: &PathBuf) -> Result<(Option<String>, KeystoreConfig)> {
+	fn keystore_config(&self, config_dir: &PathBuf) -> Result<KeystoreConfig> {
 		self.keystore_params()
 			.map(|x| x.keystore_config(config_dir))
-			.unwrap_or_else(|| Ok((None, KeystoreConfig::InMemory)))
+			.unwrap_or_else(|| Ok(KeystoreConfig::InMemory))
 	}
 
 	/// Get the database cache size.
@@ -505,7 +505,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
 		let is_validator = role.is_authority();
-		let (keystore_remote, keystore) = self.keystore_config(&config_dir)?;
+		let keystore = self.keystore_config(&config_dir)?;
 		let telemetry_endpoints = self.telemetry_endpoints(&chain_spec)?;
 		let runtime_cache_size = self.runtime_cache_size()?;
 
@@ -524,7 +524,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 				node_key,
 				DCV::p2p_listen_port(),
 			)?,
-			keystore_remote,
 			keystore,
 			database: self.database_config(&config_dir, database_cache_size, database)?,
 			trie_cache_maximum_size: self.trie_cache_maximum_size()?,

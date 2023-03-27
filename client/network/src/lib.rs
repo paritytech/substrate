@@ -212,7 +212,7 @@
 //! `sc-network` automatically tries to open a substream towards each node for which the legacy
 //! Substream substream is open. The handshake is then performed automatically.
 //!
-//! For example, the `sc-finality-grandpa` crate registers the `/paritytech/grandpa/1`
+//! For example, the `sc-consensus-grandpa` crate registers the `/paritytech/grandpa/1`
 //! notifications protocol.
 //!
 //! At the moment, for backwards-compatibility, notification protocols are tied to the legacy
@@ -248,39 +248,40 @@ mod behaviour;
 mod discovery;
 mod peer_info;
 mod protocol;
-mod request_responses;
 mod service;
 mod transport;
 
 pub mod config;
+pub mod error;
+pub mod event;
 pub mod network_state;
+pub mod request_responses;
+pub mod types;
+pub mod utils;
 
+pub use event::{DhtEvent, Event};
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use protocol::PeerInfo;
-use sc_consensus::{JustificationSyncLink, Link};
+pub use request_responses::{IfDisconnected, RequestFailure, RequestResponseConfig};
 pub use sc_network_common::{
-	protocol::{
-		event::{DhtEvent, Event},
-		role::ObservedRole,
-		ProtocolName,
-	},
-	request_responses::{IfDisconnected, RequestFailure},
-	service::{
-		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkRequest, NetworkSigner,
-		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest, Signature,
-		SigningError,
-	},
+	role::ObservedRole,
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
-		StateDownloadProgress, SyncState,
+		ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState, SyncStatusProvider,
 	},
 };
 pub use service::{
-	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender,
-	NotificationSenderReady, OutboundFailure, PublicKey,
+	signature::Signature,
+	traits::{
+		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkEventStream, NetworkNotification,
+		NetworkPeers, NetworkRequest, NetworkSigner, NetworkStateInfo, NetworkStatus,
+		NetworkStatusProvider, NetworkSyncForkRequest, NotificationSender as NotificationSenderT,
+		NotificationSenderError, NotificationSenderReady,
+	},
+	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender, OutboundFailure,
+	PublicKey,
 };
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+pub use types::ProtocolName;
 
 pub use sc_peerset::ReputationChange;
 
@@ -295,18 +296,3 @@ const MAX_CONNECTIONS_PER_PEER: usize = 2;
 
 /// The maximum number of concurrent established connections that were incoming.
 const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
-
-/// Abstraction over syncing-related services
-pub trait ChainSyncInterface<B: BlockT>:
-	NetworkSyncForkRequest<B::Hash, NumberFor<B>> + JustificationSyncLink<B> + Link<B> + Send + Sync
-{
-}
-
-impl<T, B: BlockT> ChainSyncInterface<B> for T where
-	T: NetworkSyncForkRequest<B::Hash, NumberFor<B>>
-		+ JustificationSyncLink<B>
-		+ Link<B>
-		+ Send
-		+ Sync
-{
-}

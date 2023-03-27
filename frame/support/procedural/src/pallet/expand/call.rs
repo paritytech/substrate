@@ -324,6 +324,21 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		}
 
+		impl<#type_impl_gen> #frame_support::dispatch::GetCallIndex for #call_ident<#type_use_gen>
+			#where_clause
+		{
+			fn get_call_index(&self) -> u8 {
+				match *self {
+					#( Self::#fn_name { .. } => #call_index, )*
+					Self::__Ignore(_, _) => unreachable!("__PhantomItem cannot be used."),
+				}
+			}
+
+			fn get_call_indices() -> &'static [u8] {
+				&[ #( #call_index, )* ]
+			}
+		}
+
 		impl<#type_impl_gen> #frame_support::traits::UnfilteredDispatchable
 			for #call_ident<#type_use_gen>
 			#where_clause
@@ -333,22 +348,24 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				self,
 				origin: Self::RuntimeOrigin
 			) -> #frame_support::dispatch::DispatchResultWithPostInfo {
-				match self {
-					#(
-						Self::#fn_name { #( #args_name_pattern, )* } => {
-							#frame_support::sp_tracing::enter_span!(
-								#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
-							);
-							#maybe_allow_attrs
-							<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
-								.map(Into::into).map_err(Into::into)
+				#frame_support::dispatch_context::run_in_context(|| {
+					match self {
+						#(
+							Self::#fn_name { #( #args_name_pattern, )* } => {
+								#frame_support::sp_tracing::enter_span!(
+									#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
+								);
+								#maybe_allow_attrs
+								<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
+									.map(Into::into).map_err(Into::into)
+							},
+						)*
+						Self::__Ignore(_, _) => {
+							let _ = origin; // Use origin for empty Call enum
+							unreachable!("__PhantomItem cannot be used.");
 						},
-					)*
-					Self::__Ignore(_, _) => {
-						let _ = origin; // Use origin for empty Call enum
-						unreachable!("__PhantomItem cannot be used.");
-					},
-				}
+					}
+				})
 			}
 		}
 
@@ -360,7 +377,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clause {
 			#[doc(hidden)]
-			pub fn call_functions() -> #frame_support::metadata::PalletCallMetadata {
+			pub fn call_functions() -> #frame_support::metadata_ir::PalletCallMetadataIR {
 				#frame_support::scale_info::meta_type::<#call_ident<#type_use_gen>>().into()
 			}
 		}

@@ -47,7 +47,7 @@ pub enum Error {
 	BadKeyType,
 	/// Some random issue with the key store. Shouldn't happen.
 	#[error("The key store is unavailable")]
-	KeyStoreUnavailable,
+	KeystoreUnavailable,
 	/// Invalid session keys encoding.
 	#[error("Session keys are not encoded correctly")]
 	InvalidSessionKeys,
