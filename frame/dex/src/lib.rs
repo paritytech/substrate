@@ -88,13 +88,13 @@ pub mod pallet {
 		PalletId,
 	};
 	use sp_runtime::{
-		traits::{Hash, IntegerSquareRoot, One, TrailingZeroInput, Zero},
+		traits::{AccountIdConversion, IntegerSquareRoot, One, Zero},
 		Saturating,
 	};
 	use sp_std::prelude::*;
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(_);
+	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -260,6 +260,30 @@ pub mod pallet {
 		InvalidPath,
 		/// It was not possible to calculate path data.
 		PathError,
+	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T>
+	where
+		T::AssetId: From<u32>,
+	{
+		fn integrity_test() {
+			sp_std::if_std! {
+				sp_io::TestExternalities::new_empty().execute_with(|| {
+					// ensure that the `AccountId` is set properly and doesn't generate the same
+					// pool account for different pool ids.
+					let native = T::MultiAssetIdConverter::get_native();
+					let asset_1 = T::MultiAssetIdConverter::into_multiasset_id(1.into());
+					let asset_2 = T::MultiAssetIdConverter::into_multiasset_id(2.into());
+					let pool_account_1 = Self::get_pool_account((native, asset_1));
+					let pool_account_2 = Self::get_pool_account((native, asset_2));
+					assert!(
+						pool_account_1 != pool_account_2,
+						"AccountId should be set at least to u128"
+					);
+				});
+			}
+		}
 	}
 
 	// Pallet's callable functions.
@@ -653,10 +677,7 @@ pub mod pallet {
 		/// This actually does computation. If you need to keep using it, then make sure you cache
 		/// the value and only call this once.
 		pub fn get_pool_account(pool_id: PoolIdOf<T>) -> T::AccountId {
-			let sub = T::Hashing::hash_of(&(T::PalletId::get(), pool_id)).encode();
-			let account = T::AccountId::decode(&mut TrailingZeroInput::new(&sub))
-				.expect("All byte sequences are valid `AccountIds`; qed");
-			account
+			T::PalletId::get().into_sub_account_truncating(pool_id)
 		}
 
 		fn get_balance(

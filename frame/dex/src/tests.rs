@@ -56,7 +56,7 @@ fn pool_assets() -> Vec<u32> {
 	s
 }
 
-fn create_tokens(owner: u64, tokens: Vec<NativeOrAssetId<u32>>) {
+fn create_tokens(owner: u128, tokens: Vec<NativeOrAssetId<u32>>) {
 	for token_id in tokens {
 		assert_ok!(Assets::force_create(
 			RuntimeOrigin::root(),
@@ -68,14 +68,14 @@ fn create_tokens(owner: u64, tokens: Vec<NativeOrAssetId<u32>>) {
 	}
 }
 
-fn balance(owner: u64, token_id: NativeOrAssetId<u32>) -> u128 {
+fn balance(owner: u128, token_id: NativeOrAssetId<u32>) -> u128 {
 	match token_id {
 		NativeOrAssetId::Native => <<Test as Config>::Currency>::free_balance(owner),
 		NativeOrAssetId::Asset(token_id) => <<Test as Config>::Assets>::balance(token_id, owner),
 	}
 }
 
-fn pool_balance(owner: u64, token_id: u32) -> u128 {
+fn pool_balance(owner: u128, token_id: u32) -> u128 {
 	<<Test as Config>::PoolAssets>::balance(token_id, owner)
 }
 
@@ -112,7 +112,7 @@ fn can_create_pool() {
 		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_2, token_1));
 
 		let setup_fee = <<Test as Config>::PoolSetupFee as Get<<Test as Config>::Balance>>::get();
-		let pool_account = <<Test as Config>::PoolSetupFeeReceiver as Get<u64>>::get();
+		let pool_account = <<Test as Config>::PoolSetupFeeReceiver as Get<u128>>::get();
 		assert_eq!(balance(user, NativeOrAssetId::Native), 1000 - setup_fee);
 		assert_eq!(balance(pool_account, NativeOrAssetId::Native), setup_fee);
 		assert_eq!(lp_token + 1, Dex::get_next_pool_asset_id());

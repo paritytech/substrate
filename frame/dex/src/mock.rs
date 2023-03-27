@@ -61,7 +61,7 @@ impl frame_system::Config for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = u128;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
@@ -101,8 +101,8 @@ impl pallet_assets::Config<Instance1> for Test {
 	type AssetId = u32;
 	type AssetIdParameter = u32;
 	type Currency = Balances;
-	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<u64>>;
-	type ForceOrigin = frame_system::EnsureRoot<u64>;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<Self::AccountId>>;
+	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type AssetDeposit = ConstU128<1>;
 	type AssetAccountDeposit = ConstU128<10>;
 	type MetadataDepositBase = ConstU128<1>;
@@ -125,8 +125,8 @@ impl pallet_assets::Config<Instance2> for Test {
 	type AssetId = u32;
 	type AssetIdParameter = u32;
 	type Currency = Balances;
-	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<DexOrigin, u64>>;
-	type ForceOrigin = frame_system::EnsureRoot<u64>;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<DexOrigin, Self::AccountId>>;
+	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type AssetDeposit = ConstU128<0>;
 	type AssetAccountDeposit = ConstU128<0>;
 	type MetadataDepositBase = ConstU128<0>;
@@ -148,7 +148,7 @@ parameter_types! {
 }
 
 ord_parameter_types! {
-	pub const DexOrigin: u64 = AccountIdConversion::<u64>::into_account_truncating(&DexPalletId::get());
+	pub const DexOrigin: u128 = AccountIdConversion::<u128>::into_account_truncating(&DexPalletId::get());
 }
 
 impl Config for Test {
