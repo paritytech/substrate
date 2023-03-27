@@ -399,7 +399,6 @@ impl Config for Test {
 	type WeightInfo = ();
 	type ChainExtension =
 		(TestExtension, DisabledExtension, RevertingExtension, TempStorageExtension);
-	type DeletionQueueDepth = ConstU32<1024>;
 	type DeletionWeightLimit = DeletionWeightLimit;
 	type Schedule = MySchedule;
 	type DepositPerByte = DepositPerByte;
@@ -1973,25 +1972,6 @@ fn lazy_removal_works() {
 }
 
 #[test]
-fn lazy_removal_on_full_queue_works_on_initialize() {
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		// Fill the deletion queue with dummy values, so that on_initialize attempts
-		// to clear the queue
-		ContractInfo::<Test>::fill_queue_with_dummies();
-
-		let queue_len_initial = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
-
-		// Run the lazy removal
-		Contracts::on_initialize(System::block_number());
-
-		let queue_len_after_on_initialize = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
-
-		// Queue length should be decreased after call of on_initialize()
-		assert!(queue_len_initial - queue_len_after_on_initialize > 0);
-	});
-}
-
-#[test]
 fn lazy_batch_removal_works() {
 	let (code, _hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
@@ -2140,33 +2120,6 @@ fn lazy_removal_partial_remove_works() {
 }
 
 #[test]
-fn lazy_removal_does_no_run_on_full_queue_and_full_block() {
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		// Fill up the block which should prevent the lazy storage removal from running.
-		System::register_extra_weight_unchecked(
-			<Test as system::Config>::BlockWeights::get().max_block,
-			DispatchClass::Mandatory,
-		);
-
-		// Fill the deletion queue with dummy values, so that on_initialize attempts
-		// to clear the queue
-		ContractInfo::<Test>::fill_queue_with_dummies();
-
-		// Check that on_initialize() tries to perform lazy removal but removes nothing
-		//  as no more weight is left for that.
-		let weight_used = Contracts::on_initialize(System::block_number());
-		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
-		assert_eq!(weight_used, base);
-
-		// Check that the deletion queue is still full after execution of the
-		// on_initialize() hook.
-		let max_len: u32 = <Test as Config>::DeletionQueueDepth::get();
-		let queue_len: u32 = <DeletionQueue<Test>>::decode_len().unwrap_or(0).try_into().unwrap();
-		assert_eq!(max_len, queue_len);
-	});
-}
-
-#[test]
 fn lazy_removal_does_no_run_on_low_remaining_weight() {
 	let (code, _hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
@@ -2310,41 +2263,6 @@ fn lazy_removal_does_not_use_all_weight() {
 		for val in vals {
 			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), None);
 		}
-	});
-}
-
-#[test]
-fn deletion_queue_full() {
-	let (code, _hash) = compile_module::<Test>("self_destruct").unwrap();
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
-
-		let addr = Contracts::bare_instantiate(
-			ALICE,
-			min_balance * 100,
-			GAS_LIMIT,
-			None,
-			Code::Upload(code),
-			vec![],
-			vec![],
-			false,
-		)
-		.result
-		.unwrap()
-		.account_id;
-
-		// fill the deletion queue up until its limit
-		ContractInfo::<Test>::fill_queue_with_dummies();
-
-		// Terminate the contract should fail
-		assert_err_ignore_postinfo!(
-			Contracts::call(RuntimeOrigin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, None, vec![],),
-			Error::<Test>::DeletionQueueFull,
-		);
-
-		// Contract should exist because removal failed
-		get_contract(&addr);
 	});
 }
 

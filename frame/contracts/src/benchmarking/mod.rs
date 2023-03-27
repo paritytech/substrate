@@ -219,10 +219,9 @@ benchmarks! {
 		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
-	// TODO simplify this
 	#[pov_mode = Measured]
 	on_initialize_per_queue_item {
-		let q in 0..1024.min(T::DeletionQueueDepth::get());
+		let q in 0..1024;
 		for i in 0 .. q {
 			let instance = Contract::<T>::with_index(i, WasmModule::dummy(), vec![])?;
 			instance.info()?.queue_trie_for_deletion()?;
@@ -3022,9 +3021,8 @@ benchmarks! {
 		#[cfg(feature = "std")]
 		{
 			let weight_limit = T::DeletionWeightLimit::get();
-			let max_queue_depth = T::DeletionQueueDepth::get() as usize;
 			let empty_queue_throughput = ContractInfo::<T>::deletion_budget(0, weight_limit);
-			let full_queue_throughput = ContractInfo::<T>::deletion_budget(max_queue_depth, weight_limit);
+			let full_queue_throughput = ContractInfo::<T>::deletion_budget(1024, weight_limit);
 			println!("{:#?}", Schedule::<T>::default());
 			println!("###############################################");
 			println!("Lazy deletion weight per key: {}", empty_queue_throughput.0);

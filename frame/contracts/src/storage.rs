@@ -212,13 +212,13 @@ impl<T: Config> ContractInfo<T> {
 	/// Calculates the weight that is necessary to remove one key from the trie and how many
 	/// of those keys can be deleted from the deletion queue given the supplied queue length
 	/// and weight limit.
-	pub fn deletion_budget(queue_len: u64, weight_limit: Weight) -> (Weight, u32) {
+	pub fn deletion_budget(queue_len: u32, weight_limit: Weight) -> (Weight, u32) {
 		let base_weight = T::WeightInfo::on_process_deletion_queue_batch();
 		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
 			T::WeightInfo::on_initialize_per_queue_item(0);
 		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
 			T::WeightInfo::on_initialize_per_trie_key(0);
-		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len);
+		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as u64);
 
 		// `weight_per_key` being zero makes no sense and would constitute a failure to
 		// benchmark properly. We opt for not removing any keys at all in this case.
@@ -280,17 +280,6 @@ impl<T: Config> ContractInfo<T> {
 	/// Returns the code hash of the contract specified by `account` ID.
 	pub fn load_code_hash(account: &AccountIdOf<T>) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).map(|i| i.code_hash)
-	}
-
-	/// Fill up the queue in order to exercise the limits during testing.
-	#[cfg(test)]
-	pub fn fill_queue_with_dummies() {
-		use frame_support::{traits::Get, BoundedVec};
-		let queue: Vec<DeletedContract> = (0..T::DeletionQueueDepth::get())
-			.map(|_| DeletedContract { trie_id: TrieId::default() })
-			.collect();
-		let bounded: BoundedVec<_, _> = queue.try_into().map_err(|_| ()).unwrap();
-		<DeletionQueue<T>>::put(bounded);
 	}
 }
 
