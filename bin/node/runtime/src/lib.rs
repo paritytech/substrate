@@ -604,6 +604,8 @@ impl pallet_stake_tracker::Config for Runtime {
 	type TargetList = TargetList;
 }
 
+impl pallet_stake_tracker_initializer::Config for Runtime {}
+
 impl pallet_fast_unstake::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ControlOrigin = frame_system::EnsureRoot<AccountId>;
@@ -1785,6 +1787,7 @@ construct_runtime!(
 		ElectionProviderMultiPhase: pallet_election_provider_multi_phase,
 		Staking: pallet_staking,
 		StakeTracker: pallet_stake_tracker,
+		StakeTrackerInitializer: pallet_stake_tracker_initializer,
 		Session: pallet_session,
 		Democracy: pallet_democracy,
 		Council: pallet_collective::<Instance1>,

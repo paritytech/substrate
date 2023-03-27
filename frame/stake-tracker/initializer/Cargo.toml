@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 pallet-staking = { path = "../../staking", default-features = false }
-pallet-stake-tracker = { path = "../", default-features = false }
+pallet-stake-tracker = { path = "..", default-features = false }
 sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { default-features = false, path = "../../../primitives/staking" }
@@ -34,10 +34,21 @@ default = ["std"]
 std = [
     "pallet-staking/std",
     "pallet-stake-tracker/std",
+    "sp-std/std",
+    "sp-runtime/std",
+    "sp-staking/std",
+    "scale-info/std",
+    "frame-support/std",
+    "frame-system/std",
+    "frame-election-provider-support/std",
+    "log/std",
+    "codec/std"
 ]
 
 try-runtime = [
     "frame-support/try-runtime",
     "pallet-staking/try-runtime",
     "pallet-stake-tracker/try-runtime",
+    "frame-election-provider-support/try-runtime",
+    "frame-system/try-runtime"
 ]

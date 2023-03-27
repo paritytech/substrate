@@ -1,3 +1,20 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2023 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub(crate) const LOG_TARGET: &str = "runtime::stake-tracker-initializer";
@@ -17,14 +34,14 @@ use frame_support::{
 	pallet_prelude::{Get, GetStorageVersion, StorageVersion, Weight, *},
 	sp_io,
 };
-use pallet::*;
+
+pub use pallet::*;
 use pallet_stake_tracker::{ApprovalStake, BalanceOf};
 use pallet_staking::{Nominations, TemporaryMigrationLock, Validators};
 use sp_runtime::Saturating;
 use sp_staking::StakingInterface;
 use sp_std::collections::btree_map::BTreeMap;
 
-// This pallet implementation is only needed to execute the rest of the migration on_initialize.
 #[frame_support::pallet]
 pub mod pallet {
 	use crate::*;
@@ -77,7 +94,7 @@ pub mod pallet {
 
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			// Abort if the lock does not exist, it means we're done migrating.
-			if TemporaryMigrationLock::<T>::exists() {
+			if !TemporaryMigrationLock::<T>::exists() {
 				return T::DbWeight::get().reads(1)
 			}
 			let max_weight = T::BlockWeights::get().max_block;

@@ -102,6 +102,8 @@ pallet-session = { version = "4.0.0-dev", features = [ "historical" ], path = ".
 pallet-session-benchmarking = { version = "4.0.0-dev", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking" }
 pallet-stake-tracker = { version = "4.0.0-dev", default-features = false, path = "../../../frame/stake-tracker" }
+pallet-stake-tracker-initializer = { version = "1.0.0-dev", default-features = false, path = "../../../frame/stake-tracker/initializer" }
+
 pallet-staking-reward-curve = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking/reward-curve" }
 pallet-staking-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking/runtime-api" }
 pallet-state-trie-migration = { version = "4.0.0-dev", default-features = false, path = "../../../frame/state-trie-migration" }
@@ -186,6 +188,7 @@ std = [
 	"sp-staking/std",
 	"pallet-staking/std",
 	"pallet-stake-tracker/std",
+	"pallet-stake-tracker-initializer/std",
 	"pallet-staking-runtime-api/std",
 	"pallet-state-trie-migration/std",
 	"pallet-salary/std",
@@ -329,6 +332,7 @@ try-runtime = [
 	"pallet-session/try-runtime",
 	"pallet-staking/try-runtime",
 	"pallet-stake-tracker/try-runtime",
+	"pallet-stake-tracker-initializer/try-runtime",
 	"pallet-state-trie-migration/try-runtime",
 	"pallet-scheduler/try-runtime",
 	"pallet-society/try-runtime",

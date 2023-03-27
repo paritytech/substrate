@@ -3661,6 +3661,7 @@ dependencies = [
  "pallet-session-benchmarking",
  "pallet-society",
  "pallet-stake-tracker",
+ "pallet-stake-tracker-initializer",
  "pallet-staking",
  "pallet-staking-reward-curve",
  "pallet-staking-runtime-api",
