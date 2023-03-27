@@ -51,6 +51,7 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_treasury.
 pub trait WeightInfo {
+    fn spend_local() -> Weight;
 	fn spend() -> Weight;
 	fn propose_spend() -> Weight;
 	fn reject_proposal() -> Weight;
@@ -170,6 +171,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
+	/// Storage: Treasury Proposals (r:0 w:1)
+	/// Proof: Treasury Proposals (max_values: None, max_size: Some(108), added: 2583, mode: MaxEncodedLen)
+	fn spend_local() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `42`
+		//  Estimated: `3376`
+		// Minimum execution time: 17_010_000 picoseconds.
+		Weight::from_parts(17_247_000, 3376)
+			.saturating_add(RocksDbWeight::get().reads(2_u64))
+			.saturating_add(RocksDbWeight::get().writes(3_u64))
+	}
 	/// Storage: Treasury ProposalCount (r:1 w:1)
 	/// Proof: Treasury ProposalCount (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
 	/// Storage: Treasury Approvals (r:1 w:1)
