@@ -20,6 +20,7 @@ mod mock;
 
 pub(crate) const LOG_TARGET: &str = "tests::e2e-epm";
 
+use frame_support::assert_ok;
 use mock::*;
 use sp_core::Get;
 use sp_npos_elections::{to_supports, StakedAssignment};
@@ -203,4 +204,69 @@ fn continous_slashes_below_offending_threshold() {
 				);
 			}
 		});
+}
+
+#[test]
+/// When validators are slashed, they are chilled and removed from the current `VoterList`. Thus,
+/// the slashed validator should not be considered in the next validator set. However, if the
+/// slashed validator sets its intention to validate again in the same era when it was slashed and
+/// chilled, the validator may not be removed from the active validator set across eras, provided
+/// it is selected in the subsequent era after slashed. Nominations of the slashed validator will
+/// also through the slash and chilling process, as expected, and they will be active after the
+/// validator re-set the intention to be validating again.
+/// Related to <https://github.com/paritytech/substrate/issues/13714>.
+fn set_validation_intention_after_chilled() {
+	use frame_election_provider_support::SortedListProvider;
+	use pallet_staking::{Event, Forcing, Nominators, ValidatorPrefs};
+
+	let staking_builder = StakingExtBuilder::default();
+	let epm_builder = EpmExtBuilder::default();
+
+	ExtBuilder::default()
+		.staking(staking_builder)
+		.epm(epm_builder)
+		.build_and_execute(|| {
+			assert_eq!(active_era(), 0);
+			// validator is part of the validator set.
+			assert!(Session::validators().contains(&11));
+			assert!(<Runtime as pallet_staking::Config>::VoterList::contains(&11));
+
+			// nominate validator 11.
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(20), vec![11]));
+			assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![11]);
+
+			// validator is slashed. it is removed from the `VoterList` through chilling but in the
+			// current era, the validator is still part of the active validator set.
+			add_slash(&11);
+			assert!(Session::validators().contains(&11));
+			assert!(<Runtime as pallet_staking::Config>::VoterList::contains(&11) == false);
+			assert_eq!(
+				staking_events(),
+				[
+					Event::Chilled { stash: 11 },
+					Event::ForceEra { mode: Forcing::ForceNew },
+					Event::SlashReported {
+						validator: 11,
+						slash_era: 0,
+						fraction: Perbill::from_percent(10)
+					}
+				],
+			);
+
+			// after the nominator is slashed and chilled, the nominations remain.
+			assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![11]);
+
+			// validator sets intention to stake again in the same era it was chilled.
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(10), ValidatorPrefs::default()));
+
+			// progress era and check that the slashed validator is still part of the validator
+			// set.
+			assert!(start_next_active_era().is_ok());
+			assert_eq!(active_era(), 1);
+			assert!(Session::validators().contains(&11));
+			assert!(<Runtime as pallet_staking::Config>::VoterList::contains(&11));
+
+			// nominations are still active as before the slash.
+			assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![11]);
+		})
 }
