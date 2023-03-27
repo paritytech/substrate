@@ -89,11 +89,11 @@ pub struct WorkerConfig {
 impl Default for WorkerConfig {
 	fn default() -> Self {
 		Self {
-			// Kademlia's default time-to-live for Dht records is 36h, republishing records every
-			// 24h through libp2p-kad. Given that a node could restart at any point in time, one can
+			// Kademlia's default time-to-live for Dht records is 48h, republishing records every
+			// 22h through libp2p-kad. Given that a node could restart at any point in time, one can
 			// not depend on the republishing process, thus publishing own external addresses should
 			// happen on an interval < 36h.
-			max_publish_interval: Duration::from_secs(1 * 60 * 60),
+			max_publish_interval: Duration::from_secs(1 * 60 * 60), // 1h
 			keystore_refresh_interval: Duration::from_secs(60),
 			// External addresses of remote authorities can change at any given point in time. The
 			// interval on which to trigger new queries for the current and next authorities is a
