@@ -476,6 +476,11 @@ pub mod pallet {
 		}
 	}
 
+	#[pallet::hold_reason]
+	pub enum HoldReason {
+		Staking,
+	}
+
 	#[derive(codec::Encode, sp_runtime::RuntimeDebug)]
 	#[cfg_attr(feature = "std", derive(codec::Decode))]
 	pub enum InherentError {
@@ -972,6 +977,13 @@ fn validate_unsigned_expand() {
 
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::External, &call).unwrap();
 	assert_eq!(validity, ValidTransaction::default());
+}
+
+#[test]
+fn hold_reason_expand() {
+	let hold_reason: RuntimeHoldReason = pallet::HoldReason::Staking.into();
+
+	assert_eq!(hold_reason, RuntimeHoldReason::Example(pallet::HoldReason::Staking));
 }
 
 #[test]

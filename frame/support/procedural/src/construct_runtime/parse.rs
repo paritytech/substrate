@@ -38,6 +38,7 @@ mod keyword {
 	syn::custom_keyword!(Origin);
 	syn::custom_keyword!(Inherent);
 	syn::custom_keyword!(ValidateUnsigned);
+	syn::custom_keyword!(HoldReason);
 	syn::custom_keyword!(exclude_parts);
 	syn::custom_keyword!(use_parts);
 }
@@ -370,6 +371,7 @@ pub enum PalletPartKeyword {
 	Origin(keyword::Origin),
 	Inherent(keyword::Inherent),
 	ValidateUnsigned(keyword::ValidateUnsigned),
+	HoldReason(keyword::HoldReason),
 }
 
 impl Parse for PalletPartKeyword {
@@ -392,6 +394,8 @@ impl Parse for PalletPartKeyword {
 			Ok(Self::Inherent(input.parse()?))
 		} else if lookahead.peek(keyword::ValidateUnsigned) {
 			Ok(Self::ValidateUnsigned(input.parse()?))
+		} else if lookahead.peek(keyword::HoldReason) {
+			Ok(Self::HoldReason(input.parse()?))
 		} else {
 			Err(lookahead.error())
 		}
@@ -410,6 +414,7 @@ impl PalletPartKeyword {
 			Self::Origin(_) => "Origin",
 			Self::Inherent(_) => "Inherent",
 			Self::ValidateUnsigned(_) => "ValidateUnsigned",
+			Self::HoldReason(_) => "HoldReason",
 		}
 	}
 
@@ -435,6 +440,7 @@ impl Spanned for PalletPartKeyword {
 			Self::Origin(inner) => inner.span(),
 			Self::Inherent(inner) => inner.span(),
 			Self::ValidateUnsigned(inner) => inner.span(),
+			Self::HoldReason(inner) => inner.span(),
 		}
 	}
 }

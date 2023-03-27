@@ -265,6 +265,7 @@ fn construct_runtime_final_expansion(
 	let inherent =
 		expand::expand_outer_inherent(&name, &block, &unchecked_extrinsic, &pallets, &scrate);
 	let validate_unsigned = expand::expand_outer_validate_unsigned(&name, &pallets, &scrate);
+	let hold_reason = expand::expand_outer_hold_reason(&pallets, &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
 	let static_assertions = decl_static_assertions(&name, &pallets, &scrate);
 
@@ -306,6 +307,8 @@ fn construct_runtime_final_expansion(
 		#inherent
 
 		#validate_unsigned
+
+		#hold_reason
 
 		#integrity_test
 

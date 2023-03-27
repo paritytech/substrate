@@ -48,6 +48,8 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 	let validate_unsigned_part =
 		def.validate_unsigned.as_ref().map(|_| quote::quote!(ValidateUnsigned,));
 
+	let hold_reason_part = def.hold_reason.as_ref().map(|_| quote::quote!(HoldReason,));
+
 	quote::quote!(
 		// This macro follows the conventions as laid out by the `tt-call` crate. It does not
 		// accept any arguments and simply returns the pallet parts, separated by commas, then
@@ -70,7 +72,7 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 					tokens = [{
 						::{
 							Pallet, #call_part #storage_part #event_part #origin_part #config_part
-							#inherent_part #validate_unsigned_part
+							#inherent_part #validate_unsigned_part #hold_reason_part
 						}
 					}]
 				}

@@ -27,6 +27,7 @@ pub mod extra_constants;
 pub mod genesis_build;
 pub mod genesis_config;
 pub mod helper;
+pub mod hold_reason;
 pub mod hooks;
 pub mod inherent;
 pub mod origin;
@@ -56,6 +57,7 @@ pub struct Def {
 	pub genesis_build: Option<genesis_build::GenesisBuildDef>,
 	pub validate_unsigned: Option<validate_unsigned::ValidateUnsignedDef>,
 	pub extra_constants: Option<extra_constants::ExtraConstantsDef>,
+	pub hold_reason: Option<hold_reason::HoldReasonDef>,
 	pub type_values: Vec<type_value::TypeValueDef>,
 	pub frame_system: syn::Ident,
 	pub frame_support: syn::Ident,
@@ -89,6 +91,7 @@ impl Def {
 		let mut genesis_build = None;
 		let mut validate_unsigned = None;
 		let mut extra_constants = None;
+		let mut hold_reason = None;
 		let mut storages = vec![];
 		let mut type_values = vec![];
 
@@ -135,6 +138,13 @@ impl Def {
 				Some(PalletAttr::ExtraConstants(_)) =>
 					extra_constants =
 						Some(extra_constants::ExtraConstantsDef::try_from(index, item)?),
+				Some(PalletAttr::HoldReason(span)) =>
+					hold_reason = Some(hold_reason::HoldReasonDef::try_from(
+						span,
+						index,
+						&frame_support,
+						item,
+					)?),
 				Some(attr) => {
 					let msg = "Invalid duplicated attribute";
 					return Err(syn::Error::new(attr.span(), msg))
@@ -171,6 +181,7 @@ impl Def {
 			origin,
 			inherent,
 			storages,
+			hold_reason,
 			type_values,
 			frame_system,
 			frame_support,
@@ -385,6 +396,7 @@ mod keyword {
 	syn::custom_keyword!(generate_store);
 	syn::custom_keyword!(Store);
 	syn::custom_keyword!(extra_constants);
+	syn::custom_keyword!(hold_reason);
 }
 
 /// Parse attributes for item in pallet module
@@ -404,6 +416,7 @@ enum PalletAttr {
 	ValidateUnsigned(proc_macro2::Span),
 	TypeValue(proc_macro2::Span),
 	ExtraConstants(proc_macro2::Span),
+	HoldReason(proc_macro2::Span),
 }
 
 impl PalletAttr {
@@ -423,6 +436,7 @@ impl PalletAttr {
 			Self::ValidateUnsigned(span) => *span,
 			Self::TypeValue(span) => *span,
 			Self::ExtraConstants(span) => *span,
+			Self::HoldReason(span) => *span,
 		}
 	}
 }
@@ -464,6 +478,8 @@ impl syn::parse::Parse for PalletAttr {
 			Ok(PalletAttr::TypeValue(content.parse::<keyword::type_value>()?.span()))
 		} else if lookahead.peek(keyword::extra_constants) {
 			Ok(PalletAttr::ExtraConstants(content.parse::<keyword::extra_constants>()?.span()))
+		} else if lookahead.peek(keyword::hold_reason) {
+			Ok(PalletAttr::HoldReason(content.parse::<keyword::hold_reason>()?.span()))
 		} else {
 			Err(lookahead.error())
 		}
