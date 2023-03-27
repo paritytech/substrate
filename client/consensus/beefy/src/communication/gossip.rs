@@ -345,7 +345,7 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
 	use super::*;
 	use crate::keystore::BeefyKeystore;
 	use sc_network_test::Block;
@@ -426,7 +426,7 @@ mod tests {
 		VoteMessage { commitment, id: Keyring::Alice.public(), signature }
 	}
 
-	fn dummy_proof(
+	pub fn dummy_proof(
 		block_number: u64,
 		validator_set: &ValidatorSet<AuthorityId>,
 	) -> BeefyVersionedFinalityProof<Block> {
