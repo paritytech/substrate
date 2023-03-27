@@ -68,8 +68,7 @@ pub use types::*;
 pub use weights::WeightInfo;
 
 // TODO: make it configurable
-// TODO: more specific error codes.
-pub const MIN_LIQUIDITY: u32 = 1;
+pub const MINIMUM_LIQUIDITY: u32 = 1;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -81,7 +80,7 @@ pub mod pallet {
 			fungibles::{Create, Inspect, Mutate},
 			tokens::{
 				Fortitude::Polite,
-				Precision::BestEffort,
+				Precision::Exact,
 				Preservation::{Expendable, Preserve},
 			},
 		},
@@ -326,7 +325,7 @@ pub mod pallet {
 			let next_lp_token_id = lp_token.increment();
 			NextPoolAssetId::<T>::set(Some(next_lp_token_id));
 
-			T::PoolAssets::create(lp_token, pool_account.clone(), false, MIN_LIQUIDITY.into())?;
+			T::PoolAssets::create(lp_token, pool_account.clone(), false, 1u32.into())?;
 
 			let pool_info = PoolInfo { lp_token };
 			Pools::<T>::insert(pool_id, pool_info);
@@ -410,7 +409,7 @@ pub mod pallet {
 			let lp_token_amount: AssetBalanceOf<T>;
 			if total_supply.is_zero() {
 				lp_token_amount = Self::calc_lp_amount_for_zero_supply(&amount1, &amount2)?;
-				T::PoolAssets::mint_into(pool.lp_token, &pool_account, MIN_LIQUIDITY.into())?;
+				T::PoolAssets::mint_into(pool.lp_token, &pool_account, MINIMUM_LIQUIDITY.into())?;
 			} else {
 				let side1 = Self::mul_div(&amount1, &total_supply, &reserve1)?;
 				let side2 = Self::mul_div(&amount2, &total_supply, &reserve2)?;
@@ -418,7 +417,7 @@ pub mod pallet {
 			}
 
 			ensure!(
-				lp_token_amount > MIN_LIQUIDITY.into(),
+				lp_token_amount > MINIMUM_LIQUIDITY.into(),
 				Error::<T>::InsufficientLiquidityMinted
 			);
 
@@ -462,14 +461,6 @@ pub mod pallet {
 			let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
 
 			let pool_account = Self::get_pool_account(pool_id);
-			T::PoolAssets::transfer(
-				pool.lp_token,
-				&sender,
-				&pool_account,
-				lp_token_burn,
-				Expendable, /* LP tokens should not be sufficient assets so can't kill account */
-			)?;
-
 			let reserve1 = Self::get_balance(&pool_account, asset1)?;
 			let reserve2 = Self::get_balance(&pool_account, asset2)?;
 
@@ -487,13 +478,7 @@ pub mod pallet {
 				Error::<T>::AssetTwoWithdrawalDidNotMeetMinimum
 			);
 
-			T::PoolAssets::burn_from(
-				pool.lp_token,
-				&pool_account,
-				lp_token_burn,
-				BestEffort,
-				Polite,
-			)?;
+			T::PoolAssets::burn_from(pool.lp_token, &sender, lp_token_burn, Exact, Polite)?;
 
 			Self::transfer(asset1, &pool_account, &withdraw_to, amount1, false)?;
 			Self::transfer(asset2, &pool_account, &withdraw_to, amount2, false)?;
@@ -830,7 +815,7 @@ pub mod pallet {
 				.checked_mul(&amount2)
 				.ok_or(Error::<T>::Overflow)?
 				.integer_sqrt()
-				.checked_sub(&MIN_LIQUIDITY.into())
+				.checked_sub(&MINIMUM_LIQUIDITY.into())
 				.ok_or(Error::<T>::Overflow)?;
 
 			result.try_into().map_err(|_| Error::<T>::Overflow)
