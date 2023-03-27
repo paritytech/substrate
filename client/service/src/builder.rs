@@ -825,6 +825,7 @@ where
 		protocol_config
 	};
 
+	let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (engine, sync_service, block_announce_config) = SyncingEngine::new(
 		Roles::from(&config.role),
@@ -840,6 +841,7 @@ where
 		block_request_protocol_config.name.clone(),
 		state_request_protocol_config.name.clone(),
 		warp_sync_protocol_config.as_ref().map(|config| config.name.clone()),
+		rx,
 	)?;
 	let sync_service_import_queue = sync_service.clone();
 	let sync_service = Arc::new(sync_service);
@@ -864,6 +866,7 @@ where
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_announce_config,
+		tx,
 		request_response_protocol_configs: request_response_protocol_configs
 			.into_iter()
 			.chain([
@@ -909,9 +912,7 @@ where
 		chain_sync_network_provider.run(network.clone()),
 	);
 	spawn_handle.spawn("import-queue", None, import_queue.run(Box::new(sync_service_import_queue)));
-
-	let event_stream = network.event_stream("syncing");
-	spawn_handle.spawn("syncing", None, engine.run(event_stream));
+	spawn_handle.spawn_blocking("syncing", None, engine.run());
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc", 10_000);
 	spawn_handle.spawn(

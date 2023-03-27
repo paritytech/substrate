@@ -36,7 +36,7 @@ use crate::{
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
-	protocol::{self, NotificationsSink, NotifsHandlerError, Protocol, Ready},
+	protocol::{self, NotifsHandlerError, Protocol, Ready},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
 		signature::{Signature, SigningError},
@@ -92,6 +92,7 @@ use std::{
 
 pub use behaviour::{InboundFailure, OutboundFailure, ResponseFailure};
 pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
+pub use protocol::NotificationsSink;
 
 mod metrics;
 mod out_events;
@@ -230,6 +231,7 @@ where
 			From::from(&params.role),
 			&params.network_config,
 			params.block_announce_config,
+			params.tx,
 		)?;
 
 		// List of multiaddresses that we know in the network.
