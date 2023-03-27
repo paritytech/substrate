@@ -22,7 +22,14 @@ use codec::Codec;
 use sp_core::crypto::{CryptoType, CryptoTypeId, IsWrappedBy, KeyTypeId, Public};
 use sp_std::{fmt::Debug, vec::Vec};
 
-/// An application-specific key.
+/// An application-specific cryptographic object.
+///
+/// Combines all the core types and constants that are defined by a particular
+/// cryptographic scheme when it is used in a specific application domain.
+///
+/// Typically, the implementers of this trait are its associated types themselves.
+/// This provides a convenient way to access generic information about the scheme
+/// given any of the associated types.
 pub trait AppCrypto: 'static + Send + Sync + Sized + CryptoType + Clone {
 	/// Identifier for application-specific key type.
 	const ID: KeyTypeId;

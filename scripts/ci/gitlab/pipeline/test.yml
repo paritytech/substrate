@@ -432,3 +432,39 @@ cargo-check-each-crate-macos:
     - time cargo check --workspace --locked
   tags:
     - osx
+
+cargo-hfuzz:
+  stage: test
+  extends:
+    - .docker-env
+    - .test-refs
+    - .pipeline-stopper-artifacts
+  variables:
+    # max 10s per iteration, 60s per file
+    HFUZZ_RUN_ARGS: >
+      --exit_upon_crash
+      --exit_code_upon_crash 1
+      --timeout 10
+      --run_time 60
+  artifacts:
+    name: "hfuzz-$CI_COMMIT_SHORT_SHA"
+    expire_in: 7 days
+    when: on_failure
+    paths:
+      - primitives/arithmetic/fuzzer/hfuzz_workspace/
+  script:
+    # use git version of honggfuzz-rs until v0.5.56 is out, we need a few recent changes:
+    # https://github.com/rust-fuzz/honggfuzz-rs/pull/75 to avoid breakage on debian
+    # https://github.com/rust-fuzz/honggfuzz-rs/pull/81 fix to the above pr
+    # https://github.com/rust-fuzz/honggfuzz-rs/pull/82 fix for handling rusty-cachier's absolute CARGO_TARGET_DIR
+    - |
+      cat >>Cargo.toml <<EOF
+      [patch.crates-io]
+      honggfuzz = { git = 'https://github.com/altaua/honggfuzz-rs', rev = '205f7c8c059a0d98fe1cb912cdac84f324cb6981' }
+      EOF
+    - cd ./primitives/arithmetic/fuzzer
+    - rusty-cachier snapshot create
+    - cargo hfuzz build
+    - rusty-cachier cache upload
+    - for target in $(cargo read-manifest | jq -r '.targets | .[] | .name'); do
+      cargo hfuzz run "$target" || { printf "fuzzing failure for %s\n" "$target"; exit 1; }; done
