@@ -107,7 +107,10 @@ variables:
     - export WASM_BUILD_WORKSPACE_HINT="$PWD"
 
 .job-switcher:
+  variables:
+    SUPER_SKIP: "1"
   before_script:
+    - if [ ${SUPER_SKIP} == 1 ]; then exit 0; fi
     - if echo "$CI_DISABLED_JOBS" | grep -xF "$CI_JOB_NAME"; then echo "The job has been cancelled in CI settings"; exit 0; fi
 
 .kubernetes-env:

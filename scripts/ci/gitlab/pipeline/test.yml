@@ -234,6 +234,7 @@ test-frame-support:
     - .docker-env
     - .test-refs
   variables:
+    SUPER_SKIP: "0"
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
     RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
