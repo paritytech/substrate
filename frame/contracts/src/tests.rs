@@ -383,7 +383,6 @@ impl Contains<RuntimeCall> for TestFilter {
 }
 
 parameter_types! {
-	pub const DeletionWeightLimit: Weight = GAS_LIMIT;
 	pub static UnstableInterface: bool = true;
 }
 
@@ -399,7 +398,6 @@ impl Config for Test {
 	type WeightInfo = ();
 	type ChainExtension =
 		(TestExtension, DisabledExtension, RevertingExtension, TempStorageExtension);
-	type DeletionWeightLimit = DeletionWeightLimit;
 	type Schedule = MySchedule;
 	type DepositPerByte = DepositPerByte;
 	type DepositPerItem = DepositPerItem;
@@ -457,7 +455,8 @@ fn compile_module<T>(fixture_name: &str) -> wat::Result<(Vec<u8>, <T::Hashing as
 where
 	T: frame_system::Config,
 {
-	let fixture_path = ["fixtures/", fixture_name, ".wat"].concat();
+	let fixture_path =
+		["/Users/pg/github/substrate/frame/contracts/fixtures/", fixture_name, ".wat"].concat();
 	let wasm_binary = wat::parse_file(fixture_path)?;
 	let code_hash = T::Hashing::hash(&wasm_binary);
 	Ok((wasm_binary, code_hash))

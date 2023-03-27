@@ -22,8 +22,8 @@ pub mod meter;
 use crate::{
 	exec::{AccountIdOf, Key},
 	weights::WeightInfo,
-	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, Pallet,
-	TrieId, SENTINEL,
+	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueueMap,
+	DeletionQueueNonces, Error, Pallet, TrieId, SENTINEL,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -38,7 +38,7 @@ use sp_runtime::{
 	traits::{Hash, Saturating, Zero},
 	RuntimeDebug,
 };
-use sp_std::{ops::Deref, prelude::*};
+use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
@@ -339,5 +339,83 @@ impl<T: Config> Deref for DepositAccount<T> {
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
+	}
+}
+
+/// DeletionQueue manage the removal of contracts storage that are marked for deletion.
+///
+/// When a contract is deleted by calling `seal_terminate` it becomes inaccessible
+/// immediately, but the deletion of the storage items it has accumulated is performed
+/// later by pulling the contract from the queue in the `on_idle` hook.
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone)]
+#[scale_info(skip_type_params(T))]
+pub struct DeletionQueue<T: Config> {
+	/// Monotonic counter used as a key for inserting new deleted contract in the DeletionQueueMap.
+	/// The nonce is incremented after each insertion.
+	insert_nonce: u32,
+	/// The index used to read the next element to be deleted in the DeletionQueueMap.
+	/// The nonce is incremented after each deletion.
+	delete_nonce: u32,
+
+	_phantom: PhantomData<T>,
+}
+
+impl<T: Config> Default for DeletionQueue<T> {
+	fn default() -> Self {
+		Self { insert_nonce: 0, delete_nonce: 0, _phantom: Default::default() }
+	}
+}
+
+/// View on a contract that is marked for deletion
+/// The struct takes a mutable reference on the deletion queue so that the contract can be removed,
+/// and none can be added or read in the meantime.
+struct DeletionQueueEntry<'a, T: Config> {
+	contract: DeletedContract,
+	queue: &'a mut DeletionQueue<T>,
+}
+
+impl<'a, T: Config> DeletionQueueEntry<'a, T> {
+	/// Get a reference to the contract that is marked for deletion.
+	fn contract(&self) -> &DeletedContract {
+		&self.contract
+	}
+
+	/// Remove the contract from the deletion queue.
+	fn remove(self) {
+		<DeletionQueueMap<T>>::remove(self.queue.delete_nonce);
+		self.queue.delete_nonce = self.queue.delete_nonce.wrapping_add(1);
+		<DeletionQueueNonces<T>>::set(self.queue.clone());
+	}
+}
+
+impl<T: Config> DeletionQueue<T> {
+	/// Load the Deletion Queue nonces, so we can perform read or write operations on the
+	/// DeletionQueueMap storage
+	fn load() -> Self {
+		<DeletionQueueNonces<T>>::get()
+	}
+
+	/// The number of contracts marked for deletion.
+	fn len(&self) -> u32 {
+		self.insert_nonce.wrapping_sub(self.delete_nonce)
+	}
+
+	/// Insert a contract in the deletion queue.
+	fn insert(&mut self, contract: DeletedContract) {
+		<DeletionQueueMap<T>>::insert(self.insert_nonce, contract);
+		self.insert_nonce = self.insert_nonce.wrapping_add(1);
+		<DeletionQueueNonces<T>>::set(self.clone());
+	}
+
+	/// Fetch the next contract to be deleted.
+	fn next(&mut self) -> Option<DeletionQueueEntry<T>> {
+		if self.len() == 0 {
+			return None
+		}
+
+		let entry = <DeletionQueueMap<T>>::get(self.delete_nonce);
+		let entry = entry.map(|contract| DeletionQueueEntry { contract, queue: self });
+
+		entry
 	}
 }

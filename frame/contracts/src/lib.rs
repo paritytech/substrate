@@ -102,11 +102,11 @@ mod tests;
 use crate::{
 	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
 	gas::GasMeter,
-	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract},
+	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract, DeletionQueue},
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
 	weights::WeightInfo,
 };
-use codec::{Codec, Decode, Encode, HasCompact, MaxEncodedLen};
+use codec::{Codec, Encode, HasCompact};
 use environmental::*;
 use frame_support::{
 	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
@@ -244,14 +244,6 @@ pub mod pallet {
 		/// This setting along with [`MaxCodeLen`](#associatedtype.MaxCodeLen) directly affects
 		/// memory usage of your runtime.
 		type CallStack: Array<Item = Frame<Self>>;
-
-		/// The maximum amount of weight that can be consumed per block for lazy trie removal.
-		///
-		/// The amount of weight that is dedicated per block to work on the deletion queue. Larger
-		/// values allow more trie keys to be deleted in each block but reduce the amount of
-		/// weight that is left for transactions.
-		#[pallet::constant]
-		type DeletionWeightLimit: Get<Weight>;
 
 		/// The amount of balance a caller has to pay for each byte of storage.
 		///
@@ -909,98 +901,15 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type DeletionQueueMap<T: Config> = StorageMap<_, Twox64Concat, u32, DeletedContract>;
 
-	/// A pair of monotonic counters used to index the latest contract marked for deletion
+	/// A pair of monotonic counters used to track the latest contract marked for deletion
 	/// and the latest deleted contract in DeletionQueueMap.
+	///
+	/// These two nonces let us keep track of the length of the queue, so we can calculate the
+	/// weight of the deletion budget, additionally, when we iterate the map to remove contracts, we
+	/// simply use the `delete_nonce` counter and  don't pay the cost of an extra call to
+	/// `sp_io::storage::next_key` to lookup the next entry in the map
 	#[pallet::storage]
-	pub(crate) type DeletionQueueNonce<T: Config> =
-		StorageValue<_, DeletionQueueNonces, ValueQuery>;
-}
-
-/// DeletionQueueNonces is a pair of monotonic counters used to index contracts marked for deletion,
-/// and the latest deleted contract.
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, Default)]
-struct DeletionQueueNonces {
-	/// Monotonic counter used as a key for inserting new deleted contract in the DeletionQueueMap.
-	/// The nonce is incremented after each insertion.
-	insert_nonce: u32,
-	/// The index used to read the next element to be deleted in the DeletionQueueMap.
-	/// The nonce is incremented after each deletion.
-	delete_nonce: u32,
-}
-
-impl DeletionQueueNonces {
-	/// Increment the delete nonce and return the new value.
-	fn delete_inc(&mut self) -> &mut Self {
-		self.delete_nonce = self.delete_nonce.wrapping_add(1);
-		self
-	}
-
-	/// Increment the insert nonce and return the new value.
-	fn insert_inc(&mut self) -> &mut Self {
-		self.insert_nonce = self.insert_nonce.wrapping_add(1);
-		self
-	}
-}
-
-/// DeletionQueue manage the removal of contracts storage that are marked for deletion.
-///
-/// When a contract is deleted by calling `seal_terminate` it becomes inaccessible
-/// immediately, but the deletion of the storage items it has accumulated is performed
-/// later by pulling the contract from the deletion queue in the `on_idle` hook.
-struct DeletionQueue<T: Config> {
-	nonces: DeletionQueueNonces,
-	_phantom: PhantomData<T>,
-}
-
-/// View on a contract that is marked for deletion
-/// The struct takes a mutable reference on the deletion queue so that the contract can be removed,
-/// and none can be added or read in the meantime.
-struct DeletionQueueEntry<'a, T: Config> {
-	contract: DeletedContract,
-	queue: &'a mut DeletionQueue<T>,
-}
-
-impl<'a, T: Config> DeletionQueueEntry<'a, T> {
-	/// Get a reference to the contract that is marked for deletion.
-	fn contract(&self) -> &DeletedContract {
-		&self.contract
-	}
-
-	/// Remove the contract from the deletion queue.
-	fn remove(self) {
-		<DeletionQueueMap<T>>::remove(self.queue.nonces.delete_nonce);
-		<DeletionQueueNonce<T>>::set(*self.queue.nonces.delete_inc());
-	}
-}
-
-impl<T: Config> DeletionQueue<T> {
-	/// Load the Deletion Queue nonces, so we can perform read or write operations on the
-	/// DeletionQueueMap storage
-	fn load() -> Self {
-		let nonces = <DeletionQueueNonce<T>>::get();
-		Self { nonces, _phantom: PhantomData }
-	}
-
-	/// The number of contracts marked for deletion.
-	fn len(&self) -> u32 {
-		self.nonces.insert_nonce.wrapping_sub(self.nonces.delete_nonce)
-	}
-
-	/// Insert a contract in the deletion queue.
-	fn insert(&mut self, contract: DeletedContract) {
-		<DeletionQueueMap<T>>::insert(self.nonces.insert_nonce, contract);
-		<DeletionQueueNonce<T>>::set(*self.nonces.insert_inc());
-	}
-
-	/// Fetch the next contract to be deleted.
-	fn next(&mut self) -> Option<DeletionQueueEntry<T>> {
-		if self.len() == 0 {
-			return None
-		}
-
-		<DeletionQueueMap<T>>::get(self.nonces.delete_nonce)
-			.map(|contract| DeletionQueueEntry { contract, queue: self })
-	}
+	pub(crate) type DeletionQueueNonces<T: Config> = StorageValue<_, DeletionQueue<T>, ValueQuery>;
 }
 
 /// Context of a contract invocation.

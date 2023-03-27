@@ -3020,7 +3020,7 @@ benchmarks! {
 	print_schedule {
 		#[cfg(feature = "std")]
 		{
-			let weight_limit = T::DeletionWeightLimit::get();
+			let weight_limit = Weight::from_parts(100_000_000_000, 3 * 1024 * 1024);
 			let empty_queue_throughput = ContractInfo::<T>::deletion_budget(0, weight_limit);
 			let full_queue_throughput = ContractInfo::<T>::deletion_budget(1024, weight_limit);
 			println!("{:#?}", Schedule::<T>::default());
