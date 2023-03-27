@@ -115,9 +115,11 @@ use std::{
 	path::{Path, PathBuf},
 	process::Command,
 };
+use version::Version;
 
 mod builder;
 mod prerequisites;
+mod version;
 mod wasm_project;
 
 pub use builder::{WasmBuilder, WasmBuilderSelectProject};
@@ -210,7 +212,7 @@ fn get_rustup_command() -> Option<CargoCommand> {
 	let output = Command::new("rustup").args(&["toolchain", "list"]).output().ok()?.stdout;
 	let lines = output.as_slice().lines();
 
-	let mut found_version: Option<(String, Version)> = None;
+	let mut versions = Vec::new();
 	for line in lines.filter_map(|l| l.ok()) {
 		let rustup_version = line.trim_end_matches(&host);
 
@@ -222,48 +224,15 @@ fn get_rustup_command() -> Option<CargoCommand> {
 
 		let Some(cargo_version) = cmd.version() else { continue; };
 
-		if let Some((rustup_version_other, cargo_version_other)) = &mut found_version {
-			let is_older = cargo_version_other.is_older(&cargo_version);
-
-			// Nightly should not overwrite a stable version.
-			if cargo_version_other.is_stable() && cargo_version.is_nightly {
-				continue
-			}
-
-			// Stable versions overwrite nightly versions or otherwise just check which one is
-			// older.
-			if cargo_version_other.is_nightly && cargo_version.is_stable() || is_older {
-				*rustup_version_other = rustup_version.into();
-				*cargo_version_other = cargo_version;
-			}
-		} else {
-			found_version = Some((rustup_version.into(), cargo_version));
-		}
+		versions.push((cargo_version, rustup_version.to_string()));
 	}
 
-	let version = found_version?.0;
+	// Sort by the parsed version to get the latest version (greatest version) at the end of the
+	// vec.
+	versions.sort_by_key(|v| v.0);
+	let version = &versions.last()?.1;
+
 	Some(CargoCommand::new_with_args("rustup", &["run", &version, "cargo"]))
-}
-
-/// The version of rustc/cargo.
-#[derive(Clone, Copy, Debug)]
-struct Version {
-	pub major: u32,
-	pub minor: u32,
-	pub patch: u32,
-	pub is_nightly: bool,
-}
-
-impl Version {
-	/// Returns if `self` is older than `other`.
-	fn is_older(&self, other: &Self) -> bool {
-		self.major < other.major || self.minor < other.minor || self.patch < other.patch
-	}
-
-	/// Returns if `self` is a stable version.
-	fn is_stable(&self) -> bool {
-		!self.is_nightly
-	}
 }
 
 /// Wraps a specific command which represents a cargo invocation.
@@ -305,28 +274,7 @@ impl CargoCommand {
 			.ok()
 			.and_then(|o| String::from_utf8(o.stdout).ok())?;
 
-		if let Some(version) = version.split(" ").nth(1) {
-			let mut is_nightly = false;
-			let parts = version
-				.split(".")
-				.filter_map(|v| {
-					if let Some(rest) = v.strip_suffix("-nightly") {
-						is_nightly = true;
-						rest.parse().ok()
-					} else {
-						v.parse().ok()
-					}
-				})
-				.collect::<Vec<u32>>();
-
-			if parts.len() != 3 {
-				return None
-			}
-
-			Some(Version { major: parts[0], minor: parts[1], patch: parts[2], is_nightly })
-		} else {
-			None
-		}
+		Version::extract(&version)
 	}
 
 	/// Returns the version of this cargo command or `None` if it failed to extract the version.
