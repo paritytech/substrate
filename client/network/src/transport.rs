@@ -135,7 +135,7 @@ pub fn build_transport(
 
 		// NOTE: The order is important here. Preference is given to the regular TCP+Websocket
 		// transport.
-		let transport = OrTransport::new(transport, webrtc_transport)
+		let transport = OrTransport::new(webrtc_transport, transport)
 			.map(|either_output, _| match either_output {
 				EitherOutput::First((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
 				EitherOutput::Second((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
