@@ -556,7 +556,7 @@ pub mod pallet {
 
 		/// Propose and approve a spend of treasury funds.
 		///
-		/// - `origin`: Must be `SpendOrigin` with the `Success` value being at least `amount`.
+		/// - `origin`: Must be `T::SpendOrigin` with the `Success` value being at least `amount`.
 		/// - `asset_kind`: An indicator of the specific asset class which should be spent
 		/// - `amount`: The amount to be transferred from the treasury to the `beneficiary`.
 		/// - `beneficiary`: The destination account for the transfer.
