@@ -947,15 +947,15 @@ impl DeletionQueueNonces {
 ///
 /// When a contract is deleted by calling `seal_terminate` it becomes inaccessible
 /// immediately, but the deletion of the storage items it has accumulated is performed
-/// later.
+/// later by pulling the contract from the deletion queue in the `on_idle` hook.
 struct DeletionQueue<T: Config> {
 	nonces: DeletionQueueNonces,
 	_phantom: PhantomData<T>,
 }
 
 /// View on a contract that is marked for deletion
-/// The struct takes a mutable reference to the deletion queue so that the contract can be removed,
-/// and none can be added in the meantime.
+/// The struct takes a mutable reference on the deletion queue so that the contract can be removed,
+/// and none can be added or read in the meantime.
 struct DeletionQueueEntry<'a, T: Config> {
 	contract: DeletedContract,
 	queue: &'a mut DeletionQueue<T>,
@@ -984,7 +984,7 @@ impl<T: Config> DeletionQueue<T> {
 
 	/// The number of contracts marked for deletion.
 	fn len(&self) -> u32 {
-		self.nonces.insert_nonce.wrapping_sub(self.nonces.insert_nonce)
+		self.nonces.insert_nonce.wrapping_sub(self.nonces.delete_nonce)
 	}
 
 	/// Insert a contract in the deletion queue.
