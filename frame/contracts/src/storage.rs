@@ -30,7 +30,7 @@ use frame_support::{
 	dispatch::DispatchError,
 	storage::child::{self, ChildInfo},
 	weights::Weight,
-	RuntimeDebugNoBound,
+	DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_io::KillStorageResult;
@@ -339,7 +339,7 @@ impl<T: Config> Deref for DepositAccount<T> {
 /// When a contract is deleted by calling `seal_terminate` it becomes inaccessible
 /// immediately, but the deletion of the storage items it has accumulated is performed
 /// later by pulling the contract from the queue in the `on_idle` hook.
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone)]
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, DefaultNoBound, Clone)]
 #[scale_info(skip_type_params(T))]
 pub struct DeletionQueue<T: Config> {
 	/// Monotonic counter used as a key for inserting new deleted contract in the DeletionQueueMap.
@@ -350,12 +350,6 @@ pub struct DeletionQueue<T: Config> {
 	delete_nonce: u32,
 
 	_phantom: PhantomData<T>,
-}
-
-impl<T: Config> Default for DeletionQueue<T> {
-	fn default() -> Self {
-		Self { insert_nonce: 0, delete_nonce: 0, _phantom: Default::default() }
-	}
 }
 
 /// View on a contract that is marked for deletion
