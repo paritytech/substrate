@@ -209,8 +209,7 @@ impl<T: Config> ContractInfo<T> {
 	}
 
 	/// Calculates the weight that is necessary to remove one key from the trie and how many
-	/// of those keys can be deleted from the deletion queue given the supplied queue length
-	/// and weight limit.
+	/// of those keys can be deleted from the deletion queue given the supplied weight limit.
 	pub fn deletion_budget(weight_limit: Weight) -> (Weight, u32) {
 		let base_weight = T::WeightInfo::on_process_deletion_queue_batch();
 		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
@@ -226,7 +225,7 @@ impl<T: Config> ContractInfo<T> {
 		(weight_per_key, key_budget)
 	}
 
-	/// Delete as many items from the deletion queue possible within the supplied weight limit.
+	/// Delete as many items from the deletion queue possible within the supplied weight limit.j
 	///
 	/// It returns the amount of weight used for that task.
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
@@ -409,6 +408,6 @@ impl<T: Config> DeletionQueue<T> {
 		let entry = <DeletionQueueMap<T>>::get(self.delete_nonce);
 		let entry = entry.map(|contract| DeletionQueueEntry { contract, queue: self });
 
-		entr
+		entry
 	}
 }
