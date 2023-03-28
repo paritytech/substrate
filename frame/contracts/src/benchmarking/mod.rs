@@ -3009,8 +3009,9 @@ benchmarks! {
 	print_schedule {
 		#[cfg(feature = "std")]
 		{
-			let empty_queue_throughput = ContractInfo::<T>::deletion_budget(Weight::MAX);
-			let full_queue_throughput = ContractInfo::<T>::deletion_budget(Weight::MAX);
+			let max_weight = <T as frame_system::Config>::BlockWeights::get().max_block;
+			let empty_queue_throughput = ContractInfo::<T>::deletion_budget(max_weight);
+			let full_queue_throughput = ContractInfo::<T>::deletion_budget(max_weight);
 			println!("{:#?}", Schedule::<T>::default());
 			println!("###############################################");
 			println!("Lazy deletion weight per key: {}", empty_queue_throughput.0);
