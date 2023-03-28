@@ -347,7 +347,7 @@ pub struct DeletionQueue<T: Config> {
 	_phantom: PhantomData<T>,
 }
 
-/// View on a contract that is marked for deletion
+/// View on a contract that is marked for deletion.
 /// The struct takes a mutable reference on the deletion queue so that the contract can be removed,
 /// and none can be added or read in the meantime.
 struct DeletionQueueEntry<'a, T: Config> {
@@ -366,7 +366,7 @@ impl<'a, T: Config> DeletionQueueEntry<'a, T> {
 
 impl<T: Config> DeletionQueue<T> {
 	/// Load the Deletion Queue nonces, so we can perform read or write operations on the
-	/// DeletionQueueMap storage
+	/// DeletionQueueMap storage.
 	fn load() -> Self {
 		<DeletionQueueNonces<T>>::get()
 	}
