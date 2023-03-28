@@ -200,7 +200,8 @@ pub trait CommonCli: Sized {
 ///
 /// This trait needs to be implemented on the root CLI struct of the application. It will provide
 /// the implementation `name`, `version`, `executable name`, `description`, `author`, `support_url`,
-/// `copyright start year` and most importantly: how to load the chain spec.
+/// `copyright start year` and most importantly:
+/// how to load the chain spec and create substrate node runner.
 pub trait SubstrateCli: CommonCli {
 	/// Native runtime version.
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
