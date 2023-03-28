@@ -22,11 +22,12 @@ use crate::{
 		Result as ExtensionResult, RetVal, ReturnFlags, SysConfig,
 	},
 	exec::{Frame, Key},
+	storage::DeletionQueue,
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, Config, ContractInfo, ContractInfoOf, DefaultAddressGenerator,
-	Error, Pallet, Schedule,
+	DeletionQueueNonces, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -451,7 +452,7 @@ impl ExtBuilder {
 /// with it's hash.
 ///
 /// The fixture files are located under the `fixtures/` directory.
-fn compile_module<T>(fixture_name: &str) -> wat::Result<(Vec<u8>, <T::Hashing as Hash>::Output)>
+pub fn compile_module<T>(fixture_name: &str) -> wat::Result<(Vec<u8>, <T::Hashing as Hash>::Output)>
 where
 	T: frame_system::Config,
 {
@@ -2160,7 +2161,7 @@ fn lazy_removal_does_no_run_on_low_remaining_weight() {
 		// But value should be still there as the lazy removal did not run, yet.
 		assert_matches!(child::get(trie, &[99]), Some(42));
 
-		// Assign a remaining weight which is too low for a successfull deletion of the contract
+		// Assign a remaining weight which is too low for a successful deletion of the contract
 		let low_remaining_weight =
 			<<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
 
@@ -2264,6 +2265,77 @@ fn lazy_removal_does_not_use_all_weight() {
 	});
 }
 
+#[test]
+fn deletion_queue_ring_buffer_overflow() {
+	let (code, _hash) = compile_module::<Test>("self_destruct").unwrap();
+	let mut ext = ExtBuilder::default().existential_deposit(50).build();
+
+	// setup the deletion queue with custom nonces
+	ext.execute_with(|| {
+		// manually se the nonces of the deletion queue
+		let queue = DeletionQueue::from_test_values(u32::MAX - 1, u32::MAX - 1);
+		<DeletionQueueNonces<Test>>::set(queue);
+	});
+
+	// commit the changes to the storage
+	ext.commit_all().unwrap();
+
+	ext.execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let mut tries: Vec<child::ChildInfo> = vec![];
+
+		// add 3 contracts to the deletion queue
+		for i in 0..3u8 {
+			let addr = Contracts::bare_instantiate(
+				ALICE,
+				min_balance * 100,
+				GAS_LIMIT,
+				None,
+				Code::Upload(code.clone()),
+				vec![],
+				vec![i],
+				false,
+			)
+			.result
+			.unwrap()
+			.account_id;
+
+			let info = get_contract(&addr);
+			let trie = &info.child_trie_info();
+
+			// Put value into the contracts child trie
+			child::put(trie, &[99], &42);
+
+			// Terminate the contract. Contract info should be gone, but value should be still
+			// there as the lazy removal did not run, yet.
+			assert_ok!(Contracts::call(
+				RuntimeOrigin::signed(ALICE),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				None,
+				vec![]
+			));
+
+			assert!(!<ContractInfoOf::<Test>>::contains_key(&addr));
+			assert_matches!(child::get(trie, &[99]), Some(42));
+
+			tries.push(trie.clone())
+		}
+
+		// Run single lazy removal
+		Contracts::on_idle(System::block_number(), Weight::MAX);
+
+		// The single lazy removal should have removed all queued tries
+		for trie in tries.iter() {
+			assert_matches!(child::get::<i32>(trie, &[99]), None);
+		}
+
+		// nonces values should go from u32::MAX - 1 to 1
+		assert_eq!(<DeletionQueueNonces<Test>>::get().as_test_tuple(), (1, 1));
+	})
+}
 #[test]
 fn refcounter() {
 	let (wasm, code_hash) = compile_module::<Test>("self_destruct").unwrap();

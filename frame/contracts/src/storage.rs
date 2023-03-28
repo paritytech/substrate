@@ -400,3 +400,13 @@ impl<T: Config> DeletionQueue<T> {
 		entry
 	}
 }
+
+#[cfg(test)]
+impl<T: Config> DeletionQueue<T> {
+	pub fn from_test_values(insert_nonce: u32, delete_nonce: u32) -> Self {
+		DeletionQueue { insert_nonce, delete_nonce, _phantom: Default::default() }
+	}
+	pub fn as_test_tuple(&self) -> (u32, u32) {
+		(self.insert_nonce, self.delete_nonce)
+	}
+}
