@@ -25,7 +25,7 @@ use codec::Encode;
 use hash_db::Hasher;
 use parking_lot::Mutex;
 use std::{
-	collections::HashMap,
+	collections::{HashMap, HashSet},
 	marker::PhantomData,
 	mem,
 	ops::DerefMut,
@@ -41,14 +41,28 @@ const LOG_TARGET: &str = "trie-recorder";
 /// The internals of [`Recorder`].
 struct RecorderInner<H> {
 	/// The keys for that we have recorded the trie nodes and if we have recorded up to the value.
-	recorded_keys: HashMap<H, HashMap<Vec<u8>, RecordedForKey>>,
+	///
+	/// Mapping: `StorageRoot -> (Key -> RecordedForKey)`.
+	recorded_keys: HashMap<H, HashMap<Arc<[u8]>, RecordedForKey>>,
+
+	recorded_keys_transactions: Vec<HashMap<H, HashMap<Arc<[u8]>, Option<RecordedForKey>>>>,
+
 	/// The encoded nodes we accessed while recording.
+	///
+	/// Mapping: `Hash(Node) -> Node`.
 	accessed_nodes: HashMap<H, Vec<u8>>,
+
+	accessed_nodes_transactions: Vec<HashSet<H>>,
 }
 
 impl<H> Default for RecorderInner<H> {
 	fn default() -> Self {
-		Self { recorded_keys: Default::default(), accessed_nodes: Default::default() }
+		Self {
+			recorded_keys: Default::default(),
+			accessed_nodes: Default::default(),
+			recorded_keys_transactions: Vec::new(),
+			accessed_nodes_transactions: Vec::new(),
+		}
 	}
 }
 
@@ -145,6 +159,42 @@ struct TrieRecorder<H: Hasher, I> {
 	_phantom: PhantomData<H>,
 }
 
+impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> TrieRecorder<H, I> {
+	fn update_recorded_keys(&mut self, full_key: &[u8], access: RecordedForKey) {
+		let inner = self.inner.deref_mut();
+
+		let entry = inner
+			.recorded_keys
+			.entry(self.storage_root)
+			.or_default()
+			.entry(full_key.into());
+
+		let key = entry.key().clone();
+
+		let entry = if matches!(access, RecordedForKey::Value) {
+			entry.and_modify(|e| {
+				if let Some(tx) = inner.recorded_keys_transactions.last_mut() {
+					tx.entry(self.storage_root)
+						.or_default()
+						.entry(key.clone())
+						.or_insert(Some(*e));
+				}
+
+				*e = access;
+			})
+		} else {
+			entry
+		};
+		entry.or_insert_with(|| {
+			if let Some(tx) = inner.recorded_keys_transactions.last_mut() {
+				tx.entry(self.storage_root).or_default().entry(key).or_insert(None);
+			}
+
+			access
+		});
+	}
+}
+
 impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecorder<H::Out>
 	for TrieRecorder<H, I>
 {
@@ -159,10 +209,16 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 					"Recording node",
 				);
 
-				self.inner.accessed_nodes.entry(hash).or_insert_with(|| {
+				let inner = self.inner.deref_mut();
+
+				inner.accessed_nodes.entry(hash).or_insert_with(|| {
 					let node = node_owned.to_encoded::<NodeCodec<H>>();
 
 					encoded_size_update += node.encoded_size();
+
+					if let Some(tx) = inner.accessed_nodes_transactions.last_mut() {
+						tx.insert(hash);
+					}
 
 					node
 				});
@@ -174,10 +230,16 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 					"Recording node",
 				);
 
-				self.inner.accessed_nodes.entry(hash).or_insert_with(|| {
+				let inner = self.inner.deref_mut();
+
+				inner.accessed_nodes.entry(hash).or_insert_with(|| {
 					let node = encoded_node.into_owned();
 
 					encoded_size_update += node.encoded_size();
+
+					if let Some(tx) = inner.accessed_nodes_transactions.last_mut() {
+						tx.insert(hash);
+					}
 
 					node
 				});
@@ -190,21 +252,21 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 					"Recording value",
 				);
 
-				self.inner.accessed_nodes.entry(hash).or_insert_with(|| {
+				let inner = self.inner.deref_mut();
+
+				inner.accessed_nodes.entry(hash).or_insert_with(|| {
 					let value = value.into_owned();
 
 					encoded_size_update += value.encoded_size();
 
+					if let Some(tx) = inner.accessed_nodes_transactions.last_mut() {
+						tx.insert(hash);
+					}
+
 					value
 				});
 
-				self.inner
-					.recorded_keys
-					.entry(self.storage_root)
-					.or_default()
-					.entry(full_key.to_vec())
-					.and_modify(|e| *e = RecordedForKey::Value)
-					.or_insert(RecordedForKey::Value);
+				self.update_recorded_keys(full_key, RecordedForKey::Value);
 			},
 			TrieAccess::Hash { full_key } => {
 				tracing::trace!(
@@ -215,12 +277,7 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 
 				// We don't need to update the `encoded_size_update` as the hash was already
 				// accounted for by the recorded node that holds the hash.
-				self.inner
-					.recorded_keys
-					.entry(self.storage_root)
-					.or_default()
-					.entry(full_key.to_vec())
-					.or_insert(RecordedForKey::Hash);
+				self.update_recorded_keys(full_key, RecordedForKey::Hash);
 			},
 			TrieAccess::NonExisting { full_key } => {
 				tracing::trace!(
@@ -232,13 +289,7 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 				// Non-existing access means we recorded all trie nodes up to the value.
 				// Not the actual value, as it doesn't exist, but all trie nodes to know
 				// that the value doesn't exist in the trie.
-				self.inner
-					.recorded_keys
-					.entry(self.storage_root)
-					.or_default()
-					.entry(full_key.to_vec())
-					.and_modify(|e| *e = RecordedForKey::Value)
-					.or_insert(RecordedForKey::Value);
+				self.update_recorded_keys(full_key, RecordedForKey::Value);
 			},
 		};
 
