@@ -1257,6 +1257,8 @@ pub mod pallet {
 	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<T::BlockNumber>, ValueQuery>;
 
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
+	///
+	/// Invariant: Always sorted by score.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
 	pub type QueuedSolution<T: Config> =
@@ -1578,7 +1580,30 @@ impl<T: Config> Pallet<T> {
 #[cfg(any(feature = "try-runtime", test))]
 impl<T: Config> Pallet<T> {
 	fn do_try_state() -> Result<(), &'static str> {
-		Ok(())
+		Self::try_state_solution_queue()?;
+		Self::try_state_snapshot()?;
+		Self::try_state_signed_submissions_map()
+	}
+
+	// [`QueuedSolution`] state check. Invariants:
+	// - Queued solutions must be sorted by score (highest first).
+	fn try_state_solution_queue() -> Result<(), &'static str> {
+		todo!()
+	}
+
+	// [`Snapshot`] state check. Invariants:
+	// - Does not exist if in `Phase::Off`;
+	// - [`DesiredTargets`] exist IFF [`Snapshot`] is present.
+	// - [`SnapshotMetadata`] exist IFF [`Snapshot`] is present.
+	fn try_state_snapshot() -> Result<(), &'static str> {
+		todo!()
+	}
+
+	// [`SignedSubmissionsMap`] state check. Invariants:
+	// - All [`SignedSubmissionIndices`] are present in [`SignedSubmissionsMap`], and no more;
+	// - [`SignedSubmissionNextIndex`] points at an existing (and best) submissoin in the map.
+	fn try_state_signed_submissions_map() -> Result<(), &'static str> {
+		todo!()
 	}
 }
 

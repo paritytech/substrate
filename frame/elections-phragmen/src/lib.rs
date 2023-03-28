@@ -1222,7 +1222,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// [`RunnersUp`] state checks. Invariants:
-	//  - Elements are sorted based on rank;
+	//  - Elements are sorted based on rank.
 	fn try_state_runners_up() -> Result<(), &'static str> {
 		Ok(())
 	}
@@ -1239,7 +1239,8 @@ impl<T: Config> Pallet<T> {
 			Err("try_state checks: Candidates must be always sorted by account ID")
 		}
 	}
-
+	// [`Candidates`] and [`RunnersUp`] state checks. Invariants:
+	//  - Candidates and runners-ups sets are disjoint.
 	fn try_state_candidates_runners_up_disjoint() -> Result<(), &'static str> {
 		match Self::intersects(&Self::candidates_ids(), &Self::runners_up_ids()) {
 			true => Err("Candidates and runners up sets should always be disjoint"),
@@ -1247,6 +1248,9 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	// [`Members`], [`Candidates`] and [`RunnersUp`] state checks. Invariants:
+	//  - Members and candidates sets are disjoint;
+	//  - Members and runners-ups sets are disjoint.
 	fn try_state_members_disjoint() -> Result<(), &'static str> {
 		match Self::intersects(&Pallet::<T>::members_ids(), &Self::candidates_ids()) &&
 			Self::intersects(&Pallet::<T>::members_ids(), &Self::runners_up_ids())
@@ -1256,6 +1260,9 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	// [`Members`], [`RunnersUp`] and approval stake state checks. Invariants:
+	// - Selected members should have approval stake;
+	// - Selected RunnersUp should have approval stake.
 	fn try_state_members_approval_stake() -> Result<(), &'static str> {
 		match Members::<T>::get()
 			.iter()
@@ -1263,7 +1270,7 @@ impl<T: Config> Pallet<T> {
 			.all(|s| s.stake != BalanceOf::<T>::zero())
 		{
 			true => Ok(()),
-			false => Err("Members with no votes should not be chosen"),
+			false => Err("Members and RunnersUp must have approval stake"),
 		}
 	}
 
@@ -1583,6 +1590,7 @@ mod tests {
 	fn pre_conditions() {
 		System::set_block_number(1);
 		Elections::try_state_members().unwrap();
+		Elections::try_state_members_approval_stake().unwrap();
 		Elections::try_state_candidates().unwrap();
 		Elections::try_state_candidates_runners_up_disjoint().unwrap();
 	}
