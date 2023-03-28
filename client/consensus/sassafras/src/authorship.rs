@@ -54,14 +54,19 @@ pub(crate) fn claim_slot(
 
 	let (authority_idx, ticket_aux) = match ticket {
 		Some(ticket) => {
-			log::debug!(target: "sassafras", "🌳 [TRY PRIMARY]");
+			log::debug!(target: LOG_TARGET, "[TRY PRIMARY]");
 			let (authority_idx, ticket_aux) = epoch.tickets_aux.get(&ticket)?.clone();
-			log::debug!(target: "sassafras", "🌳 Ticket = [ticket: {:02x?}, auth: {}, attempt: {}]",
-                &ticket.as_bytes()[0..8], authority_idx, ticket_aux.attempt);
+			log::debug!(
+				target: LOG_TARGET,
+				"Ticket = [ticket: {:02x?}, auth: {}, attempt: {}]",
+				&ticket.as_bytes()[0..8],
+				authority_idx,
+				ticket_aux.attempt
+			);
 			(authority_idx, Some(ticket_aux))
 		},
 		None => {
-			log::debug!(target: "sassafras", "🌳 [TRY SECONDARY]");
+			log::debug!(target: LOG_TARGET, "[TRY SECONDARY]");
 			(secondary_authority_index(slot, config), None)
 		},
 	};
@@ -101,7 +106,7 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 		config.authorities.len() as u32,
 	);
 	// TODO-SASS-P4 remove me
-	log::debug!(target: "sassafras", "🌳 Tickets threshold: {:032x}", threshold);
+	log::debug!(target: LOG_TARGET, "Tickets threshold: {:032x}", threshold);
 
 	let authorities = config.authorities.iter().enumerate().map(|(index, a)| (index, &a.0));
 	for (authority_idx, authority_id) in authorities {
@@ -184,7 +189,7 @@ where
 	type AuxData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
 
 	fn logging_target(&self) -> &'static str {
-		"sassafras"
+		LOG_TARGET
 	}
 
 	fn block_import(&mut self) -> &mut Self::BlockImport {
@@ -217,13 +222,13 @@ where
 		slot: Slot,
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) -> Option<Self::Claim> {
-		debug!(target: "sassafras", "🌳 Attempting to claim slot {}", slot);
+		debug!(target: LOG_TARGET, "Attempting to claim slot {}", slot);
 
 		// Get the next slot ticket from the runtime.
 		let ticket = self.client.runtime_api().slot_ticket(parent_header.hash(), slot).ok()?;
 
 		// TODO-SASS-P2: remove me
-		debug!(target: "sassafras", "🌳 parent {}", parent_header.hash());
+		debug!(target: LOG_TARGET, "parent {}", parent_header.hash());
 
 		let claim = authorship::claim_slot(
 			slot,
@@ -235,7 +240,7 @@ where
 			&self.keystore,
 		);
 		if claim.is_some() {
-			debug!(target: "sassafras", "🌳 Claimed slot {}", slot);
+			debug!(target: LOG_TARGET, "Claimed slot {}", slot);
 		}
 		claim
 	}
@@ -251,7 +256,7 @@ where
 			Ok(()) => true,
 			Err(e) =>
 				if e.is_full() {
-					warn!(target: "sassafras", "🌳 Trying to notify a slot but the channel is full");
+					warn!(target: LOG_TARGET, "Trying to notify a slot but the channel is full");
 					true
 				} else {
 					false
@@ -379,13 +384,13 @@ async fn start_tickets_worker<B, C, SC>(
 		let epoch_desc = match find_next_epoch_digest::<B>(&notification.header) {
 			Ok(Some(epoch_desc)) => epoch_desc,
 			Err(err) => {
-				warn!(target: "sassafras", "🌳 Error fetching next epoch digest: {}", err);
+				warn!(target: LOG_TARGET, "Error fetching next epoch digest: {}", err);
 				continue
 			},
 			_ => continue,
 		};
 
-		debug!(target: "sassafras", "🌳 New epoch announced {:x?}", epoch_desc);
+		debug!(target: LOG_TARGET, "New epoch announced {:x?}", epoch_desc);
 
 		let number = *notification.header.number();
 		let position = if number == One::one() {
@@ -398,7 +403,10 @@ async fn start_tickets_worker<B, C, SC>(
 		let mut epoch = match epoch_changes.shared_data().epoch(&epoch_identifier).cloned() {
 			Some(epoch) => epoch,
 			None => {
-				warn!(target: "🌳 sassafras", "Unexpected missing epoch data for {:?}",	epoch_identifier);
+				warn!(
+					target: LOG_TARGET,
+					"Unexpected missing epoch data for {:?}", epoch_identifier
+				);
 				continue
 			},
 		};
@@ -412,7 +420,7 @@ async fn start_tickets_worker<B, C, SC>(
 		let best_hash = match select_chain.best_chain().await {
 			Ok(header) => header.hash(),
 			Err(err) => {
-				error!(target: "🌳 sassafras", "Error fetching best chain block id: {}", err);
+				error!(target: LOG_TARGET, "Error fetching best chain block id: {}", err);
 				continue
 			},
 		};
@@ -434,7 +442,7 @@ async fn start_tickets_worker<B, C, SC>(
 				// Thus on reboot/crash we are loosing them.
 			},
 			Some(err) => {
-				error!(target: "sassafras", "🌳 Unable to submit tickets: {}", err);
+				error!(target: LOG_TARGET, "Unable to submit tickets: {}", err);
 			},
 		}
 	}
@@ -538,7 +546,7 @@ where
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	ER: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
-	info!(target: "sassafras", "🌳 🍁 Starting Sassafras Authorship worker");
+	info!(target: LOG_TARGET, "🍁 Starting Sassafras Authorship worker");
 
 	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
 

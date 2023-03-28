@@ -80,6 +80,8 @@ pub mod session;
 // Re-export pallet symbols.
 pub use pallet::*;
 
+const LOG_TARGET: &str = "runtime::sassafras 🌳";
+
 /// Tickets related metadata that is commonly used together.
 #[derive(Debug, Default, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy)]
 pub struct TicketsMetadata {
@@ -272,7 +274,7 @@ pub mod pallet {
 			// On the first non-zero block (i.e. block #1) this is where the first epoch
 			// (epoch #0) actually starts. We need to adjust internal storage accordingly.
 			if *GenesisSlot::<T>::get() == 0 {
-				log::debug!(target: "sassafras", "🌳 >>> GENESIS SLOT: {:?}", pre_digest.slot);
+				log::debug!(target: LOG_TARGET, ">>> GENESIS SLOT: {:?}", pre_digest.slot);
 				Self::initialize_genesis_epoch(pre_digest.slot)
 			}
 
@@ -335,7 +337,7 @@ pub mod pallet {
 
 			let mut metadata = TicketsMeta::<T>::get();
 
-			log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ received {} tickets", tickets.len());
+			log::debug!(target: LOG_TARGET, "@@@@@@@@@@ received {} tickets", tickets.len());
 
 			// TODO-SASS-P4: for sure there is a better way to do this...
 			let tickets: Vec<_> = tickets.iter().map(|t| t.ticket).collect();
@@ -408,7 +410,9 @@ pub mod pallet {
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::submit_tickets { tickets } = call {
 				// Discard tickets not coming from the local node
-				log::debug!(target: "sassafras::runtime", "🌳 Validating unsigned from {} source",
+				log::debug!(
+					target: LOG_TARGET,
+					"Validating unsigned from {} source",
 					match source {
 						TransactionSource::Local => "local",
 						TransactionSource::InBlock => "in-block",
@@ -427,8 +431,8 @@ pub mod pallet {
 					//  B) The next epoch validators
 					//  C) Doesn't matter as far as the tickets are good (i.e. RVRF verify is ok)
 					log::warn!(
-						target: "sassafras::runtime",
-						"🌳 Rejecting unsigned transaction from external sources.",
+						target: LOG_TARGET,
+						"Rejecting unsigned transaction from external sources.",
 					);
 					return InvalidTransaction::BadSigner.into()
 				}
@@ -438,10 +442,7 @@ pub mod pallet {
 
 				let current_slot_idx = Self::current_slot_index();
 				if current_slot_idx >= epoch_duration / 2 {
-					log::warn!(
-						target: "sassafras::runtime",
-						"🌳 Timeout to propose tickets, bailing out.",
-					);
+					log::warn!(target: LOG_TARGET, "Timeout to propose tickets, bailing out.",);
 					return InvalidTransaction::Stale.into()
 				}
 
@@ -726,7 +727,12 @@ impl<T: Config> Pallet<T> {
 			} else {
 				2 * (duration - (slot_idx + 1))
 			};
-			log::debug!(target: "sassafras::runtime", "🌳 >>>>>>>> SLOT-IDX {} -> TICKET-IDX {}", slot_idx, ticket_idx);
+			log::debug!(
+				target: LOG_TARGET,
+				">>>>>>>> SLOT-IDX {} -> TICKET-IDX {}",
+				slot_idx,
+				ticket_idx
+			);
 			ticket_idx as u32
 		};
 
@@ -820,14 +826,14 @@ impl<T: Config> Pallet<T> {
 	///
 	/// TODO-SASS-P3: we have to add the zk validity proofs
 	pub fn submit_tickets_unsigned_extrinsic(mut tickets: Vec<TicketEnvelope>) -> bool {
-		log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ submitting {} tickets", tickets.len());
+		log::debug!(target: LOG_TARGET, "@@@@@@@@@@ submitting {} tickets", tickets.len());
 		tickets.sort_unstable_by_key(|t| t.ticket);
 		let tickets = BoundedVec::truncate_from(tickets);
 		let call = Call::submit_tickets { tickets };
 		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
 			Ok(_) => true,
 			Err(e) => {
-				log::error!(target: "runtime::sassafras", "Error submitting tickets {:?}", e);
+				log::error!(target: LOG_TARGET, "Error submitting tickets {:?}", e);
 				false
 			},
 		}
@@ -848,7 +854,7 @@ impl<T: Config> Pallet<T> {
 		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
 			Ok(()) => true,
 			Err(e) => {
-				log::error!(target: "runtime::sassafras", "Error submitting equivocation report: {:?}",	e);
+				log::error!(target: LOG_TARGET, "Error submitting equivocation report: {:?}", e);
 				false
 			},
 		}

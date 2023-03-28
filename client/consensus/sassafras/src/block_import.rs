@@ -173,27 +173,30 @@ where
 				*epoch_data.start_slot + skipped_epochs * epoch_data.config.epoch_duration,
 			);
 			log::warn!(
-				target: "sassafras",
-				"🌳 Epoch(s) skipped from {} to {}",
-				 original_epoch_idx, epoch_data.epoch_idx
+				target: LOG_TARGET,
+				"Epoch(s) skipped from {} to {}",
+				original_epoch_idx,
+				epoch_data.epoch_idx
 			);
 		}
 
-		log!(target: "sassafras",
-			 log_level,
-			 "🌳 🍁 New epoch {} launching at block {} (block slot {} >= start slot {}).",
-			 viable_epoch.as_ref().epoch_idx,
-			 hash,
-			 slot,
-			 viable_epoch.as_ref().start_slot,
+		log!(
+			target: LOG_TARGET,
+			log_level,
+			"New epoch {} launching at block {} (block slot {} >= start slot {}).",
+			viable_epoch.as_ref().epoch_idx,
+			hash,
+			slot,
+			viable_epoch.as_ref().start_slot,
 		);
 
 		let next_epoch = viable_epoch.increment(next_epoch_desc);
 
-		log!(target: "sassafras",
-			 log_level,
-			 "🌳 🍁 Next epoch starts at slot {}",
-			 next_epoch.as_ref().start_slot,
+		log!(
+			target: LOG_TARGET,
+			log_level,
+			"Next epoch starts at slot {}",
+			next_epoch.as_ref().start_slot,
 		);
 
 		let old_epoch_changes = (*epoch_changes).clone();
@@ -218,7 +221,7 @@ where
 		};
 
 		if let Err(e) = prune_and_import() {
-			warn!(target: "sassafras", "🌳 Failed to launch next epoch: {}", e);
+			warn!(target: LOG_TARGET, "Failed to launch next epoch: {}", e);
 			*epoch_changes = old_epoch_changes;
 			return Err(e)
 		}

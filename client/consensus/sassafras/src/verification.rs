@@ -92,7 +92,7 @@ fn check_header<B: BlockT + Sized>(
 
 	match (&ticket, &pre_digest.ticket_aux) {
 		(Some(ticket), Some(ticket_aux)) => {
-			log::debug!(target: "sassafras", "🌳 checking primary");
+			log::debug!(target: LOG_TARGET, "checking primary");
 			let transcript =
 				make_ticket_transcript(&config.randomness, ticket_aux.attempt, epoch.epoch_idx);
 			schnorrkel::PublicKey::from_bytes(authority_id.as_slice())
@@ -100,20 +100,20 @@ fn check_header<B: BlockT + Sized>(
 				.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
 		},
 		(None, None) => {
-			log::debug!(target: "sassafras", "🌳 checking secondary");
+			log::debug!(target: LOG_TARGET, "checking secondary");
 			let idx = authorship::secondary_authority_index(pre_digest.slot, config);
 			if idx != pre_digest.authority_idx {
-				log::error!(target: "sassafras", "🌳 Bad secondary authority index");
+				log::error!(target: LOG_TARGET, "Bad secondary authority index");
 				return Err(Error::SlotAuthorNotFound)
 			}
 		},
 		(Some(_), None) => {
-			log::warn!(target: "sassafras", "🌳 Unexpected secondary authoring mechanism");
+			log::warn!(target: LOG_TARGET, "Unexpected secondary authoring mechanism");
 			return Err(Error::UnexpectedAuthoringMechanism)
 		},
 		(None, Some(_)) =>
 			if origin != BlockOrigin::NetworkInitialSync {
-				log::warn!(target: "sassafras", "🌳 Unexpected primary authoring mechanism");
+				log::warn!(target: LOG_TARGET, "Unexpected primary authoring mechanism");
 				return Err(Error::UnexpectedAuthoringMechanism)
 			},
 	}
@@ -223,7 +223,7 @@ where
 		};
 
 		info!(
-			target: "sassafras",
+			target: LOG_TARGET,
 			"🌳 Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 			author,
 			slot,
@@ -275,7 +275,7 @@ where
 			)
 			.map_err(Error::RuntimeApi)?;
 
-		info!(target: "sassafras", "🌳 Submitted equivocation report for author {:?}", author);
+		info!(target: LOG_TARGET, "Submitted equivocation report for author {:?}", author);
 
 		Ok(())
 	}
@@ -302,7 +302,7 @@ where
 		mut block: BlockImportParams<Block, ()>,
 	) -> Result<BlockImportParams<Block, ()>, String> {
 		trace!(
-			target: "sassafras",
+			target: LOG_TARGET,
 			"🌳 Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
 			block.origin,
 			block.header,
@@ -389,7 +389,10 @@ where
 					)
 					.await
 				{
-					warn!(target: "sassafras", "🌳 Error checking/reporting Sassafras equivocation: {}", err);
+					warn!(
+						target: LOG_TARGET,
+						"Error checking/reporting Sassafras equivocation: {}", err
+					);
 				}
 
 				// If the body is passed through, we need to use the runtime to check that the
@@ -419,7 +422,7 @@ where
 					block.body = Some(inner_body);
 				}
 
-				trace!(target: "sassafras", "🌳 Checked {:?}; importing.", pre_header);
+				trace!(target: LOG_TARGET, "Checked {:?}; importing.", pre_header);
 				telemetry!(
 					self.telemetry;
 					CONSENSUS_TRACE;
@@ -438,7 +441,7 @@ where
 				Ok(block)
 			},
 			CheckedHeader::Deferred(a, b) => {
-				debug!(target: "sassafras", "🌳 Checking {:?} failed; {:?}, {:?}.", hash, a, b);
+				debug!(target: LOG_TARGET, "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
 				telemetry!(
 					self.telemetry;
 					CONSENSUS_DEBUG;

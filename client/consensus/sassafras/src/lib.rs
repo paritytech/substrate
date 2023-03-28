@@ -98,6 +98,8 @@ pub use aux_schema::revert;
 pub use block_import::{block_import, SassafrasBlockImport};
 pub use verification::SassafrasVerifier;
 
+const LOG_TARGET: &str = "sassafras 🌳";
+
 /// Errors encountered by the Sassafras routines.
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
@@ -180,7 +182,7 @@ impl<B: BlockT> From<Error<B>> for String {
 
 // Convenience function
 fn sassafras_err<B: BlockT>(error: Error<B>) -> Error<B> {
-	error!(target: "sassafras", "🌳 {}", error);
+	error!(target: LOG_TARGET, "{}", error);
 	error
 }
 
@@ -260,7 +262,7 @@ where
 {
 	let info = client.usage_info().chain;
 	let hash = info.finalized_state.map(|(hash, _)| hash).unwrap_or_else(|| {
-		debug!(target: "sassafras", "🌳 Reading config from genesis");
+		debug!(target: LOG_TARGET, "Reading config from genesis");
 		info.genesis_hash
 	});
 
@@ -297,10 +299,10 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 
 	let mut pre_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: "sassafras", "🌳 Checking log {:?}, looking for pre runtime digest", log);
+		trace!(target: LOG_TARGET, "Checking log {:?}, looking for pre runtime digest", log);
 		match (log.as_sassafras_pre_digest(), pre_digest.is_some()) {
 			(Some(_), true) => return Err(sassafras_err(Error::MultiplePreRuntimeDigests)),
-			(None, _) => trace!(target: "sassafras", "🌳 Ignoring digest not meant for us"),
+			(None, _) => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
 		}
 	}
@@ -313,13 +315,13 @@ fn find_next_epoch_digest<B: BlockT>(
 ) -> Result<Option<NextEpochDescriptor>, Error<B>> {
 	let mut epoch_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		trace!(target: "sassafras", "🌳 Checking log {:?}, looking for epoch change digest.", log);
+		trace!(target: LOG_TARGET, "Checking log {:?}, looking for epoch change digest.", log);
 		let log = log.try_to::<ConsensusLog>(OpaqueDigestItemId::Consensus(&SASSAFRAS_ENGINE_ID));
 		match (log, epoch_digest.is_some()) {
 			(Some(ConsensusLog::NextEpochData(_)), true) =>
 				return Err(sassafras_err(Error::MultipleEpochChangeDigests)),
 			(Some(ConsensusLog::NextEpochData(epoch)), false) => epoch_digest = Some(epoch),
-			_ => trace!(target: "sassafras", "🌳 Ignoring digest not meant for us"),
+			_ => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
 		}
 	}
 
