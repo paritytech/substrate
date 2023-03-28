@@ -288,8 +288,6 @@ check-crates-publishing-pipeline:
 foo1:
   extends: .kubernetes-env
   stage: .pre
-  variables:
-    FF_USE_NEW_BASH_EVAL_STRATEGY: 1
   script:
     - trap "echo trap" EXIT
     - echo foo
@@ -297,8 +295,6 @@ foo1:
 foo2:
   extends: .kubernetes-env
   stage: .pre
-  variables:
-    FF_USE_NEW_BASH_EVAL_STRATEGY: 1
   script:
     - trap "echo trap" EXIT
     - echo foo
