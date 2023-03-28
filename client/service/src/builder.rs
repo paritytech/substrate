@@ -230,9 +230,10 @@ where
 	Ok((client, backend, keystore_container, task_manager))
 }
 
-
 /// Creates a [`NativeElseWasmExecutor`] according to [`Configuration`].
-pub fn new_native_executor<D: NativeExecutionDispatch>(config: &Configuration) -> NativeElseWasmExecutor<D> {
+pub fn new_native_executor<D: NativeExecutionDispatch>(
+	config: &Configuration,
+) -> NativeElseWasmExecutor<D> {
 	NativeElseWasmExecutor::<D>::new(
 		config.wasm_method,
 		config.default_heap_pages,

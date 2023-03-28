@@ -531,11 +531,6 @@ pub struct SharedParams {
 	)]
 	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
-	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
-	/// [`sc_service::Configuration.default_heap_pages`].
-	#[arg(long)]
-	pub heap_pages: Option<u64>,
-
 	/// Path to a file to export the storage proof into (as a JSON).
 	/// If several blocks are executed, the path is interpreted as a folder
 	/// where one file per block will be written (named `{block_number}-{block_hash}`).
@@ -826,22 +821,13 @@ pub(crate) fn full_extensions() -> Extensions {
 	extensions
 }
 
+/// Build wasm executor by default config.
 pub(crate) fn build_executor<H: HostFunctions>(shared: &SharedParams) -> WasmExecutor<H> {
-	let heap_pages = shared.heap_pages.unwrap_or(2048);
-	let max_runtime_instances = 8;
-	let runtime_cache_size = 2;
-
-	sc_executor_common::wasm_runtime::HeapAllocStrategy;
-	let method =
-		execution_method_from_cli(shared.wasm_method, shared.wasmtime_instantiation_strategy);
-
-	WasmExecutor::builder(method)
-		.with_offchain_heap_alloc_strategy(HeapAllocStrategy::Static {
-			extra_pages: heap_pages as _,
-		})
-		.with_max_runtime_instances(max_runtime_instances)
-		.with_runtime_cache_size(runtime_cache_size)
-		.build()
+	WasmExecutor::builder(execution_method_from_cli(
+		shared.wasm_method,
+		shared.wasmtime_instantiation_strategy,
+	))
+	.build()
 }
 
 /// Ensure that the given `ext` is compiled with `try-runtime`
