@@ -483,12 +483,13 @@ async fn should_return_runtime_version() {
 	let client = Arc::new(substrate_test_runtime_client::new());
 	let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No);
 
+	// it is basically json-encoded substrate_test_runtime_client::runtime::VERSION
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
 		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",4],\
-		[\"0x37e397fc7c91f5e4\",2],[\"0xd2bc9897eed08f15\",3],[\"0x40fe3ad401f8959a\",6],\
-		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",2],\
-		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
-		\"transactionVersion\":1,\"stateVersion\":1}";
+	[\"0x37e397fc7c91f5e4\",2],[\"0xd2bc9897eed08f15\",3],[\"0x40fe3ad401f8959a\",6],\
+	[\"0xbc9d89904f5b923f\",1],[\"0xc6e9a76309f39b09\",2],[\"0xdd718d5cc53262d4\",1],\
+	[\"0xcbca25e39f142387\",2],[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],\
+	[\"0xed99c5acb25eedf5\",3]],\"transactionVersion\":1,\"stateVersion\":1}";
 
 	let runtime_version = api.runtime_version(None.into()).unwrap();
 	let serialized = serde_json::to_string(&runtime_version).unwrap();
