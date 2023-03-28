@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{extrinsic::Transfer, AccountId, AccountSignature, AuthorityId, BlockNumber, Runtime};
+use crate::{AccountId, AccountSignature, AuthorityId, BlockNumber, Runtime, Transfer};
 use codec::KeyedVec;
 use frame_support::storage;
 use sp_core::storage::well_known_keys;

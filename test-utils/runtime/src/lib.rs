@@ -19,6 +19,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
 pub mod extrinsic;
 #[cfg(feature = "std")]
 pub mod genesismap;
@@ -59,7 +60,9 @@ use sp_version::RuntimeVersion;
 pub use sp_consensus_babe::{AllowedSlots, AuthorityId, BabeEpochConfiguration, Slot};
 
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
-pub use extrinsic::{Transfer, TransferCallBuilder, UncheckedExtrinsicBuilder};
+
+#[cfg(feature = "std")]
+pub use extrinsic::{TransferCallBuilder, UncheckedExtrinsicBuilder};
 
 const LOG_TARGET: &str = "substrate_test_runtime";
 
@@ -111,6 +114,15 @@ fn version() -> RuntimeVersion {
 #[cfg(any(feature = "std", test))]
 pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
+}
+
+/// Transfer used in test substrate pallet
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct Transfer {
+	pub from: AccountId,
+	pub to: AccountId,
+	pub amount: u64,
+	pub nonce: u64,
 }
 
 /// The address format for describing accounts.
@@ -333,11 +345,6 @@ impl pallet_babe::Config for Runtime {
 fn benchmark_add_one(i: u64) -> u64 {
 	i + 1
 }
-
-/// The `benchmark_add_one` function as function pointer.
-#[cfg(not(feature = "std"))]
-static BENCHMARK_ADD_ONE: sp_runtime_interface::wasm::ExchangeableFunction<fn(u64) -> u64> =
-	sp_runtime_interface::wasm::ExchangeableFunction::new(benchmark_add_one);
 
 fn code_using_trie() -> u64 {
 	let pairs = [

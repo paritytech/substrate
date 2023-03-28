@@ -15,32 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "std")]
-use crate::sr25519::Pair;
 use crate::{
-	substrate_test_pallet, substrate_test_pallet::pallet::Call as PalletCall, AccountId,
-	AuthorityId, RuntimeCall, Signature, SignedExtra, SignedPayload, UncheckedExtrinsic,
+	sr25519::Pair, substrate_test_pallet, substrate_test_pallet::pallet::Call as PalletCall,
+	AuthorityId, RuntimeCall, Signature, SignedExtra, SignedPayload, Transfer, UncheckedExtrinsic,
 };
-use codec::{Decode, Encode};
-use scale_info::TypeInfo;
-#[cfg(feature = "std")]
+use codec::Encode;
 use sp_core::crypto::Pair as TraitPair;
-use sp_core::RuntimeDebug;
 use sp_runtime::transaction_validity::{InvalidTransaction, TransactionValidityError};
 use sp_std::prelude::*;
 
-/// Transfer used in test substrate pallet
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct Transfer {
-	pub from: AccountId,
-	pub to: AccountId,
-	pub amount: u64,
-	pub nonce: u64,
-}
-
 impl Transfer {
 	/// Convert into a signed unchecked extrinsic.
-	#[cfg(feature = "std")]
 	pub fn into_unchecked_extrinsic(self) -> UncheckedExtrinsic {
 		UncheckedExtrinsicBuilder::new_transfer(self).build()
 	}
@@ -48,7 +33,6 @@ impl Transfer {
 	/// Convert into a signed extrinsic, which will only end up included in the block
 	/// if it's the first transaction. Otherwise it will cause `ResourceExhaustion` error
 	/// which should be considered as block being full.
-	#[cfg(feature = "std")]
 	pub fn into_resources_exhausting_unchecked_extrinsic(self) -> UncheckedExtrinsic {
 		UncheckedExtrinsicBuilder::new(TransferCallBuilder::new(self).exhaust_resources().build())
 			.build()
@@ -101,7 +85,6 @@ impl TransferCallBuilder {
 	}
 
 	/// Sign `transfer` with `signer` and embeds signature into `PalletCall::transfer_call`
-	#[cfg(feature = "std")]
 	pub fn signer(mut self, signer: Pair) -> Self {
 		self.signature = Some(signer.sign(&self.transfer.encode()));
 		self
@@ -119,7 +102,6 @@ impl TransferCallBuilder {
 		self
 	}
 
-	#[cfg(feature = "std")]
 	/// Generate instance of `PalletCall::transfer_call`
 	pub fn build<T: substrate_test_pallet::Config>(self) -> PalletCall<T> {
 		let signature = match self.signature {
@@ -133,12 +115,6 @@ impl TransferCallBuilder {
 			signature,
 			exhaust_resources_when_not_first: self.exhaust_resources,
 		}
-	}
-
-	#[cfg(not(feature = "std"))]
-	/// Dummy implementation for `no_std`.
-	pub fn build<T: substrate_test_pallet::Config>(self) -> PalletCall<T> {
-		unimplemented!()
 	}
 }
 
@@ -206,13 +182,7 @@ impl UncheckedExtrinsicBuilder {
 		self
 	}
 
-	#[cfg(not(feature = "std"))]
-	pub fn build(self) -> UncheckedExtrinsic {
-		unimplemented!()
-	}
-
 	/// Build `UncheckedExtrinsic` using embedded parameters
-	#[cfg(feature = "std")]
 	pub fn build(self) -> UncheckedExtrinsic {
 		if self.is_unsigned {
 			UncheckedExtrinsic::new_unsigned(self.function)
