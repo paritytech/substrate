@@ -236,17 +236,20 @@ test-frame-support:
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-C debug-assertions -D warnings"
     RUST_BACKTRACE: 1
     WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
     # Ensure we run the UI tests.
     RUN_UI_TESTS: 1
   script:
+    - echo $RUSTFLAGS
     - rusty-cachier snapshot create
-    - time cargo test --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
-    - time cargo test --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
+    - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
+    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet
+    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
+    - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
     - rusty-cachier cache upload
 
 # This job runs tests that don't work with cargo-nextest in test-linux-stable
