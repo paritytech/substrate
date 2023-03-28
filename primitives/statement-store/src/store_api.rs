@@ -50,6 +50,8 @@ pub enum SubmitResult {
 	Known,
 	/// Known statement that's already expired.
 	KnownExpired,
+	/// Priority is too low or the size is too big.
+	Ignored,
 	/// Statement failed validation.
 	Bad(&'static str),
 	/// Internal store error.
@@ -88,4 +90,7 @@ pub trait StatementStore: Send + Sync {
 
 	/// Submit a SCALE-encoded statement.
 	fn submit_encoded(&self, statement: &[u8], source: StatementSource) -> SubmitResult;
+
+	/// Remove a statement from the store.
+	fn remove(&self, hash: &Hash) -> Result<()>;
 }

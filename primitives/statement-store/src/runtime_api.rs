@@ -30,9 +30,14 @@ use sp_externalities::ExternalitiesExt;
 /// Information concerning a valid statement.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct ValidStatement {
-	/// Statement priority as calculated by the runtime. Higher priority statements have lower
-	/// chance of being evicted.
-	pub priority: u64,
+	/// Max statement count for this account, as calculated by the runtime.
+	pub max_count: u64,
+	/// Max total data size for this account, as calculated by the runtime.
+	pub max_size: u64,
+	/// Global priority value. This is used to prioritize statements on the global scale.
+	/// If the global loimit of messages is reached, the statement with the lowest priority will be
+	/// removed first.
+	pub global_priority: u32,
 }
 
 /// An reason for an invalid statement.
@@ -107,6 +112,8 @@ pub enum SubmitResult {
 	Bad,
 	/// The store is not available.
 	NotAvailable,
+	/// Statement could not be inserted because of priority or size checks.
+	Full,
 }
 
 /// Export functions for the WASM host.
@@ -123,6 +130,7 @@ pub trait Io {
 			match store.submit(statement, StatementSource::Chain) {
 				crate::SubmitResult::New(_) => SubmitResult::OkNew,
 				crate::SubmitResult::Known => SubmitResult::OkKnown,
+				crate::SubmitResult::Ignored => SubmitResult::Full,
 				// This should not happen for `StatementSource::Chain`. An existing statement will
 				// be overwritten.
 				crate::SubmitResult::KnownExpired => SubmitResult::Bad,

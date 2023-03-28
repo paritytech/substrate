@@ -8424,7 +8424,6 @@ dependencies = [
  "sp-database",
  "sp-runtime",
  "sp-state-machine",
- "sp-statement-store",
  "sp-tracing",
  "sp-trie",
  "substrate-test-runtime-client",

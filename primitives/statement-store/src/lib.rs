@@ -115,6 +115,19 @@ pub enum Proof {
 	},
 }
 
+impl Proof {
+	/// Return account id for the proof creator.
+	pub fn account_id(&self) -> AccountId {
+		match self {
+			Proof::Sr25519 { signer, ..} => *signer,
+			Proof::Ed25519 { signer, ..} => *signer,
+			Proof::Secp256k1Ecdsa { signer, ..} =>
+				<sp_runtime::traits::BlakeTwo256 as sp_core::Hasher>::hash(signer).into(),
+			Proof::OnChain { who, ..} => *who,
+		}
+	}
+}
+
 #[derive(Encode, Decode, TypeInfo, sp_core::RuntimeDebug, Clone, PartialEq, Eq)]
 /// Statement attributes. Each statement is a list of 0 or more fields. Fields may only appear in
 /// the order declared here.
@@ -186,7 +199,7 @@ impl Encode for Statement {
 /// Result returned by `Statement::verify_signature`
 pub enum SignatureVerificationResult {
 	/// Signature is valid and matches this account id.
-	Valid([u8; 32]),
+	Valid(AccountId),
 	/// Signature has failed verification.
 	Invalid,
 	/// No signature in the proof or no proof.
@@ -349,6 +362,31 @@ impl Statement {
 		self.proof.as_ref()
 	}
 
+	/// Get proof account id, if any
+	pub fn account_id(&self) -> Option<AccountId> {
+		self.proof.as_ref().map(Proof::account_id)
+	}
+
+	/// Get plain data.
+	pub fn data(&self) -> Option<&Vec<u8>> {
+		self.data.as_ref()
+	}
+
+	/// Get plain data len.
+	pub fn data_len(&self) -> usize {
+		self.data().map_or(0, Vec::len)
+	}
+
+	/// Get channel, if any.
+	pub fn channel(&self) -> Option<Channel> {
+		self.channel.clone()
+	}
+
+	/// Get priority, if any.
+	pub fn priority(&self) -> Option<u32> {
+		self.priority.clone()
+	}
+
 	/// Return encoded fields that can be signed to construct or verify a proof
 	fn signature_material(&self) -> Vec<u8> {
 		self.encoded(false)
@@ -376,7 +414,7 @@ impl Statement {
 
 	/// Set topic by index.
 	pub fn set_topic(&mut self, index: usize, topic: Topic) {
-		if index <= 4 {
+		if index < 4 {
 			self.topics[index] = topic;
 			self.num_topics = self.num_topics.max(index as u8 + 1);
 		}
