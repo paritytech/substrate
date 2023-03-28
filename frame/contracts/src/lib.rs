@@ -618,15 +618,14 @@ pub mod pallet {
 			let origin = contract_ensure_signed_or_root(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			let common = CommonInput {
-				origin,
 				value,
 				data,
 				gas_limit,
 				storage_deposit_limit: storage_deposit_limit.map(Into::into),
 				debug_message: None,
 			};
-			let mut output =
-				CallInput::<T> { dest, determinism: Determinism::Enforced }.run_guarded(common);
+			let mut output = CallInput::<T> { origin, dest, determinism: Determinism::Enforced }
+				.run_guarded(common);
 			if let Ok(retval) = &output.result {
 				if retval.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
@@ -675,20 +674,19 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			let origin = ContractOrigin::from_account_id(ensure_signed(origin)?);
+			let origin = ensure_signed(origin)?;
 			let code_len = code.len() as u32;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
-				origin,
 				value,
 				data,
 				gas_limit,
 				storage_deposit_limit: storage_deposit_limit.map(Into::into),
 				debug_message: None,
 			};
-			let mut output =
-				InstantiateInput::<T> { code: Code::Upload(code), salt }.run_guarded(common);
+			let mut output = InstantiateInput::<T> { origin, code: Code::Upload(code), salt }
+				.run_guarded(common);
 			if let Ok(retval) = &output.result {
 				if retval.1.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
@@ -718,11 +716,10 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			let origin = ContractOrigin::from_account_id(ensure_signed(origin)?);
+			let origin = ensure_signed(origin)?;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
-				origin,
 				value,
 				data,
 				gas_limit,
@@ -730,7 +727,8 @@ pub mod pallet {
 				debug_message: None,
 			};
 			let mut output =
-				InstantiateInput::<T> { code: Code::Existing(code_hash), salt }.run_guarded(common);
+				InstantiateInput::<T> { origin, code: Code::Existing(code_hash), salt }
+					.run_guarded(common);
 			if let Ok(retval) = &output.result {
 				if retval.1.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
@@ -1023,7 +1021,6 @@ impl<T: Config> Caller<T> {
 
 /// Context of a contract invocation.
 struct CommonInput<'a, T: Config> {
-	origin: ContractOrigin<T>,
 	value: BalanceOf<T>,
 	data: Vec<u8>,
 	gas_limit: Weight,
@@ -1033,12 +1030,14 @@ struct CommonInput<'a, T: Config> {
 
 /// Input specific to a call into contract.
 struct CallInput<T: Config> {
+	origin: ContractOrigin<T>,
 	dest: T::AccountId,
 	determinism: Determinism,
 }
 
 /// Input specific to a contract instantiation invocation.
 struct InstantiateInput<T: Config> {
+	origin: T::AccountId,
 	code: Code<CodeHash<T>>,
 	salt: Vec<u8>,
 }
@@ -1117,8 +1116,9 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 		common: CommonInput<T>,
 		mut gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output> {
+		let CallInput { origin, dest, determinism } = self;
 		let mut storage_meter =
-			match StorageMeter::new(&common.origin, common.storage_deposit_limit, common.value) {
+			match StorageMeter::new(&origin, common.storage_deposit_limit, common.value) {
 				Ok(meter) => meter,
 				Err(err) =>
 					return InternalOutput {
@@ -1128,8 +1128,7 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 					},
 			};
 		let schedule = T::Schedule::get();
-		let CallInput { dest, determinism } = self;
-		let CommonInput { origin, value, data, debug_message, .. } = common;
+		let CommonInput { value, data, debug_message, .. } = common;
 		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
 			origin.clone(),
 			dest.clone(),
@@ -1155,16 +1154,8 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 	) -> InternalOutput<T, Self::Output> {
 		let mut storage_deposit = Default::default();
 		let try_exec = || {
-			// Root origin is not allowed here.
-			let origin = match &common.origin {
-				ContractOrigin::Signed(t) => t,
-				ContractOrigin::Root =>
-					return Err(ExecError {
-						error: <Error<T>>::RootOrigin.into(),
-						origin: ErrorOrigin::Caller,
-					}),
-			};
 			let schedule = T::Schedule::get();
+			let InstantiateInput { origin, salt, .. } = self;
 			let (extra_deposit, executable) = match &self.code {
 				Code::Upload(binary) => {
 					let executable = PrefabWasmModule::from_code(
@@ -1192,14 +1183,14 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 					PrefabWasmModule::from_storage(*hash, &schedule, &mut gas_meter)?,
 				),
 			};
+			let contract_origin = ContractOrigin::from_account_id(origin.clone());
 			let mut storage_meter = StorageMeter::new(
-				&common.origin,
+				&contract_origin,
 				common.storage_deposit_limit,
 				common.value.saturating_add(extra_deposit),
 			)?;
 
-			let InstantiateInput { salt, .. } = self;
-			let CommonInput { origin: _, value, data, debug_message, .. } = common;
+			let CommonInput { value, data, debug_message, .. } = common;
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
 				origin.clone(),
 				executable,
@@ -1212,7 +1203,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 				debug_message,
 			);
 			storage_deposit = storage_meter
-				.into_deposit(&common.origin)
+				.into_deposit(&contract_origin)
 				.saturating_add(&StorageDeposit::Charge(extra_deposit));
 			result
 		};
@@ -1246,14 +1237,13 @@ impl<T: Config> Pallet<T> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
 		let origin = ContractOrigin::from_account_id(origin);
 		let common = CommonInput {
-			origin,
 			value,
 			data,
 			gas_limit,
 			storage_deposit_limit,
 			debug_message: debug_message.as_mut(),
 		};
-		let output = CallInput::<T> { dest, determinism }.run_guarded(common);
+		let output = CallInput::<T> { origin, dest, determinism }.run_guarded(common);
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
@@ -1286,16 +1276,14 @@ impl<T: Config> Pallet<T> {
 		debug: bool,
 	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
-		let origin = ContractOrigin::from_account_id(origin);
 		let common = CommonInput {
-			origin,
 			value,
 			data,
 			gas_limit,
 			storage_deposit_limit,
 			debug_message: debug_message.as_mut(),
 		};
-		let output = InstantiateInput::<T> { code, salt }.run_guarded(common);
+		let output = InstantiateInput::<T> { origin, code, salt }.run_guarded(common);
 		ContractInstantiateResult {
 			result: output
 				.result
