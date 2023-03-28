@@ -17,7 +17,7 @@
 
 //! Tool for creating the genesis block.
 
-use super::{system, wasm_binary_unwrap, AccountId, AuthorityId, Runtime};
+use super::{substrate_test_pallet, wasm_binary_unwrap, AccountId, AuthorityId, Runtime};
 use codec::{Encode, Joiner, KeyedVec};
 use frame_support::traits::GenesisBuild;
 use sc_service::construct_genesis_block;
@@ -81,11 +81,21 @@ impl GenesisConfig {
 		// Assimilate the system genesis config.
 		let mut storage =
 			Storage { top: map, children_default: self.extra_storage.children_default.clone() };
-		<system::GenesisConfig as GenesisBuild<Runtime>>::assimilate_storage(
-			&system::GenesisConfig { authorities: self.authorities.clone() },
+
+		<substrate_test_pallet::GenesisConfig as GenesisBuild<Runtime>>::assimilate_storage(
+			&substrate_test_pallet::GenesisConfig { authorities: self.authorities.clone() },
 			&mut storage,
 		)
 		.expect("Adding `system::GensisConfig` to the genesis");
+
+		<pallet_babe::GenesisConfig as GenesisBuild<Runtime>>::assimilate_storage(
+			&pallet_babe::GenesisConfig {
+				authorities: self.authorities.clone().into_iter().map(|x| (x, 1)).collect(),
+				epoch_config: Some(crate::TEST_RUNTIME_BABE_EPOCH_CONFIGURATION),
+			},
+			&mut storage,
+		)
+		.expect("Adding `pallet_babe::GensisConfig` to the genesis");
 
 		storage
 	}
