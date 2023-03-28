@@ -196,6 +196,15 @@ pub trait ConversionToAssetBalance<InBalance, AssetId, AssetBalance> {
 		-> Result<AssetBalance, Self::Error>;
 }
 
+/// Converts an asset balance value into balance.
+pub trait ConversionFromAssetBalance<AssetBalance, AssetId, OutBalance> {
+	type Error;
+	fn from_asset_balance(
+		balance: AssetBalance,
+		asset_id: AssetId,
+	) -> Result<OutBalance, Self::Error>;
+}
+
 /// Trait to handle asset locking mechanism to ensure interactions with the asset can be implemented
 /// downstream to extend logic of Uniques current functionality.
 pub trait Locker<CollectionId, ItemId> {
