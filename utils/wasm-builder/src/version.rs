@@ -44,6 +44,7 @@ impl Version {
 	pub fn extract(version: &str) -> Option<Self> {
 		let mut is_nightly = false;
 		let version_parts = version
+			.trim()
 			.split(" ")
 			.nth(1)?
 			.split(".")

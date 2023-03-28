@@ -299,7 +299,7 @@ impl CargoCommand {
 		let Some(version) = self.version() else { return false };
 
 		// Check if major and minor are greater or equal than 1.68 or this is a nightly.
-		version.major >= 1 && version.minor >= 68 || version.is_nightly
+		version.major > 1 || (version.major == 1 && version.minor >= 68) || version.is_nightly
 	}
 }
 
