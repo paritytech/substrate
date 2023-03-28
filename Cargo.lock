@@ -11920,7 +11920,6 @@ dependencies = [
  "parity-scale-codec",
  "sc-cli",
  "sc-executor",
- "sc-executor-common",
  "sc-service",
  "serde",
  "serde_json",
