@@ -21,7 +21,7 @@ use crate::*;
 use frame_support::{
 	assert_ok, derive_impl_inner,
 	dispatch::{DispatchInfo, GetDispatchInfo},
-	macro_magic::*,
+	macro_magic::use_attr,
 	traits::{ConstU64, OnInitialize},
 };
 use sp_core::H256;
