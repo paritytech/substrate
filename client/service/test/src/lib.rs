@@ -252,7 +252,6 @@ fn node_config<
 		wasm_runtime_overrides: Default::default(),
 		execution_strategies: Default::default(),
 		rpc_http: None,
-		rpc_ipc: None,
 		rpc_ws: None,
 		rpc_ws_max_connections: None,
 		rpc_cors: None,

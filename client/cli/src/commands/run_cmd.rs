@@ -122,10 +122,6 @@ pub struct RunCmd {
 	#[arg(long)]
 	pub prometheus_external: bool,
 
-	/// DEPRECATED, IPC support has been removed.
-	#[arg(long, value_name = "PATH")]
-	pub ipc_path: Option<String>,
-
 	/// Specify HTTP RPC server TCP port.
 	#[arg(long, value_name = "PORT")]
 	pub rpc_port: Option<u16>,
@@ -428,10 +424,6 @@ impl CliConfiguration for RunCmd {
 		)?;
 
 		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(default_listen_port))))
-	}
-
-	fn rpc_ipc(&self) -> Result<Option<String>> {
-		Ok(self.ipc_path.clone())
 	}
 
 	fn rpc_ws(&self, default_listen_port: u16) -> Result<Option<SocketAddr>> {

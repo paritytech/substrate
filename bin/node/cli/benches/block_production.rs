@@ -86,7 +86,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		},
 		rpc_http: None,
 		rpc_ws: None,
-		rpc_ipc: None,
 		rpc_ws_max_connections: None,
 		rpc_cors: None,
 		rpc_methods: Default::default(),

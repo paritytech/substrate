@@ -572,10 +572,6 @@ fn legacy_cli_parsing(config: &Configuration) -> (Option<usize>, Option<usize>, 
 		(None, None) => None,
 	};
 
-	if config.rpc_ipc.is_some() {
-		eprintln!("DEPRECATED: `--ipc-path` has no effect anymore IPC support has been removed");
-	}
-
 	(max_request_size, ws_max_response_size, http_max_response_size)
 }
 
