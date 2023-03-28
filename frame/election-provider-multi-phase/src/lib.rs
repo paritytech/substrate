@@ -881,6 +881,11 @@ pub mod pallet {
 			// configure this pallet.
 			assert!(T::SignedMaxSubmissions::get() >= T::SignedMaxRefunds::get());
 		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
+			Self::do_try_state()
+		}
 	}
 
 	#[pallet::call]
@@ -1567,6 +1572,13 @@ impl<T: Config> Pallet<T> {
 			.fold(Zero::zero(), |acc, next| acc + next.voters.len() as u32);
 		let desired_targets = supports.len() as u32;
 		Self::register_weight(T::WeightInfo::elect_queued(active_voters, desired_targets));
+	}
+}
+
+#[cfg(any(feature = "try-runtime", test))]
+impl<T: Config> Pallet<T> {
+	fn do_try_state() -> Result<(), &'static str> {
+		Ok(())
 	}
 }
 
