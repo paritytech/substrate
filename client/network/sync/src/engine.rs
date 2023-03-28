@@ -711,7 +711,9 @@ where
 				ToServiceCommand::NewBestBlockImported(hash, number) =>
 					self.new_best_block_imported(hash, number),
 				ToServiceCommand::Status(tx) => {
-					let _ = tx.send(self.chain_sync.status());
+					let mut status = self.chain_sync.status();
+					status.num_connected_peers = self.peers.len() as u32;
+					let _ = tx.send(status);
 				},
 				ToServiceCommand::NumActivePeers(tx) => {
 					let _ = tx.send(self.chain_sync.num_active_peers());
