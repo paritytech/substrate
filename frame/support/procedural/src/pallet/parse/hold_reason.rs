@@ -55,7 +55,7 @@ impl HoldReasonDef {
 		let has_derive_attr = item
 			.attrs
 			.iter()
-			.find(|attr| {
+			.any(|attr| {
 				attr.parse_meta()
 					.ok()
 					.map(|meta| match meta {
@@ -64,8 +64,7 @@ impl HoldReasonDef {
 						_ => false,
 					})
 					.unwrap_or(false)
-			})
-			.is_some();
+			});
 
 		if !has_derive_attr {
 			let derive_attr: syn::Attribute = syn::parse_quote! {
