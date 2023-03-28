@@ -62,7 +62,7 @@ use sp_runtime::{
 	BuildStorage, DigestItem, EncodedJustification, Justifications, Storage,
 };
 use std::{marker::PhantomData, sync::Arc, task::Poll};
-use substrate_test_runtime_client::{runtime::Header, ClientExt};
+use substrate_test_runtime_client::{BlockBuilderExt, ClientExt};
 use tokio::time::Duration;
 
 const GENESIS_HASH: H256 = H256::zero();
@@ -161,23 +161,26 @@ impl BeefyTestNet {
 		// push genesis to make indexing human readable (index equals to block number)
 		all_hashes.push(self.peer(0).client().info().genesis_hash);
 
-		let built_hashes = self.peer(0).generate_blocks(count, BlockOrigin::File, |builder| {
-			let mut block = builder.build().unwrap().block;
+		for block_num in 0..count {
+			let block_num: NumberFor<Block> = block_num.saturating_add(1).try_into().unwrap();
+			let built_hashes = self.peer(0).generate_blocks(1, BlockOrigin::File, |mut builder| {
+				if include_mmr_digest {
+					// let block_num = *block.header.number();
+					let num_byte = block_num.to_le_bytes().into_iter().next().unwrap();
+					let mmr_root = MmrRootHash::repeat_byte(num_byte);
+					add_mmr_digest(&mut builder, mmr_root);
+				}
 
-			if include_mmr_digest {
-				let block_num = *block.header.number();
-				let num_byte = block_num.to_le_bytes().into_iter().next().unwrap();
-				let mmr_root = MmrRootHash::repeat_byte(num_byte);
-				add_mmr_digest(&mut block.header, mmr_root);
-			}
+				if block_num % session_length == 0 {
+					add_auth_change_digest(&mut builder, validator_set.clone());
+				}
 
-			if *block.header.number() % session_length == 0 {
-				add_auth_change_digest(&mut block.header, validator_set.clone());
-			}
+				let block = builder.build().unwrap().block;
 
-			block
-		});
-		all_hashes.extend(built_hashes);
+				block
+			});
+			all_hashes.extend(built_hashes);
+		}
 		self.run_until_sync().await;
 
 		all_hashes
@@ -321,18 +324,24 @@ sp_api::mock_impl_runtime_apis! {
 	}
 }
 
-fn add_mmr_digest(header: &mut Header, mmr_hash: MmrRootHash) {
-	header.digest_mut().push(DigestItem::Consensus(
-		BEEFY_ENGINE_ID,
-		ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),
-	));
+fn add_mmr_digest(builder: &mut impl BlockBuilderExt, mmr_hash: MmrRootHash) {
+	// let _ = builder.push_deposit_log(
+	// sp_finality_grandpa::ConsensusLog::ScheduledChange(change)).unwrap();
+	let _ = builder
+		.push_deposit_log_digest_item(DigestItem::Consensus(
+			BEEFY_ENGINE_ID,
+			ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),
+		))
+		.unwrap();
 }
 
-fn add_auth_change_digest(header: &mut Header, new_auth_set: BeefyValidatorSet) {
-	header.digest_mut().push(DigestItem::Consensus(
-		BEEFY_ENGINE_ID,
-		ConsensusLog::<AuthorityId>::AuthoritiesChange(new_auth_set).encode(),
-	));
+fn add_auth_change_digest(builder: &mut impl BlockBuilderExt, new_auth_set: BeefyValidatorSet) {
+	let _ = builder
+		.push_deposit_log_digest_item(DigestItem::Consensus(
+			BEEFY_ENGINE_ID,
+			ConsensusLog::<AuthorityId>::AuthoritiesChange(new_auth_set).encode(),
+		))
+		.unwrap();
 }
 
 pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
