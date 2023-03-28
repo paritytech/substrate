@@ -105,6 +105,8 @@ variables:
     # $WASM_BUILD_WORKSPACE_HINT enables wasm-builder to find the Cargo.lock from within generated
     # packages
     - export WASM_BUILD_WORKSPACE_HINT="$PWD"
+    # ensure that RUSTFLAGS are set correctly
+    - echo $RUSTFLAGS
 
 .job-switcher:
   before_script:
