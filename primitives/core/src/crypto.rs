@@ -274,7 +274,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 		const CHECKSUM_LEN: usize = 2;
 		let body_len = Self::LEN;
 
-		let data = bs58::decode(s.clone()).into_vec().map_err(|_| PublicError::BadBase58)?;
+		let data = bs58::decode(s).into_vec().map_err(|_| PublicError::BadBase58)?;
 		if data.len() < 2 {
 			return Err(PublicError::BadLength)
 		}
