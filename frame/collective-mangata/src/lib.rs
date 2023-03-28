@@ -231,6 +231,9 @@ pub mod pallet {
 		/// Default vote strategy of this collective.
 		type DefaultVote: DefaultVote;
 
+		/// The provider for the list of Foundation accounts
+		type FoundationAccountsProvider: Get<Vec<Self::AccountId>>;
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -360,14 +363,16 @@ pub mod pallet {
 		/// The close call was made too early, before the end of the voting.
 		TooEarly,
 		///	To early to close the proposal, can only close ProposalCloseDelay blocks after proposal
-		/// was proposed
-		TooEarlyToClose,
+		/// was proposed unless by a foundation account
+		TooEarlyToCloseByNonFoundationAccount,
 		/// There can only be a maximum of `MaxProposals` active proposals.
 		TooManyProposals,
 		/// The given weight bound for the proposal was too low.
 		WrongProposalWeight,
 		/// The given length bound for the proposal was too low.
 		WrongProposalLength,
+		/// Requires foundation account or root
+		NotFoundationAccountOrRoot,
 	}
 
 	// Note that councillor operations are assigned to the operational class.
@@ -676,15 +681,15 @@ pub mod pallet {
 			proposal_weight_bound: Weight,
 			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
-			let _ = ensure_signed(origin)?;
+			let caller = ensure_signed(origin)?;
 
-			Self::do_close(proposal_hash, index, proposal_weight_bound, length_bound)
+			Self::do_close(caller, proposal_hash, index, proposal_weight_bound, length_bound)
 		}
 
 		/// Disapprove a proposal, close, and remove it from the system, regardless of its current
 		/// state.
 		///
-		/// Must be called by the Root origin.
+		/// Must be called by the Root origin or a foundation account.
 		///
 		/// Parameters:
 		/// * `proposal_hash`: The hash of the proposal that should be disapproved.
@@ -701,7 +706,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
+			if let Some(caller) = ensure_signed_or_root(origin)? {
+				ensure!(
+					T::FoundationAccountsProvider::get().contains(&caller),
+					Error::<T, I>::NotFoundationAccountOrRoot
+				);
+			}
 			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 			Ok(Some(T::WeightInfo::disapprove_proposal(proposal_count)).into())
 		}
@@ -856,6 +866,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Close a vote that is either approved, disapproved or whose voting period has ended.
 	pub fn do_close(
+		caller: T::AccountId,
 		proposal_hash: T::Hash,
 		index: ProposalIndex,
 		proposal_weight_bound: Weight,
@@ -870,9 +881,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::proposal_proposed_time(&proposal_hash).unwrap_or_default();
 		// Only allow actual closing of the proposal after the voting period has ended.
 		ensure!(
-			frame_system::Pallet::<T>::block_number() >=
-				proposal_proposed_time.saturating_add(T::ProposalCloseDelay::get()),
-			Error::<T, I>::TooEarlyToClose
+			(frame_system::Pallet::<T>::block_number() >=
+				proposal_proposed_time.saturating_add(T::ProposalCloseDelay::get())) ||
+				(T::FoundationAccountsProvider::get().contains(&caller)),
+			Error::<T, I>::TooEarlyToCloseByNonFoundationAccount
 		);
 
 		let mut no_votes = voting.nays.len() as MemberCount;
