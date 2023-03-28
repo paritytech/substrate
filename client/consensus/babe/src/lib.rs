@@ -108,7 +108,7 @@ use sc_consensus_slots::{
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
 use sp_api::{ApiExt, ProvideRuntimeApi};
-use sp_application_crypto::AppKey;
+use sp_application_crypto::AppCrypto;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{
 	Backend as _, BlockStatus, Error as ClientError, ForkBackend, HeaderBackend, HeaderMetadata,
@@ -117,7 +117,7 @@ use sp_blockchain::{
 use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
-use sp_core::{crypto::ByteArray, ExecutionContext};
+use sp_core::ExecutionContext;
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::KeystorePtr;
 use sp_runtime::{
@@ -274,7 +274,7 @@ pub enum Error<B: BlockT> {
 	MultipleConfigChangeDigests,
 	/// Could not extract timestamp and slot
 	#[error("Could not extract timestamp and slot: {0}")]
-	Extraction(sp_consensus::Error),
+	Extraction(ConsensusError),
 	/// Could not fetch epoch
 	#[error("Could not fetch epoch at {0:?}")]
 	FetchEpoch(B::Hash),
@@ -471,7 +471,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, L, Error>(
 		max_block_proposal_slot_portion,
 		telemetry,
 	}: BabeParams<B, C, SC, E, I, SO, L, CIDP, BS>,
-) -> Result<BabeWorker<B>, sp_consensus::Error>
+) -> Result<BabeWorker<B>, ConsensusError>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B>
@@ -739,7 +739,7 @@ where
 	type SyncOracle = SO;
 	type JustificationSyncLink = L;
 	type CreateProposer =
-		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>;
+		Pin<Box<dyn Future<Output = Result<E::Proposer, ConsensusError>> + Send + 'static>>;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
 	type AuxData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
@@ -762,7 +762,7 @@ where
 				slot,
 			)
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
-			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
+			.ok_or(ConsensusError::InvalidAuthoritiesSet)
 	}
 
 	fn authorities_len(&self, epoch_descriptor: &Self::AuxData) -> Option<usize> {
@@ -827,28 +827,21 @@ where
 		(_, public): Self::Claim,
 		epoch_descriptor: Self::AuxData,
 	) -> Result<
-		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
-		sp_consensus::Error,
+		BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
+		ConsensusError,
 	> {
-		// sign the pre-sealed hash of the block and then
-		// add it to a digest item.
-		let public_type_pair = public.clone().into();
-		let public = public.to_raw_vec();
 		let signature = self
 			.keystore
-			.sign_with(<AuthorityId as AppKey>::ID, &public_type_pair, header_hash.as_ref())
-			.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
+			.sr25519_sign(<AuthorityId as AppCrypto>::ID, public.as_ref(), header_hash.as_ref())
+			.map_err(|e| ConsensusError::CannotSign(format!("{}. Key: {:?}", e, public)))?
 			.ok_or_else(|| {
-				sp_consensus::Error::CannotSign(
-					public.clone(),
-					"Could not find key in keystore.".into(),
-				)
+				ConsensusError::CannotSign(format!(
+					"Could not find key in keystore. Key: {:?}",
+					public
+				))
 			})?;
-		let signature: AuthoritySignature = signature
-			.clone()
-			.try_into()
-			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
-		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature);
+
+		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
 
 		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 		import_block.post_digests.push(digest_item);
@@ -891,11 +884,7 @@ where
 	}
 
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
-		Box::pin(
-			self.env
-				.init(block)
-				.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e))),
-		)
+		Box::pin(self.env.init(block).map_err(|e| ConsensusError::ClientImport(e.to_string())))
 	}
 
 	fn telemetry(&self) -> Option<TelemetryHandle> {
@@ -1182,7 +1171,7 @@ where
 			.create_inherent_data_providers
 			.create_inherent_data_providers(parent_hash, ())
 			.await
-			.map_err(|e| Error::<Block>::Client(sp_consensus::Error::from(e).into()))?;
+			.map_err(|e| Error::<Block>::Client(ConsensusError::from(e).into()))?;
 
 		let slot_now = create_inherent_data_providers.slot();
 
