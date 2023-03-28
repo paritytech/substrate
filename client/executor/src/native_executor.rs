@@ -107,7 +107,7 @@ impl<H> WasmExecutorBuilder<H> {
 			onchain_heap_alloc_strategy: None,
 			offchain_heap_alloc_strategy: None,
 			max_runtime_instances: 2,
-			runtime_cache_size: 4,
+			runtime_cache_size: 8,
 			allow_missing_host_functions: false,
 			cache_path: None,
 		}
@@ -173,7 +173,7 @@ impl<H> WasmExecutorBuilder<H> {
 	/// Defines the number of different runtimes/instantiated wasm blobs the cache stores.
 	/// Runtimes/wasm blobs are differentiated based on the hash and the number of heap pages.
 	///
-	/// By default this value is set to `4`.
+	/// By default this value is set to `8`.
 	pub fn with_runtime_cache_size(mut self, runtime_cache_size: u8) -> Self {
 		self.runtime_cache_size = runtime_cache_size;
 		self
@@ -238,6 +238,8 @@ impl<H> WasmExecutor<H>
 where
 	H: HostFunctions,
 {
+	/// *To be deprecated*: use [`Self::builder`] method instead of it.
+	///
 	/// Create new instance.
 	///
 	/// # Parameters
@@ -539,6 +541,8 @@ pub struct NativeElseWasmExecutor<D: NativeExecutionDispatch> {
 }
 
 impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
+	/// *To be deprecated*: use [`Self::new_with_wasm_executor`] method instead of it.
+	///
 	/// Create new instance.
 	///
 	/// # Parameters
@@ -579,6 +583,8 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 		Self { native_version: D::native_version(), wasm: executor }
 	}
 
+	/// *To be deprecated*: use [`Self::new_with_wasm_executor`] method to configure it.
+	///
 	/// Ignore missing function imports if set true.
 	pub fn allow_missing_host_functions(&mut self, allow_missing_host_functions: bool) {
 		self.wasm.allow_missing_host_functions = allow_missing_host_functions
@@ -714,11 +720,8 @@ mod tests {
 
 	#[test]
 	fn native_executor_registers_custom_interface() {
-		let executor = NativeElseWasmExecutor::<MyExecutorDispatch>::new(
-			WasmExecutionMethod::Interpreted,
-			None,
-			8,
-			2,
+		let executor = NativeElseWasmExecutor::<MyExecutorDispatch>::new_with_wasm_executor(
+			WasmExecutor::builder(WasmExecutionMethod::Interpreted).build(),
 		);
 
 		fn extract_host_functions<H>(

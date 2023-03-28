@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities", package = "frame-remote-externalities" }
 sc-cli = { version = "0.10.0-dev", path = "../../../../client/cli" }
+sc-executor-common = { version = "0.10.0-dev", path = "../../../../client/executor/common" }
 sc-executor = { version = "0.10.0-dev", path = "../../../../client/executor" }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../../client/service" }
 sp-consensus-aura = { path = "../../../../primitives/consensus/aura" }

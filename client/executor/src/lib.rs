@@ -74,13 +74,10 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 
-		let executor = WasmExecutor::<sp_io::SubstrateHostFunctions>::new(
+		let executor = WasmExecutor::<sp_io::SubstrateHostFunctions>::builder(
 			WasmExecutionMethod::Interpreted,
-			Some(8),
-			8,
-			None,
-			2,
-		);
+		)
+		.build();
 		let res = executor
 			.uncached_call(
 				RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),

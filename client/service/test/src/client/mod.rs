@@ -72,7 +72,7 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 	}
 }
 
-fn executor() -> sc_executor::NativeElseWasmExecutor<ExecutorDispatch> {
+fn executor() -> NativeElseWasmExecutor<ExecutorDispatch> {
 	sc_executor::NativeElseWasmExecutor::new(
 		sc_executor::WasmExecutionMethod::Interpreted,
 		None,

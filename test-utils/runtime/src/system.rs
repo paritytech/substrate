@@ -350,7 +350,7 @@ mod tests {
 	use super::*;
 
 	use crate::{wasm_binary_unwrap, Header, Transfer};
-	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
+	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod, WasmExecutor};
 	use sp_core::{
 		map,
 		traits::{CallContext, CodeExecutor, RuntimeCode},
@@ -374,7 +374,9 @@ mod tests {
 	}
 
 	fn executor() -> NativeElseWasmExecutor<NativeDispatch> {
-		NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
+		NativeElseWasmExecutor::new_with_wasm_executor(
+			WasmExecutor::builder(WasmExecutionMethod::Interpreted).build(),
+		)
 	}
 
 	fn new_test_ext() -> TestExternalities {
