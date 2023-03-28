@@ -45,11 +45,8 @@ pub enum Error {
 	#[error("Invalid input: {0}")]
 	Input(String),
 
-	#[error("Invalid listen multiaddress")]
-	InvalidListenMultiaddress,
-
 	#[error("Invalid URI; expecting either a secret URI or a public URI.")]
-	InvalidUri(crypto::PublicError),
+	InvalidUri(#[from] crypto::PublicError),
 
 	#[error("Signature is an invalid format.")]
 	SignatureFormatInvalid,
@@ -66,7 +63,7 @@ pub enum Error {
 	#[error("Key store operation failed")]
 	KeystoreOperation,
 
-	#[error("Key storage issue encountered")]
+	#[error("Key storage issue encountered: {0:?}")]
 	KeyStorage(#[from] sc_keystore::Error),
 
 	#[error("Invalid hexadecimal string data, {0:?}")]
@@ -89,12 +86,6 @@ impl From<&str> for Error {
 impl From<String> for Error {
 	fn from(s: String) -> Error {
 		Error::Input(s)
-	}
-}
-
-impl From<crypto::PublicError> for Error {
-	fn from(e: crypto::PublicError) -> Error {
-		Error::InvalidUri(e)
 	}
 }
 
