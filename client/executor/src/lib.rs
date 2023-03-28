@@ -32,21 +32,23 @@
 #![recursion_limit = "128"]
 
 #[macro_use]
-mod native_executor;
+mod executor;
 #[cfg(test)]
 mod integration_tests;
 mod wasm_runtime;
 
-pub use codec::Codec;
-pub use native_executor::{
-	with_externalities_safe, NativeElseWasmExecutor, NativeExecutionDispatch, WasmExecutor,
+pub use self::{
+	executor::{
+		with_externalities_safe, NativeElseWasmExecutor, NativeExecutionDispatch, WasmExecutor,
+	},
+	wasm_runtime::{read_embedded_version, WasmExecutionMethod},
 };
+pub use codec::Codec;
 #[doc(hidden)]
 pub use sp_core::traits::Externalities;
 pub use sp_version::{NativeVersion, RuntimeVersion};
 #[doc(hidden)]
 pub use sp_wasm_interface;
-pub use wasm_runtime::{read_embedded_version, WasmExecutionMethod};
 pub use wasmi;
 
 pub use sc_executor_common::error;

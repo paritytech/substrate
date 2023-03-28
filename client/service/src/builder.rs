@@ -36,7 +36,7 @@ use sc_client_api::{
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
-use sc_executor::RuntimeVersionOf;
+use sc_executor::{NativeElseWasmExecutor, NativeExecutionDispatch, RuntimeVersionOf};
 use sc_keystore::LocalKeystore;
 use sc_network::{
 	config::SyncMode, NetworkEventStream, NetworkService, NetworkStateInfo, NetworkStatusProvider,
@@ -228,6 +228,17 @@ where
 	};
 
 	Ok((client, backend, keystore_container, task_manager))
+}
+
+
+/// Creates a [`NativeElseWasmExecutor`] according to [`Configuration`].
+pub fn new_native_executor<D: NativeExecutionDispatch>(config: &Configuration) -> NativeElseWasmExecutor<D> {
+	NativeElseWasmExecutor::<D>::new(
+		config.wasm_method,
+		config.default_heap_pages,
+		config.max_runtime_instances,
+		config.runtime_cache_size,
+	)
 }
 
 /// Create an instance of default DB-backend backend.
