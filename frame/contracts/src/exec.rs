@@ -836,7 +836,7 @@ where
 			// it can create the account in case the initial transfer is < ed.
 			if entry_point == ExportedFunction::Constructor {
 				let frame = top_frame_mut!(self);
-				// Root origin is not allowed here
+				// Root origin is not allowed here.
 				let origin = match &self.origin {
 					ContractOrigin::Signed(origin) => origin,
 					ContractOrigin::Root => return Err(Error::<T>::RootOrigin.into()),
@@ -1057,7 +1057,7 @@ where
 			return Ok(());
 		}
 
-		// If the caller is root, we don't need to transfer
+		// If the caller is root, we don't need to transfer.
 		let caller = match self.caller() {
 			Caller::Account(caller) => caller,
 			Caller::Root => return Ok(()),
@@ -2185,7 +2185,7 @@ mod tests {
 	#[test]
 	fn root_caller_succeeds() {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
-			// root is the origin of the call stack
+			// root is the origin of the call stack.
 			assert!(ctx.ext.caller_is_root());
 			exec_success()
 		});
@@ -2215,15 +2215,15 @@ mod tests {
 	#[test]
 	fn root_caller_succeeds_with_consecutive_calls() {
 		let code_charlie = MockLoader::insert(Call, |ctx, _| {
-			// BOB is not root
+			// BOB is not root, even though the origin is root.
 			assert!(!ctx.ext.caller_is_root());
 			exec_success()
 		});
 
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
-			// root is the origin of the call stack
+			// root is the origin of the call stack.
 			assert!(ctx.ext.caller_is_root());
-			// BOB calls CHARLIE
+			// BOB calls CHARLIE.
 			ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true)
 		});
 

@@ -794,7 +794,7 @@ pub mod pallet {
 		/// calls. This is because on failure all storage changes including events are
 		/// rolled back.
 		Called {
-			/// The account that called the `contract`.
+			/// The caller of the `contract`.
 			caller: Caller<T>,
 			/// The contract that was called.
 			contract: T::AccountId,
@@ -959,7 +959,7 @@ pub mod pallet {
 		StorageValue<_, BoundedVec<DeletedContract, T::DeletionQueueDepth>, ValueQuery>;
 }
 
-/// The types of origin supported by the contracts pallet.
+/// The type of origins supported by the contracts pallet.
 #[derive(Clone)]
 pub enum ContractOrigin<T: Config> {
 	/// The origin is a regular signed account.
@@ -969,14 +969,15 @@ pub enum ContractOrigin<T: Config> {
 }
 
 impl<T: Config> ContractOrigin<T> {
-	/// Creates a new Signed ContractOrigin from an AccountId
+	/// Creates a new Signed ContractOrigin from an AccountId.
 	pub fn from_account_id(account_id: T::AccountId) -> Self {
 		ContractOrigin::Signed(account_id)
 	}
 }
 
 /// Helper function to ensure that the origin is either a regular signed account or root
-/// and return the origin as a `ContractOrigin`.
+/// and returns the it as a `ContractOrigin`, if it is one of those.
+/// It errors otherwise.
 fn contract_ensure_signed_or_root<T: Config>(
 	origin: T::RuntimeOrigin,
 ) -> Result<ContractOrigin<T>, BadOrigin> {
@@ -986,7 +987,7 @@ fn contract_ensure_signed_or_root<T: Config>(
 	}
 }
 
-/// The types of callers supported by the contracts pallet.
+/// The type of callers supported by the contracts pallet.
 #[derive(Clone, Encode, Decode, PartialEq, TypeInfo)]
 pub enum Caller<T: Config> {
 	Account(T::AccountId),
@@ -994,7 +995,7 @@ pub enum Caller<T: Config> {
 }
 
 impl<T: Config> Caller<T> {
-	/// Creates a new Signed ContractOrigin from an AccountId
+	/// Creates a new Signed ContractOrigin from an AccountId.
 	pub fn from_account_id(account_id: T::AccountId) -> Self {
 		Caller::Account(account_id)
 	}
@@ -1010,8 +1011,8 @@ impl<T: Config> sp_std::fmt::Debug for Caller<T> {
 }
 
 impl<T: Config> Caller<T> {
-	/// Returns the account id of the caller if it has one
-	/// it errors otherwise
+	/// Returns the account id of the caller if it has one.
+	/// It errors otherwise.
 	pub fn account_id(&self) -> Result<T::AccountId, DispatchError> {
 		match self {
 			Caller::Account(id) => Ok(id.clone()),
@@ -1155,7 +1156,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 	) -> InternalOutput<T, Self::Output> {
 		let mut storage_deposit = Default::default();
 		let try_exec = || {
-			// Root origin is not allowed here
+			// Root origin is not allowed here.
 			let origin = match &common.origin {
 				ContractOrigin::Signed(t) => t,
 				ContractOrigin::Root => {

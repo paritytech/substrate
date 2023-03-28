@@ -337,11 +337,11 @@ where
 		limit: Option<BalanceOf<T>>,
 		min_leftover: BalanceOf<T>,
 	) -> Result<Self, DispatchError> {
-		// Check the limit only if the origin is not root
+		// Check the limit only if the origin is not root.
 		return match origin {
 			ContractOrigin::Root => {
 				match limit {
-					// If the limit is specified, that the root's limit
+					// If the limit is specified, that the root's limit.
 					Some(l) => Ok(Self { limit: l, ..Default::default() }),
 					None => Err(<Error<T>>::StorageDepositLimitRequired.into()),
 				}
@@ -360,7 +360,7 @@ where
 	/// This drops the root meter in order to make sure it is only called when the whole
 	/// execution did finish.
 	pub fn into_deposit(self, origin: &ContractOrigin<T>) -> DepositOf<T> {
-		// Only refund or charge deposit if the origin is not root
+		// Only refund or charge deposit if the origin is not root.
 		let origin = match origin {
 			ContractOrigin::Root => return self.total_deposit,
 			ContractOrigin::Signed(o) => o,
