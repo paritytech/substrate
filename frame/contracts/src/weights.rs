@@ -51,7 +51,6 @@ use sp_std::marker::PhantomData;
 pub trait WeightInfo {
 	fn on_process_deletion_queue_batch() -> Weight;
 	fn on_initialize_per_trie_key(k: u32, ) -> Weight;
-	fn on_initialize_per_queue_item(q: u32, ) -> Weight;
 	fn reinstrument(c: u32, ) -> Weight;
 	fn call_with_code_per_byte(c: u32, ) -> Weight;
 	fn instantiate_with_code(c: u32, i: u32, s: u32, ) -> Weight;
@@ -197,21 +196,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(k.into())))
 			.saturating_add(Weight::from_parts(0, 70).saturating_mul(k.into()))
-	}
-	/// Storage: Contracts DeletionQueue (r:1 w:1)
-	/// Proof: Contracts DeletionQueue (max_values: Some(1), max_size: Some(16642), added: 17137, mode: Measured)
-	/// The range of component `q` is `[0, 128]`.
-	fn on_initialize_per_queue_item(q: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `250 + q * (33 ±0)`
-		//  Estimated: `1725 + q * (33 ±0)`
-		// Minimum execution time: 2_718_000 picoseconds.
-		Weight::from_parts(11_436_305, 1725)
-			// Standard Error: 3_619
-			.saturating_add(Weight::from_parts(1_296_955, 0).saturating_mul(q.into()))
-			.saturating_add(T::DbWeight::get().reads(1_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-			.saturating_add(Weight::from_parts(0, 33).saturating_mul(q.into()))
 	}
 	/// Storage: Contracts PristineCode (r:1 w:0)
 	/// Proof: Contracts PristineCode (max_values: None, max_size: Some(125988), added: 128463, mode: Measured)
@@ -2154,21 +2138,6 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(k.into())))
 			.saturating_add(Weight::from_parts(0, 70).saturating_mul(k.into()))
-	}
-	/// Storage: Contracts DeletionQueue (r:1 w:1)
-	/// Proof: Contracts DeletionQueue (max_values: Some(1), max_size: Some(16642), added: 17137, mode: Measured)
-	/// The range of component `q` is `[0, 128]`.
-	fn on_initialize_per_queue_item(q: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `250 + q * (33 ±0)`
-		//  Estimated: `1725 + q * (33 ±0)`
-		// Minimum execution time: 2_718_000 picoseconds.
-		Weight::from_parts(11_436_305, 1725)
-			// Standard Error: 3_619
-			.saturating_add(Weight::from_parts(1_296_955, 0).saturating_mul(q.into()))
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
-			.saturating_add(Weight::from_parts(0, 33).saturating_mul(q.into()))
 	}
 	/// Storage: Contracts PristineCode (r:1 w:0)
 	/// Proof: Contracts PristineCode (max_values: None, max_size: Some(125988), added: 128463, mode: Measured)

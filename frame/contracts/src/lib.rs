@@ -904,10 +904,9 @@ pub mod pallet {
 	/// A pair of monotonic counters used to track the latest contract marked for deletion
 	/// and the latest deleted contract in DeletionQueueMap.
 	///
-	/// These two nonces let us keep track of the length of the queue, so we can calculate the
-	/// weight of the deletion budget, additionally, when we iterate the map to remove contracts, we
-	/// simply use the `delete_nonce` counter and  don't pay the cost of an extra call to
-	/// `sp_io::storage::next_key` to lookup the next entry in the map
+	/// When we iterate the map to remove contracts, we simply use the `delete_nonce` counter and
+	/// don't pay the cost of an extra call to `sp_io::storage::next_key` to lookup the next entry
+	/// in the map
 	#[pallet::storage]
 	pub(crate) type DeletionQueueNonces<T: Config> = StorageValue<_, DeletionQueue<T>, ValueQuery>;
 }

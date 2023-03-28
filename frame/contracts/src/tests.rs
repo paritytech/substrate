@@ -2032,7 +2032,7 @@ fn lazy_removal_partial_remove_works() {
 	// We create a contract with some extra keys above the weight limit
 	let extra_keys = 7u32;
 	let weight_limit = Weight::from_parts(5_000_000_000, 0);
-	let (_, max_keys) = ContractInfo::<Test>::deletion_budget(1, weight_limit);
+	let (_, max_keys) = ContractInfo::<Test>::deletion_budget(weight_limit);
 	let vals: Vec<_> = (0..max_keys + extra_keys)
 		.map(|i| (blake2_256(&i.encode()), (i as u32), (i as u32).encode()))
 		.collect();
@@ -2210,7 +2210,7 @@ fn lazy_removal_does_not_use_all_weight() {
 		.account_id;
 
 		let info = get_contract(&addr);
-		let (weight_per_key, max_keys) = ContractInfo::<Test>::deletion_budget(1, weight_limit);
+		let (weight_per_key, max_keys) = ContractInfo::<Test>::deletion_budget(weight_limit);
 
 		// We create a contract with one less storage item than we can remove within the limit
 		let vals: Vec<_> = (0..max_keys - 1)

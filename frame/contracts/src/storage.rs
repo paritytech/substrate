@@ -212,19 +212,15 @@ impl<T: Config> ContractInfo<T> {
 	/// Calculates the weight that is necessary to remove one key from the trie and how many
 	/// of those keys can be deleted from the deletion queue given the supplied queue length
 	/// and weight limit.
-	pub fn deletion_budget(queue_len: u32, weight_limit: Weight) -> (Weight, u32) {
+	pub fn deletion_budget(weight_limit: Weight) -> (Weight, u32) {
 		let base_weight = T::WeightInfo::on_process_deletion_queue_batch();
-		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
-			T::WeightInfo::on_initialize_per_queue_item(0);
 		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
 			T::WeightInfo::on_initialize_per_trie_key(0);
-		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as u64);
 
 		// `weight_per_key` being zero makes no sense and would constitute a failure to
 		// benchmark properly. We opt for not removing any keys at all in this case.
 		let key_budget = weight_limit
 			.saturating_sub(base_weight)
-			.saturating_sub(decoding_weight)
 			.checked_div_per_component(&weight_per_key)
 			.unwrap_or(0) as u32;
 
@@ -236,14 +232,12 @@ impl<T: Config> ContractInfo<T> {
 	/// It returns the amount of weight used for that task.
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
 		let mut queue = <DeletionQueue<T>>::load();
-		let queue_len = queue.len();
 
-		if queue_len == 0 {
+		if queue.is_empty() {
 			return Weight::zero()
 		}
 
-		let (weight_per_key, mut remaining_key_budget) =
-			Self::deletion_budget(queue_len, weight_limit);
+		let (weight_per_key, mut remaining_key_budget) = Self::deletion_budget(weight_limit);
 
 		// We want to check whether we have enough weight to decode the queue before
 		// proceeding. Too little weight for decoding might happen during runtime upgrades
@@ -396,8 +390,8 @@ impl<T: Config> DeletionQueue<T> {
 	}
 
 	/// The number of contracts marked for deletion.
-	fn len(&self) -> u32 {
-		self.insert_nonce.wrapping_sub(self.delete_nonce)
+	fn is_empty(&self) -> bool {
+		self.insert_nonce.wrapping_sub(self.delete_nonce) == 0
 	}
 
 	/// Insert a contract in the deletion queue.
@@ -409,7 +403,7 @@ impl<T: Config> DeletionQueue<T> {
 
 	/// Fetch the next contract to be deleted.
 	fn next(&mut self) -> Option<DeletionQueueEntry<T>> {
-		if self.len() == 0 {
+		if self.is_empty() {
 			return None
 		}
 

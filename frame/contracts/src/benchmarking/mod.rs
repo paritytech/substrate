@@ -219,18 +219,6 @@ benchmarks! {
 		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
-	#[pov_mode = Measured]
-	on_initialize_per_queue_item {
-		let q in 0..1024;
-		for i in 0 .. q {
-			let instance = Contract::<T>::with_index(i, WasmModule::dummy(), vec![])?;
-			instance.info()?.queue_trie_for_deletion()?;
-			ContractInfoOf::<T>::remove(instance.account_id);
-		}
-	}: {
-		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
-	}
-
 	// This benchmarks the additional weight that is charged when a contract is executed the
 	// first time after a new schedule was deployed: For every new schedule a contract needs
 	// to re-run the instrumentation once.
@@ -239,6 +227,7 @@ benchmarks! {
 		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		Contracts::<T>::store_code_raw(code, whitelisted_caller())?;
+
 		let schedule = T::Schedule::get();
 		let mut gas_meter = GasMeter::new(Weight::MAX);
 		let mut module = PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter)?;
@@ -3020,8 +3009,8 @@ benchmarks! {
 	print_schedule {
 		#[cfg(feature = "std")]
 		{
-			let empty_queue_throughput = ContractInfo::<T>::deletion_budget(0, Weight::MAX);
-			let full_queue_throughput = ContractInfo::<T>::deletion_budget(1024, Weight::MAX);
+			let empty_queue_throughput = ContractInfo::<T>::deletion_budget(Weight::MAX);
+			let full_queue_throughput = ContractInfo::<T>::deletion_budget(Weight::MAX);
 			println!("{:#?}", Schedule::<T>::default());
 			println!("###############################################");
 			println!("Lazy deletion weight per key: {}", empty_queue_throughput.0);
