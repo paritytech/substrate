@@ -17,7 +17,7 @@
 
 //! A fixed hash type.
 
-pub use primitive_types::{H160, H256, H384, H512, H768};
+pub use primitive_types::{H1152, H160, H256, H512, H896};
 
 /// Hash conversion. Used to convert between unbound associated hash types in traits,
 /// implemented by the same hash type.

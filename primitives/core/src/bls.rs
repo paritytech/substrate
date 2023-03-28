@@ -23,15 +23,18 @@ use crate::crypto::Ss58Codec;
 use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError};
 use crate::{
 	crypto::{ByteArray, CryptoType, Derive, Public as TraitPublic, UncheckedFrom},
-	hash::{H384, H768},
+	hash::{H1152, H896},
 };
 
 #[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
 
-use bls_like::EngineBLS;
 #[cfg(feature = "full_crypto")]
-use bls_like::{Keypair, Message, SerializableToBytes};
+use bls_like::{
+	double::{DoublePublicKey, DoublePublicKeyScheme, DoubleSignature},
+	Keypair, Message, SecretKey, SerializableToBytes,
+};
+use bls_like::{EngineBLS, TinyBLS381};
 use codec::{Decode, Encode, MaxEncodedLen};
 #[cfg(feature = "std")]
 use hex;
@@ -45,35 +48,35 @@ use sp_std::{convert::TryFrom, marker::PhantomData, ops::Deref};
 /// BLS-377 specialized types
 pub mod bls377 {
 	use crate::crypto::CryptoTypeId;
-	use bls_like::BLS377;
+	use bls_like::TinyBLS377;
 
 	/// An identifier used to match public keys against BLS12-377 keys
 	pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bls7");
 
 	/// BLS12-377 key pair.
 	#[cfg(feature = "full_crypto")]
-	pub type Pair = super::Pair<BLS377>;
+	pub type Pair = super::Pair<TinyBLS377>;
 	/// BLS12-377 public key.
-	pub type Public = super::Public<BLS377>;
+	pub type Public = super::DoublePublicKey<TinyBLS377>;
 	/// BLS12-377 signature.
-	pub type Signature = super::Signature<BLS377>;
+	pub type Signature = super::DoubleSignature<TinyBLS377>;
 }
 
 /// BLS-381 specialized types
 pub mod bls381 {
 	use crate::crypto::CryptoTypeId;
-	use bls_like::ZBLS;
+	use bls_like::TinyBLS381;
 
 	/// An identifier used to match public keys against BLS12-381 keys
 	pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bls8");
 
 	/// BLS12-381 key pair.
 	#[cfg(feature = "full_crypto")]
-	pub type Pair = super::Pair<ZBLS>;
+	pub type Pair = super::Pair<TinyBLS381>;
 	/// BLS12-381 public key.
-	pub type Public = super::Public<ZBLS>;
+	pub type Public = super::DoublePublicKey<TinyBLS381>;
 	/// BLS12-381 signature.
-	pub type Signature = super::Signature<ZBLS>;
+	pub type Signature = super::DoubleSignature<TinyBLS381>;
 }
 
 trait BlsBound: EngineBLS + Send + Sync + 'static {}
@@ -82,13 +85,16 @@ impl<T: EngineBLS + Send + Sync + 'static> BlsBound for T {}
 
 // Secret key serialized side
 #[cfg(feature = "full_crypto")]
-const SECRET_KEY_SERIALIZED_SIZE: usize = 32;
+const SECRET_KEY_SERIALIZED_SIZE: usize =
+	<SecretKey<TinyBLS381> as SerializableToBytes>::SERIALIZED_BYTES_SIZE;
 
 // Public key serialized side
-const PUBLIC_KEY_SERIALIZED_SIZE: usize = 48;
+const PUBLIC_KEY_SERIALIZED_SIZE: usize =
+	<DoublePublicKey<TinyBLS381> as SerializableToBytes>::SERIALIZED_BYTES_SIZE;
 
 // Signature serialized size
-const SIGNATURE_SERIALIZED_SIZE: usize = 96;
+const SIGNATURE_SERIALIZED_SIZE: usize =
+	<DoubleSignature<TinyBLS381> as SerializableToBytes>::SERIALIZED_BYTES_SIZE;
 
 /// A secret seed.
 ///
@@ -148,11 +154,11 @@ impl<T> Public<T> {
 		Public { inner: data, _phantom: PhantomData }
 	}
 
-	/// A new instance from an H384.
+	/// A new instance from an H1152.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
 	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_h384(x: H384) -> Self {
+	pub fn from_h1152(x: H1152) -> Self {
 		Self::from_raw(x.into())
 	}
 }
@@ -229,7 +235,7 @@ impl<T: BlsBound> From<Pair<T>> for Public<T> {
 	}
 }
 
-impl<T> From<Public<T>> for H384 {
+impl<T> From<Public<T>> for H1152 {
 	fn from(x: Public<T>) -> Self {
 		x.inner.into()
 	}
@@ -241,9 +247,9 @@ impl<T> UncheckedFrom<[u8; PUBLIC_KEY_SERIALIZED_SIZE]> for Public<T> {
 	}
 }
 
-impl<T> UncheckedFrom<H384> for Public<T> {
-	fn unchecked_from(x: H384) -> Self {
-		Public::from_h384(x)
+impl<T> UncheckedFrom<H1152> for Public<T> {
+	fn unchecked_from(x: H1152) -> Self {
+		Public::from_h1152(x)
 	}
 }
 
@@ -359,11 +365,11 @@ impl<T> Signature<T> {
 		Some(Signature::from_raw(r))
 	}
 
-	/// A new instance from an H768.
+	/// A new instance from an H896.
 	///
 	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
 	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_h768(hash: H768) -> Self {
+	pub fn from_h896(hash: H896) -> Self {
 		Signature::from_raw(hash.into())
 	}
 }
@@ -405,9 +411,9 @@ impl<'de, T> Deserialize<'de> for Signature<T> {
 	}
 }
 
-impl<T> From<Signature<T>> for H768 {
-	fn from(signature: Signature<T>) -> H768 {
-		H768::from(signature.inner)
+impl<T> From<Signature<T>> for H896 {
+	fn from(signature: Signature<T>) -> H896 {
+		H896::from(signature.inner)
 	}
 }
 
@@ -479,7 +485,11 @@ fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
 impl<T: EngineBLS> Pair<T> {
 	/// Get the seed for this key.
 	pub fn seed(&self) -> Seed {
-		self.0.secret.to_bytes()
+		self.0
+			.secret
+			.to_bytes()
+			.try_into()
+			.expect("Secret key serializer returns a vector of SECRET_KEY_SERIALIZED_SIZE size")
 	}
 
 	// TODO DAVXY: is this required??? If yes add when it will be 😃
@@ -521,7 +531,10 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 		path: Iter,
 		_seed: Option<Seed>,
 	) -> Result<(Self, Option<Seed>), DeriveError> {
-		let mut acc = self.0.secret.to_bytes();
+		let mut acc: [u8; SECRET_KEY_SERIALIZED_SIZE] =
+			self.0.secret.to_bytes().try_into().expect(
+				"Secret key serializer returns a vector of SECRET_KEY_SERIALIZED_SIZE size",
+			);
 		for j in path {
 			match j {
 				DeriveJunction::Soft(_cc) => return Err(DeriveError::SoftKeyInPath),
@@ -534,7 +547,7 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 	/// Get the public key.
 	fn public(&self) -> Self::Public {
 		let mut raw = [0u8; PUBLIC_KEY_SERIALIZED_SIZE];
-		let pk = self.0.public.to_bytes();
+		let pk = DoublePublicKeyScheme::into_double_public_key(&self.0).to_bytes();
 		raw.copy_from_slice(pk.as_slice());
 		Self::Public::from_raw(raw)
 	}
@@ -542,7 +555,11 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Self::Signature {
 		let mut mutable_self = self.clone();
-		let r = mutable_self.0.sign(Message::new(b"", message)).to_bytes();
+		let r: [u8; SIGNATURE_SERIALIZED_SIZE] =
+			DoublePublicKeyScheme::sign(&mut mutable_self.0, Message::new(b"", message))
+				.to_bytes()
+				.try_into()
+				.expect("Signature serializer returns vectors of SIGNATURE_SERIALIZED_SIZE size");
 		Self::Signature::from_raw(r)
 	}
 
@@ -560,7 +577,7 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 			Ok(pk) => pk,
 			Err(_) => return false,
 		};
-		let public_key = match bls_like::PublicKey::<T>::from_bytes(&pubkey_array) {
+		let public_key = match bls_like::double::DoublePublicKey::<T>::from_bytes(&pubkey_array) {
 			Ok(pk) => pk,
 			Err(_) => return false,
 		};
@@ -569,7 +586,7 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 			Ok(s) => s,
 			Err(_) => return false,
 		};
-		let sig = match bls_like::Signature::from_bytes(sig_array) {
+		let sig = match bls_like::double::DoubleSignature::from_bytes(sig_array) {
 			Ok(s) => s,
 			Err(_) => return false,
 		};
@@ -593,7 +610,8 @@ impl<T: BlsBound> CryptoType for Pair<T> {
 mod test {
 	use super::*;
 	use crate::crypto::DEV_PHRASE;
-	use bls377::{Pair, Public, Signature};
+	use bls377::Pair;
+	use bls_like::TinyBLS377;
 	use hex_literal::hex;
 
 	#[test]
@@ -632,12 +650,12 @@ mod test {
 		assert_eq!(
 			public,
 			Public::from_raw(hex!(
-				"7a84ca8ce4c37c93c95ecee6a3c0c9a7b9c225093cf2f12dc4f69cbfb847ef9424a18f5755d5a742247d386ff2aabb80"
+				"7a84ca8ce4c37c93c95ecee6a3c0c9a7b9c225093cf2f12dc4f69cbfb847ef9424a18f5755d5a742247d386ff2aabb806bcf160eff31293ea9616976628f77266c8a8cc1d8753be04197bd6cdd8c5c87a148f782c4c1568d599b48833fd539001e580cff64bbc71850605433fcd051f3afc3b74819786f815ffb5272030a8d03e5df61e6183f8fd8ea85f26defa83400"
 			))
 		);
 		let message = b"";
 		let signature =
-	hex!("0e5854002b249175764e463165aec0e38a46ddd44c2db29d6fec3022a3993b3390b001b53a04d155a4d216dd361df90087281be27c58ae22c7f1333820259ff5ae1b321126d1a001bf91ee088fb56ca9d4aa484d129ede7e701ced08df631581"
+	hex!("1a2cf9ed2f3dc798c218fe80948560487a984eb8f7e8a86af6113759603bea9bdca53c260b69662efe64df80b5b953803145af24b37f1d292c3cfd605ecc4fbeaa3b370c92cb3fe14f5044bbe3d89a01dbac4cd5cdb741c9e6f4fad16eca76c14e5cd3b11db21c03317d5d5998c4c105"
 	);
 		let signature = Signature::from_raw(signature);
 		assert!(pair.sign(&message[..]) == signature);
@@ -657,15 +675,17 @@ mod test {
 		assert_eq!(
 			public,
 			Public::from_raw(hex!(
-				"6dc6be608fab3c6bd894a606be86db346cc170db85c733853a371f3db54ae1b12052c0888d472760c81b537572a26f00"
+				"6dc6be608fab3c6bd894a606be86db346cc170db85c733853a371f3db54ae1b12052c0888d472760c81b537572a26f00db865e5963aef8634f9917571c51b538b564b2a9ceda938c8b930969ee3b832448e08e33a79e9ddd28af419a3ce45300f5dbc768b067781f44f3fe05a19e6b07b1c4196151ec3f8ea37e4f89a8963030d2101e931276bb9ebe1f20102239d780"
 			))
 		);
 		let message = b"";
 		let signature =
-	hex!("9f7d07e0fdd6aa342f6defaade946b59bfeba8af45c243f86b208cd339b2c713421844e3007e0acafd0a529542ee050047b739fe5bfd311d884451542204e173d784e648eb55f4bd32da747f006120fadf4801c2b1c88f9745c50c2141b1d380"
+	hex!("618ae186f07ead4fb973c7ae86deeee9d33cbdcbea3fe32753e5cdba8df2ae67a28c2465118756bccfd60076fdbeb2009d2eeb174584b448bee01cf4eefd65fd839c722464e6ccc7b2639b4e7db6ec0de57eff3ee22c7eb19a8f06839530bc64ae323e263341b03363da5d75e2e59002"
 	);
-		let signature = Signature::from_raw(signature);
-		assert!(pair.sign(&message[..]) == signature);
+		let expected_signature = Signature::from_raw(signature);
+		println!("signature is {:?}", pair.sign(&message[..]));
+		let signature = pair.sign(&message[..]);
+		assert!(signature == expected_signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
 
@@ -687,7 +707,7 @@ mod test {
 			public,
 			Public::from_raw(
 				hex!(
-				"754d2f2bbfa67df54d7e0e951979a18a1e0f45948857752cc2bac6bbb0b1d05e8e48bcc453920bf0c4bbd59932124801")
+				"754d2f2bbfa67df54d7e0e951979a18a1e0f45948857752cc2bac6bbb0b1d05e8e48bcc453920bf0c4bbd5993212480112a1fb433f04d74af0a8b700d93dc957ab3207f8d071e948f5aca1a7632c00bdf6d06be05b43e2e6216dccc8a5d55a0071cb2313cfd60b7e9114619cd17c06843b352f0b607a99122f6651df8f02e1ad3697bd208e62af047ddd7b942ba80080")
 			)
 		);
 		let message =
@@ -739,15 +759,17 @@ mod test {
 		let message = b"Something important";
 		let signature = pair.sign(&message[..]);
 		let serialized_signature = serde_json::to_string(&signature).unwrap();
-		// Signature is 96 bytes, so 192 chars + 2 quote chars
-		assert_eq!(serialized_signature.len(), 194);
+		// Signature is 112 bytes, hexify * 2, so 224  chars + 2 quote chars
+		assert_eq!(serialized_signature.len(), 226);
 		let signature = serde_json::from_str(&serialized_signature).unwrap();
 		assert!(Pair::verify(&signature, &message[..], &pair.public()));
 	}
 
 	#[test]
 	fn signature_serialization_doesnt_panic() {
-		fn deserialize_signature(text: &str) -> Result<Signature, serde_json::error::Error> {
+		fn deserialize_signature(
+			text: &str,
+		) -> Result<Signature<TinyBLS377>, serde_json::error::Error> {
 			serde_json::from_str(text)
 		}
 		assert!(deserialize_signature("Not valid json.").is_err());
