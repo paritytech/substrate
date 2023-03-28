@@ -74,16 +74,6 @@ impl Weight {
 		&mut self.proof_size
 	}
 
-	/// Return self but discard any reference time.
-	pub const fn without_ref_time(&self) -> Self {
-		Self { ref_time: 0, proof_size: self.proof_size }
-	}
-
-	/// Return self but discard any proof size.
-	pub const fn without_proof_size(&self) -> Self {
-		Self { ref_time: self.ref_time, proof_size: 0 }
-	}
-
 	pub const MAX: Self = Self { ref_time: u64::MAX, proof_size: u64::MAX };
 
 	/// Get the conservative min of `self` and `other` weight.
