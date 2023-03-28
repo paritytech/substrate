@@ -73,8 +73,7 @@ use parking_lot::Mutex;
 use sc_network_common::ExHashT;
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_blockchain::HeaderBackend;
-use sp_runtime::traits::{Block as BlockT, Zero};
+use sp_runtime::traits::Block as BlockT;
 
 use std::{
 	cmp,
@@ -147,9 +146,7 @@ where
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new<Client: HeaderBackend<B> + 'static>(
-		mut params: Params<Client>,
-	) -> Result<Self, Error> {
+	pub fn new<Block: BlockT>(mut params: Params<Block>) -> Result<Self, Error> {
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
@@ -277,13 +274,11 @@ where
 				config.discovery_limit(
 					u64::from(params.network_config.default_peers_set.out_peers) + 15,
 				);
-				let genesis_hash = params
-					.chain
-					.hash(Zero::zero())
-					.ok()
-					.flatten()
-					.expect("Genesis block exists; qed");
-				config.with_kademlia(genesis_hash, params.fork_id.as_deref(), &params.protocol_id);
+				config.with_kademlia(
+					params.genesis_hash,
+					params.fork_id.as_deref(),
+					&params.protocol_id,
+				);
 				config.with_dht_random_walk(params.network_config.enable_dht_random_walk);
 				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
 				config.use_kademlia_disjoint_query_paths(

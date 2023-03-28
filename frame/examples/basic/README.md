@@ -237,4 +237,4 @@ pub trait Config: <INSERT_CUSTOM_PALLET_NAME>::Config { }
 // that the implementation is based on.
 </pre></p></details>
 
-License: Unlicense
+License: MIT-0
