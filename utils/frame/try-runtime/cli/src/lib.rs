@@ -369,6 +369,7 @@ use sc_cli::{
 	DEFAULT_WASM_EXECUTION_METHOD,
 };
 use sc_executor::{sp_wasm_interface::HostFunctions, WasmExecutor};
+use sc_executor_common::wasm_runtime::HeapAllocStrategy;
 use sp_api::HashT;
 use sp_core::{
 	hexdisplay::HexDisplay,
@@ -529,6 +530,11 @@ pub struct SharedParams {
 		value_enum,
 	)]
 	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
+
+	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
+	/// [`sc_service::Configuration.default_heap_pages`].
+	#[arg(long)]
+	pub heap_pages: Option<u64>,
 
 	/// Path to a file to export the storage proof into (as a JSON).
 	/// If several blocks are executed, the path is interpreted as a folder
@@ -822,10 +828,15 @@ pub(crate) fn full_extensions() -> Extensions {
 
 /// Build wasm executor by default config.
 pub(crate) fn build_executor<H: HostFunctions>(shared: &SharedParams) -> WasmExecutor<H> {
+	let heap_pages =
+		HeapAllocStrategy::Static { extra_pages: shared.heap_pages.unwrap_or(2048) as _ };
+
 	WasmExecutor::builder(execution_method_from_cli(
 		shared.wasm_method,
 		shared.wasmtime_instantiation_strategy,
 	))
+	.with_onchain_heap_alloc_strategy(heap_pages)
+	.with_offchain_heap_alloc_strategy(heap_pages)
 	.build()
 }
 
