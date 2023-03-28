@@ -285,6 +285,25 @@ check-crates-publishing-pipeline:
       https://github.com/paritytech/releng-scripts.git
     - ONLY_CHECK_PIPELINE=true ./releng-scripts/publish-crates
 
+foo1:
+  extends: .kubernetes-env
+  stage: .pre
+  variables:
+    FF_USE_NEW_BASH_EVAL_STRATEGY: 1
+  script:
+    - trap "echo trap" EXIT
+    - echo foo
+
+foo2:
+  extends: .kubernetes-env
+  stage: .pre
+  variables:
+    FF_USE_NEW_BASH_EVAL_STRATEGY: 1
+  script:
+    - trap "echo trap" EXIT
+    - echo foo
+    - exit 1
+
 include:
   # check jobs
   - scripts/ci/gitlab/pipeline/check.yml
