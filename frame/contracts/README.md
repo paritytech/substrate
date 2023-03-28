@@ -135,6 +135,18 @@ to `error` in order to prevent them from spamming the console.
 `--dev`: Use a dev chain spec
 `--tmp`: Use temporary storage for chain data (the chain state is deleted on exit)
 
+## Host function tracing
+
+For contract authors, it can be a helpful debugging tool to see which host functions are called, with which arguments, and what the result was. 
+
+In order to see these messages on the node console, the log level for the `runtime::contracts::strace` target needs to be raised to the `trace` level. 
+
+Example: 
+
+```bash
+cargo run --release -- --dev -lerror,runtime::contracts::strace=trace,runtime::contracts=debug
+```
+
 ## Unstable Interfaces
 
 Driven by the desire to have an iterative approach in developing new contract interfaces
