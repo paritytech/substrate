@@ -16,59 +16,57 @@
 // limitations under the License.
 
 //! # Running
-//! Running this fuzzer can be done with `cargo hfuzz run multiply_by_rational_with_rounding`.
-//! `honggfuzz` CLI options can be used by setting `HFUZZ_RUN_ARGS`, such as `-n 4` to use 4
-//! threads.
+//! Running this fuzzer can be done with `cargo hfuzz run per_thing_from_rational`. `honggfuzz` CLI
+//! options can be used by setting `HFUZZ_RUN_ARGS`, such as `-n 4` to use 4 threads.
 //!
 //! # Debugging a panic
 //! Once a panic is found, it can be debugged with
-//! `cargo hfuzz run-debug multiply_by_rational_with_rounding
-//! hfuzz_workspace/multiply_by_rational_with_rounding/*.fuzz`.
-//!
-//! # More information
-//! More information about `honggfuzz` can be found
-//! [here](https://docs.rs/honggfuzz/).
+//! `cargo hfuzz run-debug per_thing_from_rational hfuzz_workspace/per_thing_from_rational/*.fuzz`.
 
 use fraction::prelude::BigFraction as Fraction;
 use honggfuzz::fuzz;
-use sp_arithmetic::{MultiplyRational, Rounding, Rounding::*};
+use sp_arithmetic::{
+	traits::SaturatedConversion, PerThing, Perbill, Percent, Perquintill, Rounding::*, *,
+};
 
-/// Tries to demonstrate that `multiply_by_rational_with_rounding` is incorrect.
+/// Tries to demonstrate that `from_rational` is incorrect for any rounding modes.
+///
+/// NOTE: This `Fraction` library is really slow. Using f128/f256 does not work for the large
+/// numbers. But an optimization could be done do use either floats or Fraction depending on the
+/// size of the inputs.
 fn main() {
 	loop {
-		fuzz!(|data: (u128, u128, u128, ArbitraryRounding)| {
-			let (f, n, d, r) = (data.0, data.1, data.2, data.3 .0);
+		fuzz!(|data: (u128, u128, ArbitraryRounding)| {
+			let (n, d, r) = (data.0.min(data.1), data.0.max(data.1).max(1), data.2);
 
-			check::<u8>(f as u8, n as u8, d as u8, r);
-			check::<u16>(f as u16, n as u16, d as u16, r);
-			check::<u32>(f as u32, n as u32, d as u32, r);
-			check::<u64>(f as u64, n as u64, d as u64, r);
-			check::<u128>(f, n, d, r);
+			check::<PerU16>(n, d, r.0);
+			check::<Percent>(n, d, r.0);
+			check::<Permill>(n, d, r.0);
+			check::<Perbill>(n, d, r.0);
+			check::<Perquintill>(n, d, r.0);
 		})
 	}
 }
 
-fn check<N>(f: N, n: N, d: N, r: Rounding)
+/// Assert that the parts of `from_rational` are correct for the given rounding mode.
+fn check<Per: PerThing>(a: u128, b: u128, r: Rounding)
 where
-	N: MultiplyRational + Into<u128> + Copy + core::fmt::Debug,
+	Per::Inner: Into<u128>,
 {
-	let Some(got) = f.multiply_rational(n, d, r) else {
-		return;
-	};
+	let approx_ratio = Per::from_rational_with_rounding(a, b, r).unwrap();
+	let approx_parts = Fraction::from(approx_ratio.deconstruct().saturated_into::<u128>());
 
-	let (ae, be, ce) =
-		(Fraction::from(f.into()), Fraction::from(n.into()), Fraction::from(d.into()));
-	let want = round(ae * be / ce, r);
+	let perfect_ratio = if a == 0 && b == 0 {
+		Fraction::from(1)
+	} else {
+		Fraction::from(a) / Fraction::from(b.max(1))
+	};
+	let perfect_parts = round(perfect_ratio * Fraction::from(Per::ACCURACY.into()), r);
 
 	assert_eq!(
-		Fraction::from(got.into()),
-		want,
-		"{:?} * {:?} / {:?} = {:?} != {:?}",
-		f,
-		n,
-		d,
-		got,
-		want
+		approx_parts, perfect_parts,
+		"approx_parts: {}, perfect_parts: {}, a: {}, b: {}",
+		approx_parts, perfect_parts, a, b
 	);
 }
 
