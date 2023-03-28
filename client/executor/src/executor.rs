@@ -32,15 +32,13 @@ use std::{
 use codec::Encode;
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{AllocationStats, HeapAllocStrategy, WasmInstance, WasmModule},
+	wasm_runtime::{
+		AllocationStats, HeapAllocStrategy, WasmInstance, WasmModule, DEFAULT_HEAP_ALLOC_STRATEGY,
+	},
 };
 use sp_core::traits::{CallContext, CodeExecutor, Externalities, RuntimeCode};
 use sp_version::{GetNativeVersion, NativeVersion, RuntimeVersion};
 use sp_wasm_interface::{ExtendedHostFunctions, HostFunctions};
-
-/// Default heap allocation strategy.
-const DEFAULT_HEAP_ALLOC_STRATEGY: HeapAllocStrategy =
-	HeapAllocStrategy::Static { extra_pages: 2048 };
 
 /// Set up the externalities and safe calling environment to execute runtime calls.
 ///
