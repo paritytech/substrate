@@ -275,11 +275,6 @@ impl<T: Config> ContractInfo<T> {
 	}
 }
 
-// #[derive(Encode, Decode, TypeInfo, MaxEncodedLen)]
-// pub struct DeletedContract {
-// 	pub(crate) trie_id: TrieId,
-// }
-
 /// Information about what happened to the pre-existing value when calling [`ContractInfo::write`].
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum WriteOutcome {
