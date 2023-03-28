@@ -742,7 +742,6 @@ mod tests {
 
 	#[test]
 	fn heap_pages_is_respected() {
-		sp_tracing::try_init_simple();
 		// This tests that the on-chain HEAP_PAGES parameter is respected.
 
 		// Create a client devoting only 8 pages of wasm memory. This gives us ~512k of heap memory.

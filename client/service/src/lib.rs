@@ -585,7 +585,6 @@ mod tests {
 	use futures::executor::block_on;
 	use sc_transaction_pool::BasicPool;
 	use sp_consensus::SelectChain;
-	use sp_runtime::traits::BlindCheckable;
 	use substrate_test_runtime_client::{
 		prelude::*,
 		runtime::{Transfer, UncheckedExtrinsicBuilder},
