@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{error::Error as CliError, Result, Signals, SubstrateCli};
+use crate::{error::Error as CliError, CommonCli, Result, Signals, SubstrateCli};
 use chrono::prelude::*;
 use futures::{future::FutureExt, Future};
 use log::info;
@@ -189,9 +189,7 @@ impl Runner<Configuration> {
 /// 2020-06-03 16:14:21 ⛓  Native runtime: node-251 (substrate-node-1.tx1.au10)
 /// ```
 pub fn print_node_infos<C: SubstrateCli>(config: &Configuration) {
-	info!("{}", C::impl_name());
-	info!("✌️  version {}", C::impl_version());
-	info!("❤️  by {}, {}-{}", C::author(), C::copyright_start_year(), Local::now().year());
+	print_common_infos::<C>();
 	info!("📋 Chain specification: {}", config.chain_spec.name());
 	info!("🏷  Node name: {}", config.network.node_name);
 	info!("👤 Role: {}", config.display_role());
@@ -204,6 +202,21 @@ pub fn print_node_infos<C: SubstrateCli>(config: &Configuration) {
 			.map_or_else(|| "<unknown>".to_owned(), |p| p.display().to_string())
 	);
 	info!("⛓  Native runtime: {}", C::native_runtime_version(&config.chain_spec));
+}
+
+/// Log common information about the cli.
+///
+/// # Example:
+///
+/// ```text
+/// 2020-06-03 16:14:21 Substrate Node
+/// 2020-06-03 16:14:21 ✌️  version 2.0.0-rc3-f4940588c-x86_64-linux-gnu
+/// 2020-06-03 16:14:21 ❤️  by Parity Technologies <admin@parity.io>, 2017-2020
+/// ```
+pub fn print_common_infos<C: CommonCli>() {
+	info!("{}", C::impl_name());
+	info!("✌️  version {}", C::impl_version());
+	info!("❤️  by {}, {}-{}", C::author(), C::copyright_start_year(), Local::now().year());
 }
 
 #[cfg(test)]
