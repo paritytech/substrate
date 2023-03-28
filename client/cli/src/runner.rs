@@ -65,7 +65,9 @@ impl<Cfg> Runner<Cfg> {
 		F: Future<Output = std::result::Result<TaskManager, E>>,
 		E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
 	{
-		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config, self.tokio_runtime.handle().clone()))?;
+		let mut task_manager = self
+			.tokio_runtime
+			.block_on(initialize(self.config, self.tokio_runtime.handle().clone()))?;
 
 		let res = self
 			.tokio_runtime
