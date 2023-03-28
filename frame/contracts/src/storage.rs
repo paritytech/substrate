@@ -288,7 +288,7 @@ pub struct DeletedContract {
 	pub(crate) trie_id: TrieId,
 }
 
-/// Information about what happended to the pre-existing value when calling [`ContractInfo::write`].
+/// Information about what happened to the pre-existing value when calling [`ContractInfo::write`].
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum WriteOutcome {
 	/// No value existed at the specified key.
