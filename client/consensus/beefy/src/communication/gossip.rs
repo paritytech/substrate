@@ -408,7 +408,7 @@ pub(crate) mod tests {
 		}
 	}
 
-	fn sign_commitment<BN: Encode>(who: &Keyring, commitment: &Commitment<BN>) -> Signature {
+	pub fn sign_commitment<BN: Encode>(who: &Keyring, commitment: &Commitment<BN>) -> Signature {
 		let store = MemoryKeystore::new();
 		store.ecdsa_generate_new(KEY_TYPE, Some(&who.to_seed())).unwrap();
 		let beefy_keystore: BeefyKeystore = Some(store.into()).into();
