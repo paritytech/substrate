@@ -14,6 +14,7 @@
           rustup
           clang
           protobuf
+          gnumake
           rustfmt
         ];
 
