@@ -31,6 +31,7 @@ mod config;
 mod error;
 mod params;
 mod runner;
+mod signals;
 
 pub use arg_enums::*;
 pub use clap;
@@ -41,6 +42,7 @@ pub use params::*;
 pub use runner::*;
 pub use sc_service::{ChainSpec, Role};
 pub use sc_tracing::logging::LoggerBuilder;
+pub use signals::Signals;
 pub use sp_version::RuntimeVersion;
 
 /// Substrate client CLI
@@ -197,10 +199,15 @@ pub trait SubstrateCli: Sized {
 		command: &T,
 	) -> error::Result<Runner<Self>> {
 		let tokio_runtime = build_runtime()?;
+
+		// `capture` needs to be called in a tokio context.
+		// Also capture them as early as possible.
+		let signals = tokio_runtime.block_on(async { Signals::capture() })?;
+
 		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
 
 		command.init(&Self::support_url(), &Self::impl_version(), |_, _| {}, &config)?;
-		Runner::new(config, tokio_runtime)
+		Runner::new(config, tokio_runtime, signals)
 	}
 
 	/// Create a runner for the command provided in argument. The `logger_hook` can be used to setup
@@ -231,10 +238,15 @@ pub trait SubstrateCli: Sized {
 		F: FnOnce(&mut LoggerBuilder, &Configuration),
 	{
 		let tokio_runtime = build_runtime()?;
+
+		// `capture` needs to be called in a tokio context.
+		// Also capture them as early as possible.
+		let signals = tokio_runtime.block_on(async { Signals::capture() })?;
+
 		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
 
 		command.init(&Self::support_url(), &Self::impl_version(), logger_hook, &config)?;
-		Runner::new(config, tokio_runtime)
+		Runner::new(config, tokio_runtime, signals)
 	}
 	/// Native runtime version.
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;

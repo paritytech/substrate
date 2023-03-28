@@ -24,22 +24,27 @@ use crate::{
 	ChainSync, ClientError, SyncingService,
 };
 
+use codec::{Decode, DecodeAll, Encode};
 use futures::{FutureExt, Stream, StreamExt};
+use futures_timer::Delay;
 use libp2p::PeerId;
 use lru::LruCache;
 use prometheus_endpoint::{
 	register, Gauge, GaugeVec, MetricSource, Opts, PrometheusError, Registry, SourcedGauge, U64,
 };
 
-use codec::{Decode, DecodeAll, Encode};
-use futures_timer::Delay;
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
-use sc_network_common::{
+use sc_network::{
 	config::{
 		NetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
 	},
-	protocol::{event::Event, role::Roles, ProtocolName},
+	event::Event,
+	utils::LruHashSet,
+	ProtocolName,
+};
+use sc_network_common::{
+	role::Roles,
 	sync::{
 		message::{
 			generic::{BlockData, BlockResponse},
@@ -49,15 +54,11 @@ use sc_network_common::{
 		BadPeer, ChainSync as ChainSyncT, ExtendedPeerInfo, PollBlockAnnounceValidation, SyncEvent,
 		SyncMode,
 	},
-	utils::LruHashSet,
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderMetadata;
 use sp_consensus::block_validation::BlockAnnounceValidator;
-use sp_runtime::{
-	traits::{Block as BlockT, CheckedSub, Header, NumberFor, Zero},
-	SaturatedConversion,
-};
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor, Zero};
 
 use std::{
 	collections::{HashMap, HashSet},
@@ -73,24 +74,15 @@ use std::{
 /// Interval at which we perform time based maintenance
 const TICK_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1100);
 
-/// When light node connects to the full node and the full node is behind light node
-/// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it not useful
-/// and disconnect to free connection slot.
-const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
-
 /// Maximum number of known block hashes to keep for a peer.
 const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
 
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
-	/// Reputation change when we are a light client and a peer is behind us.
-	pub const PEER_BEHIND_US_LIGHT: Rep = Rep::new(-(1 << 8), "Useless for a light peer");
 	/// We received a message that failed to decode.
 	pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
 	/// Peer has different genesis.
 	pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
-	/// Peer role does not match (e.g. light peer connecting to another light peer).
-	pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
 	/// Peer send us a block announcement that failed at validation.
 	pub const BAD_BLOCK_ANNOUNCEMENT: Rep = Rep::new(-(1 << 12), "Bad block announcement");
 }
@@ -719,7 +711,9 @@ where
 				ToServiceCommand::NewBestBlockImported(hash, number) =>
 					self.new_best_block_imported(hash, number),
 				ToServiceCommand::Status(tx) => {
-					let _ = tx.send(self.chain_sync.status());
+					let mut status = self.chain_sync.status();
+					status.num_connected_peers = self.peers.len() as u32;
+					let _ = tx.send(status);
 				},
 				ToServiceCommand::NumActivePeers(tx) => {
 					let _ = tx.send(self.chain_sync.num_active_peers());
@@ -828,31 +822,6 @@ where
 			}
 
 			return Err(())
-		}
-
-		if self.roles.is_light() {
-			// we're not interested in light peers
-			if status.roles.is_light() {
-				log::debug!(target: "sync", "Peer {} is unable to serve light requests", who);
-				self.network_service.report_peer(who, rep::BAD_ROLE);
-				self.network_service
-					.disconnect_peer(who, self.block_announce_protocol_name.clone());
-				return Err(())
-			}
-
-			// we don't interested in peers that are far behind us
-			let self_best_block = self.client.info().best_number;
-			let blocks_difference = self_best_block
-				.checked_sub(&status.best_number)
-				.unwrap_or_else(Zero::zero)
-				.saturated_into::<u64>();
-			if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
-				log::debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
-				self.network_service.report_peer(who, rep::PEER_BEHIND_US_LIGHT);
-				self.network_service
-					.disconnect_peer(who, self.block_announce_protocol_name.clone());
-				return Err(())
-			}
 		}
 
 		let no_slot_peer = self.default_peers_set_no_slot_peers.contains(&who);

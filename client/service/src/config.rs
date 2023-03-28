@@ -22,22 +22,18 @@ pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStra
 pub use sc_client_db::{BlocksPruning, Database, DatabaseSource, PruningMode};
 pub use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 pub use sc_network::{
-	config::{NetworkConfiguration, Role},
-	Multiaddr,
-};
-pub use sc_network_common::{
 	config::{
-		MultiaddrWithPeerId, NodeKeyConfig, NonDefaultSetConfig, ProtocolId, SetConfig,
-		TransportConfig,
+		MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig, NonDefaultSetConfig, ProtocolId,
+		Role, SetConfig, SyncMode, TransportConfig,
 	},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
+	Multiaddr,
 };
 
 use prometheus_endpoint::Registry;
 use sc_chain_spec::ChainSpec;
-use sc_network_common::config::SyncMode;
 pub use sc_telemetry::TelemetryEndpoints;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 use sp_core::crypto::SecretString;
@@ -65,8 +61,6 @@ pub struct Configuration {
 	pub network: NetworkConfiguration,
 	/// Configuration for the keystore.
 	pub keystore: KeystoreConfig,
-	/// Remote URI to connect to for async keystore support
-	pub keystore_remote: Option<String>,
 	/// Configuration for the database.
 	pub database: DatabaseSource,
 	/// Maximum size of internal trie cache in bytes.

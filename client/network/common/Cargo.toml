@@ -26,7 +26,6 @@ codec = { package = "parity-scale-codec", version = "3.2.2", features = [
 futures = "0.3.21"
 futures-timer = "3.0.2"
 libp2p = { version = "0.50.0", features = ["request-response", "kad"] }
-linked_hash_set = "0.1.3"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
 smallvec = "1.8.0"
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }

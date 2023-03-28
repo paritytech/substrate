@@ -18,94 +18,81 @@
 
 #![cfg(unix)]
 use assert_cmd::cargo::cargo_bin;
-use nix::{
-	sys::signal::{
-		kill,
-		Signal::{self, SIGINT, SIGTERM},
-	},
-	unistd::Pid,
+use nix::sys::signal::Signal::{self, SIGINT, SIGTERM};
+use std::{
+	process::{self, Child, Command},
+	time::Duration,
 };
-use std::process::{self, Child, Command};
 use tempfile::tempdir;
 
 pub mod common;
 
 #[tokio::test]
 async fn running_the_node_works_and_can_be_interrupted() {
-	async fn run_command_and_kill(signal: Signal) {
-		let base_path = tempdir().expect("could not create a temp dir");
-		let mut cmd = common::KillChildOnDrop(
-			Command::new(cargo_bin("substrate"))
-				.stdout(process::Stdio::piped())
-				.stderr(process::Stdio::piped())
-				.args(&["--dev", "-d"])
-				.arg(base_path.path())
-				.arg("--db=paritydb")
-				.arg("--no-hardware-benchmarks")
-				.spawn()
-				.unwrap(),
-		);
+	common::run_with_timeout(Duration::from_secs(60 * 10), async move {
+		async fn run_command_and_kill(signal: Signal) {
+			let base_path = tempdir().expect("could not create a temp dir");
+			let mut cmd = common::KillChildOnDrop(
+				Command::new(cargo_bin("substrate"))
+					.stdout(process::Stdio::piped())
+					.stderr(process::Stdio::piped())
+					.args(&["--dev", "-d"])
+					.arg(base_path.path())
+					.arg("--db=paritydb")
+					.arg("--no-hardware-benchmarks")
+					.spawn()
+					.unwrap(),
+			);
 
-		let stderr = cmd.stderr.take().unwrap();
+			let stderr = cmd.stderr.take().unwrap();
 
-		let (ws_url, _) = common::find_ws_url_from_output(stderr);
+			let ws_url = common::extract_info_from_output(stderr).0.ws_url;
 
-		common::wait_n_finalized_blocks(3, 30, &ws_url)
-			.await
-			.expect("Blocks are produced in time");
-		assert!(cmd.try_wait().unwrap().is_none(), "the process should still be running");
-		kill(Pid::from_raw(cmd.id().try_into().unwrap()), signal).unwrap();
-		assert_eq!(
-			common::wait_for(&mut cmd, 30).map(|x| x.success()),
-			Ok(true),
-			"the process must exit gracefully after signal {}",
-			signal,
-		);
-		// Check if the database was closed gracefully. If it was not,
-		// there may exist a ref cycle that prevents the Client from being dropped properly.
-		//
-		// parity-db only writes the stats file on clean shutdown.
-		let stats_file = base_path.path().join("chains/dev/paritydb/full/stats.txt");
-		assert!(std::path::Path::exists(&stats_file));
-	}
+			common::wait_n_finalized_blocks(3, &ws_url).await;
 
-	run_command_and_kill(SIGINT).await;
-	run_command_and_kill(SIGTERM).await;
+			cmd.assert_still_running();
+
+			cmd.stop_with_signal(signal);
+
+			// Check if the database was closed gracefully. If it was not,
+			// there may exist a ref cycle that prevents the Client from being dropped properly.
+			//
+			// parity-db only writes the stats file on clean shutdown.
+			let stats_file = base_path.path().join("chains/dev/paritydb/full/stats.txt");
+			assert!(std::path::Path::exists(&stats_file));
+		}
+
+		run_command_and_kill(SIGINT).await;
+		run_command_and_kill(SIGTERM).await;
+	})
+	.await;
 }
 
 #[tokio::test]
 async fn running_two_nodes_with_the_same_ws_port_should_work() {
-	fn start_node() -> Child {
-		Command::new(cargo_bin("substrate"))
-			.stdout(process::Stdio::piped())
-			.stderr(process::Stdio::piped())
-			.args(&["--dev", "--tmp", "--ws-port=45789", "--no-hardware-benchmarks"])
-			.spawn()
-			.unwrap()
-	}
+	common::run_with_timeout(Duration::from_secs(60 * 10), async move {
+		fn start_node() -> Child {
+			Command::new(cargo_bin("substrate"))
+				.stdout(process::Stdio::piped())
+				.stderr(process::Stdio::piped())
+				.args(&["--dev", "--tmp", "--ws-port=45789", "--no-hardware-benchmarks"])
+				.spawn()
+				.unwrap()
+		}
 
-	let mut first_node = common::KillChildOnDrop(start_node());
-	let mut second_node = common::KillChildOnDrop(start_node());
+		let mut first_node = common::KillChildOnDrop(start_node());
+		let mut second_node = common::KillChildOnDrop(start_node());
 
-	let stderr = first_node.stderr.take().unwrap();
-	let (ws_url, _) = common::find_ws_url_from_output(stderr);
+		let stderr = first_node.stderr.take().unwrap();
+		let ws_url = common::extract_info_from_output(stderr).0.ws_url;
 
-	common::wait_n_finalized_blocks(3, 30, &ws_url).await.unwrap();
+		common::wait_n_finalized_blocks(3, &ws_url).await;
 
-	assert!(first_node.try_wait().unwrap().is_none(), "The first node should still be running");
-	assert!(second_node.try_wait().unwrap().is_none(), "The second node should still be running");
+		first_node.assert_still_running();
+		second_node.assert_still_running();
 
-	kill(Pid::from_raw(first_node.id().try_into().unwrap()), SIGINT).unwrap();
-	kill(Pid::from_raw(second_node.id().try_into().unwrap()), SIGINT).unwrap();
-
-	assert_eq!(
-		common::wait_for(&mut first_node, 30).map(|x| x.success()),
-		Ok(true),
-		"The first node must exit gracefully",
-	);
-	assert_eq!(
-		common::wait_for(&mut second_node, 30).map(|x| x.success()),
-		Ok(true),
-		"The second node must exit gracefully",
-	);
+		first_node.stop();
+		second_node.stop();
+	})
+	.await;
 }

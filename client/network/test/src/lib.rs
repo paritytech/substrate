@@ -20,6 +20,8 @@
 #[cfg(test)]
 mod block_import;
 #[cfg(test)]
+mod service;
+#[cfg(test)]
 mod sync;
 
 use std::{
@@ -46,14 +48,18 @@ use sc_consensus::{
 	ForkChoiceStrategy, ImportQueue, ImportResult, JustificationImport, JustificationSyncLink,
 	LongestChain, Verifier,
 };
-use sc_network::{Multiaddr, NetworkService, NetworkWorker};
-use sc_network_common::{
+use sc_network::{
 	config::{
 		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode,
-		ProtocolId, RequestResponseConfig, Role, SyncMode, TransportConfig,
+		ProtocolId, Role, SyncMode, TransportConfig,
 	},
-	protocol::{role::Roles, ProtocolName},
-	service::{NetworkBlock, NetworkEventStream, NetworkStateInfo, NetworkSyncForkRequest},
+	request_responses::ProtocolConfig as RequestResponseConfig,
+	types::ProtocolName,
+	Multiaddr, NetworkBlock, NetworkEventStream, NetworkService, NetworkStateInfo,
+	NetworkSyncForkRequest, NetworkWorker,
+};
+use sc_network_common::{
+	role::Roles,
 	sync::warp::{
 		AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncParams, WarpSyncProvider,
 	},
@@ -77,7 +83,7 @@ use sp_core::H256;
 use sp_runtime::{
 	codec::{Decode, Encode},
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
 	Justification, Justifications,
 };
 use substrate_test_runtime_client::AccountKeyring;
@@ -910,13 +916,15 @@ where
 		let sync_service_import_queue = Box::new(sync_service.clone());
 		let sync_service = Arc::new(sync_service.clone());
 
-		let network = NetworkWorker::new(sc_network::config::Params {
+		let genesis_hash =
+			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
+		let network = NetworkWorker::new::<Block>(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: Box::new(|f| {
 				tokio::spawn(f);
 			}),
 			network_config,
-			chain: client.clone(),
+			genesis_hash,
 			protocol_id,
 			fork_id,
 			metrics_registry: None,

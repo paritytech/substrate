@@ -29,13 +29,27 @@
 
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
-	config::Params,
+	config::{MultiaddrWithPeerId, Params, TransportConfig},
 	discovery::DiscoveryConfig,
+	error::Error,
+	event::{DhtEvent, Event},
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	protocol::{self, NotificationsSink, NotifsHandlerError, Protocol, Ready},
-	transport, ReputationChange,
+	request_responses::{IfDisconnected, RequestFailure},
+	service::{
+		signature::{Signature, SigningError},
+		traits::{
+			NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers,
+			NetworkRequest, NetworkSigner, NetworkStateInfo, NetworkStatus, NetworkStatusProvider,
+			NotificationSender as NotificationSenderT, NotificationSenderError,
+			NotificationSenderReady as NotificationSenderReadyT,
+		},
+	},
+	transport,
+	types::ProtocolName,
+	ReputationChange,
 };
 
 use futures::{channel::oneshot, prelude::*};
@@ -55,26 +69,12 @@ use libp2p::{
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
-use sc_network_common::{
-	config::{MultiaddrWithPeerId, TransportConfig},
-	error::Error,
-	protocol::{
-		event::{DhtEvent, Event},
-		ProtocolName,
-	},
-	request_responses::{IfDisconnected, RequestFailure},
-	service::{
-		NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkSigner,
-		NetworkStateInfo, NetworkStatus, NetworkStatusProvider,
-		NotificationSender as NotificationSenderT, NotificationSenderError,
-		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
-	},
-	ExHashT,
-};
+
+use sc_network_common::ExHashT;
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_blockchain::HeaderBackend;
-use sp_runtime::traits::{Block as BlockT, Zero};
+use sp_runtime::traits::Block as BlockT;
+
 use std::{
 	cmp,
 	collections::{HashMap, HashSet},
@@ -90,14 +90,13 @@ use std::{
 };
 
 pub use behaviour::{InboundFailure, OutboundFailure, ResponseFailure};
+pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
 
 mod metrics;
 mod out_events;
-#[cfg(test)]
-mod tests;
 
-pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
-use sc_network_common::service::NetworkRequest;
+pub mod signature;
+pub mod traits;
 
 /// Custom error that can be produced by the [`ConnectionHandler`] of the [`NetworkBehaviour`].
 /// Used as a template parameter of [`SwarmEvent`] below.
@@ -147,9 +146,7 @@ where
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new<Client: HeaderBackend<B> + 'static>(
-		mut params: Params<Client>,
-	) -> Result<Self, Error> {
+	pub fn new<Block: BlockT>(mut params: Params<Block>) -> Result<Self, Error> {
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
@@ -277,13 +274,11 @@ where
 				config.discovery_limit(
 					u64::from(params.network_config.default_peers_set.out_peers) + 15,
 				);
-				let genesis_hash = params
-					.chain
-					.hash(Zero::zero())
-					.ok()
-					.flatten()
-					.expect("Genesis block exists; qed");
-				config.with_kademlia(genesis_hash, params.fork_id.as_deref(), &params.protocol_id);
+				config.with_kademlia(
+					params.genesis_hash,
+					params.fork_id.as_deref(),
+					&params.protocol_id,
+				);
 				config.with_dht_random_walk(params.network_config.enable_dht_random_walk);
 				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
 				config.use_kademlia_disjoint_query_paths(
@@ -1432,10 +1427,11 @@ where
 						},
 					}
 				},
-			SwarmEvent::Behaviour(BehaviourOut::ReputationChanges { peer, changes }) =>
+			SwarmEvent::Behaviour(BehaviourOut::ReputationChanges { peer, changes }) => {
 				for change in changes {
 					self.network_service.behaviour().user_protocol().report_peer(peer, change);
-				},
+				}
+			},
 			SwarmEvent::Behaviour(BehaviourOut::PeerIdentify {
 				peer_id,
 				info:
@@ -1467,10 +1463,11 @@ where
 					.user_protocol_mut()
 					.add_default_set_discovered_nodes(iter::once(peer_id));
 			},
-			SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted) =>
+			SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted) => {
 				if let Some(metrics) = self.metrics.as_ref() {
 					metrics.kademlia_random_queries_total.inc();
-				},
+				}
+			},
 			SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
 				remote,
 				protocol,

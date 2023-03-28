@@ -29,18 +29,3 @@ help: consider importing this struct
    |
 1  | use frame_system::GenesisConfig;
    |
-
-error[E0283]: type annotations needed
-  --> tests/construct_runtime_ui/no_std_genesis_config.rs:40:1
-   |
-40 | / construct_runtime! {
-41 | |     pub struct Runtime where
-42 | |         Block = Block,
-43 | |         NodeBlock = Block,
-...  |
-48 | |     }
-49 | | }
-   | |_^ cannot infer type
-   |
-   = note: cannot satisfy `_: std::default::Default`
-   = note: this error originates in the derive macro `Default` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -30,7 +30,7 @@ use sc_consensus::{
 };
 use sc_service::client::{new_in_mem, Client, LocalCallExecutor};
 use sp_api::ProvideRuntimeApi;
-use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError, SelectChain};
+use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
 use sp_core::{testing::TaskExecutor, traits::CallContext, H256};
 use sp_runtime::{
 	generic::BlockId,
@@ -1567,7 +1567,11 @@ fn respects_block_rules() {
 }
 
 #[test]
+#[cfg(disable_flaky)]
+#[allow(dead_code)]
+// FIXME: https://github.com/paritytech/substrate/issues/11321
 fn returns_status_for_pruned_blocks() {
+	use sc_consensus::BlockStatus;
 	sp_tracing::try_init_simple();
 	let tmp = tempfile::tempdir().unwrap();
 
