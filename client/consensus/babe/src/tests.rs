@@ -358,7 +358,7 @@ impl TestNetFactory for BabeTestNet {
 }
 
 #[tokio::test]
-#[should_panic]
+#[should_panic(expected = "No BABE pre-runtime digest found")]
 async fn rejects_empty_block() {
 	sp_tracing::try_init_simple();
 	let mut net = BabeTestNet::new(3);
@@ -490,7 +490,7 @@ async fn authoring_blocks() {
 }
 
 #[tokio::test]
-#[should_panic]
+#[should_panic(expected = "valid babe headers must contain a predigest")]
 async fn rejects_missing_inherent_digest() {
 	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::take(&mut header.digest_mut().logs);
@@ -503,7 +503,7 @@ async fn rejects_missing_inherent_digest() {
 }
 
 #[tokio::test]
-#[should_panic]
+#[should_panic(expected = "has a bad seal")]
 async fn rejects_missing_seals() {
 	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::take(&mut header.digest_mut().logs);
@@ -516,7 +516,7 @@ async fn rejects_missing_seals() {
 }
 
 #[tokio::test]
-#[should_panic]
+#[should_panic(expected = "Expected epoch change to happen")]
 async fn rejects_missing_consensus_digests() {
 	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::take(&mut header.digest_mut().logs);
@@ -1049,7 +1049,7 @@ async fn importing_epoch_change_block_prunes_tree() {
 }
 
 #[tokio::test]
-#[should_panic]
+#[should_panic(expected = "Slot number must increase: parent slot: 999, this slot: 999")]
 async fn verify_slots_are_strictly_increasing() {
 	let mut net = BabeTestNet::new(1);
 
