@@ -196,8 +196,7 @@ pub trait Ext: sealing::Sealed {
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError>;
 
-	/// Returns a reference to the account id of the caller if it has one
-	/// errors otherwise.
+	/// Returns the caller
 	fn caller(&self) -> Caller<Self::T>;
 
 	/// Check if a contract lives at the specified `address`.
@@ -1058,7 +1057,7 @@ where
 			return Ok(());
 		}
 
-		// If there is no account id, the the origin is root and we don't need to transfer
+		// If the caller is root, we don't need to transfer
 		let caller = match self.caller() {
 			Caller::Account(caller) => caller,
 			Caller::Root => return Ok(()),
