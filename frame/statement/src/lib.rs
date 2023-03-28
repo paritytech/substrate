@@ -27,8 +27,8 @@
 
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{traits::Zero, SaturatedConversion},
-	traits::Currency,
+	sp_runtime::{traits::CheckedDiv, SaturatedConversion},
+	traits::fungible::Inspect,
 };
 use frame_system::pallet_prelude::*;
 use sp_statement_store::{
@@ -45,12 +45,19 @@ pub use pallet::*;
 
 const LOG_TARGET: &str = "runtime::statement";
 
+const MIN_ALLOWED_STATEMENTS: u32 = 4;
+const MAX_ALLOWED_STATEMENTS: u32 = 10;
+const MIN_ALLOWED_BYTES: u32 = 1024;
+const MAX_ALLOWED_BYTES: u32 = 4096;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 
 	pub type BalanceOf<T> =
-		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+		<<T as Config>::Currency as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
+
+	pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config
@@ -59,11 +66,13 @@ pub mod pallet {
 	{
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-		/// Account balance.
-		type Currency: Currency<<Self as frame_system::Config>::AccountId>;
+		/// The currency which is used to calculate account limits.
+		type Currency: Inspect<Self::AccountId>;
 		/// Min balance for priority statements.
 		#[pallet::constant]
-		type PriorityBalance: Get<BalanceOf<Self>>;
+		type StatementCost: Get<BalanceOf<Self>>;
+		#[pallet::constant]
+		type ByteCost: Get<BalanceOf<Self>>;
 	}
 
 	#[pallet::pallet]
@@ -91,7 +100,7 @@ pub mod pallet {
 		fn offchain_worker(now: BlockNumberFor<T>) {
 			log::trace!(target: LOG_TARGET, "Collecting statements at #{:?}", now);
 			Pallet::<T>::collect_statements();
-			Pallet::<T>::dispatch_statemens();
+			Pallet::<T>::dispatch_statements();
 		}
 	}
 }
@@ -151,16 +160,26 @@ where
 				},
 			},
 		};
-		let priority_cost = T::PriorityBalance::get();
-		let priority: u64 = if priority_cost.is_zero() {
-			0
-		} else {
-			let balance = T::Currency::free_balance(&account);
-			let priority = balance / priority_cost;
-			priority.saturated_into()
-		};
+		let statement_cost = T::StatementCost::get();
+		let byte_cost = T::ByteCost::get();
+		let priority_cost = statement_cost;
+		let balance = <T::Currency as Inspect<AccountIdOf<T>>>::balance(&account);
+		let global_priority =
+			balance.checked_div(&priority_cost).unwrap_or_default().saturated_into();
+		let max_count = balance
+			.checked_div(&statement_cost)
+			.unwrap_or_default()
+			.saturated_into::<u32>()
+			.min(MAX_ALLOWED_STATEMENTS)
+			.max(MIN_ALLOWED_STATEMENTS);
+		let max_size = balance
+			.checked_div(&byte_cost)
+			.unwrap_or_default()
+			.saturated_into::<u32>()
+			.min(MAX_ALLOWED_BYTES)
+			.max(MIN_ALLOWED_BYTES);
 
-		Ok(ValidStatement { priority })
+		Ok(ValidStatement { global_priority, max_count, max_size })
 	}
 
 	/// Submit a statement event. The statement will be picked up by the offchain worker and
@@ -187,7 +206,7 @@ where
 		}
 	}
 
-	fn dispatch_statemens() {
+	fn dispatch_statements() {
 		let all_statements = sp_statement_store::runtime_api::io::dump();
 		for (hash, _statement) in all_statements {
 			// TODO: Custom statement handling

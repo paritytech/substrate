@@ -470,6 +470,7 @@ where
 				self.network.report_peer(who, rep::GOOD_STATEMENT),
 			SubmitResult::Known => self.network.report_peer(who, rep::ANY_STATEMENT_REFUND),
 			SubmitResult::KnownExpired => {},
+			SubmitResult::Ignored => {},
 			SubmitResult::Bad(_) => self.network.report_peer(who, rep::BAD_STATEMENT),
 			SubmitResult::InternalError(_) => {},
 		}

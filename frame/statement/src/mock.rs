@@ -97,16 +97,20 @@ ord_parameter_types! {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type PriorityBalance = ConstU64<10>;
+	type StatementCost = ConstU64<1000>;
+	type ByteCost = ConstU64<2>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	let balances = pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(
-			sp_core::sr25519::Pair::from_string("//Alice", None).unwrap().public().into(),
-			200,
-		)],
+		balances: vec![
+			(sp_core::sr25519::Pair::from_string("//Alice", None).unwrap().public().into(), 6000),
+			(
+				sp_core::sr25519::Pair::from_string("//Charlie", None).unwrap().public().into(),
+				500000,
+			),
+		],
 	};
 	balances.assimilate_storage(&mut t).unwrap();
 	t.into()

@@ -268,13 +268,15 @@ impl pallet_sudo::Config for Runtime {
 }
 
 parameter_types! {
-	pub StatementPriorityBalance: Balance = 1000;
+	pub StatementCost: Balance = 1000;
+	pub StatementByteCost: Balance = 10;
 }
 
 impl pallet_statement::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type PriorityBalance = StatementPriorityBalance;
+	type StatementCost = StatementCost;
+	type ByteCost = StatementByteCost;
 }
 
 /// Configure the pallet-template in pallets/template.

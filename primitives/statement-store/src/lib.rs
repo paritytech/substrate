@@ -119,11 +119,11 @@ impl Proof {
 	/// Return account id for the proof creator.
 	pub fn account_id(&self) -> AccountId {
 		match self {
-			Proof::Sr25519 { signer, ..} => *signer,
-			Proof::Ed25519 { signer, ..} => *signer,
-			Proof::Secp256k1Ecdsa { signer, ..} =>
+			Proof::Sr25519 { signer, .. } => *signer,
+			Proof::Ed25519 { signer, .. } => *signer,
+			Proof::Secp256k1Ecdsa { signer, .. } =>
 				<sp_runtime::traits::BlakeTwo256 as sp_core::Hasher>::hash(signer).into(),
-			Proof::OnChain { who, ..} => *who,
+			Proof::OnChain { who, .. } => *who,
 		}
 	}
 }

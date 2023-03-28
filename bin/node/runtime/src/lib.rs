@@ -1745,13 +1745,15 @@ impl frame_benchmarking_pallet_pov::Config for Runtime {
 }
 
 parameter_types! {
-	pub StatementPriorityBalance: Balance = 10 * CENTS;
+	pub StatementCost: Balance = 1 * DOLLARS;
+	pub StatementByteCost: Balance = 100 * MILLICENTS;
 }
 
 impl pallet_statement::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type PriorityBalance = StatementPriorityBalance;
+	type StatementCost = StatementCost;
+	type ByteCost = StatementByteCost;
 }
 
 construct_runtime!(

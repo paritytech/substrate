@@ -34,7 +34,8 @@ use sp_core::{hexdisplay::HexDisplay, Decode, Encode};
 use sp_runtime::traits::Block as BlockT;
 use sp_statement_store::{
 	runtime_api::{InvalidStatement, StatementSource, ValidStatement, ValidateStatement},
-	BlockHash, DecryptionKey, Hash, NetworkPriority, Proof, Result, Statement, SubmitResult, Topic, AccountId, Channel,
+	AccountId, BlockHash, Channel, DecryptionKey, Hash, NetworkPriority, Proof, Result, Statement,
+	SubmitResult, Topic,
 };
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
@@ -86,19 +87,13 @@ struct StatementsForAccount {
 
 impl PartialOrd for PriorityKey {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-		Some(
-			self.priority
-				.cmp(&other.priority)
-				.then_with(|| self.hash.cmp(&other.hash))
-		)
+		Some(self.priority.cmp(&other.priority).then_with(|| self.hash.cmp(&other.hash)))
 	}
 }
 
 impl Ord for PriorityKey {
 	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-		self.priority
-			.cmp(&other.priority)
-			.then_with(|| self.hash.cmp(&other.hash))
+		self.priority.cmp(&other.priority).then_with(|| self.hash.cmp(&other.hash))
 	}
 }
 
@@ -107,7 +102,8 @@ struct Index {
 	by_topic: HashMap<Topic, HashSet<Hash>>,
 	by_dec_key: HashMap<DecryptionKey, HashSet<Hash>>,
 	statement_topics: HashMap<Hash, ([Option<Topic>; 4], Option<DecryptionKey>)>,
-	entries: HashMap<Hash, (AccountId, u32, u32)>, // Statement hash -> (Account id, global_priority, priority)
+	entries: HashMap<Hash, (AccountId, u32, u32)>, /* Statement hash -> (Account id,
+	                                                * global_priority, priority) */
 	expired: HashMap<Hash, u64>, // Value is expiration timestamp.
 	accounts: HashMap<AccountId, StatementsForAccount>,
 	by_global_priority: BTreeMap<PriorityKey, usize>,
@@ -183,19 +179,21 @@ enum IndexQuery {
 
 enum MaybeInserted {
 	Inserted(HashSet<Hash>),
-	Ignored
+	Ignored,
 }
 
 impl Index {
 	fn new() -> Index {
-		Index {
-			max_entries: MAX_LIVE_STATEMENTS,
-			max_size: MAX_TOTAL_SIZE,
-			.. Default::default()
-		}
+		Index { max_entries: MAX_LIVE_STATEMENTS, max_size: MAX_TOTAL_SIZE, ..Default::default() }
 	}
 
-	fn insert_new(&mut self, hash: Hash, account: AccountId, global_priority: u32, statement: &Statement) {
+	fn insert_new(
+		&mut self,
+		hash: Hash,
+		account: AccountId,
+		global_priority: u32,
+		statement: &Statement,
+	) {
 		let mut all_topics = [None; 4];
 		let mut nt = 0;
 		while let Some(t) = statement.topic(nt) {
@@ -212,17 +210,19 @@ impl Index {
 		}
 		let priority = statement.priority().unwrap_or(0);
 		self.entries.insert(hash, (account.clone(), global_priority, priority));
-		self.by_global_priority.insert(PriorityKey { hash: hash.clone(), priority: global_priority }, statement.data_len());
+		self.by_global_priority.insert(
+			PriorityKey { hash: hash.clone(), priority: global_priority },
+			statement.data_len(),
+		);
 		self.total_size += statement.data_len();
 		let mut account_info = self.accounts.entry(account).or_default();
 		account_info.data_size += statement.data_len();
 		if let Some(channel) = statement.channel() {
 			account_info.channels.insert(channel, ChannelEntry { hash, priority });
 		}
-		account_info.by_priority.insert(PriorityKey {
-			hash,
-			priority,
-		}, (statement.channel(), statement.data_len()));
+		account_info
+			.by_priority
+			.insert(PriorityKey { hash, priority }, (statement.channel(), statement.data_len()));
 	}
 
 	fn query(&self, hash: &Hash) -> IndexQuery {
@@ -262,7 +262,7 @@ impl Index {
 			}
 			sets[i] = set.expect("Function returns if set is None");
 		}
-		let sets = &mut sets[0 .. topics.len()];
+		let sets = &mut sets[0..topics.len()];
 		if sets.is_empty() && key.is_none() {
 			// Iterate all entries
 			for h in self.entries.keys() {
@@ -336,7 +336,9 @@ impl Index {
 				}
 			}
 			self.expired.insert(hash.clone(), current_time);
-			if let std::collections::hash_map::Entry::Occupied(mut account_rec) = self.accounts.entry(account) {
+			if let std::collections::hash_map::Entry::Occupied(mut account_rec) =
+				self.accounts.entry(account)
+			{
 				let key = PriorityKey { hash: hash.clone(), priority };
 				if let Some((channel, len)) = account_rec.get_mut().by_priority.remove(&key) {
 					account_rec.get_mut().data_size -= len;
@@ -355,7 +357,14 @@ impl Index {
 		}
 	}
 
-	fn insert(&mut self, hash: Hash, statement: &Statement, account: &AccountId, validation: &ValidStatement, current_time: u64) -> MaybeInserted {
+	fn insert(
+		&mut self,
+		hash: Hash,
+		statement: &Statement,
+		account: &AccountId,
+		validation: &ValidStatement,
+		current_time: u64,
+	) -> MaybeInserted {
 		let statement_len = statement.data_len();
 		if statement_len > validation.max_size as usize {
 			log::debug!(
@@ -364,7 +373,7 @@ impl Index {
 				HexDisplay::from(&hash),
 				statement_len,
 			);
-			return MaybeInserted::Ignored;
+			return MaybeInserted::Ignored
 		}
 
 		let mut evicted = HashSet::new();
@@ -386,7 +395,7 @@ impl Index {
 							priority,
 							channel_record.priority,
 						);
-						return MaybeInserted::Ignored;
+						return MaybeInserted::Ignored
 					} else {
 						// Would replace channel message. Still need to check for size constraints
 						// below.
@@ -398,7 +407,10 @@ impl Index {
 							HexDisplay::from(&channel_record.hash),
 							channel_record.priority,
 						);
-						let key = PriorityKey { hash: channel_record.hash, priority: channel_record.priority };
+						let key = PriorityKey {
+							hash: channel_record.hash,
+							priority: channel_record.priority,
+						};
 						if let Some((_channel, len)) = account_rec.by_priority.get(&key) {
 							would_free_size = *len;
 							evicted.insert(channel_record.hash);
@@ -408,14 +420,15 @@ impl Index {
 			}
 			// Check if we can evict enough lower priority statements to satisfy constraints
 			for (entry, (_, len)) in account_rec.by_priority.iter() {
-				if (account_rec.data_size - would_free_size + statement_len <= max_size)
-				&& account_rec.by_priority.len() + 1 - evicted.len() <= max_count {
+				if (account_rec.data_size - would_free_size + statement_len <= max_size) &&
+					account_rec.by_priority.len() + 1 - evicted.len() <= max_count
+				{
 					// Satisfied
-					break;
+					break
 				}
 				if evicted.contains(&entry.hash) {
 					// Already accounted for above
-					continue;
+					continue
 				}
 				if entry.priority >= priority {
 					log::debug!(
@@ -425,7 +438,7 @@ impl Index {
 						priority,
 						entry.priority,
 					);
-					return MaybeInserted::Ignored;
+					return MaybeInserted::Ignored
 				}
 				evicted.insert(entry.hash);
 				would_free_size += len;
@@ -433,14 +446,15 @@ impl Index {
 		}
 		// Now check global constraints as well.
 		for (entry, len) in self.by_global_priority.iter() {
-			if (self.total_size - would_free_size + statement_len <= self.max_size)
-				&& self.by_global_priority.len() + 1 - evicted.len() <= self.max_entries {
-					// Satisfied
-					break;
+			if (self.total_size - would_free_size + statement_len <= self.max_size) &&
+				self.by_global_priority.len() + 1 - evicted.len() <= self.max_entries
+			{
+				// Satisfied
+				break
 			}
 			if evicted.contains(&entry.hash) {
 				// Already accounted for above
-				continue;
+				continue
 			}
 
 			if entry.priority >= priority {
@@ -451,7 +465,7 @@ impl Index {
 					priority,
 					entry.priority,
 				);
-				return MaybeInserted::Ignored;
+				return MaybeInserted::Ignored
 			}
 			evicted.insert(entry.hash);
 			would_free_size += len;
@@ -564,7 +578,12 @@ impl Store {
 							HexDisplay::from(&hash)
 						);
 						if let Some(account_id) = statement_with_meta.statement.account_id() {
-							index.insert_new(hash, account_id, statement_with_meta.meta.global_priority, &statement_with_meta.statement);
+							index.insert_new(
+								hash,
+								account_id,
+								statement_with_meta.meta.global_priority,
+								&statement_with_meta.statement,
+							);
 						}
 					}
 					true
@@ -585,7 +604,7 @@ impl Store {
 					}
 					true
 				})
-			.map_err(|e| Error::Db(e.to_string()))?;
+				.map_err(|e| Error::Db(e.to_string()))?;
 		}
 
 		self.maintain();
@@ -634,7 +653,8 @@ impl Store {
 	pub fn maintain(&self) {
 		log::trace!(target: LOG_TARGET, "Started store maintenance");
 		let deleted = self.index.write().maintain(self.timestamp());
-		let deleted: Vec<_> = deleted.into_iter().map(|hash| (col::EXPIRED, hash.to_vec(), None)).collect();
+		let deleted: Vec<_> =
+			deleted.into_iter().map(|hash| (col::EXPIRED, hash.to_vec(), None)).collect();
 		let count = deleted.len() as u64;
 		if let Err(e) = self.db.commit(deleted) {
 			log::warn!(target: LOG_TARGET, "Error writing to the statement database: {:?}", e);
@@ -756,16 +776,14 @@ impl StatementStore for Store {
 	fn submit(&self, statement: Statement, source: StatementSource) -> SubmitResult {
 		let hash = statement.hash();
 		match self.index.read().query(&hash) {
-			IndexQuery::Expired => {
+			IndexQuery::Expired =>
 				if !source.can_be_resubmitted() {
 					return SubmitResult::KnownExpired
-				}
-			},
-			IndexQuery::Exists => {
+				},
+			IndexQuery::Exists =>
 				if !source.can_be_resubmitted() {
 					return SubmitResult::Known
-				}
-			},
+				},
 			IndexQuery::Unknown => {},
 		}
 
@@ -826,7 +844,6 @@ impl StatementStore for Store {
 				&account_id,
 				&validation,
 				current_time,
-
 			) {
 				MaybeInserted::Ignored => return SubmitResult::Ignored,
 				MaybeInserted::Inserted(evicted) => evicted,
@@ -846,10 +863,13 @@ impl StatementStore for Store {
 				);
 				return SubmitResult::InternalError(Error::Db(e.to_string()))
 			}
-		}// Release index lock
+		} // Release index lock
 		self.metrics.report(|metrics| metrics.submitted_statements.inc());
-		let network_priority =
-			if validation.global_priority > 0 { NetworkPriority::High } else { NetworkPriority::Low };
+		let network_priority = if validation.global_priority > 0 {
+			NetworkPriority::High
+		} else {
+			NetworkPriority::Low
+		};
 		log::trace!(target: LOG_TARGET, "Statement submitted: {:?}", HexDisplay::from(&hash));
 		SubmitResult::New(network_priority)
 	}
@@ -899,8 +919,8 @@ mod tests {
 	use sp_core::Pair;
 	use sp_statement_store::{
 		runtime_api::{InvalidStatement, ValidStatement, ValidateStatement},
-		NetworkPriority, Proof, SignatureVerificationResult, Statement, StatementSource,
-		StatementStore, SubmitResult, Topic, Channel, AccountId,
+		AccountId, Channel, NetworkPriority, Proof, SignatureVerificationResult, Statement,
+		StatementSource, StatementStore, SubmitResult, Topic,
 	};
 
 	type Extrinsic = sp_runtime::OpaqueExtrinsic;
@@ -1183,7 +1203,6 @@ mod tests {
 		assert_eq!(store.submit(statement(4, 6, None, 100), source), ok);
 		assert_eq!(store.index.read().expired.len(), 7);
 
-
 		let mut expected_statements = vec![
 			statement(2, 4, None, 1000).hash(),
 			statement(3, 4, Some(3), 300).hash(),
@@ -1191,7 +1210,8 @@ mod tests {
 			statement(4, 6, None, 100).hash(),
 		];
 		expected_statements.sort();
-		let mut statements: Vec<_> = store.dump().unwrap().into_iter().map(|(hash, _)| hash).collect();
+		let mut statements: Vec<_> =
+			store.dump().unwrap().into_iter().map(|(hash, _)| hash).collect();
 		statements.sort();
 		assert_eq!(expected_statements, statements);
 	}

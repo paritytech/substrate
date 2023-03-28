@@ -35,19 +35,40 @@ fn sign_and_validate_no_balance() {
 		let mut statement = Statement::new();
 		statement.sign_sr25519_private(&pair);
 		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
-		assert_eq!(Ok(ValidStatement { priority: 0 }), result);
+		assert_eq!(
+			Ok(ValidStatement {
+				global_priority: 0,
+				max_count: MIN_ALLOWED_STATEMENTS,
+				max_size: MIN_ALLOWED_BYTES
+			}),
+			result
+		);
 
 		let pair = sp_core::ed25519::Pair::from_string("//Bob", None).unwrap();
 		let mut statement = Statement::new();
 		statement.sign_ed25519_private(&pair);
 		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
-		assert_eq!(Ok(ValidStatement { priority: 0 }), result);
+		assert_eq!(
+			Ok(ValidStatement {
+				global_priority: 0,
+				max_count: MIN_ALLOWED_STATEMENTS,
+				max_size: MIN_ALLOWED_BYTES
+			}),
+			result
+		);
 
 		let pair = sp_core::ecdsa::Pair::from_string("//Bob", None).unwrap();
 		let mut statement = Statement::new();
 		statement.sign_ecdsa_private(&pair);
 		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
-		assert_eq!(Ok(ValidStatement { priority: 0 }), result);
+		assert_eq!(
+			Ok(ValidStatement {
+				global_priority: 0,
+				max_count: MIN_ALLOWED_STATEMENTS,
+				max_size: MIN_ALLOWED_BYTES
+			}),
+			result
+		);
 	});
 }
 
@@ -58,7 +79,20 @@ fn validate_with_balance() {
 		let mut statement = Statement::new();
 		statement.sign_sr25519_private(&pair);
 		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
-		assert_eq!(Ok(ValidStatement { priority: 20 }), result);
+		assert_eq!(Ok(ValidStatement { global_priority: 6, max_count: 6, max_size: 3000 }), result);
+
+		let pair = sp_core::sr25519::Pair::from_string("//Charlie", None).unwrap();
+		let mut statement = Statement::new();
+		statement.sign_sr25519_private(&pair);
+		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
+		assert_eq!(
+			Ok(ValidStatement {
+				global_priority: 500,
+				max_count: MAX_ALLOWED_STATEMENTS,
+				max_size: MAX_ALLOWED_BYTES
+			}),
+			result
+		);
 	});
 }
 
@@ -99,7 +133,7 @@ fn validate_event() {
 			block_hash: parent_hash.into(),
 		});
 		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement.clone());
-		assert_eq!(Ok(ValidStatement { priority: 20 }), result);
+		assert_eq!(Ok(ValidStatement { global_priority: 6, max_count: 6, max_size: 3000 }), result);
 
 		// Use wrong event index
 		statement.set_proof(Proof::OnChain {

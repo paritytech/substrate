@@ -92,8 +92,9 @@ impl StatementApiServer for StatementStore {
 			// `KnownExpired` should not happen. Expired statements submitted with
 			// `StatementSource::Rpc` should be renewed.
 			SubmitResult::KnownExpired =>
-				Err(Error::StatementStore("Submitted an expired statement".into()).into()),
+				Err(Error::StatementStore("Submitted an expired statement.".into()).into()),
 			SubmitResult::Bad(e) => Err(Error::StatementStore(e.into()).into()),
+			SubmitResult::Ignored => Err(Error::StatementStore("Store is full.".into()).into()),
 			SubmitResult::InternalError(e) => Err(Error::StatementStore(e.to_string()).into()),
 		}
 	}
