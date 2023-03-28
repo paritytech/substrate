@@ -66,7 +66,7 @@ impl<G, E, F, U> Drop for TestNet<G, E, F, U> {
 }
 
 pub trait TestNetNode:
-	Clone + Future<Output = Result<(), sc_service::Error>> + Send + 'static
+	Clone + Future<Output = Result<(), Error>> + Send + 'static
 {
 	type Block: BlockT;
 	type Backend: Backend<Self::Block>;
@@ -128,7 +128,7 @@ impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Clone
 impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Future
 	for TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool>
 {
-	type Output = Result<(), sc_service::Error>;
+	type Output = Result<(), Error>;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		Pin::new(&mut self.task_manager.lock().future()).poll(cx)

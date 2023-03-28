@@ -172,7 +172,7 @@ pub type Client<B> = client::Client<
 	client::LocalCallExecutor<
 		substrate_test_runtime::Block,
 		B,
-		sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch>,
+		NativeElseWasmExecutor<LocalExecutorDispatch>,
 	>,
 	substrate_test_runtime::Block,
 	substrate_test_runtime::RuntimeApi,

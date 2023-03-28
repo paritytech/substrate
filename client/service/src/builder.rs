@@ -76,11 +76,11 @@ pub type TFullClient<TBl, TRtApi, TExec> =
 	Client<TFullBackend<TBl>, TFullCallExecutor<TBl, TExec>, TBl, TRtApi>;
 
 /// Full client backend type.
-pub type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
+pub type TFullBackend<TBl> = Backend<TBl>;
 
 /// Full client call executor type.
 pub type TFullCallExecutor<TBl, TExec> =
-	crate::client::LocalCallExecutor<TBl, sc_client_db::Backend<TBl>, TExec>;
+	crate::client::LocalCallExecutor<TBl, Backend<TBl>, TExec>;
 
 type TFullParts<TBl, TRtApi, TExec> =
 	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
@@ -267,7 +267,7 @@ pub fn new_client<E, Block, RA, G>(
 	telemetry: Option<TelemetryHandle>,
 	config: ClientConfig<Block>,
 ) -> Result<
-	crate::client::Client<
+	Client<
 		Backend<Block>,
 		crate::client::LocalCallExecutor<Block, Backend<Block>, E>,
 		Block,
@@ -291,7 +291,7 @@ where
 		execution_extensions,
 	)?;
 
-	crate::client::Client::new(
+	Client::new(
 		backend,
 		executor,
 		spawn_handle,
