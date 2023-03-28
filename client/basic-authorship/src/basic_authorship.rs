@@ -915,7 +915,9 @@ mod tests {
 
 		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
 
-		// Give it enough time
+		// Exact block_limit, which includes:
+		// 99 (header_size) + 718 (proof@initialize_block) + 246 (one Transfer extrinsic)
+		let block_limit = 1063;
 		let block = block_on(proposer.propose(
 			Default::default(),
 			Default::default(),
@@ -925,7 +927,7 @@ mod tests {
 		.map(|r| r.block)
 		.unwrap();
 
-		// The block limit didn't changed, but we now include the proof in the estimation of the
+		// The block limit was increased, but we now include the proof in the estimation of the
 		// block size and thus, only the `Transfer` will fit into the block. It reads more data
 		// than we have reserved in the block limit.
 		assert_eq!(block.extrinsics().len(), 1);
