@@ -501,6 +501,9 @@ mod test {
 		statement.set_topic(1, topic2.clone());
 		statement.set_plain_data(data.clone());
 
+		statement.set_topic(5, [0x55; 32]);
+		assert_eq!(statement.topic(5), None);
+
 		let fields = vec![
 			Field::AuthenticityProof(proof.clone()),
 			Field::DecryptionKey(decryption_key.clone()),
