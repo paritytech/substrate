@@ -190,9 +190,10 @@ impl<
 }
 
 /// Converts a balance value into an asset balance.
-pub trait BalanceConversion<InBalance, AssetId, OutBalance> {
+pub trait ConversionToAssetBalance<InBalance, AssetId, AssetBalance> {
 	type Error;
-	fn to_asset_balance(balance: InBalance, asset_id: AssetId) -> Result<OutBalance, Self::Error>;
+	fn to_asset_balance(balance: InBalance, asset_id: AssetId)
+		-> Result<AssetBalance, Self::Error>;
 }
 
 /// Trait to handle asset locking mechanism to ensure interactions with the asset can be implemented
