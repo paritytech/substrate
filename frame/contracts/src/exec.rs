@@ -1204,7 +1204,7 @@ where
 			T::Currency::reducible_balance(&frame.account_id, Expendable, Polite),
 			ExistenceRequirement::AllowDeath,
 		)?;
-		info.queue_trie_for_deletion()?;
+		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::remove_user(info.code_hash);
 		Contracts::<T>::deposit_event(

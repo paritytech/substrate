@@ -27,7 +27,7 @@ use crate::{
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
+	dispatch::DispatchError,
 	storage::child::{self, ChildInfo},
 	weights::Weight,
 	RuntimeDebugNoBound,
@@ -204,9 +204,8 @@ impl<T: Config> ContractInfo<T> {
 	/// Push a contract's trie to the deletion queue for lazy removal.
 	///
 	/// You must make sure that the contract is also removed when queuing the trie for deletion.
-	pub fn queue_trie_for_deletion(&self) -> DispatchResult {
+	pub fn queue_trie_for_deletion(&self) {
 		DeletionQueue::<T>::load().insert(DeletedContract { trie_id: self.trie_id.clone() });
-		Ok(())
 	}
 
 	/// Calculates the weight that is necessary to remove one key from the trie and how many
@@ -410,6 +409,6 @@ impl<T: Config> DeletionQueue<T> {
 		let entry = <DeletionQueueMap<T>>::get(self.delete_nonce);
 		let entry = entry.map(|contract| DeletionQueueEntry { contract, queue: self });
 
-		entry
+		entr
 	}
 }

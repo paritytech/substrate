@@ -214,7 +214,7 @@ benchmarks! {
 	on_initialize_per_trie_key {
 		let k in 0..1024;
 		let instance = Contract::<T>::with_storage(WasmModule::dummy(), k, T::Schedule::get().limits.payload_len)?;
-		instance.info()?.queue_trie_for_deletion()?;
+		instance.info()?.queue_trie_for_deletion();
 	}: {
 		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
