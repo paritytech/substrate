@@ -2904,7 +2904,7 @@ mod tests {
 							caller: Caller::from_account_id(ALICE),
 							contract: BOB,
 						}),
-						topics: vec![hash(&ALICE), hash(&BOB)],
+						topics: vec![hash(&Caller::<Test>::from_account_id(ALICE)), hash(&BOB)],
 					},
 				]
 			);
@@ -3004,7 +3004,7 @@ mod tests {
 							caller: Caller::from_account_id(ALICE),
 							contract: BOB,
 						}),
-						topics: vec![hash(&ALICE), hash(&BOB)],
+						topics: vec![hash(&Caller::<Test>::from_account_id(ALICE)), hash(&BOB)],
 					},
 				]
 			);
