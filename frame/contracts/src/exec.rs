@@ -1347,14 +1347,6 @@ where
 		secp256k1_ecdsa_recover_compressed(signature, message_hash).map_err(|_| ())
 	}
 
-	fn sr25519_recover(
-		&self,
-		signature: &[u8; 65],
-		message_hash: &[u8; 32],
-	) -> Result<[u8; 33], ()> {
-		todo!()
-	}
-
 	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()> {
 		ECDSAPublic(*pk).to_eth_address()
 	}

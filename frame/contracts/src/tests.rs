@@ -2834,61 +2834,7 @@ fn gas_call_runtime_reentrancy_guarded() {
 
 #[test]
 fn ecdsa_recover() {
-	#[rustfmt::skip]
-	let signature: [u8; 65] = [
-		161, 234, 203,  74, 147, 96,  51, 212,   5, 174, 231,   9, 142,  48, 137, 201,
-		162, 118, 192,  67, 239, 16,  71, 216, 125,  86, 167, 139,  70,   7,  86, 241,
-			33,  87, 154, 251,  81, 29, 160,   4, 176, 239,  88, 211, 244, 232, 232,  52,
-		211, 234, 100, 115, 230, 47,  80,  44, 152, 166,  62,  50,   8,  13,  86, 175,
-			28,
-	];
-	#[rustfmt::skip]
-	let message_hash: [u8; 32] = [
-		162, 28, 244, 179, 96, 76, 244, 178, 188,  83, 230, 248, 143, 106,  77, 117,
-		239, 95, 244, 171, 65, 95,  62, 153, 174, 166, 182,  28, 130,  73, 196, 208
-	];
-	#[rustfmt::skip]
-	let expected_compressed_public_key: [u8; 33] = [
-			2, 121, 190, 102, 126, 249, 220, 187, 172, 85, 160,  98, 149, 206, 135, 11,
-			7,   2, 155, 252, 219,  45, 206,  40, 217, 89, 242, 129,  91,  22, 248, 23,
-		152,
-	];
-
-	signature_recover("ecdsa_recover", &signature, &message_hash, &expected_compressed_public_key);
-}
-
-#[test]
-fn sr25519_recover() {
-	#[rustfmt::skip]
-	let signature: [u8; 65] = [
-		161, 234, 203,  74, 147, 96,  51, 212,   5, 174, 231,   9, 142,  48, 137, 201,
-		162, 118, 192,  67, 239, 16,  71, 216, 125,  86, 167, 139,  70,   7,  86, 241,
-			33,  87, 154, 251,  81, 29, 160,   4, 176, 239,  88, 211, 244, 232, 232,  52,
-		211, 234, 100, 115, 230, 47,  80,  44, 152, 166,  62,  50,   8,  13,  86, 175,
-			28,
-	];
-	#[rustfmt::skip]
-	let message_hash: [u8; 32] = [
-		162, 28, 244, 179, 96, 76, 244, 178, 188,  83, 230, 248, 143, 106,  77, 117,
-		239, 95, 244, 171, 65, 95,  62, 153, 174, 166, 182,  28, 130,  73, 196, 208
-	];
-	#[rustfmt::skip]
-	let expected_compressed_public_key: [u8; 33] = [
-			2, 121, 190, 102, 126, 249, 220, 187, 172, 85, 160,  98, 149, 206, 135, 11,
-			7,   2, 155, 252, 219,  45, 206,  40, 217, 89, 242, 129,  91,  22, 248, 23,
-		152,
-	];
-
-	signature_recover("ecdsa_recover", &signature, &message_hash, &expected_compressed_public_key);
-}
-
-fn signature_recover(
-	fixture: &str,
-	signature: &[u8],
-	message_hash: &[u8],
-	expected_compressed_public_key: &[u8],
-) {
-	let (wasm, _code_hash) = compile_module::<Test>(fixture).unwrap();
+	let (wasm, _code_hash) = compile_module::<Test>("ecdsa_recover").unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
@@ -2908,6 +2854,25 @@ fn signature_recover(
 		.unwrap()
 		.account_id;
 
+		#[rustfmt::skip]
+		let signature: [u8; 65] = [
+			161, 234, 203,  74, 147, 96,  51, 212,   5, 174, 231,   9, 142,  48, 137, 201,
+			162, 118, 192,  67, 239, 16,  71, 216, 125,  86, 167, 139,  70,   7,  86, 241,
+			 33,  87, 154, 251,  81, 29, 160,   4, 176, 239,  88, 211, 244, 232, 232,  52,
+			211, 234, 100, 115, 230, 47,  80,  44, 152, 166,  62,  50,   8,  13,  86, 175,
+			 28,
+		];
+		#[rustfmt::skip]
+		let message_hash: [u8; 32] = [
+			162, 28, 244, 179, 96, 76, 244, 178, 188,  83, 230, 248, 143, 106,  77, 117,
+			239, 95, 244, 171, 65, 95,  62, 153, 174, 166, 182,  28, 130,  73, 196, 208
+		];
+		#[rustfmt::skip]
+		const EXPECTED_COMPRESSED_PUBLIC_KEY: [u8; 33] = [
+			  2, 121, 190, 102, 126, 249, 220, 187, 172, 85, 160,  98, 149, 206, 135, 11,
+			  7,   2, 155, 252, 219,  45, 206,  40, 217, 89, 242, 129,  91,  22, 248, 23,
+			152,
+		];
 		let mut params = vec![];
 		params.extend_from_slice(&signature);
 		params.extend_from_slice(&message_hash);
@@ -2925,7 +2890,7 @@ fn signature_recover(
 		.result
 		.unwrap();
 		assert!(!result.did_revert());
-		assert_eq!(result.data, expected_compressed_public_key);
+		assert_eq!(result.data, EXPECTED_COMPRESSED_PUBLIC_KEY);
 	})
 }
 
