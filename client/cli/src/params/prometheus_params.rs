@@ -21,7 +21,7 @@ pub struct PrometheusParams {
 }
 
 impl PrometheusParams {
-	/// Creates configuration about Prometheus.
+	/// Creates [`PrometheusConfig`].
 	pub fn prometheus_config(
 		&self,
 		default_listen_port: u16,

@@ -142,7 +142,7 @@ pub struct RunCmd {
 
 	/// The human-readable name for this node.
 	///
-	/// The node name will be reported to the telemetry server, if enabled.
+	/// It's used as network node name.
 	#[arg(long, value_name = "NAME")]
 	pub name: Option<String>,
 
@@ -173,6 +173,10 @@ pub struct RunCmd {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub pool_config: TransactionPoolParams,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub keystore_params: KeystoreParams,
 
 	/// Shortcut for `--name Alice --validator` with session keys for `Alice` added to keystore.
 	#[arg(long, conflicts_with_all = &["bob", "charlie", "dave", "eve", "ferdie", "one", "two"])]
@@ -210,10 +214,6 @@ pub struct RunCmd {
 	/// Enable authoring even when offline.
 	#[arg(long)]
 	pub force_authoring: bool,
-
-	#[allow(missing_docs)]
-	#[clap(flatten)]
-	pub keystore_params: KeystoreParams,
 
 	/// The size of the instances cache for each runtime.
 	///
@@ -334,7 +334,7 @@ impl CliConfiguration for RunCmd {
 		let keyring = self.get_keyring();
 		let is_authority = self.validator || is_dev || keyring.is_some();
 
-		Ok(if is_authority { sc_service::Role::Authority } else { sc_service::Role::Full })
+		Ok(if is_authority { Role::Authority } else { Role::Full })
 	}
 
 	fn force_authoring(&self) -> Result<bool> {
