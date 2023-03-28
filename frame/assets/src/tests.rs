@@ -1164,16 +1164,19 @@ fn balance_conversion_should_work() {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), not_sufficient, 1, false, 10));
 		assert_eq!(asset_ids(), vec![23, 42, 999]);
 		assert_eq!(
-			BalanceToAssetBalance::<Balances, Test, ConvertInto>::convert(100, 1234),
+			BalanceToAssetBalance::<Balances, Test, ConvertInto>::to_asset_balance(100, 1234),
 			Err(ConversionError::AssetMissing)
 		);
 		assert_eq!(
-			BalanceToAssetBalance::<Balances, Test, ConvertInto>::convert(100, not_sufficient),
+			BalanceToAssetBalance::<Balances, Test, ConvertInto>::to_asset_balance(
+				100,
+				not_sufficient
+			),
 			Err(ConversionError::AssetNotSufficient)
 		);
 		// 10 / 1 == 10 -> the conversion should 10x the value
 		assert_eq!(
-			BalanceToAssetBalance::<Balances, Test, ConvertInto>::convert(100, id),
+			BalanceToAssetBalance::<Balances, Test, ConvertInto>::to_asset_balance(100, id),
 			Ok(100 * 10)
 		);
 	});
