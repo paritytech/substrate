@@ -834,19 +834,19 @@ where
 		let do_transaction = || {
 			// We need to charge the storage deposit before the initial transfer so that
 			// it can create the account in case the initial transfer is < ed.
-			if entry_point == ExportedFunction::Constructor {
-				let frame = top_frame_mut!(self);
-				// Root origin is not allowed here.
-				let origin = match &self.origin {
-					ContractOrigin::Signed(origin) => origin,
-					ContractOrigin::Root => return Err(Error::<T>::RootOrigin.into()),
-				};
-				frame.nested_storage.charge_instantiate(
-					origin,
-					&frame.account_id,
-					frame.contract_info.get(&frame.account_id),
-				)?;
-			}
+			// Also, we can only charge the storage deposit if there is an account id asociated with
+			// the origin, if the origin is Root there is no storage deposit to charge.
+			match (entry_point, &self.origin) {
+				(ExportedFunction::Constructor, ContractOrigin::Signed(origin)) => {
+					let frame = top_frame_mut!(self);
+					frame.nested_storage.charge_instantiate(
+						origin,
+						&frame.account_id,
+						frame.contract_info.get(&frame.account_id),
+					)?;
+				},
+				_ => (),
+			};
 
 			// Every non delegate call or instantiate also optionally transfers the balance.
 			self.initial_transfer()?;
@@ -1056,11 +1056,9 @@ where
 			return Ok(())
 		}
 
+		// Get the account id from the Caller.
 		// If the caller is root, we don't need to transfer.
-		let caller = match self.caller() {
-			Caller::Account(caller) => caller,
-			Caller::Root => return Ok(()),
-		};
+		let Caller::Account(caller) = self.caller() else { return Ok(()) };
 
 		let value = frame.value_transferred;
 		Self::transfer(ExistenceRequirement::KeepAlive, &caller, &frame.account_id, value)
@@ -1299,7 +1297,7 @@ where
 	}
 
 	fn caller_is_root(&self) -> bool {
-		// it the caller isn't origin, then it can't be root.
+		// if the caller isn't origin, then it can't be root.
 		if !self.caller_is_origin() {
 			return false
 		}
