@@ -52,19 +52,16 @@ impl HoldReasonDef {
 			return Err(syn::Error::new(item.span(), msg))
 		}
 
-		let has_derive_attr = item
-			.attrs
-			.iter()
-			.any(|attr| {
-				attr.parse_meta()
-					.ok()
-					.map(|meta| match meta {
-						syn::Meta::List(syn::MetaList { path, .. }) =>
-							path.get_ident().map(|ident| ident == "derive").unwrap_or(false),
-						_ => false,
-					})
-					.unwrap_or(false)
-			});
+		let has_derive_attr = item.attrs.iter().any(|attr| {
+			attr.parse_meta()
+				.ok()
+				.map(|meta| match meta {
+					syn::Meta::List(syn::MetaList { path, .. }) =>
+						path.get_ident().map(|ident| ident == "derive").unwrap_or(false),
+					_ => false,
+				})
+				.unwrap_or(false)
+		});
 
 		if !has_derive_attr {
 			let derive_attr: syn::Attribute = syn::parse_quote! {
