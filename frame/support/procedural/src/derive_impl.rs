@@ -17,9 +17,12 @@
 
 //! Implementation of the `derive_impl` attribute macro.
 
+use std::collections::{HashMap, HashSet};
+
 use frame_support_procedural_tools::generate_crate_access_2018;
+use macro_magic::core::pretty_print;
 use proc_macro2::TokenStream;
-use quote::ToTokens;
+use quote::{quote, ToTokens};
 use syn::{
 	braced, bracketed,
 	parse::{Parse, ParseStream},
@@ -139,10 +142,72 @@ pub(crate) fn derive_impl_inner(input: TokenStream) -> Result<TokenStream> {
 	Ok(quote::quote!(#final_impl_block))
 }
 
-pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> Result<TokenStream> {
-	let foreign_impl = parse2::<ItemImpl>(attrs.clone())?;
-	println!("FOREIGN IMPL:: {}", foreign_impl.to_token_stream().to_string());
-	panic!("stop here");
+fn impl_item_ident(impl_item: &ImplItem) -> Option<Ident> {
+	match impl_item {
+		ImplItem::Const(item) => Some(item.ident.clone()),
+		ImplItem::Method(item) => Some(item.sig.ident.clone()),
+		ImplItem::Type(item) => Some(item.ident.clone()),
+		_ => None,
+	}
+}
+
+fn combine_impls(local_impl: ItemImpl, foreign_impl: ItemImpl) -> ItemImpl {
+	let existing_local_keys: HashSet<Ident> = local_impl
+		.items
+		.iter()
+		.filter_map(|impl_item| impl_item_ident(impl_item))
+		.collect();
+	let existing_unsupported_items: HashSet<ImplItem> = local_impl
+		.items
+		.iter()
+		.filter(|impl_item| impl_item_ident(impl_item).is_none())
+		.cloned()
+		.collect();
+	let mut final_impl = local_impl;
+	final_impl.items.extend(
+		foreign_impl
+			.items
+			.iter()
+			.filter_map(|item| {
+				if let Some(ident) = impl_item_ident(&item) {
+					if existing_local_keys.contains(&ident) {
+						// do not copy colliding supported items
+						None
+					} else {
+						// copy uncolliding supported items verbatim
+						Some(item)
+					}
+				} else {
+					if existing_unsupported_items.contains(item) {
+						// do not copy colliding unsupported items
+						None
+					} else {
+						// copy uncolliding unsupported items
+						Some(item)
+					}
+				}
+			})
+			.cloned()
+			.collect::<Vec<ImplItem>>(),
+	);
+	final_impl
+}
+
+pub fn derive_impl(foreign_tokens: TokenStream, local_tokens: TokenStream) -> Result<TokenStream> {
+	let local_impl = parse2::<ItemImpl>(local_tokens)?;
+	let foreign_impl = parse2::<ItemImpl>(foreign_tokens)?;
+
+	println!("\nlocal_impl:");
+	pretty_print(&local_impl.to_token_stream());
+	println!("foreign_impl:");
+	pretty_print(&foreign_impl.to_token_stream());
+
+	let combined_impl = combine_impls(local_impl, foreign_impl);
+
+	println!("combined_impl:");
+	pretty_print(&combined_impl.to_token_stream());
+
+	Ok(quote!(#combined_impl))
 	// attr: frame_system::preludes::testing::Impl
 	// tokens:
 	// impl frame_system::Config for Test {
@@ -157,27 +222,27 @@ pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> Result<TokenStream
 	// 	// We decide to override this one.
 	// 	type AccountData = pallet_balances::AccountData<u64>;
 	// }
-	let implementing_type: TypePath = parse2(attrs.clone())?;
-	// ideas for sam:
-	// let other_path_tokens = magic_macro!(path_to_other_path_token);
-	// let foreign_trait_tokens = import_tokens_indirect!(frame_system::testing::DefaultConfig);
-	// println!("{}", foreign_trait_tokens.to_string());
+	// let implementing_type: TypePath = parse2(attrs.clone())?;
+	// // ideas for sam:
+	// // let other_path_tokens = magic_macro!(path_to_other_path_token);
+	// // let foreign_trait_tokens = import_tokens_indirect!(frame_system::testing::DefaultConfig);
+	// // println!("{}", foreign_trait_tokens.to_string());
 
-	let frame_support = generate_crate_access_2018("frame-support")?;
-	// TODO: may not be accurate.
-	let source_crate_path = implementing_type.path.segments.first().unwrap().ident.clone();
-	// source_crate_path = frame_system
+	// let frame_support = generate_crate_access_2018("frame-support")?;
+	// // TODO: may not be accurate.
+	// let source_crate_path = implementing_type.path.segments.first().unwrap().ident.clone();
+	// // source_crate_path = frame_system
 
-	//let tokens = import_tokens_indirect!(::pallet_example_basic::pallet::Config);
+	// //let tokens = import_tokens_indirect!(::pallet_example_basic::pallet::Config);
 
-	Ok(quote::quote!(
-		#frame_support::tt_call! {
-			macro = [{ #source_crate_path::tt_config_items }] // frame_system::tt_config_items
-			frame_support = [{ #frame_support }] // ::frame_support
-			~~> #frame_support::derive_impl_inner! {
-				partial_impl_block = [{ #input }]
-				implementing_type = [{ #attrs }]
-			}
-		}
-	))
+	// Ok(quote::quote!(
+	// 	#frame_support::tt_call! {
+	// 		macro = [{ #source_crate_path::tt_config_items }] // frame_system::tt_config_items
+	// 		frame_support = [{ #frame_support }] // ::frame_support
+	// 		~~> #frame_support::derive_impl_inner! {
+	// 			partial_impl_block = [{ #input }]
+	// 			implementing_type = [{ #attrs }]
+	// 		}
+	// 	}
+	// ))
 }
