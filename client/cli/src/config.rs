@@ -609,22 +609,20 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 		logger.init()?;
 
-		raise_fd_limit()
+		raise_fd_limit(RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT)
 	}
 }
 
 /// Raise the soft open file descriptor resource limit to the smaller of the
 /// kernel limit and the hard resource limit.
 ///
-/// Print warning log if fd limit is smaller than `RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT`
-pub fn raise_fd_limit() -> Result<()> {
+/// Print warning log if fd limit is smaller than `limit`
+pub fn raise_fd_limit(limit: u64) -> Result<()> {
 	if let Some(new_limit) = fdlimit::raise_fd_limit() {
-		if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {
+		if new_limit < limit {
 			log::warn!(
 				"Low open file descriptor limit configured for the process. \
-					Current value: {:?}, recommended value: {:?}.",
-				new_limit,
-				RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT,
+					Current value: {new_limit}, recommended value: {limit}.",
 			);
 		}
 	}
