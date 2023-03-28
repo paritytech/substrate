@@ -182,7 +182,7 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Asset ID does not correspond to locked NFT. 
+		/// Asset ID does not correspond to locked NFT.
 		IncorrectAssetId,
 		/// The signing account has no permission to do the operation.
 		NoPermission,
@@ -358,10 +358,12 @@ pub mod pallet {
 			nft_collection_id: &T::NftCollectionId,
 			nft_id: &T::NftId,
 		) -> DispatchResult {
-			let name = format!("{} {nft_collection_id}-{nft_id}", String::from_utf8_lossy(&T::NewAssetName::get()));
+			let name = format!(
+				"{} {nft_collection_id}-{nft_id}",
+				String::from_utf8_lossy(&T::NewAssetName::get())
+			);
 			let symbol: &[u8] = &T::NewAssetSymbol::get();
 			let deposit = T::Assets::calc(name.as_bytes(), symbol);
-
 
 			if deposit != Zero::zero() {
 				T::Currency::transfer(

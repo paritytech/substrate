@@ -924,10 +924,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Calculate the metadata deposit for the provided data.
-	pub(super) fn calc_metadata_deposit(
-		name: &[u8],
-		symbol: &[u8],
-	) -> DepositBalanceOf<T, I> {
+	pub(super) fn calc_metadata_deposit(name: &[u8], symbol: &[u8]) -> DepositBalanceOf<T, I> {
 		T::MetadataDepositPerByte::get()
 			.saturating_mul(((name.len() + symbol.len()) as u32).into())
 			.saturating_add(T::MetadataDepositBase::get())
