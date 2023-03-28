@@ -23,6 +23,7 @@ pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../
 sp-io = { version = "7.0.0", default-features = false, path = "../../../primitives/io" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
+macro_magic = "0.2.5"
 
 [dev-dependencies]
 sp-core = { version = "7.0.0", default-features = false, path = "../../../primitives/core" }

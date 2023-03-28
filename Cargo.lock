@@ -4367,9 +4367,9 @@ dependencies = [
 
 [[package]]
 name = "macro_magic"
-version = "0.2.0"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a46cb4aa5d8f8ed2dff8aabb1897057dcf2226010e4c113f0a5ba18b6aceca3"
+checksum = "0b99f8208e778933c757f131dbdcf7a93342718b2128593b8186f1242844177c"
 dependencies = [
  "macro_magic_core",
  "macro_magic_macros",
@@ -4379,12 +4379,13 @@ dependencies = [
 
 [[package]]
 name = "macro_magic_core"
-version = "0.2.0"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adfee80cffea890d40db7f6fcab74dfa8be40ed9c0be33dc0d23de360a625107"
+checksum = "194cce8673866a9f5834c4f14504d446007666ca39ae1556711e195d425c5518"
 dependencies = [
  "convert_case",
  "derive-syn-parse",
+ "macro_magic_core_macros",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -4392,10 +4393,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "macro_magic_macros"
-version = "0.2.0"
+name = "macro_magic_core_macros"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e52f768d6f74458b01f841fcf0423135895ed44032d1b100fb2f17111fe397f"
+checksum = "9f1e4637d501823b6a68001cba03d2cf437ec108495fa20cd9eec300a3717950"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "macro_magic_macros"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38e2193937cbecce1e6d37ad2558718eab2dd9ed71c3756a95e07331714bb0b8"
 dependencies = [
  "macro_magic_core",
  "quote",
@@ -5931,6 +5943,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
+ "macro_magic",
  "pallet-balances",
  "parity-scale-codec",
  "scale-info",

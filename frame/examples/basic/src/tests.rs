@@ -19,8 +19,9 @@
 
 use crate::*;
 use frame_support::{
-	assert_ok,
+	assert_ok, derive_impl_inner,
 	dispatch::{DispatchInfo, GetDispatchInfo},
+	macro_magic::*,
 	traits::{ConstU64, OnInitialize},
 };
 use sp_core::H256;
@@ -33,6 +34,9 @@ use sp_runtime::{
 };
 // Reexport crate as its pallet name for construct_runtime.
 use crate as pallet_example_basic;
+
+#[use_attr]
+use frame_support::derive_impl;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -50,7 +54,7 @@ frame_support::construct_runtime!(
 	}
 );
 
-#[frame_support::derive_impl(frame_system::preludes::testing::Impl)]
+#[derive_impl(frame_system::preludes::testing::TestDefaultConfig)]
 impl frame_system::Config for Test {
 	// These are all defined by system as mandatory.
 	type BaseCallFilter = frame_support::traits::Everything;

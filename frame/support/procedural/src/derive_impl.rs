@@ -18,7 +18,6 @@
 //! Implementation of the `derive_impl` attribute macro.
 
 use frame_support_procedural_tools::generate_crate_access_2018;
-use macro_magic::import_tokens_attr;
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 use syn::{
@@ -141,6 +140,9 @@ pub(crate) fn derive_impl_inner(input: TokenStream) -> Result<TokenStream> {
 }
 
 pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> Result<TokenStream> {
+	let foreign_impl = parse2::<ItemImpl>(attrs.clone())?;
+	println!("FOREIGN IMPL:: {}", foreign_impl.to_token_stream().to_string());
+	panic!("stop here");
 	// attr: frame_system::preludes::testing::Impl
 	// tokens:
 	// impl frame_system::Config for Test {
