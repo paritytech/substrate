@@ -17,8 +17,11 @@
 
 //! Integration tests for ecdsa
 use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::ecdsa::{AppPair, AppPublic};
-use sp_core::{crypto::Pair, testing::ECDSA};
+use sp_application_crypto::ecdsa::AppPair;
+use sp_core::{
+	crypto::{ByteArray, Pair},
+	testing::ECDSA,
+};
 use sp_keystore::{testing::MemoryKeystore, Keystore};
 use std::sync::Arc;
 use substrate_test_runtime_client::{
@@ -35,6 +38,6 @@ fn ecdsa_works_in_runtime() {
 		.expect("Tests `ecdsa` crypto.");
 
 	let supported_keys = keystore.keys(ECDSA).unwrap();
-	assert!(supported_keys.contains(&public.clone().into()));
-	assert!(AppPair::verify(&signature, "ecdsa", &AppPublic::from(public)));
+	assert!(supported_keys.contains(&public.to_raw_vec()));
+	assert!(AppPair::verify(&signature, "ecdsa", &public));
 }
