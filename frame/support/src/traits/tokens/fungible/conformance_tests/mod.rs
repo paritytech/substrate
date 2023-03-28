@@ -6,13 +6,12 @@
 /// used by any pallet that implements any `fungible` traits.
 ///
 /// Open question: Do we need conformance tests for 'unbalanced' traits?
-use super::*;
-mod balanced;
-mod balanced_hold;
-mod handle_imbalance_drop;
-mod inspect;
-mod inspect_freeze;
-mod inspect_hold;
+pub mod balanced;
+pub mod balanced_hold;
+pub mod handle_imbalance_drop;
+pub mod inspect;
+pub mod inspect_freeze;
+pub mod inspect_hold;
 pub mod mutate;
 pub mod mutate_freeze;
 pub mod mutate_hold;

@@ -15,12 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Conformance tests regarding the functionality of the `fungible` Inspect trait.
+//! Conformance tests checking functionality of the `fungible` Inspect trait.
 //!
-//! TODO: Decouple these tests from balances and abstract them into a macro so that they can be
-//! used by any pallet that implements the `fungible` Inspect trait.
+//! TODO: Feels like these can be just rolled up into Mutable trait tests, cannot test Inspect
+//! without Mutate being avaliable, and cannot think of a realistic scenario a pallet would
+//! implement Inspect without Mutate.
 
-macro_rules! fungible_inspect_conformance_tests {
+#[macro_export]
+macro_rules! inspect_conformance_tests {
 	($ext_builder:ident, $pallet:ident) => {
 		use super::*;
 		use frame_support::traits::tokens::{
@@ -135,5 +137,3 @@ macro_rules! fungible_inspect_conformance_tests {
 		}
 	};
 }
-
-fungible_inspect_conformance_tests!(ExtBuilder, Balances);

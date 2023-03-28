@@ -24,7 +24,8 @@
 // It is referenced in passing in some comments, but there are no default implementations
 // that make use of it.
 
-macro_rules! fungible_mutate_conformance_tests {
+#[macro_export]
+macro_rules! mutate_conformance_tests {
 	($ext_builder:ident, $pallet:ident) => {
 		use super::*;
 		use frame_support::traits::tokens::{
@@ -32,7 +33,6 @@ macro_rules! fungible_mutate_conformance_tests {
 			Precision,
 			Preservation::{self},
 		};
-		use fungible::Mutate;
 
 		#[test]
 		// TODO: Is this test required? We already have a test for `total_issuance` in the inspect
@@ -261,5 +261,3 @@ macro_rules! fungible_mutate_conformance_tests {
 		}
 	};
 }
-
-fungible_mutate_conformance_tests!(ExtBuilder, Balances);
