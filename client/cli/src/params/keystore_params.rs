@@ -87,7 +87,7 @@ impl KeystoreParams {
 	}
 
 	/// helper method to fetch password from `KeyParams` or read from stdin
-	pub fn read_password(&self) -> error::Result<Option<SecretString>> {
+	pub fn read_password(&self) -> Result<Option<SecretString>> {
 		let (password_interactive, password) = (self.password_interactive, self.password.clone());
 
 		let pass = if password_interactive {

@@ -26,7 +26,7 @@ use frame_benchmarking_cli::*;
 use kitchensink_runtime::{ExistentialDeposit, RuntimeApi};
 use node_executor::ExecutorDispatch;
 use node_primitives::Block;
-use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
+use sc_cli::{ChainSpec, CommonCli, Result, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
 use sp_keyring::Sr25519Keyring;
 
@@ -38,7 +38,7 @@ use {
 	try_runtime_cli::block_building_info::substrate_info,
 };
 
-impl SubstrateCli for Cli {
+impl CommonCli for Cli {
 	fn impl_name() -> String {
 		"Substrate Node".into()
 	}
@@ -62,7 +62,9 @@ impl SubstrateCli for Cli {
 	fn copyright_start_year() -> i32 {
 		2017
 	}
+}
 
+impl SubstrateCli for Cli {
 	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
 		let spec = match id {
 			"" =>
@@ -92,7 +94,7 @@ pub fn run() -> Result<()> {
 	match &cli.subcommand {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
-			runner.run_node_until_exit(|config| async move {
+			runner.run_node_until_exit::<Cli, _, _>(|config| async move {
 				service::new_full(config, cli).map_err(sc_cli::Error::Service)
 			})
 		},

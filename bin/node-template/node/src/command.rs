@@ -6,14 +6,14 @@ use crate::{
 };
 use frame_benchmarking_cli::{BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE};
 use node_template_runtime::{Block, EXISTENTIAL_DEPOSIT};
-use sc_cli::{ChainSpec, RuntimeVersion, SubstrateCli};
+use sc_cli::{ChainSpec, CommonCli, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
 use sp_keyring::Sr25519Keyring;
 
 #[cfg(feature = "try-runtime")]
 use try_runtime_cli::block_building_info::timestamp_with_aura_info;
 
-impl SubstrateCli for Cli {
+impl CommonCli for Cli {
 	fn impl_name() -> String {
 		"Substrate Node".into()
 	}
@@ -37,7 +37,9 @@ impl SubstrateCli for Cli {
 	fn copyright_start_year() -> i32 {
 		2017
 	}
+}
 
+impl SubstrateCli for Cli {
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
 		Ok(match id {
 			"dev" => Box::new(chain_spec::development_config()?),
@@ -208,7 +210,7 @@ pub fn run() -> sc_cli::Result<()> {
 		},
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
-			runner.run_node_until_exit(|config| async move {
+			runner.run_node_until_exit::<Cli, _, _>(|config| async move {
 				service::new_full(config).map_err(sc_cli::Error::Service)
 			})
 		},

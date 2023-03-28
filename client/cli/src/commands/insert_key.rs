@@ -93,6 +93,7 @@ fn to_vec<P: sp_core::Pair>(uri: &str, pass: Option<SecretString>) -> Result<Vec
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::{CommonCli, SubstrateCli};
 	use sc_service::{ChainSpec, ChainType, GenericChainSpec, NoExtension};
 	use sp_core::{sr25519::Pair, ByteArray, Pair as _};
 	use sp_keystore::Keystore;
@@ -100,7 +101,7 @@ mod tests {
 
 	struct Cli;
 
-	impl SubstrateCli for Cli {
+	impl CommonCli for Cli {
 		fn impl_name() -> String {
 			"test".into()
 		}
@@ -124,7 +125,9 @@ mod tests {
 		fn author() -> String {
 			"test".into()
 		}
+	}
 
+	impl SubstrateCli for Cli {
 		fn native_runtime_version(_: &Box<dyn ChainSpec>) -> &'static sp_version::RuntimeVersion {
 			unimplemented!("Not required in tests")
 		}

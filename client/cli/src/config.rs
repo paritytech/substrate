@@ -22,7 +22,6 @@ use crate::{
 	arg_enums::Database, error::Result, DatabaseParams, ImportParams, KeystoreParams,
 	NetworkParams, NodeKeyParams, OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
 };
-use log::warn;
 use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
@@ -411,21 +410,21 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// By default this is `false`.
 	fn force_authoring(&self) -> Result<bool> {
-		Ok(Default::default())
+		Ok(false)
 	}
 
 	/// Returns `Ok(true)` if grandpa should be disabled
 	///
 	/// By default this is `false`.
 	fn disable_grandpa(&self) -> Result<bool> {
-		Ok(Default::default())
+		Ok(false)
 	}
 
 	/// Get the development key seed from the current object
 	///
 	/// By default this is `None`.
 	fn dev_key_seed(&self, _is_dev: bool) -> Result<Option<String>> {
-		Ok(Default::default())
+		Ok(None)
 	}
 
 	/// Get the tracing targets from the current object (if any)
@@ -458,7 +457,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// By default this is `None`.
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
-		Ok(Default::default())
+		Ok(None)
 	}
 
 	/// Get maximum different runtimes in cache
@@ -470,7 +469,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 	/// Activate or not the automatic announcing of blocks after import
 	///
-	/// By default this is `false`.
+	/// By default this is `true`.
 	fn announce_block(&self) -> Result<bool> {
 		Ok(true)
 	}
@@ -564,31 +563,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		})
 	}
 
-	/// Get the filters for the logging.
-	///
-	/// This should be a list of comma-separated values.
-	/// Example: `foo=trace,bar=debug,baz=info`
-	///
-	/// By default this is retrieved from `SharedParams`.
-	fn log_filters(&self) -> Result<String> {
-		Ok(self.shared_params().log_filters().join(","))
-	}
-
-	/// Should the detailed log output be enabled.
-	fn detailed_log_output(&self) -> Result<bool> {
-		Ok(self.shared_params().detailed_log_output())
-	}
-
-	/// Is log reloading enabled?
-	fn enable_log_reloading(&self) -> Result<bool> {
-		Ok(self.shared_params().enable_log_reloading())
-	}
-
-	/// Should the log color output be disabled?
-	fn disable_log_color(&self) -> Result<bool> {
-		Ok(self.shared_params().disable_log_color())
-	}
-
 	/// Initialize substrate. This must be done only once per process.
 	///
 	/// This method:
@@ -629,37 +603,49 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	{
 		sp_panic_handler::set(support_url, impl_version);
 
-		let mut logger = LoggerBuilder::new(self.log_filters()?);
-		logger
-			.with_log_reloading(self.enable_log_reloading()?)
-			.with_detailed_output(self.detailed_log_output()?);
-
-		if let Some(tracing_targets) = self.tracing_targets()? {
-			let tracing_receiver = self.tracing_receiver()?;
-			logger.with_profiling(tracing_receiver, tracing_targets);
-		}
-
-		if self.disable_log_color()? {
-			logger.with_colors(false);
-		}
-
+		let mut logger = init_logger(self.shared_params())?;
 		// Call hook for custom profiling setup.
 		logger_hook(&mut logger, config);
 
 		logger.init()?;
 
-		if let Some(new_limit) = fdlimit::raise_fd_limit() {
-			if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {
-				warn!(
-					"Low open file descriptor limit configured for the process. \
-					Current value: {:?}, recommended value: {:?}.",
-					new_limit, RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT,
-				);
-			}
-		}
-
-		Ok(())
+		check_fd_limit()
 	}
+}
+
+/// Warning if fd limit is smaller than `RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT`
+pub fn check_fd_limit() -> Result<()> {
+	if let Some(new_limit) = fdlimit::raise_fd_limit() {
+		if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {
+			log::warn!(
+				"Low open file descriptor limit configured for the process. \
+					Current value: {:?}, recommended value: {:?}.",
+				new_limit,
+				RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT,
+			);
+		}
+	}
+
+	Ok(())
+}
+
+/// Initialize node tracing logger according to SharedParams.
+pub fn init_logger(shared_params: &SharedParams) -> Result<LoggerBuilder> {
+	let mut logger = LoggerBuilder::new(shared_params.log_filters().join(","));
+	logger
+		.with_log_reloading(shared_params.enable_log_reloading())
+		.with_detailed_output(shared_params.detailed_log_output());
+
+	if let Some(tracing_targets) = shared_params.tracing_targets() {
+		let tracing_receiver = shared_params.tracing_receiver();
+		logger.with_profiling(tracing_receiver, tracing_targets);
+	}
+
+	if shared_params.disable_log_color() {
+		logger.with_colors(false);
+	}
+
+	Ok(logger)
 }
 
 /// Generate a valid random name for the node

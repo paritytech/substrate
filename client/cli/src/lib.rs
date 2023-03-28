@@ -45,12 +45,15 @@ pub use sc_tracing::logging::LoggerBuilder;
 pub use signals::Signals;
 pub use sp_version::RuntimeVersion;
 
-/// Substrate client CLI
+/// Common Client CLI
 ///
 /// This trait needs to be implemented on the root CLI struct of the application. It will provide
 /// the implementation `name`, `version`, `executable name`, `description`, `author`, `support_url`,
-/// `copyright start year` and most importantly: how to load the chain spec.
-pub trait SubstrateCli: Sized {
+/// `copyright start year`.
+///
+/// It is used to implement a cli not caring about substrate runtime, chain spec or some substrate
+/// client config.
+pub trait CommonCli: Sized {
 	/// Implementation name.
 	fn impl_name() -> String;
 
@@ -87,9 +90,6 @@ pub trait SubstrateCli: Sized {
 	/// Copyright starting year (x-current year)
 	fn copyright_start_year() -> i32;
 
-	/// Chain spec factory
-	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String>;
-
 	/// Helper function used to parse the command line arguments. This is the equivalent of
 	/// [`clap::Parser::parse()`].
 	///
@@ -103,7 +103,7 @@ pub trait SubstrateCli: Sized {
 	where
 		Self: Parser + Sized,
 	{
-		<Self as SubstrateCli>::from_iter(&mut std::env::args_os())
+		<Self as CommonCli>::from_iter(&mut std::env::args_os())
 	}
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
@@ -183,12 +183,37 @@ pub trait SubstrateCli: Sized {
 		format!("{}/v{}", Self::impl_name(), Self::impl_version())
 	}
 
+	/// Create a generic runner for the config provided in argument. This will pass the config and
+	/// a tokio runtime to runner.
+	fn create_cli_runner<Cfg>(&self, config: Cfg) -> Result<Runner<Cfg>> {
+		let tokio_runtime = build_runtime()?;
+
+		// `capture` needs to be called in a tokio context.
+		// Also capture them as early as possible.
+		let signals = tokio_runtime.block_on(async { Signals::capture() })?;
+
+		Runner::new(config, tokio_runtime, signals)
+	}
+}
+
+/// Substrate client CLI
+///
+/// This trait needs to be implemented on the root CLI struct of the application. It will provide
+/// the implementation `name`, `version`, `executable name`, `description`, `author`, `support_url`,
+/// `copyright start year` and most importantly: how to load the chain spec.
+pub trait SubstrateCli: CommonCli {
+	/// Native runtime version.
+	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
+
+	/// Chain spec factory
+	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String>;
+
 	/// Only create a Configuration for the command provided in argument
 	fn create_configuration<T: CliConfiguration<DVC>, DVC: DefaultConfigurationValues>(
 		&self,
 		command: &T,
 		tokio_handle: tokio::runtime::Handle,
-	) -> error::Result<Configuration> {
+	) -> Result<Configuration> {
 		command.create_configuration(self, tokio_handle)
 	}
 
@@ -197,17 +222,8 @@ pub trait SubstrateCli: Sized {
 	fn create_runner<T: CliConfiguration<DVC>, DVC: DefaultConfigurationValues>(
 		&self,
 		command: &T,
-	) -> error::Result<Runner<Self>> {
-		let tokio_runtime = build_runtime()?;
-
-		// `capture` needs to be called in a tokio context.
-		// Also capture them as early as possible.
-		let signals = tokio_runtime.block_on(async { Signals::capture() })?;
-
-		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
-
-		command.init(&Self::support_url(), &Self::impl_version(), |_, _| {}, &config)?;
-		Runner::new(config, tokio_runtime, signals)
+	) -> Result<Runner<Configuration>> {
+		self.create_runner_with_logger_hook(command, |_, _| {})
 	}
 
 	/// Create a runner for the command provided in argument. The `logger_hook` can be used to setup
@@ -229,11 +245,15 @@ pub trait SubstrateCli: Sized {
 	/// 	}
 	/// }
 	/// ```
-	fn create_runner_with_logger_hook<T: CliConfiguration, F>(
+	fn create_runner_with_logger_hook<
+		F,
+		T: CliConfiguration<DVC>,
+		DVC: DefaultConfigurationValues,
+	>(
 		&self,
 		command: &T,
 		logger_hook: F,
-	) -> error::Result<Runner<Self>>
+	) -> Result<Runner<Configuration>>
 	where
 		F: FnOnce(&mut LoggerBuilder, &Configuration),
 	{
@@ -243,11 +263,9 @@ pub trait SubstrateCli: Sized {
 		// Also capture them as early as possible.
 		let signals = tokio_runtime.block_on(async { Signals::capture() })?;
 
-		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
+		let config = self.create_configuration(command, tokio_runtime.handle().clone())?;
 
 		command.init(&Self::support_url(), &Self::impl_version(), logger_hook, &config)?;
 		Runner::new(config, tokio_runtime, signals)
 	}
-	/// Native runtime version.
-	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
 }

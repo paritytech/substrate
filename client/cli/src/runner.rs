@@ -22,7 +22,7 @@ use futures::{future::FutureExt, Future};
 use log::info;
 use sc_service::{Configuration, Error as ServiceError, TaskManager};
 use sc_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
-use std::{marker::PhantomData, time::Duration};
+use std::time::Duration;
 
 /// Build a tokio runtime with all features.
 pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::Error> {
@@ -39,53 +39,32 @@ pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::
 }
 
 /// A Substrate CLI runtime that can be used to run a node or a command
-pub struct Runner<C: SubstrateCli> {
-	config: Configuration,
+pub struct Runner<Cfg> {
+	config: Cfg,
 	tokio_runtime: tokio::runtime::Runtime,
 	signals: Signals,
-	phantom: PhantomData<C>,
 }
 
-impl<C: SubstrateCli> Runner<C> {
+impl<Cfg> Runner<Cfg> {
 	/// Create a new runtime with the command provided in argument
 	pub fn new(
-		config: Configuration,
+		config: Cfg,
 		tokio_runtime: tokio::runtime::Runtime,
 		signals: Signals,
-	) -> Result<Runner<C>> {
-		Ok(Runner { config, tokio_runtime, signals, phantom: PhantomData })
+	) -> Result<Self> {
+		Ok(Runner { config, tokio_runtime, signals })
 	}
 
-	/// Log information about the node itself.
-	///
-	/// # Example:
-	///
-	/// ```text
-	/// 2020-06-03 16:14:21 Substrate Node
-	/// 2020-06-03 16:14:21 ✌️  version 2.0.0-rc3-f4940588c-x86_64-linux-gnu
-	/// 2020-06-03 16:14:21 ❤️  by Parity Technologies <admin@parity.io>, 2017-2020
-	/// 2020-06-03 16:14:21 📋 Chain specification: Flaming Fir
-	/// 2020-06-03 16:14:21 🏷  Node name: jolly-rod-7462
-	/// 2020-06-03 16:14:21 👤 Role: FULL
-	/// 2020-06-03 16:14:21 💾 Database: RocksDb at /tmp/c/chains/flamingfir7/db
-	/// 2020-06-03 16:14:21 ⛓  Native runtime: node-251 (substrate-node-1.tx1.au10)
-	/// ```
-	fn print_node_infos(&self) {
-		print_node_infos::<C>(self.config())
-	}
-
-	/// A helper function that runs a node with tokio and stops if the process receives the signal
-	/// `SIGTERM` or `SIGINT`.
-	pub fn run_node_until_exit<F, E>(
+	/// A helper function that runs a command with tokio and stops if the process receives the
+	/// signal `SIGTERM` or `SIGINT`.
+	pub fn run_until_exit<F, E>(
 		self,
-		initialize: impl FnOnce(Configuration) -> F,
+		initialize: impl FnOnce(Cfg) -> F,
 	) -> std::result::Result<(), E>
 	where
 		F: Future<Output = std::result::Result<TaskManager, E>>,
 		E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
 	{
-		self.print_node_infos();
-
 		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
 
 		let res = self
@@ -134,7 +113,7 @@ impl<C: SubstrateCli> Runner<C> {
 	/// A helper function that runs a command with the configuration of this node.
 	pub fn sync_run<E>(
 		self,
-		runner: impl FnOnce(Configuration) -> std::result::Result<(), E>,
+		runner: impl FnOnce(Cfg) -> std::result::Result<(), E>,
 	) -> std::result::Result<(), E>
 	where
 		E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
@@ -146,7 +125,7 @@ impl<C: SubstrateCli> Runner<C> {
 	/// the signal `SIGTERM` or `SIGINT`.
 	pub fn async_run<F, E>(
 		self,
-		runner: impl FnOnce(Configuration) -> std::result::Result<(F, TaskManager), E>,
+		runner: impl FnOnce(Cfg) -> std::result::Result<(F, TaskManager), E>,
 	) -> std::result::Result<(), E>
 	where
 		F: Future<Output = std::result::Result<(), E>>,
@@ -161,17 +140,52 @@ impl<C: SubstrateCli> Runner<C> {
 	}
 
 	/// Get an immutable reference to the node Configuration
-	pub fn config(&self) -> &Configuration {
+	pub fn config(&self) -> &Cfg {
 		&self.config
 	}
 
 	/// Get a mutable reference to the node Configuration
-	pub fn config_mut(&mut self) -> &mut Configuration {
+	pub fn config_mut(&mut self) -> &mut Cfg {
 		&mut self.config
+	}
+
+	/// Get an immutable reference to the runner runtime.
+	pub fn runtime(&self) -> &tokio::runtime::Runtime {
+		&self.tokio_runtime
+	}
+}
+
+impl Runner<Configuration> {
+	/// A helper function that runs a substrate node with tokio and stops if the process receives
+	/// the signal `SIGTERM` or `SIGINT`.
+	pub fn run_node_until_exit<C: SubstrateCli, F, E>(
+		self,
+		initialize: impl FnOnce(Configuration) -> F,
+	) -> std::result::Result<(), E>
+	where
+		F: Future<Output = std::result::Result<TaskManager, E>>,
+		E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
+	{
+		print_node_infos::<C>(self.config());
+
+		self.run_until_exit(initialize)
 	}
 }
 
 /// Log information about the node itself.
+///
+/// # Example:
+///
+/// ```text
+/// 2020-06-03 16:14:21 Substrate Node
+/// 2020-06-03 16:14:21 ✌️  version 2.0.0-rc3-f4940588c-x86_64-linux-gnu
+/// 2020-06-03 16:14:21 ❤️  by Parity Technologies <admin@parity.io>, 2017-2020
+/// 2020-06-03 16:14:21 📋 Chain specification: Flaming Fir
+/// 2020-06-03 16:14:21 🏷  Node name: jolly-rod-7462
+/// 2020-06-03 16:14:21 👤 Role: FULL
+/// 2020-06-03 16:14:21 💾 Database: RocksDb at /tmp/c/chains/flamingfir7/db
+/// 2020-06-03 16:14:21 ⛓  Native runtime: node-251 (substrate-node-1.tx1.au10)
+/// ```
 pub fn print_node_infos<C: SubstrateCli>(config: &Configuration) {
 	info!("{}", C::impl_name());
 	info!("✌️  version {}", C::impl_version());
@@ -197,6 +211,7 @@ mod tests {
 		sync::atomic::{AtomicU64, Ordering},
 	};
 
+	use crate::{CommonCli, SubstrateCli};
 	use sc_network::config::NetworkConfiguration;
 	use sc_service::{Arc, ChainType, GenericChainSpec, NoExtension};
 	use sp_runtime::create_runtime_str;
@@ -206,7 +221,7 @@ mod tests {
 
 	struct Cli;
 
-	impl SubstrateCli for Cli {
+	impl CommonCli for Cli {
 		fn author() -> String {
 			"test".into()
 		}
@@ -230,7 +245,9 @@ mod tests {
 		fn copyright_start_year() -> i32 {
 			2042
 		}
+	}
 
+	impl SubstrateCli for Cli {
 		fn load_spec(
 			&self,
 			_: &str,
@@ -256,7 +273,7 @@ mod tests {
 		}
 	}
 
-	fn create_runner() -> Runner<Cli> {
+	fn create_runner() -> Runner<Configuration> {
 		let runtime = build_runtime().unwrap();
 
 		let runner = Runner::new(
@@ -330,7 +347,7 @@ mod tests {
 		let counter2 = counter.clone();
 
 		runner
-			.run_node_until_exit(move |cfg| async move {
+			.run_node_until_exit::<Cli, _, _>(move |cfg| async move {
 				let task_manager = TaskManager::new(cfg.tokio_handle.clone(), None).unwrap();
 				let (sender, receiver) = futures::channel::oneshot::channel();
 
@@ -394,7 +411,7 @@ mod tests {
 				let runner = create_runner();
 
 				runner
-					.run_node_until_exit(move |cfg| async move {
+					.run_node_until_exit::<Cli, _, _>(move |cfg| async move {
 						let task_manager =
 							TaskManager::new(cfg.tokio_handle.clone(), None).unwrap();
 						let (sender, receiver) = futures::channel::oneshot::channel();
