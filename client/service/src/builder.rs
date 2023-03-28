@@ -79,8 +79,7 @@ pub type TFullClient<TBl, TRtApi, TExec> =
 pub type TFullBackend<TBl> = Backend<TBl>;
 
 /// Full client call executor type.
-pub type TFullCallExecutor<TBl, TExec> =
-	crate::client::LocalCallExecutor<TBl, Backend<TBl>, TExec>;
+pub type TFullCallExecutor<TBl, TExec> = crate::client::LocalCallExecutor<TBl, Backend<TBl>, TExec>;
 
 type TFullParts<TBl, TRtApi, TExec> =
 	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);

@@ -65,9 +65,7 @@ impl<G, E, F, U> Drop for TestNet<G, E, F, U> {
 	}
 }
 
-pub trait TestNetNode:
-	Clone + Future<Output = Result<(), Error>> + Send + 'static
-{
+pub trait TestNetNode: Clone + Future<Output = Result<(), Error>> + Send + 'static {
 	type Block: BlockT;
 	type Backend: Backend<Self::Block>;
 	type Executor: CallExecutor<Self::Block> + Send + Sync;
