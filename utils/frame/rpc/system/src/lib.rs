@@ -243,7 +243,7 @@ mod tests {
 				amount: 5,
 				nonce,
 			};
-			t.into_signed_tx()
+			t.into_unchecked_extrinsic()
 		};
 		// Populate the pool
 		let ext0 = new_transaction(0);
@@ -297,7 +297,7 @@ mod tests {
 			amount: 5,
 			nonce: 0,
 		}
-		.into_signed_tx();
+		.into_unchecked_extrinsic();
 
 		// when
 		let bytes = accounts.dry_run(tx.encode().into(), None).await.expect("Call is successful");
@@ -325,7 +325,7 @@ mod tests {
 			amount: 5,
 			nonce: 100,
 		}
-		.into_signed_tx();
+		.into_unchecked_extrinsic();
 
 		// when
 		let bytes = accounts.dry_run(tx.encode().into(), None).await.expect("Call is successful");

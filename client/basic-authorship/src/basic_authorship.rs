@@ -559,23 +559,23 @@ mod tests {
 	use sp_runtime::{generic::BlockId, traits::NumberFor};
 	use substrate_test_runtime_client::{
 		prelude::*,
-		runtime::{Extrinsic, Transfer},
+		runtime::{Transfer, TransferCallBuilder, UncheckedExtrinsic, UncheckedExtrinsicBuilder},
 		TestClientBuilder, TestClientBuilderExt,
 	};
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
-	fn extrinsic(nonce: u64) -> Extrinsic {
+	fn extrinsic(nonce: u64) -> UncheckedExtrinsic {
 		Transfer {
 			amount: Default::default(),
 			nonce,
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Bob.into(),
 		}
-		.into_signed_tx()
+		.into_unchecked_extrinsic()
 	}
 
-	fn exhausts_resources_extrinsic_from(who: usize) -> Extrinsic {
+	fn exhausts_resources_extrinsic_from(who: usize) -> UncheckedExtrinsic {
 		let pair = AccountKeyring::numeric(who);
 		let transfer = Transfer {
 			// increase the amount to bump priority
@@ -584,8 +584,10 @@ mod tests {
 			from: pair.public(),
 			to: AccountKeyring::Bob.into(),
 		};
-		let signature = pair.sign(&transfer.encode()).into();
-		Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: true }
+		UncheckedExtrinsicBuilder::new(
+			TransferCallBuilder::new(transfer).signer(pair).exhaust_resources().build(),
+		)
+		.build()
 	}
 
 	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
@@ -764,14 +766,14 @@ mod tests {
 					nonce: 2,
 					from: AccountKeyring::Alice.into(),
 					to: AccountKeyring::Bob.into(),
-				}.into_resources_exhausting_tx(),
+				}.into_resources_exhausting_unchecked_extrinsic(),
 				extrinsic(3),
 				Transfer {
 					amount: Default::default(),
 					nonce: 4,
 					from: AccountKeyring::Alice.into(),
 					to: AccountKeyring::Bob.into(),
-				}.into_resources_exhausting_tx(),
+				}.into_resources_exhausting_unchecked_extrinsic(),
 				extrinsic(5),
 				extrinsic(6),
 			],
@@ -854,9 +856,12 @@ mod tests {
 				amount: 100,
 				nonce: 0,
 			}
-			.into_signed_tx(),
+			.into_unchecked_extrinsic(),
 		)
-		.chain((0..extrinsics_num - 1).map(|v| Extrinsic::IncludeData(vec![v as u8; 10])))
+		.chain(
+			(0..extrinsics_num - 1)
+				.map(|v| UncheckedExtrinsicBuilder::new_include_data(vec![v as u8; 10]).build()),
+		)
 		.collect::<Vec<_>>();
 
 		let block_limit = genesis_header.encoded_size() +
@@ -865,7 +870,7 @@ mod tests {
 				.take(extrinsics_num - 1)
 				.map(Encode::encoded_size)
 				.sum::<usize>() +
-			Vec::<Extrinsic>::new().encoded_size();
+			Vec::<UncheckedExtrinsic>::new().encoded_size();
 
 		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, extrinsics)).unwrap();
 

@@ -40,18 +40,18 @@ use sp_keystore::{testing::MemoryKeystore, Keystore};
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	self,
-	runtime::{Block, Extrinsic, SessionKeys, Transfer},
+	runtime::{Block, SessionKeys, Transfer, UncheckedExtrinsic},
 	AccountKeyring, Backend, Client, DefaultTestClientBuilderExt, TestClientBuilderExt,
 };
 
-fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
+fn uxt(sender: AccountKeyring, nonce: u64) -> UncheckedExtrinsic {
 	let tx = Transfer {
 		amount: Default::default(),
 		nonce,
 		from: sender.into(),
 		to: AccountKeyring::Bob.into(),
 	};
-	tx.into_signed_tx()
+	tx.into_unchecked_extrinsic()
 }
 
 type FullTransactionPool = BasicPool<FullChainApi<Client<Backend>, Block>, Block>;
@@ -131,7 +131,7 @@ async fn author_should_watch_extrinsic() {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Bob.into(),
 		};
-		let tx = tx.into_signed_tx().encode();
+		let tx = tx.into_unchecked_extrinsic().encode();
 		let hash = blake2_256(&tx);
 
 		(to_hex(&tx, true), hash)

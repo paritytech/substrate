@@ -588,7 +588,7 @@ mod tests {
 	use sp_runtime::traits::BlindCheckable;
 	use substrate_test_runtime_client::{
 		prelude::*,
-		runtime::{Extrinsic, Transfer},
+		runtime::{Transfer, UncheckedExtrinsicBuilder},
 	};
 
 	#[test]
@@ -607,13 +607,13 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Bob.into(),
 		}
-		.into_signed_tx();
+		.into_unchecked_extrinsic();
 		block_on(pool.submit_one(&BlockId::hash(best.hash()), source, transaction.clone()))
 			.unwrap();
 		block_on(pool.submit_one(
 			&BlockId::hash(best.hash()),
 			source,
-			Extrinsic::IncludeData(vec![1]),
+			UncheckedExtrinsicBuilder::new_include_data(vec![1]).build(),
 		))
 		.unwrap();
 		assert_eq!(pool.status().ready, 2);
@@ -623,8 +623,10 @@ mod tests {
 
 		// then
 		assert_eq!(transactions.len(), 1);
-		assert!(transactions[0].1.clone().check().is_ok());
 		// this should not panic
-		let _ = transactions[0].1.transfer();
+		assert!(Transfer::try_from_unchecked_extrinsic_and_verify(&transactions[0].1).is_ok());
+		// this should not panic
+		let _ =
+			Transfer::try_from_unchecked_extrinsic(&transactions[0].1).expect("should not panic");
 	}
 }

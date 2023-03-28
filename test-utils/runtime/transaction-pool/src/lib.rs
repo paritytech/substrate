@@ -35,7 +35,10 @@ use sp_runtime::{
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 use substrate_test_runtime_client::{
-	runtime::{AccountId, Block, BlockNumber, Extrinsic, Hash, Header, Index, Transfer},
+	runtime::{
+		AccountId, Block, BlockNumber, Hash, Header, Index, Transfer, UncheckedExtrinsic,
+		UncheckedExtrinsicBuilder,
+	},
 	AccountKeyring::{self, *},
 };
 
@@ -83,7 +86,7 @@ pub struct ChainState {
 pub struct TestApi {
 	valid_modifier: RwLock<Box<dyn Fn(&mut ValidTransaction) + Send + Sync>>,
 	chain: RwLock<ChainState>,
-	validation_requests: RwLock<Vec<Extrinsic>>,
+	validation_requests: RwLock<Vec<UncheckedExtrinsic>>,
 }
 
 impl TestApi {
@@ -119,7 +122,7 @@ impl TestApi {
 	pub fn push_block(
 		&self,
 		block_number: BlockNumber,
-		xts: Vec<Extrinsic>,
+		xts: Vec<UncheckedExtrinsic>,
 		is_best_block: bool,
 	) -> Header {
 		let parent_hash = {
@@ -141,7 +144,7 @@ impl TestApi {
 	pub fn push_block_with_parent(
 		&self,
 		parent: Hash,
-		xts: Vec<Extrinsic>,
+		xts: Vec<UncheckedExtrinsic>,
 		is_best_block: bool,
 	) -> Header {
 		// `Hash::default()` is the genesis parent hash
@@ -197,7 +200,7 @@ impl TestApi {
 			.push((block, is_best_block.into()));
 	}
 
-	fn hash_and_length_inner(ex: &Extrinsic) -> (Hash, usize) {
+	fn hash_and_length_inner(ex: &UncheckedExtrinsic) -> (Hash, usize) {
 		let encoded = ex.encode();
 		(BlakeTwo256::hash(&encoded), encoded.len())
 	}
@@ -206,12 +209,12 @@ impl TestApi {
 	///
 	/// Next time transaction pool will try to validate this
 	/// extrinsic, api will return invalid result.
-	pub fn add_invalid(&self, xts: &Extrinsic) {
+	pub fn add_invalid(&self, xts: &UncheckedExtrinsic) {
 		self.chain.write().invalid_hashes.insert(Self::hash_and_length_inner(xts).0);
 	}
 
 	/// Query validation requests received.
-	pub fn validation_requests(&self) -> Vec<Extrinsic> {
+	pub fn validation_requests(&self) -> Vec<UncheckedExtrinsic> {
 		self.validation_requests.read().clone()
 	}
 
@@ -240,7 +243,7 @@ impl sc_transaction_pool::ChainApi for TestApi {
 	type Block = Block;
 	type Error = Error;
 	type ValidationFuture = futures::future::Ready<Result<TransactionValidity, Error>>;
-	type BodyFuture = futures::future::Ready<Result<Option<Vec<Extrinsic>>, Error>>;
+	type BodyFuture = futures::future::Ready<Result<Option<Vec<UncheckedExtrinsic>>, Error>>;
 
 	fn validate_transaction(
 		&self,
@@ -276,7 +279,9 @@ impl sc_transaction_pool::ChainApi for TestApi {
 			Err(e) => return ready(Err(e)),
 		}
 
-		let (requires, provides) = if let Some(transfer) = uxt.try_transfer() {
+		let (requires, provides) = if let Some(transfer) =
+			Transfer::try_from_unchecked_extrinsic(&uxt)
+		{
 			let chain_nonce = self.chain.read().nonces.get(&transfer.from).cloned().unwrap_or(0);
 			let requires =
 				if chain_nonce == transfer.nonce { vec![] } else { vec![vec![chain_nonce as u8]] };
@@ -374,9 +379,8 @@ impl sp_blockchain::HeaderMetadata<Block> for TestApi {
 /// Generate transfer extrinsic with a given nonce.
 ///
 /// Part of the test api.
-pub fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
+pub fn uxt(who: AccountKeyring, nonce: Index) -> UncheckedExtrinsic {
 	let dummy = codec::Decode::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 	let transfer = Transfer { from: who.into(), to: dummy, nonce, amount: 1 };
-	let signature = transfer.using_encoded(|e| who.sign(e));
-	Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: false }
+	UncheckedExtrinsicBuilder::new_transfer(transfer).build()
 }

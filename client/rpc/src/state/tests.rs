@@ -244,8 +244,9 @@ async fn should_send_initial_storage_changes_and_notifications() {
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No);
 
-		let alice_balance_key =
-			blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
+		let alice_balance_key = blake2_256(&runtime::substrate_test_pallet::balance_of_key(
+			AccountKeyring::Alice.into(),
+		));
 
 		let api_rpc = api.into_rpc();
 		let sub = api_rpc

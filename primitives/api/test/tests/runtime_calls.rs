@@ -161,7 +161,7 @@ fn record_proof_works() {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Bob.into(),
 	}
-	.into_signed_tx();
+	.into_unchecked_extrinsic();
 
 	// Build the block and record proof
 	let mut builder = client

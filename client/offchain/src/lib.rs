@@ -254,8 +254,8 @@ mod tests {
 	use sp_runtime::generic::BlockId;
 	use std::{collections::HashSet, sync::Arc};
 	use substrate_test_runtime_client::{
-		runtime::Block, ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient,
-		TestClientBuilderExt,
+		runtime::{Block, UncheckedExtrinsicBuilder},
+		ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient, TestClientBuilderExt,
 	};
 
 	struct TestNetwork();
@@ -403,12 +403,9 @@ mod tests {
 		let key = &b"hello"[..];
 		let value = &b"world"[..];
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		block_builder
-			.push(substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexSet(
-				key.to_vec(),
-				value.to_vec(),
-			))
-			.unwrap();
+		let ext =
+			UncheckedExtrinsicBuilder::new_offchain_index_set(key.to_vec(), value.to_vec()).build();
+		block_builder.push(ext).unwrap();
 
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
@@ -416,11 +413,8 @@ mod tests {
 		assert_eq!(value, &offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).unwrap());
 
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		block_builder
-			.push(substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexClear(
-				key.to_vec(),
-			))
-			.unwrap();
+		let ext = UncheckedExtrinsicBuilder::new_offchain_index_clear(key.to_vec()).build();
+		block_builder.push(ext).unwrap();
 
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();

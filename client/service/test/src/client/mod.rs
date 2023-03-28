@@ -88,7 +88,7 @@ fn construct_block(
 	state_root: Hash,
 	txs: Vec<Transfer>,
 ) -> (Vec<u8>, Hash) {
-	let transactions = txs.into_iter().map(|tx| tx.into_signed_tx()).collect::<Vec<_>>();
+	let transactions = txs.into_iter().map(|tx| tx.into_unchecked_extrinsic()).collect::<Vec<_>>();
 
 	let iter = transactions.iter().map(Encode::encode);
 	let extrinsics_root = LayoutV0::<BlakeTwo256>::ordered_trie_root(iter).into();
@@ -1496,7 +1496,7 @@ fn respects_block_rules() {
 		let mut block_not_ok = client
 			.new_block_at(client.chain_info().genesis_hash, Default::default(), false)
 			.unwrap();
-		block_not_ok.push_storage_change(vec![0], Some(vec![1])).unwrap();
+		block_not_ok.push_storage_change_unsigned(vec![0], Some(vec![1])).unwrap();
 		let block_not_ok = block_not_ok.build().unwrap().block;
 
 		let params = BlockCheckParams {
@@ -1518,7 +1518,7 @@ fn respects_block_rules() {
 
 		// And check good fork (build B[2])
 		let mut block_ok = client.new_block_at(block_ok_1_hash, Default::default(), false).unwrap();
-		block_ok.push_storage_change(vec![0], Some(vec![2])).unwrap();
+		block_ok.push_storage_change_unsigned(vec![0], Some(vec![2])).unwrap();
 		let block_ok = block_ok.build().unwrap().block;
 		assert_eq!(*block_ok.header().number(), 2);
 
@@ -1538,7 +1538,7 @@ fn respects_block_rules() {
 		// And now try bad fork (build B'[2])
 		let mut block_not_ok =
 			client.new_block_at(block_ok_1_hash, Default::default(), false).unwrap();
-		block_not_ok.push_storage_change(vec![0], Some(vec![3])).unwrap();
+		block_not_ok.push_storage_change_unsigned(vec![0], Some(vec![3])).unwrap();
 		let block_not_ok = block_not_ok.build().unwrap().block;
 		assert_eq!(*block_not_ok.header().number(), 2);
 
