@@ -205,7 +205,7 @@ impl<T: Config> ContractInfo<T> {
 	///
 	/// You must make sure that the contract is also removed when queuing the trie for deletion.
 	pub fn queue_trie_for_deletion(&self) {
-		DeletionQueue::<T>::load().insert(DeletedContract { trie_id: self.trie_id.clone() });
+		DeletionQueue::<T>::load().insert(self.trie_id.clone());
 	}
 
 	/// Calculates the weight that is necessary to remove one key from the trie and how many
@@ -249,7 +249,7 @@ impl<T: Config> ContractInfo<T> {
 
 			#[allow(deprecated)]
 			let outcome = child::kill_storage(
-				&ChildInfo::new_default(&entry.contract().trie_id),
+				&ChildInfo::new_default(&entry.trie_id),
 				Some(remaining_key_budget),
 			);
 
@@ -275,10 +275,10 @@ impl<T: Config> ContractInfo<T> {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct DeletedContract {
-	pub(crate) trie_id: TrieId,
-}
+// #[derive(Encode, Decode, TypeInfo, MaxEncodedLen)]
+// pub struct DeletedContract {
+// 	pub(crate) trie_id: TrieId,
+// }
 
 /// Information about what happened to the pre-existing value when calling [`ContractInfo::write`].
 #[cfg_attr(test, derive(Debug, PartialEq))]
@@ -356,16 +356,11 @@ pub struct DeletionQueue<T: Config> {
 /// The struct takes a mutable reference on the deletion queue so that the contract can be removed,
 /// and none can be added or read in the meantime.
 struct DeletionQueueEntry<'a, T: Config> {
-	contract: DeletedContract,
+	trie_id: TrieId,
 	queue: &'a mut DeletionQueue<T>,
 }
 
 impl<'a, T: Config> DeletionQueueEntry<'a, T> {
-	/// Get a reference to the contract that is marked for deletion.
-	fn contract(&self) -> &DeletedContract {
-		&self.contract
-	}
-
 	/// Remove the contract from the deletion queue.
 	fn remove(self) {
 		<DeletionQueueMap<T>>::remove(self.queue.delete_nonce);
@@ -387,8 +382,8 @@ impl<T: Config> DeletionQueue<T> {
 	}
 
 	/// Insert a contract in the deletion queue.
-	fn insert(&mut self, contract: DeletedContract) {
-		<DeletionQueueMap<T>>::insert(self.insert_nonce, contract);
+	fn insert(&mut self, trie_id: TrieId) {
+		<DeletionQueueMap<T>>::insert(self.insert_nonce, trie_id);
 		self.insert_nonce = self.insert_nonce.wrapping_add(1);
 		<DeletionQueueNonces<T>>::set(self.clone());
 	}
@@ -400,7 +395,7 @@ impl<T: Config> DeletionQueue<T> {
 		}
 
 		let entry = <DeletionQueueMap<T>>::get(self.delete_nonce);
-		let entry = entry.map(|contract| DeletionQueueEntry { contract, queue: self });
+		let entry = entry.map(|trie_id| DeletionQueueEntry { trie_id, queue: self });
 
 		entry
 	}
