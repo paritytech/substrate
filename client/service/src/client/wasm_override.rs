@@ -264,14 +264,17 @@ pub fn dummy_overrides() -> WasmOverride {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod, WasmExecutor};
+	use sc_executor::{
+		HeapAllocStrategy, NativeElseWasmExecutor, WasmExecutionMethod, WasmExecutor,
+	};
 	use std::fs::{self, File};
 	use substrate_test_runtime_client::LocalExecutorDispatch;
 
 	fn executor() -> NativeElseWasmExecutor<substrate_test_runtime_client::LocalExecutorDispatch> {
 		NativeElseWasmExecutor::<substrate_test_runtime_client::LocalExecutorDispatch>::new_with_wasm_executor(
 			WasmExecutor::builder(WasmExecutionMethod::Interpreted)
-				// .with_onchain_heap_alloc_strategy(128)
+				.with_onchain_heap_alloc_strategy(HeapAllocStrategy::Static {extra_pages: 128})
+				.with_offchain_heap_alloc_strategy(HeapAllocStrategy::Static {extra_pages: 128})
 				.with_max_runtime_instances(1)
 				.with_runtime_cache_size(2)
 				.build()
