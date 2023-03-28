@@ -59,13 +59,13 @@ impl<Cfg> Runner<Cfg> {
 	/// signal `SIGTERM` or `SIGINT`.
 	pub fn run_until_exit<F, E>(
 		self,
-		initialize: impl FnOnce(Cfg) -> F,
+		initialize: impl FnOnce(Cfg, tokio::runtime::Handle) -> F,
 	) -> std::result::Result<(), E>
 	where
 		F: Future<Output = std::result::Result<TaskManager, E>>,
 		E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
 	{
-		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
+		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config, self.tokio_runtime.handle().clone()))?;
 
 		let res = self
 			.tokio_runtime
@@ -168,7 +168,7 @@ impl Runner<Configuration> {
 	{
 		print_node_infos::<C>(self.config());
 
-		self.run_until_exit(initialize)
+		self.run_until_exit(|config, _| initialize(config))
 	}
 }
 

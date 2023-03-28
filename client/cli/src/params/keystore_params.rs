@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{error, error::Result};
+use crate::error::Result;
 use clap::Args;
 use sc_service::config::KeystoreConfig;
 use sp_core::crypto::SecretString;
