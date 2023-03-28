@@ -663,23 +663,20 @@ mod tests {
 	#[test]
 	fn should_limit_futures() {
 		// given
-		let limit = Limit { count: 100, total_bytes: 200 };
+		let limit = Limit { count: 100, total_bytes: 246 };
 
 		let options = Options { ready: limit.clone(), future: limit.clone(), ..Default::default() };
 
 		let pool = Pool::new(options, true.into(), TestApi::default().into());
 
-		let hash1 = block_on(pool.submit_one(
-			&BlockId::Number(0),
-			SOURCE,
-			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
-				to: AccountId::from_h256(H256::from_low_u64_be(2)),
-				amount: 5,
-				nonce: 1,
-			}),
-		))
-		.unwrap();
+		let xt = uxt(Transfer {
+			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			to: AccountId::from_h256(H256::from_low_u64_be(2)),
+			amount: 5,
+			nonce: 1,
+		});
+
+		let hash1 = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, xt)).unwrap();
 		assert_eq!(pool.validated_pool().status().future, 1);
 
 		// when
