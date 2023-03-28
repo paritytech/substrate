@@ -332,6 +332,6 @@ mod tests {
 
 		// then
 		let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_ref()).unwrap();
-		assert_eq!(apply_res, Err(TransactionValidityError::Invalid(InvalidTransaction::Stale)));
+		assert_eq!(apply_res, Err(TransactionValidityError::Invalid(InvalidTransaction::Future)));
 	}
 }
