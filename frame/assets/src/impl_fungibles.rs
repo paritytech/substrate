@@ -237,10 +237,10 @@ impl<T: Config<I>, I: 'static>
 	> for Pallet<T, I>
 {
 	fn calc(
-		name: &Vec<u8>,
-		symbol: &Vec<u8>,
+		name: &[u8],
+		symbol: &[u8],
 	) -> <T::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance {
-		Self::calc_metadata_deposit(name, symbol)
+		Self::calc_metadata_deposit(&name, &symbol)
 	}
 }
 

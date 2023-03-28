@@ -76,7 +76,7 @@ pub mod pallet {
 			},
 			Currency, ExistenceRequirement, ReservableCurrency,
 		},
-		PalletId,
+		BoundedVec, PalletId,
 	};
 
 	pub type AssetIdOf<T> =
@@ -135,11 +135,15 @@ pub mod pallet {
 
 		/// The newly created asset's symbol.
 		#[pallet::constant]
-		type NewAssetSymbol: Get<Vec<u8>>;
+		type NewAssetSymbol: Get<BoundedVec<u8, Self::StringLimit>>;
 
 		/// The newly created asset's name.
 		#[pallet::constant]
-		type NewAssetName: Get<Vec<u8>>;
+		type NewAssetName: Get<BoundedVec<u8, Self::StringLimit>>;
+
+		/// The maximum length of a name or symbol stored on-chain.
+		#[pallet::constant]
+		type StringLimit: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -178,12 +182,14 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Information about the fractionalized NFT can't be found.
-		DataNotFound,
+		/// Asset ID does not correspond to locked NFT. 
+		IncorrectAssetId,
 		/// The signing account has no permission to do the operation.
 		NoPermission,
 		/// NFT doesn't exist.
 		NftNotFound,
+		/// NFT has not yet been fractionalised.
+		NftNotFractionalized,
 	}
 
 	#[pallet::call]
@@ -275,8 +281,8 @@ pub mod pallet {
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			NftToAsset::<T>::try_mutate_exists((nft_collection_id, nft_id), |maybe_details| {
-				let details = maybe_details.take().ok_or(Error::<T>::DataNotFound)?;
-				ensure!(details.asset == asset_id, Error::<T>::DataNotFound);
+				let details = maybe_details.take().ok_or(Error::<T>::NftNotFractionalized)?;
+				ensure!(details.asset == asset_id, Error::<T>::IncorrectAssetId);
 
 				let deposit = details.deposit;
 				let asset_creator = details.asset_creator;
@@ -352,10 +358,11 @@ pub mod pallet {
 			nft_collection_id: &T::NftCollectionId,
 			nft_id: &T::NftId,
 		) -> DispatchResult {
-			let symbol = T::NewAssetSymbol::get();
-			let name = T::NewAssetName::get();
-			let name = format!("{} {nft_collection_id}-{nft_id}", String::from_utf8_lossy(&name));
-			let deposit = T::Assets::calc(&name.clone().into(), &symbol.clone().into());
+			let name = format!("{} {nft_collection_id}-{nft_id}", String::from_utf8_lossy(&T::NewAssetName::get()));
+			let symbol: &[u8] = &T::NewAssetSymbol::get();
+			let deposit = T::Assets::calc(name.as_bytes(), symbol);
+
+
 			if deposit != Zero::zero() {
 				T::Currency::transfer(
 					&depositor,
