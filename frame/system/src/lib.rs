@@ -211,7 +211,7 @@ pub mod pallet {
 
 			pub struct Impl {}
 
-			#[export_tokens(testing_DefaultConfig)]
+			#[export_tokens(TestDefaultConfig)]
 			impl DefaultConfig for Impl {
 				type Version = ();
 				type BlockWeights = ();

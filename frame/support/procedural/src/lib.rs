@@ -37,8 +37,9 @@ mod storage_alias;
 mod transactional;
 mod tt_macro;
 
+use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 
@@ -777,6 +778,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 		.into()
 }
 
+#[import_tokens_attr]
 #[proc_macro_attribute]
 pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
 	derive_impl::derive_impl(attrs.into(), input.into())

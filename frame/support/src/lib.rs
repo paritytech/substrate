@@ -32,6 +32,7 @@
 /// Export ourself as `frame_support` to make tests happy.
 extern crate self as frame_support;
 
+use ::macro_magic::use_attr;
 #[doc(hidden)]
 pub use sp_tracing;
 
@@ -211,8 +212,10 @@ impl TypeId for PalletId {
 /// ```
 pub use frame_support_procedural::storage_alias;
 
-/// FOOO
+/// Test
+#[use_attr]
 pub use frame_support_procedural::derive_impl;
+
 #[doc(hidden)]
 pub use frame_support_procedural::derive_impl_inner;
 
