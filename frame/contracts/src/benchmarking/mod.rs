@@ -3010,14 +3010,11 @@ benchmarks! {
 		#[cfg(feature = "std")]
 		{
 			let max_weight = <T as frame_system::Config>::BlockWeights::get().max_block;
-			let empty_queue_throughput = ContractInfo::<T>::deletion_budget(max_weight);
-			let full_queue_throughput = ContractInfo::<T>::deletion_budget(max_weight);
+			let (weight_per_key, key_budget) = ContractInfo::<T>::deletion_budget(max_weight);
 			println!("{:#?}", Schedule::<T>::default());
 			println!("###############################################");
-			println!("Lazy deletion weight per key: {}", empty_queue_throughput.0);
-			println!("Lazy deletion throughput per block (empty queue, full queue): {}, {}",
-				empty_queue_throughput.1, full_queue_throughput.1,
-			);
+			println!("Lazy deletion weight per key: {weight_per_key}");
+			println!("Lazy deletion throughput per block: {key_budget}");
 		}
 		#[cfg(not(feature = "std"))]
 		Err("Run this bench with a native runtime in order to see the schedule.")?;
