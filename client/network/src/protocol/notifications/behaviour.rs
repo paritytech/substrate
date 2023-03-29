@@ -415,13 +415,20 @@ impl Notifications {
 	}
 
 	/// Disconnects the given peer if we are connected to it.
+	///
+	/// Note the peer will be banned for 10s after this.
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId, set_id: sc_peerset::SetId) {
 		trace!(target: "sub-libp2p", "External API => Disconnect({}, {:?})", peer_id, set_id);
-		self.disconnect_peer_inner(peer_id, set_id);
+		self.disconnect_peer_inner(peer_id, set_id, Some(Duration::from_secs(10)));
 	}
 
 	/// Inner implementation of `disconnect_peer`.
-	fn disconnect_peer_inner(&mut self, peer_id: &PeerId, set_id: sc_peerset::SetId) {
+	fn disconnect_peer_inner(
+		&mut self,
+		peer_id: &PeerId,
+		set_id: sc_peerset::SetId,
+		ban: Option<Duration>,
+	) {
 		let mut entry = if let Entry::Occupied(entry) = self.peers.entry((*peer_id, set_id)) {
 			entry
 		} else {
@@ -439,8 +446,12 @@ impl Notifications {
 			PeerState::DisabledPendingEnable { connections, timer_deadline, timer: _ } => {
 				trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
 				self.peerset.dropped(set_id, *peer_id, DropReason::Unknown);
-				*entry.into_mut() =
-					PeerState::Disabled { connections, backoff_until: Some(timer_deadline) }
+				let backoff_until = Some(if let Some(ban) = ban {
+					cmp::max(timer_deadline, Instant::now() + ban)
+				} else {
+					timer_deadline
+				});
+				*entry.into_mut() = PeerState::Disabled { connections, backoff_until }
 			},
 
 			// Enabled => Disabled.
@@ -488,7 +499,8 @@ impl Notifications {
 					.iter()
 					.any(|(_, s)| matches!(s, ConnectionState::Opening)));
 
-				*entry.into_mut() = PeerState::Disabled { connections, backoff_until: None }
+				let backoff_until = ban.map(|dur| Instant::now() + dur);
+				*entry.into_mut() = PeerState::Disabled { connections, backoff_until }
 			},
 
 			// Incoming => Disabled.
@@ -526,6 +538,13 @@ impl Notifications {
 				debug_assert!(!connections
 					.iter()
 					.any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote)));
+
+				let backoff_until = match (backoff_until, ban) {
+					(Some(a), Some(b)) => Some(cmp::max(a, Instant::now() + b)),
+					(Some(a), None) => Some(a),
+					(None, Some(b)) => Some(Instant::now() + b),
+					(None, None) => None,
+				};
 				*entry.into_mut() = PeerState::Disabled { connections, backoff_until }
 			},
 
