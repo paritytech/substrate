@@ -260,21 +260,6 @@ parameter_types! {
 	pub const ExtendStakeAmount: Balance = 15 * DOLLARS;
 	pub const ReleaseDelay: u32 = 15;
 	pub const SafeModeHoldReason: HoldReason = HoldReason::SafeMode;
-
-	pub const ForceEnterWeak: u32 = 3;
-	pub const ForceEnterStrong: u32 = 5;
-
-	pub const ForceExtendWeak: u32 = 11;
-	pub const ForceExtendStrong: u32 = 15;
-
-	// NOTE: The account ID maps to the duration. Easy for testing.
-	pub ForceEnterOrigins: Vec<u32> = vec![ForceEnterWeak::get(), ForceEnterStrong::get()];
-	pub ForceExtendOrigins: Vec<u32> = vec![ForceExtendWeak::get(), ForceExtendStrong::get()];
-}
-
-frame_support::ord_parameter_types! {
-	pub const ForceExitOrigin: u32 = 100;
-	pub const ForceStakeOrigin: u32 = 200;
 }
 
 impl pallet_safe_mode::Config for Runtime {

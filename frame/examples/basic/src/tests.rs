@@ -200,17 +200,3 @@ fn weights_work() {
 	// TODO: account for proof size weight
 	assert!(info1.weight.ref_time() > info2.weight.ref_time());
 }
-
-frame_support::parameter_types! {
-	pub storage Value: u64 = 1;
-}
-
-#[test]
-fn storage_consistent() {
-	new_test_ext().execute_with(|| {
-		let _g = frame_support::StorageNoopGuard::default();
-
-		let v = Value::get();
-		Value::set(&1);
-	});
-}

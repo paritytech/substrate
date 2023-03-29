@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Traits that can be used to pause calls on a chain.
+//! Traits that can be used to pause calls.
 
 pub trait SafeMode {
 	type BlockNumber;
