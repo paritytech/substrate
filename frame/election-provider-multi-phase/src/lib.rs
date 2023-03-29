@@ -1162,6 +1162,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
+			ensure!(phase.is_signed() || phase.is_emergency(), <Error<T>>::CallNotAllowed);
+
 			<ForcePhase<T>>::put(phase);
 			Ok(())
 		}
@@ -1424,6 +1426,10 @@ impl<T: Config> Pallet<T> {
 
 	/// Tries to create a snapshot and transitions to the signed phase if successful.
 	fn start_signed_phase() -> Weight {
+		if !Self::current_phase().is_off() {
+			Self::do_force_rotate_round();
+		}
+
 		match Self::create_snapshot() {
 			Ok(_) => {
 				Self::phase_transition(Phase::Signed);
