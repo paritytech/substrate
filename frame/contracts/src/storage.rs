@@ -225,7 +225,7 @@ impl<T: Config> ContractInfo<T> {
 		(weight_per_key, key_budget)
 	}
 
-	/// Delete as many items from the deletion queue possible within the supplied weight limit.j
+	/// Delete as many items from the deletion queue possible within the supplied weight limit.
 	///
 	/// It returns the amount of weight used for that task.
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
