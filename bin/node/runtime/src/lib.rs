@@ -1528,6 +1528,7 @@ parameter_types! {
 	pub const DexPalletId: PalletId = PalletId(*b"py/dexer");
 	pub AllowMultiAssetPools: bool = true;
 	pub const PoolSetupFee: Balance = 1 * DOLLARS;
+	pub const MintMinLiquidity: Balance = 100;  // 100 is good enough when the main currency has 10-12 decimals.
 }
 
 impl pallet_dex::Config for Runtime {
@@ -1548,6 +1549,7 @@ impl pallet_dex::Config for Runtime {
 	type WeightInfo = pallet_dex::weights::SubstrateWeight<Runtime>;
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<4>;
+	type MintMinLiquidity = MintMinLiquidity;
 	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
 }
 

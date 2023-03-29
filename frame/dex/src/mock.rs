@@ -166,6 +166,7 @@ impl Config for Test {
 	type PoolSetupFeeReceiver = DexOrigin;
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<4>;
+	type MintMinLiquidity = ConstU128<100>; // 100 is good enough when the main currency has 12 decimals.
 
 	type Balance = u128;
 	type HigherPrecisionBalance = sp_core::U256;

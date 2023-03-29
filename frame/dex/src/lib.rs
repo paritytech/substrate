@@ -67,9 +67,6 @@ use sp_runtime::{
 pub use types::*;
 pub use weights::WeightInfo;
 
-// TODO: make it configurable
-pub const MINIMUM_LIQUIDITY: u32 = 1;
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -151,6 +148,9 @@ pub mod pallet {
 		/// An account that receives the pool setup fee.
 		type PoolSetupFeeReceiver: Get<Self::AccountId>;
 
+		/// The minimum LP token amount that could be minted. Ameliorates rounding errors.
+		type MintMinLiquidity: Get<Self::AssetBalance>;
+
 		/// The max number of hops in a swap.
 		#[pallet::constant]
 		type MaxSwapPathLength: Get<u32>;
@@ -227,6 +227,8 @@ pub mod pallet {
 		PoolExists,
 		/// Desired amount can't be zero.
 		WrongDesiredAmount,
+		/// Desired amount can't be equal to the pool reserve.
+		AmountOutTooHigh,
 		/// The pool doesn't exist.
 		PoolNotFound,
 		/// An overflow happened.
@@ -247,10 +249,10 @@ pub mod pallet {
 		ZeroLiquidity,
 		/// Amount can't be zero.
 		ZeroAmount,
-		/// Calculated amount out is less than min desired.
-		InsufficientOutputAmount,
 		/// Insufficient liquidity in the pool.
 		InsufficientLiquidity,
+		/// Calculated amount out is less than provided minimum amount.
+		ProvidedMinimumNotSufficientForSwap,
 		/// Provided maximum amount is not sufficient for swap.
 		ProvidedMaximumNotSufficientForSwap,
 		/// Only pools with native on one side are valid.
@@ -409,7 +411,7 @@ pub mod pallet {
 			let lp_token_amount: AssetBalanceOf<T>;
 			if total_supply.is_zero() {
 				lp_token_amount = Self::calc_lp_amount_for_zero_supply(&amount1, &amount2)?;
-				T::PoolAssets::mint_into(pool.lp_token, &pool_account, MINIMUM_LIQUIDITY.into())?;
+				T::PoolAssets::mint_into(pool.lp_token, &pool_account, T::MintMinLiquidity::get())?;
 			} else {
 				let side1 = Self::mul_div(&amount1, &total_supply, &reserve1)?;
 				let side2 = Self::mul_div(&amount2, &total_supply, &reserve2)?;
@@ -417,7 +419,7 @@ pub mod pallet {
 			}
 
 			ensure!(
-				lp_token_amount > MINIMUM_LIQUIDITY.into(),
+				lp_token_amount > T::MintMinLiquidity::get(),
 				Error::<T>::InsufficientLiquidityMinted
 			);
 
@@ -519,7 +521,7 @@ pub mod pallet {
 
 			let amounts = Self::get_amounts_out(&amount_in, &path)?;
 			let amount_out = *amounts.last().expect("Has always more than 1 element");
-			ensure!(amount_out >= amount_out_min, Error::<T>::InsufficientOutputAmount);
+			ensure!(amount_out >= amount_out_min, Error::<T>::ProvidedMinimumNotSufficientForSwap);
 
 			Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
 
@@ -815,8 +817,8 @@ pub mod pallet {
 				.checked_mul(&amount2)
 				.ok_or(Error::<T>::Overflow)?
 				.integer_sqrt()
-				.checked_sub(&MINIMUM_LIQUIDITY.into())
-				.ok_or(Error::<T>::Overflow)?;
+				.checked_sub(&T::MintMinLiquidity::get().into())
+				.ok_or(Error::<T>::InsufficientLiquidityMinted)?;
 
 			result.try_into().map_err(|_| Error::<T>::Overflow)
 		}
@@ -888,7 +890,11 @@ pub mod pallet {
 			let reserve_out = T::HigherPrecisionBalance::from(*reserve_out);
 
 			if reserve_in.is_zero() || reserve_out.is_zero() {
-				return Err(Error::<T>::ZeroLiquidity.into())
+				Err(Error::<T>::ZeroLiquidity.into())?
+			}
+
+			if amount_out == reserve_out {
+				Err(Error::<T>::AmountOutTooHigh.into())?
 			}
 
 			let numerator = reserve_in
