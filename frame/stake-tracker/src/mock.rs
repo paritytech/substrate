@@ -47,6 +47,8 @@ frame_support::construct_runtime!(
 		VoterBagsList: pallet_bags_list::<Instance1>::{Pallet, Call, Storage, Event<T>},
 		TargetBagsList: pallet_bags_list::<Instance2>::{Pallet, Call, Storage, Event<T>},
 		StakeTracker: pallet_stake_tracker::{Pallet, Storage},
+		StakeTrackerInitializer: pallet_stake_tracker_initializer::{Pallet, Storage},
+
 	}
 );
 

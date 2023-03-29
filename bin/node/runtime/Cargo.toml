@@ -46,7 +46,7 @@ sp-io = { version = "7.0.0", default-features = false, path = "../../../primitiv
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/benchmarking" }
 frame-benchmarking-pallet-pov = { version = "4.0.0-dev", default-features = false, path = "../../../frame/benchmarking/pov" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/support" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/support", features = ["tuples-96"] }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-support" }
@@ -103,7 +103,6 @@ pallet-session-benchmarking = { version = "4.0.0-dev", path = "../../../frame/se
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking" }
 pallet-stake-tracker = { version = "4.0.0-dev", default-features = false, path = "../../../frame/stake-tracker" }
 pallet-stake-tracker-initializer = { version = "1.0.0-dev", default-features = false, path = "../../../frame/stake-tracker/initializer" }
-
 pallet-staking-reward-curve = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking/reward-curve" }
 pallet-staking-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking/runtime-api" }
 pallet-state-trie-migration = { version = "4.0.0-dev", default-features = false, path = "../../../frame/state-trie-migration" }

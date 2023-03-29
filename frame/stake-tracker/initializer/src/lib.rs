@@ -17,6 +17,23 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::Decode;
+use frame_election_provider_support::SortedListProvider;
+use frame_support::{
+	pallet_prelude::{Get, Weight},
+	sp_io, storage,
+};
+pub use pallet::*;
+
+use pallet_stake_tracker::{ApprovalStake, BalanceOf};
+use pallet_staking::{Nominations, TemporaryMigrationLock, Validators};
+use sp_runtime::Saturating;
+use sp_staking::StakingInterface;
+use sp_std::collections::btree_map::BTreeMap;
+
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
+
 pub(crate) const LOG_TARGET: &str = "runtime::stake-tracker-initializer";
 
 #[macro_export]
@@ -29,31 +46,11 @@ macro_rules! log {
 	};
 }
 
-use frame_election_provider_support::SortedListProvider;
-use frame_support::{
-	pallet_prelude::{Get, GetStorageVersion, StorageVersion, Weight, *},
-	sp_io,
-};
-
-pub use pallet::*;
-use pallet_stake_tracker::{ApprovalStake, BalanceOf};
-use pallet_staking::{Nominations, TemporaryMigrationLock, Validators};
-use sp_runtime::Saturating;
-use sp_staking::StakingInterface;
-use sp_std::collections::btree_map::BTreeMap;
-
 #[frame_support::pallet]
 pub mod pallet {
 	use crate::*;
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::BlockNumberFor;
-
-	#[pallet::storage]
-	pub(crate) type MigrationV1StateNominators<T: Config> =
-		StorageValue<_, MigrationState, OptionQuery>;
-
-	#[pallet::storage]
-	pub(crate) type MigrationV1StateValidators<T: Config> =
-		StorageValue<_, MigrationState, OptionQuery>;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -72,6 +69,14 @@ pub mod pallet {
 		pub prefix: BoundedVec<u8, ConstU32<32>>,
 		pub done: bool,
 	}
+
+	#[pallet::storage]
+	pub(crate) type MigrationV1StateNominators<T: Config> =
+		StorageValue<_, MigrationState, OptionQuery>;
+
+	#[pallet::storage]
+	pub(crate) type MigrationV1StateValidators<T: Config> =
+		StorageValue<_, MigrationState, OptionQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
