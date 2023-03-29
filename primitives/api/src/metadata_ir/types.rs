@@ -38,7 +38,7 @@ pub struct MetadataIR<T: Form = MetaForm> {
 	/// The type of the `Runtime`.
 	pub ty: T::Type,
 	/// Metadata of the Runtime API.
-	pub runtime: Vec<RuntimeApiMetadataIR<T>>,
+	pub apis: Vec<RuntimeApiMetadataIR<T>>,
 }
 
 /// Metadata of a runtime trait.
