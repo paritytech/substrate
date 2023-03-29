@@ -24,7 +24,7 @@ use crate as pallet_tx_pause;
 
 use frame_support::{
 	parameter_types,
-	traits::{ConstU64, Everything, InsideBoth, InstanceFilter, SortedMembers},
+	traits::{ConstU64, Everything, InsideBoth, InstanceFilter},
 };
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
@@ -90,6 +90,7 @@ impl pallet_utility::Config for Test {
 	type WeightInfo = ();
 }
 
+/// Mocked proxies to check that the tx-pause also works with the proxy pallet.
 #[derive(
 	Copy,
 	Clone,
@@ -108,11 +109,13 @@ pub enum ProxyType {
 	JustTransfer,
 	JustUtility,
 }
+
 impl Default for ProxyType {
 	fn default() -> Self {
 		Self::Any
 	}
 }
+
 impl InstanceFilter<RuntimeCall> for ProxyType {
 	fn filter(&self, c: &RuntimeCall) -> bool {
 		match self {
@@ -127,6 +130,7 @@ impl InstanceFilter<RuntimeCall> for ProxyType {
 		self == &ProxyType::Any || self == o
 	}
 }
+
 impl pallet_proxy::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
@@ -143,17 +147,18 @@ impl pallet_proxy::Config for Test {
 }
 
 parameter_types! {
-	pub const PauseOrigin: u64 = 1;
-	pub const UnpauseOrigin: u64 = 2;
-  pub const MaxNameLen: u32 = 50;
-  pub const PauseTooLongNames: bool = false;
+	pub const MaxNameLen: u32 = 50;
+	pub const PauseTooLongNames: bool = false;
 }
 
+frame_support::ord_parameter_types! {
+	pub const PauseOrigin: u64 = 1;
+	pub const UnpauseOrigin: u64 = 2;
+}
+
+/// The calls that are never allowed to be paused.
 #[derive(Copy, Clone, Encode, Decode, RuntimeDebug, MaxEncodedLen, scale_info::TypeInfo)]
 pub struct WhitelistedCalls;
-
-/// Contains used by `BaseCallFiler` so this impl whitelists `Balances::transfer_keep_alive`. All
-/// others may be paused.
 impl Contains<FullNameOf<Test>> for WhitelistedCalls {
 	fn contains(full_name: &FullNameOf<Test>) -> bool {
 		let unpausables: Vec<FullNameOf<Test>> = vec![(
@@ -163,22 +168,6 @@ impl Contains<FullNameOf<Test>> for WhitelistedCalls {
 
 		unpausables.contains(full_name)
 	}
-}
-
-// Required impl to use some <Configured Origin>::get() in tests
-impl SortedMembers<u64> for PauseOrigin {
-	fn sorted_members() -> Vec<u64> {
-		vec![Self::get()]
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn add(_m: &u64) {}
-}
-impl SortedMembers<u64> for UnpauseOrigin {
-	fn sorted_members() -> Vec<u64> {
-		vec![Self::get()]
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn add(_m: &u64) {}
 }
 
 impl Config for Test {

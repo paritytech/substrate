@@ -24,18 +24,15 @@ use crate as pallet_safe_mode;
 
 use frame_support::{
 	parameter_types,
-	traits::{ConstU64, Everything, InsideBoth, InstanceFilter, SortedMembers},
+	traits::{ConstU64, Everything, InsideBoth, InstanceFilter, IsInVec},
 };
-use frame_system::{EnsureSignedBy, RawOrigin};
+use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
 
-parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = InsideBoth<Everything, SafeMode>;
 	type BlockWeights = ();
@@ -50,7 +47,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -61,11 +58,6 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
-}
-
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-	pub const MaxReserves: u32 = 10;
 }
 
 /// Identifies a hold on an account's balance.
@@ -81,11 +73,11 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<2>;
 	type AccountStore = System;
 	type WeightInfo = ();
 	type MaxLocks = ();
-	type MaxReserves = MaxReserves;
+	type MaxReserves = ConstU32<10>;
 	type ReserveIdentifier = Self::BlockNumber;
 	type HoldIdentifier = HoldReason;
 	type FreezeIdentifier = ();
@@ -100,6 +92,7 @@ impl pallet_utility::Config for Test {
 	type WeightInfo = ();
 }
 
+/// Mocked proxies to check that the safe-mode also works with the proxy pallet.
 #[derive(
 	Copy,
 	Clone,
@@ -118,11 +111,13 @@ pub enum ProxyType {
 	JustTransfer,
 	JustUtility,
 }
+
 impl Default for ProxyType {
 	fn default() -> Self {
 		Self::Any
 	}
 }
+
 impl InstanceFilter<RuntimeCall> for ProxyType {
 	fn filter(&self, c: &RuntimeCall) -> bool {
 		match self {
@@ -137,6 +132,7 @@ impl InstanceFilter<RuntimeCall> for ProxyType {
 		self == &ProxyType::Any || self == o
 	}
 }
+
 impl pallet_proxy::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
@@ -152,7 +148,7 @@ impl pallet_proxy::Config for Test {
 	type AnnouncementDepositFactor = ConstU64<1>;
 }
 
-/// Filter to allow all everything except balance calls
+/// The calls that can always bypass the safe-mode.
 pub struct WhitelistedCalls;
 impl Contains<RuntimeCall> for WhitelistedCalls {
 	fn contains(call: &RuntimeCall) -> bool {
@@ -163,144 +159,28 @@ impl Contains<RuntimeCall> for WhitelistedCalls {
 	}
 }
 
-/// An origin that can enable the safe-mode by force.
-pub enum ForceEnterOrigin {
-	Weak,
-	Medium,
-	Strong,
-}
-
-/// An origin that can extend the safe-mode by force.
-pub enum ForceExtendOrigin {
-	Weak,
-	Medium,
-	Strong,
-}
-
-impl ForceEnterOrigin {
-	/// The duration of how long the safe-mode will be activated.
-	pub fn duration(&self) -> u64 {
-		match self {
-			Self::Weak => 5,
-			Self::Medium => 7,
-			Self::Strong => 11,
-		}
-	}
-
-	/// Account id of the origin.
-	pub const fn acc(&self) -> u64 {
-		match self {
-			Self::Weak => 100,
-			Self::Medium => 101,
-			Self::Strong => 102,
-		}
-	}
-
-	/// Signed origin.
-	pub fn signed(&self) -> <Test as frame_system::Config>::RuntimeOrigin {
-		RawOrigin::Signed(self.acc()).into()
-	}
-}
-
-impl ForceExtendOrigin {
-	/// The duration of how long the safe-mode will be extended.
-	pub fn duration(&self) -> u64 {
-		match self {
-			Self::Weak => 13,
-			Self::Medium => 17,
-			Self::Strong => 19,
-		}
-	}
-
-	/// Account id of the origin.
-	pub const fn acc(&self) -> u64 {
-		match self {
-			Self::Weak => 200,
-			Self::Medium => 201,
-			Self::Strong => 202,
-		}
-	}
-
-	/// Signed origin.
-	pub fn signed(&self) -> <Test as frame_system::Config>::RuntimeOrigin {
-		RawOrigin::Signed(self.acc()).into()
-	}
-}
-
-impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>>> EnsureOrigin<O>
-	for ForceEnterOrigin
-{
-	type Success = u64;
-
-	fn try_origin(o: O) -> Result<Self::Success, O> {
-		o.into().and_then(|o| match o {
-			RawOrigin::Signed(acc) if acc == ForceEnterOrigin::Weak.acc() =>
-				Ok(ForceEnterOrigin::Weak.duration()),
-			RawOrigin::Signed(acc) if acc == ForceEnterOrigin::Medium.acc() =>
-				Ok(ForceEnterOrigin::Medium.duration()),
-			RawOrigin::Signed(acc) if acc == ForceEnterOrigin::Strong.acc() =>
-				Ok(ForceEnterOrigin::Strong.duration()),
-			r => Err(O::from(r)),
-		})
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<O, ()> {
-		Ok(O::from(RawOrigin::Signed(ForceEnterOrigin::Strong.acc())))
-	}
-}
-
-impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>>> EnsureOrigin<O>
-	for ForceExtendOrigin
-{
-	type Success = u64;
-
-	fn try_origin(o: O) -> Result<Self::Success, O> {
-		o.into().and_then(|o| match o {
-			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Weak.acc() =>
-				Ok(ForceExtendOrigin::Weak.duration()),
-			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Medium.acc() =>
-				Ok(ForceExtendOrigin::Medium.duration()),
-			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Strong.acc() =>
-				Ok(ForceExtendOrigin::Strong.duration()),
-			r => Err(O::from(r)),
-		})
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<O, ()> {
-		Ok(O::from(RawOrigin::Signed(ForceExtendOrigin::Strong.acc())))
-	}
-}
-
 parameter_types! {
-	pub const EnterDuration: u64 = 3;
+	pub const EnterDuration: u64 = 7;
 	pub const ExtendDuration: u64 = 30;
 	pub const EnterStakeAmount: u64 = 100;
 	pub const ExtendStakeAmount: u64 = 100;
-	pub const ForceExitOrigin: u64 = 3;
-	pub const StakeSlashOrigin: u64 = 4;
-	pub const ReleaseDelay: u64 = 2;
-}
-
-// Required impl to use some <Configured Origin>::get() in tests
-impl SortedMembers<u64> for ForceExitOrigin {
-	fn sorted_members() -> Vec<u64> {
-		vec![Self::get()]
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn add(_m: &u64) {}
-}
-impl SortedMembers<u64> for StakeSlashOrigin {
-	fn sorted_members() -> Vec<u64> {
-		vec![Self::get()]
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn add(_m: &u64) {}
-}
-
-parameter_types! {
+	pub const ReleaseDelay: u64 = 20;
 	pub const SafeModeHoldReason: HoldReason = HoldReason::SafeMode;
+
+	pub const ForceEnterWeak: u64 = 3;
+	pub const ForceEnterStrong: u64 = 5;
+
+	pub const ForceExtendWeak: u64 = 11;
+	pub const ForceExtendStrong: u64 = 15;
+
+	// NOTE: The account ID maps to the duration. Easy for testing.
+	pub ForceEnterOrigins: Vec<u64> = vec![ForceEnterWeak::get(), ForceEnterStrong::get()];
+	pub ForceExtendOrigins: Vec<u64> = vec![ForceExtendWeak::get(), ForceExtendStrong::get()];
+}
+
+frame_support::ord_parameter_types! {
+	pub const ForceExitOrigin: u64 = 100;
+	pub const ForceStakeOrigin: u64 = 200;
 }
 
 impl Config for Test {
@@ -312,10 +192,10 @@ impl Config for Test {
 	type EnterStakeAmount = EnterStakeAmount;
 	type ExtendDuration = ExtendDuration;
 	type ExtendStakeAmount = ExtendStakeAmount;
-	type ForceEnterOrigin = ForceEnterOrigin;
-	type ForceExtendOrigin = ForceExtendOrigin;
+	type ForceEnterOrigin = EnsureSignedBy<IsInVec<ForceEnterOrigins>, u64>;
+	type ForceExtendOrigin = EnsureSignedBy<IsInVec<ForceExtendOrigins>, u64>;
 	type ForceExitOrigin = EnsureSignedBy<ForceExitOrigin, Self::AccountId>;
-	type StakeSlashOrigin = EnsureSignedBy<StakeSlashOrigin, Self::AccountId>;
+	type ForceStakeOrigin = EnsureSignedBy<ForceStakeOrigin, Self::AccountId>;
 	type ReleaseDelay = ReleaseDelay;
 	type WeightInfo = ();
 }

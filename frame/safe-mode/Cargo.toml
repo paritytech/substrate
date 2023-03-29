@@ -18,6 +18,7 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances", default-features = false, optional = true }
@@ -42,6 +43,7 @@ std = [
 	"pallet-balances?/std",
 	"pallet-utility?/std",
 	"pallet-proxy?/std",
+	"sp-arithmetic/std",
 	"sp-runtime/std",
 	"sp-std/std",
 ]

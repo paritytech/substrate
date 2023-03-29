@@ -29,7 +29,6 @@ use frame_election_provider_support::{
 use frame_support::{
 	construct_runtime,
 	dispatch::DispatchClass,
-	pallet_prelude::EnsureOrigin,
 	parameter_types,
 	traits::{
 		fungible::ItemOf,
@@ -49,7 +48,7 @@ use frame_support::{
 };
 use frame_system::{
 	limits::{BlockLength, BlockWeights},
-	EnsureRoot, EnsureRootWithSuccess, EnsureSigned, EnsureWithSuccess, RawOrigin,
+	EnsureRoot, EnsureRootWithSuccess, EnsureSigned, EnsureWithSuccess,
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
@@ -65,7 +64,7 @@ use scale_info::TypeInfo;
 use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
-use sp_core::{crypto::KeyTypeId, ed25519::Public, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
 	create_runtime_str,
@@ -254,113 +253,6 @@ impl pallet_tx_pause::Config for Runtime {
 	type WeightInfo = pallet_tx_pause::weights::SubstrateWeight<Runtime>;
 }
 
-/// An origin that can enable the safe-mode by force.
-pub enum ForceEnterOrigin {
-	Weak,
-	Medium,
-	Strong,
-}
-
-/// An origin that can extend the safe-mode by force.
-pub enum ForceExtendOrigin {
-	Weak,
-	Medium,
-	Strong,
-}
-
-impl ForceEnterOrigin {
-	/// The duration of how long the safe-mode will be activated.
-	pub fn duration(&self) -> u32 {
-		match self {
-			Self::Weak => 5,
-			Self::Medium => 7,
-			Self::Strong => 11,
-		}
-	}
-
-	/// Dummy account id of the origin.
-	pub fn acc(&self) -> AccountId {
-		match self {
-			Self::Weak => Public::from_raw([0; 32]).into(),
-			Self::Medium => Public::from_raw([1; 32]).into(),
-			Self::Strong => Public::from_raw([2; 32]).into(),
-		}
-	}
-
-	/// Signed origin.
-	pub fn signed(&self) -> <Runtime as frame_system::Config>::RuntimeOrigin {
-		RawOrigin::Signed(self.acc()).into()
-	}
-}
-
-impl ForceExtendOrigin {
-	/// The duration of how long the safe-mode will be extended.
-	pub fn duration(&self) -> u32 {
-		match self {
-			Self::Weak => 13,
-			Self::Medium => 17,
-			Self::Strong => 19,
-		}
-	}
-
-	/// A dummy id for this origin.
-	pub fn acc(&self) -> AccountId {
-		match self {
-			Self::Weak => Public::from_raw([0; 32]).into(),
-			Self::Medium => Public::from_raw([1; 32]).into(),
-			Self::Strong => Public::from_raw([2; 32]).into(),
-		}
-	}
-
-	/// Signed origin.
-	pub fn signed(&self) -> <Runtime as frame_system::Config>::RuntimeOrigin {
-		RawOrigin::Signed(self.acc()).into()
-	}
-}
-
-// FAIL-CI can probably feature gate
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> EnsureOrigin<O>
-	for ForceEnterOrigin
-{
-	type Success = u32;
-
-	fn try_origin(o: O) -> Result<Self::Success, O> {
-		use ForceEnterOrigin::*;
-		o.into().and_then(|o| match o {
-			RawOrigin::Signed(acc) if acc == Weak.acc() => Ok(Weak.duration()),
-			RawOrigin::Signed(acc) if acc == Medium.acc() => Ok(Medium.duration()),
-			RawOrigin::Signed(acc) if acc == Strong.acc() => Ok(Strong.duration()),
-			r => Err(O::from(r)),
-		})
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<O, ()> {
-		Ok(O::from(RawOrigin::Signed(ForceEnterOrigin::Strong.acc())))
-	}
-}
-
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> EnsureOrigin<O>
-	for ForceExtendOrigin
-{
-	type Success = u32;
-
-	fn try_origin(o: O) -> Result<Self::Success, O> {
-		use ForceEnterOrigin::*;
-		o.into().and_then(|o| match o {
-			RawOrigin::Signed(acc) if acc == Weak.acc() => Ok(Weak.duration()),
-			RawOrigin::Signed(acc) if acc == Medium.acc() => Ok(Medium.duration()),
-			RawOrigin::Signed(acc) if acc == Strong.acc() => Ok(Strong.duration()),
-			r => Err(O::from(r)),
-		})
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<O, ()> {
-		Ok(O::from(RawOrigin::Signed(ForceEnterOrigin::Strong.acc())))
-	}
-}
-
 parameter_types! {
 	pub const SignedEnterDuration: u32 = 10;
 	pub const ExtendDuration: u32 = 20;
@@ -368,6 +260,21 @@ parameter_types! {
 	pub const ExtendStakeAmount: Balance = 15 * DOLLARS;
 	pub const ReleaseDelay: u32 = 15;
 	pub const SafeModeHoldReason: HoldReason = HoldReason::SafeMode;
+
+	pub const ForceEnterWeak: u32 = 3;
+	pub const ForceEnterStrong: u32 = 5;
+
+	pub const ForceExtendWeak: u32 = 11;
+	pub const ForceExtendStrong: u32 = 15;
+
+	// NOTE: The account ID maps to the duration. Easy for testing.
+	pub ForceEnterOrigins: Vec<u32> = vec![ForceEnterWeak::get(), ForceEnterStrong::get()];
+	pub ForceExtendOrigins: Vec<u32> = vec![ForceExtendWeak::get(), ForceExtendStrong::get()];
+}
+
+frame_support::ord_parameter_types! {
+	pub const ForceExitOrigin: u32 = 100;
+	pub const ForceStakeOrigin: u32 = 200;
 }
 
 impl pallet_safe_mode::Config for Runtime {
@@ -379,10 +286,10 @@ impl pallet_safe_mode::Config for Runtime {
 	type EnterStakeAmount = EnterStakeAmount;
 	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
 	type ExtendStakeAmount = ExtendStakeAmount;
-	type ForceEnterOrigin = ForceEnterOrigin;
-	type ForceExtendOrigin = ForceExtendOrigin;
-	type ForceExitOrigin = EnsureRoot<Self::AccountId>;
-	type StakeSlashOrigin = EnsureRoot<Self::AccountId>;
+	type ForceEnterOrigin = EnsureRootWithSuccess<AccountId, ConstU32<9>>;
+	type ForceExtendOrigin = EnsureRootWithSuccess<AccountId, ConstU32<11>>;
+	type ForceExitOrigin = EnsureRoot<AccountId>;
+	type ForceStakeOrigin = EnsureRoot<AccountId>;
 	type ReleaseDelay = ReleaseDelay;
 	type WeightInfo = pallet_safe_mode::weights::SubstrateWeight<Runtime>;
 }
@@ -1770,8 +1677,8 @@ impl pallet_core_fellowship::Config for Runtime {
 	type Balance = Balance;
 	type ParamsOrigin = frame_system::EnsureRoot<AccountId>;
 	type InductOrigin = pallet_core_fellowship::EnsureInducted<Runtime, (), 1>;
-	type ApproveOrigin = frame_system::EnsureRootWithSuccess<AccountId, ConstU16<9>>;
-	type PromoteOrigin = frame_system::EnsureRootWithSuccess<AccountId, ConstU16<9>>;
+	type ApproveOrigin = EnsureRootWithSuccess<AccountId, ConstU16<9>>;
+	type PromoteOrigin = EnsureRootWithSuccess<AccountId, ConstU16<9>>;
 	type EvidenceSize = ConstU32<16_384>;
 }
 

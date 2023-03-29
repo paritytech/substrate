@@ -30,6 +30,15 @@ use sp_runtime::traits::{Bounded, One, Zero};
 mod benchmarks {
 	use super::*;
 
+	/// `on_initialize` doing nothing.
+	#[benchmark]
+	fn on_initialize_noop() {
+		#[block]
+		{
+			SafeMode::<T>::on_initialize(1u32.into());
+		}
+	}
+
 	/// `on_initialize` exiting since the until block is in the past.
 	#[benchmark]
 	fn on_initialize_exit() {
@@ -40,22 +49,18 @@ mod benchmarks {
 		{
 			SafeMode::<T>::on_initialize(1u32.into());
 		}
+
+		assert!(!SafeMode::<T>::is_entered());
 	}
 
-	/// `on_initialize` doing nothing.
+	/// Permissionless enter - if configured.
 	#[benchmark]
-	fn on_initialize_noop() {
-		#[block]
-		{
-			SafeMode::<T>::on_initialize(1u32.into());
-		}
-	}
+	fn enter() -> Result<(), BenchmarkError> {
+		T::EnterStakeAmount::get().ok_or_else(|| BenchmarkError::Weightless)?;
 
-	#[benchmark]
-	fn enter() {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value() / 2u32.into());
+		T::Currency::set_balance(&caller, init_bal::<T>());
 
 		#[extrinsic_call]
 		_(origin);
@@ -64,12 +69,15 @@ mod benchmarks {
 			SafeMode::<T>::active_until().unwrap(),
 			System::<T>::block_number() + T::EnterDuration::get()
 		);
+		Ok(())
 	}
 
+	/// Forceful enter - if configured.
 	#[benchmark]
 	fn force_enter() -> Result<(), BenchmarkError> {
 		let force_origin =
 			T::ForceEnterOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+
 		let duration = T::ForceEnterOrigin::ensure_origin(force_origin.clone()).unwrap();
 		let call = Call::<T>::force_enter {};
 
@@ -82,36 +90,37 @@ mod benchmarks {
 		Ok(())
 	}
 
+	/// Permissionless extend - if configured.
 	#[benchmark]
-	fn extend() {
-		let caller: T::AccountId = whitelisted_caller();
-		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value() / 2u32.into());
+	fn extend() -> Result<(), BenchmarkError> {
+		T::ExtendStakeAmount::get().ok_or_else(|| BenchmarkError::Weightless)?;
+
+		let alice: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(&alice, init_bal::<T>());
 
 		System::<T>::set_block_number(1u32.into());
-		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
+		assert!(SafeMode::<T>::do_enter(None, 1u32.into()).is_ok());
 
 		#[extrinsic_call]
-		_(origin);
+		_(RawOrigin::Signed(alice));
 
 		assert_eq!(
 			SafeMode::<T>::active_until().unwrap(),
-			System::<T>::block_number() + T::EnterDuration::get() + T::ExtendDuration::get()
+			System::<T>::block_number() + 1u32.into() + T::ExtendDuration::get()
 		);
+		Ok(())
 	}
 
+	/// Forceful extend - if configured.
 	#[benchmark]
 	fn force_extend() -> Result<(), BenchmarkError> {
-		let caller: T::AccountId = whitelisted_caller();
-		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value() / 2u32.into());
-
-		System::<T>::set_block_number(1u32.into());
-		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
-
 		let force_origin = T::ForceExtendOrigin::try_successful_origin()
 			.map_err(|_| BenchmarkError::Weightless)?;
-		let extension = T::ForceExtendOrigin::ensure_origin(force_origin.clone()).unwrap();
+
+		System::<T>::set_block_number(1u32.into());
+		assert!(SafeMode::<T>::do_enter(None, 1u32.into()).is_ok());
+
+		let duration = T::ForceExtendOrigin::ensure_origin(force_origin.clone()).unwrap();
 		let call = Call::<T>::force_extend {};
 
 		#[block]
@@ -121,21 +130,18 @@ mod benchmarks {
 
 		assert_eq!(
 			SafeMode::<T>::active_until().unwrap(),
-			System::<T>::block_number() + T::EnterDuration::get() + extension
+			System::<T>::block_number() + 1u32.into() + duration
 		);
 		Ok(())
 	}
 
+	/// Forceful exit - if configured.
 	#[benchmark]
 	fn force_exit() -> Result<(), BenchmarkError> {
-		let caller: T::AccountId = whitelisted_caller();
-		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value() / 2u32.into());
-
-		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
-
 		let force_origin =
 			T::ForceExitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+
+		assert!(SafeMode::<T>::do_enter(None, 1u32.into()).is_ok());
 		let call = Call::<T>::force_exit {};
 
 		#[block]
@@ -147,124 +153,104 @@ mod benchmarks {
 		Ok(())
 	}
 
+	/// Permissionless release of a stake - if configured.
 	#[benchmark]
 	fn release_stake() -> Result<(), BenchmarkError> {
-		let caller: T::AccountId = whitelisted_caller();
-		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value() / 2u32.into());
+		let delay = T::ReleaseDelay::get().ok_or_else(|| BenchmarkError::Weightless)?;
 
-		let entered_at_block: T::BlockNumber = System::<T>::block_number();
-		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
-		let current_stake = Stakes::<T>::get(&caller, entered_at_block).unwrap_or_default();
-		assert_eq!(current_stake, T::EnterStakeAmount::get().unwrap());
-		assert_eq!(
-			T::Currency::balance(&caller),
-			BalanceOf::<T>::max_value() / 2u32.into() - T::EnterStakeAmount::get().unwrap()
-		);
+		let alice: T::AccountId = whitelisted_caller();
+		let origin = RawOrigin::Signed(alice.clone());
 
-		let force_origin =
-			T::ForceExitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		assert!(SafeMode::<T>::force_exit(force_origin.clone()).is_ok());
+		T::Currency::set_balance(&alice, init_bal::<T>());
+		// Mock the storage. This is needed in case the `EnterStakeAmount` is zero.
+		let block: T::BlockNumber = 1u32.into();
+		let bal: BalanceOf<T> = 1u32.into();
+		Stakes::<T>::insert(&alice, &block, &bal);
+		T::Currency::hold(&T::HoldReason::get(), &alice, bal)?;
+		EnteredUntil::<T>::put(&block);
+		assert!(SafeMode::<T>::do_exit(ExitReason::Force).is_ok());
 
-		System::<T>::set_block_number(
-			System::<T>::block_number() + T::ReleaseDelay::get().unwrap() + One::one(),
-		);
+		System::<T>::set_block_number(delay + One::one() + 2u32.into());
 		System::<T>::on_initialize(System::<T>::block_number());
 		SafeMode::<T>::on_initialize(System::<T>::block_number());
 
-		let call =
-			Call::<T>::release_stake { account: caller.clone(), block: entered_at_block.clone() };
+		let call = Call::<T>::release_stake { account: alice.clone(), block: 1u32.into() };
 
 		#[block]
 		{
-			call.dispatch_bypass_filter(origin.into())?;
+			call.dispatch_bypass_filter(origin.into()).unwrap();
 		}
 
-		assert!(!Stakes::<T>::contains_key(&caller, entered_at_block));
-		assert_eq!(T::Currency::balance(&caller), BalanceOf::<T>::max_value() / 2u32.into());
+		assert!(!Stakes::<T>::contains_key(&alice, &block));
+		assert_eq!(T::Currency::balance(&alice), init_bal::<T>());
 		Ok(())
 	}
 
+	/// Forceful release of a stake - if configured.
 	#[benchmark]
 	fn force_release_stake() -> Result<(), BenchmarkError> {
-		let caller: T::AccountId = whitelisted_caller();
-		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value() / 2u32.into());
-
-		let entered_at_block: T::BlockNumber = System::<T>::block_number();
-		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
-		let current_stake = Stakes::<T>::get(&caller, entered_at_block).unwrap_or_default();
-		assert_eq!(current_stake, T::EnterStakeAmount::get().unwrap());
-		assert_eq!(
-			T::Currency::balance(&caller),
-			BalanceOf::<T>::max_value() / 2u32.into() - T::EnterStakeAmount::get().unwrap()
-		);
-
-		// TODO
 		let force_origin =
-			T::ForceExitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		assert!(SafeMode::<T>::force_exit(force_origin.clone()).is_ok());
+			T::ForceStakeOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+
+		let alice: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(&alice, init_bal::<T>());
+
+		// Mock the storage. This is needed in case the `EnterStakeAmount` is zero.
+		let block: T::BlockNumber = 1u32.into();
+		let bal: BalanceOf<T> = 1u32.into();
+		Stakes::<T>::insert(&alice, &block, &bal);
+		T::Currency::hold(&T::HoldReason::get(), &alice, bal)?;
+		EnteredUntil::<T>::put(&block);
+
+		assert_eq!(T::Currency::balance(&alice), init_bal::<T>() - 1u32.into());
+		assert!(SafeMode::<T>::do_exit(ExitReason::Force).is_ok());
 
 		System::<T>::set_block_number(System::<T>::block_number() + One::one());
 		System::<T>::on_initialize(System::<T>::block_number());
 		SafeMode::<T>::on_initialize(System::<T>::block_number());
 
-		let release_origin =
-			T::StakeSlashOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		let call = Call::<T>::force_release_stake {
-			account: caller.clone(),
-			block: entered_at_block.clone(),
-		};
+		let call = Call::<T>::force_release_stake { account: alice.clone(), block };
 
 		#[block]
 		{
-			call.dispatch_bypass_filter(release_origin)?;
+			call.dispatch_bypass_filter(force_origin)?;
 		}
 
-		assert!(!Stakes::<T>::contains_key(&caller, entered_at_block));
-		assert_eq!(T::Currency::balance(&caller), BalanceOf::<T>::max_value() / 2u32.into());
+		assert!(!Stakes::<T>::contains_key(&alice, block));
+		assert_eq!(T::Currency::balance(&alice), init_bal::<T>());
 		Ok(())
 	}
 
 	#[benchmark]
 	fn force_slash_stake() -> Result<(), BenchmarkError> {
-		// FAIL-CI disable if uncallable
-		let caller: T::AccountId = whitelisted_caller();
-		let origin = RawOrigin::Signed(caller.clone());
-		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value() / 2u32.into());
-
-		let entered_at_block: T::BlockNumber = System::<T>::block_number();
-		assert!(SafeMode::<T>::enter(origin.clone().into()).is_ok());
-		let current_stake = Stakes::<T>::get(&caller, entered_at_block).unwrap_or_default();
-		assert_eq!(current_stake, T::EnterStakeAmount::get().unwrap());
-		assert_eq!(
-			T::Currency::balance(&caller),
-			BalanceOf::<T>::max_value() / 2u32.into() - T::EnterStakeAmount::get().unwrap()
-		);
-
-		// TODO
 		let force_origin =
-			T::ForceExitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		assert!(SafeMode::<T>::force_exit(force_origin.clone()).is_ok());
+			T::ForceStakeOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 
-		let release_origin =
-			T::StakeSlashOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		let call = Call::<T>::force_slash_stake {
-			account: caller.clone(),
-			block: entered_at_block.clone(),
-		};
+		let alice: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(&alice, init_bal::<T>());
+
+		// Mock the storage. This is needed in case the `EnterStakeAmount` is zero.
+		let block: T::BlockNumber = 1u32.into();
+		let bal: BalanceOf<T> = 1u32.into();
+		Stakes::<T>::insert(&alice, &block, &bal);
+		T::Currency::hold(&T::HoldReason::get(), &alice, bal)?;
+		EnteredUntil::<T>::put(&block);
+		assert!(SafeMode::<T>::do_exit(ExitReason::Force).is_ok());
+
+		let call = Call::<T>::force_slash_stake { account: alice.clone(), block };
 
 		#[block]
 		{
-			call.dispatch_bypass_filter(release_origin)?;
+			call.dispatch_bypass_filter(force_origin)?;
 		}
 
-		assert!(!Stakes::<T>::contains_key(&caller, entered_at_block));
-		assert_eq!(
-			T::Currency::balance(&caller),
-			BalanceOf::<T>::max_value() / 2u32.into() - T::EnterStakeAmount::get().unwrap()
-		);
+		assert!(!Stakes::<T>::contains_key(&alice, block));
+		assert_eq!(T::Currency::balance(&alice), init_bal::<T>() - 1u32.into());
 		Ok(())
+	}
+
+	fn init_bal<T: Config>() -> BalanceOf<T> {
+		BalanceOf::<T>::max_value() / 10u32.into()
 	}
 
 	impl_benchmark_test_suite!(SafeMode, crate::mock::new_test_ext(), crate::mock::Test);
