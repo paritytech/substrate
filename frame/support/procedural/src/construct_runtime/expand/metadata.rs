@@ -98,7 +98,7 @@ pub fn expand_runtime_metadata(
 								.collect(),
 					},
 					ty: #scrate::scale_info::meta_type::<#runtime>(),
-					runtime: (&rt).runtime_metadata(),
+					apis: (&rt).runtime_metadata(),
 				}
 			}
 
