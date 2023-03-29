@@ -384,7 +384,7 @@ frame_benchmarking::benchmarks! {
 
 	force_rotate_round {
 
-	}: _(RawOrigin::Root, Phase::Off)
+	}: _(RawOrigin::Root)
 	verify {
 		assert_eq!(<MultiPhase<T>>::round(), 2);
 	}

@@ -1138,12 +1138,8 @@ pub mod pallet {
 		#[pallet::weight(({
 			T::WeightInfo::force_rotate_round()
 		}, DispatchClass::Operational))]
-		pub fn force_rotate_round(
-			origin: OriginFor<T>,
-			current_phase: Phase<T::BlockNumber>,
-		) -> DispatchResult {
+		pub fn force_rotate_round(origin: OriginFor<T>) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
-			ensure!(current_phase == Self::current_phase(), <Error<T>>::CallNotAllowed);
 
 			Self::do_force_rotate_round();
 
@@ -2019,24 +2015,21 @@ mod tests {
 			assert_eq!(MultiPhase::round(), 1);
 
 			assert_noop!(
-				MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::none(), Phase::Off),
+				MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::none()),
 				DispatchError::BadOrigin
 			);
 			assert_noop!(
-				MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::signed(1), Phase::Off),
+				MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::signed(1)),
 				DispatchError::BadOrigin
 			);
 
 			// The provided current phase is incorrect.
 			assert_noop!(
-				MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::root(), Phase::Signed),
+				MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::root()),
 				Error::<Runtime>::CallNotAllowed
 			);
 
-			assert_ok!(MultiPhase::force_rotate_round(
-				crate::mock::RuntimeOrigin::root(),
-				Phase::Off
-			));
+			assert_ok!(MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::root(),));
 			assert_eq!(MultiPhase::round(), 2);
 
 			assert_eq!(
