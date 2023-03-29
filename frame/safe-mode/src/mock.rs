@@ -67,6 +67,16 @@ parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 	pub const MaxReserves: u32 = 10;
 }
+
+/// Identifies a hold on an account's balance.
+#[derive(
+	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, Debug, TypeInfo,
+)]
+pub enum HoldReason {
+	/// The safe-mode pallet holds funds since an account either entered or extended the safe-mode.
+	SafeMode,
+}
+
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
@@ -77,7 +87,7 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = MaxReserves;
 	type ReserveIdentifier = Self::BlockNumber;
-	type HoldIdentifier = HoldIdentifier;
+	type HoldIdentifier = HoldReason;
 	type FreezeIdentifier = ();
 	type MaxHolds = ConstU32<10>;
 	type MaxFreezes = ConstU32<0>;
@@ -289,25 +299,14 @@ impl SortedMembers<u64> for StakeSlashOrigin {
 	fn add(_m: &u64) {}
 }
 
-#[derive(
-	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, Debug, TypeInfo,
-)]
-pub enum HoldIdentifier {
-	SafeModeStake { block: u64 },
-}
-
-impl crate::CausalHoldReason<u64> for HoldIdentifier {
-	type Reason = HoldIdentifier;
-
-	fn cause(block: u64) -> Self::Reason {
-		Self::SafeModeStake { block }
-	}
+parameter_types! {
+	pub const SafeModeHoldReason: HoldReason = HoldReason::SafeMode;
 }
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type HoldReason = HoldIdentifier;
+	type HoldReason = SafeModeHoldReason;
 	type WhitelistedCalls = WhitelistedCalls;
 	type EnterDuration = EnterDuration;
 	type EnterStakeAmount = EnterStakeAmount;

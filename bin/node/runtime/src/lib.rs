@@ -361,26 +361,19 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> Ensu
 	}
 }
 
-impl pallet_safe_mode::CausalHoldReason<u32> for HoldReason {
-	type Reason = HoldReason;
-
-	fn cause(block: u32) -> Self::Reason {
-		Self::SafeModeStake { block }
-	}
-}
-
 parameter_types! {
 	pub const SignedEnterDuration: u32 = 10;
 	pub const ExtendDuration: u32 = 20;
 	pub const EnterStakeAmount: Balance = 10 * DOLLARS;
 	pub const ExtendStakeAmount: Balance = 15 * DOLLARS;
 	pub const ReleaseDelay: u32 = 15;
+	pub const SafeModeHoldReason: HoldReason = HoldReason::SafeMode;
 }
 
 impl pallet_safe_mode::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type HoldReason = HoldReason;
+	type HoldReason = SafeModeHoldReason;
 	type WhitelistedCalls = SafeModeWhitelistedCalls;
 	type EnterDuration = ConstU32<{ 2 * DAYS }>;
 	type EnterStakeAmount = EnterStakeAmount;
@@ -620,9 +613,8 @@ parameter_types! {
 pub enum HoldReason {
 	/// The NIS Pallet has reserved it for a non-fungible receipt.
 	Nis,
-	SafeModeStake {
-		block: u32,
-	},
+	/// A stake was reserved for a entering or extending the SafeMode.
+	SafeMode,
 }
 
 impl pallet_balances::Config for Runtime {

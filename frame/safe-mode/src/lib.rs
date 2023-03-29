@@ -44,13 +44,6 @@ pub use weights::*;
 type BalanceOf<T> =
 	<<T as Config>::Currency as FunInspect<<T as frame_system::Config>::AccountId>>::Balance;
 
-/// Create a hold reason for a given cause.
-pub trait CausalHoldReason<Cause> {
-	type Reason: codec::Encode + TypeInfo + 'static;
-
-	fn cause(path: Cause) -> Self::Reason;
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -67,10 +60,8 @@ pub mod pallet {
 		type Currency: FunHoldInspect<Self::AccountId> + FunHoldMutate<Self::AccountId>;
 
 		/// Create a hold reason for a specific cause.
-		type HoldReason: CausalHoldReason<
-			Self::BlockNumber,
-			Reason = <Self::Currency as FunHoldInspect<Self::AccountId>>::Reason,
-		>;
+		#[pallet::constant]
+		type HoldReason: Get<<Self::Currency as FunHoldInspect<Self::AccountId>>::Reason>;
 
 		/// Contains all runtime calls in any pallet that can be dispatched even while the safe-mode
 		/// is entered.
@@ -445,12 +436,8 @@ impl<T: Config> Pallet<T> {
 			ensure!(now > (block.saturating_add(delay)), Error::<T>::CannotReleaseYet);
 		}
 
-		let amount = T::Currency::release(
-			&T::HoldReason::cause(block),
-			&account,
-			amount,
-			Precision::BestEffort,
-		)?;
+		let amount =
+			T::Currency::release(&T::HoldReason::get(), &account, amount, Precision::BestEffort)?;
 		Self::deposit_event(Event::<T>::StakeReleased { block, account, amount });
 		Ok(())
 	}
@@ -461,7 +448,7 @@ impl<T: Config> Pallet<T> {
 
 		// FAIL-CI check these args
 		T::Currency::burn_held(
-			&T::HoldReason::cause(block),
+			&T::HoldReason::get(),
 			&account,
 			amount,
 			Precision::BestEffort,
@@ -475,7 +462,7 @@ impl<T: Config> Pallet<T> {
 	fn hold(who: T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
 		let block = <frame_system::Pallet<T>>::block_number();
 		// Hold for the same reason will increase the amount.
-		T::Currency::hold(&T::HoldReason::cause(block), &who, amount)?;
+		T::Currency::hold(&T::HoldReason::get(), &who, amount)?;
 
 		let current_stake = Stakes::<T>::get(&who, block).unwrap_or_default();
 		Stakes::<T>::insert(&who, block, current_stake.saturating_add(amount));
