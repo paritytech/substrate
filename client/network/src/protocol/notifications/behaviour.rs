@@ -1552,6 +1552,12 @@ impl NetworkBehaviour for Notifications {
 
 					// Disabled => Disabled | Incoming
 					PeerState::Disabled { mut connections, backoff_until } => {
+						// Do not accept incoming connections if the peer is still banned.
+						if backoff_until.map_or(false, |t| t > Instant::now()) {
+							*entry.into_mut() = PeerState::Disabled { connections, backoff_until };
+							return
+						}
+
 						if let Some((_, connec_state)) =
 							connections.iter_mut().find(|(c, _)| *c == connection_id)
 						{
