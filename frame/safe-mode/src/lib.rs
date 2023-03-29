@@ -143,6 +143,9 @@ pub mod pallet {
 
 		/// This stake cannot be released yet.
 		CannotReleaseYet,
+
+		/// An error from the underlying `Currency`.
+		CurrencyError,
 	}
 
 	#[pallet::event]
@@ -165,6 +168,16 @@ pub mod pallet {
 
 		/// An account had reserve slashed that was reserved.
 		StakeSlashed { account: T::AccountId, amount: BalanceOf<T> },
+
+		/// Could not hold funds for entering or extending the safe-mode.
+		///
+		/// This error comes from the underlying `Currency`.
+		CannotStake,
+
+		/// Could not release funds for entering or extending the safe-mode.
+		///
+		/// This error comes from the underlying `Currency`.
+		CannotRelease,
 	}
 
 	/// The reason why the safe-mode was deactivated.
@@ -240,7 +253,7 @@ pub mod pallet {
 		pub fn enter(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			Self::do_enter(Some(who), T::EnterDuration::get())
+			Self::do_enter(Some(who), T::EnterDuration::get()).map_err(Into::into)
 		}
 
 		/// Enter safe-mode by force for a per-origin configured number of blocks.
@@ -254,7 +267,7 @@ pub mod pallet {
 		pub fn force_enter(origin: OriginFor<T>) -> DispatchResult {
 			let duration = T::ForceEnterOrigin::ensure_origin(origin)?;
 
-			Self::do_enter(None, duration)
+			Self::do_enter(None, duration).map_err(Into::into)
 		}
 
 		/// Extend the safe-mode permissionlessly for [`Config::ExtendDuration`] blocks.
@@ -273,7 +286,7 @@ pub mod pallet {
 		pub fn extend(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			Self::do_extend(Some(who), T::ExtendDuration::get())
+			Self::do_extend(Some(who), T::ExtendDuration::get()).map_err(Into::into)
 		}
 
 		/// Extend the safe-mode by force for a per-origin configured number of blocks.
@@ -287,7 +300,7 @@ pub mod pallet {
 		pub fn force_extend(origin: OriginFor<T>) -> DispatchResult {
 			let duration = T::ForceExtendOrigin::ensure_origin(origin)?;
 
-			Self::do_extend(None, duration)
+			Self::do_extend(None, duration).map_err(Into::into)
 		}
 
 		/// Exit safe-mode by force.
@@ -303,7 +316,7 @@ pub mod pallet {
 		pub fn force_exit(origin: OriginFor<T>) -> DispatchResult {
 			T::ForceExitOrigin::ensure_origin(origin)?;
 
-			Self::do_exit(ExitReason::Force)
+			Self::do_exit(ExitReason::Force).map_err(Into::into)
 		}
 
 		/// Slash a stake for an account that entered or extended safe-mode at a specific
@@ -324,7 +337,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceStakeOrigin::ensure_origin(origin)?;
 
-			Self::do_force_slash(account, block)
+			Self::do_force_slash(account, block).map_err(Into::into)
 		}
 
 		/// Permissionlessly release a stake for an account that entered safe-mode at a
@@ -348,7 +361,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_signed(origin)?;
 
-			Self::do_release(false, account, block)
+			Self::do_release(false, account, block).map_err(Into::into)
 		}
 
 		/// Force to release a stake for an account that entered safe-mode at a specific
@@ -371,7 +384,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceStakeOrigin::ensure_origin(origin)?;
 
-			Self::do_release(true, account, block)
+			Self::do_release(true, account, block).map_err(Into::into)
 		}
 	}
 
@@ -395,7 +408,10 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Logic for the [`crate::Pallet::enter`] and [`crate::Pallet::force_enter`] calls.
-	pub(crate) fn do_enter(who: Option<T::AccountId>, duration: T::BlockNumber) -> DispatchResult {
+	pub(crate) fn do_enter(
+		who: Option<T::AccountId>,
+		duration: T::BlockNumber,
+	) -> Result<(), Error<T>> {
 		ensure!(!Self::is_entered(), Error::<T>::Entered);
 
 		if let Some(who) = who {
@@ -410,7 +426,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Logic for the [`crate::Pallet::extend`] and [`crate::Pallet::force_extend`] calls.
-	pub(crate) fn do_extend(who: Option<T::AccountId>, duration: T::BlockNumber) -> DispatchResult {
+	pub(crate) fn do_extend(
+		who: Option<T::AccountId>,
+		duration: T::BlockNumber,
+	) -> Result<(), Error<T>> {
 		let mut until = EnteredUntil::<T>::get().ok_or(Error::<T>::Exited)?;
 
 		if let Some(who) = who {
@@ -427,7 +446,7 @@ impl<T: Config> Pallet<T> {
 	/// Logic for the [`crate::Pallet::force_exit`] call.
 	///
 	/// Errors if the safe-mode is already exited.
-	pub(crate) fn do_exit(reason: ExitReason) -> DispatchResult {
+	pub(crate) fn do_exit(reason: ExitReason) -> Result<(), Error<T>> {
 		let _until = EnteredUntil::<T>::take().ok_or(Error::<T>::Exited)?;
 		Self::deposit_event(Event::Exited { reason });
 		Ok(())
@@ -439,7 +458,7 @@ impl<T: Config> Pallet<T> {
 		force: bool,
 		account: T::AccountId,
 		block: T::BlockNumber,
-	) -> DispatchResult {
+	) -> Result<(), Error<T>> {
 		let amount = Stakes::<T>::take(&account, &block).ok_or(Error::<T>::NoStake)?;
 
 		if !force {
@@ -451,13 +470,17 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let amount =
-			T::Currency::release(&T::HoldReason::get(), &account, amount, Precision::BestEffort)?;
+			T::Currency::release(&T::HoldReason::get(), &account, amount, Precision::BestEffort)
+				.map_err(|_| Error::<T>::CurrencyError)?;
 		Self::deposit_event(Event::<T>::StakeReleased { account, amount });
 		Ok(())
 	}
 
 	/// Logic for the [`crate::Pallet::slash_stake`] call.
-	pub(crate) fn do_force_slash(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
+	pub(crate) fn do_force_slash(
+		account: T::AccountId,
+		block: T::BlockNumber,
+	) -> Result<(), Error<T>> {
 		let amount = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NoStake)?;
 
 		// FAIL-CI check these args
@@ -467,7 +490,8 @@ impl<T: Config> Pallet<T> {
 			amount,
 			Precision::BestEffort,
 			Fortitude::Force,
-		)?;
+		)
+		.map_err(|_| Error::<T>::CurrencyError)?;
 		defensive_assert!(burned == amount, "Could not burn the full held amount");
 		Self::deposit_event(Event::<T>::StakeSlashed { account, amount });
 		Ok(())
@@ -476,13 +500,14 @@ impl<T: Config> Pallet<T> {
 	/// Place a hold for exactly `amount` and store it in `Stakes`.
 	///
 	/// This errors if the account already has a hold for the same reason.
-	fn hold(who: T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
+	fn hold(who: T::AccountId, amount: BalanceOf<T>) -> Result<(), Error<T>> {
 		let block = <frame_system::Pallet<T>>::block_number();
 		if !T::Currency::balance_on_hold(&T::HoldReason::get(), &who).is_zero() {
 			return Err(Error::<T>::AlreadyStaked.into())
 		}
 
-		T::Currency::hold(&T::HoldReason::get(), &who, amount)?;
+		T::Currency::hold(&T::HoldReason::get(), &who, amount)
+			.map_err(|_| Error::<T>::CurrencyError)?;
 		Stakes::<T>::insert(&who, block, amount);
 		Self::deposit_event(Event::<T>::StakePlaced { account: who, amount });
 
@@ -513,12 +538,49 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: pallet::Config> Contains<T::RuntimeCall> for Pallet<T>
+impl<T: Config> Contains<T::RuntimeCall> for Pallet<T>
 where
 	T::RuntimeCall: GetCallMetadata,
 {
 	/// Return whether this call is allowed to be dispatched.
 	fn contains(call: &T::RuntimeCall) -> bool {
 		Pallet::<T>::is_allowed(call)
+	}
+}
+
+impl<T: Config> frame_support::traits::SafeMode for Pallet<T> {
+	type BlockNumber = T::BlockNumber;
+
+	fn is_entered() -> bool {
+		Self::is_entered()
+	}
+
+	fn remaining() -> Option<Self::BlockNumber> {
+		EnteredUntil::<T>::get().map(|until| {
+			let now = <frame_system::Pallet<T>>::block_number();
+			until.saturating_sub(now)
+		})
+	}
+
+	fn enter(duration: Self::BlockNumber) -> Result<(), frame_support::traits::SafeModeError> {
+		Self::do_enter(None, duration).map_err(Into::into)
+	}
+
+	fn extend(duration: Self::BlockNumber) -> Result<(), frame_support::traits::SafeModeError> {
+		Self::do_extend(None, duration).map_err(Into::into)
+	}
+
+	fn exit() -> Result<(), frame_support::traits::SafeModeError> {
+		Self::do_exit(ExitReason::Force).map_err(Into::into)
+	}
+}
+
+impl<T: Config> From<Error<T>> for frame_support::traits::SafeModeError {
+	fn from(err: Error<T>) -> Self {
+		match err {
+			Error::<T>::Entered => Self::AlreadyEntered,
+			Error::<T>::Exited => Self::AlreadyExited,
+			_ => Self::Unknown,
+		}
 	}
 }

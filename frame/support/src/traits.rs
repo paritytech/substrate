@@ -118,6 +118,9 @@ pub use messages::{
 	ProcessMessageError, ServiceQueues, TransformOrigin,
 };
 
+mod call_pause;
+pub use call_pause::{SafeMode, SafeModeError, TransactionPause, TransactionPauseError};
+
 #[cfg(feature = "try-runtime")]
 mod try_runtime;
 #[cfg(feature = "try-runtime")]

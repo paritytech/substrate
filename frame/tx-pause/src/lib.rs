@@ -164,11 +164,7 @@ pub mod pallet {
 		pub fn pause(origin: OriginFor<T>, full_name: FullNameOf<T>) -> DispatchResult {
 			T::PauseOrigin::ensure_origin(origin)?;
 
-			Self::ensure_can_pause(&full_name)?;
-			PausedCalls::<T>::insert(&full_name, ());
-			Self::deposit_event(Event::CallPaused { full_name });
-
-			Ok(())
+			Self::do_pause(full_name).map_err(Into::into)
 		}
 
 		/// Un-pause a call.
@@ -177,18 +173,31 @@ pub mod pallet {
 		/// Emits an [`Event::CallUnpaused`] event on success.
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::unpause())]
-		pub fn unpause(origin: OriginFor<T>, full_name: FullNameOf<T>) -> DispatchResult {
+		pub fn unpause(origin: OriginFor<T>, ident: FullNameOf<T>) -> DispatchResult {
 			T::UnpauseOrigin::ensure_origin(origin)?;
 
-			Self::ensure_can_unpause(&full_name)?;
-			PausedCalls::<T>::remove(&full_name);
-			Self::deposit_event(Event::CallUnpaused { full_name });
-			Ok(())
+			Self::do_unpause(ident).map_err(Into::into)
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
+	pub(crate) fn do_pause(ident: FullNameOf<T>) -> Result<(), Error<T>> {
+		Self::ensure_can_pause(&ident)?;
+		PausedCalls::<T>::insert(&ident, ());
+		Self::deposit_event(Event::CallPaused { full_name: ident });
+
+		Ok(())
+	}
+
+	pub(crate) fn do_unpause(ident: FullNameOf<T>) -> Result<(), Error<T>> {
+		Self::ensure_can_unpause(&ident)?;
+		PausedCalls::<T>::remove(&ident);
+		Self::deposit_event(Event::CallUnpaused { full_name: ident });
+
+		Ok(())
+	}
+
 	/// Return whether this call is paused.
 	pub fn is_paused_unbound(pallet: Vec<u8>, call: Vec<u8>) -> bool {
 		let pallet = PalletNameOf::<T>::try_from(pallet);
@@ -244,5 +253,41 @@ where
 	fn contains(call: &<T as frame_system::Config>::RuntimeCall) -> bool {
 		let CallMetadata { pallet_name, function_name } = call.get_call_metadata();
 		!Pallet::<T>::is_paused_unbound(pallet_name.into(), function_name.into())
+	}
+}
+
+impl<T: Config> frame_support::traits::TransactionPause for Pallet<T> {
+	type CallIdentifier = FullNameOf<T>;
+
+	fn is_paused(full_name: Self::CallIdentifier) -> bool {
+		Self::is_paused(&full_name)
+	}
+
+	fn can_pause(full_name: Self::CallIdentifier) -> bool {
+		Self::ensure_can_pause(&full_name).is_ok()
+	}
+
+	fn pause(
+		full_name: Self::CallIdentifier,
+	) -> Result<(), frame_support::traits::TransactionPauseError> {
+		Self::do_pause(full_name).map_err(Into::into)
+	}
+
+	fn unpause(
+		full_name: Self::CallIdentifier,
+	) -> Result<(), frame_support::traits::TransactionPauseError> {
+		Self::do_unpause(full_name).map_err(Into::into)
+	}
+}
+
+impl<T: Config> From<Error<T>> for frame_support::traits::TransactionPauseError {
+	fn from(err: Error<T>) -> Self {
+		match err {
+			Error::<T>::NotFound => Self::NotFound,
+			Error::<T>::Unpausable => Self::Unpausable,
+			Error::<T>::IsPaused => Self::AlreadyPaused,
+			Error::<T>::IsUnpaused => Self::AlreadyUnpaused,
+			_ => Self::Unknown,
+		}
 	}
 }
