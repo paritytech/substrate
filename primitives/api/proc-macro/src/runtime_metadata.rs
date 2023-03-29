@@ -126,7 +126,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 		};
 
 		// String method name including quotes for constructing `v15::RuntimeApiMethodMetadata`.
-		let method_name = format!("{}", signature.ident);
+		let method_name = signature.ident.to_string();
 		let docs = collect_docs(&method.attrs, &crate_);
 
 		// Include the method metadata only if its `cfg` features are enabled.
