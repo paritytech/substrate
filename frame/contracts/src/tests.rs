@@ -458,7 +458,8 @@ fn compile_module<T>(fixture_name: &str) -> wat::Result<(Vec<u8>, <T::Hashing as
 where
 	T: frame_system::Config,
 {
-	let fixture_path = ["/Users/pg/github/substrate/frame/contracts/fixtures/", fixture_name, ".wat"].concat();
+	let fixture_path =
+		["/Users/pg/github/substrate/frame/contracts/fixtures/", fixture_name, ".wat"].concat();
 	let wasm_binary = wat::parse_file(fixture_path)?;
 	let code_hash = T::Hashing::hash(&wasm_binary);
 	Ok((wasm_binary, code_hash))
@@ -2929,7 +2930,6 @@ fn sr25519_verify() {
 		.account_id;
 
 		let call_with_message = |message: &[u8; 11]| {
-
 			// Alice's signature for "hello world"
 			#[rustfmt::skip]
 			let signature: [u8; 64] = [
@@ -2960,8 +2960,8 @@ fn sr25519_verify() {
 				params,
 				false,
 				Determinism::Enforced,
-				)
-				.result
+			)
+			.result
 		};
 
 		assert!(call_with_message(&b"hello world").is_ok());
