@@ -193,7 +193,7 @@ fn combine_impls(local_impl: ItemImpl, foreign_impl: ItemImpl) -> ItemImpl {
 	final_impl
 }
 
-pub fn derive_impl(foreign_tokens: TokenStream, local_tokens: TokenStream) -> Result<TokenStream> {
+pub fn derive_impl(foreign_path: TokenStream, foreign_tokens: TokenStream, local_tokens: TokenStream) -> Result<TokenStream> {
 	let local_impl = parse2::<ItemImpl>(local_tokens)?;
 	let foreign_impl = parse2::<ItemImpl>(foreign_tokens)?;
 
@@ -201,6 +201,7 @@ pub fn derive_impl(foreign_tokens: TokenStream, local_tokens: TokenStream) -> Re
 	pretty_print(&local_impl.to_token_stream());
 	println!("foreign_impl:");
 	pretty_print(&foreign_impl.to_token_stream());
+	println!("foreign_path: {}", foreign_path);
 
 	let combined_impl = combine_impls(local_impl, foreign_impl);
 
