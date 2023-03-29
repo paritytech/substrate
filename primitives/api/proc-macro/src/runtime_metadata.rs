@@ -105,7 +105,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 			};
 
 			let pat = &typed.pat;
-			let name = format!("{}", quote!(#pat));
+			let name = quote!(#pat).to_string();
 			let ty = &typed.ty;
 			collect_where_bounds(ty).map(|ty_elem| where_clause.push(ty_elem));
 
