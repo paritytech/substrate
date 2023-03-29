@@ -23,6 +23,11 @@ use quote::{quote, ToTokens};
 use std::collections::HashSet;
 use syn::{parse2, parse_quote, Ident, ImplItem, ItemImpl, Path, Result};
 
+/// Gets the [`Ident`] representation of the given [`ImplItem`], if one exists. Otherwise
+/// returns [`None`].
+///
+/// Used by [`combine_impls`] to determine whether we can compare [`ImplItem`]s by [`Ident`]
+/// or not.
 fn impl_item_ident(impl_item: &ImplItem) -> Option<Ident> {
 	match impl_item {
 		ImplItem::Const(item) => Some(item.ident.clone()),
