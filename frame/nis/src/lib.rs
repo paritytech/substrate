@@ -752,8 +752,7 @@ pub mod pallet {
 					)?;
 					summary.receipts_on_hold.saturating_reduce(on_hold);
 				}
-				T::Currency::release(&T::HoldReason::get(), &who, amount, Exact)
-					.map_err(|_| Error::<T>::Release2)?;
+				T::Currency::release(&T::HoldReason::get(), &who, amount, Exact)?;
 			}
 
 			if dropped {
