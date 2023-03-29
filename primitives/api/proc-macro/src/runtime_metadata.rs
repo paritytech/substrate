@@ -249,6 +249,7 @@ pub fn generate_impl_runtime_metadata(
 				#crate_::vec![ #( #metadata, )* ]
 			}
 		}
+		#[doc(hidden)]
 		impl InternalImplRuntimeApis for #runtime_name {}
 	))
 }
