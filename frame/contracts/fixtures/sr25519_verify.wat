@@ -1,7 +1,8 @@
 ;; This contract:
 ;; 1) Reads signature, message and public key from the input
 ;; 2) Calls sr25519_verify
-;; 3) Returns the result
+;; 3) Traps if the signature is invalid
+
 (module
 	(import "seal0" "seal_sr25519_verify" (func $seal_sr25519_verify (param i32 i32 i32 i32) (result i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
