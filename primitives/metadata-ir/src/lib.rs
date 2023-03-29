@@ -77,7 +77,7 @@ mod test {
 				signed_extensions: vec![],
 			},
 			ty: meta_type::<()>(),
-			runtime: vec![],
+			apis: vec![],
 		}
 	}
 
