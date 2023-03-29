@@ -49,7 +49,7 @@ impl MemoryKeystore {
 		})
 	}
 
-	fn public<T: Pair>(&self, key_type: KeyTypeId) -> Vec<T::Public> {
+	fn public_keys<T: Pair>(&self, key_type: KeyTypeId) -> Vec<T::Public> {
 		self.keys
 			.read()
 			.get(&key_type)
@@ -62,7 +62,7 @@ impl MemoryKeystore {
 			.unwrap_or_default()
 	}
 
-	fn generate<T: Pair>(
+	fn generate_new<T: Pair>(
 		&self,
 		key_type: KeyTypeId,
 		seed: Option<&str>,
@@ -96,14 +96,14 @@ impl MemoryKeystore {
 		public: &T::Public,
 		msg: &[u8],
 	) -> Result<Option<T::Signature>, Error> {
-		let signature = self.pair::<T>(key_type, public).map(|pair| pair.sign(msg));
-		Ok(signature)
+		let sig = self.pair::<T>(key_type, public).map(|pair| pair.sign(msg));
+		Ok(sig)
 	}
 }
 
 impl Keystore for MemoryKeystore {
 	fn sr25519_public_keys(&self, key_type: KeyTypeId) -> Vec<sr25519::Public> {
-		self.public::<sr25519::Pair>(key_type)
+		self.public_keys::<sr25519::Pair>(key_type)
 	}
 
 	fn sr25519_generate_new(
@@ -111,7 +111,7 @@ impl Keystore for MemoryKeystore {
 		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<sr25519::Public, Error> {
-		self.generate::<sr25519::Pair>(key_type, seed)
+		self.generate_new::<sr25519::Pair>(key_type, seed)
 	}
 
 	fn sr25519_sign(
@@ -129,16 +129,16 @@ impl Keystore for MemoryKeystore {
 		public: &sr25519::Public,
 		transcript_data: VRFTranscriptData,
 	) -> Result<Option<VRFSignature>, Error> {
-		let signature = self.pair::<sr25519::Pair>(key_type, public).map(|pair| {
+		let sig = self.pair::<sr25519::Pair>(key_type, public).map(|pair| {
 			let transcript = make_transcript(transcript_data);
 			let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
 			VRFSignature { output: inout.to_output(), proof }
 		});
-		Ok(signature)
+		Ok(sig)
 	}
 
 	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {
-		self.public::<ed25519::Pair>(key_type)
+		self.public_keys::<ed25519::Pair>(key_type)
 	}
 
 	fn ed25519_generate_new(
@@ -146,7 +146,7 @@ impl Keystore for MemoryKeystore {
 		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<ed25519::Public, Error> {
-		self.generate::<ed25519::Pair>(key_type, seed)
+		self.generate_new::<ed25519::Pair>(key_type, seed)
 	}
 
 	fn ed25519_sign(
@@ -159,7 +159,7 @@ impl Keystore for MemoryKeystore {
 	}
 
 	fn ecdsa_public_keys(&self, key_type: KeyTypeId) -> Vec<ecdsa::Public> {
-		self.public::<ecdsa::Pair>(key_type)
+		self.public_keys::<ecdsa::Pair>(key_type)
 	}
 
 	fn ecdsa_generate_new(
@@ -167,7 +167,7 @@ impl Keystore for MemoryKeystore {
 		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<ecdsa::Public, Error> {
-		self.generate::<ecdsa::Pair>(key_type, seed)
+		self.generate_new::<ecdsa::Pair>(key_type, seed)
 	}
 
 	fn ecdsa_sign(
@@ -185,9 +185,8 @@ impl Keystore for MemoryKeystore {
 		public: &ecdsa::Public,
 		msg: &[u8; 32],
 	) -> Result<Option<ecdsa::Signature>, Error> {
-		let signature =
-			self.pair::<ecdsa::Pair>(key_type, public).map(|pair| pair.sign_prehashed(msg));
-		Ok(signature)
+		let sig = self.pair::<ecdsa::Pair>(key_type, public).map(|pair| pair.sign_prehashed(msg));
+		Ok(sig)
 	}
 
 	fn insert(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
