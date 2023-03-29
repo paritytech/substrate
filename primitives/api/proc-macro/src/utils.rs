@@ -264,10 +264,10 @@ pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
 		.iter()
 		.filter_map(|attr| {
 			let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() else {
-                               return None
-                       };
+				return None
+			};
 
-			meta.path.get_ident().filter(|ident| ident == "doc").map(|_| meta.lit)
+			meta.path.get_ident().filter(|ident| *ident == "doc").map(|_| meta.lit)
 		})
 		.collect()
 }
