@@ -105,7 +105,7 @@ impl<H> WasmExecutorBuilder<H> {
 			onchain_heap_alloc_strategy: None,
 			offchain_heap_alloc_strategy: None,
 			max_runtime_instances: 2,
-			runtime_cache_size: 8,
+			runtime_cache_size: 4,
 			allow_missing_host_functions: false,
 			cache_path: None,
 		}
@@ -171,7 +171,7 @@ impl<H> WasmExecutorBuilder<H> {
 	/// Defines the number of different runtimes/instantiated wasm blobs the cache stores.
 	/// Runtimes/wasm blobs are differentiated based on the hash and the number of heap pages.
 	///
-	/// By default this value is set to `8`.
+	/// By default this value is set to `4`.
 	pub fn with_runtime_cache_size(mut self, runtime_cache_size: u8) -> Self {
 		self.runtime_cache_size = runtime_cache_size;
 		self
