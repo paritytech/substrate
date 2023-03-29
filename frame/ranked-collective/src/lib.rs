@@ -90,14 +90,14 @@ pub type Votes = u32;
 )]
 #[scale_info(skip_type_params(T, I, M))]
 #[codec(mel_bound())]
-pub struct Tally<T, I, M: MaxClassVoters> {
+pub struct Tally<T, I, M: GetMaxVoters> {
 	bare_ayes: MemberIndex,
 	ayes: Votes,
 	nays: Votes,
 	dummy: PhantomData<(T, I, M)>,
 }
 
-impl<T: Config<I>, I: 'static, M: MaxClassVoters> Tally<T, I, M> {
+impl<T: Config<I>, I: 'static, M: GetMaxVoters> Tally<T, I, M> {
 	pub fn from_parts(bare_ayes: MemberIndex, ayes: Votes, nays: Votes) -> Self {
 		Tally { bare_ayes, ayes, nays, dummy: PhantomData }
 	}
@@ -115,7 +115,7 @@ pub type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T,
 pub type ClassOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Class;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
-impl<T: Config<I>, I: 'static, M: MaxClassVoters<Class = ClassOf<T, I>>>
+impl<T: Config<I>, I: 'static, M: GetMaxVoters<Class = ClassOf<T, I>>>
 	VoteTally<Votes, ClassOf<T, I>> for Tally<T, I, M>
 {
 	fn new(_: ClassOf<T, I>) -> Self {
@@ -125,7 +125,7 @@ impl<T: Config<I>, I: 'static, M: MaxClassVoters<Class = ClassOf<T, I>>>
 		self.bare_ayes
 	}
 	fn support(&self, class: ClassOf<T, I>) -> Perbill {
-		Perbill::from_rational(self.bare_ayes, M::max_class_voters(class))
+		Perbill::from_rational(self.bare_ayes, M::get_max_voters(class))
 	}
 	fn approval(&self, _: ClassOf<T, I>) -> Perbill {
 		Perbill::from_rational(self.ayes, 1.max(self.ayes + self.nays))
@@ -133,19 +133,19 @@ impl<T: Config<I>, I: 'static, M: MaxClassVoters<Class = ClassOf<T, I>>>
 	#[cfg(feature = "runtime-benchmarks")]
 	fn unanimity(class: ClassOf<T, I>) -> Self {
 		Self {
-			bare_ayes: M::max_class_voters(class.clone()),
-			ayes: M::max_class_voters(class),
+			bare_ayes: M::get_max_voters(class.clone()),
+			ayes: M::get_max_voters(class),
 			nays: 0,
 			dummy: PhantomData,
 		}
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn rejection(class: ClassOf<T, I>) -> Self {
-		Self { bare_ayes: 0, ayes: 0, nays: M::max_class_voters(class), dummy: PhantomData }
+		Self { bare_ayes: 0, ayes: 0, nays: M::get_max_voters(class), dummy: PhantomData }
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn from_requirements(support: Perbill, approval: Perbill, class: ClassOf<T, I>) -> Self {
-		let c = M::max_class_voters(class);
+		let c = M::get_max_voters(class);
 		let ayes = support * c;
 		let nays = ((ayes as u64) * 1_000_000_000u64 / approval.deconstruct() as u64) as u32 - ayes;
 		Self { bare_ayes: ayes, ayes, nays, dummy: PhantomData }
@@ -153,7 +153,7 @@ impl<T: Config<I>, I: 'static, M: MaxClassVoters<Class = ClassOf<T, I>>>
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn setup(class: ClassOf<T, I>, granularity: Perbill) {
-		if M::max_class_voters(class.clone()) == 0 {
+		if M::get_max_voters(class.clone()) == 0 {
 			let max_voters = granularity.saturating_reciprocal_mul(1u32);
 			for i in 0..max_voters {
 				let who: T::AccountId =
@@ -164,7 +164,7 @@ impl<T: Config<I>, I: 'static, M: MaxClassVoters<Class = ClassOf<T, I>>>
 				)
 				.expect("could not add members for benchmarks");
 			}
-			assert_eq!(M::max_class_voters(class), max_voters);
+			assert_eq!(M::get_max_voters(class), max_voters);
 		}
 	}
 }
@@ -233,28 +233,17 @@ impl Convert<Rank, Votes> for Geometric {
 	}
 }
 
-/// Trait for getting the maximum number of voters for a given rank.
-pub trait MaxRankVoters {
-	/// Return the maximum number of voters for the rank `r`.
-	fn max_rank_voters(r: Rank) -> MemberIndex;
-}
-impl<T: Config<I>, I: 'static> MaxRankVoters for Pallet<T, I> {
-	fn max_rank_voters(r: Rank) -> MemberIndex {
-		MemberCount::<T, I>::get(r)
-	}
-}
-
 /// Trait for getting the maximum number of voters for a given poll class.
-pub trait MaxClassVoters {
+pub trait GetMaxVoters {
 	/// Poll class type.
 	type Class;
-	/// Return the maximum number of voters for the class `c`.
-	fn max_class_voters(c: Self::Class) -> MemberIndex;
+	/// Return the maximum number of voters for the poll class `c`.
+	fn get_max_voters(c: Self::Class) -> MemberIndex;
 }
-impl<T: Config<I>, I: 'static> MaxClassVoters for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> GetMaxVoters for Pallet<T, I> {
 	type Class = ClassOf<T, I>;
-	fn max_class_voters(c: Self::Class) -> MemberIndex {
-		<Self as MaxRankVoters>::max_rank_voters(T::MinRankOfClass::convert(c))
+	fn get_max_voters(c: Self::Class) -> MemberIndex {
+		MemberCount::<T, I>::get(T::MinRankOfClass::convert(c))
 	}
 }
 
