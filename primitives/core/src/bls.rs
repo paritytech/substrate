@@ -30,11 +30,11 @@ use crate::{
 use sp_std::vec::Vec;
 
 #[cfg(feature = "full_crypto")]
+use bls_like::{double::DoublePublicKeyScheme, Keypair, Message, SecretKey};
 use bls_like::{
-	double::{DoublePublicKey, DoublePublicKeyScheme, DoubleSignature},
-	Keypair, Message, SecretKey, SerializableToBytes,
+	double::{DoublePublicKey, DoubleSignature},
+	EngineBLS, SerializableToBytes, TinyBLS381,
 };
-use bls_like::{EngineBLS, TinyBLS381};
 use codec::{Decode, Encode, MaxEncodedLen};
 #[cfg(feature = "std")]
 use hex;
@@ -57,9 +57,9 @@ pub mod bls377 {
 	#[cfg(feature = "full_crypto")]
 	pub type Pair = super::Pair<TinyBLS377>;
 	/// BLS12-377 public key.
-	pub type Public = super::DoublePublicKey<TinyBLS377>;
+	pub type Public = super::Public<TinyBLS377>;
 	/// BLS12-377 signature.
-	pub type Signature = super::DoubleSignature<TinyBLS377>;
+	pub type Signature = super::Signature<TinyBLS377>;
 }
 
 /// BLS-381 specialized types
@@ -74,9 +74,9 @@ pub mod bls381 {
 	#[cfg(feature = "full_crypto")]
 	pub type Pair = super::Pair<TinyBLS381>;
 	/// BLS12-381 public key.
-	pub type Public = super::DoublePublicKey<TinyBLS381>;
+	pub type Public = super::Public<TinyBLS381>;
 	/// BLS12-381 signature.
-	pub type Signature = super::DoubleSignature<TinyBLS381>;
+	pub type Signature = super::Signature<TinyBLS381>;
 }
 
 trait BlsBound: EngineBLS + Send + Sync + 'static {}
