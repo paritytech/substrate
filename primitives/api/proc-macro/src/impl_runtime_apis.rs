@@ -82,7 +82,7 @@ fn generate_impl_call(
 		quote!(
 			if !#input.is_empty() {
 				panic!(
-					"Bad input data provided to {}: expected no parameters, input buffer is not empty.",
+					"Bad input data provided to {}: expected no parameters, but input buffer is not empty.",
 					#fn_name_str
 				);
 			}
