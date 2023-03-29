@@ -37,6 +37,7 @@ pub struct MemoryKeystore {
 }
 
 impl MemoryKeystore {
+	/// Creates a new instance of `Self`.
 	pub fn new() -> Self {
 		Self::default()
 	}
