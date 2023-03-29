@@ -108,7 +108,7 @@ pub enum ReturnCode {
 	/// ECDSA compressed pubkey conversion into Ethereum address failed (most probably
 	/// wrong pubkey provided).
 	EcdsaRecoverFailed = 11,
-	/// TODO docstring
+	/// sr25519 signature verification failed.
 	Sr25519VerifyFailed = 12,
 }
 
