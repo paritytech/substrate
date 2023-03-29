@@ -436,6 +436,7 @@ mod tests {
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
 		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
+		sr25519_verify: RefCell<Vec<([u8; 64], Vec<u8>, [u8; 32])>>,
 		code_hashes: Vec<CodeHash<Test>>,
 	}
 
@@ -460,6 +461,7 @@ mod tests {
 				gas_meter: GasMeter::new(Weight::from_parts(10_000_000_000, 10 * 1024 * 1024)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
+				sr25519_verify: Default::default(),
 			}
 		}
 	}
@@ -613,6 +615,10 @@ mod tests {
 		) -> Result<[u8; 33], ()> {
 			self.ecdsa_recover.borrow_mut().push((*signature, *message_hash));
 			Ok([3; 33])
+		}
+		fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool {
+			self.sr25519_verify.borrow_mut().push((*signature, message.into(), *pub_key));
+			true
 		}
 		fn contract_info(&mut self) -> &mut crate::ContractInfo<Self::T> {
 			unimplemented!()

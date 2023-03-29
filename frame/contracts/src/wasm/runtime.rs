@@ -108,6 +108,8 @@ pub enum ReturnCode {
 	/// ECDSA compressed pubkey conversion into Ethereum address failed (most probably
 	/// wrong pubkey provided).
 	EcdsaRecoverFailed = 11,
+	/// TODO docstring
+	Sr25519VerifyFailed = 12,
 }
 
 impl From<ExecReturnValue> for ReturnCode {
@@ -250,6 +252,8 @@ pub enum RuntimeCosts {
 	HashBlake128(u32),
 	/// Weight of calling `seal_ecdsa_recover`.
 	EcdsaRecovery,
+	/// Weight of calling `seal_sr25519_verify`.
+	Sr25519Verify,
 	/// Weight charged by a chain extension through `seal_call_chain_extension`.
 	ChainExtension(Weight),
 	/// Weight charged for calling into the runtime.
@@ -335,6 +339,7 @@ impl RuntimeCosts {
 				.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			EcdsaRecovery => s.ecdsa_recover,
+			Sr25519Verify => s.sr25519_verify,
 			ChainExtension(weight) => weight,
 			CallRuntime(weight) => weight,
 			SetCodeHash => s.set_code_hash,
@@ -2462,6 +2467,43 @@ pub mod env {
 				Ok(ReturnCode::Success)
 			},
 			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
+		}
+	}
+
+	/// Verify the sr25519 signature given the message and public key
+	///
+	/// # Parameters
+	///
+	/// - `signature_ptr`: the pointer into the linear memory where the signature is placed. Should
+	///   be decodable as a 64 bytes. Traps otherwise.
+	/// - `message_ptr`: the pointer into the linear memory where the message is placed.
+	/// - `message_len`: the length of the message payload. Should be decodable as a Scale encoded
+	///   Vec<u8>. Traps otherwise.
+	/// - `pub_key_ptr`: the pointer into the linear memory where the public key is placed. Should
+	///   be decodable as a 32 bytes. Traps otherwise.
+	/// # Errors
+	///
+	/// - `ReturnCode::Sr25519VerifyFailed
+	#[prefixed_alias]
+	fn sr25519_verify(
+		ctx: _,
+		memory: _,
+		signature_ptr: u32,
+		message_ptr: u32,
+		message_len: u32,
+		pub_key_ptr: u32,
+	) -> Result<ReturnCode, TrapReason> {
+		ctx.charge_gas(RuntimeCosts::Sr25519Verify)?;
+		let mut signature: [u8; 64] = [0; 64];
+		ctx.read_sandbox_memory_into_buf(memory, signature_ptr, &mut signature)?;
+		let mut pub_key: [u8; 32] = [0; 32];
+		ctx.read_sandbox_memory_into_buf(memory, pub_key_ptr, &mut pub_key)?;
+		let message: Vec<u8> =
+			ctx.read_sandbox_memory_as_unbounded(memory, message_ptr, message_len)?;
+		if ctx.ext.sr25519_verify(&signature, &message, &pub_key) {
+			Ok(ReturnCode::Success)
+		} else {
+			Ok(ReturnCode::Sr25519VerifyFailed)
 		}
 	}
 

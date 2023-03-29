@@ -458,7 +458,7 @@ fn compile_module<T>(fixture_name: &str) -> wat::Result<(Vec<u8>, <T::Hashing as
 where
 	T: frame_system::Config,
 {
-	let fixture_path = ["fixtures/", fixture_name, ".wat"].concat();
+	let fixture_path = ["/Users/pg/github/substrate/frame/contracts/fixtures/", fixture_name, ".wat"].concat();
 	let wasm_binary = wat::parse_file(fixture_path)?;
 	let code_hash = T::Hashing::hash(&wasm_binary);
 	Ok((wasm_binary, code_hash))
@@ -2903,6 +2903,65 @@ fn ecdsa_recover() {
 		.unwrap();
 		assert!(!result.did_revert());
 		assert_eq!(result.data, EXPECTED_COMPRESSED_PUBLIC_KEY);
+	})
+}
+
+#[test]
+fn sr25519_verify() {
+	let (wasm, _code_hash) = compile_module::<Test>("sr25519_verify").unwrap();
+
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Instantiate the sr25519_verify contract.
+		let addr = Contracts::bare_instantiate(
+			ALICE,
+			100_000,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm),
+			vec![],
+			vec![],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		let message = b"hello world";
+
+		#[rustfmt::skip]
+		let signature: [u8; 64] = [
+			184, 49, 74, 238, 78, 165, 102, 252, 22, 92, 156, 176, 124, 118, 168, 116, 247,
+			99, 0, 94, 2, 45, 9, 170, 73, 222, 182, 74, 60, 32, 75, 64, 98, 174, 69, 55, 83,
+			85, 180, 98, 208, 75, 231, 57, 205, 62, 4, 105, 26, 136, 172, 17, 123, 99, 90, 255, 
+			228, 54, 115, 63, 30, 207, 205, 131,
+		];
+
+		#[rustfmt::skip]
+		let public_key: [u8; 32] = [
+			212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 
+			133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125,
+		];
+
+		let mut params = vec![];
+		params.extend_from_slice(&signature);
+		params.extend_from_slice(&message.to_vec().encode());
+		params.extend_from_slice(&public_key);
+
+		let result = <Pallet<Test>>::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			params,
+			false,
+			Determinism::Enforced,
+		)
+		.result
+		.unwrap();
+		assert!(!result.did_revert());
 	})
 }
 

@@ -111,6 +111,7 @@ pub trait WeightInfo {
 	fn seal_hash_blake2_128_per_byte(n: u32, ) -> Weight;
 	fn seal_ecdsa_recover(r: u32, ) -> Weight;
 	fn seal_ecdsa_to_eth_address(r: u32, ) -> Weight;
+	fn seal_sr25519_verify(r: u32, ) -> Weight;
 	fn seal_set_code_hash(r: u32, ) -> Weight;
 	fn seal_reentrance_count(r: u32, ) -> Weight;
 	fn seal_account_reentrance_count(r: u32, ) -> Weight;
@@ -1494,6 +1495,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(6_u64))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
 			.saturating_add(Weight::from_parts(0, 385).saturating_mul(r.into()))
+	}
+	fn seal_sr25519_verify(_r: u32, ) -> Weight {
+		Weight::zero()
 	}
 	/// Storage: System Account (r:1 w:0)
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: Measured)
@@ -3451,6 +3455,9 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(6_u64))
 			.saturating_add(RocksDbWeight::get().writes(3_u64))
 			.saturating_add(Weight::from_parts(0, 385).saturating_mul(r.into()))
+	}
+	fn seal_sr25519_verify(_r: u32, ) -> Weight {
+		Weight::zero()
 	}
 	/// Storage: System Account (r:1 w:0)
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: Measured)
