@@ -437,6 +437,7 @@ mod tests {
 		debug_buffer: Vec<u8>,
 		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
 		code_hashes: Vec<CodeHash<Test>>,
+		caller: Caller<Test>,
 	}
 
 	/// The call is mocked and just returns this hardcoded value.
@@ -460,6 +461,7 @@ mod tests {
 				gas_meter: GasMeter::new(Weight::from_parts(10_000_000_000, 10 * 1024 * 1024)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
+				caller: Caller::Account(ALICE),
 			}
 		}
 	}
@@ -544,7 +546,7 @@ mod tests {
 			Ok(result)
 		}
 		fn caller(&self) -> Caller<Self::T> {
-			Caller::from_account_id(ALICE)
+			self.caller.clone()
 		}
 		fn is_contract(&self, _address: &AccountIdOf<Self::T>) -> bool {
 			true
@@ -1447,6 +1449,16 @@ mod tests {
 	#[test]
 	fn caller() {
 		assert_ok!(execute(CODE_CALLER, vec![], MockExt::default()));
+	}
+
+	#[test]
+	fn caller_traps_when_no_account_id() {
+		let mut ext = MockExt::default();
+		ext.caller = Caller::Root;
+		assert_eq!(
+			execute(CODE_CALLER, vec![], ext),
+			Err(ExecError { error: Error::<Test>::RootOrigin.into(), origin: ErrorOrigin::Caller })
+		);
 	}
 
 	/// calls `seal_address` and compares the result with the constant (BOB's address part).

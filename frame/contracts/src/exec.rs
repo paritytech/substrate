@@ -1058,7 +1058,10 @@ where
 
 		// Get the account id from the Caller.
 		// If the caller is root, we don't need to transfer.
-		let Caller::Account(caller) = self.caller() else { return Ok(()) };
+		let caller = match self.caller() {
+			Caller::Account(caller) => caller,
+			Caller::Root => return Ok(()),
+		};
 
 		let value = frame.value_transferred;
 		Self::transfer(ExistenceRequirement::KeepAlive, &caller, &frame.account_id, value)

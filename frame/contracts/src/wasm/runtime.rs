@@ -1631,11 +1631,12 @@ pub mod env {
 	#[prefixed_alias]
 	fn caller(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::Caller)?;
+		let caller = ctx.ext.caller().account_id()?;
 		Ok(ctx.write_sandbox_output(
 			memory,
 			out_ptr,
 			out_len_ptr,
-			&ctx.ext.caller().encode(),
+			&caller.encode(),
 			false,
 			already_charged,
 		)?)
