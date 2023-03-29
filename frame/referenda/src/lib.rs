@@ -1206,7 +1206,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let until_approval = track.min_approval.delay(approval);
 			let until_support = track.min_support.delay(support);
 			let offset = until_support.max(until_approval);
-			deciding.since.saturating_add(offset * track.decision_period)
+			deciding.since.saturating_add(offset.mul_ceil(track.decision_period))
 		})
 	}
 

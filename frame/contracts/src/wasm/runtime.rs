@@ -84,6 +84,7 @@ enum KeyType {
 /// will not be changed or removed. This means that any contract **must not** exhaustively
 /// match return codes. Instead, contracts should prepare for unknown variants and deal with
 /// those errors gracefully in order to be forward compatible.
+#[derive(Debug)]
 #[repr(u32)]
 pub enum ReturnCode {
 	/// API call successful.

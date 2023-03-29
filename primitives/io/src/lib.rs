@@ -19,7 +19,7 @@
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc_error_handler))]
+#![cfg_attr(enable_alloc_error_handler, feature(alloc_error_handler))]
 #![cfg_attr(
 	feature = "std",
 	doc = "Substrate runtime standard library as compiled when linked with Rust's standard library."
@@ -1643,7 +1643,7 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 /// A default OOM handler for WASM environment.
-#[cfg(all(not(feature = "disable_oom"), not(feature = "std")))]
+#[cfg(all(not(feature = "disable_oom"), enable_alloc_error_handler))]
 #[alloc_error_handler]
 pub fn oom(_: core::alloc::Layout) -> ! {
 	#[cfg(feature = "improved_panic_error_reporting")]
