@@ -143,7 +143,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 	}
 
 	let trait_name_ident = &decl.ident;
-	let trait_name = format!("{}", trait_name_ident);
+	let trait_name = trait_name_ident.to_string();
 	let docs = collect_docs(&decl.attrs, &crate_);
 	let attrs = filter_cfg_attributes(&decl.attrs);
 	// The trait generics where already extended with `Block: BlockT`.
