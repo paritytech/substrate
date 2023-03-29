@@ -149,6 +149,54 @@ impl<H: Hasher> Recorder<H> {
 		mem::take(&mut *self.inner.lock());
 		self.encoded_size_estimation.store(0, Ordering::Relaxed);
 	}
+
+	pub fn start_transaction(&self) {
+		let mut inner = self.inner.lock();
+		inner.accessed_nodes_transactions.push(Default::default());
+		inner.recorded_keys_transactions.push(Default::default());
+	}
+
+	pub fn rollback_transaction(&self) {
+		let mut inner = self.inner.lock();
+
+		if let Some(nodes) = inner.accessed_nodes_transactions.pop() {
+			nodes.into_iter().for_each(|n| {
+				inner.accessed_nodes.remove(&n);
+			})
+		}
+
+		if let Some(keys_per_storage_root) = inner.recorded_keys_transactions.pop() {
+			keys_per_storage_root.into_iter().for_each(|(storage_root, keys)| {
+				keys.into_iter().for_each(|(k, old_state)| {
+					if let Some(state) = old_state {
+						inner.recorded_keys.entry(storage_root).or_default().insert(k, state);
+					} else {
+						inner.recorded_keys.entry(storage_root).or_default().remove(&k);
+					}
+				});
+			})
+		}
+	}
+
+	pub fn commit_transaction(&self) {
+		let mut inner = self.inner.lock();
+
+		if let Some(nodes) = inner.accessed_nodes_transactions.pop() {
+			if let Some(parent) = inner.accessed_nodes_transactions.last_mut() {
+				parent.extend(nodes);
+			}
+		}
+
+		if let Some(keys_per_storage_root) = inner.recorded_keys_transactions.pop() {
+			if let Some(parent) = inner.recorded_keys_transactions.last_mut() {
+				keys_per_storage_root.into_iter().for_each(|(storage_root, keys)| {
+					keys.into_iter().for_each(|(k, old_state)| {
+						parent.entry(storage_root).or_default().entry(k).or_insert(old_state);
+					})
+				});
+			}
+		}
+	}
 }
 
 /// The [`TrieRecorder`](trie_db::TrieRecorder) implementation.
@@ -163,21 +211,15 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> TrieRecorder<H, I> 
 	fn update_recorded_keys(&mut self, full_key: &[u8], access: RecordedForKey) {
 		let inner = self.inner.deref_mut();
 
-		let entry = inner
-			.recorded_keys
-			.entry(self.storage_root)
-			.or_default()
-			.entry(full_key.into());
+		let entry =
+			inner.recorded_keys.entry(self.storage_root).or_default().entry(full_key.into());
 
 		let key = entry.key().clone();
 
 		let entry = if matches!(access, RecordedForKey::Value) {
 			entry.and_modify(|e| {
 				if let Some(tx) = inner.recorded_keys_transactions.last_mut() {
-					tx.entry(self.storage_root)
-						.or_default()
-						.entry(key.clone())
-						.or_insert(Some(*e));
+					tx.entry(self.storage_root).or_default().entry(key.clone()).or_insert(Some(*e));
 				}
 
 				*e = access;
@@ -314,7 +356,7 @@ mod tests {
 	type Recorder = super::Recorder<sp_core::Blake2Hasher>;
 
 	const TEST_DATA: &[(&[u8], &[u8])] =
-		&[(b"key1", b"val1"), (b"key2", b"val2"), (b"key3", b"val3"), (b"key4", b"val4")];
+		&[(b"key1", &[1; 64]), (b"key2", &[2; 64]), (b"key3", &[3; 64]), (b"key4", &[4; 64])];
 
 	fn create_trie() -> (MemoryDB, TrieHash<Layout>) {
 		let mut db = MemoryDB::default();
@@ -350,5 +392,75 @@ mod tests {
 		// Check that we recorded the required data
 		let trie = TrieDBBuilder::<Layout>::new(&memory_db, &root).build();
 		assert_eq!(TEST_DATA[0].1.to_vec(), trie.get(TEST_DATA[0].0).unwrap().unwrap());
+	}
+
+	#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+	struct RecorderStats {
+		accessed_nodes: usize,
+		recorded_keys: usize,
+	}
+
+	impl RecorderStats {
+		fn extract(recorder: &Recorder) -> Self {
+			let inner = recorder.inner.lock();
+
+			let recorded_keys =
+				inner.recorded_keys.iter().map(|(_, keys)| keys.keys()).flatten().count();
+
+			Self { recorded_keys, accessed_nodes: inner.accessed_nodes.len() }
+		}
+	}
+
+	#[test]
+	fn recorder_transactions_work() {
+		let (db, root) = create_trie();
+
+		let recorder = Recorder::default();
+		let mut stats = Vec::new();
+
+		for i in 0..4 {
+			recorder.start_transaction();
+			{
+				let mut trie_recorder = recorder.as_trie_recorder(root);
+				let trie = TrieDBBuilder::<Layout>::new(&db, &root)
+					.with_recorder(&mut trie_recorder)
+					.build();
+
+				assert_eq!(TEST_DATA[i].1.to_vec(), trie.get(TEST_DATA[i].0).unwrap().unwrap());
+			}
+			stats.push(RecorderStats::extract(&recorder));
+		}
+
+		assert_eq!(4, recorder.inner.lock().accessed_nodes_transactions.len());
+		assert_eq!(4, recorder.inner.lock().recorded_keys_transactions.len());
+
+		for i in 0..5 {
+			if i == 4 {
+				assert_eq!(RecorderStats::default(), RecorderStats::extract(&recorder));
+			} else {
+				assert_eq!(stats[3 - i], RecorderStats::extract(&recorder));
+			}
+
+			let storage_proof = recorder.to_storage_proof();
+			let memory_db: MemoryDB = storage_proof.into_memory_db();
+
+			// Check that we recorded the required data
+			let trie = TrieDBBuilder::<Layout>::new(&memory_db, &root).build();
+
+			// Check that the required data is still present.
+			for a in 0..4 {
+				if a < 4 - i {
+					assert_eq!(TEST_DATA[a].1.to_vec(), trie.get(TEST_DATA[a].0).unwrap().unwrap());
+				} else {
+					// All the data that we already rolled back, should be gone!
+					assert!(trie.get(TEST_DATA[a].0).is_err());
+				}
+			}
+
+			recorder.rollback_transaction();
+		}
+
+		assert_eq!(0, recorder.inner.lock().accessed_nodes_transactions.len());
+		assert_eq!(0, recorder.inner.lock().recorded_keys_transactions.len());
 	}
 }
