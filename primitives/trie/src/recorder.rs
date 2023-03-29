@@ -159,11 +159,19 @@ impl<H: Hasher> Recorder<H> {
 	pub fn rollback_transaction(&self) {
 		let mut inner = self.inner.lock();
 
+		// We locked `inner` and can just update the encoded size locally and then store it back to
+		// the atomic.
+		let mut new_encoded_size_estimation = self.encoded_size_estimation.load(Ordering::Relaxed);
 		if let Some(nodes) = inner.accessed_nodes_transactions.pop() {
 			nodes.into_iter().for_each(|n| {
-				inner.accessed_nodes.remove(&n);
+				if let Some(old) = inner.accessed_nodes.remove(&n) {
+					new_encoded_size_estimation =
+						new_encoded_size_estimation.saturating_sub(old.encoded_size());
+				}
 			})
 		}
+		self.encoded_size_estimation
+			.store(new_encoded_size_estimation, Ordering::Relaxed);
 
 		if let Some(keys_per_storage_root) = inner.recorded_keys_transactions.pop() {
 			keys_per_storage_root.into_iter().for_each(|(storage_root, keys)| {
@@ -227,6 +235,7 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> TrieRecorder<H, I> 
 		} else {
 			entry
 		};
+
 		entry.or_insert_with(|| {
 			if let Some(tx) = inner.recorded_keys_transactions.last_mut() {
 				tx.entry(self.storage_root).or_default().entry(key).or_insert(None);
@@ -349,7 +358,8 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 
 #[cfg(test)]
 mod tests {
-	use trie_db::{Trie, TrieDBBuilder, TrieDBMutBuilder, TrieHash, TrieMut};
+	use super::*;
+	use trie_db::{Trie, TrieDBBuilder, TrieDBMutBuilder, TrieHash, TrieMut, TrieRecorder};
 
 	type MemoryDB = crate::MemoryDB<sp_core::Blake2Hasher>;
 	type Layout = crate::LayoutV1<sp_core::Blake2Hasher>;
@@ -398,6 +408,7 @@ mod tests {
 	struct RecorderStats {
 		accessed_nodes: usize,
 		recorded_keys: usize,
+		estimated_size: usize,
 	}
 
 	impl RecorderStats {
@@ -407,12 +418,16 @@ mod tests {
 			let recorded_keys =
 				inner.recorded_keys.iter().map(|(_, keys)| keys.keys()).flatten().count();
 
-			Self { recorded_keys, accessed_nodes: inner.accessed_nodes.len() }
+			Self {
+				recorded_keys,
+				accessed_nodes: inner.accessed_nodes.len(),
+				estimated_size: recorder.estimate_encoded_size(),
+			}
 		}
 	}
 
 	#[test]
-	fn recorder_transactions_work() {
+	fn recorder_transactions_rollback_work() {
 		let (db, root) = create_trie();
 
 		let recorder = Recorder::default();
@@ -462,5 +477,203 @@ mod tests {
 
 		assert_eq!(0, recorder.inner.lock().accessed_nodes_transactions.len());
 		assert_eq!(0, recorder.inner.lock().recorded_keys_transactions.len());
+	}
+
+	#[test]
+	fn recorder_transactions_commit_work() {
+		let (db, root) = create_trie();
+
+		let recorder = Recorder::default();
+
+		for i in 0..4 {
+			recorder.start_transaction();
+			{
+				let mut trie_recorder = recorder.as_trie_recorder(root);
+				let trie = TrieDBBuilder::<Layout>::new(&db, &root)
+					.with_recorder(&mut trie_recorder)
+					.build();
+
+				assert_eq!(TEST_DATA[i].1.to_vec(), trie.get(TEST_DATA[i].0).unwrap().unwrap());
+			}
+		}
+
+		let stats = RecorderStats::extract(&recorder);
+		assert_eq!(4, recorder.inner.lock().accessed_nodes_transactions.len());
+		assert_eq!(4, recorder.inner.lock().recorded_keys_transactions.len());
+
+		for _ in 0..4 {
+			recorder.commit_transaction();
+		}
+		assert_eq!(stats, RecorderStats::extract(&recorder));
+
+		let storage_proof = recorder.to_storage_proof();
+		let memory_db: MemoryDB = storage_proof.into_memory_db();
+
+		// Check that we recorded the required data
+		let trie = TrieDBBuilder::<Layout>::new(&memory_db, &root).build();
+
+		// Check that the required data is still present.
+		for i in 0..4 {
+			assert_eq!(TEST_DATA[i].1.to_vec(), trie.get(TEST_DATA[i].0).unwrap().unwrap());
+		}
+	}
+
+	#[test]
+	fn recorder_transactions_commit_and_rollback_work() {
+		let (db, root) = create_trie();
+
+		let recorder = Recorder::default();
+
+		for i in 0..2 {
+			recorder.start_transaction();
+			{
+				let mut trie_recorder = recorder.as_trie_recorder(root);
+				let trie = TrieDBBuilder::<Layout>::new(&db, &root)
+					.with_recorder(&mut trie_recorder)
+					.build();
+
+				assert_eq!(TEST_DATA[i].1.to_vec(), trie.get(TEST_DATA[i].0).unwrap().unwrap());
+			}
+		}
+
+		recorder.rollback_transaction();
+
+		for i in 2..4 {
+			recorder.start_transaction();
+			{
+				let mut trie_recorder = recorder.as_trie_recorder(root);
+				let trie = TrieDBBuilder::<Layout>::new(&db, &root)
+					.with_recorder(&mut trie_recorder)
+					.build();
+
+				assert_eq!(TEST_DATA[i].1.to_vec(), trie.get(TEST_DATA[i].0).unwrap().unwrap());
+			}
+		}
+
+		recorder.rollback_transaction();
+
+		assert_eq!(2, recorder.inner.lock().accessed_nodes_transactions.len());
+		assert_eq!(2, recorder.inner.lock().recorded_keys_transactions.len());
+
+		for _ in 0..2 {
+			recorder.commit_transaction();
+		}
+
+		assert_eq!(0, recorder.inner.lock().accessed_nodes_transactions.len());
+		assert_eq!(0, recorder.inner.lock().recorded_keys_transactions.len());
+
+		let storage_proof = recorder.to_storage_proof();
+		let memory_db: MemoryDB = storage_proof.into_memory_db();
+
+		// Check that we recorded the required data
+		let trie = TrieDBBuilder::<Layout>::new(&memory_db, &root).build();
+
+		// Check that the required data is still present.
+		for i in 0..4 {
+			if i % 2 == 0 {
+				assert_eq!(TEST_DATA[i].1.to_vec(), trie.get(TEST_DATA[i].0).unwrap().unwrap());
+			} else {
+				assert!(trie.get(TEST_DATA[i].0).is_err());
+			}
+		}
+	}
+
+	#[test]
+	fn recorder_transaction_accessed_keys_works() {
+		let key = TEST_DATA[0].0;
+		let (db, root) = create_trie();
+
+		let recorder = Recorder::default();
+
+		{
+			let trie_recorder = recorder.as_trie_recorder(root);
+			assert!(matches!(trie_recorder.trie_nodes_recorded_for_key(key), RecordedForKey::None));
+		}
+
+		recorder.start_transaction();
+		{
+			let mut trie_recorder = recorder.as_trie_recorder(root);
+			let trie = TrieDBBuilder::<Layout>::new(&db, &root)
+				.with_recorder(&mut trie_recorder)
+				.build();
+
+			assert_eq!(
+				sp_core::Blake2Hasher::hash(TEST_DATA[0].1),
+				trie.get_hash(TEST_DATA[0].0).unwrap().unwrap()
+			);
+			assert!(matches!(trie_recorder.trie_nodes_recorded_for_key(key), RecordedForKey::Hash));
+		}
+
+		recorder.start_transaction();
+		{
+			let mut trie_recorder = recorder.as_trie_recorder(root);
+			let trie = TrieDBBuilder::<Layout>::new(&db, &root)
+				.with_recorder(&mut trie_recorder)
+				.build();
+
+			assert_eq!(TEST_DATA[0].1.to_vec(), trie.get(TEST_DATA[0].0).unwrap().unwrap());
+			assert!(matches!(
+				trie_recorder.trie_nodes_recorded_for_key(key),
+				RecordedForKey::Value,
+			));
+		}
+
+		recorder.rollback_transaction();
+		{
+			let trie_recorder = recorder.as_trie_recorder(root);
+			assert!(matches!(trie_recorder.trie_nodes_recorded_for_key(key), RecordedForKey::Hash));
+		}
+
+		recorder.rollback_transaction();
+		{
+			let trie_recorder = recorder.as_trie_recorder(root);
+			assert!(matches!(trie_recorder.trie_nodes_recorded_for_key(key), RecordedForKey::None));
+		}
+
+		recorder.start_transaction();
+		{
+			let mut trie_recorder = recorder.as_trie_recorder(root);
+			let trie = TrieDBBuilder::<Layout>::new(&db, &root)
+				.with_recorder(&mut trie_recorder)
+				.build();
+
+			assert_eq!(TEST_DATA[0].1.to_vec(), trie.get(TEST_DATA[0].0).unwrap().unwrap());
+			assert!(matches!(
+				trie_recorder.trie_nodes_recorded_for_key(key),
+				RecordedForKey::Value,
+			));
+		}
+
+		recorder.start_transaction();
+		{
+			let mut trie_recorder = recorder.as_trie_recorder(root);
+			let trie = TrieDBBuilder::<Layout>::new(&db, &root)
+				.with_recorder(&mut trie_recorder)
+				.build();
+
+			assert_eq!(
+				sp_core::Blake2Hasher::hash(TEST_DATA[0].1),
+				trie.get_hash(TEST_DATA[0].0).unwrap().unwrap()
+			);
+			assert!(matches!(
+				trie_recorder.trie_nodes_recorded_for_key(key),
+				RecordedForKey::Value
+			));
+		}
+
+		recorder.rollback_transaction();
+		{
+			let trie_recorder = recorder.as_trie_recorder(root);
+			assert!(matches!(
+				trie_recorder.trie_nodes_recorded_for_key(key),
+				RecordedForKey::Value
+			));
+		}
+
+		recorder.rollback_transaction();
+		{
+			let trie_recorder = recorder.as_trie_recorder(root);
+			assert!(matches!(trie_recorder.trie_nodes_recorded_for_key(key), RecordedForKey::None));
+		}
 	}
 }
