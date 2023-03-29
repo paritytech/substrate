@@ -157,7 +157,7 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use std::{collections::HashSet, str::FromStr};
-use syn::{Ident, Result};
+use syn::{spanned::Spanned, Ident, Result};
 
 /// The fixed name of the system pallet.
 const SYSTEM_PALLET_NAME: &str = "System";
@@ -184,6 +184,23 @@ fn construct_runtime_intermediary_expansion(
 	input: TokenStream2,
 	definition: ImplicitRuntimeDeclaration,
 ) -> Result<TokenStream2> {
+	let max_pallet_num = {
+		if cfg!(feature = "tuples-96") {
+			96
+		} else if cfg!(feature = "tuples-128") {
+			128
+		} else {
+			64
+		}
+	};
+
+	if definition.pallets.len() > max_pallet_num {
+		return Err(syn::Error::new(
+			input.span(),
+			"The number of pallets exceeds the maximum number of tuple elements.",
+		))
+	}
+
 	let frame_support = generate_crate_access_2018("frame-support")?;
 	let mut expansion = quote::quote!(
 		#frame_support::construct_runtime! { #input }
