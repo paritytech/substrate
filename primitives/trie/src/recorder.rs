@@ -45,6 +45,10 @@ struct RecorderInner<H> {
 	/// Mapping: `StorageRoot -> (Key -> RecordedForKey)`.
 	recorded_keys: HashMap<H, HashMap<Arc<[u8]>, RecordedForKey>>,
 
+	/// Stores transaction information about [`Self::recorded_keys`].
+	///
+	/// For each transaction we only store the `storage_root` and the old states per key. `None`
+	/// state means that the key wasn't recorded before.
 	recorded_keys_transactions: Vec<HashMap<H, HashMap<Arc<[u8]>, Option<RecordedForKey>>>>,
 
 	/// The encoded nodes we accessed while recording.
@@ -52,6 +56,9 @@ struct RecorderInner<H> {
 	/// Mapping: `Hash(Node) -> Node`.
 	accessed_nodes: HashMap<H, Vec<u8>>,
 
+	/// Stores transaction information about [`Self::accessed_nodes`].
+	///
+	/// For each transaction we only store the hashes of added nodes.
 	accessed_nodes_transactions: Vec<HashSet<H>>,
 }
 
@@ -97,6 +104,8 @@ impl<H: Hasher> Recorder<H> {
 	///
 	/// - `storage_root`: The storage root of the trie for which accesses are recorded. This is
 	///   important when recording access to different tries at once (like top and child tries).
+	///
+	///NOTE: This locks a mutex that stays locked until the return value is dropped.
 	#[inline]
 	pub fn as_trie_recorder(
 		&self,
@@ -150,12 +159,16 @@ impl<H: Hasher> Recorder<H> {
 		self.encoded_size_estimation.store(0, Ordering::Relaxed);
 	}
 
+	/// Stat a new transaction.
 	pub fn start_transaction(&self) {
 		let mut inner = self.inner.lock();
 		inner.accessed_nodes_transactions.push(Default::default());
 		inner.recorded_keys_transactions.push(Default::default());
 	}
 
+	/// Rollback the latest transaction.
+	///
+	/// If there isn't any transaction, nothing gonna happen.
 	pub fn rollback_transaction(&self) {
 		let mut inner = self.inner.lock();
 
@@ -186,6 +199,9 @@ impl<H: Hasher> Recorder<H> {
 		}
 	}
 
+	/// Commit the latest transaction.
+	///
+	/// If there isn't any transaction, nothing gonna happen.
 	pub fn commit_transaction(&self) {
 		let mut inner = self.inner.lock();
 
@@ -216,6 +232,7 @@ struct TrieRecorder<H: Hasher, I> {
 }
 
 impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> TrieRecorder<H, I> {
+	/// Update the recorded keys entry for the given `full_key`.
 	fn update_recorded_keys(&mut self, full_key: &[u8], access: RecordedForKey) {
 		let inner = self.inner.deref_mut();
 
@@ -224,9 +241,12 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> TrieRecorder<H, I> 
 
 		let key = entry.key().clone();
 
+		// We don't need to update the record if we only accessed the `Hash` for the given
+		// `full_key`. Only `Value` access can be an upgrade from `Hash`.
 		let entry = if matches!(access, RecordedForKey::Value) {
 			entry.and_modify(|e| {
 				if let Some(tx) = inner.recorded_keys_transactions.last_mut() {
+					// Store the previous state only once per transaction.
 					tx.entry(self.storage_root).or_default().entry(key.clone()).or_insert(Some(*e));
 				}
 
@@ -238,6 +258,7 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> TrieRecorder<H, I> 
 
 		entry.or_insert_with(|| {
 			if let Some(tx) = inner.recorded_keys_transactions.last_mut() {
+				// The key wasn't yet recorded, so there isn't any old state.
 				tx.entry(self.storage_root).or_default().entry(key).or_insert(None);
 			}
 
