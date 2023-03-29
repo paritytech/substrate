@@ -49,10 +49,32 @@ pub trait AppCrypto: 'static + Send + Sync + Sized + CryptoType + Clone {
 	type Pair: AppPair;
 }
 
+/// Type which implements Hash in std, not when no-std (std variant).
+#[cfg(any(feature = "std", feature = "full_crypto"))]
+pub trait MaybeHash: sp_std::hash::Hash {}
+#[cfg(any(feature = "std", feature = "full_crypto"))]
+impl<T: sp_std::hash::Hash> MaybeHash for T {}
+
+/// Type which implements Hash in std, not when no-std (no-std variant).
+#[cfg(all(not(feature = "std"), not(feature = "full_crypto")))]
+pub trait MaybeHash {}
+#[cfg(all(not(feature = "std"), not(feature = "full_crypto")))]
+impl<T> MaybeHash for T {}
+
 /// A application's public key.
-pub trait AppPublic: AppCrypto + Public + Ord + PartialOrd + Eq + PartialEq + Debug {
+pub trait AppPublic:
+	AppCrypto + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + Codec
+{
 	/// The wrapped type which is just a plain instance of `Public`.
-	type Generic: IsWrappedBy<Self> + Public + Ord + PartialOrd + Eq + PartialEq + Debug;
+	type Generic: IsWrappedBy<Self>
+		+ Public
+		+ Ord
+		+ PartialOrd
+		+ Eq
+		+ PartialEq
+		+ Debug
+		+ MaybeHash
+		+ Codec;
 }
 
 /// A application's key pair.
