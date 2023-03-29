@@ -5,37 +5,3 @@ error: invalid suffix `something` for number literal
    |                          ^^^^^^^^^^^^^^^ invalid suffix `something`
    |
    = help: the suffix must be one of the numeric types (`u32`, `isize`, `f32`, etc.)
-
-error[E0308]: mismatched types
-   --> tests/pallet_ui/weight_argument_has_suffix.rs:12:12
-    |
-12  |     #[pallet::call]
-    |               ^^^^
-    |               |
-    |               expected trait `frame_support::dispatch::ClassifyDispatch`, found trait `frame_support::dispatch::WeighData`
-    |               arguments to this function are incorrect
-    |
-    = note: expected reference `&dyn frame_support::dispatch::ClassifyDispatch<()>`
-               found reference `&dyn frame_support::dispatch::WeighData<()>`
-note: associated function defined here
-   --> $WORKSPACE/frame/support/src/dispatch.rs
-    |
-    |     fn classify_dispatch(&self, target: T) -> DispatchClass;
-    |        ^^^^^^^^^^^^^^^^^
-
-error[E0308]: mismatched types
-   --> tests/pallet_ui/weight_argument_has_suffix.rs:12:12
-    |
-12  |     #[pallet::call]
-    |               ^^^^
-    |               |
-    |               expected trait `frame_support::dispatch::PaysFee`, found trait `frame_support::dispatch::WeighData`
-    |               arguments to this function are incorrect
-    |
-    = note: expected reference `&dyn frame_support::dispatch::PaysFee<()>`
-               found reference `&dyn frame_support::dispatch::WeighData<()>`
-note: associated function defined here
-   --> $WORKSPACE/frame/support/src/dispatch.rs
-    |
-    |     fn pays_fee(&self, _target: T) -> Pays;
-    |        ^^^^^^^^

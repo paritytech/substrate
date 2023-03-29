@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,11 +33,11 @@ use pallet_nomination_pools::{
 	mock::*,
 	pallet as pools,
 	pallet::{BondedPools, Call as PoolsCall, Event as PoolsEvents, PoolMembers},
-	BondExtra, BondedPool, LastPoolId, MaxPoolMembers, MaxPoolMembersPerPool, MaxPools,
-	MinCreateBond, MinJoinBond, PoolId,
+	BondExtra, BondedPool, GlobalMaxCommission, LastPoolId, MaxPoolMembers, MaxPoolMembersPerPool,
+	MaxPools, MinCreateBond, MinJoinBond, PoolId,
 };
 use rand::{seq::SliceRandom, Rng};
-use sp_runtime::{assert_eq_error_rate, Perquintill};
+use sp_runtime::{assert_eq_error_rate, Perbill, Perquintill};
 
 const ERA: BlockNumber = 1000;
 const MAX_ED_MULTIPLE: Balance = 10_000;
@@ -143,9 +143,9 @@ fn random_call<R: Rng>(mut rng: &mut R) -> (pools::Call<T>, RuntimeOrigin) {
 			let amount = random_ed_multiple(&mut rng);
 			fund_account(&mut rng, &who);
 			let root = who;
-			let state_toggler = who;
+			let bouncer = who;
 			let nominator = who;
-			(PoolsCall::<T>::create { amount, root, state_toggler, nominator }, origin)
+			(PoolsCall::<T>::create { amount, root, bouncer, nominator }, origin)
 		},
 		7 => {
 			// nominate
@@ -224,6 +224,7 @@ fn main() {
 		MaxPoolMembers::<T>::set(Some(10_000));
 		MaxPoolMembersPerPool::<T>::set(Some(1000));
 		MaxPools::<T>::set(Some(1_000));
+		GlobalMaxCommission::<T>::set(Some(Perbill::from_percent(25)));
 
 		MinCreateBond::<T>::set(10 * ExistentialDeposit::get());
 		MinJoinBond::<T>::set(5 * ExistentialDeposit::get());

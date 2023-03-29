@@ -23,7 +23,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
-sp-state-machine = { version = "0.13.0", path = "../../primitives/state-machine" }
 
 [dev-dependencies]
+sp-state-machine = { version = "0.13.0", path = "../../primitives/state-machine" }
 substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }

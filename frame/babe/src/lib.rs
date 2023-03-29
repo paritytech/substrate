@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,28 +25,25 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays},
 	ensure,
-	traits::{
-		ConstU32, DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet,
-		OneSessionHandler,
-	},
+	traits::{ConstU32, DisabledValidators, FindAuthor, Get, OnTimestampSet, OneSessionHandler},
 	weights::Weight,
 	BoundedVec, WeakBoundedVec,
 };
 use sp_application_crypto::ByteArray;
-use sp_runtime::{
-	generic::DigestItem,
-	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
-	ConsensusEngineId, KeyTypeId, Permill,
-};
-use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_std::prelude::*;
-
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
 	AllowedSlots, BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
 	EquivocationProof, Slot, BABE_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
+use sp_runtime::{
+	generic::DigestItem,
+	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
+	ConsensusEngineId, Permill,
+};
+use sp_session::{GetSessionNumber, GetValidatorCount};
+use sp_staking::{offence::OffenceReportSystem, SessionIndex};
+use sp_std::prelude::*;
 
 pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
 
@@ -63,7 +60,7 @@ mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
-pub use equivocation::{BabeEquivocationOffence, EquivocationHandler, HandleEquivocation};
+pub use equivocation::{EquivocationOffence, EquivocationReportSystem};
 #[allow(deprecated)]
 pub use randomness::CurrentBlockRandomness;
 pub use randomness::{
@@ -102,7 +99,7 @@ impl EpochChangeTrigger for SameAuthoritiesForever {
 			let authorities = <Pallet<T>>::authorities();
 			let next_authorities = authorities.clone();
 
-			<Pallet<T>>::enact_epoch_change(authorities, next_authorities);
+			<Pallet<T>>::enact_epoch_change(authorities, next_authorities, None);
 		}
 	}
 }
@@ -117,7 +114,6 @@ pub mod pallet {
 
 	/// The BABE Pallet
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -149,35 +145,25 @@ pub mod pallet {
 		/// initialization.
 		type DisabledValidators: DisabledValidators;
 
-		/// The proof of key ownership, used for validating equivocation reports.
-		/// The proof must include the session index and validator count of the
-		/// session at which the equivocation occurred.
-		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
-
-		/// The identification of a key owner, used when reporting equivocations.
-		type KeyOwnerIdentification: Parameter;
-
-		/// A system for proving ownership of keys, i.e. that a given key was part
-		/// of a validator set, needed for validating equivocation reports.
-		type KeyOwnerProofSystem: KeyOwnerProofSystem<
-			(KeyTypeId, AuthorityId),
-			Proof = Self::KeyOwnerProof,
-			IdentificationTuple = Self::KeyOwnerIdentification,
-		>;
-
-		/// The equivocation handling subsystem, defines methods to report an
-		/// offence (after the equivocation has been validated) and for submitting a
-		/// transaction to report an equivocation (from an offchain context).
-		/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
-		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
-		/// definition.
-		type HandleEquivocation: HandleEquivocation<Self>;
-
+		/// Helper for weights computations
 		type WeightInfo: WeightInfo;
 
 		/// Max number of authorities allowed
 		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
+
+		/// The proof of key ownership, used for validating equivocation reports.
+		/// The proof must include the session index and validator count of the
+		/// session at which the equivocation occurred.
+		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+
+		/// The equivocation handling subsystem, defines methods to check/report an
+		/// offence and for submitting a transaction to report an equivocation
+		/// (from an offchain context).
+		type EquivocationReportSystem: OffenceReportSystem<
+			Option<Self::AccountId>,
+			(EquivocationProof<Self::Header>, Self::KeyOwnerProof),
+		>;
 	}
 
 	#[pallet::error]
@@ -316,6 +302,19 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type NextEpochConfig<T> = StorageValue<_, BabeEpochConfiguration>;
 
+	/// A list of the last 100 skipped epochs and the corresponding session index
+	/// when the epoch was skipped.
+	///
+	/// This is only used for validating equivocation proofs. An equivocation proof
+	/// must contains a key-ownership proof for a given session, therefore we need a
+	/// way to tie together sessions and epoch indices, i.e. we need to validate that
+	/// a validator was the owner of a given key on a given session, and what the
+	/// active epoch index was during that session.
+	#[pallet::storage]
+	#[pallet::getter(fn skipped_epochs)]
+	pub(super) type SkippedEpochs<T> =
+		StorageValue<_, BoundedVec<(u64, SessionIndex), ConstU32<100>>, ValueQuery>;
+
 	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
@@ -415,8 +414,12 @@ pub mod pallet {
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
-
-			Self::do_report_equivocation(Some(reporter), *equivocation_proof, key_owner_proof)
+			T::EquivocationReportSystem::process_evidence(
+				Some(reporter),
+				(*equivocation_proof, key_owner_proof),
+			)?;
+			// Waive the fee since the report is valid and beneficial
+			Ok(Pays::No.into())
 		}
 
 		/// Report authority equivocation/misbehavior. This method will verify
@@ -437,12 +440,11 @@ pub mod pallet {
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
-
-			Self::do_report_equivocation(
-				T::HandleEquivocation::block_author(),
-				*equivocation_proof,
-				key_owner_proof,
-			)
+			T::EquivocationReportSystem::process_evidence(
+				None,
+				(*equivocation_proof, key_owner_proof),
+			)?;
+			Ok(Pays::No.into())
 		}
 
 		/// Plan an epoch config change. The epoch config change is recorded and will be enacted on
@@ -577,6 +579,7 @@ impl<T: Config> Pallet<T> {
 	pub fn enact_epoch_change(
 		authorities: WeakBoundedVec<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>,
 		next_authorities: WeakBoundedVec<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>,
+		session_index: Option<SessionIndex>,
 	) {
 		// PRECONDITION: caller has done initialization and is guaranteed
 		// by the session module to be called before this.
@@ -601,6 +604,35 @@ impl<T: Config> Pallet<T> {
 			GenesisSlot::<T>::get(),
 			T::EpochDuration::get(),
 		);
+
+		let current_epoch_index = EpochIndex::<T>::get();
+		if current_epoch_index.saturating_add(1) != epoch_index {
+			// we are skipping epochs therefore we need to update the mapping
+			// of epochs to session
+			if let Some(session_index) = session_index {
+				SkippedEpochs::<T>::mutate(|skipped_epochs| {
+					if epoch_index < session_index as u64 {
+						log::warn!(
+							target: LOG_TARGET,
+							"Current epoch index {} is lower than session index {}.",
+							epoch_index,
+							session_index,
+						);
+
+						return
+					}
+
+					if skipped_epochs.is_full() {
+						// NOTE: this is O(n) but we currently don't have a bounded `VecDeque`.
+						// this vector is bounded to a small number of elements so performance
+						// shouldn't be an issue.
+						skipped_epochs.remove(0);
+					}
+
+					skipped_epochs.force_push((epoch_index, session_index));
+				})
+			}
+		}
 
 		EpochIndex::<T>::put(epoch_index);
 		Authorities::<T>::put(authorities);
@@ -816,49 +848,34 @@ impl<T: Config> Pallet<T> {
 		this_randomness
 	}
 
-	fn do_report_equivocation(
-		reporter: Option<T::AccountId>,
-		equivocation_proof: EquivocationProof<T::Header>,
-		key_owner_proof: T::KeyOwnerProof,
-	) -> DispatchResultWithPostInfo {
-		let offender = equivocation_proof.offender.clone();
-		let slot = equivocation_proof.slot;
+	/// Returns the session index that was live when the given epoch happened,
+	/// taking into account any skipped epochs.
+	///
+	/// This function is only well defined for epochs that actually existed,
+	/// e.g. if we skipped from epoch 10 to 20 then a call for epoch 15 (which
+	/// didn't exist) will return an incorrect session index.
+	pub(crate) fn session_index_for_epoch(epoch_index: u64) -> SessionIndex {
+		let skipped_epochs = SkippedEpochs::<T>::get();
+		match skipped_epochs.binary_search_by_key(&epoch_index, |(epoch_index, _)| *epoch_index) {
+			// we have an exact match so we just return the given session index
+			Ok(index) => skipped_epochs[index].1,
+			// we haven't found any skipped epoch before the given epoch,
+			// so the epoch index and session index should match
+			Err(0) => epoch_index.saturated_into::<u32>(),
+			// we have found a skipped epoch before the given epoch
+			Err(index) => {
+				// the element before the given index should give us the skipped epoch
+				// that's closest to the one we're trying to find the session index for
+				let closest_skipped_epoch = skipped_epochs[index - 1];
 
-		// validate the equivocation proof
-		if !sp_consensus_babe::check_equivocation_proof(equivocation_proof) {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
+				// calculate the number of skipped epochs at this point by checking the difference
+				// between the epoch and session indices. epoch index should always be greater or
+				// equal to session index, this is because epochs can be skipped whereas sessions
+				// can't (this is enforced when pushing into `SkippedEpochs`)
+				let skipped_epochs = closest_skipped_epoch.0 - closest_skipped_epoch.1 as u64;
+				epoch_index.saturating_sub(skipped_epochs).saturated_into::<u32>()
+			},
 		}
-
-		let validator_set_count = key_owner_proof.validator_count();
-		let session_index = key_owner_proof.session();
-
-		let epoch_index = (*slot.saturating_sub(GenesisSlot::<T>::get()) / T::EpochDuration::get())
-			.saturated_into::<u32>();
-
-		// check that the slot number is consistent with the session index
-		// in the key ownership proof (i.e. slot is for that epoch)
-		if epoch_index != session_index {
-			return Err(Error::<T>::InvalidKeyOwnershipProof.into())
-		}
-
-		// check the membership proof and extract the offender's id
-		let key = (sp_consensus_babe::KEY_TYPE, offender);
-		let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof)
-			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
-
-		let offence =
-			BabeEquivocationOffence { slot, validator_set_count, offender, session_index };
-
-		let reporters = match reporter {
-			Some(id) => vec![id],
-			None => vec![],
-		};
-
-		T::HandleEquivocation::report_offence(reporters, offence)
-			.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
-
-		// waive the fee since the report is valid and beneficial
-		Ok(Pays::No.into())
 	}
 
 	/// Submits an extrinsic to report an equivocation. This method will create
@@ -869,11 +886,7 @@ impl<T: Config> Pallet<T> {
 		equivocation_proof: EquivocationProof<T::Header>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::HandleEquivocation::submit_unsigned_equivocation_report(
-			equivocation_proof,
-			key_owner_proof,
-		)
-		.ok()
+		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()
 	}
 }
 
@@ -926,7 +939,10 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
+impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T>
+where
+	T: pallet_session::Config,
+{
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -959,7 +975,9 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 			),
 		);
 
-		Self::enact_epoch_change(bounded_authorities, next_bounded_authorities)
+		let session_index = <pallet_session::Pallet<T>>::current_index();
+
+		Self::enact_epoch_change(bounded_authorities, next_bounded_authorities, Some(session_index))
 	}
 
 	fn on_disabled(i: u32) {

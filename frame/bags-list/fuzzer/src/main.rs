@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -88,7 +88,7 @@ fn main() {
 				},
 			}
 
-			assert!(BagsList::try_state().is_ok());
+			assert!(BagsList::do_try_state().is_ok());
 		})
 	});
 }
