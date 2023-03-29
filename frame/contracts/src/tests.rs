@@ -459,7 +459,7 @@ where
 	T: frame_system::Config,
 {
 	let fixture_path =
-		["/Users/pg/github/substrate/frame/contracts/fixtures/", fixture_name, ".wat"].concat();
+		["fixtures/", fixture_name, ".wat"].concat();
 	let wasm_binary = wat::parse_file(fixture_path)?;
 	let code_hash = T::Hashing::hash(&wasm_binary);
 	Ok((wasm_binary, code_hash))
