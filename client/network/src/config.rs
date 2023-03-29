@@ -38,7 +38,6 @@ pub use sc_network_common::{
 	ExHashT,
 };
 use sc_utils::mpsc::TracingUnboundedSender;
-use sp_runtime::traits::Block as BlockT;
 use zeroize::Zeroize;
 
 use sp_runtime::traits::Block as BlockT;

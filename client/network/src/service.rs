@@ -147,7 +147,7 @@ where
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new<Block: BlockT>(mut params: Params<Block>) -> Result<Self, Error> {
+	pub fn new(mut params: Params<B>) -> Result<Self, Error> {
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();

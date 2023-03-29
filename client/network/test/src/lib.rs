@@ -920,7 +920,7 @@ where
 
 		let genesis_hash =
 			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
-		let network = NetworkWorker::new::<Block>(sc_network::config::Params {
+		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: Box::new(|f| {
 				tokio::spawn(f);
