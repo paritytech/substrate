@@ -14,17 +14,18 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 log = { version = "0.4.17", default-features = false }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", optional = true }
-beefy-merkle-tree = { version = "4.0.0-dev", default-features = false, path = "./primitives" }
-beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../primitives/beefy", package = "sp-beefy" }
+binary-merkle-tree = { version = "4.0.0-dev", default-features = false, path = "../../utils/binary-merkle-tree" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-beefy = { version = "4.0.0-dev", default-features = false, path = "../beefy" }
 pallet-mmr = { version = "4.0.0-dev", default-features = false, path = "../merkle-mountain-range" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
+sp-consensus-beefy = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/beefy" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 
 [dev-dependencies]
 array-bytes = "4.1"
@@ -34,8 +35,7 @@ sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 default = ["std"]
 std = [
 	"array-bytes",
-	"beefy-merkle-tree/std",
-	"beefy-primitives/std",
+	"binary-merkle-tree/std",
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
@@ -45,9 +45,11 @@ std = [
 	"pallet-session/std",
 	"scale-info/std",
 	"serde",
+	"sp-consensus-beefy/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-api/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

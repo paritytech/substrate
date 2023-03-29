@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,7 +50,7 @@ pub use paste;
 pub use scale_info;
 #[cfg(feature = "std")]
 pub use serde;
-pub use sp_core::Void;
+pub use sp_core::{OpaqueMetadata, Void};
 #[doc(hidden)]
 pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]
@@ -78,11 +78,12 @@ pub mod inherent;
 #[macro_use]
 pub mod error;
 pub mod crypto;
+pub mod dispatch_context;
 pub mod instances;
+pub mod metadata_ir;
 pub mod migrations;
 pub mod traits;
 pub mod weights;
-
 #[doc(hidden)]
 pub mod unsigned {
 	#[doc(hidden)]
@@ -826,9 +827,9 @@ pub use serde::{Deserialize, Serialize};
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::metadata::{
-		PalletStorageMetadata, StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
-		StorageHasher,
+	use crate::metadata_ir::{
+		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
+		StorageEntryTypeIR, StorageHasherIR,
 	};
 	use codec::{Codec, EncodeLike};
 	use frame_support::traits::CrateVersion;
@@ -874,6 +875,7 @@ pub mod tests {
 
 	decl_storage! {
 		trait Store for Module<T: Config> as Test {
+			pub Value get(fn value): u64;
 			pub Data get(fn data) build(|_| vec![(15u32, 42u64)]):
 				map hasher(twox_64_concat) u32 => u64;
 			pub OptionLinkedMap: map hasher(blake2_128_concat) u32 => Option<u32>;
@@ -943,6 +945,61 @@ pub mod tests {
 				<T as Config>::BlockNumber,
 				<T as Config>::BlockNumber,
 			>;
+		});
+	}
+
+	#[test]
+	fn storage_value_mutate_exists_should_work() {
+		new_test_ext().execute_with(|| {
+			#[crate::storage_alias]
+			pub type Value = StorageValue<Test, u32>;
+
+			assert!(!Value::exists());
+
+			Value::mutate_exists(|v| *v = Some(1));
+			assert!(Value::exists());
+			assert_eq!(Value::get(), Some(1));
+
+			// removed if mutated to `None`
+			Value::mutate_exists(|v| *v = None);
+			assert!(!Value::exists());
+		});
+	}
+
+	#[test]
+	fn storage_value_try_mutate_exists_should_work() {
+		new_test_ext().execute_with(|| {
+			#[crate::storage_alias]
+			pub type Value = StorageValue<Test, u32>;
+
+			type TestResult = result::Result<(), &'static str>;
+
+			assert!(!Value::exists());
+
+			// mutated if `Ok`
+			assert_ok!(Value::try_mutate_exists(|v| -> TestResult {
+				*v = Some(1);
+				Ok(())
+			}));
+			assert!(Value::exists());
+			assert_eq!(Value::get(), Some(1));
+
+			// no-op if `Err`
+			assert_noop!(
+				Value::try_mutate_exists(|v| -> TestResult {
+					*v = Some(2);
+					Err("nah")
+				}),
+				"nah"
+			);
+			assert_eq!(Value::get(), Some(1));
+
+			// removed if mutated to`None`
+			assert_ok!(Value::try_mutate_exists(|v| -> TestResult {
+				*v = None;
+				Ok(())
+			}));
+			assert!(!Value::exists());
 		});
 	}
 
@@ -1253,94 +1310,107 @@ pub mod tests {
 		});
 	}
 
-	fn expected_metadata() -> PalletStorageMetadata {
-		PalletStorageMetadata {
+	fn expected_metadata() -> PalletStorageMetadataIR {
+		PalletStorageMetadataIR {
 			prefix: "Test",
 			entries: vec![
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
+					name: "Value",
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u64>()),
+					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
+					docs: vec![],
+				},
+				StorageEntryMetadataIR {
 					name: "Data",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Twox64Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Twox64Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u64>(),
 					},
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "OptionLinkedMap",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Identity],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Identity],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData2",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "DataDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Twox64Concat, StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![
+							StorageHasherIR::Twox64Concat,
+							StorageHasherIR::Blake2_128Concat,
+						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u64>(),
 					},
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericDataDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Identity],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat, StorageHasherIR::Identity],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData2DM",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![
+							StorageHasherIR::Blake2_128Concat,
+							StorageHasherIR::Twox64Concat,
+						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "AppendableDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
 						hashers: vec![
-							StorageHasher::Blake2_128Concat,
-							StorageHasher::Blake2_128Concat,
+							StorageHasherIR::Blake2_128Concat,
+							StorageHasherIR::Blake2_128Concat,
 						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<Vec<u32>>(),
@@ -2743,229 +2813,6 @@ pub mod pallet_macros {
 		genesis_config, getter, hooks, inherent, origin, storage, storage_prefix, storage_version,
 		type_value, unbounded, validate_unsigned, weight, whitelist_storage,
 	};
-}
-
-/// Contains macros, structs, and traits associated with v2 of the pallet benchmarking syntax.
-/// This module contains macros, structs, and traits associated with v2 of the pallet
-/// benchmarking syntax.
-///
-/// The [`benchmarking::benchmarks`] and [`benchmarking::instance_benchmarks`] macros can be
-/// used to designate a module as a benchmarking module that can contain benchmarks and
-/// benchmark tests. The `#[benchmarks]` variant will set up a regular, non-instance
-/// benchmarking module, and the `#[instance_benchmarks]` variant will set up the module in
-/// instance benchmarking mode.
-///
-/// Benchmarking modules should be gated behind a `#[cfg(feature = "runtime-benchmarks")]`
-/// feature gate to ensure benchmarking code that is only compiled when the
-/// `runtime-benchmarks` feature is enabled is not referenced.
-///
-/// The following is the general syntax for a benchmarks (or instance benchmarks) module:
-///
-/// ## General Syntax
-///
-/// ```ignore
-/// #![cfg(feature = "runtime-benchmarks")]
-///
-/// use super::{mock_helpers::*, Pallet as MyPallet};
-/// use frame_support::benchmarking::*;
-/// use frame_benchmarking::whitelisted_caller;
-///
-/// #[benchmarks]
-/// mod benchmarks {
-/// 	use super::*;
-///
-/// 	#[benchmark]
-/// 	fn bench_name_1(x: Linear<7, 1_000>, y: Linear<1_000, 100_0000>) {
-/// 		// setup code
-/// 		let z = x + y;
-/// 		let caller = whitelisted_caller();
-///
-/// 		#[extrinsic_call]
-/// 		extrinsic_name(SystemOrigin::Signed(caller), other, arguments);
-///
-/// 		// verification code
-/// 		assert_eq!(MyPallet::<T>::my_var(), z);
-/// 	}
-///
-/// 	#[benchmark]
-/// 	fn bench_name_2() {
-/// 		// setup code
-/// 		let caller = whitelisted_caller();
-///
-/// 		#[block]
-/// 		{
-/// 			something(some, thing);
-/// 			my_extrinsic(RawOrigin::Signed(caller), some, argument);
-/// 			something_else(foo, bar);
-/// 		}
-///
-/// 		// verification code
-/// 		assert_eq!(MyPallet::<T>::something(), 37);
-/// 	}
-/// }
-/// ```
-///
-/// ## Benchmark Definitions
-///
-/// Within a `#[benchmarks]` or `#[instance_benchmarks]` module, you can define individual
-/// benchmarks using the `#[benchmark]` attribute, as shown in the example above.
-///
-/// The `#[benchmark]` attribute expects a function definition with a blank return type and
-/// zero or more arguments whose names are valid `frame_benchmarking::BenchmarkParamater`
-/// parameters, such as `x`, `y`, `a`, `b`, etc., and whose param types must implement
-/// [`benchmarking::ParamRange`]. At the moment the only valid type that implements
-/// [`benchmarking::ParamRange`] is [`benchmarking::Linear`].
-///
-/// The valid syntax for defining a `Linear` is `Linear<A, B>` where `A`, and `B` are
-/// valid integer literals (that fit in a `u32`), such that `B` >= `A`.
-///
-/// Note that the benchmark function definition does not actually expand as a function
-/// definition, but rather is used to automatically create a number of impls and structs
-/// required by the benchmarking engine. For this reason, the visibility of the function
-/// definition as well as the return type are not used for any purpose and are discarded by the
-/// expansion code.
-///
-/// Also note that the `// setup code` and `// verification code` comments shown above are not
-/// required and are included simply for demonstration purposes.
-///
-/// ### `#[extrinsic_call]` and `#[block]`
-///
-/// Within the benchmark function body, either an `#[extrinsic_call]` or a `#[block]`
-/// annotation is required. These attributes should be attached to a block (shown in
-/// `bench_name_2` above) or a one-line function call (shown in `bench_name_1` above, in `syn`
-/// parlance this should be an `ExprCall`), respectively.
-///
-/// The `#[block]` syntax is broad and will benchmark any code contained within the block the
-/// attribute is attached to. If `#[block]` is attached to something other than a block, a
-/// compiler error will be emitted.
-///
-/// The one-line `#[extrinsic_call]` syntax must consist of a function call to an extrinsic,
-/// where the first argument is the origin. If `#[extrinsic_call]` is attached to an item that
-/// doesn't meet these requirements, a compiler error will be emitted.
-///
-/// As a short-hand, you may substitute the name of the extrinsic call with `_`, such as the
-/// following:
-///
-/// ```ignore
-/// 	#[extrinsic_call]
-/// _(RawOrigin::Signed(whitelisted_caller()), 0u32.into(), 0);
-/// ```
-///
-/// The underscore will be substituted with the name of the benchmark  (i.e. the name of the
-/// function in the benchmark function definition).
-///
-/// Regardless of whether `#[extrinsic_call]` or `#[block]` is used, this attribute also serves
-/// the purpose of designating the boundary between the setup code portion of the benchmark
-/// (everything before the `#[extrinsic_call]` or `#[block]` attribute) and the verification
-/// stage (everything after the item that the `#[extrinsic_call]` or `#[block]` attribute is
-/// attached to). The setup code section should contain any code that needs to execute before
-/// the measured portion of the benchmark executes. The verification section is where you can
-/// perform assertions to verify that the extrinsic call (or whatever is happening in your
-/// block, if you used the `#[block]` syntax) executed successfully.
-///
-/// Note that neither `#[extrinsic_call]` nor `#[block]` are real attribute macros and are
-/// instead consumed by the outer macro pattern as part of the enclosing benchmark function
-/// definition. This is why we are able to use `#[extrinsic_call]` and `#[block]` within a
-/// function definition even though this behavior has not been stabilized
-/// yet—`#[extrinsic_call]` and `#[block]` are parsed and consumed as part of the benchmark
-/// definition parsing code, so they never expand as their own attribute macros.
-///
-/// ### Optional Attributes
-///
-/// The keywords `extra` and `skip_meta` can be provided as optional arguments to the
-/// `#[benchmark]` attribute, i.e. `#[benchmark(extra, skip_meta)]`. Including either of these
-/// will enable the `extra` or `skip_meta` option, respectively. These options enable the same
-/// behavior they did in the old benchmarking syntax in `frame_benchmarking`, namely:
-///
-/// #### `extra`
-///
-/// Specifies that this benchmark should not normally run. To run benchmarks marked with
-/// `extra`, you will need to invoke the `frame-benchmarking-cli` with `--extra`.
-///
-/// #### `skip_meta`
-///
-/// Specifies that the benchmarking framework should not analyze the storage keys that
-/// benchmarked code read or wrote. This useful to suppress the prints in the form of unknown
-/// 0x… in case a storage key that does not have metadata. Note that this skips the analysis
-/// of all accesses, not just ones without metadata.
-///
-/// ## Where Clause
-///
-/// Some pallets require a where clause specifying constraints on their generics to make
-/// writing benchmarks feasible. To accomodate this situation, you can provide such a where
-/// clause as the (only) argument to the `#[benchmarks]` or `#[instance_benchmarks]` attribute
-/// macros. Below is an example of this taken from the `message-queue` pallet.
-///
-/// ```ignore
-/// #[benchmarks(
-/// 	where
-/// 		<<T as Config>::MessageProcessor as ProcessMessage>::Origin: From<u32> + PartialEq,
-/// 		<T as Config>::Size: From<u32>,
-/// )]
-/// mod benchmarks {
-/// 	use super::*;
-/// 	// ...
-/// }
-/// ```
-///
-/// ## Benchmark Tests
-///
-/// Benchmark tests can be generated using the old syntax in `frame_benchmarking`,
-/// including the `frame_benchmarking::impl_benchmark_test_suite` macro.
-///
-/// An example is shown below (taken from the `message-queue` pallet's `benchmarking` module):
-/// ```ignore
-/// #[benchmarks]
-/// mod benchmarks {
-/// 	use super::*;
-/// 	// ...
-/// 	impl_benchmark_test_suite!(
-/// 		MessageQueue,
-/// 		crate::mock::new_test_ext::<crate::integration_test::Test>(),
-/// 		crate::integration_test::Test
-/// 	);
-/// }
-/// ```
-pub mod benchmarking {
-	pub use frame_support_procedural::{
-		benchmark, benchmarks, block, extrinsic_call, instance_benchmarks,
-	};
-
-	// Used in #[benchmark] implementation to ensure that benchmark function arguments
-	// implement [`ParamRange`].
-	#[doc(hidden)]
-	pub use static_assertions::assert_impl_all;
-
-	/// Used by the new benchmarking code to specify that a benchmarking variable is linear
-	/// over some specified range, i.e. `Linear<0, 1_000>` means that the corresponding variable
-	/// is allowed to range from `0` to `1000`, inclusive.
-	///
-	/// See [`frame_support::benchmarking`] for more info.
-	pub struct Linear<const A: u32, const B: u32>;
-
-	/// Trait that must be implemented by all structs that can be used as parameter range types
-	/// in the new benchmarking code (i.e. `Linear<0, 1_000>`). Right now there is just
-	/// [`Linear`] but this could later be extended to support additional non-linear parameter
-	/// ranges.
-	///
-	/// See [`frame_support::benchmarking`] for more info.
-	pub trait ParamRange {
-		/// Represents the (inclusive) starting number of this [`ParamRange`].
-		fn start(&self) -> u32;
-
-		/// Represents the (inclusive) ending number of this [`ParamRange`]
-		fn end(&self) -> u32;
-	}
-
-	impl<const A: u32, const B: u32> ParamRange for Linear<A, B> {
-		fn start(&self) -> u32 {
-			return A
-		}
-
-		fn end(&self) -> u32 {
-			return B
-		}
-	}
 }
 
 // Generate a macro that will enable/disable code based on `std` feature being active.

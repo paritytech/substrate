@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,7 @@ use crate::Pallet as Collective;
 use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 
-use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
+use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_system::{Call as SystemCall, Pallet as System, RawOrigin as SystemOrigin};
 
 const SEED: u32 = 0;

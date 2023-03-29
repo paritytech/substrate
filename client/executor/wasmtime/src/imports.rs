@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ use crate::{host::HostContext, runtime::StoreData};
 use sc_executor_common::error::WasmError;
 use sp_wasm_interface::{FunctionContext, HostFunctions};
 use std::collections::HashMap;
-use wasmtime::{ExternType, FuncType, ImportType, Linker, Module, Trap};
+use wasmtime::{ExternType, FuncType, ImportType, Linker, Module};
 
 /// Goes over all imports of a module and prepares the given linker for instantiation of the module.
 /// Returns an error if there are imports that cannot be satisfied.
@@ -67,7 +67,7 @@ where
 				log::debug!("Missing import: '{}' {:?}", name, func_ty);
 				linker
 					.func_new("env", &name, func_ty.clone(), move |_, _, _| {
-						Err(Trap::new(error.clone()))
+					    Err(anyhow::Error::msg(error.clone()))
 					})
 					.expect("adding a missing import stub can only fail when the item already exists, and it is missing here; qed");
 			}

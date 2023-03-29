@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +20,10 @@ use crate::Config;
 use codec::FullCodec;
 use frame_support::{
 	traits::{
-		fungibles::{Balanced, CreditOf, Inspect},
-		tokens::{Balance, BalanceConversion},
+		fungibles::{Balanced, Credit, Inspect},
+		tokens::{
+			Balance, BalanceConversion, Fortitude::Polite, Precision::Exact, Preservation::Protect,
+		},
 	},
 	unsigned::TransactionValidityError,
 };
@@ -58,6 +60,8 @@ pub trait OnChargeAssetTransaction<T: Config> {
 	/// the corrected amount.
 	///
 	/// Note: The `fee` already includes the `tip`.
+	///
+	/// Returns the fee and tip in the asset used for payment as (fee, tip).
 	fn correct_and_deposit_fee(
 		who: &T::AccountId,
 		dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
@@ -65,7 +69,7 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		corrected_fee: Self::Balance,
 		tip: Self::Balance,
 		already_withdrawn: Self::LiquidityInfo,
-	) -> Result<(), TransactionValidityError>;
+	) -> Result<(AssetBalanceOf<T>, AssetBalanceOf<T>), TransactionValidityError>;
 }
 
 /// Allows specifying what to do with the withdrawn asset fees.
@@ -73,13 +77,13 @@ pub trait HandleCredit<AccountId, B: Balanced<AccountId>> {
 	/// Implement to determine what to do with the withdrawn asset fees.
 	/// Default for `CreditOf` from the assets pallet is to burn and
 	/// decrease total issuance.
-	fn handle_credit(credit: CreditOf<AccountId, B>);
+	fn handle_credit(credit: Credit<AccountId, B>);
 }
 
 /// Default implementation that just drops the credit according to the `OnDrop` in the underlying
 /// imbalance type.
 impl<A, B: Balanced<A>> HandleCredit<A, B> for () {
-	fn handle_credit(_credit: CreditOf<A, B>) {}
+	fn handle_credit(_credit: Credit<A, B>) {}
 }
 
 /// Implements the asset transaction for a balance to asset converter (implementing
@@ -99,7 +103,7 @@ where
 {
 	type Balance = BalanceOf<T>;
 	type AssetId = AssetIdOf<T>;
-	type LiquidityInfo = CreditOf<T::AccountId, T::Fungibles>;
+	type LiquidityInfo = Credit<T::AccountId, T::Fungibles>;
 
 	/// Withdraw the predicted fee from the transaction origin.
 	///
@@ -124,27 +128,39 @@ where
 		if !matches!(can_withdraw, WithdrawConsequence::Success) {
 			return Err(InvalidTransaction::Payment.into())
 		}
-		<T::Fungibles as Balanced<T::AccountId>>::withdraw(asset_id, who, converted_fee)
-			.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))
+		<T::Fungibles as Balanced<T::AccountId>>::withdraw(
+			asset_id,
+			who,
+			converted_fee,
+			Exact,
+			Protect,
+			Polite,
+		)
+		.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))
 	}
 
 	/// Hand the fee and the tip over to the `[HandleCredit]` implementation.
 	/// Since the predicted fee might have been too high, parts of the fee may be refunded.
 	///
 	/// Note: The `corrected_fee` already includes the `tip`.
+	///
+	/// Returns the fee and tip in the asset used for payment as (fee, tip).
 	fn correct_and_deposit_fee(
 		who: &T::AccountId,
 		_dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
 		_post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: Self::Balance,
-		_tip: Self::Balance,
+		tip: Self::Balance,
 		paid: Self::LiquidityInfo,
-	) -> Result<(), TransactionValidityError> {
+	) -> Result<(AssetBalanceOf<T>, AssetBalanceOf<T>), TransactionValidityError> {
 		let min_converted_fee = if corrected_fee.is_zero() { Zero::zero() } else { One::one() };
-		// Convert the corrected fee into the asset used for payment.
+		// Convert the corrected fee and tip into the asset used for payment.
 		let converted_fee = CON::to_asset_balance(corrected_fee, paid.asset())
 			.map_err(|_| -> TransactionValidityError { InvalidTransaction::Payment.into() })?
 			.max(min_converted_fee);
+		let converted_tip = CON::to_asset_balance(tip, paid.asset())
+			.map_err(|_| -> TransactionValidityError { InvalidTransaction::Payment.into() })?;
+
 		// Calculate how much refund we should return.
 		let (final_fee, refund) = paid.split(converted_fee);
 		// Refund to the account that paid the fees. If this fails, the account might have dropped
@@ -152,6 +168,6 @@ where
 		let _ = <T::Fungibles as Balanced<T::AccountId>>::resolve(who, refund);
 		// Handle the final fee, e.g. by transferring to the block author or burning.
 		HC::handle_credit(final_fee);
-		Ok(())
+		Ok((converted_fee, converted_tip))
 	}
 }
