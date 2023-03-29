@@ -48,9 +48,9 @@ variables:
   CARGO_INCREMENTAL: 0
   DOCKER_OS: "debian:stretch"
   ARCH: "x86_64"
-  CI_IMAGE: "paritytech/ci-linux:production"
+  CI_IMAGE: "paritytech/ci-linux@sha256:a8b63e4f1ab37f90034b9edd3a936a1d4ae897560e25010e0f2fccd8274c6f27" # staging 2023-03-28
   BUILDAH_IMAGE: "quay.io/buildah/stable:v1.27"
-  RELENG_SCRIPTS_BRANCH: "master"
+  RELENG_SCRIPTS_BRANCH: "mira/pg-13" # TODO: back to master when the ci image is moved back to prod
   RUSTY_CACHIER_SINGLE_BRANCH: master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
   RUSTY_CACHIER_COMPRESSION_METHOD: zstd
