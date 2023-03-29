@@ -240,6 +240,23 @@ pub fn generate_impl_runtime_metadata(
 		));
 	}
 
+	// Each runtime must expose the `runtime_metadata()` to fetch the runtime API metadata.
+	// The function is implemented by calling `impl_runtime_apis!`.
+	//
+	// However, the `construct_runtime!` may be called without calling `impl_runtime_apis!`.
+	// Rely on the `Deref` trait to differentiate between a runtime that implements
+	// APIs (by macro impl_runtime_apis!) and a runtime that is simply created (by macro
+	// construct_runtime!).
+	//
+	// Both `InternalConstructRuntime` and `InternalImplRuntimeApis` expose a `runtime_metadata()`
+	// function. `InternalConstructRuntime` is implemented by the `construct_runtime!` for Runtime
+	// references (`& Runtime`), while `InternalImplRuntimeApis` is implemented by the
+	// `impl_runtime_apis!` for Runtime (`Runtime`).
+	//
+	// Therefore, the `Deref` trait will resolve the `runtime_metadata` from `impl_runtime_apis!`
+	// when both macros are called; and will resolve an empty `runtime_metadata` when only the
+	// `construct_runtime!` is called.
+
 	Ok(quote!(
 		#[doc(hidden)]
 		trait InternalImplRuntimeApis {
