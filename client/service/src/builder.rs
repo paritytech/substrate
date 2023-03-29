@@ -38,9 +38,7 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
-use sc_network::{
-	config::SyncMode, NetworkEventStream, NetworkService, NetworkStateInfo, NetworkStatusProvider,
-};
+use sc_network::{config::SyncMode, NetworkService, NetworkStateInfo, NetworkStatusProvider};
 use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{role::Roles, sync::warp::WarpSyncParams};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
@@ -906,7 +904,7 @@ where
 	)?;
 
 	spawn_handle.spawn("network-transactions-handler", Some("networking"), tx_handler.run());
-	spawn_handle.spawn(
+	spawn_handle.spawn_blocking(
 		"chain-sync-network-service-provider",
 		Some("networking"),
 		chain_sync_network_provider.run(network.clone()),

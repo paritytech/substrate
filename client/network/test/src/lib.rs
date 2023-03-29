@@ -55,8 +55,8 @@ use sc_network::{
 	},
 	request_responses::ProtocolConfig as RequestResponseConfig,
 	types::ProtocolName,
-	Multiaddr, NetworkBlock, NetworkEventStream, NetworkService, NetworkStateInfo,
-	NetworkSyncForkRequest, NetworkWorker,
+	Multiaddr, NetworkBlock, NetworkService, NetworkStateInfo, NetworkSyncForkRequest,
+	NetworkWorker,
 };
 use sc_network_common::{
 	role::Roles,

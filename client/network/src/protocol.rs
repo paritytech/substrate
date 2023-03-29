@@ -24,7 +24,7 @@ use crate::{
 
 use bytes::Bytes;
 use codec::{DecodeAll, Encode};
-use futures::{channel::oneshot, stream::FuturesUnordered, FutureExt, StreamExt};
+use futures::{channel::oneshot, stream::FuturesUnordered, StreamExt};
 use libp2p::{
 	core::connection::ConnectionId,
 	swarm::{
@@ -95,7 +95,7 @@ pub struct Protocol<B: BlockT> {
 	/// Connected peers.
 	peers: HashMap<PeerId, Roles>,
 	sync_substream_validations: FuturesUnordered<PendingSyncSubstreamValidation>,
-	tx: TracingUnboundedSender<crate::event::SyncEvent>,
+	tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
 	_marker: std::marker::PhantomData<B>,
 }
 
@@ -105,7 +105,7 @@ impl<B: BlockT> Protocol<B> {
 		roles: Roles,
 		network_config: &config::NetworkConfiguration,
 		block_announces_protocol: config::NonDefaultSetConfig,
-		tx: TracingUnboundedSender<crate::event::SyncEvent>,
+		tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
 	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let mut known_addresses = Vec::new();
 
@@ -463,12 +463,18 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 					match <Message<B> as DecodeAll>::decode_all(&mut &received_handshake[..]) {
 						Ok(GenericMessage::Status(handshake)) => {
 							let roles = handshake.roles;
+							let handshake = BlockAnnouncesHandshake::<B> {
+								roles: handshake.roles,
+								best_number: handshake.best_number,
+								best_hash: handshake.best_hash,
+								genesis_hash: handshake.genesis_hash,
+							};
 
 							let (tx, rx) = oneshot::channel();
 							let _ = self.tx.unbounded_send(
 								crate::SyncEvent::NotificationStreamOpened {
 									remote: peer_id,
-									received_handshake,
+									received_handshake: handshake,
 									sink: notifications_sink,
 									tx,
 								},
@@ -509,7 +515,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 									let _ = self.tx.unbounded_send(
 										crate::SyncEvent::NotificationStreamOpened {
 											remote: peer_id,
-											received_handshake,
+											received_handshake: handshake,
 											sink: notifications_sink,
 											tx,
 										},

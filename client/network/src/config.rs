@@ -30,7 +30,6 @@ pub use crate::{
 };
 
 use codec::Encode;
-use futures::channel::oneshot;
 use libp2p::{identity::Keypair, multiaddr, Multiaddr, PeerId};
 use prometheus_endpoint::Registry;
 pub use sc_network_common::{
@@ -39,6 +38,7 @@ pub use sc_network_common::{
 	ExHashT,
 };
 use sc_utils::mpsc::TracingUnboundedSender;
+use sp_runtime::traits::Block as BlockT;
 use zeroize::Zeroize;
 
 use std::{
@@ -695,7 +695,7 @@ impl NetworkConfiguration {
 }
 
 /// Network initialization parameters.
-pub struct Params<Client> {
+pub struct Params<Client, Block: BlockT> {
 	/// Assigned role for our node (full, light, ...).
 	pub role: Role,
 
@@ -722,7 +722,7 @@ pub struct Params<Client> {
 	pub block_announce_config: NonDefaultSetConfig,
 
 	/// TX channel for direct communication with `SyncingEngine` and `Protocol`.
-	pub tx: TracingUnboundedSender<crate::event::SyncEvent>,
+	pub tx: TracingUnboundedSender<crate::event::SyncEvent<Block>>,
 
 	/// Request response protocol configurations
 	pub request_response_protocol_configs: Vec<RequestResponseConfig>,

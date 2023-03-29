@@ -149,7 +149,7 @@ where
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new<Client: HeaderBackend<B> + 'static>(
-		mut params: Params<Client>,
+		mut params: Params<Client, B>,
 	) -> Result<Self, Error> {
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;

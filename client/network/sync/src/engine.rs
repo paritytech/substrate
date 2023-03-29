@@ -24,8 +24,8 @@ use crate::{
 	ChainSync, ClientError, SyncingService,
 };
 
-use codec::{Decode, DecodeAll, Encode};
-use futures::{channel::oneshot, FutureExt, Stream, StreamExt};
+use codec::{Decode, Encode};
+use futures::{FutureExt, StreamExt};
 use futures_timer::Delay;
 use libp2p::PeerId;
 use lru::LruCache;
@@ -39,7 +39,6 @@ use sc_network::{
 	config::{
 		NetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
 	},
-	event::Event,
 	utils::LruHashSet,
 	NotificationsSink, ProtocolName,
 };
@@ -63,7 +62,6 @@ use sp_runtime::traits::{Block as BlockT, Header, NumberFor, Zero};
 use std::{
 	collections::{HashMap, HashSet},
 	num::NonZeroUsize,
-	pin::Pin,
 	sync::{
 		atomic::{AtomicBool, AtomicUsize, Ordering},
 		Arc,
@@ -79,8 +77,6 @@ const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
 
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
-	/// We received a message that failed to decode.
-	pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
 	/// Peer has different genesis.
 	pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
 	/// Peer send us a block announcement that failed at validation.
@@ -187,7 +183,7 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	service_rx: TracingUnboundedReceiver<ToServiceCommand<B>>,
 
 	/// Channel for receiving inbound connections from `Protocol`.
-	rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent>,
+	rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent<B>>,
 
 	/// Assigned roles.
 	roles: Roles,
@@ -259,7 +255,7 @@ where
 		block_request_protocol_name: ProtocolName,
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
-		rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent>,
+		rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent<B>>,
 	) -> Result<(Self, SyncingService<B>, NonDefaultSetConfig), ClientError> {
 		let mode = match network_config.sync_mode {
 			SyncOperationMode::Full => SyncMode::Full,
@@ -678,33 +674,17 @@ where
 					received_handshake,
 					sink,
 					tx,
-				} => {
-					match <BlockAnnouncesHandshake<B> as DecodeAll>::decode_all(
-						&mut &received_handshake[..],
-					) {
-						Ok(decoded_handshake) => {
-							match self.on_sync_peer_connected(remote, decoded_handshake, sink) {
-								Ok(()) => {
-									let _ = tx.send(true);
-								},
-								Err(()) => {
-									log::debug!(
-										target: "sync",
-										"Failed to register peer {remote:?}: {received_handshake:?}",
-									);
-									let _ = tx.send(false);
-								},
-							}
-						},
-						Err(_) => {
-							let _ = tx.send(false);
-							log::debug!(
-								target: "sync",
-								"failed to decode handshake but it was decoded correctly by `Protocol`",
-							);
-							debug_assert!(false);
-						},
-					}
+				} => match self.on_sync_peer_connected(remote, &received_handshake, sink) {
+					Ok(()) => {
+						let _ = tx.send(true);
+					},
+					Err(()) => {
+						log::debug!(
+							target: "sync",
+							"Failed to register peer {remote:?}: {received_handshake:?}",
+						);
+						let _ = tx.send(false);
+					},
 				},
 				sc_network::SyncEvent::NotificationStreamClosed { remote } => {
 					if self.on_sync_peer_disconnected(remote).is_err() {
@@ -780,7 +760,7 @@ where
 	pub fn on_sync_peer_connected(
 		&mut self,
 		who: PeerId,
-		status: BlockAnnouncesHandshake<B>,
+		status: &BlockAnnouncesHandshake<B>,
 		sink: NotificationsSink,
 	) -> Result<(), ()> {
 		log::trace!(target: "sync", "New peer {} {:?}", who, status);
