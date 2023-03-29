@@ -24,9 +24,9 @@ use sp_std::vec::Vec;
 pub use sp_core::bls::bls381::*;
 
 mod app {
-	use sp_core::testing::BLS377;
+	use sp_core::testing::BLS381;
 
-	crate::app_crypto!(super, BLS377);
+	crate::app_crypto!(super, BLS381);
 
 	impl crate::traits::BoundToRuntimeAppPublic for Public {
 		type Public = Self;

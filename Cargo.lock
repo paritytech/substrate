@@ -620,12 +620,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c7f02d4ea65f2c1853089ffd8d2787bdbc63de2f0d29dedbcf8ccdfa0ccd4cf"
 
 [[package]]
-name = "base58"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6107fe1be6682a68940da878d9e9f5e90ca5745b3dec9fd1bb393c8777d4f581"
-
-[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2384,6 +2378,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9c384f161156f5260c24a097c56119f9be8c798586aecc13afbcbe7b7e26bf8"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "fraction"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3027ae1df8d41b4bed2241c8fdad4acc1e7af60c8e17743534b545e77182d678"
+dependencies = [
+ "lazy_static",
+ "num",
 ]
 
 [[package]]
@@ -5455,6 +5459,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "num"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43db66d1170d347f9a065114077f7dccb00c1b9478c89384490a3425279a4606"
+dependencies = [
+ "num-bigint",
+ "num-complex",
+ "num-integer",
+ "num-iter",
+ "num-rational",
+ "num-traits",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5491,6 +5509,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "225d3389fb3509a24c93f5c29eb6bde2586b98d9f016636dff58d7c6f7569cd9"
 dependencies = [
  "autocfg",
+ "num-traits",
+]
+
+[[package]]
+name = "num-iter"
+version = "0.1.43"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d03e6c028c5dc5cac6e2dec0efda81fc887605bb3d884578bb6d6bf7514e252"
+dependencies = [
+ "autocfg",
+ "num-integer",
  "num-traits",
 ]
 
@@ -10311,8 +10340,11 @@ dependencies = [
 name = "sp-arithmetic-fuzzer"
 version = "2.0.0"
 dependencies = [
+ "arbitrary",
+ "fraction",
  "honggfuzz",
  "num-bigint",
+ "num-traits",
  "primitive-types",
  "sp-arithmetic",
 ]
@@ -10487,11 +10519,11 @@ name = "sp-core"
 version = "7.0.0"
 dependencies = [
  "array-bytes",
- "base58",
  "bitflags",
  "blake2",
  "bls-like",
  "bounded-collections",
+ "bs58",
  "criterion",
  "dyn-clonable",
  "ed25519-zebra",
@@ -10516,7 +10548,6 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
- "sha2 0.10.6",
  "sp-core-hashing",
  "sp-core-hashing-proc-macro",
  "sp-debug-derive",
@@ -10608,6 +10639,7 @@ dependencies = [
  "libsecp256k1",
  "log",
  "parity-scale-codec",
+ "rustversion",
  "secp256k1",
  "sp-core",
  "sp-externalities",

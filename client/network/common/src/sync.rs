@@ -94,6 +94,8 @@ pub struct SyncStatus<Block: BlockT> {
 	pub best_seen_block: Option<NumberFor<Block>>,
 	/// Number of peers participating in syncing.
 	pub num_peers: u32,
+	/// Number of peers known to `SyncingEngine` (both full and light).
+	pub num_connected_peers: u32,
 	/// Number of blocks queued for import
 	pub queued_blocks: u32,
 	/// State sync status in progress, if any.

@@ -509,8 +509,7 @@ impl<T: BlsBound> CryptoType for Pair<T> {
 mod test {
 	use super::*;
 	use crate::crypto::DEV_PHRASE;
-	use bls377::Pair;
-	use bls_like::TinyBLS377;
+	use bls377::{Pair, Signature};
 	use hex_literal::hex;
 
 	#[test]
@@ -666,9 +665,7 @@ mod test {
 
 	#[test]
 	fn signature_serialization_doesnt_panic() {
-		fn deserialize_signature(
-			text: &str,
-		) -> Result<Signature<TinyBLS377>, serde_json::error::Error> {
+		fn deserialize_signature(text: &str) -> Result<Signature, serde_json::error::Error> {
 			serde_json::from_str(text)
 		}
 		assert!(deserialize_signature("Not valid json.").is_err());
