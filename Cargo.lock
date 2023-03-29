@@ -9077,7 +9077,6 @@ name = "sc-keystore"
 version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
- "async-trait",
  "parking_lot 0.12.1",
  "serde_json",
  "sp-application-crypto",

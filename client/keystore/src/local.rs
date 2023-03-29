@@ -231,8 +231,16 @@ impl Keystore for LocalKeystore {
 		Ok(res)
 	}
 
-	fn bls381_public_keys(&self, _key_type: KeyTypeId) -> Vec<bls381::Public> {
-		unimplemented!()
+	fn bls381_public_keys(&self, key_type: KeyTypeId) -> Vec<bls381::Public> {
+		self.0
+			.read()
+			.raw_public_keys(key_type)
+			.map(|v| {
+				v.into_iter()
+					.filter_map(|k| bls381::Public::from_slice(k.as_slice()).ok())
+					.collect()
+			})
+			.unwrap_or_default()
 	}
 
 	/// Generate a new pair compatible with the 'bls381' signature scheme.
@@ -240,19 +248,33 @@ impl Keystore for LocalKeystore {
 	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn bls381_generate_new(
 		&self,
-		_key_type: KeyTypeId,
-		_seed: Option<&str>,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
 	) -> std::result::Result<bls381::Public, TraitError> {
-		unimplemented!()
+		let pair = match seed {
+			Some(seed) => self
+				.0
+				.write()
+				.insert_ephemeral_from_seed_by_type::<bls381::Pair>(seed, key_type),
+			None => self.0.write().generate_by_type::<bls381::Pair>(key_type),
+		}
+		.map_err(|e| -> TraitError { e.into() })?;
+
+		Ok(pair.public())
 	}
 
 	fn bls381_sign(
 		&self,
-		_key_type: KeyTypeId,
-		_public: &bls381::Public,
-		_msg: &[u8],
+		key_type: KeyTypeId,
+		public: &bls381::Public,
+		msg: &[u8],
 	) -> std::result::Result<Option<bls381::Signature>, TraitError> {
-		unimplemented!()
+		let res = self
+			.0
+			.read()
+			.key_pair_by_type::<bls381::Pair>(public, key_type)?
+			.map(|pair| pair.sign(msg));
+		Ok(res)
 	}
 
 	fn insert(
