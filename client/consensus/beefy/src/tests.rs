@@ -165,7 +165,6 @@ impl BeefyTestNet {
 			let block_num: NumberFor<Block> = block_num.saturating_add(1).try_into().unwrap();
 			let built_hashes = self.peer(0).generate_blocks(1, BlockOrigin::File, |mut builder| {
 				if include_mmr_digest {
-					// let block_num = *block.header.number();
 					let num_byte = block_num.to_le_bytes().into_iter().next().unwrap();
 					let mmr_root = MmrRootHash::repeat_byte(num_byte);
 					add_mmr_digest(&mut builder, mmr_root);
@@ -325,8 +324,6 @@ sp_api::mock_impl_runtime_apis! {
 }
 
 fn add_mmr_digest(builder: &mut impl BlockBuilderExt, mmr_hash: MmrRootHash) {
-	// let _ = builder.push_deposit_log(
-	// sp_finality_grandpa::ConsensusLog::ScheduledChange(change)).unwrap();
 	let _ = builder
 		.push_deposit_log_digest_item(DigestItem::Consensus(
 			BEEFY_ENGINE_ID,
