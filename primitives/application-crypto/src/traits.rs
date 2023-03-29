@@ -15,10 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use codec::Codec;
+use scale_info::TypeInfo;
+
 #[cfg(feature = "full_crypto")]
 use sp_core::crypto::Pair;
-
-use codec::Codec;
 use sp_core::crypto::{CryptoType, CryptoTypeId, IsWrappedBy, KeyTypeId, Public};
 use sp_std::{fmt::Debug, vec::Vec};
 
@@ -48,38 +49,10 @@ pub trait AppCrypto: 'static + Send + Sync + Sized + CryptoType + Clone {
 	type Pair: AppPair;
 }
 
-/// Type which implements Hash in std, not when no-std (std variant).
-#[cfg(any(feature = "std", feature = "full_crypto"))]
-pub trait MaybeHash: sp_std::hash::Hash {}
-#[cfg(any(feature = "std", feature = "full_crypto"))]
-impl<T: sp_std::hash::Hash> MaybeHash for T {}
-
-/// Type which implements Hash in std, not when no-std (no-std variant).
-#[cfg(all(not(feature = "std"), not(feature = "full_crypto")))]
-pub trait MaybeHash {}
-#[cfg(all(not(feature = "std"), not(feature = "full_crypto")))]
-impl<T> MaybeHash for T {}
-
-/// Type which implements Debug and Hash in std, not when no-std (no-std variant with crypto).
-#[cfg(all(not(feature = "std"), feature = "full_crypto"))]
-pub trait MaybeDebugHash: sp_std::hash::Hash {}
-#[cfg(all(not(feature = "std"), feature = "full_crypto"))]
-impl<T: sp_std::hash::Hash> MaybeDebugHash for T {}
-
 /// A application's public key.
-pub trait AppPublic:
-	AppCrypto + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + codec::Codec
-{
+pub trait AppPublic: AppCrypto + Public + Ord + PartialOrd + Eq + PartialEq + Debug {
 	/// The wrapped type which is just a plain instance of `Public`.
-	type Generic: IsWrappedBy<Self>
-		+ Public
-		+ Ord
-		+ PartialOrd
-		+ Eq
-		+ PartialEq
-		+ Debug
-		+ MaybeHash
-		+ codec::Codec;
+	type Generic: IsWrappedBy<Self> + Public + Ord + PartialOrd + Eq + PartialEq + Debug;
 }
 
 /// A application's key pair.
@@ -92,15 +65,15 @@ pub trait AppPair: AppCrypto + Pair<Public = <Self as AppCrypto>::Public> {
 }
 
 /// A application's signature.
-pub trait AppSignature: AppCrypto + Eq + PartialEq + Debug + MaybeHash {
+pub trait AppSignature: AppCrypto + Eq + PartialEq + Debug {
 	/// The wrapped type which is just a plain instance of `Signature`.
-	type Generic: IsWrappedBy<Self> + Eq + PartialEq + Debug + MaybeHash;
+	type Generic: IsWrappedBy<Self> + Eq + PartialEq + Debug;
 }
 
 /// A runtime interface for a public key.
 pub trait RuntimePublic: Sized {
 	/// The signature that will be generated when signing with the corresponding private key.
-	type Signature: Codec + Debug + MaybeHash + Eq + PartialEq + Clone;
+	type Signature: Debug + Eq + PartialEq + Clone;
 
 	/// Returns all public keys for the given key type in the keystore.
 	fn all(key_type: KeyTypeId) -> crate::Vec<Self>;
@@ -134,7 +107,7 @@ pub trait RuntimeAppPublic: Sized {
 	const ID: KeyTypeId;
 
 	/// The signature that will be generated when signing with the corresponding private key.
-	type Signature: Codec + Debug + MaybeHash + Eq + PartialEq + Clone + scale_info::TypeInfo;
+	type Signature: Debug + Eq + PartialEq + Clone + TypeInfo + Codec;
 
 	/// Returns all public keys for this application in the keystore.
 	fn all() -> crate::Vec<Self>;
@@ -165,7 +138,7 @@ impl<T> RuntimeAppPublic for T
 where
 	T: AppPublic + AsRef<<T as AppPublic>::Generic>,
 	<T as AppPublic>::Generic: RuntimePublic,
-	<T as AppCrypto>::Signature: scale_info::TypeInfo
+	<T as AppCrypto>::Signature: TypeInfo
 		+ Codec
 		+ From<<<T as AppPublic>::Generic as RuntimePublic>::Signature>
 		+ AsRef<<<T as AppPublic>::Generic as RuntimePublic>::Signature>,
