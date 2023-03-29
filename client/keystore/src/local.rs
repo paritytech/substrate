@@ -20,7 +20,7 @@
 use parking_lot::RwLock;
 use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
 use sp_core::{
-	bls377,
+	bls381,
 	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString},
 	ecdsa, ed25519, sr25519,
 };
@@ -231,27 +231,27 @@ impl Keystore for LocalKeystore {
 		Ok(res)
 	}
 
-	fn bls377_public_keys(&self, _key_type: KeyTypeId) -> Vec<bls377::Public> {
+	fn bls381_public_keys(&self, _key_type: KeyTypeId) -> Vec<bls381::Public> {
 		unimplemented!()
 	}
 
-	/// Generate a new pair compatible with the 'bls377' signature scheme.
+	/// Generate a new pair compatible with the 'bls381' signature scheme.
 	///
 	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
-	fn bls377_generate_new(
+	fn bls381_generate_new(
 		&self,
 		_key_type: KeyTypeId,
 		_seed: Option<&str>,
-	) -> std::result::Result<bls377::Public, TraitError> {
+	) -> std::result::Result<bls381::Public, TraitError> {
 		unimplemented!()
 	}
 
-	fn bls377_sign(
+	fn bls381_sign(
 		&self,
 		_key_type: KeyTypeId,
-		_public: &bls377::Public,
+		_public: &bls381::Public,
 		_msg: &[u8],
-	) -> std::result::Result<Option<bls377::Signature>, TraitError> {
+	) -> std::result::Result<Option<bls381::Signature>, TraitError> {
 		unimplemented!()
 	}
 

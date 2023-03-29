@@ -41,7 +41,7 @@ pub use serde;
 #[doc(hidden)]
 pub use sp_std::{ops::Deref, vec::Vec};
 
-pub mod bls377;
+pub mod bls381;
 pub mod ecdsa;
 pub mod ed25519;
 pub mod sr25519;

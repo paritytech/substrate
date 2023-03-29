@@ -21,7 +21,7 @@ pub mod vrf;
 
 use crate::vrf::{VRFSignature, VRFTranscriptData};
 use sp_core::{
-	bls377,
+	bls381,
 	crypto::{ByteArray, CryptoTypeId, KeyTypeId},
 	ecdsa, ed25519, sr25519,
 };
@@ -164,32 +164,32 @@ pub trait Keystore: Send + Sync {
 	) -> Result<Option<ecdsa::Signature>, Error>;
 
 	/// Returns all bls public keys for the given key type.
-	fn bls377_public_keys(&self, id: KeyTypeId) -> Vec<bls377::Public>;
+	fn bls381_public_keys(&self, id: KeyTypeId) -> Vec<bls381::Public>;
 
-	/// Generate a new bls377 key pair for the given key type and an optional seed.
+	/// Generate a new bls381 key pair for the given key type and an optional seed.
 	///
-	/// Returns an `bls377::Public` key of the generated key pair or an `Err` if
+	/// Returns an `bls381::Public` key of the generated key pair or an `Err` if
 	/// something failed during key generation.
-	fn bls377_generate_new(
+	fn bls381_generate_new(
 		&self,
 		key_type: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<bls377::Public, Error>;
+	) -> Result<bls381::Public, Error>;
 
-	/// Generate a bls377 signature for a given message.
+	/// Generate a bls381 signature for a given message.
 	///
-	/// Receives [`KeyTypeId`] and a [`bls377::Public`] key to be able to map
+	/// Receives [`KeyTypeId`] and a [`bls381::Public`] key to be able to map
 	/// them to a private key that exists in the keystore.
 	///
-	/// Returns an [`bls377::Signature`] or `None` in case the given `key_type`
+	/// Returns an [`bls381::Signature`] or `None` in case the given `key_type`
 	/// and `public` combination doesn't exist in the keystore.
 	/// An `Err` will be returned if generating the signature itself failed.
-	fn bls377_sign(
+	fn bls381_sign(
 		&self,
 		key_type: KeyTypeId,
-		public: &bls377::Public,
+		public: &bls381::Public,
 		msg: &[u8],
-	) -> Result<Option<bls377::Signature>, Error>;
+	) -> Result<Option<bls381::Signature>, Error>;
 
 	/// Insert a new secret key.
 	fn insert(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()>;
@@ -239,10 +239,10 @@ pub trait Keystore: Send + Sync {
 					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;
 				self.ecdsa_sign(id, &public, msg)?.map(|s| s.encode())
 			},
-			bls377::CRYPTO_ID => {
-				let public = bls377::Public::from_slice(public)
+			bls381::CRYPTO_ID => {
+				let public = bls381::Public::from_slice(public)
 					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;
-				self.bls377_sign(id, &public, msg)?.map(|s| s.encode())
+				self.bls381_sign(id, &public, msg)?.map(|s| s.encode())
 			},
 			_ => return Err(Error::KeyNotSupported(id)),
 		};

@@ -15,13 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! BLS12-377 crypto applications.
+//! BLS12-381 crypto applications.
 
 use crate::{KeyTypeId, RuntimePublic};
 
 use sp_std::vec::Vec;
 
-pub use sp_core::bls::bls377::*;
+pub use sp_core::bls::bls381::*;
 
 mod app {
 	use sp_core::testing::BLS377;

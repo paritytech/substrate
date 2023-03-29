@@ -18,7 +18,7 @@
 //! Types that should only be used for testing!
 
 use sp_core::{
-	bls377,
+	bls381,
 	crypto::{ByteArray, KeyTypeId, Pair},
 	ecdsa, ed25519, sr25519,
 };
@@ -76,11 +76,11 @@ impl MemoryKeystore {
 		})
 	}
 
-	fn bls377_key_pair(&self, id: KeyTypeId, pub_key: &bls377::Public) -> Option<bls377::Pair> {
+	fn bls381_key_pair(&self, id: KeyTypeId, pub_key: &bls381::Public) -> Option<bls381::Pair> {
 		self.keys.read().get(&id).and_then(|inner| {
 			inner
 				.get(pub_key.as_slice())
-				.map(|s| bls377::Pair::from_string(s, None).expect("`bls` seed slice is valid"))
+				.map(|s| bls381::Pair::from_string(s, None).expect("`bls` seed slice is valid"))
 		})
 	}
 }
@@ -268,27 +268,27 @@ impl Keystore for MemoryKeystore {
 		pair.map(|pair| pair.sign_prehashed(msg)).map(Ok).transpose()
 	}
 
-	fn bls377_public_keys(&self, key_type: KeyTypeId) -> Vec<bls377::Public> {
+	fn bls381_public_keys(&self, key_type: KeyTypeId) -> Vec<bls381::Public> {
 		self.keys
 			.read()
 			.get(&key_type)
 			.map(|keys| {
 				keys.values()
-					.map(|s| bls377::Pair::from_string(s, None).expect("`bls` seed slice is valid"))
+					.map(|s| bls381::Pair::from_string(s, None).expect("`bls` seed slice is valid"))
 					.map(|p| p.public())
 					.collect()
 			})
 			.unwrap_or_default()
 	}
 
-	fn bls377_generate_new(
+	fn bls381_generate_new(
 		&self,
 		key_type: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<bls377::Public, Error> {
+	) -> Result<bls381::Public, Error> {
 		match seed {
 			Some(seed) => {
-				let pair = bls377::Pair::from_string(seed, None)
+				let pair = bls381::Pair::from_string(seed, None)
 					.map_err(|_| Error::ValidationError("Generates an `bls` pair.".to_owned()))?;
 				self.keys
 					.write()
@@ -298,7 +298,7 @@ impl Keystore for MemoryKeystore {
 				Ok(pair.public())
 			},
 			None => {
-				let (pair, phrase, _) = bls377::Pair::generate_with_phrase(None);
+				let (pair, phrase, _) = bls381::Pair::generate_with_phrase(None);
 				self.keys
 					.write()
 					.entry(key_type)
@@ -309,13 +309,13 @@ impl Keystore for MemoryKeystore {
 		}
 	}
 
-	fn bls377_sign(
+	fn bls381_sign(
 		&self,
 		key_type: KeyTypeId,
-		public: &bls377::Public,
+		public: &bls381::Public,
 		msg: &[u8],
-	) -> Result<Option<bls377::Signature>, Error> {
-		Ok(self.bls377_key_pair(key_type, public).map(|pair| pair.sign(msg)))
+	) -> Result<Option<bls381::Signature>, Error> {
+		Ok(self.bls381_key_pair(key_type, public).map(|pair| pair.sign(msg)))
 	}
 
 	fn insert(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
