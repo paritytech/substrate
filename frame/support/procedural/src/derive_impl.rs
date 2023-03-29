@@ -17,19 +17,17 @@
 
 //! Implementation of the `derive_impl` attribute macro.
 
-use std::collections::{HashMap, HashSet};
-
-use frame_support_procedural_tools::generate_crate_access_2018;
 use macro_magic::core::pretty_print;
-use proc_macro2::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
+use std::collections::HashSet;
 use syn::{
 	braced, bracketed,
 	parse::{Parse, ParseStream},
-	parse2,
+	parse2, parse_quote,
 	punctuated::Punctuated,
 	token::{Brace, Bracket},
-	Ident, ImplItem, ItemImpl, Result, Token, TypePath,
+	Ident, ImplItem, ItemImpl, Path, Result, Token, TypePath,
 };
 
 mod keywords {
@@ -99,7 +97,7 @@ impl Parse for DeriveImplDef {
 	}
 }
 
-pub(crate) fn derive_impl_inner(input: TokenStream) -> Result<TokenStream> {
+pub(crate) fn derive_impl_inner(input: TokenStream2) -> Result<TokenStream2> {
 	println!("input: {}", input);
 	let DeriveImplDef { partial_impl_block, implementing_type, type_items, .. } = parse2(input)?;
 
@@ -151,7 +149,7 @@ fn impl_item_ident(impl_item: &ImplItem) -> Option<Ident> {
 	}
 }
 
-fn combine_impls(local_impl: ItemImpl, foreign_impl: ItemImpl) -> ItemImpl {
+fn combine_impls(local_impl: ItemImpl, foreign_impl: ItemImpl, foreign_path: Path) -> ItemImpl {
 	let existing_local_keys: HashSet<Ident> = local_impl
 		.items
 		.iter()
@@ -163,47 +161,60 @@ fn combine_impls(local_impl: ItemImpl, foreign_impl: ItemImpl) -> ItemImpl {
 		.filter(|impl_item| impl_item_ident(impl_item).is_none())
 		.cloned()
 		.collect();
+	let source_crate_path = foreign_path.segments.first().unwrap().ident.clone();
 	let mut final_impl = local_impl;
 	final_impl.items.extend(
 		foreign_impl
 			.items
-			.iter()
+			.into_iter()
 			.filter_map(|item| {
 				if let Some(ident) = impl_item_ident(&item) {
 					if existing_local_keys.contains(&ident) {
-						// do not copy colliding supported items
+						// do not copy colliding items that have an ident
 						None
 					} else {
-						// copy uncolliding supported items verbatim
-						Some(item)
+						if matches!(item, ImplItem::Type(_)) {
+							// modify and insert uncolliding type items
+							let modified_item: ImplItem = parse_quote! {
+								type #ident = <#foreign_path as #source_crate_path::pallet::DefaultConfig>::#ident;
+							};
+							Some(modified_item)
+						} else {
+							// copy uncolliding non-type items that have an ident
+							Some(item)
+						}
 					}
 				} else {
-					if existing_unsupported_items.contains(item) {
-						// do not copy colliding unsupported items
+					if existing_unsupported_items.contains(&item) {
+						// do not copy colliding items that lack an ident
 						None
 					} else {
-						// copy uncolliding unsupported items
+						// copy uncolliding items without an ident verbaitm
 						Some(item)
 					}
 				}
 			})
-			.cloned()
 			.collect::<Vec<ImplItem>>(),
 	);
 	final_impl
 }
 
-pub fn derive_impl(foreign_path: TokenStream, foreign_tokens: TokenStream, local_tokens: TokenStream) -> Result<TokenStream> {
+pub fn derive_impl(
+	foreign_path: TokenStream2,
+	foreign_tokens: TokenStream2,
+	local_tokens: TokenStream2,
+) -> Result<TokenStream2> {
+	println!("foreign_path: {}\n", foreign_path.to_string());
+	println!("foreign_impl:");
+	pretty_print(&foreign_tokens);
+	println!("\nlocal_impl:");
+	pretty_print(&local_tokens);
+
 	let local_impl = parse2::<ItemImpl>(local_tokens)?;
 	let foreign_impl = parse2::<ItemImpl>(foreign_tokens)?;
+	let foreign_path = parse2::<Path>(foreign_path)?;
 
-	println!("\nlocal_impl:");
-	pretty_print(&local_impl.to_token_stream());
-	println!("foreign_impl:");
-	pretty_print(&foreign_impl.to_token_stream());
-	println!("foreign_path: {}", foreign_path);
-
-	let combined_impl = combine_impls(local_impl, foreign_impl);
+	let combined_impl = combine_impls(local_impl, foreign_impl, foreign_path);
 
 	println!("combined_impl:");
 	pretty_print(&combined_impl.to_token_stream());
