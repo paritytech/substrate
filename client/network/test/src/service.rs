@@ -34,7 +34,8 @@ use sc_network_sync::{
 	service::network::{NetworkServiceHandle, NetworkServiceProvider},
 	state_request_handler::StateRequestHandler,
 };
-use sp_runtime::traits::Block as BlockT;
+use sp_blockchain::HeaderBackend;
+use sp_runtime::traits::{Block as BlockT, Zero};
 use substrate_test_runtime_client::{
 	runtime::{Block as TestBlock, Hash as TestHash},
 	TestClientBuilder, TestClientBuilderExt as _,
@@ -194,17 +195,19 @@ impl TestNetworkBuilder {
 		)
 		.unwrap();
 		let mut link = self.link.unwrap_or(Box::new(chain_sync_service.clone()));
+		let genesis_hash =
+			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
 		let worker = NetworkWorker::<
 			substrate_test_runtime_client::runtime::Block,
 			substrate_test_runtime_client::runtime::Hash,
-		>::new(config::Params {
+		>::new(config::Params::<substrate_test_runtime_client::runtime::Block> {
 			block_announce_config,
 			role: config::Role::Full,
 			executor: Box::new(|f| {
 				tokio::spawn(f);
 			}),
+			genesis_hash,
 			network_config,
-			chain: client.clone(),
 			protocol_id,
 			fork_id,
 			metrics_registry: None,
