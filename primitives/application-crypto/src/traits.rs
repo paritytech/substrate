@@ -161,6 +161,44 @@ pub trait RuntimeAppPublic: Sized {
 	fn to_raw_vec(&self) -> Vec<u8>;
 }
 
+impl<T> RuntimeAppPublic for T
+where
+	T: AppPublic + AsRef<<T as AppPublic>::Generic>,
+	<T as AppPublic>::Generic: RuntimePublic,
+	<T as AppCrypto>::Signature: scale_info::TypeInfo
+		+ Codec
+		+ From<<<T as AppPublic>::Generic as RuntimePublic>::Signature>
+		+ AsRef<<<T as AppPublic>::Generic as RuntimePublic>::Signature>,
+{
+	const ID: KeyTypeId = <T as AppCrypto>::ID;
+
+	type Signature = <T as AppCrypto>::Signature;
+
+	fn all() -> crate::Vec<Self> {
+		<<T as AppPublic>::Generic as RuntimePublic>::all(Self::ID)
+			.into_iter()
+			.map(|p| p.into())
+			.collect()
+	}
+
+	fn generate_pair(seed: Option<Vec<u8>>) -> Self {
+		<<T as AppPublic>::Generic as RuntimePublic>::generate_pair(Self::ID, seed).into()
+	}
+
+	fn sign<M: AsRef<[u8]>>(&self, msg: &M) -> Option<Self::Signature> {
+		<<T as AppPublic>::Generic as RuntimePublic>::sign(self.as_ref(), Self::ID, msg)
+			.map(|s| s.into())
+	}
+
+	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
+		<<T as AppPublic>::Generic as RuntimePublic>::verify(self.as_ref(), msg, signature.as_ref())
+	}
+
+	fn to_raw_vec(&self) -> Vec<u8> {
+		<<T as AppPublic>::Generic as RuntimePublic>::to_raw_vec(self.as_ref())
+	}
+}
+
 /// Something that is bound to a fixed [`RuntimeAppPublic`].
 pub trait BoundToRuntimeAppPublic {
 	/// The [`RuntimeAppPublic`] this type is bound to.

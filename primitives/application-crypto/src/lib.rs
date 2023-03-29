@@ -309,39 +309,6 @@ macro_rules! app_crypto_public_common {
 			type Generic = $public;
 		}
 
-		impl $crate::RuntimeAppPublic for Public
-		where
-			$public: $crate::RuntimePublic<Signature = $sig>,
-		{
-			const ID: $crate::KeyTypeId = $key_type;
-
-			type Signature = Signature;
-
-			fn all() -> $crate::Vec<Self> {
-				<$public as $crate::RuntimePublic>::all($key_type)
-					.into_iter()
-					.map(Self)
-					.collect()
-			}
-
-			fn generate_pair(seed: Option<$crate::Vec<u8>>) -> Self {
-				Self(<$public as $crate::RuntimePublic>::generate_pair($key_type, seed))
-			}
-
-			fn sign<M: AsRef<[u8]>>(&self, msg: &M) -> Option<Self::Signature> {
-				<$public as $crate::RuntimePublic>::sign(self.as_ref(), $key_type, msg)
-					.map(Signature)
-			}
-
-			fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
-				<$public as $crate::RuntimePublic>::verify(self.as_ref(), msg, &signature.as_ref())
-			}
-
-			fn to_raw_vec(&self) -> $crate::Vec<u8> {
-				<$public as $crate::RuntimePublic>::to_raw_vec(&self.0)
-			}
-		}
-
 		impl<'a> TryFrom<&'a [u8]> for Public {
 			type Error = ();
 
