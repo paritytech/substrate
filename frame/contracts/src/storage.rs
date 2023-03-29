@@ -371,7 +371,7 @@ impl<T: Config> DeletionQueue<T> {
 		<DeletionQueueNonces<T>>::get()
 	}
 
-	/// The number of contracts marked for deletion.
+	/// Returns `true` if the queue contains no elements.
 	fn is_empty(&self) -> bool {
 		self.insert_nonce.wrapping_sub(self.delete_nonce) == 0
 	}
