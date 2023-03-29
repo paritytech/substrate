@@ -240,7 +240,7 @@ mod keyword {
 	syn::custom_keyword!(default_selector);
 	syn::custom_keyword!(InterfaceError);
 	syn::custom_keyword!(Result);
-	syn::custom_keyword!(Selectable);
+	syn::custom_keyword!(H256);
 }
 
 /// Parse attributes for item in interface trait definition
@@ -279,9 +279,7 @@ pub fn check_selector_first_arg_type(ty: &syn::Type) -> syn::Result<()> {
 	pub struct CheckSelectorFirstArg;
 	impl syn::parse::Parse for CheckSelectorFirstArg {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-			input.parse::<syn::token::SelfType>()?;
-			input.parse::<syn::Token![::]>()?;
-			input.parse::<keyword::Selectable>()?;
+			input.parse::<keyword::H256>()?;
 
 			Ok(Self)
 		}

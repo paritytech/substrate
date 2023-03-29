@@ -23,6 +23,7 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 	let (span, where_clause, calls) = def.interface.calls();
 
 	let frame_support = &def.frame_support;
+	let sp_core = &def.sp_core;
 	let call_ident = syn::Ident::new("Call", span);
 
 	let fn_name = calls.iter().map(|method| &method.name).collect::<Vec<_>>();
@@ -112,19 +113,19 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 			Some(selector_type) => match selector_type {
 				SelectorType::Default { .. } => {
 					quote::quote!(
-						let select = #frame_support::interface::Select::new(selectable.into(), Box::new(DefaultSelector{}));
+						let select = #frame_support::interface::Select::new(selectable, Box::new(DefaultSelector::<#type_use_gen>::new()));
 					)
 				},
 				SelectorType::Named { name, .. } => {
 					let name = name.clone();
 					quote::quote_spanned!(method.attr_span =>
-						let select = #frame_support::interface::Select::new(selectable.into(), Box::new(#name{}));
+						let select = #frame_support::interface::Select::new(selectable, Box::new(#name::<#type_use_gen>::new()));
 					)
 				},
 			},
 			None => {
 				quote::quote!(
-					let select = #frame_support::interface::Select::new(selectable.into(), Box::new(#frame_support::interface::EmptySelector{}));
+					let select = #frame_support::interface::Select::new(selectable, Box::new(#frame_support::interface::EmptySelector::new()));
 					select.select()?;
 				)
 			},
@@ -163,23 +164,31 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 
 	quote::quote_spanned!(span =>
 		// TODO: REMOVE
-		struct DefaultSelector<Runtime: Pip20>(phantom);
-		struct RestrictedCurrency<Runtime: Pip20>;
+		struct DefaultSelector<Runtime>(std::marker::PhantomData<Runtime>);
+		struct RestrictedCurrency<Runtime>(std::marker::PhantomData<Runtime>);
 
-		impl<Runtime> Selector for DefaultSelector<Runtime: Pip20> {
-			type Selectable = H256;
-			type Selected = <Runtime as Pip20>::CurrencyId;
+		impl<Runtime: Pip20> #frame_support::interface::Selector for DefaultSelector<Runtime> {
+			type Selected = <Runtime as Pip20>::Currency;
 
-			fn select(&self, from: Self::Selectable) -> Result<Self::Selected, InterfaceError> {
+			fn select(&self, from: sp_core::H256) -> Result<Self::Selected, InterfaceError> {
 				todo!();
 			}
 		}
-		impl<Runtime> Selector for RestrictedCurrency<Runtime: Pip20> {
-			type Selectable = H256;
-			type Selected = <Runtime as Pip20>::CurrencyId;
+		impl<Runtime> DefaultSelector<Runtime> {
+			pub fn new() -> Self {
+				DefaultSelector(Default::default())
+			}
+		}
+		impl<Runtime: Pip20> #frame_support::interface::Selector for RestrictedCurrency<Runtime> {
+			type Selected = <Runtime as Pip20>::Currency;
 
-			fn select(&self, from: Self::Selectable) -> Result<Self::Selected, InterfaceError> {
+			fn select(&self, from: sp_core::H256) -> Result<Self::Selected, InterfaceError> {
 				todo!();
+			}
+		}
+		impl<Runtime> RestrictedCurrency<Runtime> {
+			pub fn new() -> Self {
+				RestrictedCurrency(Default::default())
 			}
 		}
 		// TODO: TILL HERE
@@ -290,12 +299,11 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 			#where_clause
 		{
 			type RuntimeOrigin = <#type_use_gen as #frame_support::interface::Core>::RuntimeOrigin;
-			type Selectable = <#type_use_gen as #frame_support::interface::Core>::Selectable;
 
 			fn call(
 				self,
 				origin: Self::RuntimeOrigin,
-				selectable: Self::Selectable,
+				selectable: sp_core::H256,
 			) -> #frame_support::interface::InterfaceResultWithPostInfo {
 				#frame_support::dispatch_context::run_in_context(|| {
 					match self {

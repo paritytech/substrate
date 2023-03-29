@@ -20,6 +20,7 @@ use crate::{
 	traits::{EnqueueMessage, GetCallMetadata, UnfilteredDispatchable},
 };
 use codec::{Decode, Encode};
+use frame_support::dispatch::DispatchErrorWithPostInfo;
 use sp_core::H256;
 use sp_runtime::{
 	traits,
@@ -30,15 +31,15 @@ sp_api::decl_runtime_apis! {
 	pub trait Interface<View>
 		where View: sp_api::Encode + frame_support::interface::View
 	{
-		fn view(view: frame_supprt::interface::InterfaceViewEntry<View>) -> InterfaceViewResult;
+		fn view(view: frame_support::interface::InterfaceViewEntry<View>) -> InterfaceViewResult;
 	}
 }
 
 pub type InterfaceResult = Result<(), Error>;
 pub type InterfaceViewResult = Result<Vec<u8>, Error>;
+pub type InterfaceErrorWithPostInfo = InterfaceErrorWithInfo<PostDispatchInfo>;
 pub type InterfaceResultWithInfo<T> = Result<T, InterfaceErrorWithInfo<T>>;
-pub type InterfaceResultWithPostInfo =
-	Result<PostDispatchInfo, InterfaceErrorWithInfo<PostDispatchInfo>>;
+pub type InterfaceResultWithPostInfo = Result<PostDispatchInfo, InterfaceErrorWithPostInfo>;
 
 #[derive(
 	Eq,
@@ -64,13 +65,15 @@ impl From<Error> for InterfaceErrorWithInfo<PostDispatchInfo> {
 	}
 }
 
-impl Into<DispatchResultWithPostInfo> for InterfaceResultWithPostInfo {
-	fn into(self) -> DispatchResultWithPostInfo {
-		self.map_err(|e| e.into())
+impl Into<DispatchErrorWithPostInfo> for InterfaceErrorWithPostInfo {
+	fn into(self) -> DispatchErrorWithPostInfo {
+		// TODO: This needs
+		//       * Error to implement all the stuff that pallet::Error enums implement
+		todo!()
 	}
 }
 
-pub trait Core {
+pub trait Core: 'static + Eq + Clone {
 	type RuntimeOrigin;
 }
 
@@ -145,6 +148,10 @@ impl From<Error> for DispatchError {
 	}
 }
 
+#[derive(
+	PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, scale_info::TypeInfo, codec::MaxEncodedLen,
+)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct InterfaceCallEntry<CallInterface> {
 	selectable: H256,
 	interface: CallInterface,
@@ -152,15 +159,19 @@ pub struct InterfaceCallEntry<CallInterface> {
 
 impl<CallInterface> UnfilteredDispatchable for InterfaceCallEntry<CallInterface>
 where
-	CallInterface: Call + Core,
+	CallInterface: Call<RuntimeOrigin = <CallInterface as Core>::RuntimeOrigin> + Core,
 {
 	type RuntimeOrigin = <CallInterface as Core>::RuntimeOrigin;
 
 	fn dispatch_bypass_filter(self, origin: Self::RuntimeOrigin) -> DispatchResultWithPostInfo {
-		self.interface.call(origin, self.selectable).into()
+		self.interface.call(origin, self.selectable).map_err(Into::into)
 	}
 }
 
+#[derive(
+	PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, scale_info::TypeInfo, codec::MaxEncodedLen,
+)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct InterfaceViewEntry<ViewInterface> {
 	selectable: H256,
 	interface: ViewInterface,
@@ -220,13 +231,14 @@ mod tests {
 			Parameter,
 		};
 		use sp_core::H256;
+		use sp_runtime::traits::Member;
 
 		#[interface::definition]
 		#[interface::with_selector]
 		pub trait Pip20: frame_support::interface::Core {
-			type AccountId: Parameter;
-			type Currency: Parameter;
-			type Balance: Parameter;
+			type AccountId: Parameter + Member;
+			type Currency: Parameter + Member;
+			type Balance: Parameter + Member;
 
 			#[interface::selector(SelectCurrency)]
 			#[interface::default_selector]

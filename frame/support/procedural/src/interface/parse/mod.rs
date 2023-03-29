@@ -32,6 +32,7 @@ pub struct Def {
 	pub error: Option<ErrorDef>,
 	pub event: Option<EventDef>,
 	pub frame_support: syn::Ident,
+	pub sp_core: syn::Ident,
 }
 
 impl Def {
@@ -47,6 +48,7 @@ impl Def {
 			.1;
 
 		let frame_support = generate_crate_access_2018("frame-support")?;
+		let sp_core = generate_crate_access_2018("sp-core")?;
 		let mut interface = None;
 		let mut error = None;
 		let mut event = None;
@@ -79,7 +81,7 @@ impl Def {
 			syn::Error::new(item_span, msg)
 		})?;
 
-		Ok(Def { item, interface, error, event, frame_support })
+		Ok(Def { item, interface, error, event, frame_support, sp_core })
 	}
 }
 
