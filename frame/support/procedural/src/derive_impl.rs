@@ -32,6 +32,18 @@ fn impl_item_ident(impl_item: &ImplItem) -> Option<Ident> {
 	}
 }
 
+/// The real meat behind `derive_impl`. Takes in a `local_impl`, which is the impl for which we
+/// want to implement defaults (i.e. the one the attribute macro is attached to), and a
+/// `foreign_impl`, which is the impl containing the defaults we want to use, and returns an
+/// [`ItemImpl`] containing the final generated impl.
+///
+/// This process has the following caveats:
+/// * Colliding items that have an ident are not copied into `local_impl`
+/// * Uncolliding items that have an ident are copied into `local_impl` but are qualified as `type
+///   #ident = <#foreign_path as #source_crate_path::pallet::DefaultConfig>::#ident;`
+/// * Items that lack an ident are de-duplicated so only unique items that lack an ident are copied
+///   into `local_impl`. Items that lack an ident and also exist verbatim in `local_impl` are not
+///   copied over.
 fn combine_impls(local_impl: ItemImpl, foreign_impl: ItemImpl, foreign_path: Path) -> ItemImpl {
 	let existing_local_keys: HashSet<Ident> = local_impl
 		.items
@@ -44,43 +56,40 @@ fn combine_impls(local_impl: ItemImpl, foreign_impl: ItemImpl, foreign_path: Pat
 		.filter(|impl_item| impl_item_ident(impl_item).is_none())
 		.cloned()
 		.collect();
-	// // TODO: may not be accurate.
-	// // source_crate_path = frame_system
 	let source_crate_path = foreign_path.segments.first().unwrap().ident.clone();
 	let mut final_impl = local_impl;
-	final_impl.items.extend(
-		foreign_impl
-			.items
-			.into_iter()
-			.filter_map(|item| {
-				if let Some(ident) = impl_item_ident(&item) {
-					if existing_local_keys.contains(&ident) {
-						// do not copy colliding items that have an ident
-						None
-					} else {
-						if matches!(item, ImplItem::Type(_)) {
-							// modify and insert uncolliding type items
-							let modified_item: ImplItem = parse_quote! {
-								type #ident = <#foreign_path as #source_crate_path::pallet::DefaultConfig>::#ident;
-							};
-							Some(modified_item)
-						} else {
-							// copy uncolliding non-type items that have an ident
-							Some(item)
-						}
-					}
+	let extended_items = foreign_impl
+		.items
+		.into_iter()
+		.filter_map(|item| {
+			if let Some(ident) = impl_item_ident(&item) {
+				if existing_local_keys.contains(&ident) {
+					// do not copy colliding items that have an ident
+					None
 				} else {
-					if existing_unsupported_items.contains(&item) {
-						// do not copy colliding items that lack an ident
-						None
+					if matches!(item, ImplItem::Type(_)) {
+						// modify and insert uncolliding type items
+						let modified_item: ImplItem = parse_quote! {
+							type #ident = <#foreign_path as #source_crate_path::pallet::DefaultConfig>::#ident;
+						};
+						Some(modified_item)
 					} else {
-						// copy uncolliding items without an ident verbaitm
+						// copy uncolliding non-type items that have an ident
 						Some(item)
 					}
 				}
-			})
-			.collect::<Vec<ImplItem>>(),
-	);
+			} else {
+				if existing_unsupported_items.contains(&item) {
+					// do not copy colliding items that lack an ident
+					None
+				} else {
+					// copy uncolliding items without an ident verbaitm
+					Some(item)
+				}
+			}
+		})
+		.collect::<Vec<ImplItem>>();
+	final_impl.items.extend(extended_items);
 	final_impl
 }
 
