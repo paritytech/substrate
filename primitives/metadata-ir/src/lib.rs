@@ -17,6 +17,10 @@
 
 //! Intermediate representation of the runtime metadata.
 
+// Re-export.
+#[doc(hidden)]
+pub use frame_metadata;
+
 mod types;
 use frame_metadata::{RuntimeMetadataPrefixed, RuntimeMetadataV14};
 pub use types::*;
@@ -64,7 +68,6 @@ pub fn into_latest(metadata: MetadataIR) -> RuntimeMetadataPrefixed {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::metadata_ir::ExtrinsicMetadataIR;
 	use frame_metadata::{v14::META_RESERVED, RuntimeMetadata};
 	use scale_info::meta_type;
 

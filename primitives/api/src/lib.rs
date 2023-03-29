@@ -73,8 +73,6 @@ extern crate self as sp_api;
 #[doc(hidden)]
 pub use codec::{self, Decode, DecodeLimit, Encode};
 #[doc(hidden)]
-pub use frame_metadata as metadata;
-#[doc(hidden)]
 #[cfg(feature = "std")]
 pub use hash_db::Hasher;
 #[doc(hidden)]
@@ -85,6 +83,8 @@ pub use sp_core::to_substrate_wasm_fn_return_value;
 use sp_core::OpaqueMetadata;
 #[doc(hidden)]
 pub use sp_core::{offchain, ExecutionContext};
+#[doc(hidden)]
+pub use sp_metadata_ir::{self as metadata_ir, frame_metadata as metadata};
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_runtime::StateVersion;
@@ -110,7 +110,6 @@ pub use sp_std::{mem, slice, vec};
 pub use sp_version::{create_apis_vec, ApiId, ApisVec, RuntimeVersion};
 #[cfg(feature = "std")]
 use std::cell::RefCell;
-pub mod metadata_ir;
 
 /// Maximum nesting level for extrinsics.
 pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
