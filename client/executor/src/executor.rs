@@ -236,8 +236,6 @@ impl<H> WasmExecutor<H>
 where
 	H: HostFunctions,
 {
-	/// *To be deprecated*: use [`Self::builder`] method instead of it.
-	///
 	/// Create new instance.
 	///
 	/// # Parameters
@@ -256,6 +254,7 @@ where
 	///   compiled execution method is used.
 	///
 	/// `runtime_cache_size` - The capacity of runtime cache.
+	#[deprecated(note = "use `Self::builder` method instead of it")]
 	pub fn new(
 		method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
@@ -288,6 +287,7 @@ where
 	}
 
 	/// Ignore missing function imports if set true.
+	#[deprecated(note = "use `Self::builder` method instead of it")]
 	pub fn allow_missing_host_functions(&mut self, allow_missing_host_functions: bool) {
 		self.allow_missing_host_functions = allow_missing_host_functions
 	}
@@ -539,7 +539,6 @@ pub struct NativeElseWasmExecutor<D: NativeExecutionDispatch> {
 }
 
 impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
-	/// *To be deprecated*: use [`Self::new_with_wasm_executor`] method instead of it.
 	///
 	/// Create new instance.
 	///
@@ -555,6 +554,7 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 	/// `max_runtime_instances` - The number of runtime instances to keep in memory ready for reuse.
 	///
 	/// `runtime_cache_size` - The capacity of runtime cache.
+	#[deprecated(note = "use `Self::new_with_wasm_executor` method instead of it")]
 	pub fn new(
 		fallback_method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
@@ -581,9 +581,8 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 		Self { native_version: D::native_version(), wasm: executor }
 	}
 
-	/// *To be deprecated*: use [`Self::new_with_wasm_executor`] method to configure it.
-	///
 	/// Ignore missing function imports if set true.
+	#[deprecated(note = "use `Self::new_with_wasm_executor` method instead of it")]
 	pub fn allow_missing_host_functions(&mut self, allow_missing_host_functions: bool) {
 		self.wasm.allow_missing_host_functions = allow_missing_host_functions
 	}
