@@ -590,10 +590,6 @@ where
 			self.tick_timeout.reset(TICK_TIMEOUT);
 		}
 
-		while let Poll::Ready(result) = self.chain_sync.poll(cx) {
-			self.process_block_announce_validation_result(result);
-		}
-
 		while let Poll::Ready(Some(event)) = self.service_rx.poll_next_unpin(cx) {
 			match event {
 				ToServiceCommand::SetSyncForkRequest(peers, hash, number) => {
@@ -726,6 +722,13 @@ where
 					}
 				},
 			}
+		}
+
+		// poll `ChainSync` last because of a block announcement was received through the
+		// event stream between `SyncingEngine` and `Protocol` and the validation finished
+		// right after it as queued, the resulting block request (if any) can be sent right away.
+		while let Poll::Ready(result) = self.chain_sync.poll(cx) {
+			self.process_block_announce_validation_result(result);
 		}
 
 		Poll::Pending
