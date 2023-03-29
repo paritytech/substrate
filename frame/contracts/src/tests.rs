@@ -452,7 +452,7 @@ impl ExtBuilder {
 /// with it's hash.
 ///
 /// The fixture files are located under the `fixtures/` directory.
-pub fn compile_module<T>(fixture_name: &str) -> wat::Result<(Vec<u8>, <T::Hashing as Hash>::Output)>
+fn compile_module<T>(fixture_name: &str) -> wat::Result<(Vec<u8>, <T::Hashing as Hash>::Output)>
 where
 	T: frame_system::Config,
 {
