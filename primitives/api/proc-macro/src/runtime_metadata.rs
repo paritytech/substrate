@@ -242,6 +242,7 @@ pub fn generate_impl_runtime_metadata(
 	}
 
 	Ok(quote!(
+		#[doc(hidden)]
 		trait InternalImplRuntimeApis {
 			#[inline(always)]
 			fn runtime_metadata(&self) -> #crate_::vec::Vec<#crate_::metadata_ir::RuntimeApiMetadataIR> {
