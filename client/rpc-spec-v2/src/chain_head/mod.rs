@@ -23,6 +23,8 @@
 //! Methods are prefixed by `chainHead`.
 
 #[cfg(test)]
+mod test_utils;
+#[cfg(test)]
 mod tests;
 
 pub mod api;

@@ -12,8 +12,8 @@ note: type in trait
    |
 13 |         fn test(data: u64);
    |                       ^^^
-   = note: expected fn pointer `fn(u64)`
-              found fn pointer `fn(&u64)`
+   = note: expected signature `fn(u64)`
+              found signature `fn(&u64)`
 
 error[E0308]: mismatched types
   --> tests/ui/type_reference_in_impl_runtime_apis_call.rs:19:11
