@@ -390,7 +390,7 @@ impl<T: Config> DeletionQueue<T> {
 		}
 
 		let entry = <DeletionQueueMap<T>>::get(self.delete_nonce);
-		entry.map(|trie_id| DeletionQueueEntry { trie_id, queue: self });
+		entry.map(|trie_id| DeletionQueueEntry { trie_id, queue: self })
 	}
 }
 
