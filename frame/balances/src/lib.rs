@@ -788,7 +788,7 @@ pub mod pallet {
 					// them enough for an ED.
 					log::warn!(
 						target: LOG_TARGET,
-						"account with a non-zero reserve balance has no provider refs, account_id: '{}'.",
+						"account with a non-zero reserve balance has no provider refs, account_id: '{:?}'.",
 						who
 					);
 					a.free = a.free.max(Self::ed());
