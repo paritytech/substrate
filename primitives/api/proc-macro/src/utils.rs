@@ -267,11 +267,7 @@ pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
                                return None
                        };
 
-			if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
-				Some(meta.lit)
-			} else {
-				None
-			}
+			meta.path.get_ident().filter(|ident| ident == "doc").map(|_| meta.lit)
 		})
 		.collect()
 }
