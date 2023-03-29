@@ -786,13 +786,6 @@ pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
 		.into()
 }
 
-#[proc_macro]
-pub fn derive_impl_inner(input: TokenStream) -> TokenStream {
-	derive_impl::derive_impl_inner(input.into())
-		.unwrap_or_else(|r| r.into_compile_error())
-		.into()
-}
-
 /// Used internally to decorate pallet attribute macro stubs when they are erroneously used
 /// outside of a pallet module
 fn pallet_macro_stub() -> TokenStream {

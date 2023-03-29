@@ -209,10 +209,10 @@ pub mod pallet {
 			use macro_magic::export_tokens;
 			use sp_runtime::traits::IdentityLookup;
 
-			pub struct Impl {}
+			pub struct TestDefaultConfig {}
 
 			#[export_tokens(TestDefaultConfig)]
-			impl DefaultConfig for Impl {
+			impl DefaultConfig for TestDefaultConfig {
 				type Version = ();
 				type BlockWeights = ();
 				type BlockLength = ();
