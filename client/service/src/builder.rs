@@ -36,7 +36,10 @@ use sc_client_api::{
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
-use sc_executor::{NativeElseWasmExecutor, NativeExecutionDispatch, RuntimeVersionOf};
+use sc_executor::{
+	sp_wasm_interface::HostFunctions, HeapAllocStrategy, NativeElseWasmExecutor,
+	NativeExecutionDispatch, RuntimeVersionOf, WasmExecutor, DEFAULT_HEAP_ALLOC_PAGES,
+};
 use sc_keystore::LocalKeystore;
 use sc_network::{
 	config::SyncMode, NetworkEventStream, NetworkService, NetworkStateInfo, NetworkStatusProvider,
@@ -233,12 +236,20 @@ where
 pub fn new_native_executor<D: NativeExecutionDispatch>(
 	config: &Configuration,
 ) -> NativeElseWasmExecutor<D> {
-	NativeElseWasmExecutor::<D>::new(
-		config.wasm_method,
-		config.default_heap_pages,
-		config.max_runtime_instances,
-		config.runtime_cache_size,
-	)
+	NativeElseWasmExecutor::new_with_wasm_executor(new_wasm_executor(config))
+}
+
+/// Creates a [`WasmExecutor`] according to [`Configuration`].
+pub fn new_wasm_executor<H: HostFunctions>(config: &Configuration) -> WasmExecutor<H> {
+	let extra_pages =
+		config.default_heap_pages.map(|p| p as u32).unwrap_or(DEFAULT_HEAP_ALLOC_PAGES);
+	let strategy = HeapAllocStrategy::Static { extra_pages };
+	WasmExecutor::<H>::builder(config.wasm_method)
+		.with_onchain_heap_alloc_strategy(strategy)
+		.with_onchain_heap_alloc_strategy(strategy)
+		.with_max_runtime_instances(config.max_runtime_instances)
+		.with_runtime_cache_size(config.runtime_cache_size)
+		.build()
 }
 
 /// Create an instance of default DB-backend backend.

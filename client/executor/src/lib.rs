@@ -51,7 +51,10 @@ pub use sp_version::{NativeVersion, RuntimeVersion};
 pub use sp_wasm_interface;
 pub use wasmi;
 
-pub use sc_executor_common::{error, wasm_runtime::HeapAllocStrategy};
+pub use sc_executor_common::{
+	error,
+	wasm_runtime::{HeapAllocStrategy, DEFAULT_HEAP_ALLOC_PAGES, DEFAULT_HEAP_ALLOC_STRATEGY},
+};
 pub use sc_executor_wasmtime::InstantiationStrategy as WasmtimeInstantiationStrategy;
 
 /// Extracts the runtime version of a given runtime code.
