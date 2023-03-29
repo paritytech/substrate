@@ -200,7 +200,6 @@ pub mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 
-		// Inherent call is not validated as unsigned
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			log::trace!(target: LOG_TARGET, "validate_unsigned {call:?}");
 			validate_runtime_call(call)
@@ -281,6 +280,13 @@ pub fn validate_runtime_call<T: pallet::Config>(call: &pallet::Call<T>) -> Trans
 				propagate: true,
 			})
 		},
+		Call::include_data { data } => Ok(ValidTransaction {
+			priority: data.len() as u64,
+			requires: vec![],
+			provides: vec![data.clone()],
+			longevity: 1,
+			propagate: false,
+		}),
 		_ => Ok(Default::default()),
 	}
 }

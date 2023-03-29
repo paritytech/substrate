@@ -420,17 +420,7 @@ impl_runtime_apis! {
 			utx: <Block as BlockT>::Extrinsic,
 			block_hash: <Block as BlockT>::Hash,
 		) -> TransactionValidity {
-			//todo: review validation
 			log::trace!(target: LOG_TARGET, "validate_transaction {:?}", utx);
-			if let RuntimeCall::SubstrateTest(substrate_test_pallet::pallet::Call::include_data{data}) = utx.function {
-				return Ok(ValidTransaction {
-					priority: data.len() as u64,
-					requires: vec![],
-					provides: vec![data],
-					longevity: 1,
-					propagate: false,
-				});
-			}
 			Executive::validate_transaction(source, utx, block_hash)
 		}
 	}
