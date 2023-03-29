@@ -19,12 +19,9 @@
 
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
+use crate::crypto::{ByteArray, CryptoType, Derive, Public as TraitPublic, UncheckedFrom};
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError};
-use crate::{
-	crypto::{ByteArray, CryptoType, Derive, Public as TraitPublic, UncheckedFrom},
-	hash::{H1152, H896},
-};
 
 #[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
@@ -145,24 +142,6 @@ impl<T> sp_std::hash::Hash for Public<T> {
 	}
 }
 
-impl<T> Public<T> {
-	/// A new instance from the given PUBLIC_KEY_SERIALIZED_SIZE-byte `data`.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_raw(data: [u8; PUBLIC_KEY_SERIALIZED_SIZE]) -> Self {
-		Public { inner: data, _phantom: PhantomData }
-	}
-
-	/// A new instance from an H1152.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_h1152(x: H1152) -> Self {
-		Self::from_raw(x.into())
-	}
-}
-
 impl<T> ByteArray for Public<T> {
 	const LEN: usize = PUBLIC_KEY_SERIALIZED_SIZE;
 }
@@ -235,21 +214,9 @@ impl<T: BlsBound> From<Pair<T>> for Public<T> {
 	}
 }
 
-impl<T> From<Public<T>> for H1152 {
-	fn from(x: Public<T>) -> Self {
-		x.inner.into()
-	}
-}
-
 impl<T> UncheckedFrom<[u8; PUBLIC_KEY_SERIALIZED_SIZE]> for Public<T> {
-	fn unchecked_from(x: [u8; PUBLIC_KEY_SERIALIZED_SIZE]) -> Self {
-		Public::from_raw(x)
-	}
-}
-
-impl<T> UncheckedFrom<H1152> for Public<T> {
-	fn unchecked_from(x: H1152) -> Self {
-		Public::from_h1152(x)
+	fn unchecked_from(data: [u8; PUBLIC_KEY_SERIALIZED_SIZE]) -> Self {
+		Public { inner: data, _phantom: PhantomData }
 	}
 }
 
@@ -343,48 +310,16 @@ impl<T> sp_std::hash::Hash for Signature<T> {
 	}
 }
 
-impl<T> Signature<T> {
-	/// A new instance from the given SIGNATURE_SERIALIZED_SIZE-byte `data`.
-	///
-	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
-	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_raw(data: [u8; SIGNATURE_SERIALIZED_SIZE]) -> Self {
-		Signature { inner: data, _phantom: PhantomData }
-	}
-
-	/// A new instance from the given slice that should be 64 bytes long.
-	///
-	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
-	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_slice(data: &[u8]) -> Option<Self> {
-		if data.len() != SIGNATURE_SERIALIZED_SIZE {
-			return None
-		}
-		let mut r = [0u8; SIGNATURE_SERIALIZED_SIZE];
-		r.copy_from_slice(data);
-		Some(Signature::from_raw(r))
-	}
-
-	/// A new instance from an H896.
-	///
-	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
-	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_h896(hash: H896) -> Self {
-		Signature::from_raw(hash.into())
-	}
-}
-
 impl<T> TryFrom<&[u8]> for Signature<T> {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-		if data.len() == SIGNATURE_SERIALIZED_SIZE {
-			let mut inner = [0u8; SIGNATURE_SERIALIZED_SIZE];
-			inner.copy_from_slice(data);
-			Ok(Signature::from_raw(inner))
-		} else {
-			Err(())
+		if data.len() != SIGNATURE_SERIALIZED_SIZE {
+			return Err(())
 		}
+		let mut inner = [0u8; SIGNATURE_SERIALIZED_SIZE];
+		inner.copy_from_slice(data);
+		Ok(Signature::unchecked_from(inner))
 	}
 }
 
@@ -408,12 +343,6 @@ impl<'de, T> Deserialize<'de> for Signature<T> {
 			.map_err(|e| de::Error::custom(format!("{:?}", e)))?;
 		Signature::try_from(signature_hex.as_ref())
 			.map_err(|e| de::Error::custom(format!("{:?}", e)))
-	}
-}
-
-impl<T> From<Signature<T>> for H896 {
-	fn from(signature: Signature<T>) -> H896 {
-		H896::from(signature.inner)
 	}
 }
 
@@ -455,7 +384,7 @@ impl<T> sp_std::fmt::Debug for Signature<T> {
 
 impl<T> UncheckedFrom<[u8; SIGNATURE_SERIALIZED_SIZE]> for Signature<T> {
 	fn unchecked_from(data: [u8; SIGNATURE_SERIALIZED_SIZE]) -> Self {
-		Signature::from_raw(data)
+		Signature { inner: data, _phantom: PhantomData }
 	}
 }
 
@@ -482,29 +411,7 @@ fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
 }
 
 #[cfg(feature = "full_crypto")]
-impl<T: EngineBLS> Pair<T> {
-	/// Get the seed for this key.
-	pub fn seed(&self) -> Seed {
-		self.0
-			.secret
-			.to_bytes()
-			.try_into()
-			.expect("Secret key serializer returns a vector of SECRET_KEY_SERIALIZED_SIZE size")
-	}
-
-	// TODO DAVXY: is this required??? If yes add when it will be 😃
-	// /// Exactly as `from_string` except that if no matches are found then, the the first 32
-	// /// characters are taken (padded with spaces as necessary) and used as the MiniSecretKey.
-	// #[cfg(feature = "std")]
-	// pub fn from_legacy_string(s: &str, password_override: Option<&str>) -> Self {
-	// 	Self::from_string(s, password_override).unwrap_or_else(|_| {
-	// 		let mut padded_seed: Seed = [b' '; 32];
-	// 		let len = s.len().min(32);
-	// 		padded_seed[..len].copy_from_slice(&s.as_bytes()[..len]);
-	// 		Self::from_seed(&padded_seed)
-	// 	})
-	// }
-}
+impl<T: EngineBLS> Pair<T> {}
 
 #[cfg(feature = "full_crypto")]
 impl<T: BlsBound> TraitPair for Pair<T> {
@@ -512,10 +419,6 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 	type Public = Public<T>;
 	type Signature = Signature<T>;
 
-	/// Make a new key pair from secret seed material. The slice must be 32 bytes long or it
-	/// will return `None`.
-	///
-	/// You should never need to use this; generate(), generate_with_phrase
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Self, SecretStringError> {
 		if seed_slice.len() != SECRET_KEY_SERIALIZED_SIZE {
 			return Err(SecretStringError::InvalidSeedLength)
@@ -525,7 +428,6 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 		Ok(Pair(bls_like::Keypair { secret, public }))
 	}
 
-	/// Derive a child key from a series of given junctions.
 	fn derive<Iter: Iterator<Item = DeriveJunction>>(
 		&self,
 		path: Iter,
@@ -544,15 +446,13 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 		Ok((Self::from_seed(&acc), Some(acc)))
 	}
 
-	/// Get the public key.
 	fn public(&self) -> Self::Public {
 		let mut raw = [0u8; PUBLIC_KEY_SERIALIZED_SIZE];
 		let pk = DoublePublicKeyScheme::into_double_public_key(&self.0).to_bytes();
 		raw.copy_from_slice(pk.as_slice());
-		Self::Public::from_raw(raw)
+		Self::Public::unchecked_from(raw)
 	}
 
-	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Self::Signature {
 		let mut mutable_self = self.clone();
 		let r: [u8; SIGNATURE_SERIALIZED_SIZE] =
@@ -560,18 +460,13 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 				.to_bytes()
 				.try_into()
 				.expect("Signature serializer returns vectors of SIGNATURE_SERIALIZED_SIZE size");
-		Self::Signature::from_raw(r)
+		Self::Signature::unchecked_from(r)
 	}
 
-	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
 		Self::verify_weak(&sig.inner[..], message.as_ref(), pubkey)
 	}
 
-	/// Verify a signature on a message. Returns true if the signature is good.
-	///
-	/// This doesn't use the type system to ensure that `sig` and `pubkey` are the correct
-	/// size. Use it only if you're coming from byte buffers and need the speed.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
 		let pubkey_array: [u8; PUBLIC_KEY_SERIALIZED_SIZE] = match pubkey.as_ref().try_into() {
 			Ok(pk) => pk,
@@ -594,9 +489,13 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 		sig.verify(Message::new(b"", message.as_ref()), &public_key)
 	}
 
-	/// Return a vec filled with raw data.
+	/// Get the seed for this key.
 	fn to_raw_vec(&self) -> Vec<u8> {
-		self.seed().to_vec()
+		self.0
+			.secret
+			.to_bytes()
+			.try_into()
+			.expect("Secret key serializer returns a vector of SECRET_KEY_SERIALIZED_SIZE size")
 	}
 }
 
@@ -649,7 +548,7 @@ mod test {
 		let public = pair.public();
 		assert_eq!(
 			public,
-			Public::from_raw(hex!(
+			Public::unchecked_from(hex!(
 				"7a84ca8ce4c37c93c95ecee6a3c0c9a7b9c225093cf2f12dc4f69cbfb847ef9424a18f5755d5a742247d386ff2aabb806bcf160eff31293ea9616976628f77266c8a8cc1d8753be04197bd6cdd8c5c87a148f782c4c1568d599b48833fd539001e580cff64bbc71850605433fcd051f3afc3b74819786f815ffb5272030a8d03e5df61e6183f8fd8ea85f26defa83400"
 			))
 		);
@@ -657,7 +556,7 @@ mod test {
 		let signature =
 	hex!("1a2cf9ed2f3dc798c218fe80948560487a984eb8f7e8a86af6113759603bea9bdca53c260b69662efe64df80b5b953803145af24b37f1d292c3cfd605ecc4fbeaa3b370c92cb3fe14f5044bbe3d89a01dbac4cd5cdb741c9e6f4fad16eca76c14e5cd3b11db21c03317d5d5998c4c105"
 	);
-		let signature = Signature::from_raw(signature);
+		let signature = Signature::unchecked_from(signature);
 		assert!(pair.sign(&message[..]) == signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
@@ -674,7 +573,7 @@ mod test {
 		let public = pair.public();
 		assert_eq!(
 			public,
-			Public::from_raw(hex!(
+			Public::unchecked_from(hex!(
 				"6dc6be608fab3c6bd894a606be86db346cc170db85c733853a371f3db54ae1b12052c0888d472760c81b537572a26f00db865e5963aef8634f9917571c51b538b564b2a9ceda938c8b930969ee3b832448e08e33a79e9ddd28af419a3ce45300f5dbc768b067781f44f3fe05a19e6b07b1c4196151ec3f8ea37e4f89a8963030d2101e931276bb9ebe1f20102239d780"
 			))
 		);
@@ -682,7 +581,7 @@ mod test {
 		let signature =
 	hex!("618ae186f07ead4fb973c7ae86deeee9d33cbdcbea3fe32753e5cdba8df2ae67a28c2465118756bccfd60076fdbeb2009d2eeb174584b448bee01cf4eefd65fd839c722464e6ccc7b2639b4e7db6ec0de57eff3ee22c7eb19a8f06839530bc64ae323e263341b03363da5d75e2e59002"
 	);
-		let expected_signature = Signature::from_raw(signature);
+		let expected_signature = Signature::unchecked_from(signature);
 		println!("signature is {:?}", pair.sign(&message[..]));
 		let signature = pair.sign(&message[..]);
 		assert!(signature == expected_signature);
@@ -705,7 +604,7 @@ mod test {
 		let public = pair.public();
 		assert_eq!(
 			public,
-			Public::from_raw(
+			Public::unchecked_from(
 				hex!(
 				"754d2f2bbfa67df54d7e0e951979a18a1e0f45948857752cc2bac6bbb0b1d05e8e48bcc453920bf0c4bbd5993212480112a1fb433f04d74af0a8b700d93dc957ab3207f8d071e948f5aca1a7632c00bdf6d06be05b43e2e6216dccc8a5d55a0071cb2313cfd60b7e9114619cd17c06843b352f0b607a99122f6651df8f02e1ad3697bd208e62af047ddd7b942ba80080")
 			)
