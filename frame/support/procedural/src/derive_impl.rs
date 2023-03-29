@@ -28,6 +28,7 @@ fn impl_item_ident(impl_item: &ImplItem) -> Option<Ident> {
 		ImplItem::Const(item) => Some(item.ident.clone()),
 		ImplItem::Method(item) => Some(item.sig.ident.clone()),
 		ImplItem::Type(item) => Some(item.ident.clone()),
+		ImplItem::Macro(item) => item.mac.path.get_ident().cloned(),
 		_ => None,
 	}
 }
