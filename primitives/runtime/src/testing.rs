@@ -156,10 +156,6 @@ impl OpaqueKeys for UintAuthorityId {
 	}
 }
 
-impl crate::BoundToRuntimeAppPublic for UintAuthorityId {
-	type Public = Self;
-}
-
 impl traits::IdentifyAccount for UintAuthorityId {
 	type AccountId = u64;
 

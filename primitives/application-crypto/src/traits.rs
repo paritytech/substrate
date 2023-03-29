@@ -204,3 +204,7 @@ pub trait BoundToRuntimeAppPublic {
 	/// The [`RuntimeAppPublic`] this type is bound to.
 	type Public: RuntimeAppPublic;
 }
+
+impl<T: RuntimeAppPublic> BoundToRuntimeAppPublic for T {
+	type Public = Self;
+}
