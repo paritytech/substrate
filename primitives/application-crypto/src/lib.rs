@@ -109,8 +109,8 @@ macro_rules! app_crypto {
 	};
 }
 
-/// Declares `Pair` type which is functionally equivalent to `$pair`, but is a new
-/// application-specific type whose identifier is `$key_type`.
+/// Declares `Pair` type which is functionally equivalent to `$pair`, but is
+/// new application-specific type whose identifier is `$key_type`.
 #[macro_export]
 macro_rules! app_crypto_pair {
 	($pair:ty, $key_type:expr, $crypto_type:expr) => {
@@ -213,7 +213,7 @@ macro_rules! app_crypto_pair_functions_if_std {
 /// Declares `Public` type which is functionally equivalent to `$public` but is
 /// new application-specific type whose identifier is `$key_type`.
 /// For full functionality, `app_crypto_public_common!` must be called too.
-/// Can only be used without `full_crypto` feature.
+/// Can only be used with `full_crypto` feature.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_public_full_crypto {
@@ -375,8 +375,8 @@ macro_rules! app_crypto_public_common_if_std {
 
 /// Declares Signature type which is functionally equivalent to `$sig`, but is new
 /// Application-specific type whose identifier is `$key_type`.
-/// can only be used together with `full_crypto` feature
 /// For full functionality, app_crypto_public_common! must be called too.
+/// Can only be used with `full_crypto` feature
 #[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_signature_full_crypto {
