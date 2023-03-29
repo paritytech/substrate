@@ -1422,7 +1422,7 @@ impl<T: Config> Pallet<T> {
 		Self::rotate_round();
 	}
 
-	/// Treis to create a snapshot and transitions to the signed phase if successful.
+	/// Tries to create a snapshot and transitions to the signed phase if successful.
 	fn start_signed_phase() -> Weight {
 		match Self::create_snapshot() {
 			Ok(_) => {
