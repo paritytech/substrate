@@ -227,7 +227,6 @@ benchmarks! {
 		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		Contracts::<T>::store_code_raw(code, whitelisted_caller())?;
-
 		let schedule = T::Schedule::get();
 		let mut gas_meter = GasMeter::new(Weight::MAX);
 		let mut module = PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter)?;
