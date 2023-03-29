@@ -27,6 +27,8 @@ mod v15;
 /// Metadata V14.
 const V14: u32 = 14;
 /// Metadata V15.
+///
+/// Not yet stable, thus we set it to `u32::MAX`.
 const V15: u32 = u32::MAX;
 
 /// Transform the IR to the specified version.
