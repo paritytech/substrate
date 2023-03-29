@@ -161,10 +161,9 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 		ty.default = None;
 	}
 
-	let where_clause: Vec<_> = where_clause
+	let where_clause = where_clause
 		.iter()
-		.map(|ty| quote!(#ty: #crate_::scale_info::TypeInfo + 'static))
-		.collect();
+		.map(|ty| quote!(#ty: #crate_::scale_info::TypeInfo + 'static));
 
 	quote!(
 		#( #attrs )*
