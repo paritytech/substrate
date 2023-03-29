@@ -51,7 +51,7 @@ fn collect_where_bounds(ty: &syn::Type) -> Option<syn::Type> {
 		_ => ty,
 	};
 
-	return Some(ty_elem.clone())
+	Some(ty_elem.clone())
 }
 
 /// Extract the documentation from the provided attributes.
