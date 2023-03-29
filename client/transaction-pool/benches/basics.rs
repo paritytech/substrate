@@ -143,6 +143,7 @@ fn uxt(transfer: Transfer) -> UncheckedExtrinsic {
 	UncheckedExtrinsicBuilder::new(
 		TransferCallBuilder::new(transfer).with_signature(signature).build(),
 	)
+	.unsigned()
 	.build()
 }
 
