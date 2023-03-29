@@ -1527,7 +1527,7 @@ impl pallet_assets::Config<Instance2> for Runtime {
 parameter_types! {
 	pub const DexPalletId: PalletId = PalletId(*b"py/dexer");
 	pub AllowMultiAssetPools: bool = true;
-	pub const PoolSetupFee: Balance = 1 * DOLLARS;
+	pub const PoolSetupFee: Balance = 1 * DOLLARS; // should be more or equal to the existential deposit
 	pub const MintMinLiquidity: Balance = 100;  // 100 is good enough when the main currency has 10-12 decimals.
 }
 

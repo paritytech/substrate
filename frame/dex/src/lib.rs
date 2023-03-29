@@ -311,6 +311,9 @@ pub mod pallet {
 
 			ensure!(!Pools::<T>::contains_key(&pool_id), Error::<T>::PoolExists);
 
+			let pool_account = Self::get_pool_account(pool_id);
+			frame_system::Pallet::<T>::inc_providers(&pool_account);
+
 			// pay the setup fee
 			T::Currency::transfer(
 				&sender,
@@ -319,11 +322,7 @@ pub mod pallet {
 				Preserve,
 			)?;
 
-			let pool_account = Self::get_pool_account(pool_id);
 			let lp_token = NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value());
-
-			frame_system::Pallet::<T>::inc_providers(&pool_account);
-
 			let next_lp_token_id = lp_token.increment();
 			NextPoolAssetId::<T>::set(Some(next_lp_token_id));
 

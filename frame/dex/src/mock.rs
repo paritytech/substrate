@@ -162,7 +162,7 @@ impl Config for Test {
 	type PalletId = DexPalletId;
 	type WeightInfo = ();
 	type LPFee = ConstU32<3>; // means 0.3%
-	type PoolSetupFee = ConstU128<5>;
+	type PoolSetupFee = ConstU128<5>; // should be more or equal to the existential deposit
 	type PoolSetupFeeReceiver = DexOrigin;
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<4>;
