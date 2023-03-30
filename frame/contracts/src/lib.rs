@@ -908,7 +908,7 @@ pub mod pallet {
 	/// don't pay the cost of an extra call to `sp_io::storage::next_key` to lookup the next entry
 	/// in the map
 	#[pallet::storage]
-	pub(crate) type DeletionQueueNonces<T: Config> = StorageValue<_, DeletionQueue<T>, ValueQuery>;
+	pub(crate) type DeletionQueueCounter<T: Config> = StorageValue<_, DeletionQueue<T>, ValueQuery>;
 }
 
 /// Context of a contract invocation.
