@@ -650,6 +650,12 @@ mod tests {
 		TestExtTestValue::mutate(|ext| ext.clear())
 	}
 
+	struct ChargingTestCase {
+		origin: ContractOrigin<Test>,
+		deposit: DepositOf<Test>,
+		expected: TestExt,
+	}
+
 	#[derive(Default)]
 	struct StorageInfo {
 		bytes: u32,
@@ -710,195 +716,158 @@ mod tests {
 
 	#[test]
 	fn charging_works() {
-		clear_ext();
+		let test_cases = vec![
+			ChargingTestCase {
+				origin: ContractOrigin::<Test>::from_account_id(ALICE),
+				deposit: Deposit::Refund(28),
+				expected: TestExt {
+					limit_checks: vec![LimitCheck { origin: ALICE, limit: 100, min_leftover: 0 }],
+					charges: vec![
+						Charge {
+							origin: ALICE,
+							contract: DepositAccount(CHARLIE),
+							amount: Deposit::Refund(10),
+							terminated: false,
+						},
+						Charge {
+							origin: ALICE,
+							contract: DepositAccount(CHARLIE),
+							amount: Deposit::Refund(20),
+							terminated: false,
+						},
+						Charge {
+							origin: ALICE,
+							contract: DepositAccount(BOB),
+							amount: Deposit::Charge(2),
+							terminated: false,
+						},
+					],
+				},
+			},
+			ChargingTestCase {
+				origin: ContractOrigin::<Test>::Root,
+				deposit: Deposit::Charge(0),
+				expected: TestExt { limit_checks: vec![], charges: vec![] },
+			},
+		];
 
-		let mut meter =
-			TestMeter::new(&ContractOrigin::from_account_id(ALICE), Some(100), 0).unwrap();
-		assert_eq!(meter.available(), 100);
+		for test_case in test_cases {
+			clear_ext();
 
-		let mut nested0_info =
-			new_info(StorageInfo { bytes: 100, items: 5, bytes_deposit: 100, items_deposit: 10 });
-		let mut nested0 = meter.nested();
-		nested0.charge(&Diff {
-			bytes_added: 108,
-			bytes_removed: 5,
-			items_added: 1,
-			items_removed: 2,
-		});
-		nested0.charge(&Diff { bytes_removed: 99, ..Default::default() });
+			let mut meter = TestMeter::new(&test_case.origin, Some(100), 0).unwrap();
+			assert_eq!(meter.available(), 100);
 
-		let mut nested1_info =
-			new_info(StorageInfo { bytes: 100, items: 10, bytes_deposit: 100, items_deposit: 20 });
-		let mut nested1 = nested0.nested();
-		nested1.charge(&Diff { items_removed: 5, ..Default::default() });
-		nested0.absorb(nested1, DepositAccount(CHARLIE), Some(&mut nested1_info));
+			let mut nested0_info = new_info(StorageInfo {
+				bytes: 100,
+				items: 5,
+				bytes_deposit: 100,
+				items_deposit: 10,
+			});
+			let mut nested0 = meter.nested();
+			nested0.charge(&Diff {
+				bytes_added: 108,
+				bytes_removed: 5,
+				items_added: 1,
+				items_removed: 2,
+			});
+			nested0.charge(&Diff { bytes_removed: 99, ..Default::default() });
 
-		let mut nested2_info =
-			new_info(StorageInfo { bytes: 100, items: 7, bytes_deposit: 100, items_deposit: 20 });
-		let mut nested2 = nested0.nested();
-		nested2.charge(&Diff { items_removed: 7, ..Default::default() });
-		nested0.absorb(nested2, DepositAccount(CHARLIE), Some(&mut nested2_info));
+			let mut nested1_info = new_info(StorageInfo {
+				bytes: 100,
+				items: 10,
+				bytes_deposit: 100,
+				items_deposit: 20,
+			});
+			let mut nested1 = nested0.nested();
+			nested1.charge(&Diff { items_removed: 5, ..Default::default() });
+			nested0.absorb(nested1, DepositAccount(CHARLIE), Some(&mut nested1_info));
 
-		nested0.enforce_limit(Some(&mut nested0_info)).unwrap();
-		meter.absorb(nested0, DepositAccount(BOB), Some(&mut nested0_info));
+			let mut nested2_info = new_info(StorageInfo {
+				bytes: 100,
+				items: 7,
+				bytes_deposit: 100,
+				items_deposit: 20,
+			});
+			let mut nested2 = nested0.nested();
+			nested2.charge(&Diff { items_removed: 7, ..Default::default() });
+			nested0.absorb(nested2, DepositAccount(CHARLIE), Some(&mut nested2_info));
 
-		meter.into_deposit(&ContractOrigin::from_account_id(ALICE));
+			nested0.enforce_limit(Some(&mut nested0_info)).unwrap();
+			meter.absorb(nested0, DepositAccount(BOB), Some(&mut nested0_info));
 
-		assert_eq!(nested0_info.extra_deposit(), 112);
-		assert_eq!(nested1_info.extra_deposit(), 110);
-		assert_eq!(nested2_info.extra_deposit(), 100);
+			assert_eq!(meter.into_deposit(&test_case.origin), test_case.deposit);
 
-		assert_eq!(
-			TestExtTestValue::get(),
-			TestExt {
-				limit_checks: vec![LimitCheck { origin: ALICE, limit: 100, min_leftover: 0 }],
-				charges: vec![
-					Charge {
-						origin: ALICE,
-						contract: DepositAccount(CHARLIE),
-						amount: Deposit::Refund(10),
-						terminated: false
-					},
-					Charge {
-						origin: ALICE,
-						contract: DepositAccount(CHARLIE),
-						amount: Deposit::Refund(20),
-						terminated: false
-					},
-					Charge {
-						origin: ALICE,
-						contract: DepositAccount(BOB),
-						amount: Deposit::Charge(2),
-						terminated: false
-					}
-				]
-			}
-		)
-	}
+			assert_eq!(nested0_info.extra_deposit(), 112);
+			assert_eq!(nested1_info.extra_deposit(), 110);
+			assert_eq!(nested2_info.extra_deposit(), 100);
 
-	#[test]
-	fn charging_works_for_root() {
-		clear_ext();
-
-		let mut meter = TestMeter::new(&ContractOrigin::Root, Some(100), 0).unwrap();
-		assert_eq!(meter.available(), 100);
-
-		let mut nested0_info =
-			new_info(StorageInfo { bytes: 100, items: 5, bytes_deposit: 100, items_deposit: 10 });
-		let mut nested0 = meter.nested();
-		nested0.charge(&Diff {
-			bytes_added: 108,
-			bytes_removed: 5,
-			items_added: 1,
-			items_removed: 2,
-		});
-		nested0.charge(&Diff { bytes_removed: 99, ..Default::default() });
-
-		let mut nested1_info =
-			new_info(StorageInfo { bytes: 100, items: 10, bytes_deposit: 100, items_deposit: 20 });
-		let mut nested1 = nested0.nested();
-		nested1.charge(&Diff { items_removed: 5, ..Default::default() });
-		nested0.absorb(nested1, DepositAccount(CHARLIE), Some(&mut nested1_info));
-
-		let mut nested2_info =
-			new_info(StorageInfo { bytes: 100, items: 7, bytes_deposit: 100, items_deposit: 20 });
-		let mut nested2 = nested0.nested();
-		nested2.charge(&Diff { items_removed: 7, ..Default::default() });
-		nested0.absorb(nested2, DepositAccount(CHARLIE), Some(&mut nested2_info));
-
-		nested0.enforce_limit(Some(&mut nested0_info)).unwrap();
-		meter.absorb(nested0, DepositAccount(BOB), Some(&mut nested0_info));
-
-		let deposit = meter.into_deposit(&ContractOrigin::Root);
-		assert_eq!(deposit, Deposit::Charge(Zero::zero()));
-
-		assert_eq!(nested0_info.extra_deposit(), 112);
-		assert_eq!(nested1_info.extra_deposit(), 110);
-		assert_eq!(nested2_info.extra_deposit(), 100);
-
-		assert_eq!(TestExtTestValue::get(), TestExt { limit_checks: vec![], charges: vec![] })
+			assert_eq!(TestExtTestValue::get(), test_case.expected)
+		}
 	}
 
 	#[test]
 	fn termination_works() {
-		clear_ext();
+		let test_cases = vec![
+			ChargingTestCase {
+				origin: ContractOrigin::<Test>::from_account_id(ALICE),
+				deposit: Deposit::Refund(107),
+				expected: TestExt {
+					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
+					charges: vec![
+						Charge {
+							origin: ALICE,
+							contract: DepositAccount(CHARLIE),
+							amount: Deposit::Refund(119),
+							terminated: true,
+						},
+						Charge {
+							origin: ALICE,
+							contract: DepositAccount(BOB),
+							amount: Deposit::Charge(12),
+							terminated: false,
+						},
+					],
+				},
+			},
+			ChargingTestCase {
+				origin: ContractOrigin::<Test>::Root,
+				deposit: Deposit::Charge(0),
+				expected: TestExt { limit_checks: vec![], charges: vec![] },
+			},
+		];
 
-		let mut meter =
-			TestMeter::new(&ContractOrigin::from_account_id(ALICE), Some(1_000), 0).unwrap();
-		assert_eq!(meter.available(), 1_000);
+		for test_case in test_cases {
+			clear_ext();
 
-		let mut nested0 = meter.nested();
-		nested0.charge(&Diff {
-			bytes_added: 5,
-			bytes_removed: 1,
-			items_added: 3,
-			items_removed: 1,
-		});
-		nested0.charge(&Diff { items_added: 2, ..Default::default() });
+			let mut meter = TestMeter::new(&test_case.origin, Some(1_000), 0).unwrap();
+			assert_eq!(meter.available(), 1_000);
 
-		let mut nested1_info =
-			new_info(StorageInfo { bytes: 100, items: 10, bytes_deposit: 100, items_deposit: 20 });
-		let mut nested1 = nested0.nested();
-		nested1.charge(&Diff { items_removed: 5, ..Default::default() });
-		nested1.charge(&Diff { bytes_added: 20, ..Default::default() });
-		nested1.terminate(&nested1_info);
-		nested0.enforce_limit(Some(&mut nested1_info)).unwrap();
-		nested0.absorb(nested1, DepositAccount(CHARLIE), None);
+			let mut nested0 = meter.nested();
+			nested0.charge(&Diff {
+				bytes_added: 5,
+				bytes_removed: 1,
+				items_added: 3,
+				items_removed: 1,
+			});
+			nested0.charge(&Diff { items_added: 2, ..Default::default() });
 
-		meter.absorb(nested0, DepositAccount(BOB), None);
-		meter.into_deposit(&ContractOrigin::from_account_id(ALICE));
+			let mut nested1_info = new_info(StorageInfo {
+				bytes: 100,
+				items: 10,
+				bytes_deposit: 100,
+				items_deposit: 20,
+			});
+			let mut nested1 = nested0.nested();
+			nested1.charge(&Diff { items_removed: 5, ..Default::default() });
+			nested1.charge(&Diff { bytes_added: 20, ..Default::default() });
+			nested1.terminate(&nested1_info);
+			nested0.enforce_limit(Some(&mut nested1_info)).unwrap();
+			nested0.absorb(nested1, DepositAccount(CHARLIE), None);
 
-		assert_eq!(
-			TestExtTestValue::get(),
-			TestExt {
-				limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
-				charges: vec![
-					Charge {
-						origin: ALICE,
-						contract: DepositAccount(CHARLIE),
-						amount: Deposit::Refund(119),
-						terminated: true
-					},
-					Charge {
-						origin: ALICE,
-						contract: DepositAccount(BOB),
-						amount: Deposit::Charge(12),
-						terminated: false
-					}
-				]
-			}
-		)
-	}
+			meter.absorb(nested0, DepositAccount(BOB), None);
+			assert_eq!(meter.into_deposit(&test_case.origin), test_case.deposit);
 
-	#[test]
-	fn termination_works_for_root() {
-		clear_ext();
-
-		let mut meter = TestMeter::new(&ContractOrigin::Root, Some(1_000), 0).unwrap();
-		assert_eq!(meter.available(), 1_000);
-
-		let mut nested0 = meter.nested();
-		nested0.charge(&Diff {
-			bytes_added: 5,
-			bytes_removed: 1,
-			items_added: 3,
-			items_removed: 1,
-		});
-		nested0.charge(&Diff { items_added: 2, ..Default::default() });
-
-		let mut nested1_info =
-			new_info(StorageInfo { bytes: 100, items: 10, bytes_deposit: 100, items_deposit: 20 });
-		let mut nested1 = nested0.nested();
-		nested1.charge(&Diff { items_removed: 5, ..Default::default() });
-		nested1.charge(&Diff { bytes_added: 20, ..Default::default() });
-		nested1.terminate(&nested1_info);
-		nested0.enforce_limit(Some(&mut nested1_info)).unwrap();
-		nested0.absorb(nested1, DepositAccount(CHARLIE), None);
-
-		meter.absorb(nested0, DepositAccount(BOB), None);
-		let deposit = meter.into_deposit(&ContractOrigin::Root);
-		assert_eq!(deposit, Deposit::Charge(Zero::zero()));
-
-		assert_eq!(TestExtTestValue::get(), TestExt { limit_checks: vec![], charges: vec![] })
+			assert_eq!(TestExtTestValue::get(), test_case.expected)
+		}
 	}
 }
