@@ -850,7 +850,8 @@ where
 		protocol_config
 	}));
 
-	let mut network_params = sc_network::config::Params {
+	let genesis_hash = client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
+	let mut network_params = sc_network::config::Params::<TBl> {
 		role: config.role.clone(),
 		executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
@@ -859,7 +860,7 @@ where
 			})
 		},
 		network_config: config.network.clone(),
-		chain: client.clone(),
+		genesis_hash,
 		protocol_id: protocol_id.clone(),
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
