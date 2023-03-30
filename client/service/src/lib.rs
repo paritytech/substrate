@@ -380,7 +380,8 @@ where
 		}
 	}
 
-	let random_port = |mut addr: SocketAddr| {
+	// if binding the specified port failed then a random port is assigned by the OS.
+	let backup_port = |mut addr: SocketAddr| {
 		addr.set_port(0);
 		addr
 	};
@@ -388,12 +389,11 @@ where
 	let addr = config
 		.rpc_addr
 		.unwrap_or_else(|| "127.0.0.1:9944".parse().expect("valid sockaddr; qed"));
-	let addr2 = random_port(addr);
-
+	let backup_addr = backup_port(addr);
 	let metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
 
 	let server_config = sc_rpc_server::Config {
-		addrs: [addr, addr2],
+		addrs: [addr, backup_addr],
 		max_connections: config.rpc_max_connections,
 		max_payload_in_mb: config.rpc_max_request_size,
 		max_payload_out_mb: config.rpc_max_response_size,
@@ -406,7 +406,6 @@ where
 	};
 
 	let server_fut = sc_rpc_server::start_server(server_config);
-
 	match tokio::task::block_in_place(|| config.tokio_handle.block_on(server_fut)) {
 		Ok(server) => Ok(Box::new(waiting::Server(Some(server)))),
 		Err(e) => Err(Error::Application(e)),

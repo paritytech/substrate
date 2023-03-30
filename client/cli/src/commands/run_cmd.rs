@@ -106,7 +106,7 @@ pub struct RunCmd {
 	#[arg(long, value_name = "PORT")]
 	pub rpc_port: Option<u16>,
 
-	/// Maximum number of WS RPC server connections.
+	/// Maximum number of RPC server connections.
 	#[arg(long, value_name = "COUNT")]
 	pub rpc_max_connections: Option<usize>,
 
