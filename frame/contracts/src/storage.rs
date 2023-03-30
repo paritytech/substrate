@@ -22,8 +22,8 @@ pub mod meter;
 use crate::{
 	exec::{AccountIdOf, Key},
 	weights::WeightInfo,
-	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf,
-	DeletionQueue as DeletionQueueMap, DeletionQueueCounter, Error, Pallet, TrieId, SENTINEL,
+	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueueCounter,
+	DeletionQueueMap, Error, Pallet, TrieId, SENTINEL,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -373,13 +373,13 @@ impl<T: Config> DeletionQueue<T> {
 
 	/// Returns `true` if the queue contains no elements.
 	fn is_empty(&self) -> bool {
-		self.insert_index.wrapping_sub(self.delete_counter) == 0
+		self.insert_counter.wrapping_sub(self.delete_counter) == 0
 	}
 
 	/// Insert a contract in the deletion queue.
 	fn insert(&mut self, trie_id: TrieId) {
-		<DeletionQueueMap<T>>::insert(self.insert_index, trie_id);
-		self.insert_index = self.insert_index.wrapping_add(1);
+		<DeletionQueueMap<T>>::insert(self.insert_counter, trie_id);
+		self.insert_counter = self.insert_counter.wrapping_add(1);
 		<DeletionQueueCounter<T>>::set(self.clone());
 	}
 
@@ -396,10 +396,10 @@ impl<T: Config> DeletionQueue<T> {
 
 #[cfg(test)]
 impl<T: Config> DeletionQueue<T> {
-	pub fn from_test_values(insert_index: u32, delete_counter: u32) -> Self {
-		Self { insert_index, delete_counter, _phantom: Default::default() }
+	pub fn from_test_values(insert_counter: u32, delete_counter: u32) -> Self {
+		Self { insert_counter, delete_counter, _phantom: Default::default() }
 	}
 	pub fn as_test_tuple(&self) -> (u32, u32) {
-		(self.insert_index, self.delete_counter)
+		(self.insert_counter, self.delete_counter)
 	}
 }
