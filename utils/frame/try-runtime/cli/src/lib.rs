@@ -133,11 +133,10 @@
 //! given the right flag:
 //!
 //! ```ignore
-//! 
-//! #[cfg(feature = try-runtime)]
+//! #[cfg(feature = "try-runtime")]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
-//! #[cfg(feature = try-runtime)]
+//! #[cfg(feature = "try-runtime")]
 //! fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {}
 //! ```
 //!
@@ -152,9 +151,9 @@
 //!
 //! Similarly, each pallet can expose a function in `#[pallet::hooks]` section as follows:
 //!
-//! ```
-//! #[cfg(feature = try-runtime)]
-//! fn try_state(_) -> Result<(), &'static str> {}
+//! ```ignore
+//! #[cfg(feature = "try-runtime")]
+//! fn try_state(_: BlockNumber) -> Result<(), &'static str> {}
 //! ```
 //!
 //! which is called on numerous code paths in the try-runtime tool. These checks should ensure that
@@ -365,8 +364,9 @@ use remote_externalities::{
 	TestExternalities,
 };
 use sc_cli::{
-	CliConfiguration, RuntimeVersion, WasmExecutionMethod, WasmtimeInstantiationStrategy,
-	DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
+	execution_method_from_cli, CliConfiguration, RuntimeVersion, WasmExecutionMethod,
+	WasmtimeInstantiationStrategy, DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
+	DEFAULT_WASM_EXECUTION_METHOD,
 };
 use sc_executor::{sp_wasm_interface::HostFunctions, WasmExecutor};
 use sp_api::HashT;
@@ -831,7 +831,7 @@ pub(crate) fn build_executor<H: HostFunctions>(shared: &SharedParams) -> WasmExe
 	let runtime_cache_size = 2;
 
 	WasmExecutor::new(
-		sc_executor::WasmExecutionMethod::Interpreted,
+		execution_method_from_cli(shared.wasm_method, shared.wasmtime_instantiation_strategy),
 		heap_pages,
 		max_runtime_instances,
 		None,

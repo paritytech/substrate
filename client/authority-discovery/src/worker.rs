@@ -32,7 +32,7 @@ use std::{
 use futures::{channel::mpsc, future, stream::Fuse, FutureExt, Stream, StreamExt};
 
 use addr_cache::AddrCache;
-use codec::Decode;
+use codec::{Decode, Encode};
 use ip_network::IpNetwork;
 use libp2p::{
 	core::multiaddr,
@@ -45,6 +45,7 @@ use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
+
 use sc_network::{
 	event::DhtEvent, KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature,
 };
@@ -53,8 +54,7 @@ use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
 };
 use sp_blockchain::HeaderBackend;
-
-use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
+use sp_core::crypto::{key_types, ByteArray, Pair};
 use sp_keystore::{Keystore, KeystorePtr};
 use sp_runtime::traits::Block as BlockT;
 
@@ -129,7 +129,7 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	publish_if_changed_interval: ExpIncInterval,
 	/// List of keys onto which addresses have been published at the latest publication.
 	/// Used to check whether they have changed.
-	latest_published_keys: HashSet<CryptoTypePublicPair>,
+	latest_published_keys: HashSet<AuthorityId>,
 	/// Same value as in the configuration.
 	publish_non_global_ips: bool,
 	/// Same value as in the configuration.
@@ -159,12 +159,15 @@ pub trait AuthorityDiscovery<Block: BlockT> {
 	/// Retrieve authority identifiers of the current and next authority set.
 	async fn authorities(&self, at: Block::Hash)
 		-> std::result::Result<Vec<AuthorityId>, ApiError>;
+
+	/// Retrieve best block hash
+	async fn best_hash(&self) -> std::result::Result<Block::Hash, Error>;
 }
 
 #[async_trait::async_trait]
 impl<Block, T> AuthorityDiscovery<Block> for T
 where
-	T: ProvideRuntimeApi<Block> + Send + Sync,
+	T: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync,
 	T::Api: AuthorityDiscoveryApi<Block>,
 	Block: BlockT,
 {
@@ -174,13 +177,17 @@ where
 	) -> std::result::Result<Vec<AuthorityId>, ApiError> {
 		self.runtime_api().authorities(at)
 	}
+
+	async fn best_hash(&self) -> std::result::Result<Block::Hash, Error> {
+		Ok(self.info().best_hash)
+	}
 }
 
 impl<Client, Network, Block, DhtEventStream> Worker<Client, Network, Block, DhtEventStream>
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: AuthorityDiscovery<Block> + HeaderBackend<Block> + 'static,
+	Client: AuthorityDiscovery<Block> + 'static,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Construct a [`Worker`].
@@ -341,7 +348,7 @@ where
 		let keys = Worker::<Client, Network, Block, DhtEventStream>::get_own_public_keys_within_authority_set(
 			key_store.clone(),
 			self.client.as_ref(),
-		).await?.into_iter().map(Into::into).collect::<HashSet<_>>();
+		).await?.into_iter().collect::<HashSet<_>>();
 
 		if only_if_changed && keys == self.latest_published_keys {
 			return Ok(())
@@ -378,7 +385,7 @@ where
 	}
 
 	async fn refill_pending_lookups_queue(&mut self) -> Result<()> {
-		let best_hash = self.client.info().best_hash;
+		let best_hash = self.client.best_hash().await?;
 
 		let local_keys = match &self.role {
 			Role::PublishAndDiscover(key_store) => key_store
@@ -596,7 +603,7 @@ where
 			.into_iter()
 			.collect::<HashSet<_>>();
 
-		let best_hash = client.info().best_hash;
+		let best_hash = client.best_hash().await?;
 		let authorities = client
 			.authorities(best_hash)
 			.await
@@ -656,7 +663,7 @@ fn sign_record_with_peer_id(
 ) -> Result<schema::PeerSignature> {
 	let signature = network
 		.sign_with_local_identity(serialized_record)
-		.map_err(|_| Error::Signing)?;
+		.map_err(|e| Error::CannotSign(format!("{} (network packet)", e)))?;
 	let public_key = signature.public_key.to_protobuf_encoding();
 	let signature = signature.bytes;
 	Ok(schema::PeerSignature { signature, public_key })
@@ -666,15 +673,20 @@ fn sign_record_with_authority_ids(
 	serialized_record: Vec<u8>,
 	peer_signature: Option<schema::PeerSignature>,
 	key_store: &dyn Keystore,
-	keys: Vec<CryptoTypePublicPair>,
+	keys: Vec<AuthorityId>,
 ) -> Result<Vec<(KademliaKey, Vec<u8>)>> {
 	let mut result = Vec::with_capacity(keys.len());
 
 	for key in keys.iter() {
 		let auth_signature = key_store
-			.sign_with(key_types::AUTHORITY_DISCOVERY, key, &serialized_record)
-			.map_err(|_| Error::Signing)?
-			.ok_or_else(|| Error::MissingSignature(key.clone()))?;
+			.sr25519_sign(key_types::AUTHORITY_DISCOVERY, key.as_ref(), &serialized_record)
+			.map_err(|e| Error::CannotSign(format!("{}. Key: {:?}", e, key)))?
+			.ok_or_else(|| {
+				Error::CannotSign(format!("Could not find key in keystore. Key: {:?}", key))
+			})?;
+
+		// Scale encode
+		let auth_signature = auth_signature.encode();
 
 		let signed_record = schema::SignedAuthorityRecord {
 			record: serialized_record.clone(),
@@ -683,7 +695,7 @@ fn sign_record_with_authority_ids(
 		}
 		.encode_to_vec();
 
-		result.push((hash_authority_id(&key.1), signed_record));
+		result.push((hash_authority_id(key.as_slice()), signed_record));
 	}
 
 	Ok(result)
