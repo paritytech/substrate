@@ -17,6 +17,9 @@
 
 //! Intermediate representation of the runtime metadata.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+#![warn(missing_docs)]
+
 // Re-export.
 #[doc(hidden)]
 pub use frame_metadata;
