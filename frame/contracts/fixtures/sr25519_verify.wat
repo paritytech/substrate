@@ -35,8 +35,8 @@
 
 		;; set the pointers to the memory locations
 		;; Memory layout during `call`
-		;; [10, 75) signature
-		;; [75, 86) message
+		;; [10, 74) signature
+		;; [74, 86) message
 		;; [86, 118) public key
 		(local.set $signature_ptr (i32.const 10))
 		(local.set $message_ptr (i32.const 74))
