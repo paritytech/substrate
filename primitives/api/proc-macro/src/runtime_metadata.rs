@@ -30,14 +30,19 @@ use crate::{
 /// Get the type parameter argument without lifetime or mutability
 /// of a runtime metadata function.
 ///
-/// Because `decl_runtime_apis` macro extends the generics of each trait by adding
-/// the generic `Block: BlockT`, this expects the `Block` to be present.
-fn get_argument_type_param(ty: &syn::Type) -> Option<syn::Type> {
-	let ty_string = format!("{}", quote!(#ty));
-	if !ty_string.contains("Block") {
-		return None
-	}
-
+/// In the following example, both the `AccountId` and `Index` generic
+/// type parameters must implement `scale_info::TypeInfo` because they
+/// are added into the metadata using `scale_info::meta_type`.
+///
+/// ```ignore
+/// trait ExampleAccountNonceApi<AccountId, Index> {
+///   fn account_nonce<'a>(account: &'a AccountId) -> Index;
+/// }
+/// ```
+///
+/// Instead of returning `&'a AccountId` for the first parameter, this function
+/// returns `AccountId` to place bounds around it.
+fn get_type_param(ty: &syn::Type) -> syn::Type {
 	// Remove the lifetime and mutability of the type T to
 	// place bounds around it.
 	let ty_elem = match &ty {
@@ -48,7 +53,7 @@ fn get_argument_type_param(ty: &syn::Type) -> Option<syn::Type> {
 		_ => ty,
 	};
 
-	Some(ty_elem.clone())
+	ty_elem.clone()
 }
 
 /// Extract the documentation from the provided attributes.
@@ -105,7 +110,8 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait) -> TokenStream {
 			let pat = &typed.pat;
 			let name = quote!(#pat).to_string();
 			let ty = &typed.ty;
-			get_argument_type_param(ty).map(|ty_elem| where_clause.push(ty_elem));
+
+			where_clause.push(get_type_param(ty));
 
 			inputs.push(quote!(
 				#crate_::metadata_ir::RuntimeApiMethodParamMetadataIR {
@@ -118,7 +124,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait) -> TokenStream {
 		let output = match &signature.output {
 			syn::ReturnType::Default => quote!(#crate_::scale_info::meta_type::<()>()),
 			syn::ReturnType::Type(_, ty) => {
-				get_argument_type_param(ty).map(|ty_elem| where_clause.push(ty_elem));
+				where_clause.push(get_type_param(ty));
 				quote!(#crate_::scale_info::meta_type::<#ty>())
 			},
 		};
@@ -151,9 +157,6 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait) -> TokenStream {
 			continue
 		};
 
-		// `scale_info::meta_type` requires `T: ?Sized + TypeInfo + 'static` bounds.
-		ty.bounds.push(parse_quote!(#crate_::scale_info::TypeInfo));
-		ty.bounds.push(parse_quote!('static));
 		// Default type parameters are not allowed in functions.
 		ty.eq_token = None;
 		ty.default = None;
