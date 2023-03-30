@@ -157,7 +157,7 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use std::{collections::HashSet, str::FromStr};
-use syn::{Ident, Result};
+use syn::{spanned::Spanned, Ident, Result};
 
 /// The fixed name of the system pallet.
 const SYSTEM_PALLET_NAME: &str = "System";
@@ -170,9 +170,12 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 
 	let res = match definition {
 		RuntimeDeclaration::Implicit(implicit_def) =>
-			construct_runtime_intermediary_expansion(input_copy.into(), implicit_def),
+			check_pallet_number(input_copy.clone().into(), implicit_def.pallets.len()).and_then(
+				|_| construct_runtime_intermediary_expansion(input_copy.into(), implicit_def),
+			),
 		RuntimeDeclaration::Explicit(explicit_decl) =>
-			construct_runtime_final_expansion(explicit_decl),
+			check_pallet_number(input_copy.into(), explicit_decl.pallets.len())
+				.and_then(|_| construct_runtime_final_expansion(explicit_decl)),
 	};
 
 	res.unwrap_or_else(|e| e.to_compile_error()).into()
@@ -615,4 +618,35 @@ fn decl_static_assertions(
 	quote! {
 		#(#error_encoded_size_check)*
 	}
+}
+
+fn check_pallet_number(input: TokenStream2, pallet_num: usize) -> Result<()> {
+	let max_pallet_num = {
+		if cfg!(feature = "tuples-96") {
+			96
+		} else if cfg!(feature = "tuples-128") {
+			128
+		} else {
+			64
+		}
+	};
+
+	if pallet_num > max_pallet_num {
+		let no_feature = max_pallet_num == 128;
+		return Err(syn::Error::new(
+			input.span(),
+			format!(
+				"{} To increase this limit, enable the tuples-{} feature of [frame_support]. {}",
+				"The number of pallets exceeds the maximum number of tuple elements.",
+				max_pallet_num + 32,
+				if no_feature {
+					"If the feature does not exist - it needs to be implemented."
+				} else {
+					""
+				},
+			),
+		))
+	}
+
+	Ok(())
 }
