@@ -6,7 +6,7 @@ mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T>(core::marker::PhantomData<T>);
 
-	#[pallet::hold_reason]
+	#[pallet::composite_enum]
 	pub struct HoldReason;
 }
 

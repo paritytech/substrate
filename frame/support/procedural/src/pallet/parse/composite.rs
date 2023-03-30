@@ -18,20 +18,76 @@
 use quote::ToTokens;
 use syn::spanned::Spanned;
 
-mod keyword {
+pub mod keyword {
+	use super::*;
+
+	syn::custom_keyword!(FreezeReason);
 	syn::custom_keyword!(HoldReason);
+	syn::custom_keyword!(LockId);
+	syn::custom_keyword!(SlashReason);
+	pub enum CompositeKeyword {
+		FreezeReason(FreezeReason),
+		HoldReason(HoldReason),
+		LockId(LockId),
+		SlashReason(SlashReason),
+	}
+
+	impl Spanned for CompositeKeyword {
+		fn span(&self) -> proc_macro2::Span {
+			use CompositeKeyword::*;
+			match self {
+				FreezeReason(inner) => inner.span(),
+				HoldReason(inner) => inner.span(),
+				LockId(inner) => inner.span(),
+				SlashReason(inner) => inner.span(),
+			}
+		}
+	}
+
+	impl syn::parse::Parse for CompositeKeyword {
+		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+			let lookahead = input.lookahead1();
+			if lookahead.peek(FreezeReason) {
+				Ok(Self::FreezeReason(input.parse()?))
+			} else if lookahead.peek(HoldReason) {
+				Ok(Self::HoldReason(input.parse()?))
+			} else if lookahead.peek(LockId) {
+				Ok(Self::LockId(input.parse()?))
+			} else if lookahead.peek(SlashReason) {
+				Ok(Self::SlashReason(input.parse()?))
+			} else {
+				Err(lookahead.error())
+			}
+		}
+	}
+
+	impl std::fmt::Display for CompositeKeyword {
+		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+			use CompositeKeyword::*;
+			write!(
+				f,
+				"{}",
+				match self {
+					FreezeReason(_) => "FreezeReason",
+					HoldReason(_) => "HoldReason",
+					LockId(_) => "LockId",
+					SlashReason(_) => "SlashReason",
+				}
+			)
+		}
+	}
 }
 
-pub struct HoldReasonDef {
+pub struct CompositeDef {
 	/// The index of the HoldReason item in the pallet module.
 	pub index: usize,
-	/// The HoldReason keyword used (contains span).
-	pub hold_reason: keyword::HoldReason,
+	/// The composite keyword used (contains span).
+	pub composite_keyword: keyword::CompositeKeyword,
 	/// The span of the pallet::hold_reason attribute.
 	pub attr_span: proc_macro2::Span,
 }
 
-impl HoldReasonDef {
+impl CompositeDef {
 	pub fn try_from(
 		attr_span: proc_macro2::Span,
 		index: usize,
@@ -75,8 +131,9 @@ impl HoldReasonDef {
 			item.attrs.push(derive_attr);
 		}
 
-		let hold_reason = syn::parse2::<keyword::HoldReason>(item.ident.to_token_stream())?;
+		let composite_keyword =
+			syn::parse2::<keyword::CompositeKeyword>(item.ident.to_token_stream())?;
 
-		Ok(HoldReasonDef { index, hold_reason, attr_span })
+		Ok(CompositeDef { index, composite_keyword, attr_span })
 	}
 }

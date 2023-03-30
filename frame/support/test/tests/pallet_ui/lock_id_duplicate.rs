@@ -7,7 +7,10 @@ mod pallet {
 	pub struct Pallet<T>(core::marker::PhantomData<T>);
 
 	#[pallet::composite_enum]
-    enum HoldReason {}
+    pub enum LockId {}
+
+	#[pallet::composite_enum]
+    pub enum LockId {}
 }
 
 fn main() {
