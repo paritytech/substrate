@@ -18,12 +18,12 @@
 
 //! Tests that are only relevant for Linux.
 
+mod smaps;
+
 use super::mk_test_runtime;
 use crate::WasmExecutionMethod;
 use codec::Encode as _;
 use sc_executor_common::wasm_runtime::{HeapAllocStrategy, DEFAULT_HEAP_ALLOC_STRATEGY};
-
-mod smaps;
 
 use self::smaps::Smaps;
 

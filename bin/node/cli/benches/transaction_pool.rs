@@ -24,6 +24,7 @@ use kitchensink_runtime::{constants::currency::*, BalancesCall, SudoCall};
 use node_cli::service::{create_extrinsic, fetch_nonce, FullClient, TransactionPool};
 use node_primitives::AccountId;
 use sc_client_api::execution_extensions::ExecutionStrategies;
+use sc_executor::WasmtimeInstantiationStrategy;
 use sc_service::{
 	config::{
 		BlocksPruning, DatabaseSource, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
@@ -37,7 +38,6 @@ use sp_core::{crypto::Pair, sr25519};
 use sp_keyring::Sr25519Keyring;
 use sp_runtime::{generic::BlockId, OpaqueExtrinsic};
 use tokio::runtime::Handle;
-use sc_executor::WasmtimeInstantiationStrategy;
 
 fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 	let base_path = BasePath::new_temp_dir().expect("Creates base path");

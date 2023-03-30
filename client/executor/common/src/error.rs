@@ -48,9 +48,6 @@ pub enum Error {
 	#[error("Invalid type returned (should be u64)")]
 	InvalidReturn,
 
-	#[error("Runtime error")]
-	Runtime,
-
 	#[error("Runtime panicked: {0}")]
 	RuntimePanicked(String),
 
