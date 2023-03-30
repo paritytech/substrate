@@ -2396,7 +2396,7 @@ dependencies = [
 [[package]]
 name = "frame-metadata"
 version = "15.0.0"
-source = "git+https://github.com/paritytech/frame-metadata/?branch=lexnv/md_v15#3f176938c7a6c569d7608aa02efa0def93476675"
+source = "git+https://github.com/paritytech/frame-metadata/?branch=main#a09bd491757db2c7a62b880d04d7c943e2a36ff9"
 dependencies = [
  "cfg-if",
  "parity-scale-codec",
