@@ -161,25 +161,25 @@ impl BeefyTestNet {
 		// push genesis to make indexing human readable (index equals to block number)
 		all_hashes.push(self.peer(0).client().info().genesis_hash);
 
-		for block_num in 0..count {
-			let block_num: NumberFor<Block> = block_num.saturating_add(1).try_into().unwrap();
-			let built_hashes = self.peer(0).generate_blocks(1, BlockOrigin::File, |mut builder| {
-				if include_mmr_digest {
-					let num_byte = block_num.to_le_bytes().into_iter().next().unwrap();
-					let mmr_root = MmrRootHash::repeat_byte(num_byte);
-					add_mmr_digest(&mut builder, mmr_root);
-				}
+		let mut block_num: NumberFor<Block> = 0;
+		let built_hashes = self.peer(0).generate_blocks(count, BlockOrigin::File, |mut builder| {
+			block_num = block_num.saturating_add(1).try_into().unwrap();
+			if include_mmr_digest {
+				let num_byte = block_num.to_le_bytes().into_iter().next().unwrap();
+				let mmr_root = MmrRootHash::repeat_byte(num_byte);
+				add_mmr_digest(&mut builder, mmr_root);
+			}
 
-				if block_num % session_length == 0 {
-					add_auth_change_digest(&mut builder, validator_set.clone());
-				}
+			if block_num % session_length == 0 {
+				add_auth_change_digest(&mut builder, validator_set.clone());
+			}
 
-				let block = builder.build().unwrap().block;
+			let block = builder.build().unwrap().block;
+			assert_eq!(block.header.number, block_num);
 
-				block
-			});
-			all_hashes.extend(built_hashes);
-		}
+			block
+		});
+		all_hashes.extend(built_hashes);
 		self.run_until_sync().await;
 
 		all_hashes
