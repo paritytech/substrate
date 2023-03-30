@@ -309,7 +309,7 @@ pub mod pallet {
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let (asset1, _asset2) = pool_id;
 
-			if !T::AllowMultiAssetPools::get() && T::MultiAssetIdConverter::get_native() != asset1 {
+			if !T::AllowMultiAssetPools::get() && !T::MultiAssetIdConverter::is_native(asset1) {
 				Err(Error::<T>::PoolMustContainNativeCurrency)?;
 			}
 
@@ -379,7 +379,7 @@ pub mod pallet {
 			let reserve2 = Self::get_balance(&pool_account, asset2)?;
 
 			if reserve1.is_zero() && reserve2.is_zero() {
-				if T::MultiAssetIdConverter::get_native() == asset1 {
+				if T::MultiAssetIdConverter::is_native(asset1) {
 					Self::validate_ed(amount1_desired).map_err(|_| Error::<T>::AmountLessThanED)?;
 				}
 				amount1 = amount1_desired;
@@ -485,7 +485,7 @@ pub mod pallet {
 				!amount2.is_zero() && amount2 >= amount2_min_receive,
 				Error::<T>::AssetTwoWithdrawalDidNotMeetMinimum
 			);
-			if T::MultiAssetIdConverter::get_native() == asset1 {
+			if T::MultiAssetIdConverter::is_native(asset1) {
 				let reserve1_left = reserve1.saturating_sub(amount1);
 				Self::validate_ed(reserve1_left).map_err(|_| Error::<T>::ReserveLeftLessThanED)?;
 			}
@@ -599,7 +599,7 @@ pub mod pallet {
 				asset: asset_id,
 				amount,
 			});
-			if T::MultiAssetIdConverter::get_native() == asset_id {
+			if T::MultiAssetIdConverter::is_native(asset_id) {
 				let preservation = match keep_alive {
 					true => Preserve,
 					false => Expendable,
@@ -661,6 +661,13 @@ pub mod pallet {
 							send_to.clone()
 						};
 
+						if T::MultiAssetIdConverter::is_native(asset2) {
+							let reserve = Self::get_balance(&pool_account, asset2)?;
+							let reserve_left = reserve.saturating_sub(*amount_out);
+							Self::validate_ed(reserve_left)
+								.map_err(|_| Error::<T>::ReserveLeftLessThanED)?;
+						}
+
 						Self::transfer(asset2, &pool_account, &to, *amount_out, true)?;
 					}
 					i.saturating_inc();
@@ -679,15 +686,15 @@ pub mod pallet {
 
 		fn get_balance(
 			owner: &T::AccountId,
-			token_id: T::MultiAssetId,
+			asset: T::MultiAssetId,
 		) -> Result<T::AssetBalance, Error<T>> {
-			if T::MultiAssetIdConverter::get_native() == token_id {
+			if T::MultiAssetIdConverter::is_native(asset) {
 				Self::native_to_asset(<<T as Config>::Currency>::reducible_balance(
 					owner, Expendable, Polite,
 				))
 			} else {
 				Ok(<<T as Config>::Assets>::reducible_balance(
-					T::MultiAssetIdConverter::try_convert(token_id)
+					T::MultiAssetIdConverter::try_convert(asset)
 						.map_err(|_| Error::<T>::Overflow)?,
 					owner,
 					Expendable,

@@ -614,7 +614,8 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
 		create_tokens(user, vec![token_2]);
 		assert_ok!(AssetConversion::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 
-		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user, 10000 + get_ed()));
+		let ed = get_ed();
+		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user, 10000 + ed));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
 
 		let liquidity1 = 10000;
@@ -660,6 +661,19 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
 		// Let's try and drain it.
 		assert_eq!(balance(pallet_account, token_1), 708);
 		assert_eq!(balance(pallet_account, token_2), 15);
+
+		// validate the reserve should always stay above the ED
+		assert_noop!(
+			AssetConversion::swap_tokens_for_exact_tokens(
+				RuntimeOrigin::signed(user),
+				bvec![token_2, token_1],
+				708 - ed + 1, // amount_out
+				500,          // amount_in_max
+				user,
+				false,
+			),
+			Error::<Test>::ReserveLeftLessThanED
+		);
 
 		assert_ok!(AssetConversion::swap_tokens_for_exact_tokens(
 			RuntimeOrigin::signed(user),

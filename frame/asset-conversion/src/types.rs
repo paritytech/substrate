@@ -39,6 +39,8 @@ pub struct PoolInfo<PoolAssetId> {
 pub trait MultiAssetIdConverter<MultiAssetId, AssetId> {
 	fn get_native() -> MultiAssetId;
 
+	fn is_native(asset: MultiAssetId) -> bool;
+
 	fn try_convert(asset: MultiAssetId) -> Result<AssetId, ()>;
 
 	fn into_multiasset_id(asset: AssetId) -> MultiAssetId;
@@ -87,6 +89,10 @@ impl<AssetId: Ord> MultiAssetIdConverter<NativeOrAssetId<AssetId>, AssetId>
 {
 	fn get_native() -> NativeOrAssetId<AssetId> {
 		NativeOrAssetId::Native
+	}
+
+	fn is_native(asset: NativeOrAssetId<AssetId>) -> bool {
+		asset == Self::get_native()
 	}
 
 	fn try_convert(asset: NativeOrAssetId<AssetId>) -> Result<AssetId, ()> {
