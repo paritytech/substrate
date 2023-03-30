@@ -315,12 +315,12 @@ fn get_benchmark_data(
 	let mut base_calculated_proof_size = 0;
 	// Sum up the proof sizes per component
 	for (_, slope, base) in proof_size_per_components.iter() {
-		base_calculated_proof_size += base;
+		base_calculated_proof_size = base_calculated_proof_size.max(*base);
 		for component in slope.iter() {
 			let mut found = false;
 			for used_component in used_calculated_proof_size.iter_mut() {
 				if used_component.name == component.name {
-					used_component.slope += component.slope;
+					used_component.slope = used_component.slope.max(component.slope);
 					found = true;
 					break
 				}
