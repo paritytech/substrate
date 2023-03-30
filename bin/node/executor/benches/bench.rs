@@ -192,13 +192,12 @@ fn bench_execute_block(c: &mut Criterion) {
 		group.bench_function(format!("{:?}", strategy), |b| {
 			let genesis_config = node_testing::genesis::config(Some(compact_code_unwrap()));
 			let (use_native, wasm_method) = match strategy {
-				ExecutionMethod::Native => (true, WasmExecutionMethod::Interpreted),
+				ExecutionMethod::Native => (true),
 				ExecutionMethod::Wasm(wasm_method) => (false, wasm_method),
 			};
 
-			let executor = NativeElseWasmExecutor::new_with_wasm_executor(
-				WasmExecutor::builder(WasmExecutionMethod::Interpreted).build(),
-			);
+			let executor =
+				NativeElseWasmExecutor::new_with_wasm_executor(WasmExecutor::builder().build());
 			let runtime_code = RuntimeCode {
 				code_fetcher: &sp_core::traits::WrappedRuntimeCode(compact_code_unwrap().into()),
 				hash: vec![1, 2, 3],

@@ -114,7 +114,9 @@ fn call_in_wasm<E: Externalities>(
 	execution_method: WasmExecutionMethod,
 	ext: &mut E,
 ) -> Result<Vec<u8>, Error> {
-	let executor = crate::WasmExecutor::<HostFunctions>::builder(execution_method).build();
+	let executor = crate::WasmExecutor::<HostFunctions>::builder()
+		.with_execution_method(execution_method)
+		.build();
 
 	executor.uncached_call(
 		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
@@ -446,7 +448,8 @@ test_wasm_execution!(should_trap_when_heap_exhausted);
 fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 
-	let executor = crate::WasmExecutor::<HostFunctions>::builder(wasm_method)
+	let executor = crate::WasmExecutor::<HostFunctions>::builder()
+		.with_execution_method(wasm_method)
 		// `17` is the initial number of pages compiled into the binary.
 		.with_onchain_heap_alloc_strategy(HeapAllocStrategy::Static { extra_pages: 17 })
 		.build();
@@ -576,7 +579,11 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(parallel_execution);
 fn parallel_execution(wasm_method: WasmExecutionMethod) {
-	let executor = Arc::new(crate::WasmExecutor::<HostFunctions>::builder(wasm_method).build());
+	let executor = Arc::new(
+		crate::WasmExecutor::<HostFunctions>::builder()
+			.with_execution_method(wasm_method)
+			.build(),
+	);
 	let threads: Vec<_> = (0..8)
 		.map(|_| {
 			let executor = executor.clone();

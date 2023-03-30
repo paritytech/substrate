@@ -214,7 +214,8 @@ impl PalletCmd {
 			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy);
 
 		let executor = NativeElseWasmExecutor::<ExecDispatch>::new_with_wasm_executor(
-			WasmExecutor::builder(method)
+			WasmExecutor::builder()
+				.with_execution_method(method)
 				.with_max_runtime_instances(2)
 				.with_runtime_cache_size(2)
 				.build(),

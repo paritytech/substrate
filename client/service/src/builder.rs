@@ -38,7 +38,7 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
 use sc_executor::{
 	sp_wasm_interface::HostFunctions, HeapAllocStrategy, NativeElseWasmExecutor,
-	NativeExecutionDispatch, RuntimeVersionOf, WasmExecutor, DEFAULT_HEAP_ALLOC_PAGES,
+	NativeExecutionDispatch, RuntimeVersionOf, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY,
 };
 use sc_keystore::LocalKeystore;
 use sc_network::{
@@ -241,10 +241,11 @@ pub fn new_native_executor<D: NativeExecutionDispatch>(
 
 /// Creates a [`WasmExecutor`] according to [`Configuration`].
 pub fn new_wasm_executor<H: HostFunctions>(config: &Configuration) -> WasmExecutor<H> {
-	let extra_pages =
-		config.default_heap_pages.map(|p| p as u32).unwrap_or(DEFAULT_HEAP_ALLOC_PAGES);
-	let strategy = HeapAllocStrategy::Static { extra_pages };
-	WasmExecutor::<H>::builder(config.wasm_method)
+	let strategy = config
+		.default_heap_pages
+		.map_or(DEFAULT_HEAP_ALLOC_STRATEGY, |p| HeapAllocStrategy::Static { extra_pages: p as _ });
+	WasmExecutor::<H>::builder()
+		.with_execution_method(config.wasm_method)
 		.with_onchain_heap_alloc_strategy(strategy)
 		.with_onchain_heap_alloc_strategy(strategy)
 		.with_max_runtime_instances(config.max_runtime_instances)

@@ -98,9 +98,7 @@ pub fn from_block_number(n: u32) -> Header {
 }
 
 pub fn executor() -> NativeElseWasmExecutor<ExecutorDispatch> {
-	NativeElseWasmExecutor::new_with_wasm_executor(
-		WasmExecutor::builder(WasmExecutionMethod::Interpreted).build(),
-	)
+	NativeElseWasmExecutor::new_with_wasm_executor(WasmExecutor::builder().build())
 }
 
 pub fn executor_call(

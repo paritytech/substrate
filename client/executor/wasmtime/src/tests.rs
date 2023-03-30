@@ -20,9 +20,7 @@ use codec::{Decode as _, Encode as _};
 use sc_executor_common::{
 	error::Error,
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{
-		HeapAllocStrategy, WasmModule, DEFAULT_HEAP_ALLOC_PAGES, DEFAULT_HEAP_ALLOC_STRATEGY,
-	},
+	wasm_runtime::{HeapAllocStrategy, WasmModule, DEFAULT_HEAP_ALLOC_STRATEGY},
 };
 use sc_runtime_test::wasm_binary_unwrap;
 
