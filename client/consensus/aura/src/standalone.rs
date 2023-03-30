@@ -43,7 +43,7 @@ use super::{
 	AuraApi, AuthorityId, CompatibilityMode, CompatibleDigestItem, SlotDuration, LOG_TARGET,
 };
 
-/// Get the slot duration for Aura by reading from a runtime API.
+/// Get the slot duration for Aura by reading from a runtime API at the best block's state.
 pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration>
 where
 	A: Codec,
@@ -51,9 +51,20 @@ where
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: AuraApi<B, A>,
 {
+	slot_duration_at(client, client.usage_info().chain.best_hash)
+}
+
+/// Get the slot duration for Aura by reading from a runtime API at a given block's state.
+pub fn slot_duration_at<A, B, C>(client: &C, block_hash: B::Hash) -> CResult<SlotDuration>
+where
+	A: Codec,
+	B: BlockT,
+	C: AuxStore + ProvideRuntimeApi<B>,
+	C::Api: AuraApi<B, A>,
+{
 	client
 		.runtime_api()
-		.slot_duration(client.usage_info().chain.best_hash)
+		.slot_duration(block_hash)
 		.map_err(|err| err.into())
 }
 
