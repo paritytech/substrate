@@ -42,11 +42,7 @@ use sp_staking::{
 };
 use sp_std::prelude::*;
 
-use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
-	Forcing, IndividualExposure, MaxWinnersOf, Nominations, PositiveImbalanceOf, RewardDestination,
-	SessionInterface, StakingLedger, ValidatorPrefs,
-};
+use crate::{log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf, Forcing, IndividualExposure, MaxWinnersOf, Nominations, PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger, ValidatorPrefs, EraInfo};
 
 use super::{pallet::*, STAKING_ID};
 
