@@ -75,26 +75,85 @@ impl From<Error> for SubscriptionManagementError {
 	}
 }
 
-/// The state of a block of a single subscription ID.
+/// The state machine of a block of a single subscription ID.
+///
+/// # Motivation
+///
+/// Each block is registered twice: once from the `BestBlock` event
+/// and once from the `Finalized` event.
+///
+/// The state of a block must be tracked until both events register the
+/// block and the user calls `unpin`.
+///
+/// Otherwise, the following race might happen:
+///  T0. BestBlock event: hash is tracked and pinned in backend.
+///  T1. User calls unpin: hash is untracked and unpinned in backend.
+///  T2. Finalized event: hash is tracked (no previous history) and pinned again.
+///
+/// # State Machine Transition
+///
+/// ```ignore
+///                   (register)
+/// [ REGISTERED ]  ---------------> [ FULLY REGISTERED ]
+///       |                              |
+///       | (unpin)                      | (unpin)
+///       |                              |
+///       V           (register)         V
+/// [ UNPINNED ]  -----------------> [ FULLY UNPINNED ]
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+enum BlockStateMachine {
+	/// The block was registered by one event (either `Finalized` or `BestBlock` event).
+	///
+	/// Unpin was not called.
+	Registered,
+	/// The block was registered by both events (`Finalized` and `BestBlock` events).
+	///
+	/// Unpin was not called.
+	FullyRegistered,
+	/// The block was registered by one event (either `Finalized` or `BestBlock` event),
+	///
+	/// Unpin __was__ called.
+	Unpinned,
+	/// The block was registered by both events (`Finalized` and `BestBlock` events).
+	///
+	/// Unpin __was__ called.
+	FullyUnpinned,
+}
+
+impl BlockStateMachine {
+	fn new() -> Self {
+		BlockStateMachine::Registered
+	}
+
+	fn advance_register(&mut self) {
+		match self {
+			BlockStateMachine::Registered => *self = BlockStateMachine::FullyRegistered,
+			BlockStateMachine::Unpinned => *self = BlockStateMachine::FullyUnpinned,
+			_ => (),
+		}
+	}
+
+	fn advance_unpin(&mut self) {
+		match self {
+			BlockStateMachine::Registered => *self = BlockStateMachine::Unpinned,
+			BlockStateMachine::FullyRegistered => *self = BlockStateMachine::FullyUnpinned,
+			_ => (),
+		}
+	}
+
+	fn was_unpinned(&self) -> bool {
+		match self {
+			BlockStateMachine::Unpinned => true,
+			BlockStateMachine::FullyUnpinned => true,
+			_ => false,
+		}
+	}
+}
+
 struct BlockState {
-	/// True if the block can be unregistered from the
-	/// internal memory of the subscription.
-	///
-	/// Each block is registered twice: once from the `BestBlock` event
-	/// and once from the `Finalized` event. This becomes true when
-	/// both events registered the block.
-	///
-	/// Field is added to avoid losing track of the block for the following
-	/// timeline:
-	///  T0. BestBlock event: hash is tracked and pinned in backend.
-	///  T1. User calls unpin: hash is untracked and unpinned in backend.
-	///  T2. Finalized event: hash is tracked (no previous history) and pinned again.
-	can_unregister: bool,
-	/// True if the block was unpinned.
-	///
-	/// Because of the previous condition, a block can be unregistered
-	/// only when both `can_unregister` and `was_unpinned` are true.
-	was_unpinned: bool,
+	/// The state machine of this block.
+	state_machine: BlockStateMachine,
 	/// The timestamp when the block was inserted.
 	timestamp: Instant,
 }
@@ -139,26 +198,24 @@ impl<Block: BlockT> SubscriptionState<Block> {
 	fn register_block(&mut self, hash: Block::Hash) -> bool {
 		match self.blocks.entry(hash) {
 			Entry::Occupied(mut occupied) => {
-				let mut block_state = occupied.get_mut();
-				if block_state.was_unpinned {
-					// If `unpin` was called between two events
-					// unregister the block now.
+				let block_state = occupied.get_mut();
+
+				block_state.state_machine.advance_register();
+				// Block was registered twice and unpin was called.
+				if block_state.state_machine == BlockStateMachine::FullyUnpinned {
 					occupied.remove();
-				} else {
-					// Both `BestBlock` and `Finalized` events registered the block.
-					// Unregister the block on `unpin`.
-					block_state.can_unregister = true;
 				}
 
+				// Second time we register this block.
 				false
 			},
 			Entry::Vacant(vacant) => {
 				vacant.insert(BlockState {
-					can_unregister: false,
-					was_unpinned: false,
+					state_machine: BlockStateMachine::new(),
 					timestamp: Instant::now(),
 				});
 
+				// First time we register this block.
 				true
 			},
 		}
@@ -172,18 +229,17 @@ impl<Block: BlockT> SubscriptionState<Block> {
 	fn unregister_block(&mut self, hash: Block::Hash) -> bool {
 		match self.blocks.entry(hash) {
 			Entry::Occupied(mut occupied) => {
-				let mut block_state = occupied.get_mut();
+				let block_state = occupied.get_mut();
 
 				// Cannot unpin a block twice.
-				if block_state.was_unpinned {
+				if block_state.state_machine.was_unpinned() {
 					return false
 				}
 
-				// If `register_block` was called twice unregister the block now.
-				if block_state.can_unregister {
+				block_state.state_machine.advance_unpin();
+				// Block was registered twice and unpin was called.
+				if block_state.state_machine == BlockStateMachine::FullyUnpinned {
 					occupied.remove();
-				} else {
-					block_state.was_unpinned = true;
 				}
 
 				true
@@ -204,7 +260,7 @@ impl<Block: BlockT> SubscriptionState<Block> {
 		};
 
 		// Subscription no longer contains the block if `unpin` was called.
-		!state.was_unpinned
+		!state.state_machine.was_unpinned()
 	}
 
 	/// Get the timestamp of the oldest inserted block.
@@ -321,7 +377,7 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionsInner<Block, BE> 
 		sub.stop();
 
 		for (hash, state) in sub.blocks.iter() {
-			if !state.was_unpinned {
+			if !state.state_machine.was_unpinned() {
 				self.global_unpin_block(*hash);
 			}
 		}
@@ -617,6 +673,63 @@ mod tests {
 	}
 
 	#[test]
+	fn block_state_machine_register_unpin() {
+		let mut state = BlockStateMachine::new();
+		// Starts in `Registered` state.
+		assert_eq!(state, BlockStateMachine::Registered);
+
+		state.advance_register();
+		assert_eq!(state, BlockStateMachine::FullyRegistered);
+
+		// Can call register multiple times.
+		state.advance_register();
+		assert_eq!(state, BlockStateMachine::FullyRegistered);
+
+		assert!(!state.was_unpinned());
+		state.advance_unpin();
+		assert_eq!(state, BlockStateMachine::FullyUnpinned);
+		assert!(state.was_unpinned());
+
+		// Can call unpin multiple times.
+		state.advance_unpin();
+		assert_eq!(state, BlockStateMachine::FullyUnpinned);
+		assert!(state.was_unpinned());
+
+		// Nothing to advance.
+		state.advance_register();
+		assert_eq!(state, BlockStateMachine::FullyUnpinned);
+	}
+
+	#[test]
+	fn block_state_machine_unpin_register() {
+		let mut state = BlockStateMachine::new();
+		// Starts in `Registered` state.
+		assert_eq!(state, BlockStateMachine::Registered);
+
+		assert!(!state.was_unpinned());
+		state.advance_unpin();
+		assert_eq!(state, BlockStateMachine::Unpinned);
+		assert!(state.was_unpinned());
+
+		// Can call unpin multiple times.
+		state.advance_unpin();
+		assert_eq!(state, BlockStateMachine::Unpinned);
+		assert!(state.was_unpinned());
+
+		state.advance_register();
+		assert_eq!(state, BlockStateMachine::FullyUnpinned);
+		assert!(state.was_unpinned());
+
+		// Nothing to advance.
+		state.advance_register();
+		assert_eq!(state, BlockStateMachine::FullyUnpinned);
+		// Nothing to unpin.
+		state.advance_unpin();
+		assert_eq!(state, BlockStateMachine::FullyUnpinned);
+		assert!(state.was_unpinned());
+	}
+
+	#[test]
 	fn sub_state_register_twice() {
 		let mut sub_state = SubscriptionState::<Block> {
 			runtime_updates: false,
@@ -628,13 +741,11 @@ mod tests {
 		assert_eq!(sub_state.register_block(hash), true);
 		let block_state = sub_state.blocks.get(&hash).unwrap();
 		// Did not call `register_block` twice.
-		assert_eq!(block_state.can_unregister, false);
-		assert_eq!(block_state.was_unpinned, false);
+		assert_eq!(block_state.state_machine, BlockStateMachine::Registered);
 
 		assert_eq!(sub_state.register_block(hash), false);
 		let block_state = sub_state.blocks.get(&hash).unwrap();
-		assert_eq!(block_state.can_unregister, true);
-		assert_eq!(block_state.was_unpinned, false);
+		assert_eq!(block_state.state_machine, BlockStateMachine::FullyRegistered);
 
 		// Block is no longer tracked when: `register_block` is called twice and
 		// `unregister_block` is called once.
@@ -658,14 +769,12 @@ mod tests {
 		assert_eq!(sub_state.register_block(hash), true);
 		let block_state = sub_state.blocks.get(&hash).unwrap();
 		// Did not call `register_block` twice.
-		assert_eq!(block_state.can_unregister, false);
-		assert_eq!(block_state.was_unpinned, false);
+		assert_eq!(block_state.state_machine, BlockStateMachine::Registered);
 
 		// Unregister block before the second `register_block`.
 		assert_eq!(sub_state.unregister_block(hash), true);
 		let block_state = sub_state.blocks.get(&hash).unwrap();
-		assert_eq!(block_state.can_unregister, false);
-		assert_eq!(block_state.was_unpinned, true);
+		assert_eq!(block_state.state_machine, BlockStateMachine::Unpinned);
 
 		assert_eq!(sub_state.register_block(hash), false);
 		let block_state = sub_state.blocks.get(&hash);
