@@ -32,7 +32,10 @@ use frame_support::{
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use pallet_contracts_primitives::StorageDeposit as Deposit;
-use sp_runtime::{traits::Saturating, FixedPointNumber, FixedU128};
+use sp_runtime::{
+	traits::{Saturating, Zero},
+	FixedPointNumber, FixedU128,
+};
 use sp_std::{marker::PhantomData, vec::Vec};
 
 /// Deposit that uses the native currency's balance type.
@@ -358,7 +361,7 @@ where
 	pub fn into_deposit(self, origin: &ContractOrigin<T>) -> DepositOf<T> {
 		// Only refund or charge deposit if the origin is not root.
 		let origin = match origin {
-			ContractOrigin::Root => return self.total_deposit,
+			ContractOrigin::Root => return Deposit::Charge(Zero::zero()),
 			ContractOrigin::Signed(o) => o,
 		};
 
@@ -774,6 +777,49 @@ mod tests {
 	}
 
 	#[test]
+	fn charging_works_for_root() {
+		clear_ext();
+
+		let mut meter = TestMeter::new(&ContractOrigin::Root, Some(100), 0).unwrap();
+		assert_eq!(meter.available(), 100);
+
+		let mut nested0_info =
+			new_info(StorageInfo { bytes: 100, items: 5, bytes_deposit: 100, items_deposit: 10 });
+		let mut nested0 = meter.nested();
+		nested0.charge(&Diff {
+			bytes_added: 108,
+			bytes_removed: 5,
+			items_added: 1,
+			items_removed: 2,
+		});
+		nested0.charge(&Diff { bytes_removed: 99, ..Default::default() });
+
+		let mut nested1_info =
+			new_info(StorageInfo { bytes: 100, items: 10, bytes_deposit: 100, items_deposit: 20 });
+		let mut nested1 = nested0.nested();
+		nested1.charge(&Diff { items_removed: 5, ..Default::default() });
+		nested0.absorb(nested1, DepositAccount(CHARLIE), Some(&mut nested1_info));
+
+		let mut nested2_info =
+			new_info(StorageInfo { bytes: 100, items: 7, bytes_deposit: 100, items_deposit: 20 });
+		let mut nested2 = nested0.nested();
+		nested2.charge(&Diff { items_removed: 7, ..Default::default() });
+		nested0.absorb(nested2, DepositAccount(CHARLIE), Some(&mut nested2_info));
+
+		nested0.enforce_limit(Some(&mut nested0_info)).unwrap();
+		meter.absorb(nested0, DepositAccount(BOB), Some(&mut nested0_info));
+
+		let deposit = meter.into_deposit(&ContractOrigin::Root);
+		assert_eq!(deposit, Deposit::Charge(Zero::zero()));
+
+		assert_eq!(nested0_info.extra_deposit(), 112);
+		assert_eq!(nested1_info.extra_deposit(), 110);
+		assert_eq!(nested2_info.extra_deposit(), 100);
+
+		assert_eq!(TestExtTestValue::get(), TestExt { limit_checks: vec![], charges: vec![] })
+	}
+
+	#[test]
 	fn termination_works() {
 		clear_ext();
 
@@ -822,5 +868,37 @@ mod tests {
 				]
 			}
 		)
+	}
+
+	#[test]
+	fn termination_works_for_root() {
+		clear_ext();
+
+		let mut meter = TestMeter::new(&ContractOrigin::Root, Some(1_000), 0).unwrap();
+		assert_eq!(meter.available(), 1_000);
+
+		let mut nested0 = meter.nested();
+		nested0.charge(&Diff {
+			bytes_added: 5,
+			bytes_removed: 1,
+			items_added: 3,
+			items_removed: 1,
+		});
+		nested0.charge(&Diff { items_added: 2, ..Default::default() });
+
+		let mut nested1_info =
+			new_info(StorageInfo { bytes: 100, items: 10, bytes_deposit: 100, items_deposit: 20 });
+		let mut nested1 = nested0.nested();
+		nested1.charge(&Diff { items_removed: 5, ..Default::default() });
+		nested1.charge(&Diff { bytes_added: 20, ..Default::default() });
+		nested1.terminate(&nested1_info);
+		nested0.enforce_limit(Some(&mut nested1_info)).unwrap();
+		nested0.absorb(nested1, DepositAccount(CHARLIE), None);
+
+		meter.absorb(nested0, DepositAccount(BOB), None);
+		let deposit = meter.into_deposit(&ContractOrigin::Root);
+		assert_eq!(deposit, Deposit::Charge(Zero::zero()));
+
+		assert_eq!(TestExtTestValue::get(), TestExt { limit_checks: vec![], charges: vec![] })
 	}
 }
