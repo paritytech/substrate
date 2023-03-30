@@ -406,7 +406,7 @@ where
 	};
 
 	let server_fut = sc_rpc_server::start_server(server_config);
-	match tokio::task::block_in_place(|| config.tokio_handle.block_on(server_fut)) {
+	match config.tokio_handle.block_on(server_fut) {
 		Ok(server) => Ok(Box::new(waiting::Server(Some(server)))),
 		Err(e) => Err(Error::Application(e)),
 	}
