@@ -122,6 +122,9 @@ pub trait SpendFunds<T: Config<I>, I: 'static = ()> {
 /// An index of a proposal. Just a `u32`.
 pub type ProposalIndex = u32;
 
+/// An index of a pending payment. Just a `u32`.
+pub type PendingPaymentIndex = u32;
+
 /// A spending proposal.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
@@ -261,7 +264,7 @@ pub mod pallet {
 	pub type PendingPayments<T: Config<I>, I: 'static = ()> = CountedStorageMap<
 		_,
 		Twox64Concat,
-		ProposalIndex,
+		PendingPaymentIndex,
 		PendingPayment<
 			T::AccountId,
 			BalanceOf<T, I>,
@@ -350,27 +353,27 @@ pub mod pallet {
 		/// The inactive funds of the pallet have been updated.
 		UpdatedInactive { reactivated: BalanceOf<T, I>, deactivated: BalanceOf<T, I> },
 		/// The payment has been queued to be paid out at the next Spend Period
-		QueuedPayment {
-			proposal_index: ProposalIndex,
+		PaymentQueued {
+			payment_index: PendingPaymentIndex,
 			asset_kind: T::AssetKind,
 			amount: PayBalanceOf<T, I>,
 			beneficiary: T::AccountId,
 		},
 		/// The has been processed but awaiting payment status.
-		TriggerPayment {
-			proposal_index: ProposalIndex,
+		PaymentTriggered {
+			payment_index: PendingPaymentIndex,
 			asset_kind: T::AssetKind,
 			amount: PayBalanceOf<T, I>,
 		},
 		/// The proposal was paid successfully
-		ProposalPaymentSuccess {
-			proposal_index: ProposalIndex,
+		PaymentSuccess {
+			payment_index: PendingPaymentIndex,
 			asset_kind: T::AssetKind,
 			amount: PayBalanceOf<T, I>,
 		},
 		/// The proposal payment failed. Payment will be retried in next spend period.
-		ProposalPaymentFailure {
-			proposal_index: ProposalIndex,
+		PaymentFailure {
+			payment_index: PendingPaymentIndex,
 			asset_kind: T::AssetKind,
 			amount: PayBalanceOf<T, I>,
 		},
@@ -606,8 +609,8 @@ pub mod pallet {
 			let next_index = PendingPayments::<T, I>::count();
 			PendingPayments::<T, I>::insert(next_index, pending_payment);
 
-			Self::deposit_event(Event::QueuedPayment {
-				proposal_index: next_index,
+			Self::deposit_event(Event::PaymentQueued {
+				payment_index: next_index,
 				asset_kind,
 				amount,
 				beneficiary,
@@ -686,8 +689,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						if let Ok(id) = T::Paymaster::pay(&p.beneficiary, p.asset_kind, p.value) {
 							total_spent += p.normalized_value;
 							p.payment_id = Some(id);
-							Self::deposit_event(Event::TriggerPayment {
-								proposal_index: key,
+							Self::deposit_event(Event::PaymentTriggered {
+								payment_index: key,
 								asset_kind: p.asset_kind,
 								amount: p.value,
 							});
@@ -699,8 +702,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						PaymentStatus::Failure => {
 							// try again in the next `T::SpendPeriod`.
 							missed_proposals = missed_proposals.saturating_add(1);
-							Self::deposit_event(Event::ProposalPaymentFailure {
-								proposal_index: key,
+							Self::deposit_event(Event::PaymentFailure {
+								payment_index: key,
 								asset_kind: p.asset_kind,
 								amount: p.value,
 							});
@@ -711,8 +714,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						},
 						PaymentStatus::Success => {
 							PendingPayments::<T, I>::remove(key);
-							Self::deposit_event(Event::ProposalPaymentSuccess {
-								proposal_index: key,
+							Self::deposit_event(Event::PaymentSuccess {
+								payment_index: key,
 								asset_kind: p.asset_kind,
 								amount: p.value,
 							});
