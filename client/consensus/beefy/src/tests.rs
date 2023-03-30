@@ -324,7 +324,7 @@ sp_api::mock_impl_runtime_apis! {
 }
 
 fn add_mmr_digest(builder: &mut impl BlockBuilderExt, mmr_hash: MmrRootHash) {
-	let _ = builder
+	builder
 		.push_deposit_log_digest_item(DigestItem::Consensus(
 			BEEFY_ENGINE_ID,
 			ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),

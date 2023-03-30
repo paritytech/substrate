@@ -477,7 +477,7 @@ mod tests {
 		block_builder.push(ext.clone()).unwrap();
 		let block = block_builder.build().unwrap().block;
 
-		client.import(BlockOrigin::File, block.clone()).await.unwrap();
+		client.import(BlockOrigin::File, block).await.unwrap();
 
 		let (bitswap, config) = BitswapRequestHandler::new(Arc::new(client));
 

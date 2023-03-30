@@ -64,7 +64,7 @@ pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 #[cfg(feature = "std")]
 pub use extrinsic::{TransferCallBuilder, UncheckedExtrinsicBuilder};
 
-const LOG_TARGET: &str = "substrate_test_runtime";
+const LOG_TARGET: &str = "substrate-test-runtime";
 
 // Include the WASM binary
 #[cfg(feature = "std")]
@@ -747,7 +747,7 @@ mod tests {
 			.set_heap_pages(8)
 			.build();
 		let best_hash = client.chain_info().best_hash;
-		let _ = client.runtime_api().do_trace_log(best_hash);
+		client.runtime_api().do_trace_log(best_hash);
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
