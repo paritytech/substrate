@@ -87,7 +87,7 @@ pub trait StateApi<Hash> {
 	///
 	/// NOTE: The first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
-	/// WARNING: The time complexity of this query is O(|keys|*dist(block, hash)), and the 
+	/// WARNING: The time complexity of this query is O(|keys|*dist(block, hash)), and the
 	/// memory complexity is O(dist(block, hash)) -- use with caution.
 	#[method(name = "state_queryStorage", blocking)]
 	fn query_storage(
