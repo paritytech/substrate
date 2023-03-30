@@ -872,7 +872,7 @@ mod tests {
 				.sum::<usize>() +
 			Vec::<UncheckedExtrinsic>::new().encoded_size();
 
-		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, extrinsics)).unwrap();
+		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, extrinsics.clone())).unwrap();
 
 		block_on(txpool.maintain(chain_event(genesis_header.clone())));
 
@@ -917,7 +917,11 @@ mod tests {
 
 		// Exact block_limit, which includes:
 		// 99 (header_size) + 718 (proof@initialize_block) + 246 (one Transfer extrinsic)
-		let block_limit = 1063;
+		let block_limit = {
+			let builder =
+				client.new_block_at(genesis_header.hash(), Default::default(), true).unwrap();
+			builder.estimate_block_size(true) + extrinsics[0].encoded_size()
+		};
 		let block = block_on(proposer.propose(
 			Default::default(),
 			Default::default(),
