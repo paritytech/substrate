@@ -217,12 +217,11 @@ fn parse_renamed_attribute(renamed: &Attribute) -> Result<(String, u32)> {
 fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 	let mut result = Vec::new();
 
-	let crate_ = generate_crate_access();
 	for decl in decls {
 		let mut decl = decl.clone();
 		let decl_span = decl.span();
 		extend_generics_with_block(&mut decl.generics);
-		let metadata = generate_decl_runtime_metadata(&decl, &crate_);
+		let metadata = generate_decl_runtime_metadata(&decl);
 		let mod_name = generate_runtime_mod_name_for_trait(&decl.ident);
 		let found_attributes = remove_supported_attributes(&mut decl.attrs);
 		let api_version =
