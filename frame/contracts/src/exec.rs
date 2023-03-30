@@ -834,7 +834,7 @@ where
 		let do_transaction = || {
 			// We need to charge the storage deposit before the initial transfer so that
 			// it can create the account in case the initial transfer is < ed.
-			// Also, we can only charge the storage deposit if there is an account id asociated with
+			// Also, we can only charge the storage deposit if there is an account id associated with
 			// the origin, if the origin is Root there is no storage deposit to charge.
 			match (entry_point, &self.origin) {
 				(ExportedFunction::Constructor, ContractOrigin::Signed(origin)) => {
