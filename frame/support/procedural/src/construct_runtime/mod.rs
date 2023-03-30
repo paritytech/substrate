@@ -644,5 +644,5 @@ fn check_pallet_number(input: TokenStream2, pallet_num: usize) -> Result<()> {
 		))
 	}
 
-	return Ok(())
+	Ok(())
 }
