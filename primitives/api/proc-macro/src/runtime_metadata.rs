@@ -27,15 +27,12 @@ use crate::{
 	},
 };
 
-/// Collect extra where bounds on the parameter type.
+/// Get the type parameter argument without lifetime or mutability
+/// of a runtime metadata function.
 ///
-/// `decl_runtime_apis` macro extends the generics of each trait by adding
-/// the generic `Block: BlockT`.
-///
-/// If the generic `Block` is present on the parameter type,
-/// then returns the type without any lifetimes or mutability.
-/// Otherwise, returns `None`.
-fn collect_where_bounds(ty: &syn::Type) -> Option<syn::Type> {
+/// Because `decl_runtime_apis` macro extends the generics of each trait by adding
+/// the generic `Block: BlockT`, this expects the `Block` to be present.
+fn get_argument_type_param(ty: &syn::Type) -> Option<syn::Type> {
 	let ty_string = format!("{}", quote!(#ty));
 	if !ty_string.contains("Block") {
 		return None
@@ -107,7 +104,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 			let pat = &typed.pat;
 			let name = quote!(#pat).to_string();
 			let ty = &typed.ty;
-			collect_where_bounds(ty).map(|ty_elem| where_clause.push(ty_elem));
+			get_argument_type_param(ty).map(|ty_elem| where_clause.push(ty_elem));
 
 			inputs.push(quote!(
 				#crate_::metadata_ir::RuntimeApiMethodParamMetadataIR {
@@ -120,7 +117,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait, crate_: &TokenStream) ->
 		let output = match &signature.output {
 			syn::ReturnType::Default => quote!(#crate_::scale_info::meta_type::<()>()),
 			syn::ReturnType::Type(_, ty) => {
-				collect_where_bounds(ty).map(|ty_elem| where_clause.push(ty_elem));
+				get_argument_type_param(ty).map(|ty_elem| where_clause.push(ty_elem));
 				quote!(#crate_::scale_info::meta_type::<#ty>())
 			},
 		};
