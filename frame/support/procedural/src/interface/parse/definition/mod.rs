@@ -19,7 +19,9 @@ mod call;
 mod selector;
 mod view;
 
-use crate::interface::parse::definition::{call::SingleCallDef, view::SingleViewDef};
+use crate::interface::parse::definition::{
+	call::SingleCallDef, selector::SingleSelectorDef, view::SingleViewDef,
+};
 use quote::ToTokens;
 use syn::spanned::Spanned;
 
@@ -45,6 +47,16 @@ impl InterfaceDef {
 	pub fn views(&self) -> (proc_macro2::Span, Option<syn::WhereClause>, Vec<SingleViewDef>) {
 		if let Some(views) = self.views.as_ref() {
 			(views.interface_span, self.where_clause.clone(), views.views.clone())
+		} else {
+			(self.span.clone(), self.where_clause.clone(), Vec::new())
+		}
+	}
+
+	pub fn selectors(
+		&self,
+	) -> (proc_macro2::Span, Option<syn::WhereClause>, Vec<SingleSelectorDef>) {
+		if let Some(selectors) = self.selectors.as_ref() {
+			(selectors.interface_span, self.where_clause.clone(), selectors.selectors.clone())
 		} else {
 			(self.span.clone(), self.where_clause.clone(), Vec::new())
 		}

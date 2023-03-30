@@ -163,36 +163,6 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 		.collect::<Vec<_>>();
 
 	quote::quote_spanned!(span =>
-		// TODO: REMOVE
-		struct DefaultSelector<Runtime>(std::marker::PhantomData<Runtime>);
-		struct RestrictedCurrency<Runtime>(std::marker::PhantomData<Runtime>);
-
-		impl<Runtime: Pip20> #frame_support::interface::Selector for DefaultSelector<Runtime> {
-			type Selected = <Runtime as Pip20>::Currency;
-
-			fn select(&self, from: sp_core::H256) -> SelectorResult<Self::Selected> {
-				todo!();
-			}
-		}
-		impl<Runtime> DefaultSelector<Runtime> {
-			pub fn new() -> Self {
-				DefaultSelector(Default::default())
-			}
-		}
-		impl<Runtime: Pip20> #frame_support::interface::Selector for RestrictedCurrency<Runtime> {
-			type Selected = <Runtime as Pip20>::Currency;
-
-			fn select(&self, from: sp_core::H256) -> SelectorResult<Self::Selected> {
-				todo!();
-			}
-		}
-		impl<Runtime> RestrictedCurrency<Runtime> {
-			pub fn new() -> Self {
-				RestrictedCurrency(Default::default())
-			}
-		}
-		// TODO: TILL HERE
-
 		#[derive(
 			#frame_support::RuntimeDebugNoBound,
 			#frame_support::CloneNoBound,

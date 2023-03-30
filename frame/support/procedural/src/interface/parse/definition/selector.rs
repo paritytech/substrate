@@ -191,8 +191,9 @@ impl SelectorDef {
 
 		let selected = super::adapt_type_to_generic_if_self(output.clone());
 
-		selectors.push_and_check_default(SingleSelectorDef {
+		selectors.check_default_and_push(SingleSelectorDef {
 			name,
+			method: method.sig.ident.clone(),
 			output,
 			selected,
 			attr_span: method.span(),
@@ -202,7 +203,7 @@ impl SelectorDef {
 		Ok(selectors)
 	}
 
-	fn push_and_check_default(&mut self, selector: SingleSelectorDef) -> syn::Result<()> {
+	fn check_default_and_push(&mut self, selector: SingleSelectorDef) -> syn::Result<()> {
 		if selector.default {
 			if self.selectors.iter().any(|given_s| given_s.default) {
 				let msg = "Invalid Interface::selector, duplicate \
@@ -215,9 +216,12 @@ impl SelectorDef {
 	}
 }
 
+#[derive(Clone)]
 pub struct SingleSelectorDef {
-	/// Function name.
+	/// Selector name.
 	pub name: syn::Ident,
+	/// Method name to call
+	pub method: syn::Ident,
 	/// The return type of the selector.
 	pub output: Box<syn::Type>,
 	/// The type the generated selector will
