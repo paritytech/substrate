@@ -265,7 +265,7 @@ pub fn dummy_overrides() -> WasmOverride {
 mod tests {
 	use super::*;
 	use sc_executor::{
-		HeapAllocStrategy, NativeElseWasmExecutor, WasmExecutionMethod, WasmExecutor,
+		HeapAllocStrategy, NativeElseWasmExecutor, WasmExecutor,
 	};
 	use std::fs::{self, File};
 	use substrate_test_runtime_client::LocalExecutorDispatch;

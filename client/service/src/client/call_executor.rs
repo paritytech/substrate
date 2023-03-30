@@ -368,7 +368,7 @@ mod tests {
 	use super::*;
 	use backend::Backend;
 	use sc_client_api::in_mem;
-	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod, WasmExecutor};
+	use sc_executor::{NativeElseWasmExecutor, WasmExecutor};
 	use sp_core::{
 		testing::TaskExecutor,
 		traits::{FetchRuntimeCode, WrappedRuntimeCode},

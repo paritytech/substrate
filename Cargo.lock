@@ -7914,18 +7914,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "456c603be3e8d448b072f410900c09faf164fbce2d480456f50eea6e25f9c848"
 
 [[package]]
-name = "region"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76e189c2369884dce920945e2ddf79b3dff49e071a167dd1817fa9c4c00d512e"
-dependencies = [
- "bitflags",
- "libc",
- "mach",
- "winapi",
-]
-
-[[package]]
 name = "resolv-conf"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8849,18 +8837,6 @@ dependencies = [
  "sp-wasm-interface",
  "thiserror",
  "wasm-instrument 0.3.0",
- "wasmi 0.13.2",
-]
-
-[[package]]
-name = "sc-executor-wasmi"
-version = "0.10.0-dev"
-dependencies = [
- "log",
- "sc-allocator",
- "sc-executor-common",
- "sp-runtime-interface",
- "sp-wasm-interface",
  "wasmi 0.13.2",
 ]
 
@@ -12391,7 +12367,6 @@ dependencies = [
  "memory_units",
  "num-rational",
  "num-traits",
- "region",
 ]
 
 [[package]]
