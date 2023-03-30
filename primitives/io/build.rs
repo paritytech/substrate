@@ -16,28 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Substrate chain head API.
-//!
-//! # Note
-//!
-//! Methods are prefixed by `chainHead`.
+#[rustversion::before(1.68)]
+fn main() {
+	if !cfg!(feature = "std") {
+		println!("cargo:rustc-cfg=enable_alloc_error_handler");
+	}
+}
 
-#[cfg(test)]
-mod test_utils;
-#[cfg(test)]
-mod tests;
-
-pub mod api;
-pub mod chain_head;
-pub mod error;
-pub mod event;
-
-mod chain_head_follow;
-mod subscription;
-
-pub use api::ChainHeadApiServer;
-pub use chain_head::ChainHead;
-pub use event::{
-	BestBlockChanged, ChainHeadEvent, ChainHeadResult, ErrorEvent, Finalized, FollowEvent,
-	Initialized, NetworkConfig, NewBlock, RuntimeEvent, RuntimeVersionEvent,
-};
+#[rustversion::since(1.68)]
+fn main() {}

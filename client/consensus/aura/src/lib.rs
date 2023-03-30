@@ -45,7 +45,7 @@ use sc_consensus_slots::{
 };
 use sc_telemetry::TelemetryHandle;
 use sp_api::{Core, ProvideRuntimeApi};
-use sp_application_crypto::{AppKey, AppPublic};
+use sp_application_crypto::{AppCrypto, AppPublic};
 use sp_blockchain::{HeaderBackend, Result as CResult};
 use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
 use sp_consensus_slots::Slot;
@@ -205,7 +205,7 @@ pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, Error>(
 		telemetry,
 		compatibility_mode,
 	}: StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, NumberFor<B>>,
-) -> Result<impl Future<Output = ()>, sp_consensus::Error>
+) -> Result<impl Future<Output = ()>, ConsensusError>
 where
 	P: Pair + Send + Sync,
 	P::Public: AppPublic + Hash + Member + Encode + Decode,
@@ -222,7 +222,7 @@ where
 	CIDP: CreateInherentDataProviders<B, ()> + Send + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
-	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
+	Error: std::error::Error + Send + From<ConsensusError> + 'static,
 {
 	let worker = build_aura_worker::<P, _, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
 		client,
@@ -320,7 +320,7 @@ where
 	P::Public: AppPublic + Hash + Member + Encode + Decode,
 	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
-	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
+	Error: std::error::Error + Send + From<ConsensusError> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
@@ -374,13 +374,13 @@ where
 	SO: SyncOracle + Send + Clone + Sync,
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
-	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
+	Error: std::error::Error + Send + From<ConsensusError> + 'static,
 {
 	type BlockImport = I;
 	type SyncOracle = SO;
 	type JustificationSyncLink = L;
 	type CreateProposer =
-		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>;
+		Pin<Box<dyn Future<Output = Result<E::Proposer, ConsensusError>> + Send + 'static>>;
 	type Proposer = E::Proposer;
 	type Claim = P::Public;
 	type AuxData = Vec<AuthorityId<P>>;
@@ -393,11 +393,7 @@ where
 		&mut self.block_import
 	}
 
-	fn aux_data(
-		&self,
-		header: &B::Header,
-		_slot: Slot,
-	) -> Result<Self::AuxData, sp_consensus::Error> {
+	fn aux_data(&self, header: &B::Header, _slot: Slot) -> Result<Self::AuxData, ConsensusError> {
 		authorities(
 			self.client.as_ref(),
 			header.hash(),
@@ -406,17 +402,17 @@ where
 		)
 	}
 
-	fn authorities_len(&self, epoch_data: &Self::AuxData) -> Option<usize> {
-		Some(epoch_data.len())
+	fn authorities_len(&self, authorities: &Self::AuxData) -> Option<usize> {
+		Some(authorities.len())
 	}
 
 	async fn claim_slot(
 		&self,
 		_header: &B::Header,
 		slot: Slot,
-		epoch_data: &Self::AuxData,
+		authorities: &Self::AuxData,
 	) -> Option<Self::Claim> {
-		let expected_author = slot_author::<P>(slot, epoch_data);
+		let expected_author = slot_author::<P>(slot, authorities);
 		expected_author.and_then(|p| {
 			if self
 				.keystore
@@ -440,29 +436,30 @@ where
 		body: Vec<B::Extrinsic>,
 		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 		public: Self::Claim,
-		_epoch: Self::AuxData,
+		_authorities: Self::AuxData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
-		sp_consensus::Error,
+		ConsensusError,
 	> {
-		// sign the pre-sealed hash of the block and then
-		// add it to a digest item.
-		let public_type_pair = public.to_public_crypto_pair();
-		let public = public.to_raw_vec();
 		let signature = self
 			.keystore
-			.sign_with(<AuthorityId<P> as AppKey>::ID, &public_type_pair, header_hash.as_ref())
-			.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
+			.sign_with(
+				<AuthorityId<P> as AppCrypto>::ID,
+				<AuthorityId<P> as AppCrypto>::CRYPTO_ID,
+				public.as_slice(),
+				header_hash.as_ref(),
+			)
+			.map_err(|e| ConsensusError::CannotSign(format!("{}. Key: {:?}", e, public)))?
 			.ok_or_else(|| {
-				sp_consensus::Error::CannotSign(
-					public.clone(),
-					"Could not find key in keystore.".into(),
-				)
+				ConsensusError::CannotSign(format!(
+					"Could not find key in keystore. Key: {:?}",
+					public
+				))
 			})?;
 		let signature = signature
 			.clone()
 			.try_into()
-			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
+			.map_err(|_| ConsensusError::InvalidSignature(signature, public.to_raw_vec()))?;
 
 		let signature_digest_item =
 			<DigestItem as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
@@ -507,7 +504,7 @@ where
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
 		self.env
 			.init(block)
-			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)))
+			.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))
 			.boxed()
 	}
 
@@ -620,14 +617,14 @@ where
 							Default::default(),
 						),
 					)
-					.map_err(|_| sp_consensus::Error::InvalidAuthoritiesSet)?;
+					.map_err(|_| ConsensusError::InvalidAuthoritiesSet)?;
 			},
 	}
 
 	runtime_api
 		.authorities(parent_hash)
 		.ok()
-		.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
+		.ok_or(ConsensusError::InvalidAuthoritiesSet)
 }
 
 #[cfg(test)]
