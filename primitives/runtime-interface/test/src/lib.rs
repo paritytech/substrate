@@ -176,62 +176,85 @@ fn test_versionining_register_only() {
 	call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_versionning_register_only_works");
 }
 
+fn run_test_in_another_process(
+	test_name: &str,
+	test_body: impl FnOnce(),
+) -> Option<std::process::Output> {
+	if std::env::var("RUN_FORKED_TEST").is_ok() {
+		test_body();
+		None
+	} else {
+		let output = std::process::Command::new(std::env::current_exe().unwrap())
+			.arg(test_name)
+			.env("RUN_FORKED_TEST", "1")
+			.output()
+			.unwrap();
+
+		assert!(output.status.success());
+		Some(output)
+	}
+}
+
 #[test]
 fn test_tracing() {
-	use std::fmt;
-	use tracing::span::Id as SpanId;
-	use tracing_core::field::{Field, Visit};
+	// Run in a different process to ensure that the `Span` is registered with our local
+	// `TracingSubscriber`.
+	run_test_in_another_process("test_tracing", || {
+		use std::fmt;
+		use tracing::span::Id as SpanId;
+		use tracing_core::field::{Field, Visit};
 
-	#[derive(Clone)]
-	struct TracingSubscriber(Arc<Mutex<Inner>>);
+		#[derive(Clone)]
+		struct TracingSubscriber(Arc<Mutex<Inner>>);
 
-	struct FieldConsumer(&'static str, Option<String>);
-	impl Visit for FieldConsumer {
-		fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
-			if field.name() == self.0 {
-				self.1 = Some(format!("{:?}", value))
+		struct FieldConsumer(&'static str, Option<String>);
+		impl Visit for FieldConsumer {
+			fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+				if field.name() == self.0 {
+					self.1 = Some(format!("{:?}", value))
+				}
 			}
 		}
-	}
 
-	#[derive(Default)]
-	struct Inner {
-		spans: HashSet<String>,
-	}
-
-	impl tracing::subscriber::Subscriber for TracingSubscriber {
-		fn enabled(&self, _: &tracing::Metadata) -> bool {
-			true
+		#[derive(Default)]
+		struct Inner {
+			spans: HashSet<String>,
 		}
 
-		fn new_span(&self, span: &tracing::span::Attributes) -> tracing::Id {
-			let mut inner = self.0.lock().unwrap();
-			let id = SpanId::from_u64((inner.spans.len() + 1) as _);
-			let mut f = FieldConsumer("name", None);
-			span.record(&mut f);
-			inner.spans.insert(f.1.unwrap_or_else(|| span.metadata().name().to_owned()));
-			id
+		impl tracing::subscriber::Subscriber for TracingSubscriber {
+			fn enabled(&self, _: &tracing::Metadata) -> bool {
+				true
+			}
+
+			fn new_span(&self, span: &tracing::span::Attributes) -> tracing::Id {
+				let mut inner = self.0.lock().unwrap();
+				let id = SpanId::from_u64((inner.spans.len() + 1) as _);
+				let mut f = FieldConsumer("name", None);
+				span.record(&mut f);
+				inner.spans.insert(f.1.unwrap_or_else(|| span.metadata().name().to_owned()));
+				id
+			}
+
+			fn record(&self, _: &SpanId, _: &tracing::span::Record) {}
+
+			fn record_follows_from(&self, _: &SpanId, _: &SpanId) {}
+
+			fn event(&self, _: &tracing::Event) {}
+
+			fn enter(&self, _: &SpanId) {}
+
+			fn exit(&self, _: &SpanId) {}
 		}
 
-		fn record(&self, _: &SpanId, _: &tracing::span::Record) {}
+		let subscriber = TracingSubscriber(Default::default());
+		let _guard = tracing::subscriber::set_default(subscriber.clone());
 
-		fn record_follows_from(&self, _: &SpanId, _: &SpanId) {}
+		// Call some method to generate a trace
+		call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_return_data");
 
-		fn event(&self, _: &tracing::Event) {}
-
-		fn enter(&self, _: &SpanId) {}
-
-		fn exit(&self, _: &SpanId) {}
-	}
-
-	let subscriber = TracingSubscriber(Default::default());
-	let _guard = tracing::subscriber::set_default(subscriber.clone());
-
-	// Call some method to generate a trace
-	call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_return_data");
-
-	let inner = subscriber.0.lock().unwrap();
-	assert!(inner.spans.contains("return_input_version_1"));
+		let inner = subscriber.0.lock().unwrap();
+		assert!(inner.spans.contains("return_input_version_1"));
+	});
 }
 
 #[test]
