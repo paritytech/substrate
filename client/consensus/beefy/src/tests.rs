@@ -54,7 +54,7 @@ use sp_consensus_beefy::{
 	VersionedFinalityProof, BEEFY_ENGINE_ID, KEY_TYPE as BeefyKeyType,
 };
 use sp_core::H256;
-use sp_keystore::{testing::KeyStore as TestKeystore, SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{testing::MemoryKeystore, Keystore, KeystorePtr};
 use sp_mmr_primitives::{Error as MmrError, MmrApi};
 use sp_runtime::{
 	codec::Encode,
@@ -339,11 +339,12 @@ pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
 	keys.iter().map(|&key| key.public().into()).collect()
 }
 
-pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStorePtr {
-	let keystore = Arc::new(TestKeystore::new());
-	SyncCryptoStore::ecdsa_generate_new(&*keystore, BeefyKeyType, Some(&authority.to_seed()))
-		.expect("Creates authority key");
+pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> KeystorePtr {
+	let keystore = MemoryKeystore::new();
 	keystore
+		.ecdsa_generate_new(BeefyKeyType, Some(&authority.to_seed()))
+		.expect("Creates authority key");
+	keystore.into()
 }
 
 async fn voter_init_setup(
