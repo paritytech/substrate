@@ -338,11 +338,11 @@ impl<T: Config> Deref for DepositAccount<T> {
 #[scale_info(skip_type_params(T))]
 pub struct DeletionQueue<T: Config> {
 	/// Monotonic counter used as a key for inserting a new deleted contract in the DeletionQueueMap.
-	/// The nonce is incremented after each insertion.
-	insert_nonce: u32,
+	/// The counter is incremented after each insertion.
+	insert_counter: u32,
 	/// The index used to read the next element to be deleted in the DeletionQueueMap.
-	/// The nonce is incremented after each deletion.
-	delete_nonce: u32,
+	/// The counter is incremented after each deletion.
+	delete_counter: u32,
 
 	_phantom: PhantomData<T>,
 }
