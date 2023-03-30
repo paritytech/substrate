@@ -70,8 +70,8 @@ use libp2p::{
 			toggle::{Toggle, ToggleConnectionHandler},
 			DialFailure, FromSwarm, NewExternalAddr,
 		},
-		ConnectionDenied, ConnectionId, DialError, NetworkBehaviour, NetworkBehaviourAction,
-		PollParameters, THandler, THandlerInEvent, THandlerOutEvent,
+		ConnectionDenied, ConnectionId, DialError, NetworkBehaviour, PollParameters, THandler,
+		THandlerInEvent, THandlerOutEvent, ToSwarm,
 	},
 };
 use libp2p_identity::PeerId;
@@ -670,10 +670,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, THandlerInEvent<Self>>> {
+	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
 		// Immediately process the content of `discovered`.
 		if let Some(ev) = self.pending_events.pop_front() {
-			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+			return Poll::Ready(ToSwarm::GenerateEvent(ev))
 		}
 
 		// Poll the stream that fires when we need to start a random Kademlia query.
@@ -707,7 +707,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 					if actually_started {
 						let ev = DiscoveryOut::RandomKademliaStarted;
-						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+						return Poll::Ready(ToSwarm::GenerateEvent(ev))
 					}
 				}
 			}
@@ -715,18 +715,18 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 		while let Poll::Ready(ev) = self.kademlia.poll(cx, params) {
 			match ev {
-				NetworkBehaviourAction::GenerateEvent(ev) => match ev {
+				ToSwarm::GenerateEvent(ev) => match ev {
 					KademliaEvent::RoutingUpdated { peer, .. } => {
 						let ev = DiscoveryOut::Discovered(peer);
-						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+						return Poll::Ready(ToSwarm::GenerateEvent(ev))
 					},
 					KademliaEvent::UnroutablePeer { peer, .. } => {
 						let ev = DiscoveryOut::UnroutablePeer(peer);
-						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+						return Poll::Ready(ToSwarm::GenerateEvent(ev))
 					},
 					KademliaEvent::RoutablePeer { peer, .. } => {
 						let ev = DiscoveryOut::Discovered(peer);
-						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+						return Poll::Ready(ToSwarm::GenerateEvent(ev))
 					},
 					KademliaEvent::PendingRoutablePeer { .. } |
 					KademliaEvent::InboundRequest { .. } => {
@@ -834,7 +834,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								)
 							},
 						};
-						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+						return Poll::Ready(ToSwarm::GenerateEvent(ev))
 					},
 					KademliaEvent::OutboundQueryProgressed {
 						result: QueryResult::PutRecord(res),
@@ -856,7 +856,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								)
 							},
 						};
-						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+						return Poll::Ready(ToSwarm::GenerateEvent(ev))
 					},
 					KademliaEvent::OutboundQueryProgressed {
 						result: QueryResult::RepublishRecord(res),
@@ -878,24 +878,13 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						warn!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
 					},
 				},
-				NetworkBehaviourAction::Dial { opts } =>
-					return Poll::Ready(NetworkBehaviourAction::Dial { opts }),
-				NetworkBehaviourAction::NotifyHandler { peer_id, handler, event } =>
-					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-						peer_id,
-						handler,
-						event,
-					}),
-				NetworkBehaviourAction::ReportObservedAddr { address, score } =>
-					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-						address,
-						score,
-					}),
-				NetworkBehaviourAction::CloseConnection { peer_id, connection } =>
-					return Poll::Ready(NetworkBehaviourAction::CloseConnection {
-						peer_id,
-						connection,
-					}),
+				ToSwarm::Dial { opts } => return Poll::Ready(ToSwarm::Dial { opts }),
+				ToSwarm::NotifyHandler { peer_id, handler, event } =>
+					return Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }),
+				ToSwarm::ReportObservedAddr { address, score } =>
+					return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
+				ToSwarm::CloseConnection { peer_id, connection } =>
+					return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
 			}
 		}
 
@@ -903,7 +892,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		if let Some(ref mut mdns) = self.mdns {
 			while let Poll::Ready(ev) = mdns.poll(cx, params) {
 				match ev {
-					NetworkBehaviourAction::GenerateEvent(event) => match event {
+					ToSwarm::GenerateEvent(event) => match event {
 						mdns::Event::Discovered(list) => {
 							if self.num_connections >= self.discovery_only_if_under_num {
 								continue
@@ -912,25 +901,21 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							self.pending_events
 								.extend(list.map(|(peer_id, _)| DiscoveryOut::Discovered(peer_id)));
 							if let Some(ev) = self.pending_events.pop_front() {
-								return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+								return Poll::Ready(ToSwarm::GenerateEvent(ev))
 							}
 						},
 						mdns::Event::Expired(_) => {},
 					},
-					NetworkBehaviourAction::Dial { .. } => {
+					ToSwarm::Dial { .. } => {
 						unreachable!("mDNS never dials!");
 					},
-					NetworkBehaviourAction::NotifyHandler { event, .. } => match event {}, /* `event` is an enum with no variant */
-					NetworkBehaviourAction::ReportObservedAddr { address, score } =>
-						return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-							address,
-							score,
-						}),
-					NetworkBehaviourAction::CloseConnection { peer_id, connection } =>
-						return Poll::Ready(NetworkBehaviourAction::CloseConnection {
-							peer_id,
-							connection,
-						}),
+					ToSwarm::NotifyHandler { event, .. } => match event {}, /* `event` is an
+					                                                          * enum with no
+					                                                          * variant */
+					ToSwarm::ReportObservedAddr { address, score } =>
+						return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
+					ToSwarm::CloseConnection { peer_id, connection } =>
+						return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
 				}
 			}
 		}
@@ -971,7 +956,7 @@ mod tests {
 		},
 		identity::Keypair,
 		noise,
-		swarm::{Executor, Swarm, SwarmEvent},
+		swarm::{Executor, Swarm, SwarmBuilder, SwarmEvent},
 		yamux, Multiaddr,
 	};
 	use sp_core::hash::H256;
@@ -1020,12 +1005,13 @@ mod tests {
 				};
 
 				let runtime = tokio::runtime::Runtime::new().unwrap();
-				let mut swarm = Swarm::with_executor(
+				let mut swarm = SwarmBuilder::with_executor(
 					transport,
 					behaviour,
 					keypair.public().to_peer_id(),
 					TokioExecutor(runtime),
-				);
+				)
+				.build();
 				let listen_addr: Multiaddr =
 					format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 

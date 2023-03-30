@@ -26,8 +26,8 @@ use libp2p::{
 	identity, noise,
 	swarm::{
 		behaviour::FromSwarm, ConnectionDenied, ConnectionId, Executor, NetworkBehaviour,
-		NetworkBehaviourAction, PollParameters, Swarm, SwarmEvent, THandler, THandlerInEvent,
-		THandlerOutEvent,
+		PollParameters, Swarm, SwarmBuilder, SwarmEvent, THandler, THandlerInEvent,
+		THandlerOutEvent, ToSwarm,
 	},
 	yamux, Multiaddr, PeerId, Transport,
 };
@@ -106,12 +106,13 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		};
 
 		let runtime = tokio::runtime::Runtime::new().unwrap();
-		let mut swarm = Swarm::with_executor(
+		let mut swarm = SwarmBuilder::with_executor(
 			transport,
 			behaviour,
 			keypairs[index].public().to_peer_id(),
 			TokioExecutor(runtime),
-		);
+		)
+		.build();
 		swarm.listen_on(addrs[index].clone()).unwrap();
 		out.push(swarm);
 	}
@@ -223,7 +224,7 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, THandlerInEvent<Self>>> {
+	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
 		self.inner.poll(cx, params)
 	}
 }

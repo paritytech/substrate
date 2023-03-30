@@ -27,8 +27,8 @@ use codec::{DecodeAll, Encode};
 use libp2p::{
 	core::Endpoint,
 	swarm::{
-		behaviour::FromSwarm, ConnectionDenied, ConnectionId, NetworkBehaviour,
-		NetworkBehaviourAction, PollParameters, THandler, THandlerInEvent, THandlerOutEvent,
+		behaviour::FromSwarm, ConnectionDenied, ConnectionId, NetworkBehaviour, PollParameters,
+		THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
 	},
 	Multiaddr, PeerId,
 };
@@ -427,26 +427,21 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		&mut self,
 		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, THandlerInEvent<Self>>> {
+	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
 		if let Some(message) = self.pending_messages.pop_front() {
-			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
+			return Poll::Ready(ToSwarm::GenerateEvent(message))
 		}
 
 		let event = match self.behaviour.poll(cx, params) {
 			Poll::Pending => return Poll::Pending,
-			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
-			Poll::Ready(NetworkBehaviourAction::Dial { opts }) =>
-				return Poll::Ready(NetworkBehaviourAction::Dial { opts }),
-			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
-				return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-					peer_id,
-					handler,
-					event,
-				}),
-			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
-				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
-			Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
-				return Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }),
+			Poll::Ready(ToSwarm::GenerateEvent(ev)) => ev,
+			Poll::Ready(ToSwarm::Dial { opts }) => return Poll::Ready(ToSwarm::Dial { opts }),
+			Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }) =>
+				return Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }),
+			Poll::Ready(ToSwarm::ReportObservedAddr { address, score }) =>
+				return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
+			Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }) =>
+				return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
 		};
 
 		let outcome = match event {
@@ -600,11 +595,11 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		};
 
 		if !matches!(outcome, CustomMessageOutcome::None) {
-			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome))
+			return Poll::Ready(ToSwarm::GenerateEvent(outcome))
 		}
 
 		if let Some(message) = self.pending_messages.pop_front() {
-			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
+			return Poll::Ready(ToSwarm::GenerateEvent(message))
 		}
 
 		// This block can only be reached if an event was pulled from the behaviour and that

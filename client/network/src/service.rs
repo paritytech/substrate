@@ -54,7 +54,9 @@ use crate::{
 
 use either::Either;
 use futures::{channel::oneshot, prelude::*};
+#[allow(deprecated)]
 use libp2p::{
+	connection_limits::Exceeded,
 	core::{upgrade, ConnectedPoint},
 	identify::Info as IdentifyInfo,
 	kad::record::Key as KademliaKey,
@@ -380,6 +382,7 @@ where
 					SpawnImpl(params.executor),
 				)
 			};
+			#[allow(deprecated)]
 			let builder = builder
 				.connection_limits(
 					ConnectionLimits::default()
@@ -1663,7 +1666,14 @@ where
 				}
 
 				if let Some(metrics) = self.metrics.as_ref() {
+					#[allow(deprecated)]
 					let reason = match error {
+						DialError::Denied { cause } =>
+							if cause.downcast::<Exceeded>().is_ok() {
+								Some("limit-reached")
+							} else {
+								None
+							},
 						DialError::ConnectionLimit(_) => Some("limit-reached"),
 						DialError::InvalidPeerId(_) |
 						DialError::WrongPeerId { .. } |
@@ -1672,8 +1682,7 @@ where
 						DialError::Banned |
 						DialError::NoAddresses |
 						DialError::DialPeerConditionFalse(_) |
-						DialError::Aborted |
-						DialError::Denied { .. } => None, // ignore them
+						DialError::Aborted => None, // ignore them
 					};
 					if let Some(reason) = reason {
 						metrics.pending_connections_errors_total.with_label_values(&[reason]).inc();
@@ -1697,12 +1706,19 @@ where
 					local_addr, send_back_addr, error,
 				);
 				if let Some(metrics) = self.metrics.as_ref() {
+					#[allow(deprecated)]
 					let reason = match error {
+						ListenError::Denied { cause } =>
+							if cause.downcast::<Exceeded>().is_ok() {
+								Some("limit-reached")
+							} else {
+								None
+							},
 						ListenError::ConnectionLimit(_) => Some("limit-reached"),
 						ListenError::WrongPeerId { .. } | ListenError::LocalPeerId { .. } =>
 							Some("invalid-peer-id"),
 						ListenError::Transport(_) => Some("transport-error"),
-						ListenError::Aborted | ListenError::Denied { .. } => None, // ignore it
+						ListenError::Aborted => None, // ignore it
 					};
 
 					if let Some(reason) = reason {
@@ -1713,6 +1729,7 @@ where
 					}
 				}
 			},
+			#[allow(deprecated)]
 			SwarmEvent::BannedPeer { peer_id, endpoint } => {
 				debug!(
 					target: "sub-libp2p",

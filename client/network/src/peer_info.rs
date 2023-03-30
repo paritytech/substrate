@@ -34,8 +34,7 @@ use libp2p::{
 			ListenFailure,
 		},
 		ConnectionDenied, ConnectionHandler, ConnectionId, IntoConnectionHandlerSelect,
-		NetworkBehaviour, NetworkBehaviourAction, PollParameters, THandler, THandlerInEvent,
-		THandlerOutEvent,
+		NetworkBehaviour, PollParameters, THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
 	},
 	Multiaddr,
 };
@@ -406,44 +405,37 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, THandlerInEvent<Self>>> {
+	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
 		loop {
 			match self.ping.poll(cx, params) {
 				Poll::Pending => break,
-				Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => {
+				Poll::Ready(ToSwarm::GenerateEvent(ev)) => {
 					if let PingEvent { peer, result: Ok(PingSuccess::Ping { rtt }) } = ev {
 						self.handle_ping_report(&peer, rtt)
 					}
 				},
-				Poll::Ready(NetworkBehaviourAction::Dial { opts }) =>
-					return Poll::Ready(NetworkBehaviourAction::Dial { opts }),
-				Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
-					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
+				Poll::Ready(ToSwarm::Dial { opts }) => return Poll::Ready(ToSwarm::Dial { opts }),
+				Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }) =>
+					return Poll::Ready(ToSwarm::NotifyHandler {
 						peer_id,
 						handler,
 						event: Either::Left(event),
 					}),
-				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
-					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-						address,
-						score,
-					}),
-				Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
-					return Poll::Ready(NetworkBehaviourAction::CloseConnection {
-						peer_id,
-						connection,
-					}),
+				Poll::Ready(ToSwarm::ReportObservedAddr { address, score }) =>
+					return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
+				Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }) =>
+					return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
 			}
 		}
 
 		loop {
 			match self.identify.poll(cx, params) {
 				Poll::Pending => break,
-				Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)) => match event {
+				Poll::Ready(ToSwarm::GenerateEvent(event)) => match event {
 					IdentifyEvent::Received { peer_id, info, .. } => {
 						self.handle_identify_report(&peer_id, &info);
 						let event = PeerInfoEvent::Identified { peer_id, info };
-						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
+						return Poll::Ready(ToSwarm::GenerateEvent(event))
 					},
 					IdentifyEvent::Error { peer_id, error } => {
 						debug!(target: "sub-libp2p", "Identification with peer {:?} failed => {}", peer_id, error)
@@ -451,24 +443,17 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 					IdentifyEvent::Pushed { .. } => {},
 					IdentifyEvent::Sent { .. } => {},
 				},
-				Poll::Ready(NetworkBehaviourAction::Dial { opts }) =>
-					return Poll::Ready(NetworkBehaviourAction::Dial { opts }),
-				Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
-					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
+				Poll::Ready(ToSwarm::Dial { opts }) => return Poll::Ready(ToSwarm::Dial { opts }),
+				Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }) =>
+					return Poll::Ready(ToSwarm::NotifyHandler {
 						peer_id,
 						handler,
 						event: Either::Right(event),
 					}),
-				Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
-					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-						address,
-						score,
-					}),
-				Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
-					return Poll::Ready(NetworkBehaviourAction::CloseConnection {
-						peer_id,
-						connection,
-					}),
+				Poll::Ready(ToSwarm::ReportObservedAddr { address, score }) =>
+					return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
+				Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }) =>
+					return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
 			}
 		}
 
