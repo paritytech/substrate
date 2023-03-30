@@ -329,7 +329,7 @@ impl<T: Config> Deref for DepositAccount<T> {
 	}
 }
 
-/// DeletionQueue manage the removal of contracts storage that are marked for deletion.
+/// Manage the removal of contracts storage that are marked for deletion.
 ///
 /// When a contract is deleted by calling `seal_terminate` it becomes inaccessible
 /// immediately, but the deletion of the storage items it has accumulated is performed
