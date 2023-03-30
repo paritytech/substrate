@@ -278,6 +278,7 @@ fn get_benchmark_data(
 				used_recorded_proof_size.push(ComponentSlope { name: name.clone(), slope, error });
 			}
 		});
+	used_recorded_proof_size.sort_by(|a, b| a.name.cmp(&b.name));
 
 	// We add additional comments showing which storage items were touched.
 	// We find the worst case proof size, and use that as the final proof size result.
@@ -337,6 +338,7 @@ fn get_benchmark_data(
 			}
 		}
 	}
+	used_calculated_proof_size.sort_by(|a, b| a.name.cmp(&b.name));
 
 	// This puts a marker on any component which is entirely unused in the weight formula.
 	let components = batch.time_results[0]
