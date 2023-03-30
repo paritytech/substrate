@@ -18,7 +18,7 @@
 use codec::{Decode, Encode};
 use frame_support::Hashable;
 use frame_system::offchain::AppCrypto;
-use sc_executor::{error::Result, NativeElseWasmExecutor, WasmExecutionMethod, WasmExecutor};
+use sc_executor::{error::Result, NativeElseWasmExecutor, WasmExecutor};
 use sp_consensus_babe::{
 	digests::{PreDigest, SecondaryPlainPreDigest},
 	Slot, BABE_ENGINE_ID,
