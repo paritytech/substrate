@@ -22,8 +22,8 @@ pub mod meter;
 use crate::{
 	exec::{AccountIdOf, Key},
 	weights::WeightInfo,
-	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueueCounter,
-	DeletionQueue, Error, Pallet, TrieId, SENTINEL,
+	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue,
+	DeletionQueueCounter, Error, Pallet, TrieId, SENTINEL,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -348,10 +348,12 @@ pub struct DeletionQueueManager<T: Config> {
 }
 
 /// View on a contract that is marked for deletion.
-/// The struct takes a mutable reference on the deletion queue so that the contract can be removed,
-/// and none can be added or read in the meantime.
 struct DeletionQueueEntry<'a, T: Config> {
+	/// the trie id of the contract to delete.
 	trie_id: TrieId,
+
+	/// A mutable reference on the queue so that the contract can be removed, and none can be added
+	/// or read in the meantime.
 	queue: &'a mut DeletionQueueManager<T>,
 }
 
