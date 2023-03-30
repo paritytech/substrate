@@ -288,7 +288,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 		};
 	// Update the gossip validator with the right starting round and set id.
 	if let Err(e) = persisted_state
-		.current_gossip_filter()
+		.gossip_filter_config()
 		.map(|f| gossip_validator.update_filter(f))
 	{
 		error!(target: LOG_TARGET, "Error: {:?}. Terminating.", e);

@@ -29,7 +29,7 @@ pub(crate) mod beefy_protocol_name {
 	use sc_network::ProtocolName;
 
 	/// BEEFY votes gossip protocol name suffix.
-	const GOSSIP_NAME: &str = "/beefy/1";
+	const GOSSIP_NAME: &str = "/beefy/2";
 	/// BEEFY justifications protocol name suffix.
 	const JUSTIFICATIONS_NAME: &str = "/beefy/justifications/1";
 
@@ -86,7 +86,7 @@ mod tests {
 		let genesis_hash = H256::random();
 		let genesis_hex = array_bytes::bytes2hex("", genesis_hash.as_ref());
 
-		let expected_gossip_name = format!("/{}/beefy/1", genesis_hex);
+		let expected_gossip_name = format!("/{}/beefy/2", genesis_hex);
 		let gossip_proto_name = gossip_protocol_name(&genesis_hash, None);
 		assert_eq!(gossip_proto_name.to_string(), expected_gossip_name);
 
@@ -101,7 +101,7 @@ mod tests {
 		];
 		let genesis_hex = "32043c7b3a6ad8f6c2bc8bc121d4caab09377b5e082b0cfbbb39ad13bc4acd93";
 
-		let expected_gossip_name = format!("/{}/beefy/1", genesis_hex);
+		let expected_gossip_name = format!("/{}/beefy/2", genesis_hex);
 		let gossip_proto_name = gossip_protocol_name(&genesis_hash, None);
 		assert_eq!(gossip_proto_name.to_string(), expected_gossip_name);
 
