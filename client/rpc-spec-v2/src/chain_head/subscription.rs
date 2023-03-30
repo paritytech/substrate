@@ -179,7 +179,7 @@ impl<Block: BlockT> SubscriptionState<Block> {
 					return false
 				}
 
-				// If `pin` was called twice unregister the block now.
+				// If `register_block` was called twice unregister the block now.
 				if block_state.can_unregister {
 					occupied.remove();
 				} else {
