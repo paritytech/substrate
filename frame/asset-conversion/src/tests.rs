@@ -299,6 +299,20 @@ fn add_tiny_liquidity_leads_to_insufficient_liquidity_minted_error() {
 				1,
 				user
 			),
+			Error::<Test>::AmountLessThanED
+		);
+
+		assert_noop!(
+			AssetConversion::add_liquidity(
+				RuntimeOrigin::signed(user),
+				token_1,
+				token_2,
+				get_ed(),
+				1,
+				1,
+				1,
+				user
+			),
 			Error::<Test>::InsufficientLiquidityMinted
 		);
 	});
@@ -650,22 +664,22 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
 		assert_ok!(AssetConversion::swap_tokens_for_exact_tokens(
 			RuntimeOrigin::signed(user),
 			bvec![token_2, token_1],
-			690, // amount_out
-			600, // amount_in_max
+			608, // amount_out
+			500, // amount_in_max
 			user,
 			false,
 		));
 
 		let token_1_left = balance(pallet_account, token_1);
 		let token_2_left = balance(pallet_account, token_2);
-		assert_eq!(token_1_left, 708 - 690);
+		assert_eq!(token_1_left, 708 - 608);
 
 		// The price for the last tokens should be very high
 		assert_eq!(
 			AssetConversion::get_amount_in(&(token_1_left - 1), &token_2_left, &token_1_left)
 				.ok()
 				.unwrap(),
-			10095
+			10625
 		);
 
 		assert_noop!(
@@ -899,7 +913,7 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
 		assert_ok!(AssetConversion::create_pool(RuntimeOrigin::signed(user2), token_1, token_2));
 
 		let ed = get_ed();
-		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user, 51));
+		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user, 101));
 		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user2, 10000 + ed));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user2), 2, user2, 1000));
 
@@ -918,8 +932,8 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
 			AssetConversion::swap_tokens_for_exact_tokens(
 				RuntimeOrigin::signed(user),
 				bvec![token_1, token_2],
-				1,  // amount_out
-				51, // amount_in_min
+				1,   // amount_out
+				101, // amount_in_max
 				user,
 				true,
 			),

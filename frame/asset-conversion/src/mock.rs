@@ -82,7 +82,7 @@ impl pallet_balances::Config for Test {
 	type Balance = u128;
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
-	type ExistentialDeposit = ConstU128<1>;
+	type ExistentialDeposit = ConstU128<100>;
 	type AccountStore = System;
 	type WeightInfo = ();
 	type MaxLocks = ();
@@ -163,7 +163,7 @@ impl Config for Test {
 	type PalletId = AssetConversionPalletId;
 	type WeightInfo = ();
 	type LPFee = ConstU32<3>; // means 0.3%
-	type PoolSetupFee = ConstU128<5>; // should be more or equal to the existential deposit
+	type PoolSetupFee = ConstU128<100>; // should be more or equal to the existential deposit
 	type PoolSetupFeeReceiver = AssetConversionOrigin;
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<4>;
@@ -180,7 +180,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(1, 1000), (2, 2000), (3, 3000), (4, 4000)],
+		balances: vec![(1, 10000), (2, 20000), (3, 30000), (4, 40000)],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();

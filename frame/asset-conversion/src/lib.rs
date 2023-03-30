@@ -227,8 +227,10 @@ pub mod pallet {
 		PoolExists,
 		/// Desired amount can't be zero.
 		WrongDesiredAmount,
-		/// Provided amount should be greater or equal to existential deposit.
+		/// Provided amount should be greater or equal to the existential deposit.
 		AmountLessThanED,
+		/// Reserve needs to be greater or equal to the existential deposit.
+		ReserveLeftLessThanED,
 		/// Desired amount can't be equal to the pool reserve.
 		AmountOutTooHigh,
 		/// The pool doesn't exist.
@@ -378,11 +380,7 @@ pub mod pallet {
 
 			if reserve1.is_zero() && reserve2.is_zero() {
 				if T::MultiAssetIdConverter::get_native() == asset1 {
-					ensure!(
-						T::HigherPrecisionBalance::from(amount1_desired) >=
-							T::HigherPrecisionBalance::from(T::Currency::minimum_balance()),
-						Error::<T>::AmountLessThanED
-					);
+					Self::validate_ed(amount1_desired).map_err(|_| Error::<T>::AmountLessThanED)?;
 				}
 				amount1 = amount1_desired;
 				amount2 = amount2_desired;
@@ -487,6 +485,10 @@ pub mod pallet {
 				!amount2.is_zero() && amount2 >= amount2_min_receive,
 				Error::<T>::AssetTwoWithdrawalDidNotMeetMinimum
 			);
+			if T::MultiAssetIdConverter::get_native() == asset1 {
+				let reserve1_left = reserve1.saturating_sub(amount1);
+				Self::validate_ed(reserve1_left).map_err(|_| Error::<T>::ReserveLeftLessThanED)?;
+			}
 
 			T::PoolAssets::burn_from(pool.lp_token, &sender, lp_token_burn, Exact, Polite)?;
 
@@ -924,6 +926,15 @@ pub mod pallet {
 				.ok_or(Error::<T>::Overflow)?;
 
 			result.try_into().map_err(|_| Error::<T>::Overflow)
+		}
+
+		fn validate_ed(value: T::AssetBalance) -> Result<(), ()> {
+			let ed = T::Currency::minimum_balance();
+			ensure!(
+				T::HigherPrecisionBalance::from(value) >= T::HigherPrecisionBalance::from(ed),
+				()
+			);
+			Ok(())
 		}
 
 		#[cfg(any(test, feature = "runtime-benchmarks"))]
