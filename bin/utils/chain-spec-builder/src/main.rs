@@ -19,7 +19,6 @@
 use std::{
 	fs,
 	path::{Path, PathBuf},
-	sync::Arc,
 };
 
 use ansi_term::Style;
@@ -32,7 +31,7 @@ use sp_core::{
 	crypto::{ByteArray, Ss58Codec},
 	sr25519,
 };
-use sp_keystore::{Keystore, KeystorePtr};
+use sp_keystore::KeystorePtr;
 
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.
@@ -164,16 +163,17 @@ fn generate_chain_spec(
 
 fn generate_authority_keys_and_store(seeds: &[String], keystore_path: &Path) -> Result<(), String> {
 	for (n, seed) in seeds.iter().enumerate() {
-		let keystore: KeystorePtr = Arc::new(
+		let keystore: KeystorePtr =
 			LocalKeystore::open(keystore_path.join(format!("auth-{}", n)), None)
-				.map_err(|err| err.to_string())?,
-		);
+				.map_err(|err| err.to_string())?
+				.into();
 
 		let (_, _, grandpa, babe, im_online, authority_discovery) =
 			chain_spec::authority_keys_from_seed(seed);
 
 		let insert_key = |key_type, public| {
-			Keystore::insert(&*keystore, key_type, &format!("//{}", seed), public)
+			keystore
+				.insert(key_type, &format!("//{}", seed), public)
 				.map_err(|_| format!("Failed to insert key: {}", grandpa))
 		};
 

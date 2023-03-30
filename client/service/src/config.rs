@@ -61,8 +61,6 @@ pub struct Configuration {
 	pub network: NetworkConfiguration,
 	/// Configuration for the keystore.
 	pub keystore: KeystoreConfig,
-	/// Remote URI to connect to for async keystore support
-	pub keystore_remote: Option<String>,
 	/// Configuration for the database.
 	pub database: DatabaseSource,
 	/// Maximum size of internal trie cache in bytes.
