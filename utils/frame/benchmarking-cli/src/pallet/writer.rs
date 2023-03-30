@@ -628,7 +628,7 @@ pub(crate) fn process_storage_results(
 				},
 			};
 			// Add the additional trie layer overhead for every new prefix.
-			if *reads > 0 {
+			if *reads > 0 && !is_all_ignored {
 				prefix_result.proof_size += 15 * 33 * additional_trie_layers as u32;
 			}
 			storage_per_prefix.entry(prefix.clone()).or_default().push(prefix_result);
