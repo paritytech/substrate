@@ -86,7 +86,7 @@ impl GenesisConfig {
 			&substrate_test_pallet::GenesisConfig { authorities: self.authorities.clone() },
 			&mut storage,
 		)
-		.expect("Adding `system::GensisConfig` to the genesis");
+		.expect("Adding `system::GenesisConfig` to the genesis");
 
 		<pallet_babe::GenesisConfig as GenesisBuild<Runtime>>::assimilate_storage(
 			&pallet_babe::GenesisConfig {
@@ -95,7 +95,7 @@ impl GenesisConfig {
 			},
 			&mut storage,
 		)
-		.expect("Adding `pallet_babe::GensisConfig` to the genesis");
+		.expect("Adding `pallet_babe::GenesisConfig` to the genesis");
 
 		storage
 	}
