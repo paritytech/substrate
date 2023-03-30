@@ -236,7 +236,8 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				&self,
 				call: F,
 			) -> R where Self: Sized {
-				#crate_::OverlayedChanges::start_transaction(&mut std::cell::RefCell::borrow_mut(&self.changes));
+				self.start_transaction();
+
 				*std::cell::RefCell::borrow_mut(&self.commit_on_success) = false;
 				let res = call(self);
 				*std::cell::RefCell::borrow_mut(&self.commit_on_success) = true;
@@ -340,16 +341,37 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					transactions; qed";
 				if *std::cell::RefCell::borrow(&self.commit_on_success) {
 					let res = if commit {
+						if let Some(recorder) = &self.recorder {
+							#crate_::ProofRecorder::<Block>::commit_transaction(&recorder);
+						}
+
 						#crate_::OverlayedChanges::commit_transaction(
 							&mut std::cell::RefCell::borrow_mut(&self.changes)
 						)
 					} else {
+						if let Some(recorder) = &self.recorder {
+							#crate_::ProofRecorder::<Block>::rollback_transaction(&recorder);
+						}
+
 						#crate_::OverlayedChanges::rollback_transaction(
 							&mut std::cell::RefCell::borrow_mut(&self.changes)
 						)
 					};
 
 					std::result::Result::expect(res, proof);
+				}
+			}
+
+			fn start_transaction(&self) {
+				if !*std::cell::RefCell::borrow(&self.commit_on_success) {
+					return
+				}
+
+				#crate_::OverlayedChanges::start_transaction(
+					&mut std::cell::RefCell::borrow_mut(&self.changes)
+				);
+				if let Some(recorder) = &self.recorder {
+					#crate_::ProofRecorder::<Block>::start_transaction(&recorder);
 				}
 			}
 		}
@@ -443,11 +465,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				params: std::vec::Vec<u8>,
 				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
 			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
-				if *std::cell::RefCell::borrow(&self.commit_on_success) {
-					#crate_::OverlayedChanges::start_transaction(
-						&mut std::cell::RefCell::borrow_mut(&self.changes)
-					);
-				}
+				self.start_transaction();
 
 				let res = (|| {
 					let version = #crate_::CallApiAt::<__SrApiBlock__>::runtime_version_at(
