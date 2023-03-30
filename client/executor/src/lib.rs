@@ -41,7 +41,7 @@ pub use self::{
 	executor::{
 		with_externalities_safe, NativeElseWasmExecutor, NativeExecutionDispatch, WasmExecutor,
 	},
-	wasm_runtime::read_embedded_version,
+	wasm_runtime::{read_embedded_version, WasmExecutionMethod},
 };
 pub use codec::Codec;
 #[doc(hidden)]
