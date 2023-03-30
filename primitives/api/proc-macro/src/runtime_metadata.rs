@@ -150,6 +150,10 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait) -> TokenStream {
 		let syn::GenericParam::Type(ty) = generic_param else {
 			continue
 		};
+
+		// `scale_info::meta_type` requires `T: ?Sized + TypeInfo + 'static` bounds.
+		ty.bounds.push(parse_quote!(#crate_::scale_info::TypeInfo));
+		ty.bounds.push(parse_quote!('static));
 		// Default type parameters are not allowed in functions.
 		ty.eq_token = None;
 		ty.default = None;
