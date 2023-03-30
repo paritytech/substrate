@@ -330,6 +330,10 @@ pub mod pallet {
 		Issued { amount: T::Balance },
 		/// Total issuance was decreased by `amount`, creating a debt to be balanced.
 		Rescinded { amount: T::Balance },
+		/// Some balance was locked.
+		Locked { who: T::AccountId, amount: T::Balance },
+		/// Some balance was unlocked.
+		Unlocked { who: T::AccountId, amount: T::Balance },
 	}
 
 	#[pallet::error]
@@ -1016,9 +1020,12 @@ pub mod pallet {
 				);
 			}
 			let freezes = Freezes::<T, I>::get(who);
+			let mut prev_frozen = Zero::zero();
+			let mut after_frozen = Zero::zero();
 			// TODO: Revisit this assumption. We no manipulate consumer/provider refs.
 			// No way this can fail since we do not alter the existential balances.
 			let res = Self::mutate_account(who, |b| {
+				prev_frozen = b.frozen;
 				b.frozen = Zero::zero();
 				for l in locks.iter() {
 					b.frozen = b.frozen.max(l.amount);
@@ -1026,6 +1033,7 @@ pub mod pallet {
 				for l in freezes.iter() {
 					b.frozen = b.frozen.max(l.amount);
 				}
+				after_frozen = b.frozen;
 			});
 			debug_assert!(res.is_ok());
 			if let Ok((_, maybe_dust)) = res {
@@ -1052,6 +1060,14 @@ pub mod pallet {
 						This is unexpected but should be safe."
 					);
 				}
+			}
+
+			if prev_frozen > after_frozen {
+				let amount = prev_frozen.saturating_sub(after_frozen);
+				Self::deposit_event(Event::Unlocked { who: who.clone(), amount });
+			} else if after_frozen > prev_frozen {
+				let amount = after_frozen.saturating_sub(prev_frozen);
+				Self::deposit_event(Event::Locked { who: who.clone(), amount });
 			}
 		}
 

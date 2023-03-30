@@ -755,6 +755,61 @@ fn emit_events_with_reserve_and_unreserve() {
 }
 
 #[test]
+fn emit_events_with_changing_locks() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		let _ = Balances::deposit_creating(&1, 100);
+		System::reset_events();
+
+		// Locks = [] --> [10]
+		Balances::set_lock(*b"LOCK_000", &1, 10, WithdrawReasons::TRANSFER);
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 10 })]);
+
+		// Locks = [10] --> [15]
+		Balances::set_lock(*b"LOCK_000", &1, 15, WithdrawReasons::TRANSFER);
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 5 })]);
+
+		// Locks = [15] --> [15, 20]
+		Balances::set_lock(*b"LOCK_001", &1, 20, WithdrawReasons::TRANSACTION_PAYMENT);
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 5 })]);
+
+		// Locks = [15, 20] --> [17, 20]
+		Balances::set_lock(*b"LOCK_000", &1, 17, WithdrawReasons::TRANSACTION_PAYMENT);
+		for event in events() {
+			match event {
+				RuntimeEvent::Balances(crate::Event::Locked { .. }) => {
+					assert!(false, "unexpected lock event")
+				},
+				RuntimeEvent::Balances(crate::Event::Unlocked { .. }) => {
+					assert!(false, "unexpected unlock event")
+				},
+				_ => continue,
+			}
+		}
+
+		// Locks = [17, 20] --> [17, 15]
+		Balances::set_lock(*b"LOCK_001", &1, 15, WithdrawReasons::TRANSFER);
+		assert_eq!(
+			events(),
+			[RuntimeEvent::Balances(crate::Event::Unlocked { who: 1, amount: 3 })]
+		);
+
+		// Locks = [17, 15] --> [15]
+		Balances::remove_lock(*b"LOCK_000", &1);
+		assert_eq!(
+			events(),
+			[RuntimeEvent::Balances(crate::Event::Unlocked { who: 1, amount: 2 })]
+		);
+
+		// Locks = [15] --> []
+		Balances::remove_lock(*b"LOCK_001", &1);
+		assert_eq!(
+			events(),
+			[RuntimeEvent::Balances(crate::Event::Unlocked { who: 1, amount: 15 })]
+		);
+	});
+}
+
+#[test]
 fn emit_events_with_existential_deposit() {
 	ExtBuilder::default().existential_deposit(100).build_and_execute_with(|| {
 		assert_ok!(Balances::force_set_balance(RawOrigin::Root.into(), 1, 100));
