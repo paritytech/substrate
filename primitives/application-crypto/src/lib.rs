@@ -85,7 +85,7 @@ macro_rules! app_crypto {
 ///
 /// ```rust
 /// # use sp_application_crypto::{app_crypto, ed25519, KeyTypeId};
-/// // Declare a new set of crypto types using Ed25519 logic that identifies as `KeyTypeId`
+/// // Declare a new set of crypto types using ed25519 logic that identifies as `KeyTypeId`
 /// // of value `b"fuba"`.
 /// app_crypto!(ed25519, KeyTypeId(*b"fuba"));
 /// ```
