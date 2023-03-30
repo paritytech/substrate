@@ -56,6 +56,24 @@ pub(crate) enum GossipMessage<B: Block> {
 	FinalityProof(BeefyVersionedFinalityProof<B>),
 }
 
+impl<B: Block> GossipMessage<B> {
+	/// Return inner vote if this message is a Vote.
+	pub fn unwrap_vote(self) -> Option<VoteMessage<NumberFor<B>, AuthorityId, Signature>> {
+		match self {
+			GossipMessage::Vote(vote) => Some(vote),
+			GossipMessage::FinalityProof(_) => None,
+		}
+	}
+
+	/// Return inner finality proof if this message is a FinalityProof.
+	pub fn unwrap_finality_proof(self) -> Option<BeefyVersionedFinalityProof<B>> {
+		match self {
+			GossipMessage::Vote(_) => None,
+			GossipMessage::FinalityProof(proof) => Some(proof),
+		}
+	}
+}
+
 /// Gossip engine votes messages topic
 pub(crate) fn votes_topic<B: Block>() -> B::Hash
 where
@@ -72,30 +90,49 @@ where
 	<<B::Header as Header>::Hashing as Hash>::hash(b"beefy-justifications")
 }
 
+/// A type that represents hash of the message.
+pub type MessageHash = [u8; 8];
+
 #[derive(Clone, Debug)]
-pub(crate) struct GossipFilter<B: Block> {
+pub(crate) struct GossipFilterCfg<'a, B: Block> {
+	pub start: NumberFor<B>,
+	pub end: NumberFor<B>,
+	pub validator_set: &'a ValidatorSet<AuthorityId>,
+}
+
+#[derive(Clone, Debug)]
+struct FilterInner<B: Block> {
 	pub start: NumberFor<B>,
 	pub end: NumberFor<B>,
 	pub validator_set: ValidatorSet<AuthorityId>,
 }
 
-/// A type that represents hash of the message.
-pub type MessageHash = [u8; 8];
-
 struct Filter<B: Block> {
-	filter: Option<GossipFilter<B>>,
+	inner: Option<FilterInner<B>>,
 	live_votes: BTreeMap<NumberFor<B>, fnv::FnvHashSet<MessageHash>>,
 }
 
 impl<B: Block> Filter<B> {
 	pub fn new() -> Self {
-		Self { filter: None, live_votes: BTreeMap::new() }
+		Self { inner: None, live_votes: BTreeMap::new() }
 	}
 
 	/// Update filter to new `start` and `set_id`.
-	fn update(&mut self, filter: GossipFilter<B>) {
-		self.live_votes.retain(|&round, _| round >= filter.start && round <= filter.end);
-		self.filter = Some(filter);
+	fn update(&mut self, cfg: GossipFilterCfg<B>) {
+		self.live_votes.retain(|&round, _| round >= cfg.start && round <= cfg.end);
+		// only clone+overwrite big validator_set if set_id changed
+		match self.inner.as_mut() {
+			Some(f) if f.validator_set.id() == cfg.validator_set.id() => {
+				f.start = cfg.start;
+				f.end = cfg.end;
+			},
+			_ =>
+				self.inner = Some(FilterInner {
+					start: cfg.start,
+					end: cfg.end,
+					validator_set: cfg.validator_set.clone(),
+				}),
+		}
 	}
 
 	/// Return true if `max(session_start, best_beefy) <= round <= best_grandpa`,
@@ -103,7 +140,7 @@ impl<B: Block> Filter<B> {
 	///
 	/// Latest concluded round is still considered alive to allow proper gossiping for it.
 	fn is_vote_accepted(&self, round: NumberFor<B>, set_id: ValidatorSetId) -> bool {
-		self.filter
+		self.inner
 			.as_ref()
 			.map(|f| set_id == f.validator_set.id() && round >= f.start && round <= f.end)
 			.unwrap_or(false)
@@ -114,7 +151,7 @@ impl<B: Block> Filter<B> {
 	///
 	/// Latest concluded round is still considered alive to allow proper gossiping for it.
 	fn is_finality_proof_accepted(&self, round: NumberFor<B>, set_id: ValidatorSetId) -> bool {
-		self.filter
+		self.inner
 			.as_ref()
 			.map(|f| set_id == f.validator_set.id() && round >= f.start)
 			.unwrap_or(false)
@@ -130,8 +167,8 @@ impl<B: Block> Filter<B> {
 		self.live_votes.get(&round).map(|known| known.contains(hash)).unwrap_or(false)
 	}
 
-	fn gossip_filter(&self) -> Option<GossipFilter<B>> {
-		self.filter.clone()
+	fn validator_set(&self) -> Option<&ValidatorSet<AuthorityId>> {
+		self.inner.as_ref().map(|f| &f.validator_set)
 	}
 }
 
@@ -171,7 +208,7 @@ where
 	/// Update gossip validator filter.
 	///
 	/// Only votes for `set_id` and rounds `start <= round <= end` will be accepted.
-	pub(crate) fn update_filter(&self, filter: GossipFilter<B>) {
+	pub(crate) fn update_filter(&self, filter: GossipFilterCfg<B>) {
 		debug!(target: LOG_TARGET, "🥩 New gossip filter {:?}", filter);
 		self.gossip_filter.write().update(filter);
 	}
@@ -223,29 +260,27 @@ where
 		let (round, set_id) = proof_block_num_and_set_id::<B>(&proof);
 		self.known_peers.lock().note_vote_for(*sender, round);
 
-		let filter = if let Some(filter) = self.gossip_filter.read().gossip_filter() {
-			filter
-		} else {
-			return ValidationResult::Discard
-		};
+		let guard = self.gossip_filter.read();
 		// Verify general usefulness of the justifications.
-		// We are going to discard old justifications right away (without verification).
-		// We are going to accept only justifications for current set id.
-		if set_id != filter.validator_set.id() || round < filter.start {
+		if !guard.is_finality_proof_accepted(round, set_id) {
 			return ValidationResult::Discard
 		}
-
 		// Verify justification signatures.
-		if let Ok(()) = verify_with_validator_set::<B>(round, &filter.validator_set, &proof) {
-			ValidationResult::ProcessAndKeep(self.justifs_topic)
-		} else {
-			// TODO: report peer
-			debug!(
-				target: LOG_TARGET,
-				"🥩 Bad signatures on message: {:?}, from: {:?}", proof, sender
-			);
-			ValidationResult::Discard
-		}
+		guard
+			.validator_set()
+			.map(|validator_set| {
+				if let Ok(()) = verify_with_validator_set::<B>(round, validator_set, &proof) {
+					ValidationResult::ProcessAndKeep(self.justifs_topic)
+				} else {
+					// TODO: report peer
+					debug!(
+						target: LOG_TARGET,
+						"🥩 Bad signatures on message: {:?}, from: {:?}", proof, sender
+					);
+					ValidationResult::Discard
+				}
+			})
+			.unwrap_or(ValidationResult::Discard)
 	}
 }
 
@@ -373,10 +408,10 @@ pub(crate) mod tests {
 		assert!(!filter.is_known_vote(4, &msg_hash));
 		assert_eq!(filter.live_votes.len(), 3);
 
-		assert!(filter.filter.is_none());
+		assert!(filter.inner.is_none());
 		assert!(!filter.is_vote_accepted(1, 1));
 
-		filter.update(GossipFilter { start: 3, end: 10, validator_set });
+		filter.update(GossipFilterCfg { start: 3, end: 10, validator_set: &validator_set });
 		assert_eq!(filter.live_votes.len(), 1);
 		assert!(filter.live_votes.contains_key(&3));
 		assert!(!filter.is_vote_accepted(2, 1));
@@ -385,7 +420,7 @@ pub(crate) mod tests {
 		assert!(!filter.is_vote_accepted(4, 2));
 
 		let validator_set = ValidatorSet::<AuthorityId>::new(keys, 2).unwrap();
-		filter.update(GossipFilter { start: 5, end: 10, validator_set });
+		filter.update(GossipFilterCfg { start: 5, end: 10, validator_set: &validator_set });
 		assert!(filter.live_votes.is_empty());
 	}
 
@@ -451,7 +486,7 @@ pub(crate) mod tests {
 		let keys = vec![Keyring::Alice.public()];
 		let validator_set = ValidatorSet::<AuthorityId>::new(keys.clone(), 0).unwrap();
 		let gv = GossipValidator::<Block>::new(Arc::new(Mutex::new(KnownPeers::new())));
-		gv.update_filter(GossipFilter { start: 0, end: 10, validator_set: validator_set.clone() });
+		gv.update_filter(GossipFilterCfg { start: 0, end: 10, validator_set: &validator_set });
 		let sender = sc_network::PeerId::random();
 		let mut context = TestContext;
 
@@ -476,7 +511,7 @@ pub(crate) mod tests {
 		assert!(matches!(res, ValidationResult::ProcessAndKeep(_)));
 
 		// next we should quickly reject if the round is not live
-		gv.update_filter(GossipFilter { start: 7, end: 10, validator_set: validator_set.clone() });
+		gv.update_filter(GossipFilterCfg { start: 7, end: 10, validator_set: &validator_set });
 
 		let number = vote.commitment.block_number;
 		let set_id = vote.commitment.validator_set_id;
@@ -524,13 +559,13 @@ pub(crate) mod tests {
 		let keys = vec![Keyring::Alice.public()];
 		let validator_set = ValidatorSet::<AuthorityId>::new(keys.clone(), 0).unwrap();
 		let gv = GossipValidator::<Block>::new(Arc::new(Mutex::new(KnownPeers::new())));
-		gv.update_filter(GossipFilter { start: 0, end: 10, validator_set: validator_set.clone() });
+		gv.update_filter(GossipFilterCfg { start: 0, end: 10, validator_set: &validator_set });
 		let sender = sc_network::PeerId::random();
 		let topic = Default::default();
 		let intent = MessageIntent::Broadcast;
 
 		// conclude 2
-		gv.update_filter(GossipFilter { start: 2, end: 10, validator_set: validator_set.clone() });
+		gv.update_filter(GossipFilterCfg { start: 2, end: 10, validator_set: &validator_set });
 		let mut allowed = gv.message_allowed();
 		let mut expired = gv.message_expired();
 
@@ -601,7 +636,7 @@ pub(crate) mod tests {
 		let keys = vec![Keyring::Alice.public()];
 		let validator_set = ValidatorSet::<AuthorityId>::new(keys.clone(), 0).unwrap();
 		let gv = GossipValidator::<Block>::new(Arc::new(Mutex::new(KnownPeers::new())));
-		gv.update_filter(GossipFilter { start: 0, end: 10, validator_set });
+		gv.update_filter(GossipFilterCfg { start: 0, end: 10, validator_set: &validator_set });
 		let sender = sc_network::PeerId::random();
 		let topic = Default::default();
 

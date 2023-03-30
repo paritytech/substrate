@@ -22,7 +22,9 @@ use crate::{
 	aux_schema::{load_persistent, tests::verify_persisted_version},
 	beefy_block_import_and_links,
 	communication::{
-		gossip::{proofs_topic, tests::sign_commitment, votes_topic, GossipFilter, GossipMessage},
+		gossip::{
+			proofs_topic, tests::sign_commitment, votes_topic, GossipFilterCfg, GossipMessage,
+		},
 		request_response::{on_demand_justifications_protocol_config, BeefyJustifsRequestHandler},
 	},
 	gossip_protocol_name,
@@ -1262,10 +1264,10 @@ async fn gossipped_finality_proofs() {
 	// Charlie will run just the gossip engine and not the full voter.
 	let charlie_gossip_validator =
 		Arc::new(crate::communication::gossip::GossipValidator::new(known_peers));
-	charlie_gossip_validator.update_filter(GossipFilter::<Block> {
+	charlie_gossip_validator.update_filter(GossipFilterCfg::<Block> {
 		start: 1,
 		end: 10,
-		validator_set: validator_set.clone(),
+		validator_set: &validator_set,
 	});
 	let mut charlie_gossip_engine = sc_network_gossip::GossipEngine::new(
 		charlie.network_service().clone(),

@@ -18,7 +18,7 @@
 
 use crate::{
 	communication::{
-		gossip::{proofs_topic, votes_topic, GossipFilter, GossipMessage, GossipValidator},
+		gossip::{proofs_topic, votes_topic, GossipFilterCfg, GossipMessage, GossipValidator},
 		request_response::outgoing_requests_engine::OnDemandJustificationsEngine,
 	},
 	error::Error,
@@ -301,10 +301,10 @@ impl<B: Block> PersistedState<B> {
 		self.voting_oracle.best_grandpa_block_header = best_grandpa;
 	}
 
-	pub(crate) fn current_gossip_filter(&self) -> Result<GossipFilter<B>, Error> {
+	pub(crate) fn gossip_filter_config(&self) -> Result<GossipFilterCfg<B>, Error> {
 		let (start, end) = self.voting_oracle.accepted_interval()?;
-		let validator_set = self.voting_oracle.current_validator_set()?.clone();
-		Ok(GossipFilter { start, end, validator_set })
+		let validator_set = self.voting_oracle.current_validator_set()?;
+		Ok(GossipFilterCfg { start, end, validator_set })
 	}
 }
 
@@ -494,7 +494,7 @@ where
 			// Update gossip validator votes filter.
 			if let Err(e) = self
 				.persisted_state
-				.current_gossip_filter()
+				.gossip_filter_config()
 				.map(|filter| self.gossip_validator.update_filter(filter))
 			{
 				error!(target: LOG_TARGET, "🥩 Voter error: {:?}", e);
@@ -649,7 +649,7 @@ where
 
 		// Update gossip validator votes filter.
 		self.persisted_state
-			.current_gossip_filter()
+			.gossip_filter_config()
 			.map(|filter| self.gossip_validator.update_filter(filter))?;
 		Ok(())
 	}
@@ -764,27 +764,17 @@ where
 			BeefyKeystore::verify(&authority_id, &signature, &encoded_commitment)
 		);
 
-		let message = VoteMessage { commitment, id: authority_id, signature };
-		let gossip_vote = GossipMessage::<B>::Vote(message);
-		let encoded_vote = gossip_vote.encode();
-		let vote = if let GossipMessage::<B>::Vote(message) = gossip_vote {
-			message
-		} else {
-			unreachable!("GossipMessage::Vote() hardcoded above. qed.")
-		};
-
-		metric_inc!(self, beefy_votes_sent);
-
-		debug!(target: LOG_TARGET, "🥩 Sent vote message: {:?}", vote);
-
-		if let Some(finality_proof) = self.handle_vote(vote).map_err(|err| {
+		let vote = VoteMessage { commitment, id: authority_id, signature };
+		if let Some(finality_proof) = self.handle_vote(vote.clone()).map_err(|err| {
 			error!(target: LOG_TARGET, "🥩 Error handling self vote: {}", err);
 			err
 		})? {
-			let gossip_proof = GossipMessage::<B>::FinalityProof(finality_proof);
-			let encoded_proof = gossip_proof.encode();
+			let encoded_proof = GossipMessage::<B>::FinalityProof(finality_proof).encode();
 			self.gossip_engine.gossip_message(proofs_topic::<B>(), encoded_proof, true);
 		} else {
+			metric_inc!(self, beefy_votes_sent);
+			debug!(target: LOG_TARGET, "🥩 Sent vote message: {:?}", vote);
+			let encoded_vote = GossipMessage::<B>::Vote(vote).encode();
 			self.gossip_engine.gossip_message(votes_topic::<B>(), encoded_vote, false);
 		}
 
@@ -836,10 +826,7 @@ where
 				.filter_map(|notification| async move {
 					let vote = GossipMessage::<B>::decode(&mut &notification.message[..])
 						.ok()
-						.and_then(|message| match message {
-							GossipMessage::<B>::Vote(vote) => Some(vote),
-							GossipMessage::<B>::FinalityProof(_) => None,
-						});
+						.and_then(|message| message.unwrap_vote());
 					trace!(target: LOG_TARGET, "🥩 Got vote message: {:?}", vote);
 					vote
 				})
@@ -851,10 +838,7 @@ where
 				.filter_map(|notification| async move {
 					let proof = GossipMessage::<B>::decode(&mut &notification.message[..])
 						.ok()
-						.and_then(|message| match message {
-							GossipMessage::<B>::Vote(_) => None,
-							GossipMessage::<B>::FinalityProof(proof) => Some(proof),
-						});
+						.and_then(|message| message.unwrap_finality_proof());
 					trace!(target: LOG_TARGET, "🥩 Got gossip proof message: {:?}", proof);
 					proof
 				})
