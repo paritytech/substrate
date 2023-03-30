@@ -193,16 +193,7 @@ impl Keystore for MemoryKeystore {
 	}
 
 	fn bls381_public_keys(&self, key_type: KeyTypeId) -> Vec<bls381::Public> {
-		self.keys
-			.read()
-			.get(&key_type)
-			.map(|keys| {
-				keys.values()
-					.map(|s| bls381::Pair::from_string(s, None).expect("`bls` seed slice is valid"))
-					.map(|p| p.public())
-					.collect()
-			})
-			.unwrap_or_default()
+		self.public_keys::<bls381::Pair>(key_type)
 	}
 
 	fn bls381_generate_new(
@@ -210,27 +201,7 @@ impl Keystore for MemoryKeystore {
 		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<bls381::Public, Error> {
-		match seed {
-			Some(seed) => {
-				let pair = bls381::Pair::from_string(seed, None)
-					.map_err(|_| Error::ValidationError("Generates an `bls` pair.".to_owned()))?;
-				self.keys
-					.write()
-					.entry(key_type)
-					.or_default()
-					.insert(pair.public().to_raw_vec(), seed.into());
-				Ok(pair.public())
-			},
-			None => {
-				let (pair, phrase, _) = bls381::Pair::generate_with_phrase(None);
-				self.keys
-					.write()
-					.entry(key_type)
-					.or_default()
-					.insert(pair.public().to_raw_vec(), phrase);
-				Ok(pair.public())
-			},
-		}
+		self.generate_new::<bls381::Pair>(key_type, seed)
 	}
 
 	fn bls381_sign(

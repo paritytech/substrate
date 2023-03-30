@@ -205,15 +205,7 @@ impl Keystore for LocalKeystore {
 	}
 
 	fn bls381_public_keys(&self, key_type: KeyTypeId) -> Vec<bls381::Public> {
-		self.0
-			.read()
-			.raw_public_keys(key_type)
-			.map(|v| {
-				v.into_iter()
-					.filter_map(|k| bls381::Public::from_slice(k.as_slice()).ok())
-					.collect()
-			})
-			.unwrap_or_default()
+		self.public_keys::<bls381::Pair>(key_type)
 	}
 
 	/// Generate a new pair compatible with the 'bls381' signature scheme.
@@ -224,16 +216,7 @@ impl Keystore for LocalKeystore {
 		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> std::result::Result<bls381::Public, TraitError> {
-		let pair = match seed {
-			Some(seed) => self
-				.0
-				.write()
-				.insert_ephemeral_from_seed_by_type::<bls381::Pair>(seed, key_type),
-			None => self.0.write().generate_by_type::<bls381::Pair>(key_type),
-		}
-		.map_err(|e| -> TraitError { e.into() })?;
-
-		Ok(pair.public())
+		self.generate_new::<bls381::Pair>(key_type, seed)
 	}
 
 	fn bls381_sign(
@@ -242,12 +225,7 @@ impl Keystore for LocalKeystore {
 		public: &bls381::Public,
 		msg: &[u8],
 	) -> std::result::Result<Option<bls381::Signature>, TraitError> {
-		let res = self
-			.0
-			.read()
-			.key_pair_by_type::<bls381::Pair>(public, key_type)?
-			.map(|pair| pair.sign(msg));
-		Ok(res)
+		self.sign::<bls381::Pair>(key_type, public, msg)
 	}
 
 	fn insert(

@@ -209,7 +209,12 @@ pub trait Keystore: Send + Sync {
 	///
 	/// The message is signed using the cryptographic primitive specified by `crypto_id`.
 	///
-	/// Schemes supported by the default trait implementation: sr25519, ed25519 and ecdsa.
+	/// Schemes supported by the default trait implementation:
+	/// - sr25519
+	/// - ed25519
+	/// - ecdsa
+	/// - bls381.
+	///
 	/// To support more schemes you can overwrite this method.
 	///
 	/// Returns the SCALE encoded signature if key is found and supported, `None` if the key doesn't
