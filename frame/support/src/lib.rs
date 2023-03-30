@@ -829,6 +829,7 @@ macro_rules! assert_error_encoded_size {
 pub use serde::{Deserialize, Serialize};
 
 #[doc(hidden)]
+#[cfg(not(no_std))]
 pub mod macro_magic {
 	pub use ::macro_magic::*;
 }

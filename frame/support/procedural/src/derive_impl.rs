@@ -17,7 +17,7 @@
 
 //! Implementation of the `derive_impl` attribute macro.
 
-use macro_magic::core::pretty_print;
+use macro_magic::mm_core::pretty_print;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use std::collections::HashSet;

@@ -1116,15 +1116,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3ad85c1f65dc7b37604eb0e89748faf0b9653065f2a8ef69f96a687ec1e9279"
 
 [[package]]
-name = "convert_case"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
-dependencies = [
- "unicode-segmentation",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3776,6 +3767,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99227334921fae1a979cf0bfdfcc6b3e5ce376ef57e16fb6fb3ea2ed6095f80c"
 
 [[package]]
+name = "libc-print"
+version = "0.1.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06cea5d58bd9ba4717bbf5c6c5bb11bb6e9e76685b7fff34039b80f50ce86c11"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "libgit2-sys"
 version = "0.14.2+1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4478,9 +4478,9 @@ dependencies = [
 
 [[package]]
 name = "macro_magic"
-version = "0.2.6"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b745dd26139d33d0c29799b8983eda0673e5e30613f9b3a42743c146c4bd887a"
+checksum = "91164c80f941dea9c77312dd44813a655f45a2ae0a7b5f87c72275aac2441f91"
 dependencies = [
  "macro_magic_core",
  "macro_magic_macros",
@@ -4490,12 +4490,12 @@ dependencies = [
 
 [[package]]
 name = "macro_magic_core"
-version = "0.2.6"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b432f14f3e7100d45a36576b2acaa7f246cac3a0d3221715d9f16355a154838a"
+checksum = "7c37a39d8acc9049fdd2faeb20983d5dcae911b0f51634e31daeea49db7d9673"
 dependencies = [
- "convert_case",
  "derive-syn-parse",
+ "libc-print",
  "macro_magic_core_macros",
  "prettyplease",
  "proc-macro2",
@@ -4505,9 +4505,9 @@ dependencies = [
 
 [[package]]
 name = "macro_magic_core_macros"
-version = "0.2.6"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "809c2526d4dfc5b3f30a6b80b45a5fcf1f15cabe4fb1094bc9c1d8e1857c7f35"
+checksum = "0c1d949db0089faf1a78086afb016151d41d070b9d2e399545b66d22dc2da08e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4516,9 +4516,9 @@ dependencies = [
 
 [[package]]
 name = "macro_magic_macros"
-version = "0.2.6"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccabbd32376feddaaed042c928a93368f6e1a0274d339857c379e43339e3daee"
+checksum = "1dfa542442b41c04f49b644906d4da05c8b84984ce354d637700fd6a5d34ac49"
 dependencies = [
  "macro_magic_core",
  "quote",
@@ -12103,12 +12103,6 @@ checksum = "5c5713f0fc4b5db668a2ac63cdb7bb4469d8c9fed047b1d0292cc7b0ce2ba921"
 dependencies = [
  "tinyvec",
 ]
-
-[[package]]
-name = "unicode-segmentation"
-version = "1.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dd624098567895118886609431a7c3b8f516e41d30e0643f03d94592a147e36"
 
 [[package]]
 name = "unicode-width"
