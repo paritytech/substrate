@@ -22,8 +22,8 @@ pub mod meter;
 use crate::{
 	exec::{AccountIdOf, Key},
 	weights::WeightInfo,
-	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueueMap,
-	DeletionQueueNonces, Error, Pallet, TrieId, SENTINEL,
+	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf,
+	DeletionQueue as DeletionQueueMap, DeletionQueueCounter, Error, Pallet, TrieId, SENTINEL,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -337,10 +337,10 @@ impl<T: Config> Deref for DepositAccount<T> {
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, DefaultNoBound, Clone)]
 #[scale_info(skip_type_params(T))]
 pub struct DeletionQueue<T: Config> {
-	/// Monotonic counter used as a key for inserting a new deleted contract in the DeletionQueueMap.
+	/// Monotonic counter used as a key for inserting a new deleted contract in the queue.
 	/// The counter is incremented after each insertion.
 	insert_counter: u32,
-	/// The index used to read the next element to be deleted in the DeletionQueueMap.
+	/// The index used to read the next element to be deleted in the queue.
 	/// The counter is incremented after each deletion.
 	delete_counter: u32,
 
@@ -358,9 +358,9 @@ struct DeletionQueueEntry<'a, T: Config> {
 impl<'a, T: Config> DeletionQueueEntry<'a, T> {
 	/// Remove the contract from the deletion queue.
 	fn remove(self) {
-		<DeletionQueueMap<T>>::remove(self.queue.delete_nonce);
-		self.queue.delete_nonce = self.queue.delete_nonce.wrapping_add(1);
-		<DeletionQueueNonces<T>>::set(self.queue.clone());
+		<DeletionQueueMap<T>>::remove(self.queue.delete_counter);
+		self.queue.delete_counter = self.queue.delete_counter.wrapping_add(1);
+		<DeletionQueueCounter<T>>::set(self.queue.clone());
 	}
 }
 
@@ -368,19 +368,19 @@ impl<T: Config> DeletionQueue<T> {
 	/// Load the Deletion Queue nonces, so we can perform read or write operations on the
 	/// DeletionQueueMap storage.
 	fn load() -> Self {
-		<DeletionQueueNonces<T>>::get()
+		<DeletionQueueCounter<T>>::get()
 	}
 
 	/// Returns `true` if the queue contains no elements.
 	fn is_empty(&self) -> bool {
-		self.insert_nonce.wrapping_sub(self.delete_nonce) == 0
+		self.insert_index.wrapping_sub(self.delete_counter) == 0
 	}
 
 	/// Insert a contract in the deletion queue.
 	fn insert(&mut self, trie_id: TrieId) {
-		<DeletionQueueMap<T>>::insert(self.insert_nonce, trie_id);
-		self.insert_nonce = self.insert_nonce.wrapping_add(1);
-		<DeletionQueueNonces<T>>::set(self.clone());
+		<DeletionQueueMap<T>>::insert(self.insert_index, trie_id);
+		self.insert_index = self.insert_index.wrapping_add(1);
+		<DeletionQueueCounter<T>>::set(self.clone());
 	}
 
 	/// Fetch the next contract to be deleted.
@@ -389,17 +389,17 @@ impl<T: Config> DeletionQueue<T> {
 			return None
 		}
 
-		let entry = <DeletionQueueMap<T>>::get(self.delete_nonce);
+		let entry = <DeletionQueueMap<T>>::get(self.delete_counter);
 		entry.map(|trie_id| DeletionQueueEntry { trie_id, queue: self })
 	}
 }
 
 #[cfg(test)]
 impl<T: Config> DeletionQueue<T> {
-	pub fn from_test_values(insert_nonce: u32, delete_nonce: u32) -> Self {
-		DeletionQueue { insert_nonce, delete_nonce, _phantom: Default::default() }
+	pub fn from_test_values(insert_index: u32, delete_counter: u32) -> Self {
+		Self { insert_index, delete_counter, _phantom: Default::default() }
 	}
 	pub fn as_test_tuple(&self) -> (u32, u32) {
-		(self.insert_nonce, self.delete_nonce)
+		(self.insert_index, self.delete_counter)
 	}
 }

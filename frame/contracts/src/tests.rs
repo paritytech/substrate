@@ -27,7 +27,7 @@ use crate::{
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, Config, ContractInfo, ContractInfoOf, DefaultAddressGenerator,
-	DeletionQueueNonces, Error, Pallet, Schedule,
+	DeletionQueueCounter, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -2274,7 +2274,7 @@ fn deletion_queue_ring_buffer_overflow() {
 	ext.execute_with(|| {
 		// manually se the nonces of the deletion queue
 		let queue = DeletionQueue::from_test_values(u32::MAX - 1, u32::MAX - 1);
-		<DeletionQueueNonces<Test>>::set(queue);
+		<DeletionQueueCounter<Test>>::set(queue);
 	});
 
 	// commit the changes to the storage
@@ -2333,7 +2333,7 @@ fn deletion_queue_ring_buffer_overflow() {
 		}
 
 		// nonces values should go from u32::MAX - 1 to 1
-		assert_eq!(<DeletionQueueNonces<Test>>::get().as_test_tuple(), (1, 1));
+		assert_eq!(<DeletionQueueCounter<Test>>::get().as_test_tuple(), (1, 1));
 	})
 }
 #[test]

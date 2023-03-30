@@ -170,8 +170,8 @@ pub trait WeightInfo {
 /// Weights for pallet_contracts using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	/// Storage: Contracts DeletionQueueNonces (r:1 w:0)
-	/// Proof: Contracts DeletionQueueNonces (max_values: Some(1), max_size: Some(8), added: 503, mode: Measured)
+	/// Storage: Contracts DeletionQueueCounter (r:1 w:0)
+	/// Proof: Contracts DeletionQueueCounter (max_values: Some(1), max_size: Some(8), added: 503, mode: Measured)
 	fn on_process_deletion_queue_batch() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `109`
@@ -795,8 +795,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: Contracts CodeStorage (max_values: None, max_size: Some(126001), added: 128476, mode: Measured)
 	/// Storage: Timestamp Now (r:1 w:0)
 	/// Proof: Timestamp Now (max_values: Some(1), max_size: Some(8), added: 503, mode: Measured)
-	/// Storage: Contracts DeletionQueueNonces (r:1 w:1)
-	/// Proof: Contracts DeletionQueueNonces (max_values: Some(1), max_size: Some(8), added: 503, mode: Measured)
+	/// Storage: Contracts DeletionQueueCounter (r:1 w:1)
+	/// Proof: Contracts DeletionQueueCounter (max_values: Some(1), max_size: Some(8), added: 503, mode: Measured)
 	/// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	/// Proof: Contracts OwnerInfoOf (max_values: None, max_size: Some(88), added: 2563, mode: Measured)
 	/// Storage: System EventTopics (r:3 w:3)
@@ -2116,8 +2116,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	/// Storage: Contracts DeletionQueueNonces (r:1 w:0)
-	/// Proof: Contracts DeletionQueueNonces (max_values: Some(1), max_size: Some(8), added: 503, mode: Measured)
+	/// Storage: Contracts DeletionQueueCounter (r:1 w:0)
+	/// Proof: Contracts DeletionQueueCounter (max_values: Some(1), max_size: Some(8), added: 503, mode: Measured)
 	fn on_process_deletion_queue_batch() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `109`
@@ -2741,8 +2741,8 @@ impl WeightInfo for () {
 	/// Proof: Contracts CodeStorage (max_values: None, max_size: Some(126001), added: 128476, mode: Measured)
 	/// Storage: Timestamp Now (r:1 w:0)
 	/// Proof: Timestamp Now (max_values: Some(1), max_size: Some(8), added: 503, mode: Measured)
-	/// Storage: Contracts DeletionQueueNonces (r:1 w:1)
-	/// Proof: Contracts DeletionQueueNonces (max_values: Some(1), max_size: Some(8), added: 503, mode: Measured)
+	/// Storage: Contracts DeletionQueueCounter (r:1 w:1)
+	/// Proof: Contracts DeletionQueueCounter (max_values: Some(1), max_size: Some(8), added: 503, mode: Measured)
 	/// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	/// Proof: Contracts OwnerInfoOf (max_values: None, max_size: Some(88), added: 2563, mode: Measured)
 	/// Storage: System EventTopics (r:3 w:3)
