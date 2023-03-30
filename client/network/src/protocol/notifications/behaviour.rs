@@ -1870,7 +1870,7 @@ impl NetworkBehaviour for Notifications {
 						if !connections.iter().any(|(_, s)| {
 							matches!(s, ConnectionState::Opening | ConnectionState::Open(_))
 						}) {
-							trace!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
+							trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
 							self.peerset.dropped(set_id, peer_id, DropReason::Refused);
 
 							let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());

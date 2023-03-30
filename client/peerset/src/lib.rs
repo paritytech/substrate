@@ -667,6 +667,7 @@ impl Peerset {
 		}
 
 		if let DropReason::Refused = reason {
+			trace!(target: "peerset", "Connection refused, removing {} from {:?}", peer_id, set_id);
 			self.on_remove_from_peers_set(set_id, peer_id);
 		}
 
