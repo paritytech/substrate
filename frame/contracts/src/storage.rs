@@ -23,7 +23,7 @@ use crate::{
 	exec::{AccountIdOf, Key},
 	weights::WeightInfo,
 	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueueCounter,
-	DeletionQueueMap, Error, Pallet, TrieId, SENTINEL,
+	DeletionQueue, Error, Pallet, TrieId, SENTINEL,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -205,7 +205,7 @@ impl<T: Config> ContractInfo<T> {
 	///
 	/// You must make sure that the contract is also removed when queuing the trie for deletion.
 	pub fn queue_trie_for_deletion(&self) {
-		DeletionQueue::<T>::load().insert(self.trie_id.clone());
+		DeletionQueueManager::<T>::load().insert(self.trie_id.clone());
 	}
 
 	/// Calculates the weight that is necessary to remove one key from the trie and how many
@@ -229,7 +229,7 @@ impl<T: Config> ContractInfo<T> {
 	///
 	/// It returns the amount of weight used for that task.
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
-		let mut queue = <DeletionQueue<T>>::load();
+		let mut queue = <DeletionQueueManager<T>>::load();
 
 		if queue.is_empty() {
 			return Weight::zero()
@@ -336,7 +336,7 @@ impl<T: Config> Deref for DepositAccount<T> {
 /// later by pulling the contract from the queue in the `on_idle` hook.
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, DefaultNoBound, Clone)]
 #[scale_info(skip_type_params(T))]
-pub struct DeletionQueue<T: Config> {
+pub struct DeletionQueueManager<T: Config> {
 	/// Monotonic counter used as a key for inserting a new deleted contract in the queue.
 	/// The counter is incremented after each insertion.
 	insert_counter: u32,
@@ -352,21 +352,21 @@ pub struct DeletionQueue<T: Config> {
 /// and none can be added or read in the meantime.
 struct DeletionQueueEntry<'a, T: Config> {
 	trie_id: TrieId,
-	queue: &'a mut DeletionQueue<T>,
+	queue: &'a mut DeletionQueueManager<T>,
 }
 
 impl<'a, T: Config> DeletionQueueEntry<'a, T> {
 	/// Remove the contract from the deletion queue.
 	fn remove(self) {
-		<DeletionQueueMap<T>>::remove(self.queue.delete_counter);
+		<DeletionQueue<T>>::remove(self.queue.delete_counter);
 		self.queue.delete_counter = self.queue.delete_counter.wrapping_add(1);
 		<DeletionQueueCounter<T>>::set(self.queue.clone());
 	}
 }
 
-impl<T: Config> DeletionQueue<T> {
+impl<T: Config> DeletionQueueManager<T> {
 	/// Load the Deletion Queue nonces, so we can perform read or write operations on the
-	/// DeletionQueueMap storage.
+	/// DeletionQueue storage.
 	fn load() -> Self {
 		<DeletionQueueCounter<T>>::get()
 	}
@@ -378,7 +378,7 @@ impl<T: Config> DeletionQueue<T> {
 
 	/// Insert a contract in the deletion queue.
 	fn insert(&mut self, trie_id: TrieId) {
-		<DeletionQueueMap<T>>::insert(self.insert_counter, trie_id);
+		<DeletionQueue<T>>::insert(self.insert_counter, trie_id);
 		self.insert_counter = self.insert_counter.wrapping_add(1);
 		<DeletionQueueCounter<T>>::set(self.clone());
 	}
@@ -389,13 +389,13 @@ impl<T: Config> DeletionQueue<T> {
 			return None
 		}
 
-		let entry = <DeletionQueueMap<T>>::get(self.delete_counter);
+		let entry = <DeletionQueue<T>>::get(self.delete_counter);
 		entry.map(|trie_id| DeletionQueueEntry { trie_id, queue: self })
 	}
 }
 
 #[cfg(test)]
-impl<T: Config> DeletionQueue<T> {
+impl<T: Config> DeletionQueueManager<T> {
 	pub fn from_test_values(insert_counter: u32, delete_counter: u32) -> Self {
 		Self { insert_counter, delete_counter, _phantom: Default::default() }
 	}

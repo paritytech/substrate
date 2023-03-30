@@ -801,8 +801,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: Contracts OwnerInfoOf (max_values: None, max_size: Some(88), added: 2563, mode: Measured)
 	/// Storage: System EventTopics (r:3 w:3)
 	/// Proof Skipped: System EventTopics (max_values: None, max_size: None, mode: Measured)
-	/// Storage: Contracts DeletionQueueMap (r:0 w:1)
-	/// Proof: Contracts DeletionQueueMap (max_values: None, max_size: Some(142), added: 2617, mode: Measured)
+	/// Storage: Contracts DeletionQueue (r:0 w:1)
+	/// Proof: Contracts DeletionQueue (max_values: None, max_size: Some(142), added: 2617, mode: Measured)
 	/// The range of component `r` is `[0, 1]`.
 	fn seal_terminate(r: u32, ) -> Weight {
 		// Proof Size summary in bytes:
@@ -2747,8 +2747,8 @@ impl WeightInfo for () {
 	/// Proof: Contracts OwnerInfoOf (max_values: None, max_size: Some(88), added: 2563, mode: Measured)
 	/// Storage: System EventTopics (r:3 w:3)
 	/// Proof Skipped: System EventTopics (max_values: None, max_size: None, mode: Measured)
-	/// Storage: Contracts DeletionQueueMap (r:0 w:1)
-	/// Proof: Contracts DeletionQueueMap (max_values: None, max_size: Some(142), added: 2617, mode: Measured)
+	/// Storage: Contracts DeletionQueue (r:0 w:1)
+	/// Proof: Contracts DeletionQueue (max_values: None, max_size: Some(142), added: 2617, mode: Measured)
 	/// The range of component `r` is `[0, 1]`.
 	fn seal_terminate(r: u32, ) -> Weight {
 		// Proof Size summary in bytes:

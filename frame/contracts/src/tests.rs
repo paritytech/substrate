@@ -22,7 +22,7 @@ use crate::{
 		Result as ExtensionResult, RetVal, ReturnFlags, SysConfig,
 	},
 	exec::{Frame, Key},
-	storage::DeletionQueue,
+	storage::DeletionQueueManager,
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
@@ -2273,7 +2273,7 @@ fn deletion_queue_ring_buffer_overflow() {
 	// setup the deletion queue with custom nonces
 	ext.execute_with(|| {
 		// manually se the nonces of the deletion queue
-		let queue = DeletionQueue::from_test_values(u32::MAX - 1, u32::MAX - 1);
+		let queue = DeletionQueueManager::from_test_values(u32::MAX - 1, u32::MAX - 1);
 		<DeletionQueueCounter<Test>>::set(queue);
 	});
 

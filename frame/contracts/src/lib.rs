@@ -102,7 +102,7 @@ mod tests;
 use crate::{
 	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
 	gas::GasMeter,
-	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueue},
+	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
 	weights::WeightInfo,
 };
@@ -899,16 +899,17 @@ pub mod pallet {
 	/// Child trie deletion is a heavy operation depending on the amount of storage items
 	/// stored in said trie. Therefore this operation is performed lazily in `on_idle`.
 	#[pallet::storage]
-	pub(crate) type DeletionQueueMap<T: Config> = StorageMap<_, Twox64Concat, u32, TrieId>;
+	pub(crate) type DeletionQueue<T: Config> = StorageMap<_, Twox64Concat, u32, TrieId>;
 
 	/// A pair of monotonic counters used to track the latest contract marked for deletion
-	/// and the latest deleted contract in DeletionQueueMap.
+	/// and the latest deleted contract in queue.
 	///
 	/// When we iterate the map to remove contracts, we simply use the delete counter and
 	/// don't pay the cost of an extra call to `sp_io::storage::next_key` to lookup the next entry
 	/// in the map
 	#[pallet::storage]
-	pub(crate) type DeletionQueueCounter<T: Config> = StorageValue<_, DeletionQueue<T>, ValueQuery>;
+	pub(crate) type DeletionQueueCounter<T: Config> =
+		StorageValue<_, DeletionQueueManager<T>, ValueQuery>;
 }
 
 /// Context of a contract invocation.
