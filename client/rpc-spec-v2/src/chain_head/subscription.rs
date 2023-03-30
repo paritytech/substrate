@@ -357,7 +357,7 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionsInner<Block, BE> 
 					Some(duration) => duration > self.local_max_pin_duration,
 					None => true,
 				};
-				should_remove.then_some(sub_id.clone())
+				should_remove.then(|| sub_id.clone())
 			})
 			.collect();
 
