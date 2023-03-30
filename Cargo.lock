@@ -6076,7 +6076,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
- "macro_magic",
  "pallet-balances",
  "parity-scale-codec",
  "scale-info",

@@ -778,7 +778,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 		.into()
 }
 
-#[import_tokens_attr]
+#[import_tokens_attr(frame_support::macro_magic)]
 #[proc_macro_attribute]
 pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
 	derive_impl::derive_impl(__source_path.into(), attrs.into(), input.into())
