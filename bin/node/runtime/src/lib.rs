@@ -1498,7 +1498,7 @@ impl pallet_assets::Config<Instance1> for Runtime {
 }
 
 ord_parameter_types! {
-	pub const DexOrigin: AccountId = AccountIdConversion::<AccountId>::into_account_truncating(&DexPalletId::get());
+	pub const AssetConversionOrigin: AccountId = AccountIdConversion::<AccountId>::into_account_truncating(&AssetConversionPalletId::get());
 }
 
 impl pallet_assets::Config<Instance2> for Runtime {
@@ -1507,7 +1507,7 @@ impl pallet_assets::Config<Instance2> for Runtime {
 	type AssetId = u32;
 	type AssetIdParameter = codec::Compact<u32>;
 	type Currency = Balances;
-	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<DexOrigin, AccountId>>;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<AssetConversionOrigin, AccountId>>;
 	type ForceOrigin = EnsureRoot<AccountId>;
 	type AssetDeposit = AssetDeposit;
 	type AssetAccountDeposit = ConstU128<DOLLARS>;
