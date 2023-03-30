@@ -170,7 +170,7 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 		impl<Runtime: Pip20> #frame_support::interface::Selector for DefaultSelector<Runtime> {
 			type Selected = <Runtime as Pip20>::Currency;
 
-			fn select(&self, from: sp_core::H256) -> Result<Self::Selected, InterfaceError> {
+			fn select(&self, from: sp_core::H256) -> SelectorResult<Self::Selected> {
 				todo!();
 			}
 		}
@@ -182,7 +182,7 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 		impl<Runtime: Pip20> #frame_support::interface::Selector for RestrictedCurrency<Runtime> {
 			type Selected = <Runtime as Pip20>::Currency;
 
-			fn select(&self, from: sp_core::H256) -> Result<Self::Selected, InterfaceError> {
+			fn select(&self, from: sp_core::H256) -> SelectorResult<Self::Selected> {
 				todo!();
 			}
 		}
@@ -304,7 +304,7 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 				self,
 				origin: Self::RuntimeOrigin,
 				selectable: sp_core::H256,
-			) -> #frame_support::interface::InterfaceResultWithPostInfo {
+			) -> #frame_support::interface::CallResult {
 				#frame_support::dispatch_context::run_in_context(|| {
 					match self {
 						#(

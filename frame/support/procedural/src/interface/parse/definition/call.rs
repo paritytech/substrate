@@ -246,17 +246,7 @@ impl CallDef {
 				return Err(syn::Error::new(arg.pat.span(), msg))
 			};
 
-			let arg_ty = if let syn::Type::Path(path) = &*(arg.ty).clone() {
-				if let Some(qself) = &path.qself {
-					let msg = "Invalid interface::call, qualified arguments are not\
-					 	yet supported.";
-					return Err(syn::Error::new(arg.ty.span(), msg))
-				}
-
-				adapt_type_to_generic_if_self(&path.path)
-			} else {
-				arg.ty.clone()
-			};
+			let arg_ty = adapt_type_to_generic_if_self(arg.ty.clone());
 
 			args.push((!arg_attrs.is_empty(), arg_ident, arg_ty));
 		}
@@ -327,24 +317,35 @@ mod keyword {
 	syn::custom_keyword!(call_index);
 	syn::custom_keyword!(weight);
 	syn::custom_keyword!(RuntimeOrigin);
-	syn::custom_keyword!(InterfaceResult);
-	syn::custom_keyword!(InterfaceResultWithPostInfo);
+	syn::custom_keyword!(CallResult);
 	syn::custom_keyword!(compact);
 	syn::custom_keyword!(Select);
 }
 
-// TODO MAKE AKTUAL TYPE HERE TO LET THE EXPANSION CHOOSE
-fn adapt_type_to_generic_if_self(path: &syn::Path) -> Box<syn::Type> {
-	if let Some(ident) = path.segments.first() {
-		if ident.ident.clone() == syn::Ident::new("Self", ident.span()) {
-			let second = path.segments.iter().nth(1).unwrap().clone().ident;
-			Box::new(syn::Type::Verbatim(quote::quote!(<Runtime as Pip20>::#second)))
-		} else {
-			Box::new(syn::Type::Path(syn::TypePath { qself: None, path: path.clone() }))
-		}
-	} else {
-		Box::new(syn::Type::Path(syn::TypePath { qself: None, path: path.clone() }))
+fn adapt_type_to_generic_if_self(ty: Box<syn::Type>) -> Box<syn::Type> {
+	let mut type_path = if let syn::Type::Path(path) = *ty { path } else { return ty };
+
+	// Replace the `Self` in qualified path if existing
+	if let Some(q_self) = &type_path.qself {
+		let ty = adapt_type_to_generic_if_self(q_self.ty.clone());
+
+		type_path.qself = Some(syn::QSelf {
+			lt_token: q_self.lt_token,
+			ty,
+			position: q_self.position,
+			as_token: q_self.as_token,
+			gt_token: q_self.gt_token,
+		});
 	}
+
+	for segment in type_path.path.segments.iter_mut() {
+		if segment.ident == "Self" {
+			let rt_ident = syn::Ident::new("Runtime", proc_macro2::Span::call_site());
+			segment.ident = rt_ident;
+		}
+	}
+
+	Box::new(syn::Type::Path(type_path))
 }
 
 /// Parse attributes for item in interface trait definition
@@ -446,11 +447,8 @@ pub fn check_call_return_type(type_: &syn::Type) -> syn::Result<()> {
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
 			let lookahead = input.lookahead1();
-			if lookahead.peek(keyword::InterfaceResult) {
-				input.parse::<keyword::InterfaceResult>()?;
-				Ok(Self)
-			} else if lookahead.peek(keyword::InterfaceResultWithPostInfo) {
-				input.parse::<keyword::InterfaceResultWithPostInfo>()?;
+			if lookahead.peek(keyword::CallResult) {
+				input.parse::<keyword::CallResult>()?;
 				Ok(Self)
 			} else {
 				Err(lookahead.error())

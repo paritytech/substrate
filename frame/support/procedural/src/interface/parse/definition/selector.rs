@@ -238,8 +238,7 @@ mod keyword {
 	syn::custom_keyword!(interface);
 	syn::custom_keyword!(selector);
 	syn::custom_keyword!(default_selector);
-	syn::custom_keyword!(InterfaceError);
-	syn::custom_keyword!(Result);
+	syn::custom_keyword!(SelectorResult);
 	syn::custom_keyword!(H256);
 }
 
@@ -295,23 +294,21 @@ pub fn check_selector_first_arg_type(ty: &syn::Type) -> syn::Result<()> {
 	Ok(())
 }
 
-/// Check the return type is `Result<$type, InterfaceError>`
+/// Check the return type is `SelectorResult<T>`
 pub fn check_selector_return_type(ty: &syn::Type) -> syn::Result<Box<syn::Type>> {
 	pub struct CheckSelectorReturnType(Box<syn::Type>);
 	impl syn::parse::Parse for CheckSelectorReturnType {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-			input.parse::<keyword::Result>()?;
+			input.parse::<keyword::SelectorResult>()?;
 			input.parse::<syn::Token![<]>()?;
 			let ty = input.parse::<syn::Type>()?;
-			input.parse::<syn::Token![,]>()?;
-			input.parse::<keyword::InterfaceError>()?;
 			input.parse::<syn::Token![>]>()?;
 			Ok(Self(Box::new(ty)))
 		}
 	}
 
 	let check = syn::parse2::<CheckSelectorReturnType>(ty.to_token_stream()).map_err(|e| {
-		let msg = "Invalid type: expected `Result<$ident, InterfaceError>`";
+		let msg = "Invalid type: expected `SelectorResult<$ident>`";
 		let mut err = syn::Error::new(ty.span(), msg);
 		err.combine(e);
 		err

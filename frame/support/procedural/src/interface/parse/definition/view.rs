@@ -276,8 +276,7 @@ mod keyword {
 	syn::custom_keyword!(no_selector);
 	syn::custom_keyword!(use_selector);
 	syn::custom_keyword!(view_index);
-	syn::custom_keyword!(InterfaceError);
-	syn::custom_keyword!(Result);
+	syn::custom_keyword!(ViewResult);
 	syn::custom_keyword!(compact);
 	syn::custom_keyword!(Select);
 }
@@ -351,18 +350,16 @@ pub fn check_view_return_type(ty: &syn::Type) -> syn::Result<Box<syn::Type>> {
 	pub struct CheckViewReturnType(Box<syn::Type>);
 	impl syn::parse::Parse for CheckViewReturnType {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-			input.parse::<keyword::Result>()?;
+			input.parse::<keyword::ViewResult>()?;
 			input.parse::<syn::Token![<]>()?;
 			let ty = input.parse::<syn::Type>()?;
-			input.parse::<syn::Token![,]>()?;
-			input.parse::<keyword::InterfaceError>()?;
 			input.parse::<syn::Token![>]>()?;
 			Ok(Self(Box::new(ty)))
 		}
 	}
 
 	let check = syn::parse2::<CheckViewReturnType>(ty.to_token_stream()).map_err(|e| {
-		let msg = "Invalid type: expected `Result<$ident, InterfaceError>`";
+		let msg = "Invalid type: expected `ViewResult<$ident>`";
 		let mut err = syn::Error::new(ty.span(), msg);
 		err.combine(e);
 		err

@@ -518,6 +518,64 @@ impl From<TransactionalError> for DispatchError {
 	}
 }
 
+/// The "high-level" error enum of interfaces
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum InterfaceError {
+	/// It was not possible to match
+	/// the selectable.
+	NoMatchingSelectable,
+	/// Interface calls which do not
+	/// make use of selectables
+	/// will throw this, if the
+	/// selectable is not H256::zero()
+	ExpectedEmptySelectable,
+	/// Interface definitions can
+	/// define their own "ModuleError"
+	/// which works equal to
+	/// pallet errors.
+	Interface(ModuleError),
+}
+
+impl From<ModuleError> for InterfaceError {
+	fn from(m: ModuleError) -> Self {
+		Self::Interface(m)
+	}
+}
+
+impl From<InterfaceError> for &'static str {
+	fn from(e: InterfaceError) -> &'static str {
+		match e {
+			InterfaceError::NoMatchingSelectable => "NoMatchingSelectable",
+			InterfaceError::ExpectedEmptySelectable => "ExpectedEmptySelectable",
+			InterfaceError::Interface(ModuleError { message, .. }) =>
+				message.unwrap_or("Unknown module error"),
+		}
+	}
+}
+
+impl From<InterfaceError> for DispatchError {
+	fn from(value: InterfaceError) -> Self {
+		Self::Interface(value)
+	}
+}
+
+impl traits::Printable for InterfaceError {
+	fn print(&self) {
+		match self {
+			Self::NoMatchingSelectable => "NoMatchingSelectable".print(),
+			Self::ExpectedEmptySelectable => "ExpectedEmptySelectable".print(),
+			Self::Interface(ModuleError { index, error, message }) => {
+				index.print();
+				error.print();
+				if let Some(msg) = message {
+					msg.print();
+				}
+			},
+		}
+	}
+}
+
 /// Reason why a dispatch call failed.
 #[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, PartialEq, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -534,6 +592,8 @@ pub enum DispatchError {
 	BadOrigin,
 	/// A custom error in a module.
 	Module(ModuleError),
+	/// An interface error
+	Interface(InterfaceError),
 	/// At least one consumer is remaining so the account cannot be destroyed.
 	ConsumerRemaining,
 	/// There are no providers so the account cannot be created.
@@ -660,6 +720,7 @@ impl From<DispatchError> for &'static str {
 			Other(msg) => msg,
 			CannotLookup => "Cannot lookup",
 			BadOrigin => "Bad origin",
+			Interface(interface_error) => interface_error.into(),
 			Module(ModuleError { message, .. }) => message.unwrap_or("Unknown module error"),
 			ConsumerRemaining => "Consumer remaining",
 			NoProviders => "No providers",
@@ -691,6 +752,7 @@ impl traits::Printable for DispatchError {
 			Other(err) => err.print(),
 			CannotLookup => "Cannot lookup".print(),
 			BadOrigin => "Bad origin".print(),
+			Interface(e) => e.print(),
 			Module(ModuleError { index, error, message }) => {
 				index.print();
 				error.print();
