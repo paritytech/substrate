@@ -117,10 +117,10 @@
 //! `payout_stakers`, which pays the reward to the validator as well as its nominators. Only the
 //! [`Config::MaxExposurePageSize`] nominator rewards can be claimed in a single call. When the
 //! number of nominators exceeds [`Config::MaxExposurePageSize`], then the nominators are stored in
-//! multiple pages of [`Config::MaxExposurePageSize`] each with upto maximum of
+//! multiple pages of [`Config::MaxExposurePageSize`], each with up to a maximum of
 //! [`Config::MaxExposurePageCount`] pages. To pay out all nominators, `payout_stakers` must be
-//! called once for each available page. In a scenario where number of nominators N exceed M where M
-//! = [`Config::MaxExposurePageSize`] * [`Config::MaxExposurePageCount`], only top M nominators by
+//! called once for each available page. In a scenario where the number of nominators N exceed M, where M
+//! = [`Config::MaxExposurePageSize`] * [`Config::MaxExposurePageCount`], only the top M nominators by
 //! stake balance are paid out. The rest of the nominators are not paid out. Paging exists to limit
 //! the i/o cost to mutate storage for each nominator's account.
 //!
@@ -476,7 +476,7 @@ pub struct StakingLedger<T: Config> {
 	/// for validators.
 	///
 	/// This is deprecated as of V14 in favor of `T::ClaimedRewards` and will be removed in future.
-	/// Refer issue: #13034
+	/// Refer to issue <https://github.com/paritytech/substrate/issues/13034>
 	pub legacy_claimed_rewards: BoundedVec<EraIndex, T::HistoryDepth>,
 }
 

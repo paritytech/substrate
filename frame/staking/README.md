@@ -91,7 +91,7 @@ valid behavior_ while _punishing any misbehavior or lack of availability_.
 Rewards must be claimed for each era before it gets too old by [`HistoryDepth`] using the
 `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
 validator as well as its nominators. Rewards are paged to maximum of [`Config::MaxExposurePageSize`]
-nominators per call. Each page of staker payout needs to be called separately to ensure all nominators are
+nominators per page. Each page of staker payout needs to be called separately to ensure all nominators are
 paid. This is to limit the i/o cost to mutate storage for each nominator's account.
 
 Slashing can occur at any point in time, once misbehavior is reported. Once slashing is
