@@ -40,22 +40,20 @@ use std::{
 
 use sp_wasm_interface::HostFunctions;
 
+pub const DEFAULT_WASM_METHOD: WasmExecutionMethod = WasmExecutionMethod::Compiled {
+	instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite,
+};
+
 /// Specification of different methods of executing the runtime Wasm code.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub enum WasmExecutionMethod {
-	/// Uses the Wasmi interpreter.
-	Interpreted,
+	// /// Uses the Wasmi interpreter.
+	// Interpreted,
 	/// Uses the Wasmtime compiled runtime.
 	Compiled {
 		/// The instantiation strategy to use.
 		instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy,
 	},
-}
-
-impl Default for WasmExecutionMethod {
-	fn default() -> WasmExecutionMethod {
-		WasmExecutionMethod::Interpreted
-	}
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -299,21 +297,21 @@ where
 	H: HostFunctions,
 {
 	match wasm_method {
-		WasmExecutionMethod::Interpreted => {
-			// Wasmi doesn't have any need in a cache directory.
-			//
-			// We drop the cache_path here to silence warnings that cache_path is not used if
-			// compiling without the `wasmtime` flag.
-			let _ = cache_path;
-
-			sc_executor_wasmi::create_runtime(
-				blob,
-				heap_alloc_strategy,
-				H::host_functions(),
-				allow_missing_func_imports,
-			)
-			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
-		},
+		// WasmExecutionMethod::Interpreted => {
+		// 	// Wasmi doesn't have any need in a cache directory.
+		// 	//
+		// 	// We drop the cache_path here to silence warnings that cache_path is not used if
+		// 	// compiling without the `wasmtime` flag.
+		// 	let _ = cache_path;
+		//
+		// 	sc_executor_wasmi::create_runtime(
+		// 		blob,
+		// 		heap_alloc_strategy,
+		// 		H::host_functions(),
+		// 		allow_missing_func_imports,
+		// 	)
+		// 	.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
+		// },
 		WasmExecutionMethod::Compiled { instantiation_strategy } =>
 			sc_executor_wasmtime::create_runtime::<H>(
 				blob,

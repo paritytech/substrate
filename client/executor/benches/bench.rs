@@ -33,7 +33,7 @@ use std::sync::{
 
 #[derive(Clone)]
 enum Method {
-	Interpreted,
+	// Interpreted,
 	Compiled { instantiation_strategy: InstantiationStrategy, precompile: bool },
 }
 
@@ -50,17 +50,18 @@ fn initialize(
 	method: Method,
 ) -> Arc<dyn WasmModule> {
 	let blob = RuntimeBlob::uncompress_if_needed(runtime).unwrap();
-	let host_functions = sp_io::SubstrateHostFunctions::host_functions();
+	// let host_functions = sp_io::SubstrateHostFunctions::host_functions();
 	let allow_missing_func_imports = true;
 
 	match method {
-		Method::Interpreted => sc_executor_wasmi::create_runtime(
-			blob,
-			DEFAULT_HEAP_ALLOC_STRATEGY,
-			host_functions,
-			allow_missing_func_imports,
-		)
-		.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
+		// Method::Interpreted => sc_executor_wasmi::create_runtime(
+		// 	blob,
+		// 	DEFAULT_HEAP_ALLOC_STRATEGY,
+		// 	host_functions,
+		// 	allow_missing_func_imports,
+		// )
+		// .map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
+
 		Method::Compiled { instantiation_strategy, precompile } => {
 			let config = sc_executor_wasmtime::Config {
 				allow_missing_func_imports,

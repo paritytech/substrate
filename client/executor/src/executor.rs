@@ -111,6 +111,14 @@ impl<H> WasmExecutorBuilder<H> {
 		}
 	}
 
+	/// The wasm execution method that should be used by the executor.
+	///
+	/// Default to
+	pub fn with_execution_method(mut self, method: WasmExecutionMethod) -> Self {
+		self.method = method;
+		self
+	}
+
 	/// Create the wasm executor with the given number of `heap_alloc_strategy` for onchain runtime
 	/// calls.
 	pub fn with_onchain_heap_alloc_strategy(
