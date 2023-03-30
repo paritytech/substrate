@@ -40,10 +40,6 @@ use std::{
 
 use sp_wasm_interface::HostFunctions;
 
-pub const DEFAULT_WASM_METHOD: WasmExecutionMethod = WasmExecutionMethod::Compiled {
-	instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite,
-};
-
 /// Specification of different methods of executing the runtime Wasm code.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub enum WasmExecutionMethod {
@@ -54,6 +50,14 @@ pub enum WasmExecutionMethod {
 		/// The instantiation strategy to use.
 		instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy,
 	},
+}
+
+impl Default for WasmExecutionMethod {
+	fn default() -> Self {
+		Self::Compiled {
+			instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite,
+		}
+	}
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

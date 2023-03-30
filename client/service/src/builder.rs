@@ -244,7 +244,8 @@ pub fn new_wasm_executor<H: HostFunctions>(config: &Configuration) -> WasmExecut
 	let extra_pages =
 		config.default_heap_pages.map(|p| p as u32).unwrap_or(DEFAULT_HEAP_ALLOC_PAGES);
 	let strategy = HeapAllocStrategy::Static { extra_pages };
-	WasmExecutor::<H>::builder(config.wasm_method)
+	WasmExecutor::<H>::builder()
+		.with_execution_method(config.wasm_method)
 		.with_onchain_heap_alloc_strategy(strategy)
 		.with_onchain_heap_alloc_strategy(strategy)
 		.with_max_runtime_instances(config.max_runtime_instances)

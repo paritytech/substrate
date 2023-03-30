@@ -287,7 +287,7 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 	{
 		let executor = executor.into().unwrap_or_else(|| {
 			NativeElseWasmExecutor::new_with_wasm_executor(
-				WasmExecutor::builder(WasmExecutionMethod::Interpreted).build(),
+				WasmExecutor::builder().build(),
 			)
 		});
 		let executor = LocalCallExecutor::new(

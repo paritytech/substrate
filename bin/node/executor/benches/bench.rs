@@ -197,7 +197,7 @@ fn bench_execute_block(c: &mut Criterion) {
 			};
 
 			let executor = NativeElseWasmExecutor::new_with_wasm_executor(
-				WasmExecutor::builder(WasmExecutionMethod::Interpreted).build(),
+				WasmExecutor::builder().build(),
 			);
 			let runtime_code = RuntimeCode {
 				code_fetcher: &sp_core::traits::WrappedRuntimeCode(compact_code_unwrap().into()),

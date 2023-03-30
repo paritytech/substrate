@@ -8816,7 +8816,6 @@ dependencies = [
  "paste",
  "regex",
  "sc-executor-common",
- "sc-executor-wasmi",
  "sc-executor-wasmtime",
  "sc-runtime-test",
  "sc-tracing",

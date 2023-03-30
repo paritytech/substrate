@@ -79,9 +79,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 
-		let executor = WasmExecutor::<sp_io::SubstrateHostFunctions>::builder(
-			WasmExecutionMethod::Interpreted,
-		)
+		let executor = WasmExecutor::<sp_io::SubstrateHostFunctions>::builder()
 		.build();
 		let res = executor
 			.uncached_call(

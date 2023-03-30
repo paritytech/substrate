@@ -180,7 +180,7 @@ fn record_proof_works() {
 	// Use the proof backend to execute `execute_block`.
 	let mut overlay = Default::default();
 	let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new_with_wasm_executor(
-		WasmExecutor::builder(WasmExecutionMethod::Interpreted).build(),
+		WasmExecutor::builder().build(),
 	);
 	execution_proof_check_on_trie_backend(
 		&backend,

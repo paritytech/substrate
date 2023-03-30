@@ -54,9 +54,6 @@ pub const DEFAULT_WASMTIME_INSTANTIATION_STRATEGY: WasmtimeInstantiationStrategy
 #[derive(Debug, Clone, Copy, ValueEnum)]
 #[value(rename_all = "kebab-case")]
 pub enum WasmExecutionMethod {
-	/// Uses an interpreter.
-	#[clap(name = "interpreted-i-know-what-i-do")]
-	Interpreted,
 	/// Uses a compiled runtime.
 	Compiled,
 }
@@ -64,7 +61,6 @@ pub enum WasmExecutionMethod {
 impl std::fmt::Display for WasmExecutionMethod {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			Self::Interpreted => write!(f, "Interpreted"),
 			Self::Compiled => write!(f, "Compiled"),
 		}
 	}
@@ -77,7 +73,6 @@ pub fn execution_method_from_cli(
 	instantiation_strategy: WasmtimeInstantiationStrategy,
 ) -> sc_service::config::WasmExecutionMethod {
 	match execution_method {
-		WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
 		WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled {
 			instantiation_strategy: match instantiation_strategy {
 				WasmtimeInstantiationStrategy::PoolingCopyOnWrite =>

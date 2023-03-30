@@ -98,10 +98,10 @@ impl<H> WasmExecutorBuilder<H> {
 	/// Create a new instance of `Self`
 	///
 	/// - `method`: The wasm execution method that should be used by the executor.
-	pub fn new(method: WasmExecutionMethod) -> Self {
+	pub fn new() -> Self {
 		Self {
 			_phantom: PhantomData,
-			method,
+			method: WasmExecutionMethod::default(),
 			onchain_heap_alloc_strategy: None,
 			offchain_heap_alloc_strategy: None,
 			max_runtime_instances: 2,
@@ -290,8 +290,8 @@ where
 	}
 
 	/// Instantiate a builder for creating an instance of `Self`.
-	pub fn builder(method: WasmExecutionMethod) -> WasmExecutorBuilder<H> {
-		WasmExecutorBuilder::new(method)
+	pub fn builder() -> WasmExecutorBuilder<H> {
+		WasmExecutorBuilder::new()
 	}
 
 	/// Ignore missing function imports if set true.
@@ -726,7 +726,7 @@ mod tests {
 	#[test]
 	fn native_executor_registers_custom_interface() {
 		let executor = NativeElseWasmExecutor::<MyExecutorDispatch>::new_with_wasm_executor(
-			WasmExecutor::builder(WasmExecutionMethod::Interpreted).build(),
+			WasmExecutor::builder().build(),
 		);
 
 		fn extract_host_functions<H>(

@@ -246,7 +246,7 @@ fn node_config<
 		state_pruning: Default::default(),
 		blocks_pruning: BlocksPruning::KeepFinalized,
 		chain_spec: Box::new((*spec).clone()),
-		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
+		wasm_method: Default::default(),
 		wasm_runtime_overrides: Default::default(),
 		execution_strategies: Default::default(),
 		rpc_http: None,

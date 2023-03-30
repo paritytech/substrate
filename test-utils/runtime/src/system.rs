@@ -375,7 +375,7 @@ mod tests {
 
 	fn executor() -> NativeElseWasmExecutor<NativeDispatch> {
 		NativeElseWasmExecutor::new_with_wasm_executor(
-			WasmExecutor::builder(WasmExecutionMethod::Interpreted).build(),
+			WasmExecutor::builder().build(),
 		)
 	}
 
