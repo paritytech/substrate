@@ -574,7 +574,7 @@ fn remove_already_removed_approval_fails() {
 }
 
 #[test]
-fn spending_in_batch_respects_max_total() {
+fn spending_local_in_batch_respects_max_total() {
 	new_test_ext().execute_with(|| {
 		// Respect the `max_total` for the given origin.
 		assert_ok!(RuntimeCall::from(UtilityCall::batch_all {
@@ -590,6 +590,47 @@ fn spending_in_batch_respects_max_total() {
 				calls: vec![
 					RuntimeCall::from(TreasuryCall::spend_local { amount: 2, beneficiary: 100 }),
 					RuntimeCall::from(TreasuryCall::spend_local { amount: 4, beneficiary: 101 })
+				]
+			})
+			.dispatch(RuntimeOrigin::signed(10)),
+			Error::<Test, _>::InsufficientPermission
+		);
+	})
+}
+
+#[test]
+fn spending_in_batch_respects_max_total() {
+	new_test_ext().execute_with(|| {
+		// Respect the `max_total` for the given origin.
+		assert_ok!(RuntimeCall::from(UtilityCall::batch_all {
+			calls: vec![
+				RuntimeCall::from(TreasuryCall::spend {
+					asset_kind: 0,
+					amount: 2,
+					beneficiary: 100
+				}),
+				RuntimeCall::from(TreasuryCall::spend {
+					asset_kind: 0,
+					amount: 2,
+					beneficiary: 101
+				})
+			]
+		})
+		.dispatch(RuntimeOrigin::signed(10)));
+
+		assert_err_ignore_postinfo!(
+			RuntimeCall::from(UtilityCall::batch_all {
+				calls: vec![
+					RuntimeCall::from(TreasuryCall::spend {
+						asset_kind: 0,
+						amount: 2,
+						beneficiary: 100
+					}),
+					RuntimeCall::from(TreasuryCall::spend {
+						asset_kind: 0,
+						amount: 4,
+						beneficiary: 101
+					})
 				]
 			})
 			.dispatch(RuntimeOrigin::signed(10)),

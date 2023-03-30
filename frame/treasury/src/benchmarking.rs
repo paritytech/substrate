@@ -43,6 +43,20 @@ fn setup_proposal<T: Config<I>, I: 'static>(
 	(caller, value, beneficiary_lookup)
 }
 
+// Create the pre-requisite information needed to create a treasury `spend` call.
+fn setup_spend_call<T: Config<I, AssetKind = u32>, I: 'static>(
+	u: u32,
+) -> (T::AssetKind, T::AccountId, PayBalanceOf<T, I>, AccountIdLookupOf<T>) {
+	let caller = account("caller", u, SEED);
+	// let _ = Assets::force_create(RuntimeOrigin::root(), 0, &caller, true, 100);
+	// let _ = Assets::mint_into(0, &caller, 100);
+
+	let value: PayBalanceOf<T, I> = 1000;
+	let beneficiary = account("beneficiary", u, SEED);
+	let beneficiary_lookup = T::Lookup::unlookup(beneficiary);
+	(0, caller, value, beneficiary_lookup)
+}
+
 // Create proposals that are approved for use in `on_initialize`.
 fn create_approved_proposals<T: Config<I>, I: 'static>(n: u32) -> Result<(), &'static str> {
 	for i in 0..n {
@@ -56,12 +70,14 @@ fn create_approved_proposals<T: Config<I>, I: 'static>(n: u32) -> Result<(), &'s
 }
 
 // Create pending payments that are approved for use in `on_initialize`.
-fn create_pending_payments<T: Config<I>, I: 'static>(n: u32) -> Result<(), &'static str> {
+fn create_pending_payments<T: Config<I, AssetKind = u32>, I: 'static>(
+	n: u32,
+) -> Result<(), &'static str> {
 	for i in 0..n {
-		let (caller, value, lookup) = setup_proposal::<T, I>(i);
+		let (caller, value, lookup) = setup_spend_call::<T, I>(i);
 		Treasury::<T, I>::spend(RawOrigin::Signed(caller).into(), 0, value, lookup)?;
 	}
-	ensure!(<PendingPayments<T, I>>::count() == n as usize, "Not all approved");
+	ensure!(<PendingPayments<T, I>>::count() == n, "Enpty pending payments storage");
 	Ok(())
 }
 
@@ -78,11 +94,11 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 benchmarks_instance_pallet! {
 	// This benchmark is short-circuited if `SpendOrigin` cannot provide
 	// a successful origin, in which case `spend` is un-callable and can use weight=0.
-	spend {
+	spend_local {
 		let (_, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		let origin = T::SpendOrigin::try_successful_origin();
 		let beneficiary = T::Lookup::lookup(beneficiary_lookup.clone()).unwrap();
-		let call = Call::<T, I>::spend { amount: value, beneficiary: beneficiary_lookup };
+		let call = Call::<T, I>::spend_local { amount: value, beneficiary: beneficiary_lookup };
 	}: {
 		if let Ok(origin) = origin.clone() {
 			call.dispatch_bypass_filter(origin)?;
@@ -91,6 +107,24 @@ benchmarks_instance_pallet! {
 	verify {
 		if origin.is_ok() {
 			assert_last_event::<T, I>(Event::SpendApproved { proposal_index: 0, amount: value, beneficiary }.into())
+		}
+	}
+
+	// This benchmark is short-circuited if `SpendOrigin` cannot provide
+	// a successful origin, in which case `spend` is un-callable and can use weight=0.
+	spend {
+		let (asset_kind, _, value, beneficiary_lookup) = setup_spend_call::<T, _>(SEED);
+		let origin = T::SpendOrigin::try_successful_origin();
+		let beneficiary = T::Lookup::lookup(beneficiary_lookup.clone()).unwrap();
+		let call = Call::<T, I>::spend { asset_kind: 0, amount: value, beneficiary: beneficiary_lookup };
+	}: {
+		if let Ok(origin) = origin.clone() {
+			call.dispatch_bypass_filter(origin)?;
+		}
+	}
+	verify {
+		if origin.is_ok() {
+			assert_last_event::<T, I>(Event::PaymentQueued{ payment_index: 0, asset_kind, amount: value, beneficiary }.into())
 		}
 	}
 
@@ -150,7 +184,7 @@ benchmarks_instance_pallet! {
 
 	on_initialize_pending_payments {
 		let p in 0 .. T::MaxApprovals::get();
-		create_pending_payments::<T, _>(p)?;
+		create_pending_payments::<T,_>(p)?;
 	}: {
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 	}
