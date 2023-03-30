@@ -394,7 +394,9 @@ mod tests {
 			Default::default(),
 			&*backend,
 		)
-		.unwrap().build().unwrap();
+		.unwrap()
+		.build()
+		.unwrap();
 
 		let proof_empty_block = block.proof.expect("Proof is build on request").encoded_size();
 
