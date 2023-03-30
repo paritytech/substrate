@@ -639,7 +639,11 @@ fn check_pallet_number(input: TokenStream2, pallet_num: usize) -> Result<()> {
 				"{} To increase this limit, enable the tuples-{} feature of [frame_support]. {}",
 				"The number of pallets exceeds the maximum number of tuple elements.",
 				max_pallet_num + 32,
-				if no_feature { "If the feature does not exist - it needs to be implemented." } else { "" },
+				if no_feature {
+					"If the feature does not exist - it needs to be implemented."
+				} else {
+					""
+				},
 			),
 		))
 	}
