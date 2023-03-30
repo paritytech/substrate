@@ -20,7 +20,9 @@ use codec::{Decode as _, Encode as _};
 use sc_executor_common::{
 	error::Error,
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{HeapAllocStrategy, WasmModule, DEFAULT_HEAP_ALLOC_STRATEGY},
+	wasm_runtime::{
+		HeapAllocStrategy, WasmModule, DEFAULT_HEAP_ALLOC_PAGES, DEFAULT_HEAP_ALLOC_STRATEGY,
+	},
 };
 use sc_runtime_test::wasm_binary_unwrap;
 
@@ -93,7 +95,7 @@ impl RuntimeBuilder {
 			instantiation_strategy,
 			canonicalize_nans: false,
 			deterministic_stack: false,
-			heap_pages: HeapAllocStrategy::Static { extra_pages: 1024 },
+			heap_pages: DEFAULT_HEAP_ALLOC_STRATEGY,
 			precompile_runtime: false,
 			tmpdir: None,
 		}

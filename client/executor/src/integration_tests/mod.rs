@@ -24,7 +24,7 @@ use codec::{Decode, Encode};
 use sc_executor_common::{
 	error::{Error, WasmError},
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{HeapAllocStrategy, WasmModule},
+	wasm_runtime::{HeapAllocStrategy, WasmModule, DEFAULT_HEAP_ALLOC_STRATEGY},
 };
 use sc_runtime_test::wasm_binary_unwrap;
 use sp_core::{
@@ -557,7 +557,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(interpreted_only heap_is_reset_between_calls);
 fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
-	let runtime = mk_test_runtime(wasm_method, HeapAllocStrategy::Static { extra_pages: 1024 });
+	let runtime = mk_test_runtime(wasm_method, DEFAULT_HEAP_ALLOC_STRATEGY);
 	let mut instance = runtime.new_instance().unwrap();
 
 	let heap_base = instance
