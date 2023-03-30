@@ -386,6 +386,10 @@ impl<T: Config> DeletionQueueManager<T> {
 	}
 
 	/// Fetch the next contract to be deleted.
+	///
+	/// Note:
+	/// we use the delete counter to get the next value to read from the queue and thus don't pay
+	/// the cost of an extra call to `sp_io::storage::next_key` to lookup the next entry in the map
 	fn next(&mut self) -> Option<DeletionQueueEntry<T>> {
 		if self.is_empty() {
 			return None

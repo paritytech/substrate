@@ -903,10 +903,6 @@ pub mod pallet {
 
 	/// A pair of monotonic counters used to track the latest contract marked for deletion
 	/// and the latest deleted contract in queue.
-	///
-	/// When we iterate the map to remove contracts, we simply use the delete counter and
-	/// don't pay the cost of an extra call to `sp_io::storage::next_key` to lookup the next entry
-	/// in the map
 	#[pallet::storage]
 	pub(crate) type DeletionQueueCounter<T: Config> =
 		StorageValue<_, DeletionQueueManager<T>, ValueQuery>;
