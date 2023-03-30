@@ -54,7 +54,7 @@ use frame_system::{
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
-use pallet_dex::{NativeOrAssetId, NativeOrAssetIdConverter};
+use pallet_asset_conversion::{NativeOrAssetId, NativeOrAssetIdConverter};
 use pallet_election_provider_multi_phase::SolutionAccuracyOf;
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use pallet_nfts::PalletFeatures;
@@ -1525,13 +1525,13 @@ impl pallet_assets::Config<Instance2> for Runtime {
 }
 
 parameter_types! {
-	pub const DexPalletId: PalletId = PalletId(*b"py/dexer");
+	pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
 	pub AllowMultiAssetPools: bool = true;
 	pub const PoolSetupFee: Balance = 1 * DOLLARS; // should be more or equal to the existential deposit
 	pub const MintMinLiquidity: Balance = 100;  // 100 is good enough when the main currency has 10-12 decimals.
 }
 
-impl pallet_dex::Config for Runtime {
+impl pallet_asset_conversion::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
@@ -1542,11 +1542,11 @@ impl pallet_dex::Config for Runtime {
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type MultiAssetId = NativeOrAssetId<u32>;
 	type PoolAssetId = <Self as pallet_assets::Config<Instance2>>::AssetId;
-	type PalletId = DexPalletId;
+	type PalletId = AssetConversionPalletId;
 	type LPFee = ConstU32<3>; // means 0.3%
 	type PoolSetupFee = PoolSetupFee;
-	type PoolSetupFeeReceiver = DexOrigin;
-	type WeightInfo = pallet_dex::weights::SubstrateWeight<Runtime>;
+	type PoolSetupFeeReceiver = AssetConversionOrigin;
+	type WeightInfo = pallet_asset_conversion::weights::SubstrateWeight<Runtime>;
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<4>;
 	type MintMinLiquidity = MintMinLiquidity;
@@ -1871,7 +1871,7 @@ construct_runtime!(
 		NominationPools: pallet_nomination_pools,
 		RankedPolls: pallet_referenda::<Instance2>,
 		RankedCollective: pallet_ranked_collective,
-		Dex: pallet_dex,
+		AssetConversion: pallet_asset_conversion,
 		FastUnstake: pallet_fast_unstake,
 		MessageQueue: pallet_message_queue,
 		Pov: frame_benchmarking_pallet_pov,
@@ -1956,7 +1956,7 @@ mod benches {
 		[pallet_contracts, Contracts]
 		[pallet_core_fellowship, CoreFellowship]
 		[pallet_democracy, Democracy]
-		[pallet_dex, Dex]
+		[pallet_asset_conversion, AssetConversion]
 		[pallet_election_provider_multi_phase, ElectionProviderMultiPhase]
 		[pallet_election_provider_support_benchmarking, EPSBench::<Runtime>]
 		[pallet_elections_phragmen, Elections]
@@ -2280,7 +2280,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_dex::DexApi<
+	impl pallet_asset_conversion::AssetConversionApi<
 		Block,
 		Balance,
 		u128,
@@ -2288,15 +2288,15 @@ impl_runtime_apis! {
 	> for Runtime
 	{
 		fn quote_price_exact_tokens_for_tokens(asset1: NativeOrAssetId<u32>, asset2: NativeOrAssetId<u32>, amount: u128, include_fee: bool) -> Option<Balance> {
-			Dex::quote_price_exact_tokens_for_tokens(asset1, asset2, amount, include_fee)
+			AssetConversion::quote_price_exact_tokens_for_tokens(asset1, asset2, amount, include_fee)
 		}
 
 		fn quote_price_tokens_for_exact_tokens(asset1: NativeOrAssetId<u32>, asset2: NativeOrAssetId<u32>, amount: u128, include_fee: bool) -> Option<Balance> {
-			Dex::quote_price_tokens_for_exact_tokens(asset1, asset2, amount, include_fee)
+			AssetConversion::quote_price_tokens_for_exact_tokens(asset1, asset2, amount, include_fee)
 		}
 
 		fn get_reserves(asset1: NativeOrAssetId<u32>, asset2: NativeOrAssetId<u32>) -> Option<(Balance, Balance)> {
-			Dex::get_reserves(asset1, asset2).ok()
+			AssetConversion::get_reserves(asset1, asset2).ok()
 		}
 	}
 

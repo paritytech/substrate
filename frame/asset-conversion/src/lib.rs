@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Substrate DEX
+//! # Substrate Asset Conversion pallet
 //!
-//! Substrate DEX pallet based on [Uniswap V2](https://github.com/Uniswap/v2-core) logic.
+//! Substrate Asset Conversion pallet based on the [Uniswap V2](https://github.com/Uniswap/v2-core) logic.
 //!
 //! ## Overview
 //!
@@ -33,7 +33,7 @@
 //!
 //! ```text
 //! curl -sS -H "Content-Type: application/json" -d \
-//! '{"id":1, "jsonrpc":"2.0", "method": "state_call", "params": ["DexApi_quote_price_tokens_for_exact_tokens", "0x0101000000000000000000000011000000000000000000"]}' \
+//! '{"id":1, "jsonrpc":"2.0", "method": "state_call", "params": ["AssetConversionApi_quote_price_tokens_for_exact_tokens", "0x0101000000000000000000000011000000000000000000"]}' \
 //! http://localhost:9933/
 //! ```
 
@@ -155,7 +155,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxSwapPathLength: Get<u32>;
 
-		/// The dex's pallet id, used for deriving its sovereign account ID.
+		/// The pallet's id, used for deriving its sovereign account ID.
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
 
@@ -986,7 +986,7 @@ where
 }
 
 sp_api::decl_runtime_apis! {
-	pub trait DexApi<Balance, AssetBalance, AssetId> where
+	pub trait AssetConversionApi<Balance, AssetBalance, AssetId> where
 		Balance: Codec + MaybeDisplay,
 		AssetBalance: frame_support::traits::tokens::Balance,
 		AssetId: Codec + MaybeDisplay

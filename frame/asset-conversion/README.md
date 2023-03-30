@@ -1,4 +1,4 @@
-# pallet-dex
+# asset-conversion
 
 ## A swap pallet
 
@@ -15,7 +15,7 @@ asset. This amount of asset will then be swapped to native by the implementation
 
 
 
-# pallet-dex
+# asset-conversion
 
 ## A swap pallet
 
@@ -35,7 +35,7 @@ Here is an example `state_call` that asks for a quote of a pool of native versus
 
 ```text
 curl -sS -H "Content-Type: application/json" -d \
-'{"id":1, "jsonrpc":"2.0", "method": "state_call", "params": ["DexApi_quote_price", "0x0101000000000000000000000011"]}' \
+'{"id":1, "jsonrpc":"2.0", "method": "state_call", "params": ["AssetConversionApi_quote_price", "0x0101000000000000000000000011"]}' \
 http://localhost:9933/
 ```
 

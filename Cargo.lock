@@ -3631,6 +3631,7 @@ dependencies = [
  "log",
  "node-primitives",
  "pallet-alliance",
+ "pallet-asset-conversion",
  "pallet-asset-tx-payment",
  "pallet-assets",
  "pallet-authority-discovery",
@@ -3646,7 +3647,6 @@ dependencies = [
  "pallet-conviction-voting",
  "pallet-core-fellowship",
  "pallet-democracy",
- "pallet-dex",
  "pallet-election-provider-multi-phase",
  "pallet-election-provider-support-benchmarking",
  "pallet-elections-phragmen",
@@ -4992,10 +4992,10 @@ dependencies = [
  "node-inspect",
  "node-primitives",
  "node-rpc",
+ "pallet-asset-conversion",
  "pallet-asset-tx-payment",
  "pallet-assets",
  "pallet-balances",
- "pallet-dex",
  "pallet-im-online",
  "pallet-timestamp",
  "pallet-transaction-payment",
@@ -5254,9 +5254,9 @@ dependencies = [
  "log",
  "node-executor",
  "node-primitives",
+ "pallet-asset-conversion",
  "pallet-asset-tx-payment",
  "pallet-assets",
- "pallet-dex",
  "pallet-transaction-payment",
  "parity-scale-codec",
  "sc-block-builder",
@@ -5546,6 +5546,26 @@ dependencies = [
  "scale-info",
  "sp-core",
  "sp-core-hashing",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-asset-conversion"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-balances",
+ "parity-scale-codec",
+ "primitive-types",
+ "scale-info",
+ "sp-api",
+ "sp-arithmetic",
+ "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
@@ -5959,26 +5979,6 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "pallet-dex"
-version = "4.0.0-dev"
-dependencies = [
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "pallet-assets",
- "pallet-balances",
- "parity-scale-codec",
- "primitive-types",
- "scale-info",
- "sp-api",
- "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",

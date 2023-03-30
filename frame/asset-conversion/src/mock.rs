@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test environment for Dex pallet.
+//! Test environment for Asset Conversion pallet.
 
 use super::*;
-use crate as pallet_dex;
+use crate as pallet_asset_conversion;
 
 use frame_support::{
 	construct_runtime,
@@ -47,7 +47,7 @@ construct_runtime!(
 		Balances: pallet_balances,
 		Assets: pallet_assets::<Instance1>,
 		PoolAssets: pallet_assets::<Instance2>,
-		Dex: pallet_dex,
+		AssetConversion: pallet_asset_conversion,
 	}
 );
 
@@ -125,7 +125,8 @@ impl pallet_assets::Config<Instance2> for Test {
 	type AssetId = u32;
 	type AssetIdParameter = u32;
 	type Currency = Balances;
-	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<DexOrigin, Self::AccountId>>;
+	type CreateOrigin =
+		AsEnsureOriginWithArg<EnsureSignedBy<AssetConversionOrigin, Self::AccountId>>;
 	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type AssetDeposit = ConstU128<0>;
 	type AssetAccountDeposit = ConstU128<0>;
@@ -143,12 +144,12 @@ impl pallet_assets::Config<Instance2> for Test {
 }
 
 parameter_types! {
-	pub const DexPalletId: PalletId = PalletId(*b"py/dexer");
+	pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
 	pub storage AllowMultiAssetPools: bool = true;
 }
 
 ord_parameter_types! {
-	pub const DexOrigin: u128 = AccountIdConversion::<u128>::into_account_truncating(&DexPalletId::get());
+	pub const AssetConversionOrigin: u128 = AccountIdConversion::<u128>::into_account_truncating(&AssetConversionPalletId::get());
 }
 
 impl Config for Test {
@@ -159,11 +160,11 @@ impl Config for Test {
 	type PoolAssetId = u32;
 	type Assets = Assets;
 	type PoolAssets = PoolAssets;
-	type PalletId = DexPalletId;
+	type PalletId = AssetConversionPalletId;
 	type WeightInfo = ();
 	type LPFee = ConstU32<3>; // means 0.3%
 	type PoolSetupFee = ConstU128<5>; // should be more or equal to the existential deposit
-	type PoolSetupFeeReceiver = DexOrigin;
+	type PoolSetupFeeReceiver = AssetConversionOrigin;
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<4>;
 	type MintMinLiquidity = ConstU128<100>; // 100 is good enough when the main currency has 12 decimals.

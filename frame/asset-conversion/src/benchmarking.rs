@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Dex pallet benchmarking.
+//! Asset Conversion pallet benchmarking.
 
 #![cfg(feature = "runtime-benchmarks")]
 
@@ -33,7 +33,7 @@ use frame_system::RawOrigin as SystemOrigin;
 use sp_runtime::traits::{Bounded, StaticLookup};
 use sp_std::prelude::*;
 
-use crate::Pallet as Dex;
+use crate::Pallet as AssetConversion;
 
 const INITIAL_ASSET_BALANCE: u128 = 1_000_000_000_000;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
@@ -44,7 +44,7 @@ fn get_lp_token_id<T: Config>() -> T::PoolAssetId
 where
 	T::PoolAssetId: Into<u32>,
 {
-	let next_id: u32 = Dex::<T>::get_next_pool_asset_id().into();
+	let next_id: u32 = AssetConversion::<T>::get_next_pool_asset_id().into();
 	(next_id - 1).into()
 }
 
@@ -77,7 +77,11 @@ where
 	let (_, _) = create_asset::<T>(asset1);
 	let (caller, caller_lookup) = create_asset::<T>(asset2);
 
-	assert_ok!(Dex::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset1, asset2));
+	assert_ok!(AssetConversion::<T>::create_pool(
+		SystemOrigin::Signed(caller.clone()).into(),
+		asset1,
+		asset2
+	));
 	let lp_token = get_lp_token_id::<T>();
 
 	(lp_token, caller, caller_lookup)
@@ -122,17 +126,17 @@ benchmarks! {
 	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2, add_amount.into(), 1000.into(), 0.into(), 0.into(), caller.clone())
 	verify {
 		let pool_id = (asset1, asset2);
-		let lp_minted = Dex::<T>::calc_lp_amount_for_zero_supply(&add_amount.into(), &1000.into()).unwrap().into();
+		let lp_minted = AssetConversion::<T>::calc_lp_amount_for_zero_supply(&add_amount.into(), &1000.into()).unwrap().into();
 		assert_eq!(
 			T::PoolAssets::balance(lp_token, &caller),
 			lp_minted.into()
 		);
 		assert_eq!(
-			T::Currency::balance(&Dex::<T>::get_pool_account(pool_id)),
+			T::Currency::balance(&AssetConversion::<T>::get_pool_account(pool_id)),
 			add_amount.into()
 		);
 		assert_eq!(
-			T::Assets::balance(0.into(), &Dex::<T>::get_pool_account(pool_id)),
+			T::Assets::balance(0.into(), &AssetConversion::<T>::get_pool_account(pool_id)),
 			1000.into()
 		);
 	}
@@ -143,10 +147,10 @@ benchmarks! {
 		let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 		let ed: u128 = T::Currency::minimum_balance().into();
 		let add_amount = 1000 + ed;
-		let lp_minted = Dex::<T>::calc_lp_amount_for_zero_supply(&add_amount.into(), &1000.into()).unwrap().into();
+		let lp_minted = AssetConversion::<T>::calc_lp_amount_for_zero_supply(&add_amount.into(), &1000.into()).unwrap().into();
 		let remove_lp_amount = lp_minted - 4;
 
-		Dex::<T>::add_liquidity(
+		AssetConversion::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
 			asset1,
 			asset2,
@@ -173,14 +177,14 @@ benchmarks! {
 
 		let (_, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 		let (_, _) = create_asset::<T>(asset3);
-		Dex::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2, asset3)?;
+		AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2, asset3)?;
 
 		let path: BoundedVec<_, T::MaxSwapPathLength> =
 			BoundedVec::try_from(vec![asset1, asset2, asset3]).unwrap();
 		let ed: u128 = T::Currency::minimum_balance().into();
 		let add_amount1 = 1000 + ed;
 
-		Dex::<T>::add_liquidity(
+		AssetConversion::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
 			asset1,
 			asset2,
@@ -190,7 +194,7 @@ benchmarks! {
 			0.into(),
 			caller.clone(),
 		)?;
-		Dex::<T>::add_liquidity(
+		AssetConversion::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
 			asset2,
 			asset3,
@@ -217,14 +221,14 @@ benchmarks! {
 
 		let (_, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 		let (_, _) = create_asset::<T>(asset3);
-		Dex::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2, asset3)?;
+		AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2, asset3)?;
 
 		let path: BoundedVec<_, T::MaxSwapPathLength> =
 			BoundedVec::try_from(vec![asset1, asset2, asset3]).unwrap();
 		let ed: u128 = T::Currency::minimum_balance().into();
 		let add_amount1 = 1000 + ed;
 
-		Dex::<T>::add_liquidity(
+		AssetConversion::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
 			asset1,
 			asset2,
@@ -234,7 +238,7 @@ benchmarks! {
 			0.into(),
 			caller.clone(),
 		)?;
-		Dex::<T>::add_liquidity(
+		AssetConversion::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
 			asset2,
 			asset3,
@@ -254,5 +258,5 @@ benchmarks! {
 		);
 	}
 
-	impl_benchmark_test_suite!(Dex, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(AssetConversion, crate::mock::new_test_ext(), crate::mock::Test);
 }
