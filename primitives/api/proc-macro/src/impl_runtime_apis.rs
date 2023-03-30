@@ -79,7 +79,14 @@ fn generate_impl_call(
 	let pborrow = params.iter().map(|v| &v.2);
 
 	let decode_params = if params.is_empty() {
-		quote!()
+		quote!(
+			if !#input.is_empty() {
+				panic!(
+					"Bad input data provided to {}: expected no parameters, but input buffer is not empty.",
+					#fn_name_str
+				);
+			}
+		)
 	} else {
 		let let_binding = if params.len() == 1 {
 			quote! {
