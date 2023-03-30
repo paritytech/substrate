@@ -974,7 +974,7 @@ impl<T: Config> ContractOrigin<T> {
 }
 
 /// Helper function to ensure that the origin is either a regular signed account or root
-/// and returns the it as a `ContractOrigin`, if it is one of those.
+/// and returns it as a `ContractOrigin`, if it is one of those.
 /// It errors otherwise.
 fn contract_ensure_signed_or_root<T: Config>(
 	origin: T::RuntimeOrigin,
