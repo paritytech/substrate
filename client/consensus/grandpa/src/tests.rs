@@ -400,7 +400,7 @@ async fn run_to_completion(
 }
 
 fn add_scheduled_change(builder: &mut impl BlockBuilderExt, change: ScheduledChange<BlockNumber>) {
-	let _ = builder
+	builder
 		.push_deposit_log_digest_item(DigestItem::Consensus(
 			GRANDPA_ENGINE_ID,
 			sp_consensus_grandpa::ConsensusLog::ScheduledChange(change).encode(),
@@ -413,7 +413,7 @@ fn add_forced_change(
 	median_last_finalized: BlockNumber,
 	change: ScheduledChange<BlockNumber>,
 ) {
-	let _ = builder
+	builder
 		.push_deposit_log_digest_item(DigestItem::Consensus(
 			GRANDPA_ENGINE_ID,
 			sp_consensus_grandpa::ConsensusLog::ForcedChange(median_last_finalized, change)
@@ -1663,7 +1663,7 @@ async fn grandpa_environment_checks_if_best_block_is_descendent_of_finality_targ
 		6,
 		BlockOrigin::File,
 		|mut builder| {
-			let _ = builder.push_deposit_log_digest_item(DigestItem::Other(vec![1])).unwrap();
+			builder.push_deposit_log_digest_item(DigestItem::Other(vec![1])).unwrap();
 			builder.build().unwrap().block
 		},
 		false,
@@ -2046,7 +2046,7 @@ async fn revert_prunes_authority_changes() {
 			3,
 			BlockOrigin::File,
 			|mut builder| {
-				let _ = builder.push_deposit_log_digest_item(DigestItem::Other(vec![1])).unwrap();
+				builder.push_deposit_log_digest_item(DigestItem::Other(vec![1])).unwrap();
 				builder.build().unwrap().block
 			},
 			false,
@@ -2077,7 +2077,7 @@ async fn revert_prunes_authority_changes() {
 			3,
 			BlockOrigin::File,
 			|mut builder| {
-				let _ = builder.push_deposit_log_digest_item(DigestItem::Other(vec![2])).unwrap();
+				builder.push_deposit_log_digest_item(DigestItem::Other(vec![2])).unwrap();
 				builder.build().unwrap().block
 			},
 			false,

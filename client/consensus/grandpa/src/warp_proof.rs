@@ -374,7 +374,7 @@ mod tests {
 					.encode(),
 				);
 
-				let _ = builder.push_deposit_log_digest_item(digest).unwrap();
+				builder.push_deposit_log_digest_item(digest).unwrap();
 			}
 
 			let block = builder.build().unwrap().block;

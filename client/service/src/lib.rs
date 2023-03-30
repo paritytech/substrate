@@ -624,8 +624,5 @@ mod tests {
 		assert_eq!(transactions.len(), 1);
 		// this should not panic
 		assert!(Transfer::try_from_unchecked_extrinsic_and_verify(&transactions[0].1).is_ok());
-		// this should not panic
-		let _ =
-			Transfer::try_from_unchecked_extrinsic(&transactions[0].1).expect("should not panic");
 	}
 }

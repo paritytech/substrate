@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{AccountId, AccountSignature, AuthorityId, BlockNumber, Runtime, Transfer};
+use crate::{AccountId, AuthorityId, BlockNumber, Runtime, Signature, Transfer};
 use codec::KeyedVec;
 use frame_support::storage;
 use sp_core::storage::well_known_keys;
@@ -93,7 +93,7 @@ pub mod pallet {
 		pub fn transfer(
 			origin: OriginFor<T>,
 			transfer: Transfer,
-			_signature: AccountSignature,
+			_signature: Signature,
 			_exhaust_resources_when_not_first: bool,
 		) -> DispatchResult {
 			log::trace!(target: LOG_TARGET, "transfer");

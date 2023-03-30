@@ -333,7 +333,7 @@ fn add_mmr_digest(builder: &mut impl BlockBuilderExt, mmr_hash: MmrRootHash) {
 }
 
 fn add_auth_change_digest(builder: &mut impl BlockBuilderExt, new_auth_set: BeefyValidatorSet) {
-	let _ = builder
+	builder
 		.push_deposit_log_digest_item(DigestItem::Consensus(
 			BEEFY_ENGINE_ID,
 			ConsensusLog::<AuthorityId>::AuthoritiesChange(new_auth_set).encode(),

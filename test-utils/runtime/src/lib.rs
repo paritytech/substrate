@@ -137,11 +137,8 @@ pub type SignedPayload = sp_runtime::generic::SignedPayload<RuntimeCall, SignedE
 pub type UncheckedExtrinsic =
 	sp_runtime::generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
 
-/// The signature type used by accounts/transactions.
-pub type AccountSignature = sr25519::Signature;
 /// An identifier for an account on this system.
-pub type AccountId =
-	<<Signature as Verify>::Signer as sp_runtime::traits::IdentifyAccount>::AccountId;
+pub type AccountId = <Signature as Verify>::Signer;
 /// A simple hash type for all our hashing.
 pub type Hash = H256;
 /// The hashing algorithm used.
@@ -540,14 +537,15 @@ impl_runtime_apis! {
 
 	impl sp_consensus_babe::BabeApi<Block> for Runtime {
 		fn configuration() -> sp_consensus_babe::BabeConfiguration {
+			let epoch_config = Babe::epoch_config().unwrap_or(TEST_RUNTIME_BABE_EPOCH_CONFIGURATION);
 			sp_consensus_babe::BabeConfiguration {
 				slot_duration: 1000,
 				epoch_length: EpochDuration::get(),
-				c: TEST_RUNTIME_BABE_EPOCH_CONFIGURATION.c,
+				c: epoch_config.c,
 				authorities: substrate_test_pallet::authorities()
 					.into_iter().map(|x|(x, 1)).collect(),
 					randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
-					allowed_slots: TEST_RUNTIME_BABE_EPOCH_CONFIGURATION.allowed_slots,
+					allowed_slots: epoch_config.allowed_slots,
 			}
 		}
 
@@ -747,7 +745,7 @@ mod tests {
 			.set_heap_pages(8)
 			.build();
 		let best_hash = client.chain_info().best_hash;
-		client.runtime_api().do_trace_log(best_hash);
+		client.runtime_api().do_trace_log(best_hash).ok();
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
