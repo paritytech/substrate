@@ -405,8 +405,19 @@ where
 		tokio_handle: config.tokio_handle.clone(),
 	};
 
-	let server_fut = sc_rpc_server::start_server(server_config);
-	match config.tokio_handle.block_on(server_fut) {
+	// `block_in_place` is basically a hack to allow callers of this method to call `block_on`.
+	// It's currently used in tests and could end up with a scenario as:
+	//
+	// async f() {
+	//    Handle::current().block_on(time::sleep(Duration::from_millis(10)));
+	//    1
+	// }
+	//
+	// rt.block_on(f());
+	//
+	match tokio::task::block_in_place(|| {
+		config.tokio_handle.block_on(sc_rpc_server::start_server(server_config))
+	}) {
 		Ok(server) => Ok(Box::new(waiting::Server(Some(server)))),
 		Err(e) => Err(Error::Application(e)),
 	}
