@@ -155,7 +155,10 @@ pub enum PreDigestLookupError {
 }
 
 /// Extract a pre-digest from a block header.
+///
 /// This fails if there is no pre-digest or there are multiple.
+///
+/// Returns the `slot` stored in the pre-digest or an error if no pre-digest was found.
 pub fn find_pre_digest<B: BlockT, Signature: Codec>(
 	header: &B::Header,
 ) -> Result<Slot, PreDigestLookupError> {
