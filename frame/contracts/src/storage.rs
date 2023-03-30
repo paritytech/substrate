@@ -255,10 +255,7 @@ impl<T: Config> ContractInfo<T> {
 
 			match outcome {
 				// This happens when our budget wasn't large enough to remove all keys.
-				KillStorageResult::SomeRemaining(keys_removed) => {
-					remaining_key_budget = remaining_key_budget.saturating_sub(keys_removed);
-					break
-				},
+				KillStorageResult::SomeRemaining(_) => return weight_limit,
 				KillStorageResult::AllRemoved(keys_removed) => {
 					entry.remove();
 					remaining_key_budget = remaining_key_budget.saturating_sub(keys_removed);
@@ -367,7 +364,7 @@ impl<'a, T: Config> DeletionQueueEntry<'a, T> {
 }
 
 impl<T: Config> DeletionQueueManager<T> {
-	/// Load the Deletion Queue nonces, so we can perform read or write operations on the
+	/// Load the `DeletionQueueCounter`, so we can perform read or write operations on the
 	/// DeletionQueue storage.
 	fn load() -> Self {
 		<DeletionQueueCounter<T>>::get()

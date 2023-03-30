@@ -2270,9 +2270,8 @@ fn deletion_queue_ring_buffer_overflow() {
 	let (code, _hash) = compile_module::<Test>("self_destruct").unwrap();
 	let mut ext = ExtBuilder::default().existential_deposit(50).build();
 
-	// setup the deletion queue with custom nonces
+	// setup the deletion queue with custom counters
 	ext.execute_with(|| {
-		// manually se the nonces of the deletion queue
 		let queue = DeletionQueueManager::from_test_values(u32::MAX - 1, u32::MAX - 1);
 		<DeletionQueueCounter<Test>>::set(queue);
 	});
@@ -2332,7 +2331,7 @@ fn deletion_queue_ring_buffer_overflow() {
 			assert_matches!(child::get::<i32>(trie, &[99]), None);
 		}
 
-		// nonces values should go from u32::MAX - 1 to 1
+		// insert and delete counter values should go from u32::MAX - 1 to 1
 		assert_eq!(<DeletionQueueCounter<Test>>::get().as_test_tuple(), (1, 1));
 	})
 }
