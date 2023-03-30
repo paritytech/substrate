@@ -368,8 +368,9 @@ use sc_cli::{
 	WasmtimeInstantiationStrategy, DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
 	DEFAULT_WASM_EXECUTION_METHOD,
 };
-use sc_executor::{sp_wasm_interface::HostFunctions, HeapAllocStrategy, WasmExecutor};
-use sc_executor_common::wasm_runtime::DEFAULT_HEAP_ALLOC_STRATEGY;
+use sc_executor::{
+	sp_wasm_interface::HostFunctions, HeapAllocStrategy, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY,
+};
 use sp_api::HashT;
 use sp_core::{
 	hexdisplay::HexDisplay,
