@@ -1,0 +1,61 @@
+error: The number of pallets exceeds the maximum number of tuple elements. To increase this limit, enable the tuples-96 feature of [frame_support].
+  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:50:2
+   |
+50 |     pub struct Runtime where
+   |     ^^^
+
+error[E0412]: cannot find type `RuntimeCall` in this scope
+  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:18:64
+   |
+18 | pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+   |                                                                ^^^^^^^^^^^ not found in this scope
+   |
+help: you might be missing a type parameter
+   |
+18 | pub type UncheckedExtrinsic<RuntimeCall> = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+   |                            +++++++++++++
+
+error[E0412]: cannot find type `Runtime` in this scope
+  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:20:25
+   |
+20 | impl pallet::Config for Runtime {}
+   |                         ^^^^^^^ not found in this scope
+
+error[E0412]: cannot find type `Runtime` in this scope
+  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:22:31
+   |
+22 | impl frame_system::Config for Runtime {
+   |                               ^^^^^^^ not found in this scope
+
+error[E0412]: cannot find type `RuntimeOrigin` in this scope
+  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:24:23
+   |
+24 |     type RuntimeOrigin = RuntimeOrigin;
+   |                          ^^^^^^^^^^^^^ help: you might have meant to use the associated type: `Self::RuntimeOrigin`
+
+error[E0412]: cannot find type `RuntimeCall` in this scope
+  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:27:21
+   |
+27 |     type RuntimeCall = RuntimeCall;
+   |                        ^^^^^^^^^^^ help: you might have meant to use the associated type: `Self::RuntimeCall`
+
+error[E0412]: cannot find type `RuntimeEvent` in this scope
+  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:33:22
+   |
+33 |     type RuntimeEvent = RuntimeEvent;
+   |                         ^^^^^^^^^^^^ help: you might have meant to use the associated type: `Self::RuntimeEvent`
+
+error[E0412]: cannot find type `PalletInfo` in this scope
+  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:39:20
+   |
+39 |     type PalletInfo = PalletInfo;
+   |                       ^^^^^^^^^^
+   |
+help: you might have meant to use the associated type
+   |
+39 |     type PalletInfo = Self::PalletInfo;
+   |                       ~~~~~~~~~~~~~~~~
+help: consider importing this trait
+   |
+1  | use frame_support::traits::PalletInfo;
+   |

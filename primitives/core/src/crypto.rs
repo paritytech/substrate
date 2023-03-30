@@ -482,7 +482,7 @@ pub trait ByteArray: AsRef<[u8]> + AsMut<[u8]> + for<'a> TryFrom<&'a [u8], Error
 	}
 }
 
-/// Trait suitable for typical cryptographic PKI key public type.
+/// Trait suitable for typical cryptographic key public type.
 pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {}
 
 /// An opaque 32-byte cryptographic identifier.
