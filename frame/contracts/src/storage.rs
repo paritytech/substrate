@@ -337,7 +337,7 @@ impl<T: Config> Deref for DepositAccount<T> {
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, DefaultNoBound, Clone)]
 #[scale_info(skip_type_params(T))]
 pub struct DeletionQueueManager<T: Config> {
-	/// Monotonic counter used as a key for inserting a new deleted contract in the queue.
+	/// Counter used as a key for inserting a new deleted contract in the queue.
 	/// The counter is incremented after each insertion.
 	insert_counter: u32,
 	/// The index used to read the next element to be deleted in the queue.
