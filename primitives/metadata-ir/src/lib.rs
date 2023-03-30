@@ -33,6 +33,7 @@ mod v15;
 
 /// Metadata V14.
 const V14: u32 = 14;
+
 /// Metadata V15.
 ///
 /// Not yet stable, thus we set it to `u32::MAX`.
