@@ -148,7 +148,7 @@ benchmarks! {
 		let ed: u128 = T::Currency::minimum_balance().into();
 		let add_amount = 1000 + ed;
 		let lp_minted = AssetConversion::<T>::calc_lp_amount_for_zero_supply(&add_amount.into(), &1000.into()).unwrap().into();
-		let remove_lp_amount = lp_minted.checked_div(2).unwrap();
+		let remove_lp_amount = lp_minted.checked_div(10).unwrap();
 
 		AssetConversion::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
