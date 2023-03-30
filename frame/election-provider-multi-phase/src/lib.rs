@@ -1580,30 +1580,73 @@ impl<T: Config> Pallet<T> {
 #[cfg(any(feature = "try-runtime", test))]
 impl<T: Config> Pallet<T> {
 	fn do_try_state() -> Result<(), &'static str> {
-		Self::try_state_solution_queue()?;
 		Self::try_state_snapshot()?;
-		Self::try_state_signed_submissions_map()
-	}
-
-	// [`QueuedSolution`] state check. Invariants:
-	// - Queued solutions must be sorted by score (highest first).
-	fn try_state_solution_queue() -> Result<(), &'static str> {
-		todo!()
+		Self::try_state_signed_submissions_map()?;
+		Self::try_state_phase_off()
 	}
 
 	// [`Snapshot`] state check. Invariants:
-	// - Does not exist if in `Phase::Off`;
 	// - [`DesiredTargets`] exist IFF [`Snapshot`] is present.
 	// - [`SnapshotMetadata`] exist IFF [`Snapshot`] is present.
 	fn try_state_snapshot() -> Result<(), &'static str> {
-		todo!()
+		let set = <DesiredTargets<T>>::get().is_some() && <DesiredTargets<T>>::get().is_some();
+
+		match <Snapshot<T>>::take().is_some() {
+            true if !set => Err("If the snapshot exists, the desired targets and snapshot metadata must also exist."),
+            _ => Ok(()),
+		}
 	}
 
 	// [`SignedSubmissionsMap`] state check. Invariants:
 	// - All [`SignedSubmissionIndices`] are present in [`SignedSubmissionsMap`], and no more;
-	// - [`SignedSubmissionNextIndex`] points at an existing (and best) submissoin in the map.
+	// - [`SignedSubmissionNextIndex`] is not present in [`SignedSubmissionsMap`];
+	// - [`SignedSubmissionIndices`] is sorted by election score.
 	fn try_state_signed_submissions_map() -> Result<(), &'static str> {
-		todo!()
+		let mut best_score: ElectionScore = Default::default();
+		let indices = <SignedSubmissionIndices<T>>::get();
+
+		for (i, indice) in indices.iter().enumerate() {
+			let submission = <SignedSubmissionsMap<T>>::get(indice.2);
+			if submission.is_none() {
+				return Err("All signed submissions indices must be part of the submissions map")
+			}
+
+			if i == 0 {
+				best_score = indice.0
+			} else {
+				if best_score.strict_threshold_better(indice.0, Perbill::zero()) {
+					return Err("Signed submission indices vector must be ordered by election score")
+				}
+			}
+		}
+
+		if <SignedSubmissionsMap<T>>::iter().nth(indices.len()).is_some() {
+			return Err("Signed submissions map length should be the same as the indices vec length")
+		}
+
+		match <SignedSubmissionNextIndex<T>>::get() {
+			0 => Ok(()),
+			next =>
+				if <SignedSubmissionsMap<T>>::get(next).is_none() {
+					Ok(())
+				} else {
+					Err("The next submissions index should not be in the submissions maps already")
+				},
+		}
+	}
+
+	// [`Phase::Off`] state check. Invariants:
+	// - If phase is `Phase::Off`, [`Snapshot`] must be none.
+	fn try_state_phase_off() -> Result<(), &'static str> {
+		match Self::current_phase().is_off() {
+			false => Ok(()),
+			true =>
+				if <Snapshot<T>>::take().is_some() {
+					Err("Snapshot must be none when in Phase::Off")
+				} else {
+					Ok(())
+				},
+		}
 	}
 }
 
