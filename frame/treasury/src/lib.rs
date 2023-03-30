@@ -136,7 +136,7 @@ pub struct Proposal<AccountId, Balance> {
 	bond: Balance,
 }
 
-/// A treasury spend payment which has not yet succeeded.
+/// PendingPayment represents treasury spend payment which has not yet succeeded.
 /// When a `PendingPayment` is verified to be successful, it is deleted from storage.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
@@ -256,7 +256,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// PendingPayments that have been made.
+	/// PendingPayments that have not yet processed or are not yet successful.
 	#[pallet::storage]
 	pub type PendingPayments<T: Config<I>, I: 'static = ()> = CountedStorageMap<
 		_,
