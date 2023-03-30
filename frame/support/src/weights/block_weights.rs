@@ -16,8 +16,8 @@
 // limitations under the License.
 
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 4.0.0-dev
-//! DATE: 2023-03-22 (Y/M/D)
-//! HOSTNAME: `runner-ul9xcbg-project-145-concurrent-0`, CPU: `Intel(R) Xeon(R) CPU @ 2.60GHz`
+//! DATE: 2023-03-30 (Y/M/D)
+//! HOSTNAME: `bm3`, CPU: `Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz`
 //!
 //! SHORT-NAME: `block`, LONG-NAME: `BlockExecution`, RUNTIME: `Development`
 //! WARMUPS: `10`, REPEAT: `100`
@@ -44,17 +44,17 @@ parameter_types! {
 	/// Calculated by multiplying the *Average* with `1.0` and adding `0`.
 	///
 	/// Stats nanoseconds:
-	///   Min, Max: 429_217, 467_628
-	///   Average:  439_575
-	///   Median:   437_944
-	///   Std-Dev:  7727.1
+	///   Min, Max: 396_364, 444_069
+	///   Average:  405_568
+	///   Median:   399_675
+	///   Std-Dev:  12102.41
 	///
 	/// Percentiles nanoseconds:
-	///   99th: 466_920
-	///   95th: 453_048
-	///   75th: 442_790
+	///   99th: 442_551
+	///   95th: 434_969
+	///   75th: 407_441
 	pub const BlockExecutionWeight: Weight =
-		Weight::from_parts(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(439_575), 0);
+		Weight::from_parts(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(405_568), 0);
 }
 
 #[cfg(test)]
