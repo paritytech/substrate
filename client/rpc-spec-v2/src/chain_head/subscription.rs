@@ -362,7 +362,7 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionsInner<Block, BE> 
 			.collect();
 
 		let mut is_terminated = false;
-		for sub_id in to_remove.into_iter() {
+		for sub_id in to_remove {
 			if sub_id == request_sub_id {
 				is_terminated = true;
 			}
