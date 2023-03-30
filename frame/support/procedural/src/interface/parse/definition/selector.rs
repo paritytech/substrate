@@ -189,9 +189,12 @@ impl SelectorDef {
 			return Err(syn::Error::new(method.sig.span(), msg))
 		};
 
+		let selected = super::adapt_type_to_generic_if_self(output.clone());
+
 		selectors.push_and_check_default(SingleSelectorDef {
 			name,
 			output,
+			selected,
 			attr_span: method.span(),
 			default: default_attr.is_some(),
 		})?;
@@ -217,6 +220,9 @@ pub struct SingleSelectorDef {
 	pub name: syn::Ident,
 	/// The return type of the selector.
 	pub output: Box<syn::Type>,
+	/// The type the generated selector will
+	/// use to implement `trait Selector`
+	pub selected: Box<syn::Type>,
 	/// The span of the selector definition
 	pub attr_span: proc_macro2::Span,
 	/// Signal if default selector

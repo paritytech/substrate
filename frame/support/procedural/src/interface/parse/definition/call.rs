@@ -246,7 +246,7 @@ impl CallDef {
 				return Err(syn::Error::new(arg.pat.span(), msg))
 			};
 
-			let arg_ty = adapt_type_to_generic_if_self(arg.ty.clone());
+			let arg_ty = super::adapt_type_to_generic_if_self(arg.ty.clone());
 
 			args.push((!arg_attrs.is_empty(), arg_ident, arg_ty));
 		}
@@ -320,32 +320,6 @@ mod keyword {
 	syn::custom_keyword!(CallResult);
 	syn::custom_keyword!(compact);
 	syn::custom_keyword!(Select);
-}
-
-fn adapt_type_to_generic_if_self(ty: Box<syn::Type>) -> Box<syn::Type> {
-	let mut type_path = if let syn::Type::Path(path) = *ty { path } else { return ty };
-
-	// Replace the `Self` in qualified path if existing
-	if let Some(q_self) = &type_path.qself {
-		let ty = adapt_type_to_generic_if_self(q_self.ty.clone());
-
-		type_path.qself = Some(syn::QSelf {
-			lt_token: q_self.lt_token,
-			ty,
-			position: q_self.position,
-			as_token: q_self.as_token,
-			gt_token: q_self.gt_token,
-		});
-	}
-
-	for segment in type_path.path.segments.iter_mut() {
-		if segment.ident == "Self" {
-			let rt_ident = syn::Ident::new("Runtime", proc_macro2::Span::call_site());
-			segment.ident = rt_ident;
-		}
-	}
-
-	Box::new(syn::Type::Path(type_path))
 }
 
 /// Parse attributes for item in interface trait definition

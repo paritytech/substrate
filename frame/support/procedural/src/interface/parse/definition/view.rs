@@ -25,8 +25,8 @@ use std::collections::HashMap;
 use syn::spanned::Spanned;
 
 pub struct ViewDef {
-	interface_span: proc_macro2::Span,
-	views: Vec<SingleViewDef>,
+	pub interface_span: proc_macro2::Span,
+	pub views: Vec<SingleViewDef>,
 }
 
 impl ViewDef {
@@ -210,7 +210,9 @@ impl ViewDef {
 				return Err(syn::Error::new(arg.pat.span(), msg))
 			};
 
-			args.push((!arg_attrs.is_empty(), arg_ident, arg.ty.clone()));
+			let arg_ty = super::adapt_type_to_generic_if_self(arg.ty.clone());
+
+			args.push((!arg_attrs.is_empty(), arg_ident, arg_ty));
 		}
 
 		let docs = get_doc_literals(&method.attrs);
@@ -250,24 +252,25 @@ impl ViewDef {
 	}
 }
 
+#[derive(Clone)]
 pub struct SingleViewDef {
 	/// Signal whether first argument must
 	/// be a selector
-	selector: Option<interface::SelectorType>,
+	pub selector: Option<interface::SelectorType>,
 	/// Function name.
-	name: syn::Ident,
+	pub name: syn::Ident,
 	/// Information on args: `(is_compact, name, type)`
-	args: Vec<(bool, syn::Ident, Box<syn::Type>)>,
+	pub args: Vec<(bool, syn::Ident, Box<syn::Type>)>,
 	/// Return type of the view function
-	output: Box<syn::Type>,
+	pub output: Box<syn::Type>,
 	/// View index of the interface.
-	view_index: u8,
+	pub view_index: u8,
 	/// Docs, used for metadata.
-	docs: Vec<syn::Lit>,
+	pub docs: Vec<syn::Lit>,
 	/// Attributes annotated at the top of the view function.
-	attrs: Vec<syn::Attribute>,
+	pub attrs: Vec<syn::Attribute>,
 	/// The span of the view definition
-	attr_span: proc_macro2::Span,
+	pub attr_span: proc_macro2::Span,
 }
 
 /// List of additional token to be used for parsing.

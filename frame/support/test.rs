@@ -1127,6 +1127,9 @@ pub mod interface {
                 fn select_currency(selectable: H256) -> SelectorResult<Self::Currency>;
                 fn select_restricted_currency(selectable: H256) -> SelectorResult<Self::Currency>;
                 fn select_account(selectable: H256) -> SelectorResult<Self::AccountId>;
+                fn select_origin(
+                    selectable: H256,
+                ) -> SelectorResult<<Self as frame_support::interface::Core>::RuntimeOrigin>;
                 fn free_balance(
                     currency: Select<Self::Currency>,
                     who: Self::AccountId,

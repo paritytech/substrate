@@ -34,7 +34,7 @@ sp_api::decl_runtime_apis! {
 	pub trait Interface<View>
 		where View: sp_api::Encode + frame_support::interface::View
 	{
-		fn view(view: frame_support::interface::InterfaceViewEntry<View>) -> Result<Vec<u8>, DispatchError>;
+		fn view(view: frame_support::interface::InterfaceViewEntry<View>) -> ViewResult<Vec<u8>>;
 	}
 }
 
@@ -42,7 +42,7 @@ sp_api::decl_runtime_apis! {
 pub type CallResult = Result<PostDispatchInfo, DispatchErrorWithPostInfo>;
 
 /// The result a view method of an interface must have
-pub type ViewResult<T> = Result<T, DispatchError>;
+pub type ViewResult<T> = Result<T, DispatchErrorWithPostInfo>;
 
 /// The result a selector method of an interface must have
 pub type SelectorResult<T> = Result<SelectorResultWithInfo<T>, DispatchErrorWithPostInfo>;
@@ -100,7 +100,7 @@ pub trait Call {
 }
 
 pub trait View {
-	fn view(self, selectable: H256) -> Result<Vec<u8>, DispatchError>;
+	fn view(self, selectable: H256) -> ViewResult<Vec<u8>>;
 }
 
 pub trait Selector {
@@ -142,7 +142,7 @@ impl<ViewInterface> InterfaceViewEntry<ViewInterface>
 where
 	ViewInterface: View,
 {
-	pub fn view(self) -> Result<Vec<u8>, DispatchError> {
+	pub fn view(self) -> ViewResult<Vec<u8>> {
 		self.interface.view(self.selectable)
 	}
 }

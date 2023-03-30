@@ -19,7 +19,7 @@ mod call;
 mod selector;
 mod view;
 
-use crate::interface::parse::definition::call::SingleCallDef;
+use crate::interface::parse::definition::{call::SingleCallDef, view::SingleViewDef};
 use quote::ToTokens;
 use syn::spanned::Spanned;
 
@@ -37,6 +37,14 @@ impl InterfaceDef {
 	pub fn calls(&self) -> (proc_macro2::Span, Option<syn::WhereClause>, Vec<SingleCallDef>) {
 		if let Some(calls) = self.calls.as_ref() {
 			(calls.interface_span, self.where_clause.clone(), calls.calls.clone())
+		} else {
+			(self.span.clone(), self.where_clause.clone(), Vec::new())
+		}
+	}
+
+	pub fn views(&self) -> (proc_macro2::Span, Option<syn::WhereClause>, Vec<SingleViewDef>) {
+		if let Some(views) = self.views.as_ref() {
+			(views.interface_span, self.where_clause.clone(), views.views.clone())
 		} else {
 			(self.span.clone(), self.where_clause.clone(), Vec::new())
 		}
@@ -263,4 +271,30 @@ impl syn::parse::Parse for InterfaceTraitAttr {
 			Err(lookahead.error())
 		}
 	}
+}
+
+fn adapt_type_to_generic_if_self(ty: Box<syn::Type>) -> Box<syn::Type> {
+	let mut type_path = if let syn::Type::Path(path) = *ty { path } else { return ty };
+
+	// Replace the `Self` in qualified path if existing
+	if let Some(q_self) = &type_path.qself {
+		let ty = adapt_type_to_generic_if_self(q_self.ty.clone());
+
+		type_path.qself = Some(syn::QSelf {
+			lt_token: q_self.lt_token,
+			ty,
+			position: q_self.position,
+			as_token: q_self.as_token,
+			gt_token: q_self.gt_token,
+		});
+	}
+
+	for segment in type_path.path.segments.iter_mut() {
+		if segment.ident == "Self" {
+			let rt_ident = syn::Ident::new("Runtime", proc_macro2::Span::call_site());
+			segment.ident = rt_ident;
+		}
+	}
+
+	Box::new(syn::Type::Path(type_path))
 }
