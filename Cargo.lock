@@ -10474,7 +10474,6 @@ dependencies = [
  "libsecp256k1",
  "log",
  "parity-scale-codec",
- "rustversion",
  "secp256k1",
  "sp-core",
  "sp-externalities",

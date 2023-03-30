@@ -35,13 +35,10 @@ fn print_error_message(message: &str) -> String {
 ///
 /// Returns the versioned cargo command on success.
 pub(crate) fn check() -> Result<CargoCommandVersioned, String> {
-	let cargo_command = crate::get_cargo_command();
+	let cargo_command = crate::get_nightly_cargo();
 
-	if !cargo_command.supports_substrate_wasm_env() {
-		return Err(print_error_message(
-			"Cannot compile the WASM runtime: no compatible Rust compiler found!\n\
-			 Install at least Rust 1.68.0 or a recent nightly version.",
-		))
+	if !cargo_command.is_nightly() {
+		return Err(print_error_message("Rust nightly not installed, please install it!"))
 	}
 
 	check_wasm_toolchain_installed(cargo_command)
