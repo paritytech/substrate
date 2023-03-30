@@ -227,6 +227,8 @@ pub mod pallet {
 		PoolExists,
 		/// Desired amount can't be zero.
 		WrongDesiredAmount,
+		/// Provided amount should be greater or equal to existential deposit.
+		AmountLessThanED,
 		/// Desired amount can't be equal to the pool reserve.
 		AmountOutTooHigh,
 		/// The pool doesn't exist.
@@ -375,6 +377,13 @@ pub mod pallet {
 			let reserve2 = Self::get_balance(&pool_account, asset2)?;
 
 			if reserve1.is_zero() && reserve2.is_zero() {
+				if T::MultiAssetIdConverter::get_native() == asset1 {
+					ensure!(
+						T::HigherPrecisionBalance::from(amount1_desired) >=
+							T::HigherPrecisionBalance::from(T::Currency::minimum_balance()),
+						Error::<T>::AmountLessThanED
+					);
+				}
 				amount1 = amount1_desired;
 				amount2 = amount2_desired;
 			} else {
