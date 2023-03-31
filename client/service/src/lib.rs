@@ -587,7 +587,7 @@ mod tests {
 	use sp_consensus::SelectChain;
 	use substrate_test_runtime_client::{
 		prelude::*,
-		runtime::{Transfer, UncheckedExtrinsicBuilder},
+		runtime::{ExtrinsicBuilder, Transfer},
 	};
 
 	#[test]
@@ -612,7 +612,7 @@ mod tests {
 		block_on(pool.submit_one(
 			&BlockId::hash(best.hash()),
 			source,
-			UncheckedExtrinsicBuilder::new_include_data(vec![1]).build(),
+			ExtrinsicBuilder::new_include_data(vec![1]).build(),
 		))
 		.unwrap();
 		assert_eq!(pool.status().ready, 2);

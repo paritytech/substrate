@@ -17,7 +17,7 @@
 
 use crate::{
 	sr25519::Pair, substrate_test_pallet, substrate_test_pallet::pallet::Call as PalletCall,
-	AuthorityId, RuntimeCall, Signature, SignedExtra, SignedPayload, Transfer, UncheckedExtrinsic,
+	AuthorityId, Extrinsic, RuntimeCall, Signature, SignedExtra, SignedPayload, Transfer,
 };
 use codec::Encode;
 use sp_core::crypto::Pair as TraitPair;
@@ -26,20 +26,19 @@ use sp_std::prelude::*;
 
 impl Transfer {
 	/// Convert into a signed unchecked extrinsic.
-	pub fn into_unchecked_extrinsic(self) -> UncheckedExtrinsic {
-		UncheckedExtrinsicBuilder::new_transfer(self).build()
+	pub fn into_unchecked_extrinsic(self) -> Extrinsic {
+		ExtrinsicBuilder::new_transfer(self).build()
 	}
 
 	/// Convert into a signed extrinsic, which will only end up included in the block
 	/// if it's the first transaction. Otherwise it will cause `ResourceExhaustion` error
 	/// which should be considered as block being full.
-	pub fn into_resources_exhausting_unchecked_extrinsic(self) -> UncheckedExtrinsic {
-		UncheckedExtrinsicBuilder::new(TransferCallBuilder::new(self).exhaust_resources().build())
-			.build()
+	pub fn into_resources_exhausting_unchecked_extrinsic(self) -> Extrinsic {
+		ExtrinsicBuilder::new(TransferCallBuilder::new(self).exhaust_resources().build()).build()
 	}
 
-	/// If feasible extract `Transfer` from given `UncheckedExtrinsic`
-	pub fn try_from_unchecked_extrinsic(uxt: &UncheckedExtrinsic) -> Option<Self> {
+	/// If feasible extract `Transfer` from given `Extrinsic`
+	pub fn try_from_unchecked_extrinsic(uxt: &Extrinsic) -> Option<Self> {
 		if let RuntimeCall::SubstrateTest(ref test_pallet_call) = uxt.function {
 			if let PalletCall::transfer { transfer, .. } = test_pallet_call {
 				return Some(transfer.clone())
@@ -49,10 +48,10 @@ impl Transfer {
 		None
 	}
 
-	/// Verify signature and extracts `Transfer` from given `UncheckedExtrinsic`, otherwise returns
+	/// Verify signature and extracts `Transfer` from given `Extrinsic`, otherwise returns
 	/// error
 	pub fn try_from_unchecked_extrinsic_and_verify(
-		uxt: &UncheckedExtrinsic,
+		uxt: &Extrinsic,
 	) -> Result<Self, TransactionValidityError> {
 		if let RuntimeCall::SubstrateTest(PalletCall::transfer {
 			ref transfer,
@@ -118,13 +117,13 @@ impl TransferCallBuilder {
 	}
 }
 
-/// Generates `UncheckedExtrinsic`
-pub struct UncheckedExtrinsicBuilder {
+/// Generates `Extrinsic`
+pub struct ExtrinsicBuilder {
 	function: RuntimeCall,
 	is_unsigned: bool,
 }
 
-impl UncheckedExtrinsicBuilder {
+impl ExtrinsicBuilder {
 	/// Create builder for given `RuntimeCall`
 	pub fn new(function: impl Into<RuntimeCall>) -> Self {
 		Self { function: function.into(), is_unsigned: false }
@@ -151,7 +150,7 @@ impl UncheckedExtrinsicBuilder {
 	}
 
 	/// Create builder for `PalletCall::storage_change_unsigned` call using given parameters. Will
-	/// create unsigned UncheckedExtrinsic.
+	/// create unsigned Extrinsic.
 	pub fn new_storage_change_unsigned(key: Vec<u8>, value: Option<Vec<u8>>) -> Self {
 		Self::new(PalletCall::storage_change_unsigned { key, value }).unsigned()
 	}
@@ -176,23 +175,23 @@ impl UncheckedExtrinsicBuilder {
 		Self::new(PalletCall::deposit_log_digest_item { log })
 	}
 
-	/// Unsigned `UncheckedExtrinsic` will be created
+	/// Unsigned `Extrinsic` will be created
 	pub fn unsigned(mut self) -> Self {
 		self.is_unsigned = true;
 		self
 	}
 
-	/// Build `UncheckedExtrinsic` using embedded parameters
-	pub fn build(self) -> UncheckedExtrinsic {
+	/// Build `Extrinsic` using embedded parameters
+	pub fn build(self) -> Extrinsic {
 		if self.is_unsigned {
-			UncheckedExtrinsic::new_unsigned(self.function)
+			Extrinsic::new_unsigned(self.function)
 		} else {
 			let sender = sp_keyring::AccountKeyring::Alice;
 			let extra = SignedExtra {};
 			let raw_payload = SignedPayload::from_raw(self.function.clone(), extra, ());
 			let signature = raw_payload.using_encoded(|e| sender.sign(e));
 
-			UncheckedExtrinsic::new_signed(self.function, sender.public(), signature, extra)
+			Extrinsic::new_signed(self.function, sender.public(), signature, extra)
 		}
 	}
 }

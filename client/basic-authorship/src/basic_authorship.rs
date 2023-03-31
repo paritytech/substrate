@@ -559,13 +559,13 @@ mod tests {
 	use sp_runtime::{generic::BlockId, traits::NumberFor};
 	use substrate_test_runtime_client::{
 		prelude::*,
-		runtime::{Transfer, TransferCallBuilder, UncheckedExtrinsic, UncheckedExtrinsicBuilder},
+		runtime::{Extrinsic, ExtrinsicBuilder, Transfer, TransferCallBuilder},
 		TestClientBuilder, TestClientBuilderExt,
 	};
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
-	fn extrinsic(nonce: u64) -> UncheckedExtrinsic {
+	fn extrinsic(nonce: u64) -> Extrinsic {
 		Transfer {
 			amount: Default::default(),
 			nonce,
@@ -575,7 +575,7 @@ mod tests {
 		.into_unchecked_extrinsic()
 	}
 
-	fn exhausts_resources_extrinsic_from(who: usize) -> UncheckedExtrinsic {
+	fn exhausts_resources_extrinsic_from(who: usize) -> Extrinsic {
 		let pair = AccountKeyring::numeric(who);
 		let transfer = Transfer {
 			// increase the amount to bump priority
@@ -584,7 +584,7 @@ mod tests {
 			from: pair.public(),
 			to: AccountKeyring::Bob.into(),
 		};
-		UncheckedExtrinsicBuilder::new(
+		ExtrinsicBuilder::new(
 			TransferCallBuilder::new(transfer).signer(pair).exhaust_resources().build(),
 		)
 		.build()
@@ -860,7 +860,7 @@ mod tests {
 		)
 		.chain(
 			(0..extrinsics_num - 1)
-				.map(|v| UncheckedExtrinsicBuilder::new_include_data(vec![v as u8; 10]).build()),
+				.map(|v| ExtrinsicBuilder::new_include_data(vec![v as u8; 10]).build()),
 		)
 		.collect::<Vec<_>>();
 
@@ -870,7 +870,7 @@ mod tests {
 				.take(extrinsics_num - 1)
 				.map(Encode::encoded_size)
 				.sum::<usize>() +
-			Vec::<UncheckedExtrinsic>::new().encoded_size();
+			Vec::<Extrinsic>::new().encoded_size();
 
 		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, extrinsics.clone())).unwrap();
 

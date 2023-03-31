@@ -88,7 +88,7 @@ use sp_runtime::{
 };
 use substrate_test_runtime_client::AccountKeyring;
 pub use substrate_test_runtime_client::{
-	runtime::{Block, Hash, Header, Transfer, UncheckedExtrinsicBuilder},
+	runtime::{Block, ExtrinsicBuilder, Hash, Header, Transfer},
 	TestClient, TestClientBuilder, TestClientBuilderExt,
 };
 use tokio::time::timeout;
@@ -503,10 +503,7 @@ where
 	) -> Vec<H256> {
 		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
 			builder
-				.push(
-					UncheckedExtrinsicBuilder::new_authorities_change(new_authorities.clone())
-						.build(),
-				)
+				.push(ExtrinsicBuilder::new_authorities_change(new_authorities.clone()).build())
 				.unwrap();
 			builder.build().unwrap().block
 		})

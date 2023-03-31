@@ -463,7 +463,7 @@ mod tests {
 	use sc_transaction_pool_api::TransactionStatus;
 	use sp_runtime::transaction_validity::TransactionSource;
 	use std::{collections::HashMap, time::Instant};
-	use substrate_test_runtime::{AccountId, Transfer, UncheckedExtrinsicBuilder, H256};
+	use substrate_test_runtime::{AccountId, ExtrinsicBuilder, Transfer, H256};
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
@@ -521,7 +521,7 @@ mod tests {
 		);
 
 		// after validation `IncludeData` will be set to non-propagable
-		let uxt = UncheckedExtrinsicBuilder::new_include_data(vec![42]).build();
+		let uxt = ExtrinsicBuilder::new_include_data(vec![42]).build();
 
 		// when
 		let res = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt));
@@ -949,7 +949,7 @@ mod tests {
 
 				let pool = Pool::new(options, true.into(), TestApi::default().into());
 
-				let xt = UncheckedExtrinsicBuilder::new_include_data(Vec::new()).build();
+				let xt = ExtrinsicBuilder::new_include_data(Vec::new()).build();
 				block_on(pool.submit_one(&BlockId::Number(0), SOURCE, xt)).unwrap();
 				assert_eq!(pool.validated_pool().status().ready, 1);
 
@@ -974,7 +974,7 @@ mod tests {
 
 				let pool = Pool::new(options, true.into(), TestApi::default().into());
 
-				let xt = UncheckedExtrinsicBuilder::new_include_data(Vec::new()).build();
+				let xt = ExtrinsicBuilder::new_include_data(Vec::new()).build();
 				block_on(pool.submit_and_watch(&BlockId::Number(0), SOURCE, xt)).unwrap();
 				assert_eq!(pool.validated_pool().status().ready, 1);
 
@@ -989,7 +989,7 @@ mod tests {
 				assert_eq!(pool.validated_pool().status().ready, 2);
 
 				// when
-				let xt = UncheckedExtrinsicBuilder::new_store(Vec::new()).build();
+				let xt = ExtrinsicBuilder::new_store(Vec::new()).build();
 				block_on(pool.submit_one(&BlockId::Number(1), SOURCE, xt)).unwrap();
 				assert_eq!(pool.validated_pool().status().ready, 2);
 

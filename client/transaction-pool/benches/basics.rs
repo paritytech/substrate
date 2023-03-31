@@ -34,8 +34,7 @@ use sp_runtime::{
 	},
 };
 use substrate_test_runtime::{
-	AccountId, Block, Transfer, TransferCallBuilder, UncheckedExtrinsic, UncheckedExtrinsicBuilder,
-	H256,
+	AccountId, Block, Extrinsic, ExtrinsicBuilder, Transfer, TransferCallBuilder, H256,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -60,8 +59,7 @@ impl ChainApi for TestApi {
 	type Block = Block;
 	type Error = sc_transaction_pool_api::error::Error;
 	type ValidationFuture = Ready<sc_transaction_pool_api::error::Result<TransactionValidity>>;
-	type BodyFuture =
-		Ready<sc_transaction_pool_api::error::Result<Option<Vec<UncheckedExtrinsic>>>>;
+	type BodyFuture = Ready<sc_transaction_pool_api::error::Result<Option<Vec<Extrinsic>>>>;
 
 	fn validate_transaction(
 		&self,
@@ -137,14 +135,12 @@ impl ChainApi for TestApi {
 	}
 }
 
-fn uxt(transfer: Transfer) -> UncheckedExtrinsic {
+fn uxt(transfer: Transfer) -> Extrinsic {
 	let signature = Decode::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
 		.expect("infinite input; no dead input space; qed");
-	UncheckedExtrinsicBuilder::new(
-		TransferCallBuilder::new(transfer).with_signature(signature).build(),
-	)
-	.unsigned()
-	.build()
+	ExtrinsicBuilder::new(TransferCallBuilder::new(transfer).with_signature(signature).build())
+		.unsigned()
+		.build()
 }
 
 fn bench_configured(pool: Pool<TestApi>, number: u64) {

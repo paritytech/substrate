@@ -62,7 +62,7 @@ pub use sp_consensus_babe::{AllowedSlots, AuthorityId, BabeEpochConfiguration, S
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
 #[cfg(feature = "std")]
-pub use extrinsic::{TransferCallBuilder, UncheckedExtrinsicBuilder};
+pub use extrinsic::{ExtrinsicBuilder, TransferCallBuilder};
 
 const LOG_TARGET: &str = "substrate-test-runtime";
 
@@ -134,7 +134,7 @@ pub type SignedExtra = SignedExtraDummy;
 /// The payload being signed in transactions.
 pub type SignedPayload = sp_runtime::generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic =
+pub type Extrinsic =
 	sp_runtime::generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
 
 /// An identifier for an account on this system.
@@ -152,7 +152,7 @@ pub type DigestItem = sp_runtime::generic::DigestItem;
 /// The digest of a block.
 pub type Digest = sp_runtime::generic::Digest;
 /// A test block.
-pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+pub type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 /// A test block's header.
 pub type Header = sp_runtime::generic::Header<BlockNumber, Hashing>;
 
@@ -277,7 +277,7 @@ construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		UncheckedExtrinsic = Extrinsic
 	{
 		System: frame_system,
 		Babe: pallet_babe,
@@ -580,7 +580,7 @@ impl_runtime_apis! {
 
 	impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
 		fn offchain_worker(header: &<Block as BlockT>::Header) {
-			let ext = UncheckedExtrinsic::new_unsigned(
+			let ext = Extrinsic::new_unsigned(
 				substrate_test_pallet::pallet::Call::include_data{data:header.number.encode()}.into(),
 			);
 			sp_io::offchain::submit_transaction(ext.encode()).unwrap();

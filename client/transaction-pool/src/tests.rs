@@ -32,8 +32,8 @@ use sp_runtime::{
 };
 use std::{collections::HashSet, sync::Arc};
 use substrate_test_runtime::{
-	substrate_test_pallet::pallet::Call as PalletCall, Block, Hashing, RuntimeCall, Transfer,
-	TransferCallBuilder, UncheckedExtrinsic, UncheckedExtrinsicBuilder, H256,
+	substrate_test_pallet::pallet::Call as PalletCall, Block, Extrinsic, ExtrinsicBuilder, Hashing,
+	RuntimeCall, Transfer, TransferCallBuilder, H256,
 };
 
 pub(crate) const INVALID_NONCE: u64 = 254;
@@ -45,12 +45,12 @@ pub(crate) struct TestApi {
 	pub invalidate: Arc<Mutex<HashSet<H256>>>,
 	pub clear_requirements: Arc<Mutex<HashSet<H256>>>,
 	pub add_requirements: Arc<Mutex<HashSet<H256>>>,
-	pub validation_requests: Arc<Mutex<Vec<UncheckedExtrinsic>>>,
+	pub validation_requests: Arc<Mutex<Vec<Extrinsic>>>,
 }
 
 impl TestApi {
 	/// Query validation requests received.
-	pub fn validation_requests(&self) -> Vec<UncheckedExtrinsic> {
+	pub fn validation_requests(&self) -> Vec<Extrinsic> {
 		self.validation_requests.lock().clone()
 	}
 }
@@ -59,7 +59,7 @@ impl ChainApi for TestApi {
 	type Block = Block;
 	type Error = error::Error;
 	type ValidationFuture = futures::future::Ready<error::Result<TransactionValidity>>;
-	type BodyFuture = futures::future::Ready<error::Result<Option<Vec<UncheckedExtrinsic>>>>;
+	type BodyFuture = futures::future::Ready<error::Result<Option<Vec<Extrinsic>>>>;
 
 	/// Verify extrinsic at given block.
 	fn validate_transaction(
@@ -187,12 +187,10 @@ impl ChainApi for TestApi {
 	}
 }
 
-pub(crate) fn uxt(transfer: Transfer) -> UncheckedExtrinsic {
+pub(crate) fn uxt(transfer: Transfer) -> Extrinsic {
 	let signature = TryFrom::try_from(&[0; 64][..]).unwrap();
-	UncheckedExtrinsicBuilder::new(
-		TransferCallBuilder::new(transfer).with_signature(signature).build(),
-	)
-	.build()
+	ExtrinsicBuilder::new(TransferCallBuilder::new(transfer).with_signature(signature).build())
+		.build()
 }
 
 pub(crate) fn pool() -> Pool<TestApi> {

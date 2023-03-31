@@ -40,11 +40,11 @@ use sp_keystore::{testing::MemoryKeystore, Keystore};
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	self,
-	runtime::{Block, SessionKeys, Transfer, UncheckedExtrinsic},
+	runtime::{Block, Extrinsic, SessionKeys, Transfer},
 	AccountKeyring, Backend, Client, DefaultTestClientBuilderExt, TestClientBuilderExt,
 };
 
-fn uxt(sender: AccountKeyring, nonce: u64) -> UncheckedExtrinsic {
+fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 	let tx = Transfer {
 		amount: Default::default(),
 		nonce,

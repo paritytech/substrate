@@ -40,8 +40,7 @@ use sp_runtime::{
 use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 use substrate_test_runtime_client::{
 	runtime::{
-		Block, Hash, Header, Index, Transfer, TransferCallBuilder, UncheckedExtrinsic,
-		UncheckedExtrinsicBuilder,
+		Block, Extrinsic, ExtrinsicBuilder, Hash, Header, Index, Transfer, TransferCallBuilder,
 	},
 	AccountKeyring::*,
 	ClientBlockImportExt,
@@ -402,7 +401,7 @@ fn should_revalidate_across_many_blocks() {
 
 #[test]
 fn should_push_watchers_during_maintenance() {
-	fn alice_uxt(nonce: u64) -> UncheckedExtrinsic {
+	fn alice_uxt(nonce: u64) -> Extrinsic {
 		uxt(Alice, 209 + nonce)
 	}
 
@@ -954,7 +953,7 @@ fn should_not_accept_old_signatures() {
 	)
 	.expect("signature construction failed");
 
-	let xt = UncheckedExtrinsicBuilder::new(
+	let xt = ExtrinsicBuilder::new(
 		TransferCallBuilder::new(transfer).with_signature(old_signature).build(),
 	)
 	.build();
@@ -1013,7 +1012,7 @@ fn import_notification_to_pool_maintain_works() {
 fn pruning_a_transaction_should_remove_it_from_best_transaction() {
 	let (pool, api, _guard) = maintained_pool();
 
-	let xt1 = UncheckedExtrinsicBuilder::new_include_data(Vec::new()).build();
+	let xt1 = ExtrinsicBuilder::new_include_data(Vec::new()).build();
 
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt1.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 1);
