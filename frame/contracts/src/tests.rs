@@ -459,7 +459,7 @@ where
 	T: frame_system::Config,
 {
 	let fixture_path = [
-		// When `CARGO_MANIFEST_DIR` is not set, rust resolves relative paths from the root folder
+		// When `CARGO_MANIFEST_DIR` is not set, Rust resolves relative paths from the root folder
 		std::env::var("CARGO_MANIFEST_DIR").as_deref().unwrap_or("frame/contracts"),
 		"/fixtures/",
 		fixture_name,
