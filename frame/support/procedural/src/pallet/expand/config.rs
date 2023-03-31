@@ -45,19 +45,6 @@ pub fn expand_config(def: &mut Def) -> TokenStream {
 	}
 
 	if let Some(trait_items) = &config.default_sub_trait {
-		let associated_type_names = config_item
-			.items
-			.iter()
-			.filter_map(
-				|i| if let syn::TraitItem::Type(t) = i { Some(t.ident.clone()) } else { None },
-			)
-			.collect::<Vec<_>>();
-
-		// we rarely use const and fns in config traits anyways... maybe not supporting them is good
-		// enough.
-		let _const_names = Vec::<syn::Ident>::default();
-		let _fn_names = Vec::<syn::Ident>::default();
-
 		// get reference to frame_support
 		let support = match generate_crate_access_2018("frame-support") {
 			Ok(krate) => krate,
