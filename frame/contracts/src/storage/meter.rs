@@ -19,7 +19,7 @@
 
 use crate::{
 	storage::{ContractInfo, DepositAccount},
-	BalanceOf, Config, ContractOrigin, Error, Inspect, Pallet, System,
+	BalanceOf, Caller, Config, Error, Inspect, Pallet, System,
 };
 use codec::Encode;
 use frame_support::{
@@ -332,20 +332,20 @@ where
 	///
 	/// This tries to [`Ext::check_limit`] on `origin` and fails if this is not possible.
 	pub fn new(
-		origin: &ContractOrigin<T>,
+		origin: &Caller<T>,
 		limit: Option<BalanceOf<T>>,
 		min_leftover: BalanceOf<T>,
 	) -> Result<Self, DispatchError> {
 		// Check the limit only if the origin is not root.
 		return match origin {
-			ContractOrigin::Root => {
+			Caller::Root => {
 				match limit {
 					// If the limit is specified, that the root's limit.
 					Some(l) => Ok(Self { limit: l, ..Default::default() }),
 					None => Err(<Error<T>>::StorageDepositLimitRequired.into()),
 				}
 			},
-			ContractOrigin::Signed(o) => {
+			Caller::Signed(o) => {
 				let limit = E::check_limit(o, limit, min_leftover)?;
 				Ok(Self { limit, ..Default::default() })
 			},
@@ -358,11 +358,11 @@ where
 	///
 	/// This drops the root meter in order to make sure it is only called when the whole
 	/// execution did finish.
-	pub fn into_deposit(self, origin: &ContractOrigin<T>) -> DepositOf<T> {
+	pub fn into_deposit(self, origin: &Caller<T>) -> DepositOf<T> {
 		// Only refund or charge deposit if the origin is not root.
 		let origin = match origin {
-			ContractOrigin::Root => return Deposit::Charge(Zero::zero()),
-			ContractOrigin::Signed(o) => o,
+			Caller::Root => return Deposit::Charge(Zero::zero()),
+			Caller::Signed(o) => o,
 		};
 
 		for charge in self.charges.iter().filter(|c| matches!(c.amount, Deposit::Refund(_))) {
@@ -651,7 +651,7 @@ mod tests {
 	}
 
 	struct ChargingTestCase {
-		origin: ContractOrigin<Test>,
+		origin: Caller<Test>,
 		deposit: DepositOf<Test>,
 		expected: TestExt,
 	}
@@ -681,7 +681,7 @@ mod tests {
 	fn new_reserves_balance_works() {
 		clear_ext();
 
-		TestMeter::new(&ContractOrigin::from_account_id(ALICE), Some(1_000), 0).unwrap();
+		TestMeter::new(&Caller::from_account_id(ALICE), Some(1_000), 0).unwrap();
 
 		assert_eq!(
 			TestExtTestValue::get(),
@@ -696,8 +696,7 @@ mod tests {
 	fn empty_charge_works() {
 		clear_ext();
 
-		let mut meter =
-			TestMeter::new(&ContractOrigin::from_account_id(ALICE), Some(1_000), 0).unwrap();
+		let mut meter = TestMeter::new(&Caller::from_account_id(ALICE), Some(1_000), 0).unwrap();
 		assert_eq!(meter.available(), 1_000);
 
 		// an empty charge does not create a `Charge` entry
@@ -718,7 +717,7 @@ mod tests {
 	fn charging_works() {
 		let test_cases = vec![
 			ChargingTestCase {
-				origin: ContractOrigin::<Test>::from_account_id(ALICE),
+				origin: Caller::<Test>::from_account_id(ALICE),
 				deposit: Deposit::Refund(28),
 				expected: TestExt {
 					limit_checks: vec![LimitCheck { origin: ALICE, limit: 100, min_leftover: 0 }],
@@ -745,7 +744,7 @@ mod tests {
 				},
 			},
 			ChargingTestCase {
-				origin: ContractOrigin::<Test>::Root,
+				origin: Caller::<Test>::Root,
 				deposit: Deposit::Charge(0),
 				expected: TestExt { limit_checks: vec![], charges: vec![] },
 			},
@@ -809,7 +808,7 @@ mod tests {
 	fn termination_works() {
 		let test_cases = vec![
 			ChargingTestCase {
-				origin: ContractOrigin::<Test>::from_account_id(ALICE),
+				origin: Caller::<Test>::from_account_id(ALICE),
 				deposit: Deposit::Refund(107),
 				expected: TestExt {
 					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
@@ -830,7 +829,7 @@ mod tests {
 				},
 			},
 			ChargingTestCase {
-				origin: ContractOrigin::<Test>::Root,
+				origin: Caller::<Test>::Root,
 				deposit: Deposit::Charge(0),
 				expected: TestExt { limit_checks: vec![], charges: vec![] },
 			},

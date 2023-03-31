@@ -116,7 +116,7 @@ use frame_support::{
 		ReservableCurrency, Time,
 	},
 	weights::{OldWeight, Weight},
-	BoundedVec, WeakBoundedVec,
+	BoundedVec, RuntimeDebugNoBound, WeakBoundedVec,
 };
 use frame_system::{ensure_signed_or_root, Pallet as System};
 use pallet_contracts_primitives::{
@@ -908,54 +908,29 @@ pub mod pallet {
 		StorageValue<_, DeletionQueueManager<T>, ValueQuery>;
 }
 
-/// The type of origins supported by the contracts pallet.
-#[derive(Clone)]
-pub enum ContractOrigin<T: Config> {
-	/// The origin is a regular signed account.
-	Signed(T::AccountId),
-	/// The origin is root.
-	Root,
-}
-
-impl<T: Config> ContractOrigin<T> {
-	/// Creates a new Signed ContractOrigin from an AccountId.
-	pub fn from_account_id(account_id: T::AccountId) -> Self {
-		ContractOrigin::Signed(account_id)
-	}
-}
-
 /// Helper function to ensure that the origin is either a regular signed account or root
-/// and returns it as a `ContractOrigin`, if it is one of those.
+/// and returns it as a `Caller`, if it is one of those.
 /// It errors otherwise.
 fn contract_ensure_signed_or_root<T: Config>(
 	origin: T::RuntimeOrigin,
-) -> Result<ContractOrigin<T>, BadOrigin> {
+) -> Result<Caller<T>, BadOrigin> {
 	match ensure_signed_or_root(origin)? {
-		Some(t) => Ok(ContractOrigin::Signed(t)),
-		None => Ok(ContractOrigin::Root),
+		Some(t) => Ok(Caller::Signed(t)),
+		None => Ok(Caller::Root),
 	}
 }
 
 /// The type of callers supported by the contracts pallet.
-#[derive(Clone, Encode, Decode, PartialEq, TypeInfo)]
+#[derive(Clone, Encode, Decode, PartialEq, TypeInfo, RuntimeDebugNoBound)]
 pub enum Caller<T: Config> {
-	Account(T::AccountId),
+	Signed(T::AccountId),
 	Root,
 }
 
 impl<T: Config> Caller<T> {
-	/// Creates a new Signed ContractOrigin from an AccountId.
+	/// Creates a new Signed Caller from an AccountId.
 	pub fn from_account_id(account_id: T::AccountId) -> Self {
-		Caller::Account(account_id)
-	}
-}
-
-impl<T: Config> sp_std::fmt::Debug for Caller<T> {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
-		match self {
-			Caller::Account(id) => write!(f, "Caller::Account({:?})", id),
-			Caller::Root => write!(f, "Caller::Root"),
-		}
+		Caller::Signed(account_id)
 	}
 }
 
@@ -964,7 +939,7 @@ impl<T: Config> Caller<T> {
 	/// It errors otherwise.
 	pub fn account_id(&self) -> Result<T::AccountId, DispatchError> {
 		match self {
-			Caller::Account(id) => Ok(id.clone()),
+			Caller::Signed(id) => Ok(id.clone()),
 			Caller::Root => Err(DispatchError::BadOrigin),
 		}
 	}
@@ -981,7 +956,7 @@ struct CommonInput<'a, T: Config> {
 
 /// Input specific to a call into contract.
 struct CallInput<T: Config> {
-	origin: ContractOrigin<T>,
+	origin: Caller<T>,
 	dest: T::AccountId,
 	determinism: Determinism,
 }
@@ -1134,7 +1109,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 					PrefabWasmModule::from_storage(*hash, &schedule, &mut gas_meter)?,
 				),
 			};
-			let contract_origin = ContractOrigin::from_account_id(origin.clone());
+			let contract_origin = Caller::from_account_id(origin.clone());
 			let mut storage_meter = StorageMeter::new(
 				&contract_origin,
 				common.storage_deposit_limit,
@@ -1186,7 +1161,7 @@ impl<T: Config> Pallet<T> {
 		determinism: Determinism,
 	) -> ContractExecResult<BalanceOf<T>> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
-		let origin = ContractOrigin::from_account_id(origin);
+		let origin = Caller::from_account_id(origin);
 		let common = CommonInput {
 			value,
 			data,

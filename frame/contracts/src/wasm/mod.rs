@@ -461,7 +461,7 @@ mod tests {
 				gas_meter: GasMeter::new(Weight::from_parts(10_000_000_000, 10 * 1024 * 1024)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
-				caller: Caller::Account(ALICE),
+				caller: Caller::Signed(ALICE),
 			}
 		}
 	}
