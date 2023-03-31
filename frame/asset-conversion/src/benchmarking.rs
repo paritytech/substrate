@@ -146,7 +146,7 @@ benchmarks! {
 		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
 		let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 		let ed: u128 = T::Currency::minimum_balance().into();
-		let add_amount = 10 * ed;
+		let add_amount = 100 * ed;
 		let lp_minted = AssetConversion::<T>::calc_lp_amount_for_zero_supply(&add_amount.into(), &1000.into()).unwrap().into();
 		let remove_lp_amount = lp_minted.checked_div(10).unwrap();
 
@@ -182,7 +182,7 @@ benchmarks! {
 		let path: BoundedVec<_, T::MaxSwapPathLength> =
 			BoundedVec::try_from(vec![asset1, asset2, asset3]).unwrap();
 		let ed: u128 = T::Currency::minimum_balance().into();
-		let add_amount1 = 1000 + ed;
+		let add_amount1 = 100 * ed;
 
 		AssetConversion::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
@@ -205,12 +205,12 @@ benchmarks! {
 			caller.clone(),
 		)?;
 		let asset1_balance = T::Currency::balance(&caller);
-	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 100.into(), 1.into(), caller.clone(), false)
+	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), ed.into(), 1.into(), caller.clone(), false)
 	verify {
 		let new_asset1_balance = T::Currency::balance(&caller);
 		assert_eq!(
 			new_asset1_balance,
-			asset1_balance - 100.into()
+			asset1_balance - ed.into()
 		);
 	}
 
