@@ -105,7 +105,7 @@ impl<H: Hasher> Recorder<H> {
 	/// - `storage_root`: The storage root of the trie for which accesses are recorded. This is
 	///   important when recording access to different tries at once (like top and child tries).
 	///
-	///NOTE: This locks a mutex that stays locked until the return value is dropped.
+	/// NOTE: This locks a mutex that stays locked until the return value is dropped.
 	#[inline]
 	pub fn as_trie_recorder(
 		&self,
