@@ -28,7 +28,7 @@ sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-weights = { version = "4.0.0", default-features = false, path = "../../primitives/weights" }
 tt-call = "1.0.8"
-macro_magic = "0.2.10"
+macro_magic = "0.2.11"
 frame-support-procedural = { version = "4.0.0-dev", default-features = false, path = "./procedural" }
 paste = "1.0"
 once_cell = { version = "1", default-features = false, optional = true }

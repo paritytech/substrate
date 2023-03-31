@@ -63,31 +63,11 @@ pub fn expand_config(def: &mut Def) -> TokenStream {
 			Ok(krate) => krate,
 			Err(err) => return err.to_compile_error(),
 		};
-
 		quote!(
 			#[#support::macro_magic::export_tokens]
 			pub trait DefaultConfig {
 				#(#trait_items)*
 			}
-
-			#[macro_export]
-			#[doc(hidden)]
-			// TODO: naming probably needs to be unique
-			macro_rules! tt_config_items {
-				{
-					$caller:tt
-					frame_support = [{$($frame_support:ident)::*}]
-				} => {
-					$( $frame_support )*::tt_return! {
-						$caller
-						type_items = [{ #(#associated_type_names),* }]
-						fn_items = [{  }]
-						const_items = [{  }]
-					}
-				}
-			}
-
-			pub use tt_config_items as tt_config_items;
 		)
 	} else {
 		Default::default()
