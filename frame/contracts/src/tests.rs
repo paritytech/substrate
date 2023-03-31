@@ -22,26 +22,27 @@ use crate::{
 		Result as ExtensionResult, RetVal, ReturnFlags, SysConfig,
 	},
 	exec::{Frame, Key},
+	storage::DeletionQueueManager,
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, Config, ContractInfo, ContractInfoOf, DefaultAddressGenerator,
-	DeletionQueue, Error, Pallet, Schedule,
+	DeletionQueueCounter, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
 use frame_support::{
 	assert_err, assert_err_ignore_postinfo, assert_noop, assert_ok,
-	dispatch::{DispatchClass, DispatchErrorWithPostInfo, PostDispatchInfo},
+	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 	parameter_types,
 	storage::child,
 	traits::{
-		ConstU32, ConstU64, Contains, Currency, ExistenceRequirement, Get, LockableCurrency,
-		OnIdle, OnInitialize, WithdrawReasons,
+		ConstU32, ConstU64, Contains, Currency, ExistenceRequirement, LockableCurrency, OnIdle,
+		OnInitialize, WithdrawReasons,
 	},
 	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
-use frame_system::{self as system, EventRecord, Phase};
+use frame_system::{EventRecord, Phase};
 use pretty_assertions::{assert_eq, assert_ne};
 use sp_io::hashing::blake2_256;
 use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
@@ -383,7 +384,6 @@ impl Contains<RuntimeCall> for TestFilter {
 }
 
 parameter_types! {
-	pub const DeletionWeightLimit: Weight = GAS_LIMIT;
 	pub static UnstableInterface: bool = true;
 }
 
@@ -399,8 +399,6 @@ impl Config for Test {
 	type WeightInfo = ();
 	type ChainExtension =
 		(TestExtension, DisabledExtension, RevertingExtension, TempStorageExtension);
-	type DeletionQueueDepth = ConstU32<1024>;
-	type DeletionWeightLimit = DeletionWeightLimit;
 	type Schedule = MySchedule;
 	type DepositPerByte = DepositPerByte;
 	type DepositPerItem = DepositPerItem;
@@ -1973,25 +1971,6 @@ fn lazy_removal_works() {
 }
 
 #[test]
-fn lazy_removal_on_full_queue_works_on_initialize() {
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		// Fill the deletion queue with dummy values, so that on_initialize attempts
-		// to clear the queue
-		ContractInfo::<Test>::fill_queue_with_dummies();
-
-		let queue_len_initial = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
-
-		// Run the lazy removal
-		Contracts::on_initialize(System::block_number());
-
-		let queue_len_after_on_initialize = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
-
-		// Queue length should be decreased after call of on_initialize()
-		assert!(queue_len_initial - queue_len_after_on_initialize > 0);
-	});
-}
-
-#[test]
 fn lazy_batch_removal_works() {
 	let (code, _hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
@@ -2054,7 +2033,7 @@ fn lazy_removal_partial_remove_works() {
 	// We create a contract with some extra keys above the weight limit
 	let extra_keys = 7u32;
 	let weight_limit = Weight::from_parts(5_000_000_000, 0);
-	let (_, max_keys) = ContractInfo::<Test>::deletion_budget(1, weight_limit);
+	let (_, max_keys) = ContractInfo::<Test>::deletion_budget(weight_limit);
 	let vals: Vec<_> = (0..max_keys + extra_keys)
 		.map(|i| (blake2_256(&i.encode()), (i as u32), (i as u32).encode()))
 		.collect();
@@ -2140,33 +2119,6 @@ fn lazy_removal_partial_remove_works() {
 }
 
 #[test]
-fn lazy_removal_does_no_run_on_full_queue_and_full_block() {
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		// Fill up the block which should prevent the lazy storage removal from running.
-		System::register_extra_weight_unchecked(
-			<Test as system::Config>::BlockWeights::get().max_block,
-			DispatchClass::Mandatory,
-		);
-
-		// Fill the deletion queue with dummy values, so that on_initialize attempts
-		// to clear the queue
-		ContractInfo::<Test>::fill_queue_with_dummies();
-
-		// Check that on_initialize() tries to perform lazy removal but removes nothing
-		//  as no more weight is left for that.
-		let weight_used = Contracts::on_initialize(System::block_number());
-		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
-		assert_eq!(weight_used, base);
-
-		// Check that the deletion queue is still full after execution of the
-		// on_initialize() hook.
-		let max_len: u32 = <Test as Config>::DeletionQueueDepth::get();
-		let queue_len: u32 = <DeletionQueue<Test>>::decode_len().unwrap_or(0).try_into().unwrap();
-		assert_eq!(max_len, queue_len);
-	});
-}
-
-#[test]
 fn lazy_removal_does_no_run_on_low_remaining_weight() {
 	let (code, _hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
@@ -2209,7 +2161,7 @@ fn lazy_removal_does_no_run_on_low_remaining_weight() {
 		// But value should be still there as the lazy removal did not run, yet.
 		assert_matches!(child::get(trie, &[99]), Some(42));
 
-		// Assign a remaining weight which is too low for a successfull deletion of the contract
+		// Assign a remaining weight which is too low for a successful deletion of the contract
 		let low_remaining_weight =
 			<<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
 
@@ -2259,7 +2211,7 @@ fn lazy_removal_does_not_use_all_weight() {
 		.account_id;
 
 		let info = get_contract(&addr);
-		let (weight_per_key, max_keys) = ContractInfo::<Test>::deletion_budget(1, weight_limit);
+		let (weight_per_key, max_keys) = ContractInfo::<Test>::deletion_budget(weight_limit);
 
 		// We create a contract with one less storage item than we can remove within the limit
 		let vals: Vec<_> = (0..max_keys - 1)
@@ -2314,40 +2266,75 @@ fn lazy_removal_does_not_use_all_weight() {
 }
 
 #[test]
-fn deletion_queue_full() {
+fn deletion_queue_ring_buffer_overflow() {
 	let (code, _hash) = compile_module::<Test>("self_destruct").unwrap();
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+	let mut ext = ExtBuilder::default().existential_deposit(50).build();
+
+	// setup the deletion queue with custom counters
+	ext.execute_with(|| {
+		let queue = DeletionQueueManager::from_test_values(u32::MAX - 1, u32::MAX - 1);
+		<DeletionQueueCounter<Test>>::set(queue);
+	});
+
+	// commit the changes to the storage
+	ext.commit_all().unwrap();
+
+	ext.execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let mut tries: Vec<child::ChildInfo> = vec![];
 
-		let addr = Contracts::bare_instantiate(
-			ALICE,
-			min_balance * 100,
-			GAS_LIMIT,
-			None,
-			Code::Upload(code),
-			vec![],
-			vec![],
-			false,
-		)
-		.result
-		.unwrap()
-		.account_id;
+		// add 3 contracts to the deletion queue
+		for i in 0..3u8 {
+			let addr = Contracts::bare_instantiate(
+				ALICE,
+				min_balance * 100,
+				GAS_LIMIT,
+				None,
+				Code::Upload(code.clone()),
+				vec![],
+				vec![i],
+				false,
+			)
+			.result
+			.unwrap()
+			.account_id;
 
-		// fill the deletion queue up until its limit
-		ContractInfo::<Test>::fill_queue_with_dummies();
+			let info = get_contract(&addr);
+			let trie = &info.child_trie_info();
 
-		// Terminate the contract should fail
-		assert_err_ignore_postinfo!(
-			Contracts::call(RuntimeOrigin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, None, vec![],),
-			Error::<Test>::DeletionQueueFull,
-		);
+			// Put value into the contracts child trie
+			child::put(trie, &[99], &42);
 
-		// Contract should exist because removal failed
-		get_contract(&addr);
-	});
+			// Terminate the contract. Contract info should be gone, but value should be still
+			// there as the lazy removal did not run, yet.
+			assert_ok!(Contracts::call(
+				RuntimeOrigin::signed(ALICE),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				None,
+				vec![]
+			));
+
+			assert!(!<ContractInfoOf::<Test>>::contains_key(&addr));
+			assert_matches!(child::get(trie, &[99]), Some(42));
+
+			tries.push(trie.clone())
+		}
+
+		// Run single lazy removal
+		Contracts::on_idle(System::block_number(), Weight::MAX);
+
+		// The single lazy removal should have removed all queued tries
+		for trie in tries.iter() {
+			assert_matches!(child::get::<i32>(trie, &[99]), None);
+		}
+
+		// insert and delete counter values should go from u32::MAX - 1 to 1
+		assert_eq!(<DeletionQueueCounter<Test>>::get().as_test_tuple(), (1, 1));
+	})
 }
-
 #[test]
 fn refcounter() {
 	let (wasm, code_hash) = compile_module::<Test>("self_destruct").unwrap();
