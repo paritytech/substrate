@@ -9128,6 +9128,7 @@ dependencies = [
  "sc-network-light",
  "sc-network-sync",
  "sc-service",
+ "sc-utils",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-babe",

@@ -36,7 +36,7 @@ use crate::{
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
-	protocol::{self, NotificationsSink, NotifsHandlerError, Protocol, Ready},
+	protocol::{self, NotifsHandlerError, Protocol, Ready},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
 		signature::{Signature, SigningError},
@@ -91,6 +91,7 @@ use std::{
 
 pub use behaviour::{InboundFailure, OutboundFailure, ResponseFailure};
 pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
+pub use protocol::NotificationsSink;
 
 mod metrics;
 mod out_events;
@@ -146,7 +147,7 @@ where
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new<Block: BlockT>(mut params: Params<Block>) -> Result<Self, Error> {
+	pub fn new(mut params: Params<B>) -> Result<Self, Error> {
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
@@ -227,6 +228,7 @@ where
 			From::from(&params.role),
 			&params.network_config,
 			params.block_announce_config,
+			params.tx,
 		)?;
 
 		// List of multiaddresses that we know in the network.
