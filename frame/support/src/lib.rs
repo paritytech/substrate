@@ -371,16 +371,14 @@ macro_rules! parameter_types {
 
 			/// Set the value of this parameter type in the storage.
 			///
-			/// This needs to be executed in an externalities provided
-			/// environment.
+			/// This needs to be executed in an externalities provided environment.
 			pub fn set(value: &$type) {
 				$crate::storage::unhashed::put(&Self::key(), value);
 			}
 
 			/// Returns the value of this parameter type.
 			///
-			/// This needs to be executed in an externalities provided
-			/// environment.
+			/// This needs to be executed in an externalities provided environment.
 			#[allow(unused)]
 			pub fn get() -> $type {
 				$crate::storage::unhashed::get(&Self::key()).unwrap_or_else(|| $value)
