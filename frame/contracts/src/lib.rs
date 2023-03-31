@@ -827,7 +827,7 @@ pub mod pallet {
 		StorageDepositNotEnoughFunds,
 		/// More storage was created than allowed by the storage deposit limit.
 		StorageDepositLimitExhausted,
-		/// The storage deposit limit needs to be specified
+		/// The storage deposit limit needs to be specified.
 		StorageDepositLimitRequired,
 		/// Code removal was denied because the code is still in use by at least one contract.
 		CodeInUse,
@@ -847,8 +847,6 @@ pub mod pallet {
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
-		/// Root origin is not allowed.
-		RootOrigin,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -967,7 +965,7 @@ impl<T: Config> Caller<T> {
 	pub fn account_id(&self) -> Result<T::AccountId, DispatchError> {
 		match self {
 			Caller::Account(id) => Ok(id.clone()),
-			Caller::Root => Err(<Error<T>>::RootOrigin.into()),
+			Caller::Root => Err(DispatchError::BadOrigin),
 		}
 	}
 }
