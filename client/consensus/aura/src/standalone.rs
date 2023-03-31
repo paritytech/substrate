@@ -62,10 +62,7 @@ where
 	C: AuxStore + ProvideRuntimeApi<B>,
 	C::Api: AuraApi<B, A>,
 {
-	client
-		.runtime_api()
-		.slot_duration(block_hash)
-		.map_err(|err| err.into())
+	client.runtime_api().slot_duration(block_hash).map_err(|err| err.into())
 }
 
 /// Get the slot author for given block along with authorities.
