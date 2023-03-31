@@ -22,6 +22,7 @@
 //! See the documentation of [`Params`].
 
 pub use crate::{
+	protocol::NotificationsSink,
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
@@ -31,7 +32,12 @@ pub use crate::{
 use codec::Encode;
 use libp2p::{identity::Keypair, multiaddr, Multiaddr, PeerId};
 use prometheus_endpoint::Registry;
-pub use sc_network_common::{role::Role, sync::warp::WarpSyncProvider, ExHashT};
+pub use sc_network_common::{
+	role::{Role, Roles},
+	sync::warp::WarpSyncProvider,
+	ExHashT,
+};
+use sc_utils::mpsc::TracingUnboundedSender;
 use zeroize::Zeroize;
 
 use sp_runtime::traits::Block as BlockT;
@@ -713,6 +719,9 @@ pub struct Params<Block: BlockT> {
 
 	/// Block announce protocol configuration
 	pub block_announce_config: NonDefaultSetConfig,
+
+	/// TX channel for direct communication with `SyncingEngine` and `Protocol`.
+	pub tx: TracingUnboundedSender<crate::event::SyncEvent<Block>>,
 
 	/// Request response protocol configurations
 	pub request_response_protocol_configs: Vec<RequestResponseConfig>,
