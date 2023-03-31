@@ -405,16 +405,10 @@ where
 		tokio_handle: config.tokio_handle.clone(),
 	};
 
-	// `block_in_place` is basically a hack to allow callers of this method to call `block_on`.
-	// It's currently used in tests and could end up with a scenario as:
+	// TODO: https://github.com/paritytech/substrate/issues/13773
 	//
-	// async f() {
-	//    Handle::current().block_on(time::sleep(Duration::from_millis(10)));
-	//    1
-	// }
-	//
-	// rt.block_on(f());
-	//
+	// `block_in_place` is a hack to allow callers to call `block_on` prior to
+	// calling `start_rpc_servers`.
 	match tokio::task::block_in_place(|| {
 		config.tokio_handle.block_on(sc_rpc_server::start_server(server_config))
 	}) {
