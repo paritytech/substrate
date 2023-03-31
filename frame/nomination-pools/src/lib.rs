@@ -1779,6 +1779,8 @@ pub mod pallet {
 		/// An account is already delegating in another pool. An account may only belong to one
 		/// pool at a time.
 		AccountBelongsToOtherPool,
+		/// The member is not unbonding.
+		NotUnbonding,
 		/// The member is fully unbonded (and thus cannot access the bonded and reward pool
 		/// anymore to, for example, collect rewards).
 		FullyUnbonding,
@@ -1836,6 +1838,10 @@ pub mod pallet {
 		InvalidPoolId,
 		/// Bonding extra is restricted to the exact pending reward amount.
 		BondExtraRestricted,
+		/// The pool does not have any active unlock chunks.
+		NoUnlockChunks,
+		/// The member does not have enough points to rebond the given amount.
+		NotEnoughPoints,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, PalletError, RuntimeDebug)]
@@ -2621,6 +2627,51 @@ pub mod pallet {
 		pub fn claim_commission(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_claim_commission(who, pool_id)
+		}
+
+		/// Rebond an unlock chunk from the unbonding queue.
+		///
+		/// Called by a pool member to rebond funds that are currently unlocking.
+		#[pallet::call_index(21)]
+		#[pallet::weight(0)]
+		pub fn rebond(origin: OriginFor<T>, points: BalanceOf<T>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
+
+			// This pool and member must be actively unbonding. `SubPools` need to exist for the
+			// pool, and the member must have unbonding eras present.
+			let mut sub_pools =
+				SubPoolsStorage::<T>::get(member.pool_id).ok_or(Error::<T>::NoUnlockChunks)?;
+			ensure!(!member.unbonding_eras.is_empty(), Error::<T>::NotUnbonding);
+
+			// The amount to rebond (as a balance) must not be greater than the combined total of
+			// the nominator's unlock chunks at this time.
+			let bonded_account = bonded_pool.bonded_account();
+			let amount_to_rebond = bonded_pool.points_to_balance(points).min(
+				T::Staking::total_stake(&bonded_account)
+					.unwrap_or_default()
+					.saturating_sub(T::Staking::active_stake(&bonded_account).unwrap_or_default()),
+			);
+
+			// The provided amount of points to rebond must be within the total points this member is
+			// currently unbonding. TODO: make into ok_to_rebond() method.
+			ensure!(
+				points <= member.unbonding_points() && !amount_to_rebond.is_zero(),
+				Error::<T>::NotEnoughPoints
+			);
+
+			// payout related stuff: we must claim the payouts, and updated recorded payout data
+			// before updating the bonded pool points, similar to that of `join` transaction.
+			reward_pool.update_records(
+				bonded_pool.id,
+				bonded_pool.points,
+				bonded_pool.commission.current(),
+			)?;
+			let _ = Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
+
+			// TODO: finish implementation.
+
+			Ok(())
 		}
 	}
 

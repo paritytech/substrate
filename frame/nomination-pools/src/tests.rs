@@ -402,6 +402,13 @@ mod unbond_pool {
 		let unbond_pool = UnbondPool::<Runtime> { points: 900, balance: 400 };
 		assert_eq!(unbond_pool.point_to_balance(90), 40);
 	}
+
+	#[test]
+	fn rebond_working() {
+		ExtBuilder::default().build_and_execute(|| {
+			// TODO: set up rebond scenario ready for extrinsic testing.
+		})
+	}
 }
 
 mod sub_pools {
