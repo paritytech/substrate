@@ -37,20 +37,3 @@ pub fn call_entry(
 		Err(e) => e.to_compile_error().into(),
 	}
 }
-
-/*
-#[frame_support::call_entry]
-pub enum CallInterface<Runtime> {
-	#[call_entry::index(20)]
-	Pip20(pip20::Call<Runtime>),
-}
-
-impl<Runtime> GetDispatchInfo for CallInterface<Runtime>{
-}
-
-impl<Runtime> Call for CallInterface<Runtime>{
-}
-
-impl<Runtime> GetCallMetadata for CallInterface<Runtime>{
-}
- */

@@ -16,17 +16,180 @@
 // limitations under the License.
 
 use frame_support_procedural_tools::generate_crate_access_2018;
+use std::{cmp::Ordering, collections::HashMap};
 use syn::spanned::Spanned;
 
 pub struct Def {
 	pub item: syn::ItemEnum,
+	pub span: proc_macro2::Span,
+	pub variants: Vec<VariantDef>,
+	pub runtime: syn::Ident,
 	pub frame_support: syn::Ident,
+	pub sp_core: syn::Ident,
 }
 impl Def {
 	pub fn try_from(mut item: syn::ItemEnum) -> syn::Result<Self> {
 		let item_span = item.span();
 		let frame_support = generate_crate_access_2018("frame-support")?;
+		let sp_core = generate_crate_access_2018("sp-core")?;
 
-		todo!()
+		// TODO: Check if other high-level attributes of #[call_entry::*] are present and error out
+
+		// TODO: Maybe check if derive of Codec and error out as we automatically wanna do that. Bad
+		//       style?
+
+		let runtime = match item.generics.params.len().cmp(&1) {
+			Ordering::Equal => {
+				let param = item.generics.params.first().expect("Is one. Qed.").clone();
+				match param {
+					syn::GenericParam::Type(ty) => ty.ident,
+					syn::GenericParam::Const(_) | syn::GenericParam::Lifetime(_) => {
+						let msg = format!(
+							"Invalid call_entry enum. Expected type generic. \
+					  			Try using the following: pub {}<Runtime>",
+							item.ident.clone()
+						);
+						return Err(syn::Error::new(item_span, msg))
+					},
+				}
+			},
+			Ordering::Greater => {
+				let msg = format!(
+					"Invalid call_entry enum. Expected one generic. Got more. \
+					  Try using the following: pub {}<Runtime>",
+					item.ident.clone()
+				);
+				return Err(syn::Error::new(item_span, msg))
+			},
+			Ordering::Less => {
+				let msg = format!(
+					"Invalid call_entry enum. Expected one generic. Got none.. \
+					  Try using the following: pub {}<Runtime>",
+					item.ident.clone()
+				);
+				return Err(syn::Error::new(item_span, msg))
+			},
+		};
+
+		let mut indices = HashMap::new();
+		let mut variants = Vec::new();
+
+		for variant in &mut item.variants {
+			let call_idx_attr: Option<CallEntryAttr> =
+				crate::interface::helper::take_item_interface_attrs(&mut variant.attrs)?
+					.into_iter()
+					.try_fold(None, |mut call_idx_attr, attr| {
+						match attr {
+							CallEntryAttr::Index(span, index) => {
+								if variant.discriminant.is_some() {
+									let msg =
+								"Invalid call_entry variant. Explicit discriminant is given. \
+								Remove and use `#[call_entry::index($expr)]` instead.";
+									return Err(syn::Error::new(variant.span(), msg))
+								}
+
+								if call_idx_attr.is_some() {
+									let msg =
+								"Invalid call_entry variant, multiple `#[call_entry::index($expr)]` \
+								attributes used on the same variant. Only one is allowed.";
+									return Err(syn::Error::new(variant.span(), msg))
+								}
+
+								call_idx_attr = Some(attr);
+							},
+						}
+
+						Ok(call_idx_attr)
+					})?;
+
+			let call_idx = match call_idx_attr {
+				None => {
+					let msg = "Invalid call_entry variant, no `#[call_entry::index($expr)]` \
+					 attributes used on variant. Explicit index must be provided.";
+					return Err(syn::Error::new(variant.span(), msg))
+				},
+				Some(index) =>
+					if let CallEntryAttr::Index(_, idx) = index {
+						idx
+					} else {
+						unreachable!("Ensured by logic above.")
+					},
+			};
+
+			indices
+				.insert(variant.ident.clone(), call_idx)
+				.expect("Variants have unique identifieres. Qed");
+
+			let inner = match &variant.fields {
+				syn::Fields::Unit | syn::Fields::Named(..) => {
+					let msg = "Invalid call_entry variant, only unnamed variants are allowed.` \
+					 attributes used on variant. Explicit index must be provided.";
+					return Err(syn::Error::new(variant.span(), msg))
+				},
+				syn::Fields::Unnamed(unnamed) =>
+					match unnamed.unnamed.len().cmp(&1) {
+						Ordering::Equal =>
+							unnamed.unnamed.first().expect("Is one. Qed.").ty.clone(),
+						Ordering::Greater | Ordering::Less => {
+							let msg = format!("Invalid call_entry variant, only a single unnamed field is allowed.` \
+					 			Try using the following: {}($ty).", variant.ident);
+							return Err(syn::Error::new(variant.span(), msg))
+						},
+					},
+			};
+
+			variants.push(VariantDef {
+				name: variant.ident.clone(),
+				index: call_idx,
+				inner: Box::new(inner),
+				span: variant.span(),
+			})
+		}
+
+		Ok(Def { item, span: item_span, variants, runtime, frame_support, sp_core })
+	}
+}
+
+pub struct VariantDef {
+	pub name: syn::Ident,
+	pub index: u8,
+	pub inner: Box<syn::Type>,
+	pub span: proc_macro2::Span,
+}
+
+/// List of additional token to be used for parsing.
+mod keyword {
+	syn::custom_keyword!(call_entry);
+	syn::custom_keyword!(index);
+}
+
+/// Parse attributes for item in interface trait definition
+/// syntax must be `interface::` (e.g. `#[interface::call]`)
+enum CallEntryAttr {
+	Index(proc_macro2::Span, u8),
+}
+
+impl syn::parse::Parse for CallEntryAttr {
+	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+		input.parse::<syn::Token![#]>()?;
+		let content;
+		syn::bracketed!(content in input);
+		content.parse::<keyword::call_entry>()?;
+		content.parse::<syn::Token![::]>()?;
+
+		let lookahead = content.lookahead1();
+		if lookahead.peek(keyword::index) {
+			let span = content.parse::<keyword::index>()?.span();
+			let call_index_content;
+			syn::parenthesized!(call_index_content in content);
+			let index = call_index_content.parse::<syn::LitInt>()?;
+			if !index.suffix().is_empty() {
+				let msg = "Number literal must not have a suffix";
+				return Err(syn::Error::new(index.span(), msg))
+			}
+			Ok(CallEntryAttr::Index(span, index.base10_parse()?))
+		} else {
+			Err(lookahead.error())
+		}
 	}
 }

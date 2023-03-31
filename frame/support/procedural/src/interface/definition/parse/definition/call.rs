@@ -18,12 +18,10 @@
 use crate::interface::{
 	definition,
 	definition::{
-		parse::{
-			definition::{selector, selector::SelectorDef},
-			helper,
-		},
+		parse::definition::{selector, selector::SelectorDef},
 		SelectorType,
 	},
+	helper,
 };
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;

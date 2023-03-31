@@ -15,10 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::interface::{
-	definition,
-	definition::parse::{definition::selector::SelectorDef, helper},
-};
+use crate::interface::{definition, definition::parse::definition::selector::SelectorDef, helper};
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 use std::collections::HashMap;

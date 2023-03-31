@@ -129,18 +129,20 @@ impl InterfaceDef {
 			return Err(syn::Error::new(item_span, msg))
 		}
 
-		let with_selector =
-			match super::helper::take_first_item_interface_attr::<InterfaceTraitAttr>(item)? {
-				Some(attr) => match attr {
-					InterfaceTraitAttr::WithSelector(_) => Ok(true),
-					_ => {
-						let msg = "Invalid Interface definition. Traits that define an interface \
+		let with_selector = match crate::interface::helper::take_first_item_interface_attr::<
+			InterfaceTraitAttr,
+		>(item)?
+		{
+			Some(attr) => match attr {
+				InterfaceTraitAttr::WithSelector(_) => Ok(true),
+				_ => {
+					let msg = "Invalid Interface definition. Traits that define an interface \
                 			can only have a single additional attribute, `#[interface::with_selector]`.";
-						Err(syn::Error::new(item_span, msg))
-					},
+					Err(syn::Error::new(item_span, msg))
 				},
-				None => Ok(false),
-			}?;
+			},
+			None => Ok(false),
+		}?;
 
 		let mut selectors = None;
 		let mut views = None;
@@ -148,7 +150,7 @@ impl InterfaceDef {
 
 		for (index, item) in item.items.iter_mut().enumerate() {
 			let interface_attr: Option<InterfaceTraitAttr> =
-				super::helper::take_first_item_interface_attr(item)?;
+				crate::interface::helper::take_first_item_interface_attr(item)?;
 
 			match interface_attr {
 				Some(InterfaceTraitAttr::Call(span)) =>

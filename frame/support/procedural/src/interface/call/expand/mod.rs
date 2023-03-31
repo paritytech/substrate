@@ -16,15 +16,81 @@
 // limitations under the License.
 
 use quote::ToTokens;
+use syn::parse_quote::ParseQuote;
 
 pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
-	let implItems = quote::quote!();
+	let generic = def.runtime;
+	let indices = def.variants.iter().map(|var| var.index).collect::<Vec<_>>();
+	let name = def.variants.iter().map(|var| var.name.clone()).collect::<Vec<_>>();
+	let inner_types = def.variants.iter().map(|var| var.inner.clone()).collect::<Vec<_>>();
+	let frame_support = def.frame_support;
+	let sp_core = def.sp_core;
 
-	let enumItem = def.item.into_token_stream();
+	def.item
+		.variants
+		.iter_mut()
+		.zip(indices)
+		.for_each(|(var, index)| var.attrs.push(syn::parse_quote!(#[codec(index = #index)])));
+
+	let impl_item = quote::quote_spanned!(def.span =>
+		impl<#generic> #frame_support::dispatch::GetDispatchInfo for CallInterface<#generic>{
+			fn get_dispatch_info(&self) -> DispatchInfo {
+				todo!()
+			}
+		}
+
+		impl<#generic> #frame_support::interface::Call for CallInterface<#generic>{
+			type RuntimeOrigin = <#generic as #frame_support::interface::Core>::RuntimeOrigin;
+
+			fn call(self, origin: Self::RuntimeOrigin, selectable: #sp_core::H256) -> #frame_support::interface::CallResult {
+				todo!()
+			}
+		}
+
+		impl<#generic> #frame_support::traits::metadata::GetCallMetadata for CallInterface<#generic>{
+			/// Return all module names.
+			fn get_module_names() -> &'static [&'static str] {
+				todo!()
+			}
+			/// Return all function names for the given `module`.
+			fn get_call_names(module: &str) -> &'static [&'static str] {
+				todo!()
+			}
+			/// Return a [`CallMetadata`], containing function and pallet name of the Call.
+			fn get_call_metadata(&self) -> CallMetadata {
+				todo!()
+			}
+		}
+
+		// Evaluate if the given index actually matches the standard defined index and trigger
+		// a warning otherwise.
+		const _: () {
+
+		}
+	);
+
+	let enum_item = def.item.into_token_stream();
 
 	quote::quote!(
-		#enumItem
+		#enum_item
 
-		#implItems
+		#impl_item
 	)
 }
+
+/*
+#[frame_support::call_entry]
+pub enum CallInterface<Runtime> {
+	#[call_entry::index(20)]
+	Pip20(pip20::Call<Runtime>),
+}
+
+impl<Runtime> GetDispatchInfo for CallInterface<Runtime>{
+}
+
+impl<Runtime> Call for CallInterface<Runtime>{
+}
+
+impl<Runtime> GetCallMetadata for CallInterface<Runtime>{
+}
+ */

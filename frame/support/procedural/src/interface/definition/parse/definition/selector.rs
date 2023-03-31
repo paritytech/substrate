@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::interface::definition::{
-	parse::{definition::keyword::selector, helper},
-	SelectorType,
+use crate::interface::{
+	definition::{parse::definition::keyword::selector, SelectorType},
+	helper,
 };
 use quote::ToTokens;
 use std::collections::HashMap;

@@ -18,7 +18,6 @@
 mod definition;
 mod error;
 mod event;
-mod helper;
 
 pub use definition::InterfaceDef;
 pub use error::ErrorDef;
@@ -55,7 +54,7 @@ impl Def {
 
 		for (index, item) in items.iter_mut().enumerate() {
 			let interface_attr: Option<InterfaceAttr> =
-				helper::take_first_item_interface_attr(item)?;
+				crate::interface::helper::take_first_item_interface_attr(item)?;
 
 			match interface_attr {
 				Some(InterfaceAttr::Definition(span)) if interface.is_none() =>
