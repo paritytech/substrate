@@ -417,8 +417,8 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		_addresses: &[Multiaddr],
 		_effective_role: Endpoint,
 	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
-		// Only `Discovery::addresses_of_peer` must be returning addresses to ensure that we
-		// don't return unwanted addresses.
+		// Only `Discovery::handle_pending_outbound_connection` must be returning addresses to
+		// ensure that we don't return unwanted addresses.
 		Ok(Vec::new())
 	}
 

@@ -537,14 +537,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
 		let Some(peer_id) = maybe_peer else { return Ok(Vec::new()); };
 
-		let mut list = Vec::new();
-
-		list.extend(
-			self.permanent_addresses
-				.iter()
-				.filter_map(|(p, a)| if *p == peer_id { Some(a.clone()) } else { None })
-				.collect::<Vec<_>>(),
-		);
+		let mut list = self
+			.permanent_addresses
+			.iter()
+			.filter_map(|(p, a)| if *p == peer_id { Some(a.clone()) } else { None })
+			.collect::<Vec<_>>();
 
 		if let Some(ephemeral_addresses) = self.ephemeral_addresses.get(&peer_id) {
 			list.extend(ephemeral_addresses.clone());
@@ -578,7 +575,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			list.extend(list_to_filter);
 		}
 
-		trace!(target: "sub-libp2p","Addresses of {:?}: {:?}", peer_id, list);
+		trace!(target: "sub-libp2p", "Addresses of {:?}: {:?}", peer_id, list);
 
 		Ok(list)
 	}
@@ -909,9 +906,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					ToSwarm::Dial { .. } => {
 						unreachable!("mDNS never dials!");
 					},
-					ToSwarm::NotifyHandler { event, .. } => match event {}, /* `event` is an
-					                                                          * enum with no
-					                                                          * variant */
+					ToSwarm::NotifyHandler { event, .. } => match event {}, /* `event` is an */
+					// enum with no
+					// variant
 					ToSwarm::ReportObservedAddr { address, score } =>
 						return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
 					ToSwarm::CloseConnection { peer_id, connection } =>
