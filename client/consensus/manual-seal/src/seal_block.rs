@@ -27,7 +27,7 @@ use sp_blockchain::HeaderBackend;
 use sp_consensus::{self, BlockOrigin, Environment, Proposer, SelectChain};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 /// max duration for creating a proposal in secs
 pub const MAX_PROPOSAL_DURATION: u64 = 10;
@@ -153,7 +153,7 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, P>(
 		let mut post_header = header.clone();
 		post_header.digest_mut().logs.extend(params.post_digests.iter().cloned());
 
-		match block_import.import_block(params, HashMap::new()).await? {
+		match block_import.import_block(params).await? {
 			ImportResult::Imported(aux) =>
 				Ok(CreatedBlock { hash: <B as BlockT>::Header::hash(&post_header), aux }),
 			other => Err(other.into()),
