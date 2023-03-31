@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Contract Pallet
+//! # Contracts Pallet
 //!
-//! The Contract module provides functionality for the runtime to deploy and execute WebAssembly
+//! The Contracts module provides functionality for the runtime to deploy and execute WebAssembly
 //! smart-contracts.
 //!
 //! - [`Config`]
@@ -73,7 +73,7 @@
 //!
 //! ## Usage
 //!
-//! The Contract module is a work in progress. The following examples show how this Contract module
+//! The Contracts module is a work in progress. The following examples show how this module
 //! can be used to instantiate and call contracts.
 //!
 //! * [`ink`](https://github.com/paritytech/ink) is

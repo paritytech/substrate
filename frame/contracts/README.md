@@ -1,6 +1,6 @@
-# Contract Module
+# Contracts Module
 
-The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
+The Contracts module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 
 - [`Call`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Call.html)
 - [`Config`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/trait.Config.html)
