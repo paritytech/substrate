@@ -99,12 +99,12 @@ impl CompositeDef {
 		} else {
 			return Err(syn::Error::new(
 				item.span(),
-				"Invalid pallet::hold_reason, expected enum item",
+				"Invalid pallet::composite_enum, expected enum item",
 			))
 		};
 
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
-			let msg = "Invalid pallet::hold_reason, `HoldReason` must be public";
+			let msg = format!("Invalid pallet::composite_enum, `{}` must be public", item.ident);
 			return Err(syn::Error::new(item.span(), msg))
 		}
 

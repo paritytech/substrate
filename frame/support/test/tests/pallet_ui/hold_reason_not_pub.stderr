@@ -1,4 +1,4 @@
-error: Invalid pallet::hold_reason, `HoldReason` must be public
+error: Invalid pallet::composite_enum, `HoldReason` must be public
   --> tests/pallet_ui/hold_reason_not_pub.rs:10:5
    |
 10 |     enum HoldReason {}
