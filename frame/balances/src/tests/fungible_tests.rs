@@ -432,23 +432,14 @@ fn emit_events_with_changing_freezes() {
 
 		// Freeze = [17, 20] --> [17, 15]
 		assert_ok!(Balances::set_freeze(&TestId::Bar, &1, 15));
-		assert_eq!(
-			events(),
-			[RuntimeEvent::Balances(crate::Event::Thawed { who: 1, amount: 3 })]
-		);
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Thawed { who: 1, amount: 3 })]);
 
 		// Freeze = [17, 15] --> [15]
 		assert_ok!(Balances::thaw(&TestId::Foo, &1));
-		assert_eq!(
-			events(),
-			[RuntimeEvent::Balances(crate::Event::Thawed { who: 1, amount: 2 })]
-		);
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Thawed { who: 1, amount: 2 })]);
 
 		// Freeze = [15] --> []
 		assert_ok!(Balances::thaw(&TestId::Bar, &1));
-		assert_eq!(
-			events(),
-			[RuntimeEvent::Balances(crate::Event::Thawed { who: 1, amount: 15 })]
-		);
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Thawed { who: 1, amount: 15 })]);
 	});
 }
