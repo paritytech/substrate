@@ -89,7 +89,7 @@ parameter_types! {
 	pub const MinVestedTransfer: u64 = 256 * 2;
 	pub UnvestedFundsAllowedWithdrawReasons: WithdrawReasons =
 		WithdrawReasons::except(WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE);
-	pub static ExistentialDeposit: u64 = 0;
+	pub static ExistentialDeposit: u64 = 1;
 }
 impl Config for Test {
 	type BlockNumberToBalance = Identity;
