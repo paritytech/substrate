@@ -458,12 +458,13 @@ fn compile_module<T>(fixture_name: &str) -> wat::Result<(Vec<u8>, <T::Hashing as
 where
 	T: frame_system::Config,
 {
-	let fixture_root = if std::env::var("CARGO_MANIFEST_DIR").is_ok() {
-		"fixtures/"
-	} else {
-		"frame/contracts/fixtures/"
-	};
-	let fixture_path = [fixture_root, fixture_name, ".wat"].concat();
+	let fixture_path = [
+		std::env::var("CARGO_MANIFEST_DIR").as_deref().unwrap_or("frame/contracts"),
+		"/fixtures/",
+		fixture_name,
+		".wat",
+	]
+	.concat();
 	let wasm_binary = wat::parse_file(fixture_path)?;
 	let code_hash = T::Hashing::hash(&wasm_binary);
 	Ok((wasm_binary, code_hash))
