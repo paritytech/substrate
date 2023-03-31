@@ -336,7 +336,7 @@ pub mod pallet {
 		Unlocked { who: T::AccountId, amount: T::Balance },
 		/// Some balance was frozen
 		Frozen { who: T::AccountId, amount: T::Balance },
-		/// Some balance was thawn.
+		/// Some balance was thawed.
 		Thawed { who: T::AccountId, amount: T::Balance },
 	}
 
