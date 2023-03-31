@@ -146,7 +146,7 @@ benchmarks! {
 		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
 		let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 		let ed: u128 = T::Currency::minimum_balance().into();
-		let add_amount = 1000 + ed;
+		let add_amount = 10 * ed;
 		let lp_minted = AssetConversion::<T>::calc_lp_amount_for_zero_supply(&add_amount.into(), &1000.into()).unwrap().into();
 		let remove_lp_amount = lp_minted.checked_div(10).unwrap();
 
