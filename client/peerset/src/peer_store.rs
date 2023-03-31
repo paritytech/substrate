@@ -212,10 +212,16 @@ struct PeerStore {
 }
 
 impl PeerStore {
-	/// Create new empty peer store.
-	pub fn new() -> Self {
-		// TODO: pass bootnodes.
-		PeerStore { inner: Arc::new(Mutex::new(PeerStoreInner { peers: HashMap::new() })) }
+	/// Create a new peer store from the list of bootnodes.
+	pub fn new(bootnodes: Vec<PeerId>) -> Self {
+		PeerStore {
+			inner: Arc::new(Mutex::new(PeerStoreInner {
+				peers: bootnodes
+					.into_iter()
+					.map(|peer_id| (peer_id, PeerInfo::default()))
+					.collect(),
+			})),
+		}
 	}
 
 	/// Get `PeerStoreHandle`.
