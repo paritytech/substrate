@@ -1771,17 +1771,17 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, bytes)
 
 	// We assume that every instantiate sends at least the minimum balance.
-	// This is a slow call: We redeuce the number of runs.
+	// This is a slow call: we reduce the number of runs.
 	#[pov_mode = Measured]
 	seal_instantiate {
-		let r in 0 .. API_BENCHMARK_RUNS / 2;
+		let r in 1 .. API_BENCHMARK_RUNS / 2;
 		let hashes = (0..r)
 			.map(|i| {
 				let code = WasmModule::<T>::from(ModuleDefinition {
 					memory: Some(ImportedMemory::max::<T>()),
 					call_body: Some(body::plain(vec![
-						// we need to add this in order to make contracts unique
-						// so that they can be deployed from the same sender
+						// We need to add this in order to make contracts unique,
+						// so that they can be deployed from the same sender.
 						Instruction::I32Const(i as i32),
 						Instruction::Drop,
 						Instruction::End,
@@ -1794,21 +1794,16 @@ benchmarks! {
 			.collect::<Result<Vec<_>, &'static str>>()?;
 		let hash_len = hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
 		let hashes_bytes = hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
-		let hashes_len = hashes_bytes.len();
+		let hashes_len = &hashes_bytes.len();
 		let value = Pallet::<T>::min_balance();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = BalanceOf::<T>::max_encoded_len();
-		// Set an own deposit limit for every call
-		let deposit_limit: u32 = (u32::MAX - 100).into();
-		let deposit_bytes = deposit_limit.to_le_bytes().to_vec();
 		let addr_len = T::AccountId::max_encoded_len();
-		// offsets where to place static data in contract memory
-		let value_offset = 0;
-		let hashes_offset = value_offset + value_len;
+		// Offsets where to place static data in contract memory.
+		let hashes_offset = value_len;
 		let addr_len_offset = hashes_offset + hashes_len;
-		let deposit_offset = addr_len_offset + addr_len;
-		let addr_offset = deposit_offset + 4;
+		let addr_offset = addr_len_offset + addr_len;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -1833,7 +1828,7 @@ benchmarks! {
 			}],
 			data_segments: vec![
 				DataSegment {
-					offset: value_offset as u32,
+					offset: 0,
 					value: value_bytes,
 				},
 				DataSegment {
@@ -1844,17 +1839,13 @@ benchmarks! {
 					offset: addr_len_offset as u32,
 					value: addr_len.to_le_bytes().into(),
 				},
-				DataSegment {
-					offset: addr_offset as u32,
-					value: deposit_bytes,
-				},
 			],
 			call_body: Some(body::repeated_dyn(r, vec![
 				Counter(hashes_offset as u32, hash_len as u32), // code_hash_ptr
 				Regular(Instruction::I64Const(0)), // ref_time weight
 				Regular(Instruction::I64Const(0)), // proof_size weight
-				Regular(Instruction::I32Const(deposit_offset as i32)),  // deposit limit ptr
-				Regular(Instruction::I32Const(value_offset as i32)), // value_ptr
+				Regular(Instruction::I32Const(SENTINEL as i32)), // deposit limit ptr: use parent's limit
+				Regular(Instruction::I32Const(0)), // value_ptr
 				Regular(Instruction::I32Const(0)), // input_data_ptr
 				Regular(Instruction::I32Const(0)), // input_data_len
 				Regular(Instruction::I32Const(addr_offset as i32)), // address_ptr
@@ -1884,7 +1875,7 @@ benchmarks! {
 				return Err("Expected that contract does not exist at this point.".into());
 			}
 		}
-	}: call(origin, callee, 0u32.into(), Weight::MAX, Some(BalanceOf::<T>::from(u32::MAX).into()), vec![])
+	}: call(origin, callee, 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		for addr in &addresses {
 			ContractInfoOf::<T>::get(&addr)

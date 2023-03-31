@@ -1579,9 +1579,8 @@ pub mod env {
 	/// - `input_data_len`: length of the input data buffer.
 	/// - `address_ptr`: a pointer where the new account's address is copied to. `SENTINEL` means
 	///   not to copy.
-	/// - `address_len_ptr`: in-out pointer to where the length of the buffer is read from and the
-	///   actual length is written to.
-	/// - `output_ptr`: a pointer where the output buffer is copied to.  `SENTINEL` means not to
+	/// - `address_len_ptr`: pointer to where put the length of the address.
+	/// - `output_ptr`: a pointer where the output buffer is copied to. `SENTINEL` means not to
 	///   copy.
 	/// - `output_len_ptr`: in-out pointer to where the length of the buffer is read from and the
 	///   actual length is written to.

@@ -344,8 +344,8 @@ parameter_types! {
 	};
 	pub static DepositPerByte: BalanceOf<Test> = 1;
 	pub const DepositPerItem: BalanceOf<Test> = 2;
-	// We need this one set high enough for running benchmarks.
-	pub const DefaultDepositLimit: BalanceOf<Test> = 10_000_000;
+	// We set it to maximum for running benchmarks
+	pub const DefaultDepositLimit: BalanceOf<Test> = Balance::max_value();
 }
 
 impl Convert<Weight, BalanceOf<Self>> for Test {
