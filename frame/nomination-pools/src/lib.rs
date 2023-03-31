@@ -133,7 +133,7 @@
 //! * Root: can change the nominator, bouncer, or itself, manage and claim commission, and can
 //!   perform any of the actions the nominator or bouncer can.
 //!
-//! ## Commission
+//! ### Commission
 //!
 //! A pool can optionally have a commission configuration, via the `root` role, set with
 //! [`Call::set_commission`] and claimed with [`Call::claim_commission`]. A payee account must be
@@ -1496,7 +1496,7 @@ pub mod pallet {
 	use sp_runtime::Perbill;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]

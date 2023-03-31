@@ -478,9 +478,22 @@ pub mod v4 {
 		}
 	}
 
+	/// Migrates from `v3` directly to `v5` to avoid the broken `v4` migration.
+	#[allow(deprecated)]
+	pub type MigrateV3ToV5<T, U> = (v4::MigrateToV4<T, U>, v5::MigrateToV5<T>);
+
+	/// # Warning
+	///
+	/// To avoid mangled storage please use `MigrateV3ToV5` instead.
+	/// See: github.com/paritytech/substrate/pull/13715
+	///
 	/// This migration adds a `commission` field to every `BondedPoolInner`, if
 	/// any.
+	#[deprecated(
+		note = "To avoid mangled storage please use `MigrateV3ToV5` instead. See: github.com/paritytech/substrate/pull/13715"
+	)]
 	pub struct MigrateToV4<T, U>(sp_std::marker::PhantomData<(T, U)>);
+	#[allow(deprecated)]
 	impl<T: Config, U: Get<Perbill>> OnRuntimeUpgrade for MigrateToV4<T, U> {
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
@@ -493,7 +506,8 @@ pub mod v4 {
 				onchain
 			);
 
-			if current == 4 && onchain == 3 {
+			if onchain == 3 {
+				log!(warn, "Please run MigrateToV5 immediately after this migration. See github.com/paritytech/substrate/pull/13715");
 				let initial_global_max_commission = U::get();
 				GlobalMaxCommission::<T>::set(Some(initial_global_max_commission));
 				log!(
@@ -508,7 +522,7 @@ pub mod v4 {
 					Some(old_value.migrate_to_v4())
 				});
 
-				current.put::<Pallet<T>>();
+				StorageVersion::new(4).put::<Pallet<T>>();
 				log!(info, "Upgraded {} pools, storage to version {:?}", translated, current);
 
 				// reads: translated + onchain version.
@@ -544,6 +558,150 @@ pub mod v4 {
 				"global maximum commission error"
 			);
 			ensure!(Pallet::<T>::on_chain_storage_version() == 4, "wrong storage version");
+			Ok(())
+		}
+	}
+}
+
+pub mod v5 {
+	use super::*;
+
+	#[derive(Decode)]
+	pub struct OldRewardPool<T: Config> {
+		last_recorded_reward_counter: T::RewardCounter,
+		last_recorded_total_payouts: BalanceOf<T>,
+		total_rewards_claimed: BalanceOf<T>,
+	}
+
+	impl<T: Config> OldRewardPool<T> {
+		fn migrate_to_v5(self) -> RewardPool<T> {
+			RewardPool {
+				last_recorded_reward_counter: self.last_recorded_reward_counter,
+				last_recorded_total_payouts: self.last_recorded_total_payouts,
+				total_rewards_claimed: self.total_rewards_claimed,
+				total_commission_pending: Zero::zero(),
+				total_commission_claimed: Zero::zero(),
+			}
+		}
+	}
+
+	/// This migration adds `total_commission_pending` and `total_commission_claimed` field to every
+	/// `RewardPool`, if any.
+	pub struct MigrateToV5<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for MigrateToV5<T> {
+		fn on_runtime_upgrade() -> Weight {
+			let current = Pallet::<T>::current_storage_version();
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
+			log!(
+				info,
+				"Running migration with current storage version {:?} / onchain {:?}",
+				current,
+				onchain
+			);
+
+			if current == 5 && onchain == 4 {
+				let mut translated = 0u64;
+				RewardPools::<T>::translate::<OldRewardPool<T>, _>(|_id, old_value| {
+					translated.saturating_inc();
+					Some(old_value.migrate_to_v5())
+				});
+
+				current.put::<Pallet<T>>();
+				log!(info, "Upgraded {} pools, storage to version {:?}", translated, current);
+
+				// reads: translated + onchain version.
+				// writes: translated + current.put.
+				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
+			} else {
+				log!(info, "Migration did not execute. This probably should be removed");
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			ensure!(
+				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
+				"the on_chain version is equal or more than the current one"
+			);
+
+			let rpool_keys = RewardPools::<T>::iter_keys().count();
+			let rpool_values = RewardPools::<T>::iter_values().count();
+			if rpool_keys != rpool_values {
+				log!(info, "🔥 There are {} undecodable RewardPools in storage. This migration will try to correct them. keys: {}, values: {}", rpool_keys.saturating_sub(rpool_values), rpool_keys, rpool_values);
+			}
+
+			ensure!(
+				PoolMembers::<T>::iter_keys().count() == PoolMembers::<T>::iter_values().count(),
+				"There are undecodable PoolMembers in storage. This migration will not fix that."
+			);
+			ensure!(
+				BondedPools::<T>::iter_keys().count() == BondedPools::<T>::iter_values().count(),
+				"There are undecodable BondedPools in storage. This migration will not fix that."
+			);
+			ensure!(
+				SubPoolsStorage::<T>::iter_keys().count() ==
+					SubPoolsStorage::<T>::iter_values().count(),
+				"There are undecodable SubPools in storage. This migration will not fix that."
+			);
+			ensure!(
+				Metadata::<T>::iter_keys().count() == Metadata::<T>::iter_values().count(),
+				"There are undecodable Metadata in storage. This migration will not fix that."
+			);
+
+			Ok((rpool_values as u64).encode())
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(data: Vec<u8>) -> Result<(), &'static str> {
+			let old_rpool_values: u64 = Decode::decode(&mut &data[..]).unwrap();
+			let rpool_keys = RewardPools::<T>::iter_keys().count() as u64;
+			let rpool_values = RewardPools::<T>::iter_values().count() as u64;
+			ensure!(
+				rpool_keys == rpool_values,
+				"There are STILL undecodable RewardPools - migration failed"
+			);
+
+			if old_rpool_values != rpool_values {
+				log!(
+					info,
+					"🎉 Fixed {} undecodable RewardPools.",
+					rpool_values.saturating_sub(old_rpool_values)
+				);
+			}
+
+			// ensure all RewardPools items now contain `total_commission_pending` and
+			// `total_commission_claimed` field.
+			ensure!(
+				RewardPools::<T>::iter().all(|(_, reward_pool)| reward_pool
+					.total_commission_pending
+					.is_zero() && reward_pool
+					.total_commission_claimed
+					.is_zero()),
+				"a commission value has been incorrectly set"
+			);
+			ensure!(Pallet::<T>::on_chain_storage_version() == 5, "wrong storage version");
+
+			// These should not have been touched - just in case.
+			ensure!(
+				PoolMembers::<T>::iter_keys().count() == PoolMembers::<T>::iter_values().count(),
+				"There are undecodable PoolMembers in storage."
+			);
+			ensure!(
+				BondedPools::<T>::iter_keys().count() == BondedPools::<T>::iter_values().count(),
+				"There are undecodable BondedPools in storage."
+			);
+			ensure!(
+				SubPoolsStorage::<T>::iter_keys().count() ==
+					SubPoolsStorage::<T>::iter_values().count(),
+				"There are undecodable SubPools in storage."
+			);
+			ensure!(
+				Metadata::<T>::iter_keys().count() == Metadata::<T>::iter_values().count(),
+				"There are undecodable Metadata in storage."
+			);
+
 			Ok(())
 		}
 	}

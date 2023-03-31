@@ -24,8 +24,8 @@ use crate::{
 	ChainSync, ClientError, SyncingService,
 };
 
-use codec::{Decode, DecodeAll, Encode};
-use futures::{FutureExt, Stream, StreamExt};
+use codec::{Decode, Encode};
+use futures::{FutureExt, StreamExt};
 use futures_timer::Delay;
 use libp2p::PeerId;
 use lru::LruCache;
@@ -39,9 +39,8 @@ use sc_network::{
 	config::{
 		NetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
 	},
-	event::Event,
 	utils::LruHashSet,
-	ProtocolName,
+	NotificationsSink, ProtocolName,
 };
 use sc_network_common::{
 	role::Roles,
@@ -58,15 +57,11 @@ use sc_network_common::{
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderMetadata;
 use sp_consensus::block_validation::BlockAnnounceValidator;
-use sp_runtime::{
-	traits::{Block as BlockT, CheckedSub, Header, NumberFor, Zero},
-	SaturatedConversion,
-};
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor, Zero};
 
 use std::{
 	collections::{HashMap, HashSet},
 	num::NonZeroUsize,
-	pin::Pin,
 	sync::{
 		atomic::{AtomicBool, AtomicUsize, Ordering},
 		Arc,
@@ -77,24 +72,13 @@ use std::{
 /// Interval at which we perform time based maintenance
 const TICK_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1100);
 
-/// When light node connects to the full node and the full node is behind light node
-/// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it not useful
-/// and disconnect to free connection slot.
-const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
-
 /// Maximum number of known block hashes to keep for a peer.
 const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
 
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
-	/// Reputation change when we are a light client and a peer is behind us.
-	pub const PEER_BEHIND_US_LIGHT: Rep = Rep::new(-(1 << 8), "Useless for a light peer");
-	/// We received a message that failed to decode.
-	pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
 	/// Peer has different genesis.
 	pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
-	/// Peer role does not match (e.g. light peer connecting to another light peer).
-	pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
 	/// Peer send us a block announcement that failed at validation.
 	pub const BAD_BLOCK_ANNOUNCEMENT: Rep = Rep::new(-(1 << 12), "Bad block announcement");
 }
@@ -174,6 +158,8 @@ pub struct Peer<B: BlockT> {
 	pub info: ExtendedPeerInfo<B>,
 	/// Holds a set of blocks known to this peer.
 	pub known_blocks: LruHashSet<B::Hash>,
+	/// Notification sink.
+	sink: NotificationsSink,
 }
 
 pub struct SyncingEngine<B: BlockT, Client> {
@@ -195,6 +181,9 @@ pub struct SyncingEngine<B: BlockT, Client> {
 
 	/// Channel for receiving service commands
 	service_rx: TracingUnboundedReceiver<ToServiceCommand<B>>,
+
+	/// Channel for receiving inbound connections from `Protocol`.
+	rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent<B>>,
 
 	/// Assigned roles.
 	roles: Roles,
@@ -266,6 +255,7 @@ where
 		block_request_protocol_name: ProtocolName,
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
+		rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent<B>>,
 	) -> Result<(Self, SyncingService<B>, NonDefaultSetConfig), ClientError> {
 		let mode = match network_config.sync_mode {
 			SyncOperationMode::Full => SyncMode::Full,
@@ -359,6 +349,7 @@ where
 				num_connected: num_connected.clone(),
 				is_major_syncing: is_major_syncing.clone(),
 				service_rx,
+				rx,
 				genesis_hash,
 				important_peers,
 				default_peers_set_no_slot_connected_peers: HashSet::new(),
@@ -566,11 +557,7 @@ where
 					data: Some(data.clone()),
 				};
 
-				self.network_service.write_notification(
-					*who,
-					self.block_announce_protocol_name.clone(),
-					message.encode(),
-				);
+				peer.sink.send_sync_notification(message.encode());
 			}
 		}
 	}
@@ -587,17 +574,13 @@ where
 		)
 	}
 
-	pub async fn run(mut self, mut stream: Pin<Box<dyn Stream<Item = Event> + Send>>) {
+	pub async fn run(mut self) {
 		loop {
-			futures::future::poll_fn(|cx| self.poll(cx, &mut stream)).await;
+			futures::future::poll_fn(|cx| self.poll(cx)).await;
 		}
 	}
 
-	pub fn poll(
-		&mut self,
-		cx: &mut std::task::Context,
-		event_stream: &mut Pin<Box<dyn Stream<Item = Event> + Send>>,
-	) -> Poll<()> {
+	pub fn poll(&mut self, cx: &mut std::task::Context) -> Poll<()> {
 		self.num_connected.store(self.peers.len(), Ordering::Relaxed);
 		self.is_major_syncing
 			.store(self.chain_sync.status().state.is_major_syncing(), Ordering::Relaxed);
@@ -605,84 +588,6 @@ where
 		while let Poll::Ready(()) = self.tick_timeout.poll_unpin(cx) {
 			self.report_metrics();
 			self.tick_timeout.reset(TICK_TIMEOUT);
-		}
-
-		while let Poll::Ready(Some(event)) = event_stream.poll_next_unpin(cx) {
-			match event {
-				Event::NotificationStreamOpened {
-					remote, protocol, received_handshake, ..
-				} => {
-					if protocol != self.block_announce_protocol_name {
-						continue
-					}
-
-					match <BlockAnnouncesHandshake<B> as DecodeAll>::decode_all(
-						&mut &received_handshake[..],
-					) {
-						Ok(handshake) => {
-							if self.on_sync_peer_connected(remote, handshake).is_err() {
-								log::debug!(
-									target: "sync",
-									"Failed to register peer {remote:?}: {received_handshake:?}",
-								);
-							}
-						},
-						Err(err) => {
-							log::debug!(
-								target: "sync",
-								"Couldn't decode handshake sent by {}: {:?}: {}",
-								remote,
-								received_handshake,
-								err,
-							);
-							self.network_service.report_peer(remote, rep::BAD_MESSAGE);
-						},
-					}
-				},
-				Event::NotificationStreamClosed { remote, protocol } => {
-					if protocol != self.block_announce_protocol_name {
-						continue
-					}
-
-					if self.on_sync_peer_disconnected(remote).is_err() {
-						log::trace!(
-							target: "sync",
-							"Disconnected peer which had earlier been refused by on_sync_peer_connected {}",
-							remote
-						);
-					}
-				},
-				Event::NotificationsReceived { remote, messages } => {
-					for (protocol, message) in messages {
-						if protocol != self.block_announce_protocol_name {
-							continue
-						}
-
-						if self.peers.contains_key(&remote) {
-							if let Ok(announce) = BlockAnnounce::decode(&mut message.as_ref()) {
-								self.push_block_announce_validation(remote, announce);
-
-								// Make sure that the newly added block announce validation future
-								// was polled once to be registered in the task.
-								if let Poll::Ready(res) =
-									self.chain_sync.poll_block_announce_validation(cx)
-								{
-									self.process_block_announce_validation_result(res)
-								}
-							} else {
-								log::warn!(target: "sub-libp2p", "Failed to decode block announce");
-							}
-						} else {
-							log::trace!(
-								target: "sync",
-								"Received sync for peer earlier refused by sync layer: {}",
-								remote
-							);
-						}
-					}
-				},
-				_ => {},
-			}
 		}
 
 		while let Poll::Ready(Some(event)) = self.service_rx.poll_next_unpin(cx) {
@@ -723,7 +628,9 @@ where
 				ToServiceCommand::NewBestBlockImported(hash, number) =>
 					self.new_best_block_imported(hash, number),
 				ToServiceCommand::Status(tx) => {
-					let _ = tx.send(self.chain_sync.status());
+					let mut status = self.chain_sync.status();
+					status.num_connected_peers = self.peers.len() as u32;
+					let _ = tx.send(status);
 				},
 				ToServiceCommand::NumActivePeers(tx) => {
 					let _ = tx.send(self.chain_sync.num_active_peers());
@@ -756,6 +663,70 @@ where
 			}
 		}
 
+		while let Poll::Ready(Some(event)) = self.rx.poll_next_unpin(cx) {
+			match event {
+				sc_network::SyncEvent::NotificationStreamOpened {
+					remote,
+					received_handshake,
+					sink,
+					tx,
+				} => match self.on_sync_peer_connected(remote, &received_handshake, sink) {
+					Ok(()) => {
+						let _ = tx.send(true);
+					},
+					Err(()) => {
+						log::debug!(
+							target: "sync",
+							"Failed to register peer {remote:?}: {received_handshake:?}",
+						);
+						let _ = tx.send(false);
+					},
+				},
+				sc_network::SyncEvent::NotificationStreamClosed { remote } => {
+					if self.on_sync_peer_disconnected(remote).is_err() {
+						log::trace!(
+							target: "sync",
+							"Disconnected peer which had earlier been refused by on_sync_peer_connected {}",
+							remote
+						);
+					}
+				},
+				sc_network::SyncEvent::NotificationsReceived { remote, messages } => {
+					for message in messages {
+						if self.peers.contains_key(&remote) {
+							if let Ok(announce) = BlockAnnounce::decode(&mut message.as_ref()) {
+								self.push_block_announce_validation(remote, announce);
+
+								// Make sure that the newly added block announce validation future
+								// was polled once to be registered in the task.
+								if let Poll::Ready(res) =
+									self.chain_sync.poll_block_announce_validation(cx)
+								{
+									self.process_block_announce_validation_result(res)
+								}
+							} else {
+								log::warn!(target: "sub-libp2p", "Failed to decode block announce");
+							}
+						} else {
+							log::trace!(
+								target: "sync",
+								"Received sync for peer earlier refused by sync layer: {}",
+								remote
+							);
+						}
+					}
+				},
+				sc_network::SyncEvent::NotificationSinkReplaced { remote, sink } => {
+					if let Some(peer) = self.peers.get_mut(&remote) {
+						peer.sink = sink;
+					}
+				},
+			}
+		}
+
+		// poll `ChainSync` last because of a block announcement was received through the
+		// event stream between `SyncingEngine` and `Protocol` and the validation finished
+		// right after it as queued, the resulting block request (if any) can be sent right away.
 		while let Poll::Ready(result) = self.chain_sync.poll(cx) {
 			self.process_block_announce_validation_result(result);
 		}
@@ -767,13 +738,13 @@ where
 	///
 	/// Returns a result if the handshake of this peer was indeed accepted.
 	pub fn on_sync_peer_disconnected(&mut self, peer: PeerId) -> Result<(), ()> {
-		if self.important_peers.contains(&peer) {
-			log::warn!(target: "sync", "Reserved peer {} disconnected", peer);
-		} else {
-			log::debug!(target: "sync", "{} disconnected", peer);
-		}
-
 		if self.peers.remove(&peer).is_some() {
+			if self.important_peers.contains(&peer) {
+				log::warn!(target: "sync", "Reserved peer {} disconnected", peer);
+			} else {
+				log::debug!(target: "sync", "{} disconnected", peer);
+			}
+
 			self.chain_sync.peer_disconnected(&peer);
 			self.default_peers_set_no_slot_connected_peers.remove(&peer);
 			self.event_streams
@@ -792,7 +763,8 @@ where
 	pub fn on_sync_peer_connected(
 		&mut self,
 		who: PeerId,
-		status: BlockAnnouncesHandshake<B>,
+		status: &BlockAnnouncesHandshake<B>,
+		sink: NotificationsSink,
 	) -> Result<(), ()> {
 		log::trace!(target: "sync", "New peer {} {:?}", who, status);
 
@@ -804,8 +776,6 @@ where
 
 		if status.genesis_hash != self.genesis_hash {
 			self.network_service.report_peer(who, rep::GENESIS_MISMATCH);
-			self.network_service
-				.disconnect_peer(who, self.block_announce_protocol_name.clone());
 
 			if self.important_peers.contains(&who) {
 				log::error!(
@@ -834,31 +804,6 @@ where
 			return Err(())
 		}
 
-		if self.roles.is_light() {
-			// we're not interested in light peers
-			if status.roles.is_light() {
-				log::debug!(target: "sync", "Peer {} is unable to serve light requests", who);
-				self.network_service.report_peer(who, rep::BAD_ROLE);
-				self.network_service
-					.disconnect_peer(who, self.block_announce_protocol_name.clone());
-				return Err(())
-			}
-
-			// we don't interested in peers that are far behind us
-			let self_best_block = self.client.info().best_number;
-			let blocks_difference = self_best_block
-				.checked_sub(&status.best_number)
-				.unwrap_or_else(Zero::zero)
-				.saturated_into::<u64>();
-			if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
-				log::debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
-				self.network_service.report_peer(who, rep::PEER_BEHIND_US_LIGHT);
-				self.network_service
-					.disconnect_peer(who, self.block_announce_protocol_name.clone());
-				return Err(())
-			}
-		}
-
 		let no_slot_peer = self.default_peers_set_no_slot_peers.contains(&who);
 		let this_peer_reserved_slot: usize = if no_slot_peer { 1 } else { 0 };
 
@@ -869,8 +814,6 @@ where
 					this_peer_reserved_slot
 		{
 			log::debug!(target: "sync", "Too many full nodes, rejecting {}", who);
-			self.network_service
-				.disconnect_peer(who, self.block_announce_protocol_name.clone());
 			return Err(())
 		}
 
@@ -879,8 +822,6 @@ where
 		{
 			// Make sure that not all slots are occupied by light clients.
 			log::debug!(target: "sync", "Too many light nodes, rejecting {}", who);
-			self.network_service
-				.disconnect_peer(who, self.block_announce_protocol_name.clone());
 			return Err(())
 		}
 
@@ -893,14 +834,13 @@ where
 			known_blocks: LruHashSet::new(
 				NonZeroUsize::new(MAX_KNOWN_BLOCKS).expect("Constant is nonzero"),
 			),
+			sink,
 		};
 
 		let req = if peer.info.roles.is_full() {
 			match self.chain_sync.new_peer(who, peer.info.best_hash, peer.info.best_number) {
 				Ok(req) => req,
 				Err(BadPeer(id, repu)) => {
-					self.network_service
-						.disconnect_peer(id, self.block_announce_protocol_name.clone());
 					self.network_service.report_peer(id, repu);
 					return Err(())
 				},

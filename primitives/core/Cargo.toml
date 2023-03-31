@@ -13,10 +13,7 @@ documentation = "https://docs.rs/sp-core"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = [
-	"derive",
-	"max-encoded-len",
-] }
+codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive","max-encoded-len"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 log = { version = "0.4.17", default-features = false }
 serde = { version = "1.0.136", optional = true, features = ["derive"] }
@@ -25,7 +22,7 @@ primitive-types = { version = "0.12.0", default-features = false, features = ["c
 impl-serde = { version = "0.4.0", optional = true }
 hash-db = { version = "0.16.0", default-features = false }
 hash256-std-hasher = { version = "0.15.2", default-features = false }
-base58 = { version = "0.2.0", optional = true }
+bs58 = { version = "0.4.0", default-features = false, optional = true }
 rand = { version = "0.8.5", features = ["small_rng"],  optional = true }
 substrate-bip39 = { version = "0.4.4", optional = true }
 tiny-bip39 = { version = "1.0.0", optional = true }
@@ -47,10 +44,7 @@ bitflags = "1.3"
 array-bytes = { version = "4.1", optional = true }
 ed25519-zebra = { version = "3.1.0", default-features = false, optional = true }
 blake2 = { version = "0.10.4", default-features = false, optional = true }
-schnorrkel = { version = "0.9.1", features = [
-	"preaudit_deprecated",
-	"u64_backend",
-], default-features = false, optional = true }
+schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false, optional = true }
 libsecp256k1 = { version = "0.7", default-features = false, features = ["static-context"], optional = true }
 merlin = { version = "2.0", default-features = false, optional = true }
 secp256k1 = { version = "0.24.0", default-features = false, features = ["recovery", "alloc"], optional = true }
@@ -96,7 +90,7 @@ std = [
 	"blake2/std",
 	"array-bytes",
 	"ed25519-zebra/std",
-	"base58",
+	"bs58/std",
 	"substrate-bip39",
 	"tiny-bip39",
 	"rand",
