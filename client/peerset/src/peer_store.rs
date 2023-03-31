@@ -20,7 +20,7 @@ use libp2p::PeerId;
 use partial_sort::PartialSort;
 use std::{
 	cmp::{Ord, Ordering, PartialOrd},
-	collections::{HashMap, HashSet},
+	collections::{hash_map::Entry, HashMap, HashSet},
 	sync::{Arc, Mutex},
 	time::{Duration, Instant},
 };
@@ -36,9 +36,11 @@ const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
 /// decrement of 50 we decrease absolute value of the reputation by 1/50. This corresponds to a
 /// factor of `k = 0.98`. It takes `ln(0.5) / ln(k)` seconds to reduce the reputation by half, or
 /// 34.3 seconds for the values above. In this setup the maximum allowed absolute value of
-/// `i32::MAX` becomes 0 in ~1100 seconds, and this is the maximun time records live in the hash map
-/// if they are not updated.
+/// `i32::MAX` becomes 0 in ~1100 seconds.
 const INVERSE_DECREMENT: i32 = 50;
+/// Amount of time between the moment we last updated the [`PeerStore`] entry and the moment we
+/// remove it, once the reputation value reaches 0.
+const FORGET_AFTER: Duration = Duration::from_secs(3600);
 
 pub trait PeerReputationProvider {
 	/// Check whether the peer is banned.
@@ -83,55 +85,63 @@ impl PeerReputationProvider for PeerStoreHandle {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Reputation(i32);
+#[derive(Debug, Clone, Copy)]
+struct PeerInfo {
+	reputation: i32,
+	last_updated: Instant,
+}
 
-impl Default for Reputation {
+impl Default for PeerInfo {
 	fn default() -> Self {
-		Reputation(0)
+		Self { reputation: 0, last_updated: Instant::now() }
 	}
 }
 
-impl Ord for Reputation {
-	// We define reverse order for reputation values.
+impl PartialEq for PeerInfo {
+	fn eq(&self, other: &Self) -> bool {
+		self.reputation == other.reputation
+	}
+}
+
+impl Eq for PeerInfo {}
+
+impl Ord for PeerInfo {
+	// We define reverse order by reputation values.
 	fn cmp(&self, other: &Self) -> Ordering {
-		self.0.cmp(&other.0).reverse()
+		self.reputation.cmp(&other.reputation).reverse()
 	}
 }
 
-impl PartialOrd for Reputation {
+impl PartialOrd for PeerInfo {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(self.cmp(other))
 	}
 }
 
-impl Reputation {
+impl PeerInfo {
 	fn is_banned(&self) -> bool {
-		self.0 < BANNED_THRESHOLD
+		self.reputation < BANNED_THRESHOLD
 	}
 
 	fn add_reputation(&mut self, increment: i32) {
-		self.0 = self.0.saturating_add(increment);
+		self.reputation = self.reputation.saturating_add(increment);
+		self.last_updated = Instant::now();
 	}
 
-	fn value(&self) -> i32 {
-		self.0
-	}
-
-	fn decay(&mut self, seconds_passed: u64) {
-		let reputation = &mut self.0;
-
+	fn decay_reputation(&mut self, seconds_passed: u64) {
+		// Note that decaying a reputation value happens "on its own",
+		// so we don't bump `last_updated`.
 		for _ in 0..seconds_passed {
-			let mut diff = *reputation / INVERSE_DECREMENT;
-			if diff == 0 && *reputation < 0 {
+			let mut diff = self.reputation / INVERSE_DECREMENT;
+			if diff == 0 && self.reputation < 0 {
 				diff = -1;
-			} else if diff == 0 && *reputation > 0 {
+			} else if diff == 0 && self.reputation > 0 {
 				diff = 1;
 			}
 
-			*reputation = reputation.saturating_sub(diff);
+			self.reputation = self.reputation.saturating_sub(diff);
 
-			if *reputation == 0 {
+			if self.reputation == 0 {
 				break
 			}
 		}
@@ -139,39 +149,42 @@ impl Reputation {
 }
 
 struct PeerStoreInner {
-	reputations: HashMap<PeerId, Reputation>,
+	peers: HashMap<PeerId, PeerInfo>,
 }
 
 impl PeerStoreInner {
 	fn is_banned(&self, peer_id: &PeerId) -> bool {
-		self.reputations.get(peer_id).cloned().unwrap_or_default().is_banned()
+		if let Some(info) = self.peers.get(peer_id) {
+			info.is_banned()
+		} else {
+			false
+		}
 	}
 
 	fn report_disconnect(&mut self, peer_id: PeerId) {
-		self.reputations
+		self.peers
 			.entry(peer_id)
 			.or_default()
 			.add_reputation(DISCONNECT_REPUTATION_CHANGE);
 	}
 
 	fn report_peer(&mut self, peer_id: PeerId, change: ReputationChange) {
-		self.reputations.entry(peer_id).or_default().add_reputation(change.value);
+		self.peers.entry(peer_id).or_default().add_reputation(change.value);
 	}
 
 	fn peer_reputation(&self, peer_id: &PeerId) -> i32 {
-		self.reputations.get(peer_id).cloned().unwrap_or(Reputation::default()).0
+		self.peers.get(peer_id).cloned().unwrap_or_default().reputation
 	}
 
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId> {
 		let mut candidates = self
-			.reputations
+			.peers
 			.iter()
-			.filter_map(|(peer_id, reputation)| {
-				(!reputation.is_banned() && !ignored.contains(peer_id))
-					.then_some((*peer_id, *reputation))
+			.filter_map(|(peer_id, info)| {
+				(!info.is_banned() && !ignored.contains(peer_id)).then_some((*peer_id, *info))
 			})
 			.collect::<Vec<_>>();
-		candidates.partial_sort(count, |(_, rep1), (_, rep2)| rep1.cmp(rep2));
+		candidates.partial_sort(count, |(_, info1), (_, info2)| info1.cmp(info2));
 		candidates.iter().take(count).map(|(peer_id, _)| *peer_id).collect()
 
 		// FIXME: depending on the usage patterns, it might be more efficient to always maintain
@@ -183,18 +196,14 @@ impl PeerStoreInner {
 			return
 		}
 
-		self.reputations
+		// Drive reputation values towards 0.
+		self.peers
 			.iter_mut()
-			.for_each(|(_, reputation)| reputation.decay(seconds_passed));
-		self.reputations.retain(|_, reputation| reputation.value() != 0);
-
-		// TODO: we likely need to also account for another condition when removing nodes, like it
-		// was done in `PeerSet` with `last_connected_or_discovered` and `FORGET_AFTER`. Otherwise,
-		// bootnodes will be deleted at startup without a chance of being connected. As another
-		// alternative, we can give bootnodes some initial reputation, enough for them to get
-		// connected. This alternative is questionable, because we are limited to 1100 seconds of
-		// reputation decay even for max reputation, which is less than one hour of lifetime in the
-		// original `PeerSet`.
+			.for_each(|(_, info)| info.decay_reputation(seconds_passed));
+		// Retain only entries with non-zero reputation values or not expired ones.
+		let now = Instant::now();
+		self.peers
+			.retain(|_, info| info.reputation != 0 || info.last_updated + FORGET_AFTER > now);
 	}
 }
 
@@ -206,7 +215,7 @@ impl PeerStore {
 	/// Create new empty peer store.
 	pub fn new() -> Self {
 		// TODO: pass bootnodes.
-		PeerStore { inner: Arc::new(Mutex::new(PeerStoreInner { reputations: HashMap::new() })) }
+		PeerStore { inner: Arc::new(Mutex::new(PeerStoreInner { peers: HashMap::new() })) }
 	}
 
 	/// Get `PeerStoreHandle`.
