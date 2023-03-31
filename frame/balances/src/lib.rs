@@ -1076,7 +1076,6 @@ pub mod pallet {
 		}
 
 		/// Update the account entry for `who`, given the locks.
-		/// Update the account entry for `who`, given the locks.
 		pub(crate) fn update_freezes(
 			who: &T::AccountId,
 			freezes: BoundedSlice<IdAmount<T::FreezeIdentifier, T::Balance>, T::MaxFreezes>,
