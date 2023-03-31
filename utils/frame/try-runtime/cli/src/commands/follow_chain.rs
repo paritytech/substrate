@@ -151,13 +151,6 @@ where
 			&executor,
 			"TryRuntime_execute_block",
 			(block, command.state_root_check, true, command.try_state.clone())
-				//                            ^^^^ is the fix.
-				// needs an integration test to make sure the payload that is build in various
-				// try-runtime-cli command match the trait def. We could: move `trait TryRuntime` to
-				// `sp-try-runtime` (or keep it where it is). provide a fake implementation of it
-				// here. call into that fake implementation with teh payload that we build above.
-				// Or, a realistic test that actually builds a wasm from substrate-node-template,
-				// but I don't know how to do it exactly.
 				.encode()
 				.as_ref(),
 			full_extensions(),
