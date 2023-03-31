@@ -19,7 +19,7 @@ mod call;
 mod selector;
 mod view;
 
-use crate::interface::parse::definition::{
+use crate::interface::definition::parse::definition::{
 	call::SingleCallDef, selector::SingleSelectorDef, view::SingleViewDef,
 };
 use quote::ToTokens;

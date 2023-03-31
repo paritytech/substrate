@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-	interface,
-	interface::{
+use crate::interface::{
+	definition,
+	definition::{
 		parse::{
 			definition::{selector, selector::SelectorDef},
 			helper,
@@ -205,7 +205,7 @@ impl CallDef {
 
 			let selector_ty = match selector_attr {
 				Some(attr) => match attr {
-					CallAttr::UseSelector(name) => interface::SelectorType::Named {
+					CallAttr::UseSelector(name) => definition::SelectorType::Named {
 						name: name.clone(),
 						return_ty: first_arg_ty,
 					},
@@ -213,7 +213,7 @@ impl CallDef {
 						unreachable!("checked during creation of the let binding"),
 					_ => unreachable!("checked during creation of the let binding"),
 				},
-				None => interface::SelectorType::Default { return_ty: first_arg_ty },
+				None => definition::SelectorType::Default { return_ty: first_arg_ty },
 			};
 
 			(2, Some(selector_ty))
@@ -292,7 +292,7 @@ impl CallDef {
 pub struct SingleCallDef {
 	/// Signal whether second argument must
 	/// be a selector
-	pub selector: Option<interface::SelectorType>,
+	pub selector: Option<definition::SelectorType>,
 	/// Function name.
 	pub name: syn::Ident,
 	/// Information on args: `(is_compact, name, type)`

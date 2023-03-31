@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-	interface,
-	interface::parse::{definition::selector::SelectorDef, helper},
+use crate::interface::{
+	definition,
+	definition::parse::{definition::selector::SelectorDef, helper},
 };
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
@@ -162,7 +162,7 @@ impl ViewDef {
 
 			let selector_ty = match selector_attr {
 				Some(attr) => match attr {
-					ViewAttr::UseSelector(name) => interface::SelectorType::Named {
+					ViewAttr::UseSelector(name) => definition::SelectorType::Named {
 						name: name.clone(),
 						return_ty: first_arg_ty,
 					},
@@ -170,7 +170,7 @@ impl ViewDef {
 						unreachable!("checked during creation of the let binding"),
 					_ => unreachable!("checked during creation of the let binding"),
 				},
-				None => interface::SelectorType::Default { return_ty: first_arg_ty },
+				None => definition::SelectorType::Default { return_ty: first_arg_ty },
 			};
 
 			(1, Some(selector_ty))
@@ -256,7 +256,7 @@ impl ViewDef {
 pub struct SingleViewDef {
 	/// Signal whether first argument must
 	/// be a selector
-	pub selector: Option<interface::SelectorType>,
+	pub selector: Option<definition::SelectorType>,
 	/// Function name.
 	pub name: syn::Ident,
 	/// Information on args: `(is_compact, name, type)`

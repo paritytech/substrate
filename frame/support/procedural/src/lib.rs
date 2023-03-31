@@ -1366,3 +1366,15 @@ pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
 pub fn interface(attr: TokenStream, input: TokenStream) -> TokenStream {
 	interface::interface(attr, input)
 }
+
+/// TODO: Docs
+#[proc_macro_attribute]
+pub fn call_entry(attr: TokenStream, input: TokenStream) -> TokenStream {
+	interface::call_entry(attr, input)
+}
+
+/// TODO: Docs
+#[proc_macro_attribute]
+pub fn view_entry(attr: TokenStream, input: TokenStream) -> TokenStream {
+	interface::view_entry(attr, input)
+}

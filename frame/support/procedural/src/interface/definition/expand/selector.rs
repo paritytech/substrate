@@ -15,39 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::interface::parse::Def;
+use crate::interface::definition::parse::Def;
 
-// TODO: REMOVE
-/*
-struct DefaultSelector<Runtime>(std::marker::PhantomData<Runtime>);
-struct RestrictedCurrency<Runtime>(std::marker::PhantomData<Runtime>);
-
-impl<Runtime: Pip20> #frame_support::interface::Selector for DefaultSelector<Runtime> {
-type Selected = <Runtime as Pip20>::Currency;
-
-fn select(&self, from: sp_core::H256) -> SelectorResult<Self::Selected> {
-todo!();
-}
-}
-impl<Runtime> DefaultSelector<Runtime> {
-	pub fn new() -> Self {
-		DefaultSelector(Default::default())
-	}
-}
-impl<Runtime: Pip20> #frame_support::interface::Selector for RestrictedCurrency<Runtime> {
-type Selected = <Runtime as Pip20>::Currency;
-
-fn select(&self, from: sp_core::H256) -> SelectorResult<Self::Selected> {
-todo!();
-}
-}
-impl<Runtime> RestrictedCurrency<Runtime> {
-	pub fn new() -> Self {
-		RestrictedCurrency(Default::default())
-	}
-}
-// TODO: TILL HERE
- */
 pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 	let (span, where_clause, selectors) = def.interface.selectors();
 

@@ -19,7 +19,7 @@ mod call;
 mod selector;
 mod view;
 
-use crate::interface::parse::Def;
+use crate::interface::definition::parse::Def;
 use quote::ToTokens;
 
 pub fn expand(mut def: Def) -> proc_macro2::TokenStream {

@@ -15,26 +15,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::interface::{parse::Def, SelectorType};
+use crate::interface::definition::{parse::Def, SelectorType};
 use quote::ToTokens;
 use syn::spanned::Spanned;
 
 pub fn expand(def: &Def) -> proc_macro2::TokenStream {
-	let (span, where_clause, calls) = def.interface.calls();
+	let (span, where_clause, views) = def.interface.views();
 
 	let frame_support = &def.frame_support;
 	let sp_core = &def.sp_core;
-	let call_ident = syn::Ident::new("Call", span);
+	let view_ident = syn::Ident::new("View", span);
 
-	let fn_name = calls.iter().map(|method| &method.name).collect::<Vec<_>>();
-	let call_index = calls.iter().map(|method| method.call_index).collect::<Vec<_>>();
-	let new_call_variant_fn_name = fn_name
+	let fn_name = views.iter().map(|method| &method.name).collect::<Vec<_>>();
+	let view_index = views.iter().map(|method| method.view_index).collect::<Vec<_>>();
+	let new_view_variant_fn_name = fn_name
 		.iter()
-		.map(|fn_name| quote::format_ident!("new_call_variant_{}", fn_name))
+		.map(|fn_name| quote::format_ident!("new_view_variant_{}", fn_name))
 		.collect::<Vec<_>>();
-	let new_call_variant_doc = fn_name
+	let new_view_variant_doc = fn_name
 		.iter()
-		.map(|fn_name| format!("Create a call with the variant `{}`.", fn_name))
+		.map(|fn_name| format!("Create a view with the variant `{}`.", fn_name))
 		.collect::<Vec<_>>();
 
 	let interface_trait_name = def.interface.trait_name.clone();
@@ -43,15 +43,14 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 	let type_use_gen = quote::quote_spanned!(span => Runtime);
 	let type_decl_gen = quote::quote_spanned!(span => Runtime);
 
-	let fn_weight = calls.iter().map(|method| &method.weight);
-	let fn_doc = calls.iter().map(|method| &method.docs).collect::<Vec<_>>();
+	let fn_doc = views.iter().map(|method| &method.docs).collect::<Vec<_>>();
 
-	let args_name = calls
+	let args_name = views
 		.iter()
 		.map(|method| method.args.iter().map(|(_, name, _)| name.clone()).collect::<Vec<_>>())
 		.collect::<Vec<_>>();
 
-	let args_name_stripped = calls
+	let args_name_stripped = views
 		.iter()
 		.map(|method| {
 			method
@@ -88,12 +87,12 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 	let args_name_pattern_ref = make_args_name_pattern(Some(quote::quote!(ref)));
 	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
 
-	let args_type = calls
+	let args_type = views
 		.iter()
 		.map(|method| method.args.iter().map(|(_, _, type_)| type_.clone()).collect::<Vec<_>>())
 		.collect::<Vec<_>>();
 
-	let args_compact_attr = calls.iter().map(|method| {
+	let args_compact_attr = views.iter().map(|method| {
 		method
 			.args
 			.iter()
@@ -107,7 +106,7 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 			.collect::<Vec<_>>()
 	});
 
-	let select_def = calls
+	let select_def = views
 		.iter()
 		.map(|method| match method.selector.as_ref() {
 			Some(selector_type) => match selector_type {
@@ -132,20 +131,20 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 		})
 		.collect::<Vec<_>>();
 
-	let first_args_def = calls
+	let first_args_def = views
 		.iter()
 		.map(|method| match method.selector.as_ref() {
-			Some(selector_type) => {
-				quote::quote!(origin, select,)
+			Some(_selector_type) => {
+				quote::quote!(select,)
 			},
 			None => {
-				quote::quote!(origin,)
+				quote::quote!()
 			},
 		})
 		.collect::<Vec<_>>();
 
 	// Extracts #[allow] attributes, necessary so that we don't run into compiler warnings
-	let maybe_allow_attrs = calls
+	let maybe_allow_attrs = views
 		.iter()
 		.map(|method| {
 			method
@@ -176,7 +175,7 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 		#[codec(decode_bound())]
 		#[scale_info(skip_type_params(#type_use_gen), capture_docs = #capture_docs)]
 		#[allow(non_camel_case_types)]
-		pub enum #call_ident<#type_impl_gen> #where_clause {
+		pub enum #view_ident<#type_impl_gen> #where_clause {
 			#[doc(hidden)]
 			#[codec(skip)]
 			__Ignore(
@@ -185,7 +184,7 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 			),
 			#(
 				#( #[doc = #fn_doc] )*
-				#[codec(index = #call_index)]
+				#[codec(index = #view_index)]
 				#fn_name {
 					#(
 						#[allow(missing_docs)]
@@ -195,10 +194,10 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 			)*
 		}
 
-		impl<#type_impl_gen> #call_ident<#type_use_gen> #where_clause {
+		impl<#type_impl_gen> #view_ident<#type_use_gen> #where_clause {
 			#(
-				#[doc = #new_call_variant_doc]
-				pub fn #new_call_variant_fn_name(
+				#[doc = #new_view_variant_doc]
+				pub fn #new_view_variant_fn_name(
 					#( #args_name_stripped: #args_type ),*
 				) -> Self {
 					Self::#fn_name {
@@ -208,74 +207,14 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 			)*
 		}
 
-		impl<#type_impl_gen> #frame_support::dispatch::GetDispatchInfo
-			for #call_ident<#type_use_gen>
+		impl<#type_impl_gen> #frame_support::interface::View
+			for #view_ident<#type_use_gen>
 			#where_clause
 		{
-			fn get_dispatch_info(&self) -> #frame_support::dispatch::DispatchInfo {
-				match *self {
-					#(
-						Self::#fn_name { #( #args_name_pattern_ref, )* } => {
-							let __pallet_base_weight = #fn_weight;
-
-							let __pallet_weight = <
-								dyn #frame_support::dispatch::WeighData<( #( & #args_type, )* )>
-							>::weigh_data(&__pallet_base_weight, ( #( #args_name, )* ));
-
-							let __pallet_class = <
-								dyn #frame_support::dispatch::ClassifyDispatch<
-									( #( & #args_type, )* )
-								>
-							>::classify_dispatch(&__pallet_base_weight, ( #( #args_name, )* ));
-
-							let __pallet_pays_fee = <
-								dyn #frame_support::dispatch::PaysFee<( #( & #args_type, )* )>
-							>::pays_fee(&__pallet_base_weight, ( #( #args_name, )* ));
-
-							#frame_support::dispatch::DispatchInfo {
-								weight: __pallet_weight,
-								class: __pallet_class,
-								pays_fee: __pallet_pays_fee,
-							}
-						},
-					)*
-					Self::__Ignore(_, _) => unreachable!("__Ignore cannot be used"),
-				}
-			}
-		}
-
-		// Deprecated, but will warn when used
-		#[allow(deprecated)]
-		impl<#type_impl_gen> #frame_support::weights::GetDispatchInfo for #call_ident<#type_use_gen> #where_clause {}
-
-		impl<#type_impl_gen> #frame_support::dispatch::GetCallName for #call_ident<#type_use_gen>
-			#where_clause
-		{
-			fn get_call_name(&self) -> &'static str {
-				match *self {
-					#( Self::#fn_name { .. } => stringify!(#fn_name), )*
-					Self::__Ignore(_, _) => unreachable!("__PhantomItem cannot be used."),
-				}
-			}
-
-			fn get_call_names() -> &'static [&'static str] {
-				&[ #( stringify!(#fn_name), )* ]
-			}
-		}
-
-
-		impl<#type_impl_gen> #frame_support::interface::Call
-			for #call_ident<#type_use_gen>
-			#where_clause
-		{
-			type RuntimeOrigin = <#type_use_gen as #frame_support::interface::Core>::RuntimeOrigin;
-
-			fn call(
+			fn view(
 				self,
-				origin: Self::RuntimeOrigin,
 				selectable: sp_core::H256,
-			) -> #frame_support::interface::CallResult {
-				#frame_support::dispatch_context::run_in_context(|| {
+			) -> #frame_support::interface::ViewResult<Vec<u8>> {
 					match self {
 						#(
 							Self::#fn_name { #( #args_name_pattern, )* } => {
@@ -286,22 +225,21 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 								#maybe_allow_attrs
 								#select_def
 								<#type_use_gen as #interface_trait_name>::#fn_name(#first_args_def #( #args_name, )* )
-									.map(Into::into).map_err(Into::into)
+									.map(|ty| #frame_support::codec::Encode::encode(&ty)).map_err(Into::into)
 							},
 						)*
 						Self::__Ignore(_, _) => {
-							let _ = origin; // Use origin for empty Call enum
+							let _ = selectable; // Use selectable for empty view enum
 							unreachable!("__PhantomItem cannot be used.");
 						},
 					}
-				})
 			}
 		}
 
-		impl<#type_impl_gen> #call_ident<#type_use_gen> #where_clause {
+		impl<#type_impl_gen> #view_ident<#type_use_gen> #where_clause {
 			#[doc(hidden)]
 			pub fn call_functions() -> #frame_support::metadata::PalletCallMetadata {
-				#frame_support::scale_info::meta_type::<#call_ident<#type_use_gen>>().into()
+				#frame_support::scale_info::meta_type::<#view_ident<#type_use_gen>>().into()
 			}
 		}
 	)

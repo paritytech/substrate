@@ -15,10 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod call;
-mod definition;
-mod view;
+use frame_support_procedural_tools::generate_crate_access_2018;
+use syn::spanned::Spanned;
 
-pub use call::call_entry;
-pub use definition::interface;
-pub use view::view_entry;
+pub struct Def {
+	pub item: syn::ItemEnum,
+	pub frame_support: syn::Ident,
+}
+impl Def {
+	pub fn try_from(mut item: syn::ItemEnum) -> syn::Result<Self> {
+		let item_span = item.span();
+		let frame_support = generate_crate_access_2018("frame-support")?;
+
+		todo!()
+	}
+}

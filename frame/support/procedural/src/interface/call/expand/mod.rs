@@ -15,10 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod call;
-mod definition;
-mod view;
+use quote::ToTokens;
 
-pub use call::call_entry;
-pub use definition::interface;
-pub use view::view_entry;
+pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
+	let implItems = quote::quote!();
+
+	let enumItem = def.item.into_token_stream();
+
+	quote::quote!(
+		#enumItem
+
+		#implItems
+	)
+}
