@@ -83,7 +83,7 @@ pub struct CompositeDef {
 	pub index: usize,
 	/// The composite keyword used (contains span).
 	pub composite_keyword: keyword::CompositeKeyword,
-	/// The span of the pallet::hold_reason attribute.
+	/// The span of the pallet::composite_enum attribute.
 	pub attr_span: proc_macro2::Span,
 }
 
