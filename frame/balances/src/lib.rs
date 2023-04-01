@@ -786,7 +786,12 @@ pub mod pallet {
 					// Gah!! We have a non-zero reserve balance but no provider refs :(
 					// This shouldn't practically happen, but we need a failsafe anyway: let's give
 					// them enough for an ED.
-					a.free = a.free.min(Self::ed());
+					log::warn!(
+						target: LOG_TARGET,
+						"account with a non-zero reserve balance has no provider refs, account_id: '{:?}'.",
+						who
+					);
+					a.free = a.free.max(Self::ed());
 					system::Pallet::<T>::inc_providers(who);
 				}
 				let _ = system::Pallet::<T>::inc_consumers(who).defensive();

@@ -480,9 +480,6 @@ pub mod pallet {
 		AlreadyCommunal,
 		/// The receipt is already private.
 		AlreadyPrivate,
-		Release1,
-		Release2,
-		Tah,
 	}
 
 	pub(crate) struct WeightCounter {
@@ -724,8 +721,7 @@ pub mod pallet {
 			let dropped = receipt.proportion.is_zero();
 
 			if amount > on_hold {
-				T::Currency::release(&T::HoldReason::get(), &who, on_hold, Exact)
-					.map_err(|_| Error::<T>::Release1)?;
+				T::Currency::release(&T::HoldReason::get(), &who, on_hold, Exact)?;
 				let deficit = amount - on_hold;
 				// Try to transfer deficit from pot to receipt owner.
 				summary.receipts_on_hold.saturating_reduce(on_hold);
@@ -756,8 +752,7 @@ pub mod pallet {
 					)?;
 					summary.receipts_on_hold.saturating_reduce(on_hold);
 				}
-				T::Currency::release(&T::HoldReason::get(), &who, amount, Exact)
-					.map_err(|_| Error::<T>::Release2)?;
+				T::Currency::release(&T::HoldReason::get(), &who, amount, Exact)?;
 			}
 
 			if dropped {
