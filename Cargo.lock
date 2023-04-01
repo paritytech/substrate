@@ -2468,6 +2468,7 @@ dependencies = [
  "derive-syn-parse",
  "frame-support-procedural-tools",
  "itertools",
+ "proc-macro-warning",
  "proc-macro2",
  "quote",
  "syn",
@@ -7509,6 +7510,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "version_check",
+]
+
+[[package]]
+name = "proc-macro-warning"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "163ecdb21ae408b772089d644160051dcf8905eac97a129380c0998847b6853b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
