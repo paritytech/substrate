@@ -231,9 +231,8 @@ pub trait Hooks<BlockNumber> {
 	/// Implement to have something happen using the remaining weight. Will not fire if the
 	/// remaining weight is 0.
 	///
-	/// The order of the pallets in the runtime enum does not affect the order in which each
-	/// pallet's `on_idle` hook is called. Instead, `on_idle` hooks are called in a round-robin
-	/// fashion indexed by the block number.
+	/// Each pallet's `on_idle` is chosen to be the first to execute in a round-robin fashion
+	/// indexed by the block number.
 	///
 	/// Return the weight used, the hook will subtract it from current weight used and pass the
 	/// result to the next `on_idle` hook if it exists.
