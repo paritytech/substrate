@@ -341,21 +341,33 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					transactions; qed";
 				if *std::cell::RefCell::borrow(&self.commit_on_success) {
 					let res = if commit {
-						if let Some(recorder) = &self.recorder {
-							#crate_::ProofRecorder::<Block>::commit_transaction(&recorder);
-						}
+						let res = if let Some(recorder) = &self.recorder {
+							#crate_::ProofRecorder::<Block>::commit_transaction(&recorder)
+						} else {
+							Ok(())
+						};
 
-						#crate_::OverlayedChanges::commit_transaction(
+						let res2 = #crate_::OverlayedChanges::commit_transaction(
 							&mut std::cell::RefCell::borrow_mut(&self.changes)
-						)
+						);
+
+						// Will panic on an `Err` below, however we should call commit
+						// on the recorder and the changes together.
+						std::result::Result::and(res, std::result::Result::map_err(res2, drop))
 					} else {
-						if let Some(recorder) = &self.recorder {
-							#crate_::ProofRecorder::<Block>::rollback_transaction(&recorder);
-						}
+						let res = if let Some(recorder) = &self.recorder {
+							#crate_::ProofRecorder::<Block>::rollback_transaction(&recorder)
+						} else {
+							Ok(())
+						};
 
-						#crate_::OverlayedChanges::rollback_transaction(
+						let res2 = #crate_::OverlayedChanges::rollback_transaction(
 							&mut std::cell::RefCell::borrow_mut(&self.changes)
-						)
+						);
+
+						// Will panic on an `Err` below, however we should call commit
+						// on the recorder and the changes together.
+						std::result::Result::and(res, std::result::Result::map_err(res2, drop))
 					};
 
 					std::result::Result::expect(res, proof);

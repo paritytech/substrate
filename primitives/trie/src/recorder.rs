@@ -38,6 +38,20 @@ use trie_db::{RecordedForKey, TrieAccess};
 
 const LOG_TARGET: &str = "trie-recorder";
 
+/// Stores all the information per transaction.
+#[derive(Default)]
+struct Transaction<H> {
+	/// Stores transaction information about [`RecorderInner::recorded_keys`].
+	///
+	/// For each transaction we only store the `storage_root` and the old states per key. `None`
+	/// state means that the key wasn't recorded before.
+	recorded_keys: HashMap<H, HashMap<Arc<[u8]>, Option<RecordedForKey>>>,
+	/// Stores transaction information about [`RecorderInner::accessed_nodes`].
+	///
+	/// For each transaction we only store the hashes of added nodes.
+	accessed_nodes: HashSet<H>,
+}
+
 /// The internals of [`Recorder`].
 struct RecorderInner<H> {
 	/// The keys for that we have recorded the trie nodes and if we have recorded up to the value.
@@ -45,21 +59,13 @@ struct RecorderInner<H> {
 	/// Mapping: `StorageRoot -> (Key -> RecordedForKey)`.
 	recorded_keys: HashMap<H, HashMap<Arc<[u8]>, RecordedForKey>>,
 
-	/// Stores transaction information about [`Self::recorded_keys`].
-	///
-	/// For each transaction we only store the `storage_root` and the old states per key. `None`
-	/// state means that the key wasn't recorded before.
-	recorded_keys_transactions: Vec<HashMap<H, HashMap<Arc<[u8]>, Option<RecordedForKey>>>>,
+	/// Currently active transactions.
+	transactions: Vec<Transaction<H>>,
 
 	/// The encoded nodes we accessed while recording.
 	///
 	/// Mapping: `Hash(Node) -> Node`.
 	accessed_nodes: HashMap<H, Vec<u8>>,
-
-	/// Stores transaction information about [`Self::accessed_nodes`].
-	///
-	/// For each transaction we only store the hashes of added nodes.
-	accessed_nodes_transactions: Vec<HashSet<H>>,
 }
 
 impl<H> Default for RecorderInner<H> {
@@ -67,8 +73,7 @@ impl<H> Default for RecorderInner<H> {
 		Self {
 			recorded_keys: Default::default(),
 			accessed_nodes: Default::default(),
-			recorded_keys_transactions: Vec::new(),
-			accessed_nodes_transactions: Vec::new(),
+			transactions: Vec::new(),
 		}
 	}
 }
@@ -162,64 +167,67 @@ impl<H: Hasher> Recorder<H> {
 	/// Stat a new transaction.
 	pub fn start_transaction(&self) {
 		let mut inner = self.inner.lock();
-		inner.accessed_nodes_transactions.push(Default::default());
-		inner.recorded_keys_transactions.push(Default::default());
+		inner.transactions.push(Default::default());
 	}
 
 	/// Rollback the latest transaction.
 	///
-	/// If there isn't any transaction, nothing gonna happen.
-	pub fn rollback_transaction(&self) {
+	/// Returns an error if there wasn't any active transaction.
+	pub fn rollback_transaction(&self) -> Result<(), ()> {
 		let mut inner = self.inner.lock();
 
 		// We locked `inner` and can just update the encoded size locally and then store it back to
 		// the atomic.
 		let mut new_encoded_size_estimation = self.encoded_size_estimation.load(Ordering::Relaxed);
-		if let Some(nodes) = inner.accessed_nodes_transactions.pop() {
-			nodes.into_iter().for_each(|n| {
-				if let Some(old) = inner.accessed_nodes.remove(&n) {
-					new_encoded_size_estimation =
-						new_encoded_size_estimation.saturating_sub(old.encoded_size());
+		let transaction = inner.transactions.pop().ok_or(())?;
+
+		transaction.accessed_nodes.into_iter().for_each(|n| {
+			if let Some(old) = inner.accessed_nodes.remove(&n) {
+				new_encoded_size_estimation =
+					new_encoded_size_estimation.saturating_sub(old.encoded_size());
+			}
+		});
+
+		transaction.recorded_keys.into_iter().for_each(|(storage_root, keys)| {
+			keys.into_iter().for_each(|(k, old_state)| {
+				if let Some(state) = old_state {
+					inner.recorded_keys.entry(storage_root).or_default().insert(k, state);
+				} else {
+					inner.recorded_keys.entry(storage_root).or_default().remove(&k);
 				}
-			})
-		}
+			});
+		});
+
 		self.encoded_size_estimation
 			.store(new_encoded_size_estimation, Ordering::Relaxed);
 
-		if let Some(keys_per_storage_root) = inner.recorded_keys_transactions.pop() {
-			keys_per_storage_root.into_iter().for_each(|(storage_root, keys)| {
-				keys.into_iter().for_each(|(k, old_state)| {
-					if let Some(state) = old_state {
-						inner.recorded_keys.entry(storage_root).or_default().insert(k, state);
-					} else {
-						inner.recorded_keys.entry(storage_root).or_default().remove(&k);
-					}
-				});
-			})
-		}
+		Ok(())
 	}
 
 	/// Commit the latest transaction.
 	///
-	/// If there isn't any transaction, nothing gonna happen.
-	pub fn commit_transaction(&self) {
+	/// Returns an error if there wasn't any active transaction.
+	pub fn commit_transaction(&self) -> Result<(), ()> {
 		let mut inner = self.inner.lock();
 
-		if let Some(nodes) = inner.accessed_nodes_transactions.pop() {
-			if let Some(parent) = inner.accessed_nodes_transactions.last_mut() {
-				parent.extend(nodes);
-			}
+		let transaction = inner.transactions.pop().ok_or(())?;
+
+		if let Some(parent_transaction) = inner.transactions.last_mut() {
+			parent_transaction.accessed_nodes.extend(transaction.accessed_nodes);
+
+			transaction.recorded_keys.into_iter().for_each(|(storage_root, keys)| {
+				keys.into_iter().for_each(|(k, old_state)| {
+					parent_transaction
+						.recorded_keys
+						.entry(storage_root)
+						.or_default()
+						.entry(k)
+						.or_insert(old_state);
+				})
+			});
 		}
 
-		if let Some(keys_per_storage_root) = inner.recorded_keys_transactions.pop() {
-			if let Some(parent) = inner.recorded_keys_transactions.last_mut() {
-				keys_per_storage_root.into_iter().for_each(|(storage_root, keys)| {
-					keys.into_iter().for_each(|(k, old_state)| {
-						parent.entry(storage_root).or_default().entry(k).or_insert(old_state);
-					})
-				});
-			}
-		}
+		Ok(())
 	}
 }
 
@@ -245,9 +253,13 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> TrieRecorder<H, I> 
 		// `full_key`. Only `Value` access can be an upgrade from `Hash`.
 		let entry = if matches!(access, RecordedForKey::Value) {
 			entry.and_modify(|e| {
-				if let Some(tx) = inner.recorded_keys_transactions.last_mut() {
+				if let Some(tx) = inner.transactions.last_mut() {
 					// Store the previous state only once per transaction.
-					tx.entry(self.storage_root).or_default().entry(key.clone()).or_insert(Some(*e));
+					tx.recorded_keys
+						.entry(self.storage_root)
+						.or_default()
+						.entry(key.clone())
+						.or_insert(Some(*e));
 				}
 
 				*e = access;
@@ -257,9 +269,13 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> TrieRecorder<H, I> 
 		};
 
 		entry.or_insert_with(|| {
-			if let Some(tx) = inner.recorded_keys_transactions.last_mut() {
+			if let Some(tx) = inner.transactions.last_mut() {
 				// The key wasn't yet recorded, so there isn't any old state.
-				tx.entry(self.storage_root).or_default().entry(key).or_insert(None);
+				tx.recorded_keys
+					.entry(self.storage_root)
+					.or_default()
+					.entry(key)
+					.or_insert(None);
 			}
 
 			access
@@ -288,8 +304,8 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 
 					encoded_size_update += node.encoded_size();
 
-					if let Some(tx) = inner.accessed_nodes_transactions.last_mut() {
-						tx.insert(hash);
+					if let Some(tx) = inner.transactions.last_mut() {
+						tx.accessed_nodes.insert(hash);
 					}
 
 					node
@@ -309,8 +325,8 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 
 					encoded_size_update += node.encoded_size();
 
-					if let Some(tx) = inner.accessed_nodes_transactions.last_mut() {
-						tx.insert(hash);
+					if let Some(tx) = inner.transactions.last_mut() {
+						tx.accessed_nodes.insert(hash);
 					}
 
 					node
@@ -331,8 +347,8 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 
 					encoded_size_update += value.encoded_size();
 
-					if let Some(tx) = inner.accessed_nodes_transactions.last_mut() {
-						tx.insert(hash);
+					if let Some(tx) = inner.transactions.last_mut() {
+						tx.accessed_nodes.insert(hash);
 					}
 
 					value
@@ -452,7 +468,7 @@ mod tests {
 		let (db, root) = create_trie();
 
 		let recorder = Recorder::default();
-		let mut stats = Vec::new();
+		let mut stats = vec![RecorderStats::default()];
 
 		for i in 0..4 {
 			recorder.start_transaction();
@@ -467,15 +483,10 @@ mod tests {
 			stats.push(RecorderStats::extract(&recorder));
 		}
 
-		assert_eq!(4, recorder.inner.lock().accessed_nodes_transactions.len());
-		assert_eq!(4, recorder.inner.lock().recorded_keys_transactions.len());
+		assert_eq!(4, recorder.inner.lock().transactions.len());
 
 		for i in 0..5 {
-			if i == 4 {
-				assert_eq!(RecorderStats::default(), RecorderStats::extract(&recorder));
-			} else {
-				assert_eq!(stats[3 - i], RecorderStats::extract(&recorder));
-			}
+			assert_eq!(stats[4 - i], RecorderStats::extract(&recorder));
 
 			let storage_proof = recorder.to_storage_proof();
 			let memory_db: MemoryDB = storage_proof.into_memory_db();
@@ -493,11 +504,12 @@ mod tests {
 				}
 			}
 
-			recorder.rollback_transaction();
+			if i < 4 {
+				recorder.rollback_transaction().unwrap();
+			}
 		}
 
-		assert_eq!(0, recorder.inner.lock().accessed_nodes_transactions.len());
-		assert_eq!(0, recorder.inner.lock().recorded_keys_transactions.len());
+		assert_eq!(0, recorder.inner.lock().transactions.len());
 	}
 
 	#[test]
@@ -519,11 +531,10 @@ mod tests {
 		}
 
 		let stats = RecorderStats::extract(&recorder);
-		assert_eq!(4, recorder.inner.lock().accessed_nodes_transactions.len());
-		assert_eq!(4, recorder.inner.lock().recorded_keys_transactions.len());
+		assert_eq!(4, recorder.inner.lock().transactions.len());
 
 		for _ in 0..4 {
-			recorder.commit_transaction();
+			recorder.commit_transaction().unwrap();
 		}
 		assert_eq!(stats, RecorderStats::extract(&recorder));
 
@@ -557,7 +568,7 @@ mod tests {
 			}
 		}
 
-		recorder.rollback_transaction();
+		recorder.rollback_transaction().unwrap();
 
 		for i in 2..4 {
 			recorder.start_transaction();
@@ -571,17 +582,15 @@ mod tests {
 			}
 		}
 
-		recorder.rollback_transaction();
+		recorder.rollback_transaction().unwrap();
 
-		assert_eq!(2, recorder.inner.lock().accessed_nodes_transactions.len());
-		assert_eq!(2, recorder.inner.lock().recorded_keys_transactions.len());
+		assert_eq!(2, recorder.inner.lock().transactions.len());
 
 		for _ in 0..2 {
-			recorder.commit_transaction();
+			recorder.commit_transaction().unwrap();
 		}
 
-		assert_eq!(0, recorder.inner.lock().accessed_nodes_transactions.len());
-		assert_eq!(0, recorder.inner.lock().recorded_keys_transactions.len());
+		assert_eq!(0, recorder.inner.lock().transactions.len());
 
 		let storage_proof = recorder.to_storage_proof();
 		let memory_db: MemoryDB = storage_proof.into_memory_db();
@@ -639,13 +648,13 @@ mod tests {
 			));
 		}
 
-		recorder.rollback_transaction();
+		recorder.rollback_transaction().unwrap();
 		{
 			let trie_recorder = recorder.as_trie_recorder(root);
 			assert!(matches!(trie_recorder.trie_nodes_recorded_for_key(key), RecordedForKey::Hash));
 		}
 
-		recorder.rollback_transaction();
+		recorder.rollback_transaction().unwrap();
 		{
 			let trie_recorder = recorder.as_trie_recorder(root);
 			assert!(matches!(trie_recorder.trie_nodes_recorded_for_key(key), RecordedForKey::None));
@@ -682,7 +691,7 @@ mod tests {
 			));
 		}
 
-		recorder.rollback_transaction();
+		recorder.rollback_transaction().unwrap();
 		{
 			let trie_recorder = recorder.as_trie_recorder(root);
 			assert!(matches!(
@@ -691,7 +700,7 @@ mod tests {
 			));
 		}
 
-		recorder.rollback_transaction();
+		recorder.rollback_transaction().unwrap();
 		{
 			let trie_recorder = recorder.as_trie_recorder(root);
 			assert!(matches!(trie_recorder.trie_nodes_recorded_for_key(key), RecordedForKey::None));
