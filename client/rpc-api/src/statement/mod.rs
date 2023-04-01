@@ -53,4 +53,8 @@ pub trait StatementApi {
 	/// Submit a pre-encoded statement.
 	#[method(name = "statement_submit")]
 	fn submit(&self, encoded: Bytes) -> RpcResult<()>;
+
+	/// Remove a statement from the store.
+	#[method(name = "statement_remove")]
+	fn remove(&self, statement_hash: [u8; 32]) -> RpcResult<()>;
 }

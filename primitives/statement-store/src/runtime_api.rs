@@ -181,4 +181,11 @@ pub trait Io {
 			Vec::default()
 		}
 	}
+
+	/// Remove a statement from the store by hash.
+	fn remove(&mut self, hash: &Hash) {
+		if let Some(StatementStoreExt(store)) = self.extension::<StatementStoreExt>() {
+			store.remove(hash).unwrap_or_default()
+		}
+	}
 }

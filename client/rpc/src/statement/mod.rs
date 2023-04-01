@@ -98,4 +98,12 @@ impl StatementApiServer for StatementStore {
 			SubmitResult::InternalError(e) => Err(Error::StatementStore(e.to_string()).into()),
 		}
 	}
+
+	fn remove(&self, hash: [u8; 32]) -> RpcResult<()> {
+		Ok(self
+			.store
+			.remove(&hash)
+			.map_err(|e| Error::StatementStore(e.to_string()))?
+		)
+	}
 }
