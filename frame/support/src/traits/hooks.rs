@@ -227,10 +227,16 @@ pub trait Hooks<BlockNumber> {
 	fn on_finalize(_n: BlockNumber) {}
 
 	/// This will be run when the block is being finalized (before `on_finalize`).
-	/// Implement to have something happen using the remaining weight.
-	/// Will not fire if the remaining weight is 0.
-	/// Return the weight used, the hook will subtract it from current weight used
-	/// and pass the result to the next `on_idle` hook if it exists.
+	///
+	/// Implement to have something happen using the remaining weight. Will not fire if the
+	/// remaining weight is 0.
+	///
+	/// The order of the pallets in the runtime enum does not affect the order in which each
+	/// pallet's `on_idle` hook is called. Instead, `on_idle` hooks are called in a round-robin
+	/// fashion indexed by the block number.
+	///
+	/// Return the weight used, the hook will subtract it from current weight used and pass the
+	/// result to the next `on_idle` hook if it exists.
 	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
 		Weight::zero()
 	}
