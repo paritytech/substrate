@@ -397,7 +397,6 @@ mod tests {
 
 		TestExternalities::default().execute_with(|| {
 			Foo::try_on_runtime_upgrade(true).unwrap();
-			// todo unify the API for storage parameter_types! output.
 			assert_eq!(Pre::take(), vec!["Foo"]);
 			assert_eq!(Post::take(), vec!["Foo"]);
 
