@@ -1198,13 +1198,6 @@ impl pallet_tips::Config for Runtime {
 parameter_types! {
 	pub const DepositPerItem: Balance = deposit(1, 0);
 	pub const DepositPerByte: Balance = deposit(0, 1);
-	pub const DeletionQueueDepth: u32 = 128;
-	// The lazy deletion runs inside on_initialize.
-	pub DeletionWeightLimit: Weight = RuntimeBlockWeights::get()
-		.per_class
-		.get(DispatchClass::Normal)
-		.max_total
-		.unwrap_or(RuntimeBlockWeights::get().max_block);
 	pub Schedule: pallet_contracts::Schedule<Runtime> = Default::default();
 }
 
@@ -1227,8 +1220,6 @@ impl pallet_contracts::Config for Runtime {
 	type WeightPrice = pallet_transaction_payment::Pallet<Self>;
 	type WeightInfo = pallet_contracts::weights::SubstrateWeight<Self>;
 	type ChainExtension = ();
-	type DeletionQueueDepth = DeletionQueueDepth;
-	type DeletionWeightLimit = DeletionWeightLimit;
 	type Schedule = Schedule;
 	type AddressGenerator = pallet_contracts::DefaultAddressGenerator;
 	type MaxCodeLen = ConstU32<{ 123 * 1024 }>;
