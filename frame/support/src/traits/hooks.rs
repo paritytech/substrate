@@ -234,8 +234,7 @@ pub trait Hooks<BlockNumber> {
 	/// Each pallet's `on_idle` is chosen to be the first to execute in a round-robin fashion
 	/// indexed by the block number.
 	///
-	/// Return the weight used, the hook will subtract it from current weight used and pass the
-	/// result to the next `on_idle` hook if it exists.
+	/// Return the weight used, the caller will use this to calculate the remaining weight and then call the next pallet `on_idle` hook if there is still weight left.
 	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
 		Weight::zero()
 	}
