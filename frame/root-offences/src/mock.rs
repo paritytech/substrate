@@ -151,7 +151,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = ConstU32<100>;
-	type ElectionBounds = ElectionsBounds;
+	type Bounds = ElectionsBounds;
 }
 
 pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
