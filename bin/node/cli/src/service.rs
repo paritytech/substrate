@@ -366,7 +366,6 @@ pub fn new_full_base(
 		network,
 		system_rpc_tx,
 		tx_handler_controller,
-		_statement_handler_controller,
 		network_starter,
 		sync_service,
 	) = sc_service::build_network(sc_service::BuildNetworkParams {

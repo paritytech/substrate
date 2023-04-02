@@ -21,7 +21,7 @@
 use std::time;
 
 /// Interval at which we propagate statements;
-pub(crate) const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
+pub(crate) const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(1000);
 
 /// Maximum number of known statement hashes to keep for a peer.
 pub(crate) const MAX_KNOWN_STATEMENTS: usize = 10240;

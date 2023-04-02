@@ -742,7 +742,6 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 		sc_network_transactions::TransactionsHandlerController<<TBl as BlockT>::Hash>,
-		Option<sc_network_statement::StatementHandlerController>,
 		NetworkStarter,
 		Arc<SyncingService<TBl>>,
 	),
@@ -954,7 +953,7 @@ where
 
 	// crate statement gossip protocol and add it to the list of supported protocols of
 	// `network_params`
-	let statement_handler_controller = if let Some(statement_store) = statement_store {
+	if let Some(statement_store) = statement_store {
 		let statement_protocol_executor = {
 			let spawn_handle = Clone::clone(&spawn_handle);
 			Box::new(move |fut| {
@@ -962,7 +961,7 @@ where
 			})
 		};
 		let statement_handler_proto = statement_handler_proto.expect("statement_handler_proto is always created when statement_store is `Some`");
-		let (statement_handler, statement_handler_controller) = statement_handler_proto.build(
+		let statement_handler = statement_handler_proto.build(
 			network.clone(),
 			sync_service.clone(),
 			statement_store.clone(),
@@ -970,10 +969,7 @@ where
 			statement_protocol_executor,
 		)?;
 		spawn_handle.spawn("network-statement-handler", Some("networking"), statement_handler.run());
-		Some(statement_handler_controller)
-	} else {
-		None
-	};
+	}
 
 	spawn_handle.spawn_blocking(
 		"chain-sync-network-service-provider",
@@ -1040,7 +1036,6 @@ where
 		network,
 		system_rpc_tx,
 		tx_handler_controller,
-		statement_handler_controller,
 		NetworkStarter(network_start_tx),
 		sync_service.clone(),
 	))

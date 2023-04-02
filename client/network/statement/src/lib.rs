@@ -43,7 +43,7 @@ use sc_network_common::{
 	role::ObservedRole,
 	sync::{SyncEvent, SyncEventStream},
 };
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_statement_store::{
 	Hash, NetworkPriority, Statement, StatementSource, StatementStore, SubmitResult,
 };
@@ -164,8 +164,7 @@ impl StatementHandlerPrototype {
 		}
 	}
 
-	/// Turns the prototype into the actual handler. Returns a controller that allows controlling
-	/// the behaviour of the handler while it's running.
+	/// Turns the prototype into the actual handler.
 	///
 	/// Important: the statements handler is initially disabled and doesn't gossip statements.
 	/// Gossiping is enabled when major syncing is done.
@@ -179,10 +178,9 @@ impl StatementHandlerPrototype {
 		statement_store: Arc<dyn StatementStore>,
 		metrics_registry: Option<&Registry>,
 		executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
-	) -> error::Result<(StatementHandler<N, S>, StatementHandlerController)> {
+	) -> error::Result<StatementHandler<N, S>> {
 		let net_event_stream = network.event_stream("statement-handler-net");
 		let sync_event_stream = sync.event_stream("statement-handler-sync");
-		let (to_handler, from_controller) = tracing_unbounded("mpsc_statement_handler", 100_000);
 		let (queue_sender, mut queue_receiver) =
 			tracing_unbounded("mpsc_statement_validator", 100_000);
 
@@ -222,7 +220,6 @@ impl StatementHandlerPrototype {
 			sync_event_stream: sync_event_stream.fuse(),
 			peers: HashMap::new(),
 			statement_store,
-			from_controller,
 			queue_sender,
 			metrics: if let Some(r) = metrics_registry {
 				Some(Metrics::register(r)?)
@@ -231,36 +228,8 @@ impl StatementHandlerPrototype {
 			},
 		};
 
-		let controller = StatementHandlerController { to_handler };
-
-		Ok((handler, controller))
+		Ok(handler)
 	}
-}
-
-/// Controls the behaviour of a [`StatementHandler`] it is connected to.
-pub struct StatementHandlerController {
-	to_handler: TracingUnboundedSender<ToHandler>,
-}
-
-impl StatementHandlerController {
-	/// You may call this when new statements are imported by the statement store.
-	///
-	/// All statements will be fetched from the `StatementStore` and propagated to peers.
-	pub fn propagate_statements(&self) {
-		let _ = self.to_handler.unbounded_send(ToHandler::PropagateStatements);
-	}
-
-	/// You must call when new a statement is imported by the statement store.
-	///
-	/// This statement will be fetched from the `StatementStore` and propagated to peers.
-	pub fn propagate_statement(&self, hash: Hash) {
-		let _ = self.to_handler.unbounded_send(ToHandler::PropagateStatement(hash));
-	}
-}
-
-enum ToHandler {
-	PropagateStatements,
-	PropagateStatement(Hash),
 }
 
 /// Handler for statements. Call [`StatementHandler::run`] to start the processing.
@@ -289,7 +258,6 @@ pub struct StatementHandler<
 	// All connected peers
 	peers: HashMap<PeerId, Peer>,
 	statement_store: Arc<dyn StatementStore>,
-	from_controller: TracingUnboundedReceiver<ToHandler>,
 	queue_sender: TracingUnboundedSender<(Statement, oneshot::Sender<SubmitResult>)>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
@@ -341,12 +309,6 @@ where
 						return;
 					}
 				}
-				message = self.from_controller.select_next_some() => {
-					match message {
-						ToHandler::PropagateStatement(hash) => self.propagate_statement(&hash),
-						ToHandler::PropagateStatements => self.propagate_statements(),
-					}
-				},
 			}
 		}
 	}
