@@ -144,7 +144,7 @@ pub fn new_partial(
 		keystore_container,
 		select_chain,
 		transaction_pool,
-		statement_store,
+		statement_store: Some(statement_store),
 		other: (grandpa_block_import, grandpa_link, telemetry),
 	})
 }

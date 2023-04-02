@@ -296,7 +296,7 @@ pub fn new_partial(
 		select_chain,
 		import_queue,
 		transaction_pool,
-		statement_store,
+		statement_store: Some(statement_store),
 		other: (rpc_extensions_builder, import_setup, rpc_setup, telemetry),
 	})
 }

@@ -142,7 +142,7 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TransactionPool>,
 	/// A shared statement store.
-	pub statement_store: Arc<StatementStore>,
+	pub statement_store: Option<Arc<StatementStore>>,
 	/// Everything else that needs to be passed into the main build function.
 	pub other: Other,
 }

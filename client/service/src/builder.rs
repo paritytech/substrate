@@ -325,7 +325,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
 	/// Shared statement store.
-	pub statement_store: Arc<StatementStore>,
+	pub statement_store: Option<Arc<StatementStore>>,
 	/// Builds additional [`RpcModule`]s that should be added to the server
 	pub rpc_builder:
 		Box<dyn Fn(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<TRpc>, Error>>,
@@ -461,13 +461,15 @@ where
 
 	// Perform periodic statement store maintenance
 	let store = statement_store.clone();
-	spawn_handle.spawn("statement-store-notifications", Some("statement-store"), async move {
-		let mut interval = tokio::time::interval(sc_statement_store::MAINTENANCE_PERIOD);
-		loop {
-			interval.tick().await;
-			store.maintain();
-		}
-	});
+	if let Some(store) = store {
+		spawn_handle.spawn("statement-store-notifications", Some("statement-store"), async move {
+			let mut interval = tokio::time::interval(sc_statement_store::MAINTENANCE_PERIOD);
+			loop {
+				interval.tick().await;
+				store.maintain();
+			}
+		});
+	}
 
 	// Prometheus metrics.
 	let metrics_service =
@@ -506,7 +508,7 @@ where
 			task_manager.spawn_handle(),
 			client.clone(),
 			transaction_pool.clone(),
-			Some(statement_store.clone()),
+			statement_store.clone(),
 			keystore.clone(),
 			system_rpc_tx.clone(),
 			&config,
@@ -721,7 +723,7 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
 	/// A shared statement store.
-	pub statement_store: Arc<StatementStore>,
+	pub statement_store: Option<Arc<StatementStore>>,
 	/// A handle for spawning tasks.
 	pub spawn_handle: SpawnTaskHandle,
 	/// An import queue.
@@ -740,7 +742,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 		sc_network_transactions::TransactionsHandlerController<<TBl as BlockT>::Hash>,
-		sc_network_statement::StatementHandlerController,
+		Option<sc_network_statement::StatementHandlerController>,
 		NetworkStarter,
 		Arc<SyncingService<TBl>>,
 	),
@@ -919,20 +921,25 @@ where
 		.insert(0, transactions_handler_proto.set_config());
 
 	// crate statment protocol and add it to the list of supported protocols of `network_params`
-	let statement_handler_proto = sc_network_statement::StatementHandlerPrototype::new(
-		protocol_id.clone(),
-		client
-			.block_hash(0u32.into())
-			.ok()
-			.flatten()
-			.expect("Genesis block exists; qed"),
-		config.chain_spec.fork_id(),
-	);
-	network_params
-		.network_config
-		.extra_sets
-		.insert(0, statement_handler_proto.set_config());
 
+	let statement_handler_proto = if statement_store.is_some() {
+		let statement_handler_proto = sc_network_statement::StatementHandlerPrototype::new(
+			protocol_id.clone(),
+			client
+				.block_hash(0u32.into())
+				.ok()
+				.flatten()
+				.expect("Genesis block exists; qed"),
+			config.chain_spec.fork_id(),
+		);
+		network_params
+			.network_config
+			.extra_sets
+			.insert(0, statement_handler_proto.set_config());
+		Some(statement_handler_proto)
+	} else {
+		None
+	};
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
@@ -945,22 +952,28 @@ where
 	)?;
 	spawn_handle.spawn("network-transactions-handler", Some("networking"), tx_handler.run());
 
-	let statement_protocol_executor = {
-		let spawn_handle = Clone::clone(&spawn_handle);
-		Box::new(move |fut| {
-			spawn_handle.spawn("network-statement-validator", Some("networking"), fut);
-		})
-	};
 	// crate statement gossip protocol and add it to the list of supported protocols of
 	// `network_params`
-	let (statement_handler, statement_handler_controller) = statement_handler_proto.build(
-		network.clone(),
-		sync_service.clone(),
-		statement_store.clone(),
-		config.prometheus_config.as_ref().map(|config| &config.registry),
-		statement_protocol_executor,
-	)?;
-	spawn_handle.spawn("network-statement-handler", Some("networking"), statement_handler.run());
+	let statement_handler_controller = if let Some(statement_store) = statement_store {
+		let statement_protocol_executor = {
+			let spawn_handle = Clone::clone(&spawn_handle);
+			Box::new(move |fut| {
+				spawn_handle.spawn("network-statement-validator", Some("networking"), fut);
+			})
+		};
+		let statement_handler_proto = statement_handler_proto.expect("statement_handler_proto is always created when statement_store is `Some`");
+		let (statement_handler, statement_handler_controller) = statement_handler_proto.build(
+			network.clone(),
+			sync_service.clone(),
+			statement_store.clone(),
+			config.prometheus_config.as_ref().map(|config| &config.registry),
+			statement_protocol_executor,
+		)?;
+		spawn_handle.spawn("network-statement-handler", Some("networking"), statement_handler.run());
+		Some(statement_handler_controller)
+	} else {
+		None
+	};
 
 	spawn_handle.spawn_blocking(
 		"chain-sync-network-service-provider",
