@@ -8824,7 +8824,6 @@ dependencies = [
  "tempfile",
  "tracing",
  "tracing-subscriber 0.2.25",
- "wasmi 0.13.2",
  "wat",
 ]
 
@@ -8837,7 +8836,6 @@ dependencies = [
  "sp-wasm-interface",
  "thiserror",
  "wasm-instrument 0.3.0",
- "wasmi 0.13.2",
 ]
 
 [[package]]

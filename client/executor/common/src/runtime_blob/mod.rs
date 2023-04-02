@@ -26,9 +26,6 @@
 //!
 //! To give you some examples:
 //!
-//! - wasmi allows reaching to non-exported mutable globals so that we could reset them. Wasmtime
-//!   doesn’t support that.
-//!
 //!   We need to reset the globals because when we
 //!   execute the Substrate Runtime, we do not drop and create the instance anew, instead
 //!   we restore some selected parts of the state.

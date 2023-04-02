@@ -109,8 +109,8 @@ fn host_function_not_found() {
 		.0
 		.unwrap_err();
 
-	assert!(err.contains("Instantiation: Export "));
-	assert!(err.contains(" not found"));
+	assert!(err.contains("test_return_data"));
+	assert!(err.contains(" Failed to create module"));
 }
 
 #[test]
