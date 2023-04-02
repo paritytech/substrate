@@ -393,10 +393,11 @@ impl BenchDb {
 
 		let backend = sc_service::new_db_backend(db_config).expect("Should not fail");
 		let executor = NativeElseWasmExecutor::new_with_wasm_executor(
-			sc_executor::WasmExecutor::builder(WasmExecutionMethod::Compiled {
-				instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
-			})
-			.build(),
+			sc_executor::WasmExecutor::builder()
+				.with_execution_method(WasmExecutionMethod::Compiled {
+					instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
+				})
+				.build(),
 		);
 
 		let client_config = sc_service::ClientConfig::default();

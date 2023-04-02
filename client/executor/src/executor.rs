@@ -111,9 +111,7 @@ impl<H> WasmExecutorBuilder<H> {
 		}
 	}
 
-	/// The wasm execution method that should be used by the executor.
-	///
-	/// Default to
+	/// Create the wasm executor with execution method that should be used by the executor.
 	pub fn with_execution_method(mut self, method: WasmExecutionMethod) -> Self {
 		self.method = method;
 		self
@@ -569,13 +567,16 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 		max_runtime_instances: usize,
 		runtime_cache_size: u8,
 	) -> Self {
-		let wasm = WasmExecutor::new(
-			fallback_method,
-			default_heap_pages,
-			max_runtime_instances,
-			None,
-			runtime_cache_size,
-		);
+		let heap_pages = default_heap_pages.map_or(DEFAULT_HEAP_ALLOC_STRATEGY, |h| {
+			HeapAllocStrategy::Static { extra_pages: h as _ }
+		});
+		let wasm = WasmExecutor::builder()
+			.with_execution_method(fallback_method)
+			.with_onchain_heap_alloc_strategy(heap_pages)
+			.with_offchain_heap_alloc_strategy(heap_pages)
+			.with_max_runtime_instances(max_runtime_instances)
+			.with_runtime_cache_size(runtime_cache_size)
+			.build();
 
 		NativeElseWasmExecutor { native_version: D::native_version(), wasm }
 	}

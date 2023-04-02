@@ -19,7 +19,7 @@
 //! Module implementing the logic for verifying and importing AuRa blocks.
 
 use crate::{
-	aura_err, authorities, find_pre_digest, slot_author, AuthorityId, CompatibilityMode, Error,
+	authorities, standalone::SealVerificationError, AuthorityId, CompatibilityMode, Error,
 	LOG_TARGET,
 };
 use codec::{Codec, Decode, Encode};
@@ -36,7 +36,7 @@ use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::Error as ConsensusError;
-use sp_consensus_aura::{digests::CompatibleDigestItem, inherents::AuraInherentData, AuraApi};
+use sp_consensus_aura::{inherents::AuraInherentData, AuraApi};
 use sp_consensus_slots::Slot;
 use sp_core::{crypto::Pair, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
@@ -54,7 +54,7 @@ use std::{fmt::Debug, hash::Hash, marker::PhantomData, sync::Arc};
 fn check_header<C, B: BlockT, P: Pair>(
 	client: &C,
 	slot_now: Slot,
-	mut header: B::Header,
+	header: B::Header,
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
 	check_for_equivocation: CheckForEquivocation,
@@ -64,27 +64,16 @@ where
 	C: sc_client_api::backend::AuxStore,
 	P::Public: Encode + Decode + PartialEq + Clone,
 {
-	let seal = header.digest_mut().pop().ok_or(Error::HeaderUnsealed(hash))?;
+	let check_result =
+		crate::standalone::check_header_slot_and_seal::<B, P>(slot_now, header, authorities);
 
-	let sig = seal.as_aura_seal().ok_or_else(|| aura_err(Error::HeaderBadSeal(hash)))?;
-
-	let slot = find_pre_digest::<B, P::Signature>(&header)?;
-
-	if slot > slot_now {
-		header.digest_mut().push(seal);
-		Ok(CheckedHeader::Deferred(header, slot))
-	} else {
-		// check the signature is valid under the expected authority and
-		// chain state.
-		let expected_author =
-			slot_author::<P>(slot, authorities).ok_or(Error::SlotAuthorNotFound)?;
-
-		let pre_hash = header.hash();
-
-		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
-			if check_for_equivocation.check_for_equivocation() {
+	match check_result {
+		Ok((header, slot, seal)) => {
+			let expected_author = crate::standalone::slot_author::<P>(slot, &authorities);
+			let should_equiv_check = check_for_equivocation.check_for_equivocation();
+			if let (true, Some(expected)) = (should_equiv_check, expected_author) {
 				if let Some(equivocation_proof) =
-					check_equivocation(client, slot_now, slot, &header, expected_author)
+					check_equivocation(client, slot_now, slot, &header, expected)
 						.map_err(Error::Client)?
 				{
 					info!(
@@ -98,9 +87,14 @@ where
 			}
 
 			Ok(CheckedHeader::Checked(header, (slot, seal)))
-		} else {
-			Err(Error::BadSignature(hash))
-		}
+		},
+		Err(SealVerificationError::Deferred(header, slot)) =>
+			Ok(CheckedHeader::Deferred(header, slot)),
+		Err(SealVerificationError::Unsealed) => Err(Error::HeaderUnsealed(hash)),
+		Err(SealVerificationError::BadSeal) => Err(Error::HeaderBadSeal(hash)),
+		Err(SealVerificationError::BadSignature) => Err(Error::BadSignature(hash)),
+		Err(SealVerificationError::SlotAuthorNotFound) => Err(Error::SlotAuthorNotFound),
+		Err(SealVerificationError::InvalidPreDigest(e)) => Err(Error::from(e)),
 	}
 }
 

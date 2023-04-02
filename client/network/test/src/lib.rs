@@ -55,8 +55,8 @@ use sc_network::{
 	},
 	request_responses::ProtocolConfig as RequestResponseConfig,
 	types::ProtocolName,
-	Multiaddr, NetworkBlock, NetworkEventStream, NetworkService, NetworkStateInfo,
-	NetworkSyncForkRequest, NetworkWorker,
+	Multiaddr, NetworkBlock, NetworkService, NetworkStateInfo, NetworkSyncForkRequest,
+	NetworkWorker,
 };
 use sc_network_common::{
 	role::Roles,
@@ -896,6 +896,7 @@ where
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
 
+		let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 		let (engine, sync_service, block_announce_config) =
 			sc_network_sync::engine::SyncingEngine::new(
 				Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
@@ -911,6 +912,7 @@ where
 				block_request_protocol_config.name.clone(),
 				state_request_protocol_config.name.clone(),
 				Some(warp_protocol_config.name.clone()),
+				rx,
 			)
 			.unwrap();
 		let sync_service_import_queue = Box::new(sync_service.clone());
@@ -918,7 +920,7 @@ where
 
 		let genesis_hash =
 			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
-		let network = NetworkWorker::new::<Block>(sc_network::config::Params {
+		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: Box::new(|f| {
 				tokio::spawn(f);
@@ -929,6 +931,7 @@ where
 			fork_id,
 			metrics_registry: None,
 			block_announce_config,
+			tx,
 			request_response_protocol_configs: [
 				block_request_protocol_config,
 				state_request_protocol_config,
@@ -950,9 +953,8 @@ where
 			import_queue.run(sync_service_import_queue).await;
 		});
 
-		let service = network.service().clone();
 		tokio::spawn(async move {
-			engine.run(service.event_stream("syncing")).await;
+			engine.run().await;
 		});
 
 		self.mut_peers(move |peers| {

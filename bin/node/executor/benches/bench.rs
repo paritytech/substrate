@@ -182,7 +182,6 @@ fn bench_execute_block(c: &mut Criterion) {
 	let mut group = c.benchmark_group("execute blocks");
 	let execution_methods = vec![
 		ExecutionMethod::Native,
-		ExecutionMethod::Wasm(WasmExecutionMethod::Interpreted),
 		ExecutionMethod::Wasm(WasmExecutionMethod::Compiled {
 			instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
 		}),
@@ -191,9 +190,9 @@ fn bench_execute_block(c: &mut Criterion) {
 	for strategy in execution_methods {
 		group.bench_function(format!("{:?}", strategy), |b| {
 			let genesis_config = node_testing::genesis::config(Some(compact_code_unwrap()));
-			let (use_native, wasm_method) = match strategy {
-				ExecutionMethod::Native => (true, WasmExecutionMethod::Interpreted),
-				ExecutionMethod::Wasm(wasm_method) => (false, wasm_method),
+			let use_native = match strategy {
+				ExecutionMethod::Native => true,
+				ExecutionMethod::Wasm(..) => false,
 			};
 
 			let executor =

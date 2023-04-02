@@ -195,7 +195,6 @@ fn bench_call_instance(c: &mut Criterion) {
 				precompile: true,
 			},
 		),
-		("interpreted", Method::Interpreted),
 	];
 
 	let runtimes = [("kusama_runtime", kusama_runtime()), ("test_runtime", test_runtime())];

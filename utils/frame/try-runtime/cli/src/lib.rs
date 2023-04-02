@@ -369,7 +369,7 @@ use sc_cli::{
 	DEFAULT_WASM_EXECUTION_METHOD,
 };
 use sc_executor::{
-	sp_wasm_interface::HostFunctions, HeapAllocStrategy, WasmExecutor, DEFAULT_HEAP_ALLOC_PAGES,
+	sp_wasm_interface::HostFunctions, HeapAllocStrategy, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY,
 };
 use sp_api::HashT;
 use sp_core::{
@@ -829,17 +829,18 @@ pub(crate) fn full_extensions() -> Extensions {
 
 /// Build wasm executor by default config.
 pub(crate) fn build_executor<H: HostFunctions>(shared: &SharedParams) -> WasmExecutor<H> {
-	let heap_pages = HeapAllocStrategy::Static {
-		extra_pages: shared.heap_pages.map(|p| p as u32).unwrap_or(DEFAULT_HEAP_ALLOC_PAGES),
-	};
+	let heap_pages = shared
+		.heap_pages
+		.map_or(DEFAULT_HEAP_ALLOC_STRATEGY, |p| HeapAllocStrategy::Static { extra_pages: p as _ });
 
-	WasmExecutor::builder(execution_method_from_cli(
-		shared.wasm_method,
-		shared.wasmtime_instantiation_strategy,
-	))
-	.with_onchain_heap_alloc_strategy(heap_pages)
-	.with_offchain_heap_alloc_strategy(heap_pages)
-	.build()
+	WasmExecutor::builder()
+		.with_execution_method(execution_method_from_cli(
+			shared.wasm_method,
+			shared.wasmtime_instantiation_strategy,
+		))
+		.with_onchain_heap_alloc_strategy(heap_pages)
+		.with_offchain_heap_alloc_strategy(heap_pages)
+		.build()
 }
 
 /// Ensure that the given `ext` is compiled with `try-runtime`
