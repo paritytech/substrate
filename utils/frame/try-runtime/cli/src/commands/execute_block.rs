@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -99,7 +99,7 @@ where
 	HostFns: HostFunctions,
 {
 	let executor = build_executor::<HostFns>(&shared);
-	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None).await?;
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 
 	// get the block number associated with this block.
 	let block_ws_uri = command.block_ws_uri::<Block>();
@@ -134,6 +134,7 @@ where
 		"TryRuntime_execute_block",
 		&payload,
 		full_extensions(),
+		shared.export_proof,
 	)?;
 
 	Ok(())

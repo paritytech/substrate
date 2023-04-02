@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -358,6 +358,7 @@
 
 #![cfg(feature = "try-runtime")]
 
+use crate::block_building_info::BlockBuildingInfoProvider;
 use parity_scale_codec::Decode;
 use remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, RemoteExternalities, SnapshotConfig,
@@ -377,19 +378,21 @@ use sp_core::{
 	},
 	storage::well_known_keys,
 	testing::TaskExecutor,
-	traits::{ReadRuntimeVersion, TaskExecutorExt},
+	traits::{CallContext, ReadRuntimeVersion, TaskExecutorExt},
 	twox_128, H256,
 };
 use sp_externalities::Extensions;
-use sp_keystore::{testing::KeyStore, KeystoreExt};
+use sp_inherents::InherentData;
+use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, NumberFor},
-	DeserializeOwned,
+	DeserializeOwned, Digest,
 };
 use sp_state_machine::{CompactProof, OverlayedChanges, StateMachine, TrieBackendBuilder};
 use sp_version::StateVersion;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
+pub mod block_building_info;
 pub mod commands;
 pub(crate) mod parse;
 pub(crate) const LOG_TARGET: &str = "try-runtime::cli";
@@ -444,6 +447,15 @@ pub enum Command {
 	/// This can only work if the block format between the remote chain and the new runtime being
 	/// tested has remained the same, otherwise block decoding might fail.
 	FollowChain(commands::follow_chain::FollowChainCmd),
+
+	/// Produce a series of empty, consecutive blocks and execute them one-by-one.
+	///
+	/// To compare it with [`Command::FollowChain`]:
+	///  - we don't have the delay of the original blocktime (for Polkadot 6s), but instead, we
+	///    execute every block immediately
+	///  - the only data that will be put into blocks are pre-runtime digest items and inherent
+	///    extrinsics; both things should be defined in your node CLI handling level
+	FastForward(commands::fast_forward::FastForwardCmd),
 
 	/// Create a new snapshot file.
 	CreateSnapshot(commands::create_snapshot::CreateSnapshotCmd),
@@ -523,6 +535,12 @@ pub struct SharedParams {
 	#[arg(long)]
 	pub heap_pages: Option<u64>,
 
+	/// Path to a file to export the storage proof into (as a JSON).
+	/// If several blocks are executed, the path is interpreted as a folder
+	/// where one file per block will be written (named `{block_number}-{block_hash}`).
+	#[clap(long)]
+	pub export_proof: Option<PathBuf>,
+
 	/// Overwrite the `state_version`.
 	///
 	/// Otherwise `remote-externalities` will automatically set the correct state version.
@@ -581,8 +599,6 @@ pub struct LiveState {
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum State {
 	/// Use a state snapshot as the source of runtime state.
-	///
-	/// This can be crated by passing a value to [`State::Live::snapshot_path`].
 	Snap {
 		#[arg(short, long)]
 		snapshot_path: PathBuf,
@@ -603,6 +619,7 @@ impl State {
 		shared: &SharedParams,
 		executor: &WasmExecutor<HostFns>,
 		state_snapshot: Option<SnapshotConfig>,
+		try_runtime_check: bool,
 	) -> sc_cli::Result<RemoteExternalities<Block>>
 	where
 		Block::Hash: FromStr,
@@ -701,8 +718,10 @@ impl State {
 		}
 
 		// whatever runtime we have in store now must have been compiled with try-runtime feature.
-		if !ensure_try_runtime::<Block, HostFns>(&executor, &mut ext) {
-			return Err("given runtime is NOT compiled with try-runtime feature!".into())
+		if try_runtime_check {
+			if !ensure_try_runtime::<Block, HostFns>(&executor, &mut ext) {
+				return Err("given runtime is NOT compiled with try-runtime feature!".into())
+			}
 		}
 
 		Ok(ext)
@@ -710,7 +729,10 @@ impl State {
 }
 
 impl TryRuntimeCmd {
-	pub async fn run<Block, HostFns>(&self) -> sc_cli::Result<()>
+	pub async fn run<Block, HostFns, BBIP>(
+		&self,
+		block_building_info_provider: Option<BBIP>,
+	) -> sc_cli::Result<()>
 	where
 		Block: BlockT<Hash = H256> + DeserializeOwned,
 		Block::Header: DeserializeOwned,
@@ -720,6 +742,7 @@ impl TryRuntimeCmd {
 		<NumberFor<Block> as TryInto<u64>>::Error: Debug,
 		NumberFor<Block>: FromStr,
 		HostFns: HostFunctions,
+		BBIP: BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>>,
 	{
 		match &self.command {
 			Command::OnRuntimeUpgrade(ref cmd) =>
@@ -744,6 +767,13 @@ impl TryRuntimeCmd {
 				commands::follow_chain::follow_chain::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
+				)
+				.await,
+			Command::FastForward(cmd) =>
+				commands::fast_forward::fast_forward::<Block, HostFns, BBIP>(
+					self.shared.clone(),
+					cmd.clone(),
+					block_building_info_provider,
 				)
 				.await,
 			Command::CreateSnapshot(cmd) =>
@@ -786,9 +816,10 @@ pub(crate) fn full_extensions() -> Extensions {
 	extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
 	let (offchain, _offchain_state) = TestOffchainExt::new();
 	let (pool, _pool_state) = TestTransactionPoolExt::new();
+	let keystore = MemoryKeystore::new();
 	extensions.register(OffchainDbExt::new(offchain.clone()));
 	extensions.register(OffchainWorkerExt::new(offchain));
-	extensions.register(KeystoreExt(std::sync::Arc::new(KeyStore::new())));
+	extensions.register(KeystoreExt::new(keystore));
 	extensions.register(TransactionPoolExt::new(pool));
 
 	extensions
@@ -845,6 +876,7 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 		extensions,
 		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code()?,
 		sp_core::testing::TaskExecutor::new(),
+		CallContext::Offchain,
 	)
 	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
 	.map_err(|e| format!("failed to execute '{}': {}", method, e))
@@ -863,6 +895,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	method: &'static str,
 	data: &[u8],
 	extensions: Extensions,
+	maybe_export_proof: Option<PathBuf>,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	use parity_scale_codec::Encode;
 
@@ -883,6 +916,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 		extensions,
 		&runtime_code,
 		sp_core::testing::TaskExecutor::new(),
+		CallContext::Offchain,
 	)
 	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
 	.map_err(|e| format!("failed to execute {}: {}", method, e))
@@ -891,6 +925,32 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	let proof = proving_backend
 		.extract_proof()
 		.expect("A recorder was set and thus, a storage proof can be extracted; qed");
+
+	if let Some(path) = maybe_export_proof {
+		let mut file = std::fs::File::create(&path).map_err(|e| {
+			log::error!(
+				target: LOG_TARGET,
+				"Failed to create file {}: {:?}",
+				path.to_string_lossy(),
+				e
+			);
+			e
+		})?;
+
+		log::info!(target: LOG_TARGET, "Writing storage proof to {}", path.to_string_lossy());
+
+		use std::io::Write as _;
+		file.write_all(storage_proof_to_raw_json(&proof).as_bytes()).map_err(|e| {
+			log::error!(
+				target: LOG_TARGET,
+				"Failed to write storage proof to {}: {:?}",
+				path.to_string_lossy(),
+				e
+			);
+			e
+		})?;
+	}
+
 	let proof_size = proof.encoded_size();
 	let compact_proof = proof
 		.clone()
@@ -950,4 +1010,22 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 pub(crate) fn rpc_err_handler(error: impl Debug) -> &'static str {
 	log::error!(target: LOG_TARGET, "rpc error: {:?}", error);
 	"rpc error."
+}
+
+/// Converts a [`sp_state_machine::StorageProof`] into a JSON string.
+fn storage_proof_to_raw_json(storage_proof: &sp_state_machine::StorageProof) -> String {
+	serde_json::Value::Object(
+		storage_proof
+			.to_memory_db::<sp_runtime::traits::BlakeTwo256>()
+			.drain()
+			.iter()
+			.map(|(key, (value, _n))| {
+				(
+					format!("0x{}", hex::encode(key.as_bytes())),
+					serde_json::Value::String(format!("0x{}", hex::encode(value))),
+				)
+			})
+			.collect(),
+	)
+	.to_string()
 }

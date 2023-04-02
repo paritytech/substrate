@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,7 +46,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::hooks]
@@ -54,10 +53,10 @@ pub mod pallet {
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
 				Self::deposit_event(Event::Something(10));
-				Weight::from_ref_time(10)
+				Weight::from_parts(10, 0)
 			} else {
 				Self::deposit_event(Event::Something(11));
-				Weight::from_ref_time(11)
+				Weight::from_parts(11, 0)
 			}
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
@@ -70,10 +69,10 @@ pub mod pallet {
 		fn on_runtime_upgrade() -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
 				Self::deposit_event(Event::Something(30));
-				Weight::from_ref_time(30)
+				Weight::from_parts(30, 0)
 			} else {
 				Self::deposit_event(Event::Something(31));
-				Weight::from_ref_time(31)
+				Weight::from_parts(31, 0)
 			}
 		}
 		fn integrity_test() {}
@@ -83,7 +82,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Doc comment put in metadata
 		#[pallet::call_index(0)]
-		#[pallet::weight(Weight::from_ref_time(*_foo as u64))]
+		#[pallet::weight(Weight::from_parts(*_foo as u64, 0))]
 		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
@@ -260,7 +259,6 @@ pub mod pallet2 {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::event]
@@ -334,7 +332,7 @@ pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
@@ -356,7 +354,7 @@ fn call_expand() {
 	assert_eq!(
 		call_foo.get_dispatch_info(),
 		DispatchInfo {
-			weight: Weight::from_ref_time(3),
+			weight: Weight::from_parts(3, 0),
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes
 		}
@@ -368,7 +366,7 @@ fn call_expand() {
 	assert_eq!(
 		call_foo.get_dispatch_info(),
 		DispatchInfo {
-			weight: Weight::from_ref_time(3),
+			weight: Weight::from_parts(3, 0),
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes
 		}
@@ -619,44 +617,29 @@ fn storage_expand() {
 
 #[test]
 fn pallet_metadata_expands() {
-	use frame_support::traits::{CrateVersion, PalletInfoData, PalletsInfoAccess};
+	use frame_support::traits::PalletsInfoAccess;
 	let mut infos = AllPalletsWithSystem::infos();
 	infos.sort_by_key(|x| x.index);
-	assert_eq!(
-		infos,
-		vec![
-			PalletInfoData {
-				index: 0,
-				name: "System",
-				module_name: "frame_system",
-				crate_version: CrateVersion { major: 4, minor: 0, patch: 0 },
-			},
-			PalletInfoData {
-				index: 1,
-				name: "Example",
-				module_name: "pallet",
-				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
-			},
-			PalletInfoData {
-				index: 2,
-				name: "Instance1Example",
-				module_name: "pallet",
-				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
-			},
-			PalletInfoData {
-				index: 3,
-				name: "Example2",
-				module_name: "pallet2",
-				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
-			},
-			PalletInfoData {
-				index: 4,
-				name: "Instance1Example2",
-				module_name: "pallet2",
-				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
-			},
-		]
-	);
+
+	assert_eq!(infos[0].index, 0);
+	assert_eq!(infos[0].name, "System");
+	assert_eq!(infos[0].module_name, "frame_system");
+
+	assert_eq!(infos[1].index, 1);
+	assert_eq!(infos[1].name, "Example");
+	assert_eq!(infos[1].module_name, "pallet");
+
+	assert_eq!(infos[2].index, 2);
+	assert_eq!(infos[2].name, "Instance1Example");
+	assert_eq!(infos[2].module_name, "pallet");
+
+	assert_eq!(infos[3].index, 3);
+	assert_eq!(infos[3].name, "Example2");
+	assert_eq!(infos[3].module_name, "pallet2");
+
+	assert_eq!(infos[4].index, 4);
+	assert_eq!(infos[4].name, "Instance1Example2");
+	assert_eq!(infos[4].module_name, "pallet2");
 }
 
 #[test]
@@ -664,10 +647,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_ref_time(21));
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_parts(21, 0));
 		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_ref_time(61));
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_parts(61, 0));
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,

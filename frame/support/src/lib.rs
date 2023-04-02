@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,7 +50,7 @@ pub use paste;
 pub use scale_info;
 #[cfg(feature = "std")]
 pub use serde;
-pub use sp_core::Void;
+pub use sp_core::{OpaqueMetadata, Void};
 #[doc(hidden)]
 pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]
@@ -78,11 +78,12 @@ pub mod inherent;
 #[macro_use]
 pub mod error;
 pub mod crypto;
+pub mod dispatch_context;
 pub mod instances;
+pub mod metadata_ir;
 pub mod migrations;
 pub mod traits;
 pub mod weights;
-
 #[doc(hidden)]
 pub mod unsigned {
 	#[doc(hidden)]
@@ -826,9 +827,9 @@ pub use serde::{Deserialize, Serialize};
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::metadata::{
-		PalletStorageMetadata, StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
-		StorageHasher,
+	use crate::metadata_ir::{
+		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
+		StorageEntryTypeIR, StorageHasherIR,
 	};
 	use codec::{Codec, EncodeLike};
 	use frame_support::traits::CrateVersion;
@@ -874,6 +875,7 @@ pub mod tests {
 
 	decl_storage! {
 		trait Store for Module<T: Config> as Test {
+			pub Value get(fn value): u64;
 			pub Data get(fn data) build(|_| vec![(15u32, 42u64)]):
 				map hasher(twox_64_concat) u32 => u64;
 			pub OptionLinkedMap: map hasher(blake2_128_concat) u32 => Option<u32>;
@@ -943,6 +945,61 @@ pub mod tests {
 				<T as Config>::BlockNumber,
 				<T as Config>::BlockNumber,
 			>;
+		});
+	}
+
+	#[test]
+	fn storage_value_mutate_exists_should_work() {
+		new_test_ext().execute_with(|| {
+			#[crate::storage_alias]
+			pub type Value = StorageValue<Test, u32>;
+
+			assert!(!Value::exists());
+
+			Value::mutate_exists(|v| *v = Some(1));
+			assert!(Value::exists());
+			assert_eq!(Value::get(), Some(1));
+
+			// removed if mutated to `None`
+			Value::mutate_exists(|v| *v = None);
+			assert!(!Value::exists());
+		});
+	}
+
+	#[test]
+	fn storage_value_try_mutate_exists_should_work() {
+		new_test_ext().execute_with(|| {
+			#[crate::storage_alias]
+			pub type Value = StorageValue<Test, u32>;
+
+			type TestResult = result::Result<(), &'static str>;
+
+			assert!(!Value::exists());
+
+			// mutated if `Ok`
+			assert_ok!(Value::try_mutate_exists(|v| -> TestResult {
+				*v = Some(1);
+				Ok(())
+			}));
+			assert!(Value::exists());
+			assert_eq!(Value::get(), Some(1));
+
+			// no-op if `Err`
+			assert_noop!(
+				Value::try_mutate_exists(|v| -> TestResult {
+					*v = Some(2);
+					Err("nah")
+				}),
+				"nah"
+			);
+			assert_eq!(Value::get(), Some(1));
+
+			// removed if mutated to`None`
+			assert_ok!(Value::try_mutate_exists(|v| -> TestResult {
+				*v = None;
+				Ok(())
+			}));
+			assert!(!Value::exists());
 		});
 	}
 
@@ -1253,94 +1310,107 @@ pub mod tests {
 		});
 	}
 
-	fn expected_metadata() -> PalletStorageMetadata {
-		PalletStorageMetadata {
+	fn expected_metadata() -> PalletStorageMetadataIR {
+		PalletStorageMetadataIR {
 			prefix: "Test",
 			entries: vec![
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
+					name: "Value",
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u64>()),
+					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
+					docs: vec![],
+				},
+				StorageEntryMetadataIR {
 					name: "Data",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Twox64Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Twox64Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u64>(),
 					},
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "OptionLinkedMap",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Identity],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Identity],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData2",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "DataDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Twox64Concat, StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![
+							StorageHasherIR::Twox64Concat,
+							StorageHasherIR::Blake2_128Concat,
+						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u64>(),
 					},
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericDataDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Identity],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat, StorageHasherIR::Identity],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData2DM",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![
+							StorageHasherIR::Blake2_128Concat,
+							StorageHasherIR::Twox64Concat,
+						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "AppendableDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
 						hashers: vec![
-							StorageHasher::Blake2_128Concat,
-							StorageHasher::Blake2_128Concat,
+							StorageHasherIR::Blake2_128Concat,
+							StorageHasherIR::Blake2_128Concat,
 						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<Vec<u32>>(),
@@ -2744,3 +2814,6 @@ pub mod pallet_macros {
 		type_value, unbounded, validate_unsigned, weight, whitelist_storage,
 	};
 }
+
+// Generate a macro that will enable/disable code based on `std` feature being active.
+sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);

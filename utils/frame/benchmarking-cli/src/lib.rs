@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +27,7 @@ mod storage;
 
 pub use block::BlockCmd;
 pub use extrinsic::{ExtrinsicBuilder, ExtrinsicCmd, ExtrinsicFactory};
-pub use machine::{MachineCmd, Requirements, SUBSTRATE_REFERENCE_HARDWARE};
+pub use machine::{MachineCmd, SUBSTRATE_REFERENCE_HARDWARE};
 pub use overhead::OverheadCmd;
 pub use pallet::PalletCmd;
 pub use sc_service::BasePath;

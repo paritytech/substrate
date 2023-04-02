@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@
 
 use super::*;
 use authorship::claim_slot;
-use log::debug;
 use rand_chacha::{
 	rand_core::{RngCore, SeedableRng},
 	ChaChaRng,
@@ -28,20 +27,21 @@ use rand_chacha::{
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client_api::{backend::TransactionFor, BlockchainEvents, Finalizer};
 use sc_consensus::{BoxBlockImport, BoxJustificationImport};
+use sc_consensus_epochs::{EpochIdentifier, EpochIdentifierPosition};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_babe::{
 	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
-	AuthorityPair, Slot,
+	AuthorityId, AuthorityPair, Slot,
 };
 use sp_consensus_slots::SlotDuration;
+use sp_consensus_vrf::schnorrkel::VRFOutput;
 use sp_core::crypto::Pair;
 use sp_keyring::Sr25519Keyring;
 use sp_keystore::{
-	testing::KeyStore as TestKeyStore, vrf::make_transcript as transcript_from_data,
-	SyncCryptoStore,
+	testing::MemoryKeystore, vrf::make_transcript as transcript_from_data, Keystore,
 };
 use sp_runtime::{
 	generic::{Digest, DigestItem},
@@ -122,11 +122,8 @@ impl DummyProposer {
 			Error,
 		>,
 	> {
-		let block_builder = self
-			.factory
-			.client
-			.new_block_at(&BlockId::Hash(self.parent_hash), pre_digests, false)
-			.unwrap();
+		let block_builder =
+			self.factory.client.new_block_at(self.parent_hash, pre_digests, false).unwrap();
 
 		let mut block = match block_builder.build().map_err(|e| e.into()) {
 			Ok(b) => b.block,
@@ -211,9 +208,8 @@ where
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<TestBlock, Self::Transaction>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		Ok(self.0.import_block(block, new_cache).await.expect("importing block failed"))
+		Ok(self.0.import_block(block).await.expect("importing block failed"))
 	}
 
 	async fn check_block(
@@ -260,7 +256,7 @@ impl Verifier<TestBlock> for TestVerifier {
 	async fn verify(
 		&mut self,
 		mut block: BlockImportParams<TestBlock, ()>,
-	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<BlockImportParams<TestBlock, ()>, String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
 		(self.mutator)(&mut block.header, Stage::PostSeal);
 		self.inner.verify(block).await
@@ -351,6 +347,11 @@ impl TestNetFactory for BabeTestNet {
 		&self.peers
 	}
 
+	fn peers_mut(&mut self) -> &mut Vec<BabePeer> {
+		trace!(target: "babe", "Retrieving peers, mutable");
+		&mut self.peers
+	}
+
 	fn mut_peers<F: FnOnce(&mut Vec<BabePeer>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
@@ -367,11 +368,12 @@ async fn rejects_empty_block() {
 	})
 }
 
-fn create_keystore(authority: Sr25519Keyring) -> SyncCryptoStorePtr {
-	let keystore = Arc::new(TestKeyStore::new());
-	SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(&authority.to_seed()))
-		.expect("Generates authority key");
+fn create_keystore(authority: Sr25519Keyring) -> KeystorePtr {
+	let keystore = MemoryKeystore::new();
 	keystore
+		.sr25519_generate_new(BABE, Some(&authority.to_seed()))
+		.expect("Generates authority key");
+	keystore.into()
 }
 
 async fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static) {
@@ -431,6 +433,7 @@ async fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + '
 				.for_each(|_| future::ready(())),
 		);
 
+		let client_clone = client.clone();
 		babe_futures.push(
 			start_babe(BabeParams {
 				block_import: data.block_import.lock().take().expect("import set up during init"),
@@ -438,12 +441,19 @@ async fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + '
 				client,
 				env: environ,
 				sync_oracle: DummyOracle,
-				create_inherent_data_providers: Box::new(|_, _| async {
-					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						Timestamp::current(),
-						SlotDuration::from_millis(SLOT_DURATION_MS),
+				create_inherent_data_providers: Box::new(move |parent, _| {
+					// Get the slot of the parent header and just increase this slot.
+					//
+					// Below we will running everything in one big future. If we would use
+					// time based slot, it can happen that on babe instance imports a block from
+					// another babe instance and then tries to build a block in the same slot making
+					// this test fail.
+					let parent_header = client_clone.header(parent).ok().flatten().unwrap();
+					let slot = Slot::from(
+						find_pre_digest::<TestBlock>(&parent_header).unwrap().slot() + 1,
 					);
-					Ok((slot,))
+
+					async move { Ok((InherentDataProvider::new(slot),)) }
 				}),
 				force_authoring: false,
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
@@ -544,52 +554,137 @@ fn sig_is_not_pre_digest() {
 }
 
 #[test]
-fn can_author_block() {
-	sp_tracing::try_init_simple();
+fn claim_epoch_slots() {
+	// We don't require the full claim information, thus as a shorter alias we're
+	// going to use a simple integer value. Generally not verbose enough, but good enough
+	// to be used within the narrow scope of a single test.
+	// 0 -> None (i.e. unable to claim the slot),
+	// 1 -> Primary
+	// 2 -> Secondary
+	// 3 -> Secondary with VRF
+	const EPOCH_DURATION: u64 = 10;
 
 	let authority = Sr25519Keyring::Alice;
 	let keystore = create_keystore(authority);
 
-	let mut i = 0;
-	let epoch = Epoch {
+	let mut epoch = Epoch {
 		start_slot: 0.into(),
 		authorities: vec![(authority.public().into(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
-		duration: 100,
+		duration: EPOCH_DURATION,
 		config: BabeEpochConfiguration {
 			c: (3, 10),
 			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 		},
 	};
 
-	let mut config = crate::BabeConfiguration {
-		slot_duration: 1000,
-		epoch_length: 100,
-		c: (3, 10),
-		authorities: Vec::new(),
-		randomness: [0; 32],
-		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
+	let claim_slot_wrap = |s, e| match claim_slot(Slot::from(s as u64), &e, &keystore) {
+		None => 0,
+		Some((PreDigest::Primary(_), _)) => 1,
+		Some((PreDigest::SecondaryPlain(_), _)) => 2,
+		Some((PreDigest::SecondaryVRF(_), _)) => 3,
 	};
 
-	// with secondary slots enabled it should never be empty
-	match claim_slot(i.into(), &epoch, &keystore) {
-		None => i += 1,
-		Some(s) => debug!(target: LOG_TARGET, "Authored block {:?}", s.0),
-	}
+	// With secondary mechanism we should be able to claim all slots.
+	let claims: Vec<_> = (0..EPOCH_DURATION)
+		.into_iter()
+		.map(|slot| claim_slot_wrap(slot, epoch.clone()))
+		.collect();
+	assert_eq!(claims, [1, 2, 2, 1, 2, 2, 2, 2, 2, 1]);
 
-	// otherwise with only vrf-based primary slots we might need to try a couple
-	// of times.
-	config.allowed_slots = AllowedSlots::PrimarySlots;
-	loop {
-		match claim_slot(i.into(), &epoch, &keystore) {
-			None => i += 1,
-			Some(s) => {
-				debug!(target: LOG_TARGET, "Authored block {:?}", s.0);
-				break
-			},
-		}
-	}
+	// With secondary with VRF mechanism we should be able to claim all the slots.
+	epoch.config.allowed_slots = AllowedSlots::PrimaryAndSecondaryVRFSlots;
+	let claims: Vec<_> = (0..EPOCH_DURATION)
+		.into_iter()
+		.map(|slot| claim_slot_wrap(slot, epoch.clone()))
+		.collect();
+	assert_eq!(claims, [1, 3, 3, 1, 3, 3, 3, 3, 3, 1]);
+
+	// Otherwise with only vrf-based primary slots we are able to claim a subset of the slots.
+	epoch.config.allowed_slots = AllowedSlots::PrimarySlots;
+	let claims: Vec<_> = (0..EPOCH_DURATION)
+		.into_iter()
+		.map(|slot| claim_slot_wrap(slot, epoch.clone()))
+		.collect();
+	assert_eq!(claims, [1, 0, 0, 1, 0, 0, 0, 0, 0, 1]);
+}
+
+#[test]
+fn claim_vrf_check() {
+	let authority = Sr25519Keyring::Alice;
+	let keystore = create_keystore(authority);
+
+	let public = authority.public();
+
+	let epoch = Epoch {
+		start_slot: 0.into(),
+		authorities: vec![(public.into(), 1)],
+		randomness: [0; 32],
+		epoch_index: 1,
+		duration: 10,
+		config: BabeEpochConfiguration {
+			c: (3, 10),
+			allowed_slots: AllowedSlots::PrimaryAndSecondaryVRFSlots,
+		},
+	};
+
+	// We leverage the predictability of claim types given a constant randomness.
+
+	// We expect a Primary claim for slot 0
+
+	let pre_digest = match claim_slot(0.into(), &epoch, &keystore).unwrap().0 {
+		PreDigest::Primary(d) => d,
+		v => panic!("Unexpected pre-digest variant {:?}", v),
+	};
+	let transcript = make_transcript_data(&epoch.randomness.clone(), 0.into(), epoch.epoch_index);
+	let sign = keystore
+		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
+		.unwrap()
+		.unwrap();
+	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
+
+	// We expect a SecondaryVRF claim for slot 1
+	let pre_digest = match claim_slot(1.into(), &epoch, &keystore).unwrap().0 {
+		PreDigest::SecondaryVRF(d) => d,
+		v => panic!("Unexpected pre-digest variant {:?}", v),
+	};
+	let transcript = make_transcript_data(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
+	let sign = keystore
+		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
+		.unwrap()
+		.unwrap();
+	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
+
+	// Check that correct epoch index has been used if epochs are skipped (primary VRF)
+	let slot = Slot::from(103);
+	let claim = match claim_slot(slot, &epoch, &keystore).unwrap().0 {
+		PreDigest::Primary(d) => d,
+		v => panic!("Unexpected claim variant {:?}", v),
+	};
+	let fixed_epoch = epoch.clone_for_slot(slot);
+	let transcript = make_transcript_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
+	let sign = keystore
+		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
+		.unwrap()
+		.unwrap();
+	assert_eq!(fixed_epoch.epoch_index, 11);
+	assert_eq!(claim.vrf_output, VRFOutput(sign.output));
+
+	// Check that correct epoch index has been used if epochs are skipped (secondary VRF)
+	let slot = Slot::from(100);
+	let pre_digest = match claim_slot(slot, &epoch, &keystore).unwrap().0 {
+		PreDigest::SecondaryVRF(d) => d,
+		v => panic!("Unexpected claim variant {:?}", v),
+	};
+	let fixed_epoch = epoch.clone_for_slot(slot);
+	let transcript = make_transcript_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
+	let sign = keystore
+		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
+		.unwrap()
+		.unwrap();
+	assert_eq!(fixed_epoch.epoch_index, 11);
+	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
 }
 
 // Propose and import a new BABE block on top of the given parent.
@@ -651,7 +746,7 @@ async fn propose_and_import_block<Transaction: Send + 'static>(
 	import
 		.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<TestBlock> { epoch_descriptor });
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-	let import_result = block_import.import_block(import, Default::default()).await.unwrap();
+	let import_result = block_import.import_block(import).await.unwrap();
 
 	match import_result {
 		ImportResult::Imported(_) => {},
@@ -668,17 +763,17 @@ async fn propose_and_import_blocks<Transaction: Send + 'static>(
 	client: &PeersFullClient,
 	proposer_factory: &mut DummyFactory,
 	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
-	parent_id: BlockId<TestBlock>,
+	parent_hash: Hash,
 	n: usize,
 ) -> Vec<Hash> {
 	let mut hashes = Vec::with_capacity(n);
-	let mut parent_header = client.header(&parent_id).unwrap().unwrap();
+	let mut parent_header = client.header(parent_hash).unwrap().unwrap();
 
 	for _ in 0..n {
 		let block_hash =
 			propose_and_import_block(&parent_header, None, proposer_factory, block_import).await;
 		hashes.push(block_hash);
-		parent_header = client.header(&BlockId::Hash(block_hash)).unwrap().unwrap();
+		parent_header = client.header(block_hash).unwrap().unwrap();
 	}
 
 	hashes
@@ -701,7 +796,7 @@ async fn importing_block_one_sets_genesis_epoch() {
 
 	let mut block_import = data.block_import.lock().take().expect("import set up during init");
 
-	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
+	let genesis_header = client.header(client.chain_info().genesis_hash).unwrap().unwrap();
 
 	let block_hash = propose_and_import_block(
 		&genesis_header,
@@ -759,34 +854,19 @@ async fn revert_prunes_epoch_changes_and_removes_weights() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		21,
 	)
 	.await;
-	let fork1 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[0]),
-		10,
-	)
-	.await;
-	let fork2 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[7]),
-		10,
-	)
-	.await;
-	let fork3 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[11]),
-		8,
-	)
-	.await;
+	let fork1 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[0], 10)
+			.await;
+	let fork2 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[7], 10)
+			.await;
+	let fork3 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[11], 8)
+			.await;
 
 	// We should be tracking a total of 9 epochs in the fork tree
 	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 8);
@@ -850,7 +930,7 @@ async fn revert_not_allowed_for_finalized() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		3,
 	)
 	.await;
@@ -903,36 +983,21 @@ async fn importing_epoch_change_block_prunes_tree() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		30,
 	)
 	.await;
 
 	// Create the forks
-	let fork_1 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[0]),
-		10,
-	)
-	.await;
-	let fork_2 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[12]),
-		15,
-	)
-	.await;
-	let fork_3 = propose_and_import_blocks(
-		&client,
-		&mut proposer_factory,
-		&mut block_import,
-		BlockId::Hash(canon[18]),
-		10,
-	)
-	.await;
+	let fork_1 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[0], 10)
+			.await;
+	let fork_2 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[12], 15)
+			.await;
+	let fork_3 =
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, canon[18], 10)
+			.await;
 
 	// We should be tracking a total of 9 epochs in the fork tree
 	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 9);
@@ -947,7 +1012,7 @@ async fn importing_epoch_change_block_prunes_tree() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Hash(client.chain_info().best_hash),
+		client.chain_info().best_hash,
 		7,
 	)
 	.await;
@@ -967,7 +1032,7 @@ async fn importing_epoch_change_block_prunes_tree() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Hash(client.chain_info().best_hash),
+		client.chain_info().best_hash,
 		8,
 	)
 	.await;
@@ -1001,7 +1066,7 @@ async fn verify_slots_are_strictly_increasing() {
 		mutator: Arc::new(|_, _| ()),
 	};
 
-	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
+	let genesis_header = client.header(client.chain_info().genesis_hash).unwrap().unwrap();
 
 	// we should have no issue importing this block
 	let b1 = propose_and_import_block(
@@ -1012,7 +1077,7 @@ async fn verify_slots_are_strictly_increasing() {
 	)
 	.await;
 
-	let b1 = client.header(&BlockId::Hash(b1)).unwrap().unwrap();
+	let b1 = client.header(b1).unwrap().unwrap();
 
 	// we should fail to import this block since the slot number didn't increase.
 	// we will panic due to the `PanickingBlockImport` defined above.
@@ -1091,7 +1156,7 @@ async fn obsolete_blocks_aux_data_cleanup() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		4,
 	)
 	.await;
@@ -1099,7 +1164,7 @@ async fn obsolete_blocks_aux_data_cleanup() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(0),
+		client.chain_info().genesis_hash,
 		2,
 	)
 	.await;
@@ -1107,7 +1172,7 @@ async fn obsolete_blocks_aux_data_cleanup() {
 		&client,
 		&mut proposer_factory,
 		&mut block_import,
-		BlockId::Number(3),
+		fork1_hashes[2],
 		2,
 	)
 	.await;
@@ -1138,4 +1203,264 @@ async fn obsolete_blocks_aux_data_cleanup() {
 	assert!(aux_data_check(&fork1_hashes[3..], true));
 	// Present C4, C5
 	assert!(aux_data_check(&fork3_hashes, true));
+}
+
+#[tokio::test]
+async fn allows_skipping_epochs() {
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+	let client = peer.client().as_client();
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let epoch_changes = data.link.epoch_changes.clone();
+	let epoch_length = data.link.config.epoch_length;
+
+	// we create all of the blocks in epoch 0 as well as a block in epoch 1
+	let blocks = propose_and_import_blocks(
+		&client,
+		&mut proposer_factory,
+		&mut block_import,
+		client.chain_info().genesis_hash,
+		epoch_length as usize + 1,
+	)
+	.await;
+
+	// the first block in epoch 0 (#1) announces both epoch 0 and 1 (this is a
+	// special genesis epoch)
+	let epoch0 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Genesis0,
+			hash: blocks[0],
+			number: 1,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch0.epoch_index, 0);
+	assert_eq!(epoch0.start_slot, Slot::from(1));
+
+	let epoch1 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Genesis1,
+			hash: blocks[0],
+			number: 1,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch1.epoch_index, 1);
+	assert_eq!(epoch1.start_slot, Slot::from(epoch_length + 1));
+
+	// the first block in epoch 1 (#7) announces epoch 2. we will be skipping
+	// this epoch and therefore re-using its data for epoch 3
+	let epoch2 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Regular,
+			hash: blocks[epoch_length as usize],
+			number: epoch_length + 1,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch2.epoch_index, 2);
+	assert_eq!(epoch2.start_slot, Slot::from(epoch_length * 2 + 1));
+
+	// we now author a block that belongs to epoch 3, thereby skipping epoch 2
+	let last_block = client.expect_header(*blocks.last().unwrap()).unwrap();
+	let block = propose_and_import_block(
+		&last_block,
+		Some((epoch_length * 3 + 1).into()),
+		&mut proposer_factory,
+		&mut block_import,
+	)
+	.await;
+
+	// and the first block in epoch 3 (#8) announces epoch 4
+	let epoch4 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Regular,
+			hash: block,
+			number: epoch_length + 2,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch4.epoch_index, 4);
+	assert_eq!(epoch4.start_slot, Slot::from(epoch_length * 4 + 1));
+
+	// if we try to get the epoch data for a slot in epoch 3
+	let epoch3 = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&block,
+			epoch_length + 2,
+			(epoch_length * 3 + 2).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	// we get back the data for epoch 2
+	assert_eq!(epoch3, epoch2);
+
+	// but if we try to get the epoch data for a slot in epoch 4
+	let epoch4_ = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&block,
+			epoch_length + 2,
+			(epoch_length * 4 + 1).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	// we get epoch 4 as expected
+	assert_eq!(epoch4, epoch4_);
+}
+
+#[tokio::test]
+async fn allows_skipping_epochs_on_some_forks() {
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+	let client = peer.client().as_client();
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let epoch_changes = data.link.epoch_changes.clone();
+	let epoch_length = data.link.config.epoch_length;
+
+	// we create all of the blocks in epoch 0 as well as two blocks in epoch 1
+	let blocks = propose_and_import_blocks(
+		&client,
+		&mut proposer_factory,
+		&mut block_import,
+		client.chain_info().genesis_hash,
+		epoch_length as usize + 1,
+	)
+	.await;
+
+	// we now author a block that belongs to epoch 2, built on top of the last
+	// authored block in epoch 1.
+	let last_block = client.expect_header(*blocks.last().unwrap()).unwrap();
+
+	let epoch2_block = propose_and_import_block(
+		&last_block,
+		Some((epoch_length * 2 + 1).into()),
+		&mut proposer_factory,
+		&mut block_import,
+	)
+	.await;
+
+	// if we try to get the epoch data for a slot in epoch 2, we get the data that
+	// was previously announced when epoch 1 started
+	let epoch2 = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&epoch2_block,
+			epoch_length + 2,
+			(epoch_length * 2 + 2).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	// we now author a block that belongs to epoch 3, built on top of the last
+	// authored block in epoch 1. authoring this block means we're skipping epoch 2
+	// entirely on this fork
+	let epoch3_block = propose_and_import_block(
+		&last_block,
+		Some((epoch_length * 3 + 1).into()),
+		&mut proposer_factory,
+		&mut block_import,
+	)
+	.await;
+
+	// if we try to get the epoch data for a slot in epoch 3
+	let epoch3_ = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&epoch3_block,
+			epoch_length + 2,
+			(epoch_length * 3 + 2).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	// we get back the data for epoch 2
+	assert_eq!(epoch3_, epoch2);
+
+	// if we try to get the epoch data for a slot in epoch 4 in the fork
+	// where we skipped epoch 2, we should get the epoch data for epoch 4
+	// that was announced at the beginning of epoch 3
+	let epoch_data = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&epoch3_block,
+			epoch_length + 2,
+			(epoch_length * 4 + 1).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	assert!(epoch_data != epoch3_);
+
+	// if we try to get the epoch data for a slot in epoch 4 in the fork
+	// where we didn't skip epoch 2, we should get back the data for epoch 3,
+	// that was announced when epoch 2 started in that fork
+	let epoch_data = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&epoch2_block,
+			epoch_length + 2,
+			(epoch_length * 4 + 1).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	assert!(epoch_data != epoch3_);
+
+	let epoch3 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Regular,
+			hash: epoch2_block,
+			number: epoch_length + 2,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch_data, epoch3);
 }

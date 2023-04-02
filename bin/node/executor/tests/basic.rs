@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,7 +30,7 @@ use sp_runtime::{
 use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
 	Balances, CheckedExtrinsic, Header, Runtime, RuntimeCall, RuntimeEvent, System,
-	TransactionPayment, UncheckedExtrinsic,
+	TransactionPayment, Treasury, UncheckedExtrinsic,
 };
 use node_primitives::{Balance, Hash};
 use node_testing::keyring::*;
@@ -89,7 +89,7 @@ fn changes_trie_block() -> (Vec<u8>, Hash) {
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(0, 0))),
-				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 					dest: bob().into(),
 					value: 69 * DOLLARS,
 				}),
@@ -116,7 +116,7 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(0, 0))),
-				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 					dest: bob().into(),
 					value: 69 * DOLLARS,
 				}),
@@ -136,14 +136,14 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 			},
 			CheckedExtrinsic {
 				signed: Some((bob(), signed_extra(0, 0))),
-				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 					dest: alice().into(),
 					value: 5 * DOLLARS,
 				}),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(1, 0))),
-				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 					dest: bob().into(),
 					value: 15 * DOLLARS,
 				}),
@@ -183,7 +183,12 @@ fn panic_execution_with_foreign_code_gives_error() {
 	let mut t = new_test_ext(bloaty_code_unwrap());
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		(69u128, 0u32, 0u128, 0u128, 0u128).encode(),
+		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
+			providers: 1,
+			data: (69u128, 0u128, 0u128, 1u128 << 127),
+			..Default::default()
+		}
+		.encode(),
 	);
 	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 69_u128.encode());
 	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
@@ -204,9 +209,14 @@ fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 	let mut t = new_test_ext(compact_code_unwrap());
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		(0u32, 0u32, 0u32, 69u128, 0u128, 0u128, 0u128).encode(),
+		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
+			providers: 1,
+			data: (69u128, 0u128, 0u128, 1u128 << 127),
+			..Default::default()
+		}
+		.encode(),
 	);
-	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 69_u128.encode());
+	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 69u128.encode());
 	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
 	let r =
@@ -226,17 +236,18 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
 		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
-			data: (111 * DOLLARS, 0u128, 0u128, 0u128),
+			providers: 1,
+			data: (111 * DOLLARS, 0u128, 0u128, 1u128 << 127),
 			..Default::default()
 		}
 		.encode(),
 	);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
-		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
-			data: (0 * DOLLARS, 0u128, 0u128, 0u128),
-			..Default::default()
-		}
+		AccountInfo::<
+			<Runtime as frame_system::Config>::Index,
+			<Runtime as frame_system::Config>::AccountData,
+		>::default()
 		.encode(),
 	);
 	t.insert(
@@ -267,17 +278,18 @@ fn successful_execution_with_foreign_code_gives_ok() {
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
 		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
-			data: (111 * DOLLARS, 0u128, 0u128, 0u128),
+			providers: 1,
+			data: (111 * DOLLARS, 0u128, 0u128, 1u128 << 127),
 			..Default::default()
 		}
 		.encode(),
 	);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
-		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
-			data: (0 * DOLLARS, 0u128, 0u128, 0u128),
-			..Default::default()
-		}
+		AccountInfo::<
+			<Runtime as frame_system::Config>::Index,
+			<Runtime as frame_system::Config>::AccountData,
+		>::default()
 		.encode(),
 	);
 	t.insert(
@@ -398,6 +410,7 @@ fn full_native_block_import_works() {
 	});
 
 	fees = t.execute_with(|| transfer_fee(&xt()));
+	let pot = t.execute_with(|| Treasury::pot());
 
 	executor_call(&mut t, "Core_execute_block", &block2.0, true).0.unwrap();
 
@@ -408,6 +421,14 @@ fn full_native_block_import_works() {
 		);
 		assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - fees);
 		let events = vec![
+			EventRecord {
+				phase: Phase::Initialization,
+				event: RuntimeEvent::Treasury(pallet_treasury::Event::UpdatedInactive {
+					reactivated: 0,
+					deactivated: pot,
+				}),
+				topics: vec![],
+			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: RuntimeEvent::System(frame_system::Event::ExtrinsicSuccess {
@@ -654,7 +675,8 @@ fn deploying_wasm_contract_should_work() {
 	let transfer_code = wat::parse_str(CODE_TRANSFER).unwrap();
 	let transfer_ch = <Runtime as frame_system::Config>::Hashing::hash(&transfer_code);
 
-	let addr = pallet_contracts::Pallet::<Runtime>::contract_address(&charlie(), &transfer_ch, &[]);
+	let addr =
+		pallet_contracts::Pallet::<Runtime>::contract_address(&charlie(), &transfer_ch, &[], &[]);
 
 	let time = 42 * 1000;
 	let b = construct_block(
@@ -672,7 +694,7 @@ fn deploying_wasm_contract_should_work() {
 					Runtime,
 				> {
 					value: 0,
-					gas_limit: Weight::from_ref_time(500_000_000),
+					gas_limit: Weight::from_parts(500_000_000, 0),
 					storage_deposit_limit: None,
 					code: transfer_code,
 					data: Vec::new(),
@@ -684,7 +706,7 @@ fn deploying_wasm_contract_should_work() {
 				function: RuntimeCall::Contracts(pallet_contracts::Call::call::<Runtime> {
 					dest: sp_runtime::MultiAddress::Id(addr.clone()),
 					value: 10,
-					gas_limit: Weight::from_ref_time(500_000_000),
+					gas_limit: Weight::from_parts(500_000_000, 0),
 					storage_deposit_limit: None,
 					data: vec![0x00, 0x01, 0x02, 0x03],
 				}),
@@ -700,11 +722,7 @@ fn deploying_wasm_contract_should_work() {
 	t.execute_with(|| {
 		// Verify that the contract does exist by querying some of its storage items
 		// It does not matter that the storage item itself does not exist.
-		assert!(&pallet_contracts::Pallet::<Runtime>::get_storage(
-			addr,
-			pallet_contracts::StorageKey::<Runtime>::default().to_vec()
-		)
-		.is_ok());
+		assert!(&pallet_contracts::Pallet::<Runtime>::get_storage(addr, vec![]).is_ok());
 	});
 }
 
@@ -778,17 +796,18 @@ fn successful_execution_gives_ok() {
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
 		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
-			data: (111 * DOLLARS, 0u128, 0u128, 0u128),
+			providers: 1,
+			data: (111 * DOLLARS, 0u128, 0u128, 1u128 << 127),
 			..Default::default()
 		}
 		.encode(),
 	);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
-		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
-			data: (0 * DOLLARS, 0u128, 0u128, 0u128),
-			..Default::default()
-		}
+		AccountInfo::<
+			<Runtime as frame_system::Config>::Index,
+			<Runtime as frame_system::Config>::AccountData,
+		>::default()
 		.encode(),
 	);
 	t.insert(

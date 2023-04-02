@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,29 +28,29 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// re-export since this is necessary for `impl_apis` in runtime.
-pub use sp_finality_grandpa as fg_primitives;
-
-use sp_std::prelude::*;
+// Re-export since this is necessary for `impl_apis` in runtime.
+pub use sp_consensus_grandpa::{
+	self as fg_primitives, AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList,
+};
 
 use codec::{self as codec, Decode, Encode, MaxEncodedLen};
-pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
-use fg_primitives::{
-	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
-	GRANDPA_ENGINE_ID,
-};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays},
 	pallet_prelude::Get,
 	storage,
-	traits::{KeyOwnerProofSystem, OneSessionHandler},
+	traits::OneSessionHandler,
 	weights::Weight,
 	WeakBoundedVec,
 };
 use scale_info::TypeInfo;
-use sp_runtime::{generic::DigestItem, traits::Zero, DispatchResult, KeyTypeId};
+use sp_consensus_grandpa::{
+	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
+	GRANDPA_ENGINE_ID, RUNTIME_LOG_TARGET as LOG_TARGET,
+};
+use sp_runtime::{generic::DigestItem, traits::Zero, DispatchResult};
 use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_staking::SessionIndex;
+use sp_staking::{offence::OffenceReportSystem, SessionIndex};
+use sp_std::prelude::*;
 
 mod default_weights;
 mod equivocation;
@@ -63,14 +63,9 @@ mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
-pub use equivocation::{
-	EquivocationHandler, GrandpaEquivocationOffence, GrandpaOffence, GrandpaTimeSlot,
-	HandleEquivocation,
-};
+pub use equivocation::{EquivocationOffence, EquivocationReportSystem, TimeSlot};
 
 pub use pallet::*;
-
-const LOG_TARGET: &str = "runtime::grandpa";
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -82,7 +77,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -93,36 +87,34 @@ pub mod pallet {
 			+ Into<<Self as frame_system::Config>::RuntimeEvent>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// The proof of key ownership, used for validating equivocation reports
-		/// The proof must include the session index and validator count of the
-		/// session at which the equivocation occurred.
-		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
-
-		/// The identification of a key owner, used when reporting equivocations.
-		type KeyOwnerIdentification: Parameter;
-
-		/// A system for proving ownership of keys, i.e. that a given key was part
-		/// of a validator set, needed for validating equivocation reports.
-		type KeyOwnerProofSystem: KeyOwnerProofSystem<
-			(KeyTypeId, AuthorityId),
-			Proof = Self::KeyOwnerProof,
-			IdentificationTuple = Self::KeyOwnerIdentification,
-		>;
-
-		/// The equivocation handling subsystem, defines methods to report an
-		/// offence (after the equivocation has been validated) and for submitting a
-		/// transaction to report an equivocation (from an offchain context).
-		/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
-		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
-		/// definition.
-		type HandleEquivocation: HandleEquivocation<Self>;
-
 		/// Weights for this pallet.
 		type WeightInfo: WeightInfo;
 
 		/// Max Authorities in use
 		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
+
+		/// The maximum number of entries to keep in the set id to session index mapping.
+		///
+		/// Since the `SetIdSession` map is only used for validating equivocations this
+		/// value should relate to the bonding duration of whatever staking system is
+		/// being used (if any). If equivocation handling is not enabled then this value
+		/// can be zero.
+		#[pallet::constant]
+		type MaxSetIdSessionEntries: Get<u64>;
+
+		/// The proof of key ownership, used for validating equivocation reports
+		/// The proof include the session index and validator count of the
+		/// session at which the equivocation occurred.
+		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+
+		/// The equivocation handling subsystem, defines methods to check/report an
+		/// offence and for submitting a transaction to report an equivocation
+		/// (from an offchain context).
+		type EquivocationReportSystem: OffenceReportSystem<
+			Option<Self::AccountId>,
+			(EquivocationProof<Self::Hash, Self::BlockNumber>, Self::KeyOwnerProof),
+		>;
 	}
 
 	#[pallet::hooks]
@@ -204,7 +196,12 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
 
-			Self::do_report_equivocation(Some(reporter), *equivocation_proof, key_owner_proof)
+			T::EquivocationReportSystem::process_evidence(
+				Some(reporter),
+				(*equivocation_proof, key_owner_proof),
+			)?;
+			// Waive the fee since the report is valid and beneficial
+			Ok(Pays::No.into())
 		}
 
 		/// Report voter equivocation/misbehavior. This method will verify the
@@ -225,11 +222,11 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
-			Self::do_report_equivocation(
-				T::HandleEquivocation::block_author(),
-				*equivocation_proof,
-				key_owner_proof,
-			)
+			T::EquivocationReportSystem::process_evidence(
+				None,
+				(*equivocation_proof, key_owner_proof),
+			)?;
+			Ok(Pays::No.into())
 		}
 
 		/// Note that the current authority set of the GRANDPA finality gadget has stalled.
@@ -325,6 +322,12 @@ pub mod pallet {
 	/// A mapping from grandpa set ID to the index of the *most recent* session for which its
 	/// members were responsible.
 	///
+	/// This is only used for validating equivocation proofs. An equivocation proof must
+	/// contains a key-ownership proof for a given session, therefore we need a way to tie
+	/// together sessions and GRANDPA set ids, i.e. we need to validate that a validator
+	/// was the owner of a given key on a given session, and what the active set ID was
+	/// during that session.
+	///
 	/// TWOX-NOTE: `SetId` is not under user control.
 	#[pallet::storage]
 	#[pallet::getter(fn session_for_set)]
@@ -339,7 +342,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			CurrentSetId::<T>::put(fg_primitives::SetId::default());
+			CurrentSetId::<T>::put(SetId::default());
 			Pallet::<T>::initialize(&self.authorities)
 		}
 	}
@@ -347,6 +350,7 @@ pub mod pallet {
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
+
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			Self::validate_unsigned(source, call)
 		}
@@ -519,74 +523,6 @@ impl<T: Config> Pallet<T> {
 		SetIdSession::<T>::insert(0, 0);
 	}
 
-	fn do_report_equivocation(
-		reporter: Option<T::AccountId>,
-		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
-		key_owner_proof: T::KeyOwnerProof,
-	) -> DispatchResultWithPostInfo {
-		// we check the equivocation within the context of its set id (and
-		// associated session) and round. we also need to know the validator
-		// set count when the offence since it is required to calculate the
-		// slash amount.
-		let set_id = equivocation_proof.set_id();
-		let round = equivocation_proof.round();
-		let session_index = key_owner_proof.session();
-		let validator_count = key_owner_proof.validator_count();
-
-		// validate the key ownership proof extracting the id of the offender.
-		let offender = T::KeyOwnerProofSystem::check_proof(
-			(fg_primitives::KEY_TYPE, equivocation_proof.offender().clone()),
-			key_owner_proof,
-		)
-		.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
-
-		// validate equivocation proof (check votes are different and
-		// signatures are valid).
-		if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof) {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
-		}
-
-		// fetch the current and previous sets last session index. on the
-		// genesis set there's no previous set.
-		let previous_set_id_session_index = if set_id == 0 {
-			None
-		} else {
-			let session_index =
-				Self::session_for_set(set_id - 1).ok_or(Error::<T>::InvalidEquivocationProof)?;
-
-			Some(session_index)
-		};
-
-		let set_id_session_index =
-			Self::session_for_set(set_id).ok_or(Error::<T>::InvalidEquivocationProof)?;
-
-		// check that the session id for the membership proof is within the
-		// bounds of the set id reported in the equivocation.
-		if session_index > set_id_session_index ||
-			previous_set_id_session_index
-				.map(|previous_index| session_index <= previous_index)
-				.unwrap_or(false)
-		{
-			return Err(Error::<T>::InvalidEquivocationProof.into())
-		}
-
-		// report to the offences module rewarding the sender.
-		T::HandleEquivocation::report_offence(
-			reporter.into_iter().collect(),
-			<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
-				session_index,
-				validator_count,
-				offender,
-				set_id,
-				round,
-			),
-		)
-		.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
-
-		// waive the fee since the report is valid and beneficial
-		Ok(Pays::No.into())
-	}
-
 	/// Submits an extrinsic to report an equivocation. This method will create
 	/// an unsigned extrinsic with a call to `report_equivocation_unsigned` and
 	/// will push the transaction to the pool. Only useful in an offchain
@@ -595,11 +531,7 @@ impl<T: Config> Pallet<T> {
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::HandleEquivocation::submit_unsigned_equivocation_report(
-			equivocation_proof,
-			key_owner_proof,
-		)
-		.ok()
+		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()
 	}
 
 	fn on_stalled(further_wait: T::BlockNumber, median: T::BlockNumber) {
@@ -645,10 +577,17 @@ where
 			};
 
 			if res.is_ok() {
-				CurrentSetId::<T>::mutate(|s| {
+				let current_set_id = CurrentSetId::<T>::mutate(|s| {
 					*s += 1;
 					*s
-				})
+				});
+
+				let max_set_id_session_entries = T::MaxSetIdSessionEntries::get().max(1);
+				if current_set_id >= max_set_id_session_entries {
+					SetIdSession::<T>::remove(current_set_id - max_set_id_session_entries);
+				}
+
+				current_set_id
 			} else {
 				// either the session module signalled that the validators have changed
 				// or the set was stalled. but since we didn't successfully schedule
@@ -661,8 +600,8 @@ where
 			Self::current_set_id()
 		};
 
-		// if we didn't issue a change, we update the mapping to note that the current
-		// set corresponds to the latest equivalent session (i.e. now).
+		// update the mapping to note that the current set corresponds to the
+		// latest equivalent session (i.e. now).
 		let session_index = <pallet_session::Pallet<T>>::current_index();
 		SetIdSession::<T>::insert(current_set_id, &session_index);
 	}

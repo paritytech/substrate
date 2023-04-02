@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -60,6 +60,8 @@ pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
 
+const LOG_TARGET: &str = "runtime::uniques";
+
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
@@ -69,7 +71,6 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -577,7 +578,9 @@ pub mod pallet {
 
 		/// Destroy a single item.
 		///
-		/// Origin must be Signed and the sender should be the Admin of the `collection`.
+		/// Origin must be Signed and the signing account must be either:
+		/// - the Admin of the `collection`;
+		/// - the Owner of the `item`;
 		///
 		/// - `collection`: The collection of the item to be burned.
 		/// - `item`: The item of the item to be burned.

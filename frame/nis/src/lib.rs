@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -71,21 +71,21 @@
 //!
 //! ## Terms
 //!
-//! - *Effective total issuance*: The total issuance of balances in the system, including all claims
-//!   of all outstanding receipts but excluding `IgnoredIssuance`.
+//! - *Effective total issuance*: The total issuance of balances in the system, equal to the active
+//!   issuance plus the value of all outstanding receipts, less `IgnoredIssuance`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
-	traits::fungible::{Inspect as FungibleInspect, Mutate as FungibleMutate},
+use frame_support::traits::{
+	fungible::{self, Inspect as FunInspect, Mutate as FunMutate},
+	tokens::{DepositConsequence, Fortitude, Preservation, Provenance, WithdrawConsequence},
 };
 pub use pallet::*;
 use sp_arithmetic::{traits::Unsigned, RationalArg};
 use sp_core::TypedGet;
 use sp_runtime::{
 	traits::{Convert, ConvertBack},
-	Perquintill,
+	DispatchError, Perquintill,
 };
 
 mod benchmarking;
@@ -117,7 +117,7 @@ where
 }
 
 pub struct NoCounterpart<T>(sp_std::marker::PhantomData<T>);
-impl<T> FungibleInspect<T> for NoCounterpart<T> {
+impl<T> FunInspect<T> for NoCounterpart<T> {
 	type Balance = u32;
 	fn total_issuance() -> u32 {
 		0
@@ -125,34 +125,30 @@ impl<T> FungibleInspect<T> for NoCounterpart<T> {
 	fn minimum_balance() -> u32 {
 		0
 	}
-	fn balance(_who: &T) -> u32 {
+	fn balance(_: &T) -> u32 {
 		0
 	}
-	fn reducible_balance(_who: &T, _keep_alive: bool) -> u32 {
+	fn total_balance(_: &T) -> u32 {
 		0
 	}
-	fn can_deposit(
-		_who: &T,
-		_amount: u32,
-		_mint: bool,
-	) -> frame_support::traits::tokens::DepositConsequence {
-		frame_support::traits::tokens::DepositConsequence::Success
+	fn reducible_balance(_: &T, _: Preservation, _: Fortitude) -> u32 {
+		0
 	}
-	fn can_withdraw(
-		_who: &T,
-		_amount: u32,
-	) -> frame_support::traits::tokens::WithdrawConsequence<u32> {
-		frame_support::traits::tokens::WithdrawConsequence::Success
+	fn can_deposit(_: &T, _: u32, _: Provenance) -> DepositConsequence {
+		DepositConsequence::Success
+	}
+	fn can_withdraw(_: &T, _: u32) -> WithdrawConsequence<u32> {
+		WithdrawConsequence::Success
 	}
 }
-impl<T> FungibleMutate<T> for NoCounterpart<T> {
-	fn mint_into(_who: &T, _amount: u32) -> DispatchResult {
-		Ok(())
+impl<T> fungible::Unbalanced<T> for NoCounterpart<T> {
+	fn handle_dust(_: fungible::Dust<T, Self>) {}
+	fn write_balance(_: &T, _: Self::Balance) -> Result<Option<Self::Balance>, DispatchError> {
+		Ok(None)
 	}
-	fn burn_from(_who: &T, _amount: u32) -> Result<u32, DispatchError> {
-		Ok(0)
-	}
+	fn set_total_issuance(_: Self::Balance) {}
 }
+impl<T> FunMutate<T> for NoCounterpart<T> {}
 impl<T> Convert<Perquintill, u32> for NoCounterpart<T> {
 	fn convert(_: Perquintill) -> u32 {
 		0
@@ -161,15 +157,24 @@ impl<T> Convert<Perquintill, u32> for NoCounterpart<T> {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::{FungibleInspect, FungibleMutate};
+	use super::{FunInspect, FunMutate};
 	pub use crate::weights::WeightInfo;
 	use frame_support::{
 		pallet_prelude::*,
 		traits::{
-			nonfungible::{Inspect as NonfungibleInspect, Transfer as NonfungibleTransfer},
-			Currency, Defensive, DefensiveSaturating,
-			ExistenceRequirement::AllowDeath,
-			OnUnbalanced, ReservableCurrency,
+			fungible::{
+				self,
+				hold::{Inspect as FunHoldInspect, Mutate as FunHoldMutate},
+				Balanced as FunBalanced,
+			},
+			nonfungible::{Inspect as NftInspect, Transfer as NftTransfer},
+			tokens::{
+				Fortitude::Polite,
+				Precision::{BestEffort, Exact},
+				Preservation::Expendable,
+				Restriction::{Free, OnHold},
+			},
+			Defensive, DefensiveSaturating, OnUnbalanced,
 		},
 		PalletId,
 	};
@@ -177,21 +182,21 @@ pub mod pallet {
 	use sp_arithmetic::{PerThing, Perquintill};
 	use sp_runtime::{
 		traits::{AccountIdConversion, Bounded, Convert, ConvertBack, Saturating, Zero},
-		TokenError,
+		Rounding, TokenError,
 	};
 	use sp_std::prelude::*;
 
 	type BalanceOf<T> =
-		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-	type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
-		<T as frame_system::Config>::AccountId,
-	>>::PositiveImbalance;
+		<<T as Config>::Currency as FunInspect<<T as frame_system::Config>::AccountId>>::Balance;
+	type DebtOf<T> =
+		fungible::Debt<<T as frame_system::Config>::AccountId, <T as Config>::Currency>;
 	type ReceiptRecordOf<T> = ReceiptRecord<
 		<T as frame_system::Config>::AccountId,
 		<T as frame_system::Config>::BlockNumber,
+		BalanceOf<T>,
 	>;
 	type IssuanceInfoOf<T> = IssuanceInfo<BalanceOf<T>>;
-	type SummaryRecordOf<T> = SummaryRecord<<T as frame_system::Config>::BlockNumber>;
+	type SummaryRecordOf<T> = SummaryRecord<<T as frame_system::Config>::BlockNumber, BalanceOf<T>>;
 	type BidOf<T> = Bid<BalanceOf<T>, <T as frame_system::Config>::AccountId>;
 	type QueueTotalsTypeOf<T> = BoundedVec<(u32, BalanceOf<T>), <T as Config>::QueueCount>;
 
@@ -208,7 +213,16 @@ pub mod pallet {
 		type PalletId: Get<PalletId>;
 
 		/// Currency type that this works on.
-		type Currency: ReservableCurrency<Self::AccountId, Balance = Self::CurrencyBalance>;
+		type Currency: FunInspect<Self::AccountId, Balance = Self::CurrencyBalance>
+			+ FunMutate<Self::AccountId>
+			+ FunBalanced<Self::AccountId>
+			+ FunHoldInspect<Self::AccountId>
+			+ FunHoldMutate<Self::AccountId>;
+
+		/// The identifier of the hold reason.
+
+		#[pallet::constant]
+		type HoldReason: Get<<Self::Currency as FunHoldInspect<Self::AccountId>>::Reason>;
 
 		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
 		/// `From<u64>`.
@@ -230,7 +244,7 @@ pub mod pallet {
 		type IgnoredIssuance: Get<BalanceOf<Self>>;
 
 		/// The accounting system for the fungible counterpart tokens.
-		type Counterpart: FungibleMutate<Self::AccountId>;
+		type Counterpart: FunMutate<Self::AccountId>;
 
 		/// The system to convert an overall proportion of issuance into a number of fungible
 		/// counterpart tokens.
@@ -238,12 +252,12 @@ pub mod pallet {
 		/// In general it's best to use `WithMaximumOf`.
 		type CounterpartAmount: ConvertBack<
 			Perquintill,
-			<Self::Counterpart as FungibleInspect<Self::AccountId>>::Balance,
+			<Self::Counterpart as FunInspect<Self::AccountId>>::Balance,
 		>;
 
 		/// Unbalanced handler to account for funds created (in case of a higher total issuance over
 		/// freezing period).
-		type Deficit: OnUnbalanced<PositiveImbalanceOf<Self>>;
+		type Deficit: OnUnbalanced<DebtOf<Self>>;
 
 		/// The target sum of all receipts' proportions.
 		type Target: Get<Perquintill>;
@@ -303,7 +317,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	/// A single bid, an item of a *queue* in `Queues`.
@@ -321,11 +334,13 @@ pub mod pallet {
 	#[derive(
 		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
 	)]
-	pub struct ReceiptRecord<AccountId, BlockNumber> {
+	pub struct ReceiptRecord<AccountId, BlockNumber, Balance> {
 		/// The proportion of the effective total issuance.
 		pub proportion: Perquintill,
-		/// The account to whom this receipt belongs.
-		pub who: AccountId,
+		/// The account to whom this receipt belongs and the amount of funds on hold in their
+		/// account for servicing this receipt. If `None`, then it is a communal receipt and
+		/// fungible counterparts have been issued.
+		pub owner: Option<(AccountId, Balance)>,
 		/// The time after which this receipt can be thawed.
 		pub expiry: BlockNumber,
 	}
@@ -340,11 +355,11 @@ pub mod pallet {
 	///
 	/// `issuance - frozen + proportion * issuance`
 	///
-	/// where `issuance = total_issuance - IgnoredIssuance`
+	/// where `issuance = active_issuance - IgnoredIssuance`
 	#[derive(
 		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
 	)]
-	pub struct SummaryRecord<BlockNumber> {
+	pub struct SummaryRecord<BlockNumber, Balance> {
 		/// The total proportion over all outstanding receipts.
 		pub proportion_owed: Perquintill,
 		/// The total number of receipts created so far.
@@ -353,6 +368,9 @@ pub mod pallet {
 		pub thawed: Perquintill,
 		/// The current thaw period's beginning.
 		pub last_period: BlockNumber,
+		/// The total amount of funds on hold for receipts. This doesn't include the pot or funds
+		/// on hold for bids.
+		pub receipts_on_hold: Balance,
 	}
 
 	pub struct OnEmptyQueueTotals<T>(sp_std::marker::PhantomData<T>);
@@ -440,24 +458,31 @@ pub mod pallet {
 		/// The queue for the bid's duration is full and the amount bid is too low to get in
 		/// through replacing an existing bid.
 		BidTooLow,
-		/// Bond index is unknown.
-		Unknown,
+		/// Receipt index is unknown.
+		UnknownReceipt,
 		/// Not the owner of the receipt.
 		NotOwner,
 		/// Bond not yet at expiry date.
 		NotExpired,
 		/// The given bid for retraction is not found.
-		NotFound,
+		UnknownBid,
 		/// The portion supplied is beyond the value of the receipt.
-		TooMuch,
+		PortionTooBig,
 		/// Not enough funds are held to pay out.
 		Unfunded,
 		/// There are enough funds for what is required.
-		Funded,
+		AlreadyFunded,
 		/// The thaw throttle has been reached for this period.
 		Throttled,
 		/// The operation would result in a receipt worth an insignficant value.
 		MakesDust,
+		/// The receipt is already communal.
+		AlreadyCommunal,
+		/// The receipt is already private.
+		AlreadyPrivate,
+		Release1,
+		Release2,
+		Tah,
 	}
 
 	pub(crate) struct WeightCounter {
@@ -539,13 +564,18 @@ pub mod pallet {
 				|q| -> Result<(u32, BalanceOf<T>), DispatchError> {
 					let queue_full = q.len() == T::MaxQueueLen::get() as usize;
 					ensure!(!queue_full || q[0].amount < amount, Error::<T>::BidTooLow);
-					T::Currency::reserve(&who, amount)?;
+					T::Currency::hold(&T::HoldReason::get(), &who, amount)?;
 
 					// queue is <Ordered: Lowest ... Highest><Fifo: Last ... First>
 					let mut bid = Bid { amount, who: who.clone() };
 					let net = if queue_full {
 						sp_std::mem::swap(&mut q[0], &mut bid);
-						let _ = T::Currency::unreserve(&bid.who, bid.amount);
+						let _ = T::Currency::release(
+							&T::HoldReason::get(),
+							&bid.who,
+							bid.amount,
+							BestEffort,
+						);
 						Self::deposit_event(Event::<T>::BidDropped {
 							who: bid.who,
 							amount: bid.amount,
@@ -596,19 +626,21 @@ pub mod pallet {
 			ensure!(queue_index < queue_count, Error::<T>::DurationTooBig);
 
 			let bid = Bid { amount, who };
-			let new_len = Queues::<T>::try_mutate(duration, |q| -> Result<u32, DispatchError> {
-				let pos = q.iter().position(|i| i == &bid).ok_or(Error::<T>::NotFound)?;
-				q.remove(pos);
-				Ok(q.len() as u32)
-			})?;
 
+			let mut queue = Queues::<T>::get(duration);
+			let pos = queue.iter().position(|i| i == &bid).ok_or(Error::<T>::UnknownBid)?;
+			queue.remove(pos);
+			let new_len = queue.len() as u32;
+
+			T::Currency::release(&T::HoldReason::get(), &bid.who, bid.amount, BestEffort)?;
+
+			Queues::<T>::insert(duration, queue);
 			QueueTotals::<T>::mutate(|qs| {
 				qs.bounded_resize(queue_count, (0, Zero::zero()));
 				qs[queue_index].0 = new_len;
 				qs[queue_index].1.saturating_reduce(bid.amount);
 			});
 
-			T::Currency::unreserve(&bid.who, bid.amount);
 			Self::deposit_event(Event::BidRetracted { who: bid.who, amount: bid.amount, duration });
 
 			Ok(())
@@ -625,8 +657,8 @@ pub mod pallet {
 			let our_account = Self::account_id();
 			let issuance = Self::issuance_with(&our_account, &summary);
 			let deficit = issuance.required.saturating_sub(issuance.holdings);
-			ensure!(!deficit.is_zero(), Error::<T>::Funded);
-			T::Deficit::on_unbalanced(T::Currency::deposit_creating(&our_account, deficit));
+			ensure!(!deficit.is_zero(), Error::<T>::AlreadyFunded);
+			T::Deficit::on_unbalanced(T::Currency::deposit(&our_account, deficit, Exact)?);
 			Self::deposit_event(Event::<T>::Funded { deficit });
 			Ok(())
 		}
@@ -640,27 +672,28 @@ pub mod pallet {
 		/// - `portion`: If `Some`, then only the given portion of the receipt should be thawed. If
 		///   `None`, then all of it should be.
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::thaw())]
-		pub fn thaw(
+		#[pallet::weight(T::WeightInfo::thaw_private())]
+		pub fn thaw_private(
 			origin: OriginFor<T>,
 			#[pallet::compact] index: ReceiptIndex,
-			portion: Option<<T::Counterpart as FungibleInspect<T::AccountId>>::Balance>,
+			maybe_proportion: Option<Perquintill>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			// Look for `index`
 			let mut receipt: ReceiptRecordOf<T> =
-				Receipts::<T>::get(index).ok_or(Error::<T>::Unknown)?;
+				Receipts::<T>::get(index).ok_or(Error::<T>::UnknownReceipt)?;
 			// If found, check the owner is `who`.
-			ensure!(receipt.who == who, Error::<T>::NotOwner);
+			let (owner, mut on_hold) = receipt.owner.ok_or(Error::<T>::AlreadyCommunal)?;
+			ensure!(owner == who, Error::<T>::NotOwner);
+
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(now >= receipt.expiry, Error::<T>::NotExpired);
 
 			let mut summary: SummaryRecordOf<T> = Summary::<T>::get();
 
-			let proportion = if let Some(counterpart) = portion {
-				let proportion = T::CounterpartAmount::convert_back(counterpart);
-				ensure!(proportion <= receipt.proportion, Error::<T>::TooMuch);
+			let proportion = if let Some(proportion) = maybe_proportion {
+				ensure!(proportion <= receipt.proportion, Error::<T>::PortionTooBig);
 				let remaining = receipt.proportion.saturating_sub(proportion);
 				ensure!(
 					remaining.is_zero() || remaining >= T::MinReceipt::get(),
@@ -679,23 +712,58 @@ pub mod pallet {
 			summary.thawed.saturating_accrue(proportion);
 			ensure!(summary.thawed <= throttle, Error::<T>::Throttled);
 
-			T::Counterpart::burn_from(&who, T::CounterpartAmount::convert(proportion))?;
-
 			// Multiply the proportion it is by the total issued.
 			let our_account = Self::account_id();
 			let effective_issuance = Self::issuance_with(&our_account, &summary).effective;
+			//			let amount = proportion.mul_ceil(effective_issuance);
 			let amount = proportion * effective_issuance;
 
 			receipt.proportion.saturating_reduce(proportion);
 			summary.proportion_owed.saturating_reduce(proportion);
 
-			T::Currency::transfer(&our_account, &who, amount, AllowDeath)
-				.map_err(|_| Error::<T>::Unfunded)?;
-
 			let dropped = receipt.proportion.is_zero();
+
+			if amount > on_hold {
+				T::Currency::release(&T::HoldReason::get(), &who, on_hold, Exact)
+					.map_err(|_| Error::<T>::Release1)?;
+				let deficit = amount - on_hold;
+				// Try to transfer deficit from pot to receipt owner.
+				summary.receipts_on_hold.saturating_reduce(on_hold);
+				on_hold = Zero::zero();
+				T::Currency::transfer(&our_account, &who, deficit, Expendable)
+					.map_err(|_| Error::<T>::Unfunded)?;
+			} else {
+				on_hold.saturating_reduce(amount);
+				summary.receipts_on_hold.saturating_reduce(amount);
+				if dropped && !on_hold.is_zero() {
+					// Reclaim any remainder:
+					// Transfer excess of `on_hold` to the pot if we have now fully compensated for
+					// the receipt.
+					T::Currency::transfer_on_hold(
+						&T::HoldReason::get(),
+						&who,
+						&our_account,
+						on_hold,
+						Exact,
+						Free,
+						Polite,
+					)
+					.map(|_| ())
+					// We ignore this error as it just means the amount we're trying to deposit is
+					// dust and the beneficiary account doesn't exist.
+					.or_else(
+						|e| if e == TokenError::CannotCreate.into() { Ok(()) } else { Err(e) },
+					)?;
+					summary.receipts_on_hold.saturating_reduce(on_hold);
+				}
+				T::Currency::release(&T::HoldReason::get(), &who, amount, Exact)
+					.map_err(|_| Error::<T>::Release2)?;
+			}
+
 			if dropped {
 				Receipts::<T>::remove(index);
 			} else {
+				receipt.owner = Some((owner, on_hold));
 				Receipts::<T>::insert(index, &receipt);
 			}
 			Summary::<T>::put(&summary);
@@ -704,28 +772,171 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Reduce or remove an outstanding receipt, placing the according proportion of funds into
+		/// the account of the owner.
+		///
+		/// - `origin`: Must be Signed and the account must be the owner of the fungible counterpart
+		///   for receipt `index`.
+		/// - `index`: The index of the receipt.
+		#[pallet::call_index(4)]
+		#[pallet::weight(T::WeightInfo::thaw_communal())]
+		pub fn thaw_communal(
+			origin: OriginFor<T>,
+			#[pallet::compact] index: ReceiptIndex,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			// Look for `index`
+			let receipt: ReceiptRecordOf<T> =
+				Receipts::<T>::get(index).ok_or(Error::<T>::UnknownReceipt)?;
+			// If found, check it is actually communal.
+			ensure!(receipt.owner.is_none(), Error::<T>::NotOwner);
+			let now = frame_system::Pallet::<T>::block_number();
+			ensure!(now >= receipt.expiry, Error::<T>::NotExpired);
+
+			let mut summary: SummaryRecordOf<T> = Summary::<T>::get();
+
+			let (throttle, throttle_period) = T::ThawThrottle::get();
+			if now.saturating_sub(summary.last_period) >= throttle_period {
+				summary.thawed = Zero::zero();
+				summary.last_period = now;
+			}
+			summary.thawed.saturating_accrue(receipt.proportion);
+			ensure!(summary.thawed <= throttle, Error::<T>::Throttled);
+
+			let cp_amount = T::CounterpartAmount::convert(receipt.proportion);
+			T::Counterpart::burn_from(&who, cp_amount, Exact, Polite)?;
+
+			// Multiply the proportion it is by the total issued.
+			let our_account = Self::account_id();
+			let effective_issuance = Self::issuance_with(&our_account, &summary).effective;
+			let amount = receipt.proportion * effective_issuance;
+
+			summary.proportion_owed.saturating_reduce(receipt.proportion);
+
+			// Try to transfer amount owed from pot to receipt owner.
+			T::Currency::transfer(&our_account, &who, amount, Expendable)
+				.map_err(|_| Error::<T>::Unfunded)?;
+
+			Receipts::<T>::remove(index);
+			Summary::<T>::put(&summary);
+
+			let e =
+				Event::Thawed { index, who, amount, proportion: receipt.proportion, dropped: true };
+			Self::deposit_event(e);
+
+			Ok(())
+		}
+
+		/// Make a private receipt communal and create fungible counterparts for its owner.
+		#[pallet::call_index(5)]
+		#[pallet::weight(T::WeightInfo::communify())]
+		pub fn communify(
+			origin: OriginFor<T>,
+			#[pallet::compact] index: ReceiptIndex,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			// Look for `index`
+			let mut receipt: ReceiptRecordOf<T> =
+				Receipts::<T>::get(index).ok_or(Error::<T>::UnknownReceipt)?;
+
+			// Check it's not already communal and make it so.
+			let (owner, on_hold) = receipt.owner.take().ok_or(Error::<T>::AlreadyCommunal)?;
+
+			// If found, check the owner is `who`.
+			ensure!(owner == who, Error::<T>::NotOwner);
+
+			// Unreserve and transfer the funds to the pot.
+			let reason = T::HoldReason::get();
+			let us = Self::account_id();
+			T::Currency::transfer_on_hold(&reason, &who, &us, on_hold, Exact, Free, Polite)
+				.map_err(|_| Error::<T>::Unfunded)?;
+
+			// Record that we've moved the amount reserved.
+			let mut summary: SummaryRecordOf<T> = Summary::<T>::get();
+			summary.receipts_on_hold.saturating_reduce(on_hold);
+			Summary::<T>::put(&summary);
+			Receipts::<T>::insert(index, &receipt);
+
+			// Mint fungibles.
+			let fung_eq = T::CounterpartAmount::convert(receipt.proportion);
+			let _ = T::Counterpart::mint_into(&who, fung_eq).defensive();
+
+			Ok(())
+		}
+
+		/// Make a communal receipt private and burn fungible counterparts from its owner.
+		#[pallet::call_index(6)]
+		#[pallet::weight(T::WeightInfo::privatize())]
+		pub fn privatize(
+			origin: OriginFor<T>,
+			#[pallet::compact] index: ReceiptIndex,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			// Look for `index`
+			let mut receipt: ReceiptRecordOf<T> =
+				Receipts::<T>::get(index).ok_or(Error::<T>::UnknownReceipt)?;
+
+			// If found, check there is no owner.
+			ensure!(receipt.owner.is_none(), Error::<T>::AlreadyPrivate);
+
+			// Multiply the proportion it is by the total issued.
+			let mut summary: SummaryRecordOf<T> = Summary::<T>::get();
+			let our_account = Self::account_id();
+			let effective_issuance = Self::issuance_with(&our_account, &summary).effective;
+			let max_amount = receipt.proportion * effective_issuance;
+			// Avoid trying to place more in the account's reserve than we have available in the pot
+			let amount = max_amount.min(T::Currency::balance(&our_account));
+
+			// Burn fungible counterparts.
+			T::Counterpart::burn_from(
+				&who,
+				T::CounterpartAmount::convert(receipt.proportion),
+				Exact,
+				Polite,
+			)?;
+
+			// Transfer the funds from the pot to the owner and reserve
+			let reason = T::HoldReason::get();
+			let us = Self::account_id();
+			T::Currency::transfer_and_hold(&reason, &us, &who, amount, Exact, Expendable, Polite)?;
+
+			// Record that we've moved the amount reserved.
+			summary.receipts_on_hold.saturating_accrue(amount);
+
+			receipt.owner = Some((who, amount));
+
+			Summary::<T>::put(&summary);
+			Receipts::<T>::insert(index, &receipt);
+
+			Ok(())
+		}
 	}
 
 	/// Issuance information returned by `issuance()`.
-	#[derive(RuntimeDebug)]
+	#[derive(Debug)]
 	pub struct IssuanceInfo<Balance> {
-		/// The balance held in reserve by this pallet instance.
+		/// The balance held by this pallet instance together with the balances on hold across
+		/// all receipt-owning accounts.
 		pub holdings: Balance,
 		/// The (non-ignored) issuance in the system, not including this pallet's account.
 		pub other: Balance,
 		/// The effective total issuance, hypothetically if all outstanding receipts were thawed at
 		/// present.
 		pub effective: Balance,
-		/// The amount needed to be the pallet instance's account in case all outstanding receipts
-		/// were thawed at present.
+		/// The amount needed to be accessible to this pallet in case all outstanding receipts were
+		/// thawed at present. If it is more than `holdings`, then the pallet will need funding.
 		pub required: Balance,
 	}
 
-	impl<T: Config> NonfungibleInspect<T::AccountId> for Pallet<T> {
+	impl<T: Config> NftInspect<T::AccountId> for Pallet<T> {
 		type ItemId = ReceiptIndex;
 
 		fn owner(item: &ReceiptIndex) -> Option<T::AccountId> {
-			Receipts::<T>::get(item).map(|r| r.who)
+			Receipts::<T>::get(item).and_then(|r| r.owner).map(|(who, _)| who)
 		}
 
 		fn attribute(item: &Self::ItemId, key: &[u8]) -> Option<Vec<u8>> {
@@ -733,20 +944,26 @@ pub mod pallet {
 			match key {
 				b"proportion" => Some(item.proportion.encode()),
 				b"expiry" => Some(item.expiry.encode()),
+				b"owner" => item.owner.as_ref().map(|x| x.0.encode()),
+				b"on_hold" => item.owner.as_ref().map(|x| x.1.encode()),
 				_ => None,
 			}
 		}
 	}
 
-	impl<T: Config> NonfungibleTransfer<T::AccountId> for Pallet<T> {
-		fn transfer(index: &ReceiptIndex, destination: &T::AccountId) -> DispatchResult {
+	impl<T: Config> NftTransfer<T::AccountId> for Pallet<T> {
+		fn transfer(index: &ReceiptIndex, dest: &T::AccountId) -> DispatchResult {
 			let mut item = Receipts::<T>::get(index).ok_or(TokenError::UnknownAsset)?;
-			let from = item.who;
-			item.who = destination.clone();
+			let (owner, on_hold) = item.owner.take().ok_or(Error::<T>::AlreadyCommunal)?;
+
+			let reason = T::HoldReason::get();
+			T::Currency::transfer_on_hold(&reason, &owner, dest, on_hold, Exact, OnHold, Polite)?;
+
+			item.owner = Some((dest.clone(), on_hold));
 			Receipts::<T>::insert(&index, &item);
 			Pallet::<T>::deposit_event(Event::<T>::Transferred {
-				from,
-				to: item.who,
+				from: owner,
+				to: dest.clone(),
 				index: *index,
 			});
 			Ok(())
@@ -780,8 +997,9 @@ pub mod pallet {
 			summary: &SummaryRecordOf<T>,
 		) -> IssuanceInfo<BalanceOf<T>> {
 			let total_issuance =
-				T::Currency::total_issuance().saturating_sub(T::IgnoredIssuance::get());
-			let holdings = T::Currency::free_balance(our_account);
+				T::Currency::active_issuance().saturating_sub(T::IgnoredIssuance::get());
+			let holdings =
+				T::Currency::balance(our_account).saturating_add(summary.receipts_on_hold);
 			let other = total_issuance.saturating_sub(holdings);
 			let effective =
 				summary.proportion_owed.left_from_one().saturating_reciprocal_mul(other);
@@ -893,7 +1111,7 @@ pub mod pallet {
 		pub(crate) fn process_bid(
 			mut bid: BidOf<T>,
 			expiry: T::BlockNumber,
-			our_account: &T::AccountId,
+			_our_account: &T::AccountId,
 			issuance: &IssuanceInfo<BalanceOf<T>>,
 			remaining: &mut BalanceOf<T>,
 			queue_amount: &mut BalanceOf<T>,
@@ -906,10 +1124,8 @@ pub mod pallet {
 			} else {
 				None
 			};
-			let amount = bid.amount.saturating_sub(T::Currency::unreserve(&bid.who, bid.amount));
-			if T::Currency::transfer(&bid.who, &our_account, amount, AllowDeath).is_err() {
-				return result
-			}
+			let amount = bid.amount;
+			summary.receipts_on_hold.saturating_accrue(amount);
 
 			// Can never overflow due to block above.
 			remaining.saturating_reduce(amount);
@@ -920,7 +1136,9 @@ pub mod pallet {
 			// Now to activate the bid...
 			let n = amount;
 			let d = issuance.effective;
-			let proportion = Perquintill::from_rational(n, d);
+			let proportion =
+				Perquintill::from_rational_with_rounding(n, d, Rounding::NearestPrefDown)
+					.defensive_unwrap_or_default();
 			let who = bid.who;
 			let index = summary.index;
 			summary.proportion_owed.defensive_saturating_accrue(proportion);
@@ -928,12 +1146,9 @@ pub mod pallet {
 
 			let e = Event::Issued { index, expiry, who: who.clone(), amount, proportion };
 			Self::deposit_event(e);
-			let receipt = ReceiptRecord { proportion, who: who.clone(), expiry };
+			let receipt = ReceiptRecord { proportion, owner: Some((who, amount)), expiry };
 			Receipts::<T>::insert(index, receipt);
 
-			// issue the fungible counterpart
-			let fung_eq = T::CounterpartAmount::convert(proportion);
-			let _ = T::Counterpart::mint_into(&who, fung_eq).defensive();
 			result
 		}
 	}

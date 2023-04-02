@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -144,7 +144,9 @@ impl<Block: BlockT> StorageNotifications<Block> {
 		filter_keys: Option<&[StorageKey]>,
 		filter_child_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
 	) -> StorageEventStream<Block::Hash> {
-		let receiver = self.0.subscribe(registry::SubscribeOp { filter_keys, filter_child_keys });
+		let receiver = self
+			.0
+			.subscribe(registry::SubscribeOp { filter_keys, filter_child_keys }, 100_000);
 
 		StorageEventStream(receiver)
 	}
