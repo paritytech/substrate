@@ -144,7 +144,7 @@ pallet_staking_reward_curve::build! {
 }
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
-	pub const ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
+	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<RuntimeCall, ()>;

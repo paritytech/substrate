@@ -141,7 +141,7 @@ pallet_staking_reward_curve::build! {
 }
 
 parameter_types! {
-	pub const ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
+	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
 }
 
 pub struct OnChainSeqPhragmen;
