@@ -157,12 +157,15 @@ pub trait AuthorityDiscovery<Block: BlockT> {
 	/// Retrieve authority identifiers of the current and next authority set.
 	async fn authorities(&self, at: Block::Hash)
 		-> std::result::Result<Vec<AuthorityId>, ApiError>;
+
+	/// Retrieve best block hash
+	async fn best_hash(&self) -> std::result::Result<Block::Hash, Error>;
 }
 
 #[async_trait::async_trait]
 impl<Block, T> AuthorityDiscovery<Block> for T
 where
-	T: ProvideRuntimeApi<Block> + Send + Sync,
+	T: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync,
 	T::Api: AuthorityDiscoveryApi<Block>,
 	Block: BlockT,
 {
@@ -172,13 +175,17 @@ where
 	) -> std::result::Result<Vec<AuthorityId>, ApiError> {
 		self.runtime_api().authorities(at)
 	}
+
+	async fn best_hash(&self) -> std::result::Result<Block::Hash, Error> {
+		Ok(self.info().best_hash)
+	}
 }
 
 impl<Client, Network, Block, DhtEventStream> Worker<Client, Network, Block, DhtEventStream>
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: AuthorityDiscovery<Block> + HeaderBackend<Block> + 'static,
+	Client: AuthorityDiscovery<Block> + 'static,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Construct a [`Worker`].
@@ -376,7 +383,7 @@ where
 	}
 
 	async fn refill_pending_lookups_queue(&mut self) -> Result<()> {
-		let best_hash = self.client.info().best_hash;
+		let best_hash = self.client.best_hash().await?;
 
 		let local_keys = match &self.role {
 			Role::PublishAndDiscover(key_store) => key_store
@@ -594,7 +601,7 @@ where
 			.into_iter()
 			.collect::<HashSet<_>>();
 
-		let best_hash = client.info().best_hash;
+		let best_hash = client.best_hash().await?;
 		let authorities = client
 			.authorities(best_hash)
 			.await
