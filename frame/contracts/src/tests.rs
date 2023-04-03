@@ -2901,6 +2901,45 @@ fn ecdsa_recover() {
 }
 
 #[test]
+fn result_returns_events() {
+	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+
+		let addr = Contracts::bare_instantiate(
+			ALICE,
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm),
+			vec![],
+			vec![],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			vec![],
+			false,
+			Determinism::Enforced,
+		);
+
+		let events = result.events.unwrap();
+		assert_return_code!(&result.result.unwrap(), RuntimeReturnCode::Success);
+		assert!(!events.is_empty());
+		assert_eq!(events, System::events());
+	});
+}
+
+#[test]
 fn upload_code_works() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 
