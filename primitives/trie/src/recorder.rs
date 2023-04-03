@@ -536,7 +536,7 @@ mod tests {
 		for _ in 0..4 {
 			recorder.commit_transaction().unwrap();
 		}
-                assert_eq!(0, recorder.inner.lock().transactions.len());
+		assert_eq!(0, recorder.inner.lock().transactions.len());
 		assert_eq!(stats, RecorderStats::extract(&recorder));
 
 		let storage_proof = recorder.to_storage_proof();
