@@ -131,7 +131,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1).
 		#[pallet::call_index(0)]
-		#[pallet::weight(50_000_000)]
+		#[pallet::weight({50_000_000})]
 		pub fn set_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -160,7 +160,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1).
 		#[pallet::call_index(1)]
-		#[pallet::weight(70_000_000)]
+		#[pallet::weight({70_000_000})]
 		pub fn clear_name(origin: OriginFor<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -183,7 +183,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1).
 		#[pallet::call_index(2)]
-		#[pallet::weight(70_000_000)]
+		#[pallet::weight({70_000_000})]
 		pub fn kill_name(origin: OriginFor<T>, target: AccountIdLookupOf<T>) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
@@ -207,7 +207,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1).
 		#[pallet::call_index(3)]
-		#[pallet::weight(70_000_000)]
+		#[pallet::weight({70_000_000})]
 		pub fn force_name(
 			origin: OriginFor<T>,
 			target: AccountIdLookupOf<T>,
