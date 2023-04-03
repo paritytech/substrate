@@ -43,18 +43,22 @@ fn setup_proposal<T: Config<I>, I: 'static>(
 	(caller, value, beneficiary_lookup)
 }
 
+const asset_kind: AssetId = 0;
+
 // Create the pre-requisite information needed to create a treasury `spend` call.
-fn setup_spend_call<T: Config<I, AssetKind = u32>, I: 'static>(
+fn setup_spend_call<T: Config<I>, I: 'static>(
 	u: u32,
 ) -> (T::AssetKind, T::AccountId, PayBalanceOf<T, I>, AccountIdLookupOf<T>) {
 	let caller = account("caller", u, SEED);
 	// let _ = Assets::force_create(RuntimeOrigin::root(), 0, &caller, true, 100);
 	// let _ = Assets::mint_into(0, &caller, 100);
 
-	let value: PayBalanceOf<T, I> = 1000;
+
+	// TODO: add to seed so value is not empty
+	let value: PayBalanceOf<T, I> = SEED.into();
 	let beneficiary = account("beneficiary", u, SEED);
 	let beneficiary_lookup = T::Lookup::unlookup(beneficiary);
-	(0, caller, value, beneficiary_lookup)
+	(asset_kind, caller, value, beneficiary_lookup)
 }
 
 // Create proposals that are approved for use in `on_initialize`.
@@ -74,8 +78,8 @@ fn create_pending_payments<T: Config<I, AssetKind = u32>, I: 'static>(
 	n: u32,
 ) -> Result<(), &'static str> {
 	for i in 0..n {
-		let (caller, value, lookup) = setup_spend_call::<T, I>(i);
-		Treasury::<T, I>::spend(RawOrigin::Signed(caller).into(), 0, value, lookup)?;
+		let (asset_kind, caller, value, lookup) = setup_spend_call::<T, I>(i);
+		Treasury::<T, I>::spend(RawOrigin::Signed(caller).into(), asset_kind, value, lookup)?;
 	}
 	ensure!(<PendingPayments<T, I>>::count() == n, "Enpty pending payments storage");
 	Ok(())
@@ -116,7 +120,7 @@ benchmarks_instance_pallet! {
 		let (asset_kind, _, value, beneficiary_lookup) = setup_spend_call::<T, _>(SEED);
 		let origin = T::SpendOrigin::try_successful_origin();
 		let beneficiary = T::Lookup::lookup(beneficiary_lookup.clone()).unwrap();
-		let call = Call::<T, I>::spend { asset_kind: 0, amount: value, beneficiary: beneficiary_lookup };
+		let call = Call::<T, I>::spend { asset_kind, amount: value, beneficiary: beneficiary_lookup };
 	}: {
 		if let Ok(origin) = origin.clone() {
 			call.dispatch_bypass_filter(origin)?;
