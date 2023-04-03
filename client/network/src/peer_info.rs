@@ -221,13 +221,13 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 			local_addr,
 			remote_addr,
 		)?;
-		let identity_handler = self.identify.handle_established_inbound_connection(
+		let identify_handler = self.identify.handle_established_inbound_connection(
 			connection_id,
 			peer,
 			local_addr,
 			remote_addr,
 		)?;
-		Ok(ping_handler.select(identity_handler))
+		Ok(ping_handler.select(identify_handler))
 	}
 
 	fn handle_established_outbound_connection(
@@ -243,13 +243,13 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 			addr,
 			role_override,
 		)?;
-		let identity_handler = self.identify.handle_established_outbound_connection(
+		let identify_handler = self.identify.handle_established_outbound_connection(
 			connection_id,
 			peer,
 			addr,
 			role_override,
 		)?;
-		Ok(ping_handler.select(identity_handler))
+		Ok(ping_handler.select(identify_handler))
 	}
 
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {

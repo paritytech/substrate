@@ -257,12 +257,12 @@ impl From<(ProtocolName, RequestId)> for ProtocolRequestId {
 pub struct RequestResponsesBehaviour {
 	/// The multiple sub-protocols, by name.
 	///
-	/// Contains the underlying libp2p [`Behaviour`] behaviour, plus an optional
+	/// Contains the underlying libp2p request-response [`Behaviour`], plus an optional
 	/// "response builder" used to build responses for incoming requests.
 	protocols:
 		HashMap<ProtocolName, (Behaviour<GenericCodec>, Option<mpsc::Sender<IncomingRequest>>)>,
 
-	/// Pending requests, passed down to a [`Behaviour`] behaviour, awaiting a reply.
+	/// Pending requests, passed down to a request-response [`Behaviour`], awaiting a reply.
 	pending_requests:
 		HashMap<ProtocolRequestId, (Instant, oneshot::Sender<Result<Vec<u8>, RequestFailure>>)>,
 
@@ -620,7 +620,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						// initialization.
 						if let Some(mut resp_builder) = resp_builder {
 							// If the response builder is too busy, silently drop `tx`. This
-							// will be reported by the corresponding [`Behaviour`] through
+							// will be reported by the corresponding request-response [`Behaviour`] through
 							// an `InboundFailure::Omission` event.
 							let _ = resp_builder.try_send(IncomingRequest {
 								peer,
@@ -673,7 +673,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 					if let Some((protocol, _)) = self.protocols.get_mut(&*protocol_name) {
 						if protocol.send_response(inner_channel, Ok(payload)).is_err() {
 							// Note: Failure is handled further below when receiving
-							// `InboundFailure` event from [`Behaviour`] behaviour.
+							// `InboundFailure` event from request-response [`Behaviour`].
 							log::debug!(
 								target: "sub-libp2p",
 								"Failed to send response for {:?} on protocol {:?} due to a \
