@@ -506,7 +506,7 @@ mod test {
 
 		let fields = vec![
 			Field::AuthenticityProof(proof.clone()),
-			Field::DecryptionKey(decryption_key.clone()),
+			Field::DecryptionKey(decryption_key),
 			Field::Priority(priority),
 			Field::Channel(channel),
 			Field::Topic1(topic1),
