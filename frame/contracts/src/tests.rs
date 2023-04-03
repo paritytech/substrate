@@ -344,8 +344,8 @@ parameter_types! {
 	};
 	pub static DepositPerByte: BalanceOf<Test> = 1;
 	pub const DepositPerItem: BalanceOf<Test> = 2;
-	// We set it to maximum for running benchmarks
-	pub const DefaultDepositLimit: BalanceOf<Test> = Balance::max_value();
+	// We need this one set high enough for running benchmarks.
+	pub const DefaultDepositLimit: BalanceOf<Test> = 10_000_000;
 }
 
 impl Convert<Weight, BalanceOf<Self>> for Test {
@@ -4190,7 +4190,7 @@ fn deposit_limit_in_nested_instantiate() {
 
 		let callee_info_len = ContractInfoOf::<Test>::get(&addr).unwrap().encoded_size() as u64;
 
-		// We don't set a special deposit limit for the netsted instantiation.
+		// We don't set a special deposit limit for the nested instantiation.
 		//
 		// The deposit limit set for the parent is insufficient for the instantiation, which
 		// requires:
