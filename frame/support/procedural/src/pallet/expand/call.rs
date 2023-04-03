@@ -62,6 +62,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 
 		let warning = proc_macro_warning::Warning::new_deprecated("ImplicitCallIndex")
+			.index(call_index_warnings.len())
 			.old("use implicit call indices")
 			.alternative("ensure that all calls have the `pallet::call_index` attribute or that the `dev-mode` of the pallet is enabled")
 			.help_links(&[
@@ -83,9 +84,10 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		match weight {
 			syn::Expr::Lit(lit) => {
 				let warning = proc_macro_warning::Warning::new_deprecated("ConstantWeight")
+					.index(weight_warnings.len())
 					.old("use hard-coded constant as call weight")
 					.alternative("benchmark all calls or put the pallet into `dev` mode")
-					.help_link("TODO")
+					.help_link("https://github.com/paritytech/substrate/pull/13798")
 					.span(lit.span())
 					.build();
 				weight_warnings.push(warning);
