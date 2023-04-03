@@ -76,9 +76,6 @@ fn initialize(
 					wasm_bulk_memory: false,
 					wasm_reference_types: false,
 					wasm_simd: false,
-					wasm_threads: false,
-					wasm_multi_memory: false,
-					wasm_memory64: false,
 				},
 			};
 

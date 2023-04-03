@@ -329,9 +329,9 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	config.wasm_simd(semantics.wasm_simd);
 	config.wasm_bulk_memory(semantics.wasm_bulk_memory);
 	config.wasm_multi_value(semantics.wasm_multi_value);
-	config.wasm_multi_memory(semantics.wasm_multi_memory);
-	config.wasm_threads(semantics.wasm_threads);
-	config.wasm_memory64(semantics.wasm_memory64);
+	config.wasm_multi_memory(false);
+	config.wasm_threads(false);
+	config.wasm_memory64(false);
 
 	let (use_pooling, use_cow) = match semantics.instantiation_strategy {
 		InstantiationStrategy::PoolingCopyOnWrite => (true, true),
@@ -516,15 +516,6 @@ pub struct Semantics {
 
 	/// Enables WASM Fixed-Width SIMD proposal
 	pub wasm_simd: bool,
-
-	/// Enables WASM Threads and Atomics proposal
-	pub wasm_threads: bool,
-
-	/// Enables WASM Multi-Memory proposal
-	pub wasm_multi_memory: bool,
-
-	/// Enables WASM Memory64 proposal
-	pub wasm_memory64: bool,
 }
 
 #[derive(Clone)]
