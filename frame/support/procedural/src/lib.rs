@@ -1431,7 +1431,9 @@ pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
 /// ```
 ///
 /// For ease of usage, when no `#[derive]` attributes are found for the enum under
-/// `#[pallet::composable_enum]`, the aforementioned traits are automatically derived for it.
+/// `#[pallet::composable_enum]`, the aforementioned traits are automatically derived for it. The
+/// inverse is also true: if there are any `#[derive]` attributes found for the enum, then no traits
+/// will automatically be derived for it.
 #[proc_macro_attribute]
 pub fn composable_enum(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()

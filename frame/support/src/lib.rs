@@ -2297,6 +2297,9 @@ pub mod pallet_prelude {
 /// Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo,
 /// RuntimeDebug
 /// ```
+/// 
+/// The inverse is also true: if there are any #[derive] attributes present for the enum, then the
+/// attribute will not automatically derive any of the traits described above.
 ///
 /// # General notes on instantiable pallets
 ///
