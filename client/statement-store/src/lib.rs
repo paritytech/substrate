@@ -233,10 +233,8 @@ impl Index {
 		}
 		let priority = statement.priority().unwrap_or(0);
 		self.entries.insert(hash, (account, global_priority, priority));
-		self.by_global_priority.insert(
-			PriorityKey { hash, priority: global_priority },
-			statement.data_len(),
-		);
+		self.by_global_priority
+			.insert(PriorityKey { hash, priority: global_priority }, statement.data_len());
 		self.total_size += statement.data_len();
 		let mut account_info = self.accounts.entry(account).or_default();
 		account_info.data_size += statement.data_len();
