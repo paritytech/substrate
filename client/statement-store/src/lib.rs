@@ -1043,7 +1043,7 @@ mod tests {
 		let mut statement = Statement::new();
 		statement.set_plain_data(vec![data]);
 		for i in 0..topics.len() {
-			statement.set_topic(i, topics[i].clone());
+			statement.set_topic(i, topics[i]);
 		}
 		let kp = sp_core::ed25519::Pair::from_string("//Alice", None).unwrap();
 		statement.sign_ed25519_private(&kp);
