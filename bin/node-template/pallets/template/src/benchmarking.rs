@@ -16,5 +16,12 @@ benchmarks! {
 		assert_eq!(Something::<T>::get(), Some(s));
 	}
 
+	cause_error {
+		Something::<T>::put(100u32);
+	}: _(RawOrigin::Signed(whitelisted_caller()))
+	verify {
+		assert_eq!(Something::<T>::get(), Some(101u32));
+	}
+
 	impl_benchmark_test_suite!(Template, crate::mock::new_test_ext(), crate::mock::Test);
 }
