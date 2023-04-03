@@ -114,7 +114,7 @@ impl Future for PendingStatement {
 		let mut this = self.project();
 
 		if let Poll::Ready(import_result) = Pin::new(&mut this.validation).poll_unpin(cx) {
-			return Poll::Ready((this.hash.clone(), import_result.ok()))
+			return Poll::Ready((*this.hash, import_result.ok()))
 		}
 
 		Poll::Pending
@@ -403,11 +403,11 @@ where
 				}
 
 				let hash = s.hash();
-				peer.known_statements.insert(hash.clone());
+				peer.known_statements.insert(hash);
 
 				self.network.report_peer(who, rep::ANY_STATEMENT);
 
-				match self.pending_statements_peers.entry(hash.clone()) {
+				match self.pending_statements_peers.entry(hash) {
 					Entry::Vacant(entry) => {
 						let (completion_sender, completion_receiver) = oneshot::channel();
 						if let Ok(()) = self.queue_sender.unbounded_send((s, completion_sender)) {
@@ -447,7 +447,7 @@ where
 
 		log::debug!(target: LOG_TARGET, "Propagating statement [{:?}]", hash);
 		if let Ok(Some(statement)) = self.statement_store.statement(hash) {
-			self.do_propagate_statements(&[(hash.clone(), statement)]);
+			self.do_propagate_statements(&[(*hash, statement)]);
 		}
 	}
 
@@ -462,7 +462,7 @@ where
 
 			let (hashes, to_send): (Vec<_>, Vec<_>) = statements
 				.iter()
-				.filter(|&(ref hash, _)| peer.known_statements.insert(hash.clone()))
+				.filter(|(hash, _)| peer.known_statements.insert(*hash))
 				.cloned()
 				.unzip();
 
