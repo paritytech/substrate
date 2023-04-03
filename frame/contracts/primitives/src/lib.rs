@@ -33,7 +33,7 @@ use sp_weights::Weight;
 ///
 /// It contains the execution result together with some auxiliary information.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct ContractResult<R, Balance, Event> {
+pub struct ContractResult<R, Balance> {
 	/// How much weight was consumed during execution.
 	pub gas_consumed: Weight,
 	/// How much weight is required as gas limit in order to execute this call.
@@ -71,16 +71,16 @@ pub struct ContractResult<R, Balance, Event> {
 	pub debug_message: Vec<u8>,
 	/// The execution result of the wasm code.
 	pub result: R,
-	pub events: Option<Vec<Event>>,
+	pub events: Option<Vec<Vec<u8>>>,
 }
 
 /// Result type of a `bare_call` call.
-pub type ContractExecResult<Balance, Event> =
-	ContractResult<Result<ExecReturnValue, DispatchError>, Balance, Event>;
+pub type ContractExecResult<Balance> =
+	ContractResult<Result<ExecReturnValue, DispatchError>, Balance>;
 
 /// Result type of a `bare_instantiate` call.
 pub type ContractInstantiateResult<AccountId, Balance> =
-	ContractResult<Result<InstantiateReturnValue<AccountId>, DispatchError>, Balance, ()>;
+	ContractResult<Result<InstantiateReturnValue<AccountId>, DispatchError>, Balance>;
 
 /// Result type of a `bare_code_upload` call.
 pub type CodeUploadResult<CodeHash, Balance> =
