@@ -620,8 +620,8 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						// initialization.
 						if let Some(mut resp_builder) = resp_builder {
 							// If the response builder is too busy, silently drop `tx`. This
-							// will be reported by the corresponding request-response [`Behaviour`] through
-							// an `InboundFailure::Omission` event.
+							// will be reported by the corresponding request-response [`Behaviour`]
+							// through an `InboundFailure::Omission` event.
 							let _ = resp_builder.try_send(IncomingRequest {
 								peer,
 								payload: request,
