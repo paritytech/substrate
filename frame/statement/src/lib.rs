@@ -170,14 +170,12 @@ where
 			.checked_div(&statement_cost)
 			.unwrap_or_default()
 			.saturated_into::<u32>()
-			.min(MAX_ALLOWED_STATEMENTS)
-			.max(MIN_ALLOWED_STATEMENTS);
+			.clamp(MIN_ALLOWED_STATEMENTS, MAX_ALLOWED_STATEMENTS);
 		let max_size = balance
 			.checked_div(&byte_cost)
 			.unwrap_or_default()
 			.saturated_into::<u32>()
-			.min(MAX_ALLOWED_BYTES)
-			.max(MIN_ALLOWED_BYTES);
+			.clamp(MIN_ALLOWED_BYTES, MAX_ALLOWED_BYTES);
 
 		Ok(ValidStatement { global_priority, max_count, max_size })
 	}
