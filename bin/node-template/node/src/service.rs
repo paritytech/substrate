@@ -178,22 +178,17 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		Vec::default(),
 	));
 
-	let (
-		network,
-		system_rpc_tx,
-		tx_handler_controller,
-		network_starter,
-		sync_service,
-	) = sc_service::build_network(sc_service::BuildNetworkParams {
-		config: &config,
-		client: client.clone(),
-		transaction_pool: transaction_pool.clone(),
-		statement_store: statement_store.clone(),
-		spawn_handle: task_manager.spawn_handle(),
-		import_queue,
-		block_announce_validator_builder: None,
-		warp_sync_params: Some(WarpSyncParams::WithProvider(warp_sync)),
-	})?;
+	let (network, system_rpc_tx, tx_handler_controller, network_starter, sync_service) =
+		sc_service::build_network(sc_service::BuildNetworkParams {
+			config: &config,
+			client: client.clone(),
+			transaction_pool: transaction_pool.clone(),
+			statement_store: statement_store.clone(),
+			spawn_handle: task_manager.spawn_handle(),
+			import_queue,
+			block_announce_validator_builder: None,
+			warp_sync_params: Some(WarpSyncParams::WithProvider(warp_sync)),
+		})?;
 
 	if config.offchain_worker.enabled {
 		sc_service::build_offchain_workers(

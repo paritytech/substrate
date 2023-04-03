@@ -960,7 +960,8 @@ where
 				spawn_handle.spawn("network-statement-validator", Some("networking"), fut);
 			})
 		};
-		let statement_handler_proto = statement_handler_proto.expect("statement_handler_proto is always created when statement_store is `Some`");
+		let statement_handler_proto = statement_handler_proto
+			.expect("statement_handler_proto is always created when statement_store is `Some`");
 		let statement_handler = statement_handler_proto.build(
 			network.clone(),
 			sync_service.clone(),
@@ -968,7 +969,11 @@ where
 			config.prometheus_config.as_ref().map(|config| &config.registry),
 			statement_protocol_executor,
 		)?;
-		spawn_handle.spawn("network-statement-handler", Some("networking"), statement_handler.run());
+		spawn_handle.spawn(
+			"network-statement-handler",
+			Some("networking"),
+			statement_handler.run(),
+		);
 	}
 
 	spawn_handle.spawn_blocking(
