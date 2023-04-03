@@ -18,7 +18,7 @@
 //! The crate's benchmarks.
 
 use super::*;
-use crate::{pallet as pallet_treasury_oracle, Pallet as TreasuryOracle};
+use crate::{pallet as pallet_asset_rate, Pallet as AssetRate};
 
 use frame_benchmarking::v2::*;
 use frame_support::assert_ok;
@@ -41,7 +41,7 @@ mod benchmarks {
 		_(RawOrigin::Root, asset_id, default_conversion_rate());
 
 		assert_eq!(
-			pallet_treasury_oracle::ConversionRateToNative::<T>::get(asset_id),
+			pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id),
 			Some(default_conversion_rate())
 		);
 		Ok(())
@@ -50,7 +50,7 @@ mod benchmarks {
 	#[benchmark]
 	fn update() -> Result<(), BenchmarkError> {
 		let asset_id: T::AssetId = ASSET_ID.into();
-		assert_ok!(TreasuryOracle::<T>::create(
+		assert_ok!(AssetRate::<T>::create(
 			RawOrigin::Root.into(),
 			asset_id,
 			default_conversion_rate()
@@ -60,7 +60,7 @@ mod benchmarks {
 		_(RawOrigin::Root, asset_id, FixedU128::from_u32(2));
 
 		assert_eq!(
-			pallet_treasury_oracle::ConversionRateToNative::<T>::get(asset_id),
+			pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id),
 			Some(FixedU128::from_u32(2))
 		);
 		Ok(())
@@ -69,7 +69,7 @@ mod benchmarks {
 	#[benchmark]
 	fn remove() -> Result<(), BenchmarkError> {
 		let asset_id: T::AssetId = ASSET_ID.into();
-		assert_ok!(TreasuryOracle::<T>::create(
+		assert_ok!(AssetRate::<T>::create(
 			RawOrigin::Root.into(),
 			ASSET_ID.into(),
 			default_conversion_rate()
@@ -78,9 +78,9 @@ mod benchmarks {
 		#[extrinsic_call]
 		_(RawOrigin::Root, asset_id);
 
-		assert!(pallet_treasury_oracle::ConversionRateToNative::<T>::get(asset_id).is_none());
+		assert!(pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id).is_none());
 		Ok(())
 	}
 
-	impl_benchmark_test_suite! { TreasuryOracle, crate::mock::new_test_ext(), crate::mock::Test }
+	impl_benchmark_test_suite! { AssetRate, crate::mock::new_test_ext(), crate::mock::Test }
 }

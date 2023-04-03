@@ -17,7 +17,7 @@
 
 //! The crate's mock.
 
-use crate as pallet_treasury_oracle;
+use crate as pallet_asset_rate;
 use frame_support::traits::{ConstU16, ConstU64};
 use sp_core::H256;
 use sp_runtime::{
@@ -35,7 +35,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		TreasuryOracle: pallet_treasury_oracle,
+		AssetRate: pallet_asset_rate,
 		Balances: pallet_balances,
 	}
 );
@@ -79,7 +79,7 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
-impl pallet_treasury_oracle::Config for Test {
+impl pallet_asset_rate::Config for Test {
 	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
 	type CreateOrigin = frame_system::EnsureRoot<u64>;

@@ -15,16 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Treasury Oracle Pallet
-//!
-//! A simple oracle pallet for the treasury.
+//! # Asset Rate Pallet
 //!
 //! - [`Config`]
 //! - [`Call`]
 //!
 //! ## Overview
 //!
-//! The TreasuryOracle pallet provides means of setting conversion rates
+//! The AssetRate pallet provides means of setting conversion rates
 //! for some asset to native balance.
 //!
 //! The supported dispatchable functions are documented in the [`Call`] enum.
@@ -39,7 +37,7 @@
 //!
 //! ### Goals
 //!
-//! The treasury-oracle system in Substrate is designed to make the following possible:
+//! The asset-rate system in Substrate is designed to make the following possible:
 //!
 //! * Whitelisting assets other than the native currency which can be accepted for Treasury spends.
 //! * Providing a soft conversion for the balance of whitelisted assets to native.
@@ -139,11 +137,11 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		// Some `asset_id` conversion rate was created.
-		Created { asset_id: T::AssetId, rate: FixedU128 },
+		AssetRateCreated { asset_id: T::AssetId, rate: FixedU128 },
 		// Some `asset_id` conversion rate was removed.
-		Removed { asset_id: T::AssetId },
+		AssetRateRemoved { asset_id: T::AssetId },
 		// Some existing `asset_id` conversion rate was updated from `old` to `new`.
-		Updated { asset_id: T::AssetId, old: FixedU128, new: FixedU128 },
+		AssetRateUpdated { asset_id: T::AssetId, old: FixedU128, new: FixedU128 },
 	}
 
 	#[pallet::error]
@@ -175,11 +173,11 @@ pub mod pallet {
 			);
 			ConversionRateToNative::<T>::set(asset_id, Some(rate));
 
-			Self::deposit_event(Event::Created { asset_id, rate });
+			Self::deposit_event(Event::AssetRateCreated { asset_id, rate });
 			Ok(())
 		}
 
-		/// Remove the conversion rate for the given asset.
+		/// Update the conversion rate for the given asset.
 		///
 		/// ## Complexity
 		/// - O(1)
@@ -204,11 +202,11 @@ pub mod pallet {
 				}
 			})?;
 
-			Self::deposit_event(Event::Updated { asset_id, old, new: rate });
+			Self::deposit_event(Event::AssetRateUpdated { asset_id, old, new: rate });
 			Ok(())
 		}
 
-		/// Update an existing conversion rate for the given asset.
+		/// Remove an existing conversion rate for the given asset.
 		///
 		/// ## Complexity
 		/// - O(1)
@@ -223,13 +221,14 @@ pub mod pallet {
 			);
 			ConversionRateToNative::<T>::remove(asset_id);
 
-			Self::deposit_event(Event::Removed { asset_id });
+			Self::deposit_event(Event::AssetRateRemoved { asset_id });
 			Ok(())
 		}
 	}
 }
 
 // Exposes conversion of an arbitrary balance of an asset to native balance.
+// TODO: Switch to `AssetBalanceToBalance` after merging Substrate #13610
 impl<T> BalanceConversion<BalanceOf<T>, AssetIdOf<T>, BalanceOf<T>> for Pallet<T>
 where
 	T: Config,

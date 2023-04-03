@@ -18,9 +18,9 @@
 //! The crate's tests.
 
 use super::*;
-use crate::pallet as pallet_treasury_oracle;
+use crate::pallet as pallet_asset_rate;
 use frame_support::{assert_noop, assert_ok};
-use mock::{new_test_ext, RuntimeOrigin, Test, TreasuryOracle};
+use mock::{new_test_ext, AssetRate, RuntimeOrigin, Test};
 use sp_runtime::FixedU128;
 
 const ASSET_ID: u32 = 42;
@@ -28,15 +28,11 @@ const ASSET_ID: u32 = 42;
 #[test]
 fn create_works() {
 	new_test_ext().execute_with(|| {
-		assert!(pallet_treasury_oracle::ConversionRateToNative::<Test>::get(ASSET_ID).is_none());
-		assert_ok!(TreasuryOracle::create(
-			RuntimeOrigin::root(),
-			ASSET_ID,
-			FixedU128::from_float(0.1)
-		));
+		assert!(pallet_asset_rate::ConversionRateToNative::<Test>::get(ASSET_ID).is_none());
+		assert_ok!(AssetRate::create(RuntimeOrigin::root(), ASSET_ID, FixedU128::from_float(0.1)));
 
 		assert_eq!(
-			pallet_treasury_oracle::ConversionRateToNative::<Test>::get(ASSET_ID),
+			pallet_asset_rate::ConversionRateToNative::<Test>::get(ASSET_ID),
 			Some(FixedU128::from_float(0.1))
 		);
 	});
@@ -45,15 +41,11 @@ fn create_works() {
 #[test]
 fn create_existing_throws() {
 	new_test_ext().execute_with(|| {
-		assert!(pallet_treasury_oracle::ConversionRateToNative::<Test>::get(ASSET_ID).is_none());
-		assert_ok!(TreasuryOracle::create(
-			RuntimeOrigin::root(),
-			ASSET_ID,
-			FixedU128::from_float(0.1)
-		));
+		assert!(pallet_asset_rate::ConversionRateToNative::<Test>::get(ASSET_ID).is_none());
+		assert_ok!(AssetRate::create(RuntimeOrigin::root(), ASSET_ID, FixedU128::from_float(0.1)));
 
 		assert_noop!(
-			TreasuryOracle::create(RuntimeOrigin::root(), ASSET_ID, FixedU128::from_float(0.1)),
+			AssetRate::create(RuntimeOrigin::root(), ASSET_ID, FixedU128::from_float(0.1)),
 			Error::<Test>::AlreadyExists
 		);
 	});
@@ -62,14 +54,10 @@ fn create_existing_throws() {
 #[test]
 fn remove_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(TreasuryOracle::create(
-			RuntimeOrigin::root(),
-			ASSET_ID,
-			FixedU128::from_float(0.1)
-		));
+		assert_ok!(AssetRate::create(RuntimeOrigin::root(), ASSET_ID, FixedU128::from_float(0.1)));
 
-		assert_ok!(TreasuryOracle::remove(RuntimeOrigin::root(), ASSET_ID,));
-		assert!(pallet_treasury_oracle::ConversionRateToNative::<Test>::get(ASSET_ID).is_none());
+		assert_ok!(AssetRate::remove(RuntimeOrigin::root(), ASSET_ID,));
+		assert!(pallet_asset_rate::ConversionRateToNative::<Test>::get(ASSET_ID).is_none());
 	});
 }
 
@@ -77,7 +65,7 @@ fn remove_works() {
 fn remove_unknown_throws() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			TreasuryOracle::remove(RuntimeOrigin::root(), ASSET_ID,),
+			AssetRate::remove(RuntimeOrigin::root(), ASSET_ID,),
 			Error::<Test>::UnknownAssetId
 		);
 	});
@@ -86,19 +74,11 @@ fn remove_unknown_throws() {
 #[test]
 fn update_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(TreasuryOracle::create(
-			RuntimeOrigin::root(),
-			ASSET_ID,
-			FixedU128::from_float(0.1)
-		));
-		assert_ok!(TreasuryOracle::update(
-			RuntimeOrigin::root(),
-			ASSET_ID,
-			FixedU128::from_float(0.5)
-		));
+		assert_ok!(AssetRate::create(RuntimeOrigin::root(), ASSET_ID, FixedU128::from_float(0.1)));
+		assert_ok!(AssetRate::update(RuntimeOrigin::root(), ASSET_ID, FixedU128::from_float(0.5)));
 
 		assert_eq!(
-			pallet_treasury_oracle::ConversionRateToNative::<Test>::get(ASSET_ID),
+			pallet_asset_rate::ConversionRateToNative::<Test>::get(ASSET_ID),
 			Some(FixedU128::from_float(0.5))
 		);
 	});
@@ -108,7 +88,7 @@ fn update_works() {
 fn update_unknown_throws() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			TreasuryOracle::update(RuntimeOrigin::root(), ASSET_ID, FixedU128::from_float(0.5)),
+			AssetRate::update(RuntimeOrigin::root(), ASSET_ID, FixedU128::from_float(0.5)),
 			Error::<Test>::UnknownAssetId
 		);
 	});
@@ -117,15 +97,11 @@ fn update_unknown_throws() {
 #[test]
 fn convert_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(TreasuryOracle::create(
-			RuntimeOrigin::root(),
-			ASSET_ID,
-			FixedU128::from_float(2.51)
-		));
+		assert_ok!(AssetRate::create(RuntimeOrigin::root(), ASSET_ID, FixedU128::from_float(2.51)));
 
-		let conversion = <TreasuryOracle as BalanceConversion<
+		let conversion = <AssetRate as BalanceConversion<
 			BalanceOf<Test>,
-			<Test as pallet_treasury_oracle::Config>::AssetId,
+			<Test as pallet_asset_rate::Config>::AssetId,
 			BalanceOf<Test>,
 		>>::to_asset_balance(10, ASSET_ID);
 		assert_eq!(conversion.expect("Conversion rate exists for asset"), 25);
@@ -135,9 +111,9 @@ fn convert_works() {
 #[test]
 fn convert_unknown_throws() {
 	new_test_ext().execute_with(|| {
-		let conversion = <TreasuryOracle as BalanceConversion<
+		let conversion = <AssetRate as BalanceConversion<
 			BalanceOf<Test>,
-			<Test as pallet_treasury_oracle::Config>::AssetId,
+			<Test as pallet_asset_rate::Config>::AssetId,
 			BalanceOf<Test>,
 		>>::to_asset_balance(10, ASSET_ID);
 		assert!(conversion.is_err());

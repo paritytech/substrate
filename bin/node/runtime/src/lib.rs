@@ -1114,7 +1114,7 @@ impl pallet_treasury::Config for Runtime {
 	type SpendOrigin = EnsureWithSuccess<EnsureRoot<AccountId>, AccountId, MaxBalance>;
 }
 
-impl pallet_treasury_oracle::Config for Runtime {
+impl pallet_asset_rate::Config for Runtime {
 	type CreateOrigin = EnsureRoot<AccountId>;
 	type RemoveOrigin = EnsureRoot<AccountId>;
 	type UpdateOrigin = EnsureRoot<AccountId>;
@@ -1122,7 +1122,7 @@ impl pallet_treasury_oracle::Config for Runtime {
 	type Currency = Balances;
 	type AssetId = u32;
 	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = pallet_treasury_oracle::weights::SubstrateWeight<Runtime>;
+	type WeightInfo = pallet_asset_rate::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -1769,7 +1769,7 @@ construct_runtime!(
 		TechnicalMembership: pallet_membership::<Instance1>,
 		Grandpa: pallet_grandpa,
 		Treasury: pallet_treasury,
-		TreasuryOracle: pallet_treasury_oracle,
+		AssetRate: pallet_asset_rate,
 		Contracts: pallet_contracts,
 		Sudo: pallet_sudo,
 		ImOnline: pallet_im_online,
@@ -1927,7 +1927,7 @@ mod benches {
 		[pallet_tips, Tips]
 		[pallet_transaction_storage, TransactionStorage]
 		[pallet_treasury, Treasury]
-		[pallet_treasury_oracle, TreasuryOracle]
+		[pallet_asset_rate, AssetRate]
 		[pallet_uniques, Uniques]
 		[pallet_nfts, Nfts]
 		[pallet_utility, Utility]

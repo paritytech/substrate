@@ -166,7 +166,7 @@ members = [
 	"frame/transaction-payment/rpc/runtime-api",
 	"frame/transaction-storage",
 	"frame/treasury",
-	"frame/treasury-oracle",
+	"frame/asset-rate",
 	"frame/tips",
 	"frame/uniques",
 	"frame/utility",

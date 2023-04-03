@@ -1,5 +1,5 @@
 [package]
-name = "pallet-treasury-oracle"
+name = "pallet-asset-rate"
 version = "4.0.0-dev"
 description = "Whitelist non-native assets for treasury spending and provide conversion to native balance"
 authors = ["William Freudenberger <w.freude@icloud.com>"]
