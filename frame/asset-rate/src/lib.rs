@@ -154,7 +154,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Initialize a conversion rate for the given asset.
+		/// Initialize a conversion rate to native balance for the given asset.
 		///
 		/// ## Complexity
 		/// - O(1)
@@ -177,7 +177,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Update the conversion rate for the given asset.
+		/// Update the conversion rate to native balance for the given asset.
 		///
 		/// ## Complexity
 		/// - O(1)
@@ -206,7 +206,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Remove an existing conversion rate for the given asset.
+		/// Remove an existing conversion rate to native balance for the given asset.
 		///
 		/// ## Complexity
 		/// - O(1)
