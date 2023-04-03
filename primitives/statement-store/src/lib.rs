@@ -302,7 +302,7 @@ impl Statement {
 				let signature = sp_core::sr25519::Signature(*signature);
 				let public = sp_core::sr25519::Public(*signer);
 				if signature.verify(to_sign.as_slice(), &public) {
-					SignatureVerificationResult::Valid(signer.clone())
+					SignatureVerificationResult::Valid(*signer)
 				} else {
 					SignatureVerificationResult::Invalid
 				}
@@ -312,7 +312,7 @@ impl Statement {
 				let signature = sp_core::ed25519::Signature(*signature);
 				let public = sp_core::ed25519::Public(*signer);
 				if signature.verify(to_sign.as_slice(), &public) {
-					SignatureVerificationResult::Valid(signer.clone())
+					SignatureVerificationResult::Valid(*signer)
 				} else {
 					SignatureVerificationResult::Invalid
 				}
@@ -341,7 +341,7 @@ impl Statement {
 	/// Returns a topic by topic index.
 	pub fn topic(&self, index: usize) -> Option<Topic> {
 		if index < self.num_topics as usize {
-			Some(self.topics[index].clone())
+			Some(self.topics[index])
 		} else {
 			None
 		}
@@ -349,7 +349,7 @@ impl Statement {
 
 	/// Returns decryption key if any.
 	pub fn decryption_key(&self) -> Option<DecryptionKey> {
-		self.decryption_key.clone()
+		self.decryption_key
 	}
 
 	/// Convert to internal data.
@@ -379,12 +379,12 @@ impl Statement {
 
 	/// Get channel, if any.
 	pub fn channel(&self) -> Option<Channel> {
-		self.channel.clone()
+		self.channel
 	}
 
 	/// Get priority, if any.
 	pub fn priority(&self) -> Option<u32> {
-		self.priority.clone()
+		self.priority
 	}
 
 	/// Return encoded fields that can be signed to construct or verify a proof
@@ -494,11 +494,11 @@ mod test {
 		let channel = [0xcc; 32];
 
 		statement.set_proof(proof.clone());
-		statement.set_decryption_key(decryption_key.clone());
+		statement.set_decryption_key(decryption_key);
 		statement.set_priority(priority);
-		statement.set_channel(channel.clone());
-		statement.set_topic(0, topic1.clone());
-		statement.set_topic(1, topic2.clone());
+		statement.set_channel(channel);
+		statement.set_topic(0, topic1);
+		statement.set_topic(1, topic2);
 		statement.set_plain_data(data.clone());
 
 		statement.set_topic(5, [0x55; 32]);
@@ -509,8 +509,8 @@ mod test {
 			Field::DecryptionKey(decryption_key.clone()),
 			Field::Priority(priority),
 			Field::Channel(channel),
-			Field::Topic1(topic1.clone()),
-			Field::Topic2(topic2.clone()),
+			Field::Topic1(topic1),
+			Field::Topic2(topic2),
 			Field::Data(data.clone()),
 		];
 

@@ -127,7 +127,7 @@ where
 					log::debug!(target: LOG_TARGET, "Bad block hash.");
 					return Err(InvalidStatement::BadProof)
 				}
-				let account: T::AccountId = who.clone().into();
+				let account: T::AccountId = (*who).into();
 				match frame_system::Pallet::<T>::event_no_consensus(*event_index as usize) {
 					Some(e) => {
 						statement.strip_proof();

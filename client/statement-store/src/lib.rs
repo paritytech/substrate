@@ -226,15 +226,15 @@ impl Index {
 		}
 		let key = statement.decryption_key();
 		if let Some(k) = &key {
-			self.by_dec_key.entry(k.clone()).or_default().insert(hash);
+			self.by_dec_key.entry(*k).or_default().insert(hash);
 		}
 		if nt > 0 || key.is_some() {
 			self.statement_topics.insert(hash, (all_topics, key));
 		}
 		let priority = statement.priority().unwrap_or(0);
-		self.entries.insert(hash, (account.clone(), global_priority, priority));
+		self.entries.insert(hash, (account, global_priority, priority));
 		self.by_global_priority.insert(
-			PriorityKey { hash: hash.clone(), priority: global_priority },
+			PriorityKey { hash, priority: global_priority },
 			statement.data_len(),
 		);
 		self.total_size += statement.data_len();
@@ -329,7 +329,7 @@ impl Index {
 		let mut purged = Vec::new();
 		self.expired.retain(|hash, timestamp| {
 			if *timestamp + PURGE_AFTER <= current_time {
-				purged.push(hash.clone());
+				purged.push(*hash);
 				log::trace!(target: LOG_TARGET, "Purged statement {:?}", HexDisplay::from(hash));
 				false
 			} else {
@@ -341,15 +341,13 @@ impl Index {
 
 	fn make_expired(&mut self, hash: &Hash, current_time: u64) -> bool {
 		if let Some((account, global_priority, priority)) = self.entries.remove(hash) {
-			let key = PriorityKey { hash: hash.clone(), priority: global_priority };
+			let key = PriorityKey { hash: *hash, priority: global_priority };
 			let len = self.by_global_priority.remove(&key).unwrap_or(0);
 			self.total_size -= len;
 			if let Some((topics, key)) = self.statement_topics.remove(hash) {
-				for t in topics {
-					if let Some(t) = t {
-						if let Some(set) = self.by_topic.get_mut(&t) {
-							set.remove(hash);
-						}
+				for t in topics.into_iter().flatten() {
+					if let Some(set) = self.by_topic.get_mut(&t) {
+						set.remove(hash);
 					}
 				}
 				if let Some(k) = key {
@@ -358,11 +356,11 @@ impl Index {
 					}
 				}
 			}
-			self.expired.insert(hash.clone(), current_time);
+			self.expired.insert(*hash, current_time);
 			if let std::collections::hash_map::Entry::Occupied(mut account_rec) =
 				self.accounts.entry(account)
 			{
-				let key = PriorityKey { hash: hash.clone(), priority };
+				let key = PriorityKey { hash: *hash, priority };
 				if let Some((channel, len)) = account_rec.get_mut().by_priority.remove(&key) {
 					account_rec.get_mut().data_size -= len;
 					if let Some(channel) = channel {
@@ -822,7 +820,7 @@ impl StatementStore for Store {
 
 		// Validate.
 		let at_block = if let Some(Proof::OnChain { block_hash, .. }) = statement.proof() {
-			Some(block_hash.clone())
+			Some(*block_hash)
 		} else {
 			None
 		};
