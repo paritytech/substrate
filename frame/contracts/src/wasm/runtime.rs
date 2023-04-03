@@ -2484,6 +2484,7 @@ pub mod env {
 	/// # Errors
 	///
 	/// - `ReturnCode::Sr25519VerifyFailed
+	#[unstable]
 	#[prefixed_alias]
 	fn sr25519_verify(
 		ctx: _,

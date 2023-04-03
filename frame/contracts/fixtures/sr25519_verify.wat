@@ -57,7 +57,7 @@
 			)
 		)
 
-		;; trap if the result is not 0x0 (false)
+		;; trap if the result is not 0x0 (ReturnCode::Success)
 		(call $assert
 			(i32.eq
 				(local.get $result) ;; The result
