@@ -57,14 +57,14 @@ use futures::{channel::oneshot, prelude::*};
 #[allow(deprecated)]
 use libp2p::{
 	connection_limits::Exceeded,
-	core::{upgrade, ConnectedPoint},
+	core::{upgrade, ConnectedPoint, Endpoint},
 	identify::Info as IdentifyInfo,
 	kad::record::Key as KademliaKey,
 	multiaddr,
 	ping::Failure as PingFailure,
 	swarm::{
-		AddressScore, ConnectionError, ConnectionLimits, DialError, Executor, ListenError,
-		NetworkBehaviour, Swarm, SwarmBuilder, SwarmEvent, THandlerErr,
+		AddressScore, ConnectionError, ConnectionId, ConnectionLimits, DialError, Executor,
+		ListenError, NetworkBehaviour, Swarm, SwarmBuilder, SwarmEvent, THandlerErr,
 	},
 	Multiaddr,
 };
@@ -525,12 +525,16 @@ where
 			let swarm = &mut *swarm;
 			open.iter()
 				.filter_map(move |peer_id| {
-					// TODO: either use `NetworkBehaviour::handle_pending_outbound_connection`,
-					// which requires `ConnectionId` OR store this info somewhere.
-					#[allow(deprecated)]
-					let known_addresses = NetworkBehaviour::addresses_of_peer(swarm.behaviour_mut(), peer_id)
-						.into_iter()
-						.collect();
+					let known_addresses = NetworkBehaviour::handle_pending_outbound_connection(
+						swarm.behaviour_mut(),
+						ConnectionId::new_unchecked(0), // dummy value
+						Some(*peer_id),
+						&vec![],
+						Endpoint::Listener,
+					)
+					.expect("network_state request to not be denied")
+					.into_iter()
+					.collect();
 
 					let endpoint = if let Some(e) =
 						swarm.behaviour_mut().node(peer_id).and_then(|i| i.endpoint())
@@ -563,7 +567,6 @@ where
 
 		let not_connected_peers = {
 			let swarm = &mut *swarm;
-			#[allow(deprecated)]
 			swarm
 				.behaviour_mut()
 				.known_peers()
@@ -581,13 +584,14 @@ where
 								.behaviour_mut()
 								.node(&peer_id)
 								.and_then(|i| i.latest_ping()),
-							// TODO: either use
-							// `NetworkBehaviour::handle_pending_outbound_connection`, which
-							// requires `ConnectionId` OR store this info somewhere.
-							known_addresses: NetworkBehaviour::addresses_of_peer(
+							known_addresses: NetworkBehaviour::handle_pending_outbound_connection(
 								swarm.behaviour_mut(),
-								&peer_id,
+								ConnectionId::new_unchecked(0), // dummy value
+								Some(peer_id),
+								&vec![],
+								Endpoint::Listener,
 							)
+							.expect("networt_state request to not be denied")
 							.into_iter()
 							.collect(),
 						},
