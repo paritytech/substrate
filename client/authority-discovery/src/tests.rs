@@ -25,8 +25,11 @@ use crate::{
 };
 
 use futures::{channel::mpsc::channel, executor::LocalPool, task::LocalSpawn};
-use libp2p::core::multiaddr::{Multiaddr, Protocol};
-use libp2p_identity::{ed25519, PeerId};
+use libp2p::{
+	core::multiaddr::{Multiaddr, Protocol},
+	identity::ed25519,
+	PeerId,
+};
 use std::{collections::HashSet, sync::Arc};
 
 use sp_authority_discovery::AuthorityId;

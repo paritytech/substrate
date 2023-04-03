@@ -77,8 +77,8 @@ use libp2p::{
 		handler::ConnectionEvent, ConnectionHandler, ConnectionHandlerEvent, KeepAlive,
 		NegotiatedSubstream, SubstreamProtocol,
 	},
+	PeerId,
 };
-use libp2p_identity::PeerId;
 use log::error;
 use parking_lot::{Mutex, RwLock};
 use std::{

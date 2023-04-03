@@ -29,8 +29,7 @@ pub use crate::{
 	types::ProtocolName,
 };
 
-pub use libp2p::{multiaddr, Multiaddr};
-pub use libp2p_identity::{Keypair, PeerId};
+pub use libp2p::{identity::Keypair, multiaddr, Multiaddr, PeerId};
 
 use codec::Encode;
 use prometheus_endpoint::Registry;

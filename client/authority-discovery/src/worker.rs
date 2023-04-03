@@ -36,10 +36,10 @@ use codec::{Decode, Encode};
 use ip_network::IpNetwork;
 use libp2p::{
 	core::multiaddr,
+	identity::PublicKey,
 	multihash::{Multihash, MultihashDigest},
-	Multiaddr,
+	Multiaddr, PeerId,
 };
-use libp2p_identity::{PeerId, PublicKey};
 
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};

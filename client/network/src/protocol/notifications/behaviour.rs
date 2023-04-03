@@ -33,8 +33,8 @@ use libp2p::{
 		ConnectionDenied, ConnectionId, DialError, NetworkBehaviour, NotifyHandler, PollParameters,
 		THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
 	},
+	PeerId,
 };
-use libp2p_identity::PeerId;
 use log::{error, trace, warn};
 use parking_lot::RwLock;
 use rand::distributions::{Distribution as _, Uniform};

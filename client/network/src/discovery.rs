@@ -73,8 +73,8 @@ use libp2p::{
 		ConnectionDenied, ConnectionId, DialError, NetworkBehaviour, PollParameters, THandler,
 		THandlerInEvent, THandlerOutEvent, ToSwarm,
 	},
+	PeerId,
 };
-use libp2p_identity::PeerId;
 use log::{debug, info, trace, warn};
 use sp_core::hexdisplay::HexDisplay;
 use std::{

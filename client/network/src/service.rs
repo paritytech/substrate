@@ -66,9 +66,8 @@ use libp2p::{
 		AddressScore, ConnectionError, ConnectionId, ConnectionLimits, DialError, Executor,
 		ListenError, NetworkBehaviour, Swarm, SwarmBuilder, SwarmEvent, THandlerErr,
 	},
-	Multiaddr,
+	Multiaddr, PeerId,
 };
-use libp2p_identity::PeerId;
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
@@ -93,7 +92,7 @@ use std::{
 };
 
 pub use behaviour::{InboundFailure, OutboundFailure, ResponseFailure};
-pub use libp2p_identity::{DecodingError, Keypair, PublicKey};
+pub use libp2p::identity::{DecodingError, Keypair, PublicKey};
 pub use protocol::NotificationsSink;
 
 mod metrics;

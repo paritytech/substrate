@@ -49,8 +49,8 @@ use libp2p::{
 		ConnectionDenied, ConnectionId, NetworkBehaviour, PollParameters, THandler,
 		THandlerInEvent, THandlerOutEvent, ToSwarm,
 	},
+	PeerId,
 };
-use libp2p_identity::PeerId;
 
 use sc_peerset::{PeersetHandle, BANNED_THRESHOLD};
 

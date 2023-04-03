@@ -27,6 +27,7 @@ use libp2p::{
 		Behaviour as Identify, Config as IdentifyConfig, Event as IdentifyEvent,
 		Info as IdentifyInfo,
 	},
+	identity::PublicKey,
 	ping::{Behaviour as Ping, Config as PingConfig, Event as PingEvent, Success as PingSuccess},
 	swarm::{
 		behaviour::{
@@ -36,9 +37,8 @@ use libp2p::{
 		ConnectionDenied, ConnectionHandler, ConnectionId, IntoConnectionHandlerSelect,
 		NetworkBehaviour, PollParameters, THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
 	},
-	Multiaddr,
+	Multiaddr, PeerId,
 };
-use libp2p_identity::{PeerId, PublicKey};
 use log::{debug, error, trace};
 use smallvec::SmallVec;
 

@@ -261,8 +261,7 @@ pub mod utils;
 
 pub use event::{DhtEvent, Event, SyncEvent};
 #[doc(inline)]
-pub use libp2p::{multiaddr, Multiaddr};
-pub use libp2p_identity::PeerId;
+pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use request_responses::{Config, IfDisconnected, RequestFailure};
 pub use sc_network_common::{
 	role::ObservedRole,

@@ -29,8 +29,12 @@ use futures::{
 	sink::SinkExt,
 	task::LocalSpawn,
 };
-use libp2p::{core::multiaddr, kad::record::Key as KademliaKey};
-use libp2p_identity::{Keypair, PeerId, SigningError};
+use libp2p::{
+	core::multiaddr,
+	identity::{Keypair, SigningError},
+	kad::record::Key as KademliaKey,
+	PeerId,
+};
 use prometheus_endpoint::prometheus::default_registry;
 
 use sc_client_api::HeaderBackend;
