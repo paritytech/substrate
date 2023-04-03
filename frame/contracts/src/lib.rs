@@ -1167,7 +1167,7 @@ impl<T: Config> Pallet<T> {
 		data: Vec<u8>,
 		debug: bool,
 		determinism: Determinism,
-	) -> ContractExecResult<BalanceOf<T>> {
+	) -> ContractExecResult<BalanceOf<T>, <T as frame_system::Config>::RuntimeEvent> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
 		let common = CommonInput {
 			origin,
@@ -1181,8 +1181,7 @@ impl<T: Config> Pallet<T> {
 		// We are good to call System::events() from the runtime API (i.e offchain).
 		// Even though it says it should only be used in tests, it is actually not allowed to be
 		// read on-chain cause it will put all the Events emitted in the block so far into the PoV.
-		let events: Vec<Vec<u8>> =
-			System::<T>::events().iter().map(|e| e.clone().event.encode()).collect(); // todo: should determinism::Relaxed be checked here?
+		let events = System::<T>::events().iter().map(|e| e.clone().event).collect::<Vec<_>>(); // todo: should determinism::Relaxed be checked here?
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
@@ -1342,11 +1341,12 @@ impl<T: Config> Pallet<T> {
 sp_api::decl_runtime_apis! {
 	/// The API used to dry-run contract interactions.
 	#[api_version(2)]
-	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash> where
+	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash, Event> where
 		AccountId: Codec,
 		Balance: Codec,
 		BlockNumber: Codec,
 		Hash: Codec,
+		Event: Codec,
 	{
 		/// Perform a call from a specified account to a given contract.
 		///
@@ -1358,7 +1358,7 @@ sp_api::decl_runtime_apis! {
 			gas_limit: Option<Weight>,
 			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
-		) -> ContractExecResult<Balance>;
+		) -> ContractExecResult<Balance, Event>;
 
 		/// Instantiate a new contract.
 		///
