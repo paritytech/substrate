@@ -24,7 +24,7 @@ use sp_runtime::{
 	DispatchError, DispatchResult,
 };
 use sp_staking::{EraIndex, Stake, StakingInterface};
-use Currency;
+use std::collections::BTreeMap;
 
 pub(crate) type AccountId = u64;
 pub(crate) type AccountIndex = u64;
@@ -41,6 +41,10 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		// TODO: we should remove this. This is ONLY needed because of this to_vote_weight
+		// calculation which might ver well happen in the staking side. For now balances should NOT
+		// be used anywhere here. Note that we are using SaturatingCurrencyToVote which ignores the
+		// issuance value.
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		VoterBagsList: pallet_bags_list::<Instance1>::{Pallet, Call, Storage, Event<T>},
 		StakeTracker: pallet_stake_tracker::{Pallet, Storage},
@@ -99,6 +103,7 @@ impl pallet_stake_tracker::Config for Runtime {
 	type Staking = StakingMock;
 	type VoterList = VoterBagsList;
 }
+
 const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 	[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
 
@@ -116,32 +121,61 @@ impl pallet_bags_list::Config<VoterBagsListInstance> for Runtime {
 	type Score = VoteWeight;
 }
 
-pub struct StakingMock {}
+pub struct StakingMock;
 
 // We don't really care about this yet in the context of testing stake-tracker logic.
 impl ScoreProvider<AccountId> for StakingMock {
 	type Score = VoteWeight;
 
 	fn score(_id: &AccountId) -> Self::Score {
-		VoteWeight::default()
+		todo!();
 	}
 
 	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
 		fn set_score_of(_: &AccountId, _: Self::Score) {
-			// not use yet.
+			unreachable!();
 		}
 	}
 }
 
+// some nominators and validators that are ready to be reported.
 parameter_types! {
-	pub static Nominators: Vec<AccountId> = vec![20, 21, 22, 23, 24];
-	pub static Validators: Vec<AccountId> = vec![10, 11, 12, 13, 14];
+	pub static TestNominators: BTreeMap<AccountId, Balance> = Default::default();
+	pub static TestValidators: BTreeMap<AccountId, Balance> = Default::default();
 }
 
-pub(crate) fn stakers() -> Vec<AccountId> {
-	let mut stakers = Nominators::get();
-	stakers.append(&mut Validators::get());
-	stakers
+pub(crate) fn set_nominator_stake(who: AccountId, stake: Balance) {
+	let old_stake = StakingMock::stake(&who).unwrap();
+	TestNominators::mutate(|x| {
+		*x.get_mut(&who).unwrap() = stake;
+	});
+	StakeTracker::on_stake_update(&who, Some(old_stake));
+}
+
+pub(crate) fn add_nominator(who: AccountId, stake: Balance) {
+	TestNominators::mutate(|x| {
+		x.insert(who, stake);
+	});
+	// TODO: check how the flow is on the staking side.
+	StakeTracker::on_nominator_add(&who);
+	StakeTracker::on_stake_update(&who, None);
+}
+
+pub(crate) fn add_validator(who: AccountId, stake: Balance) {
+	TestValidators::mutate(|x| {
+		x.insert(who, stake);
+	});
+	// TODO: check how the flow is on the staking side.
+	StakeTracker::on_validator_add(&who);
+	StakeTracker::on_stake_update(&who, None);
+}
+
+pub(crate) fn set_validator_stake(who: AccountId, stake: Balance) {
+	let old_stake = StakingMock::stake(&who).unwrap();
+	TestValidators::mutate(|x| {
+		*x.get_mut(&who).unwrap() = stake;
+	});
+	StakeTracker::on_stake_update(&who, Some(old_stake));
 }
 
 impl StakingInterface for StakingMock {
@@ -172,15 +206,12 @@ impl StakingInterface for StakingMock {
 	fn stake(
 		who: &Self::AccountId,
 	) -> Result<Stake<Self::AccountId, Self::Balance>, DispatchError> {
-		if !Nominators::get().contains(who) && !Validators::get().contains(who) {
-			return Err(DispatchError::Other("not bonded"))
-		}
-		let stake = Balances::total_balance(who);
-		Ok(Stake {
-			stash: *who,
-			active: stake.saturating_sub(ExistentialDeposit::get()),
-			total: stake,
-		})
+		let stake = TestNominators::get()
+			.get(who)
+			.cloned()
+			.or_else(|| TestValidators::get().get(who).cloned())
+			.ok_or(DispatchError::Other("not bonded"))?;
+		Ok(Stake { stash: *who, active: stake, total: stake })
 	}
 
 	fn bond(_: &Self::AccountId, _: Self::Balance, _: &Self::AccountId) -> DispatchResult {
@@ -224,11 +255,11 @@ impl StakingInterface for StakingMock {
 	}
 
 	fn is_validator(who: &Self::AccountId) -> bool {
-		Validators::get().contains(who)
+		TestValidators::get().contains_key(who)
 	}
 
 	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
-		if Nominators::get().contains(who) {
+		if TestNominators::get().contains_key(who) {
 			Some(Vec::new())
 		} else {
 			None
@@ -256,30 +287,22 @@ pub struct ExtBuilder {}
 impl ExtBuilder {
 	fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
+		let storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut ext = sp_io::TestExternalities::from(storage);
 
-		let mut storage =
-			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-
-		let _ = pallet_balances::GenesisConfig::<Runtime> {
-			balances: vec![
-				// Validator stashes, for simplicity we assume stash == controller as StakeTracker
-				// really does not care.
-				(10, 10),
-				(11, 20),
-				(12, 30),
-				(13, 40),
-				(14, 50),
-				// nominators
-				(20, 10),
-				(21, 20),
-				(22, 30),
-				(23, 40),
-				(24, 50),
-			],
-		}
-		.assimilate_storage(&mut storage);
-
-		let ext = sp_io::TestExternalities::from(storage);
+		// we have some initial accounts, spread across different bags. for simplicity, all
+		// account's balance is equal to their account id.
+		// validator accounts start from the boundary of bags, eg 10, 11 etc.
+		// nominator accounts start from the middle of the bag, eg 5, 15 etc.
+		// given that we don't care about the order within bags here, we stick to one node per bag.
+		ext.execute_with(|| {
+			for x in [10, 20, 30] {
+				add_validator(x, x.into());
+			}
+			for x in [5, 15, 25] {
+				add_nominator(x, x.into());
+			}
+		});
 
 		ext
 	}
@@ -288,5 +311,6 @@ impl ExtBuilder {
 		sp_tracing::try_init_simple();
 		let mut ext = self.build();
 		ext.execute_with(test);
+		// TODO: call try_state of `AllPallets`.
 	}
 }

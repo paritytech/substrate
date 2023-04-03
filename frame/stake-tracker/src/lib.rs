@@ -81,6 +81,10 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	pub(crate) fn active_vote_of(who: &T::AccountId) -> VoteWeight {
+		Self::to_vote(Self::active_stake_of(who))
+	}
+
 	pub(crate) fn active_stake_of(who: &T::AccountId) -> BalanceOf<T> {
 		T::Staking::stake(&who).map(|s| s.active).unwrap_or_default()
 	}
@@ -92,7 +96,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
-	fn on_stake_update(who: &T::AccountId, _: Option<Stake<T::AccountId, BalanceOf<T>>>) {
+	fn on_stake_update(who: &T::AccountId, _prev_stake: Option<Stake<T::AccountId, BalanceOf<T>>>) {
 		if let Ok(current_stake) = T::Staking::stake(who) {
 			let current_active = current_stake.active;
 
@@ -109,10 +113,15 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 					T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active))
 						.defensive_proof("Validator's position in VoterList updated; qed");
 			}
+
+		// else, this staker must have been in "chilled" state.
+		} else {
+			defensive!("received update for a staker who is not a staker");
 		}
 	}
+
 	fn on_nominator_add(who: &T::AccountId) {
-		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(Self::active_stake_of(who)))
+		let _ = T::VoterList::on_insert(who.clone(), Self::active_vote_of(who))
 			.defensive_proof("Nominator inserted into VoterList; qed");
 	}
 
@@ -123,7 +132,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	}
 
 	fn on_validator_add(who: &T::AccountId) {
-		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(Self::active_stake_of(who)))
+		let _ = T::VoterList::on_insert(who.clone(), Self::active_vote_of(who))
 			.defensive_proof("Validator inserted into VoterList; qed");
 	}
 
