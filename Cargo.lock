@@ -9049,6 +9049,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smallvec",
+ "snow",
  "sp-arithmetic",
  "sp-blockchain",
  "sp-consensus",
