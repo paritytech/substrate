@@ -118,7 +118,7 @@ use frame_support::{
 	weights::{OldWeight, Weight},
 	BoundedVec, WeakBoundedVec,
 };
-use frame_system::Pallet as System;
+use frame_system::{EventRecord, Pallet as System};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
 	ContractInstantiateResult, ExecReturnValue, GetStorageResult, InstantiateReturnValue,
@@ -1167,7 +1167,7 @@ impl<T: Config> Pallet<T> {
 		data: Vec<u8>,
 		debug: bool,
 		determinism: Determinism,
-	) -> ContractExecResult<BalanceOf<T>> {
+	) -> ContractExecResult<BalanceOf<T>, EventRecord<<T as pallet::Config>::RuntimeEvent, T>> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
 		let common = CommonInput {
 			origin,
@@ -1184,6 +1184,9 @@ impl<T: Config> Pallet<T> {
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default().to_vec(),
+			events: Some(System::events()), /* TODO: is it okay to call System::events() here?
+			                                 * The function says it should only be used in tests.
+			                                 * But what about offchain calls? */
 		}
 	}
 
@@ -1228,6 +1231,7 @@ impl<T: Config> Pallet<T> {
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default().to_vec(),
+			events: None,
 		}
 	}
 
