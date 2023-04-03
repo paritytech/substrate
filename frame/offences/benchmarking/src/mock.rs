@@ -65,7 +65,7 @@ impl frame_system::Config for Test {
 }
 
 impl pallet_balances::Config for Test {
-	type MaxLocks = ();
+	type MaxLocks = ConstU32<128>;
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
@@ -74,6 +74,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU64<10>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 impl pallet_timestamp::Config for Test {
