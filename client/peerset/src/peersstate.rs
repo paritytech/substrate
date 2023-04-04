@@ -28,7 +28,7 @@
 //! > for example connecting to some nodes in priority should be added outside of this
 //! > module, rather than inside.
 
-use libp2p::PeerId;
+use libp2p_identity::PeerId;
 use log::error;
 use std::{
 	borrow::Cow,
@@ -626,7 +626,7 @@ impl<'a> Drop for Reputation<'a> {
 #[cfg(test)]
 mod tests {
 	use super::{Peer, PeersState, SetConfig};
-	use libp2p::PeerId;
+	use libp2p_identity::PeerId;
 	use std::iter;
 
 	#[test]

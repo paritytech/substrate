@@ -8419,7 +8419,7 @@ dependencies = [
  "async-trait",
  "futures",
  "futures-timer",
- "libp2p",
+ "libp2p-identity",
  "log",
  "mockall",
  "parking_lot 0.12.1",
@@ -8989,7 +8989,6 @@ dependencies = [
  "bytes",
  "futures",
  "futures-timer",
- "libp2p",
  "libp2p-identity",
  "parity-scale-codec",
  "prost-build",
@@ -9035,7 +9034,7 @@ version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
  "futures",
- "libp2p",
+ "libp2p-identity",
  "log",
  "parity-scale-codec",
  "prost",
@@ -9183,7 +9182,7 @@ name = "sc-peerset"
 version = "4.0.0-dev"
 dependencies = [
  "futures",
- "libp2p",
+ "libp2p-identity",
  "log",
  "rand 0.8.5",
  "sc-utils",

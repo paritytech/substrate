@@ -46,7 +46,7 @@ use std::{
 };
 use wasm_timer::Delay;
 
-pub use libp2p::PeerId;
+pub use libp2p_identity::PeerId;
 
 /// We don't accept nodes whose reputation is under this value.
 pub const BANNED_THRESHOLD: i32 = 82 * (i32::MIN / 100);
@@ -781,7 +781,7 @@ mod tests {
 		BANNED_THRESHOLD,
 	};
 	use futures::prelude::*;
-	use libp2p::PeerId;
+	use libp2p_identity::PeerId;
 	use std::{pin::Pin, task::Poll, thread, time::Duration};
 
 	fn assert_messages(mut peerset: Peerset, messages: Vec<Message>) -> Peerset {

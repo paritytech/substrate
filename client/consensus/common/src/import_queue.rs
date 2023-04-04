@@ -66,7 +66,7 @@ pub type BoxJustificationImport<B> =
 	Box<dyn JustificationImport<B, Error = ConsensusError> + Send + Sync>;
 
 /// Maps to the RuntimeOrigin used by the network.
-pub type RuntimeOrigin = libp2p::PeerId;
+pub type RuntimeOrigin = libp2p_identity::PeerId;
 
 /// Block data used by the queue.
 #[derive(Debug, PartialEq, Eq, Clone)]
