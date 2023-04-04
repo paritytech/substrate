@@ -236,17 +236,23 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 			.get(DispatchClass::Normal)
 			.base_extrinsic;
 		let pre_info = DispatchInfo { weight: Weight::from_parts(1000, 0), ..Default::default() };
-		System::note_applied_extrinsic(&Ok(Some(300).into()), pre_info);
-		System::note_applied_extrinsic(&Ok(Some(1000).into()), pre_info);
+		System::note_applied_extrinsic(&Ok(from_actual_ref_time(Some(300))), pre_info);
+		System::note_applied_extrinsic(&Ok(from_actual_ref_time(Some(1000))), pre_info);
 		System::note_applied_extrinsic(
 			// values over the pre info should be capped at pre dispatch value
-			&Ok(Some(1200).into()),
+			&Ok(from_actual_ref_time(Some(1200))),
 			pre_info,
 		);
-		System::note_applied_extrinsic(&Ok((Some(2_500_000), Pays::Yes).into()), pre_info);
+		System::note_applied_extrinsic(
+			&Ok(from_post_weight_info(Some(2_500_000), Pays::Yes)),
+			pre_info,
+		);
 		System::note_applied_extrinsic(&Ok(Pays::No.into()), pre_info);
-		System::note_applied_extrinsic(&Ok((Some(2_500_000), Pays::No).into()), pre_info);
-		System::note_applied_extrinsic(&Ok((Some(500), Pays::No).into()), pre_info);
+		System::note_applied_extrinsic(
+			&Ok(from_post_weight_info(Some(2_500_000), Pays::No)),
+			pre_info,
+		);
+		System::note_applied_extrinsic(&Ok(from_post_weight_info(Some(500), Pays::No)), pre_info);
 		System::note_applied_extrinsic(
 			&Err(DispatchError::BadOrigin.with_weight(Weight::from_parts(999, 0))),
 			pre_info,
@@ -289,7 +295,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 			class: DispatchClass::Operational,
 			..Default::default()
 		};
-		System::note_applied_extrinsic(&Ok(Some(300).into()), pre_info);
+		System::note_applied_extrinsic(&Ok(from_actual_ref_time(Some(300))), pre_info);
 
 		let got = System::events();
 		let want = vec![
@@ -690,4 +696,15 @@ fn ensure_signed_stuff_works() {
 				.expect("EnsureSignedBy has no successful origin required for the test");
 		assert_ok!(EnsureSignedBy::<Members, _>::try_origin(successful_origin));
 	}
+}
+
+pub fn from_actual_ref_time(ref_time: Option<u64>) -> PostDispatchInfo {
+	PostDispatchInfo {
+		actual_weight: ref_time.map(|t| Weight::from_all(t)),
+		pays_fee: Default::default(),
+	}
+}
+
+pub fn from_post_weight_info(ref_time: Option<u64>, pays_fee: Pays) -> PostDispatchInfo {
+	PostDispatchInfo { actual_weight: ref_time.map(|t| Weight::from_all(t)), pays_fee }
 }

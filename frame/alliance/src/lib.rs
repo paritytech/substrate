@@ -114,7 +114,7 @@ use frame_support::{
 		ChangeMembers, Currency, Get, InitializeMembers, IsSubType, OnUnbalanced,
 		ReservableCurrency,
 	},
-	weights::{OldWeight, Weight},
+	weights::Weight,
 };
 use pallet_identity::IdentityField;
 
@@ -539,36 +539,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Close a vote that is either approved, disapproved, or whose voting period has ended.
-		///
-		/// Must be called by a Fellow.
-		#[pallet::call_index(2)]
-		#[pallet::weight({
-			let b = *length_bound;
-			let m = T::MaxFellows::get();
-			let p1 = *proposal_weight_bound;
-			let p2 = T::MaxProposals::get();
-			T::WeightInfo::close_early_approved(b, m, p2)
-				.max(T::WeightInfo::close_early_disapproved(m, p2))
-				.max(T::WeightInfo::close_approved(b, m, p2))
-				.max(T::WeightInfo::close_disapproved(m, p2))
-				.saturating_add(p1.into())
-		})]
-		#[allow(deprecated)]
-		#[deprecated(note = "1D weight is used in this extrinsic, please migrate to use `close`")]
-		pub fn close_old_weight(
-			origin: OriginFor<T>,
-			proposal_hash: T::Hash,
-			#[pallet::compact] index: ProposalIndex,
-			#[pallet::compact] proposal_weight_bound: OldWeight,
-			#[pallet::compact] length_bound: u32,
-		) -> DispatchResultWithPostInfo {
-			let proposal_weight_bound: Weight = proposal_weight_bound.into();
-			let who = ensure_signed(origin)?;
-			ensure!(Self::has_voting_rights(&who), Error::<T, I>::NoVotingRights);
-
-			Self::do_close(proposal_hash, index, proposal_weight_bound, length_bound)
-		}
+		// Index 2 was `close_old_weight`; it was removed due to weights v1 deprecation.
 
 		/// Initialize the Alliance, onboard fellows and allies.
 		///
