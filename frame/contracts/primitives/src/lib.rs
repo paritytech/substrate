@@ -71,6 +71,8 @@ pub struct ContractResult<R, Balance, Event> {
 	pub debug_message: Vec<u8>,
 	/// The execution result of the wasm code.
 	pub result: R,
+	/// The events that were emitted during execution. During on-chain execution these events are
+	/// None to avoid putting all the Events emitted in the block so far into the PoV.
 	pub events: Option<Vec<Event>>,
 }
 

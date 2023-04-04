@@ -1133,15 +1133,11 @@ impl<T: Config> Pallet<T> {
 			debug_message: debug_message.as_mut(),
 		};
 		let output = CallInput::<T> { dest, determinism }.run_guarded(common);
-		// We are good to call System::events() from the runtime API (i.e offchain).
-		// Even though it says it should only be used in tests, it is actually not allowed to be
-		// read on-chain cause it will put all the Events emitted in the block so far into the PoV.
-		// let events = System::<T>::events().iter().map(|e| e.clone().event).collect::<Vec<_>>();
-		// // todo: should determinism::Relaxed be checked here?
-		let events = System::<T>::events();
-		// .into_iter()
-		// .map(|e| e.event)
-		// .collect::<Vec<_>>();
+		// We are good to call System::events() here. Even though its documentation says it should
+		// only be used in tests, it is actually not allowed to be read on-chain cause it will put
+		// all the Events emitted in the block so far into the PoV.
+		let events = System::<T>::events(); // TODO: do we want to conditionally set None here?
+
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
@@ -1193,7 +1189,7 @@ impl<T: Config> Pallet<T> {
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default().to_vec(),
-			events: None,
+			events: None, // TODO: do we want to return events here?
 		}
 	}
 
