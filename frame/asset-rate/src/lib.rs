@@ -32,15 +32,12 @@
 //! * **Asset balance**: The balance type of an arbitrary asset. The network might only know about
 //!   the identifier of the asset and nothing more.
 //! * **Native balance**: The balance type of the network's native currency.
-//! * **Treasury spend**: A payment from the treasury after the corresponding proposal has been
-//!   approved.
 //!
 //! ### Goals
 //!
 //! The asset-rate system in Substrate is designed to make the following possible:
 //!
-//! * Whitelisting assets other than the native currency which can be accepted for Treasury spends.
-//! * Providing a soft conversion for the balance of whitelisted assets to native.
+//! * Providing a soft conversion for the balance of supported assets to a default asset class.
 //! * Updating existing conversion rates.
 //!
 //! ## Interface
@@ -56,13 +53,9 @@
 //!
 //! ### Assumptions
 //!
-//! * Conversion rates will not be used to determine the payment amount in another asset.
-//! * Conversion rates will be used to determine the tier of the spender status, e.g.
-//!   `SmallSpender`, `MediumSpender`, `BigSpender` or `Treasurer`.
+//! * Conversion rates are only used as estimates, and are not designed to be precise or closely
+//!   tracking real world values.
 //! * All conversion rates reflect the ration of some asset to native, e.g. native = asset * rate.
-//!
-//! ## Related Modules
-//! * [`Treasury`](../treasury/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -123,7 +116,7 @@ pub mod pallet {
 		type Currency: Inspect<Self::AccountId, Balance = Self::Balance>;
 
 		/// The identifier for the class of asset.
-		type AssetId: Member + Parameter + Copy + MaybeSerializeDeserialize + MaxEncodedLen;
+		type AssetId: frame_support::traits::tokens::AssetId;
 	}
 
 	/// Maps an asset to its fixed point representation in the native balance.
