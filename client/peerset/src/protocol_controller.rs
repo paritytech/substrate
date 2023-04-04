@@ -24,7 +24,7 @@
 // TODO: remove this line.
 #![allow(unused)]
 
-use futures::{FutureExt, StreamExt};
+use futures::{channel::oneshot, FutureExt, StreamExt};
 use libp2p::PeerId;
 use log::{error, info, trace};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
@@ -49,10 +49,12 @@ enum Action {
 	DisconnectPeer(PeerId),
 	IncomingConnection(PeerId, IncomingIndex),
 	Dropped(PeerId),
+	ReservedPeers(oneshot::Sender<Vec<PeerId>>),
 }
 
 /// Shared handle to [`ProtocolController`]. Distributed around the code outside of the
 /// protocol implementation.
+#[derive(Debug, Clone)]
 pub struct ProtocolHandle {
 	to_controller: TracingUnboundedSender<Action>,
 }
@@ -100,9 +102,14 @@ impl ProtocolHandle {
 			.unbounded_send(Action::IncomingConnection(peer_id, incoming_index));
 	}
 
-	/// Notify that connection was dropped (eithere refused or disconnected).
+	/// Notify that connection was dropped (either refused or disconnected).
 	pub fn dropped(&self, peer_id: PeerId) {
 		let _ = self.to_controller.unbounded_send(Action::Dropped(peer_id));
+	}
+
+	/// Get the list of reserved peers.
+	pub fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
+		let _ = self.to_controller.unbounded_send(Action::ReservedPeers(pending_response));
 	}
 }
 
@@ -236,6 +243,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 					peer_id, self.set_id,
 				)
 			}),
+			Action::ReservedPeers(pending_response) => self.on_reserved_peers(pending_response),
 		}
 		true
 	}
@@ -358,6 +366,11 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 		self.nodes.clear();
 		self.num_in = 0;
 		self.num_out = 0;
+	}
+
+	/// Get the list of reserved peers.
+	fn on_reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
+		pending_response.send(self.reserved_nodes.keys().cloned().collect());
 	}
 
 	/// Disconnect the peer.

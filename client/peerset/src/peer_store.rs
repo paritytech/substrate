@@ -20,7 +20,7 @@ use libp2p::PeerId;
 use partial_sort::PartialSort;
 use std::{
 	cmp::{Ord, Ordering, PartialOrd},
-	collections::{hash_map::Entry, HashMap, HashSet},
+	collections::{HashMap, HashSet},
 	sync::{Arc, Mutex},
 	time::{Duration, Instant},
 };
@@ -59,6 +59,7 @@ pub trait PeerReputationProvider {
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId>;
 }
 
+#[derive(Debug, Clone)]
 pub struct PeerStoreHandle {
 	inner: Arc<Mutex<PeerStoreInner>>,
 }
@@ -82,6 +83,14 @@ impl PeerReputationProvider for PeerStoreHandle {
 
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId> {
 		self.inner.lock().unwrap().outgoing_candidates(count, ignored)
+	}
+}
+
+impl PeerStoreHandle {
+	/// Get the number of known peers.
+	pub fn num_known_peers(&self) -> usize {
+		// FIXME: how do we use this info? May be better ask for numbers from protocol controllers?
+		self.inner.lock().unwrap().peers.len()
 	}
 }
 
@@ -129,7 +138,7 @@ impl PeerInfo {
 	}
 
 	fn decay_reputation(&mut self, seconds_passed: u64) {
-		// Note that decaying a reputation value happens "on its own",
+		// Note that decaying the reputation value happens "on its own",
 		// so we don't bump `last_updated`.
 		for _ in 0..seconds_passed {
 			let mut diff = self.reputation / INVERSE_DECREMENT;
@@ -148,6 +157,7 @@ impl PeerInfo {
 	}
 }
 
+#[derive(Debug)]
 struct PeerStoreInner {
 	peers: HashMap<PeerId, PeerInfo>,
 }
@@ -207,7 +217,8 @@ impl PeerStoreInner {
 	}
 }
 
-struct PeerStore {
+#[derive(Debug)]
+pub struct PeerStore {
 	inner: Arc<Mutex<PeerStoreInner>>,
 }
 
