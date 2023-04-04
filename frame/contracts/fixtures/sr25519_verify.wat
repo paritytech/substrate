@@ -7,6 +7,7 @@
     ;; import the host functions from the seal0 module
 	(import "seal0" "seal_sr25519_verify" (func $seal_sr25519_verify (param i32 i32 i32 i32) (result i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 
 	;; give the program 1 page of memory
 	(import "env" "memory" (memory 1 1))
@@ -14,15 +15,6 @@
 	;; [4, 8) len of signature + message + public key - 64 + 12 + 32 = 108 bytes
 	;; write the length of the input (108 bytes) at offset 4
 	(data (i32.const 4) "\6c")
-
-	(func $assert (param i32)
-		(block $ok
-			(br_if $ok
-				(get_local 0)
-			)
-			(unreachable)
-		)
-	)
 
 	(func (export "deploy"))
 
@@ -32,7 +24,6 @@
 		(local $pub_key_ptr i32)
 		(local $message_len i32)
 		(local $message_ptr i32)
-		(local $result i32)
 
 		;; set the pointers to the memory locations
 		;; Memory layout during `call`
@@ -47,9 +38,9 @@
 		;; up to 108 bytes stored at offset 4
 		(call $seal_input (local.get $signature_ptr) (i32.const 4))
 
-		;; call sr25519_verify and set the result
-		(local.set
-			$result
+		;; call sr25519_verify and store the return code
+		(i32.store
+			(i32.const 4)
 			(call $seal_sr25519_verify
 				(local.get $signature_ptr)
 				(local.get $pub_key_ptr)
@@ -58,13 +49,8 @@
 			)
 		)
 
-		;; trap if the result is not 0x0 (ReturnCode::Success)
-		(call $assert
-			(i32.eq
-				(local.get $result) ;; The result
-				(i32.const 0x0) ;; 0x0 - Success result
-			)
-		)
+		;; exit with success and take transfer return code to the output buffer
+		(call $seal_return (i32.const 0) (i32.const 4) (i32.const 4))
 	)
 )
 

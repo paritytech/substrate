@@ -2922,7 +2922,7 @@ fn sr25519_verify() {
 		.unwrap()
 		.account_id;
 
-		let call_with_message = |message: &[u8; 11]| {
+		let call_with = |message: &[u8; 11]| {
 			// Alice's signature for "hello world"
 			#[rustfmt::skip]
 			let signature: [u8; 64] = [
@@ -2955,10 +2955,14 @@ fn sr25519_verify() {
 				Determinism::Enforced,
 			)
 			.result
+			.unwrap()
 		};
 
-		assert!(call_with_message(&b"hello world").is_ok());
-		assert!(call_with_message(&b"hello worlD").is_err());
+		// verification should succeed for "hello world"
+		assert_return_code!(call_with(&b"hello world"), RuntimeReturnCode::Success);
+
+		// verification should fail for other messages
+		assert_return_code!(call_with(&b"hello worlD"), RuntimeReturnCode::Sr25519VerifyFailed);
 	})
 }
 
