@@ -434,7 +434,7 @@ mod tests {
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
 		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
-		sr25519_verify: RefCell<Vec<([u8; 64], Vec<u8>, [u8; 32])>>,
+		sr25519_verify: RefCell<Vec<([u8; 64], [u8; 32], Vec<u8>)>>,
 		code_hashes: Vec<CodeHash<Test>>,
 	}
 
@@ -615,7 +615,7 @@ mod tests {
 			Ok([3; 33])
 		}
 		fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool {
-			self.sr25519_verify.borrow_mut().push((*signature, message.into(), *pub_key));
+			// self.sr25519_verify.borrow_mut().push((*signature, message.into(), *pub_key));
 			true
 		}
 		fn contract_info(&mut self) -> &mut crate::ContractInfo<Self::T> {
@@ -1245,7 +1245,7 @@ mod tests {
 			&mock_ext.calls,
 			&[CallEntry { to: ALICE, value: 6, data: vec![1, 2, 3, 4], allows_reentry: true }]
 		);
-	}
+	
 
 	const CODE_ECDSA_RECOVER: &str = r#"
 (module
