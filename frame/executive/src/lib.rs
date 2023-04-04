@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -137,6 +137,9 @@ use sp_runtime::{
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
+#[allow(dead_code)]
+const LOG_TARGET: &str = "runtime::executive";
+
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::RuntimeOrigin;
@@ -240,7 +243,7 @@ where
 		select: frame_try_runtime::TryStateSelect,
 	) -> Result<Weight, &'static str> {
 		frame_support::log::info!(
-			target: "frame::executive",
+			target: LOG_TARGET,
 			"try-runtime: executing block #{:?} / state root check: {:?} / signature check: {:?} / try-state-select: {:?}",
 			block.header().number(),
 			state_root_check,
@@ -277,7 +280,7 @@ where
 		for e in extrinsics {
 			if let Err(err) = try_apply_extrinsic(e.clone()) {
 				frame_support::log::error!(
-					target: "runtime::executive", "executing transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
+					target: LOG_TARGET, "executing transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
 					e,
 					err,
 				);
@@ -296,7 +299,7 @@ where
 			select,
 		)
 		.map_err(|e| {
-			frame_support::log::error!(target: "runtime::executive", "failure: {:?}", e);
+			frame_support::log::error!(target: LOG_TARGET, "failure: {:?}", e);
 			e
 		})?;
 		drop(_guard);
@@ -477,15 +480,9 @@ where
 			// any initial checks
 			Self::initial_checks(&block);
 
-			let signature_batching = sp_runtime::SignatureBatching::start();
-
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
 			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
-
-			if !signature_batching.verify() {
-				panic!("Signature verification failed.");
-			}
 
 			// any final checks
 			Self::final_checks(&header);
@@ -688,13 +685,10 @@ mod tests {
 
 	use frame_support::{
 		assert_err, parameter_types,
-		traits::{
-			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, LockableCurrency,
-			WithdrawReasons,
-		},
+		traits::{fungible, ConstU32, ConstU64, ConstU8, Currency},
 		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};
-	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
+	use frame_system::{ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
 	use pallet_transaction_payment::CurrencyAdapter;
 
@@ -706,7 +700,6 @@ mod tests {
 		use frame_system::pallet_prelude::*;
 
 		#[pallet::pallet]
-		#[pallet::generate_store(pub(super) trait Store)]
 		pub struct Pallet<T>(_);
 
 		#[pallet::config]
@@ -718,12 +711,12 @@ mod tests {
 			// one with block number arg and one without
 			fn on_initialize(n: T::BlockNumber) -> Weight {
 				println!("on_initialize({})", n);
-				Weight::from_ref_time(175)
+				Weight::from_parts(175, 0)
 			}
 
 			fn on_idle(n: T::BlockNumber, remaining_weight: Weight) -> Weight {
 				println!("on_idle{}, {})", n, remaining_weight);
-				Weight::from_ref_time(175)
+				Weight::from_parts(175, 0)
 			}
 
 			fn on_finalize(n: T::BlockNumber) {
@@ -732,7 +725,7 @@ mod tests {
 
 			fn on_runtime_upgrade() -> Weight {
 				sp_io::storage::set(super::TEST_KEY, "module".as_bytes());
-				Weight::from_ref_time(200)
+				Weight::from_parts(200, 0)
 			}
 
 			fn offchain_worker(n: T::BlockNumber) {
@@ -838,7 +831,7 @@ mod tests {
 	}
 
 	frame_support::construct_runtime!(
-		pub enum Runtime where
+		pub struct Runtime where
 			Block = TestBlock,
 			NodeBlock = TestBlock,
 			UncheckedExtrinsic = TestUncheckedExtrinsic
@@ -853,9 +846,9 @@ mod tests {
 	parameter_types! {
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::builder()
-				.base_block(Weight::from_ref_time(10))
-				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::from_ref_time(5))
-				.for_class(DispatchClass::non_mandatory(), |weights| weights.max_total = Weight::from_ref_time(1024).set_proof_size(u64::MAX).into())
+				.base_block(Weight::from_parts(10, 0))
+				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::from_parts(5, 0))
+				.for_class(DispatchClass::non_mandatory(), |weights| weights.max_total = Weight::from_parts(1024, u64::MAX).into())
 				.build_or_panic();
 		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 			read: 10,
@@ -900,6 +893,10 @@ mod tests {
 		type MaxReserves = ();
 		type ReserveIdentifier = [u8; 8];
 		type WeightInfo = ();
+		type FreezeIdentifier = ();
+		type MaxFreezes = ConstU32<1>;
+		type HoldIdentifier = ();
+		type MaxHolds = ConstU32<1>;
 	}
 
 	parameter_types! {
@@ -946,7 +943,7 @@ mod tests {
 			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());
 			sp_io::storage::set(CUSTOM_ON_RUNTIME_KEY, &true.encode());
 			System::deposit_event(frame_system::Event::CodeUpdated);
-			Weight::from_ref_time(100)
+			Weight::from_parts(100, 0)
 		}
 	}
 
@@ -973,7 +970,7 @@ mod tests {
 	}
 
 	fn call_transfer(dest: u64, value: u64) -> RuntimeCall {
-		RuntimeCall::Balances(BalancesCall::transfer { dest, value })
+		RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest, value })
 	}
 
 	#[test]
@@ -1026,13 +1023,13 @@ mod tests {
 		block_import_works_inner(
 			new_test_ext_v0(1),
 			array_bytes::hex_n_into_unchecked(
-				"216e61b2689d1243eb56d89c9084db48e50ebebc4871d758db131432c675d7c0",
+				"65e953676859e7a33245908af7ad3637d6861eb90416d433d485e95e2dd174a1",
 			),
 		);
 		block_import_works_inner(
 			new_test_ext(1),
 			array_bytes::hex_n_into_unchecked(
-				"4738b4c0aab02d6ddfa62a2a6831ccc975a9f978f7db8d7ea8e68eba8639530a",
+				"5a19b3d6fdb7241836349fdcbe2d9df4d4f945b949d979e31ad50bff1cbcd1c2",
 			),
 		);
 	}
@@ -1117,14 +1114,14 @@ mod tests {
 		let mut t = new_test_ext(10000);
 		// given: TestXt uses the encoded len as fixed Len:
 		let xt = TestXt::new(
-			RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 33, value: 0 }),
 			sign_extra(1, 0, 0),
 		);
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as u64;
 		// on_initialize weight + base block execution weight
 		let block_weights = <Runtime as frame_system::Config>::BlockWeights::get();
-		let base_block_weight = Weight::from_ref_time(175) + block_weights.base_block;
+		let base_block_weight = Weight::from_parts(175, 0) + block_weights.base_block;
 		let limit = block_weights.get(DispatchClass::Normal).max_total.unwrap() - base_block_weight;
 		let num_to_exhaust_block = limit.ref_time() / (encoded_len + 5);
 		t.execute_with(|| {
@@ -1140,7 +1137,10 @@ mod tests {
 
 			for nonce in 0..=num_to_exhaust_block {
 				let xt = TestXt::new(
-					RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+					RuntimeCall::Balances(BalancesCall::transfer_allow_death {
+						dest: 33,
+						value: 0,
+					}),
 					sign_extra(1, nonce.into(), 0),
 				);
 				let res = Executive::apply_extrinsic(xt);
@@ -1149,7 +1149,7 @@ mod tests {
 					assert_eq!(
 						<frame_system::Pallet<Runtime>>::block_weight().total(),
 						//--------------------- on_initialize + block_execution + extrinsic_base weight
-						Weight::from_ref_time((encoded_len + 5) * (nonce + 1)) + base_block_weight,
+						Weight::from_parts((encoded_len + 5) * (nonce + 1), 0) + base_block_weight,
 					);
 					assert_eq!(
 						<frame_system::Pallet<Runtime>>::extrinsic_index(),
@@ -1165,22 +1165,22 @@ mod tests {
 	#[test]
 	fn block_weight_and_size_is_stored_per_tx() {
 		let xt = TestXt::new(
-			RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 33, value: 0 }),
 			sign_extra(1, 0, 0),
 		);
 		let x1 = TestXt::new(
-			RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 33, value: 0 }),
 			sign_extra(1, 1, 0),
 		);
 		let x2 = TestXt::new(
-			RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 33, value: 0 }),
 			sign_extra(1, 2, 0),
 		);
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext(1);
 		t.execute_with(|| {
 			// Block execution weight + on_initialize weight from custom module
-			let base_block_weight = Weight::from_ref_time(175) +
+			let base_block_weight = Weight::from_parts(175, 0) +
 				<Runtime as frame_system::Config>::BlockWeights::get().base_block;
 
 			Executive::initialize_block(&Header::new(
@@ -1199,7 +1199,7 @@ mod tests {
 			assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
 
 			// default weight for `TestXt` == encoded length.
-			let extrinsic_weight = Weight::from_ref_time(len as u64) +
+			let extrinsic_weight = Weight::from_parts(len as u64, 0) +
 				<Runtime as frame_system::Config>::BlockWeights::get()
 					.get(DispatchClass::Normal)
 					.base_extrinsic;
@@ -1259,50 +1259,30 @@ mod tests {
 	}
 
 	#[test]
-	fn can_pay_for_tx_fee_on_full_lock() {
-		let id: LockIdentifier = *b"0       ";
-		let execute_with_lock = |lock: WithdrawReasons| {
-			let mut t = new_test_ext(1);
-			t.execute_with(|| {
-				<pallet_balances::Pallet<Runtime> as LockableCurrency<Balance>>::set_lock(
-					id, &1, 110, lock,
-				);
-				let xt = TestXt::new(
-					RuntimeCall::System(SystemCall::remark { remark: vec![1u8] }),
-					sign_extra(1, 0, 0),
-				);
-				let weight = xt.get_dispatch_info().weight +
-					<Runtime as frame_system::Config>::BlockWeights::get()
-						.get(DispatchClass::Normal)
-						.base_extrinsic;
-				let fee: Balance =
-					<Runtime as pallet_transaction_payment::Config>::WeightToFee::weight_to_fee(
-						&weight,
-					);
-				Executive::initialize_block(&Header::new(
-					1,
-					H256::default(),
-					H256::default(),
-					[69u8; 32].into(),
-					Digest::default(),
-				));
+	fn can_not_pay_for_tx_fee_on_full_lock() {
+		let mut t = new_test_ext(1);
+		t.execute_with(|| {
+			<pallet_balances::Pallet<Runtime> as fungible::MutateFreeze<u64>>::set_freeze(
+				&(),
+				&1,
+				110,
+			)
+			.unwrap();
+			let xt = TestXt::new(
+				RuntimeCall::System(frame_system::Call::remark { remark: vec![1u8] }),
+				sign_extra(1, 0, 0),
+			);
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
 
-				if lock == WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT) {
-					assert!(Executive::apply_extrinsic(xt).unwrap().is_ok());
-					// tx fee has been deducted.
-					assert_eq!(<pallet_balances::Pallet<Runtime>>::total_balance(&1), 111 - fee);
-				} else {
-					assert_eq!(
-						Executive::apply_extrinsic(xt),
-						Err(InvalidTransaction::Payment.into()),
-					);
-					assert_eq!(<pallet_balances::Pallet<Runtime>>::total_balance(&1), 111);
-				}
-			});
-		};
-
-		execute_with_lock(WithdrawReasons::all());
-		execute_with_lock(WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT));
+			assert_eq!(Executive::apply_extrinsic(xt), Err(InvalidTransaction::Payment.into()),);
+			assert_eq!(<pallet_balances::Pallet<Runtime>>::total_balance(&1), 111);
+		});
 	}
 
 	#[test]
@@ -1315,7 +1295,7 @@ mod tests {
 			// the `on_initialize` weight defined in the custom test module.
 			assert_eq!(
 				<frame_system::Pallet<Runtime>>::block_weight().total(),
-				Weight::from_ref_time(175 + 175 + 10)
+				Weight::from_parts(175 + 175 + 10, 0)
 			);
 		})
 	}
@@ -1444,7 +1424,7 @@ mod tests {
 	#[test]
 	fn custom_runtime_upgrade_is_called_when_using_execute_block_trait() {
 		let xt = TestXt::new(
-			RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 33, value: 0 }),
 			sign_extra(1, 0, 0),
 		);
 
@@ -1570,7 +1550,7 @@ mod tests {
 	#[should_panic(expected = "Invalid inherent position for extrinsic at index 1")]
 	fn invalid_inherent_position_fail() {
 		let xt1 = TestXt::new(
-			RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 33, value: 0 }),
 			sign_extra(1, 0, 0),
 		);
 		let xt2 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);

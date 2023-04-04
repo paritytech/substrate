@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -101,10 +101,18 @@ pub struct CallMetadata {
 
 /// Gets the function name of the Call.
 pub trait GetCallName {
-	/// Return all function names.
+	/// Return all function names in the same order as [`GetCallIndex`].
 	fn get_call_names() -> &'static [&'static str];
 	/// Return the function name of the Call.
 	fn get_call_name(&self) -> &'static str;
+}
+
+/// Gets the function index of the Call.
+pub trait GetCallIndex {
+	/// Return all call indices in the same order as [`GetCallName`].
+	fn get_call_indices() -> &'static [u8];
+	/// Return the index of this Call.
+	fn get_call_index(&self) -> u8;
 }
 
 /// Gets the metadata for the Call - function name and pallet name.

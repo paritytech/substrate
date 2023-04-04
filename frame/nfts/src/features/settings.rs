@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -57,7 +57,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub(crate) fn do_update_mint_settings(
-		maybe_check_owner: Option<T::AccountId>,
+		maybe_check_origin: Option<T::AccountId>,
 		collection: T::CollectionId,
 		mint_settings: MintSettings<
 			BalanceOf<T, I>,
@@ -65,10 +65,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			T::CollectionId,
 		>,
 	) -> DispatchResult {
-		let details =
-			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		if let Some(check_owner) = &maybe_check_owner {
-			ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
+		if let Some(check_origin) = &maybe_check_origin {
+			ensure!(
+				Self::has_role(&collection, &check_origin, CollectionRole::Issuer),
+				Error::<T, I>::NoPermission
+			);
 		}
 
 		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
@@ -94,6 +95,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let config = ItemConfigOf::<T, I>::get(&collection_id, &item_id)
 			.ok_or(Error::<T, I>::UnknownItem)?;
 		Ok(config)
+	}
+
+	pub(crate) fn get_default_item_settings(
+		collection_id: &T::CollectionId,
+	) -> Result<ItemSettings, DispatchError> {
+		let collection_config = Self::get_collection_config(collection_id)?;
+		Ok(collection_config.mint_settings.default_item_settings)
 	}
 
 	pub(crate) fn is_pallet_feature_enabled(feature: PalletFeature) -> bool {
