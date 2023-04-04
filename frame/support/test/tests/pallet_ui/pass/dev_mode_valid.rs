@@ -19,6 +19,16 @@ pub mod pallet {
 	#[pallet::storage]
 	type MyStorage<T: Config> = StorageValue<_, Vec<u8>>;
 
+	// The Hasher requirement skipped by `dev_mode`.
+	#[pallet::storage]
+	type MyStorageMap<T: Config> = StorageMap<_, _, u32, u64>;
+
+	#[pallet::storage]
+	type MyStorageDoubleMap<T: Config> = StorageDoubleMap<_, _, u32, _, u64>;
+
+	#[pallet::storage]
+	type MyCountedStorageMap<T: Config> = CountedStorageMap<_, _, u32, _, u64>;
+
 	// Your Pallet's callable functions.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
