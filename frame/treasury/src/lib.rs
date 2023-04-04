@@ -58,7 +58,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod benchmarking;
+pub mod benchmarking;
 #[cfg(test)]
 mod tests;
 pub mod weights;
@@ -164,6 +164,17 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
+	#[cfg(feature = "runtime-benchmarks")]
+	pub trait BenchmarkHelper<AssetKind> {
+		fn create_asset_kind(id: u32) -> AssetKind;
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	impl<AssetKind: From<u32>> BenchmarkHelper<AssetKind> for () {
+		fn create_asset_kind(id: u32) -> AssetKind {
+			id.into()
+		}
+	}
+
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The staking balance.
@@ -240,6 +251,10 @@ pub mod pallet {
 		/// process. The `Success` value is the maximum amount that this origin is allowed to
 		/// spend at a time.
 		type SpendOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = BalanceOf<Self, I>>;
+
+		/// Helper trait for benchmarks.
+		#[cfg(feature = "runtime-benchmarks")]
+		type BenchmarkHelper: BenchmarkHelper<Self::AssetKind>;
 	}
 
 	/// Number of proposals that have been made.
