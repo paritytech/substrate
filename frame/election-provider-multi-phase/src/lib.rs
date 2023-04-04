@@ -127,7 +127,7 @@
 //!
 //! A call to `T::ElectionProvider::elect` is made, and `Ok(_)` cannot be returned, then the pallet
 //! proceeds to the [`Phase::Emergency`], if enough "electing" blocks have passed since the last
-//! successfull election (see more details below under subsection "Emergency Phase Throttling").
+//! successful election (see more details below under subsection "Emergency Phase Throttling").
 //! During this phase, any solution can be submitted from [`Config::ForceOrigin`], without any
 //! checking, via [`Pallet::set_emergency_election_result`] transaction. Hence,
 //! `[`Config::ForceOrigin`]` should only be set to a trusted origin, such as the council or root.
