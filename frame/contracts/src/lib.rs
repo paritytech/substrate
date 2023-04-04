@@ -908,9 +908,8 @@ pub mod pallet {
 		StorageValue<_, DeletionQueueManager<T>, ValueQuery>;
 }
 
-/// Helper function to ensure that the origin is either a regular signed account or root
-/// and returns it as a `Caller`, if it is one of those.
-/// It errors otherwise.
+/// Helper function to ensure that the origin is either a signed extrinsic or root.
+/// Returns a `Caller` if it is one of those, or an `Err` otherwise.
 fn contract_ensure_signed_or_root<T: Config>(
 	origin: T::RuntimeOrigin,
 ) -> Result<Caller<T>, BadOrigin> {
