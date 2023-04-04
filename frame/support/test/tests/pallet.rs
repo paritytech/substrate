@@ -476,6 +476,11 @@ pub mod pallet {
 		}
 	}
 
+	#[pallet::composite_enum]
+	pub enum HoldReason {
+		Staking,
+	}
+
 	#[derive(codec::Encode, sp_runtime::RuntimeDebug)]
 	#[cfg_attr(feature = "std", derive(codec::Decode))]
 	pub enum InherentError {
@@ -569,6 +574,16 @@ pub mod pallet2 {
 		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
 		fn build(&self) {}
+	}
+
+	#[pallet::composite_enum]
+	pub enum HoldReason {
+		Governance,
+	}
+
+	#[pallet::composite_enum]
+	pub enum SlashReason {
+		Equivocation,
 	}
 }
 
@@ -972,6 +987,17 @@ fn validate_unsigned_expand() {
 
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::External, &call).unwrap();
 	assert_eq!(validity, ValidTransaction::default());
+}
+
+#[test]
+fn composite_expand() {
+	let hold_reason: RuntimeHoldReason = pallet::HoldReason::Staking.into();
+	let hold_reason2: RuntimeHoldReason = pallet2::HoldReason::Governance.into();
+	let slash_reason: RuntimeSlashReason = pallet2::SlashReason::Equivocation.into();
+
+	assert_eq!(hold_reason, RuntimeHoldReason::Example(pallet::HoldReason::Staking));
+	assert_eq!(hold_reason2, RuntimeHoldReason::Example2(pallet2::HoldReason::Governance));
+	assert_eq!(slash_reason, RuntimeSlashReason::Example2(pallet2::SlashReason::Equivocation));
 }
 
 #[test]
