@@ -490,7 +490,7 @@ fn process_unnamed_generics(
 	storage: &StorageKind,
 	args_span: proc_macro2::Span,
 	args: &[syn::Type],
-	dev_mode: bool
+	dev_mode: bool,
 ) -> syn::Result<(Option<StorageGenerics>, Metadata, Option<syn::Type>, bool)> {
 	let retrieve_arg = |arg_pos| {
 		args.get(arg_pos).cloned().ok_or_else(|| {
@@ -549,7 +549,12 @@ fn process_unnamed_generics(
 		StorageKind::NMap => {
 			let keygen = retrieve_arg(1)?;
 			let keys = collect_keys(&keygen)?;
-			(None, Metadata::NMap { keys, keygen, value: retrieve_arg(2)? }, retrieve_arg(3).ok(), false)
+			(
+				None,
+				Metadata::NMap { keys, keygen, value: retrieve_arg(2)? },
+				retrieve_arg(3).ok(),
+				false,
+			)
 		},
 	};
 
@@ -559,7 +564,7 @@ fn process_unnamed_generics(
 /// Returns `(named generics, metadata, query kind, use_default_hasher)`
 fn process_generics(
 	segment: &syn::PathSegment,
-	dev_mode: bool
+	dev_mode: bool,
 ) -> syn::Result<(Option<StorageGenerics>, Metadata, Option<syn::Type>, bool)> {
 	let storage_kind = match &*segment.ident.to_string() {
 		"StorageValue" => StorageKind::Value,
@@ -726,7 +731,8 @@ impl StorageDef {
 			return Err(syn::Error::new(item.ty.span(), msg))
 		}
 
-		let (named_generics, metadata, query_kind, use_default_hasher) = process_generics(&typ.path.segments[0], dev_mode)?;
+		let (named_generics, metadata, query_kind, use_default_hasher) =
+			process_generics(&typ.path.segments[0], dev_mode)?;
 
 		let query_kind = query_kind
 			.map(|query_kind| {
@@ -847,7 +853,7 @@ impl StorageDef {
 			named_generics,
 			unbounded,
 			whitelisted,
-			use_default_hasher
+			use_default_hasher,
 		})
 	}
 }

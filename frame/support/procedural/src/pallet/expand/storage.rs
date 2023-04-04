@@ -271,12 +271,14 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 
 			if storage_def.use_default_hasher {
 				let hasher_indices: Vec<usize> = match storage_def.metadata {
-					Metadata::Map { .. } | Metadata::CountedMap { .. } => vec![1], 
+					Metadata::Map { .. } | Metadata::CountedMap { .. } => vec![1],
 					Metadata::DoubleMap { .. } => vec![1, 3],
-					_ => vec![]
+					_ => vec![],
 				};
 				for hasher_idx in hasher_indices {
-					args.args[hasher_idx] = syn::GenericArgument::Type(syn::parse_quote!(#frame_support::Blake2_128Concat));
+					args.args[hasher_idx] = syn::GenericArgument::Type(
+						syn::parse_quote!(#frame_support::Blake2_128Concat),
+					);
 				}
 			}
 
