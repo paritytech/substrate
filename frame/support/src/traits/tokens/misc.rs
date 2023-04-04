@@ -263,7 +263,10 @@ impl<InBalance, AssetId, OutBalance: core::convert::From<InBalance>>
 	ConversionFromAssetBalance<InBalance, AssetId, OutBalance> for ()
 {
 	type Error = ();
-	fn from_asset_balance(balance: InBalance, _asset_id: AssetId) -> Result<OutBalance, Self::Error> {
+	fn from_asset_balance(
+		balance: InBalance,
+		_asset_id: AssetId,
+	) -> Result<OutBalance, Self::Error> {
 		Ok(balance.into())
 	}
 }
