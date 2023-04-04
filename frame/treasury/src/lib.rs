@@ -193,7 +193,7 @@ pub mod pallet {
 		/// This can be implmented over fungibles or some other means.
 		type Paymaster: Pay<Beneficiary = Self::AccountId, AssetKind = Self::AssetKind>;
 
-		// THe means of knowing what is the equivalent native Balance of a given asset id Balance.
+		// The means of knowing what is the equivalent native Balance of a given asset id Balance.
 		type BalanceConverter: ConversionFromAssetBalance<
 			PayBalanceOf<Self, I>,
 			Self::AssetKind,
