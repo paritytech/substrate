@@ -24,8 +24,7 @@ use sp_runtime_interface::pass_by::PassByInner;
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
 use crate::crypto::{
-	ByteArray, CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic,
-	UncheckedFrom,
+	ByteArray, CryptoType, CryptoTypeId, Derive, Public as TraitPublic, UncheckedFrom,
 };
 #[cfg(feature = "full_crypto")]
 use crate::{
@@ -103,23 +102,7 @@ impl ByteArray for Public {
 	const LEN: usize = 33;
 }
 
-impl TraitPublic for Public {
-	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
-		CryptoTypePublicPair(CRYPTO_ID, self.to_raw_vec())
-	}
-}
-
-impl From<Public> for CryptoTypePublicPair {
-	fn from(key: Public) -> Self {
-		(&key).into()
-	}
-}
-
-impl From<&Public> for CryptoTypePublicPair {
-	fn from(key: &Public) -> Self {
-		CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
-	}
-}
+impl TraitPublic for Public {}
 
 impl Derive for Public {}
 

@@ -46,7 +46,7 @@ sp-io = { version = "7.0.0", default-features = false, path = "../../../primitiv
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/benchmarking" }
 frame-benchmarking-pallet-pov = { version = "4.0.0-dev", default-features = false, path = "../../../frame/benchmarking/pov" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/support" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/support", features = ["tuples-96"] }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-support" }
