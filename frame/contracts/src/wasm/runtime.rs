@@ -253,7 +253,7 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_ecdsa_recover`.
 	EcdsaRecovery,
 	/// Weight of calling `seal_sr25519_verify`.
-	Sr25519Verify,
+	Sr25519Verify(u32),
 	/// Weight charged by a chain extension through `seal_call_chain_extension`.
 	ChainExtension(Weight),
 	/// Weight charged for calling into the runtime.
@@ -276,6 +276,7 @@ impl RuntimeCosts {
 		let weight = match *self {
 			MeteringBlock(amount) => s.gas.saturating_add(Weight::from_parts(amount, 0)),
 			CopyFromContract(len) => s.return_per_byte.saturating_mul(len.into()),
+			Sr25519Verify(len) => s.sr25519_verify.saturating_mul(len.into()),
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
 			IsContract => s.is_contract,
@@ -339,7 +340,6 @@ impl RuntimeCosts {
 				.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			EcdsaRecovery => s.ecdsa_recover,
-			Sr25519Verify => s.sr25519_verify,
 			ChainExtension(weight) => weight,
 			CallRuntime(weight) => weight,
 			SetCodeHash => s.set_code_hash,
@@ -2476,11 +2476,11 @@ pub mod env {
 	///
 	/// - `signature_ptr`: the pointer into the linear memory where the signature is placed. Should
 	///   be decodable as a 64 bytes. Traps otherwise.
-	/// - `message_ptr`: the pointer into the linear memory where the message is placed.
-	/// - `message_len`: the length of the message payload. Should be decodable as a Scale encoded
-	///   Vec<u8>. Traps otherwise.
 	/// - `pub_key_ptr`: the pointer into the linear memory where the public key is placed. Should
 	///   be decodable as a 32 bytes. Traps otherwise.
+	/// - `message_len`: the length of the message payload.
+	/// - `message_ptr`: the pointer into the linear memory where the message is placed. Should be
+	///   decodable as a Scale encoded Vec<u8>. Traps otherwise
 	/// # Errors
 	///
 	/// - `ReturnCode::Sr25519VerifyFailed
@@ -2490,17 +2490,21 @@ pub mod env {
 		ctx: _,
 		memory: _,
 		signature_ptr: u32,
-		message_ptr: u32,
-		message_len: u32,
 		pub_key_ptr: u32,
+		message_len: u32,
+		message_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		ctx.charge_gas(RuntimeCosts::Sr25519Verify)?;
+		ctx.charge_gas(RuntimeCosts::Sr25519Verify(message_len))?;
+
 		let mut signature: [u8; 64] = [0; 64];
 		ctx.read_sandbox_memory_into_buf(memory, signature_ptr, &mut signature)?;
+
 		let mut pub_key: [u8; 32] = [0; 32];
 		ctx.read_sandbox_memory_into_buf(memory, pub_key_ptr, &mut pub_key)?;
+
 		let message: Vec<u8> =
 			ctx.read_sandbox_memory_as_unbounded(memory, message_ptr, message_len)?;
+
 		if ctx.ext.sr25519_verify(&signature, &message, &pub_key) {
 			Ok(ReturnCode::Success)
 		} else {

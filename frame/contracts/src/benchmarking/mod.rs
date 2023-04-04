@@ -2020,9 +2020,61 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	// `n`: Messaqe input to verify in bytes
+	#[pov_mode = Measured]
+	seal_sr25519_verify {
+		let n in 0 .. T::MaxCodeLen::get() - 255; // need some buffer so the code size does not
+												  // exceed the max code size.
+
+		let message = (0..n).zip((32u8..127u8).cycle()).map(|(_, c)| c).collect::<Vec<_>>().encode();
+		let message_len = message.len() as i32;
+
+		let key_type = sp_core::crypto::KeyTypeId(*b"code");
+		let pub_key = sp_io::crypto::sr25519_generate(key_type, None);
+		let sig = sp_io::crypto::sr25519_sign(key_type, &pub_key, &message).expect("Generates signature");
+		let sig = AsRef::<[u8; 64]>::as_ref(&sig).to_vec();
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "seal_sr25519_verify",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: sig,
+				},
+				DataSegment {
+					offset: 64,
+					value: pub_key.to_vec(),
+				},
+				DataSegment {
+					offset: 96,
+					value: message,
+				},
+			],
+			call_body: Some(body::plain(vec![
+				Instruction::I32Const(0), // signature_ptr
+				Instruction::I32Const(64), // pub_key_ptr
+				Instruction::I32Const(message_len), // message_len
+				Instruction::I32Const(96), // message_ptr
+				Instruction::Call(0),
+				Instruction::Drop,
+				Instruction::End,
+			])),
+			.. Default::default()
+		});
+
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
 	// Only calling the function itself with valid arguments.
 	// It generates different private keys and signatures for the message "Hello world".
-	// This is a slow call: We redeuce the number of runs.
+	// This is a slow call: We reduce the number of runs.
 	#[pov_mode = Measured]
 	seal_ecdsa_recover {
 		let r in 0 .. API_BENCHMARK_RUNS / 10;

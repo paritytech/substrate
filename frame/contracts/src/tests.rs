@@ -2947,8 +2947,8 @@ fn sr25519_verify() {
 
 			let mut params = vec![];
 			params.extend_from_slice(&signature);
-			params.extend_from_slice(&message.to_vec().encode());
 			params.extend_from_slice(&public_key);
+			params.extend_from_slice(&message.to_vec().encode());
 
 			<Pallet<Test>>::bare_call(
 				ALICE,

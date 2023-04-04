@@ -39,10 +39,7 @@ use sp_core::{
 	ecdsa::Public as ECDSAPublic,
 	sr25519::{Public as SR25519Public, Signature as SR25519Signature},
 };
-use sp_io::{
-	crypto::{secp256k1_ecdsa_recover_compressed, sr25519_verify as crypto_sr25519_verify},
-	hashing::blake2_256,
-};
+use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
 use sp_runtime::traits::{Convert, Hash};
 use sp_std::{marker::PhantomData, mem, prelude::*, vec::Vec};
 
@@ -1357,7 +1354,11 @@ where
 	}
 
 	fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool {
-		crypto_sr25519_verify(&SR25519Signature(*signature), message, &SR25519Public(*pub_key))
+		sp_io::crypto::sr25519_verify(
+			&SR25519Signature(*signature),
+			message,
+			&SR25519Public(*pub_key),
+		)
 	}
 
 	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()> {

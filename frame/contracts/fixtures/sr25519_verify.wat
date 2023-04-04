@@ -29,18 +29,19 @@
 	(func (export "call")
 		;; define local variables
 		(local $signature_ptr i32)
-		(local $message_ptr i32)
 		(local $pub_key_ptr i32)
+		(local $message_len i32)
+		(local $message_ptr i32)
 		(local $result i32)
 
 		;; set the pointers to the memory locations
 		;; Memory layout during `call`
 		;; [10, 74) signature
-		;; [74, 86) message
-		;; [86, 118) public key
+		;; [74, 106) public key
+		;; [106, 118) message (12 bytes)
 		(local.set $signature_ptr (i32.const 10))
-		(local.set $message_ptr (i32.const 74))
-		(local.set $pub_key_ptr (i32.const 86))
+		(local.set $pub_key_ptr (i32.const 74))
+		(local.set $message_ptr (i32.const 106))
 
 		;; store the input into the memory, starting at the signature and 
 		;; up to 108 bytes stored at offset 4
@@ -51,9 +52,9 @@
 			$result
 			(call $seal_sr25519_verify
 				(local.get $signature_ptr)
-				(local.get $message_ptr)
-				(i32.const 12)
 				(local.get $pub_key_ptr)
+				(i32.const 12)
+				(local.get $message_ptr)
 			)
 		)
 
