@@ -58,7 +58,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod benchmarking;
+mod benchmarking;
 #[cfg(test)]
 mod tests;
 pub mod weights;
@@ -75,7 +75,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 use frame_support::{
 	print,
 	traits::{
-		tokens::{AssetId, BalanceConversion, Pay, PaymentStatus},
+		tokens::{AssetId, ConversionFromAssetBalance, Pay, PaymentStatus},
 		Currency,
 		ExistenceRequirement::KeepAlive,
 		Get, Imbalance, OnUnbalanced, ReservableCurrency, WithdrawReasons,
@@ -194,7 +194,7 @@ pub mod pallet {
 		type Paymaster: Pay<Beneficiary = Self::AccountId, AssetKind = Self::AssetKind>;
 
 		// THe means of knowing what is the equivalent native Balance of a given asset id Balance.
-		type BalanceConverter: BalanceConversion<
+		type BalanceConverter: ConversionFromAssetBalance<
 			PayBalanceOf<Self, I>,
 			Self::AssetKind,
 			BalanceOf<Self, I>,
@@ -587,7 +587,7 @@ pub mod pallet {
 			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
-			let normalized_amount = T::BalanceConverter::to_asset_balance(amount, asset_kind)
+			let normalized_amount = T::BalanceConverter::from_asset_balance(amount, asset_kind)
 				.map_err(|_| Error::<T, I>::BalanceConversionFailed)?;
 			ensure!(normalized_amount <= max_amount, Error::<T, I>::InsufficientPermission);
 

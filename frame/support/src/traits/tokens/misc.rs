@@ -260,10 +260,10 @@ pub trait ConversionFromAssetBalance<AssetBalance, AssetId, OutBalance> {
 }
 
 impl<InBalance, AssetId, OutBalance: core::convert::From<InBalance>>
-	BalanceConversion<InBalance, AssetId, OutBalance> for ()
+	ConversionFromAssetBalance<InBalance, AssetId, OutBalance> for ()
 {
 	type Error = ();
-	fn to_asset_balance(balance: InBalance, _asset_id: AssetId) -> Result<OutBalance, Self::Error> {
+	fn from_asset_balance(balance: InBalance, _asset_id: AssetId) -> Result<OutBalance, Self::Error> {
 		Ok(balance.into())
 	}
 }
