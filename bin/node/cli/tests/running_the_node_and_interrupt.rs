@@ -25,7 +25,7 @@ use std::{
 };
 use tempfile::tempdir;
 
-pub mod common;
+use substrate_cli_test_utils as common;
 
 #[tokio::test]
 async fn running_the_node_works_and_can_be_interrupted() {
