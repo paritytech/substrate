@@ -39,7 +39,7 @@ use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
-	Digest, Percent, SaturatedConversion,
+	Perbill, Digest, Percent, SaturatedConversion,
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
@@ -381,6 +381,7 @@ where
 		let soft_deadline =
 			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros));
 		let block_timer = time::Instant::now();
+		log::trace!("xxx -> left:{left:?}, now:{now:?}, soft_deadline:{soft_deadline:?}, block_timer:{block_timer:?}");
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
 
@@ -413,7 +414,10 @@ where
 				break EndProposingReason::NoMoreTransactions
 			};
 
+
 			let now = (self.now)();
+			log::trace!("xxx -> skipped: {skipped:?} now:{now:?}, soft_deadline:{soft_deadline:?}");
+			log::trace!("xxx -> pending_tx: {:?}", pending_tx.data());
 			if now > deadline {
 				debug!(
 					"Consensus deadline reached when pushing block transactions, \
@@ -559,35 +563,26 @@ mod tests {
 	use sp_runtime::{generic::BlockId, traits::NumberFor};
 	use substrate_test_runtime_client::{
 		prelude::*,
-		runtime::{Extrinsic, ExtrinsicBuilder, Transfer, TransferCallBuilder},
+		runtime::{Block as TestBlock, Extrinsic, ExtrinsicBuilder, Transfer, TransferCallBuilder},
 		TestClientBuilder, TestClientBuilderExt,
 	};
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
-	fn extrinsic(nonce: u64) -> Extrinsic {
-		Transfer {
-			amount: Default::default(),
-			nonce,
-			from: AccountKeyring::Alice.into(),
-			to: AccountKeyring::Bob.into(),
-		}
-		.into_unchecked_extrinsic()
-	}
+	// Note: 
+	// Maximum normal extrinsic size for substrate_test_runtime is ~65% of max_block (refer to
+	// substrate_test_runtime::RuntimeBlockWeights for details). 
+	// This extrinsic sizing allows for:
+	// - one huge xts + a lot of tiny dust
+	// - one huge, no medium,
+	// - two medium xts
+	// This is widely exploited in following tests.
+	const HUGE: u32 = 649000000;
+	const MEDIUM: u32 = 250000000;
+	const TINY: u32 = 1000;
 
-	fn exhausts_resources_extrinsic_from(who: usize) -> Extrinsic {
-		let pair = AccountKeyring::numeric(who);
-		let transfer = Transfer {
-			// increase the amount to bump priority
-			amount: 1,
-			nonce: 0,
-			from: pair.public(),
-			to: AccountKeyring::Bob.into(),
-		};
-		ExtrinsicBuilder::new(
-			TransferCallBuilder::new(transfer).signer(pair).exhaust_resources().build(),
-		)
-		.build()
+	fn extrinsic(nonce: u64) -> Extrinsic {
+		ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY)).build2(nonce)
 	}
 
 	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
@@ -599,6 +594,7 @@ mod tests {
 
 	#[test]
 	fn should_cease_building_block_when_deadline_is_reached() {
+		sp_tracing::try_init_simple();
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
@@ -744,8 +740,9 @@ mod tests {
 
 	#[test]
 	fn should_not_remove_invalid_transactions_when_skipping() {
+		sp_tracing::try_init_simple();
 		// given
-		let mut client = Arc::new(substrate_test_runtime_client::new());
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
@@ -755,27 +752,20 @@ mod tests {
 			client.clone(),
 		);
 
+		let tiny = |nonce| { ExtrinsicBuilder::new_fill_block(Perbill::from_parts(MEDIUM)).build2(nonce) };
+		let huge = |nonce| { ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE)).build2(nonce) };
+
 		block_on(txpool.submit_at(
 			&BlockId::number(0),
 			SOURCE,
 			vec![
-				extrinsic(0),
-				extrinsic(1),
-				Transfer {
-					amount: Default::default(),
-					nonce: 2,
-					from: AccountKeyring::Alice.into(),
-					to: AccountKeyring::Bob.into(),
-				}.into_resources_exhausting_unchecked_extrinsic(),
-				extrinsic(3),
-				Transfer {
-					amount: Default::default(),
-					nonce: 4,
-					from: AccountKeyring::Alice.into(),
-					to: AccountKeyring::Bob.into(),
-				}.into_resources_exhausting_unchecked_extrinsic(),
-				extrinsic(5),
-				extrinsic(6),
+                tiny(0),
+                tiny(1),
+                huge(2),
+                tiny(3),
+                huge(4),
+                tiny(5),
+                tiny(6)
 			],
 		))
 		.unwrap();
@@ -783,10 +773,10 @@ mod tests {
 		let mut proposer_factory =
 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
 		let mut propose_block = |client: &TestClient,
-		                         number,
+		                         parent_number,
 		                         expected_block_extrinsics,
 		                         expected_pool_transactions| {
-			let hash = client.expect_block_hash_from_id(&BlockId::Number(number)).unwrap();
+			let hash = client.expect_block_hash_from_id(&BlockId::Number(parent_number)).unwrap();
 			let proposer = proposer_factory.init_with_now(
 				&client.expect_header(hash).unwrap(),
 				Box::new(move || time::Instant::now()),
@@ -799,12 +789,24 @@ mod tests {
 					.map(|r| r.block)
 					.unwrap();
 
+			log::trace!("xxx imported extrinsics (at block:{}): {:#?}", block.header.number, block.extrinsics);
+
 			// then
 			// block should have some extrinsics although we have some more in the pool.
-			assert_eq!(txpool.ready().count(), expected_pool_transactions);
-			assert_eq!(block.extrinsics().len(), expected_block_extrinsics);
+			assert_eq!(txpool.ready().count(), expected_pool_transactions, "at block: {}", block.header.number);
+			assert_eq!(block.extrinsics().len(), expected_block_extrinsics, "at block: {}", block.header.number);
 
 			block
+		};
+
+		let import_and_maintain = |mut client: Arc<TestClient>, block: TestBlock| {
+			let hash = block.hash();
+			block_on(client.import(BlockOrigin::Own, block)).unwrap();
+			block_on(
+				txpool.maintain(chain_event(
+						client.expect_header(hash).expect("there should be header"),
+				)),
+			);
 		};
 
 		block_on(
@@ -814,27 +816,38 @@ mod tests {
 					.expect("there should be header"),
 			)),
 		);
+		log::trace!("xxx - rx.fut: {:#?}", txpool.status());
 		assert_eq!(txpool.ready().count(), 7);
 
 		// let's create one block and import it
 		let block = propose_block(&client, 0, 2, 7);
-		let hashof1 = block.hash();
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-
-		block_on(
-			txpool.maintain(chain_event(
-				client.expect_header(hashof1).expect("there should be header"),
-			)),
-		);
+		import_and_maintain(client.clone(), block);
 		assert_eq!(txpool.ready().count(), 5);
 
 		// now let's make sure that we can still make some progress
-		let block = propose_block(&client, 1, 2, 5);
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
+		let block = propose_block(&client, 1, 1, 5);
+		import_and_maintain(client.clone(), block);
+		assert_eq!(txpool.ready().count(), 4);
+
+		// again let's make sure that we can still make some progress
+		let block = propose_block(&client, 2, 1, 4);
+		import_and_maintain(client.clone(), block);
+		assert_eq!(txpool.ready().count(), 3);
+
+		// again let's make sure that we can still make some progress
+		let block = propose_block(&client, 3, 1, 3);
+		import_and_maintain(client.clone(), block);
+		assert_eq!(txpool.ready().count(), 2);
+
+		// again let's make sure that we can still make some progress
+		let block = propose_block(&client, 4, 2, 2);
+		import_and_maintain(client.clone(), block);
+		assert_eq!(txpool.ready().count(), 0);
 	}
 
 	#[test]
 	fn should_cease_building_block_when_block_limit_is_reached() {
+		sp_tracing::try_init_simple();
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
@@ -860,7 +873,7 @@ mod tests {
 		)
 		.chain(
 			(0..extrinsics_num - 1)
-				.map(|v| ExtrinsicBuilder::new_include_data(vec![v as u8; 10]).build()),
+				.map(|v| extrinsic(v as u64 + 1)),
 		)
 		.collect::<Vec<_>>();
 
@@ -939,6 +952,7 @@ mod tests {
 
 	#[test]
 	fn should_keep_adding_transactions_after_exhausts_resources_before_soft_deadline() {
+		sp_tracing::try_init_simple();
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
@@ -950,6 +964,9 @@ mod tests {
 			client.clone(),
 		);
 
+		let tiny = |nonce| { ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY)).build2(nonce) };
+		let huge = |who| { ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE)).signer(AccountKeyring::numeric(who)).build2(0) };
+
 		block_on(
 			txpool.submit_at(
 				&BlockId::number(0),
@@ -957,9 +974,9 @@ mod tests {
 				// add 2 * MAX_SKIPPED_TRANSACTIONS that exhaust resources
 				(0..MAX_SKIPPED_TRANSACTIONS * 2)
 					.into_iter()
-					.map(|i| exhausts_resources_extrinsic_from(i))
+					.map(huge)
 					// and some transactions that are okay.
-					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
+					.chain((0..MAX_SKIPPED_TRANSACTIONS as u64).into_iter().map(tiny))
 					.collect(),
 			),
 		)
@@ -1002,6 +1019,7 @@ mod tests {
 
 	#[test]
 	fn should_only_skip_up_to_some_limit_after_soft_deadline() {
+		sp_tracing::try_init_simple();
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
@@ -1013,15 +1031,18 @@ mod tests {
 			client.clone(),
 		);
 
+		let tiny = |who| { ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY)).signer(AccountKeyring::numeric(who)).build2(1) };
+		let huge = |who| { ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE)).signer(AccountKeyring::numeric(who)).build2(0) };
+
 		block_on(
 			txpool.submit_at(
 				&BlockId::number(0),
 				SOURCE,
 				(0..MAX_SKIPPED_TRANSACTIONS + 2)
 					.into_iter()
-					.map(|i| exhausts_resources_extrinsic_from(i))
+					.map(huge)
 					// and some transactions that are okay.
-					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
+					.chain((0..MAX_SKIPPED_TRANSACTIONS+2).into_iter().map(tiny))
 					.collect(),
 			),
 		)
@@ -1034,7 +1055,7 @@ mod tests {
 					.expect("there should be header"),
 			)),
 		);
-		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 2 + 2);
+		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 2 + 4);
 
 		let mut proposer_factory =
 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
@@ -1047,6 +1068,7 @@ mod tests {
 			Box::new(move || {
 				let mut value = cell.lock();
 				let (called, old) = *value;
+				// log::trace!("xxx -> before: called:{called} old:{old:?} txpool:{:?}", txpool.status());
 				// add time after deadline is calculated internally (hence 1)
 				let increase = if called == 1 {
 					// we start after the soft_deadline should have already been reached.
@@ -1055,6 +1077,7 @@ mod tests {
 					// but we make sure to never reach the actual deadline
 					time::Duration::from_millis(0)
 				};
+				log::trace!("xxx -> called:{:?} increase:{:?} old:{:?}", called, increase, old);
 				*value = (called + 1, old + increase);
 				old
 			}),
@@ -1065,8 +1088,10 @@ mod tests {
 				.map(|r| r.block)
 				.unwrap();
 
-		// then the block should have no transactions despite some in the pool
-		assert_eq!(block.extrinsics().len(), 1);
+		// then the block should have one or two transactions. This maybe random as they are processed in parallel. The
+		// same signer and consecutive nonces for huge and tiny transactions guarantees that max two transactions will
+		// get to the block.
+		assert!((1..3).contains(&block.extrinsics().len()), "Block shall contain one or two extrinsics.");
 		assert!(
 			cell2.lock().0 > MAX_SKIPPED_TRANSACTIONS,
 			"Not enough calls to current time, which indicates the test might have ended because of deadline, not soft deadline"
