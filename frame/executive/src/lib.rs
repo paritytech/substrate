@@ -480,15 +480,9 @@ where
 			// any initial checks
 			Self::initial_checks(&block);
 
-			let signature_batching = sp_runtime::SignatureBatching::start();
-
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
 			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
-
-			if !signature_batching.verify() {
-				panic!("Signature verification failed.");
-			}
 
 			// any final checks
 			Self::final_checks(&header);
