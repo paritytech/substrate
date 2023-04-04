@@ -238,7 +238,6 @@ impl PalletCmd {
 			&(self.extra).encode(),
 			extensions(),
 			&sp_state_machine::backend::BackendRuntimeCode::new(state).runtime_code()?,
-			sp_core::testing::TaskExecutor::new(),
 			CallContext::Offchain,
 		)
 		.execute(strategy.into())
@@ -376,7 +375,6 @@ impl PalletCmd {
 						extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
 					.execute(strategy.into())
@@ -417,7 +415,6 @@ impl PalletCmd {
 						extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
 					.execute(strategy.into())
@@ -450,7 +447,6 @@ impl PalletCmd {
 						extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
 					.execute(strategy.into())
