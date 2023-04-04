@@ -1,4 +1,4 @@
-error: expected one of: `Pallet`, `Call`, `Storage`, `Event`, `Config`, `Origin`, `Inherent`, `ValidateUnsigned`
+error: expected one of: `Pallet`, `Call`, `Storage`, `Event`, `Config`, `Origin`, `Inherent`, `ValidateUnsigned`, `FreezeReason`, `HoldReason`, `LockId`, `SlashReason`
   --> $DIR/invalid_module_entry.rs:10:23
    |
 10 |         Balance: balances::{Error},

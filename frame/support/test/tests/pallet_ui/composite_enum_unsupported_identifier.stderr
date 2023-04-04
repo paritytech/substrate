@@ -1,0 +1,5 @@
+error: expected one of: `FreezeReason`, `HoldReason`, `LockId`, `SlashReason`
+  --> tests/pallet_ui/composite_enum_unsupported_identifier.rs:10:11
+   |
+10 |     pub enum HoldReasons {}
+   |              ^^^^^^^^^^^

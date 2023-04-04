@@ -456,7 +456,14 @@ fn compile_module<T>(fixture_name: &str) -> wat::Result<(Vec<u8>, <T::Hashing as
 where
 	T: frame_system::Config,
 {
-	let fixture_path = ["fixtures/", fixture_name, ".wat"].concat();
+	let fixture_path = [
+		// When `CARGO_MANIFEST_DIR` is not set, Rust resolves relative paths from the root folder
+		std::env::var("CARGO_MANIFEST_DIR").as_deref().unwrap_or("frame/contracts"),
+		"/fixtures/",
+		fixture_name,
+		".wat",
+	]
+	.concat();
 	let wasm_binary = wat::parse_file(fixture_path)?;
 	let code_hash = T::Hashing::hash(&wasm_binary);
 	Ok((wasm_binary, code_hash))
