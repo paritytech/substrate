@@ -177,7 +177,10 @@ where
 		.unwrap_or_default();
 
 	let client = {
-		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::default();
+		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
+            None,
+			Arc::new(executor.clone()),
+		);
 
 		let wasm_runtime_substitutes = config
 			.chain_spec

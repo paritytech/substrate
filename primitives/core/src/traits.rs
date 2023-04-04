@@ -157,6 +157,16 @@ pub trait ReadRuntimeVersion: Send + Sync {
 	) -> Result<Vec<u8>, String>;
 }
 
+impl ReadRuntimeVersion for std::sync::Arc<dyn ReadRuntimeVersion> {
+	fn read_runtime_version(
+		&self,
+		wasm_code: &[u8],
+		ext: &mut dyn Externalities,
+	) -> Result<Vec<u8>, String> {
+		(**self).read_runtime_version(wasm_code, ext)
+	}
+}
+
 sp_externalities::decl_extension! {
 	/// An extension that provides functionality to read version information from a given wasm blob.
 	pub struct ReadRuntimeVersionExt(Box<dyn ReadRuntimeVersion>);

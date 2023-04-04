@@ -234,7 +234,10 @@ where
 	Block: BlockT,
 	B: backend::LocalBackend<Block> + 'static,
 {
-	let extensions = ExecutionExtensions::default();
+	let extensions = ExecutionExtensions::new(
+        None,
+		Arc::new(executor.clone()),
+	);
 
 	let call_executor =
 		LocalCallExecutor::new(backend.clone(), executor, config.clone(), extensions)?;

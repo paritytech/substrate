@@ -272,9 +272,12 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 		});
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),
-			executor,
+			executor.clone(),
 			Default::default(),
-			ExecutionExtensions::default(),
+			ExecutionExtensions::new(
+                None,
+				Arc::new(executor),
+			),
 		)
 		.expect("Creates LocalCallExecutor");
 

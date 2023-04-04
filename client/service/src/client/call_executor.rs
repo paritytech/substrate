@@ -404,7 +404,10 @@ mod tests {
 				backend.clone(),
 			)
 			.unwrap(),
-			execution_extensions: Arc::new(ExecutionExtensions::default()),
+			execution_extensions: Arc::new(ExecutionExtensions::new(
+				None,
+				Arc::new(executor.clone()),
+			)),
 		};
 
 		let check = call_executor
