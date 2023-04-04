@@ -126,7 +126,7 @@ use pallet_contracts_primitives::{
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
-use sp_runtime::traits::{BadOrigin, Convert, Hash, Saturating, StaticLookup};
+use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
@@ -569,7 +569,11 @@ pub mod pallet {
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let gas_limit: Weight = gas_limit.into();
-			let origin = contract_ensure_signed_or_root(origin)?;
+			// Ensure that the origin is either a signed extrinsic or root.
+			let origin = match ensure_signed_or_root(origin)? {
+				Some(t) => Caller::Signed(t),
+				None => Caller::Root,
+			};
 			let dest = T::Lookup::lookup(dest)?;
 			let common = CommonInput {
 				value,
@@ -906,17 +910,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type DeletionQueueCounter<T: Config> =
 		StorageValue<_, DeletionQueueManager<T>, ValueQuery>;
-}
-
-/// Helper function to ensure that the origin is either a signed extrinsic or root.
-/// Returns a `Caller` if it is one of those, or an `Err` otherwise.
-fn contract_ensure_signed_or_root<T: Config>(
-	origin: T::RuntimeOrigin,
-) -> Result<Caller<T>, BadOrigin> {
-	match ensure_signed_or_root(origin)? {
-		Some(t) => Ok(Caller::Signed(t)),
-		None => Ok(Caller::Root),
-	}
 }
 
 /// The type of callers supported by the contracts pallet.
