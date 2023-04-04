@@ -2901,7 +2901,7 @@ fn ecdsa_recover() {
 }
 
 #[test]
-fn result_returns_events() {
+fn bare_call_result_returns_events() {
 	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
