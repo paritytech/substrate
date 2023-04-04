@@ -374,7 +374,7 @@ pub mod pallet {
 			amount: PayBalanceOf<T, I>,
 			beneficiary: T::AccountId,
 		},
-		/// The has been processed but awaiting payment status.
+		/// The payment has been processed but awaiting payment status.
 		PaymentTriggered {
 			payment_index: PendingPaymentIndex,
 			asset_kind: T::AssetKind,
