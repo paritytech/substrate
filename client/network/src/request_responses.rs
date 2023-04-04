@@ -18,8 +18,8 @@
 
 //! Collection of request-response protocols.
 //!
-//! The [`RequestResponse`] struct defined in this module provides support for zero or more
-//! so-called "request-response" protocols.
+//! The [`RequestResponsesBehaviour`] struct defined in this module provides support for zero or
+//! more so-called "request-response" protocols.
 //!
 //! A request-response protocol works in the following way:
 //!
@@ -1317,10 +1317,10 @@ mod tests {
 	}
 
 	/// A [`RequestId`] is a unique identifier among either all inbound or all outbound requests for
-	/// a single [`RequestResponse`] behaviour. It is not guaranteed to be unique across multiple
-	/// [`RequestResponse`] behaviours. Thus when handling [`RequestId`] in the context of multiple
-	/// [`RequestResponse`] behaviours, one needs to couple the protocol name with the [`RequestId`]
-	/// to get a unique request identifier.
+	/// a single [`RequestResponsesBehaviour`] behaviour. It is not guaranteed to be unique across
+	/// multiple [`RequestResponsesBehaviour`] behaviours. Thus when handling [`RequestId`] in the
+	/// context of multiple [`RequestResponsesBehaviour`] behaviours, one needs to couple the
+	/// protocol name with the [`RequestId`] to get a unique request identifier.
 	///
 	/// This test ensures that two requests on different protocols can be handled concurrently
 	/// without a [`RequestId`] collision.
