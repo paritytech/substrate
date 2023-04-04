@@ -123,30 +123,39 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount: T::Balance,
 		increase_supply: bool,
 	) -> DepositConsequence {
+		use DepositConsequence::*;
 		let details = match Asset::<T, I>::get(id) {
 			Some(details) => details,
-			None => return DepositConsequence::UnknownAsset,
+			None => return UnknownAsset,
 		};
 		if increase_supply && details.supply.checked_add(&amount).is_none() {
-			return DepositConsequence::Overflow
+			return Overflow
+		}
+		// We don't allow freezing of accounts that don't already have an `(AssetId, AccountId)`
+		// entry. The account may have a zero balance provided by a deposit placed by `touch`ing the
+		// account. However, frozen accounts cannot receive more of the `AssetID`.
+		if let Some(a) = Account::<T, I>::get(id, who) {
+			if a.is_frozen {
+				return Frozen
+			}
 		}
 		if let Some(balance) = Self::maybe_balance(id, who) {
 			if balance.checked_add(&amount).is_none() {
-				return DepositConsequence::Overflow
+				return Overflow
 			}
 		} else {
 			if amount < details.min_balance {
-				return DepositConsequence::BelowMinimum
+				return BelowMinimum
 			}
 			if !details.is_sufficient && !frame_system::Pallet::<T>::can_inc_consumer(who) {
-				return DepositConsequence::CannotCreate
+				return CannotCreate
 			}
 			if details.is_sufficient && details.sufficients.checked_add(1).is_none() {
-				return DepositConsequence::Overflow
+				return Overflow
 			}
 		}
 
-		DepositConsequence::Success
+		Success
 	}
 
 	/// Return the consequence of a withdraw.
@@ -302,14 +311,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((credit, maybe_burn))
 	}
 
-	/// Creates a account for `who` to hold asset `id` with a zero balance and takes a deposit.
-	pub(super) fn do_touch(id: T::AssetId, who: T::AccountId) -> DispatchResult {
+	/// Creates an account for `who` to hold asset `id` with a zero balance and takes a deposit.
+	pub(super) fn do_touch(
+		id: T::AssetId,
+		who: &T::AccountId,
+		depositor: &T::AccountId,
+	) -> DispatchResult {
 		ensure!(!Account::<T, I>::contains_key(id, &who), Error::<T, I>::AlreadyExists);
 		let deposit = T::AssetAccountDeposit::get();
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 		let reason = Self::new_account(&who, &mut details, Some(deposit))?;
-		T::Currency::reserve(&who, deposit)?;
+		T::Currency::reserve(&depositor, deposit)?;
 		Asset::<T, I>::insert(&id, details);
 		Account::<T, I>::insert(
 			id,
@@ -937,5 +950,33 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Asset::<T, I>::iter_keys()
 			.filter_map(|id| Self::maybe_balance(id, account.clone()).map(|balance| (id, balance)))
 			.collect::<Vec<_>>()
+	}
+
+	/// Freeze an account `who`, preventing further reception or transfer of asset `id`.
+	pub fn do_freeze(
+		origin: T::AccountId,
+		id: T::AssetId,
+		who: T::AccountId,
+		create: bool,
+	) -> DispatchResult {
+		let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(
+			d.status == AssetStatus::Live || d.status == AssetStatus::Frozen,
+			Error::<T, I>::AssetNotLive
+		);
+		ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
+
+		if create && Account::<T, I>::get(id, &who).is_none() {
+			// we create the account with zero balance, but the freezer must place a deposit
+			let _ = Self::do_touch(id, &who, &origin)?;
+		}
+
+		Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
+			maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.is_frozen = true;
+			Ok(())
+		})?;
+
+		Self::deposit_event(Event::<T, I>::Frozen { asset_id: id, who });
+		Ok(())
 	}
 }

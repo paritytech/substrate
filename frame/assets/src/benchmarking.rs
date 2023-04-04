@@ -277,6 +277,15 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::Frozen { asset_id: asset_id.into(), who: caller }.into());
 	}
 
+	freeze_creating {
+		let (asset_id, caller, caller_lookup) = create_default_minted_asset::<T, I>(true, 100u32.into());
+		let target: T::AccountId = account("target", 0, SEED);
+		let target_lookup = T::Lookup::unlookup(target.clone());
+	}: _(SystemOrigin::Signed(caller.clone()), asset_id, target_lookup)
+	verify {
+		assert_last_event::<T, I>(Event::Frozen { asset_id: asset_id.into(), who: target }.into());
+	}
+
 	thaw {
 		let (asset_id, caller, caller_lookup) = create_default_minted_asset::<T, I>(true, 100u32.into());
 		Assets::<T, I>::freeze(

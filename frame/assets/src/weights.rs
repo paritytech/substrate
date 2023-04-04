@@ -63,6 +63,7 @@ pub trait WeightInfo {
 	fn transfer_keep_alive() -> Weight;
 	fn force_transfer() -> Weight;
 	fn freeze() -> Weight;
+	fn freeze_creating() -> Weight;
 	fn thaw() -> Weight;
 	fn freeze_asset() -> Weight;
 	fn thaw_asset() -> Weight;
@@ -450,6 +451,19 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	/// Storage: Assets Asset (r:1 w:0)
+	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2685, mode: MaxEncodedLen)
+	/// Storage: Assets Account (r:1 w:1)
+	/// Proof: Assets Account (max_values: None, max_size: Some(102), added: 2577, mode: MaxEncodedLen)
+	fn freeze_creating() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `459`
+		//  Estimated: `7242`
+		// Minimum execution time: 19_600_000 picoseconds.
+		Weight::from_parts(20_435_000, 7242)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -819,6 +833,19 @@ impl WeightInfo for () {
 		// Minimum execution time: 15_910_000 picoseconds.
 		Weight::from_parts(16_315_000, 3675)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	/// Storage: Assets Asset (r:1 w:0)
+	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2685, mode: MaxEncodedLen)
+	/// Storage: Assets Account (r:1 w:1)
+	/// Proof: Assets Account (max_values: None, max_size: Some(102), added: 2577, mode: MaxEncodedLen)
+	fn freeze_creating() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `459`
+		//  Estimated: `7242`
+		// Minimum execution time: 19_600_000 picoseconds.
+		Weight::from_parts(20_435_000, 7242)
+			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 }

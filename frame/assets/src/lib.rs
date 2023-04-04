@@ -531,7 +531,7 @@ pub mod pallet {
 		NoPermission,
 		/// The given asset ID is unknown.
 		Unknown,
-		/// The origin account is frozen.
+		/// The origin or beneficiary account is frozen.
 		Frozen,
 		/// The asset ID is already taken.
 		InUse,
@@ -920,7 +920,9 @@ pub mod pallet {
 			Self::do_transfer(id, &source, &dest, amount, Some(origin), f).map(|_| ())
 		}
 
-		/// Disallow further unprivileged transfers from an account.
+		/// Disallow further unprivileged transfers of an asset `id` to or from an account `who`.
+		/// `who` must already exist as an entry in `Account`s of the asset. If you want to freeze
+		/// an account that does not have an entry, use `freeze_creating` instead.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
 		///
@@ -938,23 +940,10 @@ pub mod pallet {
 			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+			let who = T::Lookup::lookup(who)?;
 			let id: T::AssetId = id.into();
 
-			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(
-				d.status == AssetStatus::Live || d.status == AssetStatus::Frozen,
-				Error::<T, I>::AssetNotLive
-			);
-			ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
-			let who = T::Lookup::lookup(who)?;
-
-			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
-				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.is_frozen = true;
-				Ok(())
-			})?;
-
-			Self::deposit_event(Event::<T, I>::Frozen { asset_id: id, who });
-			Ok(())
+			Self::do_freeze(origin, id, who, false)
 		}
 
 		/// Allow unprivileged transfers from an account again.
@@ -1495,8 +1484,9 @@ pub mod pallet {
 		#[pallet::call_index(26)]
 		#[pallet::weight(T::WeightInfo::mint())]
 		pub fn touch(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
+			let who = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
-			Self::do_touch(id, ensure_signed(origin)?)
+			Self::do_touch(id, &who, &who)
 		}
 
 		/// Return the deposit (if any) of an asset account.
@@ -1563,6 +1553,31 @@ pub mod pallet {
 				new_min_balance: min_balance,
 			});
 			Ok(())
+		}
+
+		/// Disallow further unprivileged transfers to or from an account. Creates the account and
+		/// takes a deposit if it does not already exist in `Account`.
+		///
+		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be frozen.
+		/// - `who`: The account to be frozen.
+		///
+		/// Emits `Frozen`.
+		///
+		/// Weight: `O(1)`
+		#[pallet::call_index(29)]
+		#[pallet::weight(T::WeightInfo::freeze_creating())]
+		pub fn freeze_creating(
+			origin: OriginFor<T>,
+			id: T::AssetIdParameter,
+			who: AccountIdLookupOf<T>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let who = T::Lookup::lookup(who)?;
+			let id: T::AssetId = id.into();
+
+			Self::do_freeze(origin, id, who, true)
 		}
 	}
 }

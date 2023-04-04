@@ -705,7 +705,7 @@ fn set_team_should_work() {
 }
 
 #[test]
-fn transferring_to_frozen_account_should_work() {
+fn transferring_to_frozen_account_should_not_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
@@ -713,8 +713,51 @@ fn transferring_to_frozen_account_should_work() {
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_eq!(Assets::balance(0, 2), 100);
 		assert_ok!(Assets::freeze(RuntimeOrigin::signed(1), 0, 2));
-		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50));
-		assert_eq!(Assets::balance(0, 2), 150);
+		assert_noop!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50), TokenError::Frozen);
+		assert_eq!(Assets::balance(0, 1), 100);
+		assert_eq!(Assets::balance(0, 2), 100);
+	});
+}
+
+#[test]
+fn touching_and_freezing_account_with_zero_asset_balance_should_work() {
+	new_test_ext().execute_with(|| {
+		// need some deposit for the touch
+		Balances::make_free_balance_be(&2, 100);
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
+		assert_eq!(Assets::balance(0, 1), 100);
+		assert_eq!(Assets::balance(0, 2), 0);
+		// cannot freeze an account that doesn't have an `Assets` entry
+		assert_noop!(Assets::freeze(RuntimeOrigin::signed(1), 0, 2), Error::<Test>::NoAccount);
+		assert_ok!(Assets::touch(RuntimeOrigin::signed(2), 0));
+		// now it can be frozen
+		assert_ok!(Assets::freeze(RuntimeOrigin::signed(1), 0, 2));
+		assert_noop!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50), TokenError::Frozen);
+		assert_eq!(Assets::balance(0, 1), 100);
+		assert_eq!(Assets::balance(0, 2), 0);
+	});
+}
+
+#[test]
+fn freeze_creating_works() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
+		assert_eq!(Assets::balance(0, 1), 100);
+		assert_eq!(Assets::balance(0, 2), 0);
+		// cannot freeze an account that doesn't have an `Assets` entry
+		assert_noop!(Assets::freeze(RuntimeOrigin::signed(1), 0, 2), Error::<Test>::NoAccount);
+		// can freeze the account by placing a deposit
+		assert_ok!(Assets::freeze_creating(RuntimeOrigin::signed(1), 0, 2));
+		// `1` had to reserve `AssetAccountDeposit` to create `Account(id, 2)`
+		assert_eq!(Balances::reserved_balance(&1), 10);
+		// cannot transfer to `2`
+		assert_noop!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50), TokenError::Frozen);
+		// asset balances unchanged
+		assert_eq!(Assets::balance(0, 1), 100);
+		assert_eq!(Assets::balance(0, 2), 0);
 	});
 }
 
