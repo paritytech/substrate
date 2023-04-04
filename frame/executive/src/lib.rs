@@ -694,7 +694,7 @@ mod tests {
 
 	const TEST_KEY: &[u8] = b":test:key:";
 
-	#[frame_support::pallet]
+	#[frame_support::pallet(dev_mode)]
 	mod custom {
 		use frame_support::pallet_prelude::*;
 		use frame_system::pallet_prelude::*;
