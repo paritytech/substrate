@@ -100,8 +100,12 @@
 //!
 //! - rust nightly + `wasm32-unknown-unknown` toolchain
 //!
-//! If a specific rust nightly is installed with `rustup`, it is important that the wasm target is
-//! installed as well. For example if installing the rust nightly from 20.02.2020 using `rustup
+//! or
+//!
+//! - rust stable and version at least 1.68.0 + `wasm32-unknown-unknown` toolchain
+//!
+//! If a specific rust is installed with `rustup`, it is important that the wasm target is
+//! installed as well. For example if installing the rust from 20.02.2020 using `rustup
 //! install nightly-2020-02-20`, the wasm target needs to be installed as well `rustup target add
 //! wasm32-unknown-unknown --toolchain nightly-2020-02-20`.
 
@@ -111,9 +115,11 @@ use std::{
 	path::{Path, PathBuf},
 	process::Command,
 };
+use version::Version;
 
 mod builder;
 mod prerequisites;
+mod version;
 mod wasm_project;
 
 pub use builder::{WasmBuilder, WasmBuilderSelectProject};
@@ -172,53 +178,59 @@ fn copy_file_if_changed(src: PathBuf, dst: PathBuf) {
 	}
 }
 
-/// Get a cargo command that compiles with nightly
-fn get_nightly_cargo() -> CargoCommand {
+/// Get a cargo command that should be used to invoke the compilation.
+fn get_cargo_command() -> CargoCommand {
 	let env_cargo =
 		CargoCommand::new(&env::var("CARGO").expect("`CARGO` env variable is always set by cargo"));
 	let default_cargo = CargoCommand::new("cargo");
-	let rustup_run_nightly = CargoCommand::new_with_args("rustup", &["run", "nightly", "cargo"]);
 	let wasm_toolchain = env::var(WASM_BUILD_TOOLCHAIN).ok();
 
 	// First check if the user requested a specific toolchain
-	if let Some(cmd) = wasm_toolchain.and_then(|t| get_rustup_nightly(Some(t))) {
+	if let Some(cmd) =
+		wasm_toolchain.map(|t| CargoCommand::new_with_args("rustup", &["run", &t, "cargo"]))
+	{
 		cmd
-	} else if env_cargo.is_nightly() {
+	} else if env_cargo.supports_substrate_wasm_env() {
 		env_cargo
-	} else if default_cargo.is_nightly() {
+	} else if default_cargo.supports_substrate_wasm_env() {
 		default_cargo
-	} else if rustup_run_nightly.is_nightly() {
-		rustup_run_nightly
 	} else {
-		// If no command before provided us with a nightly compiler, we try to search one
-		// with rustup. If that fails as well, we return the default cargo and let the prequisities
-		// check fail.
-		get_rustup_nightly(None).unwrap_or(default_cargo)
+		// If no command before provided us with a cargo that supports our Substrate wasm env, we
+		// try to search one with rustup. If that fails as well, we return the default cargo and let
+		// the prequisities check fail.
+		get_rustup_command().unwrap_or(default_cargo)
 	}
 }
 
-/// Get a nightly from rustup. If `selected` is `Some(_)`, a `CargoCommand` using the given
-/// nightly is returned.
-fn get_rustup_nightly(selected: Option<String>) -> Option<CargoCommand> {
+/// Get the newest rustup command that supports our Substrate wasm env.
+///
+/// Stable versions are always favored over nightly versions even if the nightly versions are
+/// newer.
+fn get_rustup_command() -> Option<CargoCommand> {
 	let host = format!("-{}", env::var("HOST").expect("`HOST` is always set by cargo"));
 
-	let version = match selected {
-		Some(selected) => selected,
-		None => {
-			let output = Command::new("rustup").args(&["toolchain", "list"]).output().ok()?.stdout;
-			let lines = output.as_slice().lines();
+	let output = Command::new("rustup").args(&["toolchain", "list"]).output().ok()?.stdout;
+	let lines = output.as_slice().lines();
 
-			let mut latest_nightly = None;
-			for line in lines.filter_map(|l| l.ok()) {
-				if line.starts_with("nightly-") && line.ends_with(&host) {
-					// Rustup prints them sorted
-					latest_nightly = Some(line.clone());
-				}
-			}
+	let mut versions = Vec::new();
+	for line in lines.filter_map(|l| l.ok()) {
+		let rustup_version = line.trim_end_matches(&host);
 
-			latest_nightly?.trim_end_matches(&host).into()
-		},
-	};
+		let cmd = CargoCommand::new_with_args("rustup", &["run", &rustup_version, "cargo"]);
+
+		if !cmd.supports_substrate_wasm_env() {
+			continue
+		}
+
+		let Some(cargo_version) = cmd.version() else { continue; };
+
+		versions.push((cargo_version, rustup_version.to_string()));
+	}
+
+	// Sort by the parsed version to get the latest version (greatest version) at the end of the
+	// vec.
+	versions.sort_by_key(|v| v.0);
+	let version = &versions.last()?.1;
 
 	Some(CargoCommand::new_with_args("rustup", &["run", &version, "cargo"]))
 }
@@ -228,17 +240,23 @@ fn get_rustup_nightly(selected: Option<String>) -> Option<CargoCommand> {
 struct CargoCommand {
 	program: String,
 	args: Vec<String>,
+	version: Option<Version>,
 }
 
 impl CargoCommand {
 	fn new(program: &str) -> Self {
-		CargoCommand { program: program.into(), args: Vec::new() }
+		let version = Self::extract_version(program, &[]);
+
+		CargoCommand { program: program.into(), args: Vec::new(), version }
 	}
 
 	fn new_with_args(program: &str, args: &[&str]) -> Self {
+		let version = Self::extract_version(program, args);
+
 		CargoCommand {
 			program: program.into(),
 			args: args.iter().map(ToString::to_string).collect(),
+			version,
 		}
 	}
 
@@ -248,20 +266,40 @@ impl CargoCommand {
 		cmd
 	}
 
-	/// Check if the supplied cargo command is a nightly version
-	fn is_nightly(&self) -> bool {
+	fn extract_version(program: &str, args: &[&str]) -> Option<Version> {
+		let version = Command::new(program)
+			.args(args)
+			.arg("--version")
+			.output()
+			.ok()
+			.and_then(|o| String::from_utf8(o.stdout).ok())?;
+
+		Version::extract(&version)
+	}
+
+	/// Returns the version of this cargo command or `None` if it failed to extract the version.
+	fn version(&self) -> Option<Version> {
+		self.version
+	}
+
+	/// Check if the supplied cargo command supports our Substrate wasm environment.
+	///
+	/// This means that either the cargo version is at minimum 1.68.0 or this is a nightly cargo.
+	///
+	/// Assumes that cargo version matches the rustc version.
+	fn supports_substrate_wasm_env(&self) -> bool {
 		// `RUSTC_BOOTSTRAP` tells a stable compiler to behave like a nightly. So, when this env
 		// variable is set, we can assume that whatever rust compiler we have, it is a nightly
 		// compiler. For "more" information, see:
 		// https://github.com/rust-lang/rust/blob/fa0f7d0080d8e7e9eb20aa9cbf8013f96c81287f/src/libsyntax/feature_gate/check.rs#L891
-		env::var("RUSTC_BOOTSTRAP").is_ok() ||
-			self.command()
-				.arg("--version")
-				.output()
-				.map_err(|_| ())
-				.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
-				.unwrap_or_default()
-				.contains("-nightly")
+		if env::var("RUSTC_BOOTSTRAP").is_ok() {
+			return true
+		}
+
+		let Some(version) = self.version() else { return false };
+
+		// Check if major and minor are greater or equal than 1.68 or this is a nightly.
+		version.major > 1 || (version.major == 1 && version.minor >= 68) || version.is_nightly
 	}
 }
 
