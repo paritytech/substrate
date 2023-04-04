@@ -59,7 +59,7 @@ async fn follow_chain_works() {
 		let matched =
 			common::wait_for_stream_pattern_match(follow.stderr.take().unwrap(), re).await;
 
-		// Assert that the follow-chain process has followed at least 5 blocks.
+		// Assert that the follow-chain process has followed at least 3 blocks.
 		assert!(matches!(matched, Ok(_)));
 
 		// Sanity check: node is still running
