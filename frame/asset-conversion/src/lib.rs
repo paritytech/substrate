@@ -140,15 +140,18 @@ pub mod pallet {
 			+ Mutate<Self::AccountId>;
 
 		/// A % the liquidity providers will take of every swap. Represents 10ths of a percent.
+		#[pallet::constant]
 		type LPFee: Get<u32>;
 
 		/// A one-time fee to setup the pool.
+		#[pallet::constant]
 		type PoolSetupFee: Get<Self::Balance>;
 
 		/// An account that receives the pool setup fee.
 		type PoolSetupFeeReceiver: Get<Self::AccountId>;
 
 		/// The minimum LP token amount that could be minted. Ameliorates rounding errors.
+		#[pallet::constant]
 		type MintMinLiquidity: Get<Self::AssetBalance>;
 
 		/// The max number of hops in a swap.
