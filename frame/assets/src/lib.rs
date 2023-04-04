@@ -1551,7 +1551,7 @@ pub mod pallet {
 			let id: T::AssetId = id.into();
 
 			let mut details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(origin == details.owner, Error::<T, I>::NoPermission);
+			ensure!(Some(origin) == details.owner, Error::<T, I>::NoPermission);
 
 			let old_min_balance = details.min_balance;
 			// If the asset is marked as sufficient it won't be allowed to
