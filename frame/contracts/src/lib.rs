@@ -1169,7 +1169,7 @@ impl<T: Config> Pallet<T> {
 		data: Vec<u8>,
 		salt: Vec<u8>,
 		debug: bool,
-	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>> {
+	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>, EventRecordOf<T>> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
 		let common = CommonInput {
 			origin,
@@ -1327,7 +1327,7 @@ sp_api::decl_runtime_apis! {
 			code: Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
-		) -> ContractInstantiateResult<AccountId, Balance>;
+		) -> ContractInstantiateResult<AccountId, Balance, EventRecord>;
 
 
 		/// Upload new code without instantiating a contract from it.
