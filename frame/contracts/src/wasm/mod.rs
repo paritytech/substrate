@@ -434,7 +434,7 @@ mod tests {
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
 		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
-		sr25519_verify: RefCell<Vec<([u8; 64], [u8; 32], Vec<u8>)>>,
+		sr25519_verify: RefCell<Vec<([u8; 64], Vec<u8>, [u8; 32])>>,
 		code_hashes: Vec<CodeHash<Test>>,
 	}
 
@@ -615,7 +615,9 @@ mod tests {
 			Ok([3; 33])
 		}
 		fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool {
-			// self.sr25519_verify.borrow_mut().push((*signature, message.into(), *pub_key));
+			self.sr25519_verify
+				.borrow_mut()
+				.push((*signature, message.clone().to_vec(), *pub_key));
 			true
 		}
 		fn contract_info(&mut self) -> &mut crate::ContractInfo<Self::T> {
@@ -1245,7 +1247,7 @@ mod tests {
 			&mock_ext.calls,
 			&[CallEntry { to: ALICE, value: 6, data: vec![1, 2, 3, 4], allows_reentry: true }]
 		);
-	
+	}
 
 	const CODE_ECDSA_RECOVER: &str = r#"
 (module
@@ -1323,6 +1325,49 @@ mod tests {
 			output,
 			ExecReturnValue { flags: ReturnFlags::empty(), data: [0x02; 20].to_vec() }
 		);
+	}
+
+	#[test]
+	fn contract_sr25519() {
+		const CODE_SR25519: &str = r#"
+(module
+	(import "seal0" "seal_sr25519_verify" (func $seal_sr25519_verify (param i32 i32 i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(drop
+			(call $seal_sr25519_verify
+				(i32.const 10) ;; Pointer to signature.
+				(i32.const 74) ;; Pointer to public key.
+				(i32.const 16) ;; message length.
+				(i32.const 106) ;; Pointer to message.
+			)
+		)
+	)
+	(func (export "deploy"))
+
+	;; Signature (64 bytes)
+	(data (i32.const 10)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+
+	;;  public key (32 bytes)
+	(data (i32.const 74)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+
+	;;  message. (16 bytes)
+	(data (i32.const 106)
+		"\3c\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+)
+"#;
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(&CODE_SR25519, vec![], &mut mock_ext));
+		assert_eq!(mock_ext.sr25519_verify.into_inner(), [([1; 64], [1; 15].to_vec(), [1; 32])]);
 	}
 
 	const CODE_GET_STORAGE: &str = r#"
