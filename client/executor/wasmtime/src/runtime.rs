@@ -325,10 +325,10 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 
 	// Be clear and specific about the extensions we support. If an update brings new features
 	// they should be introduced here as well.
-	config.wasm_reference_types(false);
-	config.wasm_simd(false);
-	config.wasm_bulk_memory(false);
-	config.wasm_multi_value(false);
+	config.wasm_reference_types(semantics.wasm_reference_types);
+	config.wasm_simd(semantics.wasm_simd);
+	config.wasm_bulk_memory(semantics.wasm_bulk_memory);
+	config.wasm_multi_value(semantics.wasm_multi_value);
 	config.wasm_multi_memory(false);
 	config.wasm_threads(false);
 	config.wasm_memory64(false);
@@ -504,6 +504,18 @@ pub struct Semantics {
 
 	/// The heap allocation strategy to use.
 	pub heap_alloc_strategy: HeapAllocStrategy,
+
+	/// Enables WASM Multi-Value proposal
+	pub wasm_multi_value: bool,
+
+	/// Enables WASM Bulk Memory Operations proposal
+	pub wasm_bulk_memory: bool,
+
+	/// Enables WASM Reference Types proposal
+	pub wasm_reference_types: bool,
+
+	/// Enables WASM Fixed-Width SIMD proposal
+	pub wasm_simd: bool,
 }
 
 #[derive(Clone)]

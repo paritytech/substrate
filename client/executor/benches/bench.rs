@@ -72,6 +72,10 @@ fn initialize(
 					deterministic_stack_limit: None,
 					canonicalize_nans: false,
 					parallel_compilation: true,
+					wasm_multi_value: false,
+					wasm_bulk_memory: false,
+					wasm_reference_types: false,
+					wasm_simd: false,
 				},
 			};
 
