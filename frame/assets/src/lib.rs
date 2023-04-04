@@ -1579,6 +1579,28 @@ pub mod pallet {
 
 			Self::do_freeze(origin, id, who, true)
 		}
+
+		/// Return the deposit (if any) of a target asset account. Useful if you are the depositor.
+		///
+		/// The origin must be Signed.
+		///
+		/// - `id`: The identifier of the asset for the account to be created.
+		/// - `who`: The account to refund.
+		/// - `allow_burn`: If `true` then assets may be destroyed in order to complete the refund.
+		///
+		/// Emits `Refunded` event when successful.
+		#[pallet::call_index(30)]
+		#[pallet::weight(T::WeightInfo::mint())] // todo
+		pub fn refund_other(
+			origin: OriginFor<T>,
+			id: T::AssetIdParameter,
+			who: T::AccountId,
+			allow_burn: bool,
+		) -> DispatchResult {
+			let _ = ensure_signed(origin)?;
+			let id: T::AssetId = id.into();
+			Self::do_refund(id, who, allow_burn)
+		}
 	}
 }
 

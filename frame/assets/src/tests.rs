@@ -758,6 +758,10 @@ fn freeze_creating_works() {
 		// asset balances unchanged
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_eq!(Assets::balance(0, 2), 0);
+		// refund goes back to `1`
+		assert_ok!(Assets::thaw(RuntimeOrigin::signed(1), 0, 2));
+		assert_ok!(Assets::refund_other(RuntimeOrigin::signed(1), 0, 2, true));
+		assert_eq!(Balances::reserved_balance(&1), 0);
 	});
 }
 
