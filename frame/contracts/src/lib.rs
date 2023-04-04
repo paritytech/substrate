@@ -1133,10 +1133,10 @@ impl<T: Config> Pallet<T> {
 			debug_message: debug_message.as_mut(),
 		};
 		let output = CallInput::<T> { dest, determinism }.run_guarded(common);
-		// We are good to call System::events() here. Even though its documentation says it should
-		// only be used in tests, it is actually not allowed to be read on-chain cause it will put
-		// all the Events emitted in the block so far into the PoV.
-		let events = System::<T>::events(); // TODO: do we want to conditionally set None here?
+		// We are good to call System::read_events_no_consensus() from the runtime API.
+		// `read_events_no_consensus` is actually not allowed to be called on-chain cause it will
+		// put all the Events emitted in the block so far into the PoV.
+		let events = System::<T>::read_events_no_consensus().map(|e| *e).collect(); // TODO: do we want to conditionally set None here?
 
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
@@ -1297,12 +1297,12 @@ impl<T: Config> Pallet<T> {
 sp_api::decl_runtime_apis! {
 	/// The API used to dry-run contract interactions.
 	#[api_version(2)]
-	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash, Event> where
+	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash, EventRecord> where
 		AccountId: Codec,
 		Balance: Codec,
 		BlockNumber: Codec,
 		Hash: Codec,
-		Event: Codec,
+		EventRecord: Codec,
 	{
 		/// Perform a call from a specified account to a given contract.
 		///
@@ -1314,7 +1314,7 @@ sp_api::decl_runtime_apis! {
 			gas_limit: Option<Weight>,
 			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
-		) -> ContractExecResult<Balance, Event>;
+		) -> ContractExecResult<Balance, EventRecord>;
 
 		/// Instantiate a new contract.
 		///
