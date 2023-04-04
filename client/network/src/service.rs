@@ -615,8 +615,11 @@ where
 	}
 
 	/// Returns the list of reserved peers.
-	fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
-		self.network_service.behaviour().user_protocol().reserved_peers()
+	fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
+		self.network_service
+			.behaviour()
+			.user_protocol()
+			.reserved_peers(pending_response);
 	}
 }
 
@@ -1344,8 +1347,7 @@ where
 				.user_protocol_mut()
 				.set_notification_handshake(protocol, handshake),
 			ServiceToWorkerMsg::ReservedPeers { pending_response } => {
-				let _ =
-					pending_response.send(self.reserved_peers().map(ToOwned::to_owned).collect());
+				self.reserved_peers(pending_response);
 			},
 		}
 	}

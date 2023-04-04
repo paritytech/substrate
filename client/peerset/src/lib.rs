@@ -39,7 +39,12 @@ mod protocol_controller;
 use peer_store::{PeerReputationProvider, PeerStore, PeerStoreHandle};
 use protocol_controller::{ProtocolController, ProtocolHandle};
 
-use futures::{channel::oneshot, prelude::*};
+use futures::{
+	channel::oneshot,
+	future::{join_all, Future, JoinAll},
+	prelude::*,
+	stream::Stream,
+};
 use log::{debug, error, trace};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use serde_json::json;
@@ -141,7 +146,7 @@ impl PeersetHandle {
 	}
 
 	/// Reports an adjustment to the reputation of the given peer.
-	pub fn report_peer(&self, peer_id: PeerId, score_diff: ReputationChange) {
+	pub fn report_peer(&mut self, peer_id: PeerId, score_diff: ReputationChange) {
 		self.peer_store_handle.report_peer(peer_id, score_diff);
 	}
 
@@ -234,12 +239,14 @@ pub struct SetConfig {
 /// Implements the `Stream` trait and can be polled for messages. The `Stream` never ends and never
 /// errors.
 pub struct Peerset {
+	/// Peer reputation store handle.
+	peer_store_handle: PeerStoreHandle,
 	/// Peer reputation store.
-	peer_store: PeerStore,
+	peer_store_future: Pin<Box<dyn futures::Future<Output = ()> + Send>>,
 	/// Protocol handles.
 	protocol_handles: Vec<ProtocolHandle>,
 	/// Protocol controllers responsible for connections, per `SetId`.
-	protocol_controllers: Vec<ProtocolController<PeerStoreHandle>>,
+	protocol_controller_futures: JoinAll<Pin<Box<dyn future::Future<Output = ()> + Send>>>,
 	/// Commands sent from protocol controllers to `Notifications`. The size of this vector never
 	/// changes.
 	rx: TracingUnboundedReceiver<Message>,
@@ -247,21 +254,20 @@ pub struct Peerset {
 
 impl Peerset {
 	/// Builds a new peerset from the given configuration.
-	pub fn from_config(config: PeersetConfig) -> (Self, PeersetHandle) {
+	pub fn from_config(config: PeersetConfig) -> (Peerset, PeersetHandle) {
 		let default_set_config = &config.sets[0];
+		let peer_store = PeerStore::new(default_set_config.bootnodes.clone());
 
-		let peer_store = PeerStore::new(default_set_config.bootnodes);
-
-		let (tx, rx) = tracing_unbounded("mpsc_to_notifications", 10_000);
+		let (tx, rx) = tracing_unbounded("mpsc_protocol_controllers_to_notifications", 10_000);
 
 		let controllers = config
 			.sets
-			.iter()
+			.into_iter()
 			.enumerate()
 			.map(|(set, set_config)| {
 				ProtocolController::new(
 					SetId::from(set),
-					*set_config,
+					set_config,
 					tx.clone(),
 					peer_store.handle(),
 				)
@@ -276,7 +282,16 @@ impl Peerset {
 			protocol_handles: protocol_handles.clone(),
 		};
 
-		let peerset = Peerset { peer_store, protocol_handles, protocol_controllers, rx };
+		let protocol_controller_futures =
+			join_all(protocol_controllers.into_iter().map(|c| c.run().boxed()));
+
+		let peerset = Peerset {
+			peer_store_handle: peer_store.handle(),
+			peer_store_future: peer_store.run().boxed(),
+			protocol_handles,
+			protocol_controller_futures,
+			rx,
+		};
 
 		(peerset, handle)
 	}
@@ -320,44 +335,12 @@ impl Peerset {
 		// We don't immediately perform the adjustments in order to have state consistency. We
 		// don't want the reporting here to take priority over messages sent using the
 		// `PeersetHandle`.
-		let _ = self.peer_store.handle().report_peer(peer_id, score_diff);
+		let _ = self.peer_store_handle.report_peer(peer_id, score_diff);
 	}
-
-	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.
-	// pub fn debug_info(&mut self) -> serde_json::Value {
-	// 	self.update_time();
-
-	// 	json!({
-	// 		"sets": (0..self.data.num_sets()).map(|set_index| {
-	// 			json!({
-	// 				"nodes": self.data.peers().cloned().collect::<Vec<_>>().into_iter().filter_map(|peer_id| {
-	// 					let state = match self.data.peer(set_index, &peer_id) {
-	// 						peersstate::Peer::Connected(entry) => json!({
-	// 							"connected": true,
-	// 							"reputation": entry.reputation()
-	// 						}),
-	// 						peersstate::Peer::NotConnected(entry) => json!({
-	// 							"connected": false,
-	// 							"reputation": entry.reputation()
-	// 						}),
-	// 						peersstate::Peer::Unknown(_) => return None,
-	// 					};
-
-	// 					Some((peer_id.to_base58(), state))
-	// 				}).collect::<HashMap<_, _>>(),
-	// 				"reserved_nodes": self.reserved_nodes[set_index].0.iter().map(|peer_id| {
-	// 					peer_id.to_base58()
-	// 				}).collect::<HashSet<_>>(),
-	// 				"reserved_only": self.reserved_nodes[set_index].1,
-	// 			})
-	// 		}).collect::<Vec<_>>(),
-	// 		"message_queue": self.message_queue.len(),
-	// 	})
-	// }
 
 	/// Returns the number of peers that we have discovered.
 	pub fn num_discovered_peers(&self) -> usize {
-		self.peer_store.handle().num_known_peers()
+		self.peer_store_handle.num_known_peers()
 	}
 }
 
@@ -365,43 +348,35 @@ impl Stream for Peerset {
 	type Item = Message;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		loop {
-			if let Some(message) = self.message_queue.pop_front() {
-				return Poll::Ready(Some(message))
-			}
-
-			if Future::poll(Pin::new(&mut self.next_periodic_alloc_slots), cx).is_ready() {
-				self.next_periodic_alloc_slots = Delay::new(Duration::new(1, 0));
-
-				for set_index in 0..self.data.num_sets() {
-					self.alloc_slots(SetId(set_index));
-				}
-			}
-
-			let action = match Stream::poll_next(Pin::new(&mut self.rx), cx) {
-				Poll::Pending => return Poll::Pending,
-				Poll::Ready(Some(event)) => event,
-				Poll::Ready(None) => return Poll::Pending,
-			};
-
-			match action {
-				Action::AddReservedPeer(set_id, peer_id) =>
-					self.on_add_reserved_peer(set_id, peer_id),
-				Action::RemoveReservedPeer(set_id, peer_id) =>
-					self.on_remove_reserved_peer(set_id, peer_id),
-				Action::SetReservedPeers(set_id, peer_ids) =>
-					self.on_set_reserved_peers(set_id, peer_ids),
-				Action::SetReservedOnly(set_id, reserved) =>
-					self.on_set_reserved_only(set_id, reserved),
-				Action::ReportPeer(peer_id, score_diff) => self.on_report_peer(peer_id, score_diff),
-				Action::AddToPeersSet(sets_name, peer_id) =>
-					self.add_to_peers_set(sets_name, peer_id),
-				Action::RemoveFromPeersSet(sets_name, peer_id) =>
-					self.on_remove_from_peers_set(sets_name, peer_id),
-				Action::PeerReputation(peer_id, pending_response) =>
-					self.on_peer_reputation(peer_id, pending_response),
+		if let Poll::Ready(msg) = self.rx.poll_next_unpin(cx) {
+			if let Some(msg) = msg {
+				return Poll::Ready(Some(msg))
+			} else {
+				debug!(
+					target: "peerset",
+					"All `ProtocolController`s have terminated, terminating `Peerset`."
+				);
+				return Poll::Ready(None)
 			}
 		}
+
+		if let Poll::Ready(()) = self.peer_store_future.poll_unpin(cx) {
+			debug!(
+				target: "peerset",
+				"`PeerStore` has terminated, terminating `PeerSet`."
+			);
+			return Poll::Ready(None)
+		}
+
+		if let Poll::Ready(_) = self.protocol_controller_futures.poll_unpin(cx) {
+			debug!(
+				target: "peerset",
+				"All `ProtocolHandle`s have terminated, terminating `PeerSet`."
+			);
+			return Poll::Ready(None)
+		}
+
+		Poll::Pending
 	}
 }
 

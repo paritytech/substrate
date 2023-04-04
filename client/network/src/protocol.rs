@@ -247,8 +247,8 @@ impl<B: BlockT> Protocol<B> {
 	}
 
 	/// Returns the list of reserved peers.
-	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
-		self.behaviour.reserved_peers(HARDCODED_PEERSETS_SYNC)
+	pub fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
+		self.behaviour.reserved_peers(HARDCODED_PEERSETS_SYNC, pending_response);
 	}
 
 	/// Adds a `PeerId` to the list of reserved peers for syncing purposes.

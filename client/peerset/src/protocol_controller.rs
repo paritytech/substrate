@@ -49,7 +49,7 @@ enum Action {
 	DisconnectPeer(PeerId),
 	IncomingConnection(PeerId, IncomingIndex),
 	Dropped(PeerId),
-	ReservedPeers(oneshot::Sender<Vec<PeerId>>),
+	ReservedPeers { pending_response: oneshot::Sender<Vec<PeerId>> },
 }
 
 /// Shared handle to [`ProtocolController`]. Distributed around the code outside of the
@@ -109,7 +109,7 @@ impl ProtocolHandle {
 
 	/// Get the list of reserved peers.
 	pub fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
-		let _ = self.to_controller.unbounded_send(Action::ReservedPeers(pending_response));
+		let _ = self.to_controller.unbounded_send(Action::ReservedPeers { pending_response });
 	}
 }
 
@@ -243,7 +243,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 					peer_id, self.set_id,
 				)
 			}),
-			Action::ReservedPeers(pending_response) => self.on_reserved_peers(pending_response),
+			Action::ReservedPeers { pending_response } => self.on_reserved_peers(pending_response),
 		}
 		true
 	}

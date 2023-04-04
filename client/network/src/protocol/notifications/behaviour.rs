@@ -25,7 +25,7 @@ use crate::{
 
 use bytes::BytesMut;
 use fnv::FnvHashMap;
-use futures::prelude::*;
+use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{connection::ConnectionId, Multiaddr, PeerId},
 	swarm::{
@@ -536,8 +536,12 @@ impl Notifications {
 	}
 
 	/// Returns the list of reserved peers.
-	pub fn reserved_peers(&self, set_id: sc_peerset::SetId) -> impl Iterator<Item = &PeerId> {
-		self.peerset.reserved_peers(set_id)
+	pub fn reserved_peers(
+		&self,
+		set_id: sc_peerset::SetId,
+		pending_response: oneshot::Sender<Vec<PeerId>>,
+	) {
+		self.peerset.reserved_peers(set_id, pending_response);
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
@@ -2928,7 +2932,8 @@ mod tests {
 
 		// check peer information
 		assert_eq!(notif.open_peers().collect::<Vec<_>>(), vec![&peer],);
-		assert_eq!(notif.reserved_peers(set_id).collect::<Vec<_>>(), Vec::<&PeerId>::new(),);
+		// assert_eq!(notif.reserved_peers(set_id).collect::<Vec<_>>(), Vec::<&PeerId>::new(),);
+		todo!("Do we really need to check reserved peers here?");
 		assert_eq!(notif.num_discovered_peers(), 0usize);
 
 		// close the other connection and verify that notification replacement event is emitted
