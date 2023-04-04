@@ -28,7 +28,7 @@
 mod expand;
 mod parse;
 
-pub use parse::Def;
+pub use parse::{composite::keyword::CompositeKeyword, Def};
 use syn::spanned::Spanned;
 
 mod keyword {
