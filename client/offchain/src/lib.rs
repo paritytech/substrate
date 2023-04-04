@@ -48,7 +48,7 @@ use sc_network::{NetworkPeers, NetworkStateInfo};
 use sc_transaction_pool_api::OffchainSubmitTransaction;
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_core::{offchain, traits::SpawnNamed};
-use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
+use sp_keystore::{KeystoreExt, KeystorePtr};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{self, Header},
@@ -101,7 +101,7 @@ pub struct OffchainWorkerOptions<RA, Block: traits::Block, Storage> {
 	/// Provides access to the runtime api.
 	pub runtime_api_provider: Arc<RA>,
 	/// Provides access to the keystore.
-	pub keystore: Option<SyncCryptoStorePtr>,
+	pub keystore: Option<KeystorePtr>,
 	/// Provides access to the offchain database.
 	///
 	/// Use [`NoOffchainStorage`] as type when passing `None` to have some type that works.
@@ -124,7 +124,7 @@ pub struct OffchainWorkers<RA, Block: traits::Block, Storage> {
 	thread_pool: Mutex<ThreadPool>,
 	shared_http_client: api::SharedClient,
 	enable_http_requests: bool,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	offchain_db: Option<api::Db<Storage>>,
 	transaction_pool: Option<Arc<dyn OffchainSubmitTransaction<Block>>>,
 	network_provider: Arc<dyn NetworkProvider + Send + Sync>,

@@ -22,7 +22,7 @@ use sc_client_api::{
 };
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_api::{ProofRecorder, StorageTransactionCache};
-use sp_core::traits::{CallContext, CodeExecutor, RuntimeCode, SpawnNamed};
+use sp_core::traits::{CallContext, CodeExecutor, RuntimeCode};
 use sp_externalities::Extensions;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{backend::AsTrieBackend, Ext, OverlayedChanges, StateMachine, StorageProof};

@@ -457,7 +457,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		input.items.push(parse_quote! {
 			fn __runtime_api_internal_call_api_at(
 				&self,
-				at: <__SR_API_BLOCK__ as #crate_::BlockT>::Hash,
+				at: <__SrApiBlock__ as #crate_::BlockT>::Hash,
 				params: std::vec::Vec<u8>,
 				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
 			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {

@@ -71,16 +71,6 @@ pub enum BlockOrigin {
 	File,
 }
 
-impl From<BlockOrigin> for sp_core::ExecutionContext {
-	fn from(origin: BlockOrigin) -> Self {
-		if origin == BlockOrigin::NetworkInitialSync {
-			sp_core::ExecutionContext::Syncing
-		} else {
-			sp_core::ExecutionContext::Importing
-		}
-	}
-}
-
 /// Environment for a Consensus instance.
 ///
 /// Creates proposer instance.
