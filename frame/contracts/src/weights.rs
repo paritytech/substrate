@@ -450,10 +450,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `831 + r * (244 ±0)`
 		//  Estimated: `21855 + r * (3695 ±0)`
-		// Minimum execution time: 288_242_000 picoseconds.
-		Weight::from_parts(141_367_245, 21855)
-			// Standard Error: 5_793
-			.saturating_add(Weight::from_parts(4_137_735, 0).saturating_mul(r.into()))
+		// Minimum execution time: 244_000_000 picoseconds.
+		Weight::from_parts(88_242_794, 21855)
+			// Standard Error: 11_692
+			.saturating_add(Weight::from_parts(4_294_785, 0).saturating_mul(r.into()))
 			.saturating_add(T::DbWeight::get().reads(6_u64))
 			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(r.into())))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
