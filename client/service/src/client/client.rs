@@ -236,13 +236,8 @@ where
 {
 	let extensions = ExecutionExtensions::default();
 
-	let call_executor = LocalCallExecutor::new(
-		backend.clone(),
-		executor,
-		spawn_handle.clone(),
-		config.clone(),
-		extensions,
-	)?;
+	let call_executor =
+		LocalCallExecutor::new(backend.clone(), executor, config.clone(), extensions)?;
 
 	Client::new(
 		backend,

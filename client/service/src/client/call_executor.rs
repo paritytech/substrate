@@ -35,7 +35,6 @@ pub struct LocalCallExecutor<Block: BlockT, B, E> {
 	executor: E,
 	wasm_override: Arc<Option<WasmOverride>>,
 	wasm_substitutes: WasmSubstitutes<Block, E, B>,
-	spawn_handle: Box<dyn SpawnNamed>,
 	execution_extensions: Arc<ExecutionExtensions<Block>>,
 }
 
@@ -48,7 +47,6 @@ where
 	pub fn new(
 		backend: Arc<B>,
 		executor: E,
-		spawn_handle: Box<dyn SpawnNamed>,
 		client_config: ClientConfig<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
 	) -> sp_blockchain::Result<Self> {
@@ -68,7 +66,6 @@ where
 			backend,
 			executor,
 			wasm_override: Arc::new(wasm_override),
-			spawn_handle,
 			wasm_substitutes,
 			execution_extensions: Arc::new(execution_extensions),
 		})
@@ -138,7 +135,6 @@ where
 			backend: self.backend.clone(),
 			executor: self.executor.clone(),
 			wasm_override: self.wasm_override.clone(),
-			spawn_handle: self.spawn_handle.clone(),
 			wasm_substitutes: self.wasm_substitutes.clone(),
 			execution_extensions: self.execution_extensions.clone(),
 		}
@@ -187,7 +183,6 @@ where
 			call_data,
 			&mut extensions,
 			&runtime_code,
-			self.spawn_handle.clone(),
 			context,
 		)
 		.set_parent_hash(at_hash);
@@ -242,7 +237,6 @@ where
 					call_data,
 					&mut *extensions,
 					&runtime_code,
-					self.spawn_handle.clone(),
 					call_context,
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
@@ -258,7 +252,6 @@ where
 					call_data,
 					&mut *extensions,
 					&runtime_code,
-					self.spawn_handle.clone(),
 					call_context,
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
@@ -299,7 +292,6 @@ where
 			trie_backend,
 			&mut Default::default(),
 			&self.executor,
-			self.spawn_handle.clone(),
 			method,
 			call_data,
 			&runtime_code,
@@ -406,7 +398,6 @@ mod tests {
 			backend: backend.clone(),
 			executor: executor.clone(),
 			wasm_override: Arc::new(Some(overrides)),
-			spawn_handle: Box::new(TaskExecutor::new()),
 			wasm_substitutes: WasmSubstitutes::new(
 				Default::default(),
 				executor.clone(),

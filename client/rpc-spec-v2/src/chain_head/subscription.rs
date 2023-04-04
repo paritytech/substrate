@@ -36,10 +36,8 @@ pub enum SubscriptionManagementError {
 	ExceededLimits,
 	/// Error originated from the blockchain (client or backend).
 	Blockchain(Error),
-	/// The database does not contain a block number.
-	BlockNumberAbsent,
-	/// The database does not contain a block hash.
-	BlockHashAbsent,
+	/// The database does not contain a block header.
+	BlockHeaderAbsent,
 	/// Custom error.
 	Custom(String),
 }

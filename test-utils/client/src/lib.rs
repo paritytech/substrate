@@ -30,7 +30,7 @@ pub use sp_consensus;
 pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring, sr25519::Keyring as Sr25519Keyring, AccountKeyring,
 };
-pub use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+pub use sp_keystore::{Keystore, KeystorePtr};
 pub use sp_runtime::{Storage, StorageChild};
 
 use futures::{future::Future, stream::StreamExt};
@@ -65,7 +65,7 @@ pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend: 'static, 
 	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<ExecutorDispatch>,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	enable_offchain_indexing_api: bool,
@@ -122,7 +122,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	}
 
 	/// Set the keystore that should be used by the externalities.
-	pub fn set_keystore(mut self, keystore: SyncCryptoStorePtr) -> Self {
+	pub fn set_keystore(mut self, keystore: KeystorePtr) -> Self {
 		self.keystore = Some(keystore);
 		self
 	}
@@ -273,7 +273,6 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),
 			executor,
-			Box::new(sp_core::testing::TaskExecutor::new()),
 			Default::default(),
 			ExecutionExtensions::default(),
 		)

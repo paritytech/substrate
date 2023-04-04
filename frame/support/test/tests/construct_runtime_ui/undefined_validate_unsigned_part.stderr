@@ -29,7 +29,7 @@ error[E0599]: no variant or associated item named `Pallet` found for enum `Runti
 58 | | }
    | |_- variant or associated item `Pallet` not found for this enum
 
-error[E0599]: no function or associated item named `pre_dispatch` found for struct `pallet::Pallet` in the current scope
+error[E0599]: no function or associated item named `pre_dispatch` found for struct `Pallet` in the current scope
   --> tests/construct_runtime_ui/undefined_validate_unsigned_part.rs:49:1
    |
 11 |       pub struct Pallet<T>(_);
@@ -42,7 +42,7 @@ error[E0599]: no function or associated item named `pre_dispatch` found for stru
 ...  |
 57 | |     }
 58 | | }
-   | |_^ function or associated item not found in `pallet::Pallet<Runtime>`
+   | |_^ function or associated item not found in `Pallet<Runtime>`
    |
    = help: items from traits can only be used if the trait is implemented and in scope
    = note: the following traits define an item `pre_dispatch`, perhaps you need to implement one of them:
@@ -50,7 +50,7 @@ error[E0599]: no function or associated item named `pre_dispatch` found for stru
            candidate #2: `ValidateUnsigned`
    = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0599]: no function or associated item named `validate_unsigned` found for struct `pallet::Pallet` in the current scope
+error[E0599]: no function or associated item named `validate_unsigned` found for struct `Pallet` in the current scope
   --> tests/construct_runtime_ui/undefined_validate_unsigned_part.rs:49:1
    |
 11 |       pub struct Pallet<T>(_);
@@ -63,7 +63,7 @@ error[E0599]: no function or associated item named `validate_unsigned` found for
 ...  |
 57 | |     }
 58 | | }
-   | |_^ function or associated item not found in `pallet::Pallet<Runtime>`
+   | |_^ function or associated item not found in `Pallet<Runtime>`
    |
    = help: items from traits can only be used if the trait is implemented and in scope
    = note: the following traits define an item `validate_unsigned`, perhaps you need to implement one of them:

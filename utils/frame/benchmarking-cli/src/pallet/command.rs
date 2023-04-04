@@ -36,10 +36,10 @@ use sp_core::{
 	traits::CallContext,
 };
 use sp_externalities::Extensions;
-use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
+use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
-use std::{collections::HashMap, fmt::Debug, fs, str::FromStr, sync::Arc, time};
+use std::{collections::HashMap, fmt::Debug, fs, str::FromStr, time};
 
 /// Logging target
 const LOG_TARGET: &'static str = "frame::benchmark::pallet";
@@ -215,9 +215,10 @@ impl PalletCmd {
 
 		let extensions = || -> Extensions {
 			let mut extensions = Extensions::default();
-			extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
 			let (offchain, _) = TestOffchainExt::new();
 			let (pool, _) = TestTransactionPoolExt::new();
+			let keystore = MemoryKeystore::new();
+			extensions.register(KeystoreExt::new(keystore));
 			extensions.register(OffchainWorkerExt::new(offchain.clone()));
 			extensions.register(OffchainDbExt::new(offchain));
 			extensions.register(TransactionPoolExt::new(pool));
@@ -234,7 +235,6 @@ impl PalletCmd {
 			&(self.extra).encode(),
 			extensions(),
 			&sp_state_machine::backend::BackendRuntimeCode::new(state).runtime_code()?,
-			sp_core::testing::TaskExecutor::new(),
 			CallContext::Offchain,
 		)
 		.execute()
@@ -372,7 +372,6 @@ impl PalletCmd {
 						extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
 					.execute()
@@ -413,7 +412,6 @@ impl PalletCmd {
 						extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
 					.execute()
@@ -446,7 +444,6 @@ impl PalletCmd {
 						extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
 					.execute()
