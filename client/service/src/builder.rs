@@ -272,7 +272,6 @@ where
 	let executor = crate::client::LocalCallExecutor::new(
 		backend.clone(),
 		executor,
-		spawn_handle.clone(),
 		config.clone(),
 		execution_extensions,
 	)?;

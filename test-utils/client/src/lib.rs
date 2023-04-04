@@ -291,7 +291,6 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),
 			executor,
-			Box::new(sp_core::testing::TaskExecutor::new()),
 			Default::default(),
 			ExecutionExtensions::new(
 				self.execution_strategies.clone(),

@@ -169,18 +169,6 @@ impl ReadRuntimeVersionExt {
 	}
 }
 
-sp_externalities::decl_extension! {
-	/// Task executor extension.
-	pub struct TaskExecutorExt(Box<dyn SpawnNamed>);
-}
-
-impl TaskExecutorExt {
-	/// New instance of task executor extension.
-	pub fn new(spawn_handle: impl SpawnNamed + Send + 'static) -> Self {
-		Self(Box::new(spawn_handle))
-	}
-}
-
 /// Something that can spawn tasks (blocking and non-blocking) with an assigned name
 /// and optional group.
 #[dyn_clonable::clonable]
