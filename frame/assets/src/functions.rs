@@ -66,10 +66,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(super) fn new_account(
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
-		maybe_deposit: Option<DepositBalanceOf<T, I>>,
+		// maybe_deposit: Option<DepositBalanceOf<T, I>>,
+		maybe_deposit: Option<(DepositBalanceOf<T, I>, &T::AccountId)>,
 	) -> Result<ExistenceReason<DepositBalanceOf<T, I>>, DispatchError> {
 		let accounts = d.accounts.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-		let reason = if let Some(deposit) = maybe_deposit {
+		let reason = if let Some((deposit, _depositor)) = maybe_deposit {
+			d.deposit = d.deposit.saturating_add(deposit);
 			ExistenceReason::DepositHeld(deposit)
 		} else if d.is_sufficient {
 			frame_system::Pallet::<T>::inc_sufficients(who);
@@ -321,7 +323,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let deposit = T::AssetAccountDeposit::get();
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-		let reason = Self::new_account(&who, &mut details, Some(deposit))?;
+		let reason = Self::new_account(&who, &mut details, Some((deposit, &depositor)))?;
 		T::Currency::reserve(&depositor, deposit)?;
 		Asset::<T, I>::insert(&id, details);
 		Account::<T, I>::insert(
@@ -331,6 +333,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				balance: Zero::zero(),
 				is_frozen: false,
 				reason,
+				depositor: Some(depositor.clone()),
 				extra: T::Extra::default(),
 			},
 		);
@@ -346,7 +349,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(account.balance.is_zero() || allow_burn, Error::<T, I>::WouldBurn);
 		ensure!(!account.is_frozen, Error::<T, I>::Frozen);
 
-		T::Currency::unreserve(&who, deposit);
+		let mut refund_to: T::AccountId = who.clone();
+		if let Some(depositor) = account.depositor {
+			refund_to = depositor;
+		}
+		T::Currency::unreserve(&refund_to, deposit);
 
 		if let Remove = Self::dead_account(&who, &mut details, &account.reason, false) {
 			Account::<T, I>::remove(id, &who);
@@ -421,6 +428,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						*maybe_account = Some(AssetAccountOf::<T, I> {
 							balance: amount,
 							reason: Self::new_account(beneficiary, details, None)?,
+							depositor: None,
 							is_frozen: false,
 							extra: T::Extra::default(),
 						});
@@ -617,6 +625,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							balance: credit,
 							is_frozen: false,
 							reason: Self::new_account(dest, details, None)?,
+							depositor: None,
 							extra: T::Extra::default(),
 						});
 					},
