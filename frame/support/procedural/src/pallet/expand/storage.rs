@@ -23,7 +23,7 @@ use crate::{
 	},
 };
 use quote::ToTokens;
-use std::{collections::HashMap, ops::{IndexMut, Index}};
+use std::{collections::HashMap, ops::{IndexMut}};
 use syn::spanned::Spanned;
 
 /// Generate the prefix_ident related to the storage.
