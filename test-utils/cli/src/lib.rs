@@ -34,13 +34,10 @@ use std::{
 };
 use tokio::io::{AsyncBufReadExt, AsyncRead};
 
-/// Asynchronously reads lines from an async tokio stream and waits for
-/// a pattern match.
-///
-/// This function takes a readable tokio stream (e.g. from a child process `ChildStderr` or
-/// `ChildStdout`) and a `Regex` pattern. It reads lines from the provided stream and checks
-/// each line against the given pattern. The function returns as soon as a line matching the
-/// pattern is found.
+/// Takes a readable tokio stream (e.g. from a child process `ChildStderr` or `ChildStdout`) and
+/// a `Regex` pattern, and checks each line against the given pattern as it is produced.
+/// The function returns OK(()) as soon as a line matching the pattern is found, or an Err if
+/// the stream ends without any lines matching the pattern.
 ///
 /// # Arguments
 ///
@@ -51,8 +48,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead};
 /// # Returns
 ///
 /// * `Ok(())` if a line matching the pattern is found.
-/// * `Err(String)` if the stream ends without any lines matching the pattern, or if an error occurs
-///   while reading the stream.
+/// * `Err(String)` if the stream ends without any lines matching the pattern.
 ///
 /// # Example
 ///
