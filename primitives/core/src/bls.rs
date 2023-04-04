@@ -27,11 +27,8 @@ use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretString
 use sp_std::vec::Vec;
 
 #[cfg(feature = "full_crypto")]
-use bls_like::{double::DoublePublicKeyScheme, Keypair, Message, SecretKey};
-use bls_like::{
-	double::{DoublePublicKey, DoubleSignature},
-	EngineBLS, SerializableToBytes, TinyBLS381,
-};
+use bls_like::{SecretKey, Keypair, Message, DoublePublicKeyScheme, DoublePublicKey, DoubleSignature, SerializableToBytes};
+use bls_like::{EngineBLS, TinyBLS381};
 use codec::{Decode, Encode, MaxEncodedLen};
 #[cfg(feature = "std")]
 use hex;
