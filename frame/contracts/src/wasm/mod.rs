@@ -615,9 +615,7 @@ mod tests {
 			Ok([3; 33])
 		}
 		fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool {
-			self.sr25519_verify
-				.borrow_mut()
-				.push((*signature, message.to_vec(), *pub_key));
+			self.sr25519_verify.borrow_mut().push((*signature, message.to_vec(), *pub_key));
 			true
 		}
 		fn contract_info(&mut self) -> &mut crate::ContractInfo<Self::T> {
