@@ -89,7 +89,8 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(1)]
-		#[pallet::weight(100)]
+		// #[pallet::weight(100)]
+		#[pallet::weight(T::BlockWeights::get().max_block/10)]
 		pub fn transfer(
 			origin: OriginFor<T>,
 			transfer: Transfer,
@@ -202,7 +203,8 @@ pub mod pallet {
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			log::trace!(target: LOG_TARGET, "validate_unsigned {call:?}");
-			validate_runtime_call(call)
+			unimplemented!("todo: substrate_test_pallet::validate_unsigned");
+			// validate_runtime_call(call)
 		}
 	}
 }
@@ -228,65 +230,65 @@ use sp_runtime::transaction_validity::{
 	InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
 };
 
-pub fn validate_runtime_call<T: pallet::Config>(call: &pallet::Call<T>) -> TransactionValidity {
-	log::trace!(target: LOG_TARGET, "validate_runtime_call {call:?}");
-	match call {
-		Call::transfer { transfer, signature, exhaust_resources_when_not_first } => {
-			let extrinsic_index: u32 =
-				storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
-
-			if *exhaust_resources_when_not_first && extrinsic_index != 0 {
-				return InvalidTransaction::ExhaustsResources.into()
-			}
-
-			// check signature
-			if !sp_runtime::verify_encoded_lazy(signature, transfer, &transfer.from) {
-				return InvalidTransaction::BadProof.into()
-			}
-
-			// check nonce
-			let nonce_key = transfer.from.to_keyed_vec(NONCE_OF);
-			let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
-			if transfer.nonce < expected_nonce {
-				return InvalidTransaction::Stale.into()
-			}
-
-			if transfer.nonce > expected_nonce + 64 {
-				return InvalidTransaction::Future.into()
-			}
-
-			// check sender balance
-			let from_balance_key = transfer.from.to_keyed_vec(BALANCE_OF);
-			let from_balance: u64 = storage::hashed::get_or(&blake2_256, &from_balance_key, 0);
-
-			if transfer.amount > from_balance {
-				return Err(InvalidTransaction::Payment.into())
-			}
-
-			let encode = |from: &AccountId, nonce: u64| (from, nonce).encode();
-			let requires = if transfer.nonce != expected_nonce && transfer.nonce > 0 {
-				vec![encode(&transfer.from, transfer.nonce - 1)]
-			} else {
-				vec![]
-			};
-
-			let provides = vec![encode(&transfer.from, transfer.nonce)];
-
-			Ok(ValidTransaction {
-				priority: transfer.amount,
-				requires,
-				provides,
-				longevity: 64,
-				propagate: true,
-			})
-		},
-		Call::include_data { data } => Ok(ValidTransaction {
-			priority: data.len() as u64,
-			requires: vec![],
-			provides: vec![data.clone()],
-			longevity: 1,
-			propagate: false,
-		}),
-		_ => Ok(Default::default()),
-	}
-}
+// pub fn validate_runtime_call<T: pallet::Config>(call: &pallet::Call<T>) -> TransactionValidity {
+// 	log::trace!(target: LOG_TARGET, "validate_runtime_call {call:?}");
+// 	match call {
+// 		Call::transfer { transfer, signature, exhaust_resources_when_not_first } => {
+// 			let extrinsic_index: u32 =
+// 				storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
+//
+// 			if *exhaust_resources_when_not_first && extrinsic_index != 0 {
+// 				return InvalidTransaction::ExhaustsResources.into()
+// 			}
+//
+// 			// check signature
+// 			if !sp_runtime::verify_encoded_lazy(signature, transfer, &transfer.from) {
+// 				return InvalidTransaction::BadProof.into()
+// 			}
+//
+// 			// check nonce
+// 			let nonce_key = transfer.from.to_keyed_vec(NONCE_OF);
+// 			let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
+// 			if transfer.nonce < expected_nonce {
+// 				return InvalidTransaction::Stale.into()
+// 			}
+//
+// 			if transfer.nonce > expected_nonce + 64 {
+// 				return InvalidTransaction::Future.into()
+// 			}
+//
+// 			// check sender balance
+// 			let from_balance_key = transfer.from.to_keyed_vec(BALANCE_OF);
+// 			let from_balance: u64 = storage::hashed::get_or(&blake2_256, &from_balance_key, 0);
+//
+// 			if transfer.amount > from_balance {
+// 				return Err(InvalidTransaction::Payment.into())
+// 			}
+//
+// 			let encode = |from: &AccountId, nonce: u64| (from, nonce).encode();
+// 			let requires = if transfer.nonce != expected_nonce && transfer.nonce > 0 {
+// 				vec![encode(&transfer.from, transfer.nonce - 1)]
+// 			} else {
+// 				vec![]
+// 			};
+//
+// 			let provides = vec![encode(&transfer.from, transfer.nonce)];
+//
+// 			Ok(ValidTransaction {
+// 				priority: transfer.amount,
+// 				requires,
+// 				provides,
+// 				longevity: 64,
+// 				propagate: true,
+// 			})
+// 		},
+// 		Call::include_data { data } => Ok(ValidTransaction {
+// 			priority: data.len() as u64,
+// 			requires: vec![],
+// 			provides: vec![data.clone()],
+// 			longevity: 1,
+// 			propagate: false,
+// 		}),
+// 		_ => Ok(Default::default()),
+// 	}
+// }

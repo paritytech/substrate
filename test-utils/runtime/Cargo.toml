@@ -35,6 +35,9 @@ sp-session = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../frame/babe" }
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../frame/balances" }
+pallet-root-testing = { version = "1.0.0-dev", default-features = false, path = "../../frame/root-testing" }
+pallet-sudo = { version = "4.0.0-dev", default-features = false, path = "../../frame/sudo" }
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../frame/executive" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
@@ -68,7 +71,6 @@ default = [
 	"std", "force-debug",
 ]
 std = [
-	"pallet-beefy-mmr/std",
 	"sp-application-crypto/std",
 	"sp-consensus-aura/std",
 	"sp-consensus-babe/std",
@@ -95,9 +97,13 @@ std = [
 	"sp-externalities/std",
 	"sp-state-machine/std",
 	"pallet-babe/std",
+	"pallet-beefy-mmr/std",
+	"pallet-timestamp/std",
+	"pallet-balances/std",
+	"pallet-sudo/std",
+	"pallet-root-testing/std",
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
-	"pallet-timestamp/std",
 	"sc-service",
 	"sp-consensus-grandpa/std",
 	"sp-trie/std",

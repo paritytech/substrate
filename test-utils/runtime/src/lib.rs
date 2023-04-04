@@ -26,6 +26,11 @@ pub mod genesismap;
 pub mod substrate_test_pallet;
 
 use codec::{Decode, Encode};
+use frame_support::{
+	construct_runtime, parameter_types,
+	traits::{ConstU32, ConstU64},
+};
+use frame_system::{CheckNonce, CheckWeight};
 use scale_info::TypeInfo;
 use sp_std::prelude::*;
 
@@ -37,15 +42,11 @@ use sp_trie::{
 };
 use trie_db::{Trie, TrieMut};
 
-use frame_support::{
-	construct_runtime, parameter_types,
-	traits::{ConstU32, ConstU64},
-};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 pub use sp_core::hash::H256;
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
-	create_runtime_str, impl_opaque_keys,
+	create_runtime_str, impl_opaque_keys, Perbill,
 	traits::{BlakeTwo256, Block as BlockT, DispatchInfoOf, NumberFor, Verify},
 	transaction_validity::{
 		TransactionSource, TransactionValidity, TransactionValidityError, ValidTransaction,
@@ -130,7 +131,8 @@ pub type Address = sp_core::sr25519::Public;
 pub type Signature = sr25519::Signature;
 
 /// The SignedExtension to the basic transaction logic.
-pub type SignedExtra = SignedExtraDummy;
+// pub type SignedExtra = SignedExtraDummy;
+pub type SignedExtra = (CheckNonce<Runtime>, CheckWeight<Runtime>);
 /// The payload being signed in transactions.
 pub type SignedPayload = sp_runtime::generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// Unchecked extrinsic type as expected by this runtime.
@@ -155,6 +157,8 @@ pub type Digest = sp_runtime::generic::Digest;
 pub type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 /// A test block's header.
 pub type Header = sp_runtime::generic::Header<BlockNumber, Hashing>;
+/// Balance of an account.
+pub type Balance = u128;
 
 decl_runtime_apis! {
 	#[api_version(2)]
@@ -213,65 +217,65 @@ pub type Executive = frame_executive::Executive<
 	AllPalletsWithSystem,
 >;
 
-#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct SignedExtraDummy;
-
-impl sp_runtime::traits::Printable for SignedExtraDummy {
-	fn print(&self) {
-		"SignedExtraDummy".print()
-	}
-}
-
-impl sp_runtime::traits::Dispatchable for SignedExtraDummy {
-	type RuntimeOrigin = SignedExtraDummy;
-	type Config = SignedExtraDummy;
-	type Info = SignedExtraDummy;
-	type PostInfo = SignedExtraDummy;
-	fn dispatch(
-		self,
-		_origin: Self::RuntimeOrigin,
-	) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-		panic!("This implementation should not be used for actual dispatch.");
-	}
-}
-
-impl sp_runtime::traits::SignedExtension for SignedExtraDummy {
-	type AccountId = AccountId;
-	type Call = RuntimeCall;
-	type AdditionalSigned = ();
-	type Pre = SignedExtraDummy;
-	const IDENTIFIER: &'static str = "DummySignedExtension";
-
-	fn additional_signed(
-		&self,
-	) -> sp_std::result::Result<Self::AdditionalSigned, TransactionValidityError> {
-		Ok(())
-	}
-
-	fn validate(
-		&self,
-		_who: &Self::AccountId,
-		call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
-		_len: usize,
-	) -> TransactionValidity {
-		log::trace!(target: LOG_TARGET, "validate");
-		if let RuntimeCall::SubstrateTest(ref substrate_test_call) = call {
-			return substrate_test_pallet::validate_runtime_call(substrate_test_call)
-		}
-		Ok(ValidTransaction { provides: vec![vec![0u8]], ..Default::default() })
-	}
-
-	fn pre_dispatch(
-		self,
-		who: &Self::AccountId,
-		call: &Self::Call,
-		info: &sp_runtime::traits::DispatchInfoOf<Self::Call>,
-		len: usize,
-	) -> Result<Self::Pre, TransactionValidityError> {
-		self.validate(who, call, info, len).map(|_| SignedExtraDummy {})
-	}
-}
+// #[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
+// pub struct SignedExtraDummy;
+//
+// impl sp_runtime::traits::Printable for SignedExtraDummy {
+// 	fn print(&self) {
+// 		"SignedExtraDummy".print()
+// 	}
+// }
+//
+// impl sp_runtime::traits::Dispatchable for SignedExtraDummy {
+// 	type RuntimeOrigin = SignedExtraDummy;
+// 	type Config = SignedExtraDummy;
+// 	type Info = SignedExtraDummy;
+// 	type PostInfo = SignedExtraDummy;
+// 	fn dispatch(
+// 		self,
+// 		_origin: Self::RuntimeOrigin,
+// 	) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+// 		panic!("This implementation should not be used for actual dispatch.");
+// 	}
+// }
+//
+// impl sp_runtime::traits::SignedExtension for SignedExtraDummy {
+// 	type AccountId = AccountId;
+// 	type Call = RuntimeCall;
+// 	type AdditionalSigned = ();
+// 	type Pre = SignedExtraDummy;
+// 	const IDENTIFIER: &'static str = "DummySignedExtension";
+//
+// 	fn additional_signed(
+// 		&self,
+// 	) -> sp_std::result::Result<Self::AdditionalSigned, TransactionValidityError> {
+// 		Ok(())
+// 	}
+//
+// 	fn validate(
+// 		&self,
+// 		_who: &Self::AccountId,
+// 		call: &Self::Call,
+// 		_info: &DispatchInfoOf<Self::Call>,
+// 		_len: usize,
+// 	) -> TransactionValidity {
+// 		log::trace!(target: LOG_TARGET, "validate");
+// 		if let RuntimeCall::SubstrateTest(ref substrate_test_call) = call {
+// 			return substrate_test_pallet::validate_runtime_call(substrate_test_call)
+// 		}
+// 		Ok(ValidTransaction { provides: vec![vec![0u8]], ..Default::default() })
+// 	}
+//
+// 	fn pre_dispatch(
+// 		self,
+// 		who: &Self::AccountId,
+// 		call: &Self::Call,
+// 		info: &sp_runtime::traits::DispatchInfoOf<Self::Call>,
+// 		len: usize,
+// 	) -> Result<Self::Pre, TransactionValidityError> {
+// 		self.validate(who, call, info, len).map(|_| SignedExtraDummy {})
+// 	}
+// }
 
 construct_runtime!(
 	pub enum Runtime where
@@ -282,12 +286,72 @@ construct_runtime!(
 		System: frame_system,
 		Babe: pallet_babe,
 		SubstrateTest: substrate_test_pallet::pallet,
+		Balances: pallet_balances,
+		Sudo: pallet_sudo,
+		RootTesting: pallet_root_testing,
 	}
 );
+use frame_support::{
+	dispatch::DispatchClass,
+	pallet_prelude::Get,
+	traits::{
+		fungible::ItemOf,
+		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount},
+		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, Currency, EitherOfDiverse,
+		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
+		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
+	},
+	weights::{
+		constants::{
+			BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_REF_TIME_PER_SECOND,
+		},
+		ConstantMultiplier, IdentityFee, Weight,
+	},
+};
+use frame_system::{
+	limits::{BlockLength, BlockWeights},
+	EnsureRoot, EnsureRootWithSuccess, EnsureSigned, EnsureWithSuccess,
+};
+
+/// We assume that ~10% of the block weight is consumed by `on_initialize` handlers.
+/// This is used to limit the maximal weight of a single extrinsic.
+const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(10);
+/// We allow `Normal` extrinsics to fill up the block up to 75%, the rest can be used
+/// by  Operational  extrinsics.
+const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
+/// We allow for 2 seconds of compute with a 6 second average block time, with maximum proof size.
+const MAXIMUM_BLOCK_WEIGHT: Weight =
+	Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND.saturating_mul(2), u64::MAX);
+parameter_types! {
+	pub const BlockHashCount: BlockNumber = 2400;
+	pub const Version: RuntimeVersion = VERSION;
+
+	pub RuntimeBlockLength: BlockLength =
+		BlockLength::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
+
+	pub RuntimeBlockWeights: BlockWeights = BlockWeights::builder()
+		.base_block(BlockExecutionWeight::get())
+		.for_class(DispatchClass::all(), |weights| {
+			weights.base_extrinsic = ExtrinsicBaseWeight::get();
+		})
+		.for_class(DispatchClass::Normal, |weights| {
+			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT);
+		})
+		.for_class(DispatchClass::Operational, |weights| {
+			weights.max_total = Some(MAXIMUM_BLOCK_WEIGHT);
+			// Operational transactions have some extra reserved space, so that they
+			// are included even if block reached `MAXIMUM_BLOCK_WEIGHT`.
+			weights.reserved = Some(
+				MAXIMUM_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT
+			);
+		})
+		.avg_block_initialization(AVERAGE_ON_INITIALIZE_RATIO)
+		.build_or_panic();
+}
 
 impl frame_system::pallet::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type BlockWeights = ();
+	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
@@ -303,7 +367,7 @@ impl frame_system::pallet::Config for Runtime {
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
+	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -312,8 +376,47 @@ impl frame_system::pallet::Config for Runtime {
 	type MaxConsumers = ConstU32<16>;
 }
 
+/// Money matters.
+mod currency {
+	use crate::Balance;
+	pub const MILLICENTS: Balance = 1_000_000_000;
+	pub const CENTS: Balance = 1_000 * MILLICENTS; // assume this is worth about a cent.
+	pub const DOLLARS: Balance = 100 * CENTS;
+
+	pub const fn deposit(items: u32, bytes: u32) -> Balance {
+		items as Balance * 15 * CENTS + (bytes as Balance) * 6 * CENTS
+	}
+}
+
+parameter_types! {
+	pub const ExistentialDeposit: Balance = 1 * currency::DOLLARS;
+	// For weight estimation, we assume that the most locks on an individual account will be 50.
+	// This number may need to be adjusted in the future if this assumption no longer holds true.
+	pub const MaxLocks: u32 = 50;
+	pub const MaxReserves: u32 = 50;
+}
+
+
+impl pallet_balances::Config for Runtime {
+	type MaxLocks = MaxLocks;
+	type MaxReserves = MaxReserves;
+	type ReserveIdentifier = [u8; 8];
+	type Balance = Balance;
+	type DustRemoval = ();
+	type RuntimeEvent = RuntimeEvent;
+	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = frame_system::Pallet<Runtime>;
+	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ConstU32<1>;
+}
+
+
 impl substrate_test_pallet::Config for Runtime {}
 
+// required for pallet_babe::Config
 impl pallet_timestamp::Config for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
@@ -326,6 +429,12 @@ parameter_types! {
 	pub const EpochDuration: u64 = 6;
 }
 
+impl pallet_sudo::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+}
+
+
 impl pallet_babe::Config for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ConstU64<10_000>;
@@ -336,6 +445,8 @@ impl pallet_babe::Config for Runtime {
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<10>;
 }
+
+impl pallet_root_testing::Config for Runtime {}
 
 /// Adds one to the given input and returns the final result.
 #[inline(never)]
@@ -418,7 +529,9 @@ impl_runtime_apis! {
 			block_hash: <Block as BlockT>::Hash,
 		) -> TransactionValidity {
 			log::trace!(target: LOG_TARGET, "validate_transaction {:?}", utx);
-			Executive::validate_transaction(source, utx, block_hash)
+			let r = Executive::validate_transaction(source, utx, block_hash);
+			log::trace!(target: LOG_TARGET, "validate_transaction a {:?}", r);
+			r
 		}
 	}
 
@@ -809,5 +922,10 @@ mod tests {
 		let best_hash = client.chain_info().best_hash;
 
 		runtime_api.test_witness(best_hash, proof, root).unwrap();
+	}
+
+	#[test]
+	fn xxx() {
+		println!("xxx: {:#?}", crate::RuntimeBlockWeights::get());
 	}
 }

@@ -17,24 +17,19 @@
 
 use crate::{
 	sr25519::Pair, substrate_test_pallet, substrate_test_pallet::pallet::Call as PalletCall,
-	AuthorityId, Extrinsic, RuntimeCall, Signature, SignedExtra, SignedPayload, Transfer,
+	AuthorityId, Index, Extrinsic, RuntimeCall, Signature, SignedExtra, SignedPayload, Transfer,
 };
 use codec::Encode;
+use frame_system::{CheckWeight, CheckNonce};
 use sp_core::crypto::Pair as TraitPair;
-use sp_runtime::transaction_validity::{InvalidTransaction, TransactionValidityError};
+use sp_runtime::{Perbill, transaction_validity::{InvalidTransaction, TransactionValidityError}};
 use sp_std::prelude::*;
 
 impl Transfer {
 	/// Convert into a signed unchecked extrinsic.
 	pub fn into_unchecked_extrinsic(self) -> Extrinsic {
-		ExtrinsicBuilder::new_transfer(self).build()
-	}
-
-	/// Convert into a signed extrinsic, which will only end up included in the block
-	/// if it's the first transaction. Otherwise it will cause `ResourceExhaustion` error
-	/// which should be considered as block being full.
-	pub fn into_resources_exhausting_unchecked_extrinsic(self) -> Extrinsic {
-		ExtrinsicBuilder::new(TransferCallBuilder::new(self).exhaust_resources().build()).build()
+		let nonce = self.nonce;
+		ExtrinsicBuilder::new_transfer(self).build2(nonce)
 	}
 
 	/// If feasible extract `Transfer` from given `Extrinsic`
@@ -121,12 +116,14 @@ impl TransferCallBuilder {
 pub struct ExtrinsicBuilder {
 	function: RuntimeCall,
 	is_unsigned: bool,
+	// signer: sp_keyring::AccountKeyring,
+	signer: sp_core::sr25519::Pair,
 }
 
 impl ExtrinsicBuilder {
 	/// Create builder for given `RuntimeCall`
 	pub fn new(function: impl Into<RuntimeCall>) -> Self {
-		Self { function: function.into(), is_unsigned: false }
+		Self { function: function.into(), is_unsigned: false, signer: sp_keyring::AccountKeyring::Alice.pair() }
 	}
 
 	/// Create builder for given `Transfer`
@@ -175,23 +172,37 @@ impl ExtrinsicBuilder {
 		Self::new(PalletCall::deposit_log_digest_item { log })
 	}
 
+	/// Create builder for `pallet_root_testing::Call::new_deposit_log_digest_item`
+	pub fn new_fill_block(ratio: Perbill) -> Self {
+		Self::new(pallet_root_testing::Call::fill_block{ ratio } )
+	}
+
 	/// Unsigned `Extrinsic` will be created
 	pub fn unsigned(mut self) -> Self {
 		self.is_unsigned = true;
 		self
 	}
 
+	pub fn signer(mut self, signer: sp_core::sr25519::Pair) -> Self {
+		self.signer = signer;
+		self
+	}
+
 	/// Build `Extrinsic` using embedded parameters
 	pub fn build(self) -> Extrinsic {
+		self.build2(0u32.into())
+	}
+
+	pub fn build2(self, nonce: Index) -> Extrinsic {
 		if self.is_unsigned {
 			Extrinsic::new_unsigned(self.function)
 		} else {
-			let sender = sp_keyring::AccountKeyring::Alice;
-			let extra = SignedExtra {};
-			let raw_payload = SignedPayload::from_raw(self.function.clone(), extra, ());
-			let signature = raw_payload.using_encoded(|e| sender.sign(e));
+			let signer = self.signer;
+			let extra = (CheckNonce::from(nonce), CheckWeight::new());
+			let raw_payload = SignedPayload::from_raw(self.function.clone(), extra.clone(), ((),()));
+			let signature = raw_payload.using_encoded(|e| signer.sign(e));
 
-			Extrinsic::new_signed(self.function, sender.public(), signature, extra)
+			Extrinsic::new_signed(self.function, signer.public(), signature, extra)
 		}
 	}
 }
