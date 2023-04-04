@@ -1,3 +1,16 @@
+error: use of deprecated constant `pallet::warnings::ConstantWeight_0::_w`:
+               It is deprecated to use hard-coded constant as call weight.
+               Please instead benchmark all calls or put the pallet into `dev` mode.
+
+               For more info see:
+                   <https://github.com/paritytech/substrate/pull/13798>
+  --> tests/pallet_ui/call_argument_invalid_bound_3.rs:21:20
+   |
+21 |         #[pallet::weight(0)]
+   |                          ^
+   |
+   = note: `-D deprecated` implied by `-D warnings`
+
 error[E0277]: `Bar` doesn't implement `std::fmt::Debug`
   --> tests/pallet_ui/call_argument_invalid_bound_3.rs:23:36
    |

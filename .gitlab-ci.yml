@@ -50,12 +50,13 @@ variables:
   ARCH: "x86_64"
   CI_IMAGE: "paritytech/ci-linux:production"
   BUILDAH_IMAGE: "quay.io/buildah/stable:v1.27"
+  RELENG_SCRIPTS_BRANCH: "master"
   RUSTY_CACHIER_SINGLE_BRANCH: master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
   RUSTY_CACHIER_COMPRESSION_METHOD: zstd
   NEXTEST_FAILURE_OUTPUT: immediate-final
   NEXTEST_SUCCESS_OUTPUT: final
-  ZOMBIENET_IMAGE: "docker.io/paritytech/zombienet:v1.3.37"
+  ZOMBIENET_IMAGE: "docker.io/paritytech/zombienet:v1.3.43"
 
 .shared-default: &shared-default
   retry:
@@ -105,6 +106,8 @@ variables:
     # $WASM_BUILD_WORKSPACE_HINT enables wasm-builder to find the Cargo.lock from within generated
     # packages
     - export WASM_BUILD_WORKSPACE_HINT="$PWD"
+    # ensure that RUSTFLAGS are set correctly
+    - echo $RUSTFLAGS
 
 .job-switcher:
   before_script:

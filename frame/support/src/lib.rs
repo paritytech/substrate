@@ -1552,6 +1552,7 @@ pub mod pallet_prelude {
 /// * [`pallet::inherent`](#inherent-palletinherent-optional)
 /// * [`pallet::validate_unsigned`](#validate-unsigned-palletvalidate_unsigned-optional)
 /// * [`pallet::origin`](#origin-palletorigin-optional)
+/// * [`pallet::composable_enum`](#composable-enum-palletcomposable_enum-optional)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -2277,6 +2278,29 @@ pub mod pallet_prelude {
 ///
 /// Also see [`pallet::origin`](`frame_support::pallet_macros::origin`)
 ///
+/// # Composable enum `#[pallet::composable_enum]` (optional)
+///
+/// The `#[pallet::composable_enum]` attribute allows you to define an enum on the pallet which
+/// will then instruct `construct_runtime` to amalgamate all similarly-named enums from other
+/// pallets into an aggregate enum. This is similar in principle with how the aggregate enum is
+/// generated for `#[pallet::event]` or `#[pallet::error]`.
+///
+/// The item tagged with `#[pallet::composable_enum]` MUST be an enum declaration, and can ONLY
+/// be the following identifiers: `FreezeReason`, `HoldReason`, `LockId` or `SlashReason`.
+/// Custom identifiers are not supported.
+///
+/// NOTE: For ease of usage, when no `#[derive]` attributes are detected, the
+/// `#[pallet::composable_enum]` attribute will automatically derive the following traits for
+/// the enum:
+///
+/// ```ignore
+/// Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo,
+/// RuntimeDebug
+/// ```
+///
+/// The inverse is also true: if there are any #[derive] attributes present for the enum, then
+/// the attribute will not automatically derive any of the traits described above.
+///
 /// # General notes on instantiable pallets
 ///
 /// An instantiable pallet is one where Config is generic, i.e. `Config<I>`. This allows
@@ -2808,10 +2832,11 @@ pub use frame_support_procedural::pallet;
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
-		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
-		extra_constants, generate_deposit, generate_storage_info, generate_store, genesis_build,
-		genesis_config, getter, hooks, inherent, origin, storage, storage_prefix, storage_version,
-		type_value, unbounded, validate_unsigned, weight, whitelist_storage,
+		call_index, compact, composable_enum, config, constant,
+		disable_frame_system_supertrait_check, error, event, extra_constants, generate_deposit,
+		generate_storage_info, generate_store, genesis_build, genesis_config, getter, hooks,
+		inherent, origin, storage, storage_prefix, storage_version, type_value, unbounded,
+		validate_unsigned, weight, whitelist_storage,
 	};
 }
 

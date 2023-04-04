@@ -155,6 +155,10 @@ impl RuntimeBuilder {
 				canonicalize_nans: self.canonicalize_nans,
 				parallel_compilation: true,
 				heap_alloc_strategy: self.heap_pages,
+				wasm_multi_value: false,
+				wasm_bulk_memory: false,
+				wasm_reference_types: false,
+				wasm_simd: false,
 			},
 		};
 
@@ -474,6 +478,10 @@ fn test_instances_without_reuse_are_not_leaked() {
 				canonicalize_nans: false,
 				parallel_compilation: true,
 				heap_alloc_strategy: HeapAllocStrategy::Static { extra_pages: 2048 },
+				wasm_multi_value: false,
+				wasm_bulk_memory: false,
+				wasm_reference_types: false,
+				wasm_simd: false,
 			},
 		},
 	)
