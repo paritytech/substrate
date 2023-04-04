@@ -218,7 +218,7 @@ pub mod pallet {
 
 		/// Doc comment put in metadata
 		#[pallet::call_index(1)]
-		#[pallet::weight(1)]
+		#[pallet::weight({1})]
 		pub fn foo_storage_layer(
 			_origin: OriginFor<T>,
 			#[pallet::compact] foo: u32,
@@ -232,20 +232,20 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(4)]
-		#[pallet::weight(1)]
+		#[pallet::weight({1})]
 		pub fn foo_index_out_of_order(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
 		}
 
 		// Test for DispatchResult return type
 		#[pallet::call_index(2)]
-		#[pallet::weight(1)]
+		#[pallet::weight({1})]
 		pub fn foo_no_post_info(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
 		}
 
 		#[pallet::call_index(3)]
-		#[pallet::weight(1)]
+		#[pallet::weight({1})]
 		pub fn check_for_dispatch_context(_origin: OriginFor<T>) -> DispatchResult {
 			with_context::<(), _>(|_| ()).ok_or_else(|| DispatchError::Unavailable)
 		}

@@ -41,7 +41,7 @@ use sp_runtime::{
 type BlockNumber = u64;
 
 // example module to test behaviors.
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 pub mod example {
 	use frame_support::{dispatch::WithPostDispatchInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
@@ -91,7 +91,7 @@ pub mod example {
 
 mod mock_democracy {
 	pub use pallet::*;
-	#[frame_support::pallet]
+	#[frame_support::pallet(dev_mode)]
 	pub mod pallet {
 		use frame_support::pallet_prelude::*;
 		use frame_system::pallet_prelude::*;

@@ -22,7 +22,7 @@ use frame_support::{
 use pallet::*;
 use sp_io::TestExternalities;
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use frame_support::{ensure, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;

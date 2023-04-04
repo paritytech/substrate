@@ -11,15 +11,13 @@ mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(0)]
-		pub fn foo(_: OriginFor<T>) -> DispatchResult {
-			Ok(())
-		}
+		#[pallet::call_index(0)]
+        #[pallet::weight(123)]
+		pub fn foo(_: OriginFor<T>) -> DispatchResult { Ok(()) }
 
-		#[pallet::weight(0)]
-		pub fn bar(_: OriginFor<T>) -> DispatchResult {
-			Ok(())
-		}
+		#[pallet::call_index(1)]
+        #[pallet::weight(123_custom_prefix)]
+		pub fn bar(_: OriginFor<T>) -> DispatchResult { Ok(()) }
 	}
 }
 
