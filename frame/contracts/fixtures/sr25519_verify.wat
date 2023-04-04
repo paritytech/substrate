@@ -1,7 +1,6 @@
 ;; This contract:
 ;; 1) Reads signature, message and public key from the input
-;; 2) Calls sr25519_verify
-;; 3) Traps if the signature is invalid
+;; 2) Calls and return the result of sr25519_verify
 
 (module
     ;; import the host functions from the seal0 module
