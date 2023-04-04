@@ -79,7 +79,7 @@ where
 			None => (),
 		}
 	}
-	Err(String::from("Stderr stream ended without any lines matching the regex."))
+	Err(String::from("Stream closed without any lines matching the regex."))
 }
 
 /// Run the given `future` and panic if the `timeout` is hit.
