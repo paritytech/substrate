@@ -16,7 +16,7 @@ mod benchmarks {
 		let value = 100u32.into();
 		let caller: T::AccountId = whitelisted_caller();
 		#[extrinsic_call]
-		do_something(RawOrigin::Signed(caller), value); 
+		do_something(RawOrigin::Signed(caller), value);
 
 		assert_eq!(Something::<T>::get(), Some(value));
 	}
@@ -26,12 +26,10 @@ mod benchmarks {
 		Something::<T>::put(100u32);
 		let caller: T::AccountId = whitelisted_caller();
 		#[extrinsic_call]
-		cause_error(RawOrigin::Signed(caller)); 
+		cause_error(RawOrigin::Signed(caller));
 
 		assert_eq!(Something::<T>::get(), Some(101u32));
 	}
 
 	impl_benchmark_test_suite!(Template, crate::mock::new_test_ext(), crate::mock::Test);
-
 }
-
