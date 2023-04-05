@@ -1329,11 +1329,11 @@ mod tests {
 	fn contract_sr25519() {
 		const CODE_SR25519: &str = r#"
 (module
-	(import "seal0" "seal_sr25519_verify" (func $seal_sr25519_verify (param i32 i32 i32 i32) (result i32)))
+	(import "seal0" "sr25519_verify" (func $sr25519_verify (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
-			(call $seal_sr25519_verify
+			(call $sr25519_verify
 				(i32.const 10) ;; Pointer to signature.
 				(i32.const 74) ;; Pointer to public key.
 				(i32.const 16) ;; message length.
