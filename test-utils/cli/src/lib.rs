@@ -51,7 +51,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead};
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use my_crate::start_node;
 ///
 /// let child = start_node();
