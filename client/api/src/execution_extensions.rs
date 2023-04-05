@@ -23,12 +23,10 @@
 //! extensions to support APIs for particular execution context & capabilities.
 
 use parking_lot::RwLock;
-use sp_core::{
-	traits::{ReadRuntimeVersion, ReadRuntimeVersionExt},
-};
+use sp_core::traits::{ReadRuntimeVersion, ReadRuntimeVersionExt};
 use sp_externalities::{Extension, Extensions};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 
 /// Generate the starting set of [`Extensions`].
 ///
@@ -102,11 +100,12 @@ pub struct ExecutionExtensions<Block: BlockT> {
 
 impl<Block: BlockT> ExecutionExtensions<Block> {
 	/// Create new `ExecutionExtensions` given a `keystore` and `ExecutionStrategies`.
-	pub fn new(extensions_factory: Option<impl ExtensionsFactory<Block> + 'static>,
+	pub fn new(
+		extensions_factory: Option<Box<dyn ExtensionsFactory<Block>>>,
 		read_runtime_version: Arc<dyn ReadRuntimeVersion>,
 	) -> Self {
 		Self {
-			extensions_factory: RwLock::new(extensions_factory.map(Box::new).unwrap_or_else(|| Box::new(()))),
+			extensions_factory: RwLock::new(extensions_factory.unwrap_or_else(|| Box::new(()))),
 			read_runtime_version,
 		}
 	}
@@ -123,7 +122,8 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 		block_hash: Block::Hash,
 		block_number: NumberFor<Block>,
 	) -> Extensions {
-		let extensions = self.extensions_factory.read().extensions_for(block_hash, block_number);
+		let mut extensions =
+			self.extensions_factory.read().extensions_for(block_hash, block_number);
 
 		extensions.register(ReadRuntimeVersionExt::new(self.read_runtime_version.clone()));
 

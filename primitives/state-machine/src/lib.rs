@@ -233,7 +233,7 @@ mod execution {
 			exec: &'a Exec,
 			method: &'a str,
 			call_data: &'a [u8],
-			extensions: Extensions,
+			extensions: &'a mut Extensions,
 			runtime_code: &'a RuntimeCode,
 			context: CallContext,
 		) -> Self {
@@ -369,7 +369,7 @@ mod execution {
 		method: &str,
 		call_data: &[u8],
 		runtime_code: &RuntimeCode,
-		mut extensions: &mut Extensions,
+		extensions: &mut Extensions,
 	) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 	where
 		S: trie_backend_essence::TrieBackendStorage<H>,
