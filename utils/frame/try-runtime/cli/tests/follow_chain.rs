@@ -19,7 +19,7 @@
 #![cfg(unix)]
 
 #[cfg(feature = "try-runtime")]
-mod follow_chain_tests {
+mod tests {
 	use assert_cmd::cargo::cargo_bin;
 	use regex::Regex;
 	use std::{
