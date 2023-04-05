@@ -177,14 +177,19 @@
 
 mod chain_spec;
 mod extension;
+mod genesis;
 
-pub use chain_spec::{ChainSpec as GenericChainSpec, NoExtension};
-pub use extension::{
-	get_extension, get_extension_mut, Extension, Fork, Forks, GetExtension, Group,
+pub use self::{
+	chain_spec::{ChainSpec as GenericChainSpec, NoExtension},
+	extension::{get_extension, get_extension_mut, Extension, Fork, Forks, GetExtension, Group},
+	genesis::{
+		construct_genesis_block, resolve_state_version_from_wasm, BuildGenesisBlock,
+		GenesisBlockBuilder,
+	},
 };
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 
-use sc_network_common::config::MultiaddrWithPeerId;
+use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
 use serde::{de::DeserializeOwned, Serialize};
 use sp_core::storage::Storage;

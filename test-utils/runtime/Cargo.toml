@@ -13,17 +13,17 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../primitives/beefy", package = "sp-beefy" }
 pallet-beefy-mmr = { version = "4.0.0-dev", default-features = false, path = "../../frame/beefy-mmr" }
 sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura" }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
+sp-consensus-beefy = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/beefy" }
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 sp-keyring = { version = "7.0.0", optional = true, path = "../../primitives/keyring" }
-memory-db = { version = "0.31.0", default-features = false }
+memory-db = { version = "0.32.0", default-features = false }
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../primitives/offchain" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
@@ -38,10 +38,10 @@ pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../f
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../frame/timestamp" }
-sp-finality-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/finality-grandpa" }
+sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/grandpa" }
 sp-trie = { version = "7.0.0", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-pool" }
-trie-db = { version = "0.25.1", default-features = false }
+trie-db = { version = "0.27.0", default-features = false }
 sc-service = { version = "0.10.0-dev", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
 sp-state-machine = { version = "0.13.0", default-features = false, path = "../../primitives/state-machine" }
 sp-externalities = { version = "0.13.0", default-features = false, path = "../../primitives/externalities" }
@@ -66,11 +66,11 @@ default = [
 	"std",
 ]
 std = [
-	"beefy-primitives/std",
 	"pallet-beefy-mmr/std",
 	"sp-application-crypto/std",
 	"sp-consensus-aura/std",
 	"sp-consensus-babe/std",
+	"sp-consensus-beefy/std",
 	"sp-block-builder/std",
 	"codec/std",
 	"scale-info/std",
@@ -97,7 +97,7 @@ std = [
 	"frame-system/std",
 	"pallet-timestamp/std",
 	"sc-service",
-	"sp-finality-grandpa/std",
+	"sp-consensus-grandpa/std",
 	"sp-trie/std",
 	"sp-transaction-pool/std",
 	"trie-db/std",

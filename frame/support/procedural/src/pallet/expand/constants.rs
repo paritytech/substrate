@@ -85,7 +85,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 		let default_byte_impl = &const_.default_byte_impl;
 
 		quote::quote!({
-			#frame_support::metadata::PalletConstantMetadata {
+			#frame_support::metadata_ir::PalletConstantMetadataIR {
 				name: #ident_str,
 				ty: #frame_support::scale_info::meta_type::<#const_type>(),
 				value: { #default_byte_impl },
@@ -99,7 +99,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 
 			#[doc(hidden)]
 			pub fn pallet_constants_metadata()
-				-> #frame_support::sp_std::vec::Vec<#frame_support::metadata::PalletConstantMetadata>
+				-> #frame_support::sp_std::vec::Vec<#frame_support::metadata_ir::PalletConstantMetadataIR>
 			{
 				#frame_support::sp_std::vec![ #( #consts ),* ]
 			}

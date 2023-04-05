@@ -18,7 +18,7 @@
 //! Storage counted map type.
 
 use crate::{
-	metadata::StorageEntryMetadata,
+	metadata_ir::StorageEntryMetadataIR,
 	storage::{
 		generator::StorageMap as _,
 		types::{
@@ -459,7 +459,7 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadataIR>) {
 		<Self as MapWrapper>::Map::build_metadata(docs, entries);
 		CounterFor::<Prefix>::build_metadata(
 			if cfg!(feature = "no-metadata-docs") {
@@ -512,7 +512,7 @@ mod test {
 	use super::*;
 	use crate::{
 		hash::*,
-		metadata::{StorageEntryModifier, StorageEntryType, StorageHasher},
+		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
 		storage::{bounded_vec::BoundedVec, types::ValueQuery},
 		traits::ConstU32,
 	};
@@ -1147,21 +1147,21 @@ mod test {
 		assert_eq!(
 			entries,
 			vec![
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "foo",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Twox64Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Twox64Concat],
 						key: scale_info::meta_type::<u16>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: 97u32.encode(),
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "counter_for_foo",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0, 0, 0, 0],
 					docs: if cfg!(feature = "no-metadata-docs") {
 						vec![]

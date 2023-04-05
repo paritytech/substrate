@@ -30,6 +30,7 @@
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod migration;
 #[cfg(test)]
 pub mod mock;
 #[cfg(test)]
@@ -45,9 +46,7 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::traits::{
-	tokens::{AttributeNamespace, Locker},
-	BalanceStatus::Reserved,
-	Currency, EnsureOriginWithArg, ReservableCurrency,
+	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -60,6 +59,9 @@ pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
 
+/// The log target of this pallet.
+pub const LOG_TARGET: &'static str = "runtime::nfts";
+
 type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
@@ -69,9 +71,12 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::{IdentifyAccount, Verify};
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T, I = ()>(_);
+	#[pallet::storage_version(STORAGE_VERSION)]
+	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[cfg(feature = "runtime-benchmarks")]
 	pub trait BenchmarkHelper<CollectionId, ItemId> {
@@ -196,7 +201,7 @@ pub mod pallet {
 
 	/// Details of a collection.
 	#[pallet::storage]
-	pub(super) type Collection<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type Collection<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -205,13 +210,13 @@ pub mod pallet {
 
 	/// The collection, if any, of which an account is willing to take ownership.
 	#[pallet::storage]
-	pub(super) type OwnershipAcceptance<T: Config<I>, I: 'static = ()> =
+	pub type OwnershipAcceptance<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, T::CollectionId>;
 
 	/// The items held by any given account; set out this way so that items owned by a single
 	/// account can be enumerated.
 	#[pallet::storage]
-	pub(super) type Account<T: Config<I>, I: 'static = ()> = StorageNMap<
+	pub type Account<T: Config<I>, I: 'static = ()> = StorageNMap<
 		_,
 		(
 			NMapKey<Blake2_128Concat, T::AccountId>, // owner
@@ -225,7 +230,7 @@ pub mod pallet {
 	/// The collections owned by any given account; set out this way so that collections owned by
 	/// a single account can be enumerated.
 	#[pallet::storage]
-	pub(super) type CollectionAccount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type CollectionAccount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::AccountId,
@@ -238,7 +243,7 @@ pub mod pallet {
 	/// The items in existence and their ownership details.
 	#[pallet::storage]
 	/// Stores collection roles as per account.
-	pub(super) type CollectionRoleOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type CollectionRoleOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -250,7 +255,7 @@ pub mod pallet {
 
 	/// The items in existence and their ownership details.
 	#[pallet::storage]
-	pub(super) type Item<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type Item<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -262,7 +267,7 @@ pub mod pallet {
 
 	/// Metadata of a collection.
 	#[pallet::storage]
-	pub(super) type CollectionMetadataOf<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type CollectionMetadataOf<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -272,7 +277,7 @@ pub mod pallet {
 
 	/// Metadata of an item.
 	#[pallet::storage]
-	pub(super) type ItemMetadataOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type ItemMetadataOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -284,7 +289,7 @@ pub mod pallet {
 
 	/// Attributes of a collection.
 	#[pallet::storage]
-	pub(super) type Attribute<T: Config<I>, I: 'static = ()> = StorageNMap<
+	pub type Attribute<T: Config<I>, I: 'static = ()> = StorageNMap<
 		_,
 		(
 			NMapKey<Blake2_128Concat, T::CollectionId>,
@@ -298,7 +303,7 @@ pub mod pallet {
 
 	/// A price of an item.
 	#[pallet::storage]
-	pub(super) type ItemPriceOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type ItemPriceOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -310,7 +315,7 @@ pub mod pallet {
 
 	/// Item attribute approvals.
 	#[pallet::storage]
-	pub(super) type ItemAttributesApprovalsOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type ItemAttributesApprovalsOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -323,12 +328,12 @@ pub mod pallet {
 	/// Stores the `CollectionId` that is going to be used for the next collection.
 	/// This gets incremented whenever a new collection is created.
 	#[pallet::storage]
-	pub(super) type NextCollectionId<T: Config<I>, I: 'static = ()> =
+	pub type NextCollectionId<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, T::CollectionId, OptionQuery>;
 
 	/// Handles all the pending swaps.
 	#[pallet::storage]
-	pub(super) type PendingSwapOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type PendingSwapOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -345,12 +350,12 @@ pub mod pallet {
 
 	/// Config of a collection.
 	#[pallet::storage]
-	pub(super) type CollectionConfigOf<T: Config<I>, I: 'static = ()> =
+	pub type CollectionConfigOf<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::CollectionId, CollectionConfigFor<T, I>, OptionQuery>;
 
 	/// Config of an item.
 	#[pallet::storage]
-	pub(super) type ItemConfigOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type ItemConfigOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
@@ -398,9 +403,9 @@ pub mod pallet {
 		/// The management team changed.
 		TeamChanged {
 			collection: T::CollectionId,
-			issuer: T::AccountId,
-			admin: T::AccountId,
-			freezer: T::AccountId,
+			issuer: Option<T::AccountId>,
+			admin: Option<T::AccountId>,
+			freezer: Option<T::AccountId>,
 		},
 		/// An `item` of a `collection` has been approved by the `owner` for transfer by
 		/// a `delegate`.
@@ -532,6 +537,14 @@ pub mod pallet {
 			item: T::ItemId,
 			namespace: AttributeNamespace<T::AccountId>,
 		},
+		/// A new attribute in the `Pallet` namespace was set for the `collection` or an `item`
+		/// within that `collection`.
+		PalletAttributeSet {
+			collection: T::CollectionId,
+			item: Option<T::ItemId>,
+			attribute: PalletAttributes<T::CollectionId>,
+			value: BoundedVec<u8, T::ValueLimit>,
+		},
 	}
 
 	#[pallet::error]
@@ -622,6 +635,8 @@ pub mod pallet {
 		MaxAttributesLimitReached,
 		/// The provided namespace isn't supported in this call.
 		WrongNamespace,
+		/// Can't delete non-empty collections.
+		CollectionNotEmpty,
 	}
 
 	#[pallet::call]
@@ -713,20 +728,22 @@ pub mod pallet {
 		/// The origin must conform to `ForceOrigin` or must be `Signed` and the sender must be the
 		/// owner of the `collection`.
 		///
+		/// NOTE: The collection must have 0 items to be destroyed.
+		///
 		/// - `collection`: The identifier of the collection to be destroyed.
 		/// - `witness`: Information on the items minted in the collection. This must be
 		/// correct.
 		///
 		/// Emits `Destroyed` event when successful.
 		///
-		/// Weight: `O(n + m)` where:
-		/// - `n = witness.items`
+		/// Weight: `O(m + c + a)` where:
 		/// - `m = witness.item_metadatas`
+		/// - `c = witness.item_configs`
 		/// - `a = witness.attributes`
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::destroy(
-			witness.items,
- 			witness.item_metadatas,
+			witness.item_metadatas,
+			witness.item_configs,
 			witness.attributes,
  		))]
 		pub fn destroy(
@@ -740,8 +757,8 @@ pub mod pallet {
 			let details = Self::do_destroy_collection(collection, witness, maybe_check_owner)?;
 
 			Ok(Some(T::WeightInfo::destroy(
-				details.items,
 				details.item_metadatas,
+				details.item_configs,
 				details.attributes,
 			))
 			.into())
@@ -749,7 +766,7 @@ pub mod pallet {
 
 		/// Mint an item of a particular collection.
 		///
-		/// The origin must be Signed and the sender must be the Issuer of the `collection`.
+		/// The origin must be Signed and the sender must comply with the `mint_settings` rules.
 		///
 		/// - `collection`: The collection of the item to be minted.
 		/// - `item`: An identifier of the new item.
@@ -783,11 +800,6 @@ pub mod pallet {
 				mint_to.clone(),
 				item_config,
 				|collection_details, collection_config| {
-					// Issuer can mint regardless of mint settings
-					if Self::has_role(&collection, &caller, CollectionRole::Issuer) {
-						return Ok(())
-					}
-
 					let mint_settings = collection_config.mint_settings;
 					let now = frame_system::Pallet::<T>::block_number();
 
@@ -799,37 +811,49 @@ pub mod pallet {
 					}
 
 					match mint_settings.mint_type {
-						MintType::Issuer => return Err(Error::<T, I>::NoPermission.into()),
+						MintType::Issuer => {
+							ensure!(
+								Self::has_role(&collection, &caller, CollectionRole::Issuer),
+								Error::<T, I>::NoPermission
+							);
+						},
 						MintType::HolderOf(collection_id) => {
-							let MintWitness { owner_of_item } =
+							let MintWitness { owned_item } =
 								witness_data.ok_or(Error::<T, I>::BadWitness)?;
 
-							let has_item = Account::<T, I>::contains_key((
+							let owns_item = Account::<T, I>::contains_key((
 								&caller,
 								&collection_id,
-								&owner_of_item,
+								&owned_item,
 							));
-							ensure!(has_item, Error::<T, I>::BadWitness);
+							ensure!(owns_item, Error::<T, I>::BadWitness);
 
-							let attribute_key = Self::construct_attribute_key(
-								PalletAttributes::<T::CollectionId>::UsedToClaim(collection)
-									.encode(),
-							)?;
+							let pallet_attribute =
+								PalletAttributes::<T::CollectionId>::UsedToClaim(collection);
 
 							let key = (
 								&collection_id,
-								Some(owner_of_item),
+								Some(owned_item),
 								AttributeNamespace::Pallet,
-								&attribute_key,
+								&Self::construct_attribute_key(pallet_attribute.encode())?,
 							);
 							let already_claimed = Attribute::<T, I>::contains_key(key.clone());
 							ensure!(!already_claimed, Error::<T, I>::AlreadyClaimed);
 
-							let value = Self::construct_attribute_value(vec![0])?;
+							let attribute_value = Self::construct_attribute_value(vec![])?;
 							Attribute::<T, I>::insert(
 								key,
-								(value, AttributeDeposit { account: None, amount: Zero::zero() }),
+								(
+									attribute_value.clone(),
+									AttributeDeposit { account: None, amount: Zero::zero() },
+								),
 							);
+							Self::deposit_event(Event::PalletAttributeSet {
+								collection,
+								item: Some(item),
+								attribute: pallet_attribute,
+								value: attribute_value,
+							});
 						},
 						_ => {},
 					}
@@ -886,38 +910,30 @@ pub mod pallet {
 
 		/// Destroy a single item.
 		///
-		/// Origin must be Signed and the signing account must be either:
-		/// - the Admin of the `collection`;
-		/// - the Owner of the `item`;
+		/// The origin must conform to `ForceOrigin` or must be Signed and the signing account must
+		/// be the owner of the `item`.
 		///
 		/// - `collection`: The collection of the item to be burned.
 		/// - `item`: The item to be burned.
-		/// - `check_owner`: If `Some` then the operation will fail with `WrongOwner` unless the
-		///   item is owned by this value.
 		///
-		/// Emits `Burned` with the actual amount burned.
+		/// Emits `Burned`.
 		///
 		/// Weight: `O(1)`
-		/// Modes: `check_owner.is_some()`.
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::burn())]
 		pub fn burn(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			check_owner: Option<AccountIdLookupOf<T>>,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
-			let check_owner = check_owner.map(T::Lookup::lookup).transpose()?;
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 
 			Self::do_burn(collection, item, |details| {
-				let is_admin = Self::has_role(&collection, &origin, CollectionRole::Admin);
-				let is_permitted = is_admin || details.owner == origin;
-				ensure!(is_permitted, Error::<T, I>::NoPermission);
-				ensure!(
-					check_owner.map_or(true, |o| o == details.owner),
-					Error::<T, I>::WrongOwner
-				);
+				if let Some(check_origin) = maybe_check_origin {
+					ensure!(details.owner == check_origin, Error::<T, I>::NoPermission);
+				}
 				Ok(())
 			})
 		}
@@ -925,7 +941,6 @@ pub mod pallet {
 		/// Move an item from the sender account to another.
 		///
 		/// Origin must be Signed and the signing account must be either:
-		/// - the Admin of the `collection`;
 		/// - the Owner of the `item`;
 		/// - the approved delegate for the `item` (in this case, the approval is reset).
 		///
@@ -949,8 +964,7 @@ pub mod pallet {
 			let dest = T::Lookup::lookup(dest)?;
 
 			Self::do_transfer(collection, item, dest, |_, details| {
-				let is_admin = Self::has_role(&collection, &origin, CollectionRole::Admin);
-				if details.owner != origin && !is_admin {
+				if details.owner != origin {
 					let deadline =
 						details.approvals.get(&origin).ok_or(Error::<T, I>::NoPermission)?;
 					if let Some(d) = deadline {
@@ -1073,12 +1087,13 @@ pub mod pallet {
 
 		/// Disallows specified settings for the whole collection.
 		///
-		/// Origin must be Signed and the sender should be the Freezer of the `collection`.
+		/// Origin must be Signed and the sender should be the Owner of the `collection`.
 		///
 		/// - `collection`: The collection to be locked.
 		/// - `lock_settings`: The settings to be locked.
 		///
 		/// Note: it's possible to only lock(set) the setting, but not to unset it.
+		///
 		/// Emits `CollectionLocked`.
 		///
 		/// Weight: `O(1)`
@@ -1121,6 +1136,9 @@ pub mod pallet {
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// `collection`.
 		///
+		/// Note: by setting the role to `None` only the `ForceOrigin` will be able to change it
+		/// after to `Some(account)`.
+		///
 		/// - `collection`: The collection whose team should be changed.
 		/// - `issuer`: The new Issuer of this collection.
 		/// - `admin`: The new Admin of this collection.
@@ -1134,16 +1152,16 @@ pub mod pallet {
 		pub fn set_team(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			issuer: AccountIdLookupOf<T>,
-			admin: AccountIdLookupOf<T>,
-			freezer: AccountIdLookupOf<T>,
+			issuer: Option<AccountIdLookupOf<T>>,
+			admin: Option<AccountIdLookupOf<T>>,
+			freezer: Option<AccountIdLookupOf<T>>,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			let issuer = T::Lookup::lookup(issuer)?;
-			let admin = T::Lookup::lookup(admin)?;
-			let freezer = T::Lookup::lookup(freezer)?;
+			let issuer = issuer.map(T::Lookup::lookup).transpose()?;
+			let admin = admin.map(T::Lookup::lookup).transpose()?;
+			let freezer = freezer.map(T::Lookup::lookup).transpose()?;
 			Self::do_set_team(maybe_check_owner, collection, issuer, admin, freezer)
 		}
 
@@ -1230,7 +1248,6 @@ pub mod pallet {
 		///
 		/// Origin must be either:
 		/// - the `Force` origin;
-		/// - `Signed` with the signer being the Admin of the `collection`;
 		/// - `Signed` with the signer being the Owner of the `item`;
 		///
 		/// Arguments:
@@ -1260,7 +1277,6 @@ pub mod pallet {
 		///
 		/// Origin must be either:
 		/// - the `Force` origin;
-		/// - `Signed` with the signer being the Admin of the `collection`;
 		/// - `Signed` with the signer being the Owner of the `item`;
 		///
 		/// Arguments:
@@ -1285,8 +1301,8 @@ pub mod pallet {
 
 		/// Disallows changing the metadata or attributes of the item.
 		///
-		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// `collection`.
+		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Admin
+		/// of the `collection`.
 		///
 		/// - `collection`: The collection if the `item`.
 		/// - `item`: An item to be locked.
@@ -1294,8 +1310,8 @@ pub mod pallet {
 		/// - `lock_attributes`: Specifies whether the attributes in the `CollectionOwner` namespace
 		///   should be locked.
 		///
-		/// Note: `lock_attributes` affects the attributes in the `CollectionOwner` namespace
-		/// only. When the metadata or attributes are locked, it won't be possible the unlock them.
+		/// Note: `lock_attributes` affects the attributes in the `CollectionOwner` namespace only.
+		/// When the metadata or attributes are locked, it won't be possible the unlock them.
 		///
 		/// Emits `ItemPropertiesLocked`.
 		///
@@ -1309,11 +1325,11 @@ pub mod pallet {
 			lock_metadata: bool,
 			lock_attributes: bool,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			Self::do_lock_item_properties(
-				maybe_check_owner,
+				maybe_check_origin,
 				collection,
 				item,
 				lock_metadata,
@@ -1324,7 +1340,7 @@ pub mod pallet {
 		/// Set an attribute for a collection or item.
 		///
 		/// Origin must be Signed and must conform to the namespace ruleset:
-		/// - `CollectionOwner` namespace could be modified by the `collection` owner only;
+		/// - `CollectionOwner` namespace could be modified by the `collection` Admin only;
 		/// - `ItemOwner` namespace could be modified by the `maybe_item` owner only. `maybe_item`
 		///   should be set in that case;
 		/// - `Account(AccountId)` namespace could be modified only when the `origin` was given a
@@ -1354,15 +1370,12 @@ pub mod pallet {
 			value: BoundedVec<u8, T::ValueLimit>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_set_attribute(
-				origin.clone(),
-				collection,
-				maybe_item,
-				namespace,
-				key,
-				value,
-				origin,
-			)
+			let depositor = match namespace {
+				AttributeNamespace::CollectionOwner =>
+					Self::collection_owner(collection).ok_or(Error::<T, I>::UnknownCollection)?,
+				_ => origin.clone(),
+			};
+			Self::do_set_attribute(origin, collection, maybe_item, namespace, key, value, depositor)
 		}
 
 		/// Force-set an attribute for a collection or item.
@@ -1477,7 +1490,7 @@ pub mod pallet {
 
 		/// Set the metadata for an item.
 		///
-		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
+		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Admin of the
 		/// `collection`.
 		///
 		/// If the origin is Signed, then funds of signer are reserved according to the formula:
@@ -1499,15 +1512,15 @@ pub mod pallet {
 			item: T::ItemId,
 			data: BoundedVec<u8, T::StringLimit>,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_set_item_metadata(maybe_check_owner, collection, item, data, None)
+			Self::do_set_item_metadata(maybe_check_origin, collection, item, data, None)
 		}
 
 		/// Clear the metadata for an item.
 		///
-		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
+		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Admin of the
 		/// `collection`.
 		///
 		/// Any deposit is freed for the collection's owner.
@@ -1525,15 +1538,15 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_clear_item_metadata(maybe_check_owner, collection, item)
+			Self::do_clear_item_metadata(maybe_check_origin, collection, item)
 		}
 
 		/// Set the metadata for a collection.
 		///
-		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
+		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Admin of
 		/// the `collection`.
 		///
 		/// If the origin is `Signed`, then funds of signer are reserved according to the formula:
@@ -1553,15 +1566,15 @@ pub mod pallet {
 			collection: T::CollectionId,
 			data: BoundedVec<u8, T::StringLimit>,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_set_collection_metadata(maybe_check_owner, collection, data)
+			Self::do_set_collection_metadata(maybe_check_origin, collection, data)
 		}
 
 		/// Clear the metadata for a collection.
 		///
-		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
+		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Admin of
 		/// the `collection`.
 		///
 		/// Any deposit is freed for the collection's owner.
@@ -1577,10 +1590,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_clear_collection_metadata(maybe_check_owner, collection)
+			Self::do_clear_collection_metadata(maybe_check_origin, collection)
 		}
 
 		/// Set (or reset) the acceptance of ownership for a particular account.
@@ -1627,8 +1640,8 @@ pub mod pallet {
 
 		/// Update mint settings.
 		///
-		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
-		/// the `collection`.
+		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Issuer
+		/// of the `collection`.
 		///
 		/// - `collection`: The identifier of the collection to change.
 		/// - `mint_settings`: The new mint settings.
@@ -1645,15 +1658,15 @@ pub mod pallet {
 				T::CollectionId,
 			>,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_update_mint_settings(maybe_check_owner, collection, mint_settings)
+			Self::do_update_mint_settings(maybe_check_origin, collection, mint_settings)
 		}
 
 		/// Set (or reset) the price for an item.
 		///
-		/// Origin must be Signed and must be the owner of the asset `item`.
+		/// Origin must be Signed and must be the owner of the `item`.
 		///
 		/// - `collection`: The collection of the item.
 		/// - `item`: The item to set the price for.
@@ -1814,7 +1827,7 @@ pub mod pallet {
 		///   its metadata, attributes, who can mint it (`None` for anyone) and until what block
 		///   number.
 		/// - `signature`: The signature of the `data` object.
-		/// - `signer`: The `data` object's signer. Should be an owner of the collection.
+		/// - `signer`: The `data` object's signer. Should be an Issuer of the collection.
 		///
 		/// Emits `Issued` on success.
 		/// Emits `AttributeSet` if the attributes were provided.
@@ -1840,7 +1853,7 @@ pub mod pallet {
 		/// - `data`: The pre-signed approval that consists of the information about the item,
 		///   attributes to update and until what block number.
 		/// - `signature`: The signature of the `data` object.
-		/// - `signer`: The `data` object's signer. Should be an owner of the collection for the
+		/// - `signer`: The `data` object's signer. Should be an Admin of the collection for the
 		///   `CollectionOwner` namespace.
 		///
 		/// Emits `AttributeSet` for each provided attribute.

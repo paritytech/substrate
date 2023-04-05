@@ -22,7 +22,7 @@ use frame_support::{
 use pallet::*;
 use sp_io::TestExternalities;
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use frame_support::{ensure, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
@@ -114,7 +114,7 @@ impl pallet::Config for Runtime {}
 impl decl_pallet::Config for Runtime {}
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic

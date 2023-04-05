@@ -36,9 +36,11 @@ use sp_runtime::{
 };
 use sp_staking::offence::{Offence, ReportOffence};
 
-use pallet_babe::BabeEquivocationOffence;
+use pallet_babe::EquivocationOffence as BabeEquivocationOffence;
 use pallet_balances::Config as BalancesConfig;
-use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
+use pallet_grandpa::{
+	EquivocationOffence as GrandpaEquivocationOffence, TimeSlot as GrandpaTimeSlot,
+};
 use pallet_im_online::{Config as ImOnlineConfig, Pallet as ImOnline, UnresponsivenessOffence};
 use pallet_offences::{Config as OffencesConfig, Pallet as Offences};
 use pallet_session::{
@@ -333,6 +335,12 @@ benchmarks! {
 			let balance_slash = |id| core::iter::once(
 				<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Slashed{ who: id, amount: slash_amount.into() })
 			);
+			let balance_locked = |id| core::iter::once(
+				<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Locked{ who: id, amount: slash_amount.into() })
+			);
+			let balance_unlocked = |id| core::iter::once(
+				<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Unlocked{ who: id, amount: slash_amount.into() })
+			);
 			let chill = |id| core::iter::once(
 				<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Chilled{ stash: id })
 			);
@@ -347,12 +355,15 @@ benchmarks! {
 			let slash_events = raw_offenders.into_iter()
 				.flat_map(|offender| {
 					let nom_slashes = offender.nominator_stashes.into_iter().flat_map(|nom| {
-						balance_slash(nom.clone()).map(Into::into).chain(slash(nom).map(Into::into)).map(Box::new)
+						balance_slash(nom.clone()).map(Into::into)
+						.chain(balance_unlocked(nom.clone()).map(Into::into))
+						.chain(slash(nom).map(Into::into)).map(Box::new)
 					});
 
 					let events = chill(offender.stash.clone()).map(Into::into).map(Box::new)
 						.chain(slash_report(offender.stash.clone()).map(Into::into).map(Box::new))
 						.chain(balance_slash(offender.stash.clone()).map(Into::into).map(Box::new))
+						.chain(balance_unlocked(offender.stash.clone()).map(Into::into).map(Box::new))
 						.chain(slash(offender.stash).map(Into::into).map(Box::new))
 						.chain(nom_slashes)
 						.collect::<Vec<_>>();

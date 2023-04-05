@@ -16,62 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{error::Error as CliError, Result, SubstrateCli};
+use crate::{error::Error as CliError, Result, Signals, SubstrateCli};
 use chrono::prelude::*;
-use futures::{future, future::FutureExt, pin_mut, select, Future};
+use futures::{future::FutureExt, Future};
 use log::info;
 use sc_service::{Configuration, Error as ServiceError, TaskManager};
 use sc_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::{marker::PhantomData, time::Duration};
 
-#[cfg(target_family = "unix")]
-async fn main<F, E>(func: F) -> std::result::Result<(), E>
-where
-	F: Future<Output = std::result::Result<(), E>> + future::FusedFuture,
-	E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
-{
-	use tokio::signal::unix::{signal, SignalKind};
-
-	let mut stream_int = signal(SignalKind::interrupt()).map_err(ServiceError::Io)?;
-	let mut stream_term = signal(SignalKind::terminate()).map_err(ServiceError::Io)?;
-
-	let t1 = stream_int.recv().fuse();
-	let t2 = stream_term.recv().fuse();
-	let t3 = func;
-
-	pin_mut!(t1, t2, t3);
-
-	select! {
-		_ = t1 => {},
-		_ = t2 => {},
-		res = t3 => res?,
-	}
-
-	Ok(())
-}
-
-#[cfg(not(unix))]
-async fn main<F, E>(func: F) -> std::result::Result<(), E>
-where
-	F: Future<Output = std::result::Result<(), E>> + future::FusedFuture,
-	E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
-{
-	use tokio::signal::ctrl_c;
-
-	let t1 = ctrl_c().fuse();
-	let t2 = func;
-
-	pin_mut!(t1, t2);
-
-	select! {
-		_ = t1 => {},
-		res = t2 => res?,
-	}
-
-	Ok(())
-}
-
-/// Build a tokio runtime with all features
+/// Build a tokio runtime with all features.
 pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::Error> {
 	tokio::runtime::Builder::new_multi_thread()
 		.on_thread_start(|| {
@@ -85,35 +38,22 @@ pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::
 		.build()
 }
 
-fn run_until_exit<F, E>(
-	tokio_runtime: tokio::runtime::Runtime,
-	future: F,
-	task_manager: TaskManager,
-) -> std::result::Result<(), E>
-where
-	F: Future<Output = std::result::Result<(), E>> + future::Future,
-	E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
-{
-	let f = future.fuse();
-	pin_mut!(f);
-
-	tokio_runtime.block_on(main(f))?;
-	drop(task_manager);
-
-	Ok(())
-}
-
 /// A Substrate CLI runtime that can be used to run a node or a command
 pub struct Runner<C: SubstrateCli> {
 	config: Configuration,
 	tokio_runtime: tokio::runtime::Runtime,
+	signals: Signals,
 	phantom: PhantomData<C>,
 }
 
 impl<C: SubstrateCli> Runner<C> {
 	/// Create a new runtime with the command provided in argument
-	pub fn new(config: Configuration, tokio_runtime: tokio::runtime::Runtime) -> Result<Runner<C>> {
-		Ok(Runner { config, tokio_runtime, phantom: PhantomData })
+	pub fn new(
+		config: Configuration,
+		tokio_runtime: tokio::runtime::Runtime,
+		signals: Signals,
+	) -> Result<Runner<C>> {
+		Ok(Runner { config, tokio_runtime, signals, phantom: PhantomData })
 	}
 
 	/// Log information about the node itself.
@@ -147,7 +87,10 @@ impl<C: SubstrateCli> Runner<C> {
 		self.print_node_infos();
 
 		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
-		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
+
+		let res = self
+			.tokio_runtime
+			.block_on(self.signals.run_until_signal(task_manager.future().fuse()));
 		// We need to drop the task manager here to inform all tasks that they should shut down.
 		//
 		// This is important to be done before we instruct the tokio runtime to shutdown. Otherwise
@@ -210,7 +153,11 @@ impl<C: SubstrateCli> Runner<C> {
 		E: std::error::Error + Send + Sync + 'static + From<ServiceError> + From<CliError>,
 	{
 		let (future, task_manager) = runner(self.config)?;
-		run_until_exit::<_, E>(self.tokio_runtime, future, task_manager)
+		self.tokio_runtime.block_on(self.signals.run_until_signal(future.fuse()))?;
+		// Drop the task manager before dropping the rest, to ensure that all futures were informed
+		// about the shut down.
+		drop(task_manager);
+		Ok(())
 	}
 
 	/// Get an immutable reference to the node Configuration
@@ -321,7 +268,6 @@ mod tests {
 				transaction_pool: Default::default(),
 				network: NetworkConfiguration::new_memory(),
 				keystore: sc_service::config::KeystoreConfig::InMemory,
-				keystore_remote: None,
 				database: sc_client_db::DatabaseSource::ParityDb { path: PathBuf::from("db") },
 				trie_cache_maximum_size: None,
 				state_pruning: None,
@@ -369,6 +315,7 @@ mod tests {
 				runtime_cache_size: 2,
 			},
 			runtime,
+			Signals::dummy(),
 		)
 		.unwrap();
 
