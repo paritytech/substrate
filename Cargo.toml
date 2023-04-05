@@ -125,6 +125,7 @@ members = [
 	"frame/message-queue",
 	"frame/nfts",
 	"frame/nfts/runtime-api",
+	"frame/nfts-royalty",
 	"frame/nomination-pools",
 	"frame/nomination-pools/fuzzer",
 	"frame/nomination-pools/benchmarking",

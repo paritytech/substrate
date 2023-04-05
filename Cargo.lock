@@ -6178,6 +6178,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-nfts-royalty"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-assets",
+ "pallet-balances",
+ "pallet-nfts",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-nfts-runtime-api"
 version = "4.0.0-dev"
 dependencies = [
