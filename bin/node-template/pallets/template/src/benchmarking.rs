@@ -4,15 +4,20 @@ use super::*;
 
 #[allow(unused)]
 use crate::Pallet as Template;
-use frame_benchmarking::v1::{benchmarks, whitelisted_caller};
+use frame_benchmarking::{impl_benchmark_test_suite, whitelisted_caller, v2::*};
 use frame_system::RawOrigin;
 
-benchmarks! {
-	do_something {
-		let s in 0 .. 100;
+#[benchmarks]
+mod benchmarks {
+	use super::*;
+
+	#[benchmark]
+	fn do_something(s: Linear<0, 100>) {
 		let caller: T::AccountId = whitelisted_caller();
-	}: _(RawOrigin::Signed(caller), s)
-	verify {
+
+		#[extrinsic_call]
+	 	_(RawOrigin::Signed(caller), s);
+	
 		assert_eq!(Something::<T>::get(), Some(s));
 	}
 
