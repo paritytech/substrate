@@ -23,16 +23,17 @@ mod tests {
 	use assert_cmd::cargo::cargo_bin;
 	use regex::Regex;
 	use std::{
-		process::{self, Child, Command},
+		process::{self},
 		time::Duration,
 	};
 	use substrate_cli_test_utils as common;
+	use tokio::process::{Child, Command};
 
 	#[tokio::test]
 	async fn follow_chain_works() {
 		common::run_with_timeout(Duration::from_secs(60), async move {
-			fn start_follow(ws_url: &str) -> tokio::process::Child {
-				tokio::process::Command::new(cargo_bin("substrate"))
+			fn start_follow(ws_url: &str) -> Child {
+				Command::new(cargo_bin("substrate"))
 					.stdout(process::Stdio::piped())
 					.stderr(process::Stdio::piped())
 					.args(&["try-runtime", "--runtime=existing"])
