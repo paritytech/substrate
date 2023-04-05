@@ -1,4 +1,11 @@
-use ark_ec::pairing::{MillerLoopOutput, Pairing};
+use ark_ec::{
+	pairing::{MillerLoopOutput, Pairing},
+	short_weierstrass,
+	short_weierstrass::SWCurveConfig,
+	twisted_edwards,
+	twisted_edwards::TECurveConfig,
+	CurveConfig, VariableBaseMSM,
+};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::{io::Cursor, vec, vec::Vec};
 
@@ -43,30 +50,74 @@ pub fn final_exponentiation_generic<Curve: Pairing>(target: Vec<u8>) -> Result<V
 	}
 }
 
-pub fn msm_g1_generic<Curve: Pairing>(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn msm_sw_generic<Curve: SWCurveConfig>(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
-		.map(|a| deserialize_argument::<<Curve as Pairing>::G1Affine>(a))
+		.map(|a| deserialize_argument::<short_weierstrass::Affine<Curve>>(a))
 		.collect();
-	let scalars: Vec<_> =
-		scalars.iter().map(|a| deserialize_argument::<Curve::ScalarField>(a)).collect();
+	let scalars: Vec<_> = scalars
+		.iter()
+		.map(|a| deserialize_argument::<<Curve as CurveConfig>::ScalarField>(a))
+		.collect();
 
 	let result =
-		<<Curve as Pairing>::G1 as ark_ec::VariableBaseMSM>::msm(&bases, &scalars).unwrap();
+		<short_weierstrass::Projective<Curve> as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
 
 	serialize_result(result)
 }
 
-pub fn msm_g2_generic<Curve: Pairing>(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn msm_te_generic<Curve: TECurveConfig>(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
-		.map(|a| deserialize_argument::<<Curve as Pairing>::G2Affine>(a))
+		.map(|a| deserialize_argument::<twisted_edwards::Affine<Curve>>(a))
 		.collect();
-	let scalars: Vec<_> =
-		scalars.iter().map(|a| deserialize_argument::<Curve::ScalarField>(a)).collect();
+	let scalars: Vec<_> = scalars
+		.iter()
+		.map(|a| deserialize_argument::<<Curve as CurveConfig>::ScalarField>(a))
+		.collect();
 
 	let result =
-		<<Curve as Pairing>::G2 as ark_ec::VariableBaseMSM>::msm(&bases, &scalars).unwrap();
+		<twisted_edwards::Projective<Curve> as VariableBaseMSM>::msm(&bases, &scalars).unwrap();
+
+	serialize_result(result)
+}
+
+/// Compute a scalar multiplication on G2 through arkworks
+pub fn mul_projective_generic<Group: SWCurveConfig>(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+	let base = deserialize_argument::<short_weierstrass::Projective<Group>>(&base);
+	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
+
+	let result = <Group as SWCurveConfig>::mul_projective(&base, &scalar);
+
+	serialize_result(result)
+}
+
+/// Compute a scalar multiplication on G2 through arkworks
+pub fn mul_projective_te_generic<Group: TECurveConfig>(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+	let base = deserialize_argument::<twisted_edwards::Projective<Group>>(&base);
+	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
+
+	let result = <Group as TECurveConfig>::mul_projective(&base, &scalar);
+
+	serialize_result(result)
+}
+
+/// Compute a scalar multiplication on G2 through arkworks
+pub fn mul_affine_generic<Group: SWCurveConfig>(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+	let base = deserialize_argument::<short_weierstrass::Affine<Group>>(&base);
+	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
+
+	let result = <Group as SWCurveConfig>::mul_affine(&base, &scalar);
+
+	serialize_result(result)
+}
+
+/// Compute a scalar multiplication on G2 through arkworks
+pub fn mul_affine_te_generic<Group: TECurveConfig>(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+	let base = deserialize_argument::<twisted_edwards::Affine<Group>>(&base);
+	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
+
+	let result = <Group as TECurveConfig>::mul_affine(&base, &scalar);
 
 	serialize_result(result)
 }
