@@ -164,7 +164,7 @@ impl<H: Hasher> Recorder<H> {
 		self.encoded_size_estimation.store(0, Ordering::Relaxed);
 	}
 
-	/// Stat a new transaction.
+	/// Start a new transaction.
 	pub fn start_transaction(&self) {
 		let mut inner = self.inner.lock();
 		inner.transactions.push(Default::default());
