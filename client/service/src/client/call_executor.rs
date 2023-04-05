@@ -427,6 +427,7 @@ mod tests {
 				Default::default(),
 				None,
 				None,
+				Arc::new(executor.clone()),
 			)),
 		};
 

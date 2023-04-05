@@ -153,7 +153,7 @@ where
 			(block, command.state_root_check, true, command.try_state.clone())
 				.encode()
 				.as_ref(),
-			full_extensions(),
+			full_extensions(executor.clone()),
 			shared
 				.export_proof
 				.as_ref()
