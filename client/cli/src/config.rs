@@ -559,7 +559,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			max_runtime_instances,
 			announce_block: self.announce_block()?,
 			role,
-			base_path: base_path,
+			base_path,
 			informant_output_format: Default::default(),
 			runtime_cache_size,
 		})
