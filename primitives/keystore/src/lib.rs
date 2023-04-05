@@ -307,6 +307,17 @@ pub trait Keystore: Send + Sync {
 		};
 		Ok(signature)
 	}
+
+	/// Call a custom function with an ed25519 private key that matches given public key.
+	///
+	/// Returns `Ok(true)` if the key is found and `f` was called. `Ok(false)` if the key is missing
+	/// and an error when something has failed.
+	fn with_ed25519_key(
+		&self,
+		key_type: KeyTypeId,
+		public: &ed25519::Public,
+		f: &mut dyn FnMut(&ed25519::Pair),
+	) -> std::result::Result<bool, Error>;
 }
 
 /// A shared pointer to a keystore implementation.

@@ -56,7 +56,8 @@ use parking_lot::RwLock;
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
-use sp_core::{hexdisplay::HexDisplay, traits::SpawnNamed, Decode, Encode};
+use sp_core::{crypto::UncheckedFrom, hexdisplay::HexDisplay, traits::SpawnNamed, Decode, Encode};
+use sp_keystore::Keystore;
 use sp_runtime::traits::Block as BlockT;
 use sp_statement_store::{
 	runtime_api::{InvalidStatement, StatementSource, ValidStatement, ValidateStatement},
@@ -199,6 +200,7 @@ pub struct Store {
 			+ Send
 			+ Sync,
 	>,
+	keystore: Arc<dyn Keystore>,
 	// Used for testing
 	time_override: Option<u64>,
 	metrics: PrometheusMetrics,
@@ -477,6 +479,7 @@ impl Store {
 		path: &std::path::Path,
 		options: Options,
 		client: Arc<Client>,
+		keystore: Arc<dyn Keystore>,
 		prometheus: Option<&PrometheusRegistry>,
 		task_spawner: &dyn SpawnNamed,
 	) -> Result<Arc<Store>>
@@ -491,7 +494,7 @@ impl Store {
 			+ 'static,
 		Client::Api: ValidateStatement<Block>,
 	{
-		let store = Arc::new(Self::new(path, options, client.clone(), prometheus)?);
+		let store = Arc::new(Self::new(path, options, client.clone(), keystore, prometheus)?);
 		client.execution_extensions().register_statement_store(store.clone());
 
 		// Perform periodic statement store maintenance
@@ -517,6 +520,7 @@ impl Store {
 		path: &std::path::Path,
 		options: Options,
 		client: Arc<Client>,
+		keystore: Arc<dyn Keystore>,
 		prometheus: Option<&PrometheusRegistry>,
 	) -> Result<Store>
 	where
@@ -565,6 +569,7 @@ impl Store {
 			db,
 			index: RwLock::new(Index::new(options)),
 			validate_fn,
+			keystore,
 			time_override: None,
 			metrics: PrometheusMetrics::new(prometheus),
 		};
@@ -762,7 +767,35 @@ impl StatementStore for Store {
 	/// Return the decrypted data of all known statements whose decryption key is identified as
 	/// `dest`. The key must be available to the client.
 	fn posted_clear(&self, match_all_topics: &[Topic], dest: [u8; 32]) -> Result<Vec<Vec<u8>>> {
-		self.collect_statements(Some(dest), match_all_topics, |statement| statement.into_data())
+		self.collect_statements(Some(dest), match_all_topics, |statement| {
+			if let (Some(key), Some(_)) = (statement.decryption_key(), statement.data()) {
+				let public = UncheckedFrom::unchecked_from(key);
+				let mut out = None;
+				if let Err(e) = self.keystore.with_ed25519_key(
+					sp_core::crypto::key_types::STATEMENT,
+					&public,
+					&mut |pair| match statement.decrypt_private(pair) {
+						Ok(r) => out = r,
+						Err(e) => log::debug!(
+							target: LOG_TARGET,
+							"Decryption error: {:?}, for statement {:?}",
+							e,
+							HexDisplay::from(&statement.hash())
+						),
+					},
+				) {
+					log::debug!(
+						target: LOG_TARGET,
+						"Keystore error error: {:?}, for statement {:?}",
+						e,
+						HexDisplay::from(&statement.hash())
+					)
+				}
+				out
+			} else {
+				None
+			}
+		})
 	}
 
 	/// Submit a statement to the store. Validates the statement and returns validation result.
@@ -910,6 +943,7 @@ mod tests {
 			RuntimeApi { _inner: self.clone() }.into()
 		}
 	}
+
 	sp_api::mock_impl_runtime_apis! {
 		impl ValidateStatement<Block> for RuntimeApi {
 			fn validate_statement(
@@ -977,7 +1011,8 @@ mod tests {
 		let client = std::sync::Arc::new(TestClient);
 		let mut path: std::path::PathBuf = temp_dir.path().into();
 		path.push("db");
-		let store = Store::new(&path, Default::default(), client, None).unwrap();
+		let keystore = std::sync::Arc::new(sp_keystore::testing::MemoryKeystore::new());
+		let store = Store::new(&path, Default::default(), client, keystore, None).unwrap();
 		(store, temp_dir) // return order is important. Store must be dropped before TempDir
 	}
 
@@ -1080,12 +1115,13 @@ mod tests {
 		assert_eq!(store.statements().unwrap().len(), 3);
 		assert_eq!(store.broadcasts(&[]).unwrap().len(), 3);
 		assert_eq!(store.statement(&statement1.hash()).unwrap(), Some(statement1.clone()));
+		let keystore = store.keystore.clone();
 		drop(store);
 
 		let client = std::sync::Arc::new(TestClient);
 		let mut path: std::path::PathBuf = temp.path().into();
 		path.push("db");
-		let store = Store::new(&path, Default::default(), client, None).unwrap();
+		let store = Store::new(&path, Default::default(), client, keystore, None).unwrap();
 		assert_eq!(store.statements().unwrap().len(), 3);
 		assert_eq!(store.broadcasts(&[]).unwrap().len(), 3);
 		assert_eq!(store.statement(&statement1.hash()).unwrap(), Some(statement1));
@@ -1190,7 +1226,6 @@ mod tests {
 			statement(2, 4, None, 1000).hash(),
 			statement(3, 4, Some(3), 300).hash(),
 			statement(3, 5, None, 500).hash(),
-			//statement(4, 6, None, 100).hash(),
 		];
 		expected_statements.sort();
 		let mut statements: Vec<_> =
@@ -1214,13 +1249,31 @@ mod tests {
 		store.set_time(DEFAULT_PURGE_AFTER_SEC + 1);
 		store.maintain();
 		assert_eq!(store.index.read().expired.len(), 0);
+		let keystore = store.keystore.clone();
 		drop(store);
 
 		let client = std::sync::Arc::new(TestClient);
 		let mut path: std::path::PathBuf = temp.path().into();
 		path.push("db");
-		let store = Store::new(&path, Default::default(), client, None).unwrap();
+		let store = Store::new(&path, Default::default(), client, keystore, None).unwrap();
 		assert_eq!(store.statements().unwrap().len(), 0);
 		assert_eq!(store.index.read().expired.len(), 0);
+	}
+
+	#[test]
+	fn posted_clear_decrypts() {
+		let (store, _temp) = test_store();
+		let public = store
+			.keystore
+			.ed25519_generate_new(sp_core::crypto::key_types::STATEMENT, None)
+			.unwrap();
+		let statement1 = statement(1, 1, None, 100);
+		let mut statement2 = statement(1, 2, None, 0);
+		let plain = b"The most valuable secret".to_vec();
+		statement2.encrypt(&plain, &public).unwrap();
+		store.submit(statement1, StatementSource::Network);
+		store.submit(statement2, StatementSource::Network);
+		let posted_clear = store.posted_clear(&[], public.into()).unwrap();
+		assert_eq!(posted_clear, vec![plain]);
 	}
 }

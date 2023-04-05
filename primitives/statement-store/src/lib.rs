@@ -49,6 +49,8 @@ pub use store_api::{
 	Error, NetworkPriority, Result, StatementSource, StatementStore, SubmitResult,
 };
 
+#[cfg(feature = "std")]
+mod ecies;
 pub mod runtime_api;
 #[cfg(feature = "std")]
 mod store_api;
@@ -507,6 +509,28 @@ impl Statement {
 		}
 		output
 	}
+
+	/// Encrypt give data with given key and store both in the statements.
+	#[cfg(feature = "std")]
+	pub fn encrypt(
+		&mut self,
+		data: &[u8],
+		key: &sp_core::ed25519::Public,
+	) -> core::result::Result<(), ecies::Error> {
+		let encrypted = ecies::encrypt_ed25519(key, data)?;
+		self.data = Some(encrypted);
+		self.decryption_key = Some(key.clone().into());
+		Ok(())
+	}
+
+	/// Decrypt data (if any) with the given private key.
+	#[cfg(feature = "std")]
+	pub fn decrypt_private(
+		&self,
+		key: &sp_core::ed25519::Pair,
+	) -> core::result::Result<Option<Vec<u8>>, ecies::Error> {
+		self.data.as_ref().map(|d| ecies::decrypt_ed25519(key, d)).transpose()
+	}
 }
 
 #[cfg(test)]
@@ -614,5 +638,19 @@ mod test {
 
 		statement.remove_proof();
 		assert_eq!(statement.verify_signature(), SignatureVerificationResult::NoSignature);
+	}
+
+	#[test]
+	fn encrypt_decrypt() {
+		let mut statement = Statement::new();
+		let (pair, _) = sp_core::ed25519::Pair::generate();
+		let plain = b"test data".to_vec();
+
+		//let sr25519_kp = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
+		statement.encrypt(&plain, &pair.public()).unwrap();
+		assert_ne!(plain.as_slice(), statement.data().unwrap().as_slice());
+
+		let decrypted = statement.decrypt_private(&pair).unwrap();
+		assert_eq!(decrypted, Some(plain));
 	}
 }
