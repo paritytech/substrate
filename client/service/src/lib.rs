@@ -612,7 +612,7 @@ mod tests {
 		block_on(pool.submit_one(
 			&BlockId::hash(best.hash()),
 			source,
-			ExtrinsicBuilder::new_include_data(vec![1]).build(),
+			ExtrinsicBuilder::new_include_data(vec![1]).build2(1),
 		))
 		.unwrap();
 		assert_eq!(pool.status().ready, 2);

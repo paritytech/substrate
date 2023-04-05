@@ -37,10 +37,11 @@ use sp_core::{
 	H256,
 };
 use sp_keystore::{testing::MemoryKeystore, Keystore};
+use sp_runtime::Perbill;
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	self,
-	runtime::{Block, Extrinsic, SessionKeys, Transfer},
+	runtime::{Block, Extrinsic, ExtrinsicBuilder, SessionKeys, Transfer},
 	AccountKeyring, Backend, Client, DefaultTestClientBuilderExt, TestClientBuilderExt,
 };
 
@@ -51,7 +52,8 @@ fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 		from: sender.into(),
 		to: AccountKeyring::Bob.into(),
 	};
-	tx.into_unchecked_extrinsic()
+	// tx.into_unchecked_extrinsic()
+	ExtrinsicBuilder::new_transfer(tx).signer(sender.pair()).build2(nonce)
 }
 
 type FullTransactionPool = BasicPool<FullChainApi<Client<Backend>, Block>, Block>;
@@ -152,9 +154,11 @@ async fn author_should_watch_extrinsic() {
 async fn author_should_return_watch_validation_error() {
 	const METHOD: &'static str = "author_submitAndWatchExtrinsic";
 
+	let invalid_xt = ExtrinsicBuilder::new_fill_block(Perbill::from_percent(100)).build2(0);
+
 	let api = TestSetup::into_rpc();
 	let failed_sub = api
-		.subscribe(METHOD, [to_hex(&uxt(AccountKeyring::Alice, 179).encode(), true)])
+		.subscribe(METHOD, [to_hex(&invalid_xt.encode(), true)])
 		.await;
 
 	assert_matches!(
@@ -179,6 +183,7 @@ async fn author_should_return_pending_extrinsics() {
 
 #[tokio::test]
 async fn author_should_remove_extrinsics() {
+	sp_tracing::try_init_simple();
 	const METHOD: &'static str = "author_removeExtrinsic";
 	let setup = TestSetup::default();
 	let api = setup.author().into_rpc();

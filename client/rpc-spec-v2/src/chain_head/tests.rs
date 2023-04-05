@@ -1191,6 +1191,7 @@ async fn follow_report_multiple_pruned_block() {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
 			amount: 41,
+			//todo: who signs the transaction?
 			nonce: 0,
 		})
 		.unwrap();
@@ -1205,7 +1206,8 @@ async fn follow_report_multiple_pruned_block() {
 			from: AccountKeyring::Bob.into(),
 			to: AccountKeyring::Ferdie.into(),
 			amount: 41,
-			nonce: 0,
+			//todo: who signs the transaction? whoose nonce is it?
+			nonce: 1,
 		})
 		.unwrap();
 	let block_5 = block_builder.build().unwrap().block;

@@ -659,15 +659,11 @@ mod tests {
 		// then
 		assert!(pool.validated_pool.is_banned(&hash1));
 	}
+	use codec::Encode;
 
 	#[test]
 	fn should_limit_futures() {
-		// given
-		let limit = Limit { count: 100, total_bytes: 246 };
-
-		let options = Options { ready: limit.clone(), future: limit.clone(), ..Default::default() };
-
-		let pool = Pool::new(options, true.into(), TestApi::default().into());
+		sp_tracing::try_init_simple();
 
 		let xt = uxt(Transfer {
 			from: AccountId::from_h256(H256::from_low_u64_be(1)),
@@ -675,6 +671,13 @@ mod tests {
 			amount: 5,
 			nonce: 1,
 		});
+
+		// given
+		let limit = Limit { count: 100, total_bytes: xt.encoded_size() };
+
+		let options = Options { ready: limit.clone(), future: limit.clone(), ..Default::default() };
+
+		let pool = Pool::new(options, true.into(), TestApi::default().into());
 
 		let hash1 = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, xt)).unwrap();
 		assert_eq!(pool.validated_pool().status().future, 1);

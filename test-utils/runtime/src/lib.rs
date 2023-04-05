@@ -129,10 +129,12 @@ pub struct Transfer {
 /// The address format for describing accounts.
 pub type Address = sp_core::sr25519::Public;
 pub type Signature = sr25519::Signature;
+#[cfg(feature = "std")]
+pub type Pair = sp_core::sr25519::Pair;
 
 /// The SignedExtension to the basic transaction logic.
 // pub type SignedExtra = SignedExtraDummy;
-pub type SignedExtra = (CheckNonce<Runtime>, CheckWeight<Runtime>);
+pub type SignedExtra = (CheckNonce<Runtime>, CheckWeight<Runtime>, CheckSubstrateCall);
 /// The payload being signed in transactions.
 pub type SignedPayload = sp_runtime::generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// Unchecked extrinsic type as expected by this runtime.
@@ -217,65 +219,65 @@ pub type Executive = frame_executive::Executive<
 	AllPalletsWithSystem,
 >;
 
-// #[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
-// pub struct SignedExtraDummy;
-//
-// impl sp_runtime::traits::Printable for SignedExtraDummy {
-// 	fn print(&self) {
-// 		"SignedExtraDummy".print()
-// 	}
-// }
-//
-// impl sp_runtime::traits::Dispatchable for SignedExtraDummy {
-// 	type RuntimeOrigin = SignedExtraDummy;
-// 	type Config = SignedExtraDummy;
-// 	type Info = SignedExtraDummy;
-// 	type PostInfo = SignedExtraDummy;
-// 	fn dispatch(
-// 		self,
-// 		_origin: Self::RuntimeOrigin,
-// 	) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-// 		panic!("This implementation should not be used for actual dispatch.");
-// 	}
-// }
-//
-// impl sp_runtime::traits::SignedExtension for SignedExtraDummy {
-// 	type AccountId = AccountId;
-// 	type Call = RuntimeCall;
-// 	type AdditionalSigned = ();
-// 	type Pre = SignedExtraDummy;
-// 	const IDENTIFIER: &'static str = "DummySignedExtension";
-//
-// 	fn additional_signed(
-// 		&self,
-// 	) -> sp_std::result::Result<Self::AdditionalSigned, TransactionValidityError> {
-// 		Ok(())
-// 	}
-//
-// 	fn validate(
-// 		&self,
-// 		_who: &Self::AccountId,
-// 		call: &Self::Call,
-// 		_info: &DispatchInfoOf<Self::Call>,
-// 		_len: usize,
-// 	) -> TransactionValidity {
-// 		log::trace!(target: LOG_TARGET, "validate");
-// 		if let RuntimeCall::SubstrateTest(ref substrate_test_call) = call {
-// 			return substrate_test_pallet::validate_runtime_call(substrate_test_call)
-// 		}
-// 		Ok(ValidTransaction { provides: vec![vec![0u8]], ..Default::default() })
-// 	}
-//
-// 	fn pre_dispatch(
-// 		self,
-// 		who: &Self::AccountId,
-// 		call: &Self::Call,
-// 		info: &sp_runtime::traits::DispatchInfoOf<Self::Call>,
-// 		len: usize,
-// 	) -> Result<Self::Pre, TransactionValidityError> {
-// 		self.validate(who, call, info, len).map(|_| SignedExtraDummy {})
-// 	}
-// }
+#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct CheckSubstrateCall;
+
+impl sp_runtime::traits::Printable for CheckSubstrateCall {
+	fn print(&self) {
+		"CheckSubstrateCall".print()
+	}
+}
+
+impl sp_runtime::traits::Dispatchable for CheckSubstrateCall {
+	type RuntimeOrigin = CheckSubstrateCall;
+	type Config = CheckSubstrateCall;
+	type Info = CheckSubstrateCall;
+	type PostInfo = CheckSubstrateCall;
+	fn dispatch(
+		self,
+		_origin: Self::RuntimeOrigin,
+	) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+		panic!("This implementation should not be used for actual dispatch.");
+	}
+}
+
+impl sp_runtime::traits::SignedExtension for CheckSubstrateCall {
+	type AccountId = AccountId;
+	type Call = RuntimeCall;
+	type AdditionalSigned = ();
+	type Pre = CheckSubstrateCall;
+	const IDENTIFIER: &'static str = "DummySignedExtension";
+
+	fn additional_signed(
+		&self,
+	) -> sp_std::result::Result<Self::AdditionalSigned, TransactionValidityError> {
+		Ok(())
+	}
+
+	fn validate(
+		&self,
+		_who: &Self::AccountId,
+		call: &Self::Call,
+		_info: &DispatchInfoOf<Self::Call>,
+		_len: usize,
+	) -> TransactionValidity {
+		log::trace!(target: LOG_TARGET, "validate");
+		match call {
+			RuntimeCall::SubstrateTest(ref substrate_test_call) => substrate_test_pallet::validate_runtime_call(substrate_test_call),
+			_ => Ok(Default::default()),
+		}
+	}
+
+	fn pre_dispatch(
+		self,
+		who: &Self::AccountId,
+		call: &Self::Call,
+		info: &sp_runtime::traits::DispatchInfoOf<Self::Call>,
+		len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
+		self.validate(who, call, info, len).map(|_| CheckSubstrateCall {})
+	}
+}
 
 construct_runtime!(
 	pub enum Runtime where

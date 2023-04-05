@@ -189,8 +189,9 @@ impl ChainApi for TestApi {
 
 pub(crate) fn uxt(transfer: Transfer) -> Extrinsic {
 	let signature = TryFrom::try_from(&[0; 64][..]).unwrap();
+	let nonce = transfer.nonce;
 	ExtrinsicBuilder::new(TransferCallBuilder::new(transfer).with_signature(signature).build())
-		.build()
+		.build2(nonce)
 }
 
 pub(crate) fn pool() -> Pool<TestApi> {

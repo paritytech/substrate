@@ -254,7 +254,7 @@ mod tests {
 	use sp_runtime::generic::BlockId;
 	use std::{collections::HashSet, sync::Arc};
 	use substrate_test_runtime_client::{
-		runtime::{Block, ExtrinsicBuilder},
+		runtime::{Block, ExtrinsicBuilder, RuntimeCall, substrate_test_pallet::pallet::Call as PalletCall},
 		ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient, TestClientBuilderExt,
 	};
 
@@ -385,7 +385,7 @@ mod tests {
 
 		// then
 		assert_eq!(pool.0.status().ready, 1);
-		assert_eq!(pool.0.ready().next().unwrap().is_propagable(), false);
+		assert_eq!(matches!(pool.0.ready().next().unwrap().data().function, RuntimeCall::SubstrateTest(PalletCall::include_data { .. }) ), true);
 	}
 
 	#[test]
@@ -403,7 +403,7 @@ mod tests {
 		let key = &b"hello"[..];
 		let value = &b"world"[..];
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		let ext = ExtrinsicBuilder::new_offchain_index_set(key.to_vec(), value.to_vec()).build();
+		let ext = ExtrinsicBuilder::new_offchain_index_set(key.to_vec(), value.to_vec()).build2(0);
 		block_builder.push(ext).unwrap();
 
 		let block = block_builder.build().unwrap().block;
@@ -412,7 +412,7 @@ mod tests {
 		assert_eq!(value, &offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).unwrap());
 
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		let ext = ExtrinsicBuilder::new_offchain_index_clear(key.to_vec()).build();
+		let ext = ExtrinsicBuilder::new_offchain_index_clear(key.to_vec()).build2(1);
 		block_builder.push(ext).unwrap();
 
 		let block = block_builder.build().unwrap().block;

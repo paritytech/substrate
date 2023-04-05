@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use crate::{
-	sr25519::Pair, substrate_test_pallet, substrate_test_pallet::pallet::Call as PalletCall,
-	AuthorityId, Index, Extrinsic, RuntimeCall, Signature, SignedExtra, SignedPayload, Transfer,
+	substrate_test_pallet, substrate_test_pallet::pallet::Call as PalletCall,
+	AuthorityId, CheckSubstrateCall, Index, Extrinsic, Pair, RuntimeCall, Signature, SignedExtra, SignedPayload, Transfer,
 };
 use codec::Encode;
 use frame_system::{CheckWeight, CheckNonce};
@@ -117,7 +117,7 @@ pub struct ExtrinsicBuilder {
 	function: RuntimeCall,
 	is_unsigned: bool,
 	// signer: sp_keyring::AccountKeyring,
-	signer: sp_core::sr25519::Pair,
+	signer: Pair,
 }
 
 impl ExtrinsicBuilder {
@@ -183,7 +183,7 @@ impl ExtrinsicBuilder {
 		self
 	}
 
-	pub fn signer(mut self, signer: sp_core::sr25519::Pair) -> Self {
+	pub fn signer(mut self, signer: Pair) -> Self {
 		self.signer = signer;
 		self
 	}
@@ -198,8 +198,8 @@ impl ExtrinsicBuilder {
 			Extrinsic::new_unsigned(self.function)
 		} else {
 			let signer = self.signer;
-			let extra = (CheckNonce::from(nonce), CheckWeight::new());
-			let raw_payload = SignedPayload::from_raw(self.function.clone(), extra.clone(), ((),()));
+			let extra = (CheckNonce::from(nonce), CheckWeight::new(), CheckSubstrateCall{});
+			let raw_payload = SignedPayload::from_raw(self.function.clone(), extra.clone(), ((),(),()));
 			let signature = raw_payload.using_encoded(|e| signer.sign(e));
 
 			Extrinsic::new_signed(self.function, signer.public(), signature, extra)

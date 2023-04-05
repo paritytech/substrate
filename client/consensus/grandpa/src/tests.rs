@@ -1629,6 +1629,7 @@ async fn grandpa_environment_passes_actual_best_block_to_voting_rules() {
 
 #[tokio::test]
 async fn grandpa_environment_checks_if_best_block_is_descendent_of_finality_target() {
+	sp_tracing::try_init_simple();
 	use finality_grandpa::voter::Environment;
 
 	let peers = &[Ed25519Keyring::Alice];

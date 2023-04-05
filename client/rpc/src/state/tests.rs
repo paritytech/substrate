@@ -278,25 +278,26 @@ async fn should_send_initial_storage_changes_and_notifications() {
 
 #[tokio::test]
 async fn should_query_storage() {
+	sp_tracing::try_init_simple();
 	async fn run_tests(mut client: Arc<TestClient>) {
 		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No);
 
 		let mut add_block = |nonce| {
 			let mut builder = client.new_block(Default::default()).unwrap();
 			// fake change: None -> None -> None
-			builder.push_storage_change(vec![1], None).unwrap();
+			builder.push_storage_change_unsigned(vec![1], None).unwrap();
 			// fake change: None -> Some(value) -> Some(value)
-			builder.push_storage_change(vec![2], Some(vec![2])).unwrap();
+			builder.push_storage_change_unsigned(vec![2], Some(vec![2])).unwrap();
 			// actual change: None -> Some(value) -> None
 			builder
-				.push_storage_change(vec![3], if nonce == 0 { Some(vec![3]) } else { None })
+				.push_storage_change_unsigned(vec![3], if nonce == 0 { Some(vec![3]) } else { None })
 				.unwrap();
 			// actual change: None -> Some(value)
 			builder
-				.push_storage_change(vec![4], if nonce == 0 { None } else { Some(vec![4]) })
+				.push_storage_change_unsigned(vec![4], if nonce == 0 { None } else { Some(vec![4]) })
 				.unwrap();
 			// actual change: Some(value1) -> Some(value2)
-			builder.push_storage_change(vec![5], Some(vec![nonce as u8])).unwrap();
+			builder.push_storage_change_unsigned(vec![5], Some(vec![nonce as u8])).unwrap();
 			let block = builder.build().unwrap().block;
 			let hash = block.header.hash();
 			executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
