@@ -24,6 +24,7 @@ sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
 sp-state-machine = { version = "0.13.0", path = "../../../primitives/state-machine" }
 sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
 sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
+sp-statement-store = { version = "4.0.0-dev", path = "../../../primitives/statement-store" }
 
 [dev-dependencies]
 criterion = "0.4.0"

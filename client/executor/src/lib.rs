@@ -62,12 +62,6 @@ pub trait RuntimeVersionOf {
 	) -> error::Result<RuntimeVersion>;
 }
 
-/// The host functions Substrate provides for the Wasm runtime environment.
-///
-/// All these host functions will be callable from inside the Wasm environment.
-pub type HostFunctions =
-	(sp_io::SubstrateHostFunctions, sp_statement_store::runtime_api::HostFunctions);
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -80,7 +74,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 
-		let executor = WasmExecutor::<HostFunctions>::new(
+		let executor = WasmExecutor::<sp_io::SubstrateHostFunctions>::new(
 			WasmExecutionMethod::Interpreted,
 			Some(8),
 			8,

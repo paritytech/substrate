@@ -534,7 +534,8 @@ pub struct NativeElseWasmExecutor<D: NativeExecutionDispatch> {
 	/// Native runtime version info.
 	native_version: NativeVersion,
 	/// Fallback wasm executor.
-	wasm: WasmExecutor<ExtendedHostFunctions<crate::HostFunctions, D::ExtendHostFunctions>>,
+	wasm:
+		WasmExecutor<ExtendedHostFunctions<sp_io::SubstrateHostFunctions, D::ExtendHostFunctions>>,
 }
 
 impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
@@ -571,7 +572,9 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 
 	/// Create a new instance using the given [`WasmExecutor`].
 	pub fn new_with_wasm_executor(
-		executor: WasmExecutor<ExtendedHostFunctions<crate::HostFunctions, D::ExtendHostFunctions>>,
+		executor: WasmExecutor<
+			ExtendedHostFunctions<sp_io::SubstrateHostFunctions, D::ExtendHostFunctions>,
+		>,
 	) -> Self {
 		Self { native_version: D::native_version(), wasm: executor }
 	}

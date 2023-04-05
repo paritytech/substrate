@@ -246,7 +246,7 @@ pub fn run() -> Result<()> {
 
 				Ok((
 					cmd.run::<Block, ExtendedHostFunctions<
-						sc_executor::HostFunctions,
+						sp_io::SubstrateHostFunctions,
 						<ExecutorDispatch as NativeExecutionDispatch>::ExtendHostFunctions,
 					>, _>(Some(info_provider)),
 					task_manager,
