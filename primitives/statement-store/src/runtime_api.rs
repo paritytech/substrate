@@ -101,8 +101,8 @@ impl StatementStoreExt {
 	}
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, Copy, Encode, Decode, PassByEnum)]
 /// Submission result.
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Encode, Decode, PassByEnum)]
 pub enum SubmitResult {
 	/// Accepted as new.
 	OkNew,
