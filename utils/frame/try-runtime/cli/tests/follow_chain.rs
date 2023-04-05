@@ -31,15 +31,6 @@ mod follow_chain_tests {
 	#[tokio::test]
 	async fn follow_chain_works() {
 		common::run_with_timeout(Duration::from_secs(60), async move {
-			fn start_node() -> Child {
-				Command::new(cargo_bin("substrate"))
-					.stdout(process::Stdio::piped())
-					.stderr(process::Stdio::piped())
-					.args(&["--dev", "--tmp", "--ws-port=45789", "--no-hardware-benchmarks"])
-					.spawn()
-					.unwrap()
-			}
-
 			fn start_follow(ws_url: &str) -> tokio::process::Child {
 				tokio::process::Command::new(cargo_bin("substrate"))
 					.stdout(process::Stdio::piped())
@@ -54,7 +45,7 @@ mod follow_chain_tests {
 			common::build_substrate(&["--features=try-runtime"]);
 
 			// Start a node and wait for it to begin finalizing blocks
-			let mut node = start_node();
+			let mut node = common::start_node();
 			let ws_url = common::extract_info_from_output(node.stderr.take().unwrap()).0.ws_url;
 			common::wait_n_finalized_blocks(1, &ws_url).await;
 

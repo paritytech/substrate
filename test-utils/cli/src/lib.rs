@@ -35,6 +35,40 @@ use std::{
 };
 use tokio::io::{AsyncBufReadExt, AsyncRead};
 
+/// Starts a new Substrate node in development mode with a temporary chain.
+///
+/// This function creates a new Substrate node using the `substrate` binary.
+/// It configures the node to run in development mode (`--dev`) with a temporary chain (`--tmp`),
+/// sets the WebSocket port to 45789 (`--ws-port=45789`).
+///
+/// # Returns
+///
+/// A [`Child`] process representing the spawned Substrate node.
+///
+/// # Panics
+///
+/// This function will panic if the `substrate` binary is not found or if the node fails to start.
+///
+/// # Examples
+///
+/// ```
+/// use my_crate::start_node;
+///
+/// let child = start_node();
+/// // Interact with the Substrate node using the WebSocket port 45789.
+/// // When done, the node will be killed when the `child` is dropped.
+/// ```
+///
+/// [`Child`]: std::process::Child
+pub fn start_node() -> Child {
+	Command::new(cargo_bin("substrate"))
+		.stdout(process::Stdio::piped())
+		.stderr(process::Stdio::piped())
+		.args(&["--dev", "--tmp", "--ws-port=45789", "--no-hardware-benchmarks"])
+		.spawn()
+		.unwrap()
+}
+
 /// Builds the Substrate project using the provided arguments.
 ///
 /// This function reads the CARGO_MANIFEST_DIR environment variable to find the root workspace
@@ -101,7 +135,7 @@ pub fn build_substrate(args: &[&str]) {
 /// * `Ok(())` if a line matching the pattern is found.
 /// * `Err(String)` if the stream ends without any lines matching the pattern.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// use regex::Regex;
