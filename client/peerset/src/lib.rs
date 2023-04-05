@@ -41,7 +41,7 @@ use protocol_controller::{ProtocolController, ProtocolHandle};
 
 use futures::{
 	channel::oneshot,
-	future::{join_all, Future, JoinAll},
+	future::{join_all, JoinAll, BoxFuture},
 	prelude::*,
 	stream::Stream,
 };
@@ -242,11 +242,11 @@ pub struct Peerset {
 	/// Peer reputation store handle.
 	peer_store_handle: PeerStoreHandle,
 	/// Peer reputation store.
-	peer_store_future: Pin<Box<dyn futures::Future<Output = ()> + Send>>,
+	peer_store_future: BoxFuture<'static, ()>,
 	/// Protocol handles.
 	protocol_handles: Vec<ProtocolHandle>,
 	/// Protocol controllers responsible for connections, per `SetId`.
-	protocol_controller_futures: JoinAll<Pin<Box<dyn future::Future<Output = ()> + Send>>>,
+	protocol_controller_futures: JoinAll<BoxFuture<'static, ()>>,
 	/// Commands sent from protocol controllers to `Notifications`. The size of this vector never
 	/// changes.
 	rx: TracingUnboundedReceiver<Message>,
