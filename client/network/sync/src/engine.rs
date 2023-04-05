@@ -263,10 +263,10 @@ where
 		};
 		let max_parallel_downloads = network_config.max_parallel_downloads;
 		let max_blocks_per_request = if network_config.max_blocks_per_request >
-			crate::MAX_BLOCKS_IN_RESPONSE
+			crate::MAX_BLOCKS_IN_RESPONSE as u32
 		{
 			log::info!(target: "sync", "clamping maximum blocks per request to {}", crate::MAX_BLOCKS_IN_RESPONSE);
-			crate::MAX_BLOCKS_IN_RESPONSE
+			crate::MAX_BLOCKS_IN_RESPONSE as u32
 		} else {
 			network_config.max_blocks_per_request
 		};
