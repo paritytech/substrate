@@ -20,7 +20,7 @@
 use assert_cmd::cargo::cargo_bin;
 use nix::sys::signal::Signal::{self, SIGINT, SIGTERM};
 use std::{
-	process::{self, Child, Command},
+	process::{self, Command},
 	time::Duration,
 };
 use tempfile::tempdir;
