@@ -92,8 +92,8 @@ sp_externalities::decl_extension! {
 	pub struct StatementStoreExt(std::sync::Arc<dyn crate::StatementStore>);
 }
 
+// Host extensions for the runtime.
 #[cfg(feature = "std")]
-/// Host extensions for the runtime.
 impl StatementStoreExt {
 	/// Create new instance of externalities extensions.
 	pub fn new(store: std::sync::Arc<dyn crate::StatementStore>) -> Self {
