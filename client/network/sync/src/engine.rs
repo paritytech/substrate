@@ -728,7 +728,7 @@ where
 					},
 				},
 				sc_network::SyncEvent::NotificationStreamClosed { remote } => {
-					self.evicted.remove(remote);
+					self.evicted.remove(&remote);
 					if self.on_sync_peer_disconnected(remote).is_err() {
 						log::trace!(
 							target: "sync",
