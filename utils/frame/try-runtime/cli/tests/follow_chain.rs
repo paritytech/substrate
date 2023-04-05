@@ -47,7 +47,6 @@ mod tests {
 			}
 
 			// Start a node and wait for it to begin finalizing blocks
-			// Wrap the node in a ChildGuard so that it is killed when it is dropped.
 			let mut node = common::KillChildOnDrop(common::start_node());
 			let ws_url = common::extract_info_from_output(node.stderr.take().unwrap()).0.ws_url;
 			common::wait_n_finalized_blocks(1, &ws_url).await;
