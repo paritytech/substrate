@@ -540,7 +540,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		let mut list = self
 			.permanent_addresses
 			.iter()
-			.filter_map(|(p, a)| if *p == peer_id { Some(a.clone()) } else { None })
+			.filter_map(|(p, a)| (*p == peer_id).then_some(a.clone()))
 			.collect::<Vec<_>>();
 
 		if let Some(ephemeral_addresses) = self.ephemeral_addresses.get(&peer_id) {
