@@ -174,6 +174,12 @@ pub mod pallet {
 			id.into()
 		}
 	}
+	#[cfg(feature = "runtime-benchmarks")]
+	impl From<u32> for () {
+		fn from(error: io::Error) -> Self {
+			()
+		}
+	}
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
