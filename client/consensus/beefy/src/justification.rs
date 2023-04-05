@@ -21,13 +21,21 @@ use codec::{Decode, Encode};
 use sp_consensus::Error as ConsensusError;
 use sp_consensus_beefy::{
 	crypto::{AuthorityId, Signature},
-	ValidatorSet, VersionedFinalityProof,
+	ValidatorSet, ValidatorSetId, VersionedFinalityProof,
 };
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// A finality proof with matching BEEFY authorities' signatures.
-pub type BeefyVersionedFinalityProof<Block> =
-	sp_consensus_beefy::VersionedFinalityProof<NumberFor<Block>, Signature>;
+pub type BeefyVersionedFinalityProof<Block> = VersionedFinalityProof<NumberFor<Block>, Signature>;
+
+pub(crate) fn proof_block_num_and_set_id<Block: BlockT>(
+	proof: &BeefyVersionedFinalityProof<Block>,
+) -> (NumberFor<Block>, ValidatorSetId) {
+	match proof {
+		VersionedFinalityProof::V1(sc) =>
+			(sc.commitment.block_number, sc.commitment.validator_set_id),
+	}
+}
 
 /// Decode and verify a Beefy FinalityProof.
 pub(crate) fn decode_and_verify_finality_proof<Block: BlockT>(
@@ -41,7 +49,7 @@ pub(crate) fn decode_and_verify_finality_proof<Block: BlockT>(
 }
 
 /// Verify the Beefy finality proof against the validator set at the block it was generated.
-fn verify_with_validator_set<Block: BlockT>(
+pub(crate) fn verify_with_validator_set<Block: BlockT>(
 	target_number: NumberFor<Block>,
 	validator_set: &ValidatorSet<AuthorityId>,
 	proof: &BeefyVersionedFinalityProof<Block>,
