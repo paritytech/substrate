@@ -483,7 +483,7 @@ pub mod pallet {
 	}
 
 	/// A reason for the NIS pallet placing a hold on funds.
-	#[pallet::composable_enum]
+	#[pallet::composite_enum]
 	pub enum HoldReason {
 		/// The NIS Pallet has reserved it for a non-fungible receipt.
 		#[codec(index = 0)]
