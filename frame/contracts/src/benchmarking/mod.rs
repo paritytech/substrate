@@ -2008,7 +2008,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	// `n`: Message input to verify in bytes.
+	// `n`: Message input length to verify in bytes.
 	#[pov_mode = Measured]
 	seal_sr25519_verify {
 		let n in 0 .. T::MaxCodeLen::get() - 255; // need some buffer so the code size does not
