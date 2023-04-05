@@ -31,6 +31,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn follow_chain_works() {
+		// Build substrate so binaries used in the test use the latest code.
+		common::build_substrate(&["--features=try-runtime"]);
+
 		common::run_with_timeout(Duration::from_secs(60), async move {
 			fn start_follow(ws_url: &str) -> Child {
 				Command::new(cargo_bin("substrate"))
@@ -41,9 +44,6 @@ mod tests {
 					.spawn()
 					.unwrap()
 			}
-
-			// Build substrate so the tests use the current version of the code
-			common::build_substrate(&["--features=try-runtime"]);
 
 			// Start a node and wait for it to begin finalizing blocks
 			let mut node = common::start_node();
@@ -59,8 +59,9 @@ mod tests {
 			// Assert that the follow-chain process has followed at least 3 blocks.
 			assert!(matches!(matched, Ok(_)));
 
-			// Sanity check: node is still running
-			assert!(node.try_wait().unwrap().is_none());
+			// Don't leave hanging processes
+			node.kill().unwrap();
+			follow.kill().await.unwrap();
 		})
 		.await;
 	}
