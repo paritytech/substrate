@@ -312,7 +312,9 @@ mod tests {
 	use sp_blockchain::HeaderBackend;
 	use sp_core::Blake2Hasher;
 	use sp_state_machine::Backend;
-	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
+	use substrate_test_runtime_client::{
+		runtime::Extrinsic, DefaultTestClientBuilderExt, TestClientBuilderExt,
+	};
 
 	#[test]
 	fn block_building_storage_proof_does_not_include_runtime_by_default() {
@@ -344,5 +346,63 @@ mod tests {
 			.storage(&sp_core::storage::well_known_keys::CODE)
 			.unwrap_err()
 			.contains("Database missing expected key"),);
+	}
+
+	#[test]
+	fn failing_extrinsic_rolls_back_changes_in_storage_proof() {
+		let builder = substrate_test_runtime_client::TestClientBuilder::new();
+		let backend = builder.backend();
+		let client = builder.build();
+
+		let mut block_builder = BlockBuilder::new(
+			&client,
+			client.info().best_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		)
+		.unwrap();
+
+		block_builder.push(Extrinsic::ReadAndPanic(8)).unwrap_err();
+
+		let block = block_builder.build().unwrap();
+
+		let proof_with_panic = block.proof.expect("Proof is build on request").encoded_size();
+
+		let mut block_builder = BlockBuilder::new(
+			&client,
+			client.info().best_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		)
+		.unwrap();
+
+		block_builder.push(Extrinsic::Read(8)).unwrap();
+
+		let block = block_builder.build().unwrap();
+
+		let proof_without_panic = block.proof.expect("Proof is build on request").encoded_size();
+
+		let block = BlockBuilder::new(
+			&client,
+			client.info().best_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		)
+		.unwrap()
+		.build()
+		.unwrap();
+
+		let proof_empty_block = block.proof.expect("Proof is build on request").encoded_size();
+
+		// Ensure that we rolled back the changes of the panicked transaction.
+		assert!(proof_without_panic > proof_with_panic);
+		assert!(proof_without_panic > proof_empty_block);
+		assert_eq!(proof_empty_block, proof_with_panic);
 	}
 }
