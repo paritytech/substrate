@@ -1111,6 +1111,8 @@ impl<T: Config> Pallet<T> {
 	/// `debug` should only ever be set to `true` when executing as an RPC because
 	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
 	/// If set to `true` it returns additional human readable debugging information.
+	/// `collect_events` should only be set to `true` when called off-chain as it enables collecting
+	/// all the Events emitted in the block so far and put them in them into the PoV.
 	///
 	/// It returns the execution result and the amount of used weight.
 	pub fn bare_call(
@@ -1122,6 +1124,7 @@ impl<T: Config> Pallet<T> {
 		data: Vec<u8>,
 		debug: bool,
 		determinism: Determinism,
+		collect_events: bool,
 	) -> ContractExecResult<BalanceOf<T>, EventRecordOf<T>> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
 		let common = CommonInput {
@@ -1133,10 +1136,11 @@ impl<T: Config> Pallet<T> {
 			debug_message: debug_message.as_mut(),
 		};
 		let output = CallInput::<T> { dest, determinism }.run_guarded(common);
-		// We are good to call System::read_events_no_consensus() from the runtime API.
-		// `read_events_no_consensus` is actually not allowed to be called on-chain cause it will
-		// put all the Events emitted in the block so far into the PoV.
-		let events = System::<T>::read_events_no_consensus().map(|e| *e).collect(); // TODO: do we want to conditionally set None here?
+		let events = if collect_events {
+			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
+		} else {
+			None
+		};
 
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
@@ -1144,7 +1148,7 @@ impl<T: Config> Pallet<T> {
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default().to_vec(),
-			events: Some(events),
+			events,
 		}
 	}
 
@@ -1169,6 +1173,7 @@ impl<T: Config> Pallet<T> {
 		data: Vec<u8>,
 		salt: Vec<u8>,
 		debug: bool,
+		collect_events: bool,
 	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>, EventRecordOf<T>> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
 		let common = CommonInput {
@@ -1180,6 +1185,11 @@ impl<T: Config> Pallet<T> {
 			debug_message: debug_message.as_mut(),
 		};
 		let output = InstantiateInput::<T> { code, salt }.run_guarded(common);
+		let events = if collect_events {
+			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
+		} else {
+			None
+		};
 		ContractInstantiateResult {
 			result: output
 				.result
@@ -1189,7 +1199,7 @@ impl<T: Config> Pallet<T> {
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default().to_vec(),
-			events: None, // TODO: do we want to return events here?
+			events,
 		}
 	}
 

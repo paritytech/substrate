@@ -2147,6 +2147,7 @@ impl_runtime_apis! {
 				input_data,
 				true,
 				pallet_contracts::Determinism::Enforced,
+				true,
 			)
 		}
 
@@ -2169,7 +2170,8 @@ impl_runtime_apis! {
 				code,
 				data,
 				salt,
-				true
+				true,
+				true,
 			)
 		}
 
