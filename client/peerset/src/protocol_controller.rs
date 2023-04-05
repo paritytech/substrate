@@ -389,7 +389,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 				self.drop_connection(peer_id);
 			},
 			None => {
-				trace!(
+				error!(
 					target: "peerset",
 					"Trying to remove unknown peer {} from {:?}",
 					peer_id, self.set_id,
