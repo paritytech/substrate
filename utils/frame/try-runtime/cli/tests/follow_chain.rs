@@ -18,52 +18,58 @@
 
 #![cfg(unix)]
 
-use assert_cmd::cargo::cargo_bin;
-use regex::Regex;
-use std::{
-	process::{self, Child, Command},
-	time::Duration,
-};
-use substrate_cli_test_utils as common;
+#[cfg(feature = "try-runtime")]
+mod follow_chain_tests {
+	use assert_cmd::cargo::cargo_bin;
+	use regex::Regex;
+	use std::{
+		process::{self, Child, Command},
+		time::Duration,
+	};
+	use substrate_cli_test_utils as common;
 
-#[tokio::test]
-async fn follow_chain_works() {
-	common::run_with_timeout(Duration::from_secs(60), async move {
-		fn start_node() -> Child {
-			Command::new(cargo_bin("substrate"))
-				.stdout(process::Stdio::piped())
-				.stderr(process::Stdio::piped())
-				.args(&["--dev", "--tmp", "--ws-port=45789", "--no-hardware-benchmarks"])
-				.spawn()
-				.unwrap()
-		}
+	#[tokio::test]
+	async fn follow_chain_works() {
+		common::run_with_timeout(Duration::from_secs(60), async move {
+			fn start_node() -> Child {
+				Command::new(cargo_bin("substrate"))
+					.stdout(process::Stdio::piped())
+					.stderr(process::Stdio::piped())
+					.args(&["--dev", "--tmp", "--ws-port=45789", "--no-hardware-benchmarks"])
+					.spawn()
+					.unwrap()
+			}
 
-		fn start_follow(ws_url: &str) -> tokio::process::Child {
-			tokio::process::Command::new(cargo_bin("substrate"))
-				.stdout(process::Stdio::piped())
-				.stderr(process::Stdio::piped())
-				.args(&["try-runtime", "--runtime=existing"])
-				.args(&["follow-chain", format!("--uri={}", ws_url).as_str()])
-				.spawn()
-				.unwrap()
-		}
+			fn start_follow(ws_url: &str) -> tokio::process::Child {
+				tokio::process::Command::new(cargo_bin("substrate"))
+					.stdout(process::Stdio::piped())
+					.stderr(process::Stdio::piped())
+					.args(&["try-runtime", "--runtime=existing"])
+					.args(&["follow-chain", format!("--uri={}", ws_url).as_str()])
+					.spawn()
+					.unwrap()
+			}
 
-		// Start a node and wait for it to begin finalizing blocks
-		let mut node = start_node();
-		let ws_url = common::extract_info_from_output(node.stderr.take().unwrap()).0.ws_url;
-		common::wait_n_finalized_blocks(1, &ws_url).await;
+			// Build substrate so the tests use the current version of the code
+			common::build_substrate(&["--features=try-runtime"]);
 
-		// Kick off the follow-chain process and wait for it to process at least 3 blocks.
-		let mut follow = start_follow(&ws_url);
-		let re = Regex::new(r#".*executed block ([3-9]|[1-9]\d+).*"#).unwrap();
-		let matched =
-			common::wait_for_stream_pattern_match(follow.stderr.take().unwrap(), re).await;
+			// Start a node and wait for it to begin finalizing blocks
+			let mut node = start_node();
+			let ws_url = common::extract_info_from_output(node.stderr.take().unwrap()).0.ws_url;
+			common::wait_n_finalized_blocks(1, &ws_url).await;
 
-		// Assert that the follow-chain process has followed at least 3 blocks.
-		assert!(matches!(matched, Ok(_)));
+			// Kick off the follow-chain process and wait for it to process at least 3 blocks.
+			let mut follow = start_follow(&ws_url);
+			let re = Regex::new(r#".*executed block ([3-9]|[1-9]\d+).*"#).unwrap();
+			let matched =
+				common::wait_for_stream_pattern_match(follow.stderr.take().unwrap(), re).await;
 
-		// Sanity check: node is still running
-		assert!(node.try_wait().unwrap().is_none());
-	})
-	.await;
+			// Assert that the follow-chain process has followed at least 3 blocks.
+			assert!(matches!(matched, Ok(_)));
+
+			// Sanity check: node is still running
+			assert!(node.try_wait().unwrap().is_none());
+		})
+		.await;
+	}
 }
