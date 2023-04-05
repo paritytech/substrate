@@ -61,21 +61,17 @@ cargo-clippy:
   needs:
     - job: cargo-fmt
       artifacts: false
-  variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
     - .docker-env
     - .test-refs
   script:
     - rusty-cachier snapshot create
-    - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy --all-targets
+    - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo clippy --all-targets
     - rusty-cachier cache upload
 
 cargo-check-benches:
   stage: test
   variables:
-    # Override to use nightly toolchain
-    RUSTY_CACHIER_TOOLCHAIN: "nightly"
     CI_JOB_NAME: "cargo-check-benches"
   extends:
     - .docker-env
@@ -105,7 +101,7 @@ cargo-check-benches:
     - echo "___Running benchmarks___";
     - case ${CI_NODE_INDEX} in
       1)
-      SKIP_WASM_BUILD=1 time cargo +nightly check --locked --benches --all;
+      SKIP_WASM_BUILD=1 time cargo check --locked --benches --all;
       cargo run --locked --release -p node-bench -- ::trie::read::small --json
       | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json;
       echo "___Uploading cache for rusty-cachier___";
@@ -301,7 +297,6 @@ test-frame-examples-compile-to-wasm:
     - .docker-env
     - .test-refs
   variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
     RUSTFLAGS: "-C debug-assertions"
@@ -309,9 +304,9 @@ test-frame-examples-compile-to-wasm:
   script:
     - rusty-cachier snapshot create
     - cd ./frame/examples/offchain-worker/
-    - cargo +nightly build --locked --target=wasm32-unknown-unknown --no-default-features
+    - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
     - cd ../basic
-    - cargo +nightly build --locked --target=wasm32-unknown-unknown --no-default-features
+    - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
     - rusty-cachier cache upload
 
 test-linux-stable-int:
@@ -344,8 +339,6 @@ check-tracing:
   needs:
     - job: test-linux-stable-int
       artifacts: false
-  variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
     - .docker-env
     - .test-refs
@@ -353,8 +346,8 @@ check-tracing:
   script:
     - rusty-cachier snapshot create
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
-    - time cargo +nightly test --locked --manifest-path ./primitives/tracing/Cargo.toml --no-default-features
-    - time cargo +nightly test --locked --manifest-path ./primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
+    - time cargo test --locked --manifest-path ./primitives/tracing/Cargo.toml --no-default-features
+    - time cargo test --locked --manifest-path ./primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
     - rusty-cachier cache upload
 
 # more information about this job can be found here:
@@ -369,7 +362,6 @@ test-full-crypto-feature:
     - .docker-env
     - .test-refs
   variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
     RUSTFLAGS: "-C debug-assertions"
@@ -377,9 +369,9 @@ test-full-crypto-feature:
   script:
     - rusty-cachier snapshot create
     - cd primitives/core/
-    - time cargo +nightly build --locked --verbose --no-default-features --features full_crypto
+    - time cargo build --locked --verbose --no-default-features --features full_crypto
     - cd ../application-crypto
-    - time cargo +nightly build --locked --verbose --no-default-features --features full_crypto
+    - time cargo build --locked --verbose --no-default-features --features full_crypto
     - rusty-cachier cache upload
 
 check-rustdoc:
@@ -388,12 +380,11 @@ check-rustdoc:
     - .docker-env
     - .test-refs
   variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
     SKIP_WASM_BUILD: 1
     RUSTDOCFLAGS: "-Dwarnings"
   script:
     - rusty-cachier snapshot create
-    - time cargo +nightly doc --locked --workspace --all-features --verbose --no-deps
+    - time cargo doc --locked --workspace --all-features --verbose --no-deps
     - rusty-cachier cache upload
 
 cargo-check-each-crate:
