@@ -26,8 +26,8 @@ use crate::{
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Caller, Code, CodeStorage, Config, ContractInfo, ContractInfoOf,
-	DefaultAddressGenerator, DeletionQueueCounter, Error, Pallet, Schedule,
+	BalanceOf, Code, CodeStorage, Config, ContractInfo, ContractInfoOf, DefaultAddressGenerator,
+	DeletionQueueCounter, Error, Origin, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -966,21 +966,21 @@ fn deploy_and_call_other_contract() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: Caller::from_account_id(caller_addr.clone()),
+						caller: Origin::from_account_id(caller_addr.clone()),
 						contract: callee_addr.clone(),
 					}),
 					topics: vec![
-						hash(&Caller::<Test>::from_account_id(caller_addr.clone())),
+						hash(&Origin::<Test>::from_account_id(caller_addr.clone())),
 						hash(&callee_addr)
 					],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: Caller::from_account_id(ALICE),
+						caller: Origin::from_account_id(ALICE),
 						contract: caller_addr.clone(),
 					}),
-					topics: vec![hash(&Caller::<Test>::from_account_id(ALICE)), hash(&caller_addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&caller_addr)],
 				},
 			]
 		);
@@ -1288,10 +1288,10 @@ fn self_destruct_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: Caller::from_account_id(ALICE),
+						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
-					topics: vec![hash(&Caller::<Test>::from_account_id(ALICE)), hash(&addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3449,10 +3449,10 @@ fn storage_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: Caller::from_account_id(ALICE),
+						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
-					topics: vec![hash(&Caller::<Test>::from_account_id(ALICE)), hash(&addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3466,10 +3466,10 @@ fn storage_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: Caller::from_account_id(ALICE),
+						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
-					topics: vec![hash(&Caller::<Test>::from_account_id(ALICE)), hash(&addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3483,10 +3483,10 @@ fn storage_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: Caller::from_account_id(ALICE),
+						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
-					topics: vec![hash(&Caller::<Test>::from_account_id(ALICE)), hash(&addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3885,22 +3885,22 @@ fn set_code_hash() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: Caller::from_account_id(ALICE),
+						caller: Origin::from_account_id(ALICE),
 						contract: contract_addr.clone(),
 					}),
 					topics: vec![
-						hash(&Caller::<Test>::from_account_id(ALICE)),
+						hash(&Origin::<Test>::from_account_id(ALICE)),
 						hash(&contract_addr)
 					],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: Caller::from_account_id(ALICE),
+						caller: Origin::from_account_id(ALICE),
 						contract: contract_addr.clone(),
 					}),
 					topics: vec![
-						hash(&Caller::<Test>::from_account_id(ALICE)),
+						hash(&Origin::<Test>::from_account_id(ALICE)),
 						hash(&contract_addr)
 					],
 				},

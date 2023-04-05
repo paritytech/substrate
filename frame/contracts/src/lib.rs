@@ -577,8 +577,8 @@ pub mod pallet {
 			let gas_limit: Weight = gas_limit.into();
 			// Ensure that the origin is either a signed extrinsic or root.
 			let origin = match ensure_signed_or_root(origin)? {
-				Some(t) => Caller::Signed(t),
-				None => Caller::Root,
+				Some(t) => Origin::Signed(t),
+				None => Origin::Root,
 			};
 			let dest = T::Lookup::lookup(dest)?;
 			let common = CommonInput {
@@ -757,7 +757,7 @@ pub mod pallet {
 		/// rolled back.
 		Called {
 			/// The caller of the `contract`.
-			caller: Caller<T>,
+			caller: Origin<T>,
 			/// The contract that was called.
 			contract: T::AccountId,
 		},
@@ -918,27 +918,27 @@ pub mod pallet {
 		StorageValue<_, DeletionQueueManager<T>, ValueQuery>;
 }
 
-/// The type of callers supported by the contracts pallet.
+/// The type of origins supported by the contracts pallet.
 #[derive(Clone, Encode, Decode, PartialEq, TypeInfo, RuntimeDebugNoBound)]
-pub enum Caller<T: Config> {
-	Signed(T::AccountId),
+pub enum Origin<T: Config> {
 	Root,
+	Signed(T::AccountId),
 }
 
-impl<T: Config> Caller<T> {
+impl<T: Config> Origin<T> {
 	/// Creates a new Signed Caller from an AccountId.
 	pub fn from_account_id(account_id: T::AccountId) -> Self {
-		Caller::Signed(account_id)
+		Origin::Signed(account_id)
 	}
 }
 
-impl<T: Config> Caller<T> {
+impl<T: Config> Origin<T> {
 	/// Returns the account id of the caller if it has one.
 	/// It errors otherwise.
 	pub fn account_id(&self) -> Result<T::AccountId, DispatchError> {
 		match self {
-			Caller::Signed(id) => Ok(id.clone()),
-			Caller::Root => Err(DispatchError::BadOrigin),
+			Origin::Signed(id) => Ok(id.clone()),
+			Origin::Root => Err(DispatchError::BadOrigin),
 		}
 	}
 }
@@ -954,7 +954,7 @@ struct CommonInput<'a, T: Config> {
 
 /// Input specific to a call into contract.
 struct CallInput<T: Config> {
-	origin: Caller<T>,
+	origin: Origin<T>,
 	dest: T::AccountId,
 	determinism: Determinism,
 }
@@ -1107,7 +1107,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 					PrefabWasmModule::from_storage(*hash, &schedule, &mut gas_meter)?,
 				),
 			};
-			let contract_origin = Caller::from_account_id(origin.clone());
+			let contract_origin = Origin::from_account_id(origin.clone());
 			let mut storage_meter = StorageMeter::new(
 				&contract_origin,
 				common.storage_deposit_limit,
@@ -1159,7 +1159,7 @@ impl<T: Config> Pallet<T> {
 		determinism: Determinism,
 	) -> ContractExecResult<BalanceOf<T>> {
 		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
-		let origin = Caller::from_account_id(origin);
+		let origin = Origin::from_account_id(origin);
 		let common = CommonInput {
 			value,
 			data,

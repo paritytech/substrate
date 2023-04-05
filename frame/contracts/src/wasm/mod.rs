@@ -370,7 +370,7 @@ mod tests {
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
-		BalanceOf, Caller, CodeHash, Error, OldWeight, Pallet as Contracts,
+		BalanceOf, CodeHash, Error, OldWeight, Origin, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
 	use frame_support::{
@@ -435,7 +435,7 @@ mod tests {
 		debug_buffer: Vec<u8>,
 		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
 		code_hashes: Vec<CodeHash<Test>>,
-		caller: Caller<Test>,
+		caller: Origin<Test>,
 	}
 
 	/// The call is mocked and just returns this hardcoded value.
@@ -459,7 +459,7 @@ mod tests {
 				gas_meter: GasMeter::new(Weight::from_parts(10_000_000_000, 10 * 1024 * 1024)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
-				caller: Caller::Signed(ALICE),
+				caller: Origin::Signed(ALICE),
 			}
 		}
 	}
@@ -543,7 +543,7 @@ mod tests {
 			}
 			Ok(result)
 		}
-		fn caller(&self) -> Caller<Self::T> {
+		fn caller(&self) -> Origin<Self::T> {
 			self.caller.clone()
 		}
 		fn is_contract(&self, _address: &AccountIdOf<Self::T>) -> bool {
@@ -1452,7 +1452,7 @@ mod tests {
 	#[test]
 	fn caller_traps_when_no_account_id() {
 		let mut ext = MockExt::default();
-		ext.caller = Caller::Root;
+		ext.caller = Origin::Root;
 		assert_eq!(
 			execute(CODE_CALLER, vec![], ext),
 			Err(ExecError { error: DispatchError::BadOrigin, origin: ErrorOrigin::Caller })
