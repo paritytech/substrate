@@ -64,33 +64,6 @@ impl frame_system::Config for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 }
 
-// impl frame_system::Config for Test {
-// 	type BaseCallFilter = frame_support::traits::Everything;
-// 	type BlockWeights = ();
-// 	type BlockLength = ();
-// 	type DbWeight = ();
-// 	type RuntimeOrigin = RuntimeOrigin;
-// 	type Index = u64;
-// 	type BlockNumber = u64;
-// 	type Hash = H256;
-// 	type RuntimeCall = RuntimeCall;
-// 	type Hashing = BlakeTwo256;
-// 	type AccountId = u64;
-// 	type Lookup = IdentityLookup<Self::AccountId>;
-// 	type Header = Header;
-// 	type RuntimeEvent = RuntimeEvent;
-// 	type BlockHashCount = ConstU64<250>;
-// 	type Version = ();
-// 	type PalletInfo = PalletInfo;
-// 	type AccountData = pallet_balances::AccountData<u64>;
-// 	type OnNewAccount = ();
-// 	type OnKilledAccount = ();
-// 	type SystemWeightInfo = ();
-// 	type SS58Prefix = ();
-// 	type OnSetCode = frame_system::DefaultSetCode<Self>;
-// 	type MaxConsumers = frame_support::traits::ConstU32<16>;
-// }
-
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
