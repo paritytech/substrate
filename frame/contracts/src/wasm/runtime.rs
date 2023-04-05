@@ -2487,7 +2487,6 @@ pub mod env {
 	///
 	/// - `ReturnCode::Sr25519VerifyFailed
 	#[unstable]
-	#[prefixed_alias]
 	fn sr25519_verify(
 		ctx: _,
 		memory: _,
