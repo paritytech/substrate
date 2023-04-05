@@ -224,8 +224,8 @@ impl Statement {
 		let to_sign = self.signature_material();
 		if let Some(signature) = key.sign(&to_sign) {
 			let proof = Proof::Sr25519 {
-				signature: signature.into_generic().into(),
-				signer: key.clone().into_generic().into(),
+				signature: signature.into_inner().into(),
+				signer: key.clone().into_inner().into(),
 			};
 			self.set_proof(proof);
 			true
@@ -248,8 +248,8 @@ impl Statement {
 		let to_sign = self.signature_material();
 		if let Some(signature) = key.sign(&to_sign) {
 			let proof = Proof::Ed25519 {
-				signature: signature.into_generic().into(),
-				signer: key.clone().into_generic().into(),
+				signature: signature.into_inner().into(),
+				signer: key.clone().into_inner().into(),
 			};
 			self.set_proof(proof);
 			true
@@ -272,8 +272,8 @@ impl Statement {
 		let to_sign = self.signature_material();
 		if let Some(signature) = key.sign(&to_sign) {
 			let proof = Proof::Secp256k1Ecdsa {
-				signature: signature.into_generic().into(),
-				signer: key.clone().into_generic().0,
+				signature: signature.into_inner().into(),
+				signer: key.clone().into_inner().0,
 			};
 			self.set_proof(proof);
 			true

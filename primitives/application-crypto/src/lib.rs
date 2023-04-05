@@ -319,7 +319,7 @@ macro_rules! app_crypto_public_common {
 
 		impl Public {
 			/// Convert into wrapped generic public key type.
-			pub fn into_generic(self) -> $public {
+			pub fn into_inner(self) -> $public {
 				self.0
 			}
 		}
@@ -487,7 +487,7 @@ macro_rules! app_crypto_signature_common {
 
 		impl Signature {
 			/// Convert into wrapped generic signature type.
-			pub fn into_generic(self) -> $sig {
+			pub fn into_inner(self) -> $sig {
 				self.0
 			}
 		}
