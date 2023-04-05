@@ -1111,8 +1111,9 @@ impl<T: Config> Pallet<T> {
 	/// `debug` should only ever be set to `true` when executing as an RPC because
 	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
 	/// If set to `true` it returns additional human readable debugging information.
-	/// `collect_events` should only be set to `true` when called off-chain as it enables collecting
-	/// all the Events emitted in the block so far and put them in them into the PoV.
+	/// `collect_events` should only be set to `true` when called off-chain as it would enable
+	/// collecting all the Events emitted in the block so far and put them in them into the PoV. If
+	/// `collect_events` is `true` the result return `Some(events)`, otherwise it returns `None`
 	///
 	/// It returns the execution result and the amount of used weight.
 	pub fn bare_call(
@@ -1164,6 +1165,9 @@ impl<T: Config> Pallet<T> {
 	/// `debug` should only ever be set to `true` when executing as an RPC because
 	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
 	/// If set to `true` it returns additional human readable debugging information.
+	/// `collect_events` should only be set to `true` when called off-chain as it would enable
+	/// collecting all the Events emitted in the block so far and put them in them into the PoV. If
+	/// `collect_events` is `true` the result return `Some(events)`, otherwise it returns `None`
 	pub fn bare_instantiate(
 		origin: T::AccountId,
 		value: BalanceOf<T>,
