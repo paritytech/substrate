@@ -193,7 +193,7 @@ pub mod pallet {
 		/// This can be implmented over fungibles or some other means.
 		type Paymaster: Pay<Beneficiary = Self::AccountId, AssetKind = Self::AssetKind>;
 
-		// THe means of knowing what is the equivalent native Balance of a given asset id Balance.
+		// The means of knowing what is the equivalent native Balance of a given asset id Balance.
 		type BalanceConverter: ConversionFromAssetBalance<
 			PayBalanceOf<Self, I>,
 			Self::AssetKind,
@@ -374,7 +374,7 @@ pub mod pallet {
 			amount: PayBalanceOf<T, I>,
 			beneficiary: T::AccountId,
 		},
-		/// The has been processed but awaiting payment status.
+		/// The payment has been processed but awaiting payment status.
 		PaymentTriggered {
 			payment_index: PendingPaymentIndex,
 			asset_kind: T::AssetKind,
