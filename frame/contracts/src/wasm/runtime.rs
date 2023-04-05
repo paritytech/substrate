@@ -2471,7 +2471,7 @@ pub mod env {
 		}
 	}
 
-	/// Verify the sr25519 signature given the message and public key
+	/// Verify a sr25519 signature
 	///
 	/// # Parameters
 	///

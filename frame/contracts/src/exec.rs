@@ -275,7 +275,7 @@ pub trait Ext: sealing::Sealed {
 	/// Recovers ECDSA compressed public key based on signature and message hash.
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
 
-	/// Recovers sr25519 compressed public key based on signature and message hash.
+	/// Verify a sr25519 signature.
 	fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool;
 
 	/// Returns Ethereum address from the ECDSA compressed public key.
