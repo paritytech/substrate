@@ -181,6 +181,7 @@ where
 			config.execution_strategies.clone(),
 			Some(keystore_container.keystore()),
 			sc_offchain::OffchainDb::factory_from_backend(&*backend),
+			Arc::new(executor.clone()),
 		);
 
 		let wasm_runtime_substitutes = config

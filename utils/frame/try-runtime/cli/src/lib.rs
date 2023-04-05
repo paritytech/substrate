@@ -377,7 +377,7 @@ use sp_core::{
 		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 	},
 	storage::well_known_keys,
-	traits::{CallContext, ReadRuntimeVersion},
+	traits::{CallContext, ReadRuntimeVersion, ReadRuntimeVersionExt},
 	twox_128, H256,
 };
 use sp_externalities::Extensions;
@@ -810,7 +810,7 @@ where
 }
 
 /// Build all extensions that we typically use.
-pub(crate) fn full_extensions() -> Extensions {
+pub(crate) fn full_extensions<H: HostFunctions>(wasm_executor: WasmExecutor<H>) -> Extensions {
 	let mut extensions = Extensions::default();
 	let (offchain, _offchain_state) = TestOffchainExt::new();
 	let (pool, _pool_state) = TestTransactionPoolExt::new();
@@ -819,6 +819,7 @@ pub(crate) fn full_extensions() -> Extensions {
 	extensions.register(OffchainWorkerExt::new(offchain));
 	extensions.register(KeystoreExt::new(keystore));
 	extensions.register(TransactionPoolExt::new(pool));
+	extensions.register(ReadRuntimeVersionExt::new(wasm_executor));
 
 	extensions
 }

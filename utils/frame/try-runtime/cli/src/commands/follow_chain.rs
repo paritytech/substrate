@@ -149,7 +149,7 @@ where
 			&executor,
 			"TryRuntime_execute_block",
 			(block, command.state_root_check, command.try_state.clone()).encode().as_ref(),
-			full_extensions(),
+			full_extensions(executor.clone()),
 			shared
 				.export_proof
 				.as_ref()
