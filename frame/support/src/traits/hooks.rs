@@ -361,6 +361,7 @@ mod tests {
 	use super::*;
 	use sp_io::TestExternalities;
 
+	#[cfg(feature = "try-runtime")]
 	#[test]
 	fn on_runtime_upgrade_pre_post_executed_tuple() {
 		crate::parameter_types! {
