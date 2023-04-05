@@ -267,11 +267,6 @@ impl pallet_sudo::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 }
 
-parameter_types! {
-	pub StatementCost: Balance = 1000;
-	pub StatementByteCost: Balance = 10;
-}
-
 /// Configure the pallet-template in pallets/template.
 impl pallet_template::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;

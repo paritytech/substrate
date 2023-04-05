@@ -579,6 +579,8 @@ impl Store {
 		Ok(store)
 	}
 
+	/// Create memory index from the data.
+	// This may be moved to a background thread if it slows startup too much.
 	fn populate(&self) -> Result<()> {
 		{
 			let mut index = self.index.write();
@@ -703,6 +705,7 @@ impl Store {
 }
 
 impl StatementStore for Store {
+	/// Return all statements SCALE-encoded.
 	fn dump_encoded(&self) -> Result<Vec<(Hash, Vec<u8>)>> {
 		let index = self.index.read();
 		let mut result = Vec::with_capacity(index.entries.len());
@@ -906,6 +909,7 @@ impl StatementStore for Store {
 		}
 	}
 
+	/// Remove a statement by hash.
 	fn remove(&self, hash: &Hash) -> Result<()> {
 		let current_time = self.timestamp();
 		{
