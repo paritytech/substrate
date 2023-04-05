@@ -11,7 +11,7 @@
 	;; give the program 1 page of memory
 	(import "env" "memory" (memory 1 1))
 
-	;; [4, 8) len of signature + message + public key - 64 + 12 + 32 = 108 bytes
+	;; [4, 8) length of signature + message + public key - 64 + 12 + 32 = 108 bytes
 	;; write the length of the input (108 bytes) at offset 4
 	(data (i32.const 4) "\6c")
 
