@@ -26,6 +26,7 @@ use nix::{
 use node_primitives::{Hash, Header};
 use regex::Regex;
 use std::{
+	env,
 	io::{BufRead, BufReader, Read},
 	ops::{Deref, DerefMut},
 	path::{Path, PathBuf},
@@ -33,6 +34,56 @@ use std::{
 	time::Duration,
 };
 use tokio::io::{AsyncBufReadExt, AsyncRead};
+
+/// Builds the Substrate project using the provided arguments.
+///
+/// This function reads the CARGO_MANIFEST_DIR environment variable to find the root workspace
+/// directory. It then runs the `cargo b` command in the root directory with the specified
+/// arguments.
+///
+/// This can be useful for building the Substrate binary with a desired set of features prior
+/// to using the binary in a CLI test.
+///
+/// # Arguments
+///
+/// * `args: &[&str]` - A slice of string references representing the arguments to pass to the
+///   `cargo b` command.
+///
+/// # Panics
+///
+/// This function will panic if:
+///
+/// * The CARGO_MANIFEST_DIR environment variable is not set.
+/// * The root workspace directory cannot be determined.
+/// * The 'cargo b' command fails to execute.
+/// * The 'cargo b' command returns a non-successful status.
+///
+/// # Examples
+///
+/// ```rust
+/// build_substrate(&["--features=try-runtime"]);
+/// ```
+pub fn build_substrate(args: &[&str]) {
+	// Get the root workspace directory from the CARGO_MANIFEST_DIR environment variable
+	let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+	let root_dir = std::path::Path::new(&manifest_dir)
+		.parent()
+		.expect("Failed to find root workspace directory");
+	let output = Command::new("cargo")
+		.arg("b")
+		.args(args)
+		.current_dir(root_dir)
+		.output()
+		.expect(format!("Failed to execute 'cargo b' with args {:?}'", args).as_str());
+
+	if !output.status.success() {
+		panic!(
+			"Failed to execute 'cargo b' with args {:?}': \n{}",
+			args,
+			String::from_utf8_lossy(&output.stderr)
+		);
+	}
+}
 
 /// Takes a readable tokio stream (e.g. from a child process `ChildStderr` or `ChildStdout`) and
 /// a `Regex` pattern, and checks each line against the given pattern as it is produced.
