@@ -411,11 +411,16 @@ impl BenchDb {
 
 		let client = sc_service::new_client(
 			backend.clone(),
-			executor,
+			executor.clone(),
 			genesis_block_builder,
 			None,
 			None,
-			ExecutionExtensions::new(profile.into_execution_strategies(), None, None),
+			ExecutionExtensions::new(
+				profile.into_execution_strategies(),
+				None,
+				None,
+				Arc::new(executor),
+			),
 			Box::new(task_executor.clone()),
 			None,
 			None,
