@@ -130,12 +130,6 @@ pub fn new_partial(
 			compatibility_mode: Default::default(),
 		})?;
 
-	let statement_store = sc_statement_store::Store::new_shared(
-		config.database.path().unwrap(),
-		client.clone(),
-		config.prometheus_registry(),
-	)?;
-
 	Ok(sc_service::PartialComponents {
 		client,
 		backend,
@@ -144,7 +138,7 @@ pub fn new_partial(
 		keystore_container,
 		select_chain,
 		transaction_pool,
-		statement_store: Some(statement_store),
+		statement_store: None,
 		other: (grandpa_block_import, grandpa_link, telemetry),
 	})
 }
