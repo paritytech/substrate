@@ -365,10 +365,10 @@ where
 						continue
 					}
 					// Accept statements only when node is not major syncing
-					if self.sync.is_major_syncing() {
+					if self.sync.is_major_syncing() || self.sync.is_offline() {
 						log::trace!(
 							target: LOG_TARGET,
-							"{remote}: Ignoring statements while major syncing"
+							"{remote}: Ignoring statements while major syncing or offline"
 						);
 						continue
 					}

@@ -75,7 +75,6 @@ const MAX_TOTAL_STATEMENTS: usize = 8192;
 const MAX_TOTAL_SIZE: usize = 64 * 1024 * 1024;
 
 /// Suggested maintenance period. A good value to call `Store::maintain` with.
-#[allow(dead_code)]
 pub const MAINTENANCE_PERIOD: std::time::Duration = std::time::Duration::from_secs(30);
 
 mod col {
