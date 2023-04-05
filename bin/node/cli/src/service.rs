@@ -283,7 +283,7 @@ pub fn new_partial(
 	};
 
 	let statement_store = sc_statement_store::Store::new_shared(
-		config.database.path().unwrap(),
+		&config.data_path,
 		client.clone(),
 		config.prometheus_registry(),
 	)?;

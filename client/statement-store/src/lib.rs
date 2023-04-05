@@ -534,8 +534,7 @@ impl Store {
 		Client::Api: ValidateStatement<Block>,
 	{
 		let mut path: std::path::PathBuf = path.into();
-		path.pop();
-		path.push("statement");
+		path.push("statements");
 
 		let mut config = parity_db::Options::with_columns(&path, col::COUNT);
 
