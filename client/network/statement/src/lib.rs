@@ -48,7 +48,7 @@ use sp_statement_store::{
 	Hash, NetworkPriority, Statement, StatementSource, StatementStore, SubmitResult,
 };
 use std::{
-	collections::{hash_map::Entry, HashMap},
+	collections::{hash_map::Entry, HashMap, HashSet},
 	iter,
 	num::NonZeroUsize,
 	pin::Pin,
@@ -76,6 +76,8 @@ mod rep {
 	pub const GOOD_STATEMENT: Rep = Rep::new(1 << 7, "Good statement");
 	/// Reputation change when a peer sends us a bad statement.
 	pub const BAD_STATEMENT: Rep = Rep::new(-(1 << 12), "Bad statement");
+	/// Reputation change when a peer sends us a duplicate statement.
+	pub const DUPLICATE_STATEMENT: Rep = Rep::new(-(1 << 7), "Duplicate statement");
 	/// Reputation change when a peer sends us particularly useful statement
 	pub const EXCELLENT_STATEMENT: Rep = Rep::new(1 << 8, "High priority statement");
 }
@@ -246,7 +248,7 @@ pub struct StatementHandler<
 	/// these peers using the statement hash while the statement is
 	/// imported. This prevents that we import the same statement
 	/// multiple times concurrently.
-	pending_statements_peers: HashMap<Hash, Vec<PeerId>>,
+	pending_statements_peers: HashMap<Hash, HashSet<PeerId>>,
 	/// Network service to use to send messages and manage peers.
 	network: N,
 	/// Syncing service.
@@ -413,11 +415,16 @@ where
 						if let Ok(()) = self.queue_sender.unbounded_send((s, completion_sender)) {
 							self.pending_statements
 								.push(PendingStatement { validation: completion_receiver, hash });
-							entry.insert(vec![who]);
+							let mut set = HashSet::new();
+							set.insert(who);
+							entry.insert(set);
 						}
 					},
 					Entry::Occupied(mut entry) => {
-						entry.get_mut().push(who);
+						if !(entry.get_mut().insert(who)) {
+							// Already received this from the same peer.
+							self.network.report_peer(who, rep::DUPLICATE_STATEMENT);
+						}
 					},
 				}
 			}
