@@ -35,6 +35,28 @@ use std::{
 };
 use tokio::io::{AsyncBufReadExt, AsyncRead};
 
+/// Ensure the child is killed if it leaves its given scope.
+///
+/// # Usage
+/// ```ignore
+/// fn main() {
+/// 	let child = Command::new("/bin/cat").spawn().unwrap();
+/// 	let _guard = ChildGuard(child);
+/// 	panic!("Main thread panicking");
+/// }
+/// ```
+pub struct ChildGuard(pub Child);
+
+impl Drop for ChildGuard {
+	fn drop(&mut self) {
+		// You can check std::thread::panicking() here
+		match self.0.kill() {
+			Err(e) => println!("Could not kill child process: {}", e),
+			Ok(_) => println!("Successfully killed child process"),
+		}
+	}
+}
+
 /// Starts a new Substrate node in development mode with a temporary chain.
 ///
 /// This function creates a new Substrate node using the `substrate` binary.

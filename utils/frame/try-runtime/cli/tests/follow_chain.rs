@@ -41,13 +41,16 @@ mod tests {
 					.stderr(process::Stdio::piped())
 					.args(&["try-runtime", "--runtime=existing"])
 					.args(&["follow-chain", format!("--uri={}", ws_url).as_str()])
+					.kill_on_drop(true)
 					.spawn()
 					.unwrap()
 			}
 
 			// Start a node and wait for it to begin finalizing blocks
-			let mut node = common::start_node();
-			let ws_url = common::extract_info_from_output(node.stderr.take().unwrap()).0.ws_url;
+			// Wrap the node in a ChildGuard so that it is killed when it is dropped.
+			let node = common::start_node();
+			let mut node = common::ChildGuard(node);
+			let ws_url = common::extract_info_from_output(node.0.stderr.take().unwrap()).0.ws_url;
 			common::wait_n_finalized_blocks(1, &ws_url).await;
 
 			// Kick off the follow-chain process and wait for it to process at least 3 blocks.
@@ -58,10 +61,6 @@ mod tests {
 
 			// Assert that the follow-chain process has followed at least 3 blocks.
 			assert!(matches!(matched, Ok(_)));
-
-			// Don't leave hanging processes
-			node.kill().unwrap();
-			follow.kill().await.unwrap();
 		})
 		.await;
 	}
