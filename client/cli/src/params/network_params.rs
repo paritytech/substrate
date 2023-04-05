@@ -146,6 +146,10 @@ pub struct NetworkParams {
 		verbatim_doc_comment
 	)]
 	pub sync: SyncMode,
+
+	/// Maximum number of blocks per request.
+	#[arg(long, value_name = "COUNT", default_value_t = 64)]
+	pub max_blocks_per_request: u32,
 }
 
 impl NetworkParams {
@@ -235,6 +239,7 @@ impl NetworkParams {
 				allow_private_ip,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
+			max_blocks_per_request: self.max_blocks_per_request,
 			enable_dht_random_walk: !self.reserved_only,
 			allow_non_globals_in_dht,
 			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,

@@ -262,6 +262,14 @@ where
 			SyncOperationMode::Warp => SyncMode::Warp,
 		};
 		let max_parallel_downloads = network_config.max_parallel_downloads;
+		let max_blocks_per_request = if network_config.max_blocks_per_request >
+			crate::MAX_BLOCKS_IN_RESPONSE
+		{
+			log::info!(target: "sync", "clamping maximum blocks per request to {}", crate::MAX_BLOCKS_IN_RESPONSE);
+			crate::MAX_BLOCKS_IN_RESPONSE
+		} else {
+			network_config.max_blocks_per_request
+		};
 		let cache_capacity = NonZeroUsize::new(
 			(network_config.default_peers_set.in_peers as usize +
 				network_config.default_peers_set.out_peers as usize)
@@ -316,6 +324,7 @@ where
 			roles,
 			block_announce_validator,
 			max_parallel_downloads,
+			max_blocks_per_request,
 			warp_sync_params,
 			metrics_registry,
 			network_service.clone(),
