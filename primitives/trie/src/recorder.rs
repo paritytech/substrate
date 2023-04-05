@@ -453,7 +453,7 @@ mod tests {
 			let inner = recorder.inner.lock();
 
 			let recorded_keys =
-				inner.recorded_keys.iter().map(|(_, keys)| keys.keys()).flatten().count();
+				inner.recorded_keys.iter().flat_map(|(_, keys)| keys.keys()).count();
 
 			Self {
 				recorded_keys,
