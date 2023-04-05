@@ -170,16 +170,30 @@ pub mod pallet {
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	impl<AssetKind: From<u32>> BenchmarkHelper<AssetKind> for () {
-		fn create_asset_kind(id: u32) -> AssetKind {
-			id.into()
+		fn create_asset_kind(_id: u32) -> AssetKind {
+			0u32.into()
 		}
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	impl From<u32> for () {
-		fn from(error: io::Error) -> Self {
-			()
+	pub struct NilBenchmarkHelper;
+	#[cfg(feature = "runtime-benchmarks")]
+	impl<AssetKind: From<()>> BenchmarkHelper<AssetKind> for NilBenchmarkHelper {
+		fn create_asset_kind(_id: u32) -> AssetKind {
+			().into()
 		}
 	}
+
+	// impl<AssetKind: From<u32>> BenchmarkHelper<AssetKind> for () {
+	// 	fn create_asset_kind(id: u32) -> AssetKind {
+	// 		id.into()
+	// 	}
+	// }
+	// #[cfg(feature = "runtime-benchmarks")]
+	// impl From<u32> for () {
+	// 	fn from(_: u32) -> Self {
+	// 		()
+	// 	}
+	// }
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {

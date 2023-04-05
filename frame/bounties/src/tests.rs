@@ -116,6 +116,14 @@ parameter_types! {
 	pub static SpendLimit1: Balance = u64::MAX;
 }
 
+pub struct NilBenchmarkHelper;
+#[cfg(feature = "runtime-benchmarks")]
+impl<AssetKind: From<()>> pallet_treasury::BenchmarkHelper<AssetKind> for NilBenchmarkHelper {
+	fn create_asset_kind(_id: u32) -> AssetKind {
+		().into()
+	}
+}
+
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
 	type AssetKind = ();
@@ -137,7 +145,7 @@ impl pallet_treasury::Config for Test {
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_system::EnsureRootWithSuccess<Self::AccountId, SpendLimit>;
 	#[cfg(feature = "runtime-benchmarks")]
-	type BenchmarkHelper = ();
+	type BenchmarkHelper = NilBenchmarkHelper;
 }
 
 impl pallet_treasury::Config<Instance1> for Test {
@@ -161,7 +169,7 @@ impl pallet_treasury::Config<Instance1> for Test {
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_system::EnsureRootWithSuccess<Self::AccountId, SpendLimit1>;
 	#[cfg(feature = "runtime-benchmarks")]
-	type BenchmarkHelper = ();
+	type BenchmarkHelper = NilBenchmarkHelper;
 }
 
 parameter_types! {
