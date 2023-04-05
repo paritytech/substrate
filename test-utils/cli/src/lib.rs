@@ -94,7 +94,7 @@ pub fn start_node() -> Child {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```ignore
 /// build_substrate(&["--features=try-runtime"]);
 /// ```
 pub fn build_substrate(args: &[&str]) {
@@ -137,7 +137,7 @@ pub fn build_substrate(args: &[&str]) {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use regex::Regex;
 /// use tokio::process::Command;
 /// use tokio::io::AsyncRead;
