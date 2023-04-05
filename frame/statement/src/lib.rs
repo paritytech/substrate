@@ -100,7 +100,6 @@ pub mod pallet {
 		fn offchain_worker(now: BlockNumberFor<T>) {
 			log::trace!(target: LOG_TARGET, "Collecting statements at #{:?}", now);
 			Pallet::<T>::collect_statements();
-			Pallet::<T>::dispatch_statements();
 		}
 	}
 }
@@ -201,14 +200,6 @@ where
 				}
 				sp_statement_store::runtime_api::io::submit_statement(statement);
 			}
-		}
-	}
-
-	fn dispatch_statements() {
-		let all_statements = sp_statement_store::runtime_api::io::dump();
-		for (hash, _statement) in all_statements {
-			// TODO: Custom statement handling
-			log::trace!(target: LOG_TARGET, "Handling statement #{:?}", hash);
 		}
 	}
 }
