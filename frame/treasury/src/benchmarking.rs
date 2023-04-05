@@ -53,7 +53,6 @@ fn setup_spend_call<T: Config<I>, I: 'static>(
 ) -> (T::AssetKind, T::AccountId, PayBalanceOf<T, I>, AccountIdLookupOf<T>) {
 	let caller = account("caller", u, SEED);
 
-	// TODO: add to seed so value is not empty
 	let value: PayBalanceOf<T, I> = SEED.into();
 	let beneficiary = account("beneficiary", u, SEED);
 	let beneficiary_lookup = T::Lookup::unlookup(beneficiary);

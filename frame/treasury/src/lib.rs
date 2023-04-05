@@ -183,18 +183,6 @@ pub mod pallet {
 		}
 	}
 
-	// impl<AssetKind: From<u32>> BenchmarkHelper<AssetKind> for () {
-	// 	fn create_asset_kind(id: u32) -> AssetKind {
-	// 		id.into()
-	// 	}
-	// }
-	// #[cfg(feature = "runtime-benchmarks")]
-	// impl From<u32> for () {
-	// 	fn from(_: u32) -> Self {
-	// 		()
-	// 	}
-	// }
-
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The staking balance.
