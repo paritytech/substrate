@@ -154,13 +154,13 @@
 //!
 //! #### Emergency Phase Throttling
 //!
-//! It is possible to set a minimum number of "electing" blocks before an election failure tries
-//! the fallback election and/or triggers a transition to the emergency phase. In this context,
+//! It is possible to set a minimum number of "electing" blocks before an election results in a
+//! fallback election attempt and/or triggers a transition to the emergency phase. In this context,
 //! "electing" blocks refer to both signed and unsigned blocks. The config
-//! [`pallet::Config::MinElectingBlocks`] sets the minimum number of electing blocks that must pass
-//! in each election round *before* a failed election tries the fallback election and/or triggers
-//! the emergency phase. If [`pallet::Config::MinElectingBlocks`] is 0, the emergency throttling
-//! phase is disabled.
+//! [`pallet::Config::MinElectingBlocks`] sets the minimum number of electing blocks (i.e. signed
+//! and unsigned phase blocks) that must pass in each election round *before* a failed election
+//! tries the fallback election and/or triggers the emergency phase. If
+//! [`pallet::Config::MinElectingBlocks`] is 0, the emergency throttling phase is disabled.
 //!
 //! ## Feasible Solution (correct solution)
 //!
@@ -502,7 +502,7 @@ pub enum ElectionError<T: Config> {
 	/// No solution has been queued.
 	NothingQueued,
 	/// Election failed and emergency phase was throttled.
-	Throttling(Box<ElectionError<T>>),
+	ElectionTooEarly(Box<ElectionError<T>>),
 }
 
 // NOTE: we have to do this manually because of the additional where clause needed on
@@ -520,13 +520,13 @@ where
 			(&DataProvider(ref x), &DataProvider(ref y)) if x == y => true,
 			(&Fallback(ref x), &Fallback(ref y)) if x == y => true,
 			(NothingQueued, NothingQueued) => true,
-			(Throttling(x), Throttling(y)) if x == y => true,
+			(ElectionTooEarly(x), ElectionTooEarly(y)) if x == y => true,
 			(Feasibility(_), _) => false,
 			(Miner(_), _) => false,
 			(DataProvider(_), _) => false,
 			(Fallback(_), _) => false,
 			(NothingQueued, _) => false,
-			(Throttling(_), _) => false,
+			(ElectionTooEarly(_), _) => false,
 		}
 	}
 }
@@ -611,6 +611,8 @@ pub mod pallet {
 		/// Minimum number of signed and unsigned blocks that EPM expects for a successful
 		/// election. If an election fails before `MinElectionBlocks` have passed, the fallback
 		/// election and emergency phase are throttled.
+		//
+		/// If `MinElectionBlocks` is set to 0, the emergency throttling will be disabled.
 		type MinElectingBlocks: Get<Self::BlockNumber>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
@@ -1610,7 +1612,7 @@ impl<T: Config> Pallet<T> {
 							})
 						})
 				} else {
-					Err(ElectionError::Throttling(Box::new(err)))
+					Err(ElectionError::ElectionTooEarly(Box::new(err)))
 				}
 			})
 			.map(|ReadySolution { compute, score, supports }| {
@@ -1667,9 +1669,9 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 				Ok(supports)
 			},
 			Err(err) => match err {
-				// error is wrapped in an `ElectionError::Throttling` variant, return the inner
-				// error but do not enter emergency phase.
-				ElectionError::Throttling(err) => Err(*err),
+				// error is wrapped in an `ElectionError::ElectionTooEarly` variant, return the
+				// inner error but do not enter emergency phase.
+				ElectionError::ElectionTooEarly(err) => Err(*err),
 				_ => {
 					log!(error, "Entering emergency mode: {:?}", err);
 					Self::phase_transition(Phase::Emergency);
