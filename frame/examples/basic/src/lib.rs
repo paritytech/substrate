@@ -363,7 +363,7 @@ pub mod pallet {
 	/// should be added to our implied traits list.
 	///
 	/// `frame_system::Config` should always be included.
-	#[pallet::config]
+	#[pallet::default_config]
 	pub trait Config: pallet_balances::Config + frame_system::Config {
 		// Setting a constant config parameter from the runtime
 		#[pallet::constant]

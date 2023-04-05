@@ -97,7 +97,11 @@ impl Def {
 
 			match pallet_attr {
 				Some(PalletAttr::Config(span)) if config.is_none() =>
-					config = Some(config::ConfigDef::try_from(&frame_system, span, index, item)?),
+					config =
+						Some(config::ConfigDef::try_from(&frame_system, span, index, item, false)?),
+				Some(PalletAttr::DefaultConfig(span)) if config.is_none() =>
+					config =
+						Some(config::ConfigDef::try_from(&frame_system, span, index, item, true)?),
 				Some(PalletAttr::Pallet(span)) if pallet_struct.is_none() => {
 					let p = pallet_struct::PalletStructDef::try_from(span, index, item)?;
 					pallet_struct = Some(p);
@@ -369,28 +373,32 @@ impl GenericKind {
 
 /// List of additional token to be used for parsing.
 mod keyword {
-	syn::custom_keyword!(origin);
-	syn::custom_keyword!(call);
-	syn::custom_keyword!(event);
-	syn::custom_keyword!(config);
-	syn::custom_keyword!(hooks);
-	syn::custom_keyword!(inherent);
-	syn::custom_keyword!(error);
-	syn::custom_keyword!(storage);
-	syn::custom_keyword!(genesis_build);
-	syn::custom_keyword!(genesis_config);
-	syn::custom_keyword!(validate_unsigned);
-	syn::custom_keyword!(type_value);
-	syn::custom_keyword!(pallet);
-	syn::custom_keyword!(generate_store);
-	syn::custom_keyword!(Store);
-	syn::custom_keyword!(extra_constants);
+	use syn::custom_keyword;
+
+	custom_keyword!(origin);
+	custom_keyword!(call);
+	custom_keyword!(event);
+	custom_keyword!(config);
+	custom_keyword!(default_config);
+	custom_keyword!(hooks);
+	custom_keyword!(inherent);
+	custom_keyword!(error);
+	custom_keyword!(storage);
+	custom_keyword!(genesis_build);
+	custom_keyword!(genesis_config);
+	custom_keyword!(validate_unsigned);
+	custom_keyword!(type_value);
+	custom_keyword!(pallet);
+	custom_keyword!(generate_store);
+	custom_keyword!(Store);
+	custom_keyword!(extra_constants);
 }
 
 /// Parse attributes for item in pallet module
 /// syntax must be `pallet::` (e.g. `#[pallet::config]`)
 enum PalletAttr {
 	Config(proc_macro2::Span),
+	DefaultConfig(proc_macro2::Span),
 	Pallet(proc_macro2::Span),
 	Hooks(proc_macro2::Span),
 	RuntimeCall(proc_macro2::Span),
@@ -410,6 +418,7 @@ impl PalletAttr {
 	fn span(&self) -> proc_macro2::Span {
 		match self {
 			Self::Config(span) => *span,
+			Self::DefaultConfig(span) => *span,
 			Self::Pallet(span) => *span,
 			Self::Hooks(span) => *span,
 			Self::RuntimeCall(span) => *span,
@@ -438,6 +447,8 @@ impl syn::parse::Parse for PalletAttr {
 		let lookahead = content.lookahead1();
 		if lookahead.peek(keyword::config) {
 			Ok(PalletAttr::Config(content.parse::<keyword::config>()?.span()))
+		} else if lookahead.peek(keyword::default_config) {
+			Ok(PalletAttr::DefaultConfig(content.parse::<keyword::default_config>()?.span()))
 		} else if lookahead.peek(keyword::pallet) {
 			Ok(PalletAttr::Pallet(content.parse::<keyword::pallet>()?.span()))
 		} else if lookahead.peek(keyword::hooks) {

@@ -356,6 +356,7 @@ impl ConfigDef {
 		attr_span: proc_macro2::Span,
 		index: usize,
 		item: &mut syn::Item,
+		enable_default: bool,
 	) -> syn::Result<Self> {
 		let item = if let syn::Item::Trait(item) = item {
 			item
@@ -430,12 +431,15 @@ impl ConfigDef {
 
 			// TODO: if we call this again, we should expect `Err(_)`.
 
-			if !no_default && !is_event {
+			if !no_default && !is_event && enable_default {
 				default_subtrait_items.push(trait_item.clone());
 			}
 		}
 
-		let default_sub_trait = Some(default_subtrait_items);
+		let default_sub_trait = match enable_default {
+			true => Some(default_subtrait_items),
+			false => None,
+		};
 
 		let attr: Option<DisableFrameSystemSupertraitCheck> =
 			helper::take_first_item_pallet_attr(&mut item.attrs)?;

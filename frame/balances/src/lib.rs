@@ -210,7 +210,7 @@ pub mod pallet {
 
 	pub type CreditOf<T, I> = Credit<<T as frame_system::Config>::AccountId, Pallet<T, I>>;
 
-	#[pallet::config]
+	#[pallet::default_config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self, I>>
