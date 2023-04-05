@@ -35,7 +35,7 @@ use sp_core::{
 		testing::{TestOffchainExt, TestTransactionPoolExt},
 		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 	},
-	traits::CallContext,
+	traits::{CallContext, ReadRuntimeVersionExt},
 };
 use sp_externalities::Extensions;
 use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
@@ -225,6 +225,7 @@ impl PalletCmd {
 			extensions.register(OffchainWorkerExt::new(offchain.clone()));
 			extensions.register(OffchainDbExt::new(offchain));
 			extensions.register(TransactionPoolExt::new(pool));
+			extensions.register(ReadRuntimeVersionExt::new(executor.clone()));
 			extensions
 		};
 
@@ -238,7 +239,6 @@ impl PalletCmd {
 			&(self.extra).encode(),
 			extensions(),
 			&sp_state_machine::backend::BackendRuntimeCode::new(state).runtime_code()?,
-			sp_core::testing::TaskExecutor::new(),
 			CallContext::Offchain,
 		)
 		.execute(strategy.into())
@@ -376,7 +376,6 @@ impl PalletCmd {
 						extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
 					.execute(strategy.into())
@@ -417,7 +416,6 @@ impl PalletCmd {
 						extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
 					.execute(strategy.into())
@@ -450,7 +448,6 @@ impl PalletCmd {
 						extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
 					.execute(strategy.into())

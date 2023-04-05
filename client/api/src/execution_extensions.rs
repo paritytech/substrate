@@ -27,6 +27,7 @@ use parking_lot::RwLock;
 use sc_transaction_pool_api::OffchainSubmitTransaction;
 use sp_core::{
 	offchain::{self, OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
+	traits::{ReadRuntimeVersion, ReadRuntimeVersionExt},
 	ExecutionContext,
 };
 use sp_externalities::{Extension, Extensions};
@@ -174,19 +175,7 @@ pub struct ExecutionExtensions<Block: BlockT> {
 	transaction_pool: RwLock<Option<Weak<dyn OffchainSubmitTransaction<Block>>>>,
 	extensions_factory: RwLock<Box<dyn ExtensionsFactory<Block>>>,
 	statement_store: RwLock<Option<Weak<dyn sp_statement_store::StatementStore>>>,
-}
-
-impl<Block: BlockT> Default for ExecutionExtensions<Block> {
-	fn default() -> Self {
-		Self {
-			strategies: Default::default(),
-			keystore: None,
-			offchain_db: None,
-			transaction_pool: RwLock::new(None),
-			extensions_factory: RwLock::new(Box::new(())),
-			statement_store: RwLock::new(None),
-		}
-	}
+	read_runtime_version: Arc<dyn ReadRuntimeVersion>,
 }
 
 impl<Block: BlockT> ExecutionExtensions<Block> {
@@ -195,6 +184,7 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 		strategies: ExecutionStrategies,
 		keystore: Option<KeystorePtr>,
 		offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
+		read_runtime_version: Arc<dyn ReadRuntimeVersion>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
 		let statement_store = RwLock::new(None);
@@ -206,6 +196,7 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 			extensions_factory: RwLock::new(extensions_factory),
 			transaction_pool,
 			statement_store,
+			read_runtime_version,
 		}
 	}
 
@@ -284,6 +275,8 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 				ext.0,
 			)));
 		}
+
+		extensions.register(ReadRuntimeVersionExt::new(self.read_runtime_version.clone()));
 
 		extensions
 	}

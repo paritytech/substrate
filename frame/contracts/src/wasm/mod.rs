@@ -370,13 +370,11 @@ mod tests {
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
-		BalanceOf, CodeHash, Error, Pallet as Contracts,
+		BalanceOf, CodeHash, Error, OldWeight, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
 	use frame_support::{
-		assert_err, assert_ok,
-		dispatch::DispatchResultWithPostInfo,
-		weights::{OldWeight, Weight},
+		assert_err, assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight,
 	};
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
@@ -1632,11 +1630,22 @@ mod tests {
 
 		let output = execute(CODE_GAS_LEFT, vec![], &mut ext).unwrap();
 
-		let OldWeight(gas_left) = OldWeight::decode(&mut &*output.data).unwrap();
+		let gas_left = OldWeight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
 		// TODO: account for proof size weight
 		assert!(gas_left < gas_limit.ref_time(), "gas_left must be less than initial");
 		assert!(gas_left > actual_left.ref_time(), "gas_left must be greater than final");
+	}
+
+	/// Test that [`frame_support::weights::OldWeight`] en/decodes the same as our
+	/// [`crate::OldWeight`].
+	#[test]
+	fn old_weight_decode() {
+		#![allow(deprecated)]
+		let sp = frame_support::weights::OldWeight(42).encode();
+		let our = crate::OldWeight::decode(&mut &*sp).unwrap();
+
+		assert_eq!(our, 42);
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"

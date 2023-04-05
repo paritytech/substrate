@@ -20,6 +20,7 @@
 //! Parse the module into `Def` struct through `Def::try_from` function.
 
 pub mod call;
+pub mod composite;
 pub mod config;
 pub mod error;
 pub mod event;
@@ -35,6 +36,7 @@ pub mod storage;
 pub mod type_value;
 pub mod validate_unsigned;
 
+use composite::{keyword::CompositeKeyword, CompositeDef};
 use frame_support_procedural_tools::generate_crate_access_2018;
 use syn::spanned::Spanned;
 
@@ -56,6 +58,7 @@ pub struct Def {
 	pub genesis_build: Option<genesis_build::GenesisBuildDef>,
 	pub validate_unsigned: Option<validate_unsigned::ValidateUnsignedDef>,
 	pub extra_constants: Option<extra_constants::ExtraConstantsDef>,
+	pub composites: Vec<composite::CompositeDef>,
 	pub type_values: Vec<type_value::TypeValueDef>,
 	pub frame_system: syn::Ident,
 	pub frame_support: syn::Ident,
@@ -91,6 +94,7 @@ impl Def {
 		let mut extra_constants = None;
 		let mut storages = vec![];
 		let mut type_values = vec![];
+		let mut composites: Vec<CompositeDef> = vec![];
 
 		for (index, item) in items.iter_mut().enumerate() {
 			let pallet_attr: Option<PalletAttr> = helper::take_first_item_pallet_attr(item)?;
@@ -135,6 +139,32 @@ impl Def {
 				Some(PalletAttr::ExtraConstants(_)) =>
 					extra_constants =
 						Some(extra_constants::ExtraConstantsDef::try_from(index, item)?),
+				Some(PalletAttr::Composite(span)) => {
+					let composite =
+						composite::CompositeDef::try_from(span, index, &frame_support, item)?;
+					if composites.iter().any(|def| {
+						match (&def.composite_keyword, &composite.composite_keyword) {
+							(
+								CompositeKeyword::FreezeReason(_),
+								CompositeKeyword::FreezeReason(_),
+							) |
+							(CompositeKeyword::HoldReason(_), CompositeKeyword::HoldReason(_)) |
+							(CompositeKeyword::LockId(_), CompositeKeyword::LockId(_)) |
+							(
+								CompositeKeyword::SlashReason(_),
+								CompositeKeyword::SlashReason(_),
+							) => true,
+							_ => false,
+						}
+					}) {
+						let msg = format!(
+							"Invalid duplicated `{}` definition",
+							composite.composite_keyword
+						);
+						return Err(syn::Error::new(composite.composite_keyword.span(), &msg))
+					}
+					composites.push(composite);
+				},
 				Some(attr) => {
 					let msg = "Invalid duplicated attribute";
 					return Err(syn::Error::new(attr.span(), msg))
@@ -171,6 +201,7 @@ impl Def {
 			origin,
 			inherent,
 			storages,
+			composites,
 			type_values,
 			frame_system,
 			frame_support,
@@ -385,6 +416,7 @@ mod keyword {
 	syn::custom_keyword!(generate_store);
 	syn::custom_keyword!(Store);
 	syn::custom_keyword!(extra_constants);
+	syn::custom_keyword!(composite_enum);
 }
 
 /// Parse attributes for item in pallet module
@@ -404,6 +436,7 @@ enum PalletAttr {
 	ValidateUnsigned(proc_macro2::Span),
 	TypeValue(proc_macro2::Span),
 	ExtraConstants(proc_macro2::Span),
+	Composite(proc_macro2::Span),
 }
 
 impl PalletAttr {
@@ -423,6 +456,7 @@ impl PalletAttr {
 			Self::ValidateUnsigned(span) => *span,
 			Self::TypeValue(span) => *span,
 			Self::ExtraConstants(span) => *span,
+			Self::Composite(span) => *span,
 		}
 	}
 }
@@ -464,6 +498,8 @@ impl syn::parse::Parse for PalletAttr {
 			Ok(PalletAttr::TypeValue(content.parse::<keyword::type_value>()?.span()))
 		} else if lookahead.peek(keyword::extra_constants) {
 			Ok(PalletAttr::ExtraConstants(content.parse::<keyword::extra_constants>()?.span()))
+		} else if lookahead.peek(keyword::composite_enum) {
+			Ok(PalletAttr::Composite(content.parse::<keyword::composite_enum>()?.span()))
 		} else {
 			Err(lookahead.error())
 		}
