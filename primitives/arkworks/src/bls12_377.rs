@@ -26,43 +26,34 @@ use crate::utils::{
 use ark_bls12_377::{g1, g2, Bls12_377};
 use sp_std::vec::Vec;
 
-/// Compute multi miller loop through arkworks
-
 pub fn multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Result<Vec<u8>, ()> {
 	multi_miller_loop_generic::<Bls12_377>(a, b)
 }
 
-/// Compute final exponentiation through arkworks
 pub fn final_exponentiation(target: Vec<u8>) -> Result<Vec<u8>, ()> {
 	final_exponentiation_generic::<Bls12_377>(target)
 }
 
-/// Compute a multi scalar multiplication on G! through arkworks
 pub fn msm_g1(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	msm_sw_generic::<g1::Config>(bases, scalars)
 }
 
-/// Compute a multi scalar multiplication on G! through arkworks
 pub fn msm_g2(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	msm_sw_generic::<g2::Config>(bases, scalars)
 }
 
-/// Compute a scalar multiplication on G1 through arkworks
 pub fn mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	mul_projective_generic::<g1::Config>(base, scalar)
 }
 
-/// Compute a scalar multiplication on G2 through arkworks
 pub fn mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	mul_projective_generic::<g2::Config>(base, scalar)
 }
 
-/// Compute a scalar multiplication on G2 through arkworks
 pub fn mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	mul_affine_generic::<g1::Config>(base, scalar)
 }
 
-/// Compute a scalar multiplication on G2 through arkworks
 pub fn mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	mul_affine_generic::<g2::Config>(base, scalar)
 }

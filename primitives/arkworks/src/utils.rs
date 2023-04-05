@@ -9,18 +9,19 @@ use ark_ec::{
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
 use ark_std::{io::Cursor, vec, vec::Vec};
 
-pub fn serialize_result(result: impl CanonicalSerialize) -> Vec<u8> {
+fn serialize_result(result: impl CanonicalSerialize) -> Vec<u8> {
 	let mut serialized_result = vec![0u8; result.serialized_size(Compress::No)];
 	let mut cursor = Cursor::new(&mut serialized_result[..]);
 	result.serialize_uncompressed(&mut cursor).unwrap();
 	serialized_result
 }
 
-pub fn deserialize_argument<Field: CanonicalDeserialize>(argument: &Vec<u8>) -> Field {
+fn deserialize_argument<Field: CanonicalDeserialize>(argument: &Vec<u8>) -> Field {
 	let cursor = Cursor::new(argument);
 	Field::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap()
 }
 
+/// Compute a multi miller loop through arkworks
 pub fn multi_miller_loop_generic<Curve: Pairing>(
 	a_vec: Vec<Vec<u8>>,
 	b_vec: Vec<Vec<u8>>,
@@ -39,6 +40,7 @@ pub fn multi_miller_loop_generic<Curve: Pairing>(
 	Ok(serialize_result(result.0))
 }
 
+/// Compute a final exponentiation through arkworks
 pub fn final_exponentiation_generic<Curve: Pairing>(target: Vec<u8>) -> Result<Vec<u8>, ()> {
 	let target = deserialize_argument::<<Curve as Pairing>::TargetField>(&target);
 
@@ -50,6 +52,7 @@ pub fn final_exponentiation_generic<Curve: Pairing>(target: Vec<u8>) -> Result<V
 	}
 }
 
+/// Compute a multi scalar multiplication for short_weierstrass through arkworks
 pub fn msm_sw_generic<Curve: SWCurveConfig>(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
@@ -66,6 +69,7 @@ pub fn msm_sw_generic<Curve: SWCurveConfig>(bases: Vec<Vec<u8>>, scalars: Vec<Ve
 	serialize_result(result)
 }
 
+/// Compute a multi scalar mulitplication for twisted_edwards through arkworks
 pub fn msm_te_generic<Curve: TECurveConfig>(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	let bases: Vec<_> = bases
 		.iter()
@@ -82,7 +86,7 @@ pub fn msm_te_generic<Curve: TECurveConfig>(bases: Vec<Vec<u8>>, scalars: Vec<Ve
 	serialize_result(result)
 }
 
-/// Compute a scalar multiplication on G2 through arkworks
+/// Compute a projective scalar multiplication on G2 through arkworks
 pub fn mul_projective_generic<Group: SWCurveConfig>(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let base = deserialize_argument::<short_weierstrass::Projective<Group>>(&base);
 	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
@@ -92,7 +96,7 @@ pub fn mul_projective_generic<Group: SWCurveConfig>(base: Vec<u8>, scalar: Vec<u
 	serialize_result(result)
 }
 
-/// Compute a scalar multiplication on G2 through arkworks
+/// Compute a projective scalar multiplication for twisted_edwards through arkworks
 pub fn mul_projective_te_generic<Group: TECurveConfig>(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let base = deserialize_argument::<twisted_edwards::Projective<Group>>(&base);
 	let scalar = deserialize_argument::<Vec<u64>>(&scalar);
@@ -102,7 +106,7 @@ pub fn mul_projective_te_generic<Group: TECurveConfig>(base: Vec<u8>, scalar: Ve
 	serialize_result(result)
 }
 
-/// Compute a scalar multiplication on G2 through arkworks
+/// Compute a affine scalar multiplication through arkworks
 pub fn mul_affine_generic<Group: SWCurveConfig>(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	let base = deserialize_argument::<short_weierstrass::Affine<Group>>(&base);
 	let scalar = deserialize_argument::<Vec<u64>>(&scalar);

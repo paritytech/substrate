@@ -23,17 +23,14 @@ use crate::utils::{msm_te_generic, mul_affine_te_generic, mul_projective_te_gene
 use ark_ed_on_bls12_377::EdwardsConfig;
 use sp_std::vec::Vec;
 
-/// Compute a scalar multiplication on G2 through arkworks
 pub fn mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	mul_projective_te_generic::<EdwardsConfig>(base, scalar)
 }
 
-/// Compute a scalar multiplication through arkworks
 pub fn mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
 	mul_affine_te_generic::<EdwardsConfig>(base, scalar)
 }
 
-/// Compute a multi scalar multiplication on G! through arkworks
 pub fn msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
 	msm_te_generic::<EdwardsConfig>(bases, scalars)
 }
