@@ -2482,6 +2482,7 @@ pub mod env {
 	/// - `message_len`: the length of the message payload.
 	/// - `message_ptr`: the pointer into the linear memory where the message is placed. Should be
 	///   decodable as a Scale encoded Vec<u8>. Traps otherwise
+    ///
 	/// # Errors
 	///
 	/// - `ReturnCode::Sr25519VerifyFailed
