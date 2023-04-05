@@ -137,6 +137,9 @@ use sp_runtime::{
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
+#[allow(dead_code)]
+const LOG_TARGET: &str = "runtime::executive";
+
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::RuntimeOrigin;
@@ -240,7 +243,7 @@ where
 		select: frame_try_runtime::TryStateSelect,
 	) -> Result<Weight, &'static str> {
 		frame_support::log::info!(
-			target: "frame::executive",
+			target: LOG_TARGET,
 			"try-runtime: executing block #{:?} / state root check: {:?} / signature check: {:?} / try-state-select: {:?}",
 			block.header().number(),
 			state_root_check,
@@ -277,7 +280,7 @@ where
 		for e in extrinsics {
 			if let Err(err) = try_apply_extrinsic(e.clone()) {
 				frame_support::log::error!(
-					target: "runtime::executive", "executing transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
+					target: LOG_TARGET, "executing transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
 					e,
 					err,
 				);
@@ -296,7 +299,7 @@ where
 			select,
 		)
 		.map_err(|e| {
-			frame_support::log::error!(target: "runtime::executive", "failure: {:?}", e);
+			frame_support::log::error!(target: LOG_TARGET, "failure: {:?}", e);
 			e
 		})?;
 		drop(_guard);
@@ -477,15 +480,9 @@ where
 			// any initial checks
 			Self::initial_checks(&block);
 
-			let signature_batching = sp_runtime::SignatureBatching::start();
-
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
 			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
-
-			if !signature_batching.verify() {
-				panic!("Signature verification failed.");
-			}
 
 			// any final checks
 			Self::final_checks(&header);
@@ -697,7 +694,7 @@ mod tests {
 
 	const TEST_KEY: &[u8] = b":test:key:";
 
-	#[frame_support::pallet]
+	#[frame_support::pallet(dev_mode)]
 	mod custom {
 		use frame_support::pallet_prelude::*;
 		use frame_system::pallet_prelude::*;

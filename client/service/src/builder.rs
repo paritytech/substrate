@@ -38,9 +38,7 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
-use sc_network::{
-	config::SyncMode, NetworkEventStream, NetworkService, NetworkStateInfo, NetworkStatusProvider,
-};
+use sc_network::{config::SyncMode, NetworkService, NetworkStateInfo, NetworkStatusProvider};
 use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{role::Roles, sync::warp::WarpSyncParams};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
@@ -67,7 +65,7 @@ use sp_consensus::block_validation::{
 	BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator,
 };
 use sp_core::traits::{CodeExecutor, SpawnNamed};
-use sp_keystore::{Keystore, KeystorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::traits::{Block as BlockT, BlockIdTo, NumberFor, Zero};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 
@@ -85,24 +83,8 @@ pub type TFullCallExecutor<TBl, TExec> =
 type TFullParts<TBl, TRtApi, TExec> =
 	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
 
-trait AsKeystoreRef {
-	fn keystore_ref(&self) -> Arc<dyn Keystore>;
-}
-
-impl<T> AsKeystoreRef for Arc<T>
-where
-	T: Keystore + 'static,
-{
-	fn keystore_ref(&self) -> Arc<dyn Keystore> {
-		self.clone()
-	}
-}
-
-/// Construct and hold different layers of Keystore wrappers
-pub struct KeystoreContainer {
-	remote: Option<Box<dyn AsKeystoreRef>>,
-	local: Arc<LocalKeystore>,
-}
+/// Construct a local keystore shareable container
+pub struct KeystoreContainer(Arc<LocalKeystore>);
 
 impl KeystoreContainer {
 	/// Construct KeystoreContainer
@@ -113,41 +95,17 @@ impl KeystoreContainer {
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
 
-		Ok(Self { remote: Default::default(), local: keystore })
+		Ok(Self(keystore))
 	}
 
-	/// Set the remote keystore.
-	/// Should be called right away at startup and not at runtime:
-	/// even though this overrides any previously set remote store, it
-	/// does not reset any references previously handed out - they will
-	/// stick around.
-	pub fn set_remote_keystore<T>(&mut self, remote: Arc<T>)
-	where
-		T: Keystore + 'static,
-	{
-		self.remote = Some(Box::new(remote))
+	/// Returns a shared reference to a dynamic `Keystore` trait implementation.
+	pub fn keystore(&self) -> KeystorePtr {
+		self.0.clone()
 	}
 
-	/// Returns an adapter to a `Keystore` implementation.
-	pub fn keystore(&self) -> Arc<dyn Keystore> {
-		if let Some(c) = self.remote.as_ref() {
-			c.keystore_ref()
-		} else {
-			self.local.clone()
-		}
-	}
-
-	/// Returns the local keystore if available
-	///
-	/// The function will return None if the available keystore is not a local keystore.
-	///
-	/// # Note
-	///
-	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore
-	/// implementation, like a remote keystore for example. Only use this if you a certain that you
-	/// require it!
-	pub fn local_keystore(&self) -> Option<Arc<LocalKeystore>> {
-		Some(self.local.clone())
+	/// Returns a shared reference to the local keystore .
+	pub fn local_keystore(&self) -> Arc<LocalKeystore> {
+		self.0.clone()
 	}
 }
 
@@ -223,6 +181,7 @@ where
 			config.execution_strategies.clone(),
 			Some(keystore_container.keystore()),
 			sc_offchain::OffchainDb::factory_from_backend(&*backend),
+			Arc::new(executor.clone()),
 		);
 
 		let wasm_runtime_substitutes = config
@@ -314,7 +273,6 @@ where
 	let executor = crate::client::LocalCallExecutor::new(
 		backend.clone(),
 		executor,
-		spawn_handle.clone(),
 		config.clone(),
 		execution_extensions,
 	)?;
@@ -671,12 +629,8 @@ where
 
 	let (chain, state, child_state) = {
 		let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone()).into_rpc();
-		let (state, child_state) = sc_rpc::state::new_full(
-			client.clone(),
-			task_executor.clone(),
-			deny_unsafe,
-			config.rpc_max_payload,
-		);
+		let (state, child_state) =
+			sc_rpc::state::new_full(client.clone(), task_executor.clone(), deny_unsafe);
 		let state = state.into_rpc();
 		let child_state = child_state.into_rpc();
 
@@ -869,6 +823,7 @@ where
 		protocol_config
 	};
 
+	let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (engine, sync_service, block_announce_config) = SyncingEngine::new(
 		Roles::from(&config.role),
@@ -884,6 +839,7 @@ where
 		block_request_protocol_config.name.clone(),
 		state_request_protocol_config.name.clone(),
 		warp_sync_protocol_config.as_ref().map(|config| config.name.clone()),
+		rx,
 	)?;
 	let sync_service_import_queue = sync_service.clone();
 	let sync_service = Arc::new(sync_service);
@@ -894,7 +850,8 @@ where
 		protocol_config
 	}));
 
-	let mut network_params = sc_network::config::Params {
+	let genesis_hash = client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
+	let mut network_params = sc_network::config::Params::<TBl> {
 		role: config.role.clone(),
 		executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
@@ -903,11 +860,12 @@ where
 			})
 		},
 		network_config: config.network.clone(),
-		chain: client.clone(),
+		genesis_hash,
 		protocol_id: protocol_id.clone(),
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_announce_config,
+		tx,
 		request_response_protocol_configs: request_response_protocol_configs
 			.into_iter()
 			.chain([
@@ -947,15 +905,13 @@ where
 	)?;
 
 	spawn_handle.spawn("network-transactions-handler", Some("networking"), tx_handler.run());
-	spawn_handle.spawn(
+	spawn_handle.spawn_blocking(
 		"chain-sync-network-service-provider",
 		Some("networking"),
 		chain_sync_network_provider.run(network.clone()),
 	);
 	spawn_handle.spawn("import-queue", None, import_queue.run(Box::new(sync_service_import_queue)));
-
-	let event_stream = network.event_stream("syncing");
-	spawn_handle.spawn("syncing", None, engine.run(event_stream));
+	spawn_handle.spawn_blocking("syncing", None, engine.run());
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc", 10_000);
 	spawn_handle.spawn(

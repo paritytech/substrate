@@ -24,8 +24,7 @@ use clap::Parser;
 use sc_keystore::LocalKeystore;
 use sc_service::config::{BasePath, KeystoreConfig};
 use sp_core::crypto::{KeyTypeId, SecretString};
-use sp_keystore::{Keystore, KeystorePtr};
-use std::sync::Arc;
+use sp_keystore::KeystorePtr;
 
 /// The `insert` command
 #[derive(Debug, Clone, Parser)]
@@ -67,9 +66,9 @@ impl InsertKeyCmd {
 		let config_dir = base_path.config_dir(chain_spec.id());
 
 		let (keystore, public) = match self.keystore_params.keystore_config(&config_dir)? {
-			(_, KeystoreConfig::Path { path, password }) => {
+			KeystoreConfig::Path { path, password } => {
 				let public = with_crypto_scheme!(self.scheme, to_vec(&suri, password.clone()))?;
-				let keystore: KeystorePtr = Arc::new(LocalKeystore::open(path, password)?);
+				let keystore: KeystorePtr = LocalKeystore::open(path, password)?.into();
 				(keystore, public)
 			},
 			_ => unreachable!("keystore_config always returns path and password; qed"),
@@ -78,7 +77,8 @@ impl InsertKeyCmd {
 		let key_type =
 			KeyTypeId::try_from(self.key_type.as_str()).map_err(|_| Error::KeyTypeInvalid)?;
 
-		Keystore::insert(&*keystore, key_type, &suri, &public[..])
+		keystore
+			.insert(key_type, &suri, &public[..])
 			.map_err(|_| Error::KeystoreOperation)?;
 
 		Ok(())
@@ -95,6 +95,7 @@ mod tests {
 	use super::*;
 	use sc_service::{ChainSpec, ChainType, GenericChainSpec, NoExtension};
 	use sp_core::{sr25519::Pair, ByteArray, Pair as _};
+	use sp_keystore::Keystore;
 	use tempfile::TempDir;
 
 	struct Cli;

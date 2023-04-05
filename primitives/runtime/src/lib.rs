@@ -904,40 +904,6 @@ pub fn print(print: impl traits::Printable) {
 	print.print();
 }
 
-/// Batching session.
-///
-/// To be used in runtime only. Outside of runtime, just construct
-/// `BatchVerifier` directly.
-#[must_use = "`verify()` needs to be called to finish batch signature verification!"]
-pub struct SignatureBatching(bool);
-
-impl SignatureBatching {
-	/// Start new batching session.
-	pub fn start() -> Self {
-		sp_io::crypto::start_batch_verify();
-		SignatureBatching(false)
-	}
-
-	/// Verify all signatures submitted during the batching session.
-	#[must_use]
-	pub fn verify(mut self) -> bool {
-		self.0 = true;
-		sp_io::crypto::finish_batch_verify()
-	}
-}
-
-impl Drop for SignatureBatching {
-	fn drop(&mut self) {
-		// Sanity check. If user forgets to actually call `verify()`.
-		//
-		// We should not panic if the current thread is already panicking,
-		// because Rust otherwise aborts the process.
-		if !self.0 && !sp_std::thread::panicking() {
-			panic!("Signature verification has not been called before `SignatureBatching::drop`")
-		}
-	}
-}
-
 /// Describes on what should happen with a storage transaction.
 pub enum TransactionOutcome<R> {
 	/// Commit the transaction.
@@ -962,7 +928,7 @@ mod tests {
 
 	use super::*;
 	use codec::{Decode, Encode};
-	use sp_core::crypto::{Pair, UncheckedFrom};
+	use sp_core::crypto::Pair;
 	use sp_io::TestExternalities;
 	use sp_state_machine::create_proof_check_backend;
 
@@ -1043,36 +1009,6 @@ mod tests {
 
 		let multi_signer = MultiSigner::from(pair.public());
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
-	}
-
-	#[test]
-	#[should_panic(expected = "Signature verification has not been called")]
-	fn batching_still_finishes_when_not_called_directly() {
-		let mut ext = sp_state_machine::BasicExternalities::default();
-		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
-			sp_core::testing::TaskExecutor::new(),
-		));
-
-		ext.execute_with(|| {
-			let _batching = SignatureBatching::start();
-			let dummy = UncheckedFrom::unchecked_from([1; 32]);
-			let dummy_sig = UncheckedFrom::unchecked_from([1; 64]);
-			sp_io::crypto::sr25519_verify(&dummy_sig, &Vec::new(), &dummy);
-		});
-	}
-
-	#[test]
-	#[should_panic(expected = "Hey, I'm an error")]
-	fn batching_does_not_panic_while_thread_is_already_panicking() {
-		let mut ext = sp_state_machine::BasicExternalities::default();
-		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
-			sp_core::testing::TaskExecutor::new(),
-		));
-
-		ext.execute_with(|| {
-			let _batching = SignatureBatching::start();
-			panic!("Hey, I'm an error");
-		});
 	}
 
 	#[test]

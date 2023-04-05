@@ -175,9 +175,9 @@ pub struct InstructionWeights<T: Config> {
 	pub version: u32,
 	/// Weight to be used for instructions which don't have benchmarks assigned.
 	///
-	/// This weight is used whenever a code is uploaded with [`Determinism::AllowIndeterminism`]
+	/// This weight is used whenever a code is uploaded with [`Determinism::Relaxed`]
 	/// and an instruction (usually a float instruction) is encountered. This weight is **not**
-	/// used if a contract is uploaded with [`Determinism::Deterministic`]. If this field is set to
+	/// used if a contract is uploaded with [`Determinism::Enforced`]. If this field is set to
 	/// `0` (the default) only deterministic codes are allowed to be uploaded.
 	pub fallback: u32,
 	pub i64const: u32,
@@ -715,8 +715,7 @@ impl<'a, T: Config> gas_metering::Rules for ScheduleRules<'a, T> {
 			// Returning None makes the gas instrumentation fail which we intend for
 			// unsupported or unknown instructions. Offchain we might allow indeterminism and hence
 			// use the fallback weight for those instructions.
-			_ if matches!(self.determinism, Determinism::AllowIndeterminism) && w.fallback > 0 =>
-				w.fallback,
+			_ if matches!(self.determinism, Determinism::Relaxed) && w.fallback > 0 => w.fallback,
 			_ => return None,
 		};
 		Some(weight)

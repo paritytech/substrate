@@ -22,6 +22,7 @@
 //! See the documentation of [`Params`].
 
 pub use crate::{
+	protocol::NotificationsSink,
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
@@ -31,9 +32,15 @@ pub use crate::{
 use codec::Encode;
 use libp2p::{identity::Keypair, multiaddr, Multiaddr, PeerId};
 use prometheus_endpoint::Registry;
-pub use sc_network_common::{role::Role, sync::warp::WarpSyncProvider, ExHashT};
+pub use sc_network_common::{
+	role::{Role, Roles},
+	sync::warp::WarpSyncProvider,
+	ExHashT,
+};
+use sc_utils::mpsc::TracingUnboundedSender;
 use zeroize::Zeroize;
 
+use sp_runtime::traits::Block as BlockT;
 use std::{
 	error::Error,
 	fmt, fs,
@@ -44,7 +51,6 @@ use std::{
 	path::{Path, PathBuf},
 	pin::Pin,
 	str::{self, FromStr},
-	sync::Arc,
 };
 
 pub use libp2p::{
@@ -688,7 +694,7 @@ impl NetworkConfiguration {
 }
 
 /// Network initialization parameters.
-pub struct Params<Client> {
+pub struct Params<Block: BlockT> {
 	/// Assigned role for our node (full, light, ...).
 	pub role: Role,
 
@@ -698,11 +704,11 @@ pub struct Params<Client> {
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
 
-	/// Client that contains the blockchain.
-	pub chain: Arc<Client>,
-
 	/// Legacy name of the protocol to use on the wire. Should be different for each chain.
 	pub protocol_id: ProtocolId,
+
+	/// Genesis hash of the chain
+	pub genesis_hash: Block::Hash,
 
 	/// Fork ID to distinguish protocols of different hard forks. Part of the standard protocol
 	/// name on the wire.
@@ -713,6 +719,9 @@ pub struct Params<Client> {
 
 	/// Block announce protocol configuration
 	pub block_announce_config: NonDefaultSetConfig,
+
+	/// TX channel for direct communication with `SyncingEngine` and `Protocol`.
+	pub tx: TracingUnboundedSender<crate::event::SyncEvent<Block>>,
 
 	/// Request response protocol configurations
 	pub request_response_protocol_configs: Vec<RequestResponseConfig>,

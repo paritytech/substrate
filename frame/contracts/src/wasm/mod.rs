@@ -127,7 +127,7 @@ pub enum Determinism {
 	/// allowed.
 	///
 	/// Dispatchables always use this mode in order to make on-chain execution deterministic.
-	Deterministic,
+	Enforced,
 	/// Allow calling or uploading an indeterministic code.
 	///
 	/// This is only possible when calling into `pallet-contracts` directly via
@@ -136,7 +136,7 @@ pub enum Determinism {
 	/// # Note
 	///
 	/// **Never** use this mode for on-chain execution.
-	AllowIndeterminism,
+	Relaxed,
 }
 
 impl ExportedFunction {
@@ -225,7 +225,7 @@ impl<T: Config> PrefabWasmModule<T> {
 		let engine = Engine::new(&config);
 		let module = Module::new(&engine, code)?;
 		let mut store = Store::new(&engine, host_state);
-		let mut linker = Linker::new();
+		let mut linker = Linker::new(&engine);
 		E::define(
 			&mut store,
 			&mut linker,
@@ -329,7 +329,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 			log::debug!(target: "runtime::contracts", "failed to instantiate code: {}", msg);
 			Error::<T>::CodeRejected
 		})?;
-		store.state_mut().set_memory(memory);
+		store.data_mut().set_memory(memory);
 
 		let exported_func = instance
 			.get_export(&store, function.identifier())
@@ -346,7 +346,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 
 		let result = exported_func.call(&mut store, &[], &mut []);
 
-		store.into_state().to_execution_result(result)
+		store.into_data().to_execution_result(result)
 	}
 
 	fn code_hash(&self) -> &CodeHash<T> {
@@ -358,7 +358,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 	}
 
 	fn is_deterministic(&self) -> bool {
-		matches!(self.determinism, Determinism::Deterministic)
+		matches!(self.determinism, Determinism::Enforced)
 	}
 }
 
@@ -370,13 +370,11 @@ mod tests {
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
-		BalanceOf, CodeHash, Error, Pallet as Contracts,
+		BalanceOf, CodeHash, Error, OldWeight, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
 	use frame_support::{
-		assert_err, assert_ok,
-		dispatch::DispatchResultWithPostInfo,
-		weights::{OldWeight, Weight},
+		assert_err, assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight,
 	};
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
@@ -653,7 +651,7 @@ mod tests {
 				wasm,
 				&schedule,
 				ALICE,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 				TryInstantiate::Instantiate,
 			)
 			.map_err(|err| err.0)?
@@ -1632,11 +1630,22 @@ mod tests {
 
 		let output = execute(CODE_GAS_LEFT, vec![], &mut ext).unwrap();
 
-		let OldWeight(gas_left) = OldWeight::decode(&mut &*output.data).unwrap();
+		let gas_left = OldWeight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
 		// TODO: account for proof size weight
 		assert!(gas_left < gas_limit.ref_time(), "gas_left must be less than initial");
 		assert!(gas_left > actual_left.ref_time(), "gas_left must be greater than final");
+	}
+
+	/// Test that [`frame_support::weights::OldWeight`] en/decodes the same as our
+	/// [`crate::OldWeight`].
+	#[test]
+	fn old_weight_decode() {
+		#![allow(deprecated)]
+		let sp = frame_support::weights::OldWeight(42).encode();
+		let our = crate::OldWeight::decode(&mut &*sp).unwrap();
+
+		assert_eq!(our, 42);
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
@@ -3058,12 +3067,8 @@ mod tests {
 		let schedule = crate::Schedule::<Test>::default();
 		#[cfg(not(feature = "runtime-benchmarks"))]
 		assert_err!(execute(CODE_RANDOM, vec![], MockExt::default()), <Error<Test>>::CodeRejected);
-		self::prepare::reinstrument::<runtime::Env, Test>(
-			&wasm,
-			&schedule,
-			Determinism::Deterministic,
-		)
-		.unwrap();
+		self::prepare::reinstrument::<runtime::Env, Test>(&wasm, &schedule, Determinism::Enforced)
+			.unwrap();
 	}
 
 	/// This test check that an unstable interface cannot be deployed. In case of runtime
