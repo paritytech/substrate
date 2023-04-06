@@ -2010,7 +2010,7 @@ benchmarks! {
 
 	// `n`: Message input length to verify in bytes.
 	#[pov_mode = Measured]
-	seal_sr25519_verify {
+	seal_sr25519_verify_per_byte {
 		let n in 0 .. T::MaxCodeLen::get() - 255; // need some buffer so the code size does not
 												  // exceed the max code size.
 
@@ -2064,7 +2064,7 @@ benchmarks! {
 	// It generates different private keys and signatures for the message "Hello world".
 	// This is a slow call: We reduce the number of runs.
 	#[pov_mode = Measured]
-	seal_sr25519_verify_initialize {
+	seal_sr25519_verify {
 		let r in 0 .. API_BENCHMARK_RUNS / 10;
 
 		let message = b"Hello world".to_vec().encode();

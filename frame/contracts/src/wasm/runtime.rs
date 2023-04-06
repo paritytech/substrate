@@ -253,7 +253,7 @@ pub enum RuntimeCosts {
 	HashBlake128(u32),
 	/// Weight of calling `seal_ecdsa_recover`.
 	EcdsaRecovery,
-	/// Weight of calling `seal_sr25519_verify`.
+	/// Weight of calling `seal_sr25519_verify` for the given input length.
 	Sr25519Verify(u32),
 	/// Weight charged by a chain extension through `seal_call_chain_extension`.
 	ChainExtension(Weight),
@@ -277,7 +277,6 @@ impl RuntimeCosts {
 		let weight = match *self {
 			MeteringBlock(amount) => s.gas.saturating_add(Weight::from_parts(amount, 0)),
 			CopyFromContract(len) => s.return_per_byte.saturating_mul(len.into()),
-			Sr25519Verify(len) => s.sr25519_verify.saturating_mul(len.into()),
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
 			IsContract => s.is_contract,
@@ -341,6 +340,9 @@ impl RuntimeCosts {
 				.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			EcdsaRecovery => s.ecdsa_recover,
+			Sr25519Verify(len) => s
+				.sr25519_verify
+				.saturating_add(s.sr25519_verify_per_byte.saturating_mul(len.into())),
 			ChainExtension(weight) => weight,
 			CallRuntime(weight) => weight,
 			SetCodeHash => s.set_code_hash,
