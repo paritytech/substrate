@@ -122,9 +122,108 @@ pub mod v1 {
 			);
 
 			Asset::<T>::iter().for_each(|(_id, asset)| {
-				assert!(asset.status == AssetStatus::Live || asset.status == AssetStatus::Frozen, "assets should only be live or frozen. None should be in destroying status, or undefined state")
+				assert!(
+					asset.status == AssetStatus::Live || asset.status == AssetStatus::Frozen,
+					"assets should only be live or frozen. None should be in destroying status, or undefined state"
+				)
 			});
 			Ok(())
+		}
+	}
+}
+
+pub mod v2 {
+	use frame_support::{pallet_prelude::*, weights::Weight};
+
+	use super::*;
+
+	#[derive(Decode)]
+	pub struct OldAssetAccount<Balance, DepositBalance, Extra> {
+		pub(super) balance: Balance,
+		pub(super) is_frozen: bool,
+		pub(super) reason: ExistenceReason<DepositBalance>,
+		pub(super) extra: Extra,
+	}
+
+	impl<Balance, DepositBalance, Extra, AccountId> OldAssetAccount<Balance, DepositBalance, Extra>
+	where
+		AccountId: SystemConfig,
+	{
+		fn migrate_to_v2(
+			self,
+			who: AccountId,
+		) -> AssetAccount<Balance, DepositBalance, Extra, AccountId> {
+			let depositor_account = match self.reason {
+				// any accounts that exist via deposit will have placed it themselves
+				ExistenceReason::DepositHeld(_) => Some(who),
+				_ => None,
+			};
+
+			AssetAccount {
+				balance: self.balance,
+				is_frozen: self.is_frozen,
+				reason: self.reason,
+				depositor: depositor_account,
+				extra: self.extra,
+			}
+		}
+	}
+
+	// Migration to V2 possible from both V0 and V1.
+	pub struct MigrateToV2<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for MigrateToV2<T> {
+		fn on_runtime_upgrade() -> Weight {
+			// `current_version` is what we are migrating to
+			let current_version = Pallet::<T>::current_storage_version();
+			// `onchain_version` is what is already in place
+			let onchain_version = Pallet::<T>::on_chain_storage_version();
+
+			// `Account`s are the same in v0 and v1, so we can migrate to v2 from either one.
+			// Of course the v1 migration should be applied for `Asset`s.
+			if (onchain_version == 0 || onchain_version == 1) && current_version == 2 {
+				let mut translated = 0u64;
+
+				// todo: call migration
+
+				// update the storage version of the pallet
+				StorageVersion::new(2).put::<Pallet<T>>();
+				log::info!(
+					target: LOG_TARGET,
+					"Upgraded info for {} accounts, storage to version {:?}",
+					translated,
+					current_version
+				);
+				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
+			} else {
+				log::info!(
+					target: LOG_TARGET,
+					"Migration did not execute. This probably should be removed"
+				);
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			// todo: check how many accounts exist
+			Ok((1 as u32).encode())
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(prev_count: Vec<u8>) -> Result<(), &'static str> {
+			// todo: check how many Accounts exist
+			// todo: ensure equal to pre-upgrade
+
+			let current_version = Pallet::<T>::current_storage_version();
+			let onchain_version = Pallet::<T>::on_chain_storage_version();
+
+			frame_support::ensure!(current_version == 1, "must_upgrade");
+			assert_eq!(
+				current_version, onchain_version,
+				"after migration, the current_version and onchain_version should be the same"
+			);
+
+			// todo: check each account has `depositor` field
 		}
 	}
 }
