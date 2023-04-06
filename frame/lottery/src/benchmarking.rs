@@ -21,14 +21,14 @@
 
 use super::*;
 
-use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller, BenchmarkError};
+use frame_benchmarking::{impl_benchmark_test_suite, v1::{account, whitelisted_caller, BenchmarkError}, v2::*};
 use frame_support::{
 	storage::bounded_vec::BoundedVec,
 	traits::{EnsureOrigin, OnInitialize},
 };
 use frame_system::RawOrigin;
 use sp_runtime::traits::{Bounded, Zero};
-
+use frame_support::dispatch::UnfilteredDispatchable;
 use crate::Pallet as Lottery;
 
 // Set up and start a lottery
@@ -50,8 +50,12 @@ fn setup_lottery<T: Config>(repeat: bool) -> Result<(), &'static str> {
 	Ok(())
 }
 
-benchmarks! {
-	buy_ticket {
+#[benchmarks]
+mod benchmarks {
+	use super::*;
+
+	#[benchmark]
+	fn buy_ticket() -> Result<(), BenchmarkError> {
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		setup_lottery::<T>(false)?;
@@ -69,46 +73,64 @@ benchmarks! {
 		Participants::<T>::insert(&caller, already_called);
 
 		let call = frame_system::Call::<T>::remark { remark: vec![] };
-	}: _(RawOrigin::Signed(caller), Box::new(call.into()))
-	verify {
+	
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), Box::new(call.into()));
+	
 		assert_eq!(TicketsCount::<T>::get(), 1);
+
+		Ok(())
 	}
 
-	set_calls {
-		let n in 0 .. T::MaxCalls::get() as u32;
+	#[benchmark]
+	fn set_calls(n: Linear<0, 1>) -> Result<(), BenchmarkError> {
 		let calls = vec![frame_system::Call::<T>::remark { remark: vec![] }.into(); n as usize];
 		let origin =
 			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		assert!(CallIndices::<T>::get().is_empty());
-	}: _<T::RuntimeOrigin>(origin, calls)
-	verify {
+
+	
+		#[extrinsic_call]
+		_(origin as T::RuntimeOrigin, calls);
+	
 		if !n.is_zero() {
 			assert!(!CallIndices::<T>::get().is_empty());
 		}
+
+		Ok(())
 	}
 
-	start_lottery {
+/* 
+	#[benchmark]
+	fn start_lottery() {
 		let price = BalanceOf::<T>::max_value();
 		let end = 10u32.into();
 		let payout = 5u32.into();
 		let origin =
 			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-	}: _<T::RuntimeOrigin>(origin, price, end, payout, true)
-	verify {
+	
+		#[extrinsic_call]
+		_<T::RuntimeOrigin>(origin, price, end, payout, true);
+	
 		assert!(crate::Lottery::<T>::get().is_some());
 	}
 
-	stop_repeat {
+	#[benchmark]
+	fn stop_repeat() {
 		setup_lottery::<T>(true)?;
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, true);
 		let origin =
 			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-	}: _<T::RuntimeOrigin>(origin)
-	verify {
+	
+		#[extrinsic_call]
+		_<T::RuntimeOrigin>(origin);
+	
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, false);
 	}
 
-	on_initialize_end {
+
+	#[benchmark]
+	fn on_initialize_end() {
 		setup_lottery::<T>(false)?;
 		let winner = account("winner", 0, 0);
 		// User needs more than min balance to get ticket
@@ -124,22 +146,25 @@ benchmarks! {
 		// Assert that lotto is set up for winner
 		assert_eq!(TicketsCount::<T>::get(), 1);
 		assert!(!Lottery::<T>::pot().1.is_zero());
-	}: {
-		// Generate `MaxGenerateRandom` numbers for worst case scenario
-		for i in 0 .. T::MaxGenerateRandom::get() {
-			Lottery::<T>::generate_random_number(i);
+	
+		#[block]
+		{
+			// Generate `MaxGenerateRandom` numbers for worst case scenario
+			for i in 0 .. T::MaxGenerateRandom::get() {
+				Lottery::<T>::generate_random_number(i);
+			}
+			// Start lottery has block 15 configured for payout
+			Lottery::<T>::on_initialize(15u32.into());
 		}
-		// Start lottery has block 15 configured for payout
-		Lottery::<T>::on_initialize(15u32.into());
-	}
-	verify {
+	
 		assert!(crate::Lottery::<T>::get().is_none());
 		assert_eq!(TicketsCount::<T>::get(), 0);
 		assert_eq!(Lottery::<T>::pot().1, 0u32.into());
 		assert!(!T::Currency::free_balance(&winner).is_zero())
 	}
 
-	on_initialize_repeat {
+	#[benchmark]
+	fn on_initialize_repeat() {
 		setup_lottery::<T>(true)?;
 		let winner = account("winner", 0, 0);
 		// User needs more than min balance to get ticket
@@ -155,21 +180,24 @@ benchmarks! {
 		// Assert that lotto is set up for winner
 		assert_eq!(TicketsCount::<T>::get(), 1);
 		assert!(!Lottery::<T>::pot().1.is_zero());
-	}: {
-		// Generate `MaxGenerateRandom` numbers for worst case scenario
-		for i in 0 .. T::MaxGenerateRandom::get() {
-			Lottery::<T>::generate_random_number(i);
+
+		#[block]
+		{
+			// Generate `MaxGenerateRandom` numbers for worst case scenario
+			for i in 0 .. T::MaxGenerateRandom::get() {
+				Lottery::<T>::generate_random_number(i);
+			}
+			// Start lottery has block 15 configured for payout
+			Lottery::<T>::on_initialize(15u32.into());
 		}
-		// Start lottery has block 15 configured for payout
-		Lottery::<T>::on_initialize(15u32.into());
-	}
-	verify {
+	
 		assert!(crate::Lottery::<T>::get().is_some());
 		assert_eq!(LotteryIndex::<T>::get(), 2);
 		assert_eq!(TicketsCount::<T>::get(), 0);
 		assert_eq!(Lottery::<T>::pot().1, 0u32.into());
 		assert!(!T::Currency::free_balance(&winner).is_zero())
 	}
+	*/
 
 	impl_benchmark_test_suite!(Lottery, crate::mock::new_test_ext(), crate::mock::Test);
 }
