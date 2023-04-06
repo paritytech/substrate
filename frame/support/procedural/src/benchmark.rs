@@ -784,6 +784,18 @@ fn expand_benchmark(
 			}
 			expr_call.args = final_args;
 
+			let origin = match origin {
+				Expr::Cast(t) =>  {
+					let ty = t.ty.clone();
+					quote! {
+						<<T as frame_system::Config>::RuntimeOrigin as From<#ty>>::from(#origin);
+					}
+				},
+				_ => quote! {
+					#origin.into();
+				}
+			};
+
 			// determine call name (handles `_` and normal call syntax)
 			let expr_span = expr_call.span();
 			let call_err = || {
@@ -824,7 +836,7 @@ fn expand_benchmark(
 				let __call_decoded = <Call<#type_use_generics> as #codec::Decode>
 					::decode(&mut &__benchmarked_call_encoded[..])
 					.expect("call is encoded above, encoding must be correct");
-				let __origin = #origin.into();
+				let __origin = #origin;
 				<Call<#type_use_generics> as #traits::UnfilteredDispatchable>::dispatch_bypass_filter(
 					__call_decoded,
 					__origin,
