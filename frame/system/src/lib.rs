@@ -153,13 +153,12 @@ pub type ConsumedWeight = PerDispatchClass<Weight>;
 pub use pallet::*;
 
 /// Do something when we should be setting the code.
-pub trait SetCode {
+pub trait SetCode<T: Config> {
 	/// Set the code to the given blob.
 	fn set_code(code: Vec<u8>) -> DispatchResult;
 }
 
-pub struct DefaultSetCode<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> SetCode for DefaultSetCode<T> {
+impl<T: Config> SetCode<T> for () {
 	fn set_code(code: Vec<u8>) -> DispatchResult {
 		<Pallet<T>>::update_code_in_storage(&code)?;
 		Ok(())
@@ -391,7 +390,7 @@ pub mod pallet {
 		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
 		/// `Cumulus`, where the actual code change is deferred.
 		#[pallet::no_default]
-		type OnSetCode: SetCode;
+		type OnSetCode: SetCode<Self>;
 
 		/// The maximum number of consumers allowed on a single account.
 		type MaxConsumers: ConsumerLimits;
