@@ -19,7 +19,7 @@ proc-macro = true
 [dependencies]
 quote = "1.0.26"
 syn = "1.0.109"
-proc-macro2 = "1.0"
+proc-macro2 = "1.0.56"
 
 [features]
 default = [ "std" ]
