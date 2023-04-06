@@ -930,6 +930,7 @@ benchmarks! {
 			vec![],
 			true,
 			Determinism::Enforced,
+			false,
 		)
 		.result?;
 	}
@@ -979,6 +980,7 @@ benchmarks! {
 			vec![],
 			true,
 			Determinism::Enforced,
+			false,
 		)
 		.result?;
 	}
@@ -3054,6 +3056,7 @@ benchmarks! {
 			data,
 			false,
 			Determinism::Enforced,
+			false,
 		)
 		.result?;
 	}
@@ -3103,6 +3106,7 @@ benchmarks! {
 			data,
 			false,
 			Determinism::Enforced,
+			false,
 		)
 		.result?;
 	}
