@@ -104,7 +104,7 @@ pub fn build_substrate(args: &[&str]) {
 		.parent()
 		.expect("Failed to find root workspace directory");
 	let output = Command::new("cargo")
-		.arg("b")
+		.arg("build")
 		.args(args)
 		.current_dir(root_dir)
 		.output()
