@@ -131,8 +131,8 @@ pub fn migrate_from_pallet_version_to_storage_version<
 ///
 /// If your pallet has too many keys to be removed in a single block, it is advised to wait for
 /// a multi-block scheduler currently under development which will allow for removal of storage
-/// items (and performing other heavy migrations) over multiple blocks.
-/// (https://github.com/paritytech/substrate/issues/13690)
+/// items (and performing other heavy migrations) over multiple blocks
+/// (see <https://github.com/paritytech/substrate/issues/13690>).
 pub struct RemovePallet<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>>(
 	PhantomData<(P, DbWeight)>,
 );
