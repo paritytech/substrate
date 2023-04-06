@@ -394,6 +394,8 @@ where
 				)
 				.substream_upgrade_protocol_override(upgrade::Version::V1Lazy)
 				.notify_handler_buffer_size(NonZeroUsize::new(32).expect("32 != 0; qed"))
+				// NOTE: 24 is somewhat arbitrary and should be tuned in the future if necessary.
+				// See https://github.com/paritytech/substrate/pull/6080
 				.per_connection_event_buffer_size(24)
 				.max_negotiating_inbound_streams(2048);
 
