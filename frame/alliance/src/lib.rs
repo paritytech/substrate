@@ -1177,22 +1177,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Check invariants are consistent within the pallet.
-	/// - `Members(Fellows)` should keep to `MaxFellows` limit.
-	/// - `Members(Allies)` should keep to `MaxAllies` limit.
+	/// - `RetiringMembers`: should check to make sure there are not already retired member still in
+	///   state.
 	#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
 	pub fn do_try_state() -> Result<(), &'static str> {
-		let fellows = Members::<T, I>::get(MemberRole::Fellow);
-		let allies = Members::<T, I>::get(MemberRole::Ally);
+		let retiring_members = Members::<T, I>::get(MemberRole::Retiring).into_inner();
 
-		assert!(
-			fellows.len() as u32 <= T::MaxFellows::get(),
-			"Number of fellows should not exceed maximum fellow limit."
-		);
-
-		assert!(
-			allies.len() as u32 <= T::MaxAllies::get(),
-			"Number of allies should not exceed maximum ally limit."
-		);
+		for who in retiring_members.iter() {
+			if let Some(retirement_period_end) = RetiringMembers::<T, I>::get(&who) {
+				let assert_msg = format!(
+					"{} retirement notice has passed, remove member to free up some space.",
+					who
+				);
+				assert!(
+					frame_system::Pallet::<T>::block_number() < retirement_period_end,
+					"{}",
+					assert_msg.as_str()
+				)
+			}
+		}
 
 		Ok(())
 	}
