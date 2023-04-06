@@ -57,7 +57,7 @@ impl frame_system::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
-	type OnSetCode = frame_system::DefaultSetCode<Self>;
+	type OnSetCode = ();
 	type PalletInfo = PalletInfo;
 	type Header = Header;
 	// We decide to override this one.

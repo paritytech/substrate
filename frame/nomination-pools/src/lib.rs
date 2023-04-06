@@ -1549,9 +1549,11 @@ pub mod pallet {
 		type MaxPointsToBalance: Get<u8>;
 
 		/// Infallible method for converting `Currency::Balance` to `U256`.
+		#[pallet::no_default]
 		type BalanceToU256: Convert<BalanceOf<Self>, U256>;
 
 		/// Infallible method for converting `U256` to `Currency::Balance`.
+		#[pallet::no_default]
 		type U256ToBalance: Convert<U256, BalanceOf<Self>>;
 
 		/// The interface for nominating.
