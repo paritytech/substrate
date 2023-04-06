@@ -214,19 +214,7 @@ benchmarks! {
 	on_initialize_per_trie_key {
 		let k in 0..1024;
 		let instance = Contract::<T>::with_storage(WasmModule::dummy(), k, T::Schedule::get().limits.payload_len)?;
-		instance.info()?.queue_trie_for_deletion()?;
-	}: {
-		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
-	}
-
-	#[pov_mode = Measured]
-	on_initialize_per_queue_item {
-		let q in 0..1024.min(T::DeletionQueueDepth::get());
-		for i in 0 .. q {
-			let instance = Contract::<T>::with_index(i, WasmModule::dummy(), vec![])?;
-			instance.info()?.queue_trie_for_deletion()?;
-			ContractInfoOf::<T>::remove(instance.account_id);
-		}
+		instance.info()?.queue_trie_for_deletion();
 	}: {
 		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
@@ -3020,16 +3008,12 @@ benchmarks! {
 	print_schedule {
 		#[cfg(feature = "std")]
 		{
-			let weight_limit = T::DeletionWeightLimit::get();
-			let max_queue_depth = T::DeletionQueueDepth::get() as usize;
-			let empty_queue_throughput = ContractInfo::<T>::deletion_budget(0, weight_limit);
-			let full_queue_throughput = ContractInfo::<T>::deletion_budget(max_queue_depth, weight_limit);
+			let max_weight = <T as frame_system::Config>::BlockWeights::get().max_block;
+			let (weight_per_key, key_budget) = ContractInfo::<T>::deletion_budget(max_weight);
 			println!("{:#?}", Schedule::<T>::default());
 			println!("###############################################");
-			println!("Lazy deletion weight per key: {}", empty_queue_throughput.0);
-			println!("Lazy deletion throughput per block (empty queue, full queue): {}, {}",
-				empty_queue_throughput.1, full_queue_throughput.1,
-			);
+			println!("Lazy deletion weight per key: {weight_per_key}");
+			println!("Lazy deletion throughput per block: {key_budget}");
 		}
 		#[cfg(not(feature = "std"))]
 		Err("Run this bench with a native runtime in order to see the schedule.")?;

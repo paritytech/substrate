@@ -1,15 +1,27 @@
-error: use of deprecated struct `pallet::warnings::my_call`:
-                   Implicit call indices are deprecated in favour of explicit ones.
-                   Please ensure that all calls have the `pallet::call_index` attribute or that the
-                   `dev-mode` of the pallet is enabled. For more info see:
-                   <https://github.com/paritytech/substrate/pull/12891> and
-                   <https://github.com/paritytech/substrate/pull/11381>.
+error: use of deprecated constant `pallet::warnings::ImplicitCallIndex_0::_w`:
+               It is deprecated to use implicit call indices.
+               Please instead ensure that all calls have a `pallet::call_index` attribute or put the pallet into `dev` mode.
+
+               For more info see:
+                   <https://github.com/paritytech/substrate/pull/12891>
+                   <https://github.com/paritytech/substrate/pull/11381>
   --> tests/pallet_ui/dev_mode_without_arg_max_encoded_len.rs:25:10
    |
 25 |         pub fn my_call(_origin: OriginFor<T>) -> DispatchResult {
    |                ^^^^^^^
    |
    = note: `-D deprecated` implied by `-D warnings`
+
+error: use of deprecated constant `pallet::warnings::ConstantWeight_0::_w`:
+               It is deprecated to use hard-coded constant as call weight.
+               Please instead benchmark all calls or put the pallet into `dev` mode.
+
+               For more info see:
+                   <https://github.com/paritytech/substrate/pull/13798>
+  --> tests/pallet_ui/dev_mode_without_arg_max_encoded_len.rs:24:20
+   |
+24 |         #[pallet::weight(0)]
+   |                          ^
 
 error[E0277]: the trait bound `Vec<u8>: MaxEncodedLen` is not satisfied
   --> tests/pallet_ui/dev_mode_without_arg_max_encoded_len.rs:11:12
