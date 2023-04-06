@@ -1334,17 +1334,17 @@ mod tests {
 	(func (export "call")
 		(drop
 			(call $sr25519_verify
-				(i32.const 10) ;; Pointer to signature.
-				(i32.const 74) ;; Pointer to public key.
+				(i32.const 0) ;; Pointer to signature.
+				(i32.const 64) ;; Pointer to public key.
 				(i32.const 16) ;; message length.
-				(i32.const 106) ;; Pointer to message.
+				(i32.const 96) ;; Pointer to message.
 			)
 		)
 	)
 	(func (export "deploy"))
 
 	;; Signature (64 bytes)
-	(data (i32.const 10)
+	(data (i32.const 0)
 		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
 		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
 		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
@@ -1352,20 +1352,20 @@ mod tests {
 	)
 
 	;;  public key (32 bytes)
-	(data (i32.const 74)
+	(data (i32.const 64)
 		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
 		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
 	)
 
 	;;  message. (16 bytes)
-	(data (i32.const 106)
-		"\3c\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	(data (i32.const 96)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
 	)
 )
 "#;
 		let mut mock_ext = MockExt::default();
 		assert_ok!(execute(&CODE_SR25519, vec![], &mut mock_ext));
-		assert_eq!(mock_ext.sr25519_verify.into_inner(), [([1; 64], [1; 15].to_vec(), [1; 32])]);
+		assert_eq!(mock_ext.sr25519_verify.into_inner(), [([1; 64], [1; 16].to_vec(), [1; 32])]);
 	}
 
 	const CODE_GET_STORAGE: &str = r#"

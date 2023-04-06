@@ -2503,8 +2503,7 @@ pub mod env {
 		let mut pub_key: [u8; 32] = [0; 32];
 		ctx.read_sandbox_memory_into_buf(memory, pub_key_ptr, &mut pub_key)?;
 
-		let message: Vec<u8> =
-			ctx.read_sandbox_memory_as_unbounded(memory, message_ptr, message_len)?;
+		let message: Vec<u8> = ctx.read_sandbox_memory(memory, message_ptr, message_len)?;
 
 		if ctx.ext.sr25519_verify(&signature, &message, &pub_key) {
 			Ok(ReturnCode::Success)

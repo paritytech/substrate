@@ -11,9 +11,9 @@
 	;; give the program 1 page of memory
 	(import "env" "memory" (memory 1 1))
 
-	;; [0, 4) length of signature + message + public key - 64 + 12 + 32 = 108 bytes
-	;; write the length of the input (108 bytes) at offset 0
-	(data (i32.const 0) "\6c")
+	;; [0, 4) length of signature + message + public key - 64 + 11 + 32 = 107 bytes
+	;; write the length of the input (107 bytes) at offset 0
+	(data (i32.const 0) "\6b")
 
 	(func (export "deploy"))
 
@@ -28,7 +28,7 @@
 		;; Memory layout during `call`
 		;; [10, 74) signature
 		;; [74, 106) public key
-		;; [106, 118) message (12 bytes)
+		;; [106, 117) message (11 bytes)
 		(local.set $signature_ptr (i32.const 10))
 		(local.set $pub_key_ptr (i32.const 74))
 		(local.set $message_ptr (i32.const 106))
@@ -43,7 +43,7 @@
 			(call $sr25519_verify
 				(local.get $signature_ptr)
 				(local.get $pub_key_ptr)
-				(i32.const 12)
+				(i32.const 11)
 				(local.get $message_ptr)
 			)
 		)
