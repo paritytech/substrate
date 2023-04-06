@@ -17,9 +17,8 @@
 
 //! Implementation of the `derive_impl` attribute macro.
 
-use macro_magic::mm_core::pretty_print;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::quote;
 use std::collections::HashSet;
 use syn::{parse2, parse_quote, Ident, ImplItem, ItemImpl, Path, Result};
 
@@ -104,20 +103,11 @@ pub fn derive_impl(
 	foreign_tokens: TokenStream2,
 	local_tokens: TokenStream2,
 ) -> Result<TokenStream2> {
-	println!("foreign_path: {}\n", foreign_path.to_string());
-	println!("foreign_impl:");
-	pretty_print(&foreign_tokens);
-	println!("\nlocal_impl:");
-	pretty_print(&local_tokens);
-
 	let local_impl = parse2::<ItemImpl>(local_tokens)?;
 	let foreign_impl = parse2::<ItemImpl>(foreign_tokens)?;
 	let foreign_path = parse2::<Path>(foreign_path)?;
 
 	let combined_impl = combine_impls(local_impl, foreign_impl, foreign_path);
-
-	println!("combined_impl:");
-	pretty_print(&combined_impl.to_token_stream());
 
 	Ok(quote!(#combined_impl))
 }

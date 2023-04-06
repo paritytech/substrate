@@ -3767,15 +3767,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99227334921fae1a979cf0bfdfcc6b3e5ce376ef57e16fb6fb3ea2ed6095f80c"
 
 [[package]]
-name = "libc-print"
-version = "0.1.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06cea5d58bd9ba4717bbf5c6c5bb11bb6e9e76685b7fff34039b80f50ce86c11"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "libgit2-sys"
 version = "0.14.2+1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4495,9 +4486,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8864fb44cfc15606b1737fadf2123b4da4c683cda58ebed2eba7c42aeb864ea3"
 dependencies = [
  "derive-syn-parse",
- "libc-print",
  "macro_magic_core_macros",
- "prettyplease",
  "proc-macro2",
  "quote",
  "syn",
