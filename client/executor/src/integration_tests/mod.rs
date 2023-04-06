@@ -22,7 +22,7 @@ mod linux;
 use assert_matches::assert_matches;
 use codec::{Decode, Encode};
 use sc_executor_common::{
-	error::{Error, WasmError},
+	error::Error,
 	runtime_blob::RuntimeBlob,
 	wasm_runtime::{HeapAllocStrategy, WasmModule},
 };
