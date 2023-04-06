@@ -2320,7 +2320,7 @@ mod tests {
 		);
 		notif.disconnect_peer(&peer, 0.into());
 
-		if let Some(&PeerState::Disabled { ref connections, backoff_until: None }) =
+		if let Some(&PeerState::Disabled { ref connections, backoff_until: Some(_) }) =
 			notif.peers.get(&(peer, 0.into()))
 		{
 			assert_eq!(connections.len(), 1);
