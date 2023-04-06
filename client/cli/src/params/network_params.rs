@@ -148,6 +148,9 @@ pub struct NetworkParams {
 	pub sync: SyncMode,
 
 	/// Maximum number of blocks per request.
+	///
+	/// Try reducing this number from the default value if you have a slow network connection
+	/// and observe block request timing out.
 	#[arg(long, value_name = "COUNT", default_value_t = 64)]
 	pub max_blocks_per_request: u32,
 }
