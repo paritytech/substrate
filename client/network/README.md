@@ -262,7 +262,7 @@ After the latest state has been imported the node is fully operational, but is s
 data. I.e. it is unable to serve bock bodies and headers other than the most recent one. To make sure all
 nodes have block history available, a background sync process is started that downloads all the missing blocks.
 It is run in parallel with the keep-up sync and does not interfere with downloading of the recent blocks.
-During this download we also import GRANPA justifications for blocks with authority set changes, so that
+During this download we also import GRANDPA justifications for blocks with authority set changes, so that
 The warp-synced node has all the data to serve for other nodes nodes that might want to sync from it with
 any method.
 
