@@ -197,10 +197,10 @@ impl OnRuntimeUpgrade for Tuple {
 		weight
 	}
 
-	#[cfg(feature = "try-runtime")]
 	/// We are executing pre- and post-checks sequentially in order to be able to test several
 	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
 	/// hooks for tuples are a noop.
+	#[cfg(feature = "try-runtime")]
 	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
 		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::try_on_runtime_upgrade(checks)?); )* );
@@ -364,10 +364,64 @@ pub trait OnTimestampSet<Moment> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_io::TestExternalities;
+
+	#[cfg(feature = "try-runtime")]
+	#[test]
+	fn on_runtime_upgrade_pre_post_executed_tuple() {
+		crate::parameter_types! {
+			pub static Pre: Vec<&'static str> = Default::default();
+			pub static Post: Vec<&'static str> = Default::default();
+		}
+
+		macro_rules! impl_test_type {
+			($name:ident) => {
+				struct $name;
+				impl OnRuntimeUpgrade for $name {
+					fn on_runtime_upgrade() -> Weight {
+						Default::default()
+					}
+
+					#[cfg(feature = "try-runtime")]
+					fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+						Pre::mutate(|s| s.push(stringify!($name)));
+						Ok(Vec::new())
+					}
+
+					#[cfg(feature = "try-runtime")]
+					fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+						Post::mutate(|s| s.push(stringify!($name)));
+						Ok(())
+					}
+				}
+			};
+		}
+
+		impl_test_type!(Foo);
+		impl_test_type!(Bar);
+		impl_test_type!(Baz);
+
+		TestExternalities::default().execute_with(|| {
+			Foo::try_on_runtime_upgrade(true).unwrap();
+			assert_eq!(Pre::take(), vec!["Foo"]);
+			assert_eq!(Post::take(), vec!["Foo"]);
+
+			<(Foo, Bar, Baz)>::try_on_runtime_upgrade(true).unwrap();
+			assert_eq!(Pre::take(), vec!["Foo", "Bar", "Baz"]);
+			assert_eq!(Post::take(), vec!["Foo", "Bar", "Baz"]);
+
+			<((Foo, Bar), Baz)>::try_on_runtime_upgrade(true).unwrap();
+			assert_eq!(Pre::take(), vec!["Foo", "Bar", "Baz"]);
+			assert_eq!(Post::take(), vec!["Foo", "Bar", "Baz"]);
+
+			<(Foo, (Bar, Baz))>::try_on_runtime_upgrade(true).unwrap();
+			assert_eq!(Pre::take(), vec!["Foo", "Bar", "Baz"]);
+			assert_eq!(Post::take(), vec!["Foo", "Bar", "Baz"]);
+		});
+	}
 
 	#[test]
 	fn on_initialize_and_on_runtime_upgrade_weight_merge_works() {
-		use sp_io::TestExternalities;
 		struct Test;
 
 		impl OnInitialize<u8> for Test {
