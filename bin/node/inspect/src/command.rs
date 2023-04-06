@@ -36,7 +36,7 @@ impl InspectCmd {
 		RA: Send + Sync + 'static,
 		D: NativeExecutionDispatch + 'static,
 	{
-		let executor = sc_service::new_native_executor::<D>(&config);
+		let executor = sc_service::new_native_or_wasm_executor::<D>(&config);
 		let client = sc_service::new_full_client::<B, RA, _>(&config, None, executor)?;
 		let inspect = Inspector::<B>::new(client);
 

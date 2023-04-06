@@ -291,6 +291,6 @@ pub fn new() -> Client<Backend> {
 }
 
 /// Create a new native executor.
-pub fn new_native_executor() -> NativeElseWasmExecutor<LocalExecutorDispatch> {
+pub fn new_native_or_wasm_executor() -> NativeElseWasmExecutor<LocalExecutorDispatch> {
 	NativeElseWasmExecutor::new_with_wasm_executor(WasmExecutor::builder().build())
 }
