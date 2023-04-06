@@ -615,7 +615,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// ## Invariants:
 	///
 	/// * `Reasons` and `Tips` must have the same length of keys
-	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
+	#[cfg(any(feature = "try-runtime", test))]
 	pub fn do_try_state() -> Result<(), &'static str> {
 		let reasons = Reasons::<T, I>::iter_keys().collect::<Vec<_>>();
 		let tips = Tips::<T, I>::iter_keys().collect::<Vec<_>>();

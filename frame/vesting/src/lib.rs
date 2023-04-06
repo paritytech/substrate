@@ -663,7 +663,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// * The `per_block` payments left of every account currently vesting
 	/// * is equal to the total balance currently locked.
-	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
+	#[cfg(any(feature = "try-runtime", test))]
 	pub fn do_try_state() -> Result<(), &'static str> {
 		Vesting::<T>::iter().for_each(|(_, d)| {
 			let vesting = d.to_vec();
