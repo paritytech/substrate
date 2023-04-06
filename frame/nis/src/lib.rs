@@ -482,6 +482,14 @@ pub mod pallet {
 		AlreadyPrivate,
 	}
 
+	/// A reason for the NIS pallet placing a hold on funds.
+	#[pallet::composite_enum]
+	pub enum HoldReason {
+		/// The NIS Pallet has reserved it for a non-fungible receipt.
+		#[codec(index = 0)]
+		NftReceipt,
+	}
+
 	pub(crate) struct WeightCounter {
 		pub(crate) used: Weight,
 		pub(crate) limit: Weight,
