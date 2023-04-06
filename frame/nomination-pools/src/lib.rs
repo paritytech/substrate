@@ -1494,7 +1494,6 @@ pub mod pallet {
 	use frame_support::traits::StorageVersion;
 	use frame_system::{ensure_signed, pallet_prelude::*};
 	use sp_runtime::Perbill;
-	use sp_core::parameter_types;
 
 	/// The current storage version.
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
