@@ -79,6 +79,9 @@ pub trait WeightInfo {
 	fn cancel_approval() -> Weight;
 	fn force_cancel_approval() -> Weight;
 	fn set_min_balance() -> Weight;
+	fn touch() -> Weight;
+	fn refund() -> Weight;
+	fn refund_other() -> Weight;
 }
 
 /// Weights for pallet_assets using the Substrate node and recommended hardware.
@@ -464,6 +467,52 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	/// Storage: Assets Account (r:1 w:1)
+	/// Proof: Assets Account (max_values: None, max_size: Some(135), added: 2610, mode: MaxEncodedLen)
+	/// Storage: Assets Asset (r:1 w:1)
+	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2685, mode: MaxEncodedLen)
+	/// Storage: System Account (r:1 w:1)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	fn touch() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `453`
+		//  Estimated: `10868`
+		// Minimum execution time: 864_190_000 picoseconds.
+		Weight::from_parts(901_733_000, 0)
+			.saturating_add(Weight::from_parts(0, 10868))
+			.saturating_add(T::DbWeight::get().reads(3))
+			.saturating_add(T::DbWeight::get().writes(3))
+	}
+	/// Storage: Assets Account (r:1 w:1)
+	/// Proof: Assets Account (max_values: None, max_size: Some(135), added: 2610, mode: MaxEncodedLen)
+	/// Storage: Assets Asset (r:1 w:1)
+	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2685, mode: MaxEncodedLen)
+	/// Storage: System Account (r:1 w:1)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	fn refund() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `613`
+		//  Estimated: `10868`
+		// Minimum execution time: 921_263_000 picoseconds.
+		Weight::from_parts(931_595_000, 0)
+			.saturating_add(Weight::from_parts(0, 10868))
+			.saturating_add(T::DbWeight::get().reads(3))
+			.saturating_add(T::DbWeight::get().writes(3))
+	}
+	/// Storage: Assets Account (r:1 w:1)
+	/// Proof: Assets Account (max_values: None, max_size: Some(135), added: 2610, mode: MaxEncodedLen)
+	/// Storage: Assets Asset (r:1 w:1)
+	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2685, mode: MaxEncodedLen)
+	fn refund_other() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `511`
+		//  Estimated: `7275`
+		// Minimum execution time: 1_810_882_000 picoseconds.
+		Weight::from_parts(1_879_786_000, 0)
+			.saturating_add(Weight::from_parts(0, 7275))
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(2))
+	}
 }
 
 // For backwards compatibility and tests
@@ -847,5 +896,48 @@ impl WeightInfo for () {
 		Weight::from_parts(20_435_000, 7242)
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	/// Storage: Assets Account (r:1 w:1)
+	/// Proof: Assets Account (max_values: None, max_size: Some(135), added: 2610, mode: MaxEncodedLen)
+	/// Storage: Assets Asset (r:1 w:1)
+	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2685, mode: MaxEncodedLen)
+	/// Storage: System Account (r:1 w:1)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	fn touch() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `453`
+		//  Estimated: `10868`
+		// Minimum execution time: 864_190_000 picoseconds.
+		Weight::from_parts(901_733_000, 10_868)
+			.saturating_add(RocksDbWeight::get().reads(3))
+			.saturating_add(RocksDbWeight::get().writes(3))
+	}
+	/// Storage: Assets Account (r:1 w:1)
+	/// Proof: Assets Account (max_values: None, max_size: Some(135), added: 2610, mode: MaxEncodedLen)
+	/// Storage: Assets Asset (r:1 w:1)
+	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2685, mode: MaxEncodedLen)
+	/// Storage: System Account (r:1 w:1)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	fn refund() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `613`
+		//  Estimated: `10868`
+		// Minimum execution time: 921_263_000 picoseconds.
+		Weight::from_parts(931_595_000, 10_868)
+			.saturating_add(RocksDbWeight::get().reads(3))
+			.saturating_add(RocksDbWeight::get().writes(3))
+	}
+	/// Storage: Assets Account (r:1 w:1)
+	/// Proof: Assets Account (max_values: None, max_size: Some(135), added: 2610, mode: MaxEncodedLen)
+	/// Storage: Assets Asset (r:1 w:1)
+	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2685, mode: MaxEncodedLen)
+	fn refund_other() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `511`
+		//  Estimated: `7275`
+		// Minimum execution time: 1_810_882_000 picoseconds.
+		Weight::from_parts(1_879_786_000, 7_275)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 }

@@ -1482,7 +1482,7 @@ pub mod pallet {
 		///
 		/// Emits `Touched` event when successful.
 		#[pallet::call_index(26)]
-		#[pallet::weight(T::WeightInfo::mint())]
+		#[pallet::weight(T::WeightInfo::touch())]
 		pub fn touch(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
@@ -1498,7 +1498,7 @@ pub mod pallet {
 		///
 		/// Emits `Refunded` event when successful.
 		#[pallet::call_index(27)]
-		#[pallet::weight(T::WeightInfo::mint())]
+		#[pallet::weight(T::WeightInfo::refund())]
 		pub fn refund(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
@@ -1590,7 +1590,7 @@ pub mod pallet {
 		///
 		/// Emits `Refunded` event when successful.
 		#[pallet::call_index(30)]
-		#[pallet::weight(T::WeightInfo::mint())] // todo
+		#[pallet::weight(T::WeightInfo::refund_other())]
 		pub fn refund_other(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,

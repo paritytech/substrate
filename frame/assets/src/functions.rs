@@ -66,7 +66,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(super) fn new_account(
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
-		// maybe_deposit: Option<DepositBalanceOf<T, I>>,
 		maybe_deposit: Option<(DepositBalanceOf<T, I>, &T::AccountId)>,
 	) -> Result<ExistenceReason<DepositBalanceOf<T, I>>, DispatchError> {
 		let accounts = d.accounts.checked_add(1).ok_or(ArithmeticError::Overflow)?;
