@@ -17,8 +17,9 @@
 
 use super::helper;
 use frame_support_procedural_tools::get_doc_literals;
+use proc_macro2::Span;
 use quote::ToTokens;
-use syn::spanned::Spanned;
+use syn::{spanned::Spanned, Attribute, TraitItem};
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -350,6 +351,42 @@ pub fn replace_self_by_t(input: proc_macro2::TokenStream) -> proc_macro2::TokenS
 		.collect()
 }
 
+/// Returns the number of non-trivial attributes attached to a [`syn::TraitItem`]. Returns `0`
+/// for edge cases such as [`TraitItem::Verbatim`]. Also returns an appropriate span for the
+/// first attribute, if applicable. This function ignores doc comments and `#[cfg(..)]`
+/// directives.
+fn get_num_pallet_trait_item_attrs_with_span(trait_item: &TraitItem) -> syn::Result<(usize, Span)> {
+	let attrs = match trait_item {
+		TraitItem::Const(trait_item_const) => &trait_item_const.attrs,
+		TraitItem::Method(trait_item_method) => &trait_item_method.attrs,
+		TraitItem::Type(trait_item_type) => &trait_item_type.attrs,
+		TraitItem::Macro(trait_item_macro) => &trait_item_macro.attrs,
+		_ => return Ok((0, trait_item.span())),
+	};
+	let mut without_docs: Vec<&Attribute> = Vec::new();
+	for attr in attrs {
+		if let Some(meta_ident) = attr.parse_meta()?.path().get_ident().cloned() {
+			if meta_ident == "doc" || meta_ident == "cfg" {
+				// ignore doc and cfg directives
+				continue
+			}
+		}
+		if let Some(seg) = attr.path.segments.first() {
+			if seg.ident != "pallet" {
+				// ignore attributes not starting with `#[pallet::`
+				continue
+			}
+		}
+		without_docs.push(attr);
+	}
+	let attrs = without_docs;
+	if let Some(attr) = attrs.first() {
+		Ok((attrs.len(), attr.span()))
+	} else {
+		Ok((0, trait_item.span()))
+	}
+}
+
 impl ConfigDef {
 	pub fn try_from(
 		frame_system: &syn::Ident,
@@ -429,7 +466,15 @@ impl ConfigDef {
 			process_attr()?;
 			process_attr()?;
 
-			// TODO: if we call this again, we should expect `Err(_)`.
+			// ensure there are no more attrs on `trait_item` that haven't been consumed
+			let (num_remaining_attrs, attr_span) =
+				get_num_pallet_trait_item_attrs_with_span(trait_item)?;
+			if num_remaining_attrs > 0 {
+				return Err(syn::Error::new(
+					attr_span,
+					"Invalid attribute in pallet::config, a maximum of two attributes are expected",
+				))
+			}
 
 			if !no_default && !is_event && enable_default {
 				default_subtrait_items.push(trait_item.clone());
