@@ -2026,7 +2026,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "seal0",
-				name: "seal_sr25519_verify",
+				name: "sr25519_verify",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -2056,6 +2056,59 @@ benchmarks! {
 			.. Default::default()
 		});
 
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	// Only calling the function itself with valid arguments.
+	// It generates different private keys and signatures for the message "Hello world".
+	// This is a slow call: We reduce the number of runs.
+	#[pov_mode = Measured]
+	seal_sr25519_verify_initialize {
+		let r in 0 .. API_BENCHMARK_RUNS / 10;
+
+		let message = b"Hello world".to_vec().encode();
+		let message_len = message.len() as i32;
+		let key_type = sp_core::crypto::KeyTypeId(*b"code");
+		let sig_params = (0..r)
+			.map(|i| {
+				let pub_key = sp_io::crypto::sr25519_generate(key_type, None);
+				let sig = sp_io::crypto::sr25519_sign(key_type, &pub_key, &message).expect("Generates signature");
+				let data: [u8; 96] = [AsRef::<[u8]>::as_ref(&sig), AsRef::<[u8]>::as_ref(&pub_key)].concat().try_into().unwrap();
+				data
+			})
+			.flatten()
+			.collect::<Vec<_>>();
+		let sig_params_len = sig_params.len() as i32;
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "sr25519_verify",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: sig_params
+				},
+				DataSegment {
+					offset: sig_params_len as u32,
+					value: message,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r, vec![
+				Counter(0, 96), // signature_ptr
+				Counter(64, 96), // pub_key_ptr
+				Regular(Instruction::I32Const(message_len)), // message_len
+				Regular(Instruction::I32Const(sig_params_len)), // message_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
