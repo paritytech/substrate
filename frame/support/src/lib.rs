@@ -82,6 +82,7 @@ pub mod dispatch_context;
 pub mod instances;
 pub mod metadata_ir;
 pub mod migrations;
+pub mod remove_pallet;
 pub mod traits;
 pub mod weights;
 #[doc(hidden)]
