@@ -82,6 +82,9 @@
 //! * `approve_transfer`: Create or increase an delegated transfer.
 //! * `cancel_approval`: Rescind a previous approval.
 //! * `transfer_approved`: Transfer third-party's assets to another account.
+//! * `touch`: Create an asset account for non-provider assets. Caller must place a deposit.
+//! * `refund`: Return the deposit (if any) of the caller's asset account.
+//! * `refund_other`: Return the deposit (if any) of a specified asset account.
 //!
 //! ### Permissioned Functions
 //!
@@ -104,6 +107,8 @@
 //!   Owner.
 //! * `set_metadata`: Set the metadata of an asset class; called by the asset class's Owner.
 //! * `clear_metadata`: Remove the metadata of an asset class; called by the asset class's Owner.
+//! * `freeze_creating`: Same as `freeze`, but creates the account if necessary; called by the asset
+//!   class's Freezer.
 //!
 //! Please refer to the [`Call`] enum and its associated variants for documentation on each
 //! function.
@@ -198,7 +203,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2); // todo: migrate `Account`
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
