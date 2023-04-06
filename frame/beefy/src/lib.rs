@@ -258,6 +258,14 @@ pub mod pallet {
 		}
 	}
 
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			Self::do_try_state()
+		}
+	}
+
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
@@ -324,11 +332,11 @@ impl<T: Config> Pallet<T> {
 
 	fn initialize(authorities: &Vec<T::BeefyId>) -> Result<(), ()> {
 		if authorities.is_empty() {
-			return Ok(())
+			return Ok(());
 		}
 
 		if !<Authorities<T>>::get().is_empty() {
-			return Err(())
+			return Err(());
 		}
 
 		let bounded_authorities =
@@ -358,6 +366,14 @@ impl<T: Config> Pallet<T> {
 		// mapping whenever a new session starts, i.e. through `on_new_session`.
 		SetIdSession::<T>::insert(0, 0);
 
+		Ok(())
+	}
+
+	#[cfg(any(feature = "try-runtime", test))]
+	pub fn do_try_state() -> Result<(), &'static str> {
+		let current = ValidatorSetId::<T>::get();
+		let map = SetIdSession::<T>::iter_keys().collect::<Vec<_>>();
+		assert_eq!(map[0], current);
 		Ok(())
 	}
 }
