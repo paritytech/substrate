@@ -82,7 +82,6 @@ fn construct_block(
 	let mut overlay = OverlayedChanges::default();
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
-	let task_executor = Box::new(TaskExecutor::new());
 
 	StateMachine::new(
 		backend,
@@ -92,7 +91,6 @@ fn construct_block(
 		&header.encode(),
 		Default::default(),
 		&runtime_code,
-		task_executor.clone() as Box<_>,
 		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm)
@@ -107,7 +105,6 @@ fn construct_block(
 			&tx.encode(),
 			Default::default(),
 			&runtime_code,
-			task_executor.clone() as Box<_>,
 			CallContext::Onchain,
 		)
 		.execute(ExecutionStrategy::NativeElseWasm)
@@ -122,7 +119,6 @@ fn construct_block(
 		&[],
 		Default::default(),
 		&runtime_code,
-		task_executor.clone() as Box<_>,
 		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm)
@@ -195,7 +191,6 @@ fn construct_genesis_should_work_with_native() {
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		TaskExecutor::new(),
 		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm)
@@ -229,7 +224,6 @@ fn construct_genesis_should_work_with_wasm() {
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		TaskExecutor::new(),
 		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::AlwaysWasm)
@@ -263,7 +257,6 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		TaskExecutor::new(),
 		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm);
