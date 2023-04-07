@@ -299,7 +299,7 @@ fn add_tiny_liquidity_leads_to_insufficient_liquidity_minted_error() {
 				1,
 				user
 			),
-			Error::<Test>::AmountLessThanED
+			Error::<Test>::AmountLessThanMinimal
 		);
 
 		assert_noop!(
@@ -672,7 +672,7 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
 				user,
 				false,
 			),
-			Error::<Test>::ReserveLeftLessThanED
+			Error::<Test>::ReserveLeftLessThanMinimal
 		);
 
 		assert_ok!(AssetConversion::swap_tokens_for_exact_tokens(

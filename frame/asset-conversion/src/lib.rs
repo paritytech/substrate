@@ -230,10 +230,12 @@ pub mod pallet {
 		PoolExists,
 		/// Desired amount can't be zero.
 		WrongDesiredAmount,
-		/// Provided amount should be greater or equal to the existential deposit.
-		AmountLessThanED,
-		/// Reserve needs to be greater or equal to the existential deposit.
-		ReserveLeftLessThanED,
+		/// Provided amount should be greater or equal to the existential deposit/asset's minimal
+		/// amount.
+		AmountLessThanMinimal,
+		/// Reserve needs to always be greater or equal to the existential deposit/asset's minimal
+		/// amount.
+		ReserveLeftLessThanMinimal,
 		/// Desired amount can't be equal to the pool reserve.
 		AmountOutTooHigh,
 		/// The pool doesn't exist.
@@ -382,9 +384,10 @@ pub mod pallet {
 			let reserve2 = Self::get_balance(&pool_account, asset2)?;
 
 			if reserve1.is_zero() && reserve2.is_zero() {
-				if T::MultiAssetIdConverter::is_native(asset1) {
-					Self::validate_ed(amount1_desired).map_err(|_| Error::<T>::AmountLessThanED)?;
-				}
+				Self::validate_minimal_amount(amount1_desired, asset1)
+					.map_err(|_| Error::<T>::AmountLessThanMinimal)?;
+				Self::validate_minimal_amount(amount2_desired, asset2)
+					.map_err(|_| Error::<T>::AmountLessThanMinimal)?;
 				amount1 = amount1_desired;
 				amount2 = amount2_desired;
 			} else {
@@ -488,10 +491,12 @@ pub mod pallet {
 				!amount2.is_zero() && amount2 >= amount2_min_receive,
 				Error::<T>::AssetTwoWithdrawalDidNotMeetMinimum
 			);
-			if T::MultiAssetIdConverter::is_native(asset1) {
-				let reserve1_left = reserve1.saturating_sub(amount1);
-				Self::validate_ed(reserve1_left).map_err(|_| Error::<T>::ReserveLeftLessThanED)?;
-			}
+			let reserve1_left = reserve1.saturating_sub(amount1);
+			let reserve2_left = reserve2.saturating_sub(amount2);
+			Self::validate_minimal_amount(reserve1_left, asset1)
+				.map_err(|_| Error::<T>::ReserveLeftLessThanMinimal)?;
+			Self::validate_minimal_amount(reserve2_left, asset2)
+				.map_err(|_| Error::<T>::ReserveLeftLessThanMinimal)?;
 
 			T::PoolAssets::burn_from(pool.lp_token, &sender, lp_token_burn, Exact, Polite)?;
 
@@ -664,12 +669,10 @@ pub mod pallet {
 							send_to.clone()
 						};
 
-						if T::MultiAssetIdConverter::is_native(asset2) {
-							let reserve = Self::get_balance(&pool_account, asset2)?;
-							let reserve_left = reserve.saturating_sub(*amount_out);
-							Self::validate_ed(reserve_left)
-								.map_err(|_| Error::<T>::ReserveLeftLessThanED)?;
-						}
+						let reserve = Self::get_balance(&pool_account, asset2)?;
+						let reserve_left = reserve.saturating_sub(*amount_out);
+						Self::validate_minimal_amount(reserve_left, asset2)
+							.map_err(|_| Error::<T>::ReserveLeftLessThanMinimal)?;
 
 						Self::transfer(asset2, &pool_account, &to, *amount_out, true)?;
 					}
@@ -938,12 +941,21 @@ pub mod pallet {
 			result.try_into().map_err(|_| Error::<T>::Overflow)
 		}
 
-		fn validate_ed(value: T::AssetBalance) -> Result<(), ()> {
-			let ed = T::Currency::minimum_balance();
-			ensure!(
-				T::HigherPrecisionBalance::from(value) >= T::HigherPrecisionBalance::from(ed),
-				()
-			);
+		fn validate_minimal_amount(
+			value: T::AssetBalance,
+			asset: T::MultiAssetId,
+		) -> Result<(), ()> {
+			if T::MultiAssetIdConverter::is_native(asset) {
+				let ed = T::Currency::minimum_balance();
+				ensure!(
+					T::HigherPrecisionBalance::from(value) >= T::HigherPrecisionBalance::from(ed),
+					()
+				);
+			} else {
+				let asset_id = T::MultiAssetIdConverter::try_convert(asset).map_err(|_| ())?;
+				let minimal = T::Assets::minimum_balance(asset_id);
+				ensure!(value >= minimal, ());
+			}
 			Ok(())
 		}
 
