@@ -305,3 +305,25 @@ fn can_withdraw_balance_low() {
 		>();
 	});
 }
+
+#[test]
+fn reducible_balance_expendable() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::inspect_mutate::reducible_balance_expendable::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
+
+#[test]
+fn reducible_balance_protect_preserve() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::inspect_mutate::reducible_balance_protect_preserve::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}

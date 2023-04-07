@@ -621,3 +621,39 @@ where
 	let ret = T::can_withdraw(&account, initial_balance + 1.into());
 	assert_eq!(ret, WithdrawConsequence::BalanceLow);
 }
+
+//
+// reducible_balance
+//
+
+pub fn reducible_balance_expendable<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	let account = AccountId::from(10);
+	let initial_balance = T::minimum_balance() + 10.into();
+	T::mint_into(&account, initial_balance.clone()).unwrap();
+
+	// Verify: reducible_balance returns the full balance
+	let ret = T::reducible_balance(&account, Preservation::Expendable, Fortitude::Polite);
+	assert_eq!(ret, initial_balance);
+}
+
+pub fn reducible_balance_protect_preserve<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	let account = AccountId::from(10);
+	let initial_balance = T::minimum_balance() + 10.into();
+	T::mint_into(&account, initial_balance.clone()).unwrap();
+
+	// Verify: reducible_balance returns the full balance - min balance
+	let ret = T::reducible_balance(&account, Preservation::Protect, Fortitude::Polite);
+	assert_eq!(ret, initial_balance.clone() - T::minimum_balance());
+	let ret = T::reducible_balance(&account, Preservation::Preserve, Fortitude::Polite);
+	assert_eq!(ret, initial_balance - T::minimum_balance());
+}
