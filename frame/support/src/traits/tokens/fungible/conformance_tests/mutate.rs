@@ -15,249 +15,249 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Conformance tests regarding the functionality of the `fungible` Mutate trait.
-//!
-//! TODO: Decouple these tests from balances and abstract them into a macro so that they can be
-//! used by any pallet that implements the `fungible` Mutate trait.
+use crate::traits::{
+	fungible::{Inspect, Mutate},
+	tokens::{Fortitude, Precision, Preservation},
+};
+use core::fmt::Debug;
+use sp_arithmetic::traits::AtLeast8BitUnsigned;
 
-// TODO: is making an assumption about existential deposits valid for the `fungible` trait?
-// It is referenced in passing in some comments, but there are no default implementations
-// that make use of it.
+//
+// mint_into tests
+//
 
-#[macro_export]
-macro_rules! mutate_conformance_tests {
-	($ext_builder:ident, $pallet:ident) => {
-		use super::*;
-		use frame_support::traits::tokens::{
-			Fortitude::{self},
-			Precision,
-			Preservation::{self},
-		};
+pub fn mint_into_success<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	let account_0 = AccountId::from(0);
+	let account_1 = AccountId::from(1);
 
-		#[test]
-		// TODO: Is this test required? We already have a test for `total_issuance` in the inspect
-		// tests.
-		fn mint_into_increases_total_issuance() {
-			$ext_builder::default().build_and_execute_with(|| {
-				assert_eq!($pallet::total_issuance(), 0);
-				assert_ok!($pallet::mint_into(&1, 100));
-				assert_eq!($pallet::total_issuance(), 100);
-				assert_ok!($pallet::mint_into(&2, 100));
-				assert_eq!($pallet::total_issuance(), 200);
-				assert_ok!($pallet::mint_into(&2, 1));
-				assert_eq!($pallet::total_issuance(), 201);
-			});
-		}
+	// Sanity check that balances and total issuance start with zero balance
+	assert_eq!(T::total_balance(&account_0), Balance::zero());
+	assert_eq!(T::total_balance(&account_1), Balance::zero());
+	assert_eq!(T::total_issuance(), Balance::zero());
 
-		#[test]
-		fn mint_into_increases_account_balance() {
-			$ext_builder::default().build_and_execute_with(|| {
-				assert_eq!($pallet::free_balance(&1), 0);
-				assert_ok!($pallet::mint_into(&1, 100));
-				assert_eq!($pallet::free_balance(&1), 100);
-				assert_ok!($pallet::mint_into(&2, 100));
-				assert_eq!($pallet::free_balance(&2), 100);
-				assert_ok!($pallet::mint_into(&2, 1));
-				assert_eq!($pallet::free_balance(&2), 101);
-			});
-		}
+	// Test: Mint an amount into each account
+	let amount_0 = T::minimum_balance();
+	let amount_1 = T::minimum_balance() + 5.into();
+	T::mint_into(&account_0, amount_0.clone()).unwrap();
+	T::mint_into(&account_1, amount_1.clone()).unwrap();
 
-		#[test]
-		fn mint_into_callback_works() {
-			// TODO: What is the best way to test that `done_mint_into` is called with the correct
-			// parameters?
-		}
+	// Verify: Account balances are updated correctly
+	assert_eq!(T::total_balance(&account_0), amount_0.clone());
+	assert_eq!(T::total_balance(&account_1), amount_1.clone());
 
-		#[test]
-		fn mint_into_returns_actual() {
-			$ext_builder::default().build_and_execute_with(|| {
-				// TODO: Does this test make too many assumptions about the implementing pallet?
-				// e.g. what if they have a minimum mint amount of 100? or 1_000_000? What if there
-				// is a maximum minting amount? These tests would fail, even though the pallet is
-				// still conforming.
-				assert_eq!($pallet::mint_into(&1, 1).unwrap(), 1);
-				assert_eq!($pallet::mint_into(&1, 100_000).unwrap(), 100_000);
-				assert_eq!($pallet::mint_into(&1, 0).unwrap(), 0);
-			});
-		}
+	// Verify: Total issuance is updated correctly
+	assert_eq!(T::total_issuance(), amount_0 + amount_1);
+}
 
-		// TODO: Is this test required? We already have a test for `total_issuance` in the inspect
-		// tests.
-		#[test]
-		fn burn_from_reduces_total_issuance() {
-			$ext_builder::default().build_and_execute_with(|| {
-				assert_ok!($pallet::mint_into(&1, 100));
-				assert_eq!($pallet::total_issuance(), 100);
-				assert_ok!($pallet::burn_from(&1, 50, Precision::BestEffort, Fortitude::Polite));
-				assert_eq!($pallet::total_issuance(), 50);
-				assert_ok!($pallet::burn_from(&1, 50, Precision::BestEffort, Fortitude::Polite));
-				assert_eq!($pallet::total_issuance(), 0);
-			});
-		}
+pub fn mint_into_overflow<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	let account = AccountId::from(10);
+	let amount = Balance::max_value() - 5.into();
 
-		#[test]
-		fn burn_from_reduces_account_balance() {
-			$ext_builder::default().build_and_execute_with(|| {
-				assert_ok!($pallet::mint_into(&1, 100));
-				assert_eq!($pallet::free_balance(&1), 100);
-				assert_ok!($pallet::burn_from(&1, 50, Precision::BestEffort, Fortitude::Polite));
-				assert_eq!($pallet::free_balance(&1), 50);
-				assert_ok!($pallet::burn_from(&1, 0, Precision::BestEffort, Fortitude::Polite));
-				assert_eq!($pallet::free_balance(&1), 50);
-				assert_ok!($pallet::burn_from(&1, 50, Precision::BestEffort, Fortitude::Polite));
-				assert_eq!($pallet::free_balance(&1), 0);
-			});
-		}
+	// Mint just below the maximum balance
+	T::mint_into(&account, amount.clone()).unwrap();
 
-		#[test]
-		fn burn_from_returns_actual() {
-			$ext_builder::default().build_and_execute_with(|| {
-				assert_ok!($pallet::mint_into(&1, 100));
-				assert_eq!(
-					$pallet::burn_from(&1, 1, Precision::BestEffort, Fortitude::Polite).unwrap(),
-					1
-				);
-				assert_eq!(
-					$pallet::burn_from(&1, 0, Precision::BestEffort, Fortitude::Polite).unwrap(),
-					0
-				);
-				assert_eq!(
-					$pallet::burn_from(&1, 100_000, Precision::BestEffort, Fortitude::Polite)
-						.unwrap(),
-					99
-				);
-			});
-		}
+	// Test: Try minting beyond the maximum balance value
+	T::mint_into(&account, 10.into()).unwrap_err();
 
-		#[test]
-		fn burn_from_precision_best_effort_works() {
-			$ext_builder::default().existential_deposit(10).build_and_execute_with(|| {
-				assert_ok!($pallet::mint_into(&1, 100));
-				assert_eq!(
-					$pallet::burn_from(&1, 101, Precision::BestEffort, Fortitude::Polite),
-					Ok(100)
-				);
-				assert_eq!($pallet::free_balance(&1), 0);
-			});
-		}
+	// Verify: The balance did not change
+	assert_eq!(T::total_balance(&account), amount.clone());
 
-		#[test]
-		fn burn_from_precision_exact_works() {
-			$ext_builder::default().existential_deposit(10).build_and_execute_with(|| {
-				assert_ok!($pallet::mint_into(&1, 100));
-				assert_noop!(
-					$pallet::burn_from(&1, 101, Precision::Exact, Fortitude::Polite),
-					// TODO: Is it making too much of an assumption that the implementing pallet
-					// should implement the same Dispatch errors as in the default implementation?
-					DispatchError::Token(TokenError::FundsUnavailable)
-				);
-			});
-		}
+	// Verify: The total issuance did not change
+	assert_eq!(T::total_issuance(), amount);
+}
 
-		// Note regarding the lack of Fortitude tests: I don't think we can test them in a general
-		// way, because we cannot make assumptions about the inner workings of reducible_balance.
+pub fn mint_into_done_mint_into<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	// TODO: How can we test this?
+	assert!(true);
+}
 
-		#[test]
-		fn burn_from_callback_works() {
-			// TODO: What is the best way to test that `done_burn_from` is called with the
-			// correct parameters?
-		}
+//
+// burn_from tests
+//
 
-		// Note regarding shelve/restore tests: I'm unsure what `suspend`/`resume` refer to or
-		// how these methods are different to calling mint_into/burn_from.
+pub fn burn_from_exact_success<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	// Setup account
+	let account = AccountId::from(5);
+	let initial_balance = Balance::from(100);
+	T::mint_into(&account, initial_balance.clone()).unwrap();
 
-		#[test]
-		fn transfer_fails_insufficient_funds() {
-			$ext_builder::default().existential_deposit(10).build_and_execute_with(|| {
-				assert_ok!($pallet::mint_into(&1, 100));
-				assert_noop!(
-					<$pallet as fungible::Mutate<_>>::transfer(&1, &2, 101, Preservation::Protect),
-					DispatchError::Arithmetic(ArithmeticError::Underflow)
-				);
-			});
-		}
+	// Test: Burn an exact amount from the account
+	let amount_to_burn = Balance::from(50);
+	let precision = Precision::Exact;
+	let force = Fortitude::Polite;
+	T::burn_from(&account, amount_to_burn.clone(), precision, force).unwrap();
 
-		#[test]
-		fn transfer_fails_existential_deposit_requirement() {
-			$ext_builder::default().existential_deposit(10).build_and_execute_with(|| {
-				assert_ok!($pallet::mint_into(&1, 100));
-				assert_noop!(
-					<$pallet as fungible::Mutate<_>>::transfer(&1, &2, 5, Preservation::Protect),
-					DispatchError::Token(TokenError::BelowMinimum)
-				);
-			});
-		}
+	// Verify: The balance and total issuance should be reduced by the burned amount
+	assert_eq!(T::balance(&account), initial_balance.clone() - amount_to_burn.clone());
+	assert_eq!(T::total_issuance(), initial_balance - amount_to_burn);
+}
 
-		// TODO: Unclear exactly what the difference is between Protect and Preserve, or if they
-		// make sense without making assumptions about the implementing pallet.
+pub fn burn_from_best_effort_success<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	// Setup account
+	let account = AccountId::from(5);
+	let initial_balance = Balance::from(100);
+	T::mint_into(&account, initial_balance.clone()).unwrap();
 
-		#[test]
-		fn transfer_fails_preservation_protect() {
-			$ext_builder::default().existential_deposit(10).build_and_execute_with(|| {
-				assert_ok!($pallet::mint_into(&1, 100));
-				assert_noop!(
-					<$pallet as fungible::Mutate<_>>::transfer(&1, &2, 95, Preservation::Protect),
-					DispatchError::Token(TokenError::NotExpendable)
-				);
-			});
-		}
+	// Get reducible balance
+	let force = Fortitude::Polite;
+	let reducible_balance = T::reducible_balance(&account, Preservation::Expendable, force);
 
-		#[test]
-		fn transfer_fails_preservation_preserve() {
-			$ext_builder::default().existential_deposit(10).build_and_execute_with(|| {
-				assert_ok!($pallet::mint_into(&1, 100));
-				assert_noop!(
-					<$pallet as fungible::Mutate<_>>::transfer(&1, &2, 95, Preservation::Preserve),
-					DispatchError::Token(TokenError::NotExpendable)
-				);
-			});
-		}
+	// Test: Burn a best effort amount from the account that is greater than the reducible balance
+	let amount_to_burn = initial_balance.clone() + 10.into();
+	let precision = Precision::BestEffort;
+	assert!(amount_to_burn > reducible_balance);
+	assert!(amount_to_burn > T::balance(&account));
+	T::burn_from(&account, amount_to_burn.clone(), precision, force).unwrap();
 
-		#[test]
-		fn transfer_fails_balance_below_minimum() {
-			$ext_builder::default().existential_deposit(100).build_and_execute_with(|| {
-				assert_ok!($pallet::mint_into(&1, 1000));
-				assert_noop!(
-					<$pallet as fungible::Mutate<_>>::transfer(
-						&1,
-						&2,
-						50,
-						Preservation::Expendable
-					),
-					DispatchError::Token(TokenError::BelowMinimum)
-				);
-			});
-		}
+	// Verify: The balance and total issuance should be reduced by the reducible_balance
+	assert_eq!(T::balance(&account), initial_balance.clone() - reducible_balance.clone());
+	assert_eq!(T::total_issuance(), initial_balance - reducible_balance);
+}
 
-		#[test]
-		fn transfer_to_exisitng_account_updates_balances() {
-			$ext_builder::default().build_and_execute_with(|| {
-				assert_ok!($pallet::mint_into(&1, 100));
-				assert_ok!($pallet::mint_into(&2, 100));
-				assert_ok!(<$pallet as fungible::Mutate<_>>::transfer(
-					&1,
-					&2,
-					25,
-					Preservation::Expendable
-				));
-				assert_eq!($pallet::free_balance(&1), 75);
-				assert_eq!($pallet::free_balance(&2), 125);
-			});
-		}
+pub fn burn_from_exact_insufficient_funds<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	// Set up the initial conditions and parameters for the test
+	let account = AccountId::from(5);
+	let initial_balance = Balance::from(100);
+	T::mint_into(&account, initial_balance.clone()).unwrap();
 
-		#[test]
-		fn transfer_to_new_account_updates_balances() {
-			$ext_builder::default().build_and_execute_with(|| {
-				assert_ok!($pallet::mint_into(&1, 100));
-				assert_ok!(<$pallet as fungible::Mutate<_>>::transfer(
-					&1,
-					&2,
-					25,
-					Preservation::Expendable
-				));
-				assert_eq!($pallet::free_balance(&1), 75);
-				assert_eq!($pallet::free_balance(&2), 25);
-			});
-		}
-	};
+	// Test: Attempt to burn an amount greater than the account's balance with Exact precision
+	let amount_to_burn = initial_balance.clone() + 10.into();
+	let precision = Precision::Exact;
+	let force = Fortitude::Polite;
+	T::burn_from(&account, amount_to_burn, precision, force).unwrap_err();
+
+	// Verify: The balance and total issuance should remain unchanged
+	assert_eq!(T::balance(&account), initial_balance);
+	assert_eq!(T::total_issuance(), initial_balance);
+}
+
+//
+// restore tests
+//
+
+pub fn restore_success<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	let account_0 = AccountId::from(0);
+	let account_1 = AccountId::from(1);
+
+	// Test: Restore an amount into each account
+	let amount_0 = T::minimum_balance();
+	let amount_1 = T::minimum_balance() + 5.into();
+	T::restore(&account_0, amount_0.clone()).unwrap();
+	T::restore(&account_1, amount_1.clone()).unwrap();
+
+	// Verify: Account balances are updated correctly
+	assert_eq!(T::total_balance(&account_0), amount_0.clone());
+	assert_eq!(T::total_balance(&account_1), amount_1.clone());
+
+	// Verify: Total issuance is updated correctly
+	assert_eq!(T::total_issuance(), amount_0 + amount_1);
+}
+
+pub fn restore_overflow<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	let account = AccountId::from(10);
+	let amount = Balance::max_value() - 5.into();
+
+	// Restore just below the maximum balance
+	T::restore(&account, amount.clone()).unwrap();
+
+	// Test: Try restoring beyond the maximum balance value
+	T::restore(&account, 10.into()).unwrap_err();
+
+	// Verify: The balance and total issuance did not change
+	assert_eq!(T::total_balance(&account), amount.clone());
+	assert_eq!(T::total_issuance(), amount);
+}
+
+pub fn restore_done_restore<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	// TODO: How can we test this?
+	assert!(true);
+}
+
+//
+// shelve tests
+//
+
+pub fn shelve_success<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	// Setup account
+	let account = AccountId::from(5);
+	let initial_balance = Balance::from(100);
+	T::restore(&account, initial_balance.clone()).unwrap();
+
+	// Test: Shelve an amount from the account
+	let amount_to_shelve = Balance::from(50);
+	T::shelve(&account, amount_to_shelve.clone()).unwrap();
+
+	// Verify: The balance and total issuance should be reduced by the shelved amount
+	assert_eq!(T::balance(&account), initial_balance.clone() - amount_to_shelve.clone());
+	assert_eq!(T::total_issuance(), initial_balance - amount_to_shelve);
+}
+
+pub fn shelve_insufficient_funds<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	// Set up the initial conditions and parameters for the test
+	let account = AccountId::from(5);
+	let initial_balance = Balance::from(100);
+	T::restore(&account, initial_balance.clone()).unwrap();
+
+	// Test: Attempt to shelve an amount greater than the account's balance with Exact precision
+	let amount_to_shelve = initial_balance.clone() + 10.into();
+	T::shelve(&account, amount_to_shelve).unwrap_err();
+
+	// Verify: The balance and total issuance should remain unchanged
+	assert_eq!(T::balance(&account), initial_balance);
+	assert_eq!(T::total_issuance(), initial_balance);
 }
