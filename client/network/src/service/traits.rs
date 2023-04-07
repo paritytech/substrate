@@ -225,16 +225,16 @@ pub trait NetworkPeers {
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
-	fn add_to_peers_set(
-		&self,
-		protocol: ProtocolName,
-		peers: HashSet<Multiaddr>,
-	) -> Result<(), String>;
+	// fn add_to_peers_set(
+	// 	&self,
+	// 	protocol: ProtocolName,
+	// 	peers: HashSet<Multiaddr>,
+	// ) -> Result<(), String>;
 
 	/// Remove peers from a peer set.
 	///
 	/// If we currently have an open substream with this peer, it will soon be closed.
-	fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>);
+	//fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>);
 
 	/// Returns the number of peers in the sync peer set we're connected to.
 	fn sync_num_connected(&self) -> usize;
@@ -302,17 +302,17 @@ where
 		T::remove_peers_from_reserved_set(self, protocol, peers)
 	}
 
-	fn add_to_peers_set(
-		&self,
-		protocol: ProtocolName,
-		peers: HashSet<Multiaddr>,
-	) -> Result<(), String> {
-		T::add_to_peers_set(self, protocol, peers)
-	}
+	// fn add_to_peers_set(
+	// 	&self,
+	// 	protocol: ProtocolName,
+	// 	peers: HashSet<Multiaddr>,
+	// ) -> Result<(), String> {
+	// 	T::add_to_peers_set(self, protocol, peers)
+	// }
 
-	fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>) {
-		T::remove_from_peers_set(self, protocol, peers)
-	}
+	// fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>) {
+	// 	T::remove_from_peers_set(self, protocol, peers)
+	// }
 
 	fn sync_num_connected(&self) -> usize {
 		T::sync_num_connected(self)

@@ -42,6 +42,7 @@ use std::{
 	iter,
 	task::Poll,
 };
+use futures::channel::oneshot;
 
 use message::{generic::Message as GenericMessage, Message};
 use notifications::{Notifications, NotificationsOut};
@@ -300,39 +301,11 @@ impl<B: BlockT> Protocol<B> {
 		}
 	}
 
-	/// Notify the protocol that we have learned about the existence of nodes on the default set.
+	/// Notify the protocol that we have learned about the existence of some peer.
 	///
-	/// Can be called multiple times with the same `PeerId`s.
-	pub fn add_default_set_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
-		for peer_id in peer_ids {
-			self.peerset_handle.add_to_peers_set(HARDCODED_PEERSETS_SYNC, peer_id);
-		}
-	}
-
-	/// Add a peer to a peers set.
-	pub fn add_to_peers_set(&self, protocol: ProtocolName, peer: PeerId) {
-		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.add_to_peers_set(sc_peerset::SetId::from(index), peer);
-		} else {
-			error!(
-				target: "sub-libp2p",
-				"add_to_peers_set with unknown protocol: {}",
-				protocol
-			);
-		}
-	}
-
-	/// Remove a peer from a peers set.
-	pub fn remove_from_peers_set(&self, protocol: ProtocolName, peer: PeerId) {
-		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.remove_from_peers_set(sc_peerset::SetId::from(index), peer);
-		} else {
-			error!(
-				target: "sub-libp2p",
-				"remove_from_peers_set with unknown protocol: {}",
-				protocol
-			);
-		}
+	/// Can be called multiple times with the same `PeerId`.
+	pub fn add_known_peer(&mut self, peer_id: PeerId) {
+		self.peerset_handle.add_known_peer(peer_id);
 	}
 }
 

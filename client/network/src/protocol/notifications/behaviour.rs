@@ -545,9 +545,9 @@ impl Notifications {
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
-	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
-		self.peerset.debug_info()
-	}
+	// pub fn peerset_debug_info(&mut self) -> serde_json::Value {
+	// 	self.peerset.debug_info()
+	// }
 
 	/// Function that is called when the peerset wants us to connect to a peer.
 	fn peerset_report_connect(&mut self, peer_id: PeerId, set_id: sc_peerset::SetId) {

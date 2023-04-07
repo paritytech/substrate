@@ -20,16 +20,17 @@ use libp2p::PeerId;
 use partial_sort::PartialSort;
 use std::{
 	cmp::{Ord, Ordering, PartialOrd},
-	collections::{HashMap, HashSet},
+	collections::{hash_map::Entry, HashMap, HashSet},
 	sync::{Arc, Mutex},
 	time::{Duration, Instant},
 };
 use wasm_timer::Delay;
+use log::trace;
 
 use crate::ReputationChange;
 
 /// We don't accept nodes whose reputation is under this value.
-const BANNED_THRESHOLD: i32 = 82 * (i32::MIN / 100);
+pub const BANNED_THRESHOLD: i32 = 82 * (i32::MIN / 100);
 /// Reputation change for a node when we get disconnected from it.
 const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
 /// Relative decrement of a reputation value that is applied every second. I.e., for inverse
@@ -92,6 +93,11 @@ impl PeerStoreHandle {
 		// FIXME: how do we use this info? May be better ask for numbers from protocol controllers?
 		self.inner.lock().unwrap().peers.len()
 	}
+
+	/// Add known peer.
+	pub fn add_known_peer(&mut self, peer_id: PeerId) {
+		self.inner.lock().unwrap().add_known_peer(peer_id);
+	}
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -134,12 +140,12 @@ impl PeerInfo {
 
 	fn add_reputation(&mut self, increment: i32) {
 		self.reputation = self.reputation.saturating_add(increment);
-		self.last_updated = Instant::now();
+		self.bump_last_updated();
 	}
 
 	fn decay_reputation(&mut self, seconds_passed: u64) {
 		// Note that decaying the reputation value happens "on its own",
-		// so we don't bump `last_updated`.
+		// so we don't do `bump_last_updated()`.
 		for _ in 0..seconds_passed {
 			let mut diff = self.reputation / INVERSE_DECREMENT;
 			if diff == 0 && self.reputation < 0 {
@@ -154,6 +160,10 @@ impl PeerInfo {
 				break
 			}
 		}
+	}
+
+	fn bump_last_updated(&mut self) {
+		self.last_updated = Instant::now();
 	}
 }
 
@@ -214,6 +224,23 @@ impl PeerStoreInner {
 		let now = Instant::now();
 		self.peers
 			.retain(|_, info| info.reputation != 0 || info.last_updated + FORGET_AFTER > now);
+	}
+
+	fn add_known_peer(&mut self, peer_id: PeerId) {
+		match self.peers.entry(peer_id) {
+			Entry::Occupied(mut e) => { 
+				trace!(
+					target: "peerset",
+					"Trying to add an already known peer {}, bumping `last_updated`.",
+					peer_id,
+				);
+				e.get_mut().bump_last_updated();
+			},
+			Entry::Vacant(e) => {
+				trace!(target: "peerset", "Adding a new known peer {}.", peer_id);
+				e.insert(PeerInfo::default());
+			},
+		}
 	}
 }
 

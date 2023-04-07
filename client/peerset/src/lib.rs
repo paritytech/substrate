@@ -41,7 +41,7 @@ use protocol_controller::{ProtocolController, ProtocolHandle};
 
 use futures::{
 	channel::oneshot,
-	future::{join_all, JoinAll, BoxFuture},
+	future::{join_all, BoxFuture, JoinAll},
 	prelude::*,
 	stream::Stream,
 };
@@ -57,6 +57,8 @@ use std::{
 use wasm_timer::Delay;
 
 pub use libp2p::PeerId;
+
+pub use peer_store::BANNED_THRESHOLD;
 
 /// Identifier of a set in the peerset.
 ///
@@ -150,15 +152,10 @@ impl PeersetHandle {
 		self.peer_store_handle.report_peer(peer_id, score_diff);
 	}
 
-	/// Add a peer to a set.
-	//pub fn add_to_peers_set(&self, set_id: SetId, peer_id: PeerId) {
-	//	let _ = self.tx.unbounded_send(Action::AddToPeersSet(set_id, peer_id));
-	//}
-
-	/// Remove a peer from a set.
-	//pub fn remove_from_peers_set(&self, set_id: SetId, peer_id: PeerId) {
-	//	let _ = self.tx.unbounded_send(Action::RemoveFromPeersSet(set_id, peer_id));
-	//}
+	/// Add a peer to the list of known peers.
+	pub fn add_known_peer(&mut self, peer_id: PeerId) {
+		self.peer_store_handle.add_known_peer(peer_id);
+	}
 
 	/// Returns the reputation value of the peer.
 	pub async fn peer_reputation(self, peer_id: PeerId) -> Result<i32, ()> {
@@ -301,16 +298,26 @@ impl Peerset {
 		self.protocol_handles[set_id.0].reserved_peers(pending_response);
 	}
 
-	/// Adds a node to the given set. The peerset will, if possible and not already the case,
-	/// try to connect to it.
+	/// Indicate that we received an incoming connection. Must be answered either with
+	/// a corresponding `Accept` or `Reject`, except if we were already connected to this peer.
 	///
-	/// > **Note**: This has the same effect as [`PeersetHandle::add_to_peers_set`].
-	// pub fn add_to_peers_set(&mut self, set_id: SetId, peer_id: PeerId) {
-	// 	if let peersstate::Peer::Unknown(entry) = self.data.peer(set_id.0, &peer_id) {
-	// 		entry.discover();
-	// 		self.alloc_slots(set_id);
-	// 	}
-	// }
+	/// Note that this mechanism is orthogonal to `Connect`/`Drop`. Accepting an incoming
+	/// connection implicitly means `Connect`, but incoming connections aren't cancelled by
+	/// `dropped`.
+	// Implementation note: because of concurrency issues, it is possible that we push a `Connect`
+	// message to the output channel with a `PeerId`, and that `incoming` gets called with the same
+	// `PeerId` before that message has been read by the user. In this situation we must not answer.
+	pub fn incoming(&mut self, set_id: SetId, peer_id: PeerId, index: IncomingIndex) {
+		self.protocol_handles[set_id.0].incoming_connection(peer_id, index);
+	}
+
+	/// Indicate that we dropped an active connection with a peer, or that we failed to connect.
+	///
+	/// Must only be called after the PSM has either generated a `Connect` message with this
+	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
+	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId, reason: DropReason) {
+		self.protocol_handles[set_id.0].dropped(peer_id);
+	}
 
 	// fn on_remove_from_peers_set(&mut self, set_id: SetId, peer_id: PeerId) {
 	// 	// Don't do anything if node is reserved.
