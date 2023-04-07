@@ -786,6 +786,81 @@ pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
 		.into()
 }
 
+/// Attach this attribute to an impl statement that implements the auto-generated
+/// `DefaultConfig` trait for a default config that needs to be registered for use with the
+/// [`derive_impl`] attribute macro.
+///
+/// You must also specify an ident as the only argument to the attribute. This ident will be
+/// used as the export name for this default config impl, and is the name you must provide to
+/// [`derive_impl`] when you import this impl.
+///
+/// The ident you provide is exported at the root of the crate where it is defined, so the
+/// ident must be unique at the crate level so as not to collide with other items. This is
+/// because internally this attribute aliases to macro_magic's `#[export_tokens]` macro, which
+/// relies on crate-level `macro_rules!` exports to export tokens for use elsewhere.
+///
+/// ## Example
+///
+/// ```ignore
+/// pub struct ExampleTestDefaultConfig {}
+///
+/// #[register_default_config(ExampleTestDefaultConfig)]
+/// impl DefaultConfig for ExampleTestDefaultConfig {
+/// 	type Version = ();
+/// 	type BlockWeights = ();
+/// 	type BlockLength = ();
+/// 	...
+/// 	type SS58Prefix = ();
+/// 	type MaxConsumers = frame_support::traits::ConstU32<16>;
+/// }
+/// ```
+///
+/// This macro acts as a thin wrapper around macro_magic's `#[export_tokens]`. See the docs
+/// [here](https://docs.rs/macro_magic/latest/macro_magic/attr.export_tokens.html) for more info.
+#[proc_macro_attribute]
+pub fn register_default_config(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
+	// ensure this is an impl DefaultConfig for X impl
+	use syn::{
+		parse::{Parse, ParseStream},
+		token::Brace,
+		Attribute, Path, Token, TraitItem,
+	};
+	syn::custom_keyword!(DefaultConfig);
+	struct TraitContents {
+		_contents: Vec<TraitItem>,
+	}
+	impl Parse for TraitContents {
+		fn parse(input: ParseStream) -> syn::Result<Self> {
+			let mut items = Vec::new();
+			while !input.is_empty() {
+				items.push(input.parse()?);
+			}
+			Ok(TraitContents { _contents: items })
+		}
+	}
+	#[derive(derive_syn_parse::Parse)]
+	struct DefaultConfigTraitImpl {
+		#[call(Attribute::parse_outer)]
+		_attrs: Vec<Attribute>,
+		_impl: Token![impl],
+		_default_config: DefaultConfig,
+		_for: Token![for],
+		_path: Path,
+		#[brace]
+		_brace: Brace,
+		#[inside(_brace)]
+		_contents: TraitContents,
+	}
+	let trait_tokens = tokens.clone();
+	syn::parse_macro_input!(trait_tokens as DefaultConfigTraitImpl);
+
+	// internally wrap macro_magic's `#[export_tokens]` macro
+	match macro_magic::mm_core::export_tokens_internal(attrs, tokens) {
+		Ok(tokens) => tokens.into(),
+		Err(err) => err.to_compile_error().into(),
+	}
+}
+
 /// Used internally to decorate pallet attribute macro stubs when they are erroneously used
 /// outside of a pallet module
 fn pallet_macro_stub() -> TokenStream {

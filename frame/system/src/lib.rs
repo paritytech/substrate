@@ -205,12 +205,11 @@ pub mod pallet {
 		pub mod testing {
 			type AccountId = u64;
 			use super::*;
-			use macro_magic::export_tokens;
 			use sp_runtime::traits::IdentityLookup;
 
 			pub struct TestDefaultConfig {}
 
-			#[export_tokens(TestDefaultConfig)]
+			#[register_default_config(TestDefaultConfig)]
 			impl DefaultConfig for TestDefaultConfig {
 				type Version = ();
 				type BlockWeights = ();
