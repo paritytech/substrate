@@ -43,6 +43,17 @@ fn mint_into_overflow() {
 }
 
 #[test]
+fn mint_into_below_minimum() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::mutate::mint_into_below_minimum::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
+
+#[test]
 fn mint_into_done_mint_into() {
 	ExtBuilder::default().build_and_execute_with(|| {
 		conformance_tests::mutate::mint_into_done_mint_into::<
@@ -109,6 +120,17 @@ fn restore_overflow() {
 }
 
 #[test]
+fn restore_below_minimum() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::mutate::restore_below_minimum::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
+
+#[test]
 fn restore_done_restore() {
 	ExtBuilder::default().build_and_execute_with(|| {
 		conformance_tests::mutate::restore_done_restore::<
@@ -134,6 +156,50 @@ fn shelve_success() {
 fn shelve_insufficient_funds() {
 	ExtBuilder::default().build_and_execute_with(|| {
 		conformance_tests::mutate::shelve_insufficient_funds::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
+
+#[test]
+fn shelve_done_shelve() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::mutate::shelve_done_shelve::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
+
+#[test]
+fn transfer_success() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::mutate::transfer_success::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
+
+#[test]
+fn transfer_expendable() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::mutate::transfer_expendable::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
+
+#[test]
+fn transfer_protect_preserve() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::mutate::transfer_protect_preserve::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
