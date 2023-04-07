@@ -35,20 +35,15 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
-pub mod weights;
-
-use frame_system::Config as SystemConfig;
 pub use pallet::*;
 pub use scale_info::Type;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_system::pallet_prelude::*;
-	use sp_std::{fmt::Display, prelude::*};
+	use sp_std::{fmt::Display};
 
 	use frame_support::{
-		dispatch::DispatchResult,
 		pallet_prelude::*,
 		sp_runtime::traits::{AccountIdConversion, StaticLookup, Permill},
 		traits::{
