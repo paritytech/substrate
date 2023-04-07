@@ -17,7 +17,7 @@
 
 use crate::traits::{
 	fungible::{Inspect, Mutate},
-	tokens::{Fortitude, Precision, Preservation},
+	tokens::{DepositConsequence, Fortitude, Precision, Preservation, Provenance},
 };
 use core::fmt::Debug;
 use sp_arithmetic::traits::AtLeast8BitUnsigned;
@@ -34,14 +34,6 @@ where
 {
 	let account_0 = AccountId::from(0);
 	let account_1 = AccountId::from(1);
-
-	// Sanity check that balances and total issuance start with zero balance
-	assert_eq!(T::total_balance(&account_0), Balance::zero());
-	assert_eq!(T::total_balance(&account_1), Balance::zero());
-	assert_eq!(T::balance(&account_0), Balance::zero());
-	assert_eq!(T::balance(&account_1), Balance::zero());
-	assert_eq!(T::total_issuance(), Balance::zero());
-	assert_eq!(T::active_issuance(), Balance::zero());
 
 	// Test: Mint an amount into each account
 	let amount_0 = T::minimum_balance();
@@ -507,4 +499,62 @@ where
 	assert_eq!(T::balance(&account), expected_new.clone());
 	assert_eq!(T::total_issuance(), expected_new.clone());
 	assert_eq!(T::active_issuance(), expected_new);
+}
+
+//
+// can_deposit
+//
+
+pub fn can_deposit_success<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	let account = AccountId::from(10);
+	let initial_balance = T::minimum_balance() + 10.into();
+	T::mint_into(&account, initial_balance.clone()).unwrap();
+
+	// Test: Try deposit a reasonable amount
+	let ret = T::can_deposit(&account, 5.into(), Provenance::Minted);
+
+	// Verify: Returns success
+	assert_eq!(ret, DepositConsequence::Success);
+}
+
+pub fn can_deposit_below_minimum<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	// can_deposit always returns Success for amount 0
+	if T::minimum_balance() < 1.into() {
+		return
+	}
+
+	let account = AccountId::from(10);
+
+	// Test: can_deposit below the minimum
+	let ret = T::can_deposit(&account, T::minimum_balance() - 1.into(), Provenance::Minted);
+
+	// Verify: Returns success
+	assert_eq!(ret, DepositConsequence::BelowMinimum);
+}
+
+pub fn can_deposit_overflow<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	let account = AccountId::from(10);
+
+	// Test: Try deposit over the max balance
+	let initial_balance = Balance::max_value() - 5.into();
+	T::mint_into(&account, initial_balance.clone()).unwrap();
+	let ret = T::can_deposit(&account, 10.into(), Provenance::Minted);
+
+	// Verify: Returns success
+	assert_eq!(ret, DepositConsequence::Overflow);
 }

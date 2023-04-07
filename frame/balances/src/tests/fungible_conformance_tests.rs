@@ -239,3 +239,36 @@ fn set_balance_burn_success() {
 		>();
 	});
 }
+
+#[test]
+fn can_deposit_success() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::inspect_mutate::can_deposit_success::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
+
+#[test]
+fn can_deposit_below_minimum() {
+	ExtBuilder::default().existential_deposit(5).build_and_execute_with(|| {
+		conformance_tests::inspect_mutate::can_deposit_below_minimum::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
+
+#[test]
+fn can_deposit_overflow() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::inspect_mutate::can_deposit_overflow::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
