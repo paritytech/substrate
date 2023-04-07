@@ -100,9 +100,9 @@ mod benchmarks {
 		Ok(())
 	}
 
-/* 
+
 	#[benchmark]
-	fn start_lottery() {
+	fn start_lottery() -> Result<(), BenchmarkError> {
 		let price = BalanceOf::<T>::max_value();
 		let end = 10u32.into();
 		let payout = 5u32.into();
@@ -110,27 +110,31 @@ mod benchmarks {
 			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	
 		#[extrinsic_call]
-		_<T::RuntimeOrigin>(origin, price, end, payout, true);
+		_(origin as T::RuntimeOrigin, price, end, payout, true);
 	
 		assert!(crate::Lottery::<T>::get().is_some());
+
+		Ok(())
 	}
 
 	#[benchmark]
-	fn stop_repeat() {
+	fn stop_repeat() -> Result<(), BenchmarkError> {
 		setup_lottery::<T>(true)?;
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, true);
 		let origin =
 			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	
 		#[extrinsic_call]
-		_<T::RuntimeOrigin>(origin);
+		_(origin as T::RuntimeOrigin);
 	
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, false);
+
+		Ok(())
 	}
 
 
 	#[benchmark]
-	fn on_initialize_end() {
+	fn on_initialize_end() -> Result<(), BenchmarkError> {
 		setup_lottery::<T>(false)?;
 		let winner = account("winner", 0, 0);
 		// User needs more than min balance to get ticket
@@ -160,11 +164,13 @@ mod benchmarks {
 		assert!(crate::Lottery::<T>::get().is_none());
 		assert_eq!(TicketsCount::<T>::get(), 0);
 		assert_eq!(Lottery::<T>::pot().1, 0u32.into());
-		assert!(!T::Currency::free_balance(&winner).is_zero())
+		assert!(!T::Currency::free_balance(&winner).is_zero());
+
+		Ok(())
 	}
 
 	#[benchmark]
-	fn on_initialize_repeat() {
+	fn on_initialize_repeat() -> Result<(), BenchmarkError> {
 		setup_lottery::<T>(true)?;
 		let winner = account("winner", 0, 0);
 		// User needs more than min balance to get ticket
@@ -195,9 +201,10 @@ mod benchmarks {
 		assert_eq!(LotteryIndex::<T>::get(), 2);
 		assert_eq!(TicketsCount::<T>::get(), 0);
 		assert_eq!(Lottery::<T>::pot().1, 0u32.into());
-		assert!(!T::Currency::free_balance(&winner).is_zero())
+		assert!(!T::Currency::free_balance(&winner).is_zero());
+
+		Ok(())
 	}
-	*/
 
 	impl_benchmark_test_suite!(Lottery, crate::mock::new_test_ext(), crate::mock::Test);
 }
