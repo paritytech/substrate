@@ -785,7 +785,7 @@ fn expand_benchmark(
 			expr_call.args = final_args;
 
 			let origin = match origin {
-				Expr::Cast(t) =>  {
+				Expr::Cast(t) => {
 					let ty = t.ty.clone();
 					quote! {
 						<<T as frame_system::Config>::RuntimeOrigin as From<#ty>>::from(#origin);
@@ -793,7 +793,7 @@ fn expand_benchmark(
 				},
 				_ => quote! {
 					#origin.into();
-				}
+				},
 			};
 
 			// determine call name (handles `_` and normal call syntax)
