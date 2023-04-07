@@ -38,7 +38,7 @@ use syn::{
 	spanned::Spanned,
 	visit::{self, Visit},
 	Attribute, FnArg, GenericParam, Generics, Ident, ItemTrait, Lit, Meta, NestedMeta, TraitBound,
-	TraitItem, TraitItemMethod,
+	TraitItem, TraitItemFn,
 };
 
 use std::collections::{BTreeMap, HashMap};
@@ -74,7 +74,7 @@ fn extend_generics_with_block(generics: &mut Generics) {
 /// attribute body as `TokenStream`.
 fn remove_supported_attributes(attrs: &mut Vec<Attribute>) -> HashMap<&'static str, Attribute> {
 	let mut result = HashMap::new();
-	attrs.retain(|v| match SUPPORTED_ATTRIBUTE_NAMES.iter().find(|a| v.path.is_ident(a)) {
+	attrs.retain(|v| match SUPPORTED_ATTRIBUTE_NAMES.iter().find(|a| v.path().is_ident(a)) {
 		Some(attribute) => {
 			result.insert(*attribute, v.clone());
 			false
@@ -157,7 +157,7 @@ impl Fold for ReplaceBlockWithNodeBlock {
 /// ```
 fn generate_versioned_api_traits(
 	api: ItemTrait,
-	methods: BTreeMap<u64, Vec<TraitItemMethod>>,
+	methods: BTreeMap<u64, Vec<TraitItemFn>>,
 ) -> Vec<ItemTrait> {
 	let mut result = Vec::<ItemTrait>::new();
 	for (version, _) in &methods {
@@ -167,7 +167,7 @@ fn generate_versioned_api_traits(
 		// Add the methods from the current version and all previous one. Versions are sorted so
 		// it's safe to stop early.
 		for (_, m) in methods.iter().take_while(|(v, _)| v <= &version) {
-			versioned_trait.items.extend(m.iter().cloned().map(|m| TraitItem::Method(m)));
+			versioned_trait.items.extend(m.iter().cloned().map(|m| TraitItem::Fn(m)));
 		}
 
 		result.push(versioned_trait);
@@ -227,12 +227,12 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 
 		let trait_api_version = get_api_version(&found_attributes)?;
 
-		let mut methods_by_version: BTreeMap<u64, Vec<TraitItemMethod>> = BTreeMap::new();
+		let mut methods_by_version: BTreeMap<u64, Vec<TraitItemFn>> = BTreeMap::new();
 
 		// Process the items in the declaration. The filter_map function below does a lot of stuff
 		// because the method attributes are stripped at this point
 		decl.items.iter_mut().for_each(|i| match i {
-			TraitItem::Method(ref mut method) => {
+			TraitItem::Fn(ref mut method) => {
 				let method_attrs = remove_supported_attributes(&mut method.attrs);
 				let mut method_version = trait_api_version;
 				// validate the api version for the method (if any) and generate default
@@ -359,9 +359,8 @@ impl<'a> ToClientSideDecl<'a> {
 		let mut result = Vec::new();
 
 		items.into_iter().for_each(|i| match i {
-			TraitItem::Method(method) => {
-				let (fn_decl, fn_decl_ctx) =
-					self.fold_trait_item_method(method, trait_generics_num);
+			TraitItem::Fn(method) => {
+				let (fn_decl, fn_decl_ctx) = self.fold_trait_item_fn(method, trait_generics_num);
 				result.push(fn_decl.into());
 				result.push(fn_decl_ctx.into());
 			},
@@ -371,11 +370,11 @@ impl<'a> ToClientSideDecl<'a> {
 		result
 	}
 
-	fn fold_trait_item_method(
+	fn fold_trait_item_fn(
 		&mut self,
-		method: TraitItemMethod,
+		method: TraitItemFn,
 		trait_generics_num: usize,
-	) -> (TraitItemMethod, TraitItemMethod) {
+	) -> (TraitItemFn, TraitItemFn) {
 		let crate_ = self.crate_;
 		let context = quote!( #crate_::ExecutionContext::OffchainCall(None) );
 		let fn_decl = self.create_method_decl(method.clone(), context, trait_generics_num);
@@ -386,9 +385,9 @@ impl<'a> ToClientSideDecl<'a> {
 
 	fn create_method_decl_with_context(
 		&mut self,
-		method: TraitItemMethod,
+		method: TraitItemFn,
 		trait_generics_num: usize,
-	) -> TraitItemMethod {
+	) -> TraitItemFn {
 		let crate_ = self.crate_;
 		let context_arg: syn::FnArg = parse_quote!( context: #crate_::ExecutionContext );
 		let mut fn_decl_ctx = self.create_method_decl(method, quote!(context), trait_generics_num);
@@ -404,10 +403,10 @@ impl<'a> ToClientSideDecl<'a> {
 	/// the actual call into the runtime.
 	fn create_method_decl(
 		&mut self,
-		mut method: TraitItemMethod,
+		mut method: TraitItemFn,
 		context: TokenStream,
 		trait_generics_num: usize,
-	) -> TraitItemMethod {
+	) -> TraitItemFn {
 		let params = match extract_parameter_names_types_and_borrows(
 			&method.sig,
 			AllowSelfRefInParameters::No,
@@ -656,7 +655,7 @@ impl CheckTraitDecl {
 	/// All errors will be collected in `self.errors`.
 	fn check(&mut self, trait_: &ItemTrait) {
 		self.check_method_declarations(trait_.items.iter().filter_map(|i| match i {
-			TraitItem::Method(method) => Some(method),
+			TraitItem::Fn(method) => Some(method),
 			_ => None,
 		}));
 
@@ -666,10 +665,7 @@ impl CheckTraitDecl {
 	/// Check that the given method declarations are correct.
 	///
 	/// Any error is stored in `self.errors`.
-	fn check_method_declarations<'a>(
-		&mut self,
-		methods: impl Iterator<Item = &'a TraitItemMethod>,
-	) {
+	fn check_method_declarations<'a>(&mut self, methods: impl Iterator<Item = &'a TraitItemFn>) {
 		let mut method_to_signature_changed = HashMap::<Ident, Vec<Option<u64>>>::new();
 
 		methods.into_iter().for_each(|method| {

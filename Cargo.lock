@@ -2351,7 +2351,7 @@ dependencies = [
  "quote",
  "scale-info",
  "sp-arithmetic",
- "syn 1.0.109",
+ "syn 2.0.13",
  "trybuild",
 ]
 
@@ -2489,7 +2489,7 @@ dependencies = [
  "proc-macro-warning",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.13",
 ]
 
 [[package]]
@@ -2500,7 +2500,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.13",
 ]
 
 [[package]]
@@ -2509,7 +2509,7 @@ version = "3.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.13",
 ]
 
 [[package]]
@@ -5911,7 +5911,7 @@ version = "4.0.0-dev"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.13",
 ]
 
 [[package]]
@@ -6794,7 +6794,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sp-runtime",
- "syn 1.0.109",
+ "syn 2.0.13",
 ]
 
 [[package]]
@@ -8401,7 +8401,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.13",
 ]
 
 [[package]]
@@ -9630,7 +9630,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.13",
 ]
 
 [[package]]
@@ -10178,7 +10178,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.13",
 ]
 
 [[package]]
@@ -10487,7 +10487,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sp-core-hashing",
- "syn 1.0.109",
+ "syn 2.0.13",
 ]
 
 [[package]]
@@ -10504,7 +10504,7 @@ version = "5.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.13",
 ]
 
 [[package]]
@@ -10724,7 +10724,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.13",
 ]
 
 [[package]]
@@ -10948,7 +10948,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sp-version",
- "syn 1.0.109",
+ "syn 2.0.13",
 ]
 
 [[package]]
@@ -11374,7 +11374,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.13",
 ]
 
 [[package]]

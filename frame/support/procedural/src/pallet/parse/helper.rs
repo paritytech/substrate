@@ -139,7 +139,7 @@ impl MutItemAttrs for syn::ItemMod {
 	}
 }
 
-impl MutItemAttrs for syn::ImplItemMethod {
+impl MutItemAttrs for syn::ImplItemFn {
 	fn mut_item_attrs(&mut self) -> Option<&mut Vec<syn::Attribute>> {
 		Some(&mut self.attrs)
 	}

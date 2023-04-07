@@ -158,7 +158,7 @@ pub fn extract_all_signature_types(items: &[ImplItem]) -> Vec<Type> {
 	items
 		.iter()
 		.filter_map(|i| match i {
-			ImplItem::Method(method) => Some(&method.sig),
+			ImplItem::Fn(method) => Some(&method.sig),
 			_ => None,
 		})
 		.flat_map(|sig| {
