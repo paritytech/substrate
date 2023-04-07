@@ -35,6 +35,7 @@ pub mod pallet_struct;
 pub mod storage;
 pub mod type_value;
 pub mod validate_unsigned;
+pub mod ink;
 
 use composite::{keyword::CompositeKeyword, CompositeDef};
 use frame_support_procedural_tools::generate_crate_access_2018;
@@ -63,6 +64,7 @@ pub struct Def {
 	pub frame_system: syn::Ident,
 	pub frame_support: syn::Ident,
 	pub dev_mode: bool,
+	pub inks: Vec<ink::InkDef>
 }
 
 impl Def {
@@ -95,6 +97,7 @@ impl Def {
 		let mut storages = vec![];
 		let mut type_values = vec![];
 		let mut composites: Vec<CompositeDef> = vec![];
+		let mut inks = vec![];
 
 		for (index, item) in items.iter_mut().enumerate() {
 			let pallet_attr: Option<PalletAttr> = helper::take_first_item_pallet_attr(item)?;
@@ -165,6 +168,9 @@ impl Def {
 					}
 					composites.push(composite);
 				},
+				Some(PalletAttr::Ink(attr, span)) => {
+					inks.push(ink::InkDef::try_from(attr, span, index, item, dev_mode)?);
+				}
 				Some(attr) => {
 					let msg = "Invalid duplicated attribute";
 					return Err(syn::Error::new(attr.span(), msg))
@@ -206,6 +212,7 @@ impl Def {
 			frame_system,
 			frame_support,
 			dev_mode,
+			inks
 		};
 
 		def.check_instance_usage()?;
@@ -417,6 +424,7 @@ mod keyword {
 	syn::custom_keyword!(Store);
 	syn::custom_keyword!(extra_constants);
 	syn::custom_keyword!(composite_enum);
+	syn::custom_keyword!(ink);
 }
 
 /// Parse attributes for item in pallet module
@@ -437,6 +445,7 @@ enum PalletAttr {
 	TypeValue(proc_macro2::Span),
 	ExtraConstants(proc_macro2::Span),
 	Composite(proc_macro2::Span),
+	Ink(syn::Ident, proc_macro2::Span)
 }
 
 impl PalletAttr {
@@ -457,6 +466,7 @@ impl PalletAttr {
 			Self::TypeValue(span) => *span,
 			Self::ExtraConstants(span) => *span,
 			Self::Composite(span) => *span,
+			Self::Ink(_, span) => *span,
 		}
 	}
 }
@@ -500,6 +510,13 @@ impl syn::parse::Parse for PalletAttr {
 			Ok(PalletAttr::ExtraConstants(content.parse::<keyword::extra_constants>()?.span()))
 		} else if lookahead.peek(keyword::composite_enum) {
 			Ok(PalletAttr::Composite(content.parse::<keyword::composite_enum>()?.span()))
+		} else if lookahead.peek(keyword::ink) {
+			let attr_span = input.span();
+			content.parse::<keyword::ink>()?;
+
+			let generate_content;
+			syn::parenthesized!(generate_content in content);
+			Ok(PalletAttr::Ink(generate_content.parse::<syn::Ident>()?, attr_span))
 		} else {
 			Err(lookahead.error())
 		}

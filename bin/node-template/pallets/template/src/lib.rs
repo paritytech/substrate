@@ -105,4 +105,9 @@ pub mod pallet {
 			}
 		}
 	}
+
+	#[pallet::ink(storage)] 
+	pub struct Flipper {
+        value: bool,
+    }
 }

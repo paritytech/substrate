@@ -2834,7 +2834,7 @@ pub mod pallet_macros {
 		disable_frame_system_supertrait_check, error, event, extra_constants, generate_deposit,
 		generate_storage_info, generate_store, genesis_build, genesis_config, getter, hooks,
 		inherent, origin, storage, storage_prefix, storage_version, type_value, unbounded,
-		validate_unsigned, weight, whitelist_storage,
+		validate_unsigned, weight, whitelist_storage, ink
 	};
 }
 

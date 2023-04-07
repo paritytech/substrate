@@ -45,8 +45,8 @@ pub fn pallet(
 			dev_mode = true;
 		} else {
 			let msg = "Invalid pallet macro call: unexpected attribute. Macro call must be \
-				bare, such as `#[frame_support::pallet]` or `#[pallet]`, or must specify the \
-				`dev_mode` attribute, such as `#[frame_support::pallet(dev_mode)]` or \
+				bare, such as `#[frame_support::ink]` or `#[ink]`, or must specify the \
+				`dev_mode` attribute, such as `#[frame_support::ink(dev_mode)]` or \
 				#[pallet(dev_mode)].";
 			let span = proc_macro2::TokenStream::from(attr).span();
 			return syn::Error::new(span, msg).to_compile_error().into()
