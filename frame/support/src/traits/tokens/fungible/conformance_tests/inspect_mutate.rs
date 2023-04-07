@@ -17,7 +17,9 @@
 
 use crate::traits::{
 	fungible::{Inspect, Mutate},
-	tokens::{DepositConsequence, Fortitude, Precision, Preservation, Provenance},
+	tokens::{
+		DepositConsequence, Fortitude, Precision, Preservation, Provenance, WithdrawConsequence,
+	},
 };
 use core::fmt::Debug;
 use sp_arithmetic::traits::AtLeast8BitUnsigned;
@@ -515,7 +517,7 @@ where
 	let initial_balance = T::minimum_balance() + 10.into();
 	T::mint_into(&account, initial_balance.clone()).unwrap();
 
-	// Test: Try deposit a reasonable amount
+	// Test: can_deposit a reasonable amount
 	let ret = T::can_deposit(&account, 5.into(), Provenance::Minted);
 
 	// Verify: Returns success
@@ -557,4 +559,65 @@ where
 
 	// Verify: Returns success
 	assert_eq!(ret, DepositConsequence::Overflow);
+}
+
+//
+// can_withdraw
+//
+
+pub fn can_withdraw_success<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	let account = AccountId::from(10);
+	let initial_balance = T::minimum_balance() + 10.into();
+	T::mint_into(&account, initial_balance.clone()).unwrap();
+
+	// Test: can_withdraw a reasonable amount
+	let ret = T::can_withdraw(&account, 5.into());
+
+	// Verify: Returns success
+	assert_eq!(ret, WithdrawConsequence::Success);
+}
+
+pub fn can_withdraw_reduced_to_zero<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	if T::minimum_balance() == Balance::zero() {
+		return
+	}
+
+	let account = AccountId::from(10);
+	let initial_balance = T::minimum_balance();
+	T::mint_into(&account, initial_balance.clone()).unwrap();
+
+	// Verify: can_withdraw below the minimum balance returns ReducedToZero
+	let ret = T::can_withdraw(&account, 1.into());
+	assert_eq!(ret, WithdrawConsequence::ReducedToZero(T::minimum_balance() - 1.into()));
+}
+
+pub fn can_withdraw_balance_low<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	if T::minimum_balance() == Balance::zero() {
+		return
+	}
+
+	let account = AccountId::from(10);
+	let other_account = AccountId::from(100);
+	let initial_balance = T::minimum_balance() + 5.into();
+	T::mint_into(&account, initial_balance.clone()).unwrap();
+	T::mint_into(&other_account, initial_balance.clone() * 2.into()).unwrap();
+
+	// Verify: can_withdraw below the account balance returns BalanceLow
+	let ret = T::can_withdraw(&account, initial_balance + 1.into());
+	assert_eq!(ret, WithdrawConsequence::BalanceLow);
 }

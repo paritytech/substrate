@@ -272,3 +272,36 @@ fn can_deposit_overflow() {
 		>();
 	});
 }
+
+#[test]
+fn can_withdraw_success() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::inspect_mutate::can_withdraw_success::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
+
+#[test]
+fn can_withdraw_reduced_to_zero() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::inspect_mutate::can_withdraw_reduced_to_zero::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
+
+#[test]
+fn can_withdraw_balance_low() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::inspect_mutate::can_withdraw_balance_low::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
