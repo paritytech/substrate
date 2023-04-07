@@ -253,7 +253,7 @@ pub enum RuntimeCosts {
 	HashBlake128(u32),
 	/// Weight of calling `seal_ecdsa_recover`.
 	EcdsaRecovery,
-	/// Weight of calling `seal_sr25519_verify` for the given input length.
+	/// Weight of calling `seal_sr25519_verify` for the given input size.
 	Sr25519Verify(u32),
 	/// Weight charged by a chain extension through `seal_call_chain_extension`.
 	ChainExtension(Weight),
