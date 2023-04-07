@@ -162,7 +162,7 @@ pub use v1::*;
 /// 
 /// In case of a `force_origin`, this is the general syntax:
 /// ```ignore
-///#[extrinsic_call]
+/// #[extrinsic_call]
 /// _(force_origin as T::RuntimeOrigin, 0u32.into(), 0);
 /// ```
 ///
