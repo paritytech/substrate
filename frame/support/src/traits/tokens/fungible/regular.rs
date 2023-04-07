@@ -122,7 +122,7 @@ impl<A, T: Balanced<A>> Dust<A, T> {
 /// **WARNING**
 /// Do not use this directly unless you want trouble, since it allows you to alter account balances
 /// without keeping the issuance up to date. It has no safeguards against accidentally creating
-/// token imbalances in your system leading to accidental inflation or deflation. It's really just
+/// token imbalances in your system leading to accidental imflation or deflation. It's really just
 /// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
 /// use.
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
@@ -327,9 +327,9 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	fn set_balance(who: &AccountId, amount: Self::Balance) -> Self::Balance {
 		let b = Self::balance(who);
 		if b > amount {
-			Self::burn_from(who, b - amount, BestEffort, Force).map(|d| b.saturating_sub(d))
+			Self::burn_from(who, b - amount, BestEffort, Force).map(|d| amount.saturating_sub(d))
 		} else {
-			Self::mint_into(who, amount - b).map(|d| b.saturating_add(d))
+			Self::mint_into(who, amount - b).map(|d| amount.saturating_add(d))
 		}
 		.unwrap_or(b)
 	}
