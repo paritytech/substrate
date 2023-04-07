@@ -206,3 +206,36 @@ fn transfer_protect_preserve() {
 		>();
 	});
 }
+
+#[test]
+fn transfer_done_transfer() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::inspect_mutate::transfer_done_transfer::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
+
+#[test]
+fn set_balance_mint_success() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::inspect_mutate::set_balance_mint_success::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}
+
+#[test]
+fn set_balance_burn_success() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		conformance_tests::inspect_mutate::set_balance_burn_success::<
+			Balances,
+			<Test as frame_system::Config>::AccountId,
+			<Test as pallet_balances::Config>::Balance,
+		>();
+	});
+}

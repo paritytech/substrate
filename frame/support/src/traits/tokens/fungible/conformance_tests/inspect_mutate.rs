@@ -444,3 +444,67 @@ where
 	assert_eq!(T::total_issuance(), initial_balance.clone() * 2.into());
 	assert_eq!(T::active_issuance(), initial_balance * 2.into());
 }
+
+pub fn transfer_done_transfer<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	// TODO: How can we test this?
+	assert!(true);
+}
+
+//
+// set_balance
+//
+
+pub fn set_balance_mint_success<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	let account = AccountId::from(10);
+	let initial_balance = T::minimum_balance() + 10.into();
+	T::mint_into(&account, initial_balance.clone()).unwrap();
+
+	// Test: Increase the account balance with set_balance
+	let increase_amount: Balance = 5.into();
+	let new = T::set_balance(&account, initial_balance.clone() + increase_amount.clone());
+
+	// Verify: set_balance returned the new balance
+	let expected_new = initial_balance + increase_amount;
+	assert_eq!(new, expected_new);
+
+	// Verify: Balance and issuance is updated correctly
+	assert_eq!(T::total_balance(&account), expected_new.clone());
+	assert_eq!(T::balance(&account), expected_new.clone());
+	assert_eq!(T::total_issuance(), expected_new.clone());
+	assert_eq!(T::active_issuance(), expected_new);
+}
+
+pub fn set_balance_burn_success<T, AccountId, Balance>()
+where
+	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	AccountId: AtLeast8BitUnsigned,
+	Balance: AtLeast8BitUnsigned + Debug,
+{
+	let account = AccountId::from(10);
+	let initial_balance = T::minimum_balance() + 10.into();
+	T::mint_into(&account, initial_balance.clone()).unwrap();
+
+	// Test: Increase the account balance with set_balance
+	let burn_amount: Balance = 5.into();
+	let new = T::set_balance(&account, initial_balance.clone() - burn_amount.clone());
+
+	// Verify: set_balance returned the new balance
+	let expected_new = initial_balance - burn_amount;
+	assert_eq!(new, expected_new);
+
+	// Verify: Balance and issuance is updated correctly
+	assert_eq!(T::total_balance(&account), expected_new.clone());
+	assert_eq!(T::balance(&account), expected_new.clone());
+	assert_eq!(T::total_issuance(), expected_new.clone());
+	assert_eq!(T::active_issuance(), expected_new);
+}
