@@ -4,4 +4,4 @@
 ///
 /// Open question: Do we need conformance tests for 'unbalanced' traits?
 pub mod balanced;
-pub mod mutate;
+pub mod inspect_mutate;

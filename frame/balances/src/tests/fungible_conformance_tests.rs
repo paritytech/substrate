@@ -23,7 +23,7 @@ use frame_support::traits::fungible::conformance_tests;
 #[test]
 fn mint_into_success() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::mint_into_success::<
+		conformance_tests::inspect_mutate::mint_into_success::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -34,7 +34,7 @@ fn mint_into_success() {
 #[test]
 fn mint_into_overflow() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::mint_into_overflow::<
+		conformance_tests::inspect_mutate::mint_into_overflow::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -45,7 +45,7 @@ fn mint_into_overflow() {
 #[test]
 fn mint_into_below_minimum() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::mint_into_below_minimum::<
+		conformance_tests::inspect_mutate::mint_into_below_minimum::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -56,7 +56,7 @@ fn mint_into_below_minimum() {
 #[test]
 fn mint_into_done_mint_into() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::mint_into_done_mint_into::<
+		conformance_tests::inspect_mutate::mint_into_done_mint_into::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -67,7 +67,7 @@ fn mint_into_done_mint_into() {
 #[test]
 fn burn_from_exact_success() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::burn_from_exact_success::<
+		conformance_tests::inspect_mutate::burn_from_exact_success::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -78,7 +78,7 @@ fn burn_from_exact_success() {
 #[test]
 fn burn_from_best_effort_success() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::burn_from_best_effort_success::<
+		conformance_tests::inspect_mutate::burn_from_best_effort_success::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -89,7 +89,7 @@ fn burn_from_best_effort_success() {
 #[test]
 fn burn_from_exact_insufficient_funds() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::burn_from_exact_insufficient_funds::<
+		conformance_tests::inspect_mutate::burn_from_exact_insufficient_funds::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -100,7 +100,7 @@ fn burn_from_exact_insufficient_funds() {
 #[test]
 fn restore_success() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::restore_success::<
+		conformance_tests::inspect_mutate::restore_success::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -111,7 +111,7 @@ fn restore_success() {
 #[test]
 fn restore_overflow() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::restore_overflow::<
+		conformance_tests::inspect_mutate::restore_overflow::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -122,7 +122,7 @@ fn restore_overflow() {
 #[test]
 fn restore_below_minimum() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::restore_below_minimum::<
+		conformance_tests::inspect_mutate::restore_below_minimum::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -133,7 +133,7 @@ fn restore_below_minimum() {
 #[test]
 fn restore_done_restore() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::restore_done_restore::<
+		conformance_tests::inspect_mutate::restore_done_restore::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -144,7 +144,7 @@ fn restore_done_restore() {
 #[test]
 fn shelve_success() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::shelve_success::<
+		conformance_tests::inspect_mutate::shelve_success::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -155,7 +155,7 @@ fn shelve_success() {
 #[test]
 fn shelve_insufficient_funds() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::shelve_insufficient_funds::<
+		conformance_tests::inspect_mutate::shelve_insufficient_funds::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -166,7 +166,7 @@ fn shelve_insufficient_funds() {
 #[test]
 fn shelve_done_shelve() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::shelve_done_shelve::<
+		conformance_tests::inspect_mutate::shelve_done_shelve::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -177,7 +177,7 @@ fn shelve_done_shelve() {
 #[test]
 fn transfer_success() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::transfer_success::<
+		conformance_tests::inspect_mutate::transfer_success::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -188,7 +188,7 @@ fn transfer_success() {
 #[test]
 fn transfer_expendable() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::transfer_expendable::<
+		conformance_tests::inspect_mutate::transfer_expendable::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,
@@ -199,7 +199,7 @@ fn transfer_expendable() {
 #[test]
 fn transfer_protect_preserve() {
 	ExtBuilder::default().build_and_execute_with(|| {
-		conformance_tests::mutate::transfer_protect_preserve::<
+		conformance_tests::inspect_mutate::transfer_protect_preserve::<
 			Balances,
 			<Test as frame_system::Config>::AccountId,
 			<Test as pallet_balances::Config>::Balance,

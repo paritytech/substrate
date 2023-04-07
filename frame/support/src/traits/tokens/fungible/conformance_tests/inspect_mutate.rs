@@ -38,7 +38,10 @@ where
 	// Sanity check that balances and total issuance start with zero balance
 	assert_eq!(T::total_balance(&account_0), Balance::zero());
 	assert_eq!(T::total_balance(&account_1), Balance::zero());
+	assert_eq!(T::balance(&account_0), Balance::zero());
+	assert_eq!(T::balance(&account_1), Balance::zero());
 	assert_eq!(T::total_issuance(), Balance::zero());
+	assert_eq!(T::active_issuance(), Balance::zero());
 
 	// Test: Mint an amount into each account
 	let amount_0 = T::minimum_balance();
@@ -49,9 +52,12 @@ where
 	// Verify: Account balances are updated correctly
 	assert_eq!(T::total_balance(&account_0), amount_0.clone());
 	assert_eq!(T::total_balance(&account_1), amount_1.clone());
+	assert_eq!(T::balance(&account_0), amount_0.clone());
+	assert_eq!(T::balance(&account_1), amount_1.clone());
 
 	// Verify: Total issuance is updated correctly
-	assert_eq!(T::total_issuance(), amount_0 + amount_1);
+	assert_eq!(T::total_issuance(), amount_0.clone() + amount_1.clone());
+	assert_eq!(T::active_issuance(), amount_0 + amount_1);
 }
 
 pub fn mint_into_overflow<T, AccountId, Balance>()
@@ -71,9 +77,11 @@ where
 
 	// Verify: The balance did not change
 	assert_eq!(T::total_balance(&account), amount.clone());
+	assert_eq!(T::balance(&account), amount.clone());
 
 	// Verify: The total issuance did not change
-	assert_eq!(T::total_issuance(), amount);
+	assert_eq!(T::total_issuance(), amount.clone());
+	assert_eq!(T::active_issuance(), amount);
 }
 
 pub fn mint_into_below_minimum<T, AccountId, Balance>()
@@ -95,7 +103,9 @@ where
 
 	// Verify: noop
 	assert_eq!(T::total_balance(&account), Balance::zero());
+	assert_eq!(T::balance(&account), Balance::zero());
 	assert_eq!(T::total_issuance(), Balance::zero());
+	assert_eq!(T::active_issuance(), Balance::zero());
 }
 
 pub fn mint_into_done_mint_into<T, AccountId, Balance>()
@@ -131,7 +141,9 @@ where
 
 	// Verify: The balance and total issuance should be reduced by the burned amount
 	assert_eq!(T::balance(&account), initial_balance.clone() - amount_to_burn.clone());
-	assert_eq!(T::total_issuance(), initial_balance - amount_to_burn);
+	assert_eq!(T::total_balance(&account), initial_balance.clone() - amount_to_burn.clone());
+	assert_eq!(T::total_issuance(), initial_balance.clone() - amount_to_burn.clone());
+	assert_eq!(T::active_issuance(), initial_balance - amount_to_burn);
 }
 
 pub fn burn_from_best_effort_success<T, AccountId, Balance>()
@@ -158,7 +170,9 @@ where
 
 	// Verify: The balance and total issuance should be reduced by the reducible_balance
 	assert_eq!(T::balance(&account), initial_balance.clone() - reducible_balance.clone());
-	assert_eq!(T::total_issuance(), initial_balance - reducible_balance);
+	assert_eq!(T::total_balance(&account), initial_balance.clone() - reducible_balance.clone());
+	assert_eq!(T::total_issuance(), initial_balance.clone() - reducible_balance.clone());
+	assert_eq!(T::active_issuance(), initial_balance - reducible_balance);
 }
 
 pub fn burn_from_exact_insufficient_funds<T, AccountId, Balance>()
@@ -180,7 +194,9 @@ where
 
 	// Verify: The balance and total issuance should remain unchanged
 	assert_eq!(T::balance(&account), initial_balance);
+	assert_eq!(T::total_balance(&account), initial_balance);
 	assert_eq!(T::total_issuance(), initial_balance);
+	assert_eq!(T::active_issuance(), initial_balance);
 }
 
 //
@@ -205,9 +221,12 @@ where
 	// Verify: Account balances are updated correctly
 	assert_eq!(T::total_balance(&account_0), amount_0.clone());
 	assert_eq!(T::total_balance(&account_1), amount_1.clone());
+	assert_eq!(T::balance(&account_0), amount_0.clone());
+	assert_eq!(T::balance(&account_1), amount_1.clone());
 
 	// Verify: Total issuance is updated correctly
-	assert_eq!(T::total_issuance(), amount_0 + amount_1);
+	assert_eq!(T::total_issuance(), amount_0.clone() + amount_1.clone());
+	assert_eq!(T::active_issuance(), amount_0 + amount_1);
 }
 
 pub fn restore_overflow<T, AccountId, Balance>()
@@ -227,7 +246,9 @@ where
 
 	// Verify: The balance and total issuance did not change
 	assert_eq!(T::total_balance(&account), amount.clone());
+	assert_eq!(T::balance(&account), amount.clone());
 	assert_eq!(T::total_issuance(), amount);
+	assert_eq!(T::active_issuance(), amount);
 }
 
 pub fn restore_below_minimum<T, AccountId, Balance>()
@@ -249,7 +270,9 @@ where
 
 	// Verify: noop
 	assert_eq!(T::total_balance(&account), Balance::zero());
+	assert_eq!(T::balance(&account), Balance::zero());
 	assert_eq!(T::total_issuance(), Balance::zero());
+	assert_eq!(T::active_issuance(), Balance::zero());
 }
 
 pub fn restore_done_restore<T, AccountId, Balance>()
@@ -283,7 +306,9 @@ where
 
 	// Verify: The balance and total issuance should be reduced by the shelved amount
 	assert_eq!(T::balance(&account), initial_balance.clone() - amount_to_shelve.clone());
-	assert_eq!(T::total_issuance(), initial_balance - amount_to_shelve);
+	assert_eq!(T::total_balance(&account), initial_balance.clone() - amount_to_shelve.clone());
+	assert_eq!(T::total_issuance(), initial_balance.clone() - amount_to_shelve.clone());
+	assert_eq!(T::active_issuance(), initial_balance - amount_to_shelve);
 }
 
 pub fn shelve_insufficient_funds<T, AccountId, Balance>()
@@ -303,7 +328,9 @@ where
 
 	// Verify: The balance and total issuance should remain unchanged
 	assert_eq!(T::balance(&account), initial_balance);
+	assert_eq!(T::total_balance(&account), initial_balance);
 	assert_eq!(T::total_issuance(), initial_balance);
+	assert_eq!(T::active_issuance(), initial_balance);
 }
 
 pub fn shelve_done_shelve<T, AccountId, Balance>()
@@ -339,9 +366,12 @@ where
 	// Verify: Account balances are updated correctly
 	assert_eq!(T::total_balance(&account_0), initial_balance.clone() - transfer_amount.clone());
 	assert_eq!(T::total_balance(&account_1), initial_balance.clone() + transfer_amount.clone());
+	assert_eq!(T::balance(&account_0), initial_balance.clone() - transfer_amount.clone());
+	assert_eq!(T::balance(&account_1), initial_balance.clone() + transfer_amount.clone());
 
 	// Verify: Total issuance doesn't change
-	assert_eq!(T::total_issuance(), initial_balance * 2.into());
+	assert_eq!(T::total_issuance(), initial_balance.clone() * 2.into());
+	assert_eq!(T::active_issuance(), initial_balance * 2.into());
 }
 
 pub fn transfer_expendable<T, AccountId, Balance>()
@@ -364,9 +394,12 @@ where
 	// Verify: Account balances are updated correctly
 	assert_eq!(T::total_balance(&account_0), Balance::zero());
 	assert_eq!(T::total_balance(&account_1), initial_balance.clone() * 2.into());
+	assert_eq!(T::balance(&account_0), Balance::zero());
+	assert_eq!(T::balance(&account_1), initial_balance.clone() * 2.into());
 
 	// Verify: Total issuance doesn't change
-	assert_eq!(T::total_issuance(), initial_balance * 2.into());
+	assert_eq!(T::total_issuance(), initial_balance.clone() * 2.into());
+	assert_eq!(T::active_issuance(), initial_balance * 2.into());
 }
 
 pub fn transfer_protect_preserve<T, AccountId, Balance>()
@@ -375,6 +408,11 @@ where
 	AccountId: AtLeast8BitUnsigned,
 	Balance: AtLeast8BitUnsigned + Debug,
 {
+	// This test means nothing if there is no minimum balance
+	if T::minimum_balance() == Balance::zero() {
+		return
+	}
+
 	let account_0 = AccountId::from(0);
 	let account_1 = AccountId::from(1);
 	let initial_balance = T::minimum_balance() + 10.into();
@@ -389,7 +427,10 @@ where
 	// Verify: Noop
 	assert_eq!(T::total_balance(&account_0), initial_balance.clone());
 	assert_eq!(T::total_balance(&account_1), initial_balance.clone());
+	assert_eq!(T::balance(&account_0), initial_balance.clone());
+	assert_eq!(T::balance(&account_1), initial_balance.clone());
 	assert_eq!(T::total_issuance(), initial_balance.clone() * 2.into());
+	assert_eq!(T::active_issuance(), initial_balance.clone() * 2.into());
 
 	// Verify: Transfer Preserve entire balance from account_0 to account_1 should Err
 	let preservation = Preservation::Preserve;
@@ -398,5 +439,8 @@ where
 	// Verify: Noop
 	assert_eq!(T::total_balance(&account_0), initial_balance.clone());
 	assert_eq!(T::total_balance(&account_1), initial_balance.clone());
-	assert_eq!(T::total_issuance(), initial_balance * 2.into());
+	assert_eq!(T::balance(&account_0), initial_balance.clone());
+	assert_eq!(T::balance(&account_1), initial_balance.clone());
+	assert_eq!(T::total_issuance(), initial_balance.clone() * 2.into());
+	assert_eq!(T::active_issuance(), initial_balance * 2.into());
 }
