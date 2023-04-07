@@ -2482,8 +2482,7 @@ pub mod env {
 	/// - `pub_key_ptr`: the pointer into the linear memory where the public key is placed. Should
 	///   be decodable as a 32 bytes. Traps otherwise.
 	/// - `message_len`: the length of the message payload.
-	/// - `message_ptr`: the pointer into the linear memory where the message is placed. Should be
-	///   decodable as a Scale encoded Vec<u8>. Traps otherwise
+	/// - `message_ptr`: the pointer into the linear memory where the message is placed.
 	///
 	/// # Errors
 	///
