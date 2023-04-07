@@ -70,7 +70,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<ExistenceReason<DepositBalanceOf<T, I>>, DispatchError> {
 		let accounts = d.accounts.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 		let reason = if let Some((deposit, _depositor)) = maybe_deposit {
-			d.deposit = d.deposit.saturating_add(deposit);
 			ExistenceReason::DepositHeld(deposit)
 		} else if d.is_sufficient {
 			frame_system::Pallet::<T>::inc_sufficients(who);
@@ -349,7 +348,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(!account.is_frozen, Error::<T, I>::Frozen);
 
 		let mut refund_to: T::AccountId = who.clone();
-		if let Some(depositor) = account.depositor {
+		if let Some(depositor) = account.depositor.take() {
 			refund_to = depositor;
 		}
 		T::Currency::unreserve(&refund_to, deposit);
@@ -357,6 +356,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Remove = Self::dead_account(&who, &mut details, &account.reason, false) {
 			Account::<T, I>::remove(id, &who);
 		} else {
+			// deposit has been refunded, need to update `Account`
+			Account::<T, I>::insert(
+				id,
+				&who,
+				AssetAccountOf::<T, I> {
+					balance: account.balance,
+					is_frozen: account.is_frozen,
+					reason: ExistenceReason::DepositRefunded,
+					depositor: None,
+					extra: account.extra,
+				},
+			);
 			debug_assert!(false, "refund did not result in dead account?!");
 		}
 		Asset::<T, I>::insert(&id, details);
@@ -962,7 +973,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Freeze an account `who`, preventing further reception or transfer of asset `id`.
 	pub fn do_freeze(
-		origin: T::AccountId,
+		maybe_freezer: T::AccountId,
 		id: T::AssetId,
 		who: T::AccountId,
 		create: bool,
@@ -972,11 +983,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			d.status == AssetStatus::Live || d.status == AssetStatus::Frozen,
 			Error::<T, I>::AssetNotLive
 		);
-		ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
+		ensure!(maybe_freezer == d.freezer, Error::<T, I>::NoPermission);
 
 		if create && Account::<T, I>::get(id, &who).is_none() {
 			// we create the account with zero balance, but the freezer must place a deposit
-			let _ = Self::do_touch(id, &who, &origin)?;
+			let _ = Self::do_touch(id, &who, &maybe_freezer)?;
 		}
 
 		Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
