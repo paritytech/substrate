@@ -352,22 +352,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			refund_to = depositor;
 		}
 		T::Currency::unreserve(&refund_to, deposit);
+		account.depositor = None;
 
 		if let Remove = Self::dead_account(&who, &mut details, &account.reason, false) {
 			Account::<T, I>::remove(id, &who);
 		} else {
 			// deposit has been refunded, need to update `Account`
-			Account::<T, I>::insert(
-				id,
-				&who,
-				AssetAccountOf::<T, I> {
-					balance: account.balance,
-					is_frozen: account.is_frozen,
-					reason: ExistenceReason::DepositRefunded,
-					depositor: None,
-					extra: account.extra,
-				},
-			);
+			Account::<T, I>::insert(id, &who, account);
 			debug_assert!(false, "refund did not result in dead account?!");
 		}
 		Asset::<T, I>::insert(&id, details);
