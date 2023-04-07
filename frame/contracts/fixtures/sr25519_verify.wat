@@ -12,7 +12,7 @@
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 4) length of signature + message + public key - 64 + 11 + 32 = 107 bytes
-	;; write the length of the input (107 bytes) at offset 0
+	;; write the length of the input (6b = 107) bytes at offset 0
 	(data (i32.const 0) "\6b")
 
 	(func (export "deploy"))
@@ -34,7 +34,7 @@
 		(local.set $message_ptr (i32.const 106))
 
 		;; store the input into the memory, starting at the signature and 
-		;; up to 108 bytes stored at offset 0
+		;; up to 107 bytes stored at offset 0
 		(call $seal_input (local.get $signature_ptr) (i32.const 0))
 
 		;; call sr25519_verify and store the return code
