@@ -2067,7 +2067,7 @@ benchmarks! {
 	seal_sr25519_verify {
 		let r in 0 .. API_BENCHMARK_RUNS / 10;
 
-		let message = b"Hello world".to_vec().encode();
+		let message = b"Hello world".to_vec();
 		let message_len = message.len() as i32;
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
 		let sig_params = (0..r)
