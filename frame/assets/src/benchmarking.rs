@@ -278,10 +278,13 @@ benchmarks_instance_pallet! {
 	}
 
 	freeze_creating {
-		let (asset_id, caller, caller_lookup) = create_default_minted_asset::<T, I>(true, 100u32.into());
-		let target: T::AccountId = account("target", 0, SEED);
+		let (asset_id, asset_owner, _asset_owner_lookup) = create_default_minted_asset::<T, I>(true, 100u32.into());
+		let target: T::AccountId = account("target", 1, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
-	}: _(SystemOrigin::Signed(caller.clone()), asset_id, target_lookup)
+		assert_ne!(asset_owner, target);
+		T::Currency::make_free_balance_be(&asset_owner, DepositBalanceOf::<T, I>::max_value());
+		assert!(!Account::<T, I>::contains_key(asset_id.into(), &target));
+	}: _(SystemOrigin::Signed(asset_owner.clone()), asset_id, target_lookup)
 	verify {
 		assert_last_event::<T, I>(Event::Frozen { asset_id: asset_id.into(), who: target }.into());
 	}
