@@ -159,6 +159,12 @@ pub use v1::*;
 ///
 /// The underscore will be substituted with the name of the benchmark  (i.e. the name of the
 /// function in the benchmark function definition).
+/// 
+/// In case of a `force_origin`, this is the general syntax:
+/// ```ignore
+///#[extrinsic_call]
+/// _(force_origin as T::RuntimeOrigin, 0u32.into(), 0);
+/// ```
 ///
 /// Regardless of whether `#[extrinsic_call]` or `#[block]` is used, this attribute also serves
 /// the purpose of designating the boundary between the setup code portion of the benchmark
