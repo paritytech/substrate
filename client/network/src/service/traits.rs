@@ -259,6 +259,7 @@ where
 	}
 
 	fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
+		// TODO: make async interface to `PeerStore`?
 		T::report_peer(self, who, cost_benefit)
 	}
 

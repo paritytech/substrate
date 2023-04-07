@@ -345,6 +345,12 @@ impl Peerset {
 		let _ = self.peer_store_handle.report_peer(peer_id, score_diff);
 	}
 
+	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.
+	pub fn debug_info(&mut self) -> serde_json::Value {
+		// TODO: check what info we can include here.
+		json!("unimplemented")
+	}
+
 	/// Returns the number of peers that we have discovered.
 	pub fn num_discovered_peers(&self) -> usize {
 		self.peer_store_handle.num_known_peers()
