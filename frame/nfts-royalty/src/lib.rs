@@ -50,7 +50,7 @@ pub mod pallet {
 	use frame_support::{
 		dispatch::DispatchResult,
 		pallet_prelude::*,
-		sp_runtime::traits::{AccountIdConversion, StaticLookup},
+		sp_runtime::traits::{AccountIdConversion, StaticLookup, Permill},
 		traits::{
 			tokens::{
 				nonfungibles_v2::{Inspect as NonFungiblesInspect, Transfer}
@@ -86,10 +86,27 @@ pub mod pallet {
 			> + Transfer<Self::AccountId>;
 	}
 
+	/// Keeps track of the corresponding NFT ID, royalty percentage, and royalty recipient.
+	#[pallet::storage]
+	#[pallet::getter(fn nft_with_royalty)]
+	pub type NftWithRoyalty<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		(T::NftCollectionId, T::NftId),
+		RoyaltyDetails<T::AccountId>,
+		OptionQuery,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		// events
+		/// An NFT roaylty was successfully created.
+		NftRoyaltyCreated {
+			nft_collection: T::NftCollectionId,
+			nft: T::NftId,
+			royalty_percentage: Permill,
+			recipient: T::AccountId,,
+		}
 	}
 
 	#[pallet::error]
@@ -98,7 +115,7 @@ pub mod pallet {
 	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {
+	impl<T: Config> Pallet<T> {	
 		// public functions
 	}
 
