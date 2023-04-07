@@ -2014,7 +2014,7 @@ benchmarks! {
 		let n in 0 .. T::MaxCodeLen::get() - 255; // need some buffer so the code size does not
 												  // exceed the max code size.
 
-		let message = (0..n).zip((32u8..127u8).cycle()).map(|(_, c)| c).collect::<Vec<_>>().encode();
+		let message = (0..n).zip((32u8..127u8).cycle()).map(|(_, c)| c).collect::<Vec<_>>();
 		let message_len = message.len() as i32;
 
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
