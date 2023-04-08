@@ -36,8 +36,9 @@ use syn::{
 	parse::{Error, Parse, ParseStream, Result},
 	parse_macro_input, parse_quote,
 	spanned::Spanned,
+	token::Comma,
 	visit::{self, Visit},
-	Attribute, FnArg, GenericParam, Generics, Ident, ItemTrait, Lit, Meta, NestedMeta, TraitBound,
+	Attribute, FnArg, GenericParam, Generics, Ident, ItemTrait, LitInt, LitStr, TraitBound,
 	TraitItem, TraitItemFn,
 };
 
@@ -178,35 +179,27 @@ fn generate_versioned_api_traits(
 
 /// Try to parse the given `Attribute` as `renamed` attribute.
 fn parse_renamed_attribute(renamed: &Attribute) -> Result<(String, u32)> {
-	let meta = renamed.parse_meta()?;
-
-	let err = Err(Error::new(
-			meta.span(),
+	let mut old_name: Option<String> = None;
+	let mut version: Option<u32> = None;
+	let err = Err(
+		Error::new(
+			renamed.span(),
 			&format!(
 				"Unexpected `{renamed}` attribute. The supported format is `{renamed}(\"old_name\", version_it_was_renamed)`",
 				renamed = RENAMED_ATTRIBUTE,
 			)
 		)
 	);
-
-	match meta {
-		Meta::List(list) =>
-			if list.nested.len() > 2 && list.nested.is_empty() {
-				err
-			} else {
-				let mut itr = list.nested.iter();
-				let old_name = match itr.next() {
-					Some(NestedMeta::Lit(Lit::Str(i))) => i.value(),
-					_ => return err,
-				};
-
-				let version = match itr.next() {
-					Some(NestedMeta::Lit(Lit::Int(i))) => i.base10_parse()?,
-					_ => return err,
-				};
-
-				Ok((old_name, version))
-			},
+	renamed.parse_nested_meta(|meta| {
+		let old_name_lit: LitStr = meta.input.parse()?;
+		old_name = Some(old_name_lit.value());
+		let _comma: Comma = meta.input.parse()?;
+		let version_lit: LitInt = meta.input.parse()?;
+		version = Some(version_lit.base10_parse()?);
+		Ok(())
+	})?;
+	match (old_name, version) {
+		(Some(old_name), Some(version)) => Ok((old_name, version)),
 		_ => err,
 	}
 }
