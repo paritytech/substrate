@@ -176,7 +176,7 @@ impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<Bl
 					} else {
 						crate::log::warn!(
 							"Pallet {:?} not found",
-							sp_std::str::from_utf8(pallet_name).unwrap()
+							sp_std::str::from_utf8(pallet_name).unwrap_or_default()
 						);
 					}
 				});
