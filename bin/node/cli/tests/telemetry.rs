@@ -21,7 +21,7 @@ use std::{process, time::Duration};
 
 use crate::common::KillChildOnDrop;
 
-pub mod common;
+use substrate_cli_test_utils as common;
 pub mod websocket_server;
 
 #[tokio::test]
