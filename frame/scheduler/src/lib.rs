@@ -172,7 +172,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -217,6 +216,10 @@ pub mod pallet {
 		type OriginPrivilegeCmp: PrivilegeCmp<Self::PalletsOrigin>;
 
 		/// The maximum number of scheduled calls in the queue for a single block.
+		///
+		/// NOTE:
+		/// + Dependent pallets' benchmarks might require a higher limit for the setting. Set a
+		/// higher limit under `runtime-benchmarks` feature.
 		#[pallet::constant]
 		type MaxScheduledPerBlock: Get<u32>;
 

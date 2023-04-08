@@ -89,6 +89,10 @@ impl pallet_balances::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 pallet_staking_reward_curve::build! {
@@ -193,10 +197,11 @@ impl fast_unstake::Config for Runtime {
 type Block = frame_system::mocking::MockBlock<Runtime>;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime
+	where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
 		Timestamp: pallet_timestamp,

@@ -74,11 +74,11 @@ where
 }
 
 /// Create a message from the given data.
-pub fn msg<N: Get<u32>>(x: &'static str) -> BoundedSlice<u8, N> {
+pub fn msg<N: Get<u32>>(x: &str) -> BoundedSlice<u8, N> {
 	BoundedSlice::defensive_truncate_from(x.as_bytes())
 }
 
-pub fn vmsg(x: &'static str) -> Vec<u8> {
+pub fn vmsg(x: &str) -> Vec<u8> {
 	x.as_bytes().to_vec()
 }
 

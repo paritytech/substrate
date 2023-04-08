@@ -69,7 +69,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::InMemory,
-		keystore_remote: Default::default(),
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
 		trie_cache_maximum_size: Some(64 * 1024 * 1024),
 		state_pruning: Some(PruningMode::ArchiveAll),
@@ -137,7 +136,7 @@ fn import_block(
 	params.state_action =
 		StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(built.storage_changes));
 	params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-	futures::executor::block_on(client.import_block(params, Default::default()))
+	futures::executor::block_on(client.import_block(params))
 		.expect("importing a block doesn't fail");
 }
 
@@ -162,7 +161,7 @@ fn prepare_benchmark(client: &FullClient) -> (usize, Vec<OpaqueExtrinsic>) {
 		let extrinsic: OpaqueExtrinsic = create_extrinsic(
 			client,
 			src.clone(),
-			BalancesCall::transfer { dest: dst.clone(), value: 1 * DOLLARS },
+			BalancesCall::transfer_allow_death { dest: dst.clone(), value: 1 * DOLLARS },
 			Some(nonce),
 		)
 		.into();

@@ -50,7 +50,7 @@ pub use paste;
 pub use scale_info;
 #[cfg(feature = "std")]
 pub use serde;
-pub use sp_core::Void;
+pub use sp_core::{OpaqueMetadata, Void};
 #[doc(hidden)]
 pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]
@@ -80,10 +80,10 @@ pub mod error;
 pub mod crypto;
 pub mod dispatch_context;
 pub mod instances;
+pub mod metadata_ir;
 pub mod migrations;
 pub mod traits;
 pub mod weights;
-
 #[doc(hidden)]
 pub mod unsigned {
 	#[doc(hidden)]
@@ -371,16 +371,14 @@ macro_rules! parameter_types {
 
 			/// Set the value of this parameter type in the storage.
 			///
-			/// This needs to be executed in an externalities provided
-			/// environment.
+			/// This needs to be executed in an externalities provided environment.
 			pub fn set(value: &$type) {
 				$crate::storage::unhashed::put(&Self::key(), value);
 			}
 
 			/// Returns the value of this parameter type.
 			///
-			/// This needs to be executed in an externalities provided
-			/// environment.
+			/// This needs to be executed in an externalities provided environment.
 			#[allow(unused)]
 			pub fn get() -> $type {
 				$crate::storage::unhashed::get(&Self::key()).unwrap_or_else(|| $value)
@@ -827,9 +825,9 @@ pub use serde::{Deserialize, Serialize};
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::metadata::{
-		PalletStorageMetadata, StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
-		StorageHasher,
+	use crate::metadata_ir::{
+		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
+		StorageEntryTypeIR, StorageHasherIR,
 	};
 	use codec::{Codec, EncodeLike};
 	use frame_support::traits::CrateVersion;
@@ -1310,101 +1308,107 @@ pub mod tests {
 		});
 	}
 
-	fn expected_metadata() -> PalletStorageMetadata {
-		PalletStorageMetadata {
+	fn expected_metadata() -> PalletStorageMetadataIR {
+		PalletStorageMetadataIR {
 			prefix: "Test",
 			entries: vec![
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "Value",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u64>()),
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u64>()),
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "Data",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Twox64Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Twox64Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u64>(),
 					},
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "OptionLinkedMap",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Identity],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Identity],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData2",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "DataDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Twox64Concat, StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![
+							StorageHasherIR::Twox64Concat,
+							StorageHasherIR::Blake2_128Concat,
+						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u64>(),
 					},
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericDataDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Identity],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat, StorageHasherIR::Identity],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData2DM",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![
+							StorageHasherIR::Blake2_128Concat,
+							StorageHasherIR::Twox64Concat,
+						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "AppendableDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
 						hashers: vec![
-							StorageHasher::Blake2_128Concat,
-							StorageHasher::Blake2_128Concat,
+							StorageHasherIR::Blake2_128Concat,
+							StorageHasherIR::Blake2_128Concat,
 						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<Vec<u32>>(),
@@ -1546,6 +1550,7 @@ pub mod pallet_prelude {
 /// * [`pallet::inherent`](#inherent-palletinherent-optional)
 /// * [`pallet::validate_unsigned`](#validate-unsigned-palletvalidate_unsigned-optional)
 /// * [`pallet::origin`](#origin-palletorigin-optional)
+/// * [`pallet::composite_enum`](#composite-enum-palletcomposite_enum-optional)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -2271,6 +2276,29 @@ pub mod pallet_prelude {
 ///
 /// Also see [`pallet::origin`](`frame_support::pallet_macros::origin`)
 ///
+/// # Composite enum `#[pallet::composite_enum]` (optional)
+///
+/// The `#[pallet::composite_enum]` attribute allows you to define an enum on the pallet which
+/// will then instruct `construct_runtime` to amalgamate all similarly-named enums from other
+/// pallets into an aggregate enum. This is similar in principle with how the aggregate enum is
+/// generated for `#[pallet::event]` or `#[pallet::error]`.
+///
+/// The item tagged with `#[pallet::composite_enum]` MUST be an enum declaration, and can ONLY
+/// be the following identifiers: `FreezeReason`, `HoldReason`, `LockId` or `SlashReason`.
+/// Custom identifiers are not supported.
+///
+/// NOTE: For ease of usage, when no `#[derive]` attributes are detected, the
+/// `#[pallet::composite_enum]` attribute will automatically derive the following traits for
+/// the enum:
+///
+/// ```ignore
+/// Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo,
+/// RuntimeDebug
+/// ```
+///
+/// The inverse is also true: if there are any #[derive] attributes present for the enum, then
+/// the attribute will not automatically derive any of the traits described above.
+///
 /// # General notes on instantiable pallets
 ///
 /// An instantiable pallet is one where Config is generic, i.e. `Config<I>`. This allows
@@ -2802,10 +2830,11 @@ pub use frame_support_procedural::pallet;
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
-		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
-		extra_constants, generate_deposit, generate_storage_info, generate_store, genesis_build,
-		genesis_config, getter, hooks, inherent, origin, storage, storage_prefix, storage_version,
-		type_value, unbounded, validate_unsigned, weight, whitelist_storage,
+		call_index, compact, composite_enum, config, constant,
+		disable_frame_system_supertrait_check, error, event, extra_constants, generate_deposit,
+		generate_storage_info, generate_store, genesis_build, genesis_config, getter, hooks,
+		inherent, origin, storage, storage_prefix, storage_version, type_value, unbounded,
+		validate_unsigned, weight, whitelist_storage,
 	};
 }
 

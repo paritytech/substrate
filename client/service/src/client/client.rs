@@ -51,8 +51,8 @@ use sp_api::{
 	ProvideRuntimeApi,
 };
 use sp_blockchain::{
-	self as blockchain, well_known_cache_keys::Id as CacheKeyId, Backend as ChainBackend,
-	CachedHeaderMetadata, Error, HeaderBackend as ChainHeaderBackend, HeaderMetadata,
+	self as blockchain, Backend as ChainBackend, CachedHeaderMetadata, Error,
+	HeaderBackend as ChainHeaderBackend, HeaderMetadata,
 };
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
@@ -65,7 +65,7 @@ use sp_core::{
 	traits::SpawnNamed,
 };
 #[cfg(feature = "test-helpers")]
-use sp_keystore::SyncCryptoStorePtr;
+use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{
@@ -161,7 +161,7 @@ pub fn new_in_mem<E, Block, G, RA>(
 	backend: Arc<in_mem::Backend<Block>>,
 	executor: E,
 	genesis_block_builder: G,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -224,7 +224,7 @@ pub fn new_with_backend<B, E, Block, G, RA>(
 	backend: Arc<B>,
 	executor: E,
 	genesis_block_builder: G,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
@@ -243,15 +243,11 @@ where
 		Default::default(),
 		keystore,
 		sc_offchain::OffchainDb::factory_from_backend(&*backend),
+		Arc::new(executor.clone()),
 	);
 
-	let call_executor = LocalCallExecutor::new(
-		backend.clone(),
-		executor,
-		spawn_handle.clone(),
-		config.clone(),
-		extensions,
-	)?;
+	let call_executor =
+		LocalCallExecutor::new(backend.clone(), executor, config.clone(), extensions)?;
 
 	Client::new(
 		backend,
@@ -504,7 +500,6 @@ where
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
 		import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 		storage_changes: Option<
 			sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>,
 		>,
@@ -559,7 +554,6 @@ where
 			body,
 			indexed_body,
 			storage_changes,
-			new_cache,
 			finalized,
 			auxiliary,
 			fork_choice,
@@ -599,7 +593,6 @@ where
 		storage_changes: Option<
 			sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>,
 		>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		fork_choice: ForkChoiceStrategy,
@@ -712,7 +705,6 @@ where
 					},
 				};
 
-				operation.op.update_cache(new_cache);
 				storage_changes
 			},
 			None => None,
@@ -1770,7 +1762,6 @@ where
 	async fn import_block(
 		&mut self,
 		mut import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let span = tracing::span!(tracing::Level::DEBUG, "import_block");
 		let _enter = span.enter();
@@ -1785,7 +1776,7 @@ where
 			};
 
 		self.lock_import_and_run(|operation| {
-			self.apply_block(operation, import_block, new_cache, storage_changes)
+			self.apply_block(operation, import_block, storage_changes)
 		})
 		.map_err(|e| {
 			warn!("Block import error: {}", e);
@@ -1875,9 +1866,8 @@ where
 	async fn import_block(
 		&mut self,
 		import_block: BlockImportParams<Block, Self::Transaction>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		(&*self).import_block(import_block, new_cache).await
+		(&*self).import_block(import_block).await
 	}
 
 	async fn check_block(
