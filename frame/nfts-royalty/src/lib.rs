@@ -37,15 +37,25 @@ mod tests;
 
 pub use pallet::*;
 pub use scale_info::Type;
+pub use types::*;
+use frame_system::Config as SystemConfig;
+use sp_runtime::traits::StaticLookup;
 
-#[frame_support::pallet]
+/// The log target of this pallet.
+pub const LOG_TARGET: &'static str = "runtime::nfts-royalty";
+
+type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
+
+#[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
-	use sp_std::{fmt::Display};
+	use sp_std::fmt::Display;
+	use frame_system::pallet_prelude::*;
+	use pallet_nfts::MintWitness;
 
 	use frame_support::{
 		pallet_prelude::*,
-		sp_runtime::traits::{AccountIdConversion, StaticLookup, Permill},
+		sp_runtime::Permill,
 		traits::{
 			tokens::{
 				nonfungibles_v2::{Inspect as NonFungiblesInspect, Transfer}
@@ -54,9 +64,11 @@ pub mod pallet {
 		}
 	};
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -71,12 +83,12 @@ pub mod pallet {
 		type NftCollectionId: Member + Parameter + MaxEncodedLen + Copy + Display;
 
 		/// The type used to identify an NFT within a collection.
-		type NftId: Member + Parameter + MaxEncodedLen + Copy + Display;
+		type NftItemId: Member + Parameter + MaxEncodedLen + Copy + Display;
 
 		/// Registry for minted NFTs.
 		type Nfts: NonFungiblesInspect<
 				Self::AccountId,
-				ItemId = Self::NftId,
+				ItemId = Self::NftItemId,
 				CollectionId = Self::NftCollectionId,
 			> + Transfer<Self::AccountId>;
 	}
@@ -87,7 +99,7 @@ pub mod pallet {
 	pub type NftWithRoyalty<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
-		(T::NftCollectionId, T::NftId),
+		(T::NftCollectionId, T::NftItemId),
 		RoyaltyDetails<T::AccountId>,
 		OptionQuery,
 	>;
@@ -98,9 +110,9 @@ pub mod pallet {
 		/// An NFT roaylty was successfully created.
 		NftRoyaltyCreated {
 			nft_collection: T::NftCollectionId,
-			nft: T::NftId,
+			nft: T::NftItemId,
 			royalty_percentage: Permill,
-			recipient: T::AccountId,,
+			royalty_recipient: T::AccountId,
 		}
 	}
 
@@ -111,7 +123,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {	
-		// public functions
+		//public functions
 	}
 
 	impl<T: Config> Pallet<T> {
