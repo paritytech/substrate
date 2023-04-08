@@ -22,8 +22,7 @@ use crate as pallet_nfts_royalty;
 
 use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
-	PalletId,
+	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64}
 };
 use pallet_nfts::{PalletFeatures};
 use sp_core::H256;
@@ -50,7 +49,7 @@ construct_runtime!(
 		System: frame_system,
 		Balances: pallet_balances,
 		Nfts: pallet_nfts,
-        NftRoyalty: pallet_nfts_royalty,
+        NftsRoyalty: pallet_nfts_royalty,
 	}
 );
 impl frame_system::Config for Test {
@@ -133,17 +132,11 @@ impl pallet_nfts::Config for Test {
 	type Helper = ();
 }
 
-parameter_types! {
-	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
-	pub NewAssetSymbol: Vec<u8> = (*b"FRAC").into();
-	pub NewAssetName: Vec<u8> = (*b"Frac").into();
-}
-
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
-	type NftId = <Self as pallet_nfts::Config>::ItemId;
+	type NftItemId = <Self as pallet_nfts::Config>::ItemId;
 	type Nfts = Nfts;
 }
 

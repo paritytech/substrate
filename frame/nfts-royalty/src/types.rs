@@ -22,6 +22,7 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+use sp_runtime::Permill;
 
 /// Stores the details of an item with royalty.
 #[derive(Decode, Encode, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo)]
