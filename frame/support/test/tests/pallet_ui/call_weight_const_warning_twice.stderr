@@ -1,0 +1,31 @@
+error: invalid suffix `custom_prefix` for number literal
+  --> tests/pallet_ui/call_weight_const_warning_twice.rs:19:26
+   |
+19 |         #[pallet::weight(123_custom_prefix)]
+   |                          ^^^^^^^^^^^^^^^^^ invalid suffix `custom_prefix`
+   |
+   = help: the suffix must be one of the numeric types (`u32`, `isize`, `f32`, etc.)
+
+error: use of deprecated constant `pallet::warnings::ConstantWeight_0::_w`:
+               It is deprecated to use hard-coded constant as call weight.
+               Please instead benchmark all calls or put the pallet into `dev` mode.
+
+               For more info see:
+                   <https://github.com/paritytech/substrate/pull/13798>
+  --> tests/pallet_ui/call_weight_const_warning_twice.rs:15:26
+   |
+15 |         #[pallet::weight(123)]
+   |                          ^^^
+   |
+   = note: `-D deprecated` implied by `-D warnings`
+
+error: use of deprecated constant `pallet::warnings::ConstantWeight_1::_w`:
+               It is deprecated to use hard-coded constant as call weight.
+               Please instead benchmark all calls or put the pallet into `dev` mode.
+
+               For more info see:
+                   <https://github.com/paritytech/substrate/pull/13798>
+  --> tests/pallet_ui/call_weight_const_warning_twice.rs:19:26
+   |
+19 |         #[pallet::weight(123_custom_prefix)]
+   |                          ^^^^^^^^^^^^^^^^^

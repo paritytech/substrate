@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -406,7 +406,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDbSync<BlockHash, Key, D> {
 	}
 
 	fn prune(&mut self, commit: &mut CommitSet<Key>) -> Result<(), Error<D::Error>> {
-		if let (&mut Some(ref mut pruning), &PruningMode::Constrained(ref constraints)) =
+		if let (&mut Some(ref mut pruning), PruningMode::Constrained(constraints)) =
 			(&mut self.pruning, &self.mode)
 		{
 			loop {
@@ -594,7 +594,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDb<BlockHash, Key, D> {
 	}
 
 	/// Prevents pruning of specified block and its descendants.
-	/// `hint` used for futher checking if the given block exists
+	/// `hint` used for further checking if the given block exists
 	pub fn pin<F>(&self, hash: &BlockHash, number: u64, hint: F) -> Result<(), PinError>
 	where
 		F: Fn() -> bool,
@@ -665,7 +665,7 @@ pub enum IsPruned {
 	Pruned,
 	/// Definitely not pruned
 	NotPruned,
-	/// May or may not pruned, need futher checking
+	/// May or may not pruned, need further checking
 	MaybePruned,
 }
 

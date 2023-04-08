@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -308,7 +308,7 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 							value: kitchensink_runtime::ExistentialDeposit::get() + 1,
 						}),
 					BlockType::RandomTransfersReaping => {
-						RuntimeCall::Balances(BalancesCall::transfer {
+						RuntimeCall::Balances(BalancesCall::transfer_allow_death {
 							dest: sp_runtime::MultiAddress::Id(receiver),
 							// Transfer so that ending balance would be 1 less than existential
 							// deposit so that we kill the sender account.
@@ -411,11 +411,16 @@ impl BenchDb {
 
 		let client = sc_service::new_client(
 			backend.clone(),
-			executor,
+			executor.clone(),
 			genesis_block_builder,
 			None,
 			None,
-			ExecutionExtensions::new(profile.into_execution_strategies(), None, None),
+			ExecutionExtensions::new(
+				profile.into_execution_strategies(),
+				None,
+				None,
+				Arc::new(executor),
+			),
 			Box::new(task_executor.clone()),
 			None,
 			None,
@@ -682,10 +687,8 @@ impl BenchContext {
 		assert_eq!(self.client.chain_info().best_number, 0);
 
 		assert_eq!(
-			futures::executor::block_on(
-				self.client.import_block(import_params, Default::default())
-			)
-			.expect("Failed to import block"),
+			futures::executor::block_on(self.client.import_block(import_params))
+				.expect("Failed to import block"),
 			ImportResult::Imported(ImportedAux {
 				header_only: false,
 				clear_justification_requests: false,

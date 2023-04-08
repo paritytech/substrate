@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,7 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays},
 	log,
 	pallet_prelude::*,
-	traits::{Get, KeyOwnerProofSystem, OneSessionHandler},
+	traits::{Get, OneSessionHandler},
 	weights::Weight,
 	BoundedSlice, BoundedVec, Parameter,
 };
@@ -34,13 +34,13 @@ use frame_system::{
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, Member},
-	KeyTypeId, RuntimeAppPublic,
+	RuntimeAppPublic,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_staking::SessionIndex;
+use sp_staking::{offence::OffenceReportSystem, SessionIndex};
 use sp_std::prelude::*;
 
-use beefy_primitives::{
+use sp_consensus_beefy::{
 	AuthorityIndex, BeefyAuthorityId, ConsensusLog, EquivocationProof, OnNewValidatorSet,
 	ValidatorSet, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
@@ -52,10 +52,10 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub use crate::equivocation::{
-	BeefyEquivocationOffence, BeefyOffence, BeefyTimeSlot, EquivocationHandler, HandleEquivocation,
-};
+pub use crate::equivocation::{EquivocationOffence, EquivocationReportSystem, TimeSlot};
 pub use pallet::*;
+
+use crate::equivocation::EquivocationEvidenceFor;
 
 const LOG_TARGET: &str = "runtime::beefy";
 
@@ -74,32 +74,18 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen;
 
-		/// A system for proving ownership of keys, i.e. that a given key was part
-		/// of a validator set, needed for validating equivocation reports.
-		type KeyOwnerProofSystem: KeyOwnerProofSystem<
-			(KeyTypeId, Self::BeefyId),
-			Proof = Self::KeyOwnerProof,
-			IdentificationTuple = Self::KeyOwnerIdentification,
-		>;
-
-		/// The proof of key ownership, used for validating equivocation reports
-		/// The proof must include the session index and validator count of the
-		/// session at which the equivocation occurred.
-		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
-
-		/// The identification of a key owner, used when reporting equivocations.
-		type KeyOwnerIdentification: Parameter;
-
-		/// The equivocation handling subsystem, defines methods to report an
-		/// offence (after the equivocation has been validated) and for submitting a
-		/// transaction to report an equivocation (from an offchain context).
-		/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
-		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
-		/// definition.
-		type HandleEquivocation: HandleEquivocation<Self>;
-
 		/// The maximum number of authorities that can be added.
+		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
+
+		/// The maximum number of entries to keep in the set id to session index mapping.
+		///
+		/// Since the `SetIdSession` map is only used for validating equivocations this
+		/// value should relate to the bonding duration of whatever staking system is
+		/// being used (if any). If equivocation handling is not enabled then this value
+		/// can be zero.
+		#[pallet::constant]
+		type MaxSetIdSessionEntries: Get<u64>;
 
 		/// A hook to act on the new BEEFY validator set.
 		///
@@ -110,6 +96,19 @@ pub mod pallet {
 
 		/// Weights for this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// The proof of key ownership, used for validating equivocation reports
+		/// The proof must include the session index and validator count of the
+		/// session at which the equivocation occurred.
+		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+
+		/// The equivocation handling subsystem.
+		///
+		/// Defines methods to publish, check and process an equivocation offence.
+		type EquivocationReportSystem: OffenceReportSystem<
+			Option<Self::AccountId>,
+			EquivocationEvidenceFor<Self>,
+		>;
 	}
 
 	#[pallet::pallet]
@@ -125,7 +124,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn validator_set_id)]
 	pub(super) type ValidatorSetId<T: Config> =
-		StorageValue<_, beefy_primitives::ValidatorSetId, ValueQuery>;
+		StorageValue<_, sp_consensus_beefy::ValidatorSetId, ValueQuery>;
 
 	/// Authorities set scheduled to be used with the next session
 	#[pallet::storage]
@@ -136,11 +135,17 @@ pub mod pallet {
 	/// A mapping from BEEFY set ID to the index of the *most recent* session for which its
 	/// members were responsible.
 	///
+	/// This is only used for validating equivocation proofs. An equivocation proof must
+	/// contains a key-ownership proof for a given session, therefore we need a way to tie
+	/// together sessions and BEEFY set ids, i.e. we need to validate that a validator
+	/// was the owner of a given key on a given session, and what the active set ID was
+	/// during that session.
+	///
 	/// TWOX-NOTE: `ValidatorSetId` is not under user control.
 	#[pallet::storage]
 	#[pallet::getter(fn session_for_set)]
 	pub(super) type SetIdSession<T: Config> =
-		StorageMap<_, Twox64Concat, beefy_primitives::ValidatorSetId, SessionIndex>;
+		StorageMap<_, Twox64Concat, sp_consensus_beefy::ValidatorSetId, SessionIndex>;
 
 	/// Block number where BEEFY consensus is enabled/started.
 	/// If changing this, make sure `Self::ValidatorSetId` is also reset to
@@ -213,7 +218,12 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
 
-			Self::do_report_equivocation(Some(reporter), *equivocation_proof, key_owner_proof)
+			T::EquivocationReportSystem::process_evidence(
+				Some(reporter),
+				(*equivocation_proof, key_owner_proof),
+			)?;
+			// Waive the fee since the report is valid and beneficial
+			Ok(Pays::No.into())
 		}
 
 		/// Report voter equivocation/misbehavior. This method will verify the
@@ -240,20 +250,22 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
-			Self::do_report_equivocation(
-				T::HandleEquivocation::block_author(),
-				*equivocation_proof,
-				key_owner_proof,
-			)
+			T::EquivocationReportSystem::process_evidence(
+				None,
+				(*equivocation_proof, key_owner_proof),
+			)?;
+			Ok(Pays::No.into())
 		}
 	}
 
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
+
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 			Self::pre_dispatch(call)
 		}
+
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			Self::validate_unsigned(source, call)
 		}
@@ -264,7 +276,7 @@ impl<T: Config> Pallet<T> {
 	/// Return the current active BEEFY validator set.
 	pub fn validator_set() -> Option<ValidatorSet<T::BeefyId>> {
 		let validators: BoundedVec<T::BeefyId, T::MaxAuthorities> = Self::authorities();
-		let id: beefy_primitives::ValidatorSetId = Self::validator_set_id();
+		let id: sp_consensus_beefy::ValidatorSetId = Self::validator_set_id();
 		ValidatorSet::<T::BeefyId>::new(validators, id)
 	}
 
@@ -279,11 +291,7 @@ impl<T: Config> Pallet<T> {
 		>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::HandleEquivocation::submit_unsigned_equivocation_report(
-			equivocation_proof,
-			key_owner_proof,
-		)
-		.ok()
+		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()
 	}
 
 	fn change_authorities(
@@ -352,62 +360,6 @@ impl<T: Config> Pallet<T> {
 
 		Ok(())
 	}
-
-	fn do_report_equivocation(
-		reporter: Option<T::AccountId>,
-		equivocation_proof: EquivocationProof<
-			BlockNumberFor<T>,
-			T::BeefyId,
-			<T::BeefyId as RuntimeAppPublic>::Signature,
-		>,
-		key_owner_proof: T::KeyOwnerProof,
-	) -> DispatchResultWithPostInfo {
-		// We check the equivocation within the context of its set id (and
-		// associated session) and round. We also need to know the validator
-		// set count at the time of the offence since it is required to calculate
-		// the slash amount.
-		let set_id = equivocation_proof.set_id();
-		let round = *equivocation_proof.round_number();
-		let offender_id = equivocation_proof.offender_id().clone();
-		let session_index = key_owner_proof.session();
-		let validator_count = key_owner_proof.validator_count();
-
-		// validate the key ownership proof extracting the id of the offender.
-		let offender = T::KeyOwnerProofSystem::check_proof(
-			(beefy_primitives::KEY_TYPE, offender_id),
-			key_owner_proof,
-		)
-		.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
-
-		// validate equivocation proof (check votes are different and signatures are valid).
-		if !beefy_primitives::check_equivocation_proof(&equivocation_proof) {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
-		}
-
-		// check that the session id for the membership proof is within the
-		// bounds of the set id reported in the equivocation.
-		let set_id_session_index =
-			Self::session_for_set(set_id).ok_or(Error::<T>::InvalidEquivocationProof)?;
-		if session_index != set_id_session_index {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
-		}
-
-		// report to the offences module rewarding the sender.
-		T::HandleEquivocation::report_offence(
-			reporter.into_iter().collect(),
-			<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
-				session_index,
-				validator_count,
-				offender,
-				set_id,
-				round,
-			),
-		)
-		.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
-
-		// waive the fee since the report is valid and beneficial
-		Ok(Pays::No.into())
-	}
 }
 
 impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
@@ -462,9 +414,15 @@ where
 		// We want to have at least one BEEFY mandatory block per session.
 		Self::change_authorities(bounded_next_authorities, bounded_next_queued_authorities);
 
+		let validator_set_id = Self::validator_set_id();
 		// Update the mapping for the new set id that corresponds to the latest session (i.e. now).
 		let session_index = <pallet_session::Pallet<T>>::current_index();
-		SetIdSession::<T>::insert(Self::validator_set_id(), &session_index);
+		SetIdSession::<T>::insert(validator_set_id, &session_index);
+		// Prune old entry if limit reached.
+		let max_set_id_session_entries = T::MaxSetIdSessionEntries::get().max(1);
+		if validator_set_id >= max_set_id_session_entries {
+			SetIdSession::<T>::remove(validator_set_id - max_set_id_session_entries);
+		}
 	}
 
 	fn on_disabled(i: u32) {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,7 +47,6 @@ mod pallet {
 	use frame_support::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
@@ -276,6 +275,32 @@ fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyEx
 			Ok(Ok(()))
 		},
 		Extrinsic::Store(data) => execute_store(data.clone()),
+		Extrinsic::ReadAndPanic(i) => execute_read(*i, true),
+		Extrinsic::Read(i) => execute_read(*i, false),
+	}
+}
+
+fn execute_read(read: u32, panic_at_end: bool) -> ApplyExtrinsicResult {
+	let mut next_key = vec![];
+	for _ in 0..(read as usize) {
+		if let Some(next) = sp_io::storage::next_key(&next_key) {
+			// Read the value
+			sp_io::storage::get(&next);
+
+			next_key = next;
+		} else {
+			if panic_at_end {
+				return Ok(Ok(()))
+			} else {
+				panic!("Could not read {read} times from the state");
+			}
+		}
+	}
+
+	if panic_at_end {
+		panic!("BYE")
+	} else {
+		Ok(Ok(()))
 	}
 }
 
@@ -354,7 +379,7 @@ mod tests {
 	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
 	use sp_core::{
 		map,
-		traits::{CodeExecutor, RuntimeCode},
+		traits::{CallContext, CodeExecutor, RuntimeCode},
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
@@ -438,7 +463,14 @@ mod tests {
 			};
 
 			executor()
-				.call(&mut ext, &runtime_code, "Core_execute_block", &b.encode(), false)
+				.call(
+					&mut ext,
+					&runtime_code,
+					"Core_execute_block",
+					&b.encode(),
+					false,
+					CallContext::Offchain,
+				)
 				.0
 				.unwrap();
 		})
@@ -540,7 +572,14 @@ mod tests {
 			};
 
 			executor()
-				.call(&mut ext, &runtime_code, "Core_execute_block", &b.encode(), false)
+				.call(
+					&mut ext,
+					&runtime_code,
+					"Core_execute_block",
+					&b.encode(),
+					false,
+					CallContext::Offchain,
+				)
 				.0
 				.unwrap();
 		})
