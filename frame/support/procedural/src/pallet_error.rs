@@ -151,10 +151,12 @@ fn generate_variant_field_types(
 		if attr.path().is_ident("codec") {
 			let mut skip = false;
 
-			attr.parse_nested_meta(|meta| {
+			// We ignore the error intentionally as this isn't `codec(skip)` when
+			// `parse_nested_meta` fails.
+			let _ = attr.parse_nested_meta(|meta| {
 				skip = meta.path.is_ident("skip");
 				Ok(())
-			})?;
+			});
 
 			if skip {
 				return Ok(None)
