@@ -29,11 +29,8 @@ use crate::{
 	LOG_TARGET,
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{SaturatedConversion, Zero},
-	transaction_validity::TransactionValidityError,
-};
+use sp_arithmetic::traits::{SaturatedConversion, Zero};
+use sp_runtime::{generic::BlockId, transaction_validity::TransactionValidityError};
 
 use futures::prelude::*;
 use std::time::Duration;
@@ -201,7 +198,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 					ext_hash,
 				);
 
-				continue
+				continue;
 			}
 
 			self.block_ordered

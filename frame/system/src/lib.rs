@@ -66,14 +66,14 @@
 
 #[cfg(feature = "std")]
 use serde::Serialize;
+use sp_arithmetic::traits::{AtLeast32Bit, AtLeast32BitUnsigned, Bounded, One, Saturating, Zero};
 #[cfg(feature = "runtime-benchmarks")]
 use sp_runtime::traits::TrailingZeroInput;
 use sp_runtime::{
 	generic,
 	traits::{
-		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
-		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay,
-		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
+		self, BadOrigin, BlockNumberProvider, CheckEqual, Dispatchable, Hash, Lookup, LookupError,
+		MaybeDisplay, MaybeSerializeDeserialize, Member, SimpleBitOps, StaticLookup,
 	},
 	DispatchError, RuntimeDebug,
 };
@@ -1246,7 +1246,7 @@ impl<T: Config> Pallet<T> {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
 		if block_number.is_zero() {
-			return
+			return;
 		}
 
 		let phase = ExecutionPhase::<T>::get().unwrap_or_default();
@@ -1331,30 +1331,30 @@ impl<T: Config> Pallet<T> {
 			Self::block_number(),
 			Self::extrinsic_index().unwrap_or_default(),
 			Self::all_extrinsics_len(),
-			sp_runtime::Percent::from_rational(
+			sp_arithmetic::Percent::from_rational(
 				Self::all_extrinsics_len(),
 				*T::BlockLength::get().max.get(DispatchClass::Normal)
 			).deconstruct(),
-			sp_runtime::Percent::from_rational(
+			sp_arithmetic::Percent::from_rational(
 				Self::all_extrinsics_len(),
 				*T::BlockLength::get().max.get(DispatchClass::Operational)
 			).deconstruct(),
-			sp_runtime::Percent::from_rational(
+			sp_arithmetic::Percent::from_rational(
 				Self::all_extrinsics_len(),
 				*T::BlockLength::get().max.get(DispatchClass::Mandatory)
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Normal),
-			sp_runtime::Percent::from_rational(
+			sp_arithmetic::Percent::from_rational(
 				Self::block_weight().get(DispatchClass::Normal).ref_time(),
 				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Operational),
-			sp_runtime::Percent::from_rational(
+			sp_arithmetic::Percent::from_rational(
 				Self::block_weight().get(DispatchClass::Operational).ref_time(),
 				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Mandatory),
-			sp_runtime::Percent::from_rational(
+			sp_arithmetic::Percent::from_rational(
 				Self::block_weight().get(DispatchClass::Mandatory).ref_time(),
 				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
@@ -1605,11 +1605,11 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
 
 		if new_version.spec_name != current_version.spec_name {
-			return Err(Error::<T>::InvalidSpecName.into())
+			return Err(Error::<T>::InvalidSpecName.into());
 		}
 
 		if new_version.spec_version <= current_version.spec_version {
-			return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
+			return Err(Error::<T>::SpecVersionNeedsToIncrease.into());
 		}
 
 		Ok(())

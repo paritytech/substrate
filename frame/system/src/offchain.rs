@@ -58,9 +58,10 @@
 
 use codec::Encode;
 use frame_support::RuntimeDebug;
+use sp_arithmetic::traits::One;
 use sp_runtime::{
 	app_crypto::RuntimeAppPublic,
-	traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One},
+	traits::{Extrinsic as ExtrinsicT, IdentifyAccount},
 };
 use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 
@@ -207,7 +208,7 @@ impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>> Signer<T, C, ForAny
 		for account in accounts.into_iter() {
 			let res = f(&account);
 			if let Some(res) = res {
-				return Some((account, res))
+				return Some((account, res));
 			}
 		}
 		None

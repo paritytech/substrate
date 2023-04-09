@@ -26,7 +26,8 @@ use crate::{
 	traits::Get,
 };
 use codec::MaxEncodedLen;
-use sp_runtime::{traits::MaybeSerializeDeserialize, FixedPointOperand};
+use sp_arithmetic::FixedPointOperand;
+use sp_runtime::traits::MaybeSerializeDeserialize;
 use sp_std::fmt::Debug;
 
 mod reservable;

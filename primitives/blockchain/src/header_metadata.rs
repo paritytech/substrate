@@ -20,7 +20,8 @@
 
 use lru::LruCache;
 use parking_lot::RwLock;
-use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One};
+use sp_arithmetic::traits::One;
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::num::NonZeroUsize;
 
 /// Set to the expected max difference between `best` and `finalized` blocks at sync.
@@ -39,12 +40,12 @@ pub fn lowest_common_ancestor<Block: BlockT, T: HeaderMetadata<Block> + ?Sized>(
 ) -> Result<HashAndNumber<Block>, T::Error> {
 	let mut header_one = backend.header_metadata(id_one)?;
 	if header_one.parent == id_two {
-		return Ok(HashAndNumber { hash: id_two, number: header_one.number - One::one() })
+		return Ok(HashAndNumber { hash: id_two, number: header_one.number - One::one() });
 	}
 
 	let mut header_two = backend.header_metadata(id_two)?;
 	if header_two.parent == id_one {
-		return Ok(HashAndNumber { hash: id_one, number: header_one.number })
+		return Ok(HashAndNumber { hash: id_one, number: header_one.number });
 	}
 
 	let mut orig_header_one = header_one.clone();
@@ -58,7 +59,7 @@ pub fn lowest_common_ancestor<Block: BlockT, T: HeaderMetadata<Block> + ?Sized>(
 		if ancestor_one.number >= header_two.number {
 			header_one = ancestor_one;
 		} else {
-			break
+			break;
 		}
 	}
 
@@ -68,7 +69,7 @@ pub fn lowest_common_ancestor<Block: BlockT, T: HeaderMetadata<Block> + ?Sized>(
 		if ancestor_two.number >= header_one.number {
 			header_two = ancestor_two;
 		} else {
-			break
+			break;
 		}
 	}
 

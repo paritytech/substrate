@@ -28,7 +28,7 @@ use kitchensink_runtime::{
 };
 use node_primitives::Balance;
 use node_testing::keyring::*;
-use sp_runtime::{traits::One, Perbill};
+use sp_arithmetic::{traits::One, Perbill};
 
 pub mod common;
 use self::common::{sign, *};

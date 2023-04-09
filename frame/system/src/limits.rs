@@ -30,7 +30,8 @@ use frame_support::{
 	weights::{constants, Weight},
 };
 use scale_info::TypeInfo;
-use sp_runtime::{traits::Bounded, Perbill, RuntimeDebug};
+use sp_arithmetic::{traits::Bounded, Perbill};
+use sp_runtime::RuntimeDebug;
 
 /// Block length limit configuration.
 #[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]

@@ -25,13 +25,13 @@ use crate::{aux_schema, MmrClient, LOG_TARGET};
 use log::{debug, error, info, warn};
 use sc_client_api::{Backend, FinalityNotification};
 use sc_offchain::OffchainDb;
+use sp_arithmeric::traits::[One, Saturating];
 use sp_blockchain::{CachedHeaderMetadata, ForkBackend};
 use sp_consensus_beefy::MmrRootHash;
 use sp_core::offchain::{DbExternalities, StorageKind};
 use sp_mmr_primitives::{utils, utils::NodesUtils, MmrApi, NodeIndex};
 use sp_runtime::{
-	traits::{Block, Header, NumberFor, One},
-	Saturating,
+	traits::{Block, Header, NumberFor},
 };
 use std::{collections::VecDeque, sync::Arc};
 
@@ -149,7 +149,7 @@ where
 			None => {
 				// If we can't convert the block number to a leaf index, the chain state is probably
 				// corrupted. We only log the error, hoping that the chain state will be fixed.
-				return
+				return;
 			},
 		};
 
@@ -170,7 +170,7 @@ where
 		// Don't canonicalize branches corresponding to blocks for which the MMR pallet
 		// wasn't yet initialized.
 		if header.number < self.first_mmr_block {
-			return
+			return;
 		}
 
 		// We "canonicalize" the leaf associated with the provided block
@@ -181,7 +181,7 @@ where
 				// If we can't convert the block number to a leaf index, the chain state is probably
 				// corrupted. We only log the error, hoping that the chain state will be fixed.
 				self.best_canonicalized = header.number;
-				return
+				return;
 			},
 		};
 
@@ -231,7 +231,7 @@ where
 					_ => break,
 				};
 				if header.number <= self.best_canonicalized {
-					break
+					break;
 				}
 				to_canon.push_front(header.hash);
 			}

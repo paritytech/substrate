@@ -31,11 +31,12 @@ use codec::Encode;
 use sp_api::{
 	ApiExt, ApiRef, Core, ProvideRuntimeApi, StorageChanges, StorageProof, TransactionOutcome,
 };
+use sp_arithmetic::traits::One;
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	legacy,
-	traits::{Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
+	traits::{Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor},
 	Digest,
 };
 

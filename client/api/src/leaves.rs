@@ -19,9 +19,9 @@
 //! Helper for managing the set of available leaves in the chain for DB implementations.
 
 use codec::{Decode, Encode};
+use sp_arithmetic::traits::AtLeast32Bit;
 use sp_blockchain::{Error, Result};
 use sp_database::{Database, Transaction};
-use sp_runtime::traits::AtLeast32Bit;
 use std::{cmp::Reverse, collections::BTreeMap};
 
 type DbHash = sp_core::H256;
@@ -135,7 +135,7 @@ where
 		let number = Reverse(number);
 
 		if !self.remove_leaf(&number, &hash) {
-			return None
+			return None;
 		}
 
 		let inserted = parent_hash.and_then(|parent_hash| {
@@ -160,7 +160,7 @@ where
 	/// will be pruned soon afterwards anyway.
 	pub fn finalize_height(&mut self, number: N) -> FinalizationOutcome<H, N> {
 		let boundary = if number == N::zero() {
-			return FinalizationOutcome { removed: BTreeMap::new() }
+			return FinalizationOutcome { removed: BTreeMap::new() };
 		} else {
 			number - N::one()
 		};
@@ -176,7 +176,7 @@ where
 	/// Returns the leaves that would be displaced by finalizing the given block.
 	pub fn displaced_by_finalize_height(&self, number: N) -> FinalizationOutcome<H, N> {
 		let boundary = if number == N::zero() {
-			return FinalizationOutcome { removed: BTreeMap::new() }
+			return FinalizationOutcome { removed: BTreeMap::new() };
 		} else {
 			number - N::one()
 		};

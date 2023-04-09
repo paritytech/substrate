@@ -23,7 +23,8 @@ use crate::traits::{
 	misc::{SameOrOther, TryDrop},
 	tokens::Balance,
 };
-use sp_runtime::{traits::Zero, RuntimeDebug};
+use sp_arithmetic::traits::Zero;
+use sp_runtime::RuntimeDebug;
 use sp_std::marker::PhantomData;
 
 /// Handler for when an imbalance gets dropped. This could handle either a credit (negative) or

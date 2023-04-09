@@ -22,9 +22,10 @@ use std::{collections::hash_map::DefaultHasher, marker::PhantomData, sync::Arc};
 
 use sc_client_api::{backend::Backend, BlockImportOperation};
 use sc_executor::RuntimeVersionOf;
+use sp_arithmetic::traits::Zero;
 use sp_core::storage::{well_known_keys, StateVersion, Storage};
 use sp_runtime::{
-	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, Zero},
+	traits::{Block as BlockT, Hash as HashT, Header as HeaderT},
 	BuildStorage,
 };
 

@@ -18,6 +18,7 @@ log = { version = "0.4.17", default-features = false }
 mmr-lib = { package = "ckb-merkle-mountain-range", version = "0.5.2", default-features = false }
 serde = { version = "1.0.136", features = ["derive"], optional = true }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../arithmetic" }
 sp-core = { version = "7.0.0", default-features = false, path = "../core" }
 sp-debug-derive = { version = "5.0.0", default-features = false, path = "../debug-derive" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }

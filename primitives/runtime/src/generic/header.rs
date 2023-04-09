@@ -22,12 +22,13 @@ use crate::{
 	generic::Digest,
 	scale_info::TypeInfo,
 	traits::{
-		self, AtLeast32BitUnsigned, Hash as HashT, MaybeDisplay, MaybeSerialize,
-		MaybeSerializeDeserialize, Member, SimpleBitOps,
+		self, Hash as HashT, MaybeDisplay, MaybeSerialize, MaybeSerializeDeserialize, Member,
+		SimpleBitOps,
 	},
 };
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
+use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_core::U256;
 use sp_std::fmt::Debug;
 

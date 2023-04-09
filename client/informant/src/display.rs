@@ -25,7 +25,8 @@ use sc_network_common::sync::{
 	warp::{WarpSyncPhase, WarpSyncProgress},
 	SyncState, SyncStatus,
 };
-use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Saturating, Zero};
+use sp_arithmetic::traits::{CheckedDiv, Saturating, Zero};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt, time::Instant};
 
 /// State of the informant display system.
@@ -127,10 +128,12 @@ impl<B: BlockT> InformantDisplay<B> {
 					),
 				),
 				(SyncState::Idle, _, _) => ("💤", "Idle".into(), "".into()),
-				(SyncState::Downloading { target }, _, _) =>
-					("⚙️ ", format!("Syncing{}", speed), format!(", target=#{target}")),
-				(SyncState::Importing { target }, _, _) =>
-					("⚙️ ", format!("Preparing{}", speed), format!(", target=#{target}")),
+				(SyncState::Downloading { target }, _, _) => {
+					("⚙️ ", format!("Syncing{}", speed), format!(", target=#{target}"))
+				},
+				(SyncState::Importing { target }, _, _) => {
+					("⚙️ ", format!("Preparing{}", speed), format!(", target=#{target}"))
+				},
 			};
 
 		if self.format.enable_color {
@@ -194,8 +197,8 @@ fn speed<B: BlockT>(
 		let speed = diff
 			.saturating_mul(10_000)
 			.checked_div(u128::from(elapsed_ms))
-			.map_or(0.0, |s| s as f64) /
-			10.0;
+			.map_or(0.0, |s| s as f64)
+			/ 10.0;
 		format!(" {:4.1} bps", speed)
 	} else {
 		// If the number of blocks can't be converted to a regular integer, then we need a more
@@ -219,17 +222,17 @@ impl fmt::Display for TransferRateFormat {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		// Special case 0.
 		if self.0 == 0 {
-			return write!(f, "0")
+			return write!(f, "0");
 		}
 
 		// Under 0.1 kiB, display plain bytes.
 		if self.0 < 100 {
-			return write!(f, "{} B/s", self.0)
+			return write!(f, "{} B/s", self.0);
 		}
 
 		// Under 1.0 MiB/sec, display the value in kiB/sec.
 		if self.0 < 1024 * 1024 {
-			return write!(f, "{:.1}kiB/s", self.0 as f64 / 1024.0)
+			return write!(f, "{:.1}kiB/s", self.0 as f64 / 1024.0);
 		}
 
 		write!(f, "{:.1}MiB/s", self.0 as f64 / (1024.0 * 1024.0))

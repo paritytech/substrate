@@ -36,6 +36,7 @@ sc-keystore = { version = "4.0.0-dev", path = "../../keystore" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-application-crypto = { version = "7.0.0", path = "../../../primitives/application-crypto" }
+sp-arithmetic = { version = "6.0.0", path = "../../../primitives/arithmetic" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }

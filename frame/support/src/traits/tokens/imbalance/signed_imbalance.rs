@@ -20,7 +20,8 @@
 use super::super::imbalance::Imbalance;
 use crate::traits::misc::SameOrOther;
 use codec::FullCodec;
-use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize};
+use sp_arithmetic::traits::AtLeast32BitUnsigned;
+use sp_runtime::traits::MaybeSerializeDeserialize;
 use sp_std::fmt::Debug;
 
 /// Either a positive or a negative imbalance.
@@ -54,10 +55,12 @@ impl<
 	/// both.
 	pub fn merge(self, other: Self) -> Self {
 		match (self, other) {
-			(SignedImbalance::Positive(one), SignedImbalance::Positive(other)) =>
-				SignedImbalance::Positive(one.merge(other)),
-			(SignedImbalance::Negative(one), SignedImbalance::Negative(other)) =>
-				SignedImbalance::Negative(one.merge(other)),
+			(SignedImbalance::Positive(one), SignedImbalance::Positive(other)) => {
+				SignedImbalance::Positive(one.merge(other))
+			},
+			(SignedImbalance::Negative(one), SignedImbalance::Negative(other)) => {
+				SignedImbalance::Negative(one.merge(other))
+			},
 			(SignedImbalance::Positive(one), SignedImbalance::Negative(other)) => {
 				match one.offset(other) {
 					SameOrOther::Same(positive) => SignedImbalance::Positive(positive),

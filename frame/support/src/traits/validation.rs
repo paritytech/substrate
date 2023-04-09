@@ -19,10 +19,8 @@
 
 use crate::{dispatch::Parameter, weights::Weight};
 use codec::{Codec, Decode, MaxEncodedLen};
-use sp_runtime::{
-	traits::{Convert, Zero},
-	BoundToRuntimeAppPublic, ConsensusEngineId, Permill, RuntimeAppPublic,
-};
+use sp_arithmetic::{traits::Zero, Permill};
+use sp_runtime::{traits::Convert, BoundToRuntimeAppPublic, ConsensusEngineId, RuntimeAppPublic};
 use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 

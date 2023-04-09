@@ -87,6 +87,8 @@ pub use sp_core::{bounded_btree_map, bounded_vec};
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
 pub use sp_core::RuntimeDebug;
 
+use sp_arithmetic::ArithmeticError;
+/*
 /// Re-export big_uint stuff.
 pub use sp_arithmetic::biguint;
 /// Re-export 128 bit helpers.
@@ -97,7 +99,7 @@ pub use sp_arithmetic::{
 	FixedPointOperand, FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill,
 	Perquintill, Rational128, Rounding, UpperOf,
 };
-
+*/
 pub use either::Either;
 
 /// The number of bytes of the module-specific `error` field defined in [`ModuleError`].
@@ -137,7 +139,7 @@ impl Justifications {
 	/// not inserted.
 	pub fn append(&mut self, justification: Justification) -> bool {
 		if self.get(justification.0).is_some() {
-			return false
+			return false;
 		}
 		self.0.push(justification);
 		true
@@ -214,7 +216,7 @@ impl BuildStorage for sp_core::storage::Storage {
 			if let Some(map) = storage.children_default.get_mut(&k) {
 				map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone())));
 				if !map.child_info.try_update(&other_map.child_info) {
-					return Err("Incompatible child info update".to_string())
+					return Err("Incompatible child info update".to_string());
 				}
 			} else {
 				storage.children_default.insert(k, other_map.clone());
@@ -415,9 +417,10 @@ impl Verify for MultiSignature {
 			(Self::Ecdsa(ref sig), who) => {
 				let m = sp_io::hashing::blake2_256(msg.get());
 				match sp_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
-					Ok(pubkey) =>
-						&sp_io::hashing::blake2_256(pubkey.as_ref()) ==
-							<dyn AsRef<[u8; 32]>>::as_ref(who),
+					Ok(pubkey) => {
+						&sp_io::hashing::blake2_256(pubkey.as_ref())
+							== <dyn AsRef<[u8; 32]>>::as_ref(who)
+					},
 					_ => false,
 				}
 			},
@@ -436,8 +439,8 @@ impl Verify for AnySignature {
 		let msg = msg.get();
 		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 			.map(|s| s.verify(msg, signer))
-			.unwrap_or(false) ||
-			ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
+			.unwrap_or(false)
+			|| ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 				.map(|s| match ed25519::Public::from_slice(signer.as_ref()) {
 					Err(()) => false,
 					Ok(signer) => s.verify(msg, &signer),
@@ -572,8 +575,9 @@ impl DispatchError {
 	/// Return the same error but without the attached message.
 	pub fn stripped(self) -> Self {
 		match self {
-			DispatchError::Module(ModuleError { index, error, message: Some(_) }) =>
-				DispatchError::Module(ModuleError { index, error, message: None }),
+			DispatchError::Module(ModuleError { index, error, message: Some(_) }) => {
+				DispatchError::Module(ModuleError { index, error, message: None })
+			},
 			m => m,
 		}
 	}
@@ -636,8 +640,9 @@ impl From<TokenError> for &'static str {
 			TokenError::UnknownAsset => "The asset in question is unknown",
 			TokenError::Frozen => "Funds exist but are frozen",
 			TokenError::Unsupported => "Operation is not supported by the asset",
-			TokenError::CannotCreateHold =>
-				"Account cannot be created for recording amount on hold",
+			TokenError::CannotCreateHold => {
+				"Account cannot be created for recording amount on hold"
+			},
 			TokenError::NotExpendable => "Account that is desired to remain would die",
 		}
 	}
@@ -822,8 +827,8 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 macro_rules! assert_eq_error_rate {
 	($x:expr, $y:expr, $error:expr $(,)?) => {
 		assert!(
-			($x >= $crate::Saturating::saturating_sub($y, $error)) &&
-				($x <= $crate::Saturating::saturating_add($y, $error)),
+			($x >= $crate::Saturating::saturating_sub($y, $error))
+				&& ($x <= $crate::Saturating::saturating_add($y, $error)),
 			"{:?} != {:?} (with error rate {:?})",
 			$x,
 			$y,

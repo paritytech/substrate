@@ -18,7 +18,7 @@
 //! Means for splitting an imbalance into two and hanlding them differently.
 
 use super::super::imbalance::{Imbalance, OnUnbalanced};
-use sp_runtime::traits::Saturating;
+use sp_arithmetic::traits::Saturating;
 use sp_std::{marker::PhantomData, ops::Div};
 
 /// Split an unbalanced amount two ways between a common divisor.

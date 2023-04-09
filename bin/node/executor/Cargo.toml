@@ -19,6 +19,7 @@ frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarkin
 node-primitives = { version = "2.0.0", path = "../primitives" }
 kitchensink-runtime = { version = "3.0.0-dev", path = "../runtime" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
+sp-arithmetic = { version = "6.0.0", path = "../../../primitives/arithmetic" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
 sp-state-machine = { version = "0.13.0", path = "../../../primitives/state-machine" }

@@ -44,6 +44,7 @@ use frame_support::{
 };
 use frame_system::limits::{BlockLength, BlockWeights};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
+use sp_arithmetic::Perbill;
 pub use sp_core::hash::H256;
 use sp_inherents::{CheckInherentsResult, InherentData};
 #[cfg(feature = "std")]
@@ -58,7 +59,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
 		ValidTransaction,
 	},
-	ApplyExtrinsicResult, Perbill,
+	ApplyExtrinsicResult,
 };
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
@@ -195,7 +196,7 @@ impl BlindCheckable for Extrinsic {
 	fn check(self) -> Result<Self, TransactionValidityError> {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
-			Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first } =>
+			Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first } => {
 				if sp_runtime::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer {
 						transfer,
@@ -204,7 +205,8 @@ impl BlindCheckable for Extrinsic {
 					})
 				} else {
 					Err(InvalidTransaction::BadProof.into())
-				},
+				}
+			},
 			Extrinsic::IncludeData(v) => Ok(Extrinsic::IncludeData(v)),
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 			Extrinsic::OffchainIndexSet(key, value) => Ok(Extrinsic::OffchainIndexSet(key, value)),
@@ -536,13 +538,13 @@ impl frame_support::traits::PalletInfo for Runtime {
 	fn index<P: 'static>() -> Option<usize> {
 		let type_id = sp_std::any::TypeId::of::<P>();
 		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
-			return Some(0)
+			return Some(0);
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
-			return Some(1)
+			return Some(1);
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
-			return Some(2)
+			return Some(2);
 		}
 
 		None
@@ -550,13 +552,13 @@ impl frame_support::traits::PalletInfo for Runtime {
 	fn name<P: 'static>() -> Option<&'static str> {
 		let type_id = sp_std::any::TypeId::of::<P>();
 		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
-			return Some("System")
+			return Some("System");
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
-			return Some("Timestamp")
+			return Some("Timestamp");
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
-			return Some("Babe")
+			return Some("Babe");
 		}
 
 		None
@@ -564,13 +566,13 @@ impl frame_support::traits::PalletInfo for Runtime {
 	fn module_name<P: 'static>() -> Option<&'static str> {
 		let type_id = sp_std::any::TypeId::of::<P>();
 		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
-			return Some("system")
+			return Some("system");
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
-			return Some("pallet_timestamp")
+			return Some("pallet_timestamp");
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
-			return Some("pallet_babe")
+			return Some("pallet_babe");
 		}
 
 		None
@@ -579,13 +581,13 @@ impl frame_support::traits::PalletInfo for Runtime {
 		use frame_support::traits::PalletInfoAccess as _;
 		let type_id = sp_std::any::TypeId::of::<P>();
 		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
-			return Some(system::Pallet::<Runtime>::crate_version())
+			return Some(system::Pallet::<Runtime>::crate_version());
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
-			return Some(pallet_timestamp::Pallet::<Runtime>::crate_version())
+			return Some(pallet_timestamp::Pallet::<Runtime>::crate_version());
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
-			return Some(pallet_babe::Pallet::<Runtime>::crate_version())
+			return Some(pallet_babe::Pallet::<Runtime>::crate_version());
 		}
 
 		None
@@ -688,7 +690,7 @@ fn code_using_trie() -> u64 {
 		let mut t = TrieDBMutBuilderV1::<Hashing>::new(&mut mdb, &mut root).build();
 		for (key, value) in &pairs {
 			if t.insert(key, value).is_err() {
-				return 101
+				return 101;
 			}
 		}
 	}

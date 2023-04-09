@@ -21,10 +21,11 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use crate::LOG_TARGET;
 use futures::{channel::mpsc::Receiver, Future};
 use sc_transaction_pool_api::error;
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_blockchain::TreeRoute;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{self, Block as BlockT, SaturatedConversion},
+	traits::{self, Block as BlockT},
 	transaction_validity::{
 		TransactionSource, TransactionTag as Tag, TransactionValidity, TransactionValidityError,
 	},
@@ -404,7 +405,7 @@ impl<B: ChainApi> Pool<B> {
 
 		let ignore_banned = matches!(check, CheckBannedBeforeVerify::No);
 		if let Err(err) = self.validated_pool.check_is_known(&hash, ignore_banned) {
-			return (hash, ValidatedTransaction::Invalid(hash, err))
+			return (hash, ValidatedTransaction::Invalid(hash, err));
 		}
 
 		let validation_result = self
@@ -419,7 +420,7 @@ impl<B: ChainApi> Pool<B> {
 		};
 
 		let validity = match status {
-			Ok(validity) =>
+			Ok(validity) => {
 				if validity.provides.is_empty() {
 					ValidatedTransaction::Invalid(hash, error::Error::NoTagsProvided.into())
 				} else {
@@ -431,11 +432,14 @@ impl<B: ChainApi> Pool<B> {
 						bytes,
 						validity,
 					)
-				},
-			Err(TransactionValidityError::Invalid(e)) =>
-				ValidatedTransaction::Invalid(hash, error::Error::InvalidTransaction(e).into()),
-			Err(TransactionValidityError::Unknown(e)) =>
-				ValidatedTransaction::Unknown(hash, error::Error::UnknownTransaction(e).into()),
+				}
+			},
+			Err(TransactionValidityError::Invalid(e)) => {
+				ValidatedTransaction::Invalid(hash, error::Error::InvalidTransaction(e).into())
+			},
+			Err(TransactionValidityError::Unknown(e)) => {
+				ValidatedTransaction::Unknown(hash, error::Error::UnknownTransaction(e).into())
+			},
 		};
 
 		(hash, validity)

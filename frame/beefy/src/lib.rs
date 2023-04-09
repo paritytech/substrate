@@ -171,7 +171,7 @@ pub mod pallet {
 		fn default() -> Self {
 			// BEEFY genesis will be first BEEFY-MANDATORY block,
 			// use block number one instead of chain-genesis.
-			let genesis_block = Some(sp_runtime::traits::One::one());
+			let genesis_block = Some(sp_arithmetic::traits::One::one());
 			Self { authorities: Vec::new(), genesis_block }
 		}
 	}
@@ -324,11 +324,11 @@ impl<T: Config> Pallet<T> {
 
 	fn initialize(authorities: &Vec<T::BeefyId>) -> Result<(), ()> {
 		if authorities.is_empty() {
-			return Ok(())
+			return Ok(());
 		}
 
 		if !<Authorities<T>>::get().is_empty() {
-			return Err(())
+			return Err(());
 		}
 
 		let bounded_authorities =

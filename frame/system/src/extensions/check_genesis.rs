@@ -18,8 +18,9 @@
 use crate::{Config, Pallet};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
+use sp_arithmetic::traits::Zero;
 use sp_runtime::{
-	traits::{DispatchInfoOf, SignedExtension, Zero},
+	traits::{DispatchInfoOf, SignedExtension},
 	transaction_validity::TransactionValidityError,
 };
 

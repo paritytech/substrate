@@ -31,8 +31,8 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
+use sp_arithmetic::traits::Saturating;
 use sp_io::MultiRemovalResults;
-use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
 /// A wrapper around a `StorageMap` and a `StorageValue<Value=u32>` to keep track of how many items

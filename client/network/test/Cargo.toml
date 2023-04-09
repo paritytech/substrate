@@ -30,6 +30,7 @@ sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 sc-network-light = { version = "0.10.0-dev", path = "../light" }
 sc-network-sync = { version = "0.10.0-dev", path = "../sync" }
 sc-service = { version = "0.10.0-dev", default-features = false, features = ["test-helpers"], path = "../../service" }
+sp-arithmetic = { version = "6.0.0", path = "../../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }

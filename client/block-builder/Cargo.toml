@@ -18,6 +18,7 @@ codec = { package = "parity-scale-codec", version = "3.2.2", features = [
 ] }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
+sp-arithmetic = { version = "6.0.0", path = "../../primitives/arithmetic" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
