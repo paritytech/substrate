@@ -1498,7 +1498,8 @@ pub mod pallet {
 		///
 		/// The origin must be Signed.
 		///
-		/// - `id`: The identifier of the asset for the account to be created.
+		/// - `id`: The identifier of the asset for which the caller would like the deposit
+		///   refunded.
 		/// - `allow_burn`: If `true` then assets may be destroyed in order to complete the refund.
 		///
 		/// Emits `Refunded` event when successful.
@@ -1509,8 +1510,9 @@ pub mod pallet {
 			id: T::AssetIdParameter,
 			allow_burn: bool,
 		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
-			Self::do_refund(id, ensure_signed(origin)?, allow_burn)
+			Self::do_refund(&origin, id, &origin, allow_burn)
 		}
 
 		/// Sets the minimum balance of an asset.
@@ -1589,7 +1591,7 @@ pub mod pallet {
 		///
 		/// The origin must be Signed.
 		///
-		/// - `id`: The identifier of the asset for the account to be created.
+		/// - `id`: The identifier of the asset for the account holding a deposit.
 		/// - `who`: The account to refund.
 		/// - `allow_burn`: If `true` then assets may be destroyed in order to complete the refund.
 		///
@@ -1602,9 +1604,9 @@ pub mod pallet {
 			who: T::AccountId,
 			allow_burn: bool,
 		) -> DispatchResult {
-			let _ = ensure_signed(origin)?;
+			let origin = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
-			Self::do_refund(id, who, allow_burn)
+			Self::do_refund(&origin, id, &who, allow_burn)
 		}
 	}
 }

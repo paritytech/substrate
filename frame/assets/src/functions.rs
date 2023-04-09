@@ -66,10 +66,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(super) fn new_account(
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
-		maybe_deposit: Option<(DepositBalanceOf<T, I>, &T::AccountId)>,
+		maybe_deposit: Option<DepositBalanceOf<T, I>>,
 	) -> Result<ExistenceReason<DepositBalanceOf<T, I>>, DispatchError> {
 		let accounts = d.accounts.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-		let reason = if let Some((deposit, _depositor)) = maybe_deposit {
+		let reason = if let Some(deposit) = maybe_deposit {
 			ExistenceReason::DepositHeld(deposit)
 		} else if d.is_sufficient {
 			frame_system::Pallet::<T>::inc_sufficients(who);
@@ -321,7 +321,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let deposit = T::AssetAccountDeposit::get();
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-		let reason = Self::new_account(&who, &mut details, Some((deposit, &depositor)))?;
+		let reason = Self::new_account(&who, &mut details, Some(deposit))?;
 		T::Currency::reserve(&depositor, deposit)?;
 		Asset::<T, I>::insert(&id, details);
 		Account::<T, I>::insert(
@@ -339,7 +339,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Returns a deposit, destroying an asset-account.
-	pub(super) fn do_refund(id: T::AssetId, who: T::AccountId, allow_burn: bool) -> DispatchResult {
+	pub(super) fn do_refund(
+		caller: &T::AccountId,
+		id: T::AssetId,
+		who: &T::AccountId,
+		allow_burn: bool,
+	) -> DispatchResult {
 		let mut account = Account::<T, I>::get(id, &who).ok_or(Error::<T, I>::NoDeposit)?;
 		let deposit = account.reason.take_deposit().ok_or(Error::<T, I>::NoDeposit)?;
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
@@ -349,6 +354,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let mut refund_to: T::AccountId = who.clone();
 		if let Some(depositor) = account.depositor.take() {
+			// Only the account owner (`who`), the depositor, or the asset admin can remove an
+			// account. That is, a depositor cannot force another's account to exist with zero
+			// balance.
+			ensure!(
+				caller == &depositor || caller == who || caller == &details.admin,
+				Error::<T, I>::NoPermission
+			);
 			refund_to = depositor;
 		}
 		T::Currency::unreserve(&refund_to, deposit);
@@ -963,8 +975,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Freeze an account `who`, preventing further reception or transfer of asset `id`.
-	pub fn do_freeze(
-		maybe_freezer: T::AccountId,
+	pub(super) fn do_freeze(
+		check_freezer: T::AccountId,
 		id: T::AssetId,
 		who: T::AccountId,
 		create: bool,
@@ -974,11 +986,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			d.status == AssetStatus::Live || d.status == AssetStatus::Frozen,
 			Error::<T, I>::AssetNotLive
 		);
-		ensure!(maybe_freezer == d.freezer, Error::<T, I>::NoPermission);
+		ensure!(check_freezer == d.freezer, Error::<T, I>::NoPermission);
 
 		if create && Account::<T, I>::get(id, &who).is_none() {
 			// we create the account with zero balance, but the freezer must place a deposit
-			let _ = Self::do_touch(id, &who, &maybe_freezer)?;
+			let _ = Self::do_touch(id, &who, &check_freezer)?;
 		}
 
 		Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {

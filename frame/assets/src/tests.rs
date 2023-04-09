@@ -766,6 +766,45 @@ fn freeze_creating_works() {
 }
 
 #[test]
+fn cannot_refund_other_account_with_balance() {
+	new_test_ext().execute_with(|| {
+		// 1 will be the asset admin
+		// 2 will `touch` and exist without balance
+		// 3 will be created via freeze
+		Balances::make_free_balance_be(&1, 100);
+		Balances::make_free_balance_be(&2, 100);
+		Balances::make_free_balance_be(&3, 0);
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
+		assert_eq!(Assets::balance(0, 1), 100);
+		assert_eq!(Assets::balance(0, 2), 0);
+		assert_eq!(Assets::balance(0, 3), 0);
+
+		assert_ok!(Assets::touch(RuntimeOrigin::signed(2), 0));
+		assert!(Account::<Test>::contains_key(0, &2));
+		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50));
+		assert_ok!(Assets::transfer(RuntimeOrigin::signed(2), 0, 1, 50));
+		assert_eq!(Assets::balance(0, 2), 0);
+		assert!(Account::<Test>::contains_key(0, &2));
+		// 4 is not the depositor, account holder, or admin
+		assert_noop!(
+			Assets::refund_other(RuntimeOrigin::signed(4), 0, 2, true),
+			Error::<Test>::NoPermission
+		);
+		// but 1 is the asset admin, ok.
+		assert_ok!(Assets::refund_other(RuntimeOrigin::signed(1), 0, 2, true));
+
+		assert_ok!(Assets::freeze_creating(RuntimeOrigin::signed(1), 0, 3));
+		assert_eq!(Assets::balance(0, 3), 0);
+		assert!(Account::<Test>::contains_key(0, &3));
+		assert_noop!(
+			Assets::refund_other(RuntimeOrigin::signed(1), 0, 3, true),
+			Error::<Test>::Frozen
+		);
+	})
+}
+
+#[test]
 fn transferring_amount_more_than_available_balance_should_not_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
