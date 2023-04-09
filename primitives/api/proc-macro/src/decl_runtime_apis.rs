@@ -179,29 +179,29 @@ fn generate_versioned_api_traits(
 
 /// Try to parse the given `Attribute` as `renamed` attribute.
 fn parse_renamed_attribute(renamed: &Attribute) -> Result<(String, u32)> {
-	let mut old_name: Option<String> = None;
-	let mut version: Option<u32> = None;
-	let err = Err(
+	let err = || {
 		Error::new(
 			renamed.span(),
 			&format!(
-				"Unexpected `{renamed}` attribute. The supported format is `{renamed}(\"old_name\", version_it_was_renamed)`",
-				renamed = RENAMED_ATTRIBUTE,
-			)
+				"Unexpected `{RENAMED_ATTRIBUTE}` attribute. \
+				 The supported format is `{RENAMED_ATTRIBUTE}(\"old_name\", version_it_was_renamed)`",
+			),
 		)
-	);
-	renamed.parse_nested_meta(|meta| {
-		let old_name_lit: LitStr = meta.input.parse()?;
-		old_name = Some(old_name_lit.value());
-		let _comma: Comma = meta.input.parse()?;
-		let version_lit: LitInt = meta.input.parse()?;
-		version = Some(version_lit.base10_parse()?);
-		Ok(())
-	})?;
-	match (old_name, version) {
-		(Some(old_name), Some(version)) => Ok((old_name, version)),
-		_ => err,
-	}
+	};
+
+	renamed
+		.parse_args_with(|input: ParseStream| {
+			let old_name: LitStr = input.parse()?;
+			let _comma: Comma = input.parse()?;
+			let version: LitInt = input.parse()?;
+
+			if !input.is_empty() {
+				return Err(input.error("No more arguments expected"))
+			}
+
+			Ok((old_name.value(), version.base10_parse()?))
+		})
+		.map_err(|_| err())
 }
 
 /// Generate the declaration of the trait for the runtime.
