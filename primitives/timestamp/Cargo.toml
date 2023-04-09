@@ -1,6 +1,6 @@
 [package]
 name = "sp-timestamp"
-version = "4.0.0-dev"
+version = "19.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -18,9 +18,9 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 futures-timer = { version = "3.0.2", optional = true }
 log = { version = "0.4.17", optional = true }
 thiserror = { version = "1.0.30", optional = true }
-sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../inherents" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../std" }
+sp-inherents = { version = "19.0.0", default-features = false, path = "../inherents" }
+sp-runtime = { version = "23.0.0", default-features = false, path = "../runtime" }
+sp-std = { version = "7.0.0", default-features = false, path = "../std" }
 
 [features]
 default = [ "std" ]

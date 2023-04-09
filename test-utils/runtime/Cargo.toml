@@ -13,38 +13,38 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-pallet-beefy-mmr = { version = "4.0.0-dev", default-features = false, path = "../../frame/beefy-mmr" }
-sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
-sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura" }
-sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
-sp-consensus-beefy = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/beefy" }
-sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
+pallet-beefy-mmr = { version = "21.0.0", default-features = false, path = "../../frame/beefy-mmr" }
+sp-application-crypto = { version = "22.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-consensus-aura = { version = "0.25.0", default-features = false, path = "../../primitives/consensus/aura" }
+sp-consensus-babe = { version = "0.25.0", default-features = false, path = "../../primitives/consensus/babe" }
+sp-consensus-beefy = { version = "6.0.0", default-features = false, path = "../../primitives/consensus/beefy" }
+sp-block-builder = { version = "19.0.0", default-features = false, path = "../../primitives/block-builder" }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
-sp-keyring = { version = "7.0.0", optional = true, path = "../../primitives/keyring" }
+sp-inherents = { version = "19.0.0", default-features = false, path = "../../primitives/inherents" }
+sp-keyring = { version = "23.0.0", optional = true, path = "../../primitives/keyring" }
 memory-db = { version = "0.32.0", default-features = false }
-sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../primitives/offchain" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../../primitives/runtime-interface" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
-sp-version = { version = "5.0.0", default-features = false, path = "../../primitives/version" }
-sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../frame/babe" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
-frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
-pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../frame/timestamp" }
-sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/grandpa" }
-sp-trie = { version = "7.0.0", default-features = false, path = "../../primitives/trie" }
-sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-pool" }
+sp-offchain = { version = "19.0.0", default-features = false, path = "../../primitives/offchain" }
+sp-core = { version = "20.0.0", default-features = false, path = "../../primitives/core" }
+sp-std = { version = "7.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime-interface = { version = "16.0.0", default-features = false, path = "../../primitives/runtime-interface" }
+sp-io = { version = "22.0.0", default-features = false, path = "../../primitives/io" }
+frame-support = { version = "21.0.0", default-features = false, path = "../../frame/support" }
+sp-version = { version = "21.0.0", default-features = false, path = "../../primitives/version" }
+sp-session = { version = "20.0.0", default-features = false, path = "../../primitives/session" }
+sp-api = { version = "19.0.0", default-features = false, path = "../../primitives/api" }
+sp-runtime = { version = "23.0.0", default-features = false, path = "../../primitives/runtime" }
+pallet-babe = { version = "21.0.0", default-features = false, path = "../../frame/babe" }
+frame-system = { version = "21.0.0", default-features = false, path = "../../frame/system" }
+frame-system-rpc-runtime-api = { version = "19.0.0", default-features = false, path = "../../frame/system/rpc/runtime-api" }
+pallet-timestamp = { version = "20.0.0", default-features = false, path = "../../frame/timestamp" }
+sp-consensus-grandpa = { version = "6.0.0", default-features = false, path = "../../primitives/consensus/grandpa" }
+sp-trie = { version = "21.0.0", default-features = false, path = "../../primitives/trie" }
+sp-transaction-pool = { version = "19.0.0", default-features = false, path = "../../primitives/transaction-pool" }
 trie-db = { version = "0.27.0", default-features = false }
-sc-service = { version = "0.10.0-dev", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
-sp-state-machine = { version = "0.13.0", default-features = false, path = "../../primitives/state-machine" }
-sp-externalities = { version = "0.13.0", default-features = false, path = "../../primitives/externalities" }
+sc-service = { version = "0.28.0", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
+sp-state-machine = { version = "0.27.0", default-features = false, path = "../../primitives/state-machine" }
+sp-externalities = { version = "0.18.0", default-features = false, path = "../../primitives/externalities" }
 
 # 3rd party
 cfg-if = "1.0"
@@ -52,14 +52,14 @@ log = { version = "0.4.17", default-features = false }
 serde = { version = "1.0.136", optional = true, features = ["derive"] }
 
 [dev-dependencies]
-sc-block-builder = { version = "0.10.0-dev", path = "../../client/block-builder" }
-sc-executor = { version = "0.10.0-dev", path = "../../client/executor" }
-sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
+sc-block-builder = { version = "0.26.0", path = "../../client/block-builder" }
+sc-executor = { version = "0.25.0", path = "../../client/executor" }
+sp-consensus = { version = "0.25.0", path = "../../primitives/consensus/common" }
 substrate-test-runtime-client = { version = "2.0.0", path = "./client" }
 futures = "0.3.21"
 
 [build-dependencies]
-substrate-wasm-builder = { version = "5.0.0-dev", path = "../../utils/wasm-builder", optional = true }
+substrate-wasm-builder = { version = "10.0.0", path = "../../utils/wasm-builder", optional = true }
 
 [features]
 default = [

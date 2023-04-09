@@ -16,14 +16,14 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 honggfuzz = "0.5.54"
 
-pallet-nomination-pools = { path = "..", features = ["fuzzing"] }
+pallet-nomination-pools = { path = "..", features = ["fuzzing"] , version = "18.0.0" }
 
-frame-system = { path = "../../system" }
-frame-support = { path = "../../support" }
+frame-system = { path = "../../system" , version = "21.0.0" }
+frame-support = { path = "../../support" , version = "21.0.0" }
 
-sp-runtime = { path = "../../../primitives/runtime" }
-sp-io = { path = "../../../primitives/io" }
-sp-tracing = { path = "../../../primitives/tracing" }
+sp-runtime = { path = "../../../primitives/runtime" , version = "23.0.0" }
+sp-io = { path = "../../../primitives/io" , version = "22.0.0" }
+sp-tracing = { path = "../../../primitives/tracing" , version = "9.0.0" }
 
 rand = { version = "0.8.5", features = ["small_rng"] }
 log = "0.4.17"

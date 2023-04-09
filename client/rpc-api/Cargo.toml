@@ -1,6 +1,6 @@
 [package]
 name = "sc-rpc-api"
-version = "0.10.0-dev"
+version = "0.26.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -18,10 +18,10 @@ scale-info = { version = "2.1.1", default-features = false, features = ["derive"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.85"
 thiserror = "1.0"
-sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
-sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
-sp-version = { version = "5.0.0", path = "../../primitives/version" }
+sc-chain-spec = { version = "20.0.0", path = "../chain-spec" }
+sc-transaction-pool-api = { version = "21.0.0", path = "../transaction-pool/api" }
+sp-core = { version = "20.0.0", path = "../../primitives/core" }
+sp-rpc = { version = "19.0.0", path = "../../primitives/rpc" }
+sp-runtime = { version = "23.0.0", path = "../../primitives/runtime" }
+sp-version = { version = "21.0.0", path = "../../primitives/version" }
 jsonrpsee = { version = "0.16.2", features = ["server", "client-core", "macros"] }

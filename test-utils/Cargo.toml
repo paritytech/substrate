@@ -19,4 +19,4 @@ substrate-test-utils-derive = { version = "0.10.0-dev", path = "./derive" }
 
 [dev-dependencies]
 trybuild = { version = "1.0.74", features = [ "diff" ] }
-sc-service = { version = "0.10.0-dev", path = "../client/service" }
+sc-service = { version = "0.28.0", path = "../client/service" }

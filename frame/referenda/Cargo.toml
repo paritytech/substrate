@@ -1,6 +1,6 @@
 [package]
 name = "pallet-referenda"
-version = "4.0.0-dev"
+version = "21.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -19,21 +19,21 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 ] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", features = ["derive"], optional = true }
-sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-arithmetic = { version = "15.0.0", default-features = false, path = "../../primitives/arithmetic" }
+frame-benchmarking = { version = "21.0.0", default-features = false, optional = true, path = "../benchmarking" }
+frame-support = { version = "21.0.0", default-features = false, path = "../support" }
+frame-system = { version = "21.0.0", default-features = false, path = "../system" }
+sp-io = { version = "22.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "23.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "7.0.0", default-features = false, path = "../../primitives/std" }
 log = { version = "0.4.17", default-features = false }
 
 [dev-dependencies]
 assert_matches = { version = "1.5" }
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }
-pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
+pallet-balances = { version = "21.0.0", path = "../balances" }
+pallet-preimage = { version = "21.0.0", path = "../preimage" }
+pallet-scheduler = { version = "22.0.0", path = "../scheduler" }
+sp-core = { version = "20.0.0", path = "../../primitives/core" }
 
 [features]
 default = ["std"]

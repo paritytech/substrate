@@ -1,6 +1,6 @@
 [package]
 name = "sp-blockchain"
-version = "4.0.0-dev"
+version = "21.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -20,8 +20,8 @@ log = "0.4.17"
 lru = "0.8.1"
 parking_lot = "0.12.1"
 thiserror = "1.0.30"
-sp-api = { version = "4.0.0-dev", path = "../api" }
-sp-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
-sp-database = { version = "4.0.0-dev", path = "../database" }
-sp-runtime = { version = "7.0.0", path = "../runtime" }
-sp-state-machine = { version = "0.13.0", path = "../state-machine" }
+sp-api = { version = "19.0.0", path = "../api" }
+sp-consensus = { version = "0.25.0", path = "../consensus/common" }
+sp-database = { version = "5.0.0", path = "../database" }
+sp-runtime = { version = "23.0.0", path = "../runtime" }
+sp-state-machine = { version = "0.27.0", path = "../state-machine" }

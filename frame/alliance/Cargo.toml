@@ -1,6 +1,6 @@
 [package]
 name = "pallet-alliance"
-version = "4.0.0-dev"
+version = "20.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -19,24 +19,24 @@ log = { version = "0.4.14", default-features = false }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-core-hashing = { version = "5.0.0", default-features = false, path = "../../primitives/core/hashing", optional = true }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "7.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "20.0.0", default-features = false, path = "../../primitives/core" }
+sp-core-hashing = { version = "8.0.0", default-features = false, path = "../../primitives/core/hashing", optional = true }
+sp-io = { version = "22.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "23.0.0", default-features = false, path = "../../primitives/runtime" }
 
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+frame-benchmarking = { version = "21.0.0", default-features = false, path = "../benchmarking", optional = true }
+frame-support = { version = "21.0.0", default-features = false, path = "../support" }
+frame-system = { version = "21.0.0", default-features = false, path = "../system" }
 
-pallet-identity = { version = "4.0.0-dev", path = "../identity", default-features = false }
-pallet-collective = { version = "4.0.0-dev", path = "../collective", default-features = false, optional = true }
+pallet-identity = { version = "21.0.0", path = "../identity", default-features = false }
+pallet-collective = { version = "21.0.0", path = "../collective", default-features = false, optional = true }
 
 [dev-dependencies]
 array-bytes = "4.1"
-sp-core-hashing = { version = "5.0.0", default-features = false, path = "../../primitives/core/hashing" }
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-pallet-collective = { version = "4.0.0-dev", path = "../collective" }
+sp-core-hashing = { version = "8.0.0", default-features = false, path = "../../primitives/core/hashing" }
+pallet-balances = { version = "21.0.0", path = "../balances" }
+pallet-collective = { version = "21.0.0", path = "../collective" }
 
 [features]
 default = ["std"]

@@ -13,7 +13,7 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-substrate-rpc-client = { path = "../../utils/frame/rpc/client" }
+substrate-rpc-client = { path = "../../utils/frame/rpc/client" , version = "0.26.0" }
 assert_cmd = "2.0.10"
 nix = "0.26.2"
 regex = "1.7.3"

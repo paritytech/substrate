@@ -18,4 +18,4 @@ name = "subkey"
 
 [dependencies]
 clap = { version = "4.0.9", features = ["derive"] }
-sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
+sc-cli = { version = "0.29.0", path = "../../../client/cli" }

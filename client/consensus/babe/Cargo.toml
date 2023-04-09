@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-babe"
-version = "0.10.0-dev"
+version = "0.27.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "BABE consensus algorithm for substrate"
 edition = "2021"
@@ -26,34 +26,34 @@ num-traits = "0.2.8"
 parking_lot = "0.12.1"
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"] }
 thiserror = "1.0"
-fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
-sc-client-api = { version = "4.0.0-dev", path = "../../api" }
-sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
-sc-consensus-epochs = { version = "0.10.0-dev", path = "../epochs" }
-sc-consensus-slots = { version = "0.10.0-dev", path = "../slots" }
-sc-keystore = { version = "4.0.0-dev", path = "../../keystore" }
-sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
-sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-application-crypto = { version = "7.0.0", path = "../../../primitives/application-crypto" }
-sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
-sp-consensus-vrf = { version = "0.10.0-dev", path = "../../../primitives/consensus/vrf" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+fork-tree = { version = "7.0.0", path = "../../../utils/fork-tree" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.12.0", path = "../../../utils/prometheus" }
+sc-client-api = { version = "21.0.0", path = "../../api" }
+sc-consensus = { version = "0.26.0", path = "../../../client/consensus/common" }
+sc-consensus-epochs = { version = "0.26.0", path = "../epochs" }
+sc-consensus-slots = { version = "0.26.0", path = "../slots" }
+sc-keystore = { version = "18.0.0", path = "../../keystore" }
+sc-telemetry = { version = "8.0.0", path = "../../telemetry" }
+sp-api = { version = "19.0.0", path = "../../../primitives/api" }
+sp-application-crypto = { version = "22.0.0", path = "../../../primitives/application-crypto" }
+sp-block-builder = { version = "19.0.0", path = "../../../primitives/block-builder" }
+sp-blockchain = { version = "21.0.0", path = "../../../primitives/blockchain" }
+sp-consensus = { version = "0.25.0", path = "../../../primitives/consensus/common" }
+sp-consensus-babe = { version = "0.25.0", path = "../../../primitives/consensus/babe" }
+sp-consensus-slots = { version = "0.25.0", path = "../../../primitives/consensus/slots" }
+sp-consensus-vrf = { version = "0.25.0", path = "../../../primitives/consensus/vrf" }
+sp-core = { version = "20.0.0", path = "../../../primitives/core" }
+sp-inherents = { version = "19.0.0", path = "../../../primitives/inherents" }
+sp-keystore = { version = "0.26.0", path = "../../../primitives/keystore" }
+sp-runtime = { version = "23.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 rand_chacha = "0.2.2"
-sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
-sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
-sc-network = { version = "0.10.0-dev", path = "../../network" }
+sc-block-builder = { version = "0.26.0", path = "../../block-builder" }
+sp-keyring = { version = "23.0.0", path = "../../../primitives/keyring" }
+sc-network = { version = "0.27.0", path = "../../network" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
-sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
-sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
+sp-timestamp = { version = "19.0.0", path = "../../../primitives/timestamp" }
+sp-tracing = { version = "9.0.0", path = "../../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 tokio = "1.22.0"

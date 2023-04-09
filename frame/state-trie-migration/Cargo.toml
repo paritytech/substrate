@@ -1,6 +1,6 @@
 [package]
 name = "pallet-state-trie-migration"
-version = "4.0.0-dev"
+version = "22.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -18,21 +18,21 @@ scale-info = { version = "2.1.1", default-features = false, features = ["derive"
 serde = { version = "1.0.133", optional = true }
 thousands = { version = "0.2.0", optional = true }
 zstd = { version = "0.11.2", default-features = false, optional = true }
-frame-benchmarking = { default-features = false, optional = true, path = "../benchmarking" }
-frame-support = { default-features = false, path = "../support" }
-frame-system = { default-features = false, path = "../system" }
-remote-externalities = { optional = true, path = "../../utils/frame/remote-externalities", package = "frame-remote-externalities" }
-sp-core = { default-features = false, path = "../../primitives/core" }
-sp-io = { default-features = false, path = "../../primitives/io" }
-sp-runtime = { default-features = false, path = "../../primitives/runtime" }
-sp-std = { default-features = false, path = "../../primitives/std" }
-substrate-state-trie-migration-rpc = { optional = true, path = "../../utils/frame/rpc/state-trie-migration-rpc" }
+frame-benchmarking = { default-features = false, optional = true, path = "../benchmarking" , version = "21.0.0" }
+frame-support = { default-features = false, path = "../support" , version = "21.0.0" }
+frame-system = { default-features = false, path = "../system" , version = "21.0.0" }
+remote-externalities = { optional = true, path = "../../utils/frame/remote-externalities", package = "frame-remote-externalities" , version = "0.28.0" }
+sp-core = { default-features = false, path = "../../primitives/core" , version = "20.0.0" }
+sp-io = { default-features = false, path = "../../primitives/io" , version = "22.0.0" }
+sp-runtime = { default-features = false, path = "../../primitives/runtime" , version = "23.0.0" }
+sp-std = { default-features = false, path = "../../primitives/std" , version = "7.0.0" }
+substrate-state-trie-migration-rpc = { optional = true, path = "../../utils/frame/rpc/state-trie-migration-rpc" , version = "20.0.0" }
 
 [dev-dependencies]
 parking_lot = "0.12.1"
 tokio = { version = "1.22.0", features = ["macros"] }
-pallet-balances = { path = "../balances" }
-sp-tracing = { path = "../../primitives/tracing" }
+pallet-balances = { path = "../balances" , version = "21.0.0" }
+sp-tracing = { path = "../../primitives/tracing" , version = "9.0.0" }
 
 [features]
 default = ["std"]

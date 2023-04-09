@@ -1,6 +1,6 @@
 [package]
 name = "pallet-contracts"
-version = "4.0.0-dev"
+version = "20.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -36,16 +36,16 @@ rand_pcg = { version = "0.3", optional = true }
 
 # Substrate Dependencies
 environmental = { version = "1.1.4", default-features = false }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-pallet-contracts-primitives = { version = "7.0.0", default-features = false, path = "primitives" }
-pallet-contracts-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+frame-benchmarking = { version = "21.0.0", default-features = false, path = "../benchmarking", optional = true }
+frame-support = { version = "21.0.0", default-features = false, path = "../support" }
+frame-system = { version = "21.0.0", default-features = false, path = "../system" }
+pallet-contracts-primitives = { version = "23.0.0", default-features = false, path = "primitives" }
+pallet-contracts-proc-macro = { version = "11.0.0", path = "proc-macro" }
+sp-api = { version = "19.0.0", default-features = false, path = "../../primitives/api" }
+sp-core = { version = "20.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "22.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "23.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "7.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 array-bytes = "4.1"
@@ -55,11 +55,11 @@ pretty_assertions = "1"
 wat = "1"
 
 # Substrate Dependencies
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
-pallet-insecure-randomness-collective-flip = { version = "4.0.0-dev", path = "../insecure-randomness-collective-flip" }
-pallet-utility = { version = "4.0.0-dev", path = "../utility" }
-sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
+pallet-balances = { version = "21.0.0", path = "../balances" }
+pallet-timestamp = { version = "20.0.0", path = "../timestamp" }
+pallet-insecure-randomness-collective-flip = { version = "9.0.0", path = "../insecure-randomness-collective-flip" }
+pallet-utility = { version = "21.0.0", path = "../utility" }
+sp-keystore = { version = "0.26.0", path = "../../primitives/keystore" }
 
 [features]
 default = ["std"]

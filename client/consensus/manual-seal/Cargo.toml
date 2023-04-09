@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-manual-seal"
-version = "0.10.0-dev"
+version = "0.28.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Manual sealing engine for Substrate"
 edition = "2021"
@@ -21,28 +21,28 @@ futures = "0.3.21"
 log = "0.4.17"
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
-sc-client-api = { version = "4.0.0-dev", path = "../../api" }
-sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
-sc-consensus-aura = { version = "0.10.0-dev", path = "../../consensus/aura" }
-sc-consensus-babe = { version = "0.10.0-dev", path = "../../consensus/babe" }
-sc-consensus-epochs = { version = "0.10.0-dev", path = "../../consensus/epochs" }
-sc-transaction-pool = { version = "4.0.0-dev", path = "../../transaction-pool" }
-sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
-sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-consensus-aura = { version = "0.10.0-dev", path = "../../../primitives/consensus/aura" }
-sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
-sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.12.0", path = "../../../utils/prometheus" }
+sc-client-api = { version = "21.0.0", path = "../../api" }
+sc-consensus = { version = "0.26.0", path = "../../consensus/common" }
+sc-consensus-aura = { version = "0.27.0", path = "../../consensus/aura" }
+sc-consensus-babe = { version = "0.27.0", path = "../../consensus/babe" }
+sc-consensus-epochs = { version = "0.26.0", path = "../../consensus/epochs" }
+sc-transaction-pool = { version = "21.0.0", path = "../../transaction-pool" }
+sc-transaction-pool-api = { version = "21.0.0", path = "../../../client/transaction-pool/api" }
+sp-api = { version = "19.0.0", path = "../../../primitives/api" }
+sp-blockchain = { version = "21.0.0", path = "../../../primitives/blockchain" }
+sp-consensus = { version = "0.25.0", path = "../../../primitives/consensus/common" }
+sp-consensus-aura = { version = "0.25.0", path = "../../../primitives/consensus/aura" }
+sp-consensus-babe = { version = "0.25.0", path = "../../../primitives/consensus/babe" }
+sp-consensus-slots = { version = "0.25.0", path = "../../../primitives/consensus/slots" }
+sp-core = { version = "20.0.0", path = "../../../primitives/core" }
+sp-inherents = { version = "19.0.0", path = "../../../primitives/inherents" }
+sp-keystore = { version = "0.26.0", path = "../../../primitives/keystore" }
+sp-runtime = { version = "23.0.0", path = "../../../primitives/runtime" }
+sp-timestamp = { version = "19.0.0", path = "../../../primitives/timestamp" }
 
 [dev-dependencies]
 tokio = { version = "1.22.0", features = ["rt-multi-thread", "macros"] }
-sc-basic-authorship = { version = "0.10.0-dev", path = "../../basic-authorship" }
+sc-basic-authorship = { version = "0.27.0", path = "../../basic-authorship" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 substrate-test-runtime-transaction-pool = { version = "2.0.0", path = "../../../test-utils/runtime/transaction-pool" }

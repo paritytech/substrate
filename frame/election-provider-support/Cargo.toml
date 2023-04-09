@@ -1,6 +1,6 @@
 [package]
 name = "frame-election-provider-support"
-version = "4.0.0-dev"
+version = "21.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -14,19 +14,19 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-frame-election-provider-solution-type = { version = "4.0.0-dev", path = "solution-type" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
-sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+frame-election-provider-solution-type = { version = "7.0.0", path = "solution-type" }
+frame-support = { version = "21.0.0", default-features = false, path = "../support" }
+frame-system = { version = "21.0.0", default-features = false, path = "../system" }
+sp-arithmetic = { version = "15.0.0", default-features = false, path = "../../primitives/arithmetic" }
+sp-npos-elections = { version = "19.0.0", default-features = false, path = "../../primitives/npos-elections" }
+sp-runtime = { version = "23.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "7.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "20.0.0", default-features = false, path = "../../primitives/core" }
 
 [dev-dependencies]
 rand = { version = "0.8.5", features = ["small_rng"] }
-sp-io = { version = "7.0.0", path = "../../primitives/io" }
-sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
+sp-io = { version = "22.0.0", path = "../../primitives/io" }
+sp-npos-elections = { version = "19.0.0", path = "../../primitives/npos-elections" }
 
 [features]
 default = ["std"]

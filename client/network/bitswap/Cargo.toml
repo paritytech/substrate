@@ -1,7 +1,7 @@
 [package]
 description = "Substrate bitswap protocol"
 name = "sc-network-bitswap"
-version = "0.10.0-dev"
+version = "0.26.0"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
@@ -23,17 +23,17 @@ log = "0.4.17"
 prost = "0.11"
 thiserror = "1.0"
 unsigned-varint = { version = "0.7.1", features = ["futures", "asynchronous_codec"] }
-sc-client-api = { version = "4.0.0-dev", path = "../../api" }
-sc-network = { version = "0.10.0-dev", path = "../" }
-sc-network-common = { version = "0.10.0-dev", path = "../common" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sc-client-api = { version = "21.0.0", path = "../../api" }
+sc-network = { version = "0.27.0", path = "../" }
+sc-network-common = { version = "0.26.0", path = "../common" }
+sp-blockchain = { version = "21.0.0", path = "../../../primitives/blockchain" }
+sp-runtime = { version = "23.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 tokio = { version = "1.22.0", features = ["full"] }
-sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
-sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sc-block-builder = { version = "0.26.0", path = "../../block-builder" }
+sc-consensus = { version = "0.26.0", path = "../../consensus/common" }
+sp-core = { version = "20.0.0", path = "../../../primitives/core" }
+sp-consensus = { version = "0.25.0", path = "../../../primitives/consensus/common" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

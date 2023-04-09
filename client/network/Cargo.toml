@@ -1,7 +1,7 @@
 [package]
 description = "Substrate network protocol"
 name = "sc-network"
-version = "0.10.0-dev"
+version = "0.27.0"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
@@ -39,18 +39,18 @@ smallvec = "1.8.0"
 thiserror = "1.0"
 unsigned-varint = { version = "0.7.1", features = ["futures", "asynchronous_codec"] }
 zeroize = "1.4.3"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
-sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
-sc-client-api = { version = "4.0.0-dev", path = "../api" }
-sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
-sc-network-common = { version = "0.10.0-dev", path = "./common" }
-sc-peerset = { version = "4.0.0-dev", path = "../peerset" }
-sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-arithmetic = { version = "6.0.0", path = "../../primitives/arithmetic" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.12.0", path = "../../utils/prometheus" }
+sc-block-builder = { version = "0.26.0", path = "../block-builder" }
+sc-client-api = { version = "21.0.0", path = "../api" }
+sc-consensus = { version = "0.26.0", path = "../consensus/common" }
+sc-network-common = { version = "0.26.0", path = "./common" }
+sc-peerset = { version = "8.0.0", path = "../peerset" }
+sc-utils = { version = "7.0.0", path = "../utils" }
+sp-arithmetic = { version = "15.0.0", path = "../../primitives/arithmetic" }
+sp-blockchain = { version = "21.0.0", path = "../../primitives/blockchain" }
+sp-consensus = { version = "0.25.0", path = "../../primitives/consensus/common" }
+sp-core = { version = "20.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "23.0.0", path = "../../primitives/runtime" }
 # Force 0.9.2 as snow release to fix the compilation.
 #
 # When libp2p also enforces this version, we can get rid off this extra dep here.
@@ -64,10 +64,10 @@ tempfile = "3.1.0"
 tokio = { version = "1.22.0", features = ["macros"] }
 tokio-util = { version = "0.7.4", features = ["compat"] }
 tokio-test = "0.4.2"
-sc-network-light = { version = "0.10.0-dev", path = "./light" }
-sc-network-sync = { version = "0.10.0-dev", path = "./sync" }
+sc-network-light = { version = "0.26.0", path = "./light" }
+sc-network-sync = { version = "0.26.0", path = "./sync" }
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "9.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 

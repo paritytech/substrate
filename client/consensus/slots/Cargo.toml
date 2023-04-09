@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-slots"
-version = "0.10.0-dev"
+version = "0.26.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic slots-based utilities for consensus"
 edition = "2021"
@@ -19,17 +19,17 @@ codec = { package = "parity-scale-codec", version = "3.2.2" }
 futures = "0.3.21"
 futures-timer = "3.0.1"
 log = "0.4.17"
-sc-client-api = { version = "4.0.0-dev", path = "../../api" }
-sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
-sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
-sp-arithmetic = { version = "6.0.0", path = "../../../primitives/arithmetic" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
-sp-state-machine = { version = "0.13.0", path = "../../../primitives/state-machine" }
+sc-client-api = { version = "21.0.0", path = "../../api" }
+sc-consensus = { version = "0.26.0", path = "../../../client/consensus/common" }
+sc-telemetry = { version = "8.0.0", path = "../../telemetry" }
+sp-arithmetic = { version = "15.0.0", path = "../../../primitives/arithmetic" }
+sp-blockchain = { version = "21.0.0", path = "../../../primitives/blockchain" }
+sp-consensus = { version = "0.25.0", path = "../../../primitives/consensus/common" }
+sp-consensus-slots = { version = "0.25.0", path = "../../../primitives/consensus/slots" }
+sp-core = { version = "20.0.0", path = "../../../primitives/core" }
+sp-inherents = { version = "19.0.0", path = "../../../primitives/inherents" }
+sp-runtime = { version = "23.0.0", path = "../../../primitives/runtime" }
+sp-state-machine = { version = "0.27.0", path = "../../../primitives/state-machine" }
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

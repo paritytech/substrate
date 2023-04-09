@@ -1,6 +1,6 @@
 [package]
 name = "sc-cli"
-version = "0.10.0-dev"
+version = "0.29.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate CLI interface."
 edition = "2021"
@@ -30,27 +30,27 @@ serde_json = "1.0.85"
 thiserror = "1.0.30"
 tiny-bip39 = "1.0.0"
 tokio = { version = "1.22.0", features = ["signal", "rt-multi-thread", "parking_lot"] }
-sc-client-api = { version = "4.0.0-dev", path = "../api" }
-sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../db" }
-sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
-sc-network = { version = "0.10.0-dev", path = "../network" }
-sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
-sc-service = { version = "0.10.0-dev", default-features = false, path = "../service" }
-sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
-sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
-sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-keyring = { version = "7.0.0", path = "../../primitives/keyring" }
-sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
-sp-panic-handler = { version = "5.0.0", path = "../../primitives/panic-handler" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
-sp-version = { version = "5.0.0", path = "../../primitives/version" }
+sc-client-api = { version = "21.0.0", path = "../api" }
+sc-client-db = { version = "0.28.0", default-features = false, path = "../db" }
+sc-keystore = { version = "18.0.0", path = "../keystore" }
+sc-network = { version = "0.27.0", path = "../network" }
+sc-network-common = { version = "0.26.0", path = "../network/common" }
+sc-service = { version = "0.28.0", default-features = false, path = "../service" }
+sc-telemetry = { version = "8.0.0", path = "../telemetry" }
+sc-tracing = { version = "21.0.0", path = "../tracing" }
+sc-utils = { version = "7.0.0", path = "../utils" }
+sp-blockchain = { version = "21.0.0", path = "../../primitives/blockchain" }
+sp-core = { version = "20.0.0", path = "../../primitives/core" }
+sp-keyring = { version = "23.0.0", path = "../../primitives/keyring" }
+sp-keystore = { version = "0.26.0", path = "../../primitives/keystore" }
+sp-panic-handler = { version = "7.0.0", path = "../../primitives/panic-handler" }
+sp-runtime = { version = "23.0.0", path = "../../primitives/runtime" }
+sp-version = { version = "21.0.0", path = "../../primitives/version" }
 
 [dev-dependencies]
 tempfile = "3.1.0"
 futures-timer = "3.0.1"
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "9.0.0", path = "../../primitives/tracing" }
 
 [features]
 default = ["rocksdb"]

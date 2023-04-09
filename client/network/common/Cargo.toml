@@ -1,7 +1,7 @@
 [package]
 description = "Substrate network common"
 name = "sc-network-common"
-version = "0.10.0-dev"
+version = "0.26.0"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
@@ -26,16 +26,16 @@ codec = { package = "parity-scale-codec", version = "3.2.2", features = [
 futures = "0.3.21"
 futures-timer = "3.0.2"
 libp2p = { version = "0.50.0", features = ["request-response", "kad"] }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.12.0", path = "../../../utils/prometheus" }
 smallvec = "1.8.0"
-sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
-sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }
-sc-utils = { version = "4.0.0-dev", path = "../../utils" }
+sc-consensus = { version = "0.26.0", path = "../../consensus/common" }
+sc-peerset = { version = "8.0.0", path = "../../peerset" }
+sc-utils = { version = "7.0.0", path = "../../utils" }
 serde = { version = "1.0.136", features = ["derive"] }
-sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/grandpa" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-consensus = { version = "0.25.0", path = "../../../primitives/consensus/common" }
+sp-consensus-grandpa = { version = "6.0.0", path = "../../../primitives/consensus/grandpa" }
+sp-runtime = { version = "23.0.0", path = "../../../primitives/runtime" }
+sp-blockchain = { version = "21.0.0", path = "../../../primitives/blockchain" }
 thiserror = "1.0"
 zeroize = "1.4.3"
 

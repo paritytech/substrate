@@ -1,6 +1,6 @@
 [package]
 name = "sc-sync-state-rpc"
-version = "0.10.0-dev"
+version = "0.27.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "A RPC handler to create sync states for light clients."
 edition = "2021"
@@ -17,10 +17,10 @@ jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"]
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.85"
 thiserror = "1.0.30"
-sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
-sc-client-api = { version = "4.0.0-dev", path = "../api" }
-sc-consensus-babe = { version = "0.10.0-dev", path = "../consensus/babe" }
-sc-consensus-epochs = { version = "0.10.0-dev", path = "../consensus/epochs" }
-sc-consensus-grandpa = { version = "0.10.0-dev", path = "../consensus/grandpa" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sc-chain-spec = { version = "20.0.0", path = "../chain-spec" }
+sc-client-api = { version = "21.0.0", path = "../api" }
+sc-consensus-babe = { version = "0.27.0", path = "../consensus/babe" }
+sc-consensus-epochs = { version = "0.26.0", path = "../consensus/epochs" }
+sc-consensus-grandpa = { version = "0.12.0", path = "../consensus/grandpa" }
+sp-blockchain = { version = "21.0.0", path = "../../primitives/blockchain" }
+sp-runtime = { version = "23.0.0", path = "../../primitives/runtime" }

@@ -11,7 +11,7 @@ publish = false
 
 [dependencies]
 kitchensink-runtime = { version = "3.0.0-dev", path = "../../../../bin/node/runtime" }
-generate-bags = { version = "4.0.0-dev", path = "../" }
+generate-bags = { version = "21.0.0", path = "../" }
 
 # third-party
 clap = { version = "4.0.9", features = ["derive"] }

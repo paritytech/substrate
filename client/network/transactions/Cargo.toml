@@ -1,7 +1,7 @@
 [package]
 description = "Substrate transaction protocol"
 name = "sc-network-transactions"
-version = "0.10.0-dev"
+version = "0.26.0"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
@@ -19,10 +19,10 @@ futures = "0.3.21"
 libp2p = "0.50.0"
 log = "0.4.17"
 pin-project = "1.0.12"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
-sc-network = { version = "0.10.0-dev", path = "../" }
-sc-network-common = { version = "0.10.0-dev", path = "../common" }
-sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }
-sc-utils = { version = "4.0.0-dev", path = "../../utils" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
-sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.12.0", path = "../../../utils/prometheus" }
+sc-network = { version = "0.27.0", path = "../" }
+sc-network-common = { version = "0.26.0", path = "../common" }
+sc-peerset = { version = "8.0.0", path = "../../peerset" }
+sc-utils = { version = "7.0.0", path = "../../utils" }
+sp-runtime = { version = "23.0.0", path = "../../../primitives/runtime" }
+sp-consensus = { version = "0.25.0", path = "../../../primitives/consensus/common" }

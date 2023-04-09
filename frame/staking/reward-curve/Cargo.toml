@@ -1,6 +1,6 @@
 [package]
 name = "pallet-staking-reward-curve"
-version = "4.0.0-dev"
+version = "5.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -21,4 +21,4 @@ quote = "1.0.10"
 syn = { version = "1.0.98", features = ["full", "visit"] }
 
 [dev-dependencies]
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "23.0.0", path = "../../../primitives/runtime" }

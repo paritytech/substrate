@@ -1,6 +1,6 @@
 [package]
 name = "pallet-fast-unstake"
-version = "4.0.0-dev"
+version = "20.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -16,25 +16,25 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 log = { version = "0.4.17", default-features = false }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+frame-support = { version = "21.0.0", default-features = false, path = "../support" }
+frame-system = { version = "21.0.0", default-features = false, path = "../system" }
 
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-staking = { default-features = false, path = "../../primitives/staking" }
-frame-election-provider-support = { default-features = false, path = "../election-provider-support" }
+sp-io = { version = "22.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "23.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "7.0.0", default-features = false, path = "../../primitives/std" }
+sp-staking = { default-features = false, path = "../../primitives/staking" , version = "19.0.0" }
+frame-election-provider-support = { default-features = false, path = "../election-provider-support" , version = "21.0.0" }
 
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
+frame-benchmarking = { version = "21.0.0", default-features = false, optional = true, path = "../benchmarking" }
 
 [dev-dependencies]
-pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+pallet-staking-reward-curve = { version = "5.0.0", path = "../staking/reward-curve" }
+sp-core = { version = "20.0.0", default-features = false, path = "../../primitives/core" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
-pallet-staking = { path = "../staking" }
-pallet-balances = { path = "../balances" }
-pallet-timestamp = { path = "../timestamp" }
+sp-tracing = { version = "9.0.0", path = "../../primitives/tracing" }
+pallet-staking = { path = "../staking" , version = "21.0.0" }
+pallet-balances = { path = "../balances" , version = "21.0.0" }
+pallet-timestamp = { path = "../timestamp" , version = "20.0.0" }
 
 [features]
 default = ["std"]

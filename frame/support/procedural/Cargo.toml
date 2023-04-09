@@ -1,6 +1,6 @@
 [package]
 name = "frame-support-procedural"
-version = "4.0.0-dev"
+version = "16.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -22,7 +22,7 @@ itertools = "0.10.3"
 proc-macro2 = "1.0.37"
 quote = "1.0.10"
 syn = { version = "1.0.98", features = ["full"] }
-frame-support-procedural-tools = { version = "4.0.0-dev", path = "./tools" }
+frame-support-procedural-tools = { version = "5.0.0", path = "./tools" }
 proc-macro-warning = { version = "0.2.0", default-features = false }
 
 [features]
