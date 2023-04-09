@@ -24,7 +24,7 @@ use codec::{Decode, Encode};
 use sc_executor_common::{
 	error::Error,
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{HeapAllocStrategy, WasmModule},
+	wasm_runtime::{HeapAllocStrategy, WasmModule, DEFAULT_HEAP_ALLOC_STRATEGY},
 };
 use sc_runtime_test::wasm_binary_unwrap;
 use sp_core::{
@@ -114,8 +114,10 @@ fn call_in_wasm<E: Externalities>(
 	execution_method: WasmExecutionMethod,
 	ext: &mut E,
 ) -> Result<Vec<u8>, Error> {
-	let executor =
-		crate::WasmExecutor::<HostFunctions>::new(execution_method, Some(1024), 8, None, 2);
+	let executor = crate::WasmExecutor::<HostFunctions>::builder()
+		.with_execution_method(execution_method)
+		.build();
+
 	executor.uncached_call(
 		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 		ext,
@@ -446,13 +448,11 @@ test_wasm_execution!(should_trap_when_heap_exhausted);
 fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 
-	let executor = crate::WasmExecutor::<HostFunctions>::new(
-		wasm_method,
-		Some(17), // `17` is the initial number of pages compiled into the binary.
-		8,
-		None,
-		2,
-	);
+	let executor = crate::WasmExecutor::<HostFunctions>::builder()
+		.with_execution_method(wasm_method)
+		// `17` is the initial number of pages compiled into the binary.
+		.with_onchain_heap_alloc_strategy(HeapAllocStrategy::Static { extra_pages: 17 })
+		.build();
 
 	let err = executor
 		.uncached_call(
@@ -560,7 +560,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(interpreted_only heap_is_reset_between_calls);
 fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
-	let runtime = mk_test_runtime(wasm_method, HeapAllocStrategy::Static { extra_pages: 1024 });
+	let runtime = mk_test_runtime(wasm_method, DEFAULT_HEAP_ALLOC_STRATEGY);
 	let mut instance = runtime.new_instance().unwrap();
 
 	let heap_base = instance
@@ -579,13 +579,11 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(parallel_execution);
 fn parallel_execution(wasm_method: WasmExecutionMethod) {
-	let executor = std::sync::Arc::new(crate::WasmExecutor::<HostFunctions>::new(
-		wasm_method,
-		Some(1024),
-		8,
-		None,
-		2,
-	));
+	let executor = Arc::new(
+		crate::WasmExecutor::<HostFunctions>::builder()
+			.with_execution_method(wasm_method)
+			.build(),
+	);
 	let threads: Vec<_> = (0..8)
 		.map(|_| {
 			let executor = executor.clone();
