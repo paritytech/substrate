@@ -18,7 +18,7 @@
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
-use sc_network::PeerId;
+use sc_network::{PeerId, ReputationChange};
 use sc_network_gossip::{MessageIntent, ValidationResult, Validator, ValidatorContext};
 use sp_core::hashing::twox_64;
 use sp_runtime::traits::{Block, Hash, Header, NumberFor};
@@ -29,7 +29,7 @@ use parking_lot::{Mutex, RwLock};
 use wasm_timer::Instant;
 
 use crate::{
-	communication::peers::KnownPeers,
+	communication::{benefit, cost, peers::KnownPeers},
 	justification::{
 		proof_block_num_and_set_id, verify_with_validator_set, BeefyVersionedFinalityProof,
 	},
@@ -46,6 +46,27 @@ use sp_consensus_beefy::{
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60);
 #[cfg(test)]
 const REBROADCAST_AFTER: Duration = Duration::from_secs(5);
+
+#[derive(Debug, PartialEq)]
+pub(super) enum Action<H> {
+	// repropagate under given topic, to the given peers, applying cost/benefit to originator.
+	Keep(H, ReputationChange),
+	// discard, applying cost/benefit to originator.
+	Discard(ReputationChange),
+}
+
+/// An outcome of examining a message.
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum Consider {
+	/// Accept the message.
+	Accept,
+	/// Message is too early. Reject.
+	RejectPast,
+	/// Message is from the future. Reject.
+	RejectFuture,
+	/// Message cannot be evaluated. Reject.
+	RejectOutOfScope,
+}
 
 /// BEEFY gossip message type that gets encoded and sent on the network.
 #[derive(Debug, Encode, Decode)]
@@ -135,26 +156,47 @@ impl<B: Block> Filter<B> {
 		}
 	}
 
-	/// Return true if `max(session_start, best_beefy) <= round <= best_grandpa`,
+	/// Accept if `max(session_start, best_beefy) <= round <= best_grandpa`,
 	/// and vote `set_id` matches session set id.
 	///
 	/// Latest concluded round is still considered alive to allow proper gossiping for it.
-	fn is_vote_accepted(&self, round: NumberFor<B>, set_id: ValidatorSetId) -> bool {
+	fn consider_vote(&self, round: NumberFor<B>, set_id: ValidatorSetId) -> Consider {
 		self.inner
 			.as_ref()
-			.map(|f| set_id == f.validator_set.id() && round >= f.start && round <= f.end)
-			.unwrap_or(false)
+			.map(|f|
+				// only from current set and only [filter.start, filter.end]
+				if set_id < f.validator_set.id() {
+					Consider::RejectPast
+				} else if set_id > f.validator_set.id() {
+					Consider::RejectFuture
+				} else if round < f.start {
+					Consider::RejectPast
+				} else if round > f.end {
+					Consider::RejectFuture
+				} else {
+					Consider::Accept
+				})
+			.unwrap_or(Consider::RejectOutOfScope)
 	}
 
 	/// Return true if `round` is >= than `max(session_start, best_beefy)`,
 	/// and proof `set_id` matches session set id.
 	///
 	/// Latest concluded round is still considered alive to allow proper gossiping for it.
-	fn is_finality_proof_accepted(&self, round: NumberFor<B>, set_id: ValidatorSetId) -> bool {
+	fn consider_finality_proof(&self, round: NumberFor<B>, set_id: ValidatorSetId) -> Consider {
 		self.inner
 			.as_ref()
-			.map(|f| set_id == f.validator_set.id() && round >= f.start)
-			.unwrap_or(false)
+			.map(|f|
+				// only from current set and only >= filter.start
+				if round < f.start || set_id < f.validator_set.id() {
+					Consider::RejectPast
+				} else if set_id > f.validator_set.id() {
+					Consider::RejectFuture
+				} else {
+					Consider::Accept
+				}
+			)
+			.unwrap_or(Consider::RejectOutOfScope)
 	}
 
 	/// Add new _known_ `hash` to the round's known votes.
@@ -213,12 +255,16 @@ where
 		self.gossip_filter.write().update(filter);
 	}
 
+	fn report(&self, who: PeerId, cost_benefit: ReputationChange) {
+		// TODO
+	}
+
 	fn validate_vote(
 		&self,
 		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
 		sender: &PeerId,
 		data: &[u8],
-	) -> ValidationResult<B::Hash> {
+	) -> Action<B::Hash> {
 		let msg_hash = twox_64(data);
 		let round = vote.commitment.block_number;
 		let set_id = vote.commitment.validator_set_id;
@@ -230,25 +276,38 @@ where
 		{
 			let filter = self.gossip_filter.read();
 
-			if !filter.is_vote_accepted(round, set_id) {
-				return ValidationResult::Discard
+			match filter.consider_vote(round, set_id) {
+				Consider::RejectPast => return Action::Discard(cost::PAST_REJECTION),
+				Consider::RejectFuture => return Action::Discard(cost::FUTURE_MESSAGE),
+				Consider::RejectOutOfScope => return Action::Discard(cost::OUT_OF_SCOPE_MESSAGE),
+				Consider::Accept => {},
 			}
 
 			if filter.is_known_vote(round, &msg_hash) {
-				return ValidationResult::ProcessAndKeep(self.votes_topic)
+				return Action::Discard(benefit::KNOWN_VOTE_MESSAGE)
+			}
+
+			// ensure authority is part of the set.
+			if !filter
+				.validator_set()
+				.map(|set| set.validators().contains(&vote.id))
+				.unwrap_or(false)
+			{
+				debug!(target: LOG_TARGET, "Message from voter not in validator set: {}", vote.id);
+				return Action::Discard(cost::UNKNOWN_VOTER)
 			}
 		}
 
 		if BeefyKeystore::verify(&vote.id, &vote.signature, &vote.commitment.encode()) {
 			self.gossip_filter.write().add_known_vote(round, msg_hash);
-			ValidationResult::ProcessAndKeep(self.votes_topic)
+			ValidationResult::ProcessAndKeep(self.votes_topic);
+			Action::Keep(self.votes_topic, benefit::VOTE_MESSAGE)
 		} else {
-			// TODO: report peer
 			debug!(
 				target: LOG_TARGET,
 				"🥩 Bad signature on message: {:?}, from: {:?}", vote, sender
 			);
-			ValidationResult::Discard
+			Action::Discard(cost::BAD_SIGNATURE)
 		}
 	}
 
@@ -256,31 +315,38 @@ where
 		&self,
 		proof: BeefyVersionedFinalityProof<B>,
 		sender: &PeerId,
-	) -> ValidationResult<B::Hash> {
+	) -> Action<B::Hash> {
 		let (round, set_id) = proof_block_num_and_set_id::<B>(&proof);
 		self.known_peers.lock().note_vote_for(*sender, round);
 
 		let guard = self.gossip_filter.read();
-		// Verify general usefulness of the justifications.
-		if !guard.is_finality_proof_accepted(round, set_id) {
-			return ValidationResult::Discard
+		// Verify general usefulness of the justification.
+		match guard.consider_finality_proof(round, set_id) {
+			Consider::RejectPast => return Action::Discard(cost::PAST_REJECTION),
+			Consider::RejectFuture => return Action::Discard(cost::FUTURE_MESSAGE),
+			Consider::RejectOutOfScope => return Action::Discard(cost::OUT_OF_SCOPE_MESSAGE),
+			Consider::Accept => {},
 		}
 		// Verify justification signatures.
 		guard
 			.validator_set()
 			.map(|validator_set| {
-				if let Ok(()) = verify_with_validator_set::<B>(round, validator_set, &proof) {
-					ValidationResult::ProcessAndKeep(self.justifs_topic)
-				} else {
-					// TODO: report peer
+				if let Err((_, signatures_checked)) =
+					verify_with_validator_set::<B>(round, validator_set, &proof)
+				{
 					debug!(
 						target: LOG_TARGET,
 						"🥩 Bad signatures on message: {:?}, from: {:?}", proof, sender
 					);
-					ValidationResult::Discard
+					let mut cost = cost::INVALID_PROOF;
+					cost.value +=
+						cost::PER_SIGNATURE_CHECKED.saturating_mul(signatures_checked as i32);
+					Action::Discard(cost)
+				} else {
+					Action::Keep(self.justifs_topic, benefit::VALIDATED_PROOF)
 				}
 			})
-			.unwrap_or(ValidationResult::Discard)
+			.unwrap_or(Action::Discard(cost::OUT_OF_SCOPE_MESSAGE))
 	}
 }
 
@@ -294,15 +360,31 @@ where
 
 	fn validate(
 		&self,
-		_context: &mut dyn ValidatorContext<B>,
+		context: &mut dyn ValidatorContext<B>,
 		sender: &PeerId,
 		mut data: &[u8],
 	) -> ValidationResult<B::Hash> {
-		match GossipMessage::<B>::decode(&mut data) {
+		let action = match GossipMessage::<B>::decode(&mut data) {
 			Ok(GossipMessage::Vote(msg)) => self.validate_vote(msg, sender, data),
 			Ok(GossipMessage::FinalityProof(proof)) => self.validate_finality_proof(proof, sender),
 			Err(e) => {
 				debug!(target: LOG_TARGET, "Error decoding message: {}", e);
+				let bytes = data.len().min(i32::MAX as usize) as i32;
+				let cost = ReputationChange::new(
+					bytes.saturating_mul(cost::PER_UNDECODABLE_BYTE),
+					"BEEFY: Bad packet",
+				);
+				Action::Discard(cost)
+			},
+		};
+		match action {
+			Action::Keep(topic, cb) => {
+				self.report(*sender, cb);
+				context.broadcast_message(topic, data.to_vec(), false);
+				ValidationResult::ProcessAndKeep(topic)
+			},
+			Action::Discard(cb) => {
+				self.report(*sender, cb);
 				ValidationResult::Discard
 			},
 		}
@@ -314,13 +396,13 @@ where
 			Ok(GossipMessage::Vote(msg)) => {
 				let round = msg.commitment.block_number;
 				let set_id = msg.commitment.validator_set_id;
-				let expired = !filter.is_vote_accepted(round, set_id);
+				let expired = filter.consider_vote(round, set_id) != Consider::Accept;
 				trace!(target: LOG_TARGET, "🥩 Vote for round #{} expired: {}", round, expired);
 				expired
 			},
 			Ok(GossipMessage::FinalityProof(proof)) => {
 				let (round, set_id) = proof_block_num_and_set_id::<B>(&proof);
-				let expired = !filter.is_finality_proof_accepted(round, set_id);
+				let expired = filter.consider_finality_proof(round, set_id) != Consider::Accept;
 				trace!(
 					target: LOG_TARGET,
 					"🥩 Finality proof for round #{} expired: {}",
@@ -358,13 +440,13 @@ where
 				Ok(GossipMessage::Vote(msg)) => {
 					let round = msg.commitment.block_number;
 					let set_id = msg.commitment.validator_set_id;
-					let allowed = filter.is_vote_accepted(round, set_id);
+					let allowed = filter.consider_vote(round, set_id) == Consider::Accept;
 					trace!(target: LOG_TARGET, "🥩 Vote for round #{} allowed: {}", round, allowed);
 					allowed
 				},
 				Ok(GossipMessage::FinalityProof(proof)) => {
 					let (round, set_id) = proof_block_num_and_set_id::<B>(&proof);
-					let allowed = filter.is_finality_proof_accepted(round, set_id);
+					let allowed = filter.consider_finality_proof(round, set_id) == Consider::Accept;
 					trace!(
 						target: LOG_TARGET,
 						"🥩 Finality proof for round #{} allowed: {}",

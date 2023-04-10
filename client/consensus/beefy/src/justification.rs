@@ -45,7 +45,9 @@ pub(crate) fn decode_and_verify_finality_proof<Block: BlockT>(
 ) -> Result<BeefyVersionedFinalityProof<Block>, ConsensusError> {
 	let proof = <BeefyVersionedFinalityProof<Block>>::decode(&mut &*encoded)
 		.map_err(|_| ConsensusError::InvalidJustification)?;
-	verify_with_validator_set::<Block>(target_number, validator_set, &proof).map(|_| proof)
+	verify_with_validator_set::<Block>(target_number, validator_set, &proof)
+		.map(|_| proof)
+		.map_err(|err| err.0)
 }
 
 /// Verify the Beefy finality proof against the validator set at the block it was generated.
@@ -53,14 +55,15 @@ pub(crate) fn verify_with_validator_set<Block: BlockT>(
 	target_number: NumberFor<Block>,
 	validator_set: &ValidatorSet<AuthorityId>,
 	proof: &BeefyVersionedFinalityProof<Block>,
-) -> Result<(), ConsensusError> {
+) -> Result<(), (ConsensusError, u32)> {
+	let mut signatures_checked = 0u32;
 	match proof {
 		VersionedFinalityProof::V1(signed_commitment) => {
 			if signed_commitment.signatures.len() != validator_set.len() ||
 				signed_commitment.commitment.validator_set_id != validator_set.id() ||
 				signed_commitment.commitment.block_number != target_number
 			{
-				return Err(ConsensusError::InvalidJustification)
+				return Err((ConsensusError::InvalidJustification, 0))
 			}
 
 			// Arrangement of signatures in the commitment should be in the same order
@@ -73,14 +76,17 @@ pub(crate) fn verify_with_validator_set<Block: BlockT>(
 				.filter(|(id, signature)| {
 					signature
 						.as_ref()
-						.map(|sig| BeefyKeystore::verify(id, sig, &message[..]))
+						.map(|sig| {
+							signatures_checked += 1;
+							BeefyKeystore::verify(id, sig, &message[..])
+						})
 						.unwrap_or(false)
 				})
 				.count();
 			if valid_signatures >= crate::round::threshold(validator_set.len()) {
 				Ok(())
 			} else {
-				Err(ConsensusError::InvalidJustification)
+				Err((ConsensusError::InvalidJustification, signatures_checked))
 			}
 		},
 	}
