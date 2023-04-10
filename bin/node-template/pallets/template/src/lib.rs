@@ -79,6 +79,8 @@ pub mod pallet {
 			// Update storage.
 			<Something<T>>::put(something);
 
+			<SomeFlipper<T>>::put(Flipper { value: true });
+
 			// Emit an event.
 			Self::deposit_event(Event::SomethingStored { something, who });
 			// Return a successful DispatchResultWithPostInfo
@@ -107,7 +109,15 @@ pub mod pallet {
 	}
 
 	#[pallet::ink(storage)] 
+	#[derive(Encode, Decode)] //Todo: remove
 	pub struct Flipper {
-        value: bool,
+        pub value: bool,
     }
+
+	impl Flipper {
+		// #[ink(message)] Todo
+		pub fn flip(&mut self) {
+            self.value = !self.value;
+        }
+	}
 }
