@@ -1454,16 +1454,10 @@ where
 						.behaviour_mut()
 						.add_self_reported_address_to_dht(&peer_id, &protocols, addr);
 				}
-				self.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.add_known_peer(peer_id);
+				self.network_service.behaviour_mut().user_protocol_mut().add_known_peer(peer_id);
 			},
 			SwarmEvent::Behaviour(BehaviourOut::Discovered(peer_id)) => {
-				self.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.add_known_peer(peer_id);
+				self.network_service.behaviour_mut().user_protocol_mut().add_known_peer(peer_id);
 			},
 			SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted) => {
 				if let Some(metrics) = self.metrics.as_ref() {

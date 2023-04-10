@@ -60,6 +60,17 @@ pub use libp2p::PeerId;
 
 pub use peer_store::BANNED_THRESHOLD;
 
+#[derive(Debug)]
+enum Action {
+	AddReservedPeer(SetId, PeerId),
+	RemoveReservedPeer(SetId, PeerId),
+	SetReservedPeers(SetId, HashSet<PeerId>),
+	SetReservedOnly(SetId, bool),
+	ReportPeer(PeerId, ReputationChange),
+	AddKnownPeer(PeerId),
+	PeerReputation(PeerId, oneshot::Sender<i32>),
+}
+
 /// Identifier of a set in the peerset.
 ///
 /// Can be constructed using the `From<usize>` trait implementation based on the index of the set
@@ -111,10 +122,7 @@ impl ReputationChange {
 /// Shared handle to the peer set manager (PSM). Distributed around the code.
 #[derive(Debug, Clone)]
 pub struct PeersetHandle {
-	// Peer store handle.
-	peer_store_handle: PeerStoreHandle,
-	// Protocol handles per every `SetId`. The size of this vectore never changes.
-	protocol_handles: Vec<ProtocolHandle>,
+	tx: TracingUnboundedSender<Action>,
 }
 
 impl PeersetHandle {
@@ -126,41 +134,45 @@ impl PeersetHandle {
 	/// > **Note**: Keep in mind that the networking has to know an address for this node,
 	/// > otherwise it will not be able to connect to it.
 	pub fn add_reserved_peer(&self, set_id: SetId, peer_id: PeerId) {
-		self.protocol_handles[set_id.0].add_reserved_peer(peer_id);
+		let _ = self.tx.unbounded_send(Action::AddReservedPeer(set_id, peer_id));
 	}
 
 	/// Remove a previously-added reserved peer.
 	///
 	/// Has no effect if the node was not a reserved peer.
 	pub fn remove_reserved_peer(&self, set_id: SetId, peer_id: PeerId) {
-		self.protocol_handles[set_id.0].remove_reserved_peer(peer_id);
+		let _ = self.tx.unbounded_send(Action::RemoveReservedPeer(set_id, peer_id));
 	}
 
 	/// Sets whether or not the peerset only has connections with nodes marked as reserved for
 	/// the given set.
 	pub fn set_reserved_only(&self, set_id: SetId, reserved: bool) {
-		self.protocol_handles[set_id.0].set_reserved_only(reserved);
+		let _ = self.tx.unbounded_send(Action::SetReservedOnly(set_id, reserved));
 	}
 
 	/// Set reserved peers to the new set.
 	pub fn set_reserved_peers(&self, set_id: SetId, peer_ids: HashSet<PeerId>) {
-		self.protocol_handles[set_id.0].set_reserved_peers(peer_ids);
+		let _ = self.tx.unbounded_send(Action::SetReservedPeers(set_id, peer_ids));
 	}
 
 	/// Reports an adjustment to the reputation of the given peer.
-	pub fn report_peer(&mut self, peer_id: PeerId, score_diff: ReputationChange) {
-		self.peer_store_handle.report_peer(peer_id, score_diff);
+	pub fn report_peer(&self, peer_id: PeerId, score_diff: ReputationChange) {
+		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));
 	}
 
 	/// Add a peer to the list of known peers.
-	pub fn add_known_peer(&mut self, peer_id: PeerId) {
-		self.peer_store_handle.add_known_peer(peer_id);
+	pub fn add_known_peer(&self, peer_id: PeerId) {
+		let _ = self.tx.unbounded_send(Action::AddKnownPeer(peer_id));
 	}
 
 	/// Returns the reputation value of the peer.
 	pub async fn peer_reputation(self, peer_id: PeerId) -> Result<i32, ()> {
-		Ok(self.peer_store_handle.peer_reputation(&peer_id))
-		// TODO: convert into sync function.
+		let (tx, rx) = oneshot::channel();
+
+		let _ = self.tx.unbounded_send(Action::PeerReputation(peer_id, tx));
+
+		// The channel can only be closed if the peerset no longer exists.
+		rx.await.map_err(|_| ())
 	}
 }
 
@@ -246,7 +258,11 @@ pub struct Peerset {
 	protocol_controller_futures: JoinAll<BoxFuture<'static, ()>>,
 	/// Commands sent from protocol controllers to `Notifications`. The size of this vector never
 	/// changes.
-	rx: TracingUnboundedReceiver<Message>,
+	from_controllers: TracingUnboundedReceiver<Message>,
+	/// Receiver for messages from the `PeersetHandle` and from `to_self`.
+	from_handle: TracingUnboundedReceiver<Action>,
+	/// Sending side of `from_handle`.
+	to_self: TracingUnboundedSender<Action>,
 }
 
 impl Peerset {
@@ -255,7 +271,8 @@ impl Peerset {
 		let default_set_config = &config.sets[0];
 		let peer_store = PeerStore::new(default_set_config.bootnodes.clone());
 
-		let (tx, rx) = tracing_unbounded("mpsc_protocol_controllers_to_notifications", 10_000);
+		let (to_notifications, from_controllers) =
+			tracing_unbounded("mpsc_protocol_controllers_to_notifications", 10_000);
 
 		let controllers = config
 			.sets
@@ -265,7 +282,7 @@ impl Peerset {
 				ProtocolController::new(
 					SetId::from(set),
 					set_config,
-					tx.clone(),
+					to_notifications.clone(),
 					peer_store.handle(),
 				)
 			})
@@ -274,10 +291,9 @@ impl Peerset {
 		let (protocol_handles, protocol_controllers): (Vec<ProtocolHandle>, Vec<_>) =
 			controllers.into_iter().unzip();
 
-		let handle = PeersetHandle {
-			peer_store_handle: peer_store.handle(),
-			protocol_handles: protocol_handles.clone(),
-		};
+		let (to_self, from_handle) = tracing_unbounded("mpsc_peerset_messages", 10_000);
+
+		let handle = PeersetHandle { tx: to_self.clone() };
 
 		let protocol_controller_futures =
 			join_all(protocol_controllers.into_iter().map(|c| c.run().boxed()));
@@ -287,7 +303,9 @@ impl Peerset {
 			peer_store_future: peer_store.run().boxed(),
 			protocol_handles,
 			protocol_controller_futures,
-			rx,
+			from_controllers,
+			from_handle,
+			to_self,
 		};
 
 		(peerset, handle)
@@ -315,7 +333,7 @@ impl Peerset {
 	///
 	/// Must only be called after the PSM has either generated a `Connect` message with this
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
-	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId, reason: DropReason) {
+	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId, _reason: DropReason) {
 		self.protocol_handles[set_id.0].dropped(peer_id);
 	}
 
@@ -342,7 +360,7 @@ impl Peerset {
 		// We don't immediately perform the adjustments in order to have state consistency. We
 		// don't want the reporting here to take priority over messages sent using the
 		// `PeersetHandle`.
-		let _ = self.peer_store_handle.report_peer(peer_id, score_diff);
+		let _ = self.to_self.unbounded_send(Action::ReportPeer(peer_id, score_diff));
 	}
 
 	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.
@@ -361,7 +379,35 @@ impl Stream for Peerset {
 	type Item = Message;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		if let Poll::Ready(msg) = self.rx.poll_next_unpin(cx) {
+		while let Poll::Ready(action) = self.from_handle.poll_next_unpin(cx) {
+			if let Some(action) = action {
+				match action {
+					Action::AddReservedPeer(set_id, peer_id) =>
+						self.protocol_handles[set_id.0].add_reserved_peer(peer_id),
+					Action::RemoveReservedPeer(set_id, peer_id) =>
+						self.protocol_handles[set_id.0].remove_reserved_peer(peer_id),
+					Action::SetReservedPeers(set_id, peer_ids) =>
+						self.protocol_handles[set_id.0].set_reserved_peers(peer_ids),
+					Action::SetReservedOnly(set_id, reserved_only) =>
+						self.protocol_handles[set_id.0].set_reserved_only(reserved_only),
+					Action::ReportPeer(peer_id, score_diff) =>
+						self.peer_store_handle.report_peer(peer_id, score_diff),
+					Action::AddKnownPeer(peer_id) => self.peer_store_handle.add_known_peer(peer_id),
+					Action::PeerReputation(peer_id, pending_response) => {
+						let _ =
+							pending_response.send(self.peer_store_handle.peer_reputation(&peer_id));
+					},
+				}
+			} else {
+				debug!(
+					target: "peerset",
+					"`PeersetHandle` was dropped, terminating `Peerset`."
+				);
+				return Poll::Ready(None)
+			}
+		}
+
+		if let Poll::Ready(msg) = self.from_controllers.poll_next_unpin(cx) {
 			if let Some(msg) = msg {
 				return Poll::Ready(Some(msg))
 			} else {

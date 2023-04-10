@@ -37,12 +37,12 @@ use log::{debug, error, warn};
 use sc_network_common::{role::Roles, sync::message::BlockAnnouncesHandshake};
 use sp_runtime::traits::Block as BlockT;
 
+use futures::channel::oneshot;
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
 	iter,
 	task::Poll,
 };
-use futures::channel::oneshot;
 
 use message::{generic::Message as GenericMessage, Message};
 use notifications::{Notifications, NotificationsOut};

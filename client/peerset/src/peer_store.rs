@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use libp2p::PeerId;
+use log::trace;
 use partial_sort::PartialSort;
 use std::{
 	cmp::{Ord, Ordering, PartialOrd},
@@ -25,7 +26,6 @@ use std::{
 	time::{Duration, Instant},
 };
 use wasm_timer::Delay;
-use log::trace;
 
 use crate::ReputationChange;
 
@@ -204,6 +204,7 @@ impl PeerStoreInner {
 				(!info.is_banned() && !ignored.contains(peer_id)).then_some((*peer_id, *info))
 			})
 			.collect::<Vec<_>>();
+		let count = std::cmp::min(count, candidates.len());
 		candidates.partial_sort(count, |(_, info1), (_, info2)| info1.cmp(info2));
 		candidates.iter().take(count).map(|(peer_id, _)| *peer_id).collect()
 
@@ -228,7 +229,7 @@ impl PeerStoreInner {
 
 	fn add_known_peer(&mut self, peer_id: PeerId) {
 		match self.peers.entry(peer_id) {
-			Entry::Occupied(mut e) => { 
+			Entry::Occupied(mut e) => {
 				trace!(
 					target: "peerset",
 					"Trying to add an already known peer {}, bumping `last_updated`.",
