@@ -1048,10 +1048,6 @@ impl<T: Config> EraInfo<T> {
 
 		let overview = overview.expect("checked above; qed");
 
-		if overview.page_count == 0 {
-			return Exposure { total: overview.total, own: overview.own, others: vec![] }
-		}
-
 		let mut others = Vec::with_capacity(overview.nominator_count as usize);
 		for page in 0..overview.page_count {
 			let nominators = <ErasStakersPaged<T>>::get((era, validator, page));
