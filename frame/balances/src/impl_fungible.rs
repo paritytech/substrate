@@ -207,7 +207,7 @@ impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> fungible::MutateHold<T::AccountId> for Pallet<T, I> {}
 
 impl<T: Config<I>, I: 'static> fungible::InspectHold<T::AccountId> for Pallet<T, I> {
-	type Reason = T::HoldIdentifier;
+	type Reason = T::RuntimeHoldReason;
 
 	fn total_balance_on_hold(who: &T::AccountId) -> T::Balance {
 		Self::account(who).reserved
