@@ -119,10 +119,10 @@
 //! number of nominators exceeds [`Config::MaxExposurePageSize`], then the nominators are stored in
 //! multiple pages of [`Config::MaxExposurePageSize`], each with up to a maximum of
 //! [`Config::MaxExposurePageCount`] pages. To pay out all nominators, `payout_stakers` must be
-//! called once for each available page. In a scenario where the number of nominators N exceed M, where M
-//! = [`Config::MaxExposurePageSize`] * [`Config::MaxExposurePageCount`], only the top M nominators by
-//! stake balance are paid out. The rest of the nominators are not paid out. Paging exists to limit
-//! the i/o cost to mutate storage for each nominator's account.
+//! called once for each available page. In a scenario where the number of nominators N exceed M,
+//! where M = [`Config::MaxExposurePageSize`] * [`Config::MaxExposurePageCount`], only the top M
+//! nominators by stake balance are paid out. The rest of the nominators are not paid out. Paging
+//! exists to limit the i/o cost to mutate storage for each nominator's account.
 //!
 //! Slashing can occur at any point in time, once misbehavior is reported. Once slashing is
 //! determined, a value is deducted from the balance of the validator and all the nominators who
@@ -306,15 +306,22 @@ pub mod weights;
 mod pallet;
 
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
-use frame_support::{traits::{Currency, Defensive, Get}, weights::Weight, BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound, defensive};
+use frame_support::{
+	defensive,
+	traits::{Currency, Defensive, DefensiveMax, DefensiveSaturating, Get},
+	weights::Weight,
+	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+};
 use scale_info::TypeInfo;
-use frame_support::traits::{DefensiveMax, DefensiveSaturating};
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{AtLeast32BitUnsigned, Convert, Saturating, StaticLookup, Zero},
 	Perbill, Perquintill, Rounding, RuntimeDebug,
 };
-use sp_staking::{offence::{Offence, OffenceError, ReportOffence}, EraIndex, ExposureOverview, ExposurePage, SessionIndex, PageIndex};
+use sp_staking::{
+	offence::{Offence, OffenceError, ReportOffence},
+	EraIndex, ExposureOverview, ExposurePage, PageIndex, SessionIndex,
+};
 pub use sp_staking::{Exposure, IndividualExposure};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
@@ -1019,8 +1026,7 @@ impl<T: Config> EraInfo<T> {
 
 		// since overview is present, paged exposure will always be present except when a
 		// validator has only own stake and no nominator stake.
-		let exposure_page =
-			<ErasStakersPaged<T>>::get((era, validator, page)).unwrap_or_default();
+		let exposure_page = <ErasStakersPaged<T>>::get((era, validator, page)).unwrap_or_default();
 
 		// build the exposure
 		Some(ExposureExt {
@@ -1112,11 +1118,7 @@ impl<T: Config> EraInfo<T> {
 
 	/// Creates an entry to track validator reward has been claimed for a given era and page.
 	/// Noop if already claimed.
-	pub(crate) fn set_rewards_as_claimed(
-		era: EraIndex,
-		validator: &T::AccountId,
-		page: PageIndex,
-	) {
+	pub(crate) fn set_rewards_as_claimed(era: EraIndex, validator: &T::AccountId, page: PageIndex) {
 		let mut claimed_pages = ClaimedRewards::<T>::get(era, validator);
 
 		// this should never be called if the reward has already been claimed
@@ -1141,9 +1143,8 @@ impl<T: Config> EraInfo<T> {
 		let max_page_count = T::MaxExposurePageCount::get();
 
 		let nominator_count = exposure.others.len();
-		let required_page_count = nominator_count
-			.defensive_saturating_add(page_size as usize - 1) /
-			page_size as usize;
+		let required_page_count =
+			nominator_count.defensive_saturating_add(page_size as usize - 1) / page_size as usize;
 
 		// clip nominators if it exceeds the maximum page count.
 		let exposure = if required_page_count as PageIndex > max_page_count {

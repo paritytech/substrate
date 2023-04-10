@@ -697,7 +697,6 @@ pub mod pallet {
 
 	#[pallet::genesis_build]
 
-
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			ValidatorCount::<T>::put(self.validator_count);
