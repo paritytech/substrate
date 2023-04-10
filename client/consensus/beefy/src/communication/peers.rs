@@ -26,6 +26,7 @@ use sp_runtime::traits::{Block, NumberFor, Zero};
 use std::collections::{HashMap, VecDeque};
 
 /// Report specifying a reputation change for a given peer.
+#[derive(Debug, PartialEq)]
 pub(crate) struct PeerReport {
 	pub who: PeerId,
 	pub cost_benefit: ReputationChange,

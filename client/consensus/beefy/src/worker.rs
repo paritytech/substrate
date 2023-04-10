@@ -1085,7 +1085,8 @@ pub(crate) mod tests {
 		let network = peer.network_service().clone();
 		let sync = peer.sync_service().clone();
 		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
-		let gossip_validator = Arc::new(GossipValidator::new(known_peers.clone()));
+		let (gossip_validator, gossip_report_stream) = GossipValidator::new(known_peers.clone());
+		let gossip_validator = Arc::new(gossip_validator);
 		let gossip_engine = GossipEngine::new(
 			network.clone(),
 			sync.clone(),
@@ -1115,7 +1116,7 @@ pub(crate) mod tests {
 		)
 		.unwrap();
 		let payload_provider = MmrRootProvider::new(api.clone());
-		let worker_params = crate::worker::WorkerParams {
+		BeefyWorker {
 			backend,
 			payload_provider,
 			runtime: api,
@@ -1123,12 +1124,13 @@ pub(crate) mod tests {
 			links,
 			gossip_engine,
 			gossip_validator,
+			gossip_report_stream,
 			metrics,
 			sync: Arc::new(sync),
 			on_demand_justifications,
+			pending_justifications: BTreeMap::new(),
 			persisted_state,
-		};
-		BeefyWorker::<_, _, _, _, _>::new(worker_params)
+		}
 	}
 
 	#[test]
