@@ -36,7 +36,10 @@ use sc_client_api::{
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
-use sc_executor::RuntimeVersionOf;
+use sc_executor::{
+	sp_wasm_interface::HostFunctions, HeapAllocStrategy, NativeElseWasmExecutor,
+	NativeExecutionDispatch, RuntimeVersionOf, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY,
+};
 use sc_keystore::LocalKeystore;
 use sc_network::{config::SyncMode, NetworkService, NetworkStateInfo, NetworkStatusProvider};
 use sc_network_bitswap::BitswapRequestHandler;
@@ -74,11 +77,10 @@ pub type TFullClient<TBl, TRtApi, TExec> =
 	Client<TFullBackend<TBl>, TFullCallExecutor<TBl, TExec>, TBl, TRtApi>;
 
 /// Full client backend type.
-pub type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
+pub type TFullBackend<TBl> = Backend<TBl>;
 
 /// Full client call executor type.
-pub type TFullCallExecutor<TBl, TExec> =
-	crate::client::LocalCallExecutor<TBl, sc_client_db::Backend<TBl>, TExec>;
+pub type TFullCallExecutor<TBl, TExec> = crate::client::LocalCallExecutor<TBl, Backend<TBl>, TExec>;
 
 type TFullParts<TBl, TRtApi, TExec> =
 	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
@@ -229,6 +231,27 @@ where
 	Ok((client, backend, keystore_container, task_manager))
 }
 
+/// Creates a [`NativeElseWasmExecutor`] according to [`Configuration`].
+pub fn new_native_or_wasm_executor<D: NativeExecutionDispatch>(
+	config: &Configuration,
+) -> NativeElseWasmExecutor<D> {
+	NativeElseWasmExecutor::new_with_wasm_executor(new_wasm_executor(config))
+}
+
+/// Creates a [`WasmExecutor`] according to [`Configuration`].
+pub fn new_wasm_executor<H: HostFunctions>(config: &Configuration) -> WasmExecutor<H> {
+	let strategy = config
+		.default_heap_pages
+		.map_or(DEFAULT_HEAP_ALLOC_STRATEGY, |p| HeapAllocStrategy::Static { extra_pages: p as _ });
+	WasmExecutor::<H>::builder()
+		.with_execution_method(config.wasm_method)
+		.with_onchain_heap_alloc_strategy(strategy)
+		.with_offchain_heap_alloc_strategy(strategy)
+		.with_max_runtime_instances(config.max_runtime_instances)
+		.with_runtime_cache_size(config.runtime_cache_size)
+		.build()
+}
+
 /// Create an instance of default DB-backend backend.
 pub fn new_db_backend<Block>(
 	settings: DatabaseSettings,
@@ -254,7 +277,7 @@ pub fn new_client<E, Block, RA, G>(
 	telemetry: Option<TelemetryHandle>,
 	config: ClientConfig<Block>,
 ) -> Result<
-	crate::client::Client<
+	Client<
 		Backend<Block>,
 		crate::client::LocalCallExecutor<Block, Backend<Block>, E>,
 		Block,
@@ -277,7 +300,7 @@ where
 		execution_extensions,
 	)?;
 
-	crate::client::Client::new(
+	Client::new(
 		backend,
 		executor,
 		spawn_handle,
