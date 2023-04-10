@@ -22,9 +22,9 @@ mod linux;
 use assert_matches::assert_matches;
 use codec::{Decode, Encode};
 use sc_executor_common::{
-	error::{Error, WasmError},
+	error::Error,
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{HeapAllocStrategy, WasmModule},
+	wasm_runtime::{HeapAllocStrategy, WasmModule, DEFAULT_HEAP_ALLOC_STRATEGY},
 };
 use sc_runtime_test::wasm_binary_unwrap;
 use sp_core::{
@@ -776,9 +776,8 @@ fn return_huge_len(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 
 	match call_in_wasm("test_return_huge_len", &[], wasm_method, &mut ext).unwrap_err() {
-		Error::RuntimeConstruction(WasmError::Other(error)) => {
+		Error::OutputExceedsBounds => {
 			assert_matches!(wasm_method, WasmExecutionMethod::Compiled { .. });
-			assert_eq!(error, "output exceeds bounds of wasm memory");
 		},
 		error => panic!("unexpected error: {:?}", error),
 	}
@@ -803,9 +802,8 @@ fn return_max_memory_offset_plus_one(wasm_method: WasmExecutionMethod) {
 	match call_in_wasm("test_return_max_memory_offset_plus_one", &[], wasm_method, &mut ext)
 		.unwrap_err()
 	{
-		Error::RuntimeConstruction(WasmError::Other(error)) => {
+		Error::OutputExceedsBounds => {
 			assert_matches!(wasm_method, WasmExecutionMethod::Compiled { .. });
-			assert_eq!(error, "output exceeds bounds of wasm memory");
 		},
 		error => panic!("unexpected error: {:?}", error),
 	}
@@ -817,9 +815,8 @@ fn return_overflow(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 
 	match call_in_wasm("test_return_overflow", &[], wasm_method, &mut ext).unwrap_err() {
-		Error::RuntimeConstruction(WasmError::Other(error)) => {
+		Error::OutputExceedsBounds => {
 			assert_matches!(wasm_method, WasmExecutionMethod::Compiled { .. });
-			assert_eq!(error, "output exceeds bounds of wasm memory");
 		},
 		error => panic!("unexpected error: {:?}", error),
 	}

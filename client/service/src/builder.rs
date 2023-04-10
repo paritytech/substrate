@@ -183,6 +183,7 @@ where
 			config.execution_strategies.clone(),
 			Some(keystore_container.keystore()),
 			sc_offchain::OffchainDb::factory_from_backend(&*backend),
+			Arc::new(executor.clone()),
 		);
 
 		let wasm_runtime_substitutes = config
@@ -231,7 +232,7 @@ where
 }
 
 /// Creates a [`NativeElseWasmExecutor`] according to [`Configuration`].
-pub fn new_native_executor<D: NativeExecutionDispatch>(
+pub fn new_native_or_wasm_executor<D: NativeExecutionDispatch>(
 	config: &Configuration,
 ) -> NativeElseWasmExecutor<D> {
 	NativeElseWasmExecutor::new_with_wasm_executor(new_wasm_executor(config))
@@ -245,7 +246,7 @@ pub fn new_wasm_executor<H: HostFunctions>(config: &Configuration) -> WasmExecut
 	WasmExecutor::<H>::builder()
 		.with_execution_method(config.wasm_method)
 		.with_onchain_heap_alloc_strategy(strategy)
-		.with_onchain_heap_alloc_strategy(strategy)
+		.with_offchain_heap_alloc_strategy(strategy)
 		.with_max_runtime_instances(config.max_runtime_instances)
 		.with_runtime_cache_size(config.runtime_cache_size)
 		.build()
@@ -295,7 +296,6 @@ where
 	let executor = crate::client::LocalCallExecutor::new(
 		backend.clone(),
 		executor,
-		spawn_handle.clone(),
 		config.clone(),
 		execution_extensions,
 	)?;

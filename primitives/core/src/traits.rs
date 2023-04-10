@@ -157,6 +157,16 @@ pub trait ReadRuntimeVersion: Send + Sync {
 	) -> Result<Vec<u8>, String>;
 }
 
+impl ReadRuntimeVersion for std::sync::Arc<dyn ReadRuntimeVersion> {
+	fn read_runtime_version(
+		&self,
+		wasm_code: &[u8],
+		ext: &mut dyn Externalities,
+	) -> Result<Vec<u8>, String> {
+		(**self).read_runtime_version(wasm_code, ext)
+	}
+}
+
 sp_externalities::decl_extension! {
 	/// An extension that provides functionality to read version information from a given wasm blob.
 	pub struct ReadRuntimeVersionExt(Box<dyn ReadRuntimeVersion>);
@@ -166,18 +176,6 @@ impl ReadRuntimeVersionExt {
 	/// Creates a new instance of the extension given a version determinator instance.
 	pub fn new<T: ReadRuntimeVersion + 'static>(inner: T) -> Self {
 		Self(Box::new(inner))
-	}
-}
-
-sp_externalities::decl_extension! {
-	/// Task executor extension.
-	pub struct TaskExecutorExt(Box<dyn SpawnNamed>);
-}
-
-impl TaskExecutorExt {
-	/// New instance of task executor extension.
-	pub fn new(spawn_handle: impl SpawnNamed + Send + 'static) -> Self {
-		Self(Box::new(spawn_handle))
 	}
 }
 

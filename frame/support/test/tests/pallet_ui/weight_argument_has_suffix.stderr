@@ -1,7 +1,0 @@
-error: invalid suffix `something` for number literal
-  --> tests/pallet_ui/weight_argument_has_suffix.rs:15:26
-   |
-15 |         #[pallet::weight(10_000something)]
-   |                          ^^^^^^^^^^^^^^^ invalid suffix `something`
-   |
-   = help: the suffix must be one of the numeric types (`u32`, `isize`, `f32`, etc.)

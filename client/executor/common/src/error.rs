@@ -96,6 +96,9 @@ pub enum Error {
 
 	#[error("Execution aborted due to trap: {0}")]
 	AbortedDueToTrap(MessageWithBacktrace),
+
+	#[error("Output exceeds bounds of wasm memory")]
+	OutputExceedsBounds,
 }
 
 impl From<&'static str> for Error {
@@ -143,7 +146,7 @@ pub enum WasmError {
 	Instantiation(String),
 
 	/// Other error happenend.
-	#[error("{0}")]
+	#[error("Other error happened while constructing the runtime: {0}")]
 	Other(String),
 }
 

@@ -109,7 +109,7 @@ impl<B: BlockT> BlockCollection<B> {
 	pub fn needed_blocks(
 		&mut self,
 		who: PeerId,
-		count: usize,
+		count: u32,
 		peer_best: NumberFor<B>,
 		common: NumberFor<B>,
 		max_parallel: u32,
