@@ -56,7 +56,7 @@ macro_rules! generate_test {
 // $pm = parent module
 // $cm = child module
 // shorthand so each generate_test! call can fit on one line
-macro_rules! run_tests {
+macro_rules! generate_all_tests {
 	($pm:tt :: $cm:tt, $ext_deposit:expr, $dust_trap:expr) => {
 		generate_test!($pm::$cm, $ext_deposit, $dust_trap, mint_into_success);
 		generate_test!($pm::$cm, $ext_deposit, $dust_trap, mint_into_overflow);
@@ -90,11 +90,11 @@ macro_rules! run_tests {
 	};
 }
 
-run_tests!(conformance_tests::inspect_mutate, 1, "off");
-run_tests!(conformance_tests::inspect_mutate, 1, "on");
-run_tests!(conformance_tests::inspect_mutate, 2, "off");
-run_tests!(conformance_tests::inspect_mutate, 2, "on");
-run_tests!(conformance_tests::inspect_mutate, 5, "off");
-run_tests!(conformance_tests::inspect_mutate, 5, "on");
-run_tests!(conformance_tests::inspect_mutate, 1000, "off");
-run_tests!(conformance_tests::inspect_mutate, 1000, "on");
+generate_all_tests!(conformance_tests::inspect_mutate, 1, "off");
+generate_all_tests!(conformance_tests::inspect_mutate, 1, "on");
+generate_all_tests!(conformance_tests::inspect_mutate, 2, "off");
+generate_all_tests!(conformance_tests::inspect_mutate, 2, "on");
+generate_all_tests!(conformance_tests::inspect_mutate, 5, "off");
+generate_all_tests!(conformance_tests::inspect_mutate, 5, "on");
+generate_all_tests!(conformance_tests::inspect_mutate, 1000, "off");
+generate_all_tests!(conformance_tests::inspect_mutate, 1000, "on");
