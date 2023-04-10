@@ -33,7 +33,6 @@
 //! will at all time try to maintain a connection with.
 
 mod peer_store;
-mod peersstate;
 mod protocol_controller;
 
 use peer_store::{PeerReputationProvider, PeerStore, PeerStoreHandle};
