@@ -10,7 +10,7 @@ use std::{collections::HashMap, ops::IndexMut};
 use syn::spanned::Spanned;
 
 fn prefix_ident(ink_def: &InkDef) -> syn::Ident {
-	let ink_ident = &ink_def.ident;
+	let ink_ident = &ink_def.ident.clone().unwrap();
 	syn::Ident::new(&format!("_GeneratedPrefixForStorage{}", ink_ident), ink_ident.span())
 }
 
@@ -19,7 +19,7 @@ pub fn expand_inks(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_system = &def.frame_system;
 	let pallet_ident = &def.pallet_struct.pallet;
 
-    let getters = def.inks.iter().map(|ink_def| {
+    let getters = def.inks.iter().filter(|ink_def| ink_def.storage).map(|ink_def| {
 		let completed_where_clause =
 			super::merge_where_clauses(&[&ink_def.where_clause, &def.config.where_clause]);
 		let docs = ink_def
@@ -66,7 +66,7 @@ pub fn expand_inks(def: &mut Def) -> proc_macro2::TokenStream {
 		)
     });
 
-	let prefix_structs = def.inks.iter().map(|ink_def| {
+	let prefix_structs = def.inks.iter().filter(|ink_def| ink_def.storage).map(|ink_def| {
 		let type_impl_gen = &def.type_impl_generics(ink_def.attr_span);
 		let type_use_gen = &def.type_use_generics(ink_def.attr_span);
 		let prefix_struct_ident = prefix_ident(ink_def);
@@ -103,8 +103,13 @@ pub fn expand_inks(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	});
 
+	let _ = def.inks.iter().filter(|ink_def| !ink_def.storage).map(|ink_def| {
+		println!("Ink St: {:?}", ink_def.storage);
+		quote::quote!()
+	});
+
 	quote::quote!(
- 	   #( #getters )*
+ 	   	#( #getters )*
 		#( #prefix_structs )*
 	)
 }

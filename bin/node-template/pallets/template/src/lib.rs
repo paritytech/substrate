@@ -114,8 +114,8 @@ pub mod pallet {
         pub value: bool,
     }
 
+	#[pallet::ink(message)]
 	impl Flipper {
-		// #[ink(message)] Todo
 		pub fn flip(&mut self) {
             self.value = !self.value;
         }
