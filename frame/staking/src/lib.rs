@@ -1019,7 +1019,7 @@ impl<T: Config> EraInfo<T> {
 			return None
 		}
 
-		let overview = overview.unwrap();
+		let overview = overview.expect("checked above; qed");
 
 		// validator stake is added only in page zero
 		let validator_stake = if page == 0 { overview.own } else { Zero::zero() };
@@ -1046,7 +1046,7 @@ impl<T: Config> EraInfo<T> {
 			return ErasStakers::<T>::get(era, validator)
 		}
 
-		let overview = overview.unwrap();
+		let overview = overview.expect("checked above; qed");
 
 		if overview.page_count == 0 {
 			return Exposure { total: overview.total, own: overview.own, others: vec![] }
