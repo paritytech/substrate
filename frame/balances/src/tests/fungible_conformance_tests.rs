@@ -20,7 +20,7 @@ use frame_support::traits::fungible::{conformance_tests, Inspect, Mutate};
 use paste::paste;
 
 macro_rules! generate_test {
-    ($parent_module:tt :: $child_module:tt, $ext_deposit:expr, $dust_trap:expr, $name:ident) => {
+    ($pm:tt :: $cm:tt, $ext_deposit:expr, $dust_trap:expr, $name:ident) => {
 		paste! {
 			#[test]
 			fn [< $name _ext_deposit_ $ext_deposit _dust_trap_ $dust_trap >]() {
@@ -42,7 +42,7 @@ macro_rules! generate_test {
 						Balances::set_balance(&trap_account, Balances::minimum_balance());
 					};
 					// Run the test
-					$parent_module::$child_module::$name::<
+					$pm::$cm::$name::<
 						Balances,
 						<Test as frame_system::Config>::AccountId,
 						<Test as pallet_balances::Config>::Balance,
@@ -53,147 +53,40 @@ macro_rules! generate_test {
 	}
 }
 
+// $pm = parent module
+// $cm = child module
+// shorthand so each generate_test! call can fit on one line
 macro_rules! run_tests {
-	($parent_module:tt :: $child_module:tt, $ext_deposit:expr, $dust_trap:expr) => {
-		generate_test!($parent_module::$child_module, $ext_deposit, $dust_trap, mint_into_success);
-		generate_test!($parent_module::$child_module, $ext_deposit, $dust_trap, mint_into_overflow);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			mint_into_below_minimum
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			mint_into_done_mint_into
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			burn_from_exact_success
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			burn_from_best_effort_success
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			burn_from_exact_insufficient_funds
-		);
-		generate_test!($parent_module::$child_module, $ext_deposit, $dust_trap, restore_success);
-		generate_test!($parent_module::$child_module, $ext_deposit, $dust_trap, restore_overflow);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			restore_below_minimum
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			restore_done_restore
-		);
-		generate_test!($parent_module::$child_module, $ext_deposit, $dust_trap, shelve_success);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			shelve_insufficient_funds
-		);
-		generate_test!($parent_module::$child_module, $ext_deposit, $dust_trap, shelve_done_shelve);
-		generate_test!($parent_module::$child_module, $ext_deposit, $dust_trap, transfer_success);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			transfer_expendable_all
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			transfer_expendable_dust
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			transfer_protect_preserve
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			transfer_done_transfer
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			set_balance_mint_success
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			set_balance_burn_success
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			can_deposit_success
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			can_deposit_below_minimum
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			can_deposit_overflow
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			can_withdraw_success
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			can_withdraw_reduced_to_zero
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			can_withdraw_balance_low
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			reducible_balance_expendable
-		);
-		generate_test!(
-			$parent_module::$child_module,
-			$ext_deposit,
-			$dust_trap,
-			reducible_balance_protect_preserve
-		);
+	($pm:tt :: $cm:tt, $ext_deposit:expr, $dust_trap:expr) => {
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, mint_into_success);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, mint_into_overflow);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, mint_into_below_minimum);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, mint_into_done_mint_into);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, burn_from_exact_success);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, burn_from_best_effort_success);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, burn_from_exact_insufficient_funds);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, restore_success);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, restore_overflow);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, restore_below_minimum);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, restore_done_restore);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, shelve_success);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, shelve_insufficient_funds);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, shelve_done_shelve);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, transfer_success);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, transfer_expendable_all);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, transfer_expendable_dust);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, transfer_protect_preserve);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, transfer_done_transfer);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, set_balance_mint_success);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, set_balance_burn_success);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, can_deposit_success);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, can_deposit_below_minimum);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, can_deposit_overflow);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, can_withdraw_success);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, can_withdraw_reduced_to_zero);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, can_withdraw_balance_low);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, reducible_balance_expendable);
+		generate_test!($pm::$cm, $ext_deposit, $dust_trap, reducible_balance_protect_preserve);
 	};
 }
 
