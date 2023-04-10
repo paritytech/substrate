@@ -307,7 +307,7 @@ mod pallet;
 
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use frame_support::{
-	defensive,
+	defensive, defensive_assert,
 	traits::{Currency, Defensive, DefensiveMax, DefensiveSaturating, Get},
 	weights::Weight,
 	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
@@ -1157,7 +1157,7 @@ impl<T: Config> EraInfo<T> {
 		};
 
 		let (exposure_overview, exposure_pages) = exposure.into_pages(page_size);
-		debug_assert_eq!(exposure_pages.len(), required_page_count);
+		defensive_assert!(exposure_pages.len() == required_page_count, "unexpected page count");
 
 		<ErasStakersOverview<T>>::insert(era, &validator, &exposure_overview);
 		exposure_pages.iter().enumerate().for_each(|(page, paged_exposure)| {
