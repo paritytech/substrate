@@ -108,16 +108,6 @@ where
 	assert_eq!(T::active_issuance(), initial_active_issuance);
 }
 
-pub fn mint_into_done_mint_into<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
-where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
-	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
-{
-	// TODO: How can we test this?
-	assert!(true);
-}
-
 //
 // burn_from
 //
@@ -295,16 +285,6 @@ where
 	assert_eq!(T::active_issuance(), initial_active_issuance);
 }
 
-pub fn restore_done_restore<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
-where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
-	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
-{
-	// TODO: How can we test this?
-	assert!(true);
-}
-
 //
 // shelve tests
 //
@@ -361,16 +341,6 @@ where
 	assert_eq!(T::total_balance(&account), initial_balance);
 	assert_eq!(T::total_issuance(), initial_total_issuance + initial_balance.clone());
 	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance);
-}
-
-pub fn shelve_done_shelve<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
-where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
-	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
-{
-	// TODO: How can we test this?
-	assert!(true);
 }
 
 //
@@ -548,16 +518,6 @@ where
 	assert_eq!(T::balance(&account_1), initial_balance.clone());
 	assert_eq!(T::total_issuance(), initial_total_issuance + initial_balance.clone() * 2.into());
 	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance * 2.into());
-}
-
-pub fn transfer_done_transfer<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
-where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
-	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
-{
-	// TODO: How can we test this?
-	assert!(true);
 }
 
 //
