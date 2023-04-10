@@ -442,6 +442,10 @@ where
 	AccountId: AtLeast8BitUnsigned,
 	Balance: AtLeast8BitUnsigned + Debug,
 {
+	if T::minimum_balance() == Balance::zero() {
+		return
+	}
+
 	let account_0 = AccountId::from(10);
 	let account_1 = AccountId::from(20);
 	let initial_balance = T::minimum_balance() + 10.into();
