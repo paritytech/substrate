@@ -151,13 +151,13 @@ pub struct ProtocolController<PeerStoreHandle> {
 	set_id: SetId,
 	/// Receiver for messages from [`ProtocolHandle`].
 	from_handle: TracingUnboundedReceiver<Action>,
-	/// Number of occupied slots for incoming connections.
+	/// Number of occupied slots for incoming connections (not counting reserved nodes).
 	num_in: u32,
-	/// Number of occupied slots for outgoing connections.
+	/// Number of occupied slots for outgoing connections (not counting reserved nodes).
 	num_out: u32,
-	/// Maximum number of slots for incoming connections.
+	/// Maximum number of slots for incoming connections (not counting reserved nodes).
 	max_in: u32,
-	/// Maximum number of slots for outgoing connections.
+	/// Maximum number of slots for outgoing connections (not counting reserved nodes).
 	max_out: u32,
 	/// Connected regular nodes.
 	nodes: HashMap<PeerId, Direction>,
