@@ -256,21 +256,6 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, P, R, S> {
-	pub backend: Arc<BE>,
-	pub payload_provider: P,
-	pub runtime: Arc<R>,
-	pub sync: Arc<S>,
-	pub key_store: BeefyKeystore,
-	pub gossip_engine: GossipEngine<B>,
-	pub gossip_validator: Arc<GossipValidator<B>>,
-	pub gossip_report_stream: TracingUnboundedReceiver<PeerReport>,
-	pub on_demand_justifications: OnDemandJustificationsEngine<B>,
-	pub links: BeefyVoterLinks<B>,
-	pub metrics: Option<VoterMetrics>,
-	pub persisted_state: PersistedState<B>,
-}
-
 #[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct PersistedState<B: Block> {
 	/// Best block we voted on.
@@ -313,29 +298,29 @@ impl<B: Block> PersistedState<B> {
 /// A BEEFY worker plays the BEEFY protocol
 pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, S> {
 	// utilities
-	backend: Arc<BE>,
-	payload_provider: P,
-	runtime: Arc<RuntimeApi>,
-	sync: Arc<S>,
-	key_store: BeefyKeystore,
+	pub backend: Arc<BE>,
+	pub payload_provider: P,
+	pub runtime: Arc<RuntimeApi>,
+	pub sync: Arc<S>,
+	pub key_store: BeefyKeystore,
 
 	// communication
-	gossip_engine: GossipEngine<B>,
-	gossip_validator: Arc<GossipValidator<B>>,
-	gossip_report_stream: TracingUnboundedReceiver<PeerReport>,
-	on_demand_justifications: OnDemandJustificationsEngine<B>,
+	pub gossip_engine: GossipEngine<B>,
+	pub gossip_validator: Arc<GossipValidator<B>>,
+	pub gossip_report_stream: TracingUnboundedReceiver<PeerReport>,
+	pub on_demand_justifications: OnDemandJustificationsEngine<B>,
 
 	// channels
 	/// Links between the block importer, the background voter and the RPC layer.
-	links: BeefyVoterLinks<B>,
+	pub links: BeefyVoterLinks<B>,
 
 	// voter state
 	/// BEEFY client metrics.
-	metrics: Option<VoterMetrics>,
+	pub metrics: Option<VoterMetrics>,
 	/// Buffer holding justifications for future processing.
-	pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
+	pub pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
 	/// Persisted voter state.
-	persisted_state: PersistedState<B>,
+	pub persisted_state: PersistedState<B>,
 }
 
 impl<B, BE, P, R, S> BeefyWorker<B, BE, P, R, S>
@@ -347,45 +332,6 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B>,
 {
-	/// Return a new BEEFY worker instance.
-	///
-	/// Note that a BEEFY worker is only fully functional if a corresponding
-	/// BEEFY pallet has been deployed on-chain.
-	///
-	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, R, S>) -> Self {
-		let WorkerParams {
-			backend,
-			payload_provider,
-			runtime,
-			key_store,
-			sync,
-			gossip_engine,
-			gossip_validator,
-			gossip_report_stream,
-			on_demand_justifications,
-			links,
-			metrics,
-			persisted_state,
-		} = worker_params;
-
-		BeefyWorker {
-			backend,
-			payload_provider,
-			runtime,
-			sync,
-			key_store,
-			gossip_engine,
-			gossip_validator,
-			gossip_report_stream,
-			on_demand_justifications,
-			links,
-			metrics,
-			pending_justifications: BTreeMap::new(),
-			persisted_state,
-		}
-	}
-
 	fn best_grandpa_block(&self) -> NumberFor<B> {
 		*self.persisted_state.voting_oracle.best_grandpa_block_header.number()
 	}

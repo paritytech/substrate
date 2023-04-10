@@ -52,7 +52,11 @@ use sp_consensus_beefy::{
 use sp_keystore::KeystorePtr;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::traits::{Block, Zero};
-use std::{collections::VecDeque, marker::PhantomData, sync::Arc};
+use std::{
+	collections::{BTreeMap, VecDeque},
+	marker::PhantomData,
+	sync::Arc,
+};
 
 mod aux_schema;
 mod error;
@@ -296,7 +300,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 		return
 	}
 
-	let worker_params = worker::WorkerParams {
+	let worker = worker::BeefyWorker {
 		backend,
 		payload_provider,
 		runtime,
@@ -308,10 +312,9 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 		on_demand_justifications,
 		links,
 		metrics,
+		pending_justifications: BTreeMap::new(),
 		persisted_state,
 	};
-
-	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
 
 	futures::future::join(
 		worker.run(block_import_justif, finality_notifications),
