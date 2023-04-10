@@ -999,8 +999,8 @@ impl<T: Config> EraInfo<T> {
 
 	/// Get exposure info for a validator at a given era and page.
 	///
-	/// This builds a paged exposure from `ExposureOverview` and `ExposurePage` of the
-	/// validator. For older non-paged exposure, it returns the clipped exposure directly.
+	/// This builds a paged exposure from `ExposureOverview` and `ExposurePage` of the validator.
+	/// For older non-paged exposure, it returns the clipped exposure directly.
 	pub(crate) fn get_validator_exposure(
 		era: EraIndex,
 		validator: &T::AccountId,
