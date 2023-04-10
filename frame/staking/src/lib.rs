@@ -1059,19 +1059,19 @@ impl<T: Config> EraInfo<T> {
 
 	/// Returns the number of pages of exposure a validator has for the given era.
 	///
-	/// This will always return at minimum one count of exposure to be backward compatible to
-	/// non-paged reward payouts.
+	/// For eras where paged exposure does not exist, this returns 1 to keep backward compatibility.
 	pub(crate) fn get_page_count(era: EraIndex, validator: &T::AccountId) -> PageIndex {
 		<ErasStakersOverview<T>>::get(&era, validator)
 			.map(|overview| {
 				if overview.page_count == 0 && overview.own > Zero::zero() {
-					// this means the validator has their own stake but no nominators
+					// Even though there are no nominator pages, there is still validator's own
+					// stake exposed which needs to be paid out in a page.
 					1
 				} else {
 					overview.page_count
 				}
 			})
-			// Returns minimum of one page for backward compatibility with non paged exposure.
+			// Always returns 1 page for older non-paged exposure.
 			// FIXME: Can be cleaned up with issue #13034.
 			.unwrap_or(1)
 	}
