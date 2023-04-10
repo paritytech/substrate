@@ -26,10 +26,14 @@ use sp_runtime::traits::{Block, Hash, Header, NumberFor};
 use codec::{Decode, Encode};
 use log::{debug, trace};
 use parking_lot::{Mutex, RwLock};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use wasm_timer::Instant;
 
 use crate::{
-	communication::{benefit, cost, peers::KnownPeers},
+	communication::{
+		benefit, cost,
+		peers::{KnownPeers, PeerReport},
+	},
 	justification::{
 		proof_block_num_and_set_id, verify_with_validator_set, BeefyVersionedFinalityProof,
 	},
@@ -231,20 +235,26 @@ where
 	gossip_filter: RwLock<Filter<B>>,
 	next_rebroadcast: Mutex<Instant>,
 	known_peers: Arc<Mutex<KnownPeers<B>>>,
+	report_sender: TracingUnboundedSender<PeerReport>,
 }
 
 impl<B> GossipValidator<B>
 where
 	B: Block,
 {
-	pub fn new(known_peers: Arc<Mutex<KnownPeers<B>>>) -> GossipValidator<B> {
-		GossipValidator {
+	pub(crate) fn new(
+		known_peers: Arc<Mutex<KnownPeers<B>>>,
+	) -> (GossipValidator<B>, TracingUnboundedReceiver<PeerReport>) {
+		let (tx, rx) = tracing_unbounded("mpsc_beefy_gossip_validator", 10_000);
+		let val = GossipValidator {
 			votes_topic: votes_topic::<B>(),
 			justifs_topic: proofs_topic::<B>(),
 			gossip_filter: RwLock::new(Filter::new()),
 			next_rebroadcast: Mutex::new(Instant::now() + REBROADCAST_AFTER),
 			known_peers,
-		}
+			report_sender: tx,
+		};
+		(val, rx)
 	}
 
 	/// Update gossip validator filter.
@@ -256,7 +266,7 @@ where
 	}
 
 	fn report(&self, who: PeerId, cost_benefit: ReputationChange) {
-		// TODO
+		let _ = self.report_sender.unbounded_send(PeerReport { who, cost_benefit });
 	}
 
 	fn validate_vote(

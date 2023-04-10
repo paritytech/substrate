@@ -19,6 +19,7 @@
 use crate::{
 	communication::{
 		gossip::{proofs_topic, votes_topic, GossipFilterCfg, GossipMessage, GossipValidator},
+		peers::PeerReport,
 		request_response::outgoing_requests_engine::OnDemandJustificationsEngine,
 	},
 	error::Error,
@@ -34,7 +35,7 @@ use futures::{stream::Fuse, FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, HeaderBackend};
 use sc_network_gossip::GossipEngine;
-use sc_utils::notification::NotificationReceiver;
+use sc_utils::{mpsc::TracingUnboundedReceiver, notification::NotificationReceiver};
 use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_consensus::SyncOracle;
@@ -263,6 +264,7 @@ pub(crate) struct WorkerParams<B: Block, BE, P, R, S> {
 	pub key_store: BeefyKeystore,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
+	pub gossip_report_stream: TracingUnboundedReceiver<PeerReport>,
 	pub on_demand_justifications: OnDemandJustificationsEngine<B>,
 	pub links: BeefyVoterLinks<B>,
 	pub metrics: Option<VoterMetrics>,
@@ -320,6 +322,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, S> {
 	// communication
 	gossip_engine: GossipEngine<B>,
 	gossip_validator: Arc<GossipValidator<B>>,
+	gossip_report_stream: TracingUnboundedReceiver<PeerReport>,
 	on_demand_justifications: OnDemandJustificationsEngine<B>,
 
 	// channels
@@ -359,6 +362,7 @@ where
 			sync,
 			gossip_engine,
 			gossip_validator,
+			gossip_report_stream,
 			on_demand_justifications,
 			links,
 			metrics,
@@ -373,6 +377,7 @@ where
 			key_store,
 			gossip_engine,
 			gossip_validator,
+			gossip_report_stream,
 			on_demand_justifications,
 			links,
 			metrics,
@@ -849,7 +854,12 @@ where
 			// Act on changed 'state'.
 			self.process_new_state();
 
+			// Mutable reference used to drive the gossip engine.
 			let mut gossip_engine = &mut self.gossip_engine;
+			// Use temp val and report after async section,
+			// to avoid having to Mutex-wrap `gossip_engine`.
+			let mut gossip_report: Option<PeerReport> = None;
+
 			// Wait for, and handle external events.
 			// The branches below only change 'state', actual voting happens afterwards,
 			// based on the new resulting 'state'.
@@ -918,6 +928,13 @@ where
 						return;
 					}
 				},
+				// Process peer reports.
+				report = self.gossip_report_stream.next() => {
+					gossip_report = report;
+				},
+			}
+			if let Some(PeerReport { who, cost_benefit }) = gossip_report {
+				self.gossip_engine.report(who, cost_benefit);
 			}
 		}
 	}
