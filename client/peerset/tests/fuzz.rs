@@ -89,26 +89,30 @@ fn test_once() {
 			let action_weights = [150, 90, 90, 30, 30, 1, 1, 4, 4];
 			match WeightedIndex::new(&action_weights).unwrap().sample(&mut rng) {
 				// If we generate 0, poll the peerset.
-				0 => match Stream::poll_next(Pin::new(&mut peerset), cx) {
-					Poll::Ready(Some(Message::Connect { peer_id, .. })) => {
-						if let Some(id) =
-							incoming_nodes.iter().find(|(_, v)| **v == peer_id).map(|(&id, _)| id)
-						{
-							incoming_nodes.remove(&id);
-						}
-						assert!(connected_nodes.insert(peer_id));
-					},
-					Poll::Ready(Some(Message::Drop { peer_id, .. })) => {
-						connected_nodes.remove(&peer_id);
-					},
-					Poll::Ready(Some(Message::Accept(n))) => {
-						assert!(connected_nodes.insert(incoming_nodes.remove(&n).unwrap()))
-					},
-					Poll::Ready(Some(Message::Reject(n))) => {
-						assert!(!connected_nodes.contains(&incoming_nodes.remove(&n).unwrap()))
-					},
-					Poll::Ready(None) => panic!(),
-					Poll::Pending => {},
+				0 => loop {
+					match Stream::poll_next(Pin::new(&mut peerset), cx) {
+						Poll::Ready(Some(Message::Connect { peer_id, .. })) => {
+							if let Some(id) = incoming_nodes
+								.iter()
+								.find(|(_, v)| **v == peer_id)
+								.map(|(&id, _)| id)
+							{
+								incoming_nodes.remove(&id);
+							}
+							assert!(connected_nodes.insert(peer_id));
+						},
+						Poll::Ready(Some(Message::Drop { peer_id, .. })) => {
+							connected_nodes.remove(&peer_id);
+						},
+						Poll::Ready(Some(Message::Accept(n))) => {
+							assert!(connected_nodes.insert(incoming_nodes.remove(&n).unwrap()))
+						},
+						Poll::Ready(Some(Message::Reject(n))) => {
+							assert!(!connected_nodes.contains(&incoming_nodes.remove(&n).unwrap()))
+						},
+						Poll::Ready(None) => panic!(),
+						Poll::Pending => break,
+					}
 				},
 
 				// If we generate 1, discover a new node.
