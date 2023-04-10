@@ -1139,11 +1139,12 @@ impl<T: Config> EraInfo<T> {
 		let max_page_count = T::MaxExposurePageCount::get();
 
 		let nominator_count = exposure.others.len();
-		let required_page_count =
+		let mut required_page_count =
 			nominator_count.defensive_saturating_add(page_size as usize - 1) / page_size as usize;
 
 		// clip nominators if it exceeds the maximum page count.
 		let exposure = if required_page_count as PageIndex > max_page_count {
+			required_page_count = max_page_count as usize;
 			// sort before clipping.
 			let mut exposure_clipped = exposure;
 			let clipped_max_len = max_page_count.saturating_mul(page_size);
@@ -1156,6 +1157,7 @@ impl<T: Config> EraInfo<T> {
 		};
 
 		let (exposure_overview, exposure_pages) = exposure.into_pages(page_size);
+		debug_assert_eq!(exposure_pages.len(), required_page_count);
 
 		<ErasStakersOverview<T>>::insert(era, &validator, &exposure_overview);
 		exposure_pages.iter().enumerate().for_each(|(page, paged_exposure)| {
