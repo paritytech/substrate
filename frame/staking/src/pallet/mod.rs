@@ -1560,18 +1560,6 @@ pub mod pallet {
 		/// and vice versa. If rewards are not claimed in [`Config::HistoryDepth`] eras, they are
 		/// lost.
 		///
-		/// # <weight>
-		/// - Time complexity: at most O(MaxExposurePageSize).
-		/// - Contains a limited number of reads and writes.
-		/// -----------
-		/// N is the Number of payouts for the validator (including the validator)
-		/// Weight:
-		/// - Reward Destination Staked: O(N)
-		/// - Reward Destination Controller (Creating): O(N)
-		///
-		///   NOTE: weights are assuming that payouts are made to alive stash account (Staked).
-		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
-		/// # </weight>
 		/// ## Complexity
 		/// - At most O(MaxExposurePageSize).
 		#[pallet::call_index(18)]
@@ -1885,25 +1873,11 @@ pub mod pallet {
 		///
 		/// If a validator has more than [`Config::MaxExposurePageSize`] nominators backing
 		/// them, then the list of nominators is paged, with each page being capped at
-		/// [`Config::MaxExposurePageSize`.] If a validator has more than one page of
-		/// nominators, the call needs to be made for each page separately in order for all the
-		/// nominators backing a validator receive the reward. The nominators are not sorted across
-		/// pages and so it should not be assumed the highest staker would be on the topmost page
-		/// and vice versa. If rewards are not claimed in [`Config::HistoryDepth`] eras, they are
-		/// lost.
-		///
-		/// # <weight>
-		/// - Time complexity: at most O(MaxExposurePageSize).
-		/// - Contains a limited number of reads and writes.
-		/// -----------
-		/// N is the Number of payouts for the validator (including the validator)
-		/// Weight:
-		/// - Reward Destination Staked: O(N)
-		/// - Reward Destination Controller (Creating): O(N)
-		///
-		///   NOTE: weights are assuming that payouts are made to alive stash account (Staked).
-		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
-		/// # </weight>
+		/// [`Config::MaxExposurePageSize`.] If a validator has more than one page of nominators,
+		/// the call needs to be made for each page separately in order for all the nominators
+		/// backing a validator receive the reward. The nominators are not sorted across pages and
+		/// so it should not be assumed the highest staker would be on the topmost page and vice
+		/// versa. If rewards are not claimed in [`Config::HistoryDepth`] eras, they are lost.
 		#[pallet::call_index(26)]
 		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(T::MaxExposurePageSize::get()))]
 		pub fn payout_stakers_by_page(
