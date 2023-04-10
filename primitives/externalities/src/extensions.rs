@@ -190,6 +190,14 @@ impl Extensions {
 	pub fn iter_mut(&mut self) -> impl Iterator<Item = (&TypeId, &mut Box<dyn Extension>)> {
 		self.extensions.iter_mut()
 	}
+
+	/// Merge `other` into `self`.
+	///
+	/// If both contain the same extension, the extension instance of `other` will be present
+	/// afterwards in `self`.
+	pub fn merge(&mut self, other: Self) {
+		self.extensions.extend(other.extensions);
+	}
 }
 
 impl Extend<Extensions> for Extensions {

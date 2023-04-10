@@ -217,7 +217,16 @@ impl<Block: BlockT, Client: CallApiAt<Block>> CallApiAt<Block> for ChainHeadMock
 	fn state_at(&self, at: Block::Hash) -> Result<Self::StateBackend, sp_api::ApiError> {
 		self.client.state_at(at)
 	}
+
+	fn initialize_extensions(
+		&self,
+		at: <Block as BlockT>::Hash,
+		extensions: &mut sp_api::Extensions,
+	) -> Result<(), sp_api::ApiError> {
+		self.client.initialize_extensions(at, extensions)
+	}
 }
+
 
 impl<Block: BlockT, Client: BlockBackend<Block>> BlockBackend<Block>
 	for ChainHeadMockClient<Client>

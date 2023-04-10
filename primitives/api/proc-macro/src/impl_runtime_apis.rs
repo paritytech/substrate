@@ -233,6 +233,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			recorder: std::option::Option<#crate_::ProofRecorder<Block>>,
 			call_context: #crate_::CallContext,
 			extensions: std::cell::RefCell<#crate_::Extensions>,
+			extensions_generated_for: std::cell::RefCell<std::option::Option<Block::Hash>>,
 		}
 
 		#[cfg(any(feature = "std", test))]
@@ -345,6 +346,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					storage_transaction_cache: std::default::Default::default(),
 					call_context: #crate_::CallContext::Offchain,
 					extensions: std::default::Default::default(),
+					extensions_generated_for: std::default::Default::default(),
 				}.into()
 			}
 		}
@@ -472,6 +474,25 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 						self.call,
 						at,
 					)?;
+
+					match &mut *std::cell::RefCell::borrow_mut(&self.extensions_generated_for) {
+						Some(generated_for) => {
+							if *generated_for != at {
+								return std::result::Result::Err(
+									#crate_::ApiError::UsingSameInstanceForDifferentBlocks
+								)
+							}
+						},
+						generated_for @ None => {
+							#crate_::CallApiAt::<__SrApiBlock__>::initialize_extensions(
+								self.call,
+								at,
+								&mut std::cell::RefCell::borrow_mut(&self.extensions),
+							)?;
+
+							*generated_for = Some(at);
+						}
+					}
 
 					let params = #crate_::CallApiAtParams {
 						at,

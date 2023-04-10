@@ -525,6 +525,8 @@ pub enum ApiError {
 	Application(#[from] Box<dyn std::error::Error + Send + Sync>),
 	#[error("Api called for an unknown Block: {0}")]
 	UnknownBlock(String),
+	#[error("Using the same api instance to call into multiple independent blocks.")]
+	UsingSameInstanceForDifferentBlocks,
 }
 
 /// Extends the runtime api implementation with some common functionality.
@@ -635,6 +637,13 @@ pub trait CallApiAt<Block: BlockT> {
 
 	/// Get the state `at` the given block.
 	fn state_at(&self, at: Block::Hash) -> Result<Self::StateBackend, ApiError>;
+
+	/// Initialize the `extensions` for the given block `at` by using the global extensions factory.
+	fn initialize_extensions(
+		&self,
+		at: Block::Hash,
+		extensions: &mut Extensions,
+	) -> Result<(), ApiError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

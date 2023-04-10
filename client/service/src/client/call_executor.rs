@@ -203,11 +203,7 @@ where
 	) -> Result<Vec<u8>, sp_blockchain::Error> {
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
-		let at_number =
-			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(at_hash))?;
 		let state = self.backend.state_at(at_hash)?;
-
-		// let extensions = self.execution_extensions.extensions(at_hash, at_number);
 
 		let changes = &mut *changes.borrow_mut();
 
