@@ -216,6 +216,10 @@ pub mod pallet {
 		type OriginPrivilegeCmp: PrivilegeCmp<Self::PalletsOrigin>;
 
 		/// The maximum number of scheduled calls in the queue for a single block.
+		///
+		/// NOTE:
+		/// + Dependent pallets' benchmarks might require a higher limit for the setting. Set a
+		/// higher limit under `runtime-benchmarks` feature.
 		#[pallet::constant]
 		type MaxScheduledPerBlock: Get<u32>;
 
