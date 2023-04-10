@@ -55,8 +55,6 @@ macro_rules! run_tests {
     }
 }
 
-// run_tests!(conformance_tests::inspect_mutate, 100, "on", mint_into_overflow);
-
 run_tests!(
 	conformance_tests::inspect_mutate,
 	1,
