@@ -46,6 +46,8 @@ pub const LOG_TARGET: &'static str = "runtime::nfts-royalty";
 
 type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
 
+// type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
@@ -58,7 +60,7 @@ pub mod pallet {
 		sp_runtime::Permill,
 		traits::{
 			tokens::{
-				nonfungibles_v2::{Inspect as NonFungiblesInspect, Transfer}
+				nonfungibles_v2::{Inspect as NonFungiblesInspect, Mutate as NonFungiblesMutate}
 			},
 			ReservableCurrency
 		}
@@ -85,12 +87,15 @@ pub mod pallet {
 		/// The type used to identify an NFT within a collection.
 		type NftItemId: Member + Parameter + MaxEncodedLen + Copy + Display;
 
+		/// Witness data
+		type MintWitness: Member + Parameter + MaxEncodedLen + Copy + Display;
+
 		/// Registry for minted NFTs.
 		type Nfts: NonFungiblesInspect<
 				Self::AccountId,
 				ItemId = Self::NftItemId,
 				CollectionId = Self::NftCollectionId,
-			> + Transfer<Self::AccountId>;
+			> + NonFungiblesMutate<Self::AccountId, Self::MintWitness>;
 	}
 
 	/// Keeps track of the corresponding NFT ID, royalty percentage, and royalty recipient.
@@ -123,7 +128,40 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {	
-		//public functions
+		#[pallet::call_index(0)]
+		#[pallet::weight(0)]
+		pub fn mint_item_with_royalty(
+			origin: OriginFor<T>,
+			collection_id: T::NftCollectionId,
+			item_id: T::NftItemId,
+			mint_to: AccountIdLookupOf<T>,
+            witness_data: Option<MintWitness<T::NftItemId>>,
+			royalty_percentage: Permill,
+			royalty_recipient: T::AccountId,
+		) -> DispatchResult {
+			ensure_signed(origin)?;
+			let mint_to = T::Lookup::lookup(mint_to)?;
+			// TODO: Get this to work:
+			// let item_config = ItemConfig { settings: Self::get_default_item_settings(&collection)? };
+			// T::Nfts::mint_into(&collection_id, &item_id, &mint_to, item_config, false)?;
+
+			NftWithRoyalty::<T>::insert(
+				(collection_id, item_id),
+				RoyaltyDetails::<T::AccountId> {
+					royalty_percentage,
+					royalty_recipient: royalty_recipient.clone(),
+				},
+			);
+
+			Self::deposit_event(Event::NftRoyaltyCreated {
+				nft_collection: collection_id,
+				nft: item_id,
+				royalty_percentage,
+				royalty_recipient: royalty_recipient.clone(),
+			});
+
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
