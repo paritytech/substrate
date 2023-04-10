@@ -16,8 +16,6 @@
 // limitations under the License.
 
 //! Tests regarding the functionality of the `fungible` trait set implementations.
-//!
-//! TODO: Bundle these tests into the conformance tests & remove them.
 
 use super::*;
 use frame_support::traits::tokens::{
