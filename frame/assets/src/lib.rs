@@ -536,7 +536,7 @@ pub mod pallet {
 		NoPermission,
 		/// The given asset ID is unknown.
 		Unknown,
-		/// The origin or beneficiary account is frozen.
+		/// The origin account is frozen.
 		Frozen,
 		/// The asset ID is already taken.
 		InUse,
