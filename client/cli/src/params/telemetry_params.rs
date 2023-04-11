@@ -36,7 +36,6 @@ impl std::fmt::Display for TelemetryParsingError {
 	}
 }
 
-
 fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), TelemetryParsingError> {
 	let pos = s.find(' ');
 	match pos {

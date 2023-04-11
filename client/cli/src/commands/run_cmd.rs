@@ -16,10 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{arg_enums::RpcMethods, error::{Error, Result}, params::{
-	ImportParams, KeystoreParams, NetworkParams, OffchainWorkerParams, SharedParams,
-	TransactionPoolParams,
-}, CliConfiguration, PrometheusParams, TelemetryParams};
+use crate::{
+	arg_enums::RpcMethods,
+	error::{Error, Result},
+	params::{
+		ImportParams, KeystoreParams, NetworkParams, OffchainWorkerParams, SharedParams,
+		TransactionPoolParams,
+	},
+	CliConfiguration, PrometheusParams, RuntimeParams, TelemetryParams,
+};
 use clap::Parser;
 use regex::Regex;
 use sc_service::{
@@ -156,6 +161,10 @@ pub struct RunCmd {
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
+	pub runtime_params: RuntimeParams,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
 	pub offchain_worker_params: OffchainWorkerParams,
 
 	#[allow(missing_docs)]
@@ -214,16 +223,6 @@ pub struct RunCmd {
 	/// Enable authoring even when offline.
 	#[arg(long)]
 	pub force_authoring: bool,
-
-	/// The size of the instances cache for each runtime.
-	///
-	/// The default value is 8 and the values higher than 256 are ignored.
-	#[arg(long)]
-	pub max_runtime_instances: Option<usize>,
-
-	/// Maximum number of different runtimes that can be cached.
-	#[arg(long, default_value_t = 2)]
-	pub runtime_cache_size: u8,
 
 	/// Run a temporary node.
 	///
@@ -347,7 +346,9 @@ impl CliConfiguration for RunCmd {
 		default_listen_port: u16,
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> Result<Option<PrometheusConfig>> {
-		Ok(self.prometheus_params.prometheus_config(default_listen_port, chain_spec.id().to_string()))
+		Ok(self
+			.prometheus_params
+			.prometheus_config(default_listen_port, chain_spec.id().to_string()))
 	}
 
 	fn disable_grandpa(&self) -> Result<bool> {
@@ -434,11 +435,11 @@ impl CliConfiguration for RunCmd {
 	}
 
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
-		Ok(self.max_runtime_instances.map(|x| x.min(256)))
+		Ok(Some(self.runtime_params.max_runtime_instances.min(256)))
 	}
 
 	fn runtime_cache_size(&self) -> Result<u8> {
-		Ok(self.runtime_cache_size)
+		Ok(self.runtime_params.runtime_cache_size)
 	}
 
 	fn base_path(&self) -> Result<Option<BasePath>> {
