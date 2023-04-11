@@ -20,7 +20,7 @@ use crate::{
 	communication::{
 		gossip::{proofs_topic, votes_topic, GossipFilterCfg, GossipMessage, GossipValidator},
 		peers::PeerReport,
-		request_response::outgoing_requests_engine::OnDemandJustificationsEngine,
+		request_response::outgoing_requests_engine::{OnDemandJustificationsEngine, ResponseInfo},
 	},
 	error::Error,
 	justification::BeefyVersionedFinalityProof,
@@ -826,11 +826,16 @@ where
 					return;
 				},
 				// Process incoming justifications as these can make some in-flight votes obsolete.
-				justif = self.on_demand_justifications.next().fuse() => {
-					if let Some(justif) = justif {
-						if let Err(err) = self.triage_incoming_justif(justif) {
-							debug!(target: LOG_TARGET, "🥩 {}", err);
-						}
+				response_info = self.on_demand_justifications.next().fuse() => {
+					match response_info {
+						ResponseInfo::ValidProof(justif, peer_report) => {
+							if let Err(err) = self.triage_incoming_justif(justif) {
+								debug!(target: LOG_TARGET, "🥩 {}", err);
+							}
+							gossip_report = Some(peer_report);
+						},
+						ResponseInfo::PeerReport(peer_report) => gossip_report = Some(peer_report),
+						ResponseInfo::Pending => (),
 					}
 				},
 				justif = block_import_justif.next() => {

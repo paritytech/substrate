@@ -92,6 +92,10 @@ mod cost {
 	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
 	// Reputation cost per byte for un-decodable message.
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
+	// On-demand request was refused by peer.
+	pub(super) const REFUSAL_RESPONSE: Rep = Rep::new(-100, "BEEFY: Proof request refused");
+	// On-demand request for a proof that can't be found in the backend.
+	pub(super) const UNKOWN_PROOF_REQUEST: Rep = Rep::new(-150, "BEEFY: Unknown proof request");
 }
 
 // benefit scalars for reporting peers.
