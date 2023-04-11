@@ -768,8 +768,11 @@ fn freeze_creating_works() {
 		assert_eq!(Assets::balance(0, 2), 50);
 		// refund goes back to `1`
 		assert_ok!(Assets::thaw(RuntimeOrigin::signed(1), 0, 2));
-		assert_ok!(Assets::refund_other(RuntimeOrigin::signed(1), 0, 2, true));
-		assert_eq!(Balances::reserved_balance(&1), 0);
+		assert_noop!(
+			Assets::refund_other(RuntimeOrigin::signed(1), 0, 2),
+			Error::<Test>::WouldBurn
+		);
+		assert_eq!(Balances::reserved_balance(&1), 10);
 	});
 }
 
@@ -796,21 +799,18 @@ fn cannot_refund_other_account_with_balance() {
 		assert!(Account::<Test>::contains_key(0, &2));
 		// 4 is not the depositor, account holder, or admin
 		assert_noop!(
-			Assets::refund_other(RuntimeOrigin::signed(4), 0, 2, true),
+			Assets::refund_other(RuntimeOrigin::signed(4), 0, 2),
 			Error::<Test>::NoPermission
 		);
 		// but 1 is the asset admin, ok.
-		assert_ok!(Assets::refund_other(RuntimeOrigin::signed(1), 0, 2, true));
+		assert_ok!(Assets::refund_other(RuntimeOrigin::signed(1), 0, 2));
 		// ensure the account has actually died
 		assert!(!Account::<Test>::contains_key(0, &2));
 
 		assert_ok!(Assets::freeze_creating(RuntimeOrigin::signed(1), 0, 3));
 		assert_eq!(Assets::balance(0, 3), 0);
 		assert!(Account::<Test>::contains_key(0, &3));
-		assert_noop!(
-			Assets::refund_other(RuntimeOrigin::signed(1), 0, 3, true),
-			Error::<Test>::Frozen
-		);
+		assert_noop!(Assets::refund_other(RuntimeOrigin::signed(1), 0, 3), Error::<Test>::Frozen);
 	})
 }
 
