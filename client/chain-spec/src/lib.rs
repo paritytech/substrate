@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -177,14 +177,19 @@
 
 mod chain_spec;
 mod extension;
+mod genesis;
 
-pub use chain_spec::{ChainSpec as GenericChainSpec, NoExtension};
-pub use extension::{
-	get_extension, get_extension_mut, Extension, Fork, Forks, GetExtension, Group,
+pub use self::{
+	chain_spec::{ChainSpec as GenericChainSpec, NoExtension},
+	extension::{get_extension, get_extension_mut, Extension, Fork, Forks, GetExtension, Group},
+	genesis::{
+		construct_genesis_block, resolve_state_version_from_wasm, BuildGenesisBlock,
+		GenesisBlockBuilder,
+	},
 };
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 
-use sc_network_common::config::MultiaddrWithPeerId;
+use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
 use serde::{de::DeserializeOwned, Serialize};
 use sp_core::storage::Storage;

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -74,7 +74,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = ConstU32<2>;
+	type MaxConsumers = ConstU32<3>;
 }
 
 impl pallet_balances::Config for Test {
@@ -87,16 +87,52 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
+	type HoldIdentifier = ();
+	type FreezeIdentifier = ();
+	type MaxHolds = ();
+	type MaxFreezes = ();
 }
 
 pub struct AssetsCallbackHandle;
 impl AssetsCallback<AssetId, AccountId> for AssetsCallbackHandle {
-	fn created(_id: &AssetId, _owner: &AccountId) {
-		storage::set(b"asset_created", &().encode());
+	fn created(_id: &AssetId, _owner: &AccountId) -> Result<(), ()> {
+		if Self::should_err() {
+			Err(())
+		} else {
+			storage::set(Self::CREATED.as_bytes(), &().encode());
+			Ok(())
+		}
 	}
 
-	fn destroyed(_id: &AssetId) {
-		storage::set(b"asset_destroyed", &().encode());
+	fn destroyed(_id: &AssetId) -> Result<(), ()> {
+		if Self::should_err() {
+			Err(())
+		} else {
+			storage::set(Self::DESTROYED.as_bytes(), &().encode());
+			Ok(())
+		}
+	}
+}
+
+impl AssetsCallbackHandle {
+	pub const CREATED: &'static str = "asset_created";
+	pub const DESTROYED: &'static str = "asset_destroyed";
+
+	const RETURN_ERROR: &'static str = "return_error";
+
+	// Configures `Self` to return `Ok` when callbacks are invoked
+	pub fn set_return_ok() {
+		storage::clear(Self::RETURN_ERROR.as_bytes());
+	}
+
+	// Configures `Self` to return `Err` when callbacks are invoked
+	pub fn set_return_error() {
+		storage::set(Self::RETURN_ERROR.as_bytes(), &().encode());
+	}
+
+	// If `true`, callback should return `Err`, `Ok` otherwise.
+	fn should_err() -> bool {
+		storage::exists(Self::RETURN_ERROR.as_bytes())
 	}
 }
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,10 +19,11 @@
 use crate::{arg_enums::SyncMode, params::node_key_params::NodeKeyParams};
 use clap::Args;
 use sc_network::{
-	config::{NetworkConfiguration, NodeKeyConfig},
+	config::{
+		NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, SetConfig, TransportConfig,
+	},
 	multiaddr::Protocol,
 };
-use sc_network_common::config::{NonReservedPeerMode, SetConfig, TransportConfig};
 use sc_service::{
 	config::{Multiaddr, MultiaddrWithPeerId},
 	ChainSpec, ChainType,
@@ -82,11 +83,11 @@ pub struct NetworkParams {
 	pub allow_private_ip: bool,
 
 	/// Specify the number of outgoing connections we're trying to maintain.
-	#[arg(long, value_name = "COUNT", default_value_t = 15)]
+	#[arg(long, value_name = "COUNT", default_value_t = 8)]
 	pub out_peers: u32,
 
 	/// Maximum number of inbound full nodes peers.
-	#[arg(long, value_name = "COUNT", default_value_t = 25)]
+	#[arg(long, value_name = "COUNT", default_value_t = 32)]
 	pub in_peers: u32,
 
 	/// Maximum number of inbound light nodes peers.
@@ -131,11 +132,6 @@ pub struct NetworkParams {
 	pub ipfs_server: bool,
 
 	/// Blockchain syncing mode.
-	///
-	/// - `full`: Download and validate full blockchain history.
-	/// - `fast`: Download blocks and the latest state only.
-	/// - `fast-unsafe`: Same as `fast`, but skip downloading state proofs.
-	/// - `warp`: Download the latest state and proof.
 	#[arg(
 		long,
 		value_enum,
@@ -145,6 +141,13 @@ pub struct NetworkParams {
 		verbatim_doc_comment
 	)]
 	pub sync: SyncMode,
+
+	/// Maximum number of blocks per request.
+	///
+	/// Try reducing this number from the default value if you have a slow network connection
+	/// and observe block requests timing out.
+	#[arg(long, value_name = "COUNT", default_value_t = 64)]
+	pub max_blocks_per_request: u32,
 }
 
 impl NetworkParams {
@@ -234,6 +237,7 @@ impl NetworkParams {
 				allow_private_ip,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
+			max_blocks_per_request: self.max_blocks_per_request,
 			enable_dht_random_walk: !self.reserved_only,
 			allow_non_globals_in_dht,
 			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,

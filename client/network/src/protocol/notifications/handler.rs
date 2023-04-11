@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -57,9 +57,12 @@
 //! It is illegal to send a [`NotifsHandlerIn::Open`] before a previously-emitted
 //! [`NotifsHandlerIn::Open`] has gotten an answer.
 
-use crate::protocol::notifications::upgrade::{
-	NotificationsIn, NotificationsInSubstream, NotificationsOut, NotificationsOutSubstream,
-	UpgradeCollec,
+use crate::{
+	protocol::notifications::upgrade::{
+		NotificationsIn, NotificationsInSubstream, NotificationsOut, NotificationsOutSubstream,
+		UpgradeCollec,
+	},
+	types::ProtocolName,
 };
 
 use bytes::BytesMut;
@@ -77,7 +80,6 @@ use libp2p::{
 };
 use log::error;
 use parking_lot::{Mutex, RwLock};
-use sc_network_common::protocol::ProtocolName;
 use std::{
 	collections::VecDeque,
 	mem,
@@ -945,8 +947,9 @@ pub mod tests {
 				Poll::Ready(Some(NotificationsSinkMessage::Notification { message })) =>
 					Poll::Ready(Some(message)),
 				Poll::Pending => Poll::Ready(None),
-				Poll::Ready(Some(NotificationsSinkMessage::ForceClose)) | Poll::Ready(None) =>
-					panic!("sink closed"),
+				Poll::Ready(Some(NotificationsSinkMessage::ForceClose)) | Poll::Ready(None) => {
+					panic!("sink closed")
+				},
 			})
 			.await
 		}

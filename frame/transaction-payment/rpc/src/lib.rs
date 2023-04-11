@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,14 +26,11 @@ use jsonrpsee::{
 	types::error::{CallError, ErrorCode, ErrorObject},
 };
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
-use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_rpc::number::NumberOrHex;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, MaybeDisplay},
-};
+use sp_runtime::traits::{Block as BlockT, MaybeDisplay};
 
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 
@@ -84,7 +81,7 @@ impl From<Error> for i32 {
 impl<C, Block, Balance>
 	TransactionPaymentApiServer<
 		<Block as BlockT>::Hash,
-		RuntimeDispatchInfo<Balance, sp_weights::OldWeight>,
+		RuntimeDispatchInfo<Balance, sp_weights::Weight>,
 	> for TransactionPayment<C, Block>
 where
 	Block: BlockT,
@@ -96,9 +93,9 @@ where
 		&self,
 		encoded_xt: Bytes,
 		at: Option<Block::Hash>,
-	) -> RpcResult<RuntimeDispatchInfo<Balance, sp_weights::OldWeight>> {
+	) -> RpcResult<RuntimeDispatchInfo<Balance, sp_weights::Weight>> {
 		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
+		let at_hash = at.unwrap_or_else(|| self.client.info().best_hash);
 
 		let encoded_len = encoded_xt.len() as u32;
 
@@ -118,32 +115,15 @@ where
 			))
 		}
 
-		let api_version = api
-			.api_version::<dyn TransactionPaymentRuntimeApi<Block, Balance>>(&at)
-			.map_err(|e| map_err(e, "Failed to get transaction payment runtime api version"))?
-			.ok_or_else(|| {
-				CallError::Custom(ErrorObject::owned(
-					Error::RuntimeError.into(),
-					"Transaction payment runtime api wasn't found in the runtime",
-					None::<String>,
-				))
-			})?;
+		let res = api
+			.query_info(at_hash, uxt, encoded_len)
+			.map_err(|e| map_err(e, "Unable to query dispatch info."))?;
 
-		if api_version < 2 {
-			#[allow(deprecated)]
-			api.query_info_before_version_2(&at, uxt, encoded_len)
-				.map_err(|e| map_err(e, "Unable to query dispatch info.").into())
-		} else {
-			let res = api
-				.query_info(&at, uxt, encoded_len)
-				.map_err(|e| map_err(e, "Unable to query dispatch info."))?;
-
-			Ok(RuntimeDispatchInfo {
-				weight: sp_weights::OldWeight(res.weight.ref_time()),
-				class: res.class,
-				partial_fee: res.partial_fee,
-			})
-		}
+		Ok(RuntimeDispatchInfo {
+			weight: res.weight,
+			class: res.class,
+			partial_fee: res.partial_fee,
+		})
 	}
 
 	fn query_fee_details(
@@ -152,7 +132,7 @@ where
 		at: Option<Block::Hash>,
 	) -> RpcResult<FeeDetails<NumberOrHex>> {
 		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
+		let at_hash = at.unwrap_or_else(|| self.client.info().best_hash);
 
 		let encoded_len = encoded_xt.len() as u32;
 
@@ -163,7 +143,7 @@ where
 				Some(format!("{:?}", e)),
 			))
 		})?;
-		let fee_details = api.query_fee_details(&at, uxt, encoded_len).map_err(|e| {
+		let fee_details = api.query_fee_details(at_hash, uxt, encoded_len).map_err(|e| {
 			CallError::Custom(ErrorObject::owned(
 				Error::RuntimeError.into(),
 				"Unable to query fee details.",
