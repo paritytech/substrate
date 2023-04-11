@@ -4682,6 +4682,7 @@ mod election_data_provider {
 		ExtBuilder::default().nominate(false).build_and_execute(|| {
 			// stash bond of 222 has a nomination quota of 2 targets.
 			bond(61, 60, 222);
+			assert_eq(Staking::api_nomination_quota(222), 2);
 
 			// nominating with targets below the nomination quota works.
 			assert_ok!(Staking::nominate(RuntimeOrigin::signed(60), vec![11]));
