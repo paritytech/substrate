@@ -544,7 +544,7 @@ benchmarks_instance_pallet! {
 		).is_ok());
 		// the account should still exist, just not be frozen
 		assert!(Account::<T, I>::contains_key(asset_id.into(), &new_account));
-	}: _(SystemOrigin::Signed(asset_owner.clone()), asset_id, new_account.clone(), true)
+	}: _(SystemOrigin::Signed(asset_owner.clone()), asset_id, new_account.clone())
 	verify {
 		// this should repatriate the reserved balance of the freezer
 		assert!(T::Currency::reserved_balance(&asset_owner).is_zero());
