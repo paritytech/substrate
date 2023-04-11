@@ -25,8 +25,7 @@ use frame_support::{
 };
 use mock::*;
 use pallet_session::ShouldEndSession;
-use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot};
-use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
+use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot, VrfOutput, VrfProof};
 use sp_core::crypto::Pair;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
@@ -134,7 +133,7 @@ fn current_slot_is_processed_on_initialization() {
 
 fn test_author_vrf_output<F>(make_pre_digest: F)
 where
-	F: Fn(sp_consensus_babe::AuthorityIndex, Slot, VRFOutput, VRFProof) -> sp_runtime::Digest,
+	F: Fn(sp_consensus_babe::AuthorityIndex, Slot, VrfOutput, VrfProof) -> sp_runtime::Digest,
 {
 	let (pairs, mut ext) = new_test_ext_with_pairs(1);
 

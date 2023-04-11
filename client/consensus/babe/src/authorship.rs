@@ -25,9 +25,8 @@ use schnorrkel::{keys::PublicKey, vrf::VRFInOut};
 use sp_application_crypto::AppCrypto;
 use sp_consensus_babe::{
 	digests::{PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest},
-	make_transcript, make_transcript_data, AuthorityId, BabeAuthorityWeight, Slot, BABE_VRF_PREFIX,
+	make_transcript_data, AuthorityId, BabeAuthorityWeight, Slot, AUTHORING_VRF_CONTEXT,
 };
-use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{blake2_256, crypto::ByteArray, U256};
 use sp_keystore::KeystorePtr;
 
@@ -98,7 +97,7 @@ pub(super) fn calculate_primary_threshold(
 /// Returns true if the given VRF output is lower than the given threshold,
 /// false otherwise.
 pub(super) fn check_primary_threshold(inout: &VRFInOut, threshold: u128) -> bool {
-	u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(BABE_VRF_PREFIX)) < threshold
+	u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(AUTHORING_VRF_CONTEXT)) < threshold
 }
 
 /// Get the expected secondary author for the given slot and with given
@@ -161,8 +160,8 @@ fn claim_secondary_slot(
 				if let Ok(Some(signature)) = result {
 					Some(PreDigest::SecondaryVRF(SecondaryVRFPreDigest {
 						slot,
-						vrf_output: VRFOutput(signature.output),
-						vrf_proof: VRFProof(signature.proof),
+						vrf_output: signature.output,
+						vrf_proof: signature.proof,
 						authority_index: *authority_index as u32,
 					}))
 				} else {
@@ -248,10 +247,13 @@ fn claim_primary_slot(
 	}
 
 	for (authority_id, authority_index) in keys {
-		let transcript = make_transcript(randomness, slot, epoch_index);
 		let transcript_data = make_transcript_data(randomness, slot, epoch_index);
-		let result =
-			keystore.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), transcript_data);
+		let transcript = sp_core::sr25519::vrf::make_transcript(transcript_data.clone());
+		let result = keystore.sr25519_vrf_sign(
+			AuthorityId::ID,
+			authority_id.as_ref(),
+			transcript_data.clone(),
+		);
 		if let Ok(Some(signature)) = result {
 			let public = PublicKey::from_bytes(&authority_id.to_raw_vec()).ok()?;
 			let inout = match signature.output.attach_input_hash(&public, transcript) {
@@ -263,8 +265,8 @@ fn claim_primary_slot(
 			if check_primary_threshold(&inout, threshold) {
 				let pre_digest = PreDigest::Primary(PrimaryPreDigest {
 					slot,
-					vrf_output: VRFOutput(signature.output),
-					vrf_proof: VRFProof(signature.proof),
+					vrf_output: signature.output,
+					vrf_proof: signature.proof,
 					authority_index: *authority_index as u32,
 				});
 

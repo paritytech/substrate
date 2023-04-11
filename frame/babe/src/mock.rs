@@ -17,7 +17,7 @@
 
 //! Test utilities
 
-use crate::{self as pallet_babe, Config, CurrentSlot};
+use crate::{self as pallet_babe, make_transcript, Config, CurrentSlot};
 use codec::Encode;
 use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
@@ -25,10 +25,9 @@ use frame_support::{
 	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
 };
 use pallet_session::historical as pallet_session_historical;
-use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot};
-use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
+use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot, VrfOutput, VrfProof, RANDOMNESS_LENGTH};
 use sp_core::{
-	crypto::{IsWrappedBy, KeyTypeId, Pair},
+	crypto::{KeyTypeId, Pair},
 	H256, U256,
 };
 use sp_io;
@@ -283,8 +282,8 @@ pub fn start_era(era_index: EraIndex) {
 pub fn make_primary_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
 	slot: sp_consensus_babe::Slot,
-	vrf_output: VRFOutput,
-	vrf_proof: VRFProof,
+	vrf_output: VrfOutput,
+	vrf_proof: VrfProof,
 ) -> Digest {
 	let digest_data = sp_consensus_babe::digests::PreDigest::Primary(
 		sp_consensus_babe::digests::PrimaryPreDigest {
@@ -312,8 +311,8 @@ pub fn make_secondary_plain_pre_digest(
 pub fn make_secondary_vrf_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
 	slot: sp_consensus_babe::Slot,
-	vrf_output: VRFOutput,
-	vrf_proof: VRFProof,
+	vrf_output: VrfOutput,
+	vrf_proof: VrfProof,
 ) -> Digest {
 	let digest_data = sp_consensus_babe::digests::PreDigest::SecondaryVRF(
 		sp_consensus_babe::digests::SecondaryVRFPreDigest {
@@ -330,16 +329,16 @@ pub fn make_secondary_vrf_pre_digest(
 pub fn make_vrf_output(
 	slot: Slot,
 	pair: &sp_consensus_babe::AuthorityPair,
-) -> (VRFOutput, VRFProof, [u8; 32]) {
-	let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
-	let transcript = sp_consensus_babe::make_transcript(&Babe::randomness(), slot, 0);
-	let vrf_inout = pair.vrf_sign(transcript);
-	let vrf_randomness: sp_consensus_vrf::schnorrkel::Randomness =
-		vrf_inout.0.make_bytes::<[u8; 32]>(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT);
-	let vrf_output = VRFOutput(vrf_inout.0.to_output());
-	let vrf_proof = VRFProof(vrf_inout.1);
-
-	(vrf_output, vrf_proof, vrf_randomness)
+) -> (VrfOutput, VrfProof, [u8; RANDOMNESS_LENGTH]) {
+	use sp_core::crypto::VrfSigner;
+	let transcript_data = sp_consensus_babe::make_transcript_data(&Babe::randomness(), slot, 0);
+	let signature = pair.as_ref().vrf_sign(&transcript_data);
+	let public = schnorrkel::PublicKey::from_bytes(pair.public().as_ref()).expect("DAVXY TODO");
+	let transcript = make_transcript(transcript_data);
+	let inout = signature.output.attach_input_hash(&public, transcript).expect("DAVXY TODO");
+	let randomness =
+		inout.make_bytes::<[u8; RANDOMNESS_LENGTH]>(sp_consensus_babe::RANDOMNESS_VRF_CONTEXT);
+	(signature.output, signature.proof, randomness)
 }
 
 pub fn new_test_ext(authorities_len: usize) -> sp_io::TestExternalities {

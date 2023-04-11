@@ -15,12 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// tag::description[]
 //! Simple sr25519 (Schnorr-Ristretto) API.
 //!
 //! Note: `CHAIN_CODE_LENGTH` must be equal to `crate::crypto::JUNCTION_ID_LEN`
 //! for this to work.
-// end::description[]
+
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
 #[cfg(feature = "full_crypto")]
@@ -30,7 +29,6 @@ use schnorrkel::{
 	derive::{ChainCode, Derivation, CHAIN_CODE_LENGTH},
 	signing_context, ExpansionMode, Keypair, MiniSecretKey, PublicKey, SecretKey,
 };
-#[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
 
 use crate::{
@@ -200,8 +198,6 @@ impl<'de> Deserialize<'de> for Public {
 }
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") signature.
-///
-/// Instead of importing it for the local module, alias it to be available as a public type
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(Encode, Decode, MaxEncodedLen, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 64]);
@@ -545,39 +541,185 @@ impl CryptoType for Pair {
 	type Pair = Pair;
 }
 
-/// Batch verification.
-///
-/// `messages`, `signatures` and `pub_keys` should all have equal length.
-///
-/// Returns `true` if all signatures are correct, `false` otherwise.
-#[cfg(feature = "std")]
-pub fn verify_batch(
-	messages: Vec<&[u8]>,
-	signatures: Vec<&Signature>,
-	pub_keys: Vec<&Public>,
-) -> bool {
-	let mut sr_pub_keys = Vec::with_capacity(pub_keys.len());
-	for pub_key in pub_keys {
-		match schnorrkel::PublicKey::from_bytes(pub_key.as_ref()) {
-			Ok(pk) => sr_pub_keys.push(pk),
-			Err(_) => return false,
-		};
+/// Schnorrkel VRF related types and operations.
+pub mod vrf {
+	use super::*;
+	#[cfg(feature = "full_crypto")]
+	use crate::crypto::VrfSigner;
+	use crate::{
+		crypto::{VrfTranscriptData, VrfTranscriptValue, VrfVerifier},
+		U512,
+	};
+	pub use schnorrkel::vrf::VRF_OUTPUT_LENGTH;
+	use schnorrkel::{errors::MultiSignatureStage, vrf::VRF_PROOF_LENGTH, SignatureError};
+
+	/// VRF signature data
+	pub struct VrfSignature {
+		/// The VRFOutput serialized
+		pub output: VrfOutput,
+		/// The calculated VRFProof
+		pub proof: VrfProof,
 	}
 
-	let mut sr_signatures = Vec::with_capacity(signatures.len());
-	for signature in signatures {
-		match schnorrkel::Signature::from_bytes(signature.as_ref()) {
-			Ok(s) => sr_signatures.push(s),
-			Err(_) => return false,
-		};
+	/// VRF output type suitable for schnorrkel operations.
+	#[derive(Clone, Debug, PartialEq, Eq)]
+	pub struct VrfOutput(pub schnorrkel::vrf::VRFOutput);
+
+	impl Deref for VrfOutput {
+		type Target = schnorrkel::vrf::VRFOutput;
+
+		fn deref(&self) -> &Self::Target {
+			&self.0
+		}
 	}
 
-	let mut messages: Vec<merlin::Transcript> = messages
-		.into_iter()
-		.map(|msg| signing_context(SIGNING_CTX).bytes(msg))
-		.collect();
+	impl Encode for VrfOutput {
+		fn encode(&self) -> Vec<u8> {
+			self.0.as_bytes().encode()
+		}
+	}
 
-	schnorrkel::verify_batch(&mut messages, &sr_signatures, &sr_pub_keys, true).is_ok()
+	impl Decode for VrfOutput {
+		fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
+			let decoded = <[u8; VRF_OUTPUT_LENGTH]>::decode(i)?;
+			Ok(Self(schnorrkel::vrf::VRFOutput::from_bytes(&decoded).map_err(convert_error)?))
+		}
+	}
+
+	impl MaxEncodedLen for VrfOutput {
+		fn max_encoded_len() -> usize {
+			<[u8; VRF_OUTPUT_LENGTH]>::max_encoded_len()
+		}
+	}
+
+	impl TypeInfo for VrfOutput {
+		type Identity = [u8; VRF_OUTPUT_LENGTH];
+
+		fn type_info() -> scale_info::Type {
+			Self::Identity::type_info()
+		}
+	}
+
+	/// VRF proof type suitable for schnorrkel operations.
+	#[derive(Clone, Debug, PartialEq, Eq)]
+	pub struct VrfProof(pub schnorrkel::vrf::VRFProof);
+
+	impl PartialOrd for VrfProof {
+		fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+			Some(self.cmp(other))
+		}
+	}
+
+	impl Ord for VrfProof {
+		fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+			U512::from(self.0.to_bytes()).cmp(&U512::from(other.0.to_bytes()))
+		}
+	}
+
+	impl Deref for VrfProof {
+		type Target = schnorrkel::vrf::VRFProof;
+
+		fn deref(&self) -> &Self::Target {
+			&self.0
+		}
+	}
+
+	impl Encode for VrfProof {
+		fn encode(&self) -> Vec<u8> {
+			self.0.to_bytes().encode()
+		}
+	}
+
+	impl Decode for VrfProof {
+		fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
+			let decoded = <[u8; VRF_PROOF_LENGTH]>::decode(i)?;
+			Ok(Self(schnorrkel::vrf::VRFProof::from_bytes(&decoded).map_err(convert_error)?))
+		}
+	}
+
+	impl MaxEncodedLen for VrfProof {
+		fn max_encoded_len() -> usize {
+			<[u8; VRF_PROOF_LENGTH]>::max_encoded_len()
+		}
+	}
+
+	impl TypeInfo for VrfProof {
+		type Identity = [u8; VRF_PROOF_LENGTH];
+
+		fn type_info() -> scale_info::Type {
+			Self::Identity::type_info()
+		}
+	}
+
+	/// TODO DAVXY: this is temporary pub
+	pub fn make_transcript(data: VrfTranscriptData) -> merlin::Transcript {
+		let mut transcript = merlin::Transcript::new(data.label);
+		for (label, value) in data.items.iter() {
+			match value {
+				VrfTranscriptValue::Bytes(bytes) => {
+					transcript.append_message(label.as_bytes(), &bytes);
+				},
+				VrfTranscriptValue::U64(val) => {
+					transcript.append_u64(label.as_bytes(), *val);
+				},
+			}
+		}
+		transcript
+	}
+
+	#[cfg(feature = "full_crypto")]
+	impl VrfSigner for Pair {
+		type VrfSignature = VrfSignature;
+
+		fn vrf_sign(&self, data: &VrfTranscriptData) -> Self::VrfSignature {
+			let transcript = make_transcript(data.clone());
+			let (inout, proof, _) = self.as_ref().vrf_sign(transcript);
+			VrfSignature { output: VrfOutput(inout.to_output()), proof: VrfProof(proof) }
+		}
+	}
+
+	impl VrfVerifier for Public {
+		type VrfSignature = VrfSignature;
+
+		fn vrf_verify(&self, data: &VrfTranscriptData, signature: &Self::VrfSignature) -> bool {
+			let Ok(public) = schnorrkel::PublicKey::from_bytes(self) else {
+				return false;
+			};
+			let transcript = make_transcript(data.clone());
+			public.vrf_verify(transcript, &signature.output, &signature.proof).is_ok()
+		}
+	}
+
+	fn convert_error(e: SignatureError) -> codec::Error {
+		use MultiSignatureStage::*;
+		use SignatureError::*;
+		match e {
+			EquationFalse => "Signature error: `EquationFalse`".into(),
+			PointDecompressionError => "Signature error: `PointDecompressionError`".into(),
+			ScalarFormatError => "Signature error: `ScalarFormatError`".into(),
+			NotMarkedSchnorrkel => "Signature error: `NotMarkedSchnorrkel`".into(),
+			BytesLengthError { .. } => "Signature error: `BytesLengthError`".into(),
+			MuSigAbsent { musig_stage: Commitment } =>
+				"Signature error: `MuSigAbsent` at stage `Commitment`".into(),
+			MuSigAbsent { musig_stage: Reveal } =>
+				"Signature error: `MuSigAbsent` at stage `Reveal`".into(),
+			MuSigAbsent { musig_stage: Cosignature } =>
+				"Signature error: `MuSigAbsent` at stage `Commitment`".into(),
+			MuSigInconsistent { musig_stage: Commitment, duplicate: true } =>
+				"Signature error: `MuSigInconsistent` at stage `Commitment` on duplicate".into(),
+			MuSigInconsistent { musig_stage: Commitment, duplicate: false } =>
+				"Signature error: `MuSigInconsistent` at stage `Commitment` on not duplicate".into(),
+			MuSigInconsistent { musig_stage: Reveal, duplicate: true } =>
+				"Signature error: `MuSigInconsistent` at stage `Reveal` on duplicate".into(),
+			MuSigInconsistent { musig_stage: Reveal, duplicate: false } =>
+				"Signature error: `MuSigInconsistent` at stage `Reveal` on not duplicate".into(),
+			MuSigInconsistent { musig_stage: Cosignature, duplicate: true } =>
+				"Signature error: `MuSigInconsistent` at stage `Cosignature` on duplicate".into(),
+			MuSigInconsistent { musig_stage: Cosignature, duplicate: false } =>
+				"Signature error: `MuSigInconsistent` at stage `Cosignature` on not duplicate"
+					.into(),
+		}
+	}
 }
 
 #[cfg(test)]

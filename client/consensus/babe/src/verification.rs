@@ -29,7 +29,7 @@ use sp_consensus_babe::{
 		CompatibleDigestItem, PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest,
 		SecondaryVRFPreDigest,
 	},
-	make_transcript, AuthorityId, AuthorityPair, AuthoritySignature,
+	make_transcript_data, AuthorityId, AuthorityPair, AuthoritySignature,
 };
 use sp_consensus_slots::Slot;
 use sp_core::{ByteArray, Pair};
@@ -164,15 +164,13 @@ fn check_primary_header<B: BlockT + Sized>(
 	}
 
 	if AuthorityPair::verify(&signature, pre_hash, author) {
-		let (inout, _) = {
-			let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch_index);
-
-			schnorrkel::PublicKey::from_bytes(author.as_slice())
-				.and_then(|p| {
-					p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof)
-				})
-				.map_err(|s| babe_err(Error::VRFVerificationFailed(s)))?
-		};
+		let transcript_data = make_transcript_data(&epoch.randomness, pre_digest.slot, epoch_index);
+		let transcript = sp_core::sr25519::vrf::make_transcript(transcript_data);
+		let (inout, _) = schnorrkel::PublicKey::from_bytes(author.as_slice())
+			.and_then(|public| {
+				public.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof)
+			})
+			.map_err(|s| babe_err(Error::VRFVerificationFailed(s)))?;
 
 		let threshold =
 			calculate_primary_threshold(c, &epoch.authorities, pre_digest.authority_index as usize);
@@ -242,7 +240,8 @@ fn check_secondary_vrf_header<B: BlockT>(
 	}
 
 	if AuthorityPair::verify(&signature, pre_hash.as_ref(), author) {
-		let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch_index);
+		let transcript_data = make_transcript_data(&epoch.randomness, pre_digest.slot, epoch_index);
+		let transcript = sp_core::sr25519::vrf::make_transcript(transcript_data);
 
 		schnorrkel::PublicKey::from_bytes(author.as_slice())
 			.and_then(|p| p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof))

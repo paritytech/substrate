@@ -23,21 +23,19 @@
 pub mod digests;
 pub mod inherents;
 
-pub use merlin::Transcript;
-pub use sp_consensus_vrf::schnorrkel::{
-	Randomness, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
-};
-
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "std")]
-use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
 use sp_runtime::{traits::Header, ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
 
 use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
+
+pub use sp_core::{
+	crypto::{VrfTranscriptData, VrfTranscriptValue},
+	sr25519::vrf::{VrfOutput, VrfProof, VRF_OUTPUT_LENGTH},
+};
 
 /// Key type for BABE module.
 pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::BABE;
@@ -47,11 +45,17 @@ mod app {
 	app_crypto!(sr25519, BABE);
 }
 
-/// The prefix used by BABE for its VRF keys.
-pub const BABE_VRF_PREFIX: &[u8] = b"substrate-babe-vrf";
+/// VRF context used for authoring lottery.
+pub const AUTHORING_VRF_CONTEXT: &[u8] = b"substrate-babe-vrf";
 
-/// BABE VRFInOut context.
-pub static BABE_VRF_INOUT_CONTEXT: &[u8] = b"BabeVRFInOutContext";
+/// VRF context used for per-slot randomness generation.
+pub const RANDOMNESS_VRF_CONTEXT: &[u8] = b"BabeVRFInOutContext";
+
+/// VRF per-slot randomness length.
+pub const RANDOMNESS_LENGTH: usize = VRF_OUTPUT_LENGTH;
+
+/// Randomness type required by BABE operations.
+pub type Randomness = [u8; RANDOMNESS_LENGTH];
 
 /// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
@@ -96,24 +100,14 @@ pub type BabeAuthorityWeight = u64;
 /// of 0 (regardless of whether they are plain or vrf secondary blocks).
 pub type BabeBlockWeight = u32;
 
-/// Make a VRF transcript from given randomness, slot number and epoch.
-pub fn make_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> Transcript {
-	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.append_u64(b"slot number", *slot);
-	transcript.append_u64(b"current epoch", epoch);
-	transcript.append_message(b"chain randomness", &randomness[..]);
-	transcript
-}
-
 /// Make a VRF transcript data container
-#[cfg(feature = "std")]
-pub fn make_transcript_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VRFTranscriptData {
-	VRFTranscriptData {
+pub fn make_transcript_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfTranscriptData {
+	VrfTranscriptData {
 		label: &BABE_ENGINE_ID,
-		items: vec![
-			("slot number", VRFTranscriptValue::U64(*slot)),
-			("current epoch", VRFTranscriptValue::U64(epoch)),
-			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
+		items: sp_std::vec![
+			("slot number", VrfTranscriptValue::U64(*slot)),
+			("current epoch", VrfTranscriptValue::U64(epoch)),
+			("chain randomness", VrfTranscriptValue::Bytes(randomness.to_vec())),
 		],
 	}
 }

@@ -24,12 +24,14 @@ pallet-session = { version = "4.0.0-dev", default-features = false, path = "../s
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../timestamp" }
 sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
-sp-consensus-vrf = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/vrf" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+# TODO DAVXY: TEMPORARY remove after upgrade
+schnorrkel = { version = "0.9.1", default-features = false}
 
 [dev-dependencies]
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
@@ -53,12 +55,14 @@ std = [
 	"scale-info/std",
 	"sp-application-crypto/std",
 	"sp-consensus-babe/std",
-	"sp-consensus-vrf/std",
+	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-staking/std",
 	"sp-std/std",
+	# TODO DAVXY: TEMPORARY remove after upgrade
+	"schnorrkel/std"
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

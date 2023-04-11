@@ -20,10 +20,6 @@
 
 use super::*;
 use authorship::claim_slot;
-use rand_chacha::{
-	rand_core::{RngCore, SeedableRng},
-	ChaChaRng,
-};
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client_api::{backend::TransactionFor, BlockchainEvents, Finalizer};
 use sc_consensus::{BoxBlockImport, BoxJustificationImport};
@@ -33,16 +29,13 @@ use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_babe::{
-	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
-	AuthorityId, AuthorityPair, Slot,
+	inherents::InherentDataProvider, make_transcript_data, AllowedSlots, AuthorityId,
+	AuthorityPair, Slot,
 };
 use sp_consensus_slots::SlotDuration;
-use sp_consensus_vrf::schnorrkel::VRFOutput;
 use sp_core::crypto::Pair;
 use sp_keyring::Sr25519Keyring;
-use sp_keystore::{
-	testing::MemoryKeystore, vrf::make_transcript as transcript_from_data, Keystore,
-};
+use sp_keystore::{testing::MemoryKeystore, Keystore};
 use sp_runtime::{
 	generic::{Digest, DigestItem},
 	traits::Block as BlockT,
@@ -642,7 +635,7 @@ fn claim_vrf_check() {
 		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
-	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
+	assert_eq!(pre_digest.vrf_output, sign.output);
 
 	// We expect a SecondaryVRF claim for slot 1
 	let pre_digest = match claim_slot(1.into(), &epoch, &keystore).unwrap().0 {
@@ -654,7 +647,7 @@ fn claim_vrf_check() {
 		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
 		.unwrap()
 		.unwrap();
-	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
+	assert_eq!(pre_digest.vrf_output, sign.output);
 
 	// Check that correct epoch index has been used if epochs are skipped (primary VRF)
 	let slot = Slot::from(103);
@@ -669,7 +662,7 @@ fn claim_vrf_check() {
 		.unwrap()
 		.unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);
-	assert_eq!(claim.vrf_output, VRFOutput(sign.output));
+	assert_eq!(claim.vrf_output, sign.output);
 
 	// Check that correct epoch index has been used if epochs are skipped (secondary VRF)
 	let slot = Slot::from(100);
@@ -684,7 +677,7 @@ fn claim_vrf_check() {
 		.unwrap()
 		.unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);
-	assert_eq!(pre_digest.vrf_output, VRFOutput(sign.output));
+	assert_eq!(pre_digest.vrf_output, sign.output);
 }
 
 // Propose and import a new BABE block on top of the given parent.
@@ -1082,36 +1075,6 @@ async fn verify_slots_are_strictly_increasing() {
 	// we should fail to import this block since the slot number didn't increase.
 	// we will panic due to the `PanickingBlockImport` defined above.
 	propose_and_import_block(&b1, Some(999.into()), &mut proposer_factory, &mut block_import).await;
-}
-
-#[test]
-fn babe_transcript_generation_match() {
-	sp_tracing::try_init_simple();
-
-	let authority = Sr25519Keyring::Alice;
-	let _keystore = create_keystore(authority);
-
-	let epoch = Epoch {
-		start_slot: 0.into(),
-		authorities: vec![(authority.public().into(), 1)],
-		randomness: [0; 32],
-		epoch_index: 1,
-		duration: 100,
-		config: BabeEpochConfiguration {
-			c: (3, 10),
-			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
-		},
-	};
-
-	let orig_transcript = make_transcript(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
-	let new_transcript = make_transcript_data(&epoch.randomness, 1.into(), epoch.epoch_index);
-
-	let test = |t: merlin::Transcript| -> [u8; 16] {
-		let mut b = [0u8; 16];
-		t.build_rng().finalize(&mut ChaChaRng::from_seed([0u8; 32])).fill_bytes(&mut b);
-		b
-	};
-	debug_assert!(test(orig_transcript) == test(transcript_from_data(new_transcript)));
 }
 
 #[tokio::test]
