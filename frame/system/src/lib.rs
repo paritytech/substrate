@@ -426,7 +426,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			T::OnSetCode::set_code(code)?;
-			Ok(().into())
+			Ok(Some(T::BlockWeights::get().max_block).into())
 		}
 
 		/// Set some items of storage.
@@ -1617,12 +1617,9 @@ impl<T: Config> Pallet<T> {
 
 		cfg_if::cfg_if! {
 			 if #[cfg(all(feature = "runtime-benchmarks", not(test)))] {
-				   // Let's ensure the compiler doesn't optimize our fetching of the runtime version away.
-				   if new_version.spec_name != current_version.spec_name || new_version.spec_version != current_version.spec_version {
-					  Ok(())
-				   } else {
-					  Err(Error::<T>::InvalidSpecName.into())
-				   }
+					// Let's ensure the compiler doesn't optimize our fetching of the runtime version away.
+					core::hint::black_box((new_version, current_version));
+					Ok(())
 			  } else {
 				  if new_version.spec_name != current_version.spec_name {
 					  return Err(Error::<T>::InvalidSpecName.into())
