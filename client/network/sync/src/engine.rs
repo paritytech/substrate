@@ -79,7 +79,7 @@ const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
 /// If the block announces stream to peer has been inactive for two minutes meaning local node
 /// has not sent or received block announcements to/from the peer, report the node for inactivity,
 /// disconnect it and attempt to establish connection to some other peer.
-const INACTIVITY_EVICT_THRESHOLD: Duration = Duration::from_secs(2 * 60);
+const INACTIVITY_EVICT_THRESHOLD: Duration = Duration::from_secs(30);
 
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
@@ -627,7 +627,7 @@ where
 			let last_sent_late = peer.last_notification_sent.elapsed() > INACTIVITY_EVICT_THRESHOLD;
 
 			if last_received_late && last_sent_late {
-				log::debug!(target: "sync", "evict peer {id} since it has been idling for too long");
+				log::error!(target: "sync", "evict peer {id} since it has been idling for too long");
 				self.network_service.report_peer(*id, rep::INACTIVE_SUBSTREAM);
 				self.network_service
 					.disconnect_peer(*id, self.block_announce_protocol_name.clone());

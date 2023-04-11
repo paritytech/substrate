@@ -108,7 +108,7 @@ pub mod warp;
 pub mod warp_request_handler;
 
 /// Maximum blocks to request in a single packet.
-const MAX_BLOCKS_TO_REQUEST: usize = 64;
+const MAX_BLOCKS_TO_REQUEST: usize = 8;
 
 /// Maximum blocks to store in the import queue.
 const MAX_IMPORTING_BLOCKS: usize = 2048;
