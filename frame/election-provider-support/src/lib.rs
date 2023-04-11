@@ -774,7 +774,7 @@ impl DataProviderBounds {
 	}
 }
 
-/// The limits of an election result. The bounds are defined over the count of element of the
+/// The limits of an election snapshot size. The bounds are defined over the count of element of the
 /// election (voters or targets) or the overall size of the elements in MB.
 #[derive(Clone, Debug)]
 pub struct ElectionBounds {
