@@ -229,7 +229,7 @@ pub mod pallet {
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn submit_price(origin: OriginFor<T>, price: u32) -> DispatchResultWithPostInfo {
 			// Retrieve sender of the transaction.
 			let who = ensure_signed(origin)?;
@@ -255,7 +255,7 @@ pub mod pallet {
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn submit_price_unsigned(
 			origin: OriginFor<T>,
 			_block_number: T::BlockNumber,
@@ -272,7 +272,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(2)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn submit_price_unsigned_with_signed_payload(
 			origin: OriginFor<T>,
 			price_payload: PricePayload<T::Public, T::BlockNumber>,
