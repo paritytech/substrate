@@ -341,9 +341,6 @@ pub enum Error<B: BlockT> {
 	/// Background worker is not running and therefore requests cannot be answered.
 	#[error("Background worker is not running")]
 	BackgroundWorkerTerminated,
-	/// Background worker is overloaded and the request was dropped.
-	#[error("Background worker is overloaded and the request was dropped")]
-	BackgroundWorkerOverloaded,
 	/// Client error
 	#[error(transparent)]
 	Client(sp_blockchain::Error),
@@ -629,7 +626,6 @@ impl<B: BlockT> BabeWorkerHandle<B> {
 	async fn send_request(&self, request: BabeRequest<B>) -> Result<(), Error<B>> {
 		match self.0.clone().send(request).await {
 			Err(err) if err.is_disconnected() => return Err(Error::BackgroundWorkerTerminated),
-			Err(err) if err.is_full() => return Err(Error::BackgroundWorkerOverloaded),
 			Err(err) => warn!(
 				target: LOG_TARGET,
 				"Unhandled error when sending request to worker: {:?}", err
