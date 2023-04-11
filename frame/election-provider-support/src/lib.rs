@@ -800,7 +800,7 @@ impl ElectionBoundsBuilder {
 		ElectionBoundsBuilder { voters: Some(bounds.voters), targets: Some(bounds.targets) }
 	}
 
-	// Sets the voters count bounds.
+	/// Sets the voters count bounds.
 	pub fn voters_count(mut self, count: CountBound) -> Self {
 		self.voters = self.voters.map_or(
 			Some(DataProviderBounds { count: Some(count), size: None }),
