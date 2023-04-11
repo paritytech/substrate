@@ -231,6 +231,136 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
 
 [[package]]
+name = "ark-bls12-381"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c775f0d12169cba7aae4caeb547bb6a50781c7449a8aa53793827c9ec4abf488"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
+]
+
+[[package]]
+name = "ark-ec"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "defd9a439d56ac24968cca0571f598a61bc8c55f71d50a89cda591cb750670ba"
+dependencies = [
+ "ark-ff",
+ "ark-poly",
+ "ark-serialize",
+ "ark-std",
+ "derivative",
+ "hashbrown 0.13.2",
+ "itertools",
+ "num-traits",
+ "zeroize",
+]
+
+[[package]]
+name = "ark-ed-on-bls12-381-bandersnatch"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9cde0f2aa063a2a5c28d39b47761aa102bda7c13c84fc118a61b87c7b2f785c"
+dependencies = [
+ "ark-bls12-381",
+ "ark-ec",
+ "ark-ff",
+ "ark-std",
+]
+
+[[package]]
+name = "ark-ff"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec847af850f44ad29048935519032c33da8aa03340876d351dfab5660d2966ba"
+dependencies = [
+ "ark-ff-asm",
+ "ark-ff-macros",
+ "ark-serialize",
+ "ark-std",
+ "derivative",
+ "digest 0.10.6",
+ "itertools",
+ "num-bigint",
+ "num-traits",
+ "paste",
+ "rustc_version 0.4.0",
+ "zeroize",
+]
+
+[[package]]
+name = "ark-ff-asm"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ed4aa4fe255d0bc6d79373f7e31d2ea147bcf486cba1be5ba7ea85abdb92348"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "ark-ff-macros"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7abe79b0e4288889c4574159ab790824d0033b9fdcb2a112a3182fac2e514565"
+dependencies = [
+ "num-bigint",
+ "num-traits",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "ark-poly"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d320bfc44ee185d899ccbadfa8bc31aab923ce1558716e1997a1e74057fe86bf"
+dependencies = [
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
+ "derivative",
+ "hashbrown 0.13.2",
+]
+
+[[package]]
+name = "ark-serialize"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "adb7b85a02b83d2f22f89bd5cac66c9c89474240cb6207cb1efc16d098e822a5"
+dependencies = [
+ "ark-serialize-derive",
+ "ark-std",
+ "digest 0.10.6",
+ "num-bigint",
+]
+
+[[package]]
+name = "ark-serialize-derive"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae3281bc6d0fd7e549af32b52511e1302185bd688fd3359fa36423346ff682ea"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "ark-std"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94893f1e0c6eeab764ade8dc4c0db24caf4fe7cbbaafc0eba0a9030f447b5185"
+dependencies = [
+ "num-traits",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "array-bytes"
 version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -470,6 +600,23 @@ dependencies = [
  "miniz_oxide",
  "object 0.30.3",
  "rustc-demangle",
+]
+
+[[package]]
+name = "bandersnatch_vrfs"
+version = "0.0.1"
+dependencies = [
+ "ark-bls12-381",
+ "ark-ec",
+ "ark-ed-on-bls12-381-bandersnatch",
+ "ark-ff",
+ "ark-serialize",
+ "ark-serialize-derive",
+ "ark-std",
+ "dleq_vrf",
+ "merlin 3.0.0",
+ "rand_core 0.6.4",
+ "sha2 0.10.6",
 ]
 
 [[package]]
@@ -1640,6 +1787,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derivative"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "derive-syn-parse"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1790,6 +1948,23 @@ name = "dissimilar"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "210ec60ae7d710bed8683e333e9d2855a8a56a3e9892b38bad3bb0d4d29b0d5e"
+
+[[package]]
+name = "dleq_vrf"
+version = "0.0.1"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-serialize-derive",
+ "ark-std",
+ "arrayref",
+ "arrayvec 0.7.2",
+ "merlin 3.0.0",
+ "rand_chacha 0.3.1",
+ "rand_core 0.6.4",
+ "zeroize",
+]
 
 [[package]]
 name = "doc-comment"
@@ -4581,6 +4756,18 @@ dependencies = [
  "byteorder",
  "keccak",
  "rand_core 0.5.1",
+ "zeroize",
+]
+
+[[package]]
+name = "merlin"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58c38e2799fc0978b65dfff8023ec7843e2330bb462f19198840b34b6582397d"
+dependencies = [
+ "byteorder",
+ "keccak",
+ "rand_core 0.6.4",
  "zeroize",
 ]
 
@@ -8505,7 +8692,7 @@ dependencies = [
  "fork-tree",
  "futures",
  "log",
- "merlin",
+ "merlin 2.0.1",
  "num-bigint",
  "num-rational",
  "num-traits",
@@ -9678,7 +9865,7 @@ dependencies = [
  "arrayvec 0.5.2",
  "curve25519-dalek 2.1.3",
  "getrandom 0.1.16",
- "merlin",
+ "merlin 2.0.1",
  "rand 0.7.3",
  "rand_core 0.5.1",
  "sha2 0.8.2",
@@ -10259,7 +10446,7 @@ name = "sp-consensus-babe"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "merlin",
+ "merlin 2.0.1",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -10352,6 +10539,7 @@ name = "sp-core"
 version = "7.0.0"
 dependencies = [
  "array-bytes",
+ "bandersnatch_vrfs",
  "bitflags",
  "blake2",
  "bounded-collections",
@@ -10366,7 +10554,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1",
  "log",
- "merlin",
+ "merlin 3.0.0",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "primitive-types",
@@ -10498,7 +10686,7 @@ name = "sp-keystore"
 version = "0.13.0"
 dependencies = [
  "futures",
- "merlin",
+ "merlin 2.0.1",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "rand 0.7.3",
@@ -11989,7 +12177,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
  "digest 0.10.6",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
