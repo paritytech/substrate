@@ -1671,7 +1671,7 @@ fn metadata_at_version() {
 
 #[test]
 fn metadata_versions() {
-	assert_eq!(vec![LATEST_METADATA_VERSION], Runtime::metadata_versions());
+	assert_eq!(vec![LATEST_METADATA_VERSION, u32::MAX], Runtime::metadata_versions());
 }
 
 #[test]
