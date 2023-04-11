@@ -110,6 +110,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 pub use extension::CheckOnlySudoAccount;
 pub use pallet::*;
 
