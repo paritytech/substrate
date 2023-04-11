@@ -35,12 +35,6 @@ pub struct Weight {
 	proof_size: u64,
 }
 
-impl From<OldWeight> for Weight {
-	fn from(old: OldWeight) -> Self {
-		Weight::from_parts(old.0, 0)
-	}
-}
-
 impl Weight {
 	/// Set the reference time part of the weight.
 	pub const fn set_ref_time(mut self, c: u64) -> Self {
@@ -74,6 +68,7 @@ impl Weight {
 		&mut self.proof_size
 	}
 
+	/// The maximal weight in all dimensions.
 	pub const MAX: Self = Self { ref_time: u64::MAX, proof_size: u64::MAX };
 
 	/// Get the conservative min of `self` and `other` weight.

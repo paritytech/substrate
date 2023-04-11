@@ -473,7 +473,7 @@ where
 
 			let (hashes, to_send): (Vec<_>, Vec<_>) = transactions
 				.iter()
-				.filter(|&(ref hash, _)| peer.known_transactions.insert(hash.clone()))
+				.filter(|(hash, _)| peer.known_transactions.insert(hash.clone()))
 				.cloned()
 				.unzip();
 

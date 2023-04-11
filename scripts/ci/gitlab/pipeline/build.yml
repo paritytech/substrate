@@ -148,7 +148,6 @@ build-rustdoc:
   variables:
     SKIP_WASM_BUILD: 1
     DOC_INDEX_PAGE: "sc_service/index.html" # default redirected page
-    RUSTY_CACHIER_TOOLCHAIN: nightly
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
     CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
   artifacts:
@@ -163,7 +162,7 @@ build-rustdoc:
       artifacts: false
   script:
     - rusty-cachier snapshot create
-    - time cargo +nightly doc --locked --workspace --all-features --verbose --no-deps
+    - time cargo doc --locked --workspace --all-features --verbose --no-deps
     - rm -f $CARGO_TARGET_DIR/doc/.lock
     - mv $CARGO_TARGET_DIR/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot

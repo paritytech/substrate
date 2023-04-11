@@ -185,6 +185,8 @@ pub struct StorageDef {
 	pub unbounded: bool,
 	/// Whether or not reads to this storage key will be ignored by benchmarking
 	pub whitelisted: bool,
+	/// Whether or not a default hasher is allowed to replace `_`
+	pub use_default_hasher: bool,
 }
 
 /// The parsed generic from the
@@ -325,12 +327,12 @@ fn check_generics(
 	}
 }
 
-/// Returns `(named generics, metadata, query kind)`
+/// Returns `(named generics, metadata, query kind, use_default_hasher)`
 fn process_named_generics(
 	storage: &StorageKind,
 	args_span: proc_macro2::Span,
 	args: &[syn::Binding],
-) -> syn::Result<(Option<StorageGenerics>, Metadata, Option<syn::Type>)> {
+) -> syn::Result<(Option<StorageGenerics>, Metadata, Option<syn::Type>, bool)> {
 	let mut parsed = HashMap::<String, syn::Binding>::new();
 
 	// Ensure no duplicate.
@@ -480,15 +482,16 @@ fn process_named_generics(
 	let metadata = generics.metadata()?;
 	let query_kind = generics.query_kind();
 
-	Ok((Some(generics), metadata, query_kind))
+	Ok((Some(generics), metadata, query_kind, false))
 }
 
-/// Returns `(named generics, metadata, query kind)`
+/// Returns `(named generics, metadata, query kind, use_default_hasher)`
 fn process_unnamed_generics(
 	storage: &StorageKind,
 	args_span: proc_macro2::Span,
 	args: &[syn::Type],
-) -> syn::Result<(Option<StorageGenerics>, Metadata, Option<syn::Type>)> {
+	dev_mode: bool,
+) -> syn::Result<(Option<StorageGenerics>, Metadata, Option<syn::Type>, bool)> {
 	let retrieve_arg = |arg_pos| {
 		args.get(arg_pos).cloned().ok_or_else(|| {
 			let msg = format!(
@@ -510,18 +513,28 @@ fn process_unnamed_generics(
 		err
 	})?;
 
+	let use_default_hasher = |arg_pos| {
+		if let Some(arg) = retrieve_arg(arg_pos).ok() {
+			dev_mode && syn::parse2::<syn::Token![_]>(arg.to_token_stream()).is_ok()
+		} else {
+			false
+		}
+	};
+
 	let res = match storage {
 		StorageKind::Value =>
-			(None, Metadata::Value { value: retrieve_arg(1)? }, retrieve_arg(2).ok()),
+			(None, Metadata::Value { value: retrieve_arg(1)? }, retrieve_arg(2).ok(), false),
 		StorageKind::Map => (
 			None,
 			Metadata::Map { key: retrieve_arg(2)?, value: retrieve_arg(3)? },
 			retrieve_arg(4).ok(),
+			use_default_hasher(1),
 		),
 		StorageKind::CountedMap => (
 			None,
 			Metadata::CountedMap { key: retrieve_arg(2)?, value: retrieve_arg(3)? },
 			retrieve_arg(4).ok(),
+			use_default_hasher(1),
 		),
 		StorageKind::DoubleMap => (
 			None,
@@ -531,21 +544,28 @@ fn process_unnamed_generics(
 				value: retrieve_arg(5)?,
 			},
 			retrieve_arg(6).ok(),
+			use_default_hasher(1) && use_default_hasher(3),
 		),
 		StorageKind::NMap => {
 			let keygen = retrieve_arg(1)?;
 			let keys = collect_keys(&keygen)?;
-			(None, Metadata::NMap { keys, keygen, value: retrieve_arg(2)? }, retrieve_arg(3).ok())
+			(
+				None,
+				Metadata::NMap { keys, keygen, value: retrieve_arg(2)? },
+				retrieve_arg(3).ok(),
+				false,
+			)
 		},
 	};
 
 	Ok(res)
 }
 
-/// Returns `(named generics, metadata, query kind)`
+/// Returns `(named generics, metadata, query kind, use_default_hasher)`
 fn process_generics(
 	segment: &syn::PathSegment,
-) -> syn::Result<(Option<StorageGenerics>, Metadata, Option<syn::Type>)> {
+	dev_mode: bool,
+) -> syn::Result<(Option<StorageGenerics>, Metadata, Option<syn::Type>, bool)> {
 	let storage_kind = match &*segment.ident.to_string() {
 		"StorageValue" => StorageKind::Value,
 		"StorageMap" => StorageKind::Map,
@@ -583,7 +603,7 @@ fn process_generics(
 				_ => unreachable!("It is asserted above that all generics are types"),
 			})
 			.collect::<Vec<_>>();
-		process_unnamed_generics(&storage_kind, args_span, &args)
+		process_unnamed_generics(&storage_kind, args_span, &args, dev_mode)
 	} else if args.args.iter().all(|gen| matches!(gen, syn::GenericArgument::Binding(_))) {
 		let args = args
 			.args
@@ -711,7 +731,8 @@ impl StorageDef {
 			return Err(syn::Error::new(item.ty.span(), msg))
 		}
 
-		let (named_generics, metadata, query_kind) = process_generics(&typ.path.segments[0])?;
+		let (named_generics, metadata, query_kind, use_default_hasher) =
+			process_generics(&typ.path.segments[0], dev_mode)?;
 
 		let query_kind = query_kind
 			.map(|query_kind| {
@@ -832,6 +853,7 @@ impl StorageDef {
 			named_generics,
 			unbounded,
 			whitelisted,
+			use_default_hasher,
 		})
 	}
 }
