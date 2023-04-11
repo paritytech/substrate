@@ -42,12 +42,10 @@ pub(crate) fn decode_and_verify_finality_proof<Block: BlockT>(
 	encoded: &[u8],
 	target_number: NumberFor<Block>,
 	validator_set: &ValidatorSet<AuthorityId>,
-) -> Result<BeefyVersionedFinalityProof<Block>, ConsensusError> {
+) -> Result<BeefyVersionedFinalityProof<Block>, (ConsensusError, u32)> {
 	let proof = <BeefyVersionedFinalityProof<Block>>::decode(&mut &*encoded)
-		.map_err(|_| ConsensusError::InvalidJustification)?;
-	verify_with_validator_set::<Block>(target_number, validator_set, &proof)
-		.map(|_| proof)
-		.map_err(|err| err.0)
+		.map_err(|_| (ConsensusError::InvalidJustification, 0))?;
+	verify_with_validator_set::<Block>(target_number, validator_set, &proof).map(|_| proof)
 }
 
 /// Verify the Beefy finality proof against the validator set at the block it was generated.

@@ -210,15 +210,17 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 					req_info.block,
 					&req_info.active_set,
 				)
-				.map_err(|e| {
+				.map_err(|(err, signatures_checked)| {
 					metric_inc!(self, beefy_on_demand_justification_invalid_proof);
 					debug!(
 						target: BEEFY_SYNC_LOG_TARGET,
 						"🥩 for on demand justification #{:?}, peer {:?} responded with invalid proof: {:?}",
-						req_info.block, peer, e
+						req_info.block, peer, err
 					);
-					let peer_report = PeerReport { who: *peer, cost_benefit: cost::INVALID_PROOF };
-					Error::InvalidResponse(peer_report)
+					let mut cost = cost::INVALID_PROOF;
+					cost.value +=
+						cost::PER_SIGNATURE_CHECKED.saturating_mul(signatures_checked as i32);
+					Error::InvalidResponse(PeerReport { who: *peer, cost_benefit: cost })
 				})
 			})
 	}

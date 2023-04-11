@@ -587,7 +587,7 @@ pub(crate) mod tests {
 			(bad_encoding.len() as i32).saturating_mul(cost::PER_UNDECODABLE_BYTE),
 			"BEEFY: Bad packet",
 		);
-		let mut expected_report = PeerReport { who: sender.clone(), cost_benefit: expected_cost };
+		let mut expected_report = PeerReport { who: sender, cost_benefit: expected_cost };
 		let res = gv.validate(&mut context, &sender, bad_encoding);
 		assert!(matches!(res, ValidationResult::Discard));
 		assert_eq!(report_stream.try_recv().unwrap(), expected_report);
