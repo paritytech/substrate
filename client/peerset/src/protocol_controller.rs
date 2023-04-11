@@ -89,7 +89,7 @@ impl ProtocolHandle {
 		let _ = self.to_controller.unbounded_send(Action::SetReservedOnly(reserved));
 	}
 
-	/// Disconnect peer. You should remove the `PeerId` from the `Peerset` first
+	/// Disconnect peer. You should remove the `PeerId` from the `PeerStore` first
 	/// to not connect to the peer again during the next slot allocation.
 	pub fn disconnect_peer(&self, peer_id: PeerId) {
 		let _ = self.to_controller.unbounded_send(Action::DisconnectPeer(peer_id));
@@ -236,10 +236,12 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 			Action::IncomingConnection(peer_id, index) =>
 				self.on_incoming_connection(peer_id, index),
 			Action::Dropped(peer_id) => self.on_peer_dropped(peer_id).unwrap_or_else(|peer_id| {
-				debug_assert!(false, "Received Action::Dropped for non-connected peer.");
-				error!(
+				// We do not assert here, because due to asynchronous nature of communication
+				// between `ProtocolController` and `Notifications` we can receive `Action::Dropped`
+				// for a peer we already disconnected ourself.
+				warn!(
 					target: "peerset",
-					"Received Action::Dropped for non-connected peer {} on {:?}.",
+					"Received `Action::Dropped` for not connected peer {} on {:?}.",
 					peer_id, self.set_id,
 				)
 			}),
@@ -287,13 +289,29 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 	/// maintain connections with such peers.
 	fn on_add_reserved_peer(&mut self, peer_id: PeerId) {
 		if self.reserved_nodes.contains_key(&peer_id) {
+			warn!(
+				target: "peerset",
+				"Trying to add an already reserved node as reserved: {}.",
+				peer_id
+			);
 			return
 		}
 
+
 		// Get the peer out of non-reserved peers if it's there.
 		let state = match self.nodes.remove(&peer_id) {
-			Some(d) => PeerState::Connected(d),
-			None => PeerState::NotConnected,
+			Some(direction) => {
+				trace!(
+					target: "peerset",
+					"Marking previously connected node {} ({:?}) as reserved.",
+					peer_id, direction,
+				);
+				PeerState::Connected(direction)
+			},
+			None => {
+				trace!(target: "peerset", "Adding reserved node {}.", peer_id);
+				PeerState::NotConnected
+			},
 		};
 
 		self.reserved_nodes.insert(peer_id, state.clone());
@@ -311,7 +329,14 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
 		let mut state = match self.reserved_nodes.remove(&peer_id) {
 			Some(state) => state,
-			None => return,
+			None => {
+				warn!(
+					target: "peerset",
+					"Trying to remove unknown reserved node: {}.",
+					peer_id,
+				);
+				return
+			},
 		};
 
 		if let PeerState::Connected(direction) = state {
@@ -319,20 +344,27 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 				// Disconnect the node.
 				info!(
 					target: "peerset",
-					"Disconnecting previously reserved node {} on {:?}.",
-					peer_id, self.set_id
+					"Disconnecting previously reserved node {} ({:?}) on {:?}.",
+					peer_id, direction, self.set_id,
 				);
 				self.drop_connection(peer_id);
 			} else {
 				// Count connections as of regular node.
+				trace!(
+					target: "peerset",
+					"Making a connected reserved node {} ({:?}) a regular one.",
+					peer_id, direction,
+				);
 				match direction {
 					Direction::Inbound => self.num_in += 1,
 					Direction::Outbound => self.num_out += 1,
 				}
+				// Put the node into the list of regular nodes.
+				let prev = self.nodes.insert(peer_id, direction);
+				assert!(prev.is_none(), "Corrupted state: reserved node was also non-reserved.");
 			}
-			// Put the node into the list of regular nodes.
-			let prev = self.nodes.insert(peer_id, direction);
-			assert!(prev.is_none(), "Corrupted state: reserved node was also non-reserved.");
+		} else {
+			trace!(target: "peerset", "Removed disconnected reserved node {}.", peer_id);
 		}
 	}
 
@@ -355,6 +387,8 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 	/// Change "reserved only" flag. In "reserved only" mode we connect and accept connections to
 	/// reserved nodes only.
 	fn on_set_reserved_only(&mut self, reserved_only: bool) {
+		trace!(target: "peerset", "Set reserved only: {}", reserved_only);
+
 		self.reserved_only = reserved_only;
 
 		if !reserved_only {
@@ -379,14 +413,16 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 		if self.reserved_nodes.contains_key(&peer_id) {
 			warn!(
 				target: "peerset",
-				"Ignoring request to disconnect reserved peer {} from {:?}",
+				"Ignoring request to disconnect reserved peer {} from {:?}.",
 				peer_id, self.set_id,
 			);
 			return
 		}
 
+
 		match self.nodes.remove(&peer_id) {
 			Some(direction) => {
+				trace!(target: "peerset", "Disconnecting peer {} ({:?}).", peer_id, direction);
 				match direction {
 					Direction::Inbound => self.num_in -= 1,
 					Direction::Outbound => self.num_out -= 1,
@@ -396,7 +432,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 			None => {
 				warn!(
 					target: "peerset",
-					"Trying to disconnect unknown peer {} from {:?}",
+					"Trying to disconnect unknown peer {} from {:?}.",
 					peer_id, self.set_id,
 				);
 			},
@@ -413,6 +449,12 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 	// message to the output channel with a `PeerId`, and that `incoming` gets called with the same
 	// `PeerId` before that message has been read by the user. In this situation we must not answer.
 	fn on_incoming_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
+		trace!(
+			target: "peerset",
+			"Incoming connection from peer {} ({:?}).",
+			peer_id, incoming_index,
+		);
+
 		if self.reserved_only && !self.reserved_nodes.contains_key(&peer_id) {
 			self.reject_connection(incoming_index);
 			return
@@ -478,7 +520,8 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 			return Ok(false)
 		};
 
-		if let PeerState::Connected(_) = state {
+		if let PeerState::Connected(direction) = state {
+			trace!(target: "peerset", "Reserved peer {} ({:?}) dropped.", peer_id, direction);
 			*state = PeerState::NotConnected;
 			Ok(true)
 		} else {
@@ -492,6 +535,8 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 		let Some(direction) = self.nodes.remove(peer_id) else {
 			return false
 		};
+
+		trace!(target: "peerset", "Peer {} ({:?}) dropped.", peer_id, direction);
 
 		match direction {
 			Direction::Inbound => self.num_in -= 1,
@@ -1149,11 +1194,18 @@ mod tests {
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+		assert_eq!(controller.reserved_nodes.len(), 2);
+		assert!(controller.reserved_nodes.contains_key(&reserved1));
+		assert!(controller.reserved_nodes.contains_key(&reserved2));
+		assert!(controller.nodes.is_empty());
 
 		// Remove reserved node
 		controller.on_remove_reserved_peer(reserved1);
 		assert_eq!(rx.try_recv().unwrap(), Message::Drop { set_id: SetId(0), peer_id: reserved1 });
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+		assert_eq!(controller.reserved_nodes.len(), 1);
+		assert!(controller.reserved_nodes.contains_key(&reserved2));
+		assert!(controller.nodes.is_empty());
 	}
 
 	#[test]
