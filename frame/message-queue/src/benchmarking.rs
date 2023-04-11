@@ -234,7 +234,7 @@ mod benchmarks {
 			}
 			.into(),
 		);
-		assert!(!Pages::<T>::contains_key(&origin, 0), "Page must be removed");
+		assert!(Pages::<T>::iter_keys().count().is_zero(), "Page must be removed");
 	}
 
 	// Worst case for `execute_overweight` where the page is updated.
@@ -272,6 +272,78 @@ mod benchmarks {
 			.into(),
 		);
 		assert!(Pages::<T>::contains_key(&origin, 0), "Page must be updated");
+	}
+
+	#[benchmark]
+	fn discard_overweight_page_removed() -> Result<(), BenchmarkError> {
+		let queue: MessageOriginOf<T> = 0.into();
+		let origin = T::DiscardOverweightOrigin::try_successful_origin(&queue)
+			.map_err(|_| BenchmarkError::Weightless)?;
+		let (mut page, msgs) = full_page::<T>();
+		// Skip all messages.
+		for _ in 1..msgs {
+			page.skip_first(true);
+		}
+		page.skip_first(false);
+		let book = book_for::<T>(&page);
+		Pages::<T>::insert(&queue, 0, &page);
+		BookStateFor::<T>::insert(&queue, &book);
+		// Remove the last message since `peek_index` has linear complexity.
+		let message_index = ((msgs - 1) as u32).into();
+
+		#[block]
+		{
+			MessageQueue::<T>::discard_overweight(origin, 0u32.into(), 0u32, message_index)
+				.unwrap();
+		}
+
+		assert_last_event::<T>(
+			Event::OverweightDiscarded {
+				hash: T::Hashing::hash(&((msgs - 1) as u32).encode()),
+				origin: 0.into(),
+				page_index: 0,
+				message_index,
+			}
+			.into(),
+		);
+
+		assert!(Pages::<T>::iter_keys().count().is_zero(), "Page must be removed");
+		Ok(())
+	}
+
+	#[benchmark]
+	fn discard_overweight_page_updated() -> Result<(), BenchmarkError> {
+		let queue: MessageOriginOf<T> = 0.into();
+		let origin = T::DiscardOverweightOrigin::try_successful_origin(&queue)
+			.map_err(|_| BenchmarkError::Weightless)?;
+		let (mut page, msgs) = full_page::<T>();
+		// Skip all messages.
+		for _ in 0..msgs {
+			page.skip_first(false);
+		}
+		let book = book_for::<T>(&page);
+		Pages::<T>::insert(&queue, 0, &page);
+		BookStateFor::<T>::insert(&queue, &book);
+		let message_index = ((msgs - 1) as u32).into();
+
+		#[block]
+		{
+			MessageQueue::<T>::discard_overweight(origin, 0u32.into(), 0u32, message_index)
+				.unwrap();
+		}
+
+		assert_last_event::<T>(
+			Event::OverweightDiscarded {
+				hash: T::Hashing::hash(&((msgs - 1) as u32).encode()),
+				origin: 0.into(),
+				page_index: 0,
+				message_index,
+			}
+			.into(),
+		);
+
+		assert!(Pages::<T>::contains_key(&queue, 0), "Page must be updated");
+		Ok(())
 	}
 
 	impl_benchmark_test_suite! {

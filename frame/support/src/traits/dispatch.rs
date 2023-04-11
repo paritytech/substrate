@@ -17,7 +17,10 @@
 
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
-use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
+use crate::{
+	dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin},
+	traits::ContainsPair,
+};
 use codec::MaxEncodedLen;
 use sp_runtime::{
 	traits::{BadOrigin, Get, Member, Morph, TryMorph},
@@ -192,6 +195,45 @@ impl<OuterOrigin, Argument, EO: EnsureOrigin<OuterOrigin>>
 	}
 }
 
+/// An `EnsureOrigin` that is filtered through a `ContainsPair` predicate.
+pub struct AsEnsureOriginWithContains<EO, Predicate>(sp_std::marker::PhantomData<(EO, Predicate)>);
+impl<
+		OuterOrigin: Clone,
+		Argument,
+		EO: EnsureOrigin<OuterOrigin>,
+		Predicate: ContainsPair<EO::Success, Argument>,
+	> EnsureOriginWithArg<OuterOrigin, Argument> for AsEnsureOriginWithContains<EO, Predicate>
+{
+	/// A return type.
+	type Success = EO::Success;
+
+	/// Perform the origin check, returning the origin value if unsuccessful. This allows chaining.
+	fn try_origin(o: OuterOrigin, arg: &Argument) -> Result<Self::Success, OuterOrigin> {
+		EO::try_origin(o.clone()).and_then(|i| {
+			if Predicate::contains(&i, arg) {
+				Ok(i)
+			} else {
+				Err(o)
+			}
+		})
+	}
+
+	/// Returns an outer origin capable of passing `try_origin` check.
+	///
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin(arg: &Argument) -> Result<OuterOrigin, ()> {
+		EO::try_successful_origin().and_then(|o| {
+			let i = EO::ensure_origin(o.clone()).map_err(|_| ())?; // FAIL-CI is this stupid?
+			if Predicate::contains(&i, arg) {
+				Ok(o)
+			} else {
+				Err(())
+			}
+		})
+	}
+}
+
 /// A derivative `EnsureOrigin` implementation. It mutates the `Success` result of an `Original`
 /// implementation with a given `Mutator`.
 pub struct MapSuccess<Original, Mutator>(PhantomData<(Original, Mutator)>);
@@ -205,6 +247,25 @@ impl<O, Original: EnsureOrigin<O>, Mutator: Morph<Original::Success>> EnsureOrig
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<O, ()> {
 		Original::try_successful_origin()
+	}
+}
+
+impl<OuterOrigin, Original, Mutator, Argument> EnsureOriginWithArg<OuterOrigin, Argument>
+	for MapSuccess<Original, Mutator>
+where
+	OuterOrigin: Clone,
+	Original: EnsureOriginWithArg<OuterOrigin, Argument>,
+	Mutator: Morph<Original::Success>,
+{
+	type Success = Mutator::Outcome;
+
+	fn try_origin(o: OuterOrigin, a: &Argument) -> Result<Self::Success, OuterOrigin> {
+		Ok(Mutator::morph(Original::try_origin(o, a)?))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin(a: &Argument) -> Result<OuterOrigin, ()> {
+		Original::try_successful_origin(a)
 	}
 }
 
@@ -281,6 +342,27 @@ impl<
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<OuterOrigin, ()> {
 		L::try_successful_origin().or_else(|()| R::try_successful_origin())
+	}
+}
+
+/// A homogenous typed `EitherOf` that additionally takes an argument.
+pub struct EitherOfWithArg<L, R>(sp_std::marker::PhantomData<(L, R)>);
+impl<
+		OuterOrigin,
+		Arg,
+		L: EnsureOriginWithArg<OuterOrigin, Arg>,
+		R: EnsureOriginWithArg<OuterOrigin, Arg, Success = L::Success>,
+	> EnsureOriginWithArg<OuterOrigin, Arg> for EitherOfWithArg<L, R>
+{
+	type Success = L::Success;
+
+	fn try_origin(o: OuterOrigin, a: &Arg) -> Result<Self::Success, OuterOrigin> {
+		L::try_origin(o, a).or_else(|o| R::try_origin(o, a))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin(a: &Arg) -> Result<OuterOrigin, ()> {
+		L::try_successful_origin(a).or_else(|()| R::try_successful_origin(a))
 	}
 }
 

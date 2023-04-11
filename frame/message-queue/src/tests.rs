@@ -1089,6 +1089,26 @@ fn execute_overweight_works() {
 }
 
 #[test]
+fn discarding_overweight_works() {
+	new_test_ext::<Test>().execute_with(|| {});
+}
+
+#[test]
+fn discarding_overweight_wrong_bad_origin() {
+	new_test_ext::<Test>().execute_with(|| {
+		assert_noop!(
+			MessageQueue::discard_overweight(
+				frame_system::RawOrigin::Signed(10).into(),
+				MessageOrigin::Here,
+				0,
+				0
+			),
+			DispatchError::BadOrigin
+		);
+	});
+}
+
+#[test]
 fn permanently_overweight_book_unknits() {
 	use MessageOrigin::*;
 
@@ -1312,5 +1332,17 @@ fn enqueue_messages_works() {
 		assert_eq!(book.size, n + 3);
 		assert_eq!((book.begin, book.end), (0, 4));
 		assert_eq!(book.count as usize, Pages::<Test>::iter().count());
+	});
+}
+
+/// Assert that there is a valid `DiscardOverweightOrigin` for benchmark tests.
+#[test]
+#[cfg(feature = "runtime-benchmarks")]
+fn bench_setup_sane() {
+	new_test_ext::<Test>().execute_with(|| {
+		let queue: MessageOriginOf<Test> = 0.into();
+		let _origin: <Test as frame_system::Config>::RuntimeOrigin =
+			<Test as crate::Config>::DiscardOverweightOrigin::try_successful_origin(&queue)
+				.expect("Benchmarks need a valid discard origin when running them as tests");
 	});
 }

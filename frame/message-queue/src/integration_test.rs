@@ -32,8 +32,9 @@ use crate::{
 use crate as pallet_message_queue;
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64},
+	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
 };
+use frame_system::EnsureRoot;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rand_distr::Pareto;
 use sp_core::H256;
@@ -94,6 +95,7 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = MockedWeightInfo;
 	type MessageProcessor = CountingMessageProcessor;
+	type DiscardOverweightOrigin = AsEnsureOriginWithArg<EnsureRoot<Self::AccountId>>;
 	type Size = u32;
 	type QueueChangeHandler = ();
 	type HeapSize = HeapSize;

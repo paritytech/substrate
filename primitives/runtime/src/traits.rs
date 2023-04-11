@@ -303,6 +303,29 @@ impl<T> Morph<T> for Identity {
 	}
 }
 
+impl<T> Morph<T> for () {
+	type Outcome = ();
+
+	fn morph(_: T) -> () {
+		()
+	}
+}
+
+/// Chain together `Morph` implementations.
+///
+/// Can be used recursively.
+pub struct ChainedMorph<S, T>(sp_std::marker::PhantomData<(S, T)>);
+impl<S, T, A> Morph<A> for ChainedMorph<S, T>
+where
+	S: Morph<A>,
+	T: Morph<S::Outcome>,
+{
+	type Outcome = T::Outcome;
+	fn morph(a: A) -> Self::Outcome {
+		T::morph(S::morph(a))
+	}
+}
+
 /// Extensible conversion trait. Generic over only source type, with destination type being
 /// associated.
 pub trait TryMorph<A> {

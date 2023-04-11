@@ -34,9 +34,10 @@ use frame_support::{
 	traits::{
 		fungible::ItemOf,
 		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount},
-		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
-		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
-		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
+		AsEnsureOriginWithArg, AsEnsureOriginWithContains, ConstBool, ConstU128, ConstU16,
+		ConstU32, Currency, EitherOfDiverse, EqualPrivilegeOnly, Everything, Imbalance,
+		InstanceFilter, KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced,
+		U128CurrencyToVote, WithdrawReasons,
 	},
 	weights::{
 		constants::{
@@ -1169,6 +1170,10 @@ impl pallet_message_queue::Config for Runtime {
 	type WeightInfo = ();
 	/// NOTE: Always set this to `NoopMessageProcessor` for benchmarking.
 	type MessageProcessor = pallet_message_queue::mock_helpers::NoopMessageProcessor<u32>;
+	type DiscardOverweightOrigin = frame_support::traits::AsEnsureOriginWithContains<
+		frame_system::EnsureRoot<AccountId>,
+		frame_support::traits::Everything,
+	>;
 	type Size = u32;
 	type QueueChangeHandler = ();
 	type HeapSize = ConstU32<{ 64 * 1024 }>;
