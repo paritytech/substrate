@@ -162,7 +162,7 @@ fn rpc_error(error: impl Error) -> CallError {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_consensus_babe::block_import;
+	use sc_service::TaskManager;
 	use sp_core::crypto::key_types::BABE;
 	use sp_keyring::Sr25519Keyring;
 	use sp_keystore::{testing::MemoryKeystore, Keystore};
@@ -181,23 +181,47 @@ mod tests {
 
 	fn test_babe_rpc_module(
 		deny_unsafe: DenyUnsafe,
-	) -> Babe<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
+	) -> (Babe<Block, TestClient, sc_consensus::LongestChain<Backend, Block>>, TaskManager) {
 		let builder = TestClientBuilder::new();
 		let (client, longest_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
-		let config = sc_consensus_babe::configuration(&*client).expect("config available");
-		let (_, link) = block_import(config.clone(), client.clone(), client.clone())
-			.expect("can initialize block-import");
-
-		let epoch_changes = link.epoch_changes().clone();
+		let task_manager = TaskManager::new(tokio::runtime::Handle::current(), None).unwrap();
 		let keystore = create_keystore(Sr25519Keyring::Alice);
 
-		Babe::new(client.clone(), epoch_changes, keystore, config, longest_chain, deny_unsafe)
+		let config = sc_consensus_babe::configuration(&*client).expect("config available");
+		let slot_duration = config.slot_duration();
+
+		let (block_import, link) =
+			sc_consensus_babe::block_import(config.clone(), client.clone(), client.clone())
+				.expect("can initialize block-import");
+
+		let (_, babe_worker_handle) = sc_consensus_babe::import_queue(
+			link.clone(),
+			block_import.clone(),
+			None,
+			client.clone(),
+			longest_chain.clone(),
+			move |_, _| async move {
+				Ok((sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
+					0.into(),
+					slot_duration,
+				),))
+			},
+			&task_manager.spawn_essential_handle(),
+			None,
+			None,
+		)
+		.unwrap();
+
+		(
+			Babe::new(client.clone(), babe_worker_handle, keystore, longest_chain, deny_unsafe),
+			task_manager,
+		)
 	}
 
 	#[tokio::test]
 	async fn epoch_authorship_works() {
-		let babe_rpc = test_babe_rpc_module(DenyUnsafe::No);
+		let (babe_rpc, _task_manager) = test_babe_rpc_module(DenyUnsafe::No);
 		let api = babe_rpc.into_rpc();
 
 		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
@@ -209,7 +233,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn epoch_authorship_is_unsafe() {
-		let babe_rpc = test_babe_rpc_module(DenyUnsafe::Yes);
+		let (babe_rpc, _task_manager) = test_babe_rpc_module(DenyUnsafe::Yes);
 		let api = babe_rpc.into_rpc();
 
 		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params":[],"id":1}"#;
