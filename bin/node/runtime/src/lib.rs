@@ -1860,7 +1860,6 @@ type Migrations = (
 	pallet_nomination_pools::migration::v2::MigrateToV2<Runtime>,
 	pallet_alliance::migration::Migration<Runtime>,
 	pallet_contracts::Migration<Runtime>,
-	pallet_assets::migration::v2::MigrateToV2<Runtime>,
 );
 
 /// MMR helper types.

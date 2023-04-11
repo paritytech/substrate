@@ -1593,7 +1593,6 @@ pub mod pallet {
 		///
 		/// - `id`: The identifier of the asset for the account holding a deposit.
 		/// - `who`: The account to refund.
-		/// - `allow_burn`: If `true` then assets may be destroyed in order to complete the refund.
 		///
 		/// Emits `Refunded` event when successful.
 		#[pallet::call_index(30)]
@@ -1602,11 +1601,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
 			who: T::AccountId,
-			allow_burn: bool,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
-			Self::do_refund(&origin, id, &who, allow_burn)
+			Self::do_refund(&origin, id, &who, false)
 		}
 	}
 }

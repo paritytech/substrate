@@ -32,6 +32,8 @@ pub(super) type AssetAccountOf<T, I> = AssetAccount<
 	<T as Config<I>>::Extra,
 	<T as SystemConfig>::AccountId,
 >;
+pub(super) type ExistenceReasonOf<T, I> =
+	ExistenceReason<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
 
 /// AssetStatus holds the current state of the asset. It could either be Live and available for use,
 /// or in a Destroying state.
@@ -87,33 +89,41 @@ pub struct Approval<Balance, DepositBalance> {
 
 #[test]
 fn ensure_bool_decodes_to_consumer_or_sufficient() {
-	assert_eq!(false.encode(), ExistenceReason::<()>::Consumer.encode());
-	assert_eq!(true.encode(), ExistenceReason::<()>::Sufficient.encode());
+	assert_eq!(false.encode(), ExistenceReason::<(), ()>::Consumer.encode());
+	assert_eq!(true.encode(), ExistenceReason::<(), ()>::Sufficient.encode());
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
-pub enum ExistenceReason<Balance> {
+pub enum ExistenceReason<Balance, AccountId> {
 	#[codec(index = 0)]
 	Consumer,
 	#[codec(index = 1)]
 	Sufficient,
+	/// Deposit from the account owner.
 	#[codec(index = 2)]
 	DepositHeld(Balance),
 	#[codec(index = 3)]
 	DepositRefunded,
+	#[codec(index = 4)]
+	/// Deposit from some account id.
+	DepositFrom(AccountId, Balance),
 }
 
-impl<Balance> ExistenceReason<Balance> {
-	pub(crate) fn take_deposit(&mut self) -> Option<Balance> {
-		if !matches!(self, ExistenceReason::DepositHeld(_)) {
+impl<Balance, AccountId> ExistenceReason<Balance, AccountId>
+where
+	AccountId: Clone,
+{
+	/// Take the deposit if any.
+	/// `who` is the owner of the account and the deposit of `DepositHeld` variant.
+	pub(crate) fn take_deposit(&mut self, who: &AccountId) -> Option<(AccountId, Balance)> {
+		use ExistenceReason::*;
+		if !matches!(self, DepositHeld(_) | DepositFrom(..)) {
 			return None
 		}
-		if let ExistenceReason::DepositHeld(deposit) =
-			sp_std::mem::replace(self, ExistenceReason::DepositRefunded)
-		{
-			Some(deposit)
-		} else {
-			None
+		match sp_std::mem::replace(self, DepositRefunded) {
+			DepositHeld(deposit) => Some((who.clone(), deposit)),
+			DepositFrom(depositor, deposit) => Some((depositor, deposit)),
+			_ => None,
 		}
 	}
 }
@@ -125,9 +135,7 @@ pub struct AssetAccount<Balance, DepositBalance, Extra, AccountId> {
 	/// Whether the account is frozen.
 	pub(super) is_frozen: bool,
 	/// The reason for the existence of the account.
-	pub(super) reason: ExistenceReason<DepositBalance>,
-	/// If the account exists because of `ExistenceReason::Deposit`, the depositor.
-	pub(super) depositor: Option<AccountId>,
+	pub(super) reason: ExistenceReason<DepositBalance, AccountId>,
 	/// Additional "sidecar" data, in case some other pallet wants to use this storage item.
 	pub(super) extra: Extra,
 }
