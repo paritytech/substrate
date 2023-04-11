@@ -128,39 +128,30 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount: T::Balance,
 		increase_supply: bool,
 	) -> DepositConsequence {
-		use DepositConsequence::*;
 		let details = match Asset::<T, I>::get(id) {
 			Some(details) => details,
-			None => return UnknownAsset,
+			None => return DepositConsequence::UnknownAsset,
 		};
 		if increase_supply && details.supply.checked_add(&amount).is_none() {
-			return Overflow
-		}
-		// We don't allow freezing of accounts that don't already have an `(AssetId, AccountId)`
-		// entry. The account may have a zero balance provided by a deposit placed by `touch`ing the
-		// account. However, frozen accounts cannot receive more of the `AssetID`.
-		if let Some(a) = Account::<T, I>::get(id, who) {
-			if a.is_frozen {
-				return Frozen
-			}
+			return DepositConsequence::Overflow
 		}
 		if let Some(balance) = Self::maybe_balance(id, who) {
 			if balance.checked_add(&amount).is_none() {
-				return Overflow
+				return DepositConsequence::Overflow
 			}
 		} else {
 			if amount < details.min_balance {
-				return BelowMinimum
+				return DepositConsequence::BelowMinimum
 			}
 			if !details.is_sufficient && !frame_system::Pallet::<T>::can_inc_consumer(who) {
-				return CannotCreate
+				return DepositConsequence::CannotCreate
 			}
 			if details.is_sufficient && details.sufficients.checked_add(1).is_none() {
-				return Overflow
+				return DepositConsequence::Overflow
 			}
 		}
 
-		Success
+		DepositConsequence::Success
 	}
 
 	/// Return the consequence of a withdraw.

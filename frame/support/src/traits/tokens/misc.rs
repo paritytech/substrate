@@ -139,8 +139,6 @@ pub enum DepositConsequence {
 	/// with extremely small balance types or balances that approach the max value of the balance
 	/// type.
 	Overflow,
-	/// Account is frozen and cannot receive this asset.
-	Frozen,
 	/// Account continued in existence.
 	Success,
 }
@@ -154,7 +152,6 @@ impl DepositConsequence {
 			CannotCreate => TokenError::CannotCreate.into(),
 			UnknownAsset => TokenError::UnknownAsset.into(),
 			Overflow => ArithmeticError::Overflow.into(),
-			Frozen => TokenError::Frozen.into(),
 			Success => return Ok(()),
 		})
 	}

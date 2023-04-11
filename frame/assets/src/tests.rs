@@ -705,7 +705,7 @@ fn set_team_should_work() {
 }
 
 #[test]
-fn transferring_to_frozen_account_should_not_work() {
+fn transferring_from_frozen_account_should_not_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
@@ -713,9 +713,12 @@ fn transferring_to_frozen_account_should_not_work() {
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_eq!(Assets::balance(0, 2), 100);
 		assert_ok!(Assets::freeze(RuntimeOrigin::signed(1), 0, 2));
-		assert_noop!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50), TokenError::Frozen);
-		assert_eq!(Assets::balance(0, 1), 100);
-		assert_eq!(Assets::balance(0, 2), 100);
+		// can transfer to `2`
+		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50));
+		// cannot transfer from `2`
+		assert_noop!(Assets::transfer(RuntimeOrigin::signed(2), 0, 1, 25), Error::<Test>::Frozen);
+		assert_eq!(Assets::balance(0, 1), 50);
+		assert_eq!(Assets::balance(0, 2), 150);
 	});
 }
 
@@ -733,9 +736,12 @@ fn touching_and_freezing_account_with_zero_asset_balance_should_work() {
 		assert_ok!(Assets::touch(RuntimeOrigin::signed(2), 0));
 		// now it can be frozen
 		assert_ok!(Assets::freeze(RuntimeOrigin::signed(1), 0, 2));
-		assert_noop!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50), TokenError::Frozen);
-		assert_eq!(Assets::balance(0, 1), 100);
-		assert_eq!(Assets::balance(0, 2), 0);
+		// can transfer to `2` even though its frozen
+		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50));
+		// cannot transfer from `2`
+		assert_noop!(Assets::transfer(RuntimeOrigin::signed(2), 0, 1, 25), Error::<Test>::Frozen);
+		assert_eq!(Assets::balance(0, 1), 50);
+		assert_eq!(Assets::balance(0, 2), 50);
 	});
 }
 
@@ -753,11 +759,13 @@ fn freeze_creating_works() {
 		assert_ok!(Assets::freeze_creating(RuntimeOrigin::signed(1), 0, 2));
 		// `1` had to reserve `AssetAccountDeposit` to create `Account(id, 2)`
 		assert_eq!(Balances::reserved_balance(&1), 10);
-		// cannot transfer to `2`
-		assert_noop!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50), TokenError::Frozen);
+		// can transfer to `2` even though its frozen
+		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50),);
+		// cannot transfer from `2`
+		assert_noop!(Assets::transfer(RuntimeOrigin::signed(2), 0, 1, 25), Error::<Test>::Frozen);
 		// asset balances unchanged
-		assert_eq!(Assets::balance(0, 1), 100);
-		assert_eq!(Assets::balance(0, 2), 0);
+		assert_eq!(Assets::balance(0, 1), 50);
+		assert_eq!(Assets::balance(0, 2), 50);
 		// refund goes back to `1`
 		assert_ok!(Assets::thaw(RuntimeOrigin::signed(1), 0, 2));
 		assert_ok!(Assets::refund_other(RuntimeOrigin::signed(1), 0, 2, true));
