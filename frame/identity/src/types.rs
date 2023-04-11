@@ -457,16 +457,16 @@ mod tests {
 				let variant = variant
 					.variants
 					.iter()
-					.find(|v| v.name == &variant_name)
+					.find(|v| v.name == variant_name)
 					.expect(&format!("Expected to find variant {}", variant_name));
 
 				let field_arr_len = variant
-					.fields()
+					.fields
 					.first()
 					.and_then(|f| registry.resolve(f.ty.id))
 					.map(|ty| {
 						if let scale_info::TypeDef::Array(arr) = ty.type_def {
-							arr.len()
+							arr.len
 						} else {
 							panic!("Should be an array type")
 						}
