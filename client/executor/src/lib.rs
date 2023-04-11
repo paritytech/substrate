@@ -32,24 +32,29 @@
 #![recursion_limit = "128"]
 
 #[macro_use]
-mod native_executor;
+mod executor;
 #[cfg(test)]
 mod integration_tests;
 mod wasm_runtime;
 
-pub use codec::Codec;
-pub use native_executor::{
-	with_externalities_safe, NativeElseWasmExecutor, NativeExecutionDispatch, WasmExecutor,
+pub use self::{
+	executor::{
+		with_externalities_safe, NativeElseWasmExecutor, NativeExecutionDispatch, WasmExecutor,
+	},
+	wasm_runtime::{read_embedded_version, WasmExecutionMethod},
 };
+pub use codec::Codec;
 #[doc(hidden)]
 pub use sp_core::traits::Externalities;
 pub use sp_version::{NativeVersion, RuntimeVersion};
 #[doc(hidden)]
 pub use sp_wasm_interface;
-pub use wasm_runtime::{read_embedded_version, WasmExecutionMethod};
 pub use wasmi;
 
-pub use sc_executor_common::error;
+pub use sc_executor_common::{
+	error,
+	wasm_runtime::{HeapAllocStrategy, DEFAULT_HEAP_ALLOC_PAGES, DEFAULT_HEAP_ALLOC_STRATEGY},
+};
 pub use sc_executor_wasmtime::InstantiationStrategy as WasmtimeInstantiationStrategy;
 
 /// Extracts the runtime version of a given runtime code.
@@ -74,13 +79,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 
-		let executor = WasmExecutor::<sp_io::SubstrateHostFunctions>::new(
-			WasmExecutionMethod::Interpreted,
-			Some(8),
-			8,
-			None,
-			2,
-		);
+		let executor = WasmExecutor::<sp_io::SubstrateHostFunctions>::builder().build();
 		let res = executor
 			.uncached_call(
 				RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),

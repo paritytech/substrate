@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 serde = { version = "1.0.136", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-frame-metadata = { version = "15.0.0", default-features = false, features = ["v14"] }
+frame-metadata = { version = "15.1.0", default-features = false, features = ["v14", "v15-unstable"] }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
@@ -74,7 +74,7 @@ runtime-benchmarks = []
 try-runtime = []
 # By default some types have documentation, `no-metadata-docs` allows to reduce the documentation
 # in the metadata.
-no-metadata-docs = ["frame-support-procedural/no-metadata-docs"]
+no-metadata-docs = ["frame-support-procedural/no-metadata-docs", "sp-api/no-metadata-docs"]
 # By default some types have documentation, `full-metadata-docs` allows to add documentation to
 # more types in the metadata.
 full-metadata-docs = ["scale-info/docs"]
