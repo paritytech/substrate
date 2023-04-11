@@ -767,10 +767,13 @@ impl<AccountId, Balance: HasCompact + Zero> UnappliedSlash<AccountId, Balance> {
 }
 
 /// Something that defines the maximum number of nominations per nominator based on a curve.
+///
+/// The method `curve` implements the nomination quota curve and should not be used directly.
+/// However, `get_quota` returns the bounded maximum number of nominations based on `fn curve` and
+/// the nominator's balance.
 pub trait NominationsQuota<Balance> {
-	/// Maximum number of nominations. The method `curve` implements the nomination quota curve and
-	/// should not be used directly. However, `get_quota` returns the bounded maximum number of
-	// nominations based on `fn curve` and the nominator's balance.
+	/// Strict maximum number of nominations that caps the nominations curve. This value can be
+	/// used as the upper bound of the number of votes per nominator.
 	type MaxNominations: Get<u32>;
 
 	/// Returns the voter's nomination quota within reasonable bounds [`min`, `max`], where `min`
@@ -779,7 +782,7 @@ pub trait NominationsQuota<Balance> {
 		Self::curve(balance).clamp(1, Self::MaxNominations::get())
 	}
 
-	// Returns the voter's nomination quota based on its balance and a curve.
+	/// Returns the voter's nomination quota based on its balance and a curve.
 	fn curve(balance: Balance) -> u32;
 }
 
@@ -849,7 +852,7 @@ where
 	/// number of cast `votes`.
 	pub fn encoded_size(votes: usize) -> usize {
 		Self::length_prefix(votes)
-			.saturating_add(votes * sp_std::mem::size_of::<AccountId>())
+			.saturating_add(votes.saturating_mul(sp_std::mem::size_of::<AccountId>()))
 			.saturating_add(sp_std::mem::size_of::<frame_election_provider_support::VoteWeight>())
 			.saturating_add(sp_std::mem::size_of::<AccountId>())
 	}
