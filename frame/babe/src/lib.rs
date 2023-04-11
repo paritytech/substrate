@@ -29,7 +29,6 @@ use frame_support::{
 	weights::Weight,
 	BoundedVec, WeakBoundedVec,
 };
-use sp_application_crypto::ByteArray;
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
 	AllowedSlots, BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
@@ -44,7 +43,7 @@ use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::{offence::OffenceReportSystem, SessionIndex};
 use sp_std::prelude::*;
 
-pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
+pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH};
 
 const LOG_TARGET: &str = "runtime::babe";
 
@@ -360,25 +359,33 @@ pub mod pallet {
 					let randomness: Option<BabeRandomness> = Authorities::<T>::get()
 						.get(authority_index as usize)
 						.and_then(|(authority, _)| {
-							schnorrkel::PublicKey::from_bytes(authority.as_slice()).ok()
-						})
-						.and_then(|pubkey| {
 							let transcript_data = sp_consensus_babe::make_transcript_data(
 								&Self::randomness(),
 								CurrentSlot::<T>::get(),
 								EpochIndex::<T>::get(),
 							);
-							let transcript =
-								sp_core::sr25519::vrf::make_transcript(transcript_data);
 
 							// NOTE: this is verified by the client when importing the block, before
 							// execution. we don't run the verification again here to avoid slowing
 							// down the runtime.
-							debug_assert!(pubkey
-								.vrf_verify(transcript.clone(), vrf_output, vrf_proof)
-								.is_ok());
+							debug_assert!({
+								use sp_core::{
+									crypto::{VrfVerifier, Wraps},
+									sr25519::vrf::VrfSignature,
+								};
+								let signature = VrfSignature {
+									output: vrf_output.clone(),
+									proof: vrf_proof.clone(),
+								};
+								authority.as_inner_ref().vrf_verify(&transcript_data, &signature)
+							});
 
-							vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
+							let inout = sp_core::sr25519::vrf::make_vrf_inout(
+								authority.as_ref(),
+								&vrf_output,
+								&transcript_data,
+							);
+							Some(inout)
 						})
 						.map(|inout| inout.make_bytes(sp_consensus_babe::RANDOMNESS_VRF_CONTEXT));
 
@@ -993,7 +1000,7 @@ fn compute_randomness(
 	rho: impl Iterator<Item = BabeRandomness>,
 	rho_size_hint: Option<usize>,
 ) -> BabeRandomness {
-	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * VRF_OUTPUT_LENGTH);
+	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * RANDOMNESS_LENGTH);
 	s.extend_from_slice(&last_epoch_randomness);
 	s.extend_from_slice(&epoch_index.to_le_bytes());
 

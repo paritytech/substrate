@@ -34,7 +34,7 @@ use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
 
 pub use sp_core::{
 	crypto::{VrfTranscriptData, VrfTranscriptValue},
-	sr25519::vrf::{VrfOutput, VrfProof, VRF_OUTPUT_LENGTH},
+	sr25519::vrf::{VrfOutput, VrfProof, VRF_PREOUT_LENGTH},
 };
 
 /// Key type for BABE module.
@@ -52,7 +52,7 @@ pub const AUTHORING_VRF_CONTEXT: &[u8] = b"substrate-babe-vrf";
 pub const RANDOMNESS_VRF_CONTEXT: &[u8] = b"BabeVRFInOutContext";
 
 /// VRF per-slot randomness length.
-pub const RANDOMNESS_LENGTH: usize = VRF_OUTPUT_LENGTH;
+pub const RANDOMNESS_LENGTH: usize = VRF_PREOUT_LENGTH;
 
 /// Randomness type required by BABE operations.
 pub type Randomness = [u8; RANDOMNESS_LENGTH];
@@ -349,7 +349,7 @@ pub struct Epoch {
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch.
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	pub randomness: [u8; RANDOMNESS_LENGTH],
 	/// Configuration of the epoch.
 	pub config: BabeEpochConfiguration,
 }

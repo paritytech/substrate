@@ -17,7 +17,7 @@
 
 //! Test utilities
 
-use crate::{self as pallet_babe, make_transcript, Config, CurrentSlot};
+use crate::{self as pallet_babe, Config, CurrentSlot};
 use codec::Encode;
 use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
@@ -332,12 +332,19 @@ pub fn make_vrf_output(
 ) -> (VrfOutput, VrfProof, [u8; RANDOMNESS_LENGTH]) {
 	use sp_core::crypto::VrfSigner;
 	let transcript_data = sp_consensus_babe::make_transcript_data(&Babe::randomness(), slot, 0);
+
 	let signature = pair.as_ref().vrf_sign(&transcript_data);
-	let public = schnorrkel::PublicKey::from_bytes(pair.public().as_ref()).expect("DAVXY TODO");
-	let transcript = make_transcript(transcript_data);
-	let inout = signature.output.attach_input_hash(&public, transcript).expect("DAVXY TODO");
+
+	let inout = sp_core::sr25519::vrf::make_vrf_inout(
+		pair.public().as_ref(),
+		&signature.output,
+		&transcript_data,
+	);
+
+	// TODO DAVXY maybe directly define a make_bytes instead of make_vrf_inout?
 	let randomness =
 		inout.make_bytes::<[u8; RANDOMNESS_LENGTH]>(sp_consensus_babe::RANDOMNESS_VRF_CONTEXT);
+
 	(signature.output, signature.proof, randomness)
 }
 

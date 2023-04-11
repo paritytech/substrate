@@ -550,7 +550,7 @@ pub mod vrf {
 		crypto::{VrfTranscriptData, VrfTranscriptValue, VrfVerifier},
 		U512,
 	};
-	pub use schnorrkel::vrf::VRF_OUTPUT_LENGTH;
+	pub use schnorrkel::vrf::VRF_PREOUT_LENGTH;
 	use schnorrkel::{errors::MultiSignatureStage, vrf::VRF_PROOF_LENGTH, SignatureError};
 
 	/// VRF signature data
@@ -563,10 +563,10 @@ pub mod vrf {
 
 	/// VRF output type suitable for schnorrkel operations.
 	#[derive(Clone, Debug, PartialEq, Eq)]
-	pub struct VrfOutput(pub schnorrkel::vrf::VRFOutput);
+	pub struct VrfOutput(pub schnorrkel::vrf::VRFPreOut);
 
 	impl Deref for VrfOutput {
-		type Target = schnorrkel::vrf::VRFOutput;
+		type Target = schnorrkel::vrf::VRFPreOut;
 
 		fn deref(&self) -> &Self::Target {
 			&self.0
@@ -581,19 +581,19 @@ pub mod vrf {
 
 	impl Decode for VrfOutput {
 		fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
-			let decoded = <[u8; VRF_OUTPUT_LENGTH]>::decode(i)?;
-			Ok(Self(schnorrkel::vrf::VRFOutput::from_bytes(&decoded).map_err(convert_error)?))
+			let decoded = <[u8; VRF_PREOUT_LENGTH]>::decode(i)?;
+			Ok(Self(schnorrkel::vrf::VRFPreOut::from_bytes(&decoded).map_err(convert_error)?))
 		}
 	}
 
 	impl MaxEncodedLen for VrfOutput {
 		fn max_encoded_len() -> usize {
-			<[u8; VRF_OUTPUT_LENGTH]>::max_encoded_len()
+			<[u8; VRF_PREOUT_LENGTH]>::max_encoded_len()
 		}
 	}
 
 	impl TypeInfo for VrfOutput {
-		type Identity = [u8; VRF_OUTPUT_LENGTH];
+		type Identity = [u8; VRF_PREOUT_LENGTH];
 
 		fn type_info() -> scale_info::Type {
 			Self::Identity::type_info()
@@ -651,30 +651,14 @@ pub mod vrf {
 		}
 	}
 
-	/// TODO DAVXY: this is temporary pub
-	pub fn make_transcript(data: VrfTranscriptData) -> merlin::Transcript {
-		let mut transcript = merlin::Transcript::new(data.label);
-		for (label, value) in data.items.iter() {
-			match value {
-				VrfTranscriptValue::Bytes(bytes) => {
-					transcript.append_message(label.as_bytes(), &bytes);
-				},
-				VrfTranscriptValue::U64(val) => {
-					transcript.append_u64(label.as_bytes(), *val);
-				},
-			}
-		}
-		transcript
-	}
-
 	#[cfg(feature = "full_crypto")]
 	impl VrfSigner for Pair {
 		type VrfSignature = VrfSignature;
 
 		fn vrf_sign(&self, data: &VrfTranscriptData) -> Self::VrfSignature {
-			let transcript = make_transcript(data.clone());
+			let transcript = make_transcript(data);
 			let (inout, proof, _) = self.as_ref().vrf_sign(transcript);
-			VrfSignature { output: VrfOutput(inout.to_output()), proof: VrfProof(proof) }
+			VrfSignature { output: VrfOutput(inout.to_preout()), proof: VrfProof(proof) }
 		}
 	}
 
@@ -685,7 +669,7 @@ pub mod vrf {
 			let Ok(public) = schnorrkel::PublicKey::from_bytes(self) else {
 				return false;
 			};
-			let transcript = make_transcript(data.clone());
+			let transcript = make_transcript(data);
 			public.vrf_verify(transcript, &signature.output, &signature.proof).is_ok()
 		}
 	}
@@ -719,6 +703,35 @@ pub mod vrf {
 				"Signature error: `MuSigInconsistent` at stage `Cosignature` on not duplicate"
 					.into(),
 		}
+	}
+
+	/// TODO DAVXY: this is temporary pub
+	pub fn make_transcript(data: &VrfTranscriptData) -> merlin::Transcript {
+		let mut transcript = merlin::Transcript::new(data.label);
+		for (label, value) in data.items.iter() {
+			match value {
+				VrfTranscriptValue::Bytes(bytes) => {
+					transcript.append_message(label.as_bytes(), &bytes);
+				},
+				VrfTranscriptValue::U64(val) => {
+					transcript.append_u64(label.as_bytes(), *val);
+				},
+			}
+		}
+		transcript
+	}
+
+	/// TODO DAVXY: return a newtype instead?
+	///             Maybe is better to define a function vrf_bytes() directly...
+	/// TODO DAVXY: return a Result!
+	pub fn make_vrf_inout(
+		public: &Public,
+		output: &VrfOutput,
+		transcript_data: &VrfTranscriptData,
+	) -> schnorrkel::vrf::VRFInOut {
+		let pubkey = schnorrkel::PublicKey::from_bytes(public.as_slice()).expect("DAVXY TODO");
+		let transcript = make_transcript(transcript_data);
+		output.attach_input_hash(&pubkey, transcript).expect("DAVXY TODO")
 	}
 }
 
