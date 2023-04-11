@@ -18,7 +18,7 @@
 use codec::{Decode, Encode};
 use frame_support::Hashable;
 use frame_system::offchain::AppCrypto;
-use sc_executor::{error::Result, NativeElseWasmExecutor, WasmExecutionMethod};
+use sc_executor::{error::Result, NativeElseWasmExecutor, WasmExecutor};
 use sp_consensus_babe::{
 	digests::{PreDigest, SecondaryPlainPreDigest},
 	Slot, BABE_ENGINE_ID,
@@ -98,7 +98,7 @@ pub fn from_block_number(n: u32) -> Header {
 }
 
 pub fn executor() -> NativeElseWasmExecutor<ExecutorDispatch> {
-	NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
+	NativeElseWasmExecutor::new_with_wasm_executor(WasmExecutor::builder().build())
 }
 
 pub fn executor_call(

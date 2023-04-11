@@ -434,7 +434,7 @@ where
 			// The following unwind safety assertion is OK because if the method call panics, the
 			// runtime will be dropped.
 			let runtime = AssertUnwindSafe(runtime.as_ref());
-			crate::native_executor::with_externalities_safe(&mut **ext, move || {
+			crate::executor::with_externalities_safe(&mut **ext, move || {
 				runtime.new_instance()?.call("Core_version".into(), &[])
 			})
 			.map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
