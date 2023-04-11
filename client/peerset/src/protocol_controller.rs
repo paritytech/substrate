@@ -666,7 +666,8 @@ mod tests {
 		// Add second reserved node at runtime (this currently calls `alloc_slots` internally).
 		controller.on_add_reserved_peer(reserved2);
 
-		// Initiate connections.
+		// Initiate connections (currently, `alloc_slots` is also called internally in
+		// `on_add_reserved_peer` above).
 		controller.alloc_slots();
 
 		let mut messages = Vec::new();
