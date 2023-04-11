@@ -114,7 +114,7 @@ where
 	AccountId: Clone,
 {
 	/// Take the deposit if any.
-	/// `who` is the owner of the account and the deposit if `DepositHeld` variant.
+	/// `who` is the owner of the account and the deposit of `DepositHeld` variant.
 	pub(crate) fn take_deposit(&mut self, who: &AccountId) -> Option<(AccountId, Balance)> {
 		use ExistenceReason::*;
 		if !matches!(self, DepositHeld(_) | DepositFrom(..)) {
