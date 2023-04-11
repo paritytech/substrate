@@ -1,5 +1,5 @@
-use std::str::FromStr;
 use clap::Args;
+use std::str::FromStr;
 
 /// Parameters used to config runtime.
 #[derive(Debug, Clone, Args)]
@@ -23,8 +23,8 @@ impl RuntimeParams {
 }
 
 fn parse_max_runtime_instances(s: &str) -> Result<usize, String> {
-	let max_runtime_instances = usize::from_str(s)
-		.map_err(|_err| format!("Illegal `max_runtime_instances` value: {s}"))?;
+	let max_runtime_instances =
+		usize::from_str(s).map_err(|_err| format!("Illegal `max_runtime_instances` value: {s}"))?;
 
 	if max_runtime_instances > 256 {
 		Err(format!("Illegal `max_runtime_instances` value: {max_runtime_instances}"))
