@@ -15,16 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::utils::{
-	extract_parameter_names_types_and_borrows, fold_fn_decl_for_client_side, generate_crate_access,
-	generate_runtime_mod_name_for_trait, parse_runtime_api_version, prefix_function_with_trait,
-	replace_wild_card_parameter_names, return_type_extract_type, versioned_trait_name,
-	AllowSelfRefInParameters,
-};
-
-use crate::common::{
-	API_VERSION_ATTRIBUTE, BLOCK_GENERIC_IDENT, CHANGED_IN_ATTRIBUTE, CORE_TRAIT_ATTRIBUTE,
-	RENAMED_ATTRIBUTE, SUPPORTED_ATTRIBUTE_NAMES,
+use crate::{
+	common::{
+		API_VERSION_ATTRIBUTE, BLOCK_GENERIC_IDENT, CHANGED_IN_ATTRIBUTE, CORE_TRAIT_ATTRIBUTE,
+		RENAMED_ATTRIBUTE, SUPPORTED_ATTRIBUTE_NAMES,
+	},
+	runtime_metadata::generate_decl_runtime_metadata,
+	utils::{
+		extract_parameter_names_types_and_borrows, fold_fn_decl_for_client_side,
+		generate_crate_access, generate_runtime_mod_name_for_trait, parse_runtime_api_version,
+		prefix_function_with_trait, replace_wild_card_parameter_names, return_type_extract_type,
+		versioned_trait_name, AllowSelfRefInParameters,
+	},
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -219,6 +221,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 		let mut decl = decl.clone();
 		let decl_span = decl.span();
 		extend_generics_with_block(&mut decl.generics);
+		let metadata = generate_decl_runtime_metadata(&decl);
 		let mod_name = generate_runtime_mod_name_for_trait(&decl.ident);
 		let found_attributes = remove_supported_attributes(&mut decl.attrs);
 		let api_version =
@@ -303,6 +306,8 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 				#( #versioned_api_traits )*
 
 				pub use #versioned_ident as #main_api_ident;
+
+				#metadata
 
 				pub #api_version
 
