@@ -18,28 +18,27 @@
 
 //! RPC api for babe.
 
+use std::{collections::HashMap, error::Error, sync::Arc};
+
 use futures::TryFutureExt;
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	core::{async_trait, RpcResult},
 	proc_macros::rpc,
 	types::{error::CallError, ErrorObject},
 };
-
-use sc_consensus_babe::{authorship, Epoch};
-use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};
-use sc_rpc_api::DenyUnsafe;
 use serde::{Deserialize, Serialize};
+
+use sc_consensus_babe::{authorship, BabeWorkerHandle};
+use sc_consensus_epochs::Epoch as EpochT;
+use sc_rpc_api::DenyUnsafe;
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppCrypto;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
-use sp_consensus::{Error as ConsensusError, SelectChain};
-use sp_consensus_babe::{
-	digests::PreDigest, AuthorityId, BabeApi as BabeRuntimeApi, BabeConfiguration,
-};
+use sp_consensus::SelectChain;
+use sp_consensus_babe::{digests::PreDigest, AuthorityId, BabeApi as BabeRuntimeApi};
 use sp_core::crypto::ByteArray;
 use sp_keystore::KeystorePtr;
 use sp_runtime::traits::{Block as BlockT, Header as _};
-use std::{collections::HashMap, sync::Arc};
 
 /// Provides rpc methods for interacting with Babe.
 #[rpc(client, server)]
@@ -54,12 +53,10 @@ pub trait BabeApi {
 pub struct Babe<B: BlockT, C, SC> {
 	/// shared reference to the client.
 	client: Arc<C>,
-	/// shared reference to EpochChanges
-	shared_epoch_changes: SharedEpochChanges<B, Epoch>,
+	/// A handle to the BABE worker for issuing requests.
+	babe_worker_handle: BabeWorkerHandle<B>,
 	/// shared reference to the Keystore
 	keystore: KeystorePtr,
-	/// config (actually holds the slot duration)
-	babe_config: BabeConfiguration,
 	/// The SelectChain strategy
 	select_chain: SC,
 	/// Whether to deny unsafe calls
@@ -70,13 +67,12 @@ impl<B: BlockT, C, SC> Babe<B, C, SC> {
 	/// Creates a new instance of the Babe Rpc handler.
 	pub fn new(
 		client: Arc<C>,
-		shared_epoch_changes: SharedEpochChanges<B, Epoch>,
+		babe_worker_handle: BabeWorkerHandle<B>,
 		keystore: KeystorePtr,
-		babe_config: BabeConfiguration,
 		select_chain: SC,
 		deny_unsafe: DenyUnsafe,
 	) -> Self {
-		Self { client, shared_epoch_changes, keystore, babe_config, select_chain, deny_unsafe }
+		Self { client, babe_worker_handle, keystore, select_chain, deny_unsafe }
 	}
 }
 
@@ -93,21 +89,21 @@ where
 {
 	async fn epoch_authorship(&self) -> RpcResult<HashMap<AuthorityId, EpochAuthorship>> {
 		self.deny_unsafe.check_if_safe()?;
-		let header = self.select_chain.best_chain().map_err(Error::Consensus).await?;
+
+		let best_header = self.select_chain.best_chain().map_err(rpc_error).await?;
+
 		let epoch_start = self
 			.client
 			.runtime_api()
-			.current_epoch_start(header.hash())
-			.map_err(|err| Error::StringError(format!("{:?}", err)))?;
+			.current_epoch_start(best_header.hash())
+			.map_err(rpc_error)?;
 
-		let epoch = epoch_data(
-			&self.shared_epoch_changes,
-			&self.client,
-			&self.babe_config,
-			*epoch_start,
-			&self.select_chain,
-		)
-		.await?;
+		let epoch = self
+			.babe_worker_handle
+			.epoch_data_for_child_of(best_header.hash(), *best_header.number(), epoch_start)
+			.await
+			.map_err(rpc_error)?;
+
 		let (epoch_start, epoch_end) = (epoch.start_slot(), epoch.end_slot());
 		let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
 
@@ -159,52 +155,8 @@ pub struct EpochAuthorship {
 	secondary_vrf: Vec<u64>,
 }
 
-/// Errors encountered by the RPC
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-	/// Consensus error
-	#[error(transparent)]
-	Consensus(#[from] ConsensusError),
-	/// Errors that can be formatted as a String
-	#[error("{0}")]
-	StringError(String),
-}
-
-impl From<Error> for JsonRpseeError {
-	fn from(error: Error) -> Self {
-		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
-			1234,
-			error.to_string(),
-			None::<()>,
-		)))
-	}
-}
-
-/// Fetches the epoch data for a given slot.
-async fn epoch_data<B, C, SC>(
-	epoch_changes: &SharedEpochChanges<B, Epoch>,
-	client: &Arc<C>,
-	babe_config: &BabeConfiguration,
-	slot: u64,
-	select_chain: &SC,
-) -> Result<Epoch, Error>
-where
-	B: BlockT,
-	C: HeaderBackend<B> + HeaderMetadata<B, Error = BlockChainError> + 'static,
-	SC: SelectChain<B>,
-{
-	let parent = select_chain.best_chain().await?;
-	epoch_changes
-		.shared_data()
-		.epoch_data_for_child_of(
-			descendent_query(&**client),
-			&parent.hash(),
-			*parent.number(),
-			slot.into(),
-			|slot| Epoch::genesis(babe_config, slot),
-		)
-		.map_err(|e| Error::Consensus(ConsensusError::ChainLookup(e.to_string())))?
-		.ok_or(Error::Consensus(ConsensusError::InvalidAuthoritiesSet))
+fn rpc_error(error: impl Error) -> CallError {
+	CallError::Custom(ErrorObject::owned(1234, error.to_string(), None::<()>))
 }
 
 #[cfg(test)]
