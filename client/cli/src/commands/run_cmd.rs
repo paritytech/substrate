@@ -435,7 +435,9 @@ impl CliConfiguration for RunCmd {
 	}
 
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
-		Ok(Some(self.runtime_params.max_runtime_instances.min(256)))
+		let mut params = self.runtime_params.clone();
+		params.normalize();
+		Ok(Some(params.max_runtime_instances))
 	}
 
 	fn runtime_cache_size(&self) -> Result<u8> {
