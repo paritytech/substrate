@@ -347,24 +347,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		let mut account = Account::<T, I>::get(id, &who).ok_or(Error::<T, I>::NoDeposit)?;
 		let deposit = account.reason.take_deposit().ok_or(Error::<T, I>::NoDeposit)?;
+		let depositor = account.depositor.take().unwrap_or(who.clone());
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 		ensure!(account.balance.is_zero() || allow_burn, Error::<T, I>::WouldBurn);
 		ensure!(!account.is_frozen, Error::<T, I>::Frozen);
+		ensure!(
+			caller == who || caller == &depositor || caller == &details.admin,
+			Error::<T, I>::NoPermission
+		);
 
-		let mut refund_to: T::AccountId = who.clone();
-		if let Some(depositor) = account.depositor.take() {
-			// Only the account owner (`who`), the depositor, or the asset admin can remove an
-			// account. That is, a depositor cannot force another's account to exist with zero
-			// balance.
-			ensure!(
-				caller == &depositor || caller == who || caller == &details.admin,
-				Error::<T, I>::NoPermission
-			);
-			refund_to = depositor;
-		}
-		T::Currency::unreserve(&refund_to, deposit);
-		account.depositor = None;
+		T::Currency::unreserve(&depositor, deposit);
 
 		if let Remove = Self::dead_account(&who, &mut details, &account.reason, false) {
 			Account::<T, I>::remove(id, &who);
