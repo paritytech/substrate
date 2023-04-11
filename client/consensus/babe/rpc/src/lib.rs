@@ -162,8 +162,7 @@ fn rpc_error(error: impl Error) -> CallError {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_service::TaskManager;
-	use sp_core::crypto::key_types::BABE;
+	use sp_core::{crypto::key_types::BABE, testing::TaskExecutor};
 	use sp_keyring::Sr25519Keyring;
 	use sp_keystore::{testing::MemoryKeystore, Keystore};
 	use substrate_test_runtime_client::{
@@ -181,11 +180,11 @@ mod tests {
 
 	fn test_babe_rpc_module(
 		deny_unsafe: DenyUnsafe,
-	) -> (Babe<Block, TestClient, sc_consensus::LongestChain<Backend, Block>>, TaskManager) {
+	) -> Babe<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
 		let builder = TestClientBuilder::new();
 		let (client, longest_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
-		let task_manager = TaskManager::new(tokio::runtime::Handle::current(), None).unwrap();
+		let task_executor = TaskExecutor::new();
 		let keystore = create_keystore(Sr25519Keyring::Alice);
 
 		let config = sc_consensus_babe::configuration(&*client).expect("config available");
@@ -207,21 +206,18 @@ mod tests {
 					slot_duration,
 				),))
 			},
-			&task_manager.spawn_essential_handle(),
+			&task_executor,
 			None,
 			None,
 		)
 		.unwrap();
 
-		(
-			Babe::new(client.clone(), babe_worker_handle, keystore, longest_chain, deny_unsafe),
-			task_manager,
-		)
+		Babe::new(client.clone(), babe_worker_handle, keystore, longest_chain, deny_unsafe)
 	}
 
 	#[tokio::test]
 	async fn epoch_authorship_works() {
-		let (babe_rpc, _task_manager) = test_babe_rpc_module(DenyUnsafe::No);
+		let babe_rpc = test_babe_rpc_module(DenyUnsafe::No);
 		let api = babe_rpc.into_rpc();
 
 		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
@@ -233,7 +229,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn epoch_authorship_is_unsafe() {
-		let (babe_rpc, _task_manager) = test_babe_rpc_module(DenyUnsafe::Yes);
+		let babe_rpc = test_babe_rpc_module(DenyUnsafe::Yes);
 		let api = babe_rpc.into_rpc();
 
 		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params":[],"id":1}"#;

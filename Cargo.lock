@@ -8627,7 +8627,6 @@ dependencies = [
  "sc-consensus-epochs",
  "sc-keystore",
  "sc-rpc-api",
- "sc-service",
  "serde",
  "serde_json",
  "sp-api",
