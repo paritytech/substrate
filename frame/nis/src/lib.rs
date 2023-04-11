@@ -216,7 +216,6 @@ pub mod pallet {
 		type Currency: FunInspect<Self::AccountId, Balance = Self::CurrencyBalance>
 			+ FunMutate<Self::AccountId>
 			+ FunBalanced<Self::AccountId>
-			+ FunHoldInspect<Self::AccountId>
 			+ FunHoldMutate<Self::AccountId, Reason = Self::RuntimeHoldReason>;
 
 		/// Overarching hold reason.
