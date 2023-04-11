@@ -365,10 +365,9 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	fn set_balance(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> Self::Balance {
 		let b = Self::balance(asset, who);
 		if b > amount {
-			Self::burn_from(asset, who, b - amount, BestEffort, Force)
-				.map(|d| amount.saturating_sub(d))
+			Self::burn_from(asset, who, b - amount, BestEffort, Force).map(|d| b.saturating_sub(d))
 		} else {
-			Self::mint_into(asset, who, amount - b).map(|d| amount.saturating_add(d))
+			Self::mint_into(asset, who, amount - b).map(|d| b.saturating_add(d))
 		}
 		.unwrap_or(b)
 	}
