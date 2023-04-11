@@ -574,7 +574,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 pub trait SwapForNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
 	// If successful returns the amount in native tokens.
 	fn swap_tokens_for_exact_native(
-		origin: AccountId, //Origin,
+		sender: AccountId,
 		asset_id: AssetId,
 		amount_out: Balance,
 		amount_in_max: Option<AssetBalance>,

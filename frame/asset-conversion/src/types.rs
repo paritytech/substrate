@@ -35,7 +35,7 @@ pub struct PoolInfo<PoolAssetId> {
 }
 
 // At the moment when using PartialEq on AssetId, native
-// is expected to be loweset.
+// is expected to be lowest.
 pub trait MultiAssetIdConverter<MultiAssetId, AssetId> {
 	fn get_native() -> MultiAssetId;
 
