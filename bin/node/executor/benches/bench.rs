@@ -26,7 +26,7 @@ use node_executor::ExecutorDispatch;
 use node_primitives::{BlockNumber, Hash};
 use node_testing::keyring::*;
 use sc_executor::{
-	Externalities, NativeElseWasmExecutor, RuntimeVersionOf, WasmExecutionMethod,
+	Externalities, NativeElseWasmExecutor, RuntimeVersionOf, WasmExecutionMethod, WasmExecutor,
 	WasmtimeInstantiationStrategy,
 };
 use sp_core::{
@@ -167,7 +167,7 @@ fn test_blocks(
 	}];
 	block1_extrinsics.extend((0..20).map(|i| CheckedExtrinsic {
 		signed: Some((alice(), signed_extra(i, 0))),
-		function: RuntimeCall::Balances(pallet_balances::Call::transfer {
+		function: RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 			dest: bob().into(),
 			value: 1 * DOLLARS,
 		}),
@@ -191,12 +191,13 @@ fn bench_execute_block(c: &mut Criterion) {
 	for strategy in execution_methods {
 		group.bench_function(format!("{:?}", strategy), |b| {
 			let genesis_config = node_testing::genesis::config(Some(compact_code_unwrap()));
-			let (use_native, wasm_method) = match strategy {
-				ExecutionMethod::Native => (true, WasmExecutionMethod::Interpreted),
-				ExecutionMethod::Wasm(wasm_method) => (false, wasm_method),
+			let use_native = match strategy {
+				ExecutionMethod::Native => true,
+				ExecutionMethod::Wasm(..) => false,
 			};
 
-			let executor = NativeElseWasmExecutor::new(wasm_method, None, 8, 2);
+			let executor =
+				NativeElseWasmExecutor::new_with_wasm_executor(WasmExecutor::builder().build());
 			let runtime_code = RuntimeCode {
 				code_fetcher: &sp_core::traits::WrappedRuntimeCode(compact_code_unwrap().into()),
 				hash: vec![1, 2, 3],

@@ -27,7 +27,7 @@ use sc_cli::{
 	execution_method_from_cli, CliConfiguration, ExecutionStrategy, Result, SharedParams,
 };
 use sc_client_db::BenchmarkingState;
-use sc_executor::NativeElseWasmExecutor;
+use sc_executor::{NativeElseWasmExecutor, WasmExecutor};
 use sc_service::{Configuration, NativeExecutionDispatch};
 use serde::Serialize;
 use sp_core::{
@@ -35,13 +35,13 @@ use sp_core::{
 		testing::{TestOffchainExt, TestTransactionPoolExt},
 		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 	},
-	traits::CallContext,
+	traits::{CallContext, ReadRuntimeVersionExt},
 };
 use sp_externalities::Extensions;
-use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
+use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
-use std::{collections::HashMap, fmt::Debug, fs, str::FromStr, sync::Arc, time};
+use std::{collections::HashMap, fmt::Debug, fs, str::FromStr, time};
 
 /// Logging target
 const LOG_TARGET: &'static str = "frame::benchmark::pallet";
@@ -209,21 +209,28 @@ impl PalletCmd {
 			// Do not enable storage tracking
 			false,
 		)?;
-		let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
-			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy),
-			self.heap_pages,
-			2, // The runtime instances cache size.
-			2, // The runtime cache size
+
+		let method =
+			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy);
+
+		let executor = NativeElseWasmExecutor::<ExecDispatch>::new_with_wasm_executor(
+			WasmExecutor::builder()
+				.with_execution_method(method)
+				.with_max_runtime_instances(2)
+				.with_runtime_cache_size(2)
+				.build(),
 		);
 
 		let extensions = || -> Extensions {
 			let mut extensions = Extensions::default();
-			extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
 			let (offchain, _) = TestOffchainExt::new();
 			let (pool, _) = TestTransactionPoolExt::new();
+			let keystore = MemoryKeystore::new();
+			extensions.register(KeystoreExt::new(keystore));
 			extensions.register(OffchainWorkerExt::new(offchain.clone()));
 			extensions.register(OffchainDbExt::new(offchain));
 			extensions.register(TransactionPoolExt::new(pool));
+			extensions.register(ReadRuntimeVersionExt::new(executor.clone()));
 			extensions
 		};
 
@@ -237,7 +244,6 @@ impl PalletCmd {
 			&(self.extra).encode(),
 			extensions(),
 			&sp_state_machine::backend::BackendRuntimeCode::new(state).runtime_code()?,
-			sp_core::testing::TaskExecutor::new(),
 			CallContext::Offchain,
 		)
 		.execute(strategy.into())
@@ -375,7 +381,6 @@ impl PalletCmd {
 						extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
 					.execute(strategy.into())
@@ -416,7 +421,6 @@ impl PalletCmd {
 						extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
 					.execute(strategy.into())
@@ -449,7 +453,6 @@ impl PalletCmd {
 						extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
-						sp_core::testing::TaskExecutor::new(),
 						CallContext::Offchain,
 					)
 					.execute(strategy.into())

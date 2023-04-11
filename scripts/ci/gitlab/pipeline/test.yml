@@ -90,15 +90,13 @@ cargo-check-benches:
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
     # merges in the master branch on PRs
-    - |
-      export BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${$CI_COMMIT_REF_NAME} | jq .base.ref)
-    - if [ $CI_COMMIT_REF_NAME != "master" ]; then
-      git fetch origin +${BASE}:${BASE};
-      git fetch origin +$CI_COMMIT_REF_NAME:$CI_COMMIT_REF_NAME;
-      git checkout ${BASE};
+    - 'if [ $CI_COMMIT_REF_NAME != "master" ]; then
+      BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq -r .base.ref);
+      printf "Merging base branch %s\n" "${BASE:=master}";
       git config user.email "ci@gitlab.parity.io";
-      git merge $CI_COMMIT_REF_NAME --verbose --no-edit;
-      fi
+      git fetch origin "refs/heads/${BASE}";
+      git merge --verbose --no-edit FETCH_HEAD;
+      fi'
   parallel: 2
   script:
     - rusty-cachier snapshot create
@@ -204,10 +202,10 @@ test-linux-stable:
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-C debug-assertions -D warnings"
     RUST_BACKTRACE: 1
     WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
     # Ensure we run the UI tests.
     RUN_UI_TESTS: 1
     # needed for rusty-cachier to keep cache in test-linux-stable folder and not in test-linux-stable-1/3
@@ -238,17 +236,19 @@ test-frame-support:
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-C debug-assertions -D warnings"
     RUST_BACKTRACE: 1
     WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
     # Ensure we run the UI tests.
     RUN_UI_TESTS: 1
   script:
     - rusty-cachier snapshot create
-    - time cargo test --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
-    - time cargo test --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
+    - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
+    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet
+    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
+    - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
     - rusty-cachier cache upload
 
 # This job runs tests that don't work with cargo-nextest in test-linux-stable
@@ -260,10 +260,10 @@ test-linux-stable-extra:
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-C debug-assertions -D warnings"
     RUST_BACKTRACE: 1
     WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
     # Ensure we run the UI tests.
     RUN_UI_TESTS: 1
   script:
@@ -285,10 +285,10 @@ quick-benchmarks:
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-C debug-assertions -D warnings"
     RUST_BACKTRACE: "full"
     WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
   script:
     - rusty-cachier snapshot create
     - time cargo run --locked --release --features runtime-benchmarks -- benchmark pallet --execution wasm --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
@@ -304,7 +304,7 @@ test-frame-examples-compile-to-wasm:
     RUSTY_CACHIER_TOOLCHAIN: nightly
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y"
+    RUSTFLAGS: "-C debug-assertions"
     RUST_BACKTRACE: 1
   script:
     - rusty-cachier snapshot create
@@ -323,10 +323,10 @@ test-linux-stable-int:
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-C debug-assertions -D warnings"
     RUST_BACKTRACE: 1
     WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
     # Ensure we run the UI tests.
     RUN_UI_TESTS: 1
   script:
@@ -372,7 +372,7 @@ test-full-crypto-feature:
     RUSTY_CACHIER_TOOLCHAIN: nightly
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y"
+    RUSTFLAGS: "-C debug-assertions"
     RUST_BACKTRACE: 1
   script:
     - rusty-cachier snapshot create
@@ -434,3 +434,39 @@ cargo-check-each-crate-macos:
     - time cargo check --workspace --locked
   tags:
     - osx
+
+cargo-hfuzz:
+  stage: test
+  extends:
+    - .docker-env
+    - .test-refs
+    - .pipeline-stopper-artifacts
+  variables:
+    # max 10s per iteration, 60s per file
+    HFUZZ_RUN_ARGS: >
+      --exit_upon_crash
+      --exit_code_upon_crash 1
+      --timeout 10
+      --run_time 60
+  artifacts:
+    name: "hfuzz-$CI_COMMIT_SHORT_SHA"
+    expire_in: 7 days
+    when: on_failure
+    paths:
+      - primitives/arithmetic/fuzzer/hfuzz_workspace/
+  script:
+    # use git version of honggfuzz-rs until v0.5.56 is out, we need a few recent changes:
+    # https://github.com/rust-fuzz/honggfuzz-rs/pull/75 to avoid breakage on debian
+    # https://github.com/rust-fuzz/honggfuzz-rs/pull/81 fix to the above pr
+    # https://github.com/rust-fuzz/honggfuzz-rs/pull/82 fix for handling rusty-cachier's absolute CARGO_TARGET_DIR
+    - |
+      cat >>Cargo.toml <<EOF
+      [patch.crates-io]
+      honggfuzz = { git = 'https://github.com/altaua/honggfuzz-rs', rev = '205f7c8c059a0d98fe1cb912cdac84f324cb6981' }
+      EOF
+    - cd ./primitives/arithmetic/fuzzer
+    - rusty-cachier snapshot create
+    - cargo hfuzz build
+    - rusty-cachier cache upload
+    - for target in $(cargo read-manifest | jq -r '.targets | .[] | .name'); do
+      cargo hfuzz run "$target" || { printf "fuzzing failure for %s\n" "$target"; exit 1; }; done

@@ -29,9 +29,9 @@
 //!
 //! Some resources about the above:
 //!
-//! 1. <https://docs.substrate.io/v3/tools/try-runtime>
+//! 1. <https://docs.substrate.io/reference/command-line-tools/try-runtime/>
 //! 2. <https://www.crowdcast.io/e/substrate-seminar/41>
-//! 3. <https://docs.substrate.io/v3/advanced/executor>
+//! 3. <https://docs.substrate.io/fundamentals/runtime-development/>
 //!
 //! ---
 //!
@@ -133,11 +133,10 @@
 //! given the right flag:
 //!
 //! ```ignore
-//! 
-//! #[cfg(feature = try-runtime)]
+//! #[cfg(feature = "try-runtime")]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
-//! #[cfg(feature = try-runtime)]
+//! #[cfg(feature = "try-runtime")]
 //! fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {}
 //! ```
 //!
@@ -152,9 +151,9 @@
 //!
 //! Similarly, each pallet can expose a function in `#[pallet::hooks]` section as follows:
 //!
-//! ```
-//! #[cfg(feature = try-runtime)]
-//! fn try_state(_) -> Result<(), &'static str> {}
+//! ```ignore
+//! #[cfg(feature = "try-runtime")]
+//! fn try_state(_: BlockNumber) -> Result<(), &'static str> {}
 //! ```
 //!
 //! which is called on numerous code paths in the try-runtime tool. These checks should ensure that
@@ -365,10 +364,13 @@ use remote_externalities::{
 	TestExternalities,
 };
 use sc_cli::{
-	CliConfiguration, RuntimeVersion, WasmExecutionMethod, WasmtimeInstantiationStrategy,
-	DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
+	execution_method_from_cli, CliConfiguration, RuntimeVersion, WasmExecutionMethod,
+	WasmtimeInstantiationStrategy, DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
+	DEFAULT_WASM_EXECUTION_METHOD,
 };
-use sc_executor::{sp_wasm_interface::HostFunctions, WasmExecutor};
+use sc_executor::{
+	sp_wasm_interface::HostFunctions, HeapAllocStrategy, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY,
+};
 use sp_api::HashT;
 use sp_core::{
 	hexdisplay::HexDisplay,
@@ -377,13 +379,12 @@ use sp_core::{
 		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 	},
 	storage::well_known_keys,
-	testing::TaskExecutor,
-	traits::{CallContext, ReadRuntimeVersion, TaskExecutorExt},
+	traits::{CallContext, ReadRuntimeVersion, ReadRuntimeVersionExt},
 	twox_128, H256,
 };
 use sp_externalities::Extensions;
 use sp_inherents::InherentData;
-use sp_keystore::{testing::KeyStore, KeystoreExt};
+use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, NumberFor},
 	DeserializeOwned, Digest,
@@ -599,8 +600,6 @@ pub struct LiveState {
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum State {
 	/// Use a state snapshot as the source of runtime state.
-	///
-	/// This can be crated by passing a value to [`State::Live::snapshot_path`].
 	Snap {
 		#[arg(short, long)]
 		snapshot_path: PathBuf,
@@ -813,31 +812,34 @@ where
 }
 
 /// Build all extensions that we typically use.
-pub(crate) fn full_extensions() -> Extensions {
+pub(crate) fn full_extensions<H: HostFunctions>(wasm_executor: WasmExecutor<H>) -> Extensions {
 	let mut extensions = Extensions::default();
-	extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
 	let (offchain, _offchain_state) = TestOffchainExt::new();
 	let (pool, _pool_state) = TestTransactionPoolExt::new();
+	let keystore = MemoryKeystore::new();
 	extensions.register(OffchainDbExt::new(offchain.clone()));
 	extensions.register(OffchainWorkerExt::new(offchain));
-	extensions.register(KeystoreExt(std::sync::Arc::new(KeyStore::new())));
+	extensions.register(KeystoreExt::new(keystore));
 	extensions.register(TransactionPoolExt::new(pool));
+	extensions.register(ReadRuntimeVersionExt::new(wasm_executor));
 
 	extensions
 }
 
+/// Build wasm executor by default config.
 pub(crate) fn build_executor<H: HostFunctions>(shared: &SharedParams) -> WasmExecutor<H> {
-	let heap_pages = shared.heap_pages.or(Some(2048));
-	let max_runtime_instances = 8;
-	let runtime_cache_size = 2;
+	let heap_pages = shared
+		.heap_pages
+		.map_or(DEFAULT_HEAP_ALLOC_STRATEGY, |p| HeapAllocStrategy::Static { extra_pages: p as _ });
 
-	WasmExecutor::new(
-		sc_executor::WasmExecutionMethod::Interpreted,
-		heap_pages,
-		max_runtime_instances,
-		None,
-		runtime_cache_size,
-	)
+	WasmExecutor::builder()
+		.with_execution_method(execution_method_from_cli(
+			shared.wasm_method,
+			shared.wasmtime_instantiation_strategy,
+		))
+		.with_onchain_heap_alloc_strategy(heap_pages)
+		.with_offchain_heap_alloc_strategy(heap_pages)
+		.build()
 }
 
 /// Ensure that the given `ext` is compiled with `try-runtime`
@@ -876,7 +878,6 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 		data,
 		extensions,
 		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code()?,
-		sp_core::testing::TaskExecutor::new(),
 		CallContext::Offchain,
 	)
 	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
@@ -916,7 +917,6 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 		data,
 		extensions,
 		&runtime_code,
-		sp_core::testing::TaskExecutor::new(),
 		CallContext::Offchain,
 	)
 	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)

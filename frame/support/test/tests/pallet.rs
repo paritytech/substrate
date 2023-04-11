@@ -25,8 +25,8 @@ use frame_support::{
 	pallet_prelude::{StorageInfoTrait, ValueQuery},
 	storage::unhashed,
 	traits::{
-		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
-		OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
+		ConstU32, GetCallIndex, GetCallName, GetStorageVersion, OnFinalize, OnGenesis,
+		OnInitialize, OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
 	},
 	weights::{RuntimeDbWeight, Weight},
 };
@@ -218,7 +218,7 @@ pub mod pallet {
 
 		/// Doc comment put in metadata
 		#[pallet::call_index(1)]
-		#[pallet::weight(1)]
+		#[pallet::weight({1})]
 		pub fn foo_storage_layer(
 			_origin: OriginFor<T>,
 			#[pallet::compact] foo: u32,
@@ -231,15 +231,21 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(4)]
+		#[pallet::weight({1})]
+		pub fn foo_index_out_of_order(_origin: OriginFor<T>) -> DispatchResult {
+			Ok(())
+		}
+
 		// Test for DispatchResult return type
 		#[pallet::call_index(2)]
-		#[pallet::weight(1)]
+		#[pallet::weight({1})]
 		pub fn foo_no_post_info(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
 		}
 
 		#[pallet::call_index(3)]
-		#[pallet::weight(1)]
+		#[pallet::weight({1})]
 		pub fn check_for_dispatch_context(_origin: OriginFor<T>) -> DispatchResult {
 			with_context::<(), _>(|_| ()).ok_or_else(|| DispatchError::Unavailable)
 		}
@@ -470,6 +476,11 @@ pub mod pallet {
 		}
 	}
 
+	#[pallet::composite_enum]
+	pub enum HoldReason {
+		Staking,
+	}
+
 	#[derive(codec::Encode, sp_runtime::RuntimeDebug)]
 	#[cfg_attr(feature = "std", derive(codec::Decode))]
 	pub enum InherentError {
@@ -563,6 +574,16 @@ pub mod pallet2 {
 		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
 		fn build(&self) {}
+	}
+
+	#[pallet::composite_enum]
+	pub enum HoldReason {
+		Governance,
+	}
+
+	#[pallet::composite_enum]
+	pub enum SlashReason {
+		Equivocation,
 	}
 }
 
@@ -728,8 +749,25 @@ fn call_expand() {
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
 		pallet::Call::<Runtime>::get_call_names(),
-		&["foo", "foo_storage_layer", "foo_no_post_info", "check_for_dispatch_context"],
+		&[
+			"foo",
+			"foo_storage_layer",
+			"foo_index_out_of_order",
+			"foo_no_post_info",
+			"check_for_dispatch_context"
+		],
 	);
+
+	assert_eq!(call_foo.get_call_index(), 0u8);
+	assert_eq!(pallet::Call::<Runtime>::get_call_indices(), &[0u8, 1u8, 4u8, 2u8, 3u8])
+}
+
+#[test]
+fn call_expand_index() {
+	let call_foo = pallet::Call::<Runtime>::foo_index_out_of_order {};
+
+	assert_eq!(call_foo.get_call_index(), 4u8);
+	assert_eq!(pallet::Call::<Runtime>::get_call_indices(), &[0u8, 1u8, 4u8, 2u8, 3u8])
 }
 
 #[test]
@@ -949,6 +987,23 @@ fn validate_unsigned_expand() {
 
 	let validity = pallet::Pallet::validate_unsigned(TransactionSource::External, &call).unwrap();
 	assert_eq!(validity, ValidTransaction::default());
+}
+
+#[test]
+fn composite_expand() {
+	use codec::Encode;
+
+	let hold_reason: RuntimeHoldReason = pallet::HoldReason::Staking.into();
+	let hold_reason2: RuntimeHoldReason = pallet2::HoldReason::Governance.into();
+	let slash_reason: RuntimeSlashReason = pallet2::SlashReason::Equivocation.into();
+
+	assert_eq!(hold_reason, RuntimeHoldReason::Example(pallet::HoldReason::Staking));
+	assert_eq!(hold_reason2, RuntimeHoldReason::Example2(pallet2::HoldReason::Governance));
+	assert_eq!(slash_reason, RuntimeSlashReason::Example2(pallet2::SlashReason::Equivocation));
+
+	assert_eq!(hold_reason.encode(), [1, 0]);
+	assert_eq!(hold_reason2.encode(), [2, 0]);
+	assert_eq!(slash_reason.encode(), [2, 0]);
 }
 
 #[test]
@@ -1616,7 +1671,7 @@ fn metadata_at_version() {
 
 #[test]
 fn metadata_versions() {
-	assert_eq!(vec![LATEST_METADATA_VERSION], Runtime::metadata_versions());
+	assert_eq!(vec![LATEST_METADATA_VERSION, u32::MAX], Runtime::metadata_versions());
 }
 
 #[test]

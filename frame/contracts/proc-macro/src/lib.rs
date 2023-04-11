@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Procedural macroses used in the contracts module.
+//! Procedural macros used in the contracts module.
 //!
 //! Most likely you should use the [`#[define_env]`][`macro@define_env`] attribute macro which hides
 //! boilerplate of defining external environment for a wasm module.
@@ -527,7 +527,7 @@ fn expand_docs(def: &EnvDef) -> TokenStream2 {
 	}
 }
 
-/// Expands environment definiton.
+/// Expands environment definition.
 /// Should generate source code for:
 ///  - implementations of the host functions to be added to the wasm runtime environment (see
 ///    `expand_impls()`).
@@ -596,6 +596,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 	let impls = def.host_funcs.iter().map(|f| {
 		// skip the context and memory argument
 		let params = f.item.sig.inputs.iter().skip(2);
+
 		let (module, name, body, wasm_output, output) = (
 			f.module(),
 			&f.name,
@@ -606,6 +607,39 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		let is_stable = f.is_stable;
 		let not_deprecated = f.not_deprecated;
 
+		// wrapped host function body call with host function traces
+		// see https://github.com/paritytech/substrate/tree/master/frame/contracts#host-function-tracing
+		let wrapped_body_with_trace = {
+			let trace_fmt_args = params.clone().filter_map(|arg| match arg {
+				syn::FnArg::Receiver(_) => None,
+				syn::FnArg::Typed(p) => {
+					match *p.pat.clone() {
+						syn::Pat::Ident(ref pat_ident) => Some(pat_ident.ident.clone()),
+						_ => None,
+					}
+				},
+			});
+
+			let params_fmt_str = trace_fmt_args.clone().map(|s| format!("{s}: {{:?}}")).collect::<Vec<_>>().join(", ");
+			let trace_fmt_str = format!("{}::{}({}) = {{:?}}\n", module, name, params_fmt_str);
+
+			quote! {
+				if ::log::log_enabled!(target: "runtime::contracts::strace", ::log::Level::Trace) {
+					let result = #body;
+					{
+						use sp_std::fmt::Write;
+						let mut w = sp_std::Writer::default();
+						let _ = core::write!(&mut w, #trace_fmt_str, #( #trace_fmt_args, )* result);
+						let msg = core::str::from_utf8(&w.inner()).unwrap_or_default();
+						ctx.ext().append_debug_buffer(msg);
+					}
+					result
+				} else {
+					#body
+				}
+			}
+		};
+
 		// If we don't expand blocks (implementing for `()`) we change a few things:
 		// - We replace any code by unreachable!
 		// - Allow unused variables as the code that uses is not expanded
@@ -613,11 +647,11 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		let inner = if expand_blocks {
 			quote! { || #output {
 				let (memory, ctx) = __caller__
-					.host_data()
+					.data()
 					.memory()
 					.expect("Memory must be set when setting up host data; qed")
 					.data_and_store_mut(&mut __caller__);
-				#body
+				#wrapped_body_with_trace
 			} }
 		} else {
 			quote! { || -> #wasm_output {
@@ -630,7 +664,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		let map_err = if expand_blocks {
 			quote! {
 				|reason| {
-					::wasmi::core::Trap::host(reason)
+					::wasmi::core::Trap::from(reason)
 				}
 			}
 		} else {
@@ -778,7 +812,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 #[proc_macro_attribute]
 pub fn define_env(attr: TokenStream, item: TokenStream) -> TokenStream {
 	if !attr.is_empty() && !(attr.to_string() == "doc".to_string()) {
-		let msg = r#"Invalid `define_env` attribute macro: expected either no attributes or a single `doc` attibute:
+		let msg = r#"Invalid `define_env` attribute macro: expected either no attributes or a single `doc` attribute:
 					 - `#[define_env]`
 					 - `#[define_env(doc)]`"#;
 		let span = TokenStream2::from(attr).span();

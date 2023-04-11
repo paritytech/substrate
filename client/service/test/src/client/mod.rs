@@ -30,7 +30,7 @@ use sc_consensus::{
 };
 use sc_service::client::{new_in_mem, Client, LocalCallExecutor};
 use sp_api::ProvideRuntimeApi;
-use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError, SelectChain};
+use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
 use sp_core::{testing::TaskExecutor, traits::CallContext, H256};
 use sp_runtime::{
 	generic::BlockId,
@@ -45,6 +45,7 @@ use sp_trie::{LayoutV0, TrieConfiguration};
 use std::{collections::HashSet, sync::Arc};
 use substrate_test_runtime::TestAPI;
 use substrate_test_runtime_client::{
+	new_native_or_wasm_executor,
 	prelude::*,
 	runtime::{
 		genesismap::{insert_genesis_block, GenesisConfig},
@@ -57,29 +58,6 @@ use substrate_test_runtime_client::{
 mod db;
 
 const TEST_ENGINE_ID: ConsensusEngineId = *b"TEST";
-
-pub struct ExecutorDispatch;
-
-impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
-	type ExtendHostFunctions = ();
-
-	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-		substrate_test_runtime_client::runtime::api::dispatch(method, data)
-	}
-
-	fn native_version() -> sc_executor::NativeVersion {
-		substrate_test_runtime_client::runtime::native_version()
-	}
-}
-
-fn executor() -> sc_executor::NativeElseWasmExecutor<ExecutorDispatch> {
-	sc_executor::NativeElseWasmExecutor::new(
-		sc_executor::WasmExecutionMethod::Interpreted,
-		None,
-		8,
-		2,
-	)
-}
 
 fn construct_block(
 	backend: &InMemoryBackend<BlakeTwo256>,
@@ -104,17 +82,15 @@ fn construct_block(
 	let mut overlay = OverlayedChanges::default();
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
-	let task_executor = Box::new(TaskExecutor::new());
 
 	StateMachine::new(
 		backend,
 		&mut overlay,
-		&executor(),
+		&new_native_or_wasm_executor(),
 		"Core_initialize_block",
 		&header.encode(),
 		Default::default(),
 		&runtime_code,
-		task_executor.clone() as Box<_>,
 		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm)
@@ -124,12 +100,11 @@ fn construct_block(
 		StateMachine::new(
 			backend,
 			&mut overlay,
-			&executor(),
+			&new_native_or_wasm_executor(),
 			"BlockBuilder_apply_extrinsic",
 			&tx.encode(),
 			Default::default(),
 			&runtime_code,
-			task_executor.clone() as Box<_>,
 			CallContext::Onchain,
 		)
 		.execute(ExecutionStrategy::NativeElseWasm)
@@ -139,12 +114,11 @@ fn construct_block(
 	let ret_data = StateMachine::new(
 		backend,
 		&mut overlay,
-		&executor(),
+		&new_native_or_wasm_executor(),
 		"BlockBuilder_finalize_block",
 		&[],
 		Default::default(),
 		&runtime_code,
-		task_executor.clone() as Box<_>,
 		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm)
@@ -212,12 +186,11 @@ fn construct_genesis_should_work_with_native() {
 	let _ = StateMachine::new(
 		&backend,
 		&mut overlay,
-		&executor(),
+		&new_native_or_wasm_executor(),
 		"Core_execute_block",
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		TaskExecutor::new(),
 		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm)
@@ -246,12 +219,11 @@ fn construct_genesis_should_work_with_wasm() {
 	let _ = StateMachine::new(
 		&backend,
 		&mut overlay,
-		&executor(),
+		&new_native_or_wasm_executor(),
 		"Core_execute_block",
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		TaskExecutor::new(),
 		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::AlwaysWasm)
@@ -280,12 +252,11 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 	let r = StateMachine::new(
 		&backend,
 		&mut overlay,
-		&executor(),
+		&new_native_or_wasm_executor(),
 		"Core_execute_block",
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		TaskExecutor::new(),
 		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm);
@@ -1567,7 +1538,11 @@ fn respects_block_rules() {
 }
 
 #[test]
+#[cfg(disable_flaky)]
+#[allow(dead_code)]
+// FIXME: https://github.com/paritytech/substrate/issues/11321
 fn returns_status_for_pruned_blocks() {
+	use sc_consensus::BlockStatus;
 	sp_tracing::try_init_simple();
 	let tmp = tempfile::tempdir().unwrap();
 
@@ -1913,7 +1888,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 	use substrate_test_runtime_client::GenesisInit;
 
 	let backend = Arc::new(sc_client_api::in_mem::Backend::new());
-	let executor = substrate_test_runtime_client::new_native_executor();
+	let executor = new_native_or_wasm_executor();
 	let client_config = sc_service::ClientConfig::default();
 
 	let genesis_block_builder = sc_service::GenesisBlockBuilder::new(

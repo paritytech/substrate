@@ -127,7 +127,7 @@ pub enum Determinism {
 	/// allowed.
 	///
 	/// Dispatchables always use this mode in order to make on-chain execution deterministic.
-	Deterministic,
+	Enforced,
 	/// Allow calling or uploading an indeterministic code.
 	///
 	/// This is only possible when calling into `pallet-contracts` directly via
@@ -136,7 +136,7 @@ pub enum Determinism {
 	/// # Note
 	///
 	/// **Never** use this mode for on-chain execution.
-	AllowIndeterminism,
+	Relaxed,
 }
 
 impl ExportedFunction {
@@ -186,7 +186,7 @@ impl<T: Config> PrefabWasmModule<T> {
 		code_cache::try_remove::<T>(origin, code_hash)
 	}
 
-	/// Returns whether there is a deposit to be payed for this module.
+	/// Returns whether there is a deposit to be paid for this module.
 	///
 	/// Returns `0` if the module is already in storage and hence no deposit will
 	/// be charged when storing it.
@@ -225,7 +225,7 @@ impl<T: Config> PrefabWasmModule<T> {
 		let engine = Engine::new(&config);
 		let module = Module::new(&engine, code)?;
 		let mut store = Store::new(&engine, host_state);
-		let mut linker = Linker::new();
+		let mut linker = Linker::new(&engine);
 		E::define(
 			&mut store,
 			&mut linker,
@@ -329,7 +329,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 			log::debug!(target: "runtime::contracts", "failed to instantiate code: {}", msg);
 			Error::<T>::CodeRejected
 		})?;
-		store.state_mut().set_memory(memory);
+		store.data_mut().set_memory(memory);
 
 		let exported_func = instance
 			.get_export(&store, function.identifier())
@@ -346,7 +346,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 
 		let result = exported_func.call(&mut store, &[], &mut []);
 
-		store.into_state().to_execution_result(result)
+		store.into_data().to_execution_result(result)
 	}
 
 	fn code_hash(&self) -> &CodeHash<T> {
@@ -358,7 +358,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 	}
 
 	fn is_deterministic(&self) -> bool {
-		matches!(self.determinism, Determinism::Deterministic)
+		matches!(self.determinism, Determinism::Enforced)
 	}
 }
 
@@ -366,20 +366,15 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 mod tests {
 	use super::*;
 	use crate::{
-		exec::{
-			AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, FixSizedKey,
-			SeedOf, VarSizedKey,
-		},
+		exec::{AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, Key, SeedOf},
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
-		BalanceOf, CodeHash, Error, Pallet as Contracts,
+		BalanceOf, CodeHash, Error, OldWeight, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
 	use frame_support::{
-		assert_err, assert_ok,
-		dispatch::DispatchResultWithPostInfo,
-		weights::{OldWeight, Weight},
+		assert_err, assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight,
 	};
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
@@ -521,40 +516,15 @@ mod tests {
 			self.terminations.push(TerminationEntry { beneficiary: beneficiary.clone() });
 			Ok(())
 		}
-		fn get_storage(&mut self, key: &FixSizedKey) -> Option<Vec<u8>> {
+		fn get_storage(&mut self, key: &Key<Self::T>) -> Option<Vec<u8>> {
 			self.storage.get(&key.to_vec()).cloned()
 		}
-		fn get_storage_transparent(&mut self, key: &VarSizedKey<Self::T>) -> Option<Vec<u8>> {
-			self.storage.get(&key.to_vec()).cloned()
-		}
-		fn get_storage_size(&mut self, key: &FixSizedKey) -> Option<u32> {
-			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
-		}
-		fn get_storage_size_transparent(&mut self, key: &VarSizedKey<Self::T>) -> Option<u32> {
+		fn get_storage_size(&mut self, key: &Key<Self::T>) -> Option<u32> {
 			self.storage.get(&key.to_vec()).map(|val| val.len() as u32)
 		}
 		fn set_storage(
 			&mut self,
-			key: &FixSizedKey,
-			value: Option<Vec<u8>>,
-			take_old: bool,
-		) -> Result<WriteOutcome, DispatchError> {
-			let key = key.to_vec();
-			let entry = self.storage.entry(key.clone());
-			let result = match (entry, take_old) {
-				(Entry::Vacant(_), _) => WriteOutcome::New,
-				(Entry::Occupied(entry), false) =>
-					WriteOutcome::Overwritten(entry.remove().len() as u32),
-				(Entry::Occupied(entry), true) => WriteOutcome::Taken(entry.remove()),
-			};
-			if let Some(value) = value {
-				self.storage.insert(key, value);
-			}
-			Ok(result)
-		}
-		fn set_storage_transparent(
-			&mut self,
-			key: &VarSizedKey<Self::T>,
+			key: &Key<Self::T>,
 			value: Option<Vec<u8>>,
 			take_old: bool,
 		) -> Result<WriteOutcome, DispatchError> {
@@ -681,7 +651,7 @@ mod tests {
 				wasm,
 				&schedule,
 				ALICE,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 				TryInstantiate::Instantiate,
 			)
 			.map_err(|err| err.0)?
@@ -689,7 +659,7 @@ mod tests {
 		executable.execute(ext.borrow_mut(), entry_point, input_data)
 	}
 
-	/// Execute the suppplied code.
+	/// Execute the supplied code.
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, ext: E) -> ExecResult {
 		execute_internal(wat, input_data, ext, &ExportedFunction::Call, true, false)
 	}
@@ -1071,14 +1041,14 @@ mod tests {
 "#;
 
 		let mut ext = MockExt::default();
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -1660,11 +1630,22 @@ mod tests {
 
 		let output = execute(CODE_GAS_LEFT, vec![], &mut ext).unwrap();
 
-		let OldWeight(gas_left) = OldWeight::decode(&mut &*output.data).unwrap();
+		let gas_left = OldWeight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
 		// TODO: account for proof size weight
 		assert!(gas_left < gas_limit.ref_time(), "gas_left must be less than initial");
 		assert!(gas_left > actual_left.ref_time(), "gas_left must be greater than final");
+	}
+
+	/// Test that [`frame_support::weights::OldWeight`] en/decodes the same as our
+	/// [`crate::OldWeight`].
+	#[test]
+	fn old_weight_decode() {
+		#![allow(deprecated)]
+		let sp = frame_support::weights::OldWeight(42).encode();
+		let our = crate::OldWeight::decode(&mut &*sp).unwrap();
+
+		assert_eq!(our, 42);
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
@@ -2547,15 +2528,15 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2631,14 +2612,14 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -2728,15 +2709,15 @@ mod tests {
 
 		let mut ext = MockExt::default();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([1u8; 64].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([1u8; 64].to_vec()).unwrap(),
 			Some(vec![42u8]),
 			false,
 		)
 		.unwrap();
 
-		ext.set_storage_transparent(
-			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
+		ext.set_storage(
+			&Key::<Test>::try_from_var([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
@@ -3086,12 +3067,8 @@ mod tests {
 		let schedule = crate::Schedule::<Test>::default();
 		#[cfg(not(feature = "runtime-benchmarks"))]
 		assert_err!(execute(CODE_RANDOM, vec![], MockExt::default()), <Error<Test>>::CodeRejected);
-		self::prepare::reinstrument::<runtime::Env, Test>(
-			&wasm,
-			&schedule,
-			Determinism::Deterministic,
-		)
-		.unwrap();
+		self::prepare::reinstrument::<runtime::Env, Test>(&wasm, &schedule, Determinism::Enforced)
+			.unwrap();
 	}
 
 	/// This test check that an unstable interface cannot be deployed. In case of runtime
