@@ -626,8 +626,8 @@ enum BabeRequest<B: BlockT> {
 pub struct BabeWorkerHandle<B: BlockT>(Sender<BabeRequest<B>>);
 
 impl<B: BlockT> BabeWorkerHandle<B> {
-	fn try_send_request(&self, request: BabeRequest<B>) -> Result<(), Error<B>> {
-		match self.0.clone().try_send(request) {
+	async fn send_request(&self, request: BabeRequest<B>) -> Result<(), Error<B>> {
+		match self.0.clone().send(request).await {
 			Err(err) if err.is_disconnected() => return Err(Error::BackgroundWorkerTerminated),
 			Err(err) if err.is_full() => return Err(Error::BackgroundWorkerOverloaded),
 			Err(err) => warn!(
@@ -643,7 +643,7 @@ impl<B: BlockT> BabeWorkerHandle<B> {
 	/// Fetch all available epoch data.
 	pub async fn epoch_data(&self) -> Result<EpochChangesFor<B, Epoch>, Error<B>> {
 		let (tx, rx) = oneshot::channel();
-		self.try_send_request(BabeRequest::EpochData(tx))?;
+		self.send_request(BabeRequest::EpochData(tx)).await?;
 
 		rx.await.or(Err(Error::BackgroundWorkerTerminated))
 	}
@@ -658,12 +658,8 @@ impl<B: BlockT> BabeWorkerHandle<B> {
 		slot: Slot,
 	) -> Result<Epoch, Error<B>> {
 		let (tx, rx) = oneshot::channel();
-		self.try_send_request(BabeRequest::EpochDataForChildOf(
-			parent_hash,
-			parent_number,
-			slot,
-			tx,
-		))?;
+		self.send_request(BabeRequest::EpochDataForChildOf(parent_hash, parent_number, slot, tx))
+			.await?;
 
 		rx.await.or(Err(Error::BackgroundWorkerTerminated))?
 	}
