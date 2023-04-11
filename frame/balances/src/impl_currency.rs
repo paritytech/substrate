@@ -590,12 +590,22 @@ where
 	/// Is a no-op if:
 	/// - the value to be moved is zero; or
 	/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
+	///
+	/// This may not repatriate any funds which would lead the total balance to be less than the
+	/// frozen amount.
 	fn repatriate_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
 		value: Self::Balance,
 		status: Status,
 	) -> Result<Self::Balance, DispatchError> {
+		if value >
+			<Self as fungible::InspectHold<_>>::reducible_total_balance_on_hold(
+				slashed,
+				Fortitude::Polite,
+			) {
+			return Err(TokenError::FundsUnavailable.into())
+		}
 		let actual = Self::do_transfer_reserved(slashed, beneficiary, value, true, status)?;
 		Ok(value.saturating_sub(actual))
 	}
