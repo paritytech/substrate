@@ -49,7 +49,6 @@ macro_rules! run_tests {
 						$pm::$cm::$name::<
 							Balances,
 							<Test as frame_system::Config>::AccountId,
-							<Test as pallet_balances::Config>::Balance,
 						>(trap_account);
 					});
 				}

@@ -23,16 +23,17 @@ use crate::traits::{
 };
 use core::fmt::Debug;
 use sp_arithmetic::traits::AtLeast8BitUnsigned;
+use sp_runtime::traits::{Bounded, Zero};
 
 //
 // mint_into
 //
 
-pub fn mint_into_success<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn mint_into_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
@@ -56,16 +57,16 @@ where
 	assert_eq!(T::active_issuance(), initial_active_issuance + amount_0 + amount_1);
 }
 
-pub fn mint_into_overflow<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn mint_into_overflow<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
 	let account = AccountId::from(10);
-	let amount = Balance::max_value() - 5.into() - initial_total_issuance.clone();
+	let amount = T::Balance::max_value() - 5.into() - initial_total_issuance.clone();
 
 	// Mint just below the maximum balance
 	T::mint_into(&account, amount.clone()).unwrap();
@@ -82,14 +83,14 @@ where
 	assert_eq!(T::active_issuance(), initial_active_issuance + amount);
 }
 
-pub fn mint_into_below_minimum<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn mint_into_below_minimum<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	// Skip if there is no minimum balance
-	if T::minimum_balance() == Balance::zero() {
+	if T::minimum_balance() == T::Balance::zero() {
 		return
 	}
 
@@ -102,8 +103,8 @@ where
 	T::mint_into(&account, amount.clone()).unwrap_err();
 
 	// Verify: noop
-	assert_eq!(T::total_balance(&account), Balance::zero());
-	assert_eq!(T::balance(&account), Balance::zero());
+	assert_eq!(T::total_balance(&account), T::Balance::zero());
+	assert_eq!(T::balance(&account), T::Balance::zero());
 	assert_eq!(T::total_issuance(), initial_total_issuance);
 	assert_eq!(T::active_issuance(), initial_active_issuance);
 }
@@ -112,11 +113,11 @@ where
 // burn_from
 //
 
-pub fn burn_from_exact_success<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn burn_from_exact_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
@@ -127,7 +128,7 @@ where
 	T::mint_into(&account, initial_balance.clone()).unwrap();
 
 	// Test: Burn an exact amount from the account
-	let amount_to_burn = Balance::from(5);
+	let amount_to_burn = T::Balance::from(5);
 	let precision = Precision::Exact;
 	let force = Fortitude::Polite;
 	T::burn_from(&account, amount_to_burn.clone(), precision, force).unwrap();
@@ -142,11 +143,11 @@ where
 	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance - amount_to_burn);
 }
 
-pub fn burn_from_best_effort_success<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn burn_from_best_effort_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
@@ -177,11 +178,11 @@ where
 	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance - reducible_balance);
 }
 
-pub fn burn_from_exact_insufficient_funds<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn burn_from_exact_insufficient_funds<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	// Set up the initial conditions and parameters for the test
 	let account = AccountId::from(5);
@@ -207,11 +208,11 @@ where
 // restore
 //
 
-pub fn restore_success<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn restore_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let account_0 = AccountId::from(0);
 	let account_1 = AccountId::from(1);
@@ -235,16 +236,16 @@ where
 	assert_eq!(T::active_issuance(), initial_active_issuance + amount_0 + amount_1);
 }
 
-pub fn restore_overflow<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn restore_overflow<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
 	let account = AccountId::from(10);
-	let amount = Balance::max_value() - 5.into() - initial_total_issuance.clone();
+	let amount = T::Balance::max_value() - 5.into() - initial_total_issuance.clone();
 
 	// Restore just below the maximum balance
 	T::restore(&account, amount.clone()).unwrap();
@@ -259,14 +260,14 @@ where
 	assert_eq!(T::active_issuance(), initial_active_issuance + amount);
 }
 
-pub fn restore_below_minimum<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn restore_below_minimum<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	// Skip if there is no minimum balance
-	if T::minimum_balance() == Balance::zero() {
+	if T::minimum_balance() == T::Balance::zero() {
 		return
 	}
 
@@ -279,8 +280,8 @@ where
 	T::restore(&account, amount.clone()).unwrap_err();
 
 	// Verify: noop
-	assert_eq!(T::total_balance(&account), Balance::zero());
-	assert_eq!(T::balance(&account), Balance::zero());
+	assert_eq!(T::total_balance(&account), T::Balance::zero());
+	assert_eq!(T::balance(&account), T::Balance::zero());
 	assert_eq!(T::total_issuance(), initial_total_issuance);
 	assert_eq!(T::active_issuance(), initial_active_issuance);
 }
@@ -289,11 +290,11 @@ where
 // shelve tests
 //
 
-pub fn shelve_success<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn shelve_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
@@ -305,7 +306,7 @@ where
 	T::restore(&account, initial_balance.clone()).unwrap();
 
 	// Test: Shelve an amount from the account
-	let amount_to_shelve = Balance::from(5);
+	let amount_to_shelve = T::Balance::from(5);
 	T::shelve(&account, amount_to_shelve.clone()).unwrap();
 
 	// Verify: The balance and total issuance should be reduced by the shelved amount
@@ -318,11 +319,11 @@ where
 	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance - amount_to_shelve);
 }
 
-pub fn shelve_insufficient_funds<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn shelve_insufficient_funds<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
@@ -347,11 +348,11 @@ where
 // transfer
 //
 
-pub fn transfer_success<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn transfer_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
@@ -362,7 +363,7 @@ where
 	T::set_balance(&account_1, initial_balance.clone());
 
 	// Test: Transfer an amount from account_0 to account_1
-	let transfer_amount = Balance::from(3);
+	let transfer_amount = T::Balance::from(3);
 	T::transfer(&account_0, &account_1, transfer_amount.clone(), Preservation::Expendable).unwrap();
 
 	// Verify: Account balances are updated correctly
@@ -376,11 +377,11 @@ where
 	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance * 2.into());
 }
 
-pub fn transfer_expendable_all<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn transfer_expendable_all<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
@@ -396,9 +397,9 @@ where
 	T::transfer(&account_0, &account_1, transfer_amount.clone(), preservation).unwrap();
 
 	// Verify: Account balances are updated correctly
-	assert_eq!(T::total_balance(&account_0), Balance::zero());
+	assert_eq!(T::total_balance(&account_0), T::Balance::zero());
 	assert_eq!(T::total_balance(&account_1), initial_balance.clone() * 2.into());
-	assert_eq!(T::balance(&account_0), Balance::zero());
+	assert_eq!(T::balance(&account_0), T::Balance::zero());
 	assert_eq!(T::balance(&account_1), initial_balance.clone() * 2.into());
 
 	// Verify: Total issuance doesn't change
@@ -406,13 +407,13 @@ where
 	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance * 2.into());
 }
 
-pub fn transfer_expendable_dust<T, AccountId, Balance>(dust_trap: Option<AccountId>)
+pub fn transfer_expendable_dust<T, AccountId>(dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
-	if T::minimum_balance() == Balance::zero() {
+	if T::minimum_balance() == T::Balance::zero() {
 		return
 	}
 
@@ -426,18 +427,18 @@ where
 	let initial_active_issuance = T::active_issuance();
 	let initial_dust_trap_balance = match dust_trap.clone() {
 		Some(dust_trap) => T::total_balance(&dust_trap),
-		None => Balance::zero(),
+		None => T::Balance::zero(),
 	};
 
 	// Test: Transfer balance
 	let preservation = Preservation::Expendable;
-	let transfer_amount = Balance::from(11);
+	let transfer_amount = T::Balance::from(11);
 	T::transfer(&account_0, &account_1, transfer_amount.clone(), preservation).unwrap();
 
 	// Verify: Account balances are updated correctly
-	assert_eq!(T::total_balance(&account_0), Balance::zero());
+	assert_eq!(T::total_balance(&account_0), T::Balance::zero());
 	assert_eq!(T::total_balance(&account_1), initial_balance.clone() + transfer_amount.clone());
-	assert_eq!(T::balance(&account_0), Balance::zero());
+	assert_eq!(T::balance(&account_0), T::Balance::zero());
 	assert_eq!(T::balance(&account_1), initial_balance.clone() + transfer_amount.clone());
 
 	match dust_trap {
@@ -469,14 +470,14 @@ where
 	}
 }
 
-pub fn transfer_protect_preserve<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn transfer_protect_preserve<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	// This test means nothing if there is no minimum balance
-	if T::minimum_balance() == Balance::zero() {
+	if T::minimum_balance() == T::Balance::zero() {
 		return
 	}
 
@@ -524,11 +525,11 @@ where
 // set_balance
 //
 
-pub fn set_balance_mint_success<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn set_balance_mint_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
@@ -537,7 +538,7 @@ where
 	T::mint_into(&account, initial_balance.clone()).unwrap();
 
 	// Test: Increase the account balance with set_balance
-	let increase_amount: Balance = 5.into();
+	let increase_amount: T::Balance = 5.into();
 	let new = T::set_balance(&account, initial_balance.clone() + increase_amount.clone());
 
 	// Verify: set_balance returned the new balance
@@ -551,11 +552,11 @@ where
 	assert_eq!(T::active_issuance(), initial_active_issuance + expected_new);
 }
 
-pub fn set_balance_burn_success<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn set_balance_burn_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
@@ -564,7 +565,7 @@ where
 	T::mint_into(&account, initial_balance.clone()).unwrap();
 
 	// Test: Increase the account balance with set_balance
-	let burn_amount: Balance = 5.into();
+	let burn_amount: T::Balance = 5.into();
 	let new = T::set_balance(&account, initial_balance.clone() - burn_amount.clone());
 
 	// Verify: set_balance returned the new balance
@@ -582,11 +583,11 @@ where
 // can_deposit
 //
 
-pub fn can_deposit_success<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn can_deposit_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let account = AccountId::from(10);
 	let initial_balance = T::minimum_balance() + 10.into();
@@ -599,11 +600,11 @@ where
 	assert_eq!(ret, DepositConsequence::Success);
 }
 
-pub fn can_deposit_below_minimum<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn can_deposit_below_minimum<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	// can_deposit always returns Success for amount 0
 	if T::minimum_balance() < 2.into() {
@@ -619,16 +620,16 @@ where
 	assert_eq!(ret, DepositConsequence::BelowMinimum);
 }
 
-pub fn can_deposit_overflow<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn can_deposit_overflow<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let account = AccountId::from(10);
 
 	// Test: Try deposit over the max balance
-	let initial_balance = Balance::max_value() - 5.into() - T::total_issuance();
+	let initial_balance = T::Balance::max_value() - 5.into() - T::total_issuance();
 	T::mint_into(&account, initial_balance.clone()).unwrap();
 	let ret = T::can_deposit(&account, 10.into(), Provenance::Minted);
 
@@ -640,11 +641,11 @@ where
 // can_withdraw
 //
 
-pub fn can_withdraw_success<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn can_withdraw_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let account = AccountId::from(10);
 	let initial_balance = T::minimum_balance() + 10.into();
@@ -657,13 +658,13 @@ where
 	assert_eq!(ret, WithdrawConsequence::Success);
 }
 
-pub fn can_withdraw_reduced_to_zero<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn can_withdraw_reduced_to_zero<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
-	if T::minimum_balance() == Balance::zero() {
+	if T::minimum_balance() == T::Balance::zero() {
 		return
 	}
 
@@ -676,13 +677,13 @@ where
 	assert_eq!(ret, WithdrawConsequence::ReducedToZero(T::minimum_balance() - 1.into()));
 }
 
-pub fn can_withdraw_balance_low<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn can_withdraw_balance_low<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
-	if T::minimum_balance() == Balance::zero() {
+	if T::minimum_balance() == T::Balance::zero() {
 		return
 	}
 
@@ -701,11 +702,11 @@ where
 // reducible_balance
 //
 
-pub fn reducible_balance_expendable<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn reducible_balance_expendable<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let account = AccountId::from(10);
 	let initial_balance = T::minimum_balance() + 10.into();
@@ -716,11 +717,11 @@ where
 	assert_eq!(ret, initial_balance);
 }
 
-pub fn reducible_balance_protect_preserve<T, AccountId, Balance>(_dust_trap: Option<AccountId>)
+pub fn reducible_balance_protect_preserve<T, AccountId>(_dust_trap: Option<AccountId>)
 where
-	T: Mutate<AccountId> + Inspect<AccountId, Balance = Balance>,
+	T: Mutate<AccountId>,
+	<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
 	AccountId: AtLeast8BitUnsigned,
-	Balance: AtLeast8BitUnsigned + Debug,
 {
 	let account = AccountId::from(10);
 	let initial_balance = T::minimum_balance() + 10.into();
