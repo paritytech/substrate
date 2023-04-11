@@ -61,7 +61,7 @@ pub struct KeystoreParams {
 	pub password_filename: Option<PathBuf>,
 }
 
-/// Parse a sercret string, returning a displayable error.
+/// Parse a secret string, returning a displayable error.
 pub fn secret_string_from_str(s: &str) -> std::result::Result<SecretString, String> {
 	std::str::FromStr::from_str(s).map_err(|_| "Could not get SecretString".to_string())
 }
