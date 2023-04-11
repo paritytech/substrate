@@ -24,7 +24,7 @@ use codec::{Decode, Encode};
 use sc_executor_common::{
 	error::Error,
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{HeapAllocStrategy, WasmModule, DEFAULT_HEAP_ALLOC_STRATEGY},
+	wasm_runtime::{HeapAllocStrategy, WasmModule},
 };
 use sc_runtime_test::wasm_binary_unwrap;
 use sp_core::{
