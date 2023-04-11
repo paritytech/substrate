@@ -811,7 +811,7 @@ impl<T: Config> Pallet<T> {
 			} else if Validators::<T>::contains_key(&voter) {
 				// if this voter is a validator:
 				if voters_size_tracker.try_register_voter(1, bounds).is_err() {
-					// no more space left for the election result, stop iterating over.
+					// no more space left for the election snapshot, stop iterating over.
 					Self::deposit_event(Event::<T>::SnapshotVotersSizeExceeded {
 						size: voters_size_tracker.size as u32,
 					});
