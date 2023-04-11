@@ -296,6 +296,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			link: grandpa_link,
 			network,
 			sync: Arc::new(sync_service),
+			notification_handle: grandpa_notification_handle,
 			voting_rule: sc_consensus_grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry,
 			shared_voter_state: SharedVoterState::empty(),

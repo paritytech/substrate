@@ -18,22 +18,16 @@
 
 //! Notification service implementation.
 
-#![allow(unused)]
-
-// TODO: remove allow(unused)
-
 use crate::{
 	error,
-	protocol::notifications::handler::{
-		NotificationsSink, NotificationsSinkMessage, ASYNC_NOTIFICATIONS_BUFFER_SIZE,
-	},
+	protocol::notifications::handler::NotificationsSink,
 	service::traits::{NotificationEvent, NotificationService, ValidationResult},
 	types::ProtocolName,
 };
 
 use futures::{
 	stream::{FuturesUnordered, Stream},
-	SinkExt, StreamExt,
+	StreamExt,
 };
 use libp2p::PeerId;
 use tokio::sync::{mpsc, oneshot};
@@ -305,7 +299,7 @@ impl ProtocolHandle {
 		peer: PeerId,
 		handshake: Vec<u8>,
 	) -> Result<oneshot::Receiver<ValidationResult>, ()> {
-		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
+		let subscribers = self.subscribers.lock().map_err(|_| ())?;
 
 		log::trace!(
 			target: LOG_TARGET,
@@ -314,7 +308,7 @@ impl ProtocolHandle {
 		);
 
 		// if there is only one subscriber, `Notifications` can wait directly on the
-		// `oneshot::channel()` RX pair without indirection
+		// `oneshot::channel()`'s RX half without indirection
 		if subscribers.len() == 1 {
 			let (result_tx, rx) = oneshot::channel();
 			return subscribers[0]
@@ -327,8 +321,8 @@ impl ProtocolHandle {
 				.map_err(|_| ())
 		}
 
-		// if there are multiple subscribers, create a task which waits for
-		// all of them to finish and returns the combined result to `Notifications`
+		// if there are multiple subscribers, create a task which waits for all of the
+		// validations to finish and returns the combined result to `Notifications`
 		let mut results: FuturesUnordered<_> = subscribers
 			.iter()
 			.filter_map(|subscriber| {
@@ -411,7 +405,7 @@ impl ProtocolHandle {
 	) -> Result<(), ()> {
 		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
 
-		log::trace!(target: LOG_TARGET, "{}: substream closed for {peer:?}", self.protocol);
+		log::trace!(target: LOG_TARGET, "{}: notification received from {peer:?}", self.protocol);
 
 		subscribers.retain(|subscriber| {
 			subscriber
@@ -445,12 +439,14 @@ pub fn notification_service(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::prelude::*;
+	use crate::protocol::notifications::handler::{
+		NotificationsSinkMessage, ASYNC_NOTIFICATIONS_BUFFER_SIZE,
+	};
 
 	#[tokio::test]
 	async fn validate_and_accept_substream() {
 		let (proto, mut notif) = notification_service("/proto/1".into());
-		let (mut handle, stream) = proto.split();
+		let (handle, _stream) = proto.split();
 
 		let peer_id = PeerId::random();
 		let rx = handle.report_incoming_substream(peer_id, vec![1, 3, 3, 7]).unwrap();
@@ -472,7 +468,7 @@ mod tests {
 	async fn substream_opened() {
 		let (proto, mut notif) = notification_service("/proto/1".into());
 		let (sink, _, _) = NotificationsSink::new(PeerId::random());
-		let (mut handle, stream) = proto.split();
+		let (handle, _stream) = proto.split();
 
 		let peer_id = PeerId::random();
 		handle.report_substream_opened(peer_id, ObservedRole::Full, None, sink).unwrap();
@@ -495,7 +491,7 @@ mod tests {
 	async fn send_sync_notification() {
 		let (proto, mut notif) = notification_service("/proto/1".into());
 		let (sink, _, mut sync_rx) = NotificationsSink::new(PeerId::random());
-		let (mut handle, stream) = proto.split();
+		let (handle, _stream) = proto.split();
 		let peer_id = PeerId::random();
 
 		// validate inbound substream
@@ -528,7 +524,7 @@ mod tests {
 			panic!("invalid event received");
 		}
 
-		notif.send_sync_notification(&peer_id, vec![1, 3, 3, 8]);
+		notif.send_sync_notification(&peer_id, vec![1, 3, 3, 8]).unwrap();
 		assert_eq!(
 			sync_rx.next().await,
 			Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 8] })
@@ -539,7 +535,7 @@ mod tests {
 	async fn send_async_notification() {
 		let (proto, mut notif) = notification_service("/proto/1".into());
 		let (sink, mut async_rx, _) = NotificationsSink::new(PeerId::random());
-		let (mut handle, stream) = proto.split();
+		let (handle, _stream) = proto.split();
 		let peer_id = PeerId::random();
 
 		// validate inbound substream
@@ -581,9 +577,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn send_sync_notification_to_non_existent_peer() {
-		let (proto, mut notif) = notification_service("/proto/1".into());
-		let (sink, _, mut sync_rx) = NotificationsSink::new(PeerId::random());
-		let (mut handle, stream) = proto.split();
+		let (proto, notif) = notification_service("/proto/1".into());
+		let (_sink, _, _sync_rx) = NotificationsSink::new(PeerId::random());
+		let (_handle, _stream) = proto.split();
 		let peer = PeerId::random();
 
 		if let Err(error::Error::PeerDoesntExist(peer_id)) =
@@ -597,9 +593,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn send_async_notification_to_non_existent_peer() {
-		let (proto, mut notif) = notification_service("/proto/1".into());
-		let (sink, _, mut sync_rx) = NotificationsSink::new(PeerId::random());
-		let (mut handle, stream) = proto.split();
+		let (proto, notif) = notification_service("/proto/1".into());
+		let (_sink, _, _sync_rx) = NotificationsSink::new(PeerId::random());
+		let (_handle, _stream) = proto.split();
 		let peer = PeerId::random();
 
 		if let Err(error::Error::PeerDoesntExist(peer_id)) =
@@ -614,8 +610,8 @@ mod tests {
 	#[tokio::test]
 	async fn receive_notification() {
 		let (proto, mut notif) = notification_service("/proto/1".into());
-		let (sink, _, mut sync_rx) = NotificationsSink::new(PeerId::random());
-		let (mut handle, stream) = proto.split();
+		let (sink, _, _sync_rx) = NotificationsSink::new(PeerId::random());
+		let (mut handle, _stream) = proto.split();
 		let peer_id = PeerId::random();
 
 		// validate inbound substream
@@ -665,7 +661,7 @@ mod tests {
 	async fn backpressure_works() {
 		let (proto, mut notif) = notification_service("/proto/1".into());
 		let (sink, mut async_rx, _) = NotificationsSink::new(PeerId::random());
-		let (mut handle, stream) = proto.split();
+		let (handle, _stream) = proto.split();
 		let peer_id = PeerId::random();
 
 		// validate inbound substream
@@ -726,8 +722,8 @@ mod tests {
 	#[tokio::test]
 	async fn peer_disconnects_then_sync_notification_is_sent() {
 		let (proto, mut notif) = notification_service("/proto/1".into());
-		let (sink, _, mut sync_rx) = NotificationsSink::new(PeerId::random());
-		let (mut handle, stream) = proto.split();
+		let (sink, _, sync_rx) = NotificationsSink::new(PeerId::random());
+		let (mut handle, _stream) = proto.split();
 		let peer_id = PeerId::random();
 
 		// validate inbound substream
@@ -772,8 +768,8 @@ mod tests {
 	#[tokio::test]
 	async fn peer_disconnects_then_async_notification_is_sent() {
 		let (proto, mut notif) = notification_service("/proto/1".into());
-		let (sink, mut async_rx, _) = NotificationsSink::new(PeerId::random());
-		let (mut handle, stream) = proto.split();
+		let (sink, async_rx, _) = NotificationsSink::new(PeerId::random());
+		let (mut handle, _stream) = proto.split();
 		let peer_id = PeerId::random();
 
 		// validate inbound substream
@@ -823,8 +819,8 @@ mod tests {
 	#[tokio::test]
 	async fn cloned_service_opening_substream_works() {
 		let (proto, mut notif1) = notification_service("/proto/1".into());
-		let (sink, mut async_rx, _) = NotificationsSink::new(PeerId::random());
-		let (mut handle, stream) = proto.split();
+		let (_sink, _async_rx, _) = NotificationsSink::new(PeerId::random());
+		let (handle, _stream) = proto.split();
 		let mut notif2 = notif1.clone().unwrap();
 		let peer_id = PeerId::random();
 
@@ -852,7 +848,7 @@ mod tests {
 		{
 			assert_eq!(peer_id, peer);
 			assert_eq!(handshake, vec![1, 3, 3, 7]);
-			result_tx.send(ValidationResult::Accept);
+			result_tx.send(ValidationResult::Accept).unwrap();
 		} else {
 			panic!("invalid event received");
 		}
@@ -863,8 +859,8 @@ mod tests {
 	#[tokio::test]
 	async fn cloned_service_one_service_rejects_substream() {
 		let (proto, mut notif1) = notification_service("/proto/1".into());
-		let (sink, mut async_rx, _) = NotificationsSink::new(PeerId::random());
-		let (mut handle, stream) = proto.split();
+		let (_sink, _async_rx, _) = NotificationsSink::new(PeerId::random());
+		let (handle, _stream) = proto.split();
 		let mut notif2 = notif1.clone().unwrap();
 		let mut notif3 = notif2.clone().unwrap();
 		let peer_id = PeerId::random();
@@ -906,13 +902,13 @@ mod tests {
 	async fn cloned_service_opening_substream_sending_and_receiving_notifications_work() {
 		let (proto, mut notif1) = notification_service("/proto/1".into());
 		let (sink, _, mut sync_rx) = NotificationsSink::new(PeerId::random());
-		let (mut handle, stream) = proto.split();
+		let (mut handle, _stream) = proto.split();
 		let mut notif2 = notif1.clone().unwrap();
 		let mut notif3 = notif1.clone().unwrap();
 		let peer_id = PeerId::random();
 
 		// validate inbound substream
-		let mut result_rx = handle.report_incoming_substream(peer_id, vec![1, 3, 3, 7]).unwrap();
+		let result_rx = handle.report_incoming_substream(peer_id, vec![1, 3, 3, 7]).unwrap();
 
 		for notif in vec![&mut notif1, &mut notif2, &mut notif3] {
 			// accept the inbound substream for all services
@@ -964,7 +960,7 @@ mod tests {
 
 		for (i, notif) in vec![&mut notif1, &mut notif2, &mut notif3].iter().enumerate() {
 			// send notification from each service and verify peer receives it
-			notif.send_sync_notification(&peer_id, vec![1, 3, 3, i as u8]);
+			notif.send_sync_notification(&peer_id, vec![1, 3, 3, i as u8]).unwrap();
 			assert_eq!(
 				sync_rx.next().await,
 				Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, i as u8] })

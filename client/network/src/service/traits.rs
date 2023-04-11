@@ -18,6 +18,8 @@
 //
 // If you read this, you are very thorough, congratulations.
 
+//! Traits defined by `sc-network`.
+
 use crate::{
 	config::MultiaddrWithPeerId,
 	error,

@@ -550,6 +550,7 @@ pub fn new_full_base(
 			link: grandpa_link,
 			network: network.clone(),
 			sync: Arc::new(sync_service.clone()),
+			notification_handle: grandpa_notification_handle,
 			telemetry: telemetry.as_ref().map(|x| x.handle()),
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry: prometheus_registry.clone(),

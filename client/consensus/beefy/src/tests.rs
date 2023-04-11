@@ -70,7 +70,7 @@ use substrate_test_runtime_client::{BlockBuilderExt, ClientExt};
 use tokio::time::Duration;
 
 const GENESIS_HASH: H256 = H256::zero();
-fn beefy_gossip_proto_name() -> ProtocolName {
+pub(crate) fn beefy_gossip_proto_name() -> ProtocolName {
 	gossip_protocol_name(GENESIS_HASH, None)
 }
 
@@ -369,6 +369,7 @@ async fn voter_init_setup(
 	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
 		net.peer(0).network_service().clone(),
 		net.peer(0).sync_service().clone(),
+		net.peer(0).take_notification_handle(&beefy_gossip_proto_name()).unwrap(),
 		"/beefy/whatever",
 		gossip_validator,
 		None,
@@ -389,6 +390,14 @@ where
 {
 	let tasks = FuturesUnordered::new();
 
+	let mut notification_handles = peers
+		.iter()
+		.map(|(peer_id, _, _)| {
+			let peer = &mut net.peers[*peer_id];
+			(*peer_id, peer.take_notification_handle(&beefy_gossip_proto_name()).unwrap())
+		})
+		.collect::<std::collections::HashMap<_, _>>();
+
 	for (peer_id, key, api) in peers.into_iter() {
 		let peer = &net.peers[peer_id];
 
@@ -406,6 +415,7 @@ where
 		let network_params = crate::BeefyNetworkParams {
 			network: peer.network_service().clone(),
 			sync: peer.sync_service().clone(),
+			notification_handle: notification_handles.remove(&peer_id).unwrap(),
 			gossip_protocol_name: beefy_gossip_proto_name(),
 			justifications_protocol_name: on_demand_justif_handler.protocol_name(),
 			_phantom: PhantomData,
@@ -1266,7 +1276,7 @@ async fn gossipped_finality_proofs() {
 	let api = Arc::new(TestApi::with_validator_set(&validator_set));
 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
 
-	let charlie = &net.peers[2];
+	let charlie = &mut net.peers[2];
 	let known_peers = Arc::new(Mutex::new(KnownPeers::<Block>::new()));
 	// Charlie will run just the gossip engine and not the full voter.
 	let (gossip_validator, _) = GossipValidator::new(known_peers);
@@ -1279,6 +1289,7 @@ async fn gossipped_finality_proofs() {
 	let mut charlie_gossip_engine = sc_network_gossip::GossipEngine::new(
 		charlie.network_service().clone(),
 		charlie.sync_service().clone(),
+		charlie.take_notification_handle(&beefy_gossip_proto_name()).unwrap(),
 		beefy_gossip_proto_name(),
 		charlie_gossip_validator.clone(),
 		None,

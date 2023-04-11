@@ -4133,7 +4133,7 @@ mod test {
 		let import_queue = Box::new(sc_consensus::import_queue::mock::MockImportQueueHandle::new());
 		let (_chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
-		let (mut sync, _) = ChainSync::new(
+		let (mut sync, _, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			ProtocolId::from("test-protocol-name"),
