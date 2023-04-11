@@ -793,6 +793,8 @@ fn cannot_refund_other_account_with_balance() {
 		);
 		// but 1 is the asset admin, ok.
 		assert_ok!(Assets::refund_other(RuntimeOrigin::signed(1), 0, 2, true));
+		// ensure the account has actually died
+		assert!(!Account::<Test>::contains_key(0, &2));
 
 		assert_ok!(Assets::freeze_creating(RuntimeOrigin::signed(1), 0, 3));
 		assert_eq!(Assets::balance(0, 3), 0);
