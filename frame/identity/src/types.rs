@@ -453,7 +453,7 @@ mod tests {
 				Data::ShaThree256(_) => "ShaThree256".to_string(),
 				Data::Raw(bytes) => format!("Raw{}", bytes.len()),
 			};
-			if let scale_info::TypeDef::Variant(variant) = type_info.type_def {
+			if let scale_info::TypeDef::Variant(variant) = &type_info.type_def {
 				let variant = variant
 					.variants
 					.iter()
@@ -465,7 +465,7 @@ mod tests {
 					.first()
 					.and_then(|f| registry.resolve(f.ty.id))
 					.map(|ty| {
-						if let scale_info::TypeDef::Array(arr) = ty.type_def {
+						if let scale_info::TypeDef::Array(arr) = &ty.type_def {
 							arr.len
 						} else {
 							panic!("Should be an array type")
