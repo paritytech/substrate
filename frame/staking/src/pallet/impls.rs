@@ -1299,8 +1299,8 @@ where
 			add_db_reads_writes(1, 0);
 
 			// Reverse because it's more likely to find reports from recent eras.
-			match eras.iter().rev().find(|&&(_, ref sesh)| sesh <= &slash_session) {
-				Some(&(ref slash_era, _)) => *slash_era,
+			match eras.iter().rev().find(|&(_, sesh)| sesh <= &slash_session) {
+				Some((slash_era, _)) => *slash_era,
 				// Before bonding period. defensive - should be filtered out.
 				None => return consumed_weight,
 			}
