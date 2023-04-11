@@ -27,7 +27,7 @@ macro_rules! run_tests {
 		$(
 			paste! {
 				#[test]
-				fn [< $name _ext_deposit_ $ext_deposit _dust_trap_ $dust_trap >]() {
+				fn [< $name _existential_deposit_ $ext_deposit _dust_trap_ $dust_trap >]() {
 					let (trap_account, builder) = match $dust_trap {
 						"on" => {
 							let trap_account = <Test as frame_system::Config>::AccountId::from(65174286u64);
