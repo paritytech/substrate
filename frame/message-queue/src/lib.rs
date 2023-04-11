@@ -486,7 +486,7 @@ pub mod pallet {
 
 		/// The size of the page; this implies the maximum message size which can be sent.
 		///
-		/// A good value depends on the expected message sizes,  their weights, the weight that is
+		/// A good value depends on the expected message sizes, their weights, the weight that is
 		/// available for processing them and the maximal needed message size. The maximal message
 		/// size is slightly lower than this as defined by [`MaxMessageLenOf`].
 		#[pallet::constant]
