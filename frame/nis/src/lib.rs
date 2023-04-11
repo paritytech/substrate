@@ -162,11 +162,7 @@ pub mod pallet {
 	use frame_support::{
 		pallet_prelude::*,
 		traits::{
-			fungible::{
-				self,
-				hold::{Inspect as FunHoldInspect, Mutate as FunHoldMutate},
-				Balanced as FunBalanced,
-			},
+			fungible::{self, hold::Mutate as FunHoldMutate, Balanced as FunBalanced},
 			nonfungible::{Inspect as NftInspect, Transfer as NftTransfer},
 			tokens::{
 				Fortitude::Polite,
@@ -219,7 +215,7 @@ pub mod pallet {
 			+ FunHoldMutate<Self::AccountId, Reason = Self::RuntimeHoldReason>;
 
 		/// Overarching hold reason.
-		type RuntimeHoldReason: Member + MaxEncodedLen + From<HoldReason>;
+		type RuntimeHoldReason: From<HoldReason>;
 
 		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
 		/// `From<u64>`.
