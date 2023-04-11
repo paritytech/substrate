@@ -93,19 +93,23 @@ fn ensure_bool_decodes_to_consumer_or_sufficient() {
 	assert_eq!(true.encode(), ExistenceReason::<(), ()>::Sufficient.encode());
 }
 
+/// The reason for an account's existence within an asset class.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub enum ExistenceReason<Balance, AccountId> {
+	/// A consumer reference was used to create this account.
 	#[codec(index = 0)]
 	Consumer,
+	/// The asset class is `sufficient` for account existence.
 	#[codec(index = 1)]
 	Sufficient,
-	/// Deposit from the account owner.
+	/// The `AccountId` has placed a deposit to exist within an asset class.
 	#[codec(index = 2)]
 	DepositHeld(Balance),
+	/// A deposit was placed for this account to exist, but it has been refunded.
 	#[codec(index = 3)]
 	DepositRefunded,
+	/// Some other `AccountId` has placed a deposit to make this account exist.
 	#[codec(index = 4)]
-	/// Deposit from some account id.
 	DepositFrom(AccountId, Balance),
 }
 

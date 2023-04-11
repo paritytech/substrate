@@ -759,7 +759,7 @@ fn freeze_creating_works() {
 		assert_ok!(Assets::freeze_creating(RuntimeOrigin::signed(1), 0, 2));
 		// `1` had to reserve `AssetAccountDeposit` to create `Account(id, 2)`
 		assert_eq!(Balances::reserved_balance(&1), 10);
-		// can transfer to `2` even though its frozen
+		// can transfer to `2` even though it's frozen
 		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50),);
 		// cannot transfer from `2`
 		assert_noop!(Assets::transfer(RuntimeOrigin::signed(2), 0, 1, 25), Error::<Test>::Frozen);

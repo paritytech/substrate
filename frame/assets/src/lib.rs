@@ -925,9 +925,9 @@ pub mod pallet {
 			Self::do_transfer(id, &source, &dest, amount, Some(origin), f).map(|_| ())
 		}
 
-		/// Disallow further unprivileged transfers of an asset `id` to or from an account `who`.
-		/// `who` must already exist as an entry in `Account`s of the asset. If you want to freeze
-		/// an account that does not have an entry, use `freeze_creating` instead.
+		/// Disallow further unprivileged transfers of an asset `id` from an account `who`. `who`
+		/// must already exist as an entry in `Account`s of the asset. If you want to freeze an
+		/// account that does not have an entry, use `freeze_creating` instead.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
 		///
@@ -1562,8 +1562,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Disallow further unprivileged transfers to or from an account. Creates the account and
-		/// takes a deposit if it does not already exist in `Account`.
+		/// Disallow further unprivileged transfers from an account. Creates the account and takes a
+		/// deposit if it does not already exist in `Account`.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
 		///
@@ -1589,7 +1589,9 @@ pub mod pallet {
 
 		/// Return the deposit (if any) of a target asset account. Useful if you are the depositor.
 		///
-		/// The origin must be Signed.
+		/// The origin must be Signed and either the account owner, depositor, or asset `Admin`. In
+		/// order to burn a non-zero balance of the asset, the caller must be the account and should
+		/// use `refund`.
 		///
 		/// - `id`: The identifier of the asset for the account holding a deposit.
 		/// - `who`: The account to refund.
