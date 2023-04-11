@@ -674,22 +674,26 @@ where
 
 		while let Poll::Ready(Some(event)) = self.rx.poll_next_unpin(cx) {
 			match event {
+				sc_network::SyncEvent::ValidateSubstream { remote, received_handshake, tx } => {
+					let _ = match self.validate_inbound_substream(remote, &received_handshake) {
+						Ok(()) => tx.send(true),
+						Err(_) => tx.send(false),
+					};
+				},
 				sc_network::SyncEvent::NotificationStreamOpened {
 					remote,
 					received_handshake,
 					sink,
-					tx,
-				} => match self.on_sync_peer_connected(remote, &received_handshake, sink) {
-					Ok(()) => {
-						let _ = tx.send(true);
-					},
-					Err(()) => {
+				} => {
+					if let Err(err) = self.on_sync_peer_connected(remote, &received_handshake, sink)
+					{
 						log::debug!(
 							target: "sync",
-							"Failed to register peer {remote:?}: {received_handshake:?}",
+							"Failed to register peer {remote:?}: {received_handshake:?}: {err:?}",
 						);
-						let _ = tx.send(false);
-					},
+						self.network_service
+							.disconnect_peer(remote, self.block_announce_protocol_name.clone());
+					}
 				},
 				sc_network::SyncEvent::NotificationStreamClosed { remote } => {
 					if self.on_sync_peer_disconnected(remote).is_err() {
@@ -764,6 +768,69 @@ where
 		}
 	}
 
+	/// Validate inbound substream.
+	fn validate_inbound_substream(
+		&mut self,
+		peer: PeerId,
+		handshake: &BlockAnnouncesHandshake<B>,
+	) -> Result<(), ()> {
+		if self.peers.contains_key(&peer) {
+			log::error!(target: "sync", "Called on_sync_peer_connected with already connected peer {}", peer);
+			return Err(())
+		}
+
+		if handshake.genesis_hash != self.genesis_hash {
+			if self.important_peers.contains(&peer) {
+				log::error!(
+					target: "sync",
+					"Reserved peer id `{}` is on a different chain (our genesis: {} theirs: {})",
+					peer,
+					self.genesis_hash,
+					handshake.genesis_hash,
+				);
+			} else if self.boot_node_ids.contains(&peer) {
+				log::error!(
+					target: "sync",
+					"Bootnode with peer id `{}` is on a different chain (our genesis: {} theirs: {})",
+					peer,
+					self.genesis_hash,
+					handshake.genesis_hash,
+				);
+			} else {
+				log::debug!(
+					target: "sync",
+					"Peer is on different chain (our genesis: {} theirs: {})",
+					self.genesis_hash, handshake.genesis_hash
+				);
+			}
+
+			return Err(())
+		}
+
+		let no_slot_peer = self.default_peers_set_no_slot_peers.contains(&peer);
+		let this_peer_reserved_slot: usize = if no_slot_peer { 1 } else { 0 };
+
+		if handshake.roles.is_full() &&
+			self.chain_sync.num_peers() >=
+				self.default_peers_set_num_full +
+					self.default_peers_set_no_slot_connected_peers.len() +
+					this_peer_reserved_slot
+		{
+			log::debug!(target: "sync", "Too many full nodes, rejecting {}", peer);
+			return Err(())
+		}
+
+		if handshake.roles.is_light() &&
+			(self.peers.len() - self.chain_sync.num_peers()) >= self.default_peers_set_num_light
+		{
+			// Make sure that not all slots are occupied by light clients.
+			log::debug!(target: "sync", "Too many light nodes, rejecting {}", peer);
+			return Err(())
+		}
+
+		Ok(())
+	}
+
 	/// Called on the first connection between two peers on the default set, after their exchange
 	/// of handshake.
 	///
@@ -777,60 +844,14 @@ where
 	) -> Result<(), ()> {
 		log::trace!(target: "sync", "New peer {} {:?}", who, status);
 
-		if self.peers.contains_key(&who) {
-			log::error!(target: "sync", "Called on_sync_peer_connected with already connected peer {}", who);
-			debug_assert!(false);
-			return Err(())
-		}
-
+		// peer is not reported in `validate_inbound_substream()` as the peer might be
+		// in `Incoming` state and genesis mismatch would disconnect the peer which is
+		// an invalid state transition in `Notifications`.
 		if status.genesis_hash != self.genesis_hash {
 			self.network_service.report_peer(who, rep::GENESIS_MISMATCH);
-
-			if self.important_peers.contains(&who) {
-				log::error!(
-					target: "sync",
-					"Reserved peer id `{}` is on a different chain (our genesis: {} theirs: {})",
-					who,
-					self.genesis_hash,
-					status.genesis_hash,
-				);
-			} else if self.boot_node_ids.contains(&who) {
-				log::error!(
-					target: "sync",
-					"Bootnode with peer id `{}` is on a different chain (our genesis: {} theirs: {})",
-					who,
-					self.genesis_hash,
-					status.genesis_hash,
-				);
-			} else {
-				log::debug!(
-					target: "sync",
-					"Peer is on different chain (our genesis: {} theirs: {})",
-					self.genesis_hash, status.genesis_hash
-				);
-			}
-
-			return Err(())
 		}
 
-		let no_slot_peer = self.default_peers_set_no_slot_peers.contains(&who);
-		let this_peer_reserved_slot: usize = if no_slot_peer { 1 } else { 0 };
-
-		if status.roles.is_full() &&
-			self.chain_sync.num_peers() >=
-				self.default_peers_set_num_full +
-					self.default_peers_set_no_slot_connected_peers.len() +
-					this_peer_reserved_slot
-		{
-			log::debug!(target: "sync", "Too many full nodes, rejecting {}", who);
-			return Err(())
-		}
-
-		if status.roles.is_light() &&
-			(self.peers.len() - self.chain_sync.num_peers()) >= self.default_peers_set_num_light
-		{
-			// Make sure that not all slots are occupied by light clients.
-			log::debug!(target: "sync", "Too many light nodes, rejecting {}", who);
+		if let Err(_) = self.validate_inbound_substream(who, status) {
 			return Err(())
 		}
 
@@ -860,6 +881,7 @@ where
 
 		log::debug!(target: "sync", "Connected {}", who);
 
+		let no_slot_peer = self.default_peers_set_no_slot_peers.contains(&who);
 		self.peers.insert(who, peer);
 		if no_slot_peer {
 			self.default_peers_set_no_slot_connected_peers.insert(who);

@@ -326,6 +326,8 @@ pub enum NotifsHandlerOut {
 	OpenDesiredByRemote {
 		/// Index of the protocol in the list of protocols passed at initialization.
 		protocol_index: usize,
+		/// Received handshake.
+		handshake: Vec<u8>,
 	},
 
 	/// The remote would like the substreams to be closed. Send a [`NotifsHandlerIn::Close`] in
@@ -511,7 +513,10 @@ impl ConnectionHandler for NotifsHandler {
 				match protocol_info.state {
 					State::Closed { pending_opening } => {
 						self.events_queue.push_back(ConnectionHandlerEvent::Custom(
-							NotifsHandlerOut::OpenDesiredByRemote { protocol_index },
+							NotifsHandlerOut::OpenDesiredByRemote {
+								protocol_index,
+								handshake: in_substream_open.handshake,
+							},
 						));
 
 						protocol_info.state = State::OpenDesiredByRemote {
@@ -1630,7 +1635,7 @@ pub mod tests {
 			assert!(std::matches!(
 				handler.poll(cx),
 				Poll::Ready(ConnectionHandlerEvent::Custom(
-					NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+					NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0, .. },
 				))
 			));
 			assert!(std::matches!(

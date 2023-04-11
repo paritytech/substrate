@@ -304,6 +304,17 @@ struct IncomingPeer {
 /// Event that can be emitted by the `Notifications`.
 #[derive(Debug)]
 pub enum NotificationsOut {
+	/// Validate inbound substream received for `/block-announces/1`.
+	ValidateSubstream {
+		/// Id of the peer we are connected to.
+		peer_id: PeerId,
+		/// Incoming index.
+		index: sc_peerset::IncomingIndex,
+		/// Handshake that was sent to us.
+		/// This is normally a "Status" message, but this is out of the concern of this code.
+		received_handshake: Vec<u8>,
+	},
+
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
 		/// Id of the peer we are connected to.
@@ -866,6 +877,11 @@ impl Notifications {
 		}
 	}
 
+	/// Accept inbound substream.
+	pub fn accept_inbound_substream(&mut self, peer_id: PeerId, index: sc_peerset::IncomingIndex) {
+		self.peerset.incoming(0.into(), peer_id, index);
+	}
+
 	/// Function that is called when the peerset wants us to accept a connection
 	/// request from a peer.
 	fn peerset_report_accept(&mut self, index: sc_peerset::IncomingIndex) {
@@ -937,7 +953,7 @@ impl Notifications {
 	}
 
 	/// Function that is called when the peerset wants us to reject an incoming peer.
-	fn peerset_report_reject(&mut self, index: sc_peerset::IncomingIndex) {
+	pub fn peerset_report_reject(&mut self, index: sc_peerset::IncomingIndex) {
 		let incoming = if let Some(pos) = self.incoming.iter().position(|i| i.incoming_id == index)
 		{
 			self.incoming.remove(pos)
@@ -1438,7 +1454,7 @@ impl NetworkBehaviour for Notifications {
 		ConnectionHandler>::OutEvent,
 	) {
 		match event {
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index } => {
+			NotifsHandlerOut::OpenDesiredByRemote { protocol_index, handshake } => {
 				let set_id = sc_peerset::SetId::from(protocol_index);
 
 				trace!(target: "sub-libp2p",
@@ -1544,13 +1560,25 @@ impl NetworkBehaviour for Notifications {
 
 								trace!(target: "sub-libp2p", "PSM <= Incoming({}, {:?}).",
 									peer_id, incoming_id);
-								self.peerset.incoming(set_id, peer_id, incoming_id);
+
 								self.incoming.push(IncomingPeer {
 									peer_id,
 									set_id,
 									alive: true,
 									incoming_id,
 								});
+
+								if set_id == 0.into() {
+									let event = NotificationsOut::ValidateSubstream {
+										peer_id,
+										index: incoming_id,
+										received_handshake: handshake,
+									};
+									self.events
+										.push_back(NetworkBehaviourAction::GenerateEvent(event));
+								} else {
+									self.peerset.incoming(set_id, peer_id, incoming_id);
+								}
 
 								*entry.into_mut() =
 									PeerState::Incoming { connections, backoff_until };
@@ -2251,7 +2279,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 
 		if let Some(&PeerState::Incoming { ref connections, backoff_until: None }) =
@@ -2291,7 +2322,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		notif.disconnect_peer(&peer, 0.into());
 
@@ -2396,7 +2430,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 
 		// attempt to connect to the peer and verify that the peer state is `Enabled`
@@ -2475,7 +2512,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		notif.peerset_report_connect(peer, set_id);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Enabled { .. })));
@@ -2579,7 +2619,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 
@@ -2626,7 +2669,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		if let Some(&PeerState::Incoming { ref connections, .. }) = notif.peers.get(&(peer, set_id))
 		{
@@ -2716,7 +2762,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 
@@ -2765,7 +2814,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 
@@ -2833,7 +2885,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 
@@ -2897,7 +2952,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn2,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 
 		if let Some(&PeerState::Enabled { ref connections, .. }) = notif.peers.get(&(peer, set_id))
@@ -3247,7 +3305,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 
 		// manually add backoff for the entry
@@ -3309,7 +3370,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn1,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(
 			notif.peers.get_mut(&(peer, 0.into())),
@@ -3368,7 +3432,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn1,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(
 			notif.peers.get_mut(&(peer, 0.into())),
@@ -3556,7 +3623,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn1,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 
@@ -3564,7 +3634,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn2,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 
 		if let Some(PeerState::Incoming { ref connections, .. }) = notif.peers.get(&(peer, set_id))
@@ -3683,7 +3756,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 
@@ -3795,7 +3871,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 
@@ -3955,7 +4034,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
@@ -3991,7 +4073,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 
@@ -4033,7 +4118,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 
@@ -4133,7 +4221,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 
@@ -4171,7 +4262,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 		assert!(std::matches!(
@@ -4211,7 +4305,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 
@@ -4340,7 +4437,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 		notif.incoming[0].alive = false;
@@ -4384,7 +4484,10 @@ mod tests {
 		notif.on_connection_handler_event(
 			peer,
 			conn,
-			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
+			NotifsHandlerOut::OpenDesiredByRemote {
+				protocol_index: 0,
+				handshake: vec![1, 2, 3, 4],
+			},
 		);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 

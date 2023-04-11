@@ -96,6 +96,16 @@ pub enum Event {
 /// Event sent to `SyncingEngine`
 // TODO: remove once `NotificationService` is implemented.
 pub enum SyncEvent<B: BlockT> {
+	/// Validate inbound substream before accepting it.
+	ValidateSubstream {
+		/// Node we opened the substream with.
+		remote: PeerId,
+		/// Received handshake.
+		received_handshake: BlockAnnouncesHandshake<B>,
+		/// Channel for reporting accept/reject of the substream.
+		tx: oneshot::Sender<bool>,
+	},
+
 	/// Opened a substream with the given node with the given notifications protocol.
 	///
 	/// The protocol is always one of the notification protocols that have been registered.
@@ -106,8 +116,6 @@ pub enum SyncEvent<B: BlockT> {
 		received_handshake: BlockAnnouncesHandshake<B>,
 		/// Notification sink.
 		sink: NotificationsSink,
-		/// Channel for reporting accept/reject of the substream.
-		tx: oneshot::Sender<bool>,
 	},
 
 	/// Closed a substream with the given node. Always matches a corresponding previous

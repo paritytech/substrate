@@ -261,6 +261,16 @@ fn reconnect_after_disconnect() {
 					ServiceState::NotConnected |
 					ServiceState::Disconnected => panic!(),
 				},
+				future::Either::Left(SwarmEvent::Behaviour(
+					NotificationsOut::ValidateSubstream { peer_id, index, .. },
+				)) => {
+					service1.behaviour_mut().accept_inbound_substream(peer_id, index);
+				},
+				future::Either::Right(SwarmEvent::Behaviour(
+					NotificationsOut::ValidateSubstream { peer_id, index, .. },
+				)) => {
+					service2.behaviour_mut().accept_inbound_substream(peer_id, index);
+				},
 				_ => {},
 			}
 
