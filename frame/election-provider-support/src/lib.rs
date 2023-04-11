@@ -680,7 +680,7 @@ impl From<u32> for CountBound {
 impl Add for CountBound {
 	type Output = Self;
 	fn add(self, rhs: Self) -> Self::Output {
-		CountBound(self.0 + rhs.0)
+		CountBound(self.0.saturating_add(rhs.0))
 	}
 }
 
@@ -709,7 +709,7 @@ impl Zero for SizeBound {
 impl Add for SizeBound {
 	type Output = Self;
 	fn add(self, rhs: Self) -> Self::Output {
-		SizeBound(self.0 + rhs.0)
+		SizeBound(self.0.saturating_add(rhs.0))
 	}
 }
 
