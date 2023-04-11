@@ -1822,7 +1822,7 @@ where
 	let answer_requests =
 		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes);
 
-	spawner.spawn_essential("babe-worker", "babe", answer_requests.boxed());
+	spawner.spawn_essential("babe-worker", Some("babe"), answer_requests.boxed());
 
 	Ok((
 		BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry),
