@@ -668,9 +668,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Clear all era information for given era.
 	pub(crate) fn clear_era_information(era_index: EraIndex) {
-		let _ = <ErasStakers<T>>::clear_prefix(era_index, u32::MAX, None);
-		let _ = <ErasStakersClipped<T>>::clear_prefix(era_index, u32::MAX, None);
-		let _ = <ErasValidatorPrefs<T>>::clear_prefix(era_index, u32::MAX, None);
+		debug_assert!(<ErasStakers<T>>::clear_prefix(era_index, u32::MAX, None).maybe_cursor.is_none());
+		debug_assert!(<ErasStakersClipped<T>>::clear_prefix(era_index, u32::MAX, None).maybe_cursor.is_none());
+		debug_assert!(<ErasValidatorPrefs<T>>::clear_prefix(era_index, u32::MAX, None).maybe_cursor.is_none());
 		<ErasValidatorReward<T>>::remove(era_index);
 		<ErasRewardPoints<T>>::remove(era_index);
 		<ErasTotalStake<T>>::remove(era_index);
