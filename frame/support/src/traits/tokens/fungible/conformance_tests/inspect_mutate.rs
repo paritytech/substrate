@@ -33,8 +33,10 @@ use sp_runtime::traits::{Bounded, Zero};
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
+/// ```
 pub fn mint_into_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -70,8 +72,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
+/// ```
 pub fn mint_into_overflow<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -105,8 +109,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
+/// ```
 pub fn mint_into_below_minimum<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -140,8 +146,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - `T`: Implements `Mutate` for `AccountId`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
+/// ```
 pub fn burn_from_exact_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -177,8 +185,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - `T`: Implements `Mutate` for `AccountId`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
+/// ```
 pub fn burn_from_best_effort_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -219,8 +229,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
+/// ```
 pub fn burn_from_exact_insufficient_funds<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -254,8 +266,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
+/// ```
 pub fn restore_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -291,8 +305,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
+/// ```
 pub fn restore_overflow<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -324,8 +340,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
+/// ```
 pub fn restore_below_minimum<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -359,8 +377,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
+/// ```
 pub fn shelve_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -394,8 +414,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
+/// ```
 pub fn shelve_insufficient_funds<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -429,8 +451,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
+/// ```
 pub fn transfer_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -469,8 +493,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
+/// ```
 pub fn transfer_expendable_all<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -516,8 +542,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
+/// ```
 pub fn transfer_expendable_dust<T, AccountId>(dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -590,8 +618,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
+/// ```
 pub fn transfer_protect_preserve<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -644,8 +674,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
+/// ```
 pub fn set_balance_mint_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -680,8 +712,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
+/// ```
 pub fn set_balance_burn_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -716,8 +750,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
+/// ```
 pub fn can_deposit_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -742,8 +778,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
+/// ```
 pub fn can_deposit_below_minimum<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -771,8 +809,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
+/// ```
 pub fn can_deposit_overflow<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -797,8 +837,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
+/// ```
 pub fn can_withdraw_success<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -823,8 +865,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
+/// ```
 pub fn can_withdraw_reduced_to_zero<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -851,8 +895,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
+/// ```
 pub fn can_withdraw_balance_low<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -881,8 +927,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
+/// ```
 pub fn reducible_balance_expendable<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
@@ -905,8 +953,10 @@ where
 ///
 /// # Type Parameters
 ///
+/// ```ignore
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
+/// ```
 pub fn reducible_balance_protect_preserve<T, AccountId>(_dust_trap: Option<AccountId>)
 where
 	T: Mutate<AccountId>,
