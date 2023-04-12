@@ -1,19 +1,11 @@
-error[E0121]: the placeholder `_` is not allowed within types on item signatures for type aliases
+error: `_` can only be used in dev_mode. Please specify an appropriate hasher.
   --> tests/pallet_ui/dev_mode_without_arg_default_hasher.rs:21:47
    |
 21 |     type MyStorageMap<T: Config> = StorageMap<_, _, u32, u64>;
-   |                                                  ^ not allowed in type signatures
+   |                                                  ^
 
-error[E0121]: the placeholder `_` is not allowed within types on item signatures for type aliases
-  --> tests/pallet_ui/dev_mode_without_arg_default_hasher.rs:24:59
-   |
-24 |     type MyStorageDoubleMap<T: Config> = StorageDoubleMap<_, _, u32, _, u64, u64>;
-   |                                                              ^       ^ not allowed in type signatures
-   |                                                              |
-   |                                                              not allowed in type signatures
-
-error[E0121]: the placeholder `_` is not allowed within types on item signatures for type aliases
-  --> tests/pallet_ui/dev_mode_without_arg_default_hasher.rs:27:61
-   |
-27 |     type MyCountedStorageMap<T: Config> = CountedStorageMap<_, _, u32, u64>;
-   |                                                                ^ not allowed in type signatures
+error[E0432]: unresolved import `pallet`
+ --> tests/pallet_ui/dev_mode_without_arg_default_hasher.rs:3:9
+  |
+3 | pub use pallet::*;
+  |         ^^^^^^ help: a similar path exists: `test_pallet::pallet`

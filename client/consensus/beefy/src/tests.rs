@@ -24,6 +24,7 @@ use crate::{
 	communication::{
 		gossip::{
 			proofs_topic, tests::sign_commitment, votes_topic, GossipFilterCfg, GossipMessage,
+			GossipValidator,
 		},
 		request_response::{on_demand_justifications_protocol_config, BeefyJustifsRequestHandler},
 	},
@@ -357,8 +358,8 @@ async fn voter_init_setup(
 ) -> sp_blockchain::Result<PersistedState<Block>> {
 	let backend = net.peer(0).client().as_backend();
 	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
-	let gossip_validator =
-		Arc::new(crate::communication::gossip::GossipValidator::new(known_peers));
+	let (gossip_validator, _) = GossipValidator::new(known_peers);
+	let gossip_validator = Arc::new(gossip_validator);
 	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
 		net.peer(0).network_service().clone(),
 		net.peer(0).sync_service().clone(),
@@ -1262,8 +1263,8 @@ async fn gossipped_finality_proofs() {
 	let charlie = &net.peers[2];
 	let known_peers = Arc::new(Mutex::new(KnownPeers::<Block>::new()));
 	// Charlie will run just the gossip engine and not the full voter.
-	let charlie_gossip_validator =
-		Arc::new(crate::communication::gossip::GossipValidator::new(known_peers));
+	let (gossip_validator, _) = GossipValidator::new(known_peers);
+	let charlie_gossip_validator = Arc::new(gossip_validator);
 	charlie_gossip_validator.update_filter(GossipFilterCfg::<Block> {
 		start: 1,
 		end: 10,
