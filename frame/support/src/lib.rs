@@ -843,7 +843,6 @@ pub mod tests {
 		use crate::pallet_prelude::*;
 
 		#[pallet::pallet]
-		#[pallet::generate_store(pub (super) trait Store)]
 		pub struct Pallet<T>(PhantomData<T>);
 
 		#[pallet::config]
@@ -1397,13 +1396,6 @@ pub mod tests {
 		PalletStorageMetadataIR {
 			prefix: "System",
 			entries: vec![
-				StorageEntryMetadataIR {
-					name: "Value",
-					modifier: StorageEntryModifierIR::Default,
-					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u64>()),
-					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![],
-				},
 				StorageEntryMetadataIR {
 					name: "Data",
 					modifier: StorageEntryModifierIR::Default,

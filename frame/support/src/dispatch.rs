@@ -3531,22 +3531,20 @@ mod tests {
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod weight_tests {
-	use super::*;
-	use sp_runtime::{generic, traits::BlakeTwo256};
 	use super::{tests::*, *};
-	use sp_core::{parameter_types, Get};
+	use sp_core::parameter_types;
+	use sp_runtime::{generic, traits::BlakeTwo256};
 	use sp_weights::RuntimeDbWeight;
 
 	pub use self::frame_system::{Call, Config, Pallet};
 
-	#[crate::pallet]
+	#[crate::pallet(dev_mode)]
 	pub mod frame_system {
 		use super::{frame_system, frame_system::pallet_prelude::*};
 		pub use crate::dispatch::RawOrigin;
 		use crate::pallet_prelude::*;
 
 		#[pallet::pallet]
-		#[pallet::generate_store(pub (super) trait Store)]
 		pub struct Pallet<T>(PhantomData<T>);
 
 		#[pallet::config]
@@ -3605,12 +3603,12 @@ mod weight_tests {
 				unimplemented!();
 			}
 
-			#[pallet::weight(T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + Weight::from_ref_time(10_000))]
+			#[pallet::weight(T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + Weight::from_all(10_000))]
 			pub fn f20(_origin: OriginFor<T>) -> DispatchResult {
 				unimplemented!();
 			}
 
-			#[pallet::weight(T::DbWeight::get().reads_writes(6, 5) + Weight::from_ref_time(40_000))]
+			#[pallet::weight(T::DbWeight::get().reads_writes(6, 5) + Weight::from_all(40_000))]
 			pub fn f21(_origin: OriginFor<T>) -> DispatchResult {
 				unimplemented!();
 			}
@@ -3661,50 +3659,50 @@ mod weight_tests {
 	fn weights_are_correct() {
 		// #[pallet::weight(1000)]
 		let info = Call::<Runtime>::f00 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.weight, Weight::from_parts(1000, 0));
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[pallet::weight((1000, DispatchClass::Mandatory))]
 		let info = Call::<Runtime>::f01 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.weight, Weight::from_parts(1000, 0));
 		assert_eq!(info.class, DispatchClass::Mandatory);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[pallet::weight((1000, Pays::No))]
 		let info = Call::<Runtime>::f02 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.weight, Weight::from_parts(1000, 0));
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[pallet::weight((1000, DispatchClass::Operational, Pays::No))]
 		let info = Call::<Runtime>::f03 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.weight, Weight::from_parts(1000, 0));
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[pallet::weight(((_a * 10 + _eb * 1) as u64, DispatchClass::Normal, Pays::Yes))]
 		let info = Call::<Runtime>::f11 { a: 13, eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(150)); // 13*10 + 20
+		assert_eq!(info.weight, Weight::from_parts(150, 0)); // 13*10 + 20
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[pallet::weight((0, DispatchClass::Operational, Pays::Yes))]
 		let info = Call::<Runtime>::f12 { a: 10, eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(0));
+		assert_eq!(info.weight, Weight::zero());
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[pallet::weight(T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) +
-		// Weight::from_ref_time(10_000))]
+		// Weight::from_all(10_000))]
 		let info = Call::<Runtime>::f20 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(12300)); // 100*3 + 1000*2 + 10_1000
+		assert_eq!(info.weight, Weight::from_parts(12300, 10000)); // 100*3 + 1000*2 + 10_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
-		// #[pallet::weight(T::DbWeight::get().reads_writes(6, 5) + Weight::from_ref_time(40_000))]
+		// #[pallet::weight(T::DbWeight::get().reads_writes(6, 5) + Weight::from_all(40_000))]
 		let info = Call::<Runtime>::f21 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(45600)); // 100*6 + 1000*5 + 40_1000
+		assert_eq!(info.weight, Weight::from_parts(45600, 40000)); // 100*6 + 1000*5 + 40_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 	}
