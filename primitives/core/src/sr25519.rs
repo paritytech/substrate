@@ -705,8 +705,7 @@ pub mod vrf {
 		}
 	}
 
-	/// TODO DAVXY: this is temporary pub
-	pub fn make_transcript(data: &VrfTranscriptData) -> merlin::Transcript {
+	fn make_transcript(data: &VrfTranscriptData) -> merlin::Transcript {
 		let mut transcript = merlin::Transcript::new(data.label);
 		for (label, value) in data.items.iter() {
 			match value {
@@ -721,17 +720,18 @@ pub mod vrf {
 		transcript
 	}
 
-	/// TODO DAVXY: return a newtype instead?
-	///             Maybe is better to define a function vrf_bytes() directly...
+	/// Generate a given abount of random bytes from the given VRF configuration.
 	/// TODO DAVXY: return a Result!
-	pub fn make_vrf_inout(
+	pub fn make_bytes<B: Default + AsMut<[u8]>>(
+		context: &[u8],
 		public: &Public,
 		output: &VrfOutput,
-		transcript_data: &VrfTranscriptData,
-	) -> schnorrkel::vrf::VRFInOut {
-		let pubkey = schnorrkel::PublicKey::from_bytes(public.as_slice()).expect("DAVXY TODO");
-		let transcript = make_transcript(transcript_data);
-		output.attach_input_hash(&pubkey, transcript).expect("DAVXY TODO")
+		data: &VrfTranscriptData,
+	) -> B {
+		let pubkey = schnorrkel::PublicKey::from_bytes(public).expect("DAVXY TODO");
+		let transcript = make_transcript(data);
+		let inout = output.attach_input_hash(&pubkey, transcript).expect("DAVXY TODO");
+		inout.make_bytes::<B>(context)
 	}
 }
 

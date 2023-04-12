@@ -32,7 +32,8 @@ use frame_support::{
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
 	AllowedSlots, BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
-	EquivocationProof, Randomness as BabeRandomness, Slot, BABE_ENGINE_ID,
+	EquivocationProof, Randomness as BabeRandomness, Slot, BABE_ENGINE_ID, PUBLIC_KEY_LENGTH,
+	RANDOMNESS_LENGTH, RANDOMNESS_VRF_CONTEXT,
 };
 use sp_runtime::{
 	generic::DigestItem,
@@ -43,7 +44,7 @@ use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::{offence::OffenceReportSystem, SessionIndex};
 use sp_std::prelude::*;
 
-pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH};
+pub use sp_consensus_babe::AuthorityId;
 
 const LOG_TARGET: &str = "runtime::babe";
 
@@ -359,14 +360,14 @@ pub mod pallet {
 					let randomness: Option<BabeRandomness> = Authorities::<T>::get()
 						.get(authority_index as usize)
 						.and_then(|(authority, _)| {
-							let transcript_data = sp_consensus_babe::make_transcript_data(
+							let transcript = sp_consensus_babe::make_transcript_data(
 								&Self::randomness(),
 								CurrentSlot::<T>::get(),
 								EpochIndex::<T>::get(),
 							);
 
 							// NOTE: this is verified by the client when importing the block, before
-							// execution. we don't run the verification again here to avoid slowing
+							// execution. We don't run the verification again here to avoid slowing
 							// down the runtime.
 							debug_assert!({
 								use sp_core::{
@@ -377,17 +378,17 @@ pub mod pallet {
 									output: vrf_output.clone(),
 									proof: vrf_proof.clone(),
 								};
-								authority.as_inner_ref().vrf_verify(&transcript_data, &signature)
+								authority.as_inner_ref().vrf_verify(&transcript, &signature)
 							});
 
-							let inout = sp_core::sr25519::vrf::make_vrf_inout(
+							let vrf_bytes = sp_core::sr25519::vrf::make_bytes(
+								RANDOMNESS_VRF_CONTEXT,
 								authority.as_ref(),
 								&vrf_output,
-								&transcript_data,
+								&transcript,
 							);
-							Some(inout)
-						})
-						.map(|inout| inout.make_bytes(sp_consensus_babe::RANDOMNESS_VRF_CONTEXT));
+							Some(vrf_bytes)
+						});
 
 					if let Some(randomness) = pre_digest.is_primary().then(|| randomness).flatten()
 					{

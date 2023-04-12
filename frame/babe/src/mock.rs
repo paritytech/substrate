@@ -27,7 +27,7 @@ use frame_support::{
 use pallet_session::historical as pallet_session_historical;
 use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot, VrfOutput, VrfProof, RANDOMNESS_LENGTH};
 use sp_core::{
-	crypto::{KeyTypeId, Pair},
+	crypto::{KeyTypeId, Pair, VrfSigner},
 	H256, U256,
 };
 use sp_io;
@@ -330,20 +330,16 @@ pub fn make_vrf_output(
 	slot: Slot,
 	pair: &sp_consensus_babe::AuthorityPair,
 ) -> (VrfOutput, VrfProof, [u8; RANDOMNESS_LENGTH]) {
-	use sp_core::crypto::VrfSigner;
-	let transcript_data = sp_consensus_babe::make_transcript_data(&Babe::randomness(), slot, 0);
+	let transcript = sp_consensus_babe::make_transcript_data(&Babe::randomness(), slot, 0);
 
-	let signature = pair.as_ref().vrf_sign(&transcript_data);
+	let signature = pair.as_ref().vrf_sign(&transcript);
 
-	let inout = sp_core::sr25519::vrf::make_vrf_inout(
+	let randomness = sp_core::sr25519::vrf::make_bytes::<[u8; RANDOMNESS_LENGTH]>(
+		sp_consensus_babe::RANDOMNESS_VRF_CONTEXT,
 		pair.public().as_ref(),
 		&signature.output,
-		&transcript_data,
+		&transcript,
 	);
-
-	// TODO DAVXY maybe directly define a make_bytes instead of make_vrf_inout?
-	let randomness =
-		inout.make_bytes::<[u8; RANDOMNESS_LENGTH]>(sp_consensus_babe::RANDOMNESS_VRF_CONTEXT);
 
 	(signature.output, signature.proof, randomness)
 }

@@ -23,7 +23,6 @@ num-bigint = "0.4.3"
 num-rational = "0.4.1"
 num-traits = "0.2.8"
 parking_lot = "0.12.1"
-schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"] }
 thiserror = "1.0"
 fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }

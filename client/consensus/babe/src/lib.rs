@@ -86,7 +86,7 @@ use futures::{
 use log::{debug, info, log, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
-use schnorrkel::SignatureError;
+// use schorrkel::SignatureError;
 
 use sc_client_api::{
 	backend::AuxStore, AuxDataOperations, Backend as BackendT, BlockchainEvents,
@@ -134,7 +134,7 @@ pub use sp_consensus_babe::{
 		PrimaryPreDigest, SecondaryPlainPreDigest,
 	},
 	AuthorityId, AuthorityPair, AuthoritySignature, BabeApi, BabeAuthorityWeight, BabeBlockWeight,
-	BabeConfiguration, BabeEpochConfiguration, ConsensusLog, BABE_ENGINE_ID, VRF_OUTPUT_LENGTH,
+	BabeConfiguration, BabeEpochConfiguration, ConsensusLog, BABE_ENGINE_ID, RANDOMNESS_LENGTH,
 };
 
 pub use aux_schema::load_block_weight as block_weight;
@@ -161,7 +161,7 @@ pub struct Epoch {
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch.
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	pub randomness: [u8; RANDOMNESS_LENGTH],
 	/// Configuration of the epoch.
 	pub config: BabeEpochConfiguration,
 }
@@ -312,8 +312,8 @@ pub enum Error<B: BlockT> {
 	#[error("VRF verification of block by author {0:?} failed: threshold {1} exceeded")]
 	VRFVerificationOfBlockFailed(AuthorityId, u128),
 	/// VRF verification failed
-	#[error("VRF verification failed: {0:?}")]
-	VRFVerificationFailed(SignatureError),
+	#[error("VRF verification failed: {0}")]
+	VRFVerificationFailed(String),
 	/// Could not fetch parent header
 	#[error("Could not fetch parent header: {0}")]
 	FetchParentHeader(sp_blockchain::Error),

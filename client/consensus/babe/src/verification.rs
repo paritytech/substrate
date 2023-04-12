@@ -32,7 +32,11 @@ use sp_consensus_babe::{
 	make_transcript_data, AuthorityId, AuthorityPair, AuthoritySignature,
 };
 use sp_consensus_slots::Slot;
-use sp_core::{ByteArray, Pair};
+use sp_core::{
+	crypto::{VrfVerifier, Wraps},
+	sr25519::vrf::VrfSignature,
+	Pair,
+};
 use sp_runtime::{traits::Header, DigestItem};
 
 /// BABE verification parameters
@@ -164,18 +168,23 @@ fn check_primary_header<B: BlockT + Sized>(
 	}
 
 	if AuthorityPair::verify(&signature, pre_hash, author) {
-		let transcript_data = make_transcript_data(&epoch.randomness, pre_digest.slot, epoch_index);
-		let transcript = sp_core::sr25519::vrf::make_transcript(transcript_data);
-		let (inout, _) = schnorrkel::PublicKey::from_bytes(author.as_slice())
-			.and_then(|public| {
-				public.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof)
-			})
-			.map_err(|s| babe_err(Error::VRFVerificationFailed(s)))?;
+		let transcript = make_transcript_data(&epoch.randomness, pre_digest.slot, epoch_index);
+
+		let signature = VrfSignature {
+			output: pre_digest.vrf_output.clone(),
+			proof: pre_digest.vrf_proof.clone(),
+		};
+
+		if !author.as_inner_ref().vrf_verify(&transcript, &signature) {
+			return Err(babe_err(Error::VRFVerificationFailed(
+				"TODO propagate internal errors".to_string(),
+			)))
+		}
 
 		let threshold =
 			calculate_primary_threshold(c, &epoch.authorities, pre_digest.authority_index as usize);
 
-		if !check_primary_threshold(&inout, threshold) {
+		if !check_primary_threshold(threshold, author, &pre_digest.vrf_output, &transcript) {
 			return Err(babe_err(Error::VRFVerificationOfBlockFailed(author.clone(), threshold)))
 		}
 
@@ -240,12 +249,18 @@ fn check_secondary_vrf_header<B: BlockT>(
 	}
 
 	if AuthorityPair::verify(&signature, pre_hash.as_ref(), author) {
-		let transcript_data = make_transcript_data(&epoch.randomness, pre_digest.slot, epoch_index);
-		let transcript = sp_core::sr25519::vrf::make_transcript(transcript_data);
+		let transcript = make_transcript_data(&epoch.randomness, pre_digest.slot, epoch_index);
 
-		schnorrkel::PublicKey::from_bytes(author.as_slice())
-			.and_then(|p| p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof))
-			.map_err(|s| babe_err(Error::VRFVerificationFailed(s)))?;
+		let signature = VrfSignature {
+			output: pre_digest.vrf_output.clone(),
+			proof: pre_digest.vrf_proof.clone(),
+		};
+
+		if !author.as_inner_ref().vrf_verify(&transcript, &signature) {
+			return Err(babe_err(Error::VRFVerificationFailed(
+				"TODO propagate internal errors".to_string(),
+			)))
+		}
 
 		Ok(())
 	} else {

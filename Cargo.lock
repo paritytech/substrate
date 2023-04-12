@@ -8617,7 +8617,6 @@ dependencies = [
  "sc-network-test",
  "sc-telemetry",
  "scale-info",
- "schnorrkel 0.9.1",
  "sp-api",
  "sp-application-crypto",
  "sp-block-builder",
