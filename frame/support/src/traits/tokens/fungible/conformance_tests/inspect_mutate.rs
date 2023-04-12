@@ -33,7 +33,7 @@ use sp_runtime::traits::{Bounded, Zero};
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
 /// ```
@@ -72,7 +72,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
 /// ```
@@ -109,7 +109,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
 /// ```
@@ -146,7 +146,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - `T`: Implements `Mutate` for `AccountId`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
 /// ```
@@ -185,7 +185,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - `T`: Implements `Mutate` for `AccountId`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
 /// ```
@@ -229,7 +229,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
 /// ```
@@ -266,7 +266,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
 /// ```
@@ -305,7 +305,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
 /// ```
@@ -340,7 +340,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
 /// ```
@@ -377,7 +377,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
 /// ```
@@ -414,7 +414,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
 /// ```
@@ -451,7 +451,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
 /// ```
@@ -493,7 +493,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
 /// ```
@@ -542,7 +542,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
 /// ```
@@ -618,7 +618,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - `T`: Implements `Mutate<AccountId>`.
 /// - `AccountId`: Account identifier implementing `AtLeast8BitUnsigned`.
 /// ```
@@ -674,7 +674,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
 /// ```
@@ -712,7 +712,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
 /// ```
@@ -750,7 +750,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
 /// ```
@@ -778,7 +778,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
 /// ```
@@ -809,7 +809,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
 /// ```
@@ -837,7 +837,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
 /// ```
@@ -865,7 +865,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
 /// ```
@@ -895,7 +895,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
 /// ```
@@ -927,7 +927,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
 /// ```
@@ -953,7 +953,7 @@ where
 ///
 /// # Type Parameters
 ///
-/// ```ignore
+/// ```text
 /// - T: Implements Mutate<AccountId>.
 /// - AccountId: Account identifier implementing AtLeast8BitUnsigned.
 /// ```
