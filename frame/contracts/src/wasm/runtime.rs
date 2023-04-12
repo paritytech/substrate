@@ -2480,7 +2480,7 @@ pub mod env {
 	/// - `signature_ptr`: the pointer into the linear memory where the signature is placed. Should
 	///   be a value of 64 bytes.
 	/// - `pub_key_ptr`: the pointer into the linear memory where the public key is placed. Should
-	///   be a value of 32 bytes. Traps otherwise.
+	///   be a value of 32 bytes.
 	/// - `message_len`: the length of the message payload.
 	/// - `message_ptr`: the pointer into the linear memory where the message is placed.
 	///
