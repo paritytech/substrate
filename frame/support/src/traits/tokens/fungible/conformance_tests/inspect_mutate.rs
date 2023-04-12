@@ -49,17 +49,17 @@ where
 	// Test: Mint an amount into each account
 	let amount_0 = T::minimum_balance();
 	let amount_1 = T::minimum_balance() + 5.into();
-	T::mint_into(&account_0, amount_0.clone()).unwrap();
-	T::mint_into(&account_1, amount_1.clone()).unwrap();
+	T::mint_into(&account_0, amount_0).unwrap();
+	T::mint_into(&account_1, amount_1).unwrap();
 
 	// Verify: Account balances are updated correctly
-	assert_eq!(T::total_balance(&account_0), amount_0.clone());
-	assert_eq!(T::total_balance(&account_1), amount_1.clone());
-	assert_eq!(T::balance(&account_0), amount_0.clone());
-	assert_eq!(T::balance(&account_1), amount_1.clone());
+	assert_eq!(T::total_balance(&account_0), amount_0);
+	assert_eq!(T::total_balance(&account_1), amount_1);
+	assert_eq!(T::balance(&account_0), amount_0);
+	assert_eq!(T::balance(&account_1), amount_1);
 
 	// Verify: Total issuance is updated correctly
-	assert_eq!(T::total_issuance(), initial_total_issuance + amount_0.clone() + amount_1.clone());
+	assert_eq!(T::total_issuance(), initial_total_issuance + amount_0 + amount_1);
 	assert_eq!(T::active_issuance(), initial_active_issuance + amount_0 + amount_1);
 }
 
@@ -81,20 +81,20 @@ where
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
 	let account = AccountId::from(10);
-	let amount = T::Balance::max_value() - 5.into() - initial_total_issuance.clone();
+	let amount = T::Balance::max_value() - 5.into() - initial_total_issuance;
 
 	// Mint just below the maximum balance
-	T::mint_into(&account, amount.clone()).unwrap();
+	T::mint_into(&account, amount).unwrap();
 
 	// Verify: Minting beyond the maximum balance value returns an Err
 	T::mint_into(&account, 10.into()).unwrap_err();
 
 	// Verify: The balance did not change
-	assert_eq!(T::total_balance(&account), amount.clone());
-	assert_eq!(T::balance(&account), amount.clone());
+	assert_eq!(T::total_balance(&account), amount);
+	assert_eq!(T::balance(&account), amount);
 
 	// Verify: The total issuance did not change
-	assert_eq!(T::total_issuance(), initial_total_issuance + amount.clone());
+	assert_eq!(T::total_issuance(), initial_total_issuance + amount);
 	assert_eq!(T::active_issuance(), initial_active_issuance + amount);
 }
 
@@ -124,7 +124,7 @@ where
 	let amount = T::minimum_balance() - 1.into();
 
 	// Verify: Minting below the minimum balance returns Err
-	T::mint_into(&account, amount.clone()).unwrap_err();
+	T::mint_into(&account, amount).unwrap_err();
 
 	// Verify: noop
 	assert_eq!(T::total_balance(&account), T::Balance::zero());
@@ -154,21 +154,18 @@ where
 	// Setup account
 	let account = AccountId::from(5);
 	let initial_balance = T::minimum_balance() + 10.into();
-	T::mint_into(&account, initial_balance.clone()).unwrap();
+	T::mint_into(&account, initial_balance).unwrap();
 
 	// Test: Burn an exact amount from the account
 	let amount_to_burn = T::Balance::from(5);
 	let precision = Precision::Exact;
 	let force = Fortitude::Polite;
-	T::burn_from(&account, amount_to_burn.clone(), precision, force).unwrap();
+	T::burn_from(&account, amount_to_burn, precision, force).unwrap();
 
 	// Verify: The balance and total issuance should be reduced by the burned amount
-	assert_eq!(T::balance(&account), initial_balance.clone() - amount_to_burn.clone());
-	assert_eq!(T::total_balance(&account), initial_balance.clone() - amount_to_burn.clone());
-	assert_eq!(
-		T::total_issuance(),
-		initial_total_issuance + initial_balance.clone() - amount_to_burn.clone()
-	);
+	assert_eq!(T::balance(&account), initial_balance - amount_to_burn);
+	assert_eq!(T::total_balance(&account), initial_balance - amount_to_burn);
+	assert_eq!(T::total_issuance(), initial_total_issuance + initial_balance - amount_to_burn);
 	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance - amount_to_burn);
 }
 
@@ -194,26 +191,23 @@ where
 	// Setup account
 	let account = AccountId::from(5);
 	let initial_balance = T::minimum_balance() + 10.into();
-	T::mint_into(&account, initial_balance.clone()).unwrap();
+	T::mint_into(&account, initial_balance).unwrap();
 
 	// Get reducible balance
 	let force = Fortitude::Polite;
 	let reducible_balance = T::reducible_balance(&account, Preservation::Expendable, force);
 
 	// Test: Burn a best effort amount from the account that is greater than the reducible balance
-	let amount_to_burn = reducible_balance.clone() + 5.into();
+	let amount_to_burn = reducible_balance + 5.into();
 	let precision = Precision::BestEffort;
 	assert!(amount_to_burn > reducible_balance);
 	assert!(amount_to_burn > T::balance(&account));
-	T::burn_from(&account, amount_to_burn.clone(), precision, force).unwrap();
+	T::burn_from(&account, amount_to_burn, precision, force).unwrap();
 
 	// Verify: The balance and total issuance should be reduced by the reducible_balance
-	assert_eq!(T::balance(&account), initial_balance.clone() - reducible_balance.clone());
-	assert_eq!(T::total_balance(&account), initial_balance.clone() - reducible_balance.clone());
-	assert_eq!(
-		T::total_issuance(),
-		initial_total_issuance + initial_balance.clone() - reducible_balance.clone()
-	);
+	assert_eq!(T::balance(&account), initial_balance - reducible_balance);
+	assert_eq!(T::total_balance(&account), initial_balance - reducible_balance);
+	assert_eq!(T::total_issuance(), initial_total_issuance + initial_balance - reducible_balance);
 	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance - reducible_balance);
 }
 
@@ -236,12 +230,12 @@ where
 	// Set up the initial conditions and parameters for the test
 	let account = AccountId::from(5);
 	let initial_balance = T::minimum_balance() + 10.into();
-	T::mint_into(&account, initial_balance.clone()).unwrap();
+	T::mint_into(&account, initial_balance).unwrap();
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
 
 	// Verify: Burn an amount greater than the account's balance with Exact precision returns Err
-	let amount_to_burn = initial_balance.clone() + 10.into();
+	let amount_to_burn = initial_balance + 10.into();
 	let precision = Precision::Exact;
 	let force = Fortitude::Polite;
 	T::burn_from(&account, amount_to_burn, precision, force).unwrap_err();
@@ -276,17 +270,17 @@ where
 	let amount_1 = T::minimum_balance() + 5.into();
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
-	T::restore(&account_0, amount_0.clone()).unwrap();
-	T::restore(&account_1, amount_1.clone()).unwrap();
+	T::restore(&account_0, amount_0).unwrap();
+	T::restore(&account_1, amount_1).unwrap();
 
 	// Verify: Account balances are updated correctly
-	assert_eq!(T::total_balance(&account_0), amount_0.clone());
-	assert_eq!(T::total_balance(&account_1), amount_1.clone());
-	assert_eq!(T::balance(&account_0), amount_0.clone());
-	assert_eq!(T::balance(&account_1), amount_1.clone());
+	assert_eq!(T::total_balance(&account_0), amount_0);
+	assert_eq!(T::total_balance(&account_1), amount_1);
+	assert_eq!(T::balance(&account_0), amount_0);
+	assert_eq!(T::balance(&account_1), amount_1);
 
 	// Verify: Total issuance is updated correctly
-	assert_eq!(T::total_issuance(), initial_total_issuance + amount_0.clone() + amount_1.clone());
+	assert_eq!(T::total_issuance(), initial_total_issuance + amount_0 + amount_1);
 	assert_eq!(T::active_issuance(), initial_active_issuance + amount_0 + amount_1);
 }
 
@@ -308,18 +302,18 @@ where
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
 	let account = AccountId::from(10);
-	let amount = T::Balance::max_value() - 5.into() - initial_total_issuance.clone();
+	let amount = T::Balance::max_value() - 5.into() - initial_total_issuance;
 
 	// Restore just below the maximum balance
-	T::restore(&account, amount.clone()).unwrap();
+	T::restore(&account, amount).unwrap();
 
 	// Verify: Restoring beyond the maximum balance returns an Err
 	T::restore(&account, 10.into()).unwrap_err();
 
 	// Verify: The balance and total issuance did not change
-	assert_eq!(T::total_balance(&account), amount.clone());
-	assert_eq!(T::balance(&account), amount.clone());
-	assert_eq!(T::total_issuance(), initial_total_issuance + amount.clone());
+	assert_eq!(T::total_balance(&account), amount);
+	assert_eq!(T::balance(&account), amount);
+	assert_eq!(T::total_issuance(), initial_total_issuance + amount);
 	assert_eq!(T::active_issuance(), initial_active_issuance + amount);
 }
 
@@ -349,7 +343,7 @@ where
 	let initial_active_issuance = T::active_issuance();
 
 	// Verify: Restoring below the minimum balance returns Err
-	T::restore(&account, amount.clone()).unwrap_err();
+	T::restore(&account, amount).unwrap_err();
 
 	// Verify: noop
 	assert_eq!(T::total_balance(&account), T::Balance::zero());
@@ -380,19 +374,16 @@ where
 	let account = AccountId::from(5);
 	let initial_balance = T::minimum_balance() + 10.into();
 
-	T::restore(&account, initial_balance.clone()).unwrap();
+	T::restore(&account, initial_balance).unwrap();
 
 	// Test: Shelve an amount from the account
 	let amount_to_shelve = T::Balance::from(5);
-	T::shelve(&account, amount_to_shelve.clone()).unwrap();
+	T::shelve(&account, amount_to_shelve).unwrap();
 
 	// Verify: The balance and total issuance should be reduced by the shelved amount
-	assert_eq!(T::balance(&account), initial_balance.clone() - amount_to_shelve.clone());
-	assert_eq!(T::total_balance(&account), initial_balance.clone() - amount_to_shelve.clone());
-	assert_eq!(
-		T::total_issuance(),
-		initial_total_issuance + initial_balance.clone() - amount_to_shelve.clone()
-	);
+	assert_eq!(T::balance(&account), initial_balance - amount_to_shelve);
+	assert_eq!(T::total_balance(&account), initial_balance - amount_to_shelve);
+	assert_eq!(T::total_issuance(), initial_total_issuance + initial_balance - amount_to_shelve);
 	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance - amount_to_shelve);
 }
 
@@ -417,16 +408,16 @@ where
 	// Set up the initial conditions and parameters for the test
 	let account = AccountId::from(5);
 	let initial_balance = T::minimum_balance() + 10.into();
-	T::restore(&account, initial_balance.clone()).unwrap();
+	T::restore(&account, initial_balance).unwrap();
 
 	// Verify: Shelving greater than the balance with Exact precision returns Err
-	let amount_to_shelve = initial_balance.clone() + 10.into();
+	let amount_to_shelve = initial_balance + 10.into();
 	T::shelve(&account, amount_to_shelve).unwrap_err();
 
 	// Verify: The balance and total issuance should remain unchanged
 	assert_eq!(T::balance(&account), initial_balance);
 	assert_eq!(T::total_balance(&account), initial_balance);
-	assert_eq!(T::total_issuance(), initial_total_issuance + initial_balance.clone());
+	assert_eq!(T::total_issuance(), initial_total_issuance + initial_balance);
 	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance);
 }
 
@@ -451,21 +442,21 @@ where
 	let account_0 = AccountId::from(0);
 	let account_1 = AccountId::from(1);
 	let initial_balance = T::minimum_balance() + 10.into();
-	T::set_balance(&account_0, initial_balance.clone());
-	T::set_balance(&account_1, initial_balance.clone());
+	T::set_balance(&account_0, initial_balance);
+	T::set_balance(&account_1, initial_balance);
 
 	// Test: Transfer an amount from account_0 to account_1
 	let transfer_amount = T::Balance::from(3);
-	T::transfer(&account_0, &account_1, transfer_amount.clone(), Preservation::Expendable).unwrap();
+	T::transfer(&account_0, &account_1, transfer_amount, Preservation::Expendable).unwrap();
 
 	// Verify: Account balances are updated correctly
-	assert_eq!(T::total_balance(&account_0), initial_balance.clone() - transfer_amount.clone());
-	assert_eq!(T::total_balance(&account_1), initial_balance.clone() + transfer_amount.clone());
-	assert_eq!(T::balance(&account_0), initial_balance.clone() - transfer_amount.clone());
-	assert_eq!(T::balance(&account_1), initial_balance.clone() + transfer_amount.clone());
+	assert_eq!(T::total_balance(&account_0), initial_balance - transfer_amount);
+	assert_eq!(T::total_balance(&account_1), initial_balance + transfer_amount);
+	assert_eq!(T::balance(&account_0), initial_balance - transfer_amount);
+	assert_eq!(T::balance(&account_1), initial_balance + transfer_amount);
 
 	// Verify: Total issuance doesn't change
-	assert_eq!(T::total_issuance(), initial_total_issuance + initial_balance.clone() * 2.into());
+	assert_eq!(T::total_issuance(), initial_total_issuance + initial_balance * 2.into());
 	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance * 2.into());
 }
 
@@ -491,22 +482,22 @@ where
 	let account_0 = AccountId::from(0);
 	let account_1 = AccountId::from(1);
 	let initial_balance = T::minimum_balance() + 10.into();
-	T::set_balance(&account_0, initial_balance.clone());
-	T::set_balance(&account_1, initial_balance.clone());
+	T::set_balance(&account_0, initial_balance);
+	T::set_balance(&account_1, initial_balance);
 
 	// Test: Transfer entire balance from account_0 to account_1
 	let preservation = Preservation::Expendable;
-	let transfer_amount = initial_balance.clone();
-	T::transfer(&account_0, &account_1, transfer_amount.clone(), preservation).unwrap();
+	let transfer_amount = initial_balance;
+	T::transfer(&account_0, &account_1, transfer_amount, preservation).unwrap();
 
 	// Verify: Account balances are updated correctly
 	assert_eq!(T::total_balance(&account_0), T::Balance::zero());
-	assert_eq!(T::total_balance(&account_1), initial_balance.clone() * 2.into());
+	assert_eq!(T::total_balance(&account_1), initial_balance * 2.into());
 	assert_eq!(T::balance(&account_0), T::Balance::zero());
-	assert_eq!(T::balance(&account_1), initial_balance.clone() * 2.into());
+	assert_eq!(T::balance(&account_1), initial_balance * 2.into());
 
 	// Verify: Total issuance doesn't change
-	assert_eq!(T::total_issuance(), initial_total_issuance + initial_balance.clone() * 2.into());
+	assert_eq!(T::total_issuance(), initial_total_issuance + initial_balance * 2.into());
 	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance * 2.into());
 }
 
@@ -540,8 +531,8 @@ where
 	let account_0 = AccountId::from(10);
 	let account_1 = AccountId::from(20);
 	let initial_balance = T::minimum_balance() + 10.into();
-	T::set_balance(&account_0, initial_balance.clone());
-	T::set_balance(&account_1, initial_balance.clone());
+	T::set_balance(&account_0, initial_balance);
+	T::set_balance(&account_1, initial_balance);
 
 	let initial_total_issuance = T::total_issuance();
 	let initial_active_issuance = T::active_issuance();
@@ -553,23 +544,23 @@ where
 	// Test: Transfer balance
 	let preservation = Preservation::Expendable;
 	let transfer_amount = T::Balance::from(11);
-	T::transfer(&account_0, &account_1, transfer_amount.clone(), preservation).unwrap();
+	T::transfer(&account_0, &account_1, transfer_amount, preservation).unwrap();
 
 	// Verify: Account balances are updated correctly
 	assert_eq!(T::total_balance(&account_0), T::Balance::zero());
-	assert_eq!(T::total_balance(&account_1), initial_balance.clone() + transfer_amount.clone());
+	assert_eq!(T::total_balance(&account_1), initial_balance + transfer_amount);
 	assert_eq!(T::balance(&account_0), T::Balance::zero());
-	assert_eq!(T::balance(&account_1), initial_balance.clone() + transfer_amount.clone());
+	assert_eq!(T::balance(&account_1), initial_balance + transfer_amount);
 
 	match dust_trap {
 		Some(dust_trap) => {
 			// Verify: Total issuance and active issuance don't change
-			assert_eq!(T::total_issuance(), initial_total_issuance.clone());
-			assert_eq!(T::active_issuance(), initial_active_issuance.clone());
+			assert_eq!(T::total_issuance(), initial_total_issuance);
+			assert_eq!(T::active_issuance(), initial_active_issuance);
 			// Verify: Dust is collected into dust trap
 			assert_eq!(
 				T::total_balance(&dust_trap),
-				initial_dust_trap_balance.clone() + T::minimum_balance() - 1.into()
+				initial_dust_trap_balance + T::minimum_balance() - 1.into()
 			);
 			assert_eq!(
 				T::balance(&dust_trap),
@@ -617,38 +608,32 @@ where
 	let account_0 = AccountId::from(0);
 	let account_1 = AccountId::from(1);
 	let initial_balance = T::minimum_balance() + 10.into();
-	T::set_balance(&account_0, initial_balance.clone());
-	T::set_balance(&account_1, initial_balance.clone());
+	T::set_balance(&account_0, initial_balance);
+	T::set_balance(&account_1, initial_balance);
 
 	// Verify: Transfer Protect entire balance from account_0 to account_1 should Err
 	let preservation = Preservation::Protect;
-	let transfer_amount = initial_balance.clone();
-	T::transfer(&account_0, &account_1, transfer_amount.clone(), preservation).unwrap_err();
+	let transfer_amount = initial_balance;
+	T::transfer(&account_0, &account_1, transfer_amount, preservation).unwrap_err();
 
 	// Verify: Noop
-	assert_eq!(T::total_balance(&account_0), initial_balance.clone());
-	assert_eq!(T::total_balance(&account_1), initial_balance.clone());
-	assert_eq!(T::balance(&account_0), initial_balance.clone());
-	assert_eq!(T::balance(&account_1), initial_balance.clone());
-	assert_eq!(
-		T::total_issuance(),
-		initial_total_issuance.clone() + initial_balance.clone() * 2.into()
-	);
-	assert_eq!(
-		T::active_issuance(),
-		initial_active_issuance.clone() + initial_balance.clone() * 2.into()
-	);
+	assert_eq!(T::total_balance(&account_0), initial_balance);
+	assert_eq!(T::total_balance(&account_1), initial_balance);
+	assert_eq!(T::balance(&account_0), initial_balance);
+	assert_eq!(T::balance(&account_1), initial_balance);
+	assert_eq!(T::total_issuance(), initial_total_issuance + initial_balance * 2.into());
+	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance * 2.into());
 
 	// Verify: Transfer Preserve entire balance from account_0 to account_1 should Err
 	let preservation = Preservation::Preserve;
-	T::transfer(&account_0, &account_1, transfer_amount.clone(), preservation).unwrap_err();
+	T::transfer(&account_0, &account_1, transfer_amount, preservation).unwrap_err();
 
 	// Verify: Noop
-	assert_eq!(T::total_balance(&account_0), initial_balance.clone());
-	assert_eq!(T::total_balance(&account_1), initial_balance.clone());
-	assert_eq!(T::balance(&account_0), initial_balance.clone());
-	assert_eq!(T::balance(&account_1), initial_balance.clone());
-	assert_eq!(T::total_issuance(), initial_total_issuance + initial_balance.clone() * 2.into());
+	assert_eq!(T::total_balance(&account_0), initial_balance);
+	assert_eq!(T::total_balance(&account_1), initial_balance);
+	assert_eq!(T::balance(&account_0), initial_balance);
+	assert_eq!(T::balance(&account_1), initial_balance);
+	assert_eq!(T::total_issuance(), initial_total_issuance + initial_balance * 2.into());
 	assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance * 2.into());
 }
 
@@ -671,20 +656,20 @@ where
 	let initial_active_issuance = T::active_issuance();
 	let account = AccountId::from(10);
 	let initial_balance = T::minimum_balance() + 10.into();
-	T::mint_into(&account, initial_balance.clone()).unwrap();
+	T::mint_into(&account, initial_balance).unwrap();
 
 	// Test: Increase the account balance with set_balance
 	let increase_amount: T::Balance = 5.into();
-	let new = T::set_balance(&account, initial_balance.clone() + increase_amount.clone());
+	let new = T::set_balance(&account, initial_balance + increase_amount);
 
 	// Verify: set_balance returned the new balance
 	let expected_new = initial_balance + increase_amount;
 	assert_eq!(new, expected_new);
 
 	// Verify: Balance and issuance is updated correctly
-	assert_eq!(T::total_balance(&account), expected_new.clone());
-	assert_eq!(T::balance(&account), expected_new.clone());
-	assert_eq!(T::total_issuance(), initial_total_issuance + expected_new.clone());
+	assert_eq!(T::total_balance(&account), expected_new);
+	assert_eq!(T::balance(&account), expected_new);
+	assert_eq!(T::total_issuance(), initial_total_issuance + expected_new);
 	assert_eq!(T::active_issuance(), initial_active_issuance + expected_new);
 }
 
@@ -707,20 +692,20 @@ where
 	let initial_active_issuance = T::active_issuance();
 	let account = AccountId::from(10);
 	let initial_balance = T::minimum_balance() + 10.into();
-	T::mint_into(&account, initial_balance.clone()).unwrap();
+	T::mint_into(&account, initial_balance).unwrap();
 
 	// Test: Increase the account balance with set_balance
 	let burn_amount: T::Balance = 5.into();
-	let new = T::set_balance(&account, initial_balance.clone() - burn_amount.clone());
+	let new = T::set_balance(&account, initial_balance - burn_amount);
 
 	// Verify: set_balance returned the new balance
 	let expected_new = initial_balance - burn_amount;
 	assert_eq!(new, expected_new);
 
 	// Verify: Balance and issuance is updated correctly
-	assert_eq!(T::total_balance(&account), expected_new.clone());
-	assert_eq!(T::balance(&account), expected_new.clone());
-	assert_eq!(T::total_issuance(), initial_total_issuance + expected_new.clone());
+	assert_eq!(T::total_balance(&account), expected_new);
+	assert_eq!(T::balance(&account), expected_new);
+	assert_eq!(T::total_issuance(), initial_total_issuance + expected_new);
 	assert_eq!(T::active_issuance(), initial_active_issuance + expected_new);
 }
 
@@ -741,7 +726,7 @@ where
 {
 	let account = AccountId::from(10);
 	let initial_balance = T::minimum_balance() + 10.into();
-	T::mint_into(&account, initial_balance.clone()).unwrap();
+	T::mint_into(&account, initial_balance).unwrap();
 
 	// Test: can_deposit a reasonable amount
 	let ret = T::can_deposit(&account, 5.into(), Provenance::Minted);
@@ -798,7 +783,7 @@ where
 
 	// Test: Try deposit over the max balance
 	let initial_balance = T::Balance::max_value() - 5.into() - T::total_issuance();
-	T::mint_into(&account, initial_balance.clone()).unwrap();
+	T::mint_into(&account, initial_balance).unwrap();
 	let ret = T::can_deposit(&account, 10.into(), Provenance::Minted);
 
 	// Verify: Returns success
@@ -822,7 +807,7 @@ where
 {
 	let account = AccountId::from(10);
 	let initial_balance = T::minimum_balance() + 10.into();
-	T::mint_into(&account, initial_balance.clone()).unwrap();
+	T::mint_into(&account, initial_balance).unwrap();
 
 	// Test: can_withdraw a reasonable amount
 	let ret = T::can_withdraw(&account, 5.into());
@@ -852,7 +837,7 @@ where
 
 	let account = AccountId::from(10);
 	let initial_balance = T::minimum_balance();
-	T::mint_into(&account, initial_balance.clone()).unwrap();
+	T::mint_into(&account, initial_balance).unwrap();
 
 	// Verify: can_withdraw below the minimum balance returns ReducedToZero
 	let ret = T::can_withdraw(&account, 1.into());
@@ -881,8 +866,8 @@ where
 	let account = AccountId::from(10);
 	let other_account = AccountId::from(100);
 	let initial_balance = T::minimum_balance() + 5.into();
-	T::mint_into(&account, initial_balance.clone()).unwrap();
-	T::mint_into(&other_account, initial_balance.clone() * 2.into()).unwrap();
+	T::mint_into(&account, initial_balance).unwrap();
+	T::mint_into(&other_account, initial_balance * 2.into()).unwrap();
 
 	// Verify: can_withdraw below the account balance returns BalanceLow
 	let ret = T::can_withdraw(&account, initial_balance + 1.into());
@@ -906,7 +891,7 @@ where
 {
 	let account = AccountId::from(10);
 	let initial_balance = T::minimum_balance() + 10.into();
-	T::mint_into(&account, initial_balance.clone()).unwrap();
+	T::mint_into(&account, initial_balance).unwrap();
 
 	// Verify: reducible_balance returns the full balance
 	let ret = T::reducible_balance(&account, Preservation::Expendable, Fortitude::Polite);
@@ -930,11 +915,11 @@ where
 {
 	let account = AccountId::from(10);
 	let initial_balance = T::minimum_balance() + 10.into();
-	T::mint_into(&account, initial_balance.clone()).unwrap();
+	T::mint_into(&account, initial_balance).unwrap();
 
 	// Verify: reducible_balance returns the full balance - min balance
 	let ret = T::reducible_balance(&account, Preservation::Protect, Fortitude::Polite);
-	assert_eq!(ret, initial_balance.clone() - T::minimum_balance());
+	assert_eq!(ret, initial_balance - T::minimum_balance());
 	let ret = T::reducible_balance(&account, Preservation::Preserve, Fortitude::Polite);
 	assert_eq!(ret, initial_balance - T::minimum_balance());
 }
