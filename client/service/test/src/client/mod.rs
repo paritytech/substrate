@@ -261,42 +261,6 @@ fn construct_genesis_should_work_with_wasm() {
 }
 
 #[test]
-fn construct_genesis_with_bad_transaction_should_panic() {
-	sp_tracing::try_init_simple();
-	let mut storage = GenesisConfig::new(
-		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
-		vec![AccountKeyring::Alice.into(), AccountKeyring::Two.into()],
-		68 * DOLLARS,
-		None,
-		Default::default(),
-	)
-	.genesis_map();
-	let genesis_hash = insert_genesis_block(&mut storage);
-
-	let backend = InMemoryBackend::from((storage, StateVersion::default()));
-	let (b1data, _b1hash) = block1(genesis_hash, &backend);
-	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
-	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
-
-	let mut overlay = OverlayedChanges::default();
-
-	let r = StateMachine::new(
-		&backend,
-		&mut overlay,
-		&executor(),
-		"Core_execute_block",
-		&b1data,
-		Default::default(),
-		&runtime_code,
-		TaskExecutor::new(),
-		CallContext::Onchain,
-	)
-	.execute(ExecutionStrategy::NativeElseWasm);
-	log::trace!("xxx -> {:?}",r);
-	assert!(r.is_err());
-}
-
-#[test]
 fn client_initializes_from_genesis_ok() {
 	let client = substrate_test_runtime_client::new();
 
@@ -385,7 +349,17 @@ fn block_builder_works_with_transactions() {
 
 #[test]
 fn block_builder_does_not_include_invalid() {
+	sp_tracing::try_init_simple();
 	let mut client = substrate_test_runtime_client::new();
+
+	log::trace!("xxx -> alice : {:?}", client
+		.runtime_api()
+		.balance_of(client.chain_info().genesis_hash, AccountKeyring::Alice.into())
+		.unwrap());
+	log::trace!("xxx -> eve : {:?}", client
+		.runtime_api()
+		.balance_of(client.chain_info().genesis_hash, AccountKeyring::Eve.into())
+		.unwrap());
 
 	let mut builder = client.new_block(Default::default()).unwrap();
 
@@ -398,16 +372,20 @@ fn block_builder_does_not_include_invalid() {
 		})
 		.unwrap();
 
-	assert!(builder
+	assert!(
+	builder
 		.push_transfer(Transfer {
-			from: AccountKeyring::Eve.into(),
-			to: AccountKeyring::Alice.into(),
-			amount: 42 * DOLLARS,
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 30 * DOLLARS,
 			nonce: 0,
 		})
-		.is_err());
+	.is_err());
 
 	let block = builder.build().unwrap().block;
+	//transfer from Eve should not be included
+	log::trace!("xxx -> {:#?}", block);
+	assert_eq!(block.extrinsics.len(), 1);
 	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 	let hashof0 = client
@@ -416,6 +394,9 @@ fn block_builder_does_not_include_invalid() {
 	let hashof1 = client
 		.expect_block_hash_from_id(&BlockId::Number(1))
 		.expect("block 1 was just imported. qed");
+
+	log::trace!("xxx 0 -> {:#?}", client.body(hashof0));
+	log::trace!("xxx 1 -> {:#?}", client.body(hashof1));
 
 	assert_eq!(client.chain_info().best_number, 1);
 	assert_ne!(

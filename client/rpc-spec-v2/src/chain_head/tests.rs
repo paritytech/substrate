@@ -20,7 +20,7 @@ use sp_core::{
 };
 use sp_version::RuntimeVersion;
 use std::sync::Arc;
-use substrate_test_runtime::{ExtrinsicBuilder, Transfer};
+use substrate_test_runtime::Transfer;
 use substrate_test_runtime_client::{
 	prelude::*, runtime, Backend, BlockBuilderExt, Client, ClientBlockImportExt,
 };
@@ -1071,17 +1071,12 @@ async fn follow_forks_pruned_block() {
 	// This push is required as otherwise block 4 has the same hash as block 2 and won't get
 	// imported
 	block_builder
-		.push(
-			ExtrinsicBuilder::new_transfer(
-				Transfer {
-					from: AccountKeyring::Alice.into(),
-					to: AccountKeyring::Ferdie.into(),
-					amount: 41,
-					nonce: 0,
-				}
-			)
-			.build()
-		)
+		.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 41,
+			nonce: 0,
+		})
 		.unwrap();
 	let block_4 = block_builder.build().unwrap().block;
 	client.import(BlockOrigin::Own, block_4.clone()).await.unwrap();
@@ -1089,17 +1084,12 @@ async fn follow_forks_pruned_block() {
 	let mut block_builder =
 		client.new_block_at(block_4.header.hash(), Default::default(), false).unwrap();
 	block_builder
-		.push(
-			ExtrinsicBuilder::new_transfer(
-				Transfer {
-					from: AccountKeyring::Bob.into(),
-					to: AccountKeyring::Ferdie.into(),
-					amount: 41,
-					nonce: 0,
-				}
-			)
-			.build()
-		)
+		.push_transfer(Transfer {
+			from: AccountKeyring::Bob.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 41,
+			nonce: 0,
+		})
 		.unwrap();
 	let block_5 = block_builder.build().unwrap().block;
 	client.import(BlockOrigin::Own, block_5.clone()).await.unwrap();
@@ -1201,7 +1191,6 @@ async fn follow_report_multiple_pruned_block() {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
 			amount: 41,
-			//todo: who signs the transaction?
 			nonce: 0,
 		})
 		.unwrap();
@@ -1216,8 +1205,7 @@ async fn follow_report_multiple_pruned_block() {
 			from: AccountKeyring::Bob.into(),
 			to: AccountKeyring::Ferdie.into(),
 			amount: 41,
-			//todo: who signs the transaction? whoose nonce is it?
-			nonce: 1,
+			nonce: 0,
 		})
 		.unwrap();
 	let block_5 = block_builder.build().unwrap().block;

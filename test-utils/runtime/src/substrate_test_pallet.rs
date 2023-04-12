@@ -18,9 +18,9 @@
 use crate::{AccountId, AuthorityId, BlockNumber, Runtime, Signature};
 use codec::KeyedVec;
 use frame_support::{pallet_prelude::*, storage};
-use sp_core::storage::well_known_keys;
 use sp_io::hashing::blake2_256;
 use sp_std::prelude::*;
+
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -33,6 +33,8 @@ const LOG_TARGET: &str = "substrate_test_pallet";
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
+	use sp_core::storage::well_known_keys;
+	use sp_runtime::{Perbill, transaction_validity::TransactionPriority};
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
@@ -164,6 +166,30 @@ pub mod pallet {
 			<frame_system::Pallet<T>>::deposit_log(log);
 			Ok(())
 		}
+
+		#[pallet::call_index(8)]
+		#[pallet::weight(100)]
+		pub fn call_with_priority(
+			_origin: OriginFor<T>,
+			_priority: TransactionPriority,
+		) -> DispatchResult {
+			Ok(())
+		}
+
+		#[pallet::call_index(9)]
+		#[pallet::weight(100)]
+		pub fn call_do_not_propagate(
+			_origin: OriginFor<T>,
+		) -> DispatchResult {
+			Ok(())
+		}
+
+		#[pallet::call_index(10)]
+		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
+		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResult {
+			ensure_signed(origin)?;
+			Ok(())
+		}
 	}
 
 	#[pallet::validate_unsigned]
@@ -174,32 +200,16 @@ pub mod pallet {
 			log::trace!(target: LOG_TARGET, "validate_unsigned {call:?}");
 			//todo:
 			// Call::include_data used in:
-			// - should_call_into_runtime_and_produce_extrinsic (offchain)
-			// - should_not_propagate_transactions_that_are_marked_as_such (propagate)
-			// - syncs_huge_blocks (huge data in block)
-			//
-			// Maybe this shall not be shared?
-			// Now we are allowing all pallet calls to be sent as unsigned extrinsics
-			//
-			// match call {
-			// 	Call::include_data { data } => Ok(ValidTransaction {
-			// 		priority: data.len() as u64,
-			// 		requires: vec![],
-			// 		provides: vec![data.clone()],
-			// 		longevity: 1,
-			// 		propagate: false,
-			// 	}),
-			// }
-
-			// validate_runtime_call(call)
+			// - [done] should_call_into_runtime_and_produce_extrinsic (offchain)
+			// - [done] syncs_huge_blocks (huge data in block)
+			// - [done] should_not_propagate_transactions_that_are_marked_as_such (propagate)
 
 			match call {
+				// offchain testing requires unsigned include_data
 				Call::include_data { data } => Ok(ValidTransaction {
-					// priority: data.len() as u64,
-					// longevity: 1,
-					propagate: false,
 					..Default::default()
 				}),
+
 				// consensus tests do not use signer and nonce:
 				Call::deposit_log_digest_item { .. } => Ok(Default::default()),
 				// some tests do not care about for this call:
@@ -227,7 +237,6 @@ pub fn get_block_number() -> Option<BlockNumber> {
 	<Number<Runtime>>::get()
 }
 
-use codec::Encode;
 use sp_runtime::transaction_validity::{
 	InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
 };
@@ -235,66 +244,14 @@ use sp_runtime::transaction_validity::{
 pub fn validate_runtime_call<T: pallet::Config>(call: &pallet::Call<T>) -> TransactionValidity {
 	log::trace!(target: LOG_TARGET, "validate_runtime_call {call:?}");
 	match call {
-		// Call::transfer { transfer, signature, exhaust_resources_when_not_first } => {
-		// 	let extrinsic_index: u32 =
-		// 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
-        //
-		// 	if *exhaust_resources_when_not_first && extrinsic_index != 0 {
-		// 		return InvalidTransaction::ExhaustsResources.into()
-		// 	}
-        //
-		// 	// check signature
-		// 	if !sp_runtime::verify_encoded_lazy(signature, transfer, &transfer.from) {
-		// 		return InvalidTransaction::BadProof.into()
-		// 	}
-        //
-		// 	// check nonce
-		// 	let nonce_key = transfer.from.to_keyed_vec(NONCE_OF);
-		// 	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
-		// 	if transfer.nonce < expected_nonce {
-		// 		return InvalidTransaction::Stale.into()
-		// 	}
-        //
-		// 	if transfer.nonce > expected_nonce + 64 {
-		// 		return InvalidTransaction::Future.into()
-		// 	}
-        //
-		// 	// check sender balance
-		// 	let from_balance_key = transfer.from.to_keyed_vec(BALANCE_OF);
-		// 	let from_balance: u64 = storage::hashed::get_or(&blake2_256, &from_balance_key, 0);
-        //
-		// 	if transfer.amount > from_balance {
-		// 		return Err(InvalidTransaction::Payment.into())
-		// 	}
-        //
-		// 	let encode = |from: &AccountId, nonce: u64| (from, nonce).encode();
-		// 	let requires = if transfer.nonce != expected_nonce && transfer.nonce > 0 {
-		// 		vec![encode(&transfer.from, transfer.nonce - 1)]
-		// 	} else {
-		// 		vec![]
-		// 	};
-        //
-		// 	let provides = vec![encode(&transfer.from, transfer.nonce)];
-        //
-		// 	Ok(ValidTransaction {
-		// 		priority: transfer.amount,
-		// 		requires,
-		// 		provides,
-		// 		longevity: 64,
-		// 		propagate: true,
-		// 	})
-		// },
-		Call::include_data { data } => Ok(ValidTransaction {
-			// priority: data.len() as u64,
-			// longevity: 1,
+		Call::call_do_not_propagate { } => Ok(ValidTransaction {
 			propagate: false,
 			..Default::default()
 		}),
-		// // consensus tests do not use signer and nonce:
-		// Call::deposit_log_digest_item { .. } => Ok(Default::default()),
-		// // some tests do not care about for this call:
-		// Call::storage_change_unsigned { .. } => Ok(Default::default()),
-		// _ => Err(TransactionValidityError::Invalid(InvalidTransaction::Call)),
+		Call::call_with_priority { priority } => Ok(ValidTransaction {
+			priority: *priority,
+			..Default::default()
+		}),
 		_ => Ok(Default::default()),
 	}
 }

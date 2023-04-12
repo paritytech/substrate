@@ -289,8 +289,6 @@ construct_runtime!(
 		Babe: pallet_babe,
 		SubstrateTest: substrate_test_pallet::pallet,
 		Balances: pallet_balances,
-		Sudo: pallet_sudo,
-		RootTesting: pallet_root_testing,
 	}
 );
 use frame_support::{
@@ -425,12 +423,6 @@ parameter_types! {
 	pub const EpochDuration: u64 = 6;
 }
 
-impl pallet_sudo::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type RuntimeCall = RuntimeCall;
-}
-
-
 impl pallet_babe::Config for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ConstU64<10_000>;
@@ -441,8 +433,6 @@ impl pallet_babe::Config for Runtime {
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<10>;
 }
-
-impl pallet_root_testing::Config for Runtime {}
 
 /// Adds one to the given input and returns the final result.
 #[inline(never)]

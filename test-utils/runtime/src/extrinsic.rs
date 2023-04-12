@@ -22,7 +22,7 @@ use crate::{
 use codec::Encode;
 use frame_system::{CheckWeight, CheckNonce};
 use sp_core::crypto::Pair as TraitPair;
-use sp_runtime::{Perbill, transaction_validity::{InvalidTransaction, TransactionValidityError}};
+use sp_runtime::{Perbill, transaction_validity::{InvalidTransaction, TransactionPriority, TransactionValidityError}};
 use sp_std::prelude::*;
 
 /// Transfer used in test substrate pallet
@@ -37,7 +37,6 @@ pub struct Transfer {
 impl Transfer {
 	/// Convert into a signed unchecked extrinsic.
 	pub fn into_unchecked_extrinsic(self) -> Extrinsic {
-		let nonce = self.nonce;
 		ExtrinsicBuilder::new_transfer(self).build()
 	}
 }
@@ -152,9 +151,19 @@ impl ExtrinsicBuilder {
 		Self::new(PalletCall::deposit_log_digest_item { log })
 	}
 
-	/// Create builder for `pallet_root_testing::Call::new_deposit_log_digest_item`
+	/// Create builder for `PalletCall::Call::new_deposit_log_digest_item`
 	pub fn new_fill_block(ratio: Perbill) -> Self {
-		Self::new(pallet_root_testing::Call::fill_block{ ratio } )
+		Self::new(PalletCall::fill_block{ ratio } )
+	}
+
+	/// Create builder for `PalletCall::call_do_not_propagate` call using given parameters
+	pub fn new_call_do_not_propagate() -> Self {
+		Self::new(PalletCall::call_do_not_propagate {})
+	}
+
+	/// Create builder for `PalletCall::call_with_priority` call using given parameters
+	pub fn new_call_with_priority(priority: TransactionPriority) -> Self {
+		Self::new(PalletCall::call_with_priority {priority})
 	}
 
 	/// Unsigned `Extrinsic` will be created
@@ -163,6 +172,13 @@ impl ExtrinsicBuilder {
 		self
 	}
 
+	/// Extrinsic will be signed by signer
+	pub fn nonce(mut self, nonce: Index) -> Self {
+		self.nonce = Some(nonce);
+		self
+	}
+
+	/// Extrinsic will be signed by signer
 	pub fn signer(mut self, signer: Pair) -> Self {
 		self.signer = signer;
 		self

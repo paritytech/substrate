@@ -43,8 +43,8 @@ async fn block_stats_work() {
 			.await
 			.unwrap(),
 		Some(BlockStats {
-			witness_len: 1018,
-			witness_compact_len: 793,
+			witness_len: 1384,
+			witness_compact_len: 1127,
 			block_len: 99,
 			num_extrinsics: 0,
 		}),
