@@ -760,19 +760,24 @@ fn freeze_creating_works() {
 		// `1` had to reserve `AssetAccountDeposit` to create `Account(id, 2)`
 		assert_eq!(Balances::reserved_balance(&1), 10);
 		// can transfer to `2` even though it's frozen
-		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50),);
+		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		// cannot transfer from `2`
 		assert_noop!(Assets::transfer(RuntimeOrigin::signed(2), 0, 1, 25), Error::<Test>::Frozen);
 		// asset balances unchanged
 		assert_eq!(Assets::balance(0, 1), 50);
 		assert_eq!(Assets::balance(0, 2), 50);
-		// refund goes back to `1`
 		assert_ok!(Assets::thaw(RuntimeOrigin::signed(1), 0, 2));
+		// freezer cannot burn funds. admin can but should do so via `burn` first.
 		assert_noop!(
 			Assets::refund_other(RuntimeOrigin::signed(1), 0, 2),
 			Error::<Test>::WouldBurn
 		);
 		assert_eq!(Balances::reserved_balance(&1), 10);
+		assert_ok!(Assets::transfer(RuntimeOrigin::signed(2), 0, 1, 50));
+		assert_eq!(Assets::balance(0, 2), 0);
+		// now that the balance is 0, the freezer (`1`) can get their deposit back
+		assert_ok!(Assets::refund_other(RuntimeOrigin::signed(1), 0, 2));
+		assert_eq!(Balances::reserved_balance(&1), 0);
 	});
 }
 
@@ -792,6 +797,7 @@ fn cannot_refund_other_account_with_balance() {
 		assert_eq!(Assets::balance(0, 3), 0);
 
 		assert_ok!(Assets::touch(RuntimeOrigin::signed(2), 0));
+		assert_eq!(Balances::reserved_balance(&2), 10);
 		assert!(Account::<Test>::contains_key(0, &2));
 		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		assert_ok!(Assets::transfer(RuntimeOrigin::signed(2), 0, 1, 50));
@@ -804,6 +810,7 @@ fn cannot_refund_other_account_with_balance() {
 		);
 		// but 1 is the asset admin, ok.
 		assert_ok!(Assets::refund_other(RuntimeOrigin::signed(1), 0, 2));
+		assert_eq!(Balances::reserved_balance(&2), 0);
 		// ensure the account has actually died
 		assert!(!Account::<Test>::contains_key(0, &2));
 
