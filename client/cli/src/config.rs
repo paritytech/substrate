@@ -310,7 +310,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(Default::default())
 	}
 
-	/// Get the RPC websockets maximum connections (`None` if unlimited).
+	/// Get the maximum number of RPC server connections (`None` if unlimited).
 	///
 	/// By default this is `None`.
 	fn rpc_max_connections(&self) -> Result<Option<usize>> {
