@@ -466,7 +466,6 @@ mod tests {
 	use std::{collections::HashMap, time::Instant};
 	use substrate_test_runtime::{AccountId, ExtrinsicBuilder, Transfer, H256};
 
-
 	const SOURCE: TransactionSource = TransactionSource::External;
 
 	#[test]

@@ -290,11 +290,17 @@ async fn should_query_storage() {
 			builder.push_storage_change_unsigned(vec![2], Some(vec![2])).unwrap();
 			// actual change: None -> Some(value) -> None
 			builder
-				.push_storage_change_unsigned(vec![3], if nonce == 0 { Some(vec![3]) } else { None })
+				.push_storage_change_unsigned(
+					vec![3],
+					if nonce == 0 { Some(vec![3]) } else { None },
+				)
 				.unwrap();
 			// actual change: None -> Some(value)
 			builder
-				.push_storage_change_unsigned(vec![4], if nonce == 0 { None } else { Some(vec![4]) })
+				.push_storage_change_unsigned(
+					vec![4],
+					if nonce == 0 { None } else { Some(vec![4]) },
+				)
 				.unwrap();
 			// actual change: Some(value1) -> Some(value2)
 			builder.push_storage_change_unsigned(vec![5], Some(vec![nonce as u8])).unwrap();

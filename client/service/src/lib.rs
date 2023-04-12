@@ -585,10 +585,9 @@ mod tests {
 	use futures::executor::block_on;
 	use sc_transaction_pool::BasicPool;
 	use sp_consensus::SelectChain;
-	use sp_runtime::traits::{Checkable, IdentityLookup};
 	use substrate_test_runtime_client::{
 		prelude::*,
-		runtime::{AccountId, Extrinsic, ExtrinsicBuilder, Runtime, Transfer, TransferData},
+		runtime::{ExtrinsicBuilder, Transfer, TransferData},
 	};
 
 	#[test]
@@ -627,7 +626,8 @@ mod tests {
 		// todo: how to check signature?
 		// assert!(&transactions[0].1.check(&Default::default()).is_ok());
 		// <Extrinsic as Checkable<Runtime>>::check(&transactions[0].1, Default::default()).is_ok();
-		// <Extrinsic as Checkable<sp_runtime::traits::IdentityLookup<AccountId>>>::check(transactions[0].1, &Default::default()).is_ok();
-
+		// <Extrinsic as
+		// Checkable<sp_runtime::traits::IdentityLookup<AccountId>>>::check(transactions[0].1,
+		// &Default::default()).is_ok();
 	}
 }

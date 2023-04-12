@@ -27,10 +27,19 @@ pub mod substrate_test_pallet;
 
 use codec::{Decode, Encode};
 use frame_support::{
-	construct_runtime, parameter_types,
+	construct_runtime,
+	dispatch::DispatchClass,
+	parameter_types,
 	traits::{ConstU32, ConstU64},
+	weights::{
+		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, WEIGHT_REF_TIME_PER_SECOND},
+		Weight,
+	},
 };
-use frame_system::{CheckNonce, CheckWeight};
+use frame_system::{
+	limits::{BlockLength, BlockWeights},
+	CheckNonce, CheckWeight,
+};
 use scale_info::TypeInfo;
 use sp_std::prelude::*;
 
@@ -46,12 +55,10 @@ use sp_api::{decl_runtime_apis, impl_runtime_apis};
 pub use sp_core::hash::H256;
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
-	create_runtime_str, impl_opaque_keys, Perbill,
+	create_runtime_str, impl_opaque_keys,
 	traits::{BlakeTwo256, Block as BlockT, DispatchInfoOf, NumberFor, Verify},
-	transaction_validity::{
-		TransactionSource, TransactionValidity, TransactionValidityError,
-	},
-	ApplyExtrinsicResult,
+	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
+	ApplyExtrinsicResult, Perbill,
 };
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
@@ -263,7 +270,8 @@ impl sp_runtime::traits::SignedExtension for CheckSubstrateCall {
 	) -> TransactionValidity {
 		log::trace!(target: LOG_TARGET, "validate");
 		match call {
-			RuntimeCall::SubstrateTest(ref substrate_test_call) => substrate_test_pallet::validate_runtime_call(substrate_test_call),
+			RuntimeCall::SubstrateTest(ref substrate_test_call) =>
+				substrate_test_pallet::validate_runtime_call(substrate_test_call),
 			_ => Ok(Default::default()),
 		}
 	}
@@ -291,21 +299,6 @@ construct_runtime!(
 		Balances: pallet_balances,
 	}
 );
-use frame_support::{
-	dispatch::DispatchClass,
-	pallet_prelude::Get,
-	traits::{
-		Currency,
-		InstanceFilter
-	},
-	weights::{
-		constants::{
-			BlockExecutionWeight, ExtrinsicBaseWeight, WEIGHT_REF_TIME_PER_SECOND,
-		},
-		Weight,
-	},
-};
-use frame_system::limits::{BlockLength, BlockWeights};
 
 /// We assume that ~10% of the block weight is consumed by `on_initialize` handlers.
 /// This is used to limit the maximal weight of a single extrinsic.
@@ -390,7 +383,6 @@ parameter_types! {
 	pub const MaxReserves: u32 = 50;
 }
 
-
 impl pallet_balances::Config for Runtime {
 	type MaxLocks = MaxLocks;
 	type MaxReserves = MaxReserves;
@@ -406,7 +398,6 @@ impl pallet_balances::Config for Runtime {
 	type HoldIdentifier = ();
 	type MaxHolds = ConstU32<1>;
 }
-
 
 impl substrate_test_pallet::Config for Runtime {}
 

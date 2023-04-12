@@ -99,9 +99,7 @@ impl GenesisConfig {
 		.expect("Adding `pallet_babe::GenesisConfig` to the genesis");
 
 		<pallet_balances::GenesisConfig<Runtime> as GenesisBuild<Runtime>>::assimilate_storage(
-			&pallet_balances::GenesisConfig {
-				balances: self.balances.clone()
-			},
+			&pallet_balances::GenesisConfig { balances: self.balances.clone() },
 			&mut storage,
 		)
 		.expect("Adding `pallet_balances::GenesisConfig` to the genesis");

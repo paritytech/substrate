@@ -35,13 +35,11 @@ use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	generic::BlockId,
 	traits::Block as _,
-	transaction_validity::{InvalidTransaction, TransactionSource, ValidTransaction},
+	transaction_validity::{TransactionSource, ValidTransaction},
 };
 use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 use substrate_test_runtime_client::{
-	runtime::{
-		Block, Extrinsic, ExtrinsicBuilder, Hash, Header, Index, Transfer, TransferData,
-	},
+	runtime::{Block, Extrinsic, ExtrinsicBuilder, Hash, Header, Index, Transfer, TransferData},
 	AccountKeyring::*,
 	ClientBlockImportExt,
 };
@@ -943,10 +941,10 @@ fn should_not_accept_old_signatures() {
 	// 	)
 	// 	.0,
 	// );
-    //
+	//
 	// let transfer = Transfer { from: Alice.into(), to: Bob.into(), nonce: 0, amount: 1 };
 	// let _bytes: sp_core::sr25519::Signature = transfer.using_encoded(|e| Alice.sign(e)).into();
-    //
+	//
 	// // generated with schnorrkel 0.1.1 from `_bytes`
 	// let old_signature = sp_core::sr25519::Signature::try_from(
 	// 	&array_bytes::hex2bytes(
@@ -956,12 +954,12 @@ fn should_not_accept_old_signatures() {
 	// 	.expect("hex invalid")[..],
 	// )
 	// .expect("signature construction failed");
-    //
+	//
 	// let xt = ExtrinsicBuilder::new(
 	// 	TransferCallBuilder::new(transfer).with_signature(old_signature).build(),
 	// )
 	// .build();
-    //
+	//
 	// assert_matches::assert_matches!(
 	// 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())),
 	// 	Err(error::Error::Pool(sc_transaction_pool_api::error::Error::InvalidTransaction(

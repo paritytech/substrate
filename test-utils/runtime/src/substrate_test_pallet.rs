@@ -15,14 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{AccountId, AuthorityId, BlockNumber, Runtime, Signature};
+use crate::{AccountId, AuthorityId, BlockNumber, Runtime};
 use codec::KeyedVec;
 use frame_support::{pallet_prelude::*, storage};
 use sp_io::hashing::blake2_256;
 use sp_std::prelude::*;
 
-
-const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
 
 pub use self::pallet::*;
@@ -34,7 +32,7 @@ pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
 	use sp_core::storage::well_known_keys;
-	use sp_runtime::{Perbill, transaction_validity::TransactionPriority};
+	use sp_runtime::{transaction_validity::TransactionPriority, Perbill};
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
@@ -178,9 +176,7 @@ pub mod pallet {
 
 		#[pallet::call_index(9)]
 		#[pallet::weight(100)]
-		pub fn call_do_not_propagate(
-			_origin: OriginFor<T>,
-		) -> DispatchResult {
+		pub fn call_do_not_propagate(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
 		}
 
@@ -206,9 +202,7 @@ pub mod pallet {
 
 			match call {
 				// offchain testing requires unsigned include_data
-				Call::include_data { data } => Ok(ValidTransaction {
-					..Default::default()
-				}),
+				Call::include_data { .. } => Ok(ValidTransaction { ..Default::default() }),
 
 				// consensus tests do not use signer and nonce:
 				Call::deposit_log_digest_item { .. } => Ok(Default::default()),
@@ -244,14 +238,10 @@ use sp_runtime::transaction_validity::{
 pub fn validate_runtime_call<T: pallet::Config>(call: &pallet::Call<T>) -> TransactionValidity {
 	log::trace!(target: LOG_TARGET, "validate_runtime_call {call:?}");
 	match call {
-		Call::call_do_not_propagate { } => Ok(ValidTransaction {
-			propagate: false,
-			..Default::default()
-		}),
-		Call::call_with_priority { priority } => Ok(ValidTransaction {
-			priority: *priority,
-			..Default::default()
-		}),
+		Call::call_do_not_propagate {} =>
+			Ok(ValidTransaction { propagate: false, ..Default::default() }),
+		Call::call_with_priority { priority } =>
+			Ok(ValidTransaction { priority: *priority, ..Default::default() }),
 		_ => Ok(Default::default()),
 	}
 }

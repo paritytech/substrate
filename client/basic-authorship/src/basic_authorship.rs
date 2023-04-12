@@ -414,7 +414,6 @@ where
 				break EndProposingReason::NoMoreTransactions
 			};
 
-
 			let now = (self.now)();
 			log::trace!("xxx -> skipped: {skipped:?} now:{now:?}, soft_deadline:{soft_deadline:?}");
 			log::trace!("xxx -> pending_tx: {:?}", pending_tx.data());
@@ -559,7 +558,7 @@ mod tests {
 	use sp_api::Core;
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::{BlockOrigin, Environment, Proposer};
-	use sp_runtime::{generic::BlockId, Perbill, traits::NumberFor};
+	use sp_runtime::{generic::BlockId, traits::NumberFor, Perbill};
 	use substrate_test_runtime_client::{
 		prelude::*,
 		runtime::{Block as TestBlock, Extrinsic, ExtrinsicBuilder, Transfer},
@@ -568,9 +567,9 @@ mod tests {
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
-	// Note: 
+	// Note:
 	// Maximum normal extrinsic size for substrate_test_runtime is ~65% of max_block (refer to
-	// substrate_test_runtime::RuntimeBlockWeights for details). 
+	// substrate_test_runtime::RuntimeBlockWeights for details).
 	// This extrinsic sizing allows for:
 	// - one huge xts + a lot of tiny dust
 	// - one huge, no medium,
@@ -751,21 +750,15 @@ mod tests {
 			client.clone(),
 		);
 
-		let tiny = |nonce| { ExtrinsicBuilder::new_fill_block(Perbill::from_parts(MEDIUM)).build2(nonce) };
-		let huge = |nonce| { ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE)).build2(nonce) };
+		let tiny =
+			|nonce| ExtrinsicBuilder::new_fill_block(Perbill::from_parts(MEDIUM)).build2(nonce);
+		let huge =
+			|nonce| ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE)).build2(nonce);
 
 		block_on(txpool.submit_at(
 			&BlockId::number(0),
 			SOURCE,
-			vec![
-                tiny(0),
-                tiny(1),
-                huge(2),
-                tiny(3),
-                huge(4),
-                tiny(5),
-                tiny(6)
-			],
+			vec![tiny(0), tiny(1), huge(2), tiny(3), huge(4), tiny(5), tiny(6)],
 		))
 		.unwrap();
 
@@ -788,12 +781,26 @@ mod tests {
 					.map(|r| r.block)
 					.unwrap();
 
-			log::trace!("xxx imported extrinsics (at block:{}): {:#?}", block.header.number, block.extrinsics);
+			log::trace!(
+				"xxx imported extrinsics (at block:{}): {:#?}",
+				block.header.number,
+				block.extrinsics
+			);
 
 			// then
 			// block should have some extrinsics although we have some more in the pool.
-			assert_eq!(txpool.ready().count(), expected_pool_transactions, "at block: {}", block.header.number);
-			assert_eq!(block.extrinsics().len(), expected_block_extrinsics, "at block: {}", block.header.number);
+			assert_eq!(
+				txpool.ready().count(),
+				expected_pool_transactions,
+				"at block: {}",
+				block.header.number
+			);
+			assert_eq!(
+				block.extrinsics().len(),
+				expected_block_extrinsics,
+				"at block: {}",
+				block.header.number
+			);
 
 			block
 		};
@@ -801,11 +808,9 @@ mod tests {
 		let import_and_maintain = |mut client: Arc<TestClient>, block: TestBlock| {
 			let hash = block.hash();
 			block_on(client.import(BlockOrigin::Own, block)).unwrap();
-			block_on(
-				txpool.maintain(chain_event(
-						client.expect_header(hash).expect("there should be header"),
-				)),
-			);
+			block_on(txpool.maintain(chain_event(
+				client.expect_header(hash).expect("there should be header"),
+			)));
 		};
 
 		block_on(
@@ -870,10 +875,7 @@ mod tests {
 			}
 			.into_unchecked_extrinsic(),
 		)
-		.chain(
-			(0..extrinsics_num - 1)
-				.map(|v| extrinsic(v as u64 + 1)),
-		)
+		.chain((0..extrinsics_num - 1).map(|v| extrinsic(v as u64 + 1)))
 		.collect::<Vec<_>>();
 
 		let block_limit = genesis_header.encoded_size() +
@@ -963,8 +965,13 @@ mod tests {
 			client.clone(),
 		);
 
-		let tiny = |nonce| { ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY)).build2(nonce) };
-		let huge = |who| { ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE)).signer(AccountKeyring::numeric(who)).build2(0) };
+		let tiny =
+			|nonce| ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY)).build2(nonce);
+		let huge = |who| {
+			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE))
+				.signer(AccountKeyring::numeric(who))
+				.build2(0)
+		};
 
 		block_on(
 			txpool.submit_at(
@@ -1030,8 +1037,16 @@ mod tests {
 			client.clone(),
 		);
 
-		let tiny = |who| { ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY)).signer(AccountKeyring::numeric(who)).build2(1) };
-		let huge = |who| { ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE)).signer(AccountKeyring::numeric(who)).build2(0) };
+		let tiny = |who| {
+			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY))
+				.signer(AccountKeyring::numeric(who))
+				.build2(1)
+		};
+		let huge = |who| {
+			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE))
+				.signer(AccountKeyring::numeric(who))
+				.build2(0)
+		};
 
 		block_on(
 			txpool.submit_at(
@@ -1041,7 +1056,7 @@ mod tests {
 					.into_iter()
 					.map(huge)
 					// and some transactions that are okay.
-					.chain((0..MAX_SKIPPED_TRANSACTIONS+2).into_iter().map(tiny))
+					.chain((0..MAX_SKIPPED_TRANSACTIONS + 2).into_iter().map(tiny))
 					.collect(),
 			),
 		)
@@ -1067,8 +1082,8 @@ mod tests {
 			Box::new(move || {
 				let mut value = cell.lock();
 				let (called, old) = *value;
-				// log::trace!("xxx -> before: called:{called} old:{old:?} txpool:{:?}", txpool.status());
-				// add time after deadline is calculated internally (hence 1)
+				// log::trace!("xxx -> before: called:{called} old:{old:?} txpool:{:?}",
+				// txpool.status()); add time after deadline is calculated internally (hence 1)
 				let increase = if called == 1 {
 					// we start after the soft_deadline should have already been reached.
 					deadline / 2
@@ -1087,10 +1102,13 @@ mod tests {
 				.map(|r| r.block)
 				.unwrap();
 
-		// then the block should have one or two transactions. This maybe random as they are processed in parallel. The
-		// same signer and consecutive nonces for huge and tiny transactions guarantees that max two transactions will
-		// get to the block.
-		assert!((1..3).contains(&block.extrinsics().len()), "Block shall contain one or two extrinsics.");
+		// then the block should have one or two transactions. This maybe random as they are
+		// processed in parallel. The same signer and consecutive nonces for huge and tiny
+		// transactions guarantees that max two transactions will get to the block.
+		assert!(
+			(1..3).contains(&block.extrinsics().len()),
+			"Block shall contain one or two extrinsics."
+		);
 		assert!(
 			cell2.lock().0 > MAX_SKIPPED_TRANSACTIONS,
 			"Not enough calls to current time, which indicates the test might have ended because of deadline, not soft deadline"

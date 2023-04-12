@@ -16,13 +16,14 @@
 // limitations under the License.
 
 use crate::{
-	substrate_test_pallet, substrate_test_pallet::pallet::Call as PalletCall,
-	AccountId, AuthorityId, Balance, BalancesCall, CheckSubstrateCall, Index, Extrinsic, Pair, RuntimeCall, Signature, SignedPayload, TransferData
+	substrate_test_pallet::pallet::Call as PalletCall, AccountId, AuthorityId, Balance,
+	BalancesCall, CheckSubstrateCall, Extrinsic, Index, Pair, RuntimeCall, SignedPayload,
+	TransferData,
 };
 use codec::Encode;
-use frame_system::{CheckWeight, CheckNonce};
+use frame_system::{CheckNonce, CheckWeight};
 use sp_core::crypto::Pair as TraitPair;
-use sp_runtime::{Perbill, transaction_validity::{InvalidTransaction, TransactionPriority, TransactionValidityError}};
+use sp_runtime::{transaction_validity::TransactionPriority, Perbill};
 use sp_std::prelude::*;
 
 /// Transfer used in test substrate pallet
@@ -45,40 +46,17 @@ impl TransferData {
 	/// If feasible extract `TransferData` from given `Extrinsic`
 	pub fn try_from_unchecked_extrinsic(uxt: &Extrinsic) -> Option<Self> {
 		match uxt {
-			Extrinsic { function: RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest, value }), signature: Some((from,_, (CheckNonce(nonce),..))) } => {
-				Some(
-					TransferData {
-						from: from.clone(),
-						to: dest.clone(),
-						amount: *value,
-						nonce: *nonce
-					}
-				)
-			},
+			Extrinsic {
+				function: RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest, value }),
+				signature: Some((from, _, (CheckNonce(nonce), ..))),
+			} => Some(TransferData {
+				from: from.clone(),
+				to: dest.clone(),
+				amount: *value,
+				nonce: *nonce,
+			}),
 			_ => None,
 		}
-	}
-
-	/// Verify signature and extracts `Transfer` from given `Extrinsic`, otherwise returns
-	/// error
-	pub fn try_from_unchecked_extrinsic_and_verify(
-		uxt: &Extrinsic,
-	) -> Result<Self, TransactionValidityError> {
-		unimplemented!()
-		// if let RuntimeCall::SubstrateTest(PalletCall::transfer {
-		// 	ref transfer,
-		// 	ref signature,
-		// 	..
-		// }) = uxt.function
-		// {
-		// 	if sp_runtime::verify_encoded_lazy(signature, transfer, &transfer.from) {
-		// 		Ok(transfer.clone())
-		// 	} else {
-		// 		Err(InvalidTransaction::BadProof.into())
-		// 	}
-		// } else {
-		// 	Err(InvalidTransaction::Call.into())
-		// }
 	}
 }
 
@@ -87,13 +65,18 @@ pub struct ExtrinsicBuilder {
 	function: RuntimeCall,
 	is_unsigned: bool,
 	signer: Pair,
-	nonce: Option<Index>
+	nonce: Option<Index>,
 }
 
 impl ExtrinsicBuilder {
 	/// Create builder for given `RuntimeCall`
 	pub fn new(function: impl Into<RuntimeCall>) -> Self {
-		Self { function: function.into(), is_unsigned: false, signer: sp_keyring::AccountKeyring::Alice.pair(), nonce: None }
+		Self {
+			function: function.into(),
+			is_unsigned: false,
+			signer: sp_keyring::AccountKeyring::Alice.pair(),
+			nonce: None,
+		}
 	}
 
 	/// Create builder for given `Transfer`
@@ -101,12 +84,10 @@ impl ExtrinsicBuilder {
 		Self {
 			nonce: Some(transfer.nonce),
 			signer: transfer.from.clone(),
-			..Self::new(
-				BalancesCall::transfer_allow_death {
-					dest: transfer.to,
-					value: transfer.amount
-				}
-			)
+			..Self::new(BalancesCall::transfer_allow_death {
+				dest: transfer.to,
+				value: transfer.amount,
+			})
 		}
 	}
 
@@ -153,7 +134,7 @@ impl ExtrinsicBuilder {
 
 	/// Create builder for `PalletCall::Call::new_deposit_log_digest_item`
 	pub fn new_fill_block(ratio: Perbill) -> Self {
-		Self::new(PalletCall::fill_block{ ratio } )
+		Self::new(PalletCall::fill_block { ratio })
 	}
 
 	/// Create builder for `PalletCall::call_do_not_propagate` call using given parameters
@@ -163,7 +144,7 @@ impl ExtrinsicBuilder {
 
 	/// Create builder for `PalletCall::call_with_priority` call using given parameters
 	pub fn new_call_with_priority(priority: TransactionPriority) -> Self {
-		Self::new(PalletCall::call_with_priority {priority})
+		Self::new(PalletCall::call_with_priority { priority })
 	}
 
 	/// Unsigned `Extrinsic` will be created
@@ -195,8 +176,9 @@ impl ExtrinsicBuilder {
 			Extrinsic::new_unsigned(self.function)
 		} else {
 			let signer = self.signer;
-			let extra = (CheckNonce::from(nonce), CheckWeight::new(), CheckSubstrateCall{});
-			let raw_payload = SignedPayload::from_raw(self.function.clone(), extra.clone(), ((),(),()));
+			let extra = (CheckNonce::from(nonce), CheckWeight::new(), CheckSubstrateCall {});
+			let raw_payload =
+				SignedPayload::from_raw(self.function.clone(), extra.clone(), ((), (), ()));
 			let signature = raw_payload.using_encoded(|e| signer.sign(e));
 
 			Extrinsic::new_signed(self.function, signer.public(), signature, extra)

@@ -32,8 +32,8 @@ use sp_runtime::{
 };
 use std::{collections::HashSet, sync::Arc};
 use substrate_test_runtime::{
-	substrate_test_pallet::pallet::Call as PalletCall, BalancesCall, Block, Extrinsic, ExtrinsicBuilder, Hashing,
-	RuntimeCall, Transfer, H256,
+	substrate_test_pallet::pallet::Call as PalletCall, BalancesCall, Block, Extrinsic,
+	ExtrinsicBuilder, Hashing, RuntimeCall, Transfer, H256,
 };
 
 pub(crate) const INVALID_NONCE: u64 = 254;
@@ -75,7 +75,10 @@ impl ChainApi for TestApi {
 		let block_number = self.block_id_to_number(at).unwrap().unwrap();
 
 		let res = match uxt {
-			Extrinsic { function: RuntimeCall::Balances(BalancesCall::transfer_allow_death { .. }), signature: Some((_,_, (CheckNonce(nonce),..))) } => {
+			Extrinsic {
+				function: RuntimeCall::Balances(BalancesCall::transfer_allow_death { .. }),
+				signature: Some((_, _, (CheckNonce(nonce), ..))),
+			} => {
 				// This is used to control the test flow.
 				if nonce > 0 {
 					let opt = self.delay.lock().take();
@@ -118,14 +121,19 @@ impl ChainApi for TestApi {
 					Ok(transaction)
 				}
 			},
-			Extrinsic { function: RuntimeCall::SubstrateTest(PalletCall::include_data { .. }), .. } => Ok(ValidTransaction {
+			Extrinsic {
+				function: RuntimeCall::SubstrateTest(PalletCall::include_data { .. }),
+				..
+			} => Ok(ValidTransaction {
 				priority: 9001,
 				requires: vec![],
 				provides: vec![vec![42]],
 				longevity: 9001,
 				propagate: false,
 			}),
-			Extrinsic { function: RuntimeCall::SubstrateTest(PalletCall::store { .. }), .. } => Ok(ValidTransaction {
+			Extrinsic {
+				function: RuntimeCall::SubstrateTest(PalletCall::store { .. }), ..
+			} => Ok(ValidTransaction {
 				priority: 9001,
 				requires: vec![],
 				provides: vec![vec![43]],

@@ -352,14 +352,20 @@ fn block_builder_does_not_include_invalid() {
 	sp_tracing::try_init_simple();
 	let mut client = substrate_test_runtime_client::new();
 
-	log::trace!("xxx -> alice : {:?}", client
-		.runtime_api()
-		.balance_of(client.chain_info().genesis_hash, AccountKeyring::Alice.into())
-		.unwrap());
-	log::trace!("xxx -> eve : {:?}", client
-		.runtime_api()
-		.balance_of(client.chain_info().genesis_hash, AccountKeyring::Eve.into())
-		.unwrap());
+	log::trace!(
+		"xxx -> alice : {:?}",
+		client
+			.runtime_api()
+			.balance_of(client.chain_info().genesis_hash, AccountKeyring::Alice.into())
+			.unwrap()
+	);
+	log::trace!(
+		"xxx -> eve : {:?}",
+		client
+			.runtime_api()
+			.balance_of(client.chain_info().genesis_hash, AccountKeyring::Eve.into())
+			.unwrap()
+	);
 
 	let mut builder = client.new_block(Default::default()).unwrap();
 
@@ -372,15 +378,14 @@ fn block_builder_does_not_include_invalid() {
 		})
 		.unwrap();
 
-	assert!(
-	builder
+	assert!(builder
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
 			amount: 30 * DOLLARS,
 			nonce: 0,
 		})
-	.is_err());
+		.is_err());
 
 	let block = builder.build().unwrap().block;
 	//transfer from Eve should not be included

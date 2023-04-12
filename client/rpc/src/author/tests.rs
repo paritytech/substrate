@@ -112,7 +112,13 @@ async fn author_submit_transaction_should_not_cause_error() {
 #[tokio::test]
 async fn author_should_watch_extrinsic() {
 	let api = TestSetup::into_rpc();
-	let xt = to_hex(&ExtrinsicBuilder::new_call_with_priority(0).signer(AccountKeyring::Alice.into()).build().encode(), true);
+	let xt = to_hex(
+		&ExtrinsicBuilder::new_call_with_priority(0)
+			.signer(AccountKeyring::Alice.into())
+			.build()
+			.encode(),
+		true,
+	);
 	// let xt = to_hex(&uxt(AccountKeyring::Alice, 0).encode(), true);
 
 	let mut sub = api.subscribe("author_submitAndWatchExtrinsic", [xt]).await.unwrap();
@@ -127,7 +133,10 @@ async fn author_should_watch_extrinsic() {
 
 	// Replace the extrinsic and observe the subscription is notified.
 	let (xt_replacement, xt_hash) = {
-		let tx = ExtrinsicBuilder::new_call_with_priority(1).signer(AccountKeyring::Alice.into()).build().encode();
+		let tx = ExtrinsicBuilder::new_call_with_priority(1)
+			.signer(AccountKeyring::Alice.into())
+			.build()
+			.encode();
 		// let tx = Transfer {
 		// 	amount: 5,
 		// 	nonce: 0,
@@ -157,9 +166,7 @@ async fn author_should_return_watch_validation_error() {
 	let invalid_xt = ExtrinsicBuilder::new_fill_block(Perbill::from_percent(100)).build2(0);
 
 	let api = TestSetup::into_rpc();
-	let failed_sub = api
-		.subscribe(METHOD, [to_hex(&invalid_xt.encode(), true)])
-		.await;
+	let failed_sub = api.subscribe(METHOD, [to_hex(&invalid_xt.encode(), true)]).await;
 
 	assert_matches!(
 		failed_sub,

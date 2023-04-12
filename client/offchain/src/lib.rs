@@ -254,7 +254,9 @@ mod tests {
 	use sp_runtime::generic::BlockId;
 	use std::{collections::HashSet, sync::Arc};
 	use substrate_test_runtime_client::{
-		runtime::{Block, ExtrinsicBuilder, RuntimeCall, substrate_test_pallet::pallet::Call as PalletCall},
+		runtime::{
+			substrate_test_pallet::pallet::Call as PalletCall, Block, ExtrinsicBuilder, RuntimeCall,
+		},
 		ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient, TestClientBuilderExt,
 	};
 
@@ -385,7 +387,13 @@ mod tests {
 
 		// then
 		assert_eq!(pool.0.status().ready, 1);
-		assert_eq!(matches!(pool.0.ready().next().unwrap().data().function, RuntimeCall::SubstrateTest(PalletCall::include_data { .. }) ), true);
+		assert_eq!(
+			matches!(
+				pool.0.ready().next().unwrap().data().function,
+				RuntimeCall::SubstrateTest(PalletCall::include_data { .. })
+			),
+			true
+		);
 	}
 
 	#[test]

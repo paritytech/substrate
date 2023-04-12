@@ -18,7 +18,7 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use codec::{Decode, Encode};
+use codec::Encode;
 use futures::{
 	executor::block_on,
 	future::{ready, Ready},
@@ -35,7 +35,7 @@ use sp_runtime::{
 	},
 };
 use substrate_test_runtime::{
-	AccountId, Block, Extrinsic, ExtrinsicBuilder, H256, Transfer, TransferData,
+	AccountId, Block, Extrinsic, ExtrinsicBuilder, Transfer, TransferData, H256,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -68,8 +68,8 @@ impl ChainApi for TestApi {
 		_source: TransactionSource,
 		uxt: <Self::Block as BlockT>::Extrinsic,
 	) -> Self::ValidationFuture {
-		let transfer =
-			TransferData::try_from_unchecked_extrinsic(&uxt).expect("uxt is expected to be Transfer");
+		let transfer = TransferData::try_from_unchecked_extrinsic(&uxt)
+			.expect("uxt is expected to be Transfer");
 		let nonce = transfer.nonce;
 		let from = transfer.from;
 
@@ -138,9 +138,7 @@ impl ChainApi for TestApi {
 
 fn uxt(transfer: Transfer) -> Extrinsic {
 	//todo: empty signature removed...
-	ExtrinsicBuilder::new_transfer(transfer)
-		.unsigned()
-		.build()
+	ExtrinsicBuilder::new_transfer(transfer).unsigned().build()
 }
 
 fn bench_configured(pool: Pool<TestApi>, number: u64) {
