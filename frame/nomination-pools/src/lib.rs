@@ -133,7 +133,7 @@
 //! * Root: can change the nominator, bouncer, or itself, manage and claim commission, and can
 //!   perform any of the actions the nominator or bouncer can.
 //!
-//! ## Commission
+//! ### Commission
 //!
 //! A pool can optionally have a commission configuration, via the `root` role, set with
 //! [`Call::set_commission`] and claimed with [`Call::claim_commission`]. A payee account must be
@@ -2617,7 +2617,7 @@ pub mod pallet {
 		/// commission is paid out and added to total claimed commission`. Total pending commission
 		/// is reset to zero. the current.
 		#[pallet::call_index(20)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::claim_commission())]
 		pub fn claim_commission(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_claim_commission(who, pool_id)
