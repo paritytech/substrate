@@ -61,10 +61,10 @@ use tokio::io::{AsyncBufReadExt, AsyncRead};
 ///
 /// [`Child`]: std::process::Child
 pub fn start_node() -> Child {
-	Command::new(cargo_bin("substrate"))
+	Command::new(cargo_bin("node-template"))
 		.stdout(process::Stdio::piped())
 		.stderr(process::Stdio::piped())
-		.args(&["--dev", "--tmp", "--ws-port=45789", "--no-hardware-benchmarks"])
+		.args(&["--dev", "--ws-port=45789"])
 		.spawn()
 		.unwrap()
 }
