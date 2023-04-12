@@ -23,7 +23,7 @@ mod tests {
 	use assert_cmd::cargo::cargo_bin;
 	use regex::Regex;
 	use std::{
-		process::{self},
+		process,
 		str::from_utf8,
 		time::Duration,
 	};
