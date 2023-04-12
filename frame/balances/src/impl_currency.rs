@@ -22,7 +22,7 @@ use frame_support::{
 	ensure,
 	pallet_prelude::DispatchResult,
 	traits::{
-		tokens::{fungible, BalanceStatus as Status},
+		tokens::{fungible, Fortitude::Polite, Precision::BestEffort, BalanceStatus as Status},
 		Currency, DefensiveSaturating, ExistenceRequirement,
 		ExistenceRequirement::AllowDeath,
 		Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency,
@@ -591,22 +591,16 @@ where
 	/// - the value to be moved is zero; or
 	/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
 	///
-	/// This may not repatriate any funds which would lead the total balance to be less than the
-	/// frozen amount.
+	/// This is `Polite` and thus will not repatriate any funds which would lead the total balance
+	/// to be less than the frozen amount. Returns `Ok` with the actual amount of funds moved,
+	/// which may be less than `value` since the operation is done an a `BestEffort` basis.
 	fn repatriate_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
 		value: Self::Balance,
 		status: Status,
 	) -> Result<Self::Balance, DispatchError> {
-		if value >
-			<Self as fungible::InspectHold<_>>::reducible_total_balance_on_hold(
-				slashed,
-				Fortitude::Polite,
-			) {
-			return Err(TokenError::FundsUnavailable.into())
-		}
-		let actual = Self::do_transfer_reserved(slashed, beneficiary, value, true, status)?;
+		let actual = Self::do_transfer_reserved(slashed, beneficiary, value, BestEffort, Polite, status)?;
 		Ok(value.saturating_sub(actual))
 	}
 }

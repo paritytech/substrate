@@ -205,7 +205,7 @@ type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::fungible::Credit};
+	use frame_support::{pallet_prelude::*, traits::{fungible::Credit, tokens::Precision}};
 	use frame_system::pallet_prelude::*;
 
 	pub type CreditOf<T, I> = Credit<<T as frame_system::Config>::AccountId, Pallet<T, I>>;
@@ -1100,7 +1100,7 @@ pub mod pallet {
 		}
 
 		/// Move the reserved balance of one account into the balance of another, according to
-		/// `status`.
+		/// `status`. This will respect freezes/locks only if `fortitude` is `Polite`.
 		///
 		/// Is a no-op if:
 		/// - the value to be moved is zero; or
@@ -1111,7 +1111,8 @@ pub mod pallet {
 			slashed: &T::AccountId,
 			beneficiary: &T::AccountId,
 			value: T::Balance,
-			best_effort: bool,
+			precision: Precision,
+			fortitude: Fortitude,
 			status: Status,
 		) -> Result<T::Balance, DispatchError> {
 			if value.is_zero() {
@@ -1132,11 +1133,15 @@ pub mod pallet {
 					Self::try_mutate_account(
 						slashed,
 						|from_account, _| -> Result<T::Balance, DispatchError> {
-							let actual = cmp::min(from_account.reserved, value);
-							ensure!(
-								best_effort || actual == value,
-								Error::<T, I>::InsufficientBalance
+							let max = <Self as fungible::InspectHold<_>>::reducible_total_balance_on_hold(
+								slashed,
+								fortitude,
 							);
+							let actual = match precision {
+								Precision::BestEffort => value.min(max),
+								Precision::Exact => value,
+							};
+							ensure!(actual <= max, TokenError::FundsUnavailable);
 							match status {
 								Status::Free =>
 									to_account.free = to_account
@@ -1149,7 +1154,7 @@ pub mod pallet {
 										.checked_add(&actual)
 										.ok_or(ArithmeticError::Overflow)?,
 							}
-							from_account.reserved -= actual;
+							from_account.reserved.saturating_reduce(actual);
 							Ok(actual)
 						},
 					)
