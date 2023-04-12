@@ -48,7 +48,7 @@ fn initialize(
 	_tmpdir: &mut Option<tempfile::TempDir>,
 	runtime: &[u8],
 	method: Method,
-) -> Arc<dyn WasmModule> {
+) -> Box<dyn WasmModule> {
 	let blob = RuntimeBlob::uncompress_if_needed(runtime).unwrap();
 	let host_functions = sp_io::SubstrateHostFunctions::host_functions();
 	let allow_missing_func_imports = true;
@@ -60,7 +60,7 @@ fn initialize(
 			host_functions,
 			allow_missing_func_imports,
 		)
-		.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
+		.map(|runtime| -> Box<dyn WasmModule> { Box::new(runtime) }),
 		Method::Compiled { instantiation_strategy, precompile } => {
 			let config = sc_executor_wasmtime::Config {
 				allow_missing_func_imports,
@@ -98,7 +98,7 @@ fn initialize(
 			} else {
 				sc_executor_wasmtime::create_runtime::<sp_io::SubstrateHostFunctions>(blob, config)
 			}
-			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
+			.map(|runtime| -> Box<dyn WasmModule> { Box::new(runtime) })
 		},
 	}
 	.unwrap()

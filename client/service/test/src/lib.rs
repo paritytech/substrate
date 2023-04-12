@@ -182,10 +182,7 @@ where
 			loop {
 				interval.tick().await;
 
-				if full_nodes
-					.iter()
-					.all(|&(ref id, ref service, _, _)| full_predicate(*id, service))
-				{
+				if full_nodes.iter().all(|(id, service, _, _)| full_predicate(*id, service)) {
 					break
 				}
 			}

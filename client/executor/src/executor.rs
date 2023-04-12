@@ -320,7 +320,7 @@ where
 	) -> Result<R>
 	where
 		F: FnOnce(
-			AssertUnwindSafe<&Arc<dyn WasmModule>>,
+			AssertUnwindSafe<&dyn WasmModule>,
 			AssertUnwindSafe<&mut dyn WasmInstance>,
 			Option<&RuntimeVersion>,
 			AssertUnwindSafe<&mut dyn Externalities>,

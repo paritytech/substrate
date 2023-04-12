@@ -15,14 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::utils::{
-	extract_all_signature_types, extract_block_type_from_trait_path, extract_impl_trait,
-	extract_parameter_names_types_and_borrows, generate_crate_access,
-	generate_runtime_mod_name_for_trait, parse_runtime_api_version, prefix_function_with_trait,
-	versioned_trait_name, AllowSelfRefInParameters, RequireQualifiedTraitPath,
+use crate::{
+	common::API_VERSION_ATTRIBUTE,
+	runtime_metadata::generate_impl_runtime_metadata,
+	utils::{
+		extract_all_signature_types, extract_block_type_from_trait_path, extract_impl_trait,
+		extract_parameter_names_types_and_borrows, generate_crate_access,
+		generate_runtime_mod_name_for_trait, parse_runtime_api_version, prefix_function_with_trait,
+		versioned_trait_name, AllowSelfRefInParameters, RequireQualifiedTraitPath,
+	},
 };
-
-use crate::common::API_VERSION_ATTRIBUTE;
 
 use proc_macro2::{Span, TokenStream};
 
@@ -685,6 +687,7 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let runtime_api_versions = generate_runtime_api_versions(api_impls)?;
 	let wasm_interface = generate_wasm_interface(api_impls)?;
 	let api_impls_for_runtime_api = generate_api_impl_for_runtime_api(api_impls)?;
+	let runtime_metadata = generate_impl_runtime_metadata(api_impls)?;
 
 	let impl_ = quote!(
 		#base_runtime_api
@@ -694,6 +697,8 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 		#api_impls_for_runtime_api
 
 		#runtime_api_versions
+
+		#runtime_metadata
 
 		pub mod api {
 			use super::*;
