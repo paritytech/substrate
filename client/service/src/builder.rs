@@ -36,11 +36,12 @@ use sc_client_api::{
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
-use sc_executor::RuntimeVersionOf;
-use sc_keystore::LocalKeystore;
-use sc_network::{
-	config::SyncMode, NetworkEventStream, NetworkService, NetworkStateInfo, NetworkStatusProvider,
+use sc_executor::{
+	sp_wasm_interface::HostFunctions, HeapAllocStrategy, NativeElseWasmExecutor,
+	NativeExecutionDispatch, RuntimeVersionOf, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY,
 };
+use sc_keystore::LocalKeystore;
+use sc_network::{config::SyncMode, NetworkService, NetworkStateInfo, NetworkStatusProvider};
 use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{role::Roles, sync::warp::WarpSyncParams};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
@@ -76,11 +77,10 @@ pub type TFullClient<TBl, TRtApi, TExec> =
 	Client<TFullBackend<TBl>, TFullCallExecutor<TBl, TExec>, TBl, TRtApi>;
 
 /// Full client backend type.
-pub type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
+pub type TFullBackend<TBl> = Backend<TBl>;
 
 /// Full client call executor type.
-pub type TFullCallExecutor<TBl, TExec> =
-	crate::client::LocalCallExecutor<TBl, sc_client_db::Backend<TBl>, TExec>;
+pub type TFullCallExecutor<TBl, TExec> = crate::client::LocalCallExecutor<TBl, Backend<TBl>, TExec>;
 
 type TFullParts<TBl, TRtApi, TExec> =
 	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
@@ -183,6 +183,7 @@ where
 			config.execution_strategies.clone(),
 			Some(keystore_container.keystore()),
 			sc_offchain::OffchainDb::factory_from_backend(&*backend),
+			Arc::new(executor.clone()),
 		);
 
 		let wasm_runtime_substitutes = config
@@ -230,6 +231,27 @@ where
 	Ok((client, backend, keystore_container, task_manager))
 }
 
+/// Creates a [`NativeElseWasmExecutor`] according to [`Configuration`].
+pub fn new_native_or_wasm_executor<D: NativeExecutionDispatch>(
+	config: &Configuration,
+) -> NativeElseWasmExecutor<D> {
+	NativeElseWasmExecutor::new_with_wasm_executor(new_wasm_executor(config))
+}
+
+/// Creates a [`WasmExecutor`] according to [`Configuration`].
+pub fn new_wasm_executor<H: HostFunctions>(config: &Configuration) -> WasmExecutor<H> {
+	let strategy = config
+		.default_heap_pages
+		.map_or(DEFAULT_HEAP_ALLOC_STRATEGY, |p| HeapAllocStrategy::Static { extra_pages: p as _ });
+	WasmExecutor::<H>::builder()
+		.with_execution_method(config.wasm_method)
+		.with_onchain_heap_alloc_strategy(strategy)
+		.with_offchain_heap_alloc_strategy(strategy)
+		.with_max_runtime_instances(config.max_runtime_instances)
+		.with_runtime_cache_size(config.runtime_cache_size)
+		.build()
+}
+
 /// Create an instance of default DB-backend backend.
 pub fn new_db_backend<Block>(
 	settings: DatabaseSettings,
@@ -255,7 +277,7 @@ pub fn new_client<E, Block, RA, G>(
 	telemetry: Option<TelemetryHandle>,
 	config: ClientConfig<Block>,
 ) -> Result<
-	crate::client::Client<
+	Client<
 		Backend<Block>,
 		crate::client::LocalCallExecutor<Block, Backend<Block>, E>,
 		Block,
@@ -274,12 +296,11 @@ where
 	let executor = crate::client::LocalCallExecutor::new(
 		backend.clone(),
 		executor,
-		spawn_handle.clone(),
 		config.clone(),
 		execution_extensions,
 	)?;
 
-	crate::client::Client::new(
+	Client::new(
 		backend,
 		executor,
 		spawn_handle,
@@ -825,6 +846,7 @@ where
 		protocol_config
 	};
 
+	let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (engine, sync_service, block_announce_config) = SyncingEngine::new(
 		Roles::from(&config.role),
@@ -840,6 +862,7 @@ where
 		block_request_protocol_config.name.clone(),
 		state_request_protocol_config.name.clone(),
 		warp_sync_protocol_config.as_ref().map(|config| config.name.clone()),
+		rx,
 	)?;
 	let sync_service_import_queue = sync_service.clone();
 	let sync_service = Arc::new(sync_service);
@@ -865,6 +888,7 @@ where
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_announce_config,
+		tx,
 		request_response_protocol_configs: request_response_protocol_configs
 			.into_iter()
 			.chain([
@@ -904,15 +928,13 @@ where
 	)?;
 
 	spawn_handle.spawn("network-transactions-handler", Some("networking"), tx_handler.run());
-	spawn_handle.spawn(
+	spawn_handle.spawn_blocking(
 		"chain-sync-network-service-provider",
 		Some("networking"),
 		chain_sync_network_provider.run(network.clone()),
 	);
 	spawn_handle.spawn("import-queue", None, import_queue.run(Box::new(sync_service_import_queue)));
-
-	let event_stream = network.event_stream("syncing");
-	spawn_handle.spawn("syncing", None, engine.run(event_stream));
+	spawn_handle.spawn_blocking("syncing", None, engine.run());
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc", 10_000);
 	spawn_handle.spawn(

@@ -76,7 +76,7 @@
 //! The Contract module is a work in progress. The following examples show how this Contract module
 //! can be used to instantiate and call contracts.
 //!
-//! * [`ink`](https://github.com/paritytech/ink) is
+//! * [`ink!`](https://use.ink) is
 //! an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
 //! WebAssembly based smart contracts in the Rust programming language.
 
@@ -102,7 +102,7 @@ mod tests;
 use crate::{
 	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
 	gas::GasMeter,
-	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract},
+	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
 	weights::WeightInfo,
 };
@@ -115,7 +115,7 @@ use frame_support::{
 		tokens::fungible::Inspect, ConstU32, Contains, Currency, Get, Randomness,
 		ReservableCurrency, Time,
 	},
-	weights::{OldWeight, Weight},
+	weights::Weight,
 	BoundedVec, WeakBoundedVec,
 };
 use frame_system::Pallet as System;
@@ -149,6 +149,12 @@ type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
 type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
+
+/// The old weight type.
+///
+/// This is a copy of the [`frame_support::weights::OldWeight`] type since the contracts pallet
+/// needs to support it indefinitely.
+type OldWeight = u64;
 
 /// Used as a sentinel value when reading and writing contract memory.
 ///
@@ -245,33 +251,6 @@ pub mod pallet {
 		/// memory usage of your runtime.
 		type CallStack: Array<Item = Frame<Self>>;
 
-		/// The maximum number of contracts that can be pending for deletion.
-		///
-		/// When a contract is deleted by calling `seal_terminate` it becomes inaccessible
-		/// immediately, but the deletion of the storage items it has accumulated is performed
-		/// later. The contract is put into the deletion queue. This defines how many
-		/// contracts can be queued up at the same time. If that limit is reached `seal_terminate`
-		/// will fail. The action must be retried in a later block in that case.
-		///
-		/// The reasons for limiting the queue depth are:
-		///
-		/// 1. The queue is in storage in order to be persistent between blocks. We want to limit
-		/// 	the amount of storage that can be consumed.
-		/// 2. The queue is stored in a vector and needs to be decoded as a whole when reading
-		///		it at the end of each block. Longer queues take more weight to decode and hence
-		///		limit the amount of items that can be deleted per block.
-		#[pallet::constant]
-		type DeletionQueueDepth: Get<u32>;
-
-		/// The maximum amount of weight that can be consumed per block for lazy trie removal.
-		///
-		/// The amount of weight that is dedicated per block to work on the deletion queue. Larger
-		/// values allow more trie keys to be deleted in each block but reduce the amount of
-		/// weight that is left for transactions. See [`Self::DeletionQueueDepth`] for more
-		/// information about the deletion queue.
-		#[pallet::constant]
-		type DeletionWeightLimit: Get<Weight>;
-
 		/// The amount of balance a caller has to pay for each byte of storage.
 		///
 		/// # Note
@@ -327,25 +306,6 @@ pub mod pallet {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
 			ContractInfo::<T>::process_deletion_queue_batch(remaining_weight)
 				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
-		}
-
-		fn on_initialize(_block: T::BlockNumber) -> Weight {
-			// We want to process the deletion_queue in the on_idle hook. Only in the case
-			// that the queue length has reached its maximal depth, we process it here.
-			let max_len = T::DeletionQueueDepth::get() as usize;
-			let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
-			if queue_len >= max_len {
-				// We do not want to go above the block limit and rather avoid lazy deletion
-				// in that case. This should only happen on runtime upgrades.
-				let weight_limit = T::BlockWeights::get()
-					.max_block
-					.saturating_sub(System::<T>::block_weight().total())
-					.min(T::DeletionWeightLimit::get());
-				ContractInfo::<T>::process_deletion_queue_batch(weight_limit)
-					.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
-			} else {
-				T::WeightInfo::on_process_deletion_queue_batch()
-			}
 		}
 
 		fn integrity_test() {
@@ -860,12 +820,6 @@ pub mod pallet {
 		/// in this error. Note that this usually  shouldn't happen as deploying such contracts
 		/// is rejected.
 		NoChainExtension,
-		/// Removal of a contract failed because the deletion queue is full.
-		///
-		/// This can happen when calling `seal_terminate`.
-		/// The queue is filled by deleting contracts and emptied by a fixed amount each block.
-		/// Trying again during another block is the only way to resolve this issue.
-		DeletionQueueFull,
 		/// A contract with the same AccountId already exists.
 		DuplicateContract,
 		/// A contract self destructed in its constructor.
@@ -949,10 +903,15 @@ pub mod pallet {
 	/// Evicted contracts that await child trie deletion.
 	///
 	/// Child trie deletion is a heavy operation depending on the amount of storage items
-	/// stored in said trie. Therefore this operation is performed lazily in `on_initialize`.
+	/// stored in said trie. Therefore this operation is performed lazily in `on_idle`.
 	#[pallet::storage]
-	pub(crate) type DeletionQueue<T: Config> =
-		StorageValue<_, BoundedVec<DeletedContract, T::DeletionQueueDepth>, ValueQuery>;
+	pub(crate) type DeletionQueue<T: Config> = StorageMap<_, Twox64Concat, u32, TrieId>;
+
+	/// A pair of monotonic counters used to track the latest contract marked for deletion
+	/// and the latest deleted contract in queue.
+	#[pallet::storage]
+	pub(crate) type DeletionQueueCounter<T: Config> =
+		StorageValue<_, DeletionQueueManager<T>, ValueQuery>;
 }
 
 /// Context of a contract invocation.
@@ -1328,7 +1287,7 @@ impl<T: Config> Pallet<T> {
 	/// Used by backwards compatible extrinsics. We cannot just set the proof_size weight limit to
 	/// zero or an old `Call` will just fail with OutOfGas.
 	fn compat_weight_limit(gas_limit: OldWeight) -> Weight {
-		Weight::from_parts(gas_limit.0, u64::from(T::MaxCodeLen::get()) * 2)
+		Weight::from_parts(gas_limit, u64::from(T::MaxCodeLen::get()) * 2)
 	}
 }
 
