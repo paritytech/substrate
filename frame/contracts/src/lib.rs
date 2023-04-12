@@ -932,6 +932,27 @@ struct InstantiateInput<T: Config> {
 	salt: Vec<u8>,
 }
 
+pub enum CollectEvents {
+	/// # Note
+	///
+	/// Events should only be collected when called off-chain, as this would
+	/// collect all the Events emitted in the block so far and put them in them into the PoV.
+	///
+	/// **Never** use this mode for on-chain execution.
+	UnsafeCollect,
+	/// Events should not be collected.
+	Skip,
+}
+
+pub enum DebugInfo {
+	/// # Note
+	///
+	/// This should only ever be set to `UnsafeYes` when executing as an RPC because
+	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
+	UnsafeDebug,
+	Skip,
+}
+
 /// Return type of private helper functions.
 struct InternalOutput<T: Config, O> {
 	/// The gas meter that was used to execute the call.
@@ -1108,14 +1129,11 @@ impl<T: Config> Pallet<T> {
 	///
 	/// # Note
 	///
-	/// `debug` should only ever be set to `true` when executing as an RPC because
-	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
-	/// If set to `true` it returns additional human readable debugging information.
-	/// `collect_events` should only be set to `true` when called off-chain as it would enable
-	/// collecting all the Events emitted in the block so far and put them in them into the PoV. If
-	/// `collect_events` is `true` the result return `Some(events)`, otherwise it returns `None`
+	/// If `debug` is set to `DebugInfo::UnsafeDebug` it returns additional human readable debugging
+	/// information.
 	///
-	/// It returns the execution result and the amount of used weight.
+	/// If `collect_events` is set to `CollectEvents::UnsafeCollect` it collects all the Events
+	/// emitted in the block so far.
 	pub fn bare_call(
 		origin: T::AccountId,
 		dest: T::AccountId,
@@ -1123,11 +1141,15 @@ impl<T: Config> Pallet<T> {
 		gas_limit: Weight,
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
-		debug: bool,
+		debug: DebugInfo,
 		determinism: Determinism,
-		collect_events: bool,
+		collect_events: CollectEvents,
 	) -> ContractExecResult<BalanceOf<T>, EventRecordOf<T>> {
-		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
+		let mut debug_message = if matches!(debug, DebugInfo::UnsafeDebug) {
+			Some(DebugBufferVec::<T>::default())
+		} else {
+			None
+		};
 		let common = CommonInput {
 			origin,
 			value,
@@ -1137,7 +1159,8 @@ impl<T: Config> Pallet<T> {
 			debug_message: debug_message.as_mut(),
 		};
 		let output = CallInput::<T> { dest, determinism }.run_guarded(common);
-		let events = if collect_events {
+		// collect events if CollectEvents is UnsafeCollect
+		let events = if matches!(collect_events, CollectEvents::UnsafeCollect) {
 			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
 		} else {
 			None
@@ -1162,12 +1185,11 @@ impl<T: Config> Pallet<T> {
 	///
 	/// # Note
 	///
-	/// `debug` should only ever be set to `true` when executing as an RPC because
-	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
-	/// If set to `true` it returns additional human readable debugging information.
-	/// `collect_events` should only be set to `true` when called off-chain as it would enable
-	/// collecting all the Events emitted in the block so far and put them in them into the PoV. If
-	/// `collect_events` is `true` the result return `Some(events)`, otherwise it returns `None`
+	/// If `debug` is set to `DebugInfo::UnsafeDebug` it returns additional human readable debugging
+	/// information.
+	///
+	/// If `collect_events` is set to `CollectEvents::UnsafeCollect` it collects all the Events
+	/// emitted in the block so far.
 	pub fn bare_instantiate(
 		origin: T::AccountId,
 		value: BalanceOf<T>,
@@ -1176,10 +1198,14 @@ impl<T: Config> Pallet<T> {
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
-		debug: bool,
-		collect_events: bool,
+		debug: DebugInfo,
+		collect_events: CollectEvents,
 	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>, EventRecordOf<T>> {
-		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
+		let mut debug_message = if matches!(debug, DebugInfo::UnsafeDebug) {
+			Some(DebugBufferVec::<T>::default())
+		} else {
+			None
+		};
 		let common = CommonInput {
 			origin,
 			value,
@@ -1189,7 +1215,8 @@ impl<T: Config> Pallet<T> {
 			debug_message: debug_message.as_mut(),
 		};
 		let output = InstantiateInput::<T> { code, salt }.run_guarded(common);
-		let events = if collect_events {
+		// collect events if CollectEvents is UnsafeCollect
+		let events = if matches!(collect_events, CollectEvents::UnsafeCollect) {
 			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
 		} else {
 			None

@@ -26,8 +26,8 @@ use crate::{
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Code, CodeStorage, Config, ContractInfo, ContractInfoOf, DefaultAddressGenerator,
-	DeletionQueueCounter, Error, Pallet, Schedule,
+	BalanceOf, Code, CodeStorage, CollectEvents, Config, ContractInfo, ContractInfoOf, DebugInfo,
+	DefaultAddressGenerator, DeletionQueueCounter, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -549,8 +549,8 @@ fn instantiate_and_call_and_deposit_event() {
 			Code::Existing(code_hash),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -656,8 +656,8 @@ fn deposit_event_max_value_limit() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -703,8 +703,8 @@ fn run_out_of_gas() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -746,8 +746,8 @@ fn instantiate_unique_trie_id() {
 			Code::Existing(code_hash),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -809,8 +809,8 @@ fn storage_max_value_limit() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -860,8 +860,8 @@ fn deploy_and_call_other_contract() {
 			Code::Upload(caller_wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1007,8 +1007,8 @@ fn delegate_call() {
 			Code::Upload(caller_wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1047,8 +1047,8 @@ fn transfer_allow_death_cannot_kill_account() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1088,8 +1088,8 @@ fn cannot_self_destruct_through_draning() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1133,8 +1133,8 @@ fn cannot_self_destruct_through_storage_refund_after_price_change() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1192,8 +1192,8 @@ fn cannot_self_destruct_while_live() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1237,8 +1237,8 @@ fn self_destruct_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1345,8 +1345,8 @@ fn destroy_contract_and_transfer_funds() {
 			Code::Upload(caller_wasm),
 			callee_code_hash.as_ref().to_vec(),
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1410,8 +1410,8 @@ fn crypto_hashes() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1444,9 +1444,9 @@ fn crypto_hashes() {
 				GAS_LIMIT,
 				None,
 				params,
-				false,
+				DebugInfo::Skip,
 				Determinism::Enforced,
-				false,
+				CollectEvents::Skip,
 			)
 			.result
 			.unwrap();
@@ -1472,8 +1472,8 @@ fn transfer_return_code() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1488,9 +1488,9 @@ fn transfer_return_code() {
 			GAS_LIMIT,
 			None,
 			vec![],
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -1515,8 +1515,8 @@ fn call_return_code() {
 			Code::Upload(caller_code),
 			vec![0],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1531,9 +1531,9 @@ fn call_return_code() {
 			GAS_LIMIT,
 			None,
 			AsRef::<[u8]>::as_ref(&DJANGO).to_vec(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -1547,8 +1547,8 @@ fn call_return_code() {
 			Code::Upload(callee_code),
 			vec![0],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1567,9 +1567,9 @@ fn call_return_code() {
 				.chain(&0u32.to_le_bytes())
 				.cloned()
 				.collect(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -1588,9 +1588,9 @@ fn call_return_code() {
 				.chain(&1u32.to_le_bytes())
 				.cloned()
 				.collect(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -1608,9 +1608,9 @@ fn call_return_code() {
 				.chain(&2u32.to_le_bytes())
 				.cloned()
 				.collect(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -1646,8 +1646,8 @@ fn instantiate_return_code() {
 			Code::Upload(caller_code),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1662,9 +1662,9 @@ fn instantiate_return_code() {
 			GAS_LIMIT,
 			None,
 			callee_hash.clone(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -1679,9 +1679,9 @@ fn instantiate_return_code() {
 			GAS_LIMIT,
 			None,
 			vec![0; 33],
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -1695,9 +1695,9 @@ fn instantiate_return_code() {
 			GAS_LIMIT,
 			None,
 			callee_hash.iter().chain(&1u32.to_le_bytes()).cloned().collect(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -1711,9 +1711,9 @@ fn instantiate_return_code() {
 			GAS_LIMIT,
 			None,
 			callee_hash.iter().chain(&2u32.to_le_bytes()).cloned().collect(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -1757,8 +1757,8 @@ fn disabled_chain_extension_errors_on_call() {
 			Code::Upload(code),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1785,8 +1785,8 @@ fn chain_extension_works() {
 			Code::Upload(code),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1801,9 +1801,9 @@ fn chain_extension_works() {
 			GAS_LIMIT,
 			None,
 			input.clone(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		);
 		assert_eq!(TestExtension::last_seen_buffer(), input);
 		assert_eq!(result.result.unwrap().data, input);
@@ -1816,9 +1816,9 @@ fn chain_extension_works() {
 			GAS_LIMIT,
 			None,
 			ExtensionInput { extension_id: 0, func_id: 1, extra: &[] }.into(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -1833,9 +1833,9 @@ fn chain_extension_works() {
 			GAS_LIMIT,
 			None,
 			ExtensionInput { extension_id: 0, func_id: 2, extra: &[0] }.into(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		);
 		assert_ok!(result.result);
 		let gas_consumed = result.gas_consumed;
@@ -1846,9 +1846,9 @@ fn chain_extension_works() {
 			GAS_LIMIT,
 			None,
 			ExtensionInput { extension_id: 0, func_id: 2, extra: &[42] }.into(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		);
 		assert_ok!(result.result);
 		assert_eq!(result.gas_consumed.ref_time(), gas_consumed.ref_time() + 42);
@@ -1859,9 +1859,9 @@ fn chain_extension_works() {
 			GAS_LIMIT,
 			None,
 			ExtensionInput { extension_id: 0, func_id: 2, extra: &[95] }.into(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		);
 		assert_ok!(result.result);
 		assert_eq!(result.gas_consumed.ref_time(), gas_consumed.ref_time() + 95);
@@ -1874,9 +1874,9 @@ fn chain_extension_works() {
 			GAS_LIMIT,
 			None,
 			ExtensionInput { extension_id: 0, func_id: 3, extra: &[] }.into(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -1893,9 +1893,9 @@ fn chain_extension_works() {
 			GAS_LIMIT,
 			None,
 			ExtensionInput { extension_id: 1, func_id: 0, extra: &[] }.into(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -1932,8 +1932,8 @@ fn chain_extension_temp_storage_works() {
 			Code::Upload(code),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1956,9 +1956,9 @@ fn chain_extension_temp_storage_works() {
 				GAS_LIMIT,
 				None,
 				input.clone(),
-				false,
+				DebugInfo::Skip,
 				Determinism::Enforced,
-				false,
+				CollectEvents::Skip,
 			)
 			.result
 		);
@@ -1980,8 +1980,8 @@ fn lazy_removal_works() {
 			Code::Upload(code),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2034,8 +2034,8 @@ fn lazy_batch_removal_works() {
 				Code::Upload(code.clone()),
 				vec![],
 				vec![i],
-				false,
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 			)
 			.result
 			.unwrap()
@@ -2100,8 +2100,8 @@ fn lazy_removal_partial_remove_works() {
 			Code::Upload(code),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2182,8 +2182,8 @@ fn lazy_removal_does_no_run_on_low_remaining_weight() {
 			Code::Upload(code),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2254,8 +2254,8 @@ fn lazy_removal_does_not_use_all_weight() {
 			Code::Upload(code),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2345,8 +2345,8 @@ fn deletion_queue_ring_buffer_overflow() {
 				Code::Upload(code.clone()),
 				vec![],
 				vec![i],
-				false,
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 			)
 			.result
 			.unwrap()
@@ -2403,8 +2403,8 @@ fn refcounter() {
 			Code::Upload(wasm.clone()),
 			vec![],
 			vec![0],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2417,8 +2417,8 @@ fn refcounter() {
 			Code::Upload(wasm.clone()),
 			vec![],
 			vec![1],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2434,8 +2434,8 @@ fn refcounter() {
 			Code::Existing(code_hash),
 			vec![],
 			vec![2],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2501,8 +2501,8 @@ fn reinstrument_does_charge() {
 			Code::Upload(wasm),
 			zero.clone(),
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2517,9 +2517,9 @@ fn reinstrument_does_charge() {
 			GAS_LIMIT,
 			None,
 			zero.clone(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		);
 		assert!(!result0.result.unwrap().did_revert());
 
@@ -2530,9 +2530,9 @@ fn reinstrument_does_charge() {
 			GAS_LIMIT,
 			None,
 			zero.clone(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		);
 		assert!(!result1.result.unwrap().did_revert());
 
@@ -2553,9 +2553,9 @@ fn reinstrument_does_charge() {
 			GAS_LIMIT,
 			None,
 			zero.clone(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		);
 		assert!(!result2.result.unwrap().did_revert());
 		assert!(result2.gas_consumed.ref_time() > result1.gas_consumed.ref_time());
@@ -2581,8 +2581,8 @@ fn debug_message_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2594,9 +2594,9 @@ fn debug_message_works() {
 			GAS_LIMIT,
 			None,
 			vec![],
-			true,
+			DebugInfo::UnsafeDebug,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		);
 
 		assert_matches!(result.result, Ok(_));
@@ -2618,8 +2618,8 @@ fn debug_message_logging_disabled() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2632,9 +2632,9 @@ fn debug_message_logging_disabled() {
 			GAS_LIMIT,
 			None,
 			vec![],
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		);
 		assert_matches!(result.result, Ok(_));
 		// the dispatchables always run without debugging
@@ -2657,8 +2657,8 @@ fn debug_message_invalid_utf8() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2670,9 +2670,9 @@ fn debug_message_invalid_utf8() {
 			GAS_LIMIT,
 			None,
 			vec![],
-			true,
+			DebugInfo::UnsafeDebug,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		);
 		assert_ok!(result.result);
 		assert!(result.debug_message.is_empty());
@@ -2696,8 +2696,8 @@ fn gas_estimation_nested_call_fixed_limit() {
 			Code::Upload(caller_code),
 			vec![],
 			vec![0],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2711,8 +2711,8 @@ fn gas_estimation_nested_call_fixed_limit() {
 			Code::Upload(callee_code),
 			vec![],
 			vec![1],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2732,9 +2732,9 @@ fn gas_estimation_nested_call_fixed_limit() {
 			GAS_LIMIT,
 			None,
 			input.clone(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		);
 		assert_ok!(&result.result);
 
@@ -2750,9 +2750,9 @@ fn gas_estimation_nested_call_fixed_limit() {
 				result.gas_required,
 				Some(result.storage_deposit.charge_or_zero()),
 				input,
-				false,
+				DebugInfo::Skip,
 				Determinism::Enforced,
-				false,
+				CollectEvents::Skip,
 			)
 			.result
 		);
@@ -2777,8 +2777,8 @@ fn gas_estimation_call_runtime() {
 			Code::Upload(caller_code),
 			vec![],
 			vec![0],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2792,8 +2792,8 @@ fn gas_estimation_call_runtime() {
 			Code::Upload(callee_code),
 			vec![],
 			vec![1],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2812,9 +2812,9 @@ fn gas_estimation_call_runtime() {
 			GAS_LIMIT,
 			None,
 			call.encode(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		);
 		// contract encodes the result of the dispatch runtime
 		let outcome = u32::decode(&mut result.result.unwrap().data.as_ref()).unwrap();
@@ -2830,9 +2830,9 @@ fn gas_estimation_call_runtime() {
 				result.gas_required,
 				None,
 				call.encode(),
-				false,
+				DebugInfo::Skip,
 				Determinism::Enforced,
-				false,
+				CollectEvents::Skip,
 			)
 			.result
 		);
@@ -2856,8 +2856,8 @@ fn gas_call_runtime_reentrancy_guarded() {
 			Code::Upload(caller_code),
 			vec![],
 			vec![0],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2871,8 +2871,8 @@ fn gas_call_runtime_reentrancy_guarded() {
 			Code::Upload(callee_code),
 			vec![],
 			vec![1],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2896,9 +2896,9 @@ fn gas_call_runtime_reentrancy_guarded() {
 			GAS_LIMIT,
 			None,
 			call.encode(),
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -2923,8 +2923,8 @@ fn ecdsa_recover() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2960,9 +2960,9 @@ fn ecdsa_recover() {
 			GAS_LIMIT,
 			None,
 			params,
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -2986,8 +2986,8 @@ fn bare_instantiate_result_returns_events() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			true,
+			DebugInfo::Skip,
+			CollectEvents::UnsafeCollect,
 		);
 
 		let events = result.events.unwrap();
@@ -3011,8 +3011,8 @@ fn bare_instantiate_result_does_not_return_events() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		);
 
 		let events = result.events;
@@ -3036,8 +3036,8 @@ fn bare_call_result_returns_events() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3050,9 +3050,9 @@ fn bare_call_result_returns_events() {
 			GAS_LIMIT,
 			None,
 			vec![],
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			true,
+			CollectEvents::UnsafeCollect,
 		);
 
 		let events = result.events.unwrap();
@@ -3315,8 +3315,8 @@ fn instantiate_with_zero_balance_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3426,8 +3426,8 @@ fn instantiate_with_below_existential_deposit_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3542,8 +3542,8 @@ fn storage_deposit_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3682,8 +3682,8 @@ fn set_code_extrinsic() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3767,8 +3767,8 @@ fn slash_cannot_kill_account() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3857,8 +3857,8 @@ fn contract_reverted() {
 			Code::Existing(code_hash),
 			input.clone(),
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -3875,8 +3875,8 @@ fn contract_reverted() {
 			Code::Existing(code_hash),
 			ReturnFlags::empty().bits().encode(),
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3903,9 +3903,9 @@ fn contract_reverted() {
 			GAS_LIMIT,
 			None,
 			input,
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -3937,8 +3937,8 @@ fn code_rejected_error_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			true,
-			false,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 		);
 		assert_err!(result.result, <Error<Test>>::CodeRejected);
 		assert_eq!(
@@ -3965,8 +3965,8 @@ fn code_rejected_error_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			true,
-			false,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 		);
 		assert_err!(result.result, <Error<Test>>::CodeRejected);
 		assert_eq!(
@@ -3993,8 +3993,8 @@ fn set_code_hash() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4017,9 +4017,9 @@ fn set_code_hash() {
 			GAS_LIMIT,
 			None,
 			new_code_hash.as_ref().to_vec(),
-			true,
+			DebugInfo::UnsafeDebug,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -4033,9 +4033,9 @@ fn set_code_hash() {
 			GAS_LIMIT,
 			None,
 			vec![],
-			true,
+			DebugInfo::UnsafeDebug,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -4091,8 +4091,8 @@ fn storage_deposit_limit_is_enforced() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4134,8 +4134,8 @@ fn storage_deposit_limit_is_enforced_late() {
 			Code::Upload(wasm_caller),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4148,8 +4148,8 @@ fn storage_deposit_limit_is_enforced_late() {
 			Code::Upload(wasm_callee),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4281,8 +4281,8 @@ fn deposit_limit_honors_liquidity_restrictions() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4326,8 +4326,8 @@ fn deposit_limit_honors_existential_deposit() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4370,8 +4370,8 @@ fn deposit_limit_honors_min_leftover() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4426,8 +4426,8 @@ fn cannot_instantiate_indeterministic_code() {
 				Code::Upload(wasm.clone()),
 				vec![],
 				vec![],
-				false,
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 			)
 			.result,
 			<Error<Test>>::CodeRejected,
@@ -4472,8 +4472,8 @@ fn cannot_instantiate_indeterministic_code() {
 				Code::Existing(code_hash),
 				vec![],
 				vec![],
-				false,
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 			)
 			.result,
 			<Error<Test>>::Indeterministic,
@@ -4488,8 +4488,8 @@ fn cannot_instantiate_indeterministic_code() {
 			Code::Upload(caller_wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4504,9 +4504,9 @@ fn cannot_instantiate_indeterministic_code() {
 				GAS_LIMIT,
 				None,
 				code_hash.encode(),
-				false,
+				DebugInfo::Skip,
 				Determinism::Enforced,
-				false,
+				CollectEvents::Skip,
 			)
 			.result,
 			<Error<Test>>::Indeterministic,
@@ -4521,9 +4521,9 @@ fn cannot_instantiate_indeterministic_code() {
 				GAS_LIMIT,
 				None,
 				code_hash.encode(),
-				false,
+				DebugInfo::Skip,
 				Determinism::Relaxed,
-				false,
+				CollectEvents::Skip,
 			)
 			.result,
 			<Error<Test>>::Indeterministic,
@@ -4555,8 +4555,8 @@ fn cannot_set_code_indeterministic_code() {
 			Code::Upload(caller_wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4571,9 +4571,9 @@ fn cannot_set_code_indeterministic_code() {
 				GAS_LIMIT,
 				None,
 				code_hash.encode(),
-				false,
+				DebugInfo::Skip,
 				Determinism::Relaxed,
-				false,
+				CollectEvents::Skip,
 			)
 			.result,
 			<Error<Test>>::Indeterministic,
@@ -4605,8 +4605,8 @@ fn delegate_call_indeterministic_code() {
 			Code::Upload(caller_wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4621,9 +4621,9 @@ fn delegate_call_indeterministic_code() {
 				GAS_LIMIT,
 				None,
 				code_hash.encode(),
-				false,
+				DebugInfo::Skip,
 				Determinism::Enforced,
-				false,
+				CollectEvents::Skip,
 			)
 			.result,
 			<Error<Test>>::Indeterministic,
@@ -4638,9 +4638,9 @@ fn delegate_call_indeterministic_code() {
 				GAS_LIMIT,
 				None,
 				code_hash.encode(),
-				false,
+				DebugInfo::Skip,
 				Determinism::Relaxed,
-				false,
+				CollectEvents::Skip,
 			)
 			.result
 		);
@@ -4662,8 +4662,8 @@ fn reentrance_count_works_with_call() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4679,9 +4679,9 @@ fn reentrance_count_works_with_call() {
 			GAS_LIMIT,
 			None,
 			input,
-			true,
+			DebugInfo::UnsafeDebug,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -4703,8 +4703,8 @@ fn reentrance_count_works_with_delegated_call() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4720,9 +4720,9 @@ fn reentrance_count_works_with_delegated_call() {
 			GAS_LIMIT,
 			None,
 			input,
-			true,
+			DebugInfo::UnsafeDebug,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -4746,8 +4746,8 @@ fn account_reentrance_count_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4761,8 +4761,8 @@ fn account_reentrance_count_works() {
 			Code::Upload(wasm_reentrance_count),
 			vec![],
 			vec![],
-			false,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4775,9 +4775,9 @@ fn account_reentrance_count_works() {
 			GAS_LIMIT,
 			None,
 			contract_addr.encode(),
-			true,
+			DebugInfo::UnsafeDebug,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -4789,9 +4789,9 @@ fn account_reentrance_count_works() {
 			GAS_LIMIT,
 			None,
 			another_contract_addr.encode(),
-			true,
+			DebugInfo::UnsafeDebug,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
