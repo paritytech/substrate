@@ -21,8 +21,6 @@
 use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 
-pub mod common;
-
 /// `benchmark pallet` works for the different combinations of `steps` and `repeat`.
 #[test]
 fn benchmark_pallet_works() {
