@@ -141,13 +141,10 @@ pub async fn start_server<M: Send + Sync + 'static>(
 fn hosts_filtering(enabled: bool, addrs: &[SocketAddr]) -> AllowHosts {
 	if enabled {
 		// NOTE The listening addresses are whitelisted by default.
-		let mut hosts = Vec::with_capacity(addrs.len() * 3);
+		let mut hosts = Vec::with_capacity(addrs.len() * 2);
 		for addr in addrs {
-			let port = addr.port();
-
-			hosts.push(format!("localhost:{port}").into());
-			hosts.push(format!("127.0.0.1:{port}").into());
-			hosts.push(format!("[::1]:{port}").into());
+			hosts.push(format!("localhost:{}", addr.port()).into());
+			hosts.push(format!("127.0.0.1:{}", addr.port()).into());
 		}
 		AllowHosts::Only(hosts)
 	} else {
