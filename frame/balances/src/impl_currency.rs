@@ -22,7 +22,7 @@ use frame_support::{
 	ensure,
 	pallet_prelude::DispatchResult,
 	traits::{
-		tokens::{fungible, Fortitude::Polite, Precision::BestEffort, BalanceStatus as Status},
+		tokens::{fungible, BalanceStatus as Status, Fortitude::Polite, Precision::BestEffort},
 		Currency, DefensiveSaturating, ExistenceRequirement,
 		ExistenceRequirement::AllowDeath,
 		Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency,
@@ -600,7 +600,8 @@ where
 		value: Self::Balance,
 		status: Status,
 	) -> Result<Self::Balance, DispatchError> {
-		let actual = Self::do_transfer_reserved(slashed, beneficiary, value, BestEffort, Polite, status)?;
+		let actual =
+			Self::do_transfer_reserved(slashed, beneficiary, value, BestEffort, Polite, status)?;
 		Ok(value.saturating_sub(actual))
 	}
 }
