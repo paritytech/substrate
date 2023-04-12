@@ -51,6 +51,7 @@ type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Sourc
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
+	use pallet_nfts::{ItemSettings, ItemConfig};
 	use sp_std::fmt::Display;
 	use frame_system::pallet_prelude::*;
 
@@ -59,7 +60,7 @@ pub mod pallet {
 		sp_runtime::Permill,
 		traits::{
 			tokens::{
-				nonfungibles_v2::{Inspect as NonFungiblesInspect, Mutate as NonFungiblesMutate}
+				nonfungibles_v2::{Inspect as NonFungiblesInspect, Mutate as NonFungiblesMutate},
 			},
 			ReservableCurrency
 		}
@@ -91,7 +92,7 @@ pub mod pallet {
 				Self::AccountId,
 				ItemId = Self::NftItemId,
 				CollectionId = Self::NftCollectionId,
-			>;
+			> + NonFungiblesMutate<Self::AccountId,ItemConfig>;
 	}
 
 	/// Keeps track of the corresponding NFT ID, royalty percentage, and royalty recipient.
@@ -131,14 +132,15 @@ pub mod pallet {
 			collection_id: T::NftCollectionId,
 			item_id: T::NftItemId,
 			mint_to: AccountIdLookupOf<T>,
+			item_settings: ItemSettings,
 			royalty_percentage: Permill,
 			royalty_recipient: T::AccountId,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
 			let mint_to = T::Lookup::lookup(mint_to)?;
-			// TODO: Get this to work:
-			// let item_config = ItemConfig { settings: Self::get_default_item_settings(&collection)? };
-			// T::Nfts::mint_into(&collection_id, &item_id, &mint_to, item_config, false)?;
+
+			let item_config = ItemConfig { settings: item_settings};
+			T::Nfts::mint_into(&collection_id, &item_id, &mint_to, &item_config, false)?;
 
 			NftWithRoyalty::<T>::insert(
 				(collection_id, item_id),

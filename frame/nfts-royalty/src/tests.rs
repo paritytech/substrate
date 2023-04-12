@@ -17,19 +17,20 @@
 
 //! Tests for the NFT Royalties pallet.
 
-use crate::{mock::*};
+use crate::{mock::*, NftWithRoyalty};
 use frame_support::{assert_ok};
-use pallet_nfts::{CollectionConfig, CollectionSetting, MintSettings, CollectionSettings, CollectionAccount, Account};
+use pallet_nfts::{CollectionAccount, Account, ItemSettings, CollectionConfig, MintSettings, CollectionSettings, CollectionSetting};
+pub use sp_runtime::{Perbill, Permill};
 
 type AccountIdOf<Test> = <Test as frame_system::Config>::AccountId;
 fn account(id: u8) -> AccountIdOf<Test> {
 	[id; 32].into()
 }
 
-/// Basic test to check that the extrinsics of the NFT pallet can be executed
 #[test]
-fn basic_nft_minting_should_work() {
+fn nft_minting_with_royalties_should_work() {
 	new_test_ext().execute_with(|| {
+		// Create a collection, calling directly the NFT pallet
 		assert_ok!(Nfts::force_create(
 			RuntimeOrigin::root(),
 			account(1),
@@ -42,9 +43,20 @@ fn basic_nft_minting_should_work() {
         let mut collections: Vec<_> = CollectionAccount::<Test>::iter().map(|x| (x.0, x.1)).collect();
         collections.sort();
 		assert_eq!(collections, vec![(account(1), 0)]);
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(1)), 0, 42, account(1), None));
+		assert_ok!(NftsRoyalty::mint_item_with_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0, 42, account(1), 
+			ItemSettings::all_enabled(),
+			Permill::from_percent(5),
+			account(1)
+		));
+		// Get the items directly from the NFT pallet, to see if has been created there
         let mut items: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
 	    items.sort();
 		assert_eq!(items, vec![(account(1), 0, 42)]);
+		// Read royalties pallet storage.
+        let nft_with_royalty = NftWithRoyalty::<Test>::get((0,42)).unwrap();
+        assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
+        assert_eq!(nft_with_royalty.royalty_recipient, account(1));
 	});
 }
