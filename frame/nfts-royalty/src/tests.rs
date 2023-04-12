@@ -17,10 +17,10 @@
 
 //! Tests for the NFT Royalties pallet.
 
-use crate::{mock::*, NftWithRoyalty};
-use frame_support::{assert_ok};
-use pallet_nfts::{CollectionAccount, Account, ItemSettings, CollectionConfig, MintSettings, CollectionSettings, CollectionSetting};
-pub use sp_runtime::{Perbill, Permill};
+use crate::{mock::*, Error, NftWithRoyalty};
+use frame_support::{assert_ok, assert_noop};
+use pallet_nfts::{Error as NftErrors, CollectionAccount, Account, ItemSettings, CollectionConfig, MintSettings, CollectionSettings, CollectionSetting};
+pub use sp_runtime::{Perbill, Permill, DispatchError, ModuleError};
 
 type AccountIdOf<Test> = <Test as frame_system::Config>::AccountId;
 fn account(id: u8) -> AccountIdOf<Test> {
@@ -58,5 +58,19 @@ fn nft_minting_with_royalties_should_work() {
         let nft_with_royalty = NftWithRoyalty::<Test>::get((0,42)).unwrap();
         assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
         assert_eq!(nft_with_royalty.royalty_recipient, account(1));
+	});
+}
+
+#[test]
+fn nft_minting_with_royalties_fail_collection_not_exist() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(NftsRoyalty::mint_item_with_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0, 42, account(1), 
+			ItemSettings::all_enabled(),
+			Permill::from_percent(5),
+			account(1)),
+			NftErrors::<Test>::UnknownCollection
+		);
 	});
 }
