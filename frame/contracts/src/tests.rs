@@ -346,7 +346,7 @@ parameter_types! {
 	pub static DepositPerByte: BalanceOf<Test> = 1;
 	pub const DepositPerItem: BalanceOf<Test> = 2;
 	// We need this one set high enough for running benchmarks.
-	pub const DefaultDepositLimit: BalanceOf<Test> = 10_000_000;
+	pub static DefaultDepositLimit: BalanceOf<Test> = 10_000_000;
 }
 
 impl Convert<Weight, BalanceOf<Self>> for Test {
@@ -3943,15 +3943,50 @@ fn storage_deposit_limit_is_enforced() {
 		assert_eq!(get_contract(&addr).total_deposit(), min_balance);
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance);
 
-		// Create 100 bytes of storage with a price of per byte
+		// Create 1 byte of storage with a price of per byte,
+		// setting insufficient deposit limit, as it requires 3 Balance:
+		// 2 for the item added + 1 for the new storage item.
 		assert_err_ignore_postinfo!(
 			Contracts::call(
 				RuntimeOrigin::signed(ALICE),
 				addr.clone(),
 				0,
 				GAS_LIMIT,
-				Some(codec::Compact(1)),
-				100u32.to_le_bytes().to_vec()
+				Some(codec::Compact(2)),
+				1u32.to_le_bytes().to_vec()
+			),
+			<Error<Test>>::StorageDepositLimitExhausted,
+		);
+
+
+		// To check that deposit limit fallbacks to DefaultDepositLimit,
+		// we customize it here.
+		DEFAULT_DEPOSIT_LIMIT.with(|c| *c.borrow_mut() = 3);
+
+		// Create 1 byte of storage, should cost 3 Balance:
+		// 2 for the item added + 1 for the new storage item.
+		// Should pass as it fallbacks to DefaultDepositLimit.
+		assert_ok!(
+			Contracts::call(
+				RuntimeOrigin::signed(ALICE),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				None,
+				1u32.to_le_bytes().to_vec()
+			)
+		);
+
+		// Use 4 more bytes of the storage for the same item, which requires 4 Balance.
+		// Should fail as DefaultDepositLimit is 3 and hence isn't enough.
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				RuntimeOrigin::signed(ALICE),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				None,
+				5u32.to_le_bytes().to_vec()
 			),
 			<Error<Test>>::StorageDepositLimitExhausted,
 		);
