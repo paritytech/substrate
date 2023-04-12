@@ -409,7 +409,7 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_ecdsa_to_eth_address`.
 	pub ecdsa_to_eth_address: Weight,
 
-	/// Weight of calling `seal_sr25519_verify`.
+	/// Weight of calling `sr25519_verify`.
 	pub sr25519_verify: Weight,
 
 	/// Weight per byte of calling `seal_sr25519_verify`.
