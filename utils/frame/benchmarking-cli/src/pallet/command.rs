@@ -27,7 +27,7 @@ use sc_cli::{
 	execution_method_from_cli, CliConfiguration, ExecutionStrategy, Result, SharedParams,
 };
 use sc_client_db::BenchmarkingState;
-use sc_executor::NativeElseWasmExecutor;
+use sc_executor::{NativeElseWasmExecutor, WasmExecutor};
 use sc_service::{Configuration, NativeExecutionDispatch};
 use serde::Serialize;
 use sp_core::{
@@ -209,11 +209,16 @@ impl PalletCmd {
 			// Do not enable storage tracking
 			false,
 		)?;
-		let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
-			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy),
-			self.heap_pages,
-			2, // The runtime instances cache size.
-			2, // The runtime cache size
+
+		let method =
+			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy);
+
+		let executor = NativeElseWasmExecutor::<ExecDispatch>::new_with_wasm_executor(
+			WasmExecutor::builder()
+				.with_execution_method(method)
+				.with_max_runtime_instances(2)
+				.with_runtime_cache_size(2)
+				.build(),
 		);
 
 		let extensions = || -> Extensions {

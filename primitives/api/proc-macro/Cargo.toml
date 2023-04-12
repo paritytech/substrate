@@ -24,6 +24,9 @@ proc-macro-crate = "1.1.3"
 expander = "1.0.0"
 Inflector = "0.11.4"
 
+[dev-dependencies]
+assert_matches = "1.3.0"
+
 # Required for the doc tests
 [features]
 default = ["std"]
