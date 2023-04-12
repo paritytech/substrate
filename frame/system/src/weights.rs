@@ -110,7 +110,7 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(i.into())))
 	}
 	fn set_code() -> Weight {
-		Weight::from_ref_time(1_000_000)
+		Weight::from_parts(1_000_000, 0)
 	}
 	/// Storage: Skipped Metadata (r:0 w:0)
 	/// Proof Skipped: Skipped Metadata (max_values: None, max_size: None, mode: Measured)
@@ -165,7 +165,7 @@ impl WeightInfo for () {
 			.saturating_add(Weight::from_parts(1_121, 0).saturating_mul(b.into()))
 	}
 	fn set_code() -> Weight {
-		Weight::from_ref_time(1_000_000)
+		Weight::from_parts(1_000_000, 0)
 	}
 	/// Storage: System Digest (r:1 w:1)
 	/// Proof Skipped: System Digest (max_values: Some(1), max_size: None, mode: Measured)
