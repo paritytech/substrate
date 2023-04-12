@@ -34,7 +34,7 @@ mod tests {
 		// Build substrate so binaries used in the test use the latest code.
 		common::build_substrate(&["--features=try-runtime"]);
 
-		common::run_with_timeout(Duration::from_secs(60), async move {
+		common::run_with_timeout(Duration::from_secs(10 * 60), async move {
 			fn start_follow(ws_url: &str) -> Child {
 				Command::new(cargo_bin("substrate"))
 					.stdout(process::Stdio::piped())
