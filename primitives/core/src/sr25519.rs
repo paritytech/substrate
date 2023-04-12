@@ -554,6 +554,7 @@ pub mod vrf {
 	use schnorrkel::{errors::MultiSignatureStage, vrf::VRF_PROOF_LENGTH, SignatureError};
 
 	/// VRF signature data
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 	pub struct VrfSignature {
 		/// The initial VRF configuration
 		pub output: VrfOutput,

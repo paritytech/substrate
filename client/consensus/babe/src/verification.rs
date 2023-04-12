@@ -35,7 +35,7 @@ use sp_consensus_babe::{
 use sp_consensus_slots::Slot;
 use sp_core::{
 	crypto::{VrfVerifier, Wraps},
-	sr25519::vrf::{self, VrfSignature},
+	sr25519::vrf,
 	Pair,
 };
 use sp_runtime::{traits::Header, DigestItem};
@@ -174,10 +174,7 @@ fn check_primary_header<B: BlockT + Sized>(
 
 	let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch_index);
 
-	let signature =
-		VrfSignature { output: pre_digest.vrf_output.clone(), proof: pre_digest.vrf_proof.clone() };
-
-	if !authority_id.as_inner_ref().vrf_verify(&transcript, &signature) {
+	if !authority_id.as_inner_ref().vrf_verify(&transcript, &pre_digest.vrf_signature) {
 		return Err(babe_err(Error::VrfVerificationFailed))
 	}
 
@@ -187,7 +184,7 @@ fn check_primary_header<B: BlockT + Sized>(
 	let score = vrf::make_bytes::<[u8; AUTHORING_SCORE_LENGTH]>(
 		AUTHORING_SCORE_VRF_CONTEXT,
 		authority_id.as_ref(),
-		&signature.output,
+		&pre_digest.vrf_signature.output,
 		&transcript,
 	)
 	.map(u128::from_le_bytes)
@@ -258,10 +255,7 @@ fn check_secondary_vrf_header<B: BlockT>(
 
 	let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch_index);
 
-	let signature =
-		VrfSignature { output: pre_digest.vrf_output.clone(), proof: pre_digest.vrf_proof.clone() };
-
-	if !author.as_inner_ref().vrf_verify(&transcript, &signature) {
+	if !author.as_inner_ref().vrf_verify(&transcript, &pre_digest.vrf_signature) {
 		return Err(Error::VrfVerificationFailed)
 	}
 

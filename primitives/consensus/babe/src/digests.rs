@@ -22,7 +22,7 @@ use super::{
 	BabeEpochConfiguration, Randomness, Slot, BABE_ENGINE_ID,
 };
 
-use sp_core::sr25519::vrf::{VrfOutput, VrfProof};
+use sp_core::sr25519::vrf::VrfSignature;
 use sp_runtime::{DigestItem, RuntimeDebug};
 use sp_std::vec::Vec;
 
@@ -36,10 +36,8 @@ pub struct PrimaryPreDigest {
 	pub authority_index: super::AuthorityIndex,
 	/// Slot
 	pub slot: Slot,
-	/// VRF output
-	pub vrf_output: VrfOutput,
-	/// VRF proof
-	pub vrf_proof: VrfProof,
+	/// VRF signature
+	pub vrf_signature: VrfSignature,
 }
 
 /// BABE secondary slot assignment pre-digest.
@@ -63,10 +61,8 @@ pub struct SecondaryVRFPreDigest {
 	pub authority_index: super::AuthorityIndex,
 	/// Slot
 	pub slot: Slot,
-	/// VRF output
-	pub vrf_output: VrfOutput,
-	/// VRF proof
-	pub vrf_proof: VrfProof,
+	/// VRF signature
+	pub vrf_signature: VrfSignature,
 }
 
 /// A BABE pre-runtime digest. This contains all data required to validate a
@@ -119,11 +115,10 @@ impl PreDigest {
 	}
 
 	/// Returns the VRF output and proof, if they exist.
-	pub fn vrf(&self) -> Option<(&VrfOutput, &VrfProof)> {
+	pub fn vrf_signature(&self) -> Option<&VrfSignature> {
 		match self {
-			PreDigest::Primary(primary) => Some((&primary.vrf_output, &primary.vrf_proof)),
-			PreDigest::SecondaryVRF(secondary) =>
-				Some((&secondary.vrf_output, &secondary.vrf_proof)),
+			PreDigest::Primary(primary) => Some(&primary.vrf_signature),
+			PreDigest::SecondaryVRF(secondary) => Some(&secondary.vrf_signature),
 			PreDigest::SecondaryPlain(_) => None,
 		}
 	}

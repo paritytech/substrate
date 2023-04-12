@@ -147,12 +147,11 @@ fn claim_secondary_slot(
 				let transcript = make_transcript(randomness, slot, epoch_index);
 				let result =
 					keystore.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &transcript);
-				if let Ok(Some(signature)) = result {
+				if let Ok(Some(vrf_signature)) = result {
 					Some(PreDigest::SecondaryVRF(SecondaryVRFPreDigest {
 						slot,
-						vrf_output: signature.output,
-						vrf_proof: signature.proof,
 						authority_index: *authority_index as u32,
+						vrf_signature,
 					}))
 				} else {
 					None
@@ -240,13 +239,13 @@ fn claim_primary_slot(
 
 	for (authority_id, authority_index) in keys {
 		let result = keystore.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &transcript);
-		if let Ok(Some(signature)) = result {
+		if let Ok(Some(vrf_signature)) = result {
 			let threshold = calculate_primary_threshold(c, authorities, *authority_index);
 
 			let can_claim = vrf::make_bytes::<[u8; AUTHORING_SCORE_LENGTH]>(
 				AUTHORING_SCORE_VRF_CONTEXT,
 				authority_id.as_ref(),
-				&signature.output,
+				&vrf_signature.output,
 				&transcript,
 			)
 			.map(|bytes| u128::from_le_bytes(bytes) < threshold)
@@ -255,9 +254,8 @@ fn claim_primary_slot(
 			if can_claim {
 				let pre_digest = PreDigest::Primary(PrimaryPreDigest {
 					slot,
-					vrf_output: signature.output,
-					vrf_proof: signature.proof,
 					authority_index: *authority_index as u32,
+					vrf_signature,
 				});
 
 				return Some((pre_digest, authority_id.clone()))

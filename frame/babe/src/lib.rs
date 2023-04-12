@@ -356,7 +356,7 @@ pub mod pallet {
 					);
 				}
 
-				if let Some((vrf_output, vrf_proof)) = pre_digest.vrf() {
+				if let Some(vrf_signature) = pre_digest.vrf_signature() {
 					let randomness: Option<BabeRandomness> = Authorities::<T>::get()
 						.get(authority_index as usize)
 						.and_then(|(authority, _)| {
@@ -370,21 +370,14 @@ pub mod pallet {
 							// execution. We don't run the verification again here to avoid slowing
 							// down the runtime.
 							debug_assert!({
-								use sp_core::{
-									crypto::{VrfVerifier, Wraps},
-									sr25519::vrf::VrfSignature,
-								};
-								let signature = VrfSignature {
-									output: vrf_output.clone(),
-									proof: vrf_proof.clone(),
-								};
-								authority.as_inner_ref().vrf_verify(&transcript, &signature)
+								use sp_core::crypto::{VrfVerifier, Wraps};
+								authority.as_inner_ref().vrf_verify(&transcript, &vrf_signature)
 							});
 
 							sp_core::sr25519::vrf::make_bytes(
 								RANDOMNESS_VRF_CONTEXT,
 								authority.as_ref(),
-								&vrf_output,
+								&vrf_signature.output,
 								&transcript,
 							)
 							.ok()
