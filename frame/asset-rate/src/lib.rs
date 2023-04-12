@@ -22,8 +22,8 @@
 //!
 //! ## Overview
 //!
-//! The AssetRate pallet provides means of setting conversion rates
-//! for some asset to native balance.
+//! The AssetRate pallet provides means of setting conversion rates for some asset to native
+//! balance.
 //!
 //! The supported dispatchable functions are documented in the [`Call`] enum.
 //!
@@ -61,7 +61,7 @@
 
 use frame_support::traits::{
 	fungible::Inspect,
-	tokens::{Balance, BalanceConversion},
+	tokens::{Balance, ConversionFromAssetBalance},
 };
 use sp_runtime::{traits::Zero, FixedPointNumber, FixedPointOperand, FixedU128};
 
@@ -221,15 +221,14 @@ pub mod pallet {
 }
 
 // Exposes conversion of an arbitrary balance of an asset to native balance.
-// TODO: Switch to `AssetBalanceToBalance` after merging Substrate #13610
-impl<T> BalanceConversion<BalanceOf<T>, AssetIdOf<T>, BalanceOf<T>> for Pallet<T>
+impl<T> ConversionFromAssetBalance<BalanceOf<T>, AssetIdOf<T>, BalanceOf<T>> for Pallet<T>
 where
 	T: Config,
 	BalanceOf<T>: FixedPointOperand + Zero,
 {
 	type Error = pallet::Error<T>;
 
-	fn to_asset_balance(
+	fn from_asset_balance(
 		balance: BalanceOf<T>,
 		asset_id: AssetIdOf<T>,
 	) -> Result<BalanceOf<T>, pallet::Error<T>> {

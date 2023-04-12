@@ -99,11 +99,11 @@ fn convert_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(AssetRate::create(RuntimeOrigin::root(), ASSET_ID, FixedU128::from_float(2.51)));
 
-		let conversion = <AssetRate as BalanceConversion<
+		let conversion = <AssetRate as ConversionFromAssetBalance<
 			BalanceOf<Test>,
 			<Test as pallet_asset_rate::Config>::AssetId,
 			BalanceOf<Test>,
-		>>::to_asset_balance(10, ASSET_ID);
+		>>::from_asset_balance(10, ASSET_ID);
 		assert_eq!(conversion.expect("Conversion rate exists for asset"), 25);
 	});
 }
@@ -111,11 +111,11 @@ fn convert_works() {
 #[test]
 fn convert_unknown_throws() {
 	new_test_ext().execute_with(|| {
-		let conversion = <AssetRate as BalanceConversion<
+		let conversion = <AssetRate as ConversionFromAssetBalance<
 			BalanceOf<Test>,
 			<Test as pallet_asset_rate::Config>::AssetId,
 			BalanceOf<Test>,
-		>>::to_asset_balance(10, ASSET_ID);
+		>>::from_asset_balance(10, ASSET_ID);
 		assert!(conversion.is_err());
 	});
 }
