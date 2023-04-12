@@ -25,7 +25,7 @@ use frame_support::{
 };
 use mock::*;
 use pallet_session::ShouldEndSession;
-use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot, VrfOutput, VrfProof};
+use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot, VrfSignature};
 use sp_core::crypto::Pair;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
@@ -61,10 +61,9 @@ fn first_block_epoch_zero_start() {
 
 	ext.execute_with(|| {
 		let genesis_slot = Slot::from(100);
-		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+		let (vrf_signature, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
 
-		let first_vrf = vrf_output;
-		let pre_digest = make_primary_pre_digest(0, genesis_slot, first_vrf.clone(), vrf_proof);
+		let pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_signature);
 
 		assert_eq!(Babe::genesis_slot(), Slot::from(0));
 		System::reset_events();
@@ -110,8 +109,8 @@ fn current_slot_is_processed_on_initialization() {
 
 	ext.execute_with(|| {
 		let genesis_slot = Slot::from(10);
-		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
-		let pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
+		let (vrf_signature, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+		let pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_signature);
 
 		System::reset_events();
 		System::initialize(&1, &Default::default(), &pre_digest);
@@ -133,14 +132,14 @@ fn current_slot_is_processed_on_initialization() {
 
 fn test_author_vrf_output<F>(make_pre_digest: F)
 where
-	F: Fn(sp_consensus_babe::AuthorityIndex, Slot, VrfOutput, VrfProof) -> sp_runtime::Digest,
+	F: Fn(sp_consensus_babe::AuthorityIndex, Slot, VrfSignature) -> sp_runtime::Digest,
 {
 	let (pairs, mut ext) = new_test_ext_with_pairs(1);
 
 	ext.execute_with(|| {
 		let genesis_slot = Slot::from(10);
-		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
-		let pre_digest = make_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
+		let (vrf_signature, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+		let pre_digest = make_pre_digest(0, genesis_slot, vrf_signature);
 
 		System::reset_events();
 		System::initialize(&1, &Default::default(), &pre_digest);

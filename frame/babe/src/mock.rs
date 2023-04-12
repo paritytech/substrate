@@ -25,7 +25,7 @@ use frame_support::{
 	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
 };
 use pallet_session::historical as pallet_session_historical;
-use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot, VrfOutput, VrfProof, RANDOMNESS_LENGTH};
+use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot, VrfSignature, RANDOMNESS_LENGTH};
 use sp_core::{
 	crypto::{KeyTypeId, Pair, VrfSigner},
 	H256, U256,
@@ -282,16 +282,10 @@ pub fn start_era(era_index: EraIndex) {
 pub fn make_primary_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
 	slot: sp_consensus_babe::Slot,
-	vrf_output: VrfOutput,
-	vrf_proof: VrfProof,
+	vrf_signature: VrfSignature,
 ) -> Digest {
 	let digest_data = sp_consensus_babe::digests::PreDigest::Primary(
-		sp_consensus_babe::digests::PrimaryPreDigest {
-			authority_index,
-			slot,
-			vrf_output,
-			vrf_proof,
-		},
+		sp_consensus_babe::digests::PrimaryPreDigest { authority_index, slot, vrf_signature },
 	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
 	Digest { logs: vec![log] }
@@ -311,16 +305,10 @@ pub fn make_secondary_plain_pre_digest(
 pub fn make_secondary_vrf_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
 	slot: sp_consensus_babe::Slot,
-	vrf_output: VrfOutput,
-	vrf_proof: VrfProof,
+	vrf_signature: VrfSignature,
 ) -> Digest {
 	let digest_data = sp_consensus_babe::digests::PreDigest::SecondaryVRF(
-		sp_consensus_babe::digests::SecondaryVRFPreDigest {
-			authority_index,
-			slot,
-			vrf_output,
-			vrf_proof,
-		},
+		sp_consensus_babe::digests::SecondaryVRFPreDigest { authority_index, slot, vrf_signature },
 	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
 	Digest { logs: vec![log] }
@@ -329,7 +317,7 @@ pub fn make_secondary_vrf_pre_digest(
 pub fn make_vrf_output(
 	slot: Slot,
 	pair: &sp_consensus_babe::AuthorityPair,
-) -> (VrfOutput, VrfProof, [u8; RANDOMNESS_LENGTH]) {
+) -> (VrfSignature, [u8; RANDOMNESS_LENGTH]) {
 	let transcript = sp_consensus_babe::make_transcript(&Babe::randomness(), slot, 0);
 
 	let signature = pair.as_ref().vrf_sign(&transcript);
@@ -342,7 +330,7 @@ pub fn make_vrf_output(
 	)
 	.expect("vrf make bytes");
 
-	(signature.output, signature.proof, randomness)
+	(signature, randomness)
 }
 
 pub fn new_test_ext(authorities_len: usize) -> sp_io::TestExternalities {

@@ -34,7 +34,7 @@ use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
 
 pub use sp_core::{
 	crypto::{VrfTranscript, VrfTranscriptItem},
-	sr25519::vrf::{VrfOutput, VrfProof},
+	sr25519::vrf::{VrfOutput, VrfProof, VrfSignature},
 };
 
 /// Key type for BABE module.
