@@ -514,10 +514,16 @@ fn process_unnamed_generics(
 	})?;
 
 	let use_default_hasher = |arg_pos| {
-		if let Some(arg) = retrieve_arg(arg_pos).ok() {
-			dev_mode && syn::parse2::<syn::Token![_]>(arg.to_token_stream()).is_ok()
+		let arg = retrieve_arg(arg_pos)?;
+		if syn::parse2::<syn::Token![_]>(arg.to_token_stream()).is_ok() {
+			if dev_mode {
+				Ok(true)
+			} else {
+				let msg = "`_` can only be used in dev_mode. Please specify an appropriate hasher.";
+				Err(syn::Error::new(arg.span(), msg))
+			}
 		} else {
-			false
+			Ok(false)
 		}
 	};
 
@@ -528,13 +534,13 @@ fn process_unnamed_generics(
 			None,
 			Metadata::Map { key: retrieve_arg(2)?, value: retrieve_arg(3)? },
 			retrieve_arg(4).ok(),
-			use_default_hasher(1),
+			use_default_hasher(1)?,
 		),
 		StorageKind::CountedMap => (
 			None,
 			Metadata::CountedMap { key: retrieve_arg(2)?, value: retrieve_arg(3)? },
 			retrieve_arg(4).ok(),
-			use_default_hasher(1),
+			use_default_hasher(1)?,
 		),
 		StorageKind::DoubleMap => (
 			None,
@@ -544,7 +550,7 @@ fn process_unnamed_generics(
 				value: retrieve_arg(5)?,
 			},
 			retrieve_arg(6).ok(),
-			use_default_hasher(1) && use_default_hasher(3),
+			use_default_hasher(1)? && use_default_hasher(3)?,
 		),
 		StorageKind::NMap => {
 			let keygen = retrieve_arg(1)?;
