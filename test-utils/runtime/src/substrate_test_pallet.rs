@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{AccountId, AuthorityId, BlockNumber, Runtime, Signature, Transfer};
+use crate::{AccountId, AuthorityId, BlockNumber, Runtime, Signature};
 use codec::KeyedVec;
 use frame_support::{pallet_prelude::*, storage};
 use sp_core::storage::well_known_keys;
@@ -88,36 +88,6 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(1)]
-		// #[pallet::weight(100)]
-		#[pallet::weight(T::BlockWeights::get().max_block/10)]
-		pub fn transfer(
-			origin: OriginFor<T>,
-			transfer: Transfer,
-			_signature: Signature,
-			_exhaust_resources_when_not_first: bool,
-		) -> DispatchResult {
-			log::trace!(target: LOG_TARGET, "transfer");
-			frame_system::ensure_signed(origin)?;
-
-			//todo/cross-check: do we need to re-verify transfer (signature / nonce / balance)?
-
-			let nonce_key = transfer.from.to_keyed_vec(NONCE_OF);
-			let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
-			// increment nonce in storage
-			storage::hashed::put(&blake2_256, &nonce_key, &(expected_nonce + 1));
-
-			// check sender balance
-			let from_balance_key = transfer.from.to_keyed_vec(BALANCE_OF);
-			let from_balance: u64 = storage::hashed::get_or(&blake2_256, &from_balance_key, 0);
-
-			let to_balance_key = transfer.to.to_keyed_vec(BALANCE_OF);
-			let to_balance: u64 = storage::hashed::get_or(&blake2_256, &to_balance_key, 0);
-			storage::hashed::put(&blake2_256, &from_balance_key, &(from_balance - transfer.amount));
-			storage::hashed::put(&blake2_256, &to_balance_key, &(to_balance + transfer.amount));
-			Ok(())
-		}
-
-		#[pallet::call_index(2)]
 		#[pallet::weight(100)]
 		pub fn include_data(origin: OriginFor<T>, _data: Vec<u8>) -> DispatchResult {
 			log::trace!(target: LOG_TARGET, "include_data");
@@ -125,7 +95,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(3)]
+		#[pallet::call_index(2)]
 		#[pallet::weight(100)]
 		pub fn storage_change_unsigned(
 			_origin: OriginFor<T>,
@@ -139,7 +109,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(4)]
+		#[pallet::call_index(3)]
 		#[pallet::weight(100)]
 		pub fn storage_change(
 			origin: OriginFor<T>,
@@ -154,7 +124,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(5)]
+		#[pallet::call_index(4)]
 		#[pallet::weight(100)]
 		pub fn offchain_index_set(
 			origin: OriginFor<T>,
@@ -166,7 +136,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(6)]
+		#[pallet::call_index(5)]
 		#[pallet::weight(100)]
 		pub fn offchain_index_clear(origin: OriginFor<T>, key: Vec<u8>) -> DispatchResult {
 			frame_system::ensure_signed(origin)?;
@@ -174,7 +144,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(7)]
+		#[pallet::call_index(6)]
 		#[pallet::weight(100)]
 		pub fn store(origin: OriginFor<T>, data: Vec<u8>) -> DispatchResult {
 			frame_system::ensure_signed(origin)?;
@@ -185,7 +155,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(8)]
+		#[pallet::call_index(7)]
 		#[pallet::weight(100)]
 		pub fn deposit_log_digest_item(
 			_origin: OriginFor<T>,

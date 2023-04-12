@@ -17,7 +17,7 @@
 
 use crate::{
 	substrate_test_pallet, substrate_test_pallet::pallet::Call as PalletCall,
-	AuthorityId, CheckSubstrateCall, Index, Extrinsic, Pair, RuntimeCall, Signature, SignedExtra, SignedPayload, Transfer,
+	AccountId, AuthorityId, Balance, BalancesCall, CheckSubstrateCall, Index, Extrinsic, Pair, RuntimeCall, Signature, SignedPayload, TransferData
 };
 use codec::Encode;
 use frame_system::{CheckWeight, CheckNonce};
@@ -25,22 +25,39 @@ use sp_core::crypto::Pair as TraitPair;
 use sp_runtime::{Perbill, transaction_validity::{InvalidTransaction, TransactionValidityError}};
 use sp_std::prelude::*;
 
+/// Transfer used in test substrate pallet
+#[derive(Clone)]
+pub struct Transfer {
+	pub from: Pair,
+	pub to: AccountId,
+	pub amount: Balance,
+	pub nonce: u64,
+}
+
 impl Transfer {
 	/// Convert into a signed unchecked extrinsic.
 	pub fn into_unchecked_extrinsic(self) -> Extrinsic {
 		let nonce = self.nonce;
-		ExtrinsicBuilder::new_transfer(self).build2(nonce)
+		ExtrinsicBuilder::new_transfer(self).build()
 	}
+}
 
-	/// If feasible extract `Transfer` from given `Extrinsic`
+impl TransferData {
+	/// If feasible extract `TransferData` from given `Extrinsic`
 	pub fn try_from_unchecked_extrinsic(uxt: &Extrinsic) -> Option<Self> {
-		if let RuntimeCall::SubstrateTest(ref test_pallet_call) = uxt.function {
-			if let PalletCall::transfer { transfer, .. } = test_pallet_call {
-				return Some(transfer.clone())
-			}
-			return None
+		match uxt {
+			Extrinsic { function: RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest, value }), signature: Some((from,_, (CheckNonce(nonce),..))) } => {
+				Some(
+					TransferData {
+						from: from.clone(),
+						to: dest.clone(),
+						amount: *value,
+						nonce: *nonce
+					}
+				)
+			},
+			_ => None,
 		}
-		None
 	}
 
 	/// Verify signature and extracts `Transfer` from given `Extrinsic`, otherwise returns
@@ -48,67 +65,21 @@ impl Transfer {
 	pub fn try_from_unchecked_extrinsic_and_verify(
 		uxt: &Extrinsic,
 	) -> Result<Self, TransactionValidityError> {
-		if let RuntimeCall::SubstrateTest(PalletCall::transfer {
-			ref transfer,
-			ref signature,
-			..
-		}) = uxt.function
-		{
-			if sp_runtime::verify_encoded_lazy(signature, transfer, &transfer.from) {
-				Ok(transfer.clone())
-			} else {
-				Err(InvalidTransaction::BadProof.into())
-			}
-		} else {
-			Err(InvalidTransaction::Call.into())
-		}
-	}
-}
-
-/// Generate `PalletCall::transfer_call`
-pub struct TransferCallBuilder {
-	transfer: Transfer,
-	signature: Option<Signature>,
-	exhaust_resources: bool,
-}
-
-impl TransferCallBuilder {
-	/// Create `Self` with given `transfer` value
-	pub fn new(transfer: Transfer) -> Self {
-		TransferCallBuilder { transfer, signature: None, exhaust_resources: false }
-	}
-
-	/// Sign `transfer` with `signer` and embeds signature into `PalletCall::transfer_call`
-	pub fn signer(mut self, signer: Pair) -> Self {
-		self.signature = Some(signer.sign(&self.transfer.encode()));
-		self
-	}
-
-	/// Embed given signature into `PalletCall::transfer_call`
-	pub fn with_signature(mut self, signature: Signature) -> Self {
-		self.signature = Some(signature);
-		self
-	}
-
-	/// Set `exhaust_resources` flag of `PalletCall::transfer_call` to true
-	pub fn exhaust_resources(mut self) -> Self {
-		self.exhaust_resources = true;
-		self
-	}
-
-	/// Generate instance of `PalletCall::transfer_call`
-	pub fn build<T: substrate_test_pallet::Config>(self) -> PalletCall<T> {
-		let signature = match self.signature {
-			Some(signature) => signature,
-			None => sp_keyring::AccountKeyring::from_public(&self.transfer.from)
-				.expect("Creates keyring from public key.")
-				.sign(&self.transfer.encode()),
-		};
-		PalletCall::transfer {
-			transfer: self.transfer,
-			signature,
-			exhaust_resources_when_not_first: self.exhaust_resources,
-		}
+		unimplemented!()
+		// if let RuntimeCall::SubstrateTest(PalletCall::transfer {
+		// 	ref transfer,
+		// 	ref signature,
+		// 	..
+		// }) = uxt.function
+		// {
+		// 	if sp_runtime::verify_encoded_lazy(signature, transfer, &transfer.from) {
+		// 		Ok(transfer.clone())
+		// 	} else {
+		// 		Err(InvalidTransaction::BadProof.into())
+		// 	}
+		// } else {
+		// 	Err(InvalidTransaction::Call.into())
+		// }
 	}
 }
 
@@ -116,19 +87,28 @@ impl TransferCallBuilder {
 pub struct ExtrinsicBuilder {
 	function: RuntimeCall,
 	is_unsigned: bool,
-	// signer: sp_keyring::AccountKeyring,
 	signer: Pair,
+	nonce: Option<Index>
 }
 
 impl ExtrinsicBuilder {
 	/// Create builder for given `RuntimeCall`
 	pub fn new(function: impl Into<RuntimeCall>) -> Self {
-		Self { function: function.into(), is_unsigned: false, signer: sp_keyring::AccountKeyring::Alice.pair() }
+		Self { function: function.into(), is_unsigned: false, signer: sp_keyring::AccountKeyring::Alice.pair(), nonce: None }
 	}
 
 	/// Create builder for given `Transfer`
 	pub fn new_transfer(transfer: Transfer) -> Self {
-		Self::new(TransferCallBuilder::new(transfer).build())
+		Self {
+			nonce: Some(transfer.nonce),
+			signer: transfer.from.clone(),
+			..Self::new(
+				BalancesCall::transfer_allow_death {
+					dest: transfer.to,
+					value: transfer.amount
+				}
+			)
+		}
 	}
 
 	/// Create builder for `PalletCall::authorities_change` call using given parameters
@@ -190,7 +170,8 @@ impl ExtrinsicBuilder {
 
 	/// Build `Extrinsic` using embedded parameters
 	pub fn build(self) -> Extrinsic {
-		self.build2(0u32.into())
+		let nonce = self.nonce.unwrap_or(0);
+		self.build2(nonce)
 	}
 
 	pub fn build2(self, nonce: Index) -> Extrinsic {

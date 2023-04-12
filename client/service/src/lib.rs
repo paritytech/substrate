@@ -587,7 +587,7 @@ mod tests {
 	use sp_consensus::SelectChain;
 	use substrate_test_runtime_client::{
 		prelude::*,
-		runtime::{ExtrinsicBuilder, Transfer},
+		runtime::{ExtrinsicBuilder, Transfer, TransferData},
 	};
 
 	#[test]
@@ -623,6 +623,6 @@ mod tests {
 		// then
 		assert_eq!(transactions.len(), 1);
 		// this should not panic
-		assert!(Transfer::try_from_unchecked_extrinsic_and_verify(&transactions[0].1).is_ok());
+		assert!(TransferData::try_from_unchecked_extrinsic_and_verify(&transactions[0].1).is_ok());
 	}
 }

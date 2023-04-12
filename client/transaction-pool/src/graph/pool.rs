@@ -461,9 +461,11 @@ mod tests {
 	use futures::executor::block_on;
 	use parking_lot::Mutex;
 	use sc_transaction_pool_api::TransactionStatus;
+	use sp_keyring::AccountKeyring::{Alice, Bob};
 	use sp_runtime::transaction_validity::TransactionSource;
 	use std::{collections::HashMap, time::Instant};
 	use substrate_test_runtime::{AccountId, ExtrinsicBuilder, Transfer, H256};
+
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
@@ -477,7 +479,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
@@ -494,7 +496,7 @@ mod tests {
 		// given
 		let pool = pool();
 		let uxt = uxt(Transfer {
-			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			from: Alice.into(),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 0,
@@ -542,7 +544,7 @@ mod tests {
 				&BlockId::Number(0),
 				SOURCE,
 				uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 0,
@@ -553,7 +555,7 @@ mod tests {
 				&BlockId::Number(0),
 				SOURCE,
 				uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 1,
@@ -565,7 +567,7 @@ mod tests {
 				&BlockId::Number(0),
 				SOURCE,
 				uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 3,
@@ -594,7 +596,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
@@ -605,7 +607,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 1,
@@ -616,7 +618,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 3,
@@ -645,7 +647,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
@@ -666,7 +668,7 @@ mod tests {
 		sp_tracing::try_init_simple();
 
 		let xt = uxt(Transfer {
-			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			from: Alice.into(),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 1,
@@ -687,7 +689,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(2)),
+				from: Bob.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 10,
@@ -715,7 +717,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 1,
@@ -738,7 +740,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: INVALID_NONCE,
@@ -763,7 +765,7 @@ mod tests {
 				&BlockId::Number(0),
 				SOURCE,
 				uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 0,
@@ -795,7 +797,7 @@ mod tests {
 				&BlockId::Number(0),
 				SOURCE,
 				uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 0,
@@ -828,7 +830,7 @@ mod tests {
 				&BlockId::Number(0),
 				SOURCE,
 				uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 1,
@@ -843,7 +845,7 @@ mod tests {
 				&BlockId::Number(0),
 				SOURCE,
 				uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 0,
@@ -863,7 +865,7 @@ mod tests {
 			// given
 			let pool = pool();
 			let uxt = uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
@@ -887,7 +889,7 @@ mod tests {
 			// given
 			let pool = pool();
 			let uxt = uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
@@ -918,7 +920,7 @@ mod tests {
 			let pool = Pool::new(options, true.into(), TestApi::default().into());
 
 			let xt = uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
@@ -928,7 +930,7 @@ mod tests {
 
 			// when
 			let xt = uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(2)),
+				from: Bob.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(1)),
 				amount: 4,
 				nonce: 1,
@@ -958,7 +960,7 @@ mod tests {
 
 				// then
 				let xt = uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(2)),
+					from: Bob.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(1)),
 					amount: 4,
 					nonce: 1,
@@ -982,7 +984,7 @@ mod tests {
 				assert_eq!(pool.validated_pool().status().ready, 1);
 
 				let xt = uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 0,
@@ -1014,7 +1016,7 @@ mod tests {
 
 			// when
 			let xt = uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 1,
@@ -1030,7 +1032,7 @@ mod tests {
 			// But now before the previous one is imported we import
 			// the one that it depends on.
 			let xt = uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 4,
 				nonce: 0,

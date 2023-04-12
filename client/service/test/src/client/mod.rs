@@ -47,6 +47,7 @@ use substrate_test_runtime::TestAPI;
 use substrate_test_runtime_client::{
 	prelude::*,
 	runtime::{
+		currency::DOLLARS,
 		genesismap::{insert_genesis_block, GenesisConfig},
 		Block, BlockNumber, Digest, Hash, Header, RuntimeApi, Transfer,
 	},
@@ -161,11 +162,12 @@ fn block1(genesis_hash: Hash, backend: &InMemoryBackend<BlakeTwo256>) -> (Vec<u8
 		genesis_hash,
 		array_bytes::hex_n_into_unchecked(
 			"25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c",
+			// "eaf7fd7b6bb375b2a28d9bdb199fbb66f0dcd00ae6e1e7edbfa97989dbd81a99",
 		),
 		vec![Transfer {
-			from: AccountKeyring::One.into(),
+			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Two.into(),
-			amount: 69,
+			amount: 69 * DOLLARS,
 			nonce: 0,
 		}],
 	)
@@ -195,7 +197,7 @@ fn construct_genesis_should_work_with_native() {
 	let mut storage = GenesisConfig::new(
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
-		1000,
+		1000 * DOLLARS,
 		None,
 		Default::default(),
 	)
@@ -229,7 +231,7 @@ fn construct_genesis_should_work_with_wasm() {
 	let mut storage = GenesisConfig::new(
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
-		1000,
+		1000 * DOLLARS,
 		None,
 		Default::default(),
 	)
@@ -260,10 +262,11 @@ fn construct_genesis_should_work_with_wasm() {
 
 #[test]
 fn construct_genesis_with_bad_transaction_should_panic() {
+	sp_tracing::try_init_simple();
 	let mut storage = GenesisConfig::new(
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
-		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
-		68,
+		vec![AccountKeyring::Alice.into(), AccountKeyring::Two.into()],
+		68 * DOLLARS,
 		None,
 		Default::default(),
 	)
@@ -289,6 +292,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 		CallContext::Onchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm);
+	log::trace!("xxx -> {:?}",r);
 	assert!(r.is_err());
 }
 
@@ -301,14 +305,14 @@ fn client_initializes_from_genesis_ok() {
 			.runtime_api()
 			.balance_of(client.chain_info().best_hash, AccountKeyring::Alice.into())
 			.unwrap(),
-		1000
+		1000 * DOLLARS
 	);
 	assert_eq!(
 		client
 			.runtime_api()
 			.balance_of(client.chain_info().best_hash, AccountKeyring::Ferdie.into())
 			.unwrap(),
-		0
+		0 * DOLLARS
 	);
 }
 
@@ -333,7 +337,7 @@ fn block_builder_works_with_transactions() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 42,
+			amount: 42 * DOLLARS,
 			nonce: 0,
 		})
 		.unwrap();
@@ -368,14 +372,14 @@ fn block_builder_works_with_transactions() {
 			.runtime_api()
 			.balance_of(client.chain_info().best_hash, AccountKeyring::Alice.into())
 			.unwrap(),
-		958
+		958 * DOLLARS
 	);
 	assert_eq!(
 		client
 			.runtime_api()
 			.balance_of(client.chain_info().best_hash, AccountKeyring::Ferdie.into())
 			.unwrap(),
-		42
+		42 * DOLLARS
 	);
 }
 
@@ -389,7 +393,7 @@ fn block_builder_does_not_include_invalid() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 42,
+			amount: 42 * DOLLARS,
 			nonce: 0,
 		})
 		.unwrap();
@@ -398,7 +402,7 @@ fn block_builder_does_not_include_invalid() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Eve.into(),
 			to: AccountKeyring::Alice.into(),
-			amount: 42,
+			amount: 42 * DOLLARS,
 			nonce: 0,
 		})
 		.is_err());
@@ -519,7 +523,7 @@ fn uncles_with_multiple_forks() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 41,
+			amount: 41 * DOLLARS,
 			nonce: 0,
 		})
 		.unwrap();
@@ -551,7 +555,7 @@ fn uncles_with_multiple_forks() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 1,
+			amount: 1 * DOLLARS,
 			nonce: 1,
 		})
 		.unwrap();
@@ -565,7 +569,7 @@ fn uncles_with_multiple_forks() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 1,
+			amount: 1 * DOLLARS,
 			nonce: 0,
 		})
 		.unwrap();
@@ -674,7 +678,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 41,
+			amount: 41 * DOLLARS,
 			nonce: 0,
 		})
 		.unwrap();
@@ -706,7 +710,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 1,
+			amount: 1 * DOLLARS,
 			nonce: 1,
 		})
 		.unwrap();
@@ -720,7 +724,7 @@ fn finality_target_on_longest_chain_with_multiple_forks() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 1,
+			amount: 1 * DOLLARS,
 			nonce: 0,
 		})
 		.unwrap();
@@ -896,7 +900,7 @@ fn finality_target_with_best_not_on_longest_chain() {
 		.push_transfer(Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
-			amount: 41,
+			amount: 41 * DOLLARS,
 			nonce: 0,
 		})
 		.unwrap();
@@ -1021,7 +1025,7 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 1,
+		amount: 1 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1076,7 +1080,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 1,
+		amount: 1 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1194,7 +1198,7 @@ fn finality_notifications_content() {
 	c1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 2,
+		amount: 2 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1206,7 +1210,7 @@ fn finality_notifications_content() {
 	d3.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 2,
+		amount: 2 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1280,7 +1284,7 @@ fn state_reverted_on_reorg() {
 	a1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Bob.into(),
-		amount: 10,
+		amount: 10 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1293,7 +1297,7 @@ fn state_reverted_on_reorg() {
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 50,
+		amount: 50 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1301,19 +1305,19 @@ fn state_reverted_on_reorg() {
 	// Reorg to B1
 	block_on(client.import_as_best(BlockOrigin::Own, b1.clone())).unwrap();
 
-	assert_eq!(950, current_balance(&client));
+	assert_eq!(950 * DOLLARS, current_balance(&client));
 	let mut a2 = client.new_block_at(a1.hash(), Default::default(), false).unwrap();
 	a2.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Charlie.into(),
-		amount: 10,
+		amount: 10 * DOLLARS,
 		nonce: 1,
 	})
 	.unwrap();
 	let a2 = a2.build().unwrap().block;
 	// Re-org to A2
 	block_on(client.import_as_best(BlockOrigin::Own, a2)).unwrap();
-	assert_eq!(980, current_balance(&client));
+	assert_eq!(980 * DOLLARS, current_balance(&client));
 }
 
 #[test]
@@ -1370,7 +1374,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 1,
+		amount: 1 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1414,7 +1418,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 	c1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 2,
+		amount: 2 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -1607,7 +1611,7 @@ fn returns_status_for_pruned_blocks() {
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 1,
+		amount: 1 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();
@@ -2063,7 +2067,7 @@ fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifi
 	b1.push_transfer(Transfer {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Ferdie.into(),
-		amount: 1,
+		amount: 1 * DOLLARS,
 		nonce: 0,
 	})
 	.unwrap();

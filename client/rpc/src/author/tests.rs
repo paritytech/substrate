@@ -52,8 +52,7 @@ fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 		from: sender.into(),
 		to: AccountKeyring::Bob.into(),
 	};
-	// tx.into_unchecked_extrinsic()
-	ExtrinsicBuilder::new_transfer(tx).signer(sender.pair()).build2(nonce)
+	ExtrinsicBuilder::new_transfer(tx).build()
 }
 
 type FullTransactionPool = BasicPool<FullChainApi<Client<Backend>, Block>, Block>;

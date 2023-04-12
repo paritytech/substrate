@@ -17,7 +17,7 @@
 
 //! Tool for creating the genesis block.
 
-use super::{substrate_test_pallet, wasm_binary_unwrap, AccountId, AuthorityId, Runtime};
+use super::{substrate_test_pallet, wasm_binary_unwrap, AccountId, AuthorityId, Balance, Runtime};
 use codec::{Encode, Joiner, KeyedVec};
 use frame_support::traits::GenesisBuild;
 use sc_service::construct_genesis_block;
@@ -42,7 +42,7 @@ impl GenesisConfig {
 	pub fn new(
 		authorities: Vec<AuthorityId>,
 		endowed_accounts: Vec<AccountId>,
-		balance: u64,
+		balance: Balance,
 		heap_pages_override: Option<u64>,
 		extra_storage: Storage,
 	) -> Self {
@@ -97,6 +97,14 @@ impl GenesisConfig {
 		)
 		.expect("Adding `pallet_babe::GenesisConfig` to the genesis");
 
+		<pallet_balances::GenesisConfig<Runtime> as GenesisBuild<Runtime>>::assimilate_storage(
+			&pallet_balances::GenesisConfig {
+				balances: self.balances.clone()
+			},
+			&mut storage,
+		)
+		.expect("Adding `pallet_balances::GenesisConfig` to the genesis");
+
 		storage
 	}
 }
@@ -117,6 +125,7 @@ pub fn insert_genesis_block(storage: &mut Storage) -> sp_core::hash::H256 {
 		sp_runtime::StateVersion::V1,
 	);
 	let block: crate::Block = construct_genesis_block(state_root, StateVersion::V1);
+	log::trace!("xxx -> insert_genesis_block: {:?}", block);
 	let genesis_hash = block.header.hash();
 	storage.top.extend(additional_storage_with_genesis(&block));
 	genesis_hash

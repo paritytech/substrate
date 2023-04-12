@@ -33,6 +33,8 @@ sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transaction-pool" }
+#todo: remove?
+frame-system = { version = "4.0.0-dev", path = "../../frame/system" }
 
 [dev-dependencies]
 array-bytes = "4.1"
@@ -40,6 +42,7 @@ assert_matches = "1.3.0"
 criterion = "0.4.0"
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
+sp-keyring = { version = "7.0.0", path = "../../primitives/keyring" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 substrate-test-runtime-transaction-pool = { version = "2.0.0", path = "../../test-utils/runtime/transaction-pool" }

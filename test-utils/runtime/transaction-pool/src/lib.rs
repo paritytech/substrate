@@ -36,7 +36,7 @@ use sp_runtime::{
 use std::collections::{BTreeMap, HashMap, HashSet};
 use substrate_test_runtime_client::{
 	runtime::{
-		AccountId, Block, BlockNumber, Extrinsic, ExtrinsicBuilder, Hash, Header, Index, Transfer,
+		AccountId, Block, BlockNumber, Extrinsic, ExtrinsicBuilder, Hash, Header, Index, Transfer, TransferData,
 	},
 	AccountKeyring::{self, *},
 };
@@ -279,7 +279,7 @@ impl sc_transaction_pool::ChainApi for TestApi {
 		}
 
 		let (requires, provides) = if let Some(transfer) =
-			Transfer::try_from_unchecked_extrinsic(&uxt)
+			TransferData::try_from_unchecked_extrinsic(&uxt)
 		{
 			let chain_nonce = self.chain.read().nonces.get(&transfer.from).cloned().unwrap_or(0);
 			let requires =
@@ -381,5 +381,7 @@ impl sp_blockchain::HeaderMetadata<Block> for TestApi {
 pub fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
 	let dummy = codec::Decode::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 	let transfer = Transfer { from: who.into(), to: dummy, nonce, amount: 1 };
-	ExtrinsicBuilder::new_transfer(transfer).build()
+	let r = ExtrinsicBuilder::new_transfer(transfer).build();
+	log::trace!("xxx -> uxt: r:{r:?}");
+	r
 }

@@ -107,7 +107,7 @@ impl GenesisParameters {
 					AccountKeyring::Charlie.into(),
 				])
 				.collect(),
-			1000,
+			1000 * runtime::currency::DOLLARS,
 			self.heap_pages_override,
 			self.extra_storage.clone(),
 		)

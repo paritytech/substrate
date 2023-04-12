@@ -49,7 +49,7 @@ use sp_runtime::{
 	create_runtime_str, impl_opaque_keys, Perbill,
 	traits::{BlakeTwo256, Block as BlockT, DispatchInfoOf, NumberFor, Verify},
 	transaction_validity::{
-		TransactionSource, TransactionValidity, TransactionValidityError, ValidTransaction,
+		TransactionSource, TransactionValidity, TransactionValidityError,
 	},
 	ApplyExtrinsicResult,
 };
@@ -60,10 +60,12 @@ use sp_version::RuntimeVersion;
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AllowedSlots, AuthorityId, BabeEpochConfiguration, Slot};
 
+pub use pallet_balances::Call as BalancesCall;
+
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
 #[cfg(feature = "std")]
-pub use extrinsic::{ExtrinsicBuilder, TransferCallBuilder};
+pub use extrinsic::{ExtrinsicBuilder, Transfer};
 
 const LOG_TARGET: &str = "substrate-test-runtime";
 
@@ -117,12 +119,10 @@ pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
 }
 
-/// Transfer used in test substrate pallet
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct Transfer {
+pub struct TransferData {
 	pub from: AccountId,
 	pub to: AccountId,
-	pub amount: u64,
+	pub amount: Balance,
 	pub nonce: u64,
 }
 
@@ -160,7 +160,7 @@ pub type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 /// A test block's header.
 pub type Header = sp_runtime::generic::Header<BlockNumber, Hashing>;
 /// Balance of an account.
-pub type Balance = u128;
+pub type Balance = u64;
 
 decl_runtime_apis! {
 	#[api_version(2)]
@@ -297,23 +297,17 @@ use frame_support::{
 	dispatch::DispatchClass,
 	pallet_prelude::Get,
 	traits::{
-		fungible::ItemOf,
-		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount},
-		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, Currency, EitherOfDiverse,
-		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
-		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
+		Currency,
+		InstanceFilter
 	},
 	weights::{
 		constants::{
-			BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_REF_TIME_PER_SECOND,
+			BlockExecutionWeight, ExtrinsicBaseWeight, WEIGHT_REF_TIME_PER_SECOND,
 		},
-		ConstantMultiplier, IdentityFee, Weight,
+		Weight,
 	},
 };
-use frame_system::{
-	limits::{BlockLength, BlockWeights},
-	EnsureRoot, EnsureRootWithSuccess, EnsureSigned, EnsureWithSuccess,
-};
+use frame_system::limits::{BlockLength, BlockWeights};
 
 /// We assume that ~10% of the block weight is consumed by `on_initialize` handlers.
 /// This is used to limit the maximal weight of a single extrinsic.
@@ -379,7 +373,7 @@ impl frame_system::pallet::Config for Runtime {
 }
 
 /// Money matters.
-mod currency {
+pub mod currency {
 	use crate::Balance;
 	pub const MILLICENTS: Balance = 1_000_000_000;
 	pub const CENTS: Balance = 1_000 * MILLICENTS; // assume this is worth about a cent.
@@ -564,7 +558,9 @@ impl_runtime_apis! {
 
 	impl self::TestAPI<Block> for Runtime {
 		fn balance_of(id: AccountId) -> u64 {
-			substrate_test_pallet::balance_of(id)
+			// substrate_test_pallet::balance_of(id)
+			// pallet_balances::Pallet::<Runtime::Config as pallet_balances::Config>::free_balance(id)
+			Balances::free_balance(id)
 		}
 
 		fn benchmark_add_one(val: &u64) -> u64 {

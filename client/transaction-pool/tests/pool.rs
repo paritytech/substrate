@@ -40,7 +40,7 @@ use sp_runtime::{
 use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 use substrate_test_runtime_client::{
 	runtime::{
-		Block, Extrinsic, ExtrinsicBuilder, Hash, Header, Index, Transfer, TransferCallBuilder,
+		Block, Extrinsic, ExtrinsicBuilder, Hash, Header, Index, Transfer, TransferData,
 	},
 	AccountKeyring::*,
 	ClientBlockImportExt,
@@ -91,7 +91,7 @@ fn submission_should_work() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| Transfer::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, vec![209]);
 }
@@ -105,20 +105,21 @@ fn multiple_submission_should_work() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| Transfer::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, vec![209, 210]);
 }
 
 #[test]
 fn early_nonce_should_be_culled() {
+	sp_tracing::try_init_simple();
 	let pool = pool();
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, uxt(Alice, 208))).unwrap();
 
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| Transfer::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, Vec::<Index>::new());
 }
@@ -131,7 +132,7 @@ fn late_nonce_should_be_queued() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| Transfer::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, Vec::<Index>::new());
 
@@ -139,7 +140,7 @@ fn late_nonce_should_be_queued() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| Transfer::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, vec![209, 210]);
 }
@@ -153,7 +154,7 @@ fn prune_tags_should_work() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| Transfer::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, vec![209, 210]);
 
@@ -164,7 +165,7 @@ fn prune_tags_should_work() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| Transfer::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, vec![210]);
 }
@@ -181,7 +182,7 @@ fn should_ban_invalid_transactions() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| Transfer::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, Vec::<Index>::new());
 
@@ -234,7 +235,7 @@ fn should_correctly_prune_transactions_providing_more_than_one_tag() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| Transfer::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, vec![211]);
 
@@ -510,6 +511,7 @@ fn finalization() {
 
 #[test]
 fn fork_aware_finalization() {
+	sp_tracing::try_init_simple();
 	let api = TestApi::empty();
 	// starting block A1 (last finalized.)
 	let a_header = api.push_block(1, vec![], true);

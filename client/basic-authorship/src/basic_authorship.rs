@@ -39,7 +39,7 @@ use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
-	Perbill, Digest, Percent, SaturatedConversion,
+	Digest, Percent, SaturatedConversion,
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
@@ -559,11 +559,10 @@ mod tests {
 	use sp_api::Core;
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::{BlockOrigin, Environment, Proposer};
-	use sp_core::Pair;
-	use sp_runtime::{generic::BlockId, traits::NumberFor};
+	use sp_runtime::{generic::BlockId, Perbill, traits::NumberFor};
 	use substrate_test_runtime_client::{
 		prelude::*,
-		runtime::{Block as TestBlock, Extrinsic, ExtrinsicBuilder, Transfer, TransferCallBuilder},
+		runtime::{Block as TestBlock, Extrinsic, ExtrinsicBuilder, Transfer},
 		TestClientBuilder, TestClientBuilderExt,
 	};
 

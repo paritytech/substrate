@@ -360,6 +360,7 @@ mod tests {
 	};
 	use futures::executor::block_on;
 	use sc_transaction_pool_api::TransactionSource;
+	use sp_keyring::AccountKeyring::Alice;
 	use sp_runtime::generic::BlockId;
 	use substrate_test_runtime::{AccountId, Transfer, H256};
 
@@ -370,7 +371,7 @@ mod tests {
 		let queue = Arc::new(RevalidationQueue::new(api.clone(), pool.clone()));
 
 		let uxt = uxt(Transfer {
-			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			from: Alice.into(),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 0,

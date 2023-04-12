@@ -32,8 +32,8 @@ use sp_runtime::{
 };
 use std::{collections::HashSet, sync::Arc};
 use substrate_test_runtime::{
-	substrate_test_pallet::pallet::Call as PalletCall, Block, Extrinsic, ExtrinsicBuilder, Hashing,
-	RuntimeCall, Transfer, TransferCallBuilder, H256,
+	substrate_test_pallet::pallet::Call as PalletCall, BalancesCall, Block, Extrinsic, ExtrinsicBuilder, Hashing,
+	RuntimeCall, Transfer, H256,
 };
 
 pub(crate) const INVALID_NONCE: u64 = 254;
@@ -55,6 +55,8 @@ impl TestApi {
 	}
 }
 
+use frame_system::CheckNonce;
+
 impl ChainApi for TestApi {
 	type Block = Block;
 	type Error = error::Error;
@@ -72,10 +74,8 @@ impl ChainApi for TestApi {
 		let hash = self.hash_and_length(&uxt).0;
 		let block_number = self.block_id_to_number(at).unwrap().unwrap();
 
-		let res = match uxt.function {
-			RuntimeCall::SubstrateTest(PalletCall::transfer { transfer, .. }) => {
-				let nonce = transfer.nonce;
-
+		let res = match uxt {
+			Extrinsic { function: RuntimeCall::Balances(BalancesCall::transfer_allow_death { .. }), signature: Some((_,_, (CheckNonce(nonce),..))) } => {
 				// This is used to control the test flow.
 				if nonce > 0 {
 					let opt = self.delay.lock().take();
@@ -118,14 +118,14 @@ impl ChainApi for TestApi {
 					Ok(transaction)
 				}
 			},
-			RuntimeCall::SubstrateTest(PalletCall::include_data { .. }) => Ok(ValidTransaction {
+			Extrinsic { function: RuntimeCall::SubstrateTest(PalletCall::include_data { .. }), .. } => Ok(ValidTransaction {
 				priority: 9001,
 				requires: vec![],
 				provides: vec![vec![42]],
 				longevity: 9001,
 				propagate: false,
 			}),
-			RuntimeCall::SubstrateTest(PalletCall::store { .. }) => Ok(ValidTransaction {
+			Extrinsic { function: RuntimeCall::SubstrateTest(PalletCall::store { .. }), .. } => Ok(ValidTransaction {
 				priority: 9001,
 				requires: vec![],
 				provides: vec![vec![43]],
@@ -188,10 +188,8 @@ impl ChainApi for TestApi {
 }
 
 pub(crate) fn uxt(transfer: Transfer) -> Extrinsic {
-	let signature = TryFrom::try_from(&[0; 64][..]).unwrap();
-	let nonce = transfer.nonce;
-	ExtrinsicBuilder::new(TransferCallBuilder::new(transfer).with_signature(signature).build())
-		.build2(nonce)
+	//todo: empty signature removed...
+	ExtrinsicBuilder::new_transfer(transfer).build()
 }
 
 pub(crate) fn pool() -> Pool<TestApi> {
