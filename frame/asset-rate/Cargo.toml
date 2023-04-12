@@ -5,7 +5,7 @@ description = "Whitelist non-native assets for treasury spending and provide con
 authors = ["William Freudenberger <w.freude@icloud.com>"]
 homepage = "https://substrate.io"
 edition = "2021"
-license = "Unlicense"
+license = "Apache-2.0"
 repository = "https://github.com/paritytech/substrate/"
 
 [package.metadata.docs.rs]
