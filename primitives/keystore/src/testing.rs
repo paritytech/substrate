@@ -20,7 +20,7 @@
 use crate::{Error, Keystore, KeystorePtr};
 
 use sp_core::{
-	crypto::{ByteArray, KeyTypeId, Pair, VrfSigner, VrfTranscriptData},
+	crypto::{ByteArray, KeyTypeId, Pair, VrfSigner, VrfTranscript},
 	ecdsa, ed25519, sr25519,
 };
 
@@ -103,7 +103,7 @@ impl MemoryKeystore {
 		&self,
 		key_type: KeyTypeId,
 		public: &T::Public,
-		transcript_data: VrfTranscriptData,
+		transcript_data: VrfTranscript,
 	) -> Result<Option<T::VrfSignature>, Error> {
 		let sig = self.pair::<T>(key_type, public).map(|pair| pair.vrf_sign(&transcript_data));
 		Ok(sig)
@@ -136,7 +136,7 @@ impl Keystore for MemoryKeystore {
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript_data: VrfTranscriptData,
+		transcript_data: VrfTranscript,
 	) -> Result<Option<sr25519::vrf::VrfSignature>, Error> {
 		self.vrf_sign::<sr25519::Pair>(key_type, public, transcript_data)
 	}
@@ -229,7 +229,7 @@ impl Into<KeystorePtr> for MemoryKeystore {
 mod tests {
 	use super::*;
 	use sp_core::{
-		crypto::VrfTranscriptValue,
+		crypto::VrfTranscriptItem,
 		sr25519,
 		testing::{ECDSA, ED25519, SR25519},
 	};
@@ -268,12 +268,12 @@ mod tests {
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
-		let transcript_data = VrfTranscriptData {
+		let transcript_data = VrfTranscript {
 			label: b"Test",
 			items: vec![
-				("one", VrfTranscriptValue::U64(1)),
-				("two", VrfTranscriptValue::U64(2)),
-				("three", VrfTranscriptValue::Bytes("test".as_bytes().to_vec())),
+				("one", VrfTranscriptItem::U64(1)),
+				("two", VrfTranscriptItem::U64(2)),
+				("three", VrfTranscriptItem::Bytes("test".as_bytes().to_vec())),
 			],
 		};
 

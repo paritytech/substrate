@@ -28,7 +28,7 @@ use sp_consensus_babe::{
 };
 use sp_core::{
 	blake2_256,
-	crypto::{ByteArray, VrfTranscriptData},
+	crypto::{ByteArray, VrfTranscript},
 	sr25519::vrf::VrfOutput,
 	U256,
 };
@@ -231,7 +231,7 @@ pub(super) fn check_primary_threshold(
 	threshold: u128,
 	authority: &AuthorityId,
 	vrf_output: &VrfOutput,
-	transcript: &VrfTranscriptData,
+	transcript: &VrfTranscript,
 ) -> bool {
 	let vrf_bytes = sp_core::sr25519::vrf::make_bytes::<[u8; 16]>(
 		AUTHORING_VRF_CONTEXT,

@@ -33,7 +33,7 @@ use sp_std::vec::Vec;
 use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
 
 pub use sp_core::{
-	crypto::{VrfTranscriptData, VrfTranscriptValue},
+	crypto::{VrfTranscript, VrfTranscriptItem},
 	sr25519::vrf::{VrfOutput, VrfProof, VRF_PREOUT_LENGTH},
 };
 
@@ -101,13 +101,13 @@ pub type BabeAuthorityWeight = u64;
 pub type BabeBlockWeight = u32;
 
 /// Make a VRF transcript data container
-pub fn make_transcript_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfTranscriptData {
-	VrfTranscriptData {
+pub fn make_transcript_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfTranscript {
+	VrfTranscript {
 		label: &BABE_ENGINE_ID,
 		items: sp_std::vec![
-			("slot number", VrfTranscriptValue::U64(*slot)),
-			("current epoch", VrfTranscriptValue::U64(epoch)),
-			("chain randomness", VrfTranscriptValue::Bytes(randomness.to_vec())),
+			("slot number", VrfTranscriptItem::U64(*slot)),
+			("current epoch", VrfTranscriptItem::U64(epoch)),
+			("chain randomness", VrfTranscriptItem::Bytes(randomness.to_vec())),
 		],
 	}
 }

@@ -22,7 +22,7 @@ use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
 use sp_core::{
 	crypto::{
 		ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSigner,
-		VrfTranscriptData,
+		VrfTranscript,
 	},
 	ecdsa, ed25519, sr25519,
 };
@@ -105,7 +105,7 @@ impl LocalKeystore {
 		&self,
 		key_type: KeyTypeId,
 		public: &T::Public,
-		transcript_data: VrfTranscriptData,
+		transcript_data: VrfTranscript,
 	) -> std::result::Result<Option<T::VrfSignature>, TraitError> {
 		let sig = self
 			.0
@@ -145,7 +145,7 @@ impl Keystore for LocalKeystore {
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript_data: VrfTranscriptData,
+		transcript_data: VrfTranscript,
 	) -> std::result::Result<Option<sr25519::vrf::VrfSignature>, TraitError> {
 		self.vrf_sign::<sr25519::Pair>(key_type, public, transcript_data)
 	}

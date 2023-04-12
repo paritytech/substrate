@@ -1099,11 +1099,10 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 	}
 }
 
-/// An enum whose variants represent possible
-/// accepted values to construct the VRF transcript
+/// An enum whose variants represent possible accepted values to construct the VRF transcript.
 #[derive(Clone, Encode)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-pub enum VrfTranscriptValue {
+pub enum VrfTranscriptItem {
 	/// Value is an array of bytes
 	Bytes(Vec<u8>),
 	/// Value is a u64 integer
@@ -1112,11 +1111,11 @@ pub enum VrfTranscriptValue {
 
 /// VRF Transcript data
 #[derive(Clone, Encode)]
-pub struct VrfTranscriptData {
+pub struct VrfTranscript {
 	/// The transcript's label
 	pub label: &'static [u8],
 	/// Additional data to be registered into the transcript
-	pub items: Vec<(&'static str, VrfTranscriptValue)>,
+	pub items: Vec<(&'static str, VrfTranscriptItem)>,
 }
 
 /// VRF Signer.
@@ -1125,7 +1124,7 @@ pub trait VrfSigner {
 	type VrfSignature;
 
 	/// Sign transcript data.
-	fn vrf_sign(&self, data: &VrfTranscriptData) -> Self::VrfSignature;
+	fn vrf_sign(&self, data: &VrfTranscript) -> Self::VrfSignature;
 }
 
 /// VRF Verifier.
@@ -1134,7 +1133,7 @@ pub trait VrfVerifier {
 	type VrfSignature;
 
 	/// Verify transcript data signature.
-	fn vrf_verify(&self, data: &VrfTranscriptData, signature: &Self::VrfSignature) -> bool;
+	fn vrf_verify(&self, data: &VrfTranscript, signature: &Self::VrfSignature) -> bool;
 }
 
 /// An identifier for a specific cryptographic algorithm used by a key pair

@@ -547,7 +547,7 @@ pub mod vrf {
 	#[cfg(feature = "full_crypto")]
 	use crate::crypto::VrfSigner;
 	use crate::{
-		crypto::{VrfTranscriptData, VrfTranscriptValue, VrfVerifier},
+		crypto::{VrfTranscript, VrfTranscriptItem, VrfVerifier},
 		U512,
 	};
 	pub use schnorrkel::vrf::VRF_PREOUT_LENGTH;
@@ -655,7 +655,7 @@ pub mod vrf {
 	impl VrfSigner for Pair {
 		type VrfSignature = VrfSignature;
 
-		fn vrf_sign(&self, data: &VrfTranscriptData) -> Self::VrfSignature {
+		fn vrf_sign(&self, data: &VrfTranscript) -> Self::VrfSignature {
 			let transcript = make_transcript(data);
 			let (inout, proof, _) = self.as_ref().vrf_sign(transcript);
 			VrfSignature { output: VrfOutput(inout.to_preout()), proof: VrfProof(proof) }
@@ -665,7 +665,7 @@ pub mod vrf {
 	impl VrfVerifier for Public {
 		type VrfSignature = VrfSignature;
 
-		fn vrf_verify(&self, data: &VrfTranscriptData, signature: &Self::VrfSignature) -> bool {
+		fn vrf_verify(&self, data: &VrfTranscript, signature: &Self::VrfSignature) -> bool {
 			let Ok(public) = schnorrkel::PublicKey::from_bytes(self) else {
 				return false;
 			};
@@ -705,14 +705,14 @@ pub mod vrf {
 		}
 	}
 
-	fn make_transcript(data: &VrfTranscriptData) -> merlin::Transcript {
+	fn make_transcript(data: &VrfTranscript) -> merlin::Transcript {
 		let mut transcript = merlin::Transcript::new(data.label);
 		for (label, value) in data.items.iter() {
 			match value {
-				VrfTranscriptValue::Bytes(bytes) => {
+				VrfTranscriptItem::Bytes(bytes) => {
 					transcript.append_message(label.as_bytes(), &bytes);
 				},
-				VrfTranscriptValue::U64(val) => {
+				VrfTranscriptItem::U64(val) => {
 					transcript.append_u64(label.as_bytes(), *val);
 				},
 			}
@@ -726,7 +726,7 @@ pub mod vrf {
 		context: &[u8],
 		public: &Public,
 		output: &VrfOutput,
-		data: &VrfTranscriptData,
+		data: &VrfTranscript,
 	) -> B {
 		let pubkey = schnorrkel::PublicKey::from_bytes(public).expect("DAVXY TODO");
 		let transcript = make_transcript(data);
