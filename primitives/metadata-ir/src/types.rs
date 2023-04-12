@@ -37,6 +37,77 @@ pub struct MetadataIR<T: Form = MetaForm> {
 	pub extrinsic: ExtrinsicMetadataIR<T>,
 	/// The type of the `Runtime`.
 	pub ty: T::Type,
+	/// Metadata of the Runtime API.
+	pub apis: Vec<RuntimeApiMetadataIR<T>>,
+}
+
+/// Metadata of a runtime trait.
+#[derive(Clone, PartialEq, Eq, Encode, Debug)]
+pub struct RuntimeApiMetadataIR<T: Form = MetaForm> {
+	/// Trait name.
+	pub name: T::String,
+	/// Trait methods.
+	pub methods: Vec<RuntimeApiMethodMetadataIR<T>>,
+	/// Trait documentation.
+	pub docs: Vec<T::String>,
+}
+
+impl IntoPortable for RuntimeApiMetadataIR {
+	type Output = RuntimeApiMetadataIR<PortableForm>;
+
+	fn into_portable(self, registry: &mut Registry) -> Self::Output {
+		RuntimeApiMetadataIR {
+			name: self.name.into_portable(registry),
+			methods: registry.map_into_portable(self.methods),
+			docs: registry.map_into_portable(self.docs),
+		}
+	}
+}
+
+/// Metadata of a runtime method.
+#[derive(Clone, PartialEq, Eq, Encode, Debug)]
+pub struct RuntimeApiMethodMetadataIR<T: Form = MetaForm> {
+	/// Method name.
+	pub name: T::String,
+	/// Method parameters.
+	pub inputs: Vec<RuntimeApiMethodParamMetadataIR<T>>,
+	/// Method output.
+	pub output: T::Type,
+	/// Method documentation.
+	pub docs: Vec<T::String>,
+}
+
+impl IntoPortable for RuntimeApiMethodMetadataIR {
+	type Output = RuntimeApiMethodMetadataIR<PortableForm>;
+
+	fn into_portable(self, registry: &mut Registry) -> Self::Output {
+		RuntimeApiMethodMetadataIR {
+			name: self.name.into_portable(registry),
+			inputs: registry.map_into_portable(self.inputs),
+			output: registry.register_type(&self.output),
+			docs: registry.map_into_portable(self.docs),
+		}
+	}
+}
+
+/// Metadata of a runtime method parameter.
+#[derive(Clone, PartialEq, Eq, Encode, Debug)]
+pub struct RuntimeApiMethodParamMetadataIR<T: Form = MetaForm> {
+	/// Parameter name.
+	pub name: T::String,
+	/// Parameter type.
+	pub ty: T::Type,
+}
+
+impl IntoPortable for RuntimeApiMethodParamMetadataIR {
+	type Output = RuntimeApiMethodParamMetadataIR<PortableForm>;
+
+	fn into_portable(self, registry: &mut Registry) -> Self::Output {
+		RuntimeApiMethodParamMetadataIR {
+			name: self.name.into_portable(registry),
+			ty: registry.register_type(&self.ty),
+		}
+	}
 }
 
 /// The intermediate representation for a pallet metadata.

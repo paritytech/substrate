@@ -2580,6 +2580,7 @@ dependencies = [
  "rustversion",
  "scale-info",
  "serde",
+ "sp-api",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
@@ -10214,8 +10215,10 @@ dependencies = [
  "hash-db",
  "log",
  "parity-scale-codec",
+ "scale-info",
  "sp-api-proc-macro",
  "sp-core",
+ "sp-metadata-ir",
  "sp-runtime",
  "sp-state-machine",
  "sp-std",
@@ -10230,6 +10233,7 @@ name = "sp-api-proc-macro"
 version = "4.0.0-dev"
 dependencies = [
  "Inflector",
+ "assert_matches",
  "blake2",
  "expander",
  "proc-macro-crate",
@@ -10650,6 +10654,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-metadata-ir"
+version = "0.1.0"
+dependencies = [
+ "frame-metadata",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-std",
+]
+
+[[package]]
 name = "sp-mmr-primitives"
 version = "4.0.0-dev"
 dependencies = [
@@ -10900,6 +10914,7 @@ name = "sp-test-primitives"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec",
+ "scale-info",
  "serde",
  "sp-application-crypto",
  "sp-core",
