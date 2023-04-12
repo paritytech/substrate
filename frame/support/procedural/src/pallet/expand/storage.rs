@@ -384,10 +384,11 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
@@ -407,10 +408,11 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
@@ -432,10 +434,11 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
@@ -457,10 +460,11 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
@@ -484,10 +488,11 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
