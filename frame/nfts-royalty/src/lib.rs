@@ -53,7 +53,6 @@ pub mod pallet {
 	use super::*;
 	use sp_std::fmt::Display;
 	use frame_system::pallet_prelude::*;
-	use pallet_nfts::MintWitness;
 
 	use frame_support::{
 		pallet_prelude::*,
@@ -87,15 +86,12 @@ pub mod pallet {
 		/// The type used to identify an NFT within a collection.
 		type NftItemId: Member + Parameter + MaxEncodedLen + Copy + Display;
 
-		/// Witness data
-		type MintWitness: Member + Parameter + MaxEncodedLen + Copy + Display;
-
 		/// Registry for minted NFTs.
 		type Nfts: NonFungiblesInspect<
 				Self::AccountId,
 				ItemId = Self::NftItemId,
 				CollectionId = Self::NftCollectionId,
-			> + NonFungiblesMutate<Self::AccountId, Self::MintWitness>;
+			>;
 	}
 
 	/// Keeps track of the corresponding NFT ID, royalty percentage, and royalty recipient.
@@ -135,7 +131,6 @@ pub mod pallet {
 			collection_id: T::NftCollectionId,
 			item_id: T::NftItemId,
 			mint_to: AccountIdLookupOf<T>,
-            witness_data: Option<MintWitness<T::NftItemId>>,
 			royalty_percentage: Permill,
 			royalty_recipient: T::AccountId,
 		) -> DispatchResult {
