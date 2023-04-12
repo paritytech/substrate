@@ -1913,8 +1913,9 @@ pub mod env {
 	///
 	/// # Note
 	///
-	/// It is recommended to avoid specifying very small values for `ref_time_limit` and `proof_size_limit` as
-	/// the prices for a single gas can be smaller than the basic balance unit.
+	/// It is recommended to avoid specifying very small values for `ref_time_limit` and
+	/// `proof_size_limit` as the prices for a single gas can be smaller than the basic balance
+	/// unit.
 	#[version(1)]
 	#[unstable]
 	fn weight_to_fee(

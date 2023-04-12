@@ -4024,7 +4024,6 @@ fn storage_deposit_limit_is_enforced() {
 			<Error<Test>>::StorageDepositLimitExhausted,
 		);
 
-
 		// To check that deposit limit fallbacks to DefaultDepositLimit,
 		// we customize it here.
 		DEFAULT_DEPOSIT_LIMIT.with(|c| *c.borrow_mut() = 3);
@@ -4032,16 +4031,14 @@ fn storage_deposit_limit_is_enforced() {
 		// Create 1 byte of storage, should cost 3 Balance:
 		// 2 for the item added + 1 for the new storage item.
 		// Should pass as it fallbacks to DefaultDepositLimit.
-		assert_ok!(
-			Contracts::call(
-				RuntimeOrigin::signed(ALICE),
-				addr.clone(),
-				0,
-				GAS_LIMIT,
-				None,
-				1u32.to_le_bytes().to_vec()
-			)
-		);
+		assert_ok!(Contracts::call(
+			RuntimeOrigin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			1u32.to_le_bytes().to_vec()
+		));
 
 		// Use 4 more bytes of the storage for the same item, which requires 4 Balance.
 		// Should fail as DefaultDepositLimit is 3 and hence isn't enough.
