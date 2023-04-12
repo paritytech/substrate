@@ -103,9 +103,9 @@ impl MemoryKeystore {
 		&self,
 		key_type: KeyTypeId,
 		public: &T::Public,
-		transcript_data: VrfTranscript,
+		transcript: &VrfTranscript,
 	) -> Result<Option<T::VrfSignature>, Error> {
-		let sig = self.pair::<T>(key_type, public).map(|pair| pair.vrf_sign(&transcript_data));
+		let sig = self.pair::<T>(key_type, public).map(|pair| pair.vrf_sign(transcript));
 		Ok(sig)
 	}
 }
@@ -136,9 +136,9 @@ impl Keystore for MemoryKeystore {
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript_data: VrfTranscript,
+		transcript: &VrfTranscript,
 	) -> Result<Option<sr25519::vrf::VrfSignature>, Error> {
-		self.vrf_sign::<sr25519::Pair>(key_type, public, transcript_data)
+		self.vrf_sign::<sr25519::Pair>(key_type, public, transcript)
 	}
 
 	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {
@@ -268,7 +268,7 @@ mod tests {
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
-		let transcript_data = VrfTranscript {
+		let transcript = VrfTranscript {
 			label: b"Test",
 			items: vec![
 				("one", VrfTranscriptItem::U64(1)),
@@ -277,14 +277,14 @@ mod tests {
 			],
 		};
 
-		let result = store.sr25519_vrf_sign(SR25519, &key_pair.public(), transcript_data.clone());
+		let result = store.sr25519_vrf_sign(SR25519, &key_pair.public(), &transcript);
 		assert!(result.unwrap().is_none());
 
 		store
 			.insert(SR25519, secret_uri, key_pair.public().as_ref())
 			.expect("Inserts unknown key");
 
-		let result = store.sr25519_vrf_sign(SR25519, &key_pair.public(), transcript_data);
+		let result = store.sr25519_vrf_sign(SR25519, &key_pair.public(), &transcript);
 
 		assert!(result.unwrap().is_some());
 	}

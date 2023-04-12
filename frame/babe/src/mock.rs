@@ -330,7 +330,7 @@ pub fn make_vrf_output(
 	slot: Slot,
 	pair: &sp_consensus_babe::AuthorityPair,
 ) -> (VrfOutput, VrfProof, [u8; RANDOMNESS_LENGTH]) {
-	let transcript = sp_consensus_babe::make_transcript_data(&Babe::randomness(), slot, 0);
+	let transcript = sp_consensus_babe::make_transcript(&Babe::randomness(), slot, 0);
 
 	let signature = pair.as_ref().vrf_sign(&transcript);
 

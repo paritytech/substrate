@@ -30,7 +30,7 @@ use sp_consensus_babe::{
 		CompatibleDigestItem, PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest,
 		SecondaryVRFPreDigest,
 	},
-	make_transcript_data, AuthorityId, AuthorityPair, AuthoritySignature,
+	make_transcript, AuthorityId, AuthorityPair, AuthoritySignature,
 };
 use sp_consensus_slots::Slot;
 use sp_core::{
@@ -172,7 +172,7 @@ fn check_primary_header<B: BlockT + Sized>(
 		return Err(babe_err(Error::BadSignature(pre_hash)))
 	}
 
-	let transcript = make_transcript_data(&epoch.randomness, pre_digest.slot, epoch_index);
+	let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch_index);
 
 	let signature =
 		VrfSignature { output: pre_digest.vrf_output.clone(), proof: pre_digest.vrf_proof.clone() };
@@ -256,7 +256,7 @@ fn check_secondary_vrf_header<B: BlockT>(
 		return Err(Error::BadSignature(pre_hash))
 	}
 
-	let transcript = make_transcript_data(&epoch.randomness, pre_digest.slot, epoch_index);
+	let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch_index);
 
 	let signature =
 		VrfSignature { output: pre_digest.vrf_output.clone(), proof: pre_digest.vrf_proof.clone() };

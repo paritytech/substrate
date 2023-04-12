@@ -655,8 +655,8 @@ pub mod vrf {
 	impl VrfSigner for Pair {
 		type VrfSignature = VrfSignature;
 
-		fn vrf_sign(&self, data: &VrfTranscript) -> Self::VrfSignature {
-			let transcript = make_transcript(data);
+		fn vrf_sign(&self, transcript: &VrfTranscript) -> Self::VrfSignature {
+			let transcript = make_schnorrkel_transcript(transcript);
 			let (inout, proof, _) = self.as_ref().vrf_sign(transcript);
 			VrfSignature { output: VrfOutput(inout.to_output()), proof: VrfProof(proof) }
 		}
@@ -665,11 +665,11 @@ pub mod vrf {
 	impl VrfVerifier for Public {
 		type VrfSignature = VrfSignature;
 
-		fn vrf_verify(&self, data: &VrfTranscript, signature: &Self::VrfSignature) -> bool {
+		fn vrf_verify(&self, transcript: &VrfTranscript, signature: &Self::VrfSignature) -> bool {
 			let Ok(public) = schnorrkel::PublicKey::from_bytes(self) else {
 				return false
 			};
-			let transcript = make_transcript(data);
+			let transcript = make_schnorrkel_transcript(transcript);
 			public.vrf_verify(transcript, &signature.output, &signature.proof).is_ok()
 		}
 	}
@@ -705,12 +705,15 @@ pub mod vrf {
 		}
 	}
 
-	fn make_transcript(data: &VrfTranscript) -> merlin::Transcript {
+	/// Make an instance of backend transcript implementing `schnorrkel::vrf::VRFSigningTranscript`
+	pub fn make_schnorrkel_transcript(
+		data: &VrfTranscript,
+	) -> impl schnorrkel::vrf::VRFSigningTranscript {
 		let mut transcript = merlin::Transcript::new(data.label);
 		for (label, value) in data.items.iter() {
 			match value {
 				VrfTranscriptItem::Bytes(bytes) => {
-					transcript.append_message(label.as_bytes(), &bytes);
+					transcript.append_message(label.as_bytes(), bytes);
 				},
 				VrfTranscriptItem::U64(val) => {
 					transcript.append_u64(label.as_bytes(), *val);
@@ -725,10 +728,10 @@ pub mod vrf {
 		context: &[u8],
 		public: &Public,
 		output: &VrfOutput,
-		data: &VrfTranscript,
+		transcript: &VrfTranscript,
 	) -> Result<B, codec::Error> {
 		let pubkey = schnorrkel::PublicKey::from_bytes(public).map_err(convert_error)?;
-		let transcript = make_transcript(data);
+		let transcript = make_schnorrkel_transcript(transcript);
 		let inout = output.attach_input_hash(&pubkey, transcript).map_err(convert_error)?;
 		Ok(inout.make_bytes::<B>(context))
 	}

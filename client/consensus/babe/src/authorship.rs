@@ -24,7 +24,7 @@ use sc_consensus_epochs::Epoch as EpochT;
 use sp_application_crypto::AppCrypto;
 use sp_consensus_babe::{
 	digests::{PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest},
-	make_transcript_data, AuthorityId, BabeAuthorityWeight, Slot,
+	make_transcript, AuthorityId, BabeAuthorityWeight, Slot,
 };
 use sp_core::{blake2_256, crypto::ByteArray, sr25519::vrf, U256};
 use sp_keystore::KeystorePtr;
@@ -144,12 +144,9 @@ fn claim_secondary_slot(
 	for (authority_id, authority_index) in keys {
 		if authority_id == expected_author {
 			let pre_digest = if author_secondary_vrf {
-				let transcript_data = make_transcript_data(randomness, slot, epoch_index);
-				let result = keystore.sr25519_vrf_sign(
-					AuthorityId::ID,
-					authority_id.as_ref(),
-					transcript_data,
-				);
+				let transcript = make_transcript(randomness, slot, epoch_index);
+				let result =
+					keystore.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &transcript);
 				if let Ok(Some(signature)) = result {
 					Some(PreDigest::SecondaryVRF(SecondaryVRFPreDigest {
 						slot,
@@ -239,10 +236,10 @@ fn claim_primary_slot(
 		epoch_index = epoch.clone_for_slot(slot).epoch_index;
 	}
 
+	let transcript = make_transcript(randomness, slot, epoch_index);
+
 	for (authority_id, authority_index) in keys {
-		let transcript = make_transcript_data(randomness, slot, epoch_index);
-		let result =
-			keystore.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), transcript.clone());
+		let result = keystore.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &transcript);
 		if let Ok(Some(signature)) = result {
 			let threshold = calculate_primary_threshold(c, authorities, *authority_index);
 

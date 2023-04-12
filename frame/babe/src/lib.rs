@@ -360,7 +360,7 @@ pub mod pallet {
 					let randomness: Option<BabeRandomness> = Authorities::<T>::get()
 						.get(authority_index as usize)
 						.and_then(|(authority, _)| {
-							let transcript = sp_consensus_babe::make_transcript_data(
+							let transcript = sp_consensus_babe::make_transcript(
 								&Self::randomness(),
 								CurrentSlot::<T>::get(),
 								EpochIndex::<T>::get(),

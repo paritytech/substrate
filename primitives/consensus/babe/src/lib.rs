@@ -98,7 +98,7 @@ pub type BabeAuthorityWeight = u64;
 pub type BabeBlockWeight = u32;
 
 /// Make a VRF transcript data container
-pub fn make_transcript_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfTranscript {
+pub fn make_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfTranscript {
 	VrfTranscript {
 		label: &BABE_ENGINE_ID,
 		items: sp_std::vec![

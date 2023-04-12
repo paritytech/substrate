@@ -29,8 +29,8 @@ use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_babe::{
-	inherents::InherentDataProvider, make_transcript_data, AllowedSlots, AuthorityId,
-	AuthorityPair, Slot,
+	inherents::InherentDataProvider, make_transcript, AllowedSlots, AuthorityId, AuthorityPair,
+	Slot,
 };
 use sp_consensus_slots::SlotDuration;
 use sp_core::crypto::Pair;
@@ -630,9 +630,9 @@ fn claim_vrf_check() {
 		PreDigest::Primary(d) => d,
 		v => panic!("Unexpected pre-digest variant {:?}", v),
 	};
-	let transcript = make_transcript_data(&epoch.randomness.clone(), 0.into(), epoch.epoch_index);
+	let transcript = make_transcript(&epoch.randomness.clone(), 0.into(), epoch.epoch_index);
 	let sign = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
+		.sr25519_vrf_sign(AuthorityId::ID, &public, &transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(pre_digest.vrf_output, sign.output);
@@ -642,9 +642,9 @@ fn claim_vrf_check() {
 		PreDigest::SecondaryVRF(d) => d,
 		v => panic!("Unexpected pre-digest variant {:?}", v),
 	};
-	let transcript = make_transcript_data(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
+	let transcript = make_transcript(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
 	let sign = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
+		.sr25519_vrf_sign(AuthorityId::ID, &public, &transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(pre_digest.vrf_output, sign.output);
@@ -656,9 +656,9 @@ fn claim_vrf_check() {
 		v => panic!("Unexpected claim variant {:?}", v),
 	};
 	let fixed_epoch = epoch.clone_for_slot(slot);
-	let transcript = make_transcript_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
+	let transcript = make_transcript(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
 	let sign = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
+		.sr25519_vrf_sign(AuthorityId::ID, &public, &transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);
@@ -671,9 +671,9 @@ fn claim_vrf_check() {
 		v => panic!("Unexpected claim variant {:?}", v),
 	};
 	let fixed_epoch = epoch.clone_for_slot(slot);
-	let transcript = make_transcript_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
+	let transcript = make_transcript(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
 	let sign = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, &public, transcript)
+		.sr25519_vrf_sign(AuthorityId::ID, &public, &transcript)
 		.unwrap()
 		.unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);
