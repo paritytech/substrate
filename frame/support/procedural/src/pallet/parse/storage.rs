@@ -520,7 +520,7 @@ fn process_unnamed_generics(
 				Ok(true)
 			} else {
 				let msg = "`_` can only be used in dev_mode. Please specify an appropriate hasher.";
-				Err(syn::Error::new(args_span, msg))
+				Err(syn::Error::new(arg.span(), msg))
 			}
 		} else {
 			Ok(false)
