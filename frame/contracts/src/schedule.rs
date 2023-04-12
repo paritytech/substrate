@@ -412,7 +412,7 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `sr25519_verify`.
 	pub sr25519_verify: Weight,
 
-	/// Weight per byte of calling `seal_sr25519_verify`.
+	/// Weight per byte of calling `sr25519_verify`.
 	pub sr25519_verify_per_byte: Weight,
 
 	/// Weight of calling `reentrance_count`.
