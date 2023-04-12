@@ -102,7 +102,7 @@ pub enum ExistenceReason<Balance, AccountId> {
 	/// The asset class is `sufficient` for account existence.
 	#[codec(index = 1)]
 	Sufficient,
-	/// The `AccountId` has placed a deposit to exist within an asset class.
+	/// The account holder has placed a deposit to exist within an asset class.
 	#[codec(index = 2)]
 	DepositHeld(Balance),
 	/// A deposit was placed for this account to exist, but it has been refunded.
