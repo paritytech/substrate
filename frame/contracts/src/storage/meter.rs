@@ -133,7 +133,7 @@ pub struct RawMeter<T: Config, E, S: State + Default + Debug> {
 	charges: Vec<Charge<T>>,
 	/// We store the nested state to determine if it has a special limit for sub-call.
 	nested: S,
-	/// Type parameters are only used in impls.
+	/// Type parameter only used in impls.
 	_phantom: PhantomData<E>,
 }
 

@@ -1366,8 +1366,8 @@ pub mod env {
 	/// - `flags`: See `crate::wasm::runtime::CallFlags` for a documentation of the supported flags.
 	/// - `callee_ptr`: a pointer to the address of the callee contract. Should be decodable as an
 	///   `T::AccountId`. Traps otherwise.
-	/// - `ref_time`: how much *ref_time* Weight to devote to the execution.
-	/// - `proof_limit`: how much *proof_limit* Weight to devote to the execution.
+	/// - `ref_time_limit`: how much *ref_time* Weight to devote to the execution.
+	/// - `proof_size_limit`: how much *proof_size* Weight to devote to the execution.
 	/// - `deposit_ptr`: a pointer to the buffer with value of the storage deposit limit for the
 	///   call. Should be decodable as a `T::Balance`. Traps otherwise. Passing `SENTINEL` means
 	///   setting no specific limit for the call, which implies storage usage up to the limit of the
@@ -1396,8 +1396,8 @@ pub mod env {
 		memory: _,
 		flags: u32,
 		callee_ptr: u32,
-		ref_time: u64,
-		proof_limit: u64,
+		ref_time_limit: u64,
+		proof_size_limit: u64,
 		deposit_ptr: u32,
 		value_ptr: u32,
 		input_data_ptr: u32,
@@ -1412,7 +1412,7 @@ pub mod env {
 				callee_ptr,
 				value_ptr,
 				deposit_ptr,
-				weight: Weight::from_parts(ref_time, proof_limit),
+				weight: Weight::from_parts(ref_time_limit, proof_size_limit),
 			},
 			input_data_ptr,
 			input_data_len,
@@ -1567,8 +1567,8 @@ pub mod env {
 	/// # Parameters
 	///
 	/// - `code_hash_ptr`: a pointer to the buffer that contains the initializer code.
-	/// - `ref_time`: how much *ref_time* Weight to devote to the execution.
-	/// - `proof_limit`: how much *proof_limit* Weight to devote to the execution.
+	/// - `ref_time_limit`: how much *ref_time* Weight to devote to the execution.
+	/// - `proof_size_limit`: how much *proof_size* Weight to devote to the execution.
 	/// - `deposit_ptr`: a pointer to the buffer with value of the storage deposit limit for
 	///   instantiation. Should be decodable as a `T::Balance`. Traps otherwise. Passing `SENTINEL`
 	///   means setting no specific limit for the call, which implies storage usage up to the limit
@@ -1605,8 +1605,8 @@ pub mod env {
 		ctx: _,
 		memory: _,
 		code_hash_ptr: u32,
-		ref_time: u64,
-		proof_limit: u64,
+		ref_time_limit: u64,
+		proof_size_limit: u64,
 		deposit_ptr: u32,
 		value_ptr: u32,
 		input_data_ptr: u32,
@@ -1621,7 +1621,7 @@ pub mod env {
 		ctx.instantiate(
 			memory,
 			code_hash_ptr,
-			Weight::from_parts(ref_time, proof_limit),
+			Weight::from_parts(ref_time_limit, proof_size_limit),
 			deposit_ptr,
 			value_ptr,
 			input_data_ptr,
@@ -1906,19 +1906,19 @@ pub mod env {
 	///
 	/// # Note
 	///
-	/// It is recommended to avoid specifying very small values for `ref_time` and `proof_limit` as
+	/// It is recommended to avoid specifying very small values for `ref_time_limit` and `proof_size_limit` as
 	/// the prices for a single gas can be smaller than the basic balance unit.
 	#[version(1)]
 	#[unstable]
 	fn weight_to_fee(
 		ctx: _,
 		memory: _,
-		ref_time: u64,
-		proof_limit: u64,
+		ref_time_limit: u64,
+		proof_size_limit: u64,
 		out_ptr: u32,
 		out_len_ptr: u32,
 	) -> Result<(), TrapReason> {
-		let weight = Weight::from_parts(ref_time, proof_limit);
+		let weight = Weight::from_parts(ref_time_limit, proof_size_limit);
 		ctx.charge_gas(RuntimeCosts::WeightToFee)?;
 		Ok(ctx.write_sandbox_output(
 			memory,
