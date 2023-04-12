@@ -69,7 +69,7 @@ pub struct RunCmd {
 	///
 	/// - `unsafe`: Exposes every RPC method.
 	/// - `safe`: Exposes only a safe subset of RPC methods, denying unsafe RPC methods.
-	/// - `auto`: Acts as `safe` if RPC is served externally, e.g. when `--{rpc,ws}-external` is
+	/// - `auto`: Acts as `safe` if RPC is served externally, e.g. when `--rpc--external` is
 	///   passed, otherwise acts as `unsafe`.
 	#[arg(
 		long,
@@ -470,7 +470,7 @@ fn rpc_interface(
 ) -> Result<IpAddr> {
 	if is_external && is_validator && rpc_methods != RpcMethods::Unsafe {
 		return Err(Error::Input(
-			"--rpc-external and --ws-external options shouldn't be used if the node is running as \
+			"--rpc-external option shouldn't be used if the node is running as \
 			 a validator. Use `--unsafe-rpc-external` or `--rpc-methods=unsafe` if you understand \
 			 the risks. See the options description for more information."
 				.to_owned(),
