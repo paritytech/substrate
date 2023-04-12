@@ -381,13 +381,13 @@ pub mod pallet {
 								authority.as_inner_ref().vrf_verify(&transcript, &signature)
 							});
 
-							let vrf_bytes = sp_core::sr25519::vrf::make_bytes(
+							sp_core::sr25519::vrf::make_bytes(
 								RANDOMNESS_VRF_CONTEXT,
 								authority.as_ref(),
 								&vrf_output,
 								&transcript,
-							);
-							Some(vrf_bytes)
+							)
+							.ok()
 						});
 
 					if let Some(randomness) = pre_digest.is_primary().then(|| randomness).flatten()

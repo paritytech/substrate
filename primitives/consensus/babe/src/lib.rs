@@ -34,7 +34,7 @@ use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
 
 pub use sp_core::{
 	crypto::{VrfTranscript, VrfTranscriptItem},
-	sr25519::vrf::{VrfOutput, VrfProof, VRF_PREOUT_LENGTH},
+	sr25519::vrf::{VrfOutput, VrfProof},
 };
 
 /// Key type for BABE module.
@@ -45,14 +45,11 @@ mod app {
 	app_crypto!(sr25519, BABE);
 }
 
-/// VRF context used for authoring lottery.
-pub const AUTHORING_VRF_CONTEXT: &[u8] = b"substrate-babe-vrf";
-
 /// VRF context used for per-slot randomness generation.
 pub const RANDOMNESS_VRF_CONTEXT: &[u8] = b"BabeVRFInOutContext";
 
-/// VRF per-slot randomness length.
-pub const RANDOMNESS_LENGTH: usize = VRF_PREOUT_LENGTH;
+/// VRF output length for per-slot randomness.
+pub const RANDOMNESS_LENGTH: usize = 32;
 
 /// Randomness type required by BABE operations.
 pub type Randomness = [u8; RANDOMNESS_LENGTH];

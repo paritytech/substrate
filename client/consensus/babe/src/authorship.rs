@@ -18,20 +18,15 @@
 
 //! BABE authority selection and slot claiming.
 
-use super::Epoch;
+use super::{Epoch, AUTHORING_SCORE_LENGTH, AUTHORING_SCORE_VRF_CONTEXT};
 use codec::Encode;
 use sc_consensus_epochs::Epoch as EpochT;
 use sp_application_crypto::AppCrypto;
 use sp_consensus_babe::{
 	digests::{PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest},
-	make_transcript_data, AuthorityId, BabeAuthorityWeight, Slot, AUTHORING_VRF_CONTEXT,
+	make_transcript_data, AuthorityId, BabeAuthorityWeight, Slot,
 };
-use sp_core::{
-	blake2_256,
-	crypto::{ByteArray, VrfTranscript},
-	sr25519::vrf::VrfOutput,
-	U256,
-};
+use sp_core::{blake2_256, crypto::ByteArray, sr25519::vrf, U256};
 use sp_keystore::KeystorePtr;
 
 /// Calculates the primary selection threshold for a given authority, taking
@@ -226,23 +221,6 @@ pub fn claim_slot_using_keys(
 	})
 }
 
-/// Returns true if the VRF output is lower than the given threshold, false otherwise.
-pub(super) fn check_primary_threshold(
-	threshold: u128,
-	authority: &AuthorityId,
-	vrf_output: &VrfOutput,
-	transcript: &VrfTranscript,
-) -> bool {
-	let vrf_bytes = sp_core::sr25519::vrf::make_bytes::<[u8; 16]>(
-		AUTHORING_VRF_CONTEXT,
-		authority.as_ref(),
-		vrf_output,
-		transcript,
-	);
-
-	u128::from_le_bytes(vrf_bytes) < threshold
-}
-
 /// Claim a primary slot if it is our turn.  Returns `None` if it is not our turn.
 /// This hashes the slot number, epoch, genesis hash, and chain randomness into
 /// the VRF.  If the VRF produces a value less than `threshold`, it is our turn,
@@ -268,7 +246,16 @@ fn claim_primary_slot(
 		if let Ok(Some(signature)) = result {
 			let threshold = calculate_primary_threshold(c, authorities, *authority_index);
 
-			if check_primary_threshold(threshold, authority_id, &signature.output, &transcript) {
+			let can_claim = vrf::make_bytes::<[u8; AUTHORING_SCORE_LENGTH]>(
+				AUTHORING_SCORE_VRF_CONTEXT,
+				authority_id.as_ref(),
+				&signature.output,
+				&transcript,
+			)
+			.map(|bytes| u128::from_le_bytes(bytes) < threshold)
+			.unwrap_or_default();
+
+			if can_claim {
 				let pre_digest = PreDigest::Primary(PrimaryPreDigest {
 					slot,
 					vrf_output: signature.output,

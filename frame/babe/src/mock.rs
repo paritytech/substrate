@@ -339,7 +339,8 @@ pub fn make_vrf_output(
 		pair.public().as_ref(),
 		&signature.output,
 		&transcript,
-	);
+	)
+	.expect("vrf make bytes");
 
 	(signature.output, signature.proof, randomness)
 }

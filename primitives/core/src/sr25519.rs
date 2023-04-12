@@ -550,23 +550,23 @@ pub mod vrf {
 		crypto::{VrfTranscript, VrfTranscriptItem, VrfVerifier},
 		U512,
 	};
-	pub use schnorrkel::vrf::VRF_PREOUT_LENGTH;
+	pub use schnorrkel::vrf::VRF_OUTPUT_LENGTH;
 	use schnorrkel::{errors::MultiSignatureStage, vrf::VRF_PROOF_LENGTH, SignatureError};
 
 	/// VRF signature data
 	pub struct VrfSignature {
-		/// The VRFOutput serialized
+		/// The initial VRF configuration
 		pub output: VrfOutput,
-		/// The calculated VRFProof
+		/// The calculated VRF proof
 		pub proof: VrfProof,
 	}
 
 	/// VRF output type suitable for schnorrkel operations.
 	#[derive(Clone, Debug, PartialEq, Eq)]
-	pub struct VrfOutput(pub schnorrkel::vrf::VRFPreOut);
+	pub struct VrfOutput(pub schnorrkel::vrf::VRFOutput);
 
 	impl Deref for VrfOutput {
-		type Target = schnorrkel::vrf::VRFPreOut;
+		type Target = schnorrkel::vrf::VRFOutput;
 
 		fn deref(&self) -> &Self::Target {
 			&self.0
@@ -581,19 +581,19 @@ pub mod vrf {
 
 	impl Decode for VrfOutput {
 		fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
-			let decoded = <[u8; VRF_PREOUT_LENGTH]>::decode(i)?;
-			Ok(Self(schnorrkel::vrf::VRFPreOut::from_bytes(&decoded).map_err(convert_error)?))
+			let decoded = <[u8; VRF_OUTPUT_LENGTH]>::decode(i)?;
+			Ok(Self(schnorrkel::vrf::VRFOutput::from_bytes(&decoded).map_err(convert_error)?))
 		}
 	}
 
 	impl MaxEncodedLen for VrfOutput {
 		fn max_encoded_len() -> usize {
-			<[u8; VRF_PREOUT_LENGTH]>::max_encoded_len()
+			<[u8; VRF_OUTPUT_LENGTH]>::max_encoded_len()
 		}
 	}
 
 	impl TypeInfo for VrfOutput {
-		type Identity = [u8; VRF_PREOUT_LENGTH];
+		type Identity = [u8; VRF_OUTPUT_LENGTH];
 
 		fn type_info() -> scale_info::Type {
 			Self::Identity::type_info()
@@ -658,7 +658,7 @@ pub mod vrf {
 		fn vrf_sign(&self, data: &VrfTranscript) -> Self::VrfSignature {
 			let transcript = make_transcript(data);
 			let (inout, proof, _) = self.as_ref().vrf_sign(transcript);
-			VrfSignature { output: VrfOutput(inout.to_preout()), proof: VrfProof(proof) }
+			VrfSignature { output: VrfOutput(inout.to_output()), proof: VrfProof(proof) }
 		}
 	}
 
@@ -667,7 +667,7 @@ pub mod vrf {
 
 		fn vrf_verify(&self, data: &VrfTranscript, signature: &Self::VrfSignature) -> bool {
 			let Ok(public) = schnorrkel::PublicKey::from_bytes(self) else {
-				return false;
+				return false
 			};
 			let transcript = make_transcript(data);
 			public.vrf_verify(transcript, &signature.output, &signature.proof).is_ok()
@@ -721,17 +721,16 @@ pub mod vrf {
 	}
 
 	/// Generate a given abount of random bytes from the given VRF configuration.
-	/// TODO DAVXY: return a Result!
 	pub fn make_bytes<B: Default + AsMut<[u8]>>(
 		context: &[u8],
 		public: &Public,
 		output: &VrfOutput,
 		data: &VrfTranscript,
-	) -> B {
-		let pubkey = schnorrkel::PublicKey::from_bytes(public).expect("DAVXY TODO");
+	) -> Result<B, codec::Error> {
+		let pubkey = schnorrkel::PublicKey::from_bytes(public).map_err(convert_error)?;
 		let transcript = make_transcript(data);
-		let inout = output.attach_input_hash(&pubkey, transcript).expect("DAVXY TODO");
-		inout.make_bytes::<B>(context)
+		let inout = output.attach_input_hash(&pubkey, transcript).map_err(convert_error)?;
+		Ok(inout.make_bytes::<B>(context))
 	}
 }
 

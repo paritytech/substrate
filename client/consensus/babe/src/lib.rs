@@ -86,7 +86,6 @@ use futures::{
 use log::{debug, info, log, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
-// use schorrkel::SignatureError;
 
 use sc_client_api::{
 	backend::AuxStore, AuxDataOperations, Backend as BackendT, BlockchainEvents,
@@ -148,6 +147,12 @@ pub mod aux_schema;
 mod tests;
 
 const LOG_TARGET: &str = "babe";
+
+/// VRF context used for slots claiming lottery.
+pub const AUTHORING_SCORE_VRF_CONTEXT: &[u8] = b"substrate-babe-vrf";
+
+/// VRF output length for slots claiming lottery.
+pub const AUTHORING_SCORE_LENGTH: usize = 16;
 
 /// BABE epoch information
 #[derive(Decode, Encode, PartialEq, Eq, Clone, Debug, scale_info::TypeInfo)]
@@ -308,12 +313,12 @@ pub enum Error<B: BlockT> {
 	/// No secondary author expected.
 	#[error("No secondary author expected.")]
 	NoSecondaryAuthorExpected,
-	/// VRF verification of block by author failed
-	#[error("VRF verification of block by author {0:?} failed: threshold {1} exceeded")]
-	VRFVerificationOfBlockFailed(AuthorityId, u128),
 	/// VRF verification failed
-	#[error("VRF verification failed: {0}")]
-	VRFVerificationFailed(String),
+	#[error("VRF verification failed")]
+	VrfVerificationFailed,
+	/// Primary slot threshold too low
+	#[error("VRF output rejected, threshold {0} exceeded")]
+	VrfThresholdExceeded(u128),
 	/// Could not fetch parent header
 	#[error("Could not fetch parent header: {0}")]
 	FetchParentHeader(sp_blockchain::Error),
