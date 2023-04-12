@@ -26,12 +26,146 @@ use nix::{
 use node_primitives::{Hash, Header};
 use regex::Regex;
 use std::{
+	env,
 	io::{BufRead, BufReader, Read},
 	ops::{Deref, DerefMut},
 	path::{Path, PathBuf},
 	process::{self, Child, Command},
 	time::Duration,
 };
+use tokio::io::{AsyncBufReadExt, AsyncRead};
+
+/// Starts a new Substrate node in development mode with a temporary chain.
+///
+/// This function creates a new Substrate node using the `substrate` binary.
+/// It configures the node to run in development mode (`--dev`) with a temporary chain (`--tmp`),
+/// sets the WebSocket port to 45789 (`--ws-port=45789`).
+///
+/// # Returns
+///
+/// A [`Child`] process representing the spawned Substrate node.
+///
+/// # Panics
+///
+/// This function will panic if the `substrate` binary is not found or if the node fails to start.
+///
+/// # Examples
+///
+/// ```ignore
+/// use my_crate::start_node;
+///
+/// let child = start_node();
+/// // Interact with the Substrate node using the WebSocket port 45789.
+/// // When done, the node will be killed when the `child` is dropped.
+/// ```
+///
+/// [`Child`]: std::process::Child
+pub fn start_node() -> Child {
+	Command::new(cargo_bin("substrate"))
+		.stdout(process::Stdio::piped())
+		.stderr(process::Stdio::piped())
+		.args(&["--dev", "--tmp", "--ws-port=45789", "--no-hardware-benchmarks"])
+		.spawn()
+		.unwrap()
+}
+
+/// Builds the Substrate project using the provided arguments.
+///
+/// This function reads the CARGO_MANIFEST_DIR environment variable to find the root workspace
+/// directory. It then runs the `cargo b` command in the root directory with the specified
+/// arguments.
+///
+/// This can be useful for building the Substrate binary with a desired set of features prior
+/// to using the binary in a CLI test.
+///
+/// # Arguments
+///
+/// * `args: &[&str]` - A slice of string references representing the arguments to pass to the
+///   `cargo b` command.
+///
+/// # Panics
+///
+/// This function will panic if:
+///
+/// * The CARGO_MANIFEST_DIR environment variable is not set.
+/// * The root workspace directory cannot be determined.
+/// * The 'cargo b' command fails to execute.
+/// * The 'cargo b' command returns a non-successful status.
+///
+/// # Examples
+///
+/// ```ignore
+/// build_substrate(&["--features=try-runtime"]);
+/// ```
+pub fn build_substrate(args: &[&str]) {
+	// Get the root workspace directory from the CARGO_MANIFEST_DIR environment variable
+	let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+	let root_dir = std::path::Path::new(&manifest_dir)
+		.parent()
+		.expect("Failed to find root workspace directory");
+	let output = Command::new("cargo")
+		.arg("build")
+		.args(args)
+		.current_dir(root_dir)
+		.output()
+		.expect(format!("Failed to execute 'cargo b' with args {:?}'", args).as_str());
+
+	if !output.status.success() {
+		panic!(
+			"Failed to execute 'cargo b' with args {:?}': \n{}",
+			args,
+			String::from_utf8_lossy(&output.stderr)
+		);
+	}
+}
+
+/// Takes a readable tokio stream (e.g. from a child process `ChildStderr` or `ChildStdout`) and
+/// a `Regex` pattern, and checks each line against the given pattern as it is produced.
+/// The function returns OK(()) as soon as a line matching the pattern is found, or an Err if
+/// the stream ends without any lines matching the pattern.
+///
+/// # Arguments
+///
+/// * `child_stream` - An async tokio stream, e.g. from a child process `ChildStderr` or
+///   `ChildStdout`.
+/// * `re` - A `Regex` pattern to search for in the stream.
+///
+/// # Returns
+///
+/// * `Ok(())` if a line matching the pattern is found.
+/// * `Err(String)` if the stream ends without any lines matching the pattern.
+///
+/// # Examples
+///
+/// ```ignore
+/// use regex::Regex;
+/// use tokio::process::Command;
+/// use tokio::io::AsyncRead;
+///
+/// # async fn run() {
+/// let child = Command::new("some-command").stderr(std::process::Stdio::piped()).spawn().unwrap();
+/// let stderr = child.stderr.unwrap();
+/// let re = Regex::new("error:").unwrap();
+///
+/// match wait_for_pattern_match_in_stream(stderr, re).await {
+///     Ok(()) => println!("Error found in stderr"),
+///     Err(e) => println!("Error: {}", e),
+/// }
+/// # }
+/// ```
+pub async fn wait_for_stream_pattern_match<R>(stream: R, re: Regex) -> Result<(), String>
+where
+	R: AsyncRead + Unpin,
+{
+	let mut stdio_reader = tokio::io::BufReader::new(stream).lines();
+	while let Ok(Some(line)) = stdio_reader.next_line().await {
+		match re.find(line.as_str()) {
+			Some(_) => return Ok(()),
+			None => (),
+		}
+	}
+	Err(String::from("Stream closed without any lines matching the regex."))
+}
 
 /// Run the given `future` and panic if the `timeout` is hit.
 pub async fn run_with_timeout(timeout: Duration, future: impl futures::Future<Output = ()>) {
