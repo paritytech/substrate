@@ -834,18 +834,17 @@ where
 		let do_transaction = || {
 			// We need to charge the storage deposit before the initial transfer so that
 			// it can create the account in case the initial transfer is < ed.
-			// Also, we can only charge the storage deposit if there is an account id associated
-			// with the origin, if the origin is Root there is no storage deposit to charge.
-			match (entry_point, &self.origin) {
-				(ExportedFunction::Constructor, Origin::Signed(origin)) => {
-					let frame = top_frame_mut!(self);
-					frame.nested_storage.charge_instantiate(
-						origin,
-						&frame.account_id,
-						frame.contract_info.get(&frame.account_id),
-					)?;
-				},
-				_ => (),
+			// Root origins don't have an account associated with, so when the origin is root we
+			// can't charge the storage deposit.
+			if let (ExportedFunction::Constructor, Origin::Signed(origin)) =
+				(entry_point, &self.origin)
+			{
+				let frame = top_frame_mut!(self);
+				frame.nested_storage.charge_instantiate(
+					origin,
+					&frame.account_id,
+					frame.contract_info.get(&frame.account_id),
+				)?;
 			};
 
 			// Every non delegate call or instantiate also optionally transfers the balance.
