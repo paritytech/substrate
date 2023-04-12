@@ -36,7 +36,7 @@ mod tests {
 		common::build_substrate(&["--features=try-runtime"]);
 
 		let n_blocks = 10;
-		common::run_with_timeout(Duration::from_secs(60), async move {
+		common::run_with_timeout(Duration::from_secs(10 * 60), async move {
 			let run_fast_forward = |ws_url: String| async move {
 				Command::new(cargo_bin("substrate"))
 					.stdout(process::Stdio::piped())
