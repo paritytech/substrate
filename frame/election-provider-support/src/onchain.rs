@@ -53,8 +53,7 @@ impl From<sp_npos_elections::Error> for Error {
 /// This implements both `ElectionProvider` and `InstantElectionProvider`.
 ///
 /// This type has some utilities to make it safe. Nonetheless, it should be used with utmost care. A
-/// thoughtful value must be set as [`Config::ElectionBounds`] to ensure the size of the input is
-/// sensible.
+/// thoughtful value must be set as [`Config::Bounds`] to ensure the size of the input is sensible.
 pub struct OnChainExecution<T: Config>(PhantomData<T>);
 
 #[deprecated(note = "use OnChainExecution, which is bounded by default")]

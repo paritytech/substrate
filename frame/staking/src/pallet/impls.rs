@@ -43,10 +43,10 @@ use sp_staking::{
 use sp_std::prelude::*;
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, ElectionSizeTracker, EraPayout,
-	Exposure, ExposureOf, Forcing, IndividualExposure, MaxNominationsOf, MaxWinnersOf, Nominations,
-	NominationsQuota, PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger,
-	ValidatorPrefs,
+	election_size_tracker::StaticTracker, log, slashing, weights::WeightInfo, ActiveEraInfo,
+	BalanceOf, EraPayout, Exposure, ExposureOf, Forcing, IndividualExposure, MaxNominationsOf,
+	MaxWinnersOf, Nominations, NominationsQuota, PositiveImbalanceOf, RewardDestination,
+	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -756,7 +756,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	pub fn get_npos_voters(bounds: DataProviderBounds) -> Vec<VoterOf<Self>> {
-		let mut voters_size_tracker: ElectionSizeTracker<T::AccountId> = ElectionSizeTracker::new();
+		let mut voters_size_tracker: StaticTracker<Self> = StaticTracker::default();
 
 		let max_allowed_len = {
 			let all_voter_count = T::VoterList::count();
@@ -793,7 +793,8 @@ impl<T: Config> Pallet<T> {
 					// voter at this point and accept all the current nominations. The nomination
 					// quota is only enforced at `nominate` time.
 
-					if voters_size_tracker.try_register_voter(targets.len(), bounds).is_err() {
+					let voter = (voter, voter_weight, targets);
+					if voters_size_tracker.try_register_voter(&voter, &bounds).is_err() {
 						// no more space left for the election result, stop iterating.
 						Self::deposit_event(Event::<T>::SnapshotVotersSizeExceeded {
 							size: voters_size_tracker.size as u32,
@@ -801,7 +802,7 @@ impl<T: Config> Pallet<T> {
 						break
 					}
 
-					all_voters.push((voter.clone(), voter_weight, targets));
+					all_voters.push(voter);
 					nominators_taken.saturating_inc();
 				} else {
 					// technically should never happen, but not much we can do about it.
@@ -810,13 +811,6 @@ impl<T: Config> Pallet<T> {
 					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
 			} else if Validators::<T>::contains_key(&voter) {
 				// if this voter is a validator:
-				if voters_size_tracker.try_register_voter(1, bounds).is_err() {
-					// no more space left for the election snapshot, stop iterating over.
-					Self::deposit_event(Event::<T>::SnapshotVotersSizeExceeded {
-						size: voters_size_tracker.size as u32,
-					});
-					break
-				}
 				let self_vote = (
 					voter.clone(),
 					weight_of(&voter),
@@ -824,6 +818,14 @@ impl<T: Config> Pallet<T> {
 						.try_into()
 						.expect("`MaxVotesPerVoter` must be greater than or equal to 1"),
 				);
+
+				if voters_size_tracker.try_register_voter(&self_vote, &bounds).is_err() {
+					// no more space left for the election snapshot, stop iterating.
+					Self::deposit_event(Event::<T>::SnapshotVotersSizeExceeded {
+						size: voters_size_tracker.size as u32,
+					});
+					break
+				}
 				all_voters.push(self_vote);
 				validators_taken.saturating_inc();
 			} else {

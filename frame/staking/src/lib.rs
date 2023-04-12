@@ -292,6 +292,7 @@ pub(crate) mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod election_size_tracker;
 pub mod inflation;
 pub mod migrations;
 pub mod slashing;
@@ -300,7 +301,6 @@ pub mod weights;
 mod pallet;
 
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
-use frame_election_provider_support::{DataProviderBounds, IdentifierT, SizeBound};
 use frame_support::{
 	traits::{ConstU32, Currency, Defensive, Get},
 	weights::Weight,
@@ -793,78 +793,6 @@ impl<Balance, const MAX: u32> NominationsQuota<Balance> for FixedNominationsQuot
 
 	fn curve(_: Balance) -> u32 {
 		MAX
-	}
-}
-
-/// A static tracker for the election data snapshot.
-///
-/// Computes the (SCALE) encoded byte length of a snapshot based on static rules, without any actual
-/// encoding.
-///
-/// ## Details
-///
-/// The snapshot has the form of `Vec<Voter>` where `Voter = (Account, u64, Vec<Account>)`. For
-/// each voter added to the snapshot, [`try_register_voter`] should be called, with the number
-/// of votes (length of the internal `Vec`).
-///
-/// Whilst doing this, [`size`] will track the entire size of the `Vec<Voter>`, except for the
-/// length prefix of the outer `Vec`. To get the final size at any point, use
-/// [`final_byte_size_of`].
-#[derive(Copy, Clone, Debug)]
-pub(crate) struct ElectionSizeTracker<AccountId> {
-	pub size: usize,
-	pub num_voters: usize,
-	_marker: sp_std::marker::PhantomData<AccountId>,
-}
-
-impl<AccountId> ElectionSizeTracker<AccountId>
-where
-	AccountId: IdentifierT,
-{
-	pub(crate) fn new() -> Self {
-		ElectionSizeTracker { size: 0, num_voters: 0, _marker: Default::default() }
-	}
-
-	/// Attempts to register a new voter with `votes` for a given election `bounds`. Returns an
-	/// error if the new size exceeds the capacity of the tracker.
-	pub(crate) fn try_register_voter(
-		&mut self,
-		votes: usize,
-		bounds: DataProviderBounds,
-	) -> Result<(), ()> {
-		let voters_size_after = self.size.saturating_add(Self::encoded_size(votes));
-
-		// the total encoded size takes into consideration the prefix of the outer vec, which
-		// contains all the voters.
-		let total_size_after = Self::final_byte_size_of(self.num_voters + 1, voters_size_after);
-
-		match bounds.size_exhausted(SizeBound(total_size_after as u32)) {
-			true => Err(()),
-			false => {
-				self.size = voters_size_after;
-				self.num_voters += 1;
-				Ok(())
-			},
-		}
-	}
-
-	/// Returns the size in MBs of the scale encoded structure that stores a `Voter` with a given
-	/// number of cast `votes`.
-	pub fn encoded_size(votes: usize) -> usize {
-		Self::length_prefix(votes)
-			.saturating_add(votes.saturating_mul(sp_std::mem::size_of::<AccountId>()))
-			.saturating_add(sp_std::mem::size_of::<frame_election_provider_support::VoteWeight>())
-			.saturating_add(sp_std::mem::size_of::<AccountId>())
-	}
-	// Size of the SCALE encoded prefix with a given length.
-	#[inline]
-	pub(crate) fn length_prefix(len: usize) -> usize {
-		use codec::{Compact, CompactLen};
-		Compact::<u32>::compact_len(&(len as u32))
-	}
-
-	pub(crate) fn final_byte_size_of(num_voters: usize, size: usize) -> usize {
-		Self::length_prefix(num_voters).saturating_add(size)
 	}
 }
 

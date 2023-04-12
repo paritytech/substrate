@@ -274,7 +274,7 @@ pub mod data_provider {
 /// Something that can provide the data to an [`ElectionProvider`].
 pub trait ElectionDataProvider {
 	/// The account identifier type.
-	type AccountId;
+	type AccountId: Encode;
 
 	/// The block number type.
 	type BlockNumber;
