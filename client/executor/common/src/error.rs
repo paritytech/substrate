@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,9 +29,6 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
 	#[error(transparent)]
 	Wasmi(#[from] wasmi::Error),
-
-	#[error("Sandbox error: {0}")]
-	Sandbox(String),
 
 	#[error("Error calling api function: {0}")]
 	ApiError(Box<dyn std::error::Error + Send + Sync>),
@@ -107,6 +104,9 @@ pub enum Error {
 
 	#[error("Execution aborted due to trap: {0}")]
 	AbortedDueToTrap(MessageWithBacktrace),
+
+	#[error("Output exceeds bounds of wasm memory")]
+	OutputExceedsBounds,
 }
 
 impl wasmi::HostError for Error {}
@@ -156,7 +156,7 @@ pub enum WasmError {
 	Instantiation(String),
 
 	/// Other error happenend.
-	#[error("{0}")]
+	#[error("Other error happened while constructing the runtime: {0}")]
 	Other(String),
 }
 

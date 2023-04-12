@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,10 +25,7 @@ use codec::Encode;
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
-	weights::{
-		constants::{RocksDbWeight, WEIGHT_PER_SECOND},
-		Weight,
-	},
+	weights::{constants::RocksDbWeight, Weight},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -73,7 +70,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
@@ -83,10 +80,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2u64 * WEIGHT_PER_SECOND);
-}
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -141,17 +134,17 @@ pub fn offence_reports(kind: Kind, time_slot: u128) -> Vec<OffenceDetails<u64, u
 }
 
 #[derive(Clone)]
-pub struct Offence<T> {
+pub struct Offence {
 	pub validator_set_count: u32,
-	pub offenders: Vec<T>,
+	pub offenders: Vec<u64>,
 	pub time_slot: u128,
 }
 
-impl<T: Clone> offence::Offence<T> for Offence<T> {
+impl offence::Offence<u64> for Offence {
 	const ID: offence::Kind = KIND;
 	type TimeSlot = u128;
 
-	fn offenders(&self) -> Vec<T> {
+	fn offenders(&self) -> Vec<u64> {
 		self.offenders.clone()
 	}
 
@@ -174,5 +167,5 @@ impl<T: Clone> offence::Offence<T> for Offence<T> {
 
 /// Create the report id for the given `offender` and `time_slot` combination.
 pub fn report_id(time_slot: u128, offender: u64) -> H256 {
-	Offences::report_id::<Offence<u64>>(&time_slot, &offender)
+	Offences::report_id::<Offence>(&time_slot, &offender)
 }

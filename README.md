@@ -9,10 +9,11 @@ Substrate is a next-generation framework for blockchain innovation 🚀.
 
 Head to [docs.substrate.io](https://docs.substrate.io) and follow the [installation](https://docs.substrate.io/install/) instructions.
 Then try out one of the [tutorials](https://docs.substrate.io/tutorials/).
+Refer to the [Docker instructions](./docker/README.md) to quickly run Substrate, Substrate Node Template, Subkey, or to build a chain spec.
 
 ## Community & Support
 
-Join the highly active and supportive community on the [Susbstrate Stack Exchange](https://substrate.stackexchange.com/) to ask questions about use and problems you run into using this software.
+Join the highly active and supportive community on the [Substrate Stack Exchange](https://substrate.stackexchange.com/) to ask questions about use and problems you run into using this software.
 Please do report bugs and [issues here](https://github.com/paritytech/substrate/issues) for anything you suspect requires action in the source. 
 
 ## Contributions & Code of Conduct

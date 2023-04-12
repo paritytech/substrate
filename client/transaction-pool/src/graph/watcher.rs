@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -62,7 +62,7 @@ impl<H, BH> Default for Sender<H, BH> {
 impl<H: Clone, BH: Clone> Sender<H, BH> {
 	/// Add a new watcher to this sender object.
 	pub fn new_watcher(&mut self, hash: H) -> Watcher<H, BH> {
-		let (tx, receiver) = tracing_unbounded("mpsc_txpool_watcher");
+		let (tx, receiver) = tracing_unbounded("mpsc_txpool_watcher", 100_000);
 		self.receivers.push(tx);
 		Watcher { receiver, hash }
 	}

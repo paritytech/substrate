@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +16,8 @@
 // limitations under the License.
 
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 4.0.0-dev
-//! DATE: 2022-11-07 (Y/M/D)
-//! HOSTNAME: `bm2`, CPU: `Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz`
+//! DATE: 2023-03-15 (Y/M/D)
+//! HOSTNAME: `bm3`, CPU: `Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz`
 //!
 //! SHORT-NAME: `extrinsic`, LONG-NAME: `ExtrinsicBase`, RUNTIME: `Development`
 //! WARMUPS: `10`, REPEAT: `100`
@@ -37,23 +37,24 @@
 //   --repeat=100
 
 use sp_core::parameter_types;
-use sp_weights::{constants::WEIGHT_PER_NANOS, Weight};
+use sp_weights::{constants::WEIGHT_REF_TIME_PER_NANOS, Weight};
 
 parameter_types! {
 	/// Time to execute a NO-OP extrinsic, for example `System::remark`.
 	/// Calculated by multiplying the *Average* with `1.0` and adding `0`.
 	///
 	/// Stats nanoseconds:
-	///   Min, Max: 98_722, 101_420
-	///   Average:  98_974
-	///   Median:   98_951
-	///   Std-Dev:  271.62
+	///   Min, Max: 109_595, 114_170
+	///   Average:  110_536
+	///   Median:   110_233
+	///   Std-Dev:  933.39
 	///
 	/// Percentiles nanoseconds:
-	///   99th: 99_202
-	///   95th: 99_163
-	///   75th: 99_030
-	pub const ExtrinsicBaseWeight: Weight = WEIGHT_PER_NANOS.saturating_mul(98_974);
+	///   99th: 114_120
+	///   95th: 112_680
+	///   75th: 110_858
+	pub const ExtrinsicBaseWeight: Weight =
+		Weight::from_parts(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(110_536), 0);
 }
 
 #[cfg(test)]
@@ -69,12 +70,12 @@ mod test_weights {
 
 		// At least 10 µs.
 		assert!(
-			w.ref_time() >= 10u64 * constants::WEIGHT_PER_MICROS.ref_time(),
+			w.ref_time() >= 10u64 * constants::WEIGHT_REF_TIME_PER_MICROS,
 			"Weight should be at least 10 µs."
 		);
 		// At most 1 ms.
 		assert!(
-			w.ref_time() <= constants::WEIGHT_PER_MILLIS.ref_time(),
+			w.ref_time() <= constants::WEIGHT_REF_TIME_PER_MILLIS,
 			"Weight should be at most 1 ms."
 		);
 	}

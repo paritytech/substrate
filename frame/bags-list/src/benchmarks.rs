@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,13 +19,15 @@
 
 use super::*;
 use crate::list::List;
-use frame_benchmarking::{account, whitelist_account, whitelisted_caller};
+use frame_benchmarking::v1::{
+	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
+};
 use frame_election_provider_support::ScoreProvider;
 use frame_support::{assert_ok, traits::Get};
 use frame_system::RawOrigin as SystemOrigin;
 use sp_runtime::traits::One;
 
-frame_benchmarking::benchmarks_instance_pallet! {
+benchmarks_instance_pallet! {
 	rebag_non_terminal {
 		// An expensive case for rebag-ing (rebag a non-terminal node):
 		//

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -54,7 +54,7 @@ pub trait TestApi {
 	/// # Note
 	///
 	/// We return a `Vec<u32>` because this will use the code path that uses SCALE
-	/// to pass the data between native/wasm. (Vec<u8> is passed without encoding the
+	/// to pass the data between native/wasm. (`Vec<u8>` is passed without encoding the
 	/// data)
 	fn return_16kb() -> Vec<u32> {
 		vec![0; 4 * 1024]

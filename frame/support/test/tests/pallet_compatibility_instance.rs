@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -72,7 +72,7 @@ mod pallet_old {
 
 			fn on_initialize(_n: T::BlockNumber) -> Weight {
 				<Dummy<T, I>>::put(T::Balance::from(10));
-				Weight::from_ref_time(10)
+				Weight::from_parts(10, 0)
 			}
 
 			fn on_finalize(_n: T::BlockNumber) {
@@ -117,7 +117,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			<Dummy<T, I>>::put(T::Balance::from(10));
-			Weight::from_ref_time(10)
+			Weight::from_parts(10, 0)
 		}
 
 		fn on_finalize(_n: T::BlockNumber) {
@@ -127,6 +127,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		#[pallet::call_index(0)]
 		#[pallet::weight(<T::Balance as Into<u64>>::into(new_value.clone()))]
 		pub fn set_dummy(
 			origin: OriginFor<T>,
@@ -267,7 +268,7 @@ pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
@@ -297,9 +298,9 @@ mod test {
 			_ => unreachable!(),
 		};
 
-		let get_enum_variants = |ty_id| match types.resolve(ty_id).map(|ty| ty.type_def()) {
+		let get_enum_variants = |ty_id| match types.resolve(ty_id).map(|ty| ty.type_def.clone()) {
 			Some(ty) => match ty {
-				scale_info::TypeDef::Variant(var) => var.variants(),
+				scale_info::TypeDef::Variant(var) => var.variants,
 				_ => panic!("Expected variant type"),
 			},
 			_ => panic!("No type found"),
@@ -311,12 +312,12 @@ mod test {
 			for i in 0..vs1.len() {
 				let v1 = &vs2[i];
 				let v2 = &vs2[i];
-				assert_eq!(v1.fields().len(), v2.fields().len());
-				for f in 0..v1.fields().len() {
-					let f1 = &v1.fields()[f];
-					let f2 = &v2.fields()[f];
-					pretty_assertions::assert_eq!(f1.name(), f2.name());
-					pretty_assertions::assert_eq!(f1.ty(), f2.ty());
+				assert_eq!(v1.fields.len(), v2.fields.len());
+				for f in 0..v1.fields.len() {
+					let f1 = &v1.fields[f];
+					let f2 = &v2.fields[f];
+					pretty_assertions::assert_eq!(f1.name, f2.name);
+					pretty_assertions::assert_eq!(f1.ty, f2.ty);
 				}
 			}
 		};
@@ -324,23 +325,23 @@ mod test {
 		for i in vec![1, 3, 5].into_iter() {
 			pretty_assertions::assert_eq!(pallets[i].storage, pallets[i + 1].storage);
 
-			let call1_variants = get_enum_variants(pallets[i].calls.as_ref().unwrap().ty.id());
-			let call2_variants = get_enum_variants(pallets[i + 1].calls.as_ref().unwrap().ty.id());
-			assert_enum_variants(call1_variants, call2_variants);
+			let call1_variants = get_enum_variants(pallets[i].calls.as_ref().unwrap().ty.id);
+			let call2_variants = get_enum_variants(pallets[i + 1].calls.as_ref().unwrap().ty.id);
+			assert_enum_variants(&call1_variants, &call2_variants);
 
 			// event: check variants and fields but ignore the type name which will be different
-			let event1_variants = get_enum_variants(pallets[i].event.as_ref().unwrap().ty.id());
-			let event2_variants = get_enum_variants(pallets[i + 1].event.as_ref().unwrap().ty.id());
-			assert_enum_variants(event1_variants, event2_variants);
+			let event1_variants = get_enum_variants(pallets[i].event.as_ref().unwrap().ty.id);
+			let event2_variants = get_enum_variants(pallets[i + 1].event.as_ref().unwrap().ty.id);
+			assert_enum_variants(&event1_variants, &event2_variants);
 
-			let err1 = get_enum_variants(pallets[i].error.as_ref().unwrap().ty.id())
+			let err1 = get_enum_variants(pallets[i].error.as_ref().unwrap().ty.id)
 				.iter()
-				.filter(|v| v.name() == "__Ignore")
+				.filter(|v| v.name == "__Ignore")
 				.cloned()
 				.collect::<Vec<_>>();
-			let err2 = get_enum_variants(pallets[i + 1].error.as_ref().unwrap().ty.id())
+			let err2 = get_enum_variants(pallets[i + 1].error.as_ref().unwrap().ty.id)
 				.iter()
-				.filter(|v| v.name() == "__Ignore")
+				.filter(|v| v.name == "__Ignore")
 				.cloned()
 				.collect::<Vec<_>>();
 			assert_enum_variants(&err1, &err2);

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -211,7 +211,6 @@ pub mod pallet {
 	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::genesis_config]
@@ -297,12 +296,9 @@ pub mod pallet {
 		///
 		/// Emits either `VestingCompleted` or `VestingUpdated`.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - DbWeight: 2 Reads, 2 Writes
-		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
-		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
-		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::vest_locked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
 			.max(T::WeightInfo::vest_unlocked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES))
 		)]
@@ -320,12 +316,9 @@ pub mod pallet {
 		///
 		/// Emits either `VestingCompleted` or `VestingUpdated`.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - DbWeight: 3 Reads, 3 Writes
-		///     - Reads: Vesting Storage, Balances Locks, Target Account
-		///     - Writes: Vesting Storage, Balances Locks, Target Account
-		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
 			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES))
 		)]
@@ -346,12 +339,9 @@ pub mod pallet {
 		///
 		/// NOTE: This will unlock all schedules through the current block.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - DbWeight: 3 Reads, 3 Writes
-		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
-		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
-		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight(
 			T::WeightInfo::vested_transfer(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
 		)]
@@ -377,12 +367,9 @@ pub mod pallet {
 		///
 		/// NOTE: This will unlock all schedules through the current block.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - DbWeight: 4 Reads, 4 Writes
-		///     - Reads: Vesting Storage, Balances Locks, Target Account, Source Account
-		///     - Writes: Vesting Storage, Balances Locks, Target Account, Source Account
-		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight(
 			T::WeightInfo::force_vested_transfer(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
 		)]
@@ -417,6 +404,7 @@ pub mod pallet {
 		///
 		/// - `schedule1_index`: index of the first schedule to merge.
 		/// - `schedule2_index`: index of the second schedule to merge.
+		#[pallet::call_index(4)]
 		#[pallet::weight(
 			T::WeightInfo::not_unlocking_merge_schedules(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
 			.max(T::WeightInfo::unlocking_merge_schedules(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES))

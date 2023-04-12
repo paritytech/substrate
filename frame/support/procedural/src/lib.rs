@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +19,7 @@
 
 #![recursion_limit = "512"]
 
+mod benchmark;
 mod clone_no_bound;
 mod construct_runtime;
 mod crate_version;
@@ -66,6 +67,12 @@ fn get_cargo_env_var<T: FromStr>(version_env: &str) -> std::result::Result<T, ()
 		.unwrap_or_else(|_| panic!("`{}` is always set by cargo; qed", version_env));
 
 	T::from_str(&version).map_err(drop)
+}
+
+/// Generate the counter_prefix related to the storage.
+/// counter_prefix is used by counted storage map.
+fn counter_prefix(prefix: &str) -> String {
+	format!("CounterFor{}", prefix)
 }
 
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
@@ -474,9 +481,123 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// </pre></div>
 ///
 /// See `frame_support::pallet` docs for more info.
+///
+/// ## Runtime Metadata Documentation
+///
+/// The documentation added to this pallet is included in the runtime metadata.
+///
+/// The documentation can be defined in the following ways:
+///
+/// ```ignore
+/// #[pallet::pallet]
+/// /// Documentation for pallet 1
+/// #[doc = "Documentation for pallet 2"]
+/// #[doc = include_str!("../README.md")]
+/// #[pallet_doc("../doc1.md")]
+/// #[pallet_doc("../doc2.md")]
+/// pub mod pallet {}
+/// ```
+///
+/// The runtime metadata for this pallet contains the following
+///  - " Documentation for pallet 1" (captured from `///`)
+///  - "Documentation for pallet 2"  (captured from `#[doc]`)
+///  - content of ../README.md       (captured from `#[doc]` with `include_str!`)
+///  - content of "../doc1.md"       (captured from `pallet_doc`)
+///  - content of "../doc2.md"       (captured from `pallet_doc`)
+///
+/// ### `doc` attribute
+///
+/// The value of the `doc` attribute is included in the runtime metadata, as well as
+/// expanded on the pallet module. The previous example is expanded to:
+///
+/// ```ignore
+/// /// Documentation for pallet 1
+/// /// Documentation for pallet 2
+/// /// Content of README.md
+/// pub mod pallet {}
+/// ```
+///
+/// If you want to specify the file from which the documentation is loaded, you can use the
+/// `include_str` macro. However, if you only want the documentation to be included in the
+/// runtime metadata, use the `pallet_doc` attribute.
+///
+/// ### `pallet_doc` attribute
+///
+/// Unlike the `doc` attribute, the documentation provided to the `pallet_doc` attribute is
+/// not inserted on the module.
+///
+/// The `pallet_doc` attribute can only be provided with one argument,
+/// which is the file path that holds the documentation to be added to the metadata.
+///
+/// This approach is beneficial when you use the `include_str` macro at the beginning of the file
+/// and want that documentation to extend to the runtime metadata, without reiterating the
+/// documentation on the pallet module itself.
 #[proc_macro_attribute]
 pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 	pallet::pallet(attr, item)
+}
+
+/// An attribute macro that can be attached to a (non-empty) module declaration. Doing so will
+/// designate that module as a benchmarking module.
+///
+/// See `frame_benchmarking::v2` for more info.
+#[proc_macro_attribute]
+pub fn benchmarks(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	match benchmark::benchmarks(attr, tokens, false) {
+		Ok(tokens) => tokens,
+		Err(err) => err.to_compile_error().into(),
+	}
+}
+
+/// An attribute macro that can be attached to a (non-empty) module declaration. Doing so will
+/// designate that module as an instance benchmarking module.
+///
+/// See `frame_benchmarking::v2` for more info.
+#[proc_macro_attribute]
+pub fn instance_benchmarks(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	match benchmark::benchmarks(attr, tokens, true) {
+		Ok(tokens) => tokens,
+		Err(err) => err.to_compile_error().into(),
+	}
+}
+
+/// An attribute macro used to declare a benchmark within a benchmarking module. Must be
+/// attached to a function definition containing an `#[extrinsic_call]` or `#[block]`
+/// attribute.
+///
+/// See `frame_benchmarking::v2` for more info.
+#[proc_macro_attribute]
+pub fn benchmark(_attrs: TokenStream, _tokens: TokenStream) -> TokenStream {
+	quote!(compile_error!(
+		"`#[benchmark]` must be in a module labeled with #[benchmarks] or #[instance_benchmarks]."
+	))
+	.into()
+}
+
+/// An attribute macro used to specify the extrinsic call inside a benchmark function, and also
+/// used as a boundary designating where the benchmark setup code ends, and the benchmark
+/// verification code begins.
+///
+/// See `frame_benchmarking::v2` for more info.
+#[proc_macro_attribute]
+pub fn extrinsic_call(_attrs: TokenStream, _tokens: TokenStream) -> TokenStream {
+	quote!(compile_error!(
+		"`#[extrinsic_call]` must be in a benchmark function definition labeled with `#[benchmark]`."
+	);)
+	.into()
+}
+
+/// An attribute macro used to specify that a block should be the measured portion of the
+/// enclosing benchmark function, This attribute is also used as a boundary designating where
+/// the benchmark setup code ends, and the benchmark verification code begins.
+///
+/// See `frame_benchmarking::v2` for more info.
+#[proc_macro_attribute]
+pub fn block(_attrs: TokenStream, _tokens: TokenStream) -> TokenStream {
+	quote!(compile_error!(
+		"`#[block]` must be in a benchmark function definition labeled with `#[benchmark]`."
+	))
+	.into()
 }
 
 /// Execute the annotated function in a new storage transaction.
@@ -582,7 +703,7 @@ pub fn derive_eq_no_bound(input: TokenStream) -> TokenStream {
 }
 
 /// derive `Default` but do no bound any generic. Docs are at `frame_support::DefaultNoBound`.
-#[proc_macro_derive(DefaultNoBound)]
+#[proc_macro_derive(DefaultNoBound, attributes(default))]
 pub fn derive_default_no_bound(input: TokenStream) -> TokenStream {
 	default_no_bound::derive_default_no_bound(input)
 }
@@ -863,7 +984,8 @@ pub fn compact(_: TokenStream, _: TokenStream) -> TokenStream {
 ///
 /// The macro creates an enum `Call` with one variant per dispatchable. This enum implements:
 /// [`Clone`], [`Eq`], [`PartialEq`], [`Debug`] (with stripped implementation in `not("std")`),
-/// `Encode`, `Decode`, `GetDispatchInfo`, `GetCallName`, and `UnfilteredDispatchable`.
+/// `Encode`, `Decode`, `GetDispatchInfo`, `GetCallName`, `GetCallIndex` and
+/// `UnfilteredDispatchable`.
 ///
 /// The macro implements the `Callable` trait on `Pallet` and a function `call_functions`
 /// which returns the dispatchable metadata.
@@ -1287,5 +1409,32 @@ pub fn validate_unsigned(_: TokenStream, _: TokenStream) -> TokenStream {
 /// NOTE: for instantiable pallets, the origin must be generic over `T` and `I`.
 #[proc_macro_attribute]
 pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The `#[pallet::composite_enum]` attribute allows you to define an enum that gets composed as an
+/// aggregate enum by `construct_runtime`. This is similar in principle with `#[pallet::event]` and
+/// `#[pallet::error]`.
+///
+/// The attribute currently only supports enum definitions, and identifiers that are named
+/// `FreezeReason`, `HoldReason`, `LockId` or `SlashReason`. Arbitrary identifiers for the enum are
+/// not supported. The aggregate enum generated by `construct_runtime` will have the name of
+/// `RuntimeFreezeReason`, `RuntimeHoldReason`, `RuntimeLockId` and `RuntimeSlashReason`
+/// respectively.
+///
+/// NOTE: The aggregate enum generated by `construct_runtime` generates a conversion function from
+/// the pallet enum to the aggregate enum, and automatically derives the following traits:
+///
+/// ```ignore
+/// Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo,
+/// RuntimeDebug
+/// ```
+///
+/// For ease of usage, when no `#[derive]` attributes are found for the enum under
+/// `#[pallet::composite_enum]`, the aforementioned traits are automatically derived for it. The
+/// inverse is also true: if there are any `#[derive]` attributes found for the enum, then no traits
+/// will automatically be derived for it.
+#[proc_macro_attribute]
+pub fn composite_enum(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }

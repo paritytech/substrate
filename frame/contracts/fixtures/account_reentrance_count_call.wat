@@ -4,7 +4,7 @@
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_caller" (func $seal_caller (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "__unstable__" "account_reentrance_count" (func $account_reentrance_count (param i32) (result i32)))
+	(import "seal0" "account_reentrance_count" (func $account_reentrance_count (param i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 32) buffer where input is copied

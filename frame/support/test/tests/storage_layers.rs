@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@ use frame_support::{
 use pallet::*;
 use sp_io::TestExternalities;
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use frame_support::{ensure, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
@@ -46,6 +46,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		#[pallet::call_index(0)]
 		#[pallet::weight(1)]
 		pub fn set_value(_origin: OriginFor<T>, value: u32) -> DispatchResult {
 			Value::<T>::put(value);
@@ -113,7 +114,7 @@ impl pallet::Config for Runtime {}
 impl decl_pallet::Config for Runtime {}
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) mod execute_block;
-pub(crate) mod follow_chain;
-pub(crate) mod offchain_worker;
-pub(crate) mod on_runtime_upgrade;
+pub mod create_snapshot;
+pub mod execute_block;
+pub mod fast_forward;
+pub mod follow_chain;
+pub mod offchain_worker;
+pub mod on_runtime_upgrade;

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -101,7 +101,7 @@ use sp_runtime::{
 	PerThing, Perbill, Permill, RuntimeDebug, SaturatedConversion,
 };
 use sp_staking::{
-	offence::{Kind, Offence, ReportOffence},
+	offence::{DisableStrategy, Kind, Offence, ReportOffence},
 	SessionIndex,
 };
 use sp_std::prelude::*;
@@ -313,7 +313,6 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -463,17 +462,14 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// # <weight>
-		/// - Complexity: `O(K + E)` where K is length of `Keys` (heartbeat.validators_len) and E is
-		///   length of `heartbeat.network_state.external_address`
+		/// ## Complexity:
+		/// - `O(K + E)` where K is length of `Keys` (heartbeat.validators_len) and E is length of
+		///   `heartbeat.network_state.external_address`
 		///   - `O(K)`: decoding of length `K`
 		///   - `O(E)`: decoding/encoding of length `E`
-		/// - DbReads: pallet_session `Validators`, pallet_session `CurrentIndex`, `Keys`,
-		///   `ReceivedHeartbeats`
-		/// - DbWrites: `ReceivedHeartbeats`
-		/// # </weight>
 		// NOTE: the weight includes the cost of validate_unsigned as it is part of the cost to
 		// import block with such an extrinsic.
+		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::validate_unsigned_and_then_heartbeat(
 			heartbeat.validators_len as u32,
 			heartbeat.network_state.external_addresses.len() as u32,
@@ -604,10 +600,6 @@ impl<T: Config + pallet_authorship::Config>
 	pallet_authorship::EventHandler<ValidatorId<T>, T::BlockNumber> for Pallet<T>
 {
 	fn note_author(author: ValidatorId<T>) {
-		Self::note_authorship(author);
-	}
-
-	fn note_uncle(author: ValidatorId<T>, _age: T::BlockNumber) {
 		Self::note_authorship(author);
 	}
 }
@@ -956,6 +948,10 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 
 	fn time_slot(&self) -> Self::TimeSlot {
 		self.session_index
+	}
+
+	fn disable_strategy(&self) -> DisableStrategy {
+		DisableStrategy::Never
 	}
 
 	fn slash_fraction(&self, offenders: u32) -> Perbill {

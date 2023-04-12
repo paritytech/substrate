@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -93,9 +93,9 @@ pub use sp_arithmetic::biguint;
 pub use sp_arithmetic::helpers_128bit;
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
-	traits::SaturatedConversion, FixedI128, FixedI64, FixedPointNumber, FixedPointOperand,
-	FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, Rational128,
-	Rounding, UpperOf,
+	traits::SaturatedConversion, ArithmeticError, FixedI128, FixedI64, FixedPointNumber,
+	FixedPointOperand, FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill,
+	Perquintill, Rational128, Rounding, UpperOf,
 };
 
 pub use either::Either;
@@ -474,7 +474,7 @@ pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
 pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
 
 /// Reason why a pallet call failed.
-#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ModuleError {
 	/// Module index, matching the metadata module index.
@@ -494,7 +494,7 @@ impl PartialEq for ModuleError {
 }
 
 /// Errors related to transactional storage layers.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum TransactionalError {
 	/// Too many transactional layers have been spawned.
@@ -519,7 +519,7 @@ impl From<TransactionalError> for DispatchError {
 }
 
 /// Reason why a dispatch call failed.
-#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, PartialEq)]
+#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, PartialEq, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.
@@ -602,13 +602,14 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 }
 
 /// Description of what went wrong when trying to complete an operation on a token.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum TokenError {
 	/// Funds are unavailable.
-	NoFunds,
-	/// Account that must exist would die.
-	WouldDie,
+	FundsUnavailable,
+	/// Some part of the balance gives the only provider reference to the account and thus cannot
+	/// be (re)moved.
+	OnlyProvider,
 	/// Account cannot exist with the funds that would be given.
 	BelowMinimum,
 	/// Account cannot be created.
@@ -619,18 +620,25 @@ pub enum TokenError {
 	Frozen,
 	/// Operation is not supported by the asset.
 	Unsupported,
+	/// Account cannot be created for a held balance.
+	CannotCreateHold,
+	/// Withdrawal would cause unwanted loss of account.
+	NotExpendable,
 }
 
 impl From<TokenError> for &'static str {
 	fn from(e: TokenError) -> &'static str {
 		match e {
-			TokenError::NoFunds => "Funds are unavailable",
-			TokenError::WouldDie => "Account that must exist would die",
+			TokenError::FundsUnavailable => "Funds are unavailable",
+			TokenError::OnlyProvider => "Account that must exist would die",
 			TokenError::BelowMinimum => "Account cannot exist with the funds that would be given",
 			TokenError::CannotCreate => "Account cannot be created",
 			TokenError::UnknownAsset => "The asset in question is unknown",
 			TokenError::Frozen => "Funds exist but are frozen",
 			TokenError::Unsupported => "Operation is not supported by the asset",
+			TokenError::CannotCreateHold =>
+				"Account cannot be created for recording amount on hold",
+			TokenError::NotExpendable => "Account that is desired to remain would die",
 		}
 	}
 }
@@ -638,28 +646,6 @@ impl From<TokenError> for &'static str {
 impl From<TokenError> for DispatchError {
 	fn from(e: TokenError) -> DispatchError {
 		Self::Token(e)
-	}
-}
-
-/// Arithmetic errors.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum ArithmeticError {
-	/// Underflow.
-	Underflow,
-	/// Overflow.
-	Overflow,
-	/// Division by zero.
-	DivisionByZero,
-}
-
-impl From<ArithmeticError> for &'static str {
-	fn from(e: ArithmeticError) -> &'static str {
-		match e {
-			ArithmeticError::Underflow => "An underflow would occur",
-			ArithmeticError::Overflow => "An overflow would occur",
-			ArithmeticError::DivisionByZero => "Division by zero",
-		}
 	}
 }
 
@@ -874,13 +860,6 @@ impl OpaqueExtrinsic {
 	}
 }
 
-#[cfg(feature = "std")]
-impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.0.size_of(ops)
-	}
-}
-
 impl sp_std::fmt::Debug for OpaqueExtrinsic {
 	#[cfg(feature = "std")]
 	fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
@@ -925,40 +904,6 @@ pub fn print(print: impl traits::Printable) {
 	print.print();
 }
 
-/// Batching session.
-///
-/// To be used in runtime only. Outside of runtime, just construct
-/// `BatchVerifier` directly.
-#[must_use = "`verify()` needs to be called to finish batch signature verification!"]
-pub struct SignatureBatching(bool);
-
-impl SignatureBatching {
-	/// Start new batching session.
-	pub fn start() -> Self {
-		sp_io::crypto::start_batch_verify();
-		SignatureBatching(false)
-	}
-
-	/// Verify all signatures submitted during the batching session.
-	#[must_use]
-	pub fn verify(mut self) -> bool {
-		self.0 = true;
-		sp_io::crypto::finish_batch_verify()
-	}
-}
-
-impl Drop for SignatureBatching {
-	fn drop(&mut self) {
-		// Sanity check. If user forgets to actually call `verify()`.
-		//
-		// We should not panic if the current thread is already panicking,
-		// because Rust otherwise aborts the process.
-		if !self.0 && !sp_std::thread::panicking() {
-			panic!("Signature verification has not been called before `SignatureBatching::drop`")
-		}
-	}
-}
-
 /// Describes on what should happen with a storage transaction.
 pub enum TransactionOutcome<R> {
 	/// Commit the transaction.
@@ -983,7 +928,7 @@ mod tests {
 
 	use super::*;
 	use codec::{Decode, Encode};
-	use sp_core::crypto::{Pair, UncheckedFrom};
+	use sp_core::crypto::Pair;
 	use sp_io::TestExternalities;
 	use sp_state_machine::create_proof_check_backend;
 
@@ -1023,8 +968,8 @@ mod tests {
 			Module(ModuleError { index: 2, error: [1, 0, 0, 0], message: None }),
 			ConsumerRemaining,
 			NoProviders,
-			Token(TokenError::NoFunds),
-			Token(TokenError::WouldDie),
+			Token(TokenError::FundsUnavailable),
+			Token(TokenError::OnlyProvider),
 			Token(TokenError::BelowMinimum),
 			Token(TokenError::CannotCreate),
 			Token(TokenError::UnknownAsset),
@@ -1064,36 +1009,6 @@ mod tests {
 
 		let multi_signer = MultiSigner::from(pair.public());
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
-	}
-
-	#[test]
-	#[should_panic(expected = "Signature verification has not been called")]
-	fn batching_still_finishes_when_not_called_directly() {
-		let mut ext = sp_state_machine::BasicExternalities::default();
-		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
-			sp_core::testing::TaskExecutor::new(),
-		));
-
-		ext.execute_with(|| {
-			let _batching = SignatureBatching::start();
-			let dummy = UncheckedFrom::unchecked_from([1; 32]);
-			let dummy_sig = UncheckedFrom::unchecked_from([1; 64]);
-			sp_io::crypto::sr25519_verify(&dummy_sig, &Vec::new(), &dummy);
-		});
-	}
-
-	#[test]
-	#[should_panic(expected = "Hey, I'm an error")]
-	fn batching_does_not_panic_while_thread_is_already_panicking() {
-		let mut ext = sp_state_machine::BasicExternalities::default();
-		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
-			sp_core::testing::TaskExecutor::new(),
-		));
-
-		ext.execute_with(|| {
-			let _batching = SignatureBatching::start();
-			panic!("Hey, I'm an error");
-		});
 	}
 
 	#[test]

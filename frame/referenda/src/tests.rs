@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -266,6 +266,45 @@ fn queueing_works() {
 }
 
 #[test]
+fn alarm_interval_works() {
+	new_test_ext().execute_with(|| {
+		let call =
+			<Test as Config>::Preimages::bound(CallOf::<Test, ()>::from(Call::nudge_referendum {
+				index: 0,
+			}))
+			.unwrap();
+		for n in 0..10 {
+			let interval = n * n;
+			let now = 100 * (interval + 1);
+			System::set_block_number(now);
+			AlarmInterval::set(interval);
+			let when = now + 1;
+			let (actual, _) = Referenda::set_alarm(call.clone(), when).unwrap();
+			assert!(actual >= when);
+			assert!(actual - interval <= when);
+		}
+	});
+}
+
+#[test]
+fn decision_time_is_correct() {
+	new_test_ext().execute_with(|| {
+		let decision_time = |since: u64| {
+			Pallet::<Test>::decision_time(
+				&DecidingStatus { since: since.into(), confirming: None },
+				&Tally { ayes: 100, nays: 5 },
+				TestTracksInfo::tracks()[0].0,
+				&TestTracksInfo::tracks()[0].1,
+			)
+		};
+
+		for i in 0u64..=100 {
+			assert!(decision_time(i) > i, "The decision time should be delayed by the curve");
+		}
+	});
+}
+
+#[test]
 fn auto_timeout_should_happen_with_nothing_but_submit() {
 	new_test_ext().execute_with(|| {
 		// #1: submit
@@ -423,6 +462,44 @@ fn refund_deposit_works() {
 }
 
 #[test]
+fn refund_submission_deposit_works() {
+	new_test_ext().execute_with(|| {
+		// refund of non existing referendum fails.
+		let e = Error::<Test>::BadReferendum;
+		assert_noop!(Referenda::refund_submission_deposit(RuntimeOrigin::signed(1), 0), e);
+		// create a referendum.
+		let h = set_balance_proposal_bounded(1);
+		assert_ok!(Referenda::submit(
+			RuntimeOrigin::signed(1),
+			Box::new(RawOrigin::Root.into()),
+			h.clone(),
+			DispatchTime::At(10),
+		));
+		// refund of an ongoing referendum fails.
+		let e = Error::<Test>::BadStatus;
+		assert_noop!(Referenda::refund_submission_deposit(RuntimeOrigin::signed(3), 0), e);
+		// cancel referendum.
+		assert_ok!(Referenda::cancel(RuntimeOrigin::signed(4), 0));
+		// refund of canceled referendum works.
+		assert_ok!(Referenda::refund_submission_deposit(RuntimeOrigin::signed(3), 0));
+		// fails if already refunded.
+		let e = Error::<Test>::NoDeposit;
+		assert_noop!(Referenda::refund_submission_deposit(RuntimeOrigin::signed(2), 0), e);
+		// create second referendum.
+		assert_ok!(Referenda::submit(
+			RuntimeOrigin::signed(1),
+			Box::new(RawOrigin::Root.into()),
+			h,
+			DispatchTime::At(10),
+		));
+		// refund of a killed referendum fails.
+		assert_ok!(Referenda::kill(RuntimeOrigin::root(), 1));
+		let e = Error::<Test>::NoDeposit;
+		assert_noop!(Referenda::refund_submission_deposit(RuntimeOrigin::signed(2), 0), e);
+	});
+}
+
+#[test]
 fn cancel_works() {
 	new_test_ext().execute_with(|| {
 		let h = set_balance_proposal_bounded(1);
@@ -518,4 +595,76 @@ fn curve_handles_all_inputs() {
 
 	let threshold = test_curve.threshold(Perbill::one());
 	assert_eq!(threshold, Perbill::zero());
+}
+
+#[test]
+fn set_metadata_works() {
+	new_test_ext().execute_with(|| {
+		use frame_support::traits::Hash as PreimageHash;
+		// invalid preimage hash.
+		let invalid_hash: PreimageHash = [1u8; 32].into();
+		// fails to set metadata for a finished referendum.
+		assert_ok!(Referenda::submit(
+			RuntimeOrigin::signed(1),
+			Box::new(RawOrigin::Root.into()),
+			set_balance_proposal_bounded(1),
+			DispatchTime::At(1),
+		));
+		let index = ReferendumCount::<Test>::get() - 1;
+		assert_ok!(Referenda::kill(RuntimeOrigin::root(), index));
+		assert_noop!(
+			Referenda::set_metadata(RuntimeOrigin::signed(1), index, Some(invalid_hash)),
+			Error::<Test>::NotOngoing,
+		);
+		// no permission to set metadata.
+		assert_ok!(Referenda::submit(
+			RuntimeOrigin::signed(1),
+			Box::new(RawOrigin::Root.into()),
+			set_balance_proposal_bounded(1),
+			DispatchTime::At(1),
+		));
+		let index = ReferendumCount::<Test>::get() - 1;
+		assert_noop!(
+			Referenda::set_metadata(RuntimeOrigin::signed(2), index, Some(invalid_hash)),
+			Error::<Test>::NoPermission,
+		);
+		// preimage does not exist.
+		let index = ReferendumCount::<Test>::get() - 1;
+		assert_noop!(
+			Referenda::set_metadata(RuntimeOrigin::signed(1), index, Some(invalid_hash)),
+			Error::<Test>::PreimageNotExist,
+		);
+		// metadata set.
+		let index = ReferendumCount::<Test>::get() - 1;
+		let hash = note_preimage(1);
+		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, Some(hash)));
+		System::assert_last_event(RuntimeEvent::Referenda(crate::Event::MetadataSet {
+			index,
+			hash,
+		}));
+	});
+}
+
+#[test]
+fn clear_metadata_works() {
+	new_test_ext().execute_with(|| {
+		let hash = note_preimage(1);
+		assert_ok!(Referenda::submit(
+			RuntimeOrigin::signed(1),
+			Box::new(RawOrigin::Root.into()),
+			set_balance_proposal_bounded(1),
+			DispatchTime::At(1),
+		));
+		let index = ReferendumCount::<Test>::get() - 1;
+		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, Some(hash)));
+		assert_noop!(
+			Referenda::set_metadata(RuntimeOrigin::signed(2), index, None),
+			Error::<Test>::NoPermission,
+		);
+		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, None),);
+		System::assert_last_event(RuntimeEvent::Referenda(crate::Event::MetadataCleared {
+			index,
+			hash,
+		}));
+	});
 }

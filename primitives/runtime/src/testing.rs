@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@ use crate::{
 		PostDispatchInfoOf, SignedExtension, ValidateUnsigned,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
-	ApplyExtrinsicResultWithInfo, CryptoTypeId, KeyTypeId,
+	ApplyExtrinsicResultWithInfo, KeyTypeId,
 };
 use serde::{de::Error as DeError, Deserialize, Deserializer, Serialize, Serializer};
 use sp_core::{
@@ -115,7 +115,6 @@ impl UintAuthorityId {
 
 impl sp_application_crypto::RuntimeAppPublic for UintAuthorityId {
 	const ID: KeyTypeId = key_types::DUMMY;
-	const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"dumm");
 
 	type Signature = TestSignature;
 
@@ -155,10 +154,6 @@ impl OpaqueKeys for UintAuthorityId {
 	fn get<T: Decode>(&self, _: KeyTypeId) -> Option<T> {
 		self.using_encoded(|mut x| T::decode(&mut x)).ok()
 	}
-}
-
-impl crate::BoundToRuntimeAppPublic for UintAuthorityId {
-	type Public = Self;
 }
 
 impl traits::IdentifyAccount for UintAuthorityId {
@@ -204,13 +199,10 @@ impl Header {
 }
 
 /// An opaque extrinsic wrapper type.
-#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, parity_util_mem::MallocSizeOf)]
+#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
-impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt>
-where
-	Xt: parity_util_mem::MallocSizeOf,
-{
+impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
 	type Call = ();
 	type SignaturePayload = ();
 
@@ -243,7 +235,7 @@ impl<Xt> Deref for ExtrinsicWrapper<Xt> {
 }
 
 /// Testing block
-#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, parity_util_mem::MallocSizeOf)]
+#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 pub struct Block<Xt> {
 	/// Block header
 	pub header: Header,
@@ -306,9 +298,6 @@ impl<Call, Extra> TestXt<Call, Extra> {
 	}
 }
 
-// Non-opaque extrinsics always 0.
-parity_util_mem::malloc_size_of_is_0!(any: TestXt<Call, Extra>);
-
 impl<Call, Extra> Serialize for TestXt<Call, Extra>
 where
 	TestXt<Call, Extra>: Encode,
@@ -331,6 +320,14 @@ impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Ca
 	type Checked = Self;
 	fn check(self, _: &Context) -> Result<Self::Checked, TransactionValidityError> {
 		Ok(self)
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn unchecked_into_checked_i_know_what_i_am_doing(
+		self,
+		_: &Context,
+	) -> Result<Self::Checked, TransactionValidityError> {
+		unreachable!()
 	}
 }
 

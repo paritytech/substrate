@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -73,7 +73,6 @@ use frame_support::{
 	weights::{Weight, WeightMeter},
 };
 use frame_system::{self as system};
-pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
@@ -81,6 +80,8 @@ use sp_runtime::{
 	BoundedVec, RuntimeDebug,
 };
 use sp_std::{borrow::Borrow, cmp::Ordering, marker::PhantomData, prelude::*};
+
+pub use pallet::*;
 pub use weights::WeightInfo;
 
 /// Just a simple index for naming period tasks.
@@ -168,10 +169,9 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(3);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -216,6 +216,10 @@ pub mod pallet {
 		type OriginPrivilegeCmp: PrivilegeCmp<Self::PalletsOrigin>;
 
 		/// The maximum number of scheduled calls in the queue for a single block.
+		///
+		/// NOTE:
+		/// + Dependent pallets' benchmarks might require a higher limit for the setting. Set a
+		/// higher limit under `runtime-benchmarks` feature.
 		#[pallet::constant]
 		type MaxScheduledPerBlock: Get<u32>;
 
@@ -296,6 +300,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Anonymously schedule a task.
+		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::schedule(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule(
 			origin: OriginFor<T>,
@@ -317,6 +322,7 @@ pub mod pallet {
 		}
 
 		/// Cancel an anonymously scheduled task.
+		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config>::WeightInfo::cancel(T::MaxScheduledPerBlock::get()))]
 		pub fn cancel(origin: OriginFor<T>, when: T::BlockNumber, index: u32) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
@@ -326,6 +332,7 @@ pub mod pallet {
 		}
 
 		/// Schedule a named task.
+		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config>::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule_named(
 			origin: OriginFor<T>,
@@ -349,6 +356,7 @@ pub mod pallet {
 		}
 
 		/// Cancel a named scheduled task.
+		#[pallet::call_index(3)]
 		#[pallet::weight(<T as Config>::WeightInfo::cancel_named(T::MaxScheduledPerBlock::get()))]
 		pub fn cancel_named(origin: OriginFor<T>, id: TaskName) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
@@ -358,10 +366,7 @@ pub mod pallet {
 		}
 
 		/// Anonymously schedule a task after a delay.
-		///
-		/// # <weight>
-		/// Same as [`schedule`].
-		/// # </weight>
+		#[pallet::call_index(4)]
 		#[pallet::weight(<T as Config>::WeightInfo::schedule(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule_after(
 			origin: OriginFor<T>,
@@ -383,10 +388,7 @@ pub mod pallet {
 		}
 
 		/// Schedule a named task after a delay.
-		///
-		/// # <weight>
-		/// Same as [`schedule_named`](Self::schedule_named).
-		/// # </weight>
+		#[pallet::call_index(5)]
 		#[pallet::weight(<T as Config>::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule_named_after(
 			origin: OriginFor<T>,
@@ -745,6 +747,22 @@ impl<T: Config> Pallet<T> {
 		Ok(index)
 	}
 
+	/// Remove trailing `None` items of an agenda at `when`. If all items are `None` remove the
+	/// agenda record entirely.
+	fn cleanup_agenda(when: T::BlockNumber) {
+		let mut agenda = Agenda::<T>::get(when);
+		match agenda.iter().rposition(|i| i.is_some()) {
+			Some(i) if agenda.len() > i + 1 => {
+				agenda.truncate(i + 1);
+				Agenda::<T>::insert(when, agenda);
+			},
+			Some(_) => {},
+			None => {
+				Agenda::<T>::remove(when);
+			},
+		}
+	}
+
 	fn do_schedule(
 		when: DispatchTime<T::BlockNumber>,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
@@ -753,6 +771,8 @@ impl<T: Config> Pallet<T> {
 		call: Bounded<<T as Config>::RuntimeCall>,
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		let when = Self::resolve_time(when)?;
+
+		let lookup_hash = call.lookup_hash();
 
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
@@ -767,7 +787,14 @@ impl<T: Config> Pallet<T> {
 			origin,
 			_phantom: PhantomData,
 		};
-		Self::place_task(when, task).map_err(|x| x.0)
+		let res = Self::place_task(when, task).map_err(|x| x.0)?;
+
+		if let Some(hash) = lookup_hash {
+			// Request the call to be made available.
+			T::Preimages::request(&hash);
+		}
+
+		Ok(res)
 	}
 
 	fn do_cancel(
@@ -795,6 +822,7 @@ impl<T: Config> Pallet<T> {
 			if let Some(id) = s.maybe_id {
 				Lookup::<T>::remove(id);
 			}
+			Self::cleanup_agenda(when);
 			Self::deposit_event(Event::Canceled { when, index });
 			Ok(())
 		} else {
@@ -817,6 +845,7 @@ impl<T: Config> Pallet<T> {
 			ensure!(!matches!(task, Some(Scheduled { maybe_id: Some(_), .. })), Error::<T>::Named);
 			task.take().ok_or(Error::<T>::NotFound)
 		})?;
+		Self::cleanup_agenda(when);
 		Self::deposit_event(Event::Canceled { when, index });
 
 		Self::place_task(new_time, task).map_err(|x| x.0)
@@ -837,6 +866,8 @@ impl<T: Config> Pallet<T> {
 
 		let when = Self::resolve_time(when)?;
 
+		let lookup_hash = call.lookup_hash();
+
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
 			.filter(|p| p.1 > 1 && !p.0.is_zero())
@@ -851,7 +882,14 @@ impl<T: Config> Pallet<T> {
 			origin,
 			_phantom: Default::default(),
 		};
-		Self::place_task(when, task).map_err(|x| x.0)
+		let res = Self::place_task(when, task).map_err(|x| x.0)?;
+
+		if let Some(hash) = lookup_hash {
+			// Request the call to be made available.
+			T::Preimages::request(&hash);
+		}
+
+		Ok(res)
 	}
 
 	fn do_cancel_named(origin: Option<T::PalletsOrigin>, id: TaskName) -> DispatchResult {
@@ -873,6 +911,7 @@ impl<T: Config> Pallet<T> {
 					}
 					Ok(())
 				})?;
+				Self::cleanup_agenda(when);
 				Self::deposit_event(Event::Canceled { when, index });
 				Ok(())
 			} else {
@@ -898,6 +937,7 @@ impl<T: Config> Pallet<T> {
 			let task = agenda.get_mut(index as usize).ok_or(Error::<T>::NotFound)?;
 			task.take().ok_or(Error::<T>::NotFound)
 		})?;
+		Self::cleanup_agenda(when);
 		Self::deposit_event(Event::Canceled { when, index });
 		Self::place_task(new_time, task).map_err(|x| x.0)
 	}
@@ -1000,6 +1040,7 @@ impl<T: Config> Pallet<T> {
 		} else {
 			Agenda::<T>::remove(when);
 		}
+
 		postponed == 0
 	}
 

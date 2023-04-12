@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -69,6 +69,12 @@ impl WeightMeter {
 		let time = Perbill::from_rational(self.consumed.ref_time(), self.limit.ref_time());
 		let pov = Perbill::from_rational(self.consumed.proof_size(), self.limit.proof_size());
 		time.max(pov)
+	}
+
+	/// Consume some weight and defensively fail if it is over the limit. Saturate in any case.
+	pub fn defensive_saturating_accrue(&mut self, w: Weight) {
+		self.consumed.saturating_accrue(w);
+		debug_assert!(self.consumed.all_lte(self.limit), "Weight counter overflow");
 	}
 
 	/// Consume the given weight after checking that it can be consumed. Otherwise do nothing.

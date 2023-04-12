@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -56,7 +56,7 @@
 //!
 //! #[async_trait::async_trait]
 //! impl sp_inherents::InherentDataProvider for InherentDataProvider {
-//! 	fn provide_inherent_data(
+//! 	async fn provide_inherent_data(
 //! 		&self,
 //! 		inherent_data: &mut InherentData,
 //! 	) -> Result<(), sp_inherents::Error> {
@@ -106,7 +106,7 @@
 //! # struct InherentDataProvider;
 //! # #[async_trait::async_trait]
 //! # impl sp_inherents::InherentDataProvider for InherentDataProvider {
-//! # 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
+//! # 	async fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
 //! # 		inherent_data.put_data(INHERENT_IDENTIFIER, &"hello")
 //! # 	}
 //! # 	async fn try_handle_error(
@@ -204,7 +204,7 @@ pub enum Error {
 pub type InherentIdentifier = [u8; 8];
 
 /// Inherent data to include in a block.
-#[derive(Clone, Default, Encode, Decode)]
+#[derive(Clone, Default, Encode, Decode, scale_info::TypeInfo)]
 pub struct InherentData {
 	/// All inherent data encoded with parity-scale-codec and an identifier.
 	data: BTreeMap<InherentIdentifier, Vec<u8>>,
@@ -276,7 +276,7 @@ impl InherentData {
 ///
 /// When a fatal error occurs, all other errors are removed and the implementation needs to
 /// abort checking inherents.
-#[derive(Encode, Decode, Clone)]
+#[derive(Encode, Decode, Clone, scale_info::TypeInfo)]
 pub struct CheckInherentsResult {
 	/// Did the check succeed?
 	okay: bool,
@@ -443,7 +443,7 @@ mod tests {
 
 	#[async_trait::async_trait]
 	impl InherentDataProvider for TestInherentDataProvider {
-		fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
+		async fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
 			data.put_data(TEST_INHERENT_0, &42)
 		}
 
@@ -460,7 +460,7 @@ mod tests {
 	fn create_inherent_data() {
 		let provider = TestInherentDataProvider;
 
-		let inherent_data = provider.create_inherent_data().unwrap();
+		let inherent_data = futures::executor::block_on(provider.create_inherent_data()).unwrap();
 
 		assert_eq!(inherent_data.get_data::<u32>(&TEST_INHERENT_0).unwrap().unwrap(), 42u32);
 	}

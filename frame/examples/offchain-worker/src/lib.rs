@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -158,7 +158,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -167,7 +166,7 @@ pub mod pallet {
 		///
 		/// By implementing `fn offchain_worker` you declare a new offchain worker.
 		/// This function will be called when the node is fully synced and a new best block is
-		/// succesfuly imported.
+		/// successfully imported.
 		/// Note that it's not guaranteed for offchain workers to run on EVERY block, there might
 		/// be cases where some blocks are skipped, or for some the worker runs twice (re-orgs),
 		/// so the code should be able to handle that.
@@ -225,11 +224,12 @@ pub mod pallet {
 		/// The transaction needs to be signed (see `ensure_signed`) check, so that the caller
 		/// pays a fee to execute it.
 		/// This makes sure that it's not easy (or rather cheap) to attack the chain by submitting
-		/// excesive transactions, but note that it doesn't ensure the price oracle is actually
+		/// excessive transactions, but note that it doesn't ensure the price oracle is actually
 		/// working and receives (and provides) meaningful data.
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
-		#[pallet::weight(0)]
+		#[pallet::call_index(0)]
+		#[pallet::weight({0})]
 		pub fn submit_price(origin: OriginFor<T>, price: u32) -> DispatchResultWithPostInfo {
 			// Retrieve sender of the transaction.
 			let who = ensure_signed(origin)?;
@@ -254,7 +254,8 @@ pub mod pallet {
 		///
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
-		#[pallet::weight(0)]
+		#[pallet::call_index(1)]
+		#[pallet::weight({0})]
 		pub fn submit_price_unsigned(
 			origin: OriginFor<T>,
 			_block_number: T::BlockNumber,
@@ -270,7 +271,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::call_index(2)]
+		#[pallet::weight({0})]
 		pub fn submit_price_unsigned_with_signed_payload(
 			origin: OriginFor<T>,
 			price_payload: PricePayload<T::Public, T::BlockNumber>,
@@ -334,7 +336,7 @@ pub mod pallet {
 
 	/// Defines the block when next unsigned transaction will be accepted.
 	///
-	/// To prevent spam of unsigned (and unpayed!) transactions on the network,
+	/// To prevent spam of unsigned (and unpaid!) transactions on the network,
 	/// we only allow one transaction every `T::UnsignedInterval` blocks.
 	/// This storage entry defines when new transaction is going to be accepted.
 	#[pallet::storage]
@@ -407,15 +409,14 @@ impl<T: Config> Pallet<T> {
 		match res {
 			// The value has been set correctly, which means we can safely send a transaction now.
 			Ok(block_number) => {
-				// Depending if the block is even or odd we will send a `Signed` or `Unsigned`
-				// transaction.
+				// We will send different transactions based on a random number.
 				// Note that this logic doesn't really guarantee that the transactions will be sent
 				// in an alternating fashion (i.e. fairly distributed). Depending on the execution
 				// order and lock acquisition, we may end up for instance sending two `Signed`
 				// transactions in a row. If a strict order is desired, it's better to use
 				// the storage entry for that. (for instance store both block number and a flag
 				// indicating the type of next transaction to send).
-				let transaction_type = block_number % 3u32.into();
+				let transaction_type = block_number % 4u32.into();
 				if transaction_type == Zero::zero() {
 					TransactionType::Signed
 				} else if transaction_type == T::BlockNumber::from(1u32) {
@@ -569,12 +570,12 @@ impl<T: Config> Pallet<T> {
 	fn fetch_price() -> Result<u32, http::Error> {
 		// We want to keep the offchain worker execution time reasonable, so we set a hard-coded
 		// deadline to 2s to complete the external call.
-		// You can also wait idefinitely for the response, however you may still get a timeout
+		// You can also wait indefinitely for the response, however you may still get a timeout
 		// coming from the host machine.
 		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(2_000));
 		// Initiate an external HTTP GET request.
 		// This is using high-level wrappers from `sp_runtime`, for the low-level calls that
-		// you can find in `sp_io`. The API is trying to be similar to `reqwest`, but
+		// you can find in `sp_io`. The API is trying to be similar to `request`, but
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
 		let request =

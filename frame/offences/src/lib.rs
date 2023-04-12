@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -49,7 +49,6 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -112,10 +111,10 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config, O: Offence<T::IdentificationTuple>>
-	ReportOffence<T::AccountId, T::IdentificationTuple, O> for Pallet<T>
+impl<T, O> ReportOffence<T::AccountId, T::IdentificationTuple, O> for Pallet<T>
 where
-	T::IdentificationTuple: Clone,
+	T: Config,
+	O: Offence<T::IdentificationTuple>,
 {
 	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
 		let offenders = offence.offenders();
@@ -248,7 +247,7 @@ impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 	fn insert(&mut self, time_slot: &O::TimeSlot, report_id: ReportIdOf<T>) {
 		// Insert the report id into the list while maintaining the ordering by the time
 		// slot.
-		let pos = self.same_kind_reports.partition_point(|&(ref when, _)| when <= time_slot);
+		let pos = self.same_kind_reports.partition_point(|(when, _)| when <= time_slot);
 		self.same_kind_reports.insert(pos, (time_slot.clone(), report_id));
 
 		// Update the list of concurrent reports.

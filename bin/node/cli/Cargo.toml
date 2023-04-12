@@ -9,6 +9,7 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 default-run = "substrate"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
+publish = false
 
 [package.metadata.wasm-pack.profile.release]
 # `wasm-opt` has some problems on linux, see
@@ -36,9 +37,9 @@ crate-type = ["cdylib", "rlib"]
 # third-party dependencies
 array-bytes = "4.1"
 clap = { version = "4.0.9", features = ["derive"], optional = true }
-codec = { package = "parity-scale-codec", version = "3.0.0" }
+codec = { package = "parity-scale-codec", version = "3.2.2" }
 serde = { version = "1.0.136", features = ["derive"] }
-jsonrpsee = { version = "0.15.1", features = ["server"] }
+jsonrpsee = { version = "0.16.2", features = ["server"] }
 futures = "0.3.21"
 log = "0.4.17"
 rand = "0.8"
@@ -46,18 +47,18 @@ rand = "0.8"
 # primitives
 sp-authority-discovery = { version = "4.0.0-dev", path = "../../../primitives/authority-discovery" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-grandpa-primitives = { version = "4.0.0-dev", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
+grandpa-primitives = { version = "4.0.0-dev", package = "sp-consensus-grandpa", path = "../../../primitives/consensus/grandpa" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
-sp-authorship = { version = "4.0.0-dev", path = "../../../primitives/authorship" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
 sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../../primitives/transaction-storage-proof" }
+sp-io = { path = "../../../primitives/io" }
 
 # client dependencies
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
@@ -67,10 +68,10 @@ sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transacti
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 sc-network = { version = "0.10.0-dev", path = "../../../client/network" }
 sc-network-common = { version = "0.10.0-dev", path = "../../../client/network/common" }
+sc-network-sync = { version = "0.10.0-dev", path = "../../../client/network/sync" }
 sc-consensus-slots = { version = "0.10.0-dev", path = "../../../client/consensus/slots" }
 sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/babe" }
-sc-consensus-uncles = { version = "0.10.0-dev", path = "../../../client/consensus/uncles" }
-grandpa = { version = "0.10.0-dev", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
+grandpa = { version = "0.10.0-dev", package = "sc-consensus-grandpa", path = "../../../client/consensus/grandpa" }
 sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
 sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-authorship" }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
@@ -79,11 +80,13 @@ sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-authority-discovery = { version = "0.10.0-dev", path = "../../../client/authority-discovery" }
 sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
+sc-storage-monitor = { version = "0.1.0", path = "../../../client/storage-monitor" }
 
 # frame dependencies
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../frame/system/rpc/runtime-api" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
+pallet-assets = { version = "4.0.0-dev", path = "../../../frame/assets/" }
 pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment/" }
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
 
@@ -100,16 +103,6 @@ node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 serde_json = "1.0.85"
 
-[target.'cfg(any(target_arch="x86_64", target_arch="aarch64"))'.dependencies]
-node-executor = { version = "3.0.0-dev", path = "../executor", features = ["wasmtime"] }
-sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli", features = ["wasmtime"] }
-sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service", features = [
-	"wasmtime",
-] }
-sp-trie = { version = "7.0.0", default-features = false, path = "../../../primitives/trie", features = [
-	"memory-tracker",
-] }
-
 [dev-dependencies]
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
 sc-client-db = { version = "0.10.0-dev", path = "../../../client/db" }
@@ -123,17 +116,18 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain"
 futures = "0.3.21"
 tempfile = "3.1.0"
 assert_cmd = "2.0.2"
-nix = "0.23"
+nix = { version = "0.26.1", features = ["signal"] }
 serde_json = "1.0"
 regex = "1.6.0"
 platforms = "2.0"
-async-std = { version = "1.11.0", features = ["attributes"] }
 soketto = "0.7.1"
-criterion = { version = "0.3.5", features = ["async_tokio"] }
-tokio = { version = "1.17.0", features = ["macros", "time", "parking_lot"] }
+criterion = { version = "0.4.0", features = ["async_tokio"] }
+tokio = { version = "1.22.0", features = ["macros", "time", "parking_lot"] }
+tokio-util = { version = "0.7.4", features = ["compat"] }
 wait-timeout = "0.2"
 substrate-rpc-client = { path = "../../../utils/frame/rpc/client" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
+substrate-cli-test-utils = { path = "../../../test-utils/cli" }
 
 [build-dependencies]
 clap = { version = "4.0.9", optional = true }
@@ -145,6 +139,7 @@ substrate-frame-cli = { version = "4.0.0-dev", optional = true, path = "../../..
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", optional = true }
 pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
+sc-storage-monitor = { version = "0.1.0", path = "../../../client/storage-monitor" }
 
 [features]
 default = ["cli"]

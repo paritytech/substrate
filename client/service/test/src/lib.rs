@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,11 +22,11 @@ use futures::{task::Poll, Future, TryFutureExt as _};
 use log::{debug, info};
 use parking_lot::Mutex;
 use sc_client_api::{Backend, CallExecutor};
-use sc_network::{config::NetworkConfiguration, multiaddr};
-use sc_network_common::{
-	config::{MultiaddrWithPeerId, TransportConfig},
-	service::{NetworkBlock, NetworkPeers, NetworkStateInfo},
+use sc_network::{
+	config::{MultiaddrWithPeerId, NetworkConfiguration, TransportConfig},
+	multiaddr, NetworkBlock, NetworkPeers, NetworkStateInfo,
 };
+use sc_network_sync::SyncingService;
 use sc_service::{
 	client::Client,
 	config::{BasePath, DatabaseSource, KeystoreConfig},
@@ -65,9 +65,7 @@ impl<G, E, F, U> Drop for TestNet<G, E, F, U> {
 	}
 }
 
-pub trait TestNetNode:
-	Clone + Future<Output = Result<(), sc_service::Error>> + Send + 'static
-{
+pub trait TestNetNode: Clone + Future<Output = Result<(), Error>> + Send + 'static {
 	type Block: BlockT;
 	type Backend: Backend<Self::Block>;
 	type Executor: CallExecutor<Self::Block> + Send + Sync;
@@ -79,6 +77,7 @@ pub trait TestNetNode:
 	fn network(
 		&self,
 	) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as BlockT>::Hash>>;
+	fn sync(&self) -> &Arc<SyncingService<Self::Block>>;
 	fn spawn_handle(&self) -> SpawnTaskHandle;
 }
 
@@ -87,6 +86,7 @@ pub struct TestNetComponents<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> {
 	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
 	transaction_pool: Arc<TExPool>,
 	network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	sync: Arc<SyncingService<TBl>>,
 }
 
 impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool>
@@ -96,9 +96,16 @@ impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool>
 		task_manager: TaskManager,
 		client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
 		network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
+		sync: Arc<SyncingService<TBl>>,
 		transaction_pool: Arc<TExPool>,
 	) -> Self {
-		Self { client, transaction_pool, network, task_manager: Arc::new(Mutex::new(task_manager)) }
+		Self {
+			client,
+			sync,
+			transaction_pool,
+			network,
+			task_manager: Arc::new(Mutex::new(task_manager)),
+		}
 	}
 }
 
@@ -111,6 +118,7 @@ impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Clone
 			client: self.client.clone(),
 			transaction_pool: self.transaction_pool.clone(),
 			network: self.network.clone(),
+			sync: self.sync.clone(),
 		}
 	}
 }
@@ -118,7 +126,7 @@ impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Clone
 impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Future
 	for TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool>
 {
-	type Output = Result<(), sc_service::Error>;
+	type Output = Result<(), Error>;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		Pin::new(&mut self.task_manager.lock().future()).poll(cx)
@@ -151,6 +159,9 @@ where
 	) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as BlockT>::Hash>> {
 		self.network.clone()
 	}
+	fn sync(&self) -> &Arc<SyncingService<Self::Block>> {
+		&self.sync
+	}
 	fn spawn_handle(&self) -> SpawnTaskHandle {
 		self.task_manager.lock().spawn_handle()
 	}
@@ -171,10 +182,7 @@ where
 			loop {
 				interval.tick().await;
 
-				if full_nodes
-					.iter()
-					.all(|&(ref id, ref service, _, _)| full_predicate(*id, service))
-				{
+				if full_nodes.iter().all(|(id, service, _, _)| full_predicate(*id, service)) {
 					break
 				}
 			}
@@ -220,7 +228,7 @@ fn node_config<
 	);
 
 	network_config.transport =
-		TransportConfig::Normal { enable_mdns: false, allow_private_ipv4: true };
+		TransportConfig::Normal { enable_mdns: false, allow_private_ip: true };
 
 	Configuration {
 		impl_name: String::from("network-test-impl"),
@@ -229,14 +237,13 @@ fn node_config<
 		tokio_handle,
 		transaction_pool: Default::default(),
 		network: network_config,
-		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::Path { path: root.join("key"), password: None },
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
 		trie_cache_maximum_size: Some(16 * 1024 * 1024),
 		state_pruning: Default::default(),
 		blocks_pruning: BlocksPruning::KeepFinalized,
 		chain_spec: Box::new((*spec).clone()),
-		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
+		wasm_method: Default::default(),
 		wasm_runtime_overrides: Default::default(),
 		execution_strategies: Default::default(),
 		rpc_http: None,
@@ -302,48 +309,55 @@ where
 		full: impl Iterator<Item = impl FnOnce(Configuration) -> Result<(F, U), Error>>,
 		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration) -> Result<(F, U), Error>)>,
 	) {
-		let handle = self.runtime.handle().clone();
+		self.runtime.block_on(async {
+			let handle = self.runtime.handle().clone();
 
-		for (key, authority) in authorities {
-			let node_config = node_config(
-				self.nodes,
-				&self.chain_spec,
-				Role::Authority,
-				handle.clone(),
-				Some(key),
-				self.base_port,
-				temp,
-			);
-			let addr = node_config.network.listen_addresses.first().unwrap().clone();
-			let (service, user_data) =
-				authority(node_config).expect("Error creating test node service");
+			for (key, authority) in authorities {
+				let node_config = node_config(
+					self.nodes,
+					&self.chain_spec,
+					Role::Authority,
+					handle.clone(),
+					Some(key),
+					self.base_port,
+					temp,
+				);
+				let addr = node_config.network.listen_addresses.first().unwrap().clone();
+				let (service, user_data) =
+					authority(node_config).expect("Error creating test node service");
 
-			handle.spawn(service.clone().map_err(|_| ()));
-			let addr =
-				MultiaddrWithPeerId { multiaddr: addr, peer_id: service.network().local_peer_id() };
-			self.authority_nodes.push((self.nodes, service, user_data, addr));
-			self.nodes += 1;
-		}
+				handle.spawn(service.clone().map_err(|_| ()));
+				let addr = MultiaddrWithPeerId {
+					multiaddr: addr,
+					peer_id: service.network().local_peer_id(),
+				};
+				self.authority_nodes.push((self.nodes, service, user_data, addr));
+				self.nodes += 1;
+			}
 
-		for full in full {
-			let node_config = node_config(
-				self.nodes,
-				&self.chain_spec,
-				Role::Full,
-				handle.clone(),
-				None,
-				self.base_port,
-				temp,
-			);
-			let addr = node_config.network.listen_addresses.first().unwrap().clone();
-			let (service, user_data) = full(node_config).expect("Error creating test node service");
+			for full in full {
+				let node_config = node_config(
+					self.nodes,
+					&self.chain_spec,
+					Role::Full,
+					handle.clone(),
+					None,
+					self.base_port,
+					temp,
+				);
+				let addr = node_config.network.listen_addresses.first().unwrap().clone();
+				let (service, user_data) =
+					full(node_config).expect("Error creating test node service");
 
-			handle.spawn(service.clone().map_err(|_| ()));
-			let addr =
-				MultiaddrWithPeerId { multiaddr: addr, peer_id: service.network().local_peer_id() };
-			self.full_nodes.push((self.nodes, service, user_data, addr));
-			self.nodes += 1;
-		}
+				handle.spawn(service.clone().map_err(|_| ()));
+				let addr = MultiaddrWithPeerId {
+					multiaddr: addr,
+					peer_id: service.network().local_peer_id(),
+				};
+				self.full_nodes.push((self.nodes, service, user_data, addr));
+				self.nodes += 1;
+			}
+		});
 	}
 }
 
@@ -470,7 +484,7 @@ pub fn sync<G, E, Fb, F, B, ExF, U>(
 		let info = network.full_nodes[0].1.client().info();
 		network.full_nodes[0]
 			.1
-			.network()
+			.sync()
 			.new_best_block_imported(info.best_hash, info.best_number);
 		network.full_nodes[0].3.clone()
 	};

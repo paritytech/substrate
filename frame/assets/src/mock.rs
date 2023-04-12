@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,11 +20,13 @@
 use super::*;
 use crate as pallet_assets;
 
+use codec::Encode;
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64, GenesisBuild},
 };
 use sp_core::H256;
+use sp_io::storage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -45,6 +47,9 @@ construct_runtime!(
 	}
 );
 
+type AccountId = u64;
+type AssetId = u32;
+
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -55,7 +60,7 @@ impl frame_system::Config for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
@@ -69,7 +74,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = ConstU32<2>;
+	type MaxConsumers = ConstU32<3>;
 }
 
 impl pallet_balances::Config for Test {
@@ -82,12 +87,60 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
+	type HoldIdentifier = ();
+	type FreezeIdentifier = ();
+	type MaxHolds = ();
+	type MaxFreezes = ();
+}
+
+pub struct AssetsCallbackHandle;
+impl AssetsCallback<AssetId, AccountId> for AssetsCallbackHandle {
+	fn created(_id: &AssetId, _owner: &AccountId) -> Result<(), ()> {
+		if Self::should_err() {
+			Err(())
+		} else {
+			storage::set(Self::CREATED.as_bytes(), &().encode());
+			Ok(())
+		}
+	}
+
+	fn destroyed(_id: &AssetId) -> Result<(), ()> {
+		if Self::should_err() {
+			Err(())
+		} else {
+			storage::set(Self::DESTROYED.as_bytes(), &().encode());
+			Ok(())
+		}
+	}
+}
+
+impl AssetsCallbackHandle {
+	pub const CREATED: &'static str = "asset_created";
+	pub const DESTROYED: &'static str = "asset_destroyed";
+
+	const RETURN_ERROR: &'static str = "return_error";
+
+	// Configures `Self` to return `Ok` when callbacks are invoked
+	pub fn set_return_ok() {
+		storage::clear(Self::RETURN_ERROR.as_bytes());
+	}
+
+	// Configures `Self` to return `Err` when callbacks are invoked
+	pub fn set_return_error() {
+		storage::set(Self::RETURN_ERROR.as_bytes(), &().encode());
+	}
+
+	// If `true`, callback should return `Err`, `Ok` otherwise.
+	fn should_err() -> bool {
+		storage::exists(Self::RETURN_ERROR.as_bytes())
+	}
 }
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u64;
 	type AssetId = u32;
+	type AssetIdParameter = u32;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
@@ -99,8 +152,11 @@ impl Config for Test {
 	type StringLimit = ConstU32<50>;
 	type Freezer = TestFreezer;
 	type WeightInfo = ();
+	type CallbackHandle = AssetsCallbackHandle;
 	type Extra = ();
 	type RemoveItemsLimit = ConstU32<5>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 use std::collections::HashMap;

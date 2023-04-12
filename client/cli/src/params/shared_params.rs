@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -42,10 +42,10 @@ pub struct SharedParams {
 	#[arg(long, short = 'd', value_name = "PATH")]
 	pub base_path: Option<PathBuf>,
 
-	/// Sets a custom logging filter. Syntax is <target>=<level>, e.g. -lsync=debug.
+	/// Sets a custom logging filter. Syntax is `<target>=<level>`, e.g. -lsync=debug.
 	///
 	/// Log levels (least to most verbose) are error, warn, info, debug, and trace.
-	/// By default, all targets log `info`. The global log level can be set with -l<level>.
+	/// By default, all targets log `info`. The global log level can be set with `-l<level>`.
 	#[arg(short = 'l', long, value_name = "LOG_PATTERN", num_args = 1..)]
 	pub log: Vec<String>,
 
@@ -71,7 +71,7 @@ pub struct SharedParams {
 	#[arg(long)]
 	pub enable_log_reloading: bool,
 
-	/// Sets a custom profiling filter. Syntax is the same as for logging: <target>=<level>
+	/// Sets a custom profiling filter. Syntax is the same as for logging: `<target>=<level>`.
 	#[arg(long, value_name = "TARGETS")]
 	pub tracing_targets: Option<String>,
 
