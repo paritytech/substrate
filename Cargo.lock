@@ -7552,9 +7552,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro-warning"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d4f284d87b9cedc2ff57223cbc4e3937cd6063c01e92c8e2a8c080df0013933"
+checksum = "f0e25495609acefcaeb5052edad8ac91017c9bc98fc38ef321ed524e50b68bac"
 dependencies = [
  "proc-macro2",
  "quote",
