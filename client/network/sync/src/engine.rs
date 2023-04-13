@@ -844,12 +844,15 @@ where
 	) -> Result<(), ()> {
 		log::trace!(target: "sync", "New peer {} {:?}", who, status);
 
-		// peer is not reported in `validate_inbound_substream()` as the peer might be
-		// in `Incoming` state and genesis mismatch would disconnect the peer which is
-		// an invalid state transition in `Notifications`.
-		if status.genesis_hash != self.genesis_hash {
-			self.network_service.report_peer(who, rep::GENESIS_MISMATCH);
-		}
+		// TODO: peer with invalid genesis hash must be reported but because
+		// `validate_inbound_substream()` is first called when `ValidateSubstream` is received,
+		// meaning the peer state is `Incoming`, the peer cannot be reported without causing an
+		// invalid state transition. Report the peer for invalid genesis hash when
+		// `ValidateSubstream` is removed/`Notifications` is fixed.
+		//
+		// if status.genesis_hash != self.genesis_hash {
+		// 	self.network_service.report_peer(who, rep::GENESIS_MISMATCH);
+		// }
 
 		if let Err(_) = self.validate_inbound_substream(who, status) {
 			return Err(())

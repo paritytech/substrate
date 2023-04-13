@@ -17,8 +17,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	protocol::notifications::handler::{
-		self, NotificationsSink, NotifsHandlerIn, NotifsHandlerOut, NotifsHandlerProto,
+	protocol::{
+		notifications::handler::{
+			self, NotificationsSink, NotifsHandlerIn, NotifsHandlerOut, NotifsHandlerProto,
+		},
+		HARDCODED_PEERSETS_SYNC,
 	},
 	types::ProtocolName,
 };
@@ -882,6 +885,11 @@ impl Notifications {
 		self.peerset.incoming(0.into(), peer_id, index);
 	}
 
+	/// Reject inbound substream
+	pub fn reject_inbound_substream(&mut self, index: sc_peerset::IncomingIndex) {
+		self.peerset_report_reject(index);
+	}
+
 	/// Function that is called when the peerset wants us to accept a connection
 	/// request from a peer.
 	fn peerset_report_accept(&mut self, index: sc_peerset::IncomingIndex) {
@@ -953,7 +961,7 @@ impl Notifications {
 	}
 
 	/// Function that is called when the peerset wants us to reject an incoming peer.
-	pub fn peerset_report_reject(&mut self, index: sc_peerset::IncomingIndex) {
+	fn peerset_report_reject(&mut self, index: sc_peerset::IncomingIndex) {
 		let incoming = if let Some(pos) = self.incoming.iter().position(|i| i.incoming_id == index)
 		{
 			self.incoming.remove(pos)
@@ -1568,7 +1576,7 @@ impl NetworkBehaviour for Notifications {
 									incoming_id,
 								});
 
-								if set_id == 0.into() {
+								if set_id == HARDCODED_PEERSETS_SYNC {
 									let event = NotificationsOut::ValidateSubstream {
 										peer_id,
 										index: incoming_id,

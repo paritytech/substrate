@@ -474,7 +474,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 						target: "sub-libp2p",
 						"`SyncingEngine` rejected stream"
 					);
-					self.behaviour.peerset_report_reject(index);
+					self.behaviour.reject_inbound_substream(index);
 				},
 			}
 		}
@@ -523,7 +523,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 							target: "sub-libp2p",
 							"Failed to parse handshake ({received_handshake:?}) for {peer_id}",
 						);
-						self.behaviour.peerset_report_reject(index);
+						self.behaviour.reject_inbound_substream(index);
 					},
 				}
 
