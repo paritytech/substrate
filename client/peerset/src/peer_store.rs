@@ -27,7 +27,7 @@ use std::{
 };
 use wasm_timer::Delay;
 
-use crate::ReputationChange;
+use crate::{ReputationChange, LOG_TARGET};
 
 /// We don't accept nodes whose reputation is under this value.
 pub const BANNED_THRESHOLD: i32 = 82 * (i32::MIN / 100);
@@ -174,7 +174,7 @@ struct PeerStoreInner {
 
 impl PeerStoreInner {
 	fn is_banned(&self, peer_id: &PeerId) -> bool {
-        self.peers.get(peer_id).map_or(false, |info| info.is_banned())
+		self.peers.get(peer_id).map_or(false, |info| info.is_banned())
 	}
 
 	fn report_disconnect(&mut self, peer_id: PeerId) {
@@ -204,8 +204,7 @@ impl PeerStoreInner {
 		candidates.partial_sort(count, |(_, info1), (_, info2)| info1.cmp(info2));
 		candidates.iter().take(count).map(|(peer_id, _)| *peer_id).collect()
 
-		// FIXME: depending on the usage patterns, it might be more efficient to always maintain
-		// peers sorted.
+		// TODO: keep the peers sorted (in a "bi-multi-map"?) to not repeat sorting every time.
 	}
 
 	fn progress_time(&mut self, seconds_passed: u64) {
@@ -227,13 +226,13 @@ impl PeerStoreInner {
 		match self.peers.entry(peer_id) {
 			Entry::Occupied(mut e) => {
 				trace!(
-					target: "peerset",
+					target: LOG_TARGET,
 					"Trying to add an already known peer {peer_id}, bumping `last_updated`.",
 				);
 				e.get_mut().bump_last_updated();
 			},
 			Entry::Vacant(e) => {
-				trace!(target: "peerset", "Adding a new known peer {peer_id}.");
+				trace!(target: LOG_TARGET, "Adding a new known peer {peer_id}.");
 				e.insert(PeerInfo::default());
 			},
 		}

@@ -59,6 +59,8 @@ pub use libp2p::PeerId;
 
 pub use peer_store::BANNED_THRESHOLD;
 
+pub const LOG_TARGET: &str = "peerset";
+
 #[derive(Debug)]
 enum Action {
 	AddReservedPeer(SetId, PeerId),
@@ -336,24 +338,6 @@ impl Peerset {
 		self.protocol_handles[set_id.0].dropped(peer_id);
 	}
 
-	// fn on_remove_from_peers_set(&mut self, set_id: SetId, peer_id: PeerId) {
-	// 	// Don't do anything if node is reserved.
-	// 	if self.reserved_nodes[set_id.0].0.contains(&peer_id) {
-	// 		return
-	// 	}
-
-	// 	match self.data.peer(set_id.0, &peer_id) {
-	// 		peersstate::Peer::Connected(peer) => {
-	// 			self.message_queue.push_back(Message::Drop { set_id, peer_id: *peer.peer_id() });
-	// 			peer.disconnect().forget_peer();
-	// 		},
-	// 		peersstate::Peer::NotConnected(peer) => {
-	// 			peer.forget_peer();
-	// 		},
-	// 		peersstate::Peer::Unknown(_) => {},
-	// 	}
-	// }
-
 	/// Reports an adjustment to the reputation of the given peer.
 	pub fn report_peer(&mut self, peer_id: PeerId, score_diff: ReputationChange) {
 		// We don't immediately perform the adjustments in order to have state consistency. We
@@ -398,10 +382,7 @@ impl Stream for Peerset {
 					},
 				}
 			} else {
-				debug!(
-					target: "peerset",
-					"`PeersetHandle` was dropped, terminating `Peerset`."
-				);
+				debug!(target: LOG_TARGET, "`PeersetHandle` was dropped, terminating `Peerset`.");
 				return Poll::Ready(None)
 			}
 		}
@@ -411,7 +392,7 @@ impl Stream for Peerset {
 				return Poll::Ready(Some(msg))
 			} else {
 				debug!(
-					target: "peerset",
+					target: LOG_TARGET,
 					"All `ProtocolController`s have terminated, terminating `Peerset`."
 				);
 				return Poll::Ready(None)
@@ -419,16 +400,13 @@ impl Stream for Peerset {
 		}
 
 		if let Poll::Ready(()) = self.peer_store_future.poll_unpin(cx) {
-			debug!(
-				target: "peerset",
-				"`PeerStore` has terminated, terminating `PeerSet`."
-			);
+			debug!(target: LOG_TARGET, "`PeerStore` has terminated, terminating `PeerSet`.");
 			return Poll::Ready(None)
 		}
 
 		if let Poll::Ready(_) = self.protocol_controller_futures.poll_unpin(cx) {
 			debug!(
-				target: "peerset",
+				target: LOG_TARGET,
 				"All `ProtocolHandle`s have terminated, terminating `PeerSet`."
 			);
 			return Poll::Ready(None)

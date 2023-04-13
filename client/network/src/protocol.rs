@@ -316,6 +316,8 @@ impl<B: BlockT> Protocol<B> {
 	///
 	/// Can be called multiple times with the same `PeerId`.
 	pub fn add_known_peer(&mut self, peer_id: PeerId) {
+		// TODO: get rid of this function and call `Peerset`/`PeerStore` directly
+		// from `NetworkWorker`.
 		self.peerset_handle.add_known_peer(peer_id);
 	}
 }

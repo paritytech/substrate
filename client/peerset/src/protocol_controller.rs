@@ -37,7 +37,7 @@ use wasm_timer::Delay;
 
 use crate::{
 	peer_store::PeerReputationProvider, DropReason, IncomingIndex, Message, PeersetHandle,
-	SetConfig, SetId,
+	SetConfig, SetId, LOG_TARGET,
 };
 
 #[derive(Debug)]
@@ -49,7 +49,7 @@ enum Action {
 	DisconnectPeer(PeerId),
 	IncomingConnection(PeerId, IncomingIndex),
 	Dropped(PeerId),
-	ReservedPeers { pending_response: oneshot::Sender<Vec<PeerId>> },
+	GetReservedPeers(oneshot::Sender<Vec<PeerId>>),
 }
 
 /// Shared handle to [`ProtocolController`]. Distributed around the code outside of the
@@ -109,7 +109,7 @@ impl ProtocolHandle {
 
 	/// Get the list of reserved peers.
 	pub fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
-		let _ = self.to_controller.unbounded_send(Action::ReservedPeers { pending_response });
+		let _ = self.to_controller.unbounded_send(Action::GetReservedPeers(pending_response));
 	}
 }
 
@@ -240,12 +240,14 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 				// between `ProtocolController` and `Notifications` we can receive `Action::Dropped`
 				// for a peer we already disconnected ourself.
 				warn!(
-					target: "peerset",
+					target: LOG_TARGET,
 					"Received `Action::Dropped` for not connected peer {} on {:?}.",
-					peer_id, self.set_id,
+					peer_id,
+					self.set_id,
 				)
 			}),
-			Action::ReservedPeers { pending_response } => self.on_reserved_peers(pending_response),
+			Action::GetReservedPeers(pending_response) =>
+				self.on_get_reserved_peers(pending_response),
 		}
 		true
 	}
@@ -290,26 +292,23 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 	fn on_add_reserved_peer(&mut self, peer_id: PeerId) {
 		if self.reserved_nodes.contains_key(&peer_id) {
 			warn!(
-				target: "peerset",
-				"Trying to add an already reserved node as reserved: {}.",
-				peer_id
+				target: LOG_TARGET,
+				"Trying to add an already reserved node as reserved: {peer_id}.",
 			);
 			return
 		}
-
 
 		// Get the peer out of non-reserved peers if it's there.
 		let state = match self.nodes.remove(&peer_id) {
 			Some(direction) => {
 				trace!(
-					target: "peerset",
-					"Marking previously connected node {} ({:?}) as reserved.",
-					peer_id, direction,
+					target: LOG_TARGET,
+					"Marking previously connected node {peer_id} ({direction:?}) as reserved.",
 				);
 				PeerState::Connected(direction)
 			},
 			None => {
-				trace!(target: "peerset", "Adding reserved node {}.", peer_id);
+				trace!(target: LOG_TARGET, "Adding reserved node {peer_id}.");
 				PeerState::NotConnected
 			},
 		};
@@ -330,11 +329,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 		let mut state = match self.reserved_nodes.remove(&peer_id) {
 			Some(state) => state,
 			None => {
-				warn!(
-					target: "peerset",
-					"Trying to remove unknown reserved node: {}.",
-					peer_id,
-				);
+				warn!(target: LOG_TARGET, "Trying to remove unknown reserved node: {peer_id}.");
 				return
 			},
 		};
@@ -343,17 +338,18 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 			if self.reserved_only {
 				// Disconnect the node.
 				info!(
-					target: "peerset",
+					target: LOG_TARGET,
 					"Disconnecting previously reserved node {} ({:?}) on {:?}.",
-					peer_id, direction, self.set_id,
+					peer_id,
+					direction,
+					self.set_id,
 				);
 				self.drop_connection(peer_id);
 			} else {
 				// Count connections as of regular node.
 				trace!(
-					target: "peerset",
-					"Making a connected reserved node {} ({:?}) a regular one.",
-					peer_id, direction,
+					target: LOG_TARGET,
+					"Making a connected reserved node {peer_id} ({direction:?}) a regular one.",
 				);
 
 				match direction {
@@ -366,7 +362,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 				assert!(prev.is_none(), "Corrupted state: reserved node was also non-reserved.");
 			}
 		} else {
-			trace!(target: "peerset", "Removed disconnected reserved node {}.", peer_id);
+			trace!(target: LOG_TARGET, "Removed disconnected reserved node {peer_id}.");
 		}
 	}
 
@@ -389,7 +385,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 	/// Change "reserved only" flag. In "reserved only" mode we connect and accept connections to
 	/// reserved nodes only.
 	fn on_set_reserved_only(&mut self, reserved_only: bool) {
-		trace!(target: "peerset", "Set reserved only: {}", reserved_only);
+		trace!(target: LOG_TARGET, "Set reserved only: {reserved_only}");
 
 		self.reserved_only = reserved_only;
 
@@ -405,7 +401,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 	}
 
 	/// Get the list of reserved peers.
-	fn on_reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
+	fn on_get_reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
 		pending_response.send(self.reserved_nodes.keys().cloned().collect());
 	}
 
@@ -414,17 +410,15 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 		// Don't do anything if the node is reserved.
 		if self.reserved_nodes.contains_key(&peer_id) {
 			warn!(
-				target: "peerset",
-				"Ignoring request to disconnect reserved peer {} from {:?}.",
-				peer_id, self.set_id,
+				target: LOG_TARGET,
+				"Ignoring request to disconnect reserved peer {} from {:?}.", peer_id, self.set_id,
 			);
 			return
 		}
 
-
 		match self.nodes.remove(&peer_id) {
 			Some(direction) => {
-				trace!(target: "peerset", "Disconnecting peer {} ({:?}).", peer_id, direction);
+				trace!(target: LOG_TARGET, "Disconnecting peer {peer_id} ({direction:?}).");
 				match direction {
 					Direction::Inbound => self.num_in -= 1,
 					Direction::Outbound => self.num_out -= 1,
@@ -433,9 +427,8 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 			},
 			None => {
 				warn!(
-					target: "peerset",
-					"Trying to disconnect unknown peer {} from {:?}.",
-					peer_id, self.set_id,
+					target: LOG_TARGET,
+					"Trying to disconnect unknown peer {} from {:?}.", peer_id, self.set_id,
 				);
 			},
 		}
@@ -451,11 +444,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 	// message to the output channel with a `PeerId`, and that `incoming` gets called with the same
 	// `PeerId` before that message has been read by the user. In this situation we must not answer.
 	fn on_incoming_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
-		trace!(
-			target: "peerset",
-			"Incoming connection from peer {} ({:?}).",
-			peer_id, incoming_index,
-		);
+		trace!(target: LOG_TARGET, "Incoming connection from peer {peer_id} ({incoming_index:?}).",);
 
 		if self.reserved_only && !self.reserved_nodes.contains_key(&peer_id) {
 			self.reject_connection(incoming_index);
@@ -468,7 +457,6 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 				// If we're already connected, don't answer, as the docs mention.
 				PeerState::Connected(_) => {},
 				PeerState::NotConnected => {
-					// It's questionable whether we should check a reputation of reserved node.
 					// FIXME: unable to call `self.is_banned()` because of borrowed `self`.
 					if self.peer_store.is_banned(&peer_id) {
 						self.reject_connection(incoming_index);
@@ -523,7 +511,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 		};
 
 		if let PeerState::Connected(direction) = state {
-			trace!(target: "peerset", "Reserved peer {} ({:?}) dropped.", peer_id, direction);
+			trace!(target: LOG_TARGET, "Reserved peer {peer_id} ({direction:?}) dropped.");
 			*state = PeerState::NotConnected;
 			Ok(true)
 		} else {
@@ -538,7 +526,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 			return false
 		};
 
-		trace!(target: "peerset", "Peer {} ({:?}) dropped.", peer_id, direction);
+		trace!(target: LOG_TARGET, "Peer {peer_id} ({direction:?}) dropped.");
 
 		match direction {
 			Direction::Inbound => self.num_in -= 1,
@@ -555,11 +543,10 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 		self.reserved_nodes
 			.iter_mut()
 			.filter_map(|(peer_id, state)| {
-				(!state.is_connected() && !self.peer_store.is_banned(peer_id))
-					.then(|| {
-						*state = PeerState::Connected(Direction::Outbound);
-						peer_id
-					})
+				(!state.is_connected() && !self.peer_store.is_banned(peer_id)).then(|| {
+					*state = PeerState::Connected(Direction::Outbound);
+					peer_id
+				})
 			})
 			.cloned()
 			.collect::<Vec<_>>()
@@ -595,9 +582,8 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 					.or_else(|| {
 						debug_assert!(false, "`PeerStore` returned a node we asked to ignore.");
 						error!(
-							target: "peerset",
-							"`PeerStore` returned a node we asked to ignore: {}.",
-							peer_id
+							target: LOG_TARGET,
+							"`PeerStore` returned a node we asked to ignore: {peer_id}.",
 						);
 						None
 					})
@@ -607,7 +593,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 		if candidates.len() > available_slots {
 			debug_assert!(false, "`PeerStore` returned more nodes than there are slots available.");
 			error!(
-				target: "peerset",
+				target: LOG_TARGET,
 				"`PeerStore` returned more nodes than there are slots available.",
 			)
 		}
