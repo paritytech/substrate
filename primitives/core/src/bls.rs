@@ -77,12 +77,12 @@ trait BlsBound: EngineBLS + Send + Sync + 'static {}
 
 impl<T: EngineBLS + Send + Sync + 'static> BlsBound for T {}
 
-// Secret key serialized side
+// Secret key serialized size
 #[cfg(feature = "full_crypto")]
 const SECRET_KEY_SERIALIZED_SIZE: usize =
 	<SecretKey<TinyBLS381> as SerializableToBytes>::SERIALIZED_BYTES_SIZE;
 
-// Public key serialized side
+// Public key serialized size
 const PUBLIC_KEY_SERIALIZED_SIZE: usize =
 	<DoublePublicKey<TinyBLS381> as SerializableToBytes>::SERIALIZED_BYTES_SIZE;
 
@@ -501,7 +501,7 @@ impl<T: BlsBound> CryptoType for Pair<T> {
 	type Pair = Pair<T>;
 }
 
-// Test set excercising the BLS12-377 implementation
+// Test set exercising the BLS12-377 implementation
 #[cfg(test)]
 mod test {
 	use super::*;
