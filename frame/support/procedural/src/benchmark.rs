@@ -54,17 +54,17 @@ mod keywords {
 struct ParamDef {
 	name: String,
 	typ: Type,
-	start: u32,
-	end: u32,
+	start: syn::GenericArgument,
+	end: syn::GenericArgument,
 }
 
 /// Allows easy parsing of the `<10, 20>` component of `x: Linear<10, 20>`.
 #[derive(Parse)]
 struct RangeArgs {
 	_lt_token: Lt,
-	start: LitInt,
+	start: syn::GenericArgument,
 	_comma: Comma,
-	end: LitInt,
+	end: syn::GenericArgument,
 	_gt_token: Gt,
 }
 
@@ -228,17 +228,8 @@ fn parse_params(item_fn: &ItemFn) -> Result<Vec<ParamDef>> {
 		let Some(segment) = tpath.path.segments.last() else { return invalid_param(typ.span()) };
 		let args = segment.arguments.to_token_stream().into();
 		let Ok(args) = syn::parse::<RangeArgs>(args) else { return invalid_param(typ.span()) };
-		let Ok(start) = args.start.base10_parse::<u32>() else { return invalid_param(args.start.span()) };
-		let Ok(end) = args.end.base10_parse::<u32>() else { return invalid_param(args.end.span()) };
 
-		if end < start {
-			return Err(Error::new(
-				args.start.span(),
-				"The start of a `ParamRange` must be less than or equal to the end",
-			))
-		}
-
-		params.push(ParamDef { name, typ: typ.clone(), start, end });
+		params.push(ParamDef { name, typ: typ.clone(), start: args.start, end: args.end });
 	}
 	Ok(params)
 }
@@ -700,8 +691,8 @@ impl UnrolledParams {
 			.iter()
 			.map(|p| {
 				let name = Ident::new(&p.name, Span::call_site());
-				let start = p.start;
-				let end = p.end;
+				let start = &p.start;
+				let end = &p.end;
 				quote!(#name, #start, #end)
 			})
 			.collect();

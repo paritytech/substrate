@@ -38,6 +38,16 @@ use frame_system::RawOrigin;
 mod benchmarks {
 	use super::*;
 
+	const MY_CONST: u32 = 100;
+
+	const fn my_fn() -> u32 {
+		200
+	}
+
+	frame_support::parameter_types! {
+		const MyConst: u32 = MY_CONST;
+	}
+
 	// This will measure the execution time of `set_dummy`.
 	#[benchmark]
 	fn set_dummy_benchmark() {
@@ -92,7 +102,7 @@ mod benchmarks {
 	// Define `x` as a linear component with range `[0, =10_000]`. This means that the benchmarking
 	// will assume that the weight grows at a linear rate depending on `x`.
 	#[benchmark]
-	fn sort_vector(x: Linear<0, 10_000>) {
+	fn sort_vector(x: Linear<{MY_CONST * 2}, {my_fn() + MyConst::get()}>) {
 		let mut vector = setup_vector(x);
 
 		// The benchmark execution phase could also be a closure with custom code:
