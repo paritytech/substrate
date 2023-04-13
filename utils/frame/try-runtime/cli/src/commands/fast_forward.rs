@@ -33,6 +33,16 @@ use sp_runtime::{
 use std::{fmt::Debug, str::FromStr};
 use substrate_rpc_client::{ws_client, ChainApi};
 
+#[derive(Debug, Clone, clap::ValueEnum, Copy)]
+pub enum Inherents {
+	/// Include node-template inherents at the beginning of each block
+	NodeTemplate,
+	/// Include substrate kitchen sink inherents at the beginning of each block
+	SubstrateKitchenSink,
+	/// Don't include any inherents
+	None,
+}
+
 /// Configurations of the [`crate::Command::FastForward`].
 #[derive(Debug, Clone, clap::Parser)]
 pub struct FastForwardCmd {
@@ -50,6 +60,14 @@ pub struct FastForwardCmd {
 	/// If `state` is `Live`, this is ignored. Otherwise, it must not be empty.
 	#[arg(long, value_parser = crate::parse::url)]
 	block_ws_uri: Option<String>,
+
+	/// Completely empty blocks are impossible to mine in most runtimes due to the assumption that
+	/// [inherent transactions](https://docs.substrate.io/learn/transaction-types/#inherent-transactions)
+	/// are included at the beginning of each block.
+	///
+	/// This arg allows you to specify a chain which fast-forward will generate inherents for.
+	#[arg(long)]
+	pub inherents: Inherents,
 
 	/// Which try-state targets to execute when running this command.
 	///

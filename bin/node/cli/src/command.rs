@@ -30,6 +30,12 @@ use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
 use sp_keyring::Sr25519Keyring;
 
+#[cfg(feature = "try-runtime")]
+use try_runtime_cli::{
+	block_building_info::{node_template_info, substrate_kitchen_sink_info},
+	commands::fast_forward::Inherents,
+};
+
 use std::sync::Arc;
 
 #[cfg(feature = "try-runtime")]
@@ -242,13 +248,21 @@ pub fn run() -> Result<()> {
 					sc_service::TaskManager::new(config.tokio_handle.clone(), registry)
 						.map_err(|e| sc_cli::Error::Service(sc_service::Error::Prometheus(e)))?;
 
-				let info_provider = substrate_info(SLOT_DURATION);
+				let block_building_info_provider = match cmd.command {
+					try_runtime_cli::Command::FastForward(fast_forward_args) =>
+						match fast_forward_args.inherents {
+							Inherents::NodeTemplate => Some(node_template_info()),
+							Inherents::SubstrateKitchenSink => Some(substrate_info(6000)),
+							Inherents::None => None,
+						},
+					_ => None,
+				};
 
 				Ok((
 					cmd.run::<Block, ExtendedHostFunctions<
 						sp_io::SubstrateHostFunctions,
 						<ExecutorDispatch as NativeExecutionDispatch>::ExtendHostFunctions,
-					>, _>(Some(info_provider)),
+					>, _>(block_building_info_provider),
 					task_manager,
 				))
 			})

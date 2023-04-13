@@ -150,3 +150,15 @@ pub fn substrate_info<Block: BlockT>(
 		Ok(((slot_idp, timestamp_idp, storage_proof_idp), digest))
 	}
 }
+
+/// Provides [`BlockBuildingInfoProvider`] implementation for the node-template chain
+pub fn node_template_info<Block: BlockT>(
+) -> impl BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>> {
+	timestamp_with_aura_info::<Block>(6000)
+}
+
+/// Provides [`BlockBuildingInfoProvider`] implementation for the substrate kitchen sink chain
+pub fn substrate_kitchen_sink_info<Block: BlockT>(
+) -> impl BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>> {
+	substrate_info(6000)
+}
