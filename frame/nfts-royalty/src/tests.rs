@@ -112,3 +112,57 @@ fn nft_burn_error_nft_has_no_royalties() {
 		), Error::<Test>::RoyaltiesOfItemNotExist);
 	});
 }
+
+#[test]
+fn transfer_royalties_should_work() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		assert_ok!(NftsRoyalty::mint_item_with_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0, 42, account(1), 
+			ItemSettings::all_enabled(),
+			Permill::from_percent(5),
+			account(1)
+		));
+		// Read royalties pallet storage.
+        let nft_with_royalty = NftWithRoyalty::<Test>::get((0,42)).unwrap();
+        assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
+        assert_eq!(nft_with_royalty.royalty_recipient, account(1));
+
+		assert_ok!(NftsRoyalty::transfer_royalties_recipient(
+			RuntimeOrigin::signed(account(1)),
+			0, 42, account(2)
+		));
+		// Read royalties pallet storage.
+        let nft_with_royalty = NftWithRoyalty::<Test>::get((0,42)).unwrap();
+        assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
+        assert_eq!(nft_with_royalty.royalty_recipient, account(2));
+	});
+}
+
+#[test]
+fn transfer_royalties_should_fail_if_not_royalties_recipient() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		assert_ok!(NftsRoyalty::mint_item_with_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0, 42, account(1), 
+			ItemSettings::all_enabled(),
+			Permill::from_percent(5),
+			account(1)
+		));
+		// Read royalties pallet storage.
+        let nft_with_royalty = NftWithRoyalty::<Test>::get((0,42)).unwrap();
+        assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
+        assert_eq!(nft_with_royalty.royalty_recipient, account(1));
+
+		assert_noop!(NftsRoyalty::transfer_royalties_recipient(
+			RuntimeOrigin::signed(account(2)),
+			0, 42, account(2)
+		), Error::<Test>::NoPermission);
+		// Read royalties pallet storage to check the royalties haven't changed.
+        let nft_with_royalty = NftWithRoyalty::<Test>::get((0,42)).unwrap();
+        assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
+        assert_eq!(nft_with_royalty.royalty_recipient, account(1));
+	});
+}

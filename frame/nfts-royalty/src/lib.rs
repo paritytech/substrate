@@ -121,13 +121,21 @@ pub mod pallet {
 			royalty_recipient: T::AccountId,
 		},
 		/// An NFT royalty was destroyed.
-		NftRoyaltyBurned { nft_collection: T::NftCollectionId, nft: T::NftItemId}
+		NftRoyaltyBurned { nft_collection: T::NftCollectionId, nft: T::NftItemId},
+		/// The NFT royalty whas been transfered.
+		NftRoyaltiesTransfered {
+			nft_collection: T::NftCollectionId,
+			nft: T::NftItemId,
+			new_royalty_recipient: T::AccountId,
+		},
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		/// The item ID has not royalties associated.
 		RoyaltiesOfItemNotExist,
+		/// The signing account has no permission to do the operation.
+		NoPermission,
 	}
 
 	#[pallet::call]
@@ -201,8 +209,47 @@ pub mod pallet {
 
 			Ok(())
 		}
-	}
+		/// Transfer the royalties associated to an item to another royalty_recipient.
+		///
+		/// The origin must be the actual royalty_recipient of the `item`.
+		///
+		/// - `collection`: The collection of the item to be burned.
+		/// - `item`: The item to be burned.
+		/// - `new_royalty_recipient`: Account into which the item royalties will be transfered.
+		///
+		/// Emits `NftRoyaltiesTransfered`.
+		/// 
+		#[pallet::call_index(2)]
+		#[pallet::weight(0)]
+		pub fn transfer_royalties_recipient(
+			origin: OriginFor<T>,
+			collection_id: T::NftCollectionId,
+			item_id: T::NftItemId,
+			new_royalty_recipient: T::AccountId,
+		) -> DispatchResult {
+			let caller = ensure_signed(origin)?;
 
+			// No payments for that?
+			let item_royalties = <NftWithRoyalty<T>>::take((collection_id, item_id)).ok_or(Error::<T>::RoyaltiesOfItemNotExist)?;
+			ensure!(item_royalties.royalty_recipient == caller, Error::<T>::NoPermission);
+
+			NftWithRoyalty::<T>::insert(
+				(collection_id, item_id),
+				RoyaltyDetails::<T::AccountId> {
+					royalty_percentage: item_royalties.royalty_percentage,
+					royalty_recipient: new_royalty_recipient.clone(),
+				},
+			);
+			Self::deposit_event(Event::NftRoyaltiesTransfered {
+				nft_collection: collection_id,
+				nft: item_id,
+				new_royalty_recipient
+			});
+
+			Ok(())
+		}
+	}
+	
 	impl<T: Config> Pallet<T> {
 		// private functions
 	}
