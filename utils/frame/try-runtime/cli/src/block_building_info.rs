@@ -160,5 +160,5 @@ pub fn node_template_info<Block: BlockT>(
 /// Provides [`BlockBuildingInfoProvider`] implementation for the substrate kitchen sink chain
 pub fn substrate_kitchen_sink_info<Block: BlockT>(
 ) -> impl BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>> {
-	substrate_info(6000)
+	substrate_info::<Block>(6000)
 }
