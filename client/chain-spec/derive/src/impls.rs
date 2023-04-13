@@ -35,7 +35,7 @@ pub fn extension_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 			.named
 			.iter()
 			.find_map(|f| {
-				if f.attrs.iter().any(|attr| attr.path.is_ident(ATTRIBUTE_NAME)) {
+				if f.attrs.iter().any(|attr| attr.path().is_ident(ATTRIBUTE_NAME)) {
 					let typ = &f.ty;
 					Some(quote! { #typ })
 				} else {

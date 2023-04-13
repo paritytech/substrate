@@ -52,7 +52,11 @@ use sp_consensus_beefy::{
 use sp_keystore::KeystorePtr;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::traits::{Block, Zero};
-use std::{collections::VecDeque, marker::PhantomData, sync::Arc};
+use std::{
+	collections::{BTreeMap, VecDeque},
+	marker::PhantomData,
+	sync::Arc,
+};
 
 mod aux_schema;
 mod error;
@@ -249,9 +253,10 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
 	// Default votes filter is to discard everything.
 	// Validator is updated later with correct starting round and set id.
-	let gossip_validator =
-		Arc::new(communication::gossip::GossipValidator::new(known_peers.clone()));
-	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
+	let (gossip_validator, gossip_report_stream) =
+		communication::gossip::GossipValidator::new(known_peers.clone());
+	let gossip_validator = Arc::new(gossip_validator);
+	let mut gossip_engine = GossipEngine::new(
 		network.clone(),
 		sync.clone(),
 		gossip_protocol_name,
@@ -295,7 +300,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 		return
 	}
 
-	let worker_params = worker::WorkerParams {
+	let worker = worker::BeefyWorker {
 		backend,
 		payload_provider,
 		runtime,
@@ -303,13 +308,13 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 		key_store: key_store.into(),
 		gossip_engine,
 		gossip_validator,
+		gossip_report_stream,
 		on_demand_justifications,
 		links,
 		metrics,
+		pending_justifications: BTreeMap::new(),
 		persisted_state,
 	};
-
-	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
 
 	futures::future::join(
 		worker.run(block_import_justif, finality_notifications),
