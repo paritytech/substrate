@@ -27,10 +27,10 @@ use syn::{
 	parse_quote,
 	punctuated::Punctuated,
 	spanned::Spanned,
-	token::{Comma, Gt, Lt, PathSep},
-	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod, LitInt,
+	token::{Comma, PathSep},
+	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod,
 	Pat, Path, PathArguments, PathSegment, Result, ReturnType, Signature, Stmt, Token, Type,
-	TypePath, Visibility, WhereClause, token
+	TypePath, Visibility, WhereClause, token, ExprRange
 };
 
 mod keywords {
@@ -54,9 +54,9 @@ mod keywords {
 #[derive(Clone)]
 struct ParamDef {
 	name: String,
-	typ: Type,
-	start: u32,
-	end: u32,
+	typ: Type,	
+	start: Option<Box<Expr>>,
+	end: Option<Box<Expr>>,
 }
 
 #[derive(Parse)]
@@ -66,11 +66,7 @@ struct RangeParam {
 	#[bracket]
     _bracket: token::Bracket,
 	#[inside(_bracket)]
-    start: LitInt,
-	#[inside(_bracket)]
-    _dotdot: Token![..],
-	#[inside(_bracket)]
-    end: LitInt,
+    range: ExprRange,
 }
 
 #[derive(Clone, Debug)]
@@ -231,17 +227,7 @@ fn parse_params(item_fn: &ItemFn) -> Result<Vec<ParamDef>> {
 		let typ = &*arg.ty;
 		let Ok(args) = syn::parse::<RangeParam>(typ.to_token_stream().into()) else { return invalid_param(typ.span()) };
 
-		let Ok(start) = args.start.base10_parse::<u32>() else { return invalid_param(args.start.span()) };
-		let Ok(end) = args.end.base10_parse::<u32>() else { return invalid_param(args.end.span()) };
-
-		if end < start {
-			return Err(Error::new(
-				args.start.span(),
-				"The start of a `ParamRange` must be less than or equal to the end",
-			))
-		}
-
-		params.push(ParamDef { name, typ: typ.clone(), start, end });
+		params.push(ParamDef { name, typ: typ.clone(), start: args.range.start.clone(), end: args.range.end.clone() });
 	}
 	Ok(params)
 }
@@ -703,8 +689,8 @@ impl UnrolledParams {
 			.iter()
 			.map(|p| {
 				let name = Ident::new(&p.name, Span::call_site());
-				let start = p.start;
-				let end = p.end;
+				let start = &p.start;
+				let end = &p.end;
 				quote!(#name, #start, #end)
 			})
 			.collect();
