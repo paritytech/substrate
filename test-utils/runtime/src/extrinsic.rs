@@ -16,9 +16,8 @@
 // limitations under the License.
 
 use crate::{
-	substrate_test_pallet::pallet::Call as PalletCall, AccountId, AuthorityId, Balance,
-	BalancesCall, CheckSubstrateCall, Extrinsic, Index, Pair, RuntimeCall, SignedPayload,
-	TransferData,
+	substrate_test_pallet::pallet::Call as PalletCall, AccountId, Balance, BalancesCall,
+	CheckSubstrateCall, Extrinsic, Index, Pair, RuntimeCall, SignedPayload, TransferData,
 };
 use codec::Encode;
 use frame_system::{CheckNonce, CheckWeight};
@@ -90,11 +89,6 @@ impl ExtrinsicBuilder {
 				value: transfer.amount,
 			})
 		}
-	}
-
-	/// Create builder for `PalletCall::authorities_change` call using given parameters
-	pub fn new_authorities_change(new_authorities: Vec<AuthorityId>) -> Self {
-		Self::new(PalletCall::authorities_change { new_authorities })
 	}
 
 	/// Create builder for `PalletCall::include_data` call using given parameters

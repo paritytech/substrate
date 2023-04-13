@@ -93,8 +93,6 @@ pub use substrate_test_runtime_client::{
 };
 use tokio::time::timeout;
 
-type AuthorityId = sp_consensus_babe::AuthorityId;
-
 /// A Verifier that accepts all blocks and passes them on with the configured
 /// finality to be imported.
 #[derive(Clone)]
@@ -495,18 +493,6 @@ where
 				ForkChoiceStrategy::LongestChain,
 			)
 		}
-	}
-
-	pub fn push_authorities_change_block(
-		&mut self,
-		new_authorities: Vec<AuthorityId>,
-	) -> Vec<H256> {
-		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
-			builder
-				.push(ExtrinsicBuilder::new_authorities_change(new_authorities.clone()).build())
-				.unwrap();
-			builder.build().unwrap().block
-		})
 	}
 
 	/// Get a reference to the client.

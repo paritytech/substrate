@@ -15,13 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{AccountId, AuthorityId, BlockNumber, Runtime};
-use codec::KeyedVec;
+use crate::AuthorityId;
 use frame_support::{pallet_prelude::*, storage};
-use sp_io::hashing::blake2_256;
 use sp_std::prelude::*;
-
-const BALANCE_OF: &[u8] = b"balance:";
 
 pub use self::pallet::*;
 
@@ -41,14 +37,11 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {}
 
-	// The current block number being processed. Set by `on_initialize`.
-	#[pallet::storage]
-	pub type Number<T: Config> = StorageValue<_, T::BlockNumber, OptionQuery>;
-
 	#[pallet::storage]
 	pub type NewAuthorities<T> = StorageValue<_, Vec<AuthorityId>, OptionQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn authorities)]
 	pub type Authorities<T> = StorageValue<_, Vec<AuthorityId>, ValueQuery>;
 
 	#[pallet::genesis_config]
@@ -66,8 +59,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(n: T::BlockNumber) -> Weight {
-			Number::<T>::put(n);
+		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			Weight::zero()
 		}
 
@@ -76,17 +68,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::call_index(0)]
-		#[pallet::weight(100)]
-		pub fn authorities_change(
-			origin: OriginFor<T>,
-			new_authorities: Vec<AuthorityId>,
-		) -> DispatchResult {
-			frame_system::ensure_signed(origin)?;
-			<NewAuthorities<Runtime>>::put(new_authorities.to_vec());
-			Ok(())
-		}
-
 		#[pallet::call_index(1)]
 		#[pallet::weight(100)]
 		pub fn include_data(origin: OriginFor<T>, _data: Vec<u8>) -> DispatchResult {
@@ -201,30 +182,14 @@ pub mod pallet {
 				// consensus tests do not use signer and nonce:
 				Call::deposit_log_digest_item { .. } => Ok(Default::default()),
 
-				// some tests do not need to be complicated with signer and nonce, they also need reproducible block
-				// hash so no signature is allowed for this call
+				// some tests do not need to be complicated with signer and nonce, they also need
+				// reproducible block hash so no signature is allowed for this call
 				Call::storage_change_unsigned { .. } => Ok(Default::default()),
 
 				_ => Err(TransactionValidityError::Invalid(InvalidTransaction::Call)),
 			}
 		}
 	}
-}
-
-pub fn balance_of_key(who: AccountId) -> Vec<u8> {
-	who.to_keyed_vec(BALANCE_OF)
-}
-
-pub fn balance_of(who: AccountId) -> u64 {
-	storage::hashed::get_or(&blake2_256, &balance_of_key(who), 0)
-}
-
-pub fn authorities() -> Vec<AuthorityId> {
-	<Authorities<Runtime>>::get()
-}
-
-pub fn get_block_number() -> Option<BlockNumber> {
-	<Number<Runtime>>::get()
 }
 
 use sp_runtime::transaction_validity::{

@@ -29,12 +29,11 @@ use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
 use sp_consensus::BlockOrigin;
 use sp_core::{hash::H256, storage::ChildInfo};
-use sp_io::hashing::blake2_256;
 use sp_keyring::AccountKeyring::{Alice, Bob, Charlie, Dave, Eve};
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	prelude::*,
-	runtime::{substrate_test_pallet, ExtrinsicBuilder, Transfer},
+	runtime::{ExtrinsicBuilder, Transfer},
 };
 
 const STORAGE_KEY: &[u8] = b"child";
@@ -248,12 +247,20 @@ async fn should_send_initial_storage_changes_and_notifications() {
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No);
 
-		let alice_balance_key =
-			blake2_256(&substrate_test_pallet::balance_of_key(AccountKeyring::Alice.into()));
+		let alice_balance_key = [
+			sp_core::hashing::twox_128(b"System"),
+			sp_core::hashing::twox_128(b"Account"),
+			sp_core::hashing::blake2_128(&AccountKeyring::Alice.public()),
+		]
+		.concat()
+		.iter()
+		.chain(AccountKeyring::Alice.public().0.iter())
+		.cloned()
+		.collect::<Vec<u8>>();
 
 		let api_rpc = api.into_rpc();
 		let sub = api_rpc
-			.subscribe("state_subscribeStorage", [[StorageKey(alice_balance_key.to_vec())]])
+			.subscribe("state_subscribeStorage", [[StorageKey(alice_balance_key)]])
 			.await
 			.unwrap();
 

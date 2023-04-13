@@ -18,15 +18,14 @@
 //! Tool for creating the genesis block.
 
 use super::{substrate_test_pallet, wasm_binary_unwrap, AccountId, AuthorityId, Balance, Runtime};
-use codec::{Encode, Joiner, KeyedVec};
+use codec::{Encode, Joiner};
 use frame_support::traits::GenesisBuild;
 use sc_service::construct_genesis_block;
 use sp_core::{
 	map,
 	storage::{well_known_keys, StateVersion, Storage},
 };
-use sp_io::hashing::{blake2_256, twox_128};
-// use sp_keyring::AccountKeyring;
+use sp_io::hashing::twox_128;
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use std::collections::BTreeMap;
 
@@ -57,25 +56,16 @@ impl GenesisConfig {
 
 	pub fn genesis_map(&self) -> Storage {
 		let wasm_runtime = wasm_binary_unwrap().to_vec();
-		let mut map: BTreeMap<Vec<u8>, Vec<u8>> = self
-			.balances
-			.iter()
-			.map(|&(ref account, balance)| {
-				(account.to_keyed_vec(b"balance:"), vec![].and(&balance))
-			})
-			.map(|(k, v)| (blake2_256(&k[..])[..].to_vec(), v.to_vec()))
-			.chain(
-				vec![
-					(well_known_keys::CODE.into(), wasm_runtime),
-					(
-						well_known_keys::HEAP_PAGES.into(),
-						vec![].and(&(self.heap_pages_override.unwrap_or(16_u64))),
-					),
-				]
-				.into_iter(),
-			)
-			.collect();
-		map.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
+		let mut map: BTreeMap<Vec<u8>, Vec<u8>> = vec![
+			(well_known_keys::CODE.into(), wasm_runtime),
+			(
+				well_known_keys::HEAP_PAGES.into(),
+				vec![].and(&(self.heap_pages_override.unwrap_or(16_u64))),
+			),
+		]
+		.into_iter()
+		.collect();
+
 		// Add the extra storage entries.
 		map.extend(self.extra_storage.top.clone().into_iter());
 

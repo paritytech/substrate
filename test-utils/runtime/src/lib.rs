@@ -539,8 +539,6 @@ impl_runtime_apis! {
 
 	impl self::TestAPI<Block> for Runtime {
 		fn balance_of(id: AccountId) -> u64 {
-			// substrate_test_pallet::balance_of(id)
-			// pallet_balances::Pallet::<Runtime::Config as pallet_balances::Config>::free_balance(id)
 			Balances::free_balance(id)
 		}
 
@@ -576,7 +574,8 @@ impl_runtime_apis! {
 		}
 
 		fn get_block_number() -> u64 {
-			substrate_test_pallet::get_block_number().expect("Block number is initialized")
+			// substrate_test_pallet::get_block_number().expect("Block number is initialized")
+			System::block_number()
 		}
 
 		fn test_ed25519_crypto() -> (ed25519::AppSignature, ed25519::AppPublic) {
@@ -620,7 +619,7 @@ impl_runtime_apis! {
 		}
 
 		fn authorities() -> Vec<AuraId> {
-			substrate_test_pallet::authorities().into_iter().map(|a| {
+			SubstrateTest::authorities().into_iter().map(|a| {
 				let authority: sr25519::Public = a.into();
 				AuraId::from(authority)
 			}).collect()
@@ -634,7 +633,7 @@ impl_runtime_apis! {
 				slot_duration: 1000,
 				epoch_length: EpochDuration::get(),
 				c: epoch_config.c,
-				authorities: substrate_test_pallet::authorities()
+				authorities: SubstrateTest::authorities()
 					.into_iter().map(|x|(x, 1)).collect(),
 					randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 					allowed_slots: epoch_config.allowed_slots,
@@ -837,7 +836,6 @@ mod tests {
 			.set_heap_pages(8)
 			.build();
 		let best_hash = client.chain_info().best_hash;
-		client.runtime_api().do_trace_log(best_hash).ok();
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
