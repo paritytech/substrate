@@ -35,9 +35,9 @@ pub fn multi_miller_loop_generic<Curve: Pairing>(
 		.map(|elem| deserialize_argument::<<Curve as Pairing>::G2Affine>(elem))
 		.collect();
 
-	let result = Curve::multi_miller_loop(g1, g2);
+	let result = Curve::multi_miller_loop(g1, g2).0;
 
-	Ok(serialize_result(result.0))
+	Ok(serialize_result(result))
 }
 
 /// Compute a final exponentiation through arkworks
@@ -46,10 +46,7 @@ pub fn final_exponentiation_generic<Curve: Pairing>(target: Vec<u8>) -> Result<V
 
 	let result = Curve::final_exponentiation(MillerLoopOutput(target));
 
-	match result {
-		Some(result) => Ok(serialize_result(result)),
-		None => Err(()),
-	}
+	result.map(serialize_result).ok_or(())
 }
 
 /// Compute a multi scalar multiplication for short_weierstrass through arkworks
