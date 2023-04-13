@@ -2404,8 +2404,6 @@ pub mod env {
 	/// - Provide functionality **exclusively** to contracts.
 	/// - Provide custom weights.
 	/// - Avoid the need to keep the `Call` data structure stable.
-	#[unstable]
-	#[prefixed_alias]
 	fn call_runtime(
 		ctx: _,
 		memory: _,
