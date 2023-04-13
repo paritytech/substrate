@@ -133,7 +133,7 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T> {
 		/// The item ID has not royalties associated.
-		RoyaltiesOfItemNotExist,
+		NoRoyaltiesExist,
 		/// The signing account has no permission to do the operation.
 		NoPermission,
 	}
@@ -198,7 +198,7 @@ pub mod pallet {
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?.unwrap();
 
 			// TODO: Decide if throws an error if has not royalties or just burn it
-			<NftWithRoyalty<T>>::take((collection_id, item_id)).ok_or(Error::<T>::RoyaltiesOfItemNotExist)?;
+			<NftWithRoyalty<T>>::take((collection_id, item_id)).ok_or(Error::<T>::NoRoyaltiesExist)?;
 
 			T::Nfts::burn(&collection_id, &item_id, Some(&maybe_check_origin))?;
 
@@ -229,8 +229,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 
-			// No payments for that?
-			let item_royalties = <NftWithRoyalty<T>>::take((collection_id, item_id)).ok_or(Error::<T>::RoyaltiesOfItemNotExist)?;
+			let item_royalties = <NftWithRoyalty<T>>::take((collection_id, item_id)).ok_or(Error::<T>::NoRoyaltiesExist)?;
 			ensure!(item_royalties.royalty_recipient == caller, Error::<T>::NoPermission);
 
 			NftWithRoyalty::<T>::insert(

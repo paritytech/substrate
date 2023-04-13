@@ -20,7 +20,7 @@
 use crate::{mock::*, Error, NftWithRoyalty};
 use frame_support::{assert_ok, assert_noop};
 use pallet_nfts::{Error as NftErrors, CollectionAccount, Account, ItemSettings, CollectionConfig, MintSettings, CollectionSettings, CollectionSetting};
-pub use sp_runtime::{Perbill, Permill, DispatchError, ModuleError};
+pub use sp_runtime::{Permill, DispatchError, ModuleError};
 
 type AccountIdOf<Test> = <Test as frame_system::Config>::AccountId;
 fn account(id: u8) -> AccountIdOf<Test> {
@@ -109,7 +109,7 @@ fn nft_burn_error_nft_has_no_royalties() {
 		assert_noop!(NftsRoyalty::burn_item_with_royalty(
 			RuntimeOrigin::signed(account(1)),
 			0, 42
-		), Error::<Test>::RoyaltiesOfItemNotExist);
+		), Error::<Test>::NoRoyaltiesExist);
 	});
 }
 
