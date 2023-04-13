@@ -126,6 +126,8 @@ pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
 }
 
+/// Transfer data extracted from Extrinsic
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct TransferData {
 	pub from: AccountId,
 	pub to: AccountId,

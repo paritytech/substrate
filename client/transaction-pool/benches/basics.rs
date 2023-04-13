@@ -25,7 +25,6 @@ use futures::{
 };
 use sc_transaction_pool::*;
 use sp_core::blake2_256;
-use sp_keyring::AccountKeyring::Alice;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor},
@@ -35,7 +34,7 @@ use sp_runtime::{
 	},
 };
 use substrate_test_runtime::{
-	AccountId, Block, Extrinsic, ExtrinsicBuilder, Transfer, TransferData, H256,
+	AccountId, Block, Extrinsic, ExtrinsicBuilder, TransferData, H256,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -69,7 +68,7 @@ impl ChainApi for TestApi {
 		uxt: <Self::Block as BlockT>::Extrinsic,
 	) -> Self::ValidationFuture {
 		let transfer = TransferData::try_from_unchecked_extrinsic(&uxt)
-			.expect("uxt is expected to be Transfer");
+			.expect("uxt is expected to be bench_call (carrying TransferData)");
 		let nonce = transfer.nonce;
 		let from = transfer.from;
 
@@ -136,9 +135,9 @@ impl ChainApi for TestApi {
 	}
 }
 
-fn uxt(transfer: Transfer) -> Extrinsic {
+fn uxt(transfer: TransferData) -> Extrinsic {
 	//todo: empty signature removed...
-	ExtrinsicBuilder::new_transfer(transfer).unsigned().build()
+	ExtrinsicBuilder::new_bench_call(transfer).unsigned().build()
 }
 
 fn bench_configured(pool: Pool<TestApi>, number: u64) {
@@ -147,8 +146,8 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 	let mut tags = Vec::new();
 
 	for nonce in 1..=number {
-		let xt = uxt(Transfer {
-			from: Alice.into(),
+		let xt = uxt(TransferData {
+			from: AccountId::from_h256(H256::from_low_u64_be(1)),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce,

@@ -26,6 +26,7 @@ const LOG_TARGET: &str = "substrate_test_pallet";
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use crate::TransferData;
 	use frame_system::pallet_prelude::*;
 	use sp_core::storage::well_known_keys;
 	use sp_runtime::{transaction_validity::TransactionPriority, Perbill};
@@ -68,6 +69,15 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		#[pallet::call_index(0)]
+		#[pallet::weight(100)]
+		pub fn bench_call(
+			_origin: OriginFor<T>,
+			_transfer: TransferData,
+		) -> DispatchResult {
+			Ok(())
+		}
+
 		#[pallet::call_index(1)]
 		#[pallet::weight(100)]
 		pub fn include_data(origin: OriginFor<T>, _data: Vec<u8>) -> DispatchResult {

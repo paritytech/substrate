@@ -25,7 +25,7 @@ use sp_core::crypto::Pair as TraitPair;
 use sp_runtime::{transaction_validity::TransactionPriority, Perbill};
 use sp_std::prelude::*;
 
-/// Transfer used in test substrate pallet
+/// Transfer used in test substrate pallet. Extrinsic is created and signed basing on this data.
 #[derive(Clone)]
 pub struct Transfer {
 	pub from: Pair,
@@ -54,6 +54,10 @@ impl TransferData {
 				amount: *value,
 				nonce: *nonce,
 			}),
+			Extrinsic {
+				function: RuntimeCall::SubstrateTest(PalletCall::bench_call { transfer }),
+				signature: None,
+			} => Some(transfer.clone()),
 			_ => None,
 		}
 	}
@@ -62,8 +66,7 @@ impl TransferData {
 /// Generates `Extrinsic`
 pub struct ExtrinsicBuilder {
 	function: RuntimeCall,
-	is_unsigned: bool,
-	signer: Pair,
+	signer: Option<Pair>,
 	nonce: Option<Index>,
 }
 
@@ -72,10 +75,14 @@ impl ExtrinsicBuilder {
 	pub fn new(function: impl Into<RuntimeCall>) -> Self {
 		Self {
 			function: function.into(),
-			is_unsigned: false,
-			signer: sp_keyring::AccountKeyring::Alice.pair(),
+			signer: Some(sp_keyring::AccountKeyring::Alice.pair()),
 			nonce: None,
 		}
+	}
+
+	/// Create builder for `pallet_call::bench_transfer` from given `TransferData`. 
+	pub fn new_bench_call(transfer: TransferData) -> Self {
+		Self::new(PalletCall::bench_call { transfer })
 	}
 
 	/// Create builder for given `Transfer`. Transfer `nonce` will be used as `Extrinsic` nonce.
@@ -83,7 +90,7 @@ impl ExtrinsicBuilder {
 	pub fn new_transfer(transfer: Transfer) -> Self {
 		Self {
 			nonce: Some(transfer.nonce),
-			signer: transfer.from.clone(),
+			signer: Some(transfer.from.clone()),
 			..Self::new(BalancesCall::transfer_allow_death {
 				dest: transfer.to,
 				value: transfer.amount,
@@ -144,7 +151,7 @@ impl ExtrinsicBuilder {
 
 	/// Unsigned `Extrinsic` will be created
 	pub fn unsigned(mut self) -> Self {
-		self.is_unsigned = true;
+		self.signer = None;
 		self
 	}
 
@@ -156,16 +163,13 @@ impl ExtrinsicBuilder {
 
 	/// Extrinsic will be signed by signer
 	pub fn signer(mut self, signer: Pair) -> Self {
-		self.signer = signer;
+		self.signer = Some(signer);
 		self
 	}
 
 	/// Build `Extrinsic` using embedded parameters
 	pub fn build(self) -> Extrinsic {
-		if self.is_unsigned {
-			Extrinsic::new_unsigned(self.function)
-		} else {
-			let signer = self.signer;
+		if let Some(signer) = self.signer {
 			let extra = (
 				CheckNonce::from(self.nonce.unwrap_or(0)),
 				CheckWeight::new(),
@@ -176,6 +180,8 @@ impl ExtrinsicBuilder {
 			let signature = raw_payload.using_encoded(|e| signer.sign(e));
 
 			Extrinsic::new_signed(self.function, signer.public(), signature, extra)
+		} else {
+			Extrinsic::new_unsigned(self.function)
 		}
 	}
 }
