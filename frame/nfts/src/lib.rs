@@ -699,7 +699,7 @@ pub mod pallet {
 		///
 		/// Emits `ForceCreated` event when successful.
 		///
-		/// Weight: `O(1)`
+		/// Weight: `O(1)`mi
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::force_create())]
 		pub fn force_create(

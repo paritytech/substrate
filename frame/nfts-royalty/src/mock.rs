@@ -135,6 +135,7 @@ impl pallet_nfts::Config for Test {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
+	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type NftItemId = <Self as pallet_nfts::Config>::ItemId;
 	type Nfts = Nfts;

@@ -81,6 +81,10 @@ pub mod pallet {
 		/// The currency mechanism, used for paying for deposits.
 		type Currency: ReservableCurrency<Self::AccountId>;
 
+		/// The origin which may forcibly create or destroy an item or otherwise alter privileged
+		/// attributes.
+		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+
 		/// Identifier for the collection of NFT.
 		type NftCollectionId: Member + Parameter + MaxEncodedLen + Copy + Display;
 
@@ -109,18 +113,21 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// An NFT roaylty was successfully created.
+		/// An NFT royalty was successfully created.
 		NftRoyaltyCreated {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftItemId,
 			royalty_percentage: Permill,
 			royalty_recipient: T::AccountId,
-		}
+		},
+		/// An NFT royalty was destroyed.
+		NftRoyaltyBurned { nft_collection: T::NftCollectionId, nft: T::NftItemId}
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		// errors
+		/// The item ID has not royalties associated.
+		RoyaltiesOfItemNotExist,
 	}
 
 	#[pallet::call]
@@ -155,6 +162,41 @@ pub mod pallet {
 				nft: item_id,
 				royalty_percentage,
 				royalty_recipient: royalty_recipient.clone(),
+			});
+
+			Ok(())
+		}
+
+		/// Destroy a single item and delete the royalties associated to it.
+		///
+		/// The origin must conform to `ForceOrigin` or must be Signed and the signing account must
+		/// be the owner of the `item`.
+		///
+		/// - `collection`: The collection of the item to be burned.
+		/// - `item`: The item to be burned.
+		///
+		/// Emits `Burned`.
+		/// 
+		#[pallet::call_index(1)]
+		#[pallet::weight(0)]
+		pub fn burn_item_with_royalty(
+			origin: OriginFor<T>,
+			collection_id: T::NftCollectionId,
+			item_id: T::NftItemId,
+		) -> DispatchResult {
+			// TODO: Check if this conversion makes sense
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?.unwrap();
+
+			// TODO: Decide if throws an error if has not royalties or just burn it
+			<NftWithRoyalty<T>>::take((collection_id, item_id)).ok_or(Error::<T>::RoyaltiesOfItemNotExist)?;
+
+			T::Nfts::burn(&collection_id, &item_id, Some(&maybe_check_origin))?;
+
+			Self::deposit_event(Event::NftRoyaltyBurned {
+				nft_collection: collection_id,
+				nft: item_id,
 			});
 
 			Ok(())

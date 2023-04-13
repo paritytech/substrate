@@ -26,23 +26,26 @@ type AccountIdOf<Test> = <Test as frame_system::Config>::AccountId;
 fn account(id: u8) -> AccountIdOf<Test> {
 	[id; 32].into()
 }
+// Create a collection calling directly the NFT pallet
+fn create_collection() {
+	assert_ok!(Nfts::force_create(
+		RuntimeOrigin::root(),
+		account(1),
+		CollectionConfig {
+			settings: CollectionSettings::from_disabled(CollectionSetting::DepositRequired.into()),
+			max_supply: None,
+			mint_settings: MintSettings::default(),
+		}
+	));
+	let mut collections: Vec<_> = CollectionAccount::<Test>::iter().map(|x| (x.0, x.1)).collect();
+    collections.sort();
+	assert_eq!(collections, vec![(account(1), 0)]);
+}
 
 #[test]
 fn nft_minting_with_royalties_should_work() {
 	new_test_ext().execute_with(|| {
-		// Create a collection, calling directly the NFT pallet
-		assert_ok!(Nfts::force_create(
-			RuntimeOrigin::root(),
-			account(1),
-			CollectionConfig {
-                settings: CollectionSettings::from_disabled(CollectionSetting::DepositRequired.into()),
-                max_supply: None,
-                mint_settings: MintSettings::default(),
-            }
-		));
-        let mut collections: Vec<_> = CollectionAccount::<Test>::iter().map(|x| (x.0, x.1)).collect();
-        collections.sort();
-		assert_eq!(collections, vec![(account(1), 0)]);
+		create_collection();
 		assert_ok!(NftsRoyalty::mint_item_with_royalty(
 			RuntimeOrigin::signed(account(1)),
 			0, 42, account(1), 
@@ -72,5 +75,40 @@ fn nft_minting_with_royalties_fail_collection_not_exist() {
 			account(1)),
 			NftErrors::<Test>::UnknownCollection
 		);
+	});
+}
+#[test]
+fn nft_burn_with_royalties_should_work() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		// Mint the item we are going to burn
+		assert_ok!(NftsRoyalty::mint_item_with_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0, 42, account(1), 
+			ItemSettings::all_enabled(),
+			Permill::from_percent(5),
+			account(1)
+		));
+		// Burn the item
+		assert_ok!(NftsRoyalty::burn_item_with_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0, 42
+		));
+		// Get the items directly from the NFT pallet, to see if has been burned there
+		let mut items: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
+	    items.sort();
+		assert_eq!(items, vec![]);
+		// Read royalties pallet storage to see if the royalties has been deleted.
+        assert_eq!(NftWithRoyalty::<Test>::get((0,42)), None);
+	});
+}
+#[test]
+fn nft_burn_error_nft_has_no_royalties() {
+	new_test_ext().execute_with(|| {
+		// Try to burn the item doesn't have royalties
+		assert_noop!(NftsRoyalty::burn_item_with_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0, 42
+		), Error::<Test>::RoyaltiesOfItemNotExist);
 	});
 }
