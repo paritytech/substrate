@@ -52,6 +52,10 @@ pub mod bls377 {
 	pub type Public = super::Public<TinyBLS377>;
 	/// BLS12-377 signature.
 	pub type Signature = super::Signature<TinyBLS377>;
+
+	impl super::HardJunctionId for TinyBLS377 {
+		const ID: &'static str = "BLS12377HDKD";
+	}
 }
 
 /// BLS-381 specialized types
@@ -69,11 +73,15 @@ pub mod bls381 {
 	pub type Public = super::Public<TinyBLS381>;
 	/// BLS12-381 signature.
 	pub type Signature = super::Signature<TinyBLS381>;
+
+	impl super::HardJunctionId for TinyBLS381 {
+		const ID: &'static str = "BLS12381HDKD";
+	}
 }
 
-trait BlsBound: EngineBLS + Send + Sync + 'static {}
+trait BlsBound: EngineBLS + HardJunctionId + Send + Sync + 'static {}
 
-impl<T: EngineBLS + Send + Sync + 'static> BlsBound for T {}
+impl<T: EngineBLS + HardJunctionId + Send + Sync + 'static> BlsBound for T {}
 
 // Secret key serialized size
 #[cfg(feature = "full_crypto")]
@@ -399,10 +407,14 @@ impl<T: EngineBLS> Clone for Pair<T> {
 	}
 }
 
+trait HardJunctionId {
+	const ID: &'static str;
+}
+
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
-fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
-	("BLS12377HDKD", secret_seed, cc).using_encoded(sp_core_hashing::blake2_256)
+fn derive_hard_junction<T: HardJunctionId>(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
+	(T::ID, secret_seed, cc).using_encoded(sp_core_hashing::blake2_256)
 }
 
 #[cfg(feature = "full_crypto")]
@@ -435,7 +447,7 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 		for j in path {
 			match j {
 				DeriveJunction::Soft(_cc) => return Err(DeriveError::SoftKeyInPath),
-				DeriveJunction::Hard(cc) => acc = derive_hard_junction(&acc, &cc),
+				DeriveJunction::Hard(cc) => acc = derive_hard_junction::<T>(&acc, &cc),
 			}
 		}
 		Ok((Self::from_seed(&acc), Some(acc)))
