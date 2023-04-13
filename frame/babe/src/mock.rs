@@ -325,8 +325,8 @@ pub fn make_vrf_output(
 	let randomness = sp_core::sr25519::vrf::make_bytes::<[u8; RANDOMNESS_LENGTH]>(
 		sp_consensus_babe::RANDOMNESS_VRF_CONTEXT,
 		pair.public().as_ref(),
-		&signature.output,
 		&transcript,
+		&signature.output,
 	)
 	.expect("vrf make bytes");
 
