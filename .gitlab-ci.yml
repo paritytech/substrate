@@ -179,7 +179,7 @@ variables:
 # exclude cargo-check-benches from such runs
 .test-refs-check-benches:
   rules:
-    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "parent_pipeline"  && $CI_IMAGE =~ /staging$/
+    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "pipeline"  && $CI_IMAGE =~ /staging$/
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
