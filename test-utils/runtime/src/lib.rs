@@ -900,9 +900,4 @@ mod tests {
 
 		runtime_api.test_witness(best_hash, proof, root).unwrap();
 	}
-
-	#[test]
-	fn xxx() {
-		println!("xxx: {:#?}", crate::RuntimeBlockWeights::get());
-	}
 }

@@ -623,11 +623,5 @@ mod tests {
 		// then
 		assert_eq!(transactions.len(), 1);
 		assert!(TransferData::try_from_unchecked_extrinsic(&transactions[0].1).is_some());
-		// todo: how to check signature?
-		// assert!(&transactions[0].1.check(&Default::default()).is_ok());
-		// <Extrinsic as Checkable<Runtime>>::check(&transactions[0].1, Default::default()).is_ok();
-		// <Extrinsic as
-		// Checkable<sp_runtime::traits::IdentityLookup<AccountId>>>::check(transactions[0].1,
-		// &Default::default()).is_ok();
 	}
 }

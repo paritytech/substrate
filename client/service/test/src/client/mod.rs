@@ -351,22 +351,6 @@ fn block_builder_works_with_transactions() {
 fn block_builder_does_not_include_invalid() {
 	sp_tracing::try_init_simple();
 	let mut client = substrate_test_runtime_client::new();
-
-	log::trace!(
-		"xxx -> alice : {:?}",
-		client
-			.runtime_api()
-			.balance_of(client.chain_info().genesis_hash, AccountKeyring::Alice.into())
-			.unwrap()
-	);
-	log::trace!(
-		"xxx -> eve : {:?}",
-		client
-			.runtime_api()
-			.balance_of(client.chain_info().genesis_hash, AccountKeyring::Eve.into())
-			.unwrap()
-	);
-
 	let mut builder = client.new_block(Default::default()).unwrap();
 
 	builder
@@ -389,7 +373,6 @@ fn block_builder_does_not_include_invalid() {
 
 	let block = builder.build().unwrap().block;
 	//transfer from Eve should not be included
-	log::trace!("xxx -> {:#?}", block);
 	assert_eq!(block.extrinsics.len(), 1);
 	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
@@ -399,9 +382,6 @@ fn block_builder_does_not_include_invalid() {
 	let hashof1 = client
 		.expect_block_hash_from_id(&BlockId::Number(1))
 		.expect("block 1 was just imported. qed");
-
-	log::trace!("xxx 0 -> {:#?}", client.body(hashof0));
-	log::trace!("xxx 1 -> {:#?}", client.body(hashof1));
 
 	assert_eq!(client.chain_info().best_number, 1);
 	assert_ne!(

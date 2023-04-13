@@ -381,7 +381,6 @@ where
 		let soft_deadline =
 			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros));
 		let block_timer = time::Instant::now();
-		log::trace!("xxx -> left:{left:?}, now:{now:?}, soft_deadline:{soft_deadline:?}, block_timer:{block_timer:?}");
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
 
@@ -415,8 +414,6 @@ where
 			};
 
 			let now = (self.now)();
-			log::trace!("xxx -> skipped: {skipped:?} now:{now:?}, soft_deadline:{soft_deadline:?}");
-			log::trace!("xxx -> pending_tx: {:?}", pending_tx.data());
 			if now > deadline {
 				debug!(
 					"Consensus deadline reached when pushing block transactions, \
@@ -785,12 +782,6 @@ mod tests {
 					.map(|r| r.block)
 					.unwrap();
 
-			log::trace!(
-				"xxx imported extrinsics (at block:{}): {:#?}",
-				block.header.number,
-				block.extrinsics
-			);
-
 			// then
 			// block should have some extrinsics although we have some more in the pool.
 			assert_eq!(
@@ -824,7 +815,6 @@ mod tests {
 					.expect("there should be header"),
 			)),
 		);
-		log::trace!("xxx - rx.fut: {:#?}", txpool.status());
 		assert_eq!(txpool.ready().count(), 7);
 
 		// let's create one block and import it
@@ -1088,8 +1078,7 @@ mod tests {
 			Box::new(move || {
 				let mut value = cell.lock();
 				let (called, old) = *value;
-				// log::trace!("xxx -> before: called:{called} old:{old:?} txpool:{:?}",
-				// txpool.status()); add time after deadline is calculated internally (hence 1)
+				// add time after deadline is calculated internally (hence 1)
 				let increase = if called == 1 {
 					// we start after the soft_deadline should have already been reached.
 					deadline / 2
@@ -1097,7 +1086,6 @@ mod tests {
 					// but we make sure to never reach the actual deadline
 					time::Duration::from_millis(0)
 				};
-				log::trace!("xxx -> called:{:?} increase:{:?} old:{:?}", called, increase, old);
 				*value = (called + 1, old + increase);
 				old
 			}),

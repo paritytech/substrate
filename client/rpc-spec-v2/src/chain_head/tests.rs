@@ -246,8 +246,6 @@ async fn follow_with_runtime() {
 	)
 	.unwrap();
 
-	log::trace!("xxx -> len: {}", wasm.len());
-
 	let mut builder = client.new_block(Default::default()).unwrap();
 	builder.push_storage_change(CODE.to_vec(), Some(wasm)).unwrap();
 	let block = builder.build().unwrap().block;

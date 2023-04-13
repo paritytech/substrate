@@ -382,7 +382,5 @@ impl sp_blockchain::HeaderMetadata<Block> for TestApi {
 pub fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
 	let dummy = codec::Decode::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 	let transfer = Transfer { from: who.into(), to: dummy, nonce, amount: 1 };
-	let r = ExtrinsicBuilder::new_transfer(transfer).build();
-	log::trace!("xxx -> uxt: r:{r:?}");
-	r
+	ExtrinsicBuilder::new_transfer(transfer).build()
 }
