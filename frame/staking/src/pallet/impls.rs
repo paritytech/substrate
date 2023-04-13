@@ -1029,7 +1029,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		let voters = Self::get_npos_voters(bounds);
 
 		debug_assert!(!bounds.exhausted(
-			SizeBound(voters.encoded_size().saturating_sub(1) as u32).into(),
+			SizeBound(voters.encoded_size() as u32).into(),
 			CountBound(voters.len() as u32).into()
 		));
 
@@ -1039,7 +1039,8 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	fn electable_targets(bounds: DataProviderBounds) -> data_provider::Result<Vec<T::AccountId>> {
 		let target_count = T::TargetList::count();
 
-		// We can't handle this case yet -- return an error.
+		// We can't handle this case yet -- return an error. WIP to improve handling this case in
+		// <https://github.com/paritytech/substrate/pull/13195>.
 		if bounds.exhausted(None, CountBound(target_count as u32).into()) {
 			return Err("Target snapshot too big")
 		}
