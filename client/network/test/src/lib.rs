@@ -918,6 +918,9 @@ where
 		let sync_service_import_queue = Box::new(sync_service.clone());
 		let sync_service = Arc::new(sync_service.clone());
 
+		// This protocol MUST BE the first notification protocol given to `Notifications`
+		network_config.extra_sets.insert(0, block_announce_config);
+
 		let genesis_hash =
 			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
 		let network = NetworkWorker::new(sc_network::config::Params {
@@ -930,7 +933,6 @@ where
 			protocol_id,
 			fork_id,
 			metrics_registry: None,
-			block_announce_config,
 			tx,
 			request_response_protocol_configs: [
 				block_request_protocol_config,

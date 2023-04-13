@@ -887,7 +887,6 @@ where
 		protocol_id: protocol_id.clone(),
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
-		block_announce_config,
 		tx,
 		request_response_protocol_configs: request_response_protocol_configs
 			.into_iter()
@@ -901,6 +900,9 @@ where
 			.collect::<Vec<_>>(),
 	};
 
+	// This protocol MUST BE the first notification protocol given to `Notifications`
+	network_params.network_config.extra_sets.insert(0, block_announce_config);
+
 	// crate transactions protocol and add it to the list of supported protocols of `network_params`
 	let transactions_handler_proto = sc_network_transactions::TransactionsHandlerPrototype::new(
 		protocol_id.clone(),
@@ -911,10 +913,11 @@ where
 			.expect("Genesis block exists; qed"),
 		config.chain_spec.fork_id(),
 	);
+
 	network_params
 		.network_config
 		.extra_sets
-		.insert(0, transactions_handler_proto.set_config());
+		.insert(1, transactions_handler_proto.set_config());
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;

@@ -42,7 +42,6 @@ use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
 	future::Future,
-	iter,
 	pin::Pin,
 	task::Poll,
 };
@@ -104,7 +103,6 @@ impl<B: BlockT> Protocol<B> {
 	pub fn new(
 		roles: Roles,
 		network_config: &config::NetworkConfiguration,
-		block_announces_protocol: config::NonDefaultSetConfig,
 		tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
 	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let mut known_addresses = Vec::new();
@@ -162,21 +160,12 @@ impl<B: BlockT> Protocol<B> {
 		let behaviour = {
 			Notifications::new(
 				peerset,
-				// NOTE: Block announcement protocol is still very much hardcoded into `Protocol`.
-				// 	This protocol must be the first notification protocol given to
-				// `Notifications`
-				iter::once(notifications::ProtocolConfig {
-					name: block_announces_protocol.notifications_protocol.clone(),
-					fallback_names: block_announces_protocol.fallback_names.clone(),
-					handshake: block_announces_protocol.handshake.as_ref().unwrap().to_vec(),
-					max_notification_size: block_announces_protocol.max_notification_size,
-				})
-				.chain(network_config.extra_sets.iter().map(|s| notifications::ProtocolConfig {
+				network_config.extra_sets.iter().map(|s| notifications::ProtocolConfig {
 					name: s.notifications_protocol.clone(),
 					fallback_names: s.fallback_names.clone(),
 					handshake: s.handshake.as_ref().map_or(roles.encode(), |h| (*h).to_vec()),
 					max_notification_size: s.max_notification_size,
-				})),
+				}),
 			)
 		};
 
@@ -184,8 +173,10 @@ impl<B: BlockT> Protocol<B> {
 			pending_messages: VecDeque::new(),
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
-			notification_protocols: iter::once(block_announces_protocol.notifications_protocol)
-				.chain(network_config.extra_sets.iter().map(|s| s.notifications_protocol.clone()))
+			notification_protocols: network_config
+				.extra_sets
+				.iter()
+				.map(|s| s.notifications_protocol.clone())
 				.collect(),
 			bad_handshake_substreams: Default::default(),
 			peers: HashMap::new(),

@@ -224,12 +224,8 @@ where
 			local_peer_id.to_base58(),
 		);
 
-		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
-			From::from(&params.role),
-			&params.network_config,
-			params.block_announce_config,
-			params.tx,
-		)?;
+		let (protocol, peerset_handle, mut known_addresses) =
+			Protocol::new(From::from(&params.role), &params.network_config, params.tx)?;
 
 		// List of multiaddresses that we know in the network.
 		let mut boot_node_ids = HashSet::new();

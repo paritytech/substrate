@@ -722,9 +722,6 @@ pub struct Params<Block: BlockT> {
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
 
-	/// Block announce protocol configuration
-	pub block_announce_config: NonDefaultSetConfig,
-
 	/// TX channel for direct communication with `SyncingEngine` and `Protocol`.
 	pub tx: TracingUnboundedSender<crate::event::SyncEvent<Block>>,
 
