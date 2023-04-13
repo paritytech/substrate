@@ -453,7 +453,7 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 	fn sign(&self, message: &[u8]) -> Self::Signature {
 		let mut mutable_self = self.clone();
 		let r: [u8; SIGNATURE_SERIALIZED_SIZE] =
-			DoublePublicKeyScheme::sign(&mut mutable_self.0, Message::new(b"", message))
+			DoublePublicKeyScheme::sign(&mut mutable_self.0, &Message::new(b"", message))
 				.to_bytes()
 				.try_into()
 				.expect("Signature serializer returns vectors of SIGNATURE_SERIALIZED_SIZE size");
@@ -483,7 +483,7 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 			Err(_) => return false,
 		};
 
-		sig.verify(Message::new(b"", message.as_ref()), &public_key)
+		sig.verify(&Message::new(b"", message.as_ref()), &public_key)
 	}
 
 	/// Get the seed for this key.
@@ -550,7 +550,7 @@ mod test {
 		);
 		let message = b"";
 		let signature =
-	hex!("1a2cf9ed2f3dc798c218fe80948560487a984eb8f7e8a86af6113759603bea9bdca53c260b69662efe64df80b5b953803145af24b37f1d292c3cfd605ecc4fbeaa3b370c92cb3fe14f5044bbe3d89a01dbac4cd5cdb741c9e6f4fad16eca76c14e5cd3b11db21c03317d5d5998c4c105"
+	hex!("d1e3013161991e142d8751017d4996209c2ff8a9ee160f373733eda3b4b785ba6edce9f45f87104bbe07aa6aa6eb278063a6dd84e71b6f9ff7da6cf9a0cf175395312bd947d71efff5732bbfd206530695a84b78aba871705f494933e68f1a23c03e4cf57870a2ac0181dbba503ac503"
 	);
 		let signature = Signature::unchecked_from(signature);
 		assert!(pair.sign(&message[..]) == signature);
@@ -575,7 +575,7 @@ mod test {
 		);
 		let message = b"";
 		let signature =
-	hex!("618ae186f07ead4fb973c7ae86deeee9d33cbdcbea3fe32753e5cdba8df2ae67a28c2465118756bccfd60076fdbeb2009d2eeb174584b448bee01cf4eefd65fd839c722464e6ccc7b2639b4e7db6ec0de57eff3ee22c7eb19a8f06839530bc64ae323e263341b03363da5d75e2e59002"
+	hex!("bbb395bbdee1a35930912034f5fde3b36df2835a0536c865501b0675776a1d5931a3bea2e66eff73b2546c6af2061a80c793682f8f4efe26350d5c754d690d76c4768a0387edec797164be22cda8541003ea83652abe05454470bbdc4de35f7903b03bba7839aceb897a13b128f38e0b"
 	);
 		let expected_signature = Signature::unchecked_from(signature);
 		println!("signature is {:?}", pair.sign(&message[..]));
