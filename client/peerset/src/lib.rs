@@ -66,6 +66,9 @@ enum Action {
 	AddToPeersSet(SetId, PeerId),
 	RemoveFromPeersSet(SetId, PeerId),
 	PeerReputation(PeerId, oneshot::Sender<i32>),
+	// Following actions are for debugging purposes only.
+	Incoming(SetId, PeerId, IncomingIndex),
+	Dropped(SetId, PeerId, DropReason),
 }
 
 /// Identifier of a set in the peerset.
@@ -614,7 +617,7 @@ impl Peerset {
 	// Implementation note: because of concurrency issues, it is possible that we push a `Connect`
 	// message to the output channel with a `PeerId`, and that `incoming` gets called with the same
 	// `PeerId` before that message has been read by the user. In this situation we must not answer.
-	pub fn incoming(&mut self, set_id: SetId, peer_id: PeerId, index: IncomingIndex) {
+	fn on_incoming(&mut self, set_id: SetId, peer_id: PeerId, index: IncomingIndex) {
 		trace!(target: "peerset", "Incoming {:?}", peer_id);
 
 		self.update_time();
@@ -645,11 +648,15 @@ impl Peerset {
 		}
 	}
 
+	pub fn incoming(&self, set_id: SetId, peer_id: PeerId, index: IncomingIndex) {
+		let _ = self.tx.unbounded_send(Action::Incoming(set_id, peer_id, index));
+	}
+
 	/// Indicate that we dropped an active connection with a peer, or that we failed to connect.
 	///
 	/// Must only be called after the PSM has either generated a `Connect` message with this
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
-	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId, reason: DropReason) {
+	fn on_dropped(&mut self, set_id: SetId, peer_id: PeerId, reason: DropReason) {
 		// We want reputations to be up-to-date before adjusting them.
 		self.update_time();
 
@@ -671,6 +678,10 @@ impl Peerset {
 		}
 
 		self.alloc_slots(set_id);
+	}
+
+	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId, reason: DropReason) {
+		let _ = self.tx.unbounded_send(Action::Dropped(set_id, peer_id, reason));
 	}
 
 	/// Reports an adjustment to the reputation of the given peer.
@@ -758,12 +769,18 @@ impl Stream for Peerset {
 					self.on_remove_from_peers_set(sets_name, peer_id),
 				Action::PeerReputation(peer_id, pending_response) =>
 					self.on_peer_reputation(peer_id, pending_response),
+
+				Action::Incoming(set_id, peer_id, index) =>
+					self.on_incoming(set_id, peer_id, index),
+				Action::Dropped(set_id, peer_id, reason) =>
+					self.on_dropped(set_id, peer_id, reason),
 			}
 		}
 	}
 }
 
 /// Reason for calling [`Peerset::dropped`].
+#[derive(Debug)]
 pub enum DropReason {
 	/// Substream or connection has been closed for an unknown reason.
 	Unknown,
