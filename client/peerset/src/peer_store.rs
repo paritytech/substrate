@@ -174,11 +174,7 @@ struct PeerStoreInner {
 
 impl PeerStoreInner {
 	fn is_banned(&self, peer_id: &PeerId) -> bool {
-		if let Some(info) = self.peers.get(peer_id) {
-			info.is_banned()
-		} else {
-			false
-		}
+        self.peers.get(peer_id).map_or(false, |info| info.is_banned())
 	}
 
 	fn report_disconnect(&mut self, peer_id: PeerId) {
@@ -193,7 +189,7 @@ impl PeerStoreInner {
 	}
 
 	fn peer_reputation(&self, peer_id: &PeerId) -> i32 {
-		self.peers.get(peer_id).cloned().unwrap_or_default().reputation
+		self.peers.get(peer_id).map_or(0, |info| info.reputation)
 	}
 
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId> {
@@ -232,13 +228,12 @@ impl PeerStoreInner {
 			Entry::Occupied(mut e) => {
 				trace!(
 					target: "peerset",
-					"Trying to add an already known peer {}, bumping `last_updated`.",
-					peer_id,
+					"Trying to add an already known peer {peer_id}, bumping `last_updated`.",
 				);
 				e.get_mut().bump_last_updated();
 			},
 			Entry::Vacant(e) => {
-				trace!(target: "peerset", "Adding a new known peer {}.", peer_id);
+				trace!(target: "peerset", "Adding a new known peer {peer_id}.");
 				e.insert(PeerInfo::default());
 			},
 		}
@@ -272,6 +267,7 @@ impl PeerStore {
 	pub async fn run(self) {
 		let started = Instant::now();
 		let mut latest_time_update = started;
+
 		loop {
 			let now = Instant::now();
 			// We basically do `(now - self.latest_update).as_secs()`, except that by the way we do
@@ -282,6 +278,7 @@ impl PeerStore {
 				latest_time_update = now;
 				elapsed_now.as_secs() - elapsed_latest.as_secs()
 			};
+
 			self.inner.lock().unwrap().progress_time(seconds_passed);
 			let _ = Delay::new(Duration::from_secs(1)).await;
 		}

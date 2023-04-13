@@ -2927,8 +2927,6 @@ mod tests {
 
 		// check peer information
 		assert_eq!(notif.open_peers().collect::<Vec<_>>(), vec![&peer],);
-		// assert_eq!(notif.reserved_peers(set_id).collect::<Vec<_>>(), Vec::<&PeerId>::new(),);
-		todo!("Do we really need to check reserved peers here?");
 		assert_eq!(notif.num_discovered_peers(), 0usize);
 
 		// close the other connection and verify that notification replacement event is emitted

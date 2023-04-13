@@ -285,7 +285,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 		self.peer_store.is_banned(peer_id)
 	}
 
-	/// Add the peer to the set of reserved peers. [`ProtocolCOntroller`] will try to always
+	/// Add the peer to the set of reserved peers. [`ProtocolController`] will try to always
 	/// maintain connections with such peers.
 	fn on_add_reserved_peer(&mut self, peer_id: PeerId) {
 		if self.reserved_nodes.contains_key(&peer_id) {
@@ -355,10 +355,12 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 					"Making a connected reserved node {} ({:?}) a regular one.",
 					peer_id, direction,
 				);
+
 				match direction {
 					Direction::Inbound => self.num_in += 1,
 					Direction::Outbound => self.num_out += 1,
 				}
+
 				// Put the node into the list of regular nodes.
 				let prev = self.nodes.insert(peer_id, direction);
 				assert!(prev.is_none(), "Corrupted state: reserved node was also non-reserved.");
@@ -553,7 +555,7 @@ impl<PeerStoreHandle: PeerReputationProvider> ProtocolController<PeerStoreHandle
 		self.reserved_nodes
 			.iter_mut()
 			.filter_map(|(peer_id, state)| {
-				(matches!(state, PeerState::NotConnected) && !self.peer_store.is_banned(peer_id))
+				(!state.is_connected() && !self.peer_store.is_banned(peer_id))
 					.then(|| {
 						*state = PeerState::Connected(Direction::Outbound);
 						peer_id
