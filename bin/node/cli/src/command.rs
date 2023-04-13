@@ -252,7 +252,7 @@ pub fn run() -> Result<()> {
 					try_runtime_cli::Command::FastForward(fast_forward_args) =>
 						match fast_forward_args.inherents {
 							Inherents::NodeTemplate => Some(node_template_info()),
-							Inherents::SubstrateKitchenSink => Some(substrate_info(6000)),
+							Inherents::SubstrateKitchenSink => Some(substrate_kitchen_sink_info()),
 							Inherents::None => None,
 						},
 					_ => None,
