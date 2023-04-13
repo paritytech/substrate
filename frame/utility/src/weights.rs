@@ -53,6 +53,7 @@ pub trait WeightInfo {
 	fn batch_all(c: u32, ) -> Weight;
 	fn dispatch_as() -> Weight;
 	fn force_batch(c: u32, ) -> Weight;
+	fn downgrade_class() -> Weight;
 }
 
 /// Weights for pallet_utility using the Substrate node and recommended hardware.
@@ -102,6 +103,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			// Standard Error: 2_222
 			.saturating_add(Weight::from_parts(4_272_019, 0).saturating_mul(c.into()))
 	}
+	fn downgrade_class() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 9_811_000 picoseconds.
+		Weight::from_parts(10_162_000, 0)
+	}
 }
 
 // For backwards compatibility and tests
@@ -149,5 +157,12 @@ impl WeightInfo for () {
 		Weight::from_parts(12_960_288, 0)
 			// Standard Error: 2_222
 			.saturating_add(Weight::from_parts(4_272_019, 0).saturating_mul(c.into()))
+	}
+	fn downgrade_class() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 9_811_000 picoseconds.
+		Weight::from_parts(10_162_000, 0)
 	}
 }

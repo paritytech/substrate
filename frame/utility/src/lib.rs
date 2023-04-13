@@ -489,6 +489,29 @@ pub mod pallet {
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			res.map(|_| ()).map_err(|e| e.error)
 		}
+
+		/// Dispatch a function call with normal class.
+		///
+		/// This function sets the dispatch class of the call to normal by force.
+		///
+		/// The dispatch origin for this call must be _Root_.
+		#[pallet::call_index(6)]
+		#[pallet::weight({
+			let dispatch_info = call.get_dispatch_info();
+			(
+				T::WeightInfo::downgrade_class()
+					.saturating_add(dispatch_info.weight),
+				DispatchClass::Normal
+			)
+		})]
+		pub fn downgrade_class(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::RuntimeCall>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
+			res.map(|_| ()).map_err(|e| e.error)
+		}
 	}
 }
 

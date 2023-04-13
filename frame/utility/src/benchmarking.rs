@@ -86,5 +86,9 @@ benchmarks! {
 		assert_last_event::<T>(Event::BatchCompleted.into())
 	}
 
+	downgrade_class {
+		let call = Box::new(frame_system::Call::set_code_without_checks { code: vec![] }.into());
+	}: _(RawOrigin::Root, call)
+
 	impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);
 }

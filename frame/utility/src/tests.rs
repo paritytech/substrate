@@ -24,7 +24,7 @@ use super::*;
 use crate as utility;
 use frame_support::{
 	assert_err_ignore_postinfo, assert_noop, assert_ok,
-	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable, Pays},
+	dispatch::{DispatchClass, DispatchError, DispatchErrorWithPostInfo, Dispatchable, Pays},
 	error::BadOrigin,
 	parameter_types, storage,
 	traits::{ConstU32, ConstU64, Contains, GenesisBuild},
@@ -934,6 +934,25 @@ fn with_weight_works() {
 		assert_eq!(
 			with_weight_call.get_dispatch_info().class,
 			frame_support::dispatch::DispatchClass::Operational
+		);
+	})
+}
+
+#[test]
+fn downgrade_class_works() {
+	new_test_ext().execute_with(|| {
+		let upgrade_code_call =
+			Box::new(RuntimeCall::System(frame_system::Call::set_code_without_checks {
+				code: vec![],
+			}));
+		// Class before is `Operational`.
+		assert_eq!(upgrade_code_call.get_dispatch_info().class, DispatchClass::Operational);
+
+		let with_weight_call = Call::<Test>::downgrade_class { call: upgrade_code_call };
+		// Class after is `Normal`.
+		assert_eq!(
+			with_weight_call.get_dispatch_info().class,
+			frame_support::dispatch::DispatchClass::Normal
 		);
 	})
 }
