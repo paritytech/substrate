@@ -360,7 +360,7 @@ mod tests {
 	use super::*;
 	use backend::Backend;
 	use sc_client_api::in_mem;
-	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
+	use sc_executor::{NativeElseWasmExecutor, WasmExecutor};
 	use sp_core::{
 		testing::TaskExecutor,
 		traits::{FetchRuntimeCode, WrappedRuntimeCode},
@@ -368,14 +368,18 @@ mod tests {
 	use std::collections::HashMap;
 	use substrate_test_runtime_client::{runtime, GenesisInit, LocalExecutorDispatch};
 
+	fn executor() -> NativeElseWasmExecutor<LocalExecutorDispatch> {
+		NativeElseWasmExecutor::new_with_wasm_executor(
+			WasmExecutor::builder()
+				.with_max_runtime_instances(1)
+				.with_runtime_cache_size(2)
+				.build(),
+		)
+	}
+
 	#[test]
 	fn should_get_override_if_exists() {
-		let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new(
-			WasmExecutionMethod::Interpreted,
-			Some(128),
-			1,
-			2,
-		);
+		let executor = executor();
 
 		let overrides = crate::client::wasm_override::dummy_overrides();
 		let onchain_code = WrappedRuntimeCode(substrate_test_runtime::wasm_binary_unwrap().into());
@@ -443,12 +447,7 @@ mod tests {
 	fn returns_runtime_version_from_substitute() {
 		const SUBSTITUTE_SPEC_NAME: &str = "substitute-spec-name-cool";
 
-		let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new(
-			WasmExecutionMethod::Interpreted,
-			Some(128),
-			1,
-			2,
-		);
+		let executor = executor();
 
 		let backend = Arc::new(in_mem::Backend::<runtime::Block>::new());
 
