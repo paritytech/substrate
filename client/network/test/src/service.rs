@@ -114,7 +114,7 @@ impl TestNetworkBuilder {
 			|v| v.clone(),
 		);
 
-		let network_config = self.config.unwrap_or(config::NetworkConfiguration {
+		let mut network_config = self.config.unwrap_or(config::NetworkConfiguration {
 			extra_sets: vec![config::NonDefaultSetConfig {
 				notifications_protocol: PROTOCOL_NAME.into(),
 				fallback_names: Vec::new(),
@@ -196,6 +196,8 @@ impl TestNetworkBuilder {
 			rx,
 		)
 		.unwrap();
+		// This protocol MUST BE the first notification protocol given to `Notifications`
+		network_config.extra_sets.insert(0, block_announce_config);
 		let mut link = self.link.unwrap_or(Box::new(chain_sync_service.clone()));
 		let genesis_hash =
 			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
@@ -203,7 +205,6 @@ impl TestNetworkBuilder {
 			substrate_test_runtime_client::runtime::Block,
 			substrate_test_runtime_client::runtime::Hash,
 		>::new(config::Params::<substrate_test_runtime_client::runtime::Block> {
-			block_announce_config,
 			role: config::Role::Full,
 			executor: Box::new(|f| {
 				tokio::spawn(f);
