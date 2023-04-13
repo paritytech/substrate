@@ -71,10 +71,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
 		#[pallet::weight(100)]
-		pub fn bench_call(
-			_origin: OriginFor<T>,
-			_transfer: TransferData,
-		) -> DispatchResult {
+		pub fn bench_call(_origin: OriginFor<T>, _transfer: TransferData) -> DispatchResult {
 			Ok(())
 		}
 
