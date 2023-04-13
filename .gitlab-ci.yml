@@ -259,6 +259,9 @@ variables:
       - artifacts/
   variables:
     SPUB_TMP: artifacts
+    # disable timestamping for the crate publishing jobs, they leave stray child processes behind
+    # which don't interact well with the timestamping script
+    CI_DISABLE_TIMESTAMP: 1
 
 #### stage:                       .pre
 
