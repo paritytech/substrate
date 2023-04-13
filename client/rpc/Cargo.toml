@@ -30,6 +30,7 @@ sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
+sp-keyring = { version = "7.0.0", path = "../../primitives/keyring" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }

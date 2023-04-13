@@ -158,7 +158,8 @@ async fn follow_subscription_produces_blocks() {
 
 #[tokio::test]
 async fn follow_with_runtime() {
-	let builder = TestClientBuilder::new();
+	sp_tracing::try_init_simple();
+	let builder = TestClientBuilder::new().set_heap_pages(32);
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
@@ -244,6 +245,8 @@ async fn follow_with_runtime() {
 		sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT,
 	)
 	.unwrap();
+
+	log::trace!("xxx -> len: {}", wasm.len());
 
 	let mut builder = client.new_block(Default::default()).unwrap();
 	builder.push_storage_change(CODE.to_vec(), Some(wasm)).unwrap();

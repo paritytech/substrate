@@ -411,7 +411,7 @@ mod tests {
 		let key = &b"hello"[..];
 		let value = &b"world"[..];
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		let ext = ExtrinsicBuilder::new_offchain_index_set(key.to_vec(), value.to_vec()).build2(0);
+		let ext = ExtrinsicBuilder::new_offchain_index_set(key.to_vec(), value.to_vec()).build();
 		block_builder.push(ext).unwrap();
 
 		let block = block_builder.build().unwrap().block;
@@ -420,7 +420,7 @@ mod tests {
 		assert_eq!(value, &offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).unwrap());
 
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		let ext = ExtrinsicBuilder::new_offchain_index_clear(key.to_vec()).build2(1);
+		let ext = ExtrinsicBuilder::new_offchain_index_clear(key.to_vec()).nonce(1).build();
 		block_builder.push(ext).unwrap();
 
 		let block = block_builder.build().unwrap().block;

@@ -69,7 +69,7 @@ pub struct ExtrinsicBuilder {
 }
 
 impl ExtrinsicBuilder {
-	/// Create builder for given `RuntimeCall`
+	/// Create builder for given `RuntimeCall`. By default `Extrinsic` will be signed by `Alice`.
 	pub fn new(function: impl Into<RuntimeCall>) -> Self {
 		Self {
 			function: function.into(),
@@ -79,7 +79,8 @@ impl ExtrinsicBuilder {
 		}
 	}
 
-	/// Create builder for given `Transfer`
+	/// Create builder for given `Transfer`. Transfer `nonce` will be used as `Extrinsic` nonce.
+	/// Transfer `from` will be used as Extrinsic signer.
 	pub fn new_transfer(transfer: Transfer) -> Self {
 		Self {
 			nonce: Some(transfer.nonce),
@@ -153,7 +154,7 @@ impl ExtrinsicBuilder {
 		self
 	}
 
-	/// Extrinsic will be signed by signer
+	/// Given `nonce` will be set in `Extrinsic`
 	pub fn nonce(mut self, nonce: Index) -> Self {
 		self.nonce = Some(nonce);
 		self
@@ -167,16 +168,15 @@ impl ExtrinsicBuilder {
 
 	/// Build `Extrinsic` using embedded parameters
 	pub fn build(self) -> Extrinsic {
-		let nonce = self.nonce.unwrap_or(0);
-		self.build2(nonce)
-	}
-
-	pub fn build2(self, nonce: Index) -> Extrinsic {
 		if self.is_unsigned {
 			Extrinsic::new_unsigned(self.function)
 		} else {
 			let signer = self.signer;
-			let extra = (CheckNonce::from(nonce), CheckWeight::new(), CheckSubstrateCall {});
+			let extra = (
+				CheckNonce::from(self.nonce.unwrap_or(0)),
+				CheckWeight::new(),
+				CheckSubstrateCall {},
+			);
 			let raw_payload =
 				SignedPayload::from_raw(self.function.clone(), extra.clone(), ((), (), ()));
 			let signature = raw_payload.using_encoded(|e| signer.sign(e));

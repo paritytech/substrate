@@ -130,7 +130,7 @@ pub struct TransferData {
 	pub from: AccountId,
 	pub to: AccountId,
 	pub amount: Balance,
-	pub nonce: u64,
+	pub nonce: Index,
 }
 
 /// The address format for describing accounts.

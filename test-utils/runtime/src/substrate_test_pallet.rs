@@ -194,22 +194,18 @@ pub mod pallet {
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			log::trace!(target: LOG_TARGET, "validate_unsigned {call:?}");
-			//todo:
-			// Call::include_data used in:
-			// - [done] should_call_into_runtime_and_produce_extrinsic (offchain)
-			// - [done] syncs_huge_blocks (huge data in block)
-			// - [done] should_not_propagate_transactions_that_are_marked_as_such (propagate)
-
 			match call {
 				// offchain testing requires unsigned include_data
 				Call::include_data { .. } => Ok(ValidTransaction { ..Default::default() }),
 
 				// consensus tests do not use signer and nonce:
 				Call::deposit_log_digest_item { .. } => Ok(Default::default()),
-				// some tests do not care about for this call:
+
+				// some tests do not need to be complicated with signer and nonce, they also need reproducible block
+				// hash so no signature is allowed for this call
 				Call::storage_change_unsigned { .. } => Ok(Default::default()),
+
 				_ => Err(TransactionValidityError::Invalid(InvalidTransaction::Call)),
-				// _ => Ok(Default::default()),
 			}
 		}
 	}

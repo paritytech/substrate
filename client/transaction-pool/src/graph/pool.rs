@@ -521,7 +521,7 @@ mod tests {
 			TestApi::default().into(),
 		);
 
-		// after validation `IncludeData` will be set to non-propagable
+		// after validation `IncludeData` will be set to non-propagable (validate_transaction mock)
 		let uxt = ExtrinsicBuilder::new_include_data(vec![42]).build();
 
 		// when
@@ -953,11 +953,15 @@ mod tests {
 
 				let pool = Pool::new(options, true.into(), TestApi::default().into());
 
+				// after validation `IncludeData` will have priority set to 9001
+				// (validate_transaction mock)
 				let xt = ExtrinsicBuilder::new_include_data(Vec::new()).build();
 				block_on(pool.submit_one(&BlockId::Number(0), SOURCE, xt)).unwrap();
 				assert_eq!(pool.validated_pool().status().ready, 1);
 
 				// then
+				// after validation `Transfer` will have priority set to 4 (validate_transaction
+				// mock)
 				let xt = uxt(Transfer {
 					from: Bob.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(1)),
@@ -978,10 +982,14 @@ mod tests {
 
 				let pool = Pool::new(options, true.into(), TestApi::default().into());
 
+				// after validation `IncludeData` will have priority set to 9001
+				// (validate_transaction mock)
 				let xt = ExtrinsicBuilder::new_include_data(Vec::new()).build();
 				block_on(pool.submit_and_watch(&BlockId::Number(0), SOURCE, xt)).unwrap();
 				assert_eq!(pool.validated_pool().status().ready, 1);
 
+				// after validation `Transfer` will have priority set to 4 (validate_transaction
+				// mock)
 				let xt = uxt(Transfer {
 					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
@@ -993,6 +1001,8 @@ mod tests {
 				assert_eq!(pool.validated_pool().status().ready, 2);
 
 				// when
+				// after validation `Store` will have priority set to 9001 (validate_transaction
+				// mock)
 				let xt = ExtrinsicBuilder::new_store(Vec::new()).build();
 				block_on(pool.submit_one(&BlockId::Number(1), SOURCE, xt)).unwrap();
 				assert_eq!(pool.validated_pool().status().ready, 2);

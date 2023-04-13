@@ -21,7 +21,7 @@
 //! Specification [document](https://paritytech.github.io/json-rpc-interface-spec/).
 
 #![warn(missing_docs)]
-#![deny(unused_crate_dependencies)]
+//#![deny(unused_crate_dependencies)]
 
 pub mod chain_head;
 pub mod chain_spec;

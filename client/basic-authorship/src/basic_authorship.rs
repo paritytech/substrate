@@ -580,7 +580,7 @@ mod tests {
 	const TINY: u32 = 1000;
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
-		ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY)).build2(nonce)
+		ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY)).nonce(nonce).build()
 	}
 
 	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
@@ -750,10 +750,14 @@ mod tests {
 			client.clone(),
 		);
 
-		let tiny =
-			|nonce| ExtrinsicBuilder::new_fill_block(Perbill::from_parts(MEDIUM)).build2(nonce);
-		let huge =
-			|nonce| ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE)).build2(nonce);
+		let tiny = |nonce| {
+			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(MEDIUM))
+				.nonce(nonce)
+				.build()
+		};
+		let huge = |nonce| {
+			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE)).nonce(nonce).build()
+		};
 
 		block_on(txpool.submit_at(
 			&BlockId::number(0),
@@ -965,12 +969,13 @@ mod tests {
 			client.clone(),
 		);
 
-		let tiny =
-			|nonce| ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY)).build2(nonce);
+		let tiny = |nonce| {
+			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY)).nonce(nonce).build()
+		};
 		let huge = |who| {
 			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE))
 				.signer(AccountKeyring::numeric(who))
-				.build2(0)
+				.build()
 		};
 
 		block_on(
@@ -1040,12 +1045,13 @@ mod tests {
 		let tiny = |who| {
 			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY))
 				.signer(AccountKeyring::numeric(who))
-				.build2(1)
+				.nonce(1)
+				.build()
 		};
 		let huge = |who| {
 			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE))
 				.signer(AccountKeyring::numeric(who))
-				.build2(0)
+				.build()
 		};
 
 		block_on(

@@ -30,8 +30,12 @@ use sc_rpc_api::DenyUnsafe;
 use sp_consensus::BlockOrigin;
 use sp_core::{hash::H256, storage::ChildInfo};
 use sp_io::hashing::blake2_256;
+use sp_keyring::AccountKeyring::{Alice, Bob, Charlie, Dave, Eve};
 use std::sync::Arc;
-use substrate_test_runtime_client::{prelude::*, runtime};
+use substrate_test_runtime_client::{
+	prelude::*,
+	runtime::{substrate_test_pallet, ExtrinsicBuilder, Transfer},
+};
 
 const STORAGE_KEY: &[u8] = b"child";
 
@@ -218,7 +222,7 @@ async fn should_notify_about_storage_changes() {
 		// Cause a change:
 		let mut builder = client.new_block(Default::default()).unwrap();
 		builder
-			.push_transfer(runtime::Transfer {
+			.push_transfer(Transfer {
 				from: AccountKeyring::Alice.into(),
 				to: AccountKeyring::Ferdie.into(),
 				amount: 42,
@@ -244,9 +248,8 @@ async fn should_send_initial_storage_changes_and_notifications() {
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No);
 
-		let alice_balance_key = blake2_256(&runtime::substrate_test_pallet::balance_of_key(
-			AccountKeyring::Alice.into(),
-		));
+		let alice_balance_key =
+			blake2_256(&substrate_test_pallet::balance_of_key(AccountKeyring::Alice.into()));
 
 		let api_rpc = api.into_rpc();
 		let sub = api_rpc
@@ -256,7 +259,7 @@ async fn should_send_initial_storage_changes_and_notifications() {
 
 		let mut builder = client.new_block(Default::default()).unwrap();
 		builder
-			.push_transfer(runtime::Transfer {
+			.push_transfer(Transfer {
 				from: AccountKeyring::Alice.into(),
 				to: AccountKeyring::Ferdie.into(),
 				amount: 42,
@@ -282,28 +285,59 @@ async fn should_query_storage() {
 	async fn run_tests(mut client: Arc<TestClient>) {
 		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No);
 
-		let mut add_block = |nonce| {
+		let mut add_block = |index| {
 			let mut builder = client.new_block(Default::default()).unwrap();
 			// fake change: None -> None -> None
-			builder.push_storage_change_unsigned(vec![1], None).unwrap();
+			builder
+				.push(
+					ExtrinsicBuilder::new_storage_change(vec![1], None)
+						.nonce(index)
+						.signer(Alice.into())
+						.build(),
+				)
+				.unwrap();
 			// fake change: None -> Some(value) -> Some(value)
-			builder.push_storage_change_unsigned(vec![2], Some(vec![2])).unwrap();
+			builder
+				.push(
+					ExtrinsicBuilder::new_storage_change(vec![2], Some(vec![2]))
+						.nonce(index)
+						.signer(Bob.into())
+						.build(),
+				)
+				.unwrap();
 			// actual change: None -> Some(value) -> None
 			builder
-				.push_storage_change_unsigned(
-					vec![3],
-					if nonce == 0 { Some(vec![3]) } else { None },
+				.push(
+					ExtrinsicBuilder::new_storage_change(
+						vec![3],
+						if index == 0 { Some(vec![3]) } else { None },
+					)
+					.nonce(index)
+					.signer(Charlie.into())
+					.build(),
 				)
 				.unwrap();
 			// actual change: None -> Some(value)
 			builder
-				.push_storage_change_unsigned(
-					vec![4],
-					if nonce == 0 { None } else { Some(vec![4]) },
+				.push(
+					ExtrinsicBuilder::new_storage_change(
+						vec![4],
+						if index == 0 { None } else { Some(vec![4]) },
+					)
+					.nonce(index)
+					.signer(Dave.into())
+					.build(),
 				)
 				.unwrap();
 			// actual change: Some(value1) -> Some(value2)
-			builder.push_storage_change_unsigned(vec![5], Some(vec![nonce as u8])).unwrap();
+			builder
+				.push(
+					ExtrinsicBuilder::new_storage_change(vec![5], Some(vec![index as u8]))
+						.nonce(index)
+						.signer(Eve.into())
+						.build(),
+				)
+				.unwrap();
 			let block = builder.build().unwrap().block;
 			let hash = block.header.hash();
 			executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();

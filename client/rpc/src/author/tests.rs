@@ -163,7 +163,7 @@ async fn author_should_watch_extrinsic() {
 async fn author_should_return_watch_validation_error() {
 	const METHOD: &'static str = "author_submitAndWatchExtrinsic";
 
-	let invalid_xt = ExtrinsicBuilder::new_fill_block(Perbill::from_percent(100)).build2(0);
+	let invalid_xt = ExtrinsicBuilder::new_fill_block(Perbill::from_percent(100)).build();
 
 	let api = TestSetup::into_rpc();
 	let failed_sub = api.subscribe(METHOD, [to_hex(&invalid_xt.encode(), true)]).await;
