@@ -30,8 +30,6 @@ use bls_like::{DoublePublicKey, DoubleSignature, EngineBLS, SerializableToBytes,
 #[cfg(feature = "full_crypto")]
 use bls_like::{DoublePublicKeyScheme, Keypair, Message, SecretKey};
 use codec::{Decode, Encode, MaxEncodedLen};
-#[cfg(feature = "std")]
-use hex;
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -326,7 +324,7 @@ impl<T> Serialize for Signature<T> {
 	where
 		S: Serializer,
 	{
-		serializer.serialize_str(&hex::encode(self.inner))
+		serializer.serialize_str(&array_bytes::bytes2hex("", self.as_ref()))
 	}
 }
 
@@ -336,7 +334,7 @@ impl<'de, T> Deserialize<'de> for Signature<T> {
 	where
 		D: Deserializer<'de>,
 	{
-		let signature_hex = hex::decode(&String::deserialize(deserializer)?)
+		let signature_hex = array_bytes::hex2bytes(&String::deserialize(deserializer)?)
 			.map_err(|e| de::Error::custom(format!("{:?}", e)))?;
 		Signature::try_from(signature_hex.as_ref())
 			.map_err(|e| de::Error::custom(format!("{:?}", e)))
@@ -519,7 +517,7 @@ mod test {
 		);
 	}
 
-	//only passes if the seed = seed (mod ScalarField)
+	// Only passes if the seed = (seed mod ScalarField)
 	#[test]
 	fn seed_and_derive_should_work() {
 		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f00");
@@ -534,8 +532,6 @@ mod test {
 		);
 	}
 
-	// TODO FIXME Is this supposed to be successful?
-	// Where is the test vector defined?
 	#[test]
 	fn test_vector_should_work() {
 		let pair = Pair::from_seed(&hex!(
@@ -557,8 +553,6 @@ mod test {
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
 
-	// TODO FIXME Is this expected to be pass?
-	// Where the test vectors were taken?
 	#[test]
 	fn test_vector_by_string_should_work() {
 		let pair = Pair::from_string(
