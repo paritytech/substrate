@@ -10607,7 +10607,6 @@ dependencies = [
  "futures",
  "hash-db",
  "hash256-std-hasher",
- "hex",
  "hex-literal",
  "impl-serde",
  "lazy_static",

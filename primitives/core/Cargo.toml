@@ -46,7 +46,6 @@ ed25519-zebra = { version = "3.1.0", default-features = false, optional = true }
 blake2 = { version = "0.10.4", default-features = false, optional = true }
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false, optional = true }
 bls-like = {git = "https://github.com/w3f/bls", default-features = false}
-hex = { version = "0.4", default-features = false, optional = true}
 libsecp256k1 = { version = "0.7", default-features = false, features = ["static-context"], optional = true }
 merlin = { version = "2.0", default-features = false, optional = true }
 secp256k1 = { version = "0.24.0", default-features = false, features = ["recovery", "alloc"], optional = true }
@@ -113,7 +112,6 @@ std = [
 	"futures/thread-pool",
 	"libsecp256k1/std",
 	"dyn-clonable",
-	"hex",
 ]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers
