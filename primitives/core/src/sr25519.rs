@@ -553,20 +553,20 @@ pub mod vrf {
 	/// VRF transcript ready to be used for VRF sign/verify operations.
 	pub struct VrfTranscript(merlin::Transcript);
 
-	impl Deref for VrfTranscript {
-		type Target = merlin::Transcript;
-
-		fn deref(&self) -> &Self::Target {
-			&self.0
-		}
-	}
-
 	impl VrfTranscript {
 		/// Build a new transcript ready to be used by a VRF signer/verifier.
 		pub fn new(label: &'static [u8], data: &[(&'static [u8], &[u8])]) -> Self {
 			let mut transcript = merlin::Transcript::new(label);
 			data.iter().for_each(|(l, b)| transcript.append_message(l, b));
 			VrfTranscript(transcript)
+		}
+	}
+
+	impl Deref for VrfTranscript {
+		type Target = merlin::Transcript;
+
+		fn deref(&self) -> &Self::Target {
+			&self.0
 		}
 	}
 
@@ -581,7 +581,7 @@ pub mod vrf {
 
 	/// VRF output type suitable for schnorrkel operations.
 	#[derive(Clone, Debug, PartialEq, Eq)]
-	pub struct VrfOutput(schnorrkel::vrf::VRFOutput);
+	pub struct VrfOutput(pub schnorrkel::vrf::VRFOutput);
 
 	impl Deref for VrfOutput {
 		type Target = schnorrkel::vrf::VRFOutput;
@@ -620,7 +620,7 @@ pub mod vrf {
 
 	/// VRF proof type suitable for schnorrkel operations.
 	#[derive(Clone, Debug, PartialEq, Eq)]
-	pub struct VrfProof(schnorrkel::vrf::VRFProof);
+	pub struct VrfProof(pub schnorrkel::vrf::VRFProof);
 
 	impl Deref for VrfProof {
 		type Target = schnorrkel::vrf::VRFProof;
