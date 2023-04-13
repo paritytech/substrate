@@ -32,10 +32,7 @@ use sp_std::vec::Vec;
 
 use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
 
-pub use sp_core::{
-	crypto::{VrfTranscript, VrfTranscriptItem},
-	sr25519::vrf::{VrfOutput, VrfProof, VrfSignature},
-};
+pub use sp_core::sr25519::vrf::{VrfOutput, VrfProof, VrfSignature, VrfTranscript};
 
 /// Key type for BABE module.
 pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::BABE;
@@ -99,14 +96,14 @@ pub type BabeBlockWeight = u32;
 
 /// Make a VRF transcript data container
 pub fn make_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfTranscript {
-	VrfTranscript {
-		label: &BABE_ENGINE_ID,
-		items: sp_std::vec![
-			("slot number", VrfTranscriptItem::U64(*slot)),
-			("current epoch", VrfTranscriptItem::U64(epoch)),
-			("chain randomness", VrfTranscriptItem::Bytes(randomness.to_vec())),
+	VrfTranscript::new(
+		&BABE_ENGINE_ID,
+		&[
+			(b"slot number", &slot.to_le_bytes()),
+			(b"current epoch", &epoch.to_le_bytes()),
+			(b"chain randomness", randomness),
 		],
-	}
+	)
 }
 
 /// An consensus log item for BABE.

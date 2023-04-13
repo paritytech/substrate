@@ -184,8 +184,8 @@ fn check_primary_header<B: BlockT + Sized>(
 	let score = vrf::make_bytes::<[u8; AUTHORING_SCORE_LENGTH]>(
 		AUTHORING_SCORE_VRF_CONTEXT,
 		authority_id.as_ref(),
-		&pre_digest.vrf_signature.output,
 		&transcript,
+		&pre_digest.vrf_signature.output,
 	)
 	.map(u128::from_le_bytes)
 	.map_err(|_| babe_err(Error::VrfVerificationFailed))?;

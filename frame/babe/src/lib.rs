@@ -377,8 +377,8 @@ pub mod pallet {
 							sp_core::sr25519::vrf::make_bytes(
 								RANDOMNESS_VRF_CONTEXT,
 								authority.as_ref(),
-								&vrf_signature.output,
 								&transcript,
+								&vrf_signature.output,
 							)
 							.ok()
 						});

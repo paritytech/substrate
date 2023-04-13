@@ -245,8 +245,8 @@ fn claim_primary_slot(
 			let can_claim = vrf::make_bytes::<[u8; AUTHORING_SCORE_LENGTH]>(
 				AUTHORING_SCORE_VRF_CONTEXT,
 				authority_id.as_ref(),
-				&vrf_signature.output,
 				&transcript,
+				&vrf_signature.output,
 			)
 			.map(|bytes| u128::from_le_bytes(bytes) < threshold)
 			.unwrap_or_default();

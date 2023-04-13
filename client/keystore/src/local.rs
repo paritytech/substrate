@@ -20,10 +20,7 @@
 use parking_lot::RwLock;
 use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
 use sp_core::{
-	crypto::{
-		ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSigner,
-		VrfTranscript,
-	},
+	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSigner},
 	ecdsa, ed25519, sr25519,
 };
 use sp_keystore::{Error as TraitError, Keystore, KeystorePtr};
@@ -105,7 +102,7 @@ impl LocalKeystore {
 		&self,
 		key_type: KeyTypeId,
 		public: &T::Public,
-		transcript: &VrfTranscript,
+		transcript: &T::VrfInput,
 	) -> std::result::Result<Option<T::VrfSignature>, TraitError> {
 		let sig = self
 			.0
@@ -145,7 +142,7 @@ impl Keystore for LocalKeystore {
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript: &VrfTranscript,
+		transcript: &sr25519::vrf::VrfTranscript,
 	) -> std::result::Result<Option<sr25519::vrf::VrfSignature>, TraitError> {
 		self.vrf_sign::<sr25519::Pair>(key_type, public, transcript)
 	}

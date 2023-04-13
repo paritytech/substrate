@@ -20,7 +20,7 @@
 pub mod testing;
 
 use sp_core::{
-	crypto::{ByteArray, CryptoTypeId, KeyTypeId, VrfTranscript},
+	crypto::{ByteArray, CryptoTypeId, KeyTypeId},
 	ecdsa, ed25519, sr25519,
 };
 use std::sync::Arc;
@@ -86,7 +86,7 @@ pub trait Keystore: Send + Sync {
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript: &VrfTranscript,
+		transcript: &sr25519::vrf::VrfTranscript,
 	) -> Result<Option<sr25519::vrf::VrfSignature>, Error>;
 
 	/// Returns all ed25519 public keys for the given key type.
