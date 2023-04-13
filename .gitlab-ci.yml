@@ -275,9 +275,10 @@ check-crates-publishing-pipeline:
     - ONLY_CHECK_PIPELINE=true ./releng-scripts/publish-crates
 
 # By default our pipelines are interruptible, but some special pipelines shouldn't be interrupted:
+# * multi-project pipelines such as the ones triggered by the scripts repo
 # * the scheduled automatic-crate-publishing pipeline
 #
-# In those cases, we add an interruptible .pre job; once that one has started,
+# In those cases, we add an uninterruptible .pre job; once that one has started,
 # the entire pipeline becomes uninterruptible
 uninterruptible-pipeline:
   extends: .kubernetes-env
@@ -286,6 +287,7 @@ uninterruptible-pipeline:
   stage: .pre
   interruptible: false
   rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
     - if: $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "automatic-crate-publishing"
   script: "true"
 
