@@ -173,7 +173,7 @@ mod benchmarks {
 	// but additionally introduces many new users into the storage, increasing the the merkle
 	// trie and PoV size.
 	#[benchmark(extra)]
-	fn transfer_increasing_users(u: Linear<0, 1_000>) {
+	fn transfer_increasing_users(u: linear![0..1_000]) {
 		// 1_000 is not very much, but this upper bound can be controlled by the CLI.
 		let existential_deposit = T::ExistentialDeposit::get();
 		let caller = whitelisted_caller();
@@ -250,7 +250,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn upgrade_accounts(u: Linear<1, 1_000>) {
+	fn upgrade_accounts(u: linear![1..1_000]) {
 		let caller: T::AccountId = whitelisted_caller();
 		let who = (0..u)
 			.into_iter()

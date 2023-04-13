@@ -30,7 +30,7 @@ use syn::{
 	token::{Comma, Gt, Lt, PathSep},
 	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod, LitInt,
 	Pat, Path, PathArguments, PathSegment, Result, ReturnType, Signature, Stmt, Token, Type,
-	TypePath, Visibility, WhereClause,
+	TypePath, Visibility, WhereClause, token
 };
 
 mod keywords {
@@ -44,6 +44,7 @@ mod keywords {
 	custom_keyword!(skip_meta);
 	custom_keyword!(BenchmarkError);
 	custom_keyword!(Result);
+	custom_keyword!(linear);
 
 	pub const BENCHMARK_TOKEN: &str = stringify!(benchmark);
 	pub const BENCHMARKS_TOKEN: &str = stringify!(benchmarks);
@@ -58,14 +59,18 @@ struct ParamDef {
 	end: u32,
 }
 
-/// Allows easy parsing of the `<10, 20>` component of `x: Linear<10, 20>`.
 #[derive(Parse)]
-struct RangeArgs {
-	_lt_token: Lt,
-	start: LitInt,
-	_comma: Comma,
-	end: LitInt,
-	_gt_token: Gt,
+struct RangeParam {
+	_linear: keywords::linear,
+	_exclamation: Token![!],
+	#[bracket]
+    _bracket: token::Bracket,
+	#[inside(_bracket)]
+    start: LitInt,
+	#[inside(_bracket)]
+    _dotdot: Token![..],
+	#[inside(_bracket)]
+    end: LitInt,
 }
 
 #[derive(Clone, Debug)]
@@ -224,10 +229,8 @@ fn parse_params(item_fn: &ItemFn) -> Result<Vec<ParamDef>> {
 
 		// parse type
 		let typ = &*arg.ty;
-		let Type::Path(tpath) = typ else { return invalid_param(typ.span()) };
-		let Some(segment) = tpath.path.segments.last() else { return invalid_param(typ.span()) };
-		let args = segment.arguments.to_token_stream().into();
-		let Ok(args) = syn::parse::<RangeArgs>(args) else { return invalid_param(typ.span()) };
+		let Ok(args) = syn::parse::<RangeParam>(typ.to_token_stream().into()) else { return invalid_param(typ.span()) };
+
 		let Ok(start) = args.start.base10_parse::<u32>() else { return invalid_param(args.start.span()) };
 		let Ok(end) = args.end.base10_parse::<u32>() else { return invalid_param(args.end.span()) };
 
@@ -885,11 +888,6 @@ fn expand_benchmark(
 	let res = quote! {
 		// benchmark function definition
 		#fn_def
-
-		// compile-time assertions that each referenced param type implements ParamRange
-		#(
-			#home::assert_impl_all!(#param_types: #home::ParamRange);
-		)*
 
 		#[allow(non_camel_case_types)]
 		#(
