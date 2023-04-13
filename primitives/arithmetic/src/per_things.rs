@@ -527,16 +527,18 @@ where
 				rem_mul_div_inner += 1.into();
 			}
 		},
-		Rounding::NearestPrefDown =>
+		Rounding::NearestPrefDown => {
 			if rem_mul_upper % denom_upper > denom_upper / 2.into() {
 				// `rem * numer / denom` is less than `numer`, so this will not overflow.
 				rem_mul_div_inner += 1.into();
-			},
-		Rounding::NearestPrefUp =>
+			}
+		},
+		Rounding::NearestPrefUp => {
 			if rem_mul_upper % denom_upper >= denom_upper / 2.into() + denom_upper % 2.into() {
 				// `rem * numer / denom` is less than `numer`, so this will not overflow.
 				rem_mul_div_inner += 1.into();
-			},
+			}
+		},
 	}
 	rem_mul_div_inner.into()
 }
