@@ -18,7 +18,7 @@ build-helper = "0.1.1"
 cargo_metadata = "0.15.2"
 strum = { version = "0.24.1", features = ["derive"] }
 tempfile = "3.1.0"
-toml = "0.5.4"
+toml = "0.7.3"
 walkdir = "2.3.2"
 sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/maybe-compressed-blob" }
 filetime = "0.2.16"

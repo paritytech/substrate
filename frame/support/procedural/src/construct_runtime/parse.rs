@@ -17,6 +17,7 @@
 
 use frame_support_procedural_tools::syn_ext as ext;
 use proc_macro2::{Span, TokenStream};
+use quote::ToTokens;
 use std::collections::{HashMap, HashSet};
 use syn::{
 	ext::IdentExt,
@@ -444,21 +445,21 @@ impl PalletPartKeyword {
 	}
 }
 
-impl Spanned for PalletPartKeyword {
-	fn span(&self) -> Span {
+impl ToTokens for PalletPartKeyword {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
 		match self {
-			Self::Pallet(inner) => inner.span(),
-			Self::Call(inner) => inner.span(),
-			Self::Storage(inner) => inner.span(),
-			Self::Event(inner) => inner.span(),
-			Self::Config(inner) => inner.span(),
-			Self::Origin(inner) => inner.span(),
-			Self::Inherent(inner) => inner.span(),
-			Self::ValidateUnsigned(inner) => inner.span(),
-			Self::FreezeReason(inner) => inner.span(),
-			Self::HoldReason(inner) => inner.span(),
-			Self::LockId(inner) => inner.span(),
-			Self::SlashReason(inner) => inner.span(),
+			Self::Pallet(inner) => inner.to_tokens(tokens),
+			Self::Call(inner) => inner.to_tokens(tokens),
+			Self::Storage(inner) => inner.to_tokens(tokens),
+			Self::Event(inner) => inner.to_tokens(tokens),
+			Self::Config(inner) => inner.to_tokens(tokens),
+			Self::Origin(inner) => inner.to_tokens(tokens),
+			Self::Inherent(inner) => inner.to_tokens(tokens),
+			Self::ValidateUnsigned(inner) => inner.to_tokens(tokens),
+			Self::FreezeReason(inner) => inner.to_tokens(tokens),
+			Self::HoldReason(inner) => inner.to_tokens(tokens),
+			Self::LockId(inner) => inner.to_tokens(tokens),
+			Self::SlashReason(inner) => inner.to_tokens(tokens),
 		}
 	}
 }
@@ -681,7 +682,7 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 				.attrs
 				.iter()
 				.map(|attr| {
-					if attr.path.segments.len() != 1 || attr.path.segments[0].ident != "cfg" {
+					if attr.path().segments.first().map_or(false, |s| s.ident != "cfg") {
 						let msg = "Unsupported attribute, only #[cfg] is supported on pallet \
 						declarations in `construct_runtime`";
 						return Err(syn::Error::new(attr.span(), msg))
