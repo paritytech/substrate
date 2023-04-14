@@ -119,7 +119,6 @@ async fn author_should_watch_extrinsic() {
 			.encode(),
 		true,
 	);
-	// let xt = to_hex(&uxt(AccountKeyring::Alice, 0).encode(), true);
 
 	let mut sub = api.subscribe("author_submitAndWatchExtrinsic", [xt]).await.unwrap();
 	let (tx, sub_id) = timeout_secs(10, sub.next::<TransactionStatus<H256, Block>>())
@@ -137,13 +136,6 @@ async fn author_should_watch_extrinsic() {
 			.signer(AccountKeyring::Alice.into())
 			.build()
 			.encode();
-		// let tx = Transfer {
-		// 	amount: 5,
-		// 	nonce: 0,
-		// 	from: AccountKeyring::Alice.into(),
-		// 	to: AccountKeyring::Bob.into(),
-		// };
-		// let tx = tx.into_unchecked_extrinsic().encode();
 		let hash = blake2_256(&tx);
 		(to_hex(&tx, true), hash)
 	};
@@ -190,7 +182,6 @@ async fn author_should_return_pending_extrinsics() {
 
 #[tokio::test]
 async fn author_should_remove_extrinsics() {
-	sp_tracing::try_init_simple();
 	const METHOD: &'static str = "author_removeExtrinsic";
 	let setup = TestSetup::default();
 	let api = setup.author().into_rpc();

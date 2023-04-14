@@ -581,7 +581,6 @@ mod tests {
 
 	#[test]
 	fn should_cease_building_block_when_deadline_is_reached() {
-		sp_tracing::try_init_simple();
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
@@ -839,7 +838,6 @@ mod tests {
 
 	#[test]
 	fn should_cease_building_block_when_block_limit_is_reached() {
-		sp_tracing::try_init_simple();
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
@@ -941,7 +939,6 @@ mod tests {
 
 	#[test]
 	fn should_keep_adding_transactions_after_exhausts_resources_before_soft_deadline() {
-		sp_tracing::try_init_simple();
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
@@ -1014,7 +1011,6 @@ mod tests {
 
 	#[test]
 	fn should_only_skip_up_to_some_limit_after_soft_deadline() {
-		sp_tracing::try_init_simple();
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();

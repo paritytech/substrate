@@ -288,7 +288,6 @@ async fn should_send_initial_storage_changes_and_notifications() {
 
 #[tokio::test]
 async fn should_query_storage() {
-	sp_tracing::try_init_simple();
 	async fn run_tests(mut client: Arc<TestClient>) {
 		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No);
 

@@ -158,7 +158,6 @@ async fn follow_subscription_produces_blocks() {
 
 #[tokio::test]
 async fn follow_with_runtime() {
-	sp_tracing::try_init_simple();
 	let builder = TestClientBuilder::new().set_heap_pages(32);
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
