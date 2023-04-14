@@ -18,11 +18,11 @@
 
 //! RPC api for babe.
 
-use std::{collections::HashMap, error::Error, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use futures::TryFutureExt;
 use jsonrpsee::{
-	core::{async_trait, RpcResult},
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
 	types::{error::CallError, ErrorObject},
 };
@@ -34,11 +34,13 @@ use sc_rpc_api::DenyUnsafe;
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppCrypto;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
-use sp_consensus::SelectChain;
+use sp_consensus::{Error as ConsensusError, SelectChain};
 use sp_consensus_babe::{digests::PreDigest, AuthorityId, BabeApi as BabeRuntimeApi};
 use sp_core::crypto::ByteArray;
 use sp_keystore::KeystorePtr;
 use sp_runtime::traits::{Block as BlockT, Header as _};
+
+const BABE_ERROR: i32 = 9000;
 
 /// Provides rpc methods for interacting with Babe.
 #[rpc(client, server)]
@@ -90,19 +92,19 @@ where
 	async fn epoch_authorship(&self) -> RpcResult<HashMap<AuthorityId, EpochAuthorship>> {
 		self.deny_unsafe.check_if_safe()?;
 
-		let best_header = self.select_chain.best_chain().map_err(rpc_error).await?;
+		let best_header = self.select_chain.best_chain().map_err(Error::SelectChain).await?;
 
 		let epoch_start = self
 			.client
 			.runtime_api()
 			.current_epoch_start(best_header.hash())
-			.map_err(rpc_error)?;
+			.map_err(|_| Error::FetchEpoch)?;
 
 		let epoch = self
 			.babe_worker_handle
 			.epoch_data_for_child_of(best_header.hash(), *best_header.number(), epoch_start)
 			.await
-			.map_err(rpc_error)?;
+			.map_err(|_| Error::FetchEpoch)?;
 
 		let (epoch_start, epoch_end) = (epoch.start_slot(), epoch.end_slot());
 		let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
@@ -155,13 +157,36 @@ pub struct EpochAuthorship {
 	secondary_vrf: Vec<u64>,
 }
 
-fn rpc_error(error: impl Error) -> CallError {
-	CallError::Custom(ErrorObject::owned(1234, error.to_string(), None::<()>))
+/// Top-level error type for the RPC handler.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+	/// Failed to fetch the current best header.
+	#[error("Failed to fetch the current best header: {0}")]
+	SelectChain(ConsensusError),
+	/// Failed to fetch epoch data.
+	#[error("Failed to fetch epoch data")]
+	FetchEpoch,
+}
+
+impl From<Error> for JsonRpseeError {
+	fn from(error: Error) -> Self {
+		let error_code = match error {
+			Error::SelectChain(_) => 1,
+			Error::FetchEpoch => 2,
+		};
+
+		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+			BABE_ERROR + error_code,
+			error.to_string(),
+			Some(format!("{:?}", error)),
+		)))
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_consensus_babe::inherents::InherentDataProvider;
 	use sp_core::{crypto::key_types::BABE, testing::TaskExecutor};
 	use sp_keyring::Sr25519Keyring;
 	use sp_keystore::{testing::MemoryKeystore, Keystore};
@@ -201,7 +226,7 @@ mod tests {
 			client.clone(),
 			longest_chain.clone(),
 			move |_, _| async move {
-				Ok((sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
+				Ok((InherentDataProvider::from_timestamp_and_slot_duration(
 					0.into(),
 					slot_duration,
 				),))
