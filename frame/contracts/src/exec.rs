@@ -866,7 +866,7 @@ where
 
 			// Call into the wasm blob.
 			let output = executable
-				.execute(self, &entry_point, input_data)
+				.execute(self, &entry_point, input_data.clone())
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
 			// Avoid useless work that would be reverted anyways.
@@ -906,7 +906,11 @@ where
 					// Deposit an instantiation event.
 					Contracts::<T>::deposit_event(
 						vec![T::Hashing::hash_of(&caller), T::Hashing::hash_of(account_id)],
-						Event::Instantiated { deployer: caller, contract: account_id.clone() },
+						Event::Instantiated {
+							deployer: caller,
+							contract: account_id.clone(),
+							input_data,
+						},
 					);
 				},
 				(ExportedFunction::Call, Some(code_hash)) => {
@@ -925,7 +929,11 @@ where
 					let caller = self.caller();
 					Contracts::<T>::deposit_event(
 						vec![T::Hashing::hash_of(&caller), T::Hashing::hash_of(&account_id)],
-						Event::Called { caller: caller.clone(), contract: account_id.clone() },
+						Event::Called {
+							caller: caller.clone(),
+							contract: account_id.clone(),
+							input_data,
+						},
 					);
 				},
 			}
@@ -2430,7 +2438,11 @@ mod tests {
 			);
 			assert_eq!(
 				&events(),
-				&[Event::Instantiated { deployer: ALICE, contract: instantiated_contract_address }]
+				&[Event::Instantiated {
+					deployer: ALICE,
+					contract: instantiated_contract_address,
+					input_data: vec![]
+				}]
 			);
 		});
 	}
@@ -2539,8 +2551,16 @@ mod tests {
 			assert_eq!(
 				&events(),
 				&[
-					Event::Instantiated { deployer: BOB, contract: instantiated_contract_address },
-					Event::Called { caller: Origin::from_account_id(ALICE), contract: BOB },
+					Event::Instantiated {
+						deployer: BOB,
+						contract: instantiated_contract_address,
+						input_data: vec![]
+					},
+					Event::Called {
+						caller: Origin::from_account_id(ALICE),
+						contract: BOB,
+						input_data: vec![]
+					},
 				]
 			);
 		});
@@ -2599,7 +2619,11 @@ mod tests {
 			// event here.
 			assert_eq!(
 				&events(),
-				&[Event::Called { caller: Origin::from_account_id(ALICE), contract: BOB },]
+				&[Event::Called {
+					caller: Origin::from_account_id(ALICE),
+					contract: BOB,
+					input_data: vec![]
+				},]
 			);
 		});
 	}
@@ -2991,6 +3015,7 @@ mod tests {
 						event: MetaEvent::Contracts(crate::Event::Called {
 							caller: Origin::from_account_id(ALICE),
 							contract: BOB,
+							input_data: vec![],
 						}),
 						topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&BOB)],
 					},
@@ -3091,6 +3116,7 @@ mod tests {
 						event: MetaEvent::Contracts(crate::Event::Called {
 							caller: Origin::from_account_id(ALICE),
 							contract: BOB,
+							input_data: vec![],
 						}),
 						topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&BOB)],
 					},

@@ -714,7 +714,7 @@ pub mod pallet {
 	#[pallet::event]
 	pub enum Event<T: Config> {
 		/// Contract deployed by address at the specified address.
-		Instantiated { deployer: T::AccountId, contract: T::AccountId },
+		Instantiated { deployer: T::AccountId, contract: T::AccountId, input_data: Vec<u8> },
 
 		/// Contract has been removed.
 		///
@@ -766,6 +766,8 @@ pub mod pallet {
 			caller: Origin<T>,
 			/// The contract that was called.
 			contract: T::AccountId,
+			/// The input_data that was called.
+			input_data: Vec<u8>,
 		},
 
 		/// A contract delegate called a code hash.

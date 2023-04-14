@@ -657,7 +657,8 @@ fn instantiate_and_call_and_deposit_event() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Instantiated {
 						deployer: ALICE,
-						contract: addr.clone()
+						contract: addr.clone(),
+						input_data: vec![],
 					}),
 					topics: vec![hash(&ALICE), hash(&addr)],
 				},
@@ -893,10 +894,11 @@ fn deploy_and_call_other_contract() {
 		.account_id;
 		Contracts::bare_upload_code(ALICE, callee_wasm, None, Determinism::Enforced).unwrap();
 
+		let callee_input_data = [0, 1, 34, 51, 68, 85, 102, 119];
 		let callee_addr = Contracts::contract_address(
 			&caller_addr,
 			&callee_code_hash,
-			&[0, 1, 34, 51, 68, 85, 102, 119], // hard coded in wasm
+			&callee_input_data, // hard coded in wasm
 			&[],
 		);
 
@@ -905,13 +907,14 @@ fn deploy_and_call_other_contract() {
 
 		// Call BOB contract, which attempts to instantiate and call the callee contract and
 		// makes various assertions on the results from those calls.
+		let alice_input_data = callee_code_hash.as_ref().to_vec();
 		assert_ok!(Contracts::call(
 			RuntimeOrigin::signed(ALICE),
 			caller_addr.clone(),
 			0,
 			GAS_LIMIT,
 			None,
-			callee_code_hash.as_ref().to_vec(),
+			alice_input_data.clone(),
 		));
 
 		let callee = get_contract(&callee_addr);
@@ -982,6 +985,7 @@ fn deploy_and_call_other_contract() {
 					event: RuntimeEvent::Contracts(crate::Event::Instantiated {
 						deployer: caller_addr.clone(),
 						contract: callee_addr.clone(),
+						input_data: callee_input_data.to_vec(),
 					}),
 					topics: vec![hash(&caller_addr), hash(&callee_addr)],
 				},
@@ -999,6 +1003,7 @@ fn deploy_and_call_other_contract() {
 					event: RuntimeEvent::Contracts(crate::Event::Called {
 						caller: Origin::from_account_id(caller_addr.clone()),
 						contract: callee_addr.clone(),
+						input_data: callee_input_data.to_vec(),
 					}),
 					topics: vec![
 						hash(&Origin::<Test>::from_account_id(caller_addr.clone())),
@@ -1010,6 +1015,7 @@ fn deploy_and_call_other_contract() {
 					event: RuntimeEvent::Contracts(crate::Event::Called {
 						caller: Origin::from_account_id(ALICE),
 						contract: caller_addr.clone(),
+						input_data: alice_input_data,
 					}),
 					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&caller_addr)],
 				},
@@ -1327,6 +1333,7 @@ fn self_destruct_works() {
 					event: RuntimeEvent::Contracts(crate::Event::Called {
 						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
+						input_data: vec![],
 					}),
 					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
@@ -3633,6 +3640,7 @@ fn instantiate_with_zero_balance_works() {
 					event: RuntimeEvent::Contracts(crate::Event::Instantiated {
 						deployer: ALICE,
 						contract: addr.clone(),
+						input_data: vec![],
 					}),
 					topics: vec![hash(&ALICE), hash(&addr)],
 				},
@@ -3753,6 +3761,7 @@ fn instantiate_with_below_existential_deposit_works() {
 					event: RuntimeEvent::Contracts(crate::Event::Instantiated {
 						deployer: ALICE,
 						contract: addr.clone(),
+						input_data: vec![],
 					}),
 					topics: vec![hash(&ALICE), hash(&addr)],
 				},
@@ -3787,13 +3796,14 @@ fn storage_deposit_works() {
 		initialize_block(2);
 
 		// Create storage
+		let input_data_create_storage = (1_000u32, 5_000u32).encode();
 		assert_ok!(Contracts::call(
 			RuntimeOrigin::signed(ALICE),
 			addr.clone(),
 			42,
 			GAS_LIMIT,
 			None,
-			(1_000u32, 5_000u32).encode(),
+			input_data_create_storage.clone(),
 		));
 		// 4 is for creating 2 storage items
 		let charged0 = 4 + 1_000 + 5_000;
@@ -3801,26 +3811,28 @@ fn storage_deposit_works() {
 		assert_eq!(get_contract(&addr).total_deposit(), deposit);
 
 		// Add more storage (but also remove some)
+		let input_data_add_storage = (2_000u32, 4_900u32).encode();
 		assert_ok!(Contracts::call(
 			RuntimeOrigin::signed(ALICE),
 			addr.clone(),
 			0,
 			GAS_LIMIT,
 			None,
-			(2_000u32, 4_900u32).encode(),
+			input_data_add_storage.clone(),
 		));
 		let charged1 = 1_000 - 100;
 		deposit += charged1;
 		assert_eq!(get_contract(&addr).total_deposit(), deposit);
 
 		// Remove more storage (but also add some)
+		let input_data_remove_storage = (2_100u32, 900u32).encode();
 		assert_ok!(Contracts::call(
 			RuntimeOrigin::signed(ALICE),
 			addr.clone(),
 			0,
 			GAS_LIMIT,
 			None,
-			(2_100u32, 900u32).encode(),
+			input_data_remove_storage.clone(),
 		));
 		// -1 for numeric instability
 		let refunded0 = 4_000 - 100 - 1;
@@ -3847,6 +3859,7 @@ fn storage_deposit_works() {
 					event: RuntimeEvent::Contracts(crate::Event::Called {
 						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
+						input_data: input_data_create_storage,
 					}),
 					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
@@ -3864,6 +3877,7 @@ fn storage_deposit_works() {
 					event: RuntimeEvent::Contracts(crate::Event::Called {
 						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
+						input_data: input_data_add_storage,
 					}),
 					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
@@ -3881,6 +3895,7 @@ fn storage_deposit_works() {
 					event: RuntimeEvent::Contracts(crate::Event::Called {
 						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
+						input_data: input_data_remove_storage,
 					}),
 					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
@@ -4348,6 +4363,7 @@ fn set_code_hash() {
 					event: RuntimeEvent::Contracts(crate::Event::Called {
 						caller: Origin::from_account_id(ALICE),
 						contract: contract_addr.clone(),
+						input_data: new_code_hash.as_ref().to_vec(),
 					}),
 					topics: vec![
 						hash(&Origin::<Test>::from_account_id(ALICE)),
@@ -4359,6 +4375,7 @@ fn set_code_hash() {
 					event: RuntimeEvent::Contracts(crate::Event::Called {
 						caller: Origin::from_account_id(ALICE),
 						contract: contract_addr.clone(),
+						input_data: vec![],
 					}),
 					topics: vec![
 						hash(&Origin::<Test>::from_account_id(ALICE)),
