@@ -682,12 +682,11 @@ struct UnrolledParams {
 	param_ranges: Vec<TokenStream2>,
 	param_names: Vec<TokenStream2>,
 	param_types: Vec<TokenStream2>,
-	param_conditions: Vec<TokenStream2>,
 }
 
 impl UnrolledParams {
 	/// Constructs an [`UnrolledParams`] from a [`Vec<ParamDef>`]
-	fn from(params: &Vec<ParamDef>, home: TokenStream2) -> UnrolledParams {
+	fn from(params: &Vec<ParamDef>) -> UnrolledParams {
 		let param_ranges: Vec<TokenStream2> = params
 			.iter()
 			.map(|p| {
@@ -704,14 +703,6 @@ impl UnrolledParams {
 				quote!(#name)
 			})
 			.collect();
-		let param_conditions: Vec<TokenStream2> = params
-			.iter()
-			.map(|p| {
-				let start = &p.start;
-				let end = &p.end;
-				quote!(#home::const_assert!(#start <= #end);)
-			})
-			.collect();
 		let param_types: Vec<TokenStream2> = params
 			.iter()
 			.map(|p| {
@@ -719,7 +710,7 @@ impl UnrolledParams {
 				quote!(#typ)
 			})
 			.collect();
-		UnrolledParams { param_ranges, param_names, param_types, param_conditions }
+		UnrolledParams { param_ranges, param_names, param_types }
 	}
 }
 
@@ -744,11 +735,10 @@ fn expand_benchmark(
 	let test_ident = Ident::new(format!("test_{}", name.to_string()).as_str(), Span::call_site());
 
 	// unroll params (prepare for quoting)
-	let unrolled = UnrolledParams::from(&benchmark_def.params, home.clone());
+	let unrolled = UnrolledParams::from(&benchmark_def.params);
 	let param_names = unrolled.param_names;
 	let param_ranges = unrolled.param_ranges;
 	let param_types = unrolled.param_types;
-	let param_conditions = unrolled.param_conditions;
 
 	let type_use_generics = match is_instance {
 		false => quote!(T),
@@ -892,10 +882,6 @@ fn expand_benchmark(
 			#home::assert_impl_all!(#param_types: #home::ParamRange);
 		)*
 
-		#(
-			#param_conditions
-		)*
-
 		#[allow(non_camel_case_types)]
 		#(
 			#fn_attrs
@@ -992,6 +978,9 @@ fn expand_benchmark(
 						// Test the lowest, highest (if its different from the lowest)
 						// and up to num_values-2 more equidistant values in between.
 						// For 0..10 and num_values=6 this would mean: [0, 2, 4, 6, 8, 10]
+						if high < low {
+							return Err("The start of a `ParamRange` must be less than or equal to the end".into());
+						}
 
 						let mut values = #krate::vec![low];
 						let diff = (high - low).min(num_values - 1);
