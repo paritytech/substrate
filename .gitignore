@@ -1,8 +1,3 @@
-**/*.[0-9][0-9]
-**/*.org
-**/*.swo
-**/*.log
-**/expanded*
 **/target/
 **/*.rs.bk
 *.swp
