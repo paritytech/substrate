@@ -284,7 +284,7 @@ impl Peerset {
 					SetId::from(set),
 					set_config,
 					to_notifications.clone(),
-					peer_store.handle(),
+					Box::new(peer_store.handle()),
 				)
 			})
 			.collect::<Vec<_>>();

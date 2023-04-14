@@ -22,6 +22,7 @@ use partial_sort::PartialSort;
 use std::{
 	cmp::{Ord, Ordering, PartialOrd},
 	collections::{hash_map::Entry, HashMap, HashSet},
+	fmt::Debug,
 	sync::{Arc, Mutex},
 	time::{Duration, Instant},
 };
@@ -43,7 +44,7 @@ const INVERSE_DECREMENT: i32 = 50;
 /// remove it, once the reputation value reaches 0.
 const FORGET_AFTER: Duration = Duration::from_secs(3600);
 
-pub trait PeerReputationProvider {
+pub trait PeerReputationProvider: Debug + Send {
 	/// Check whether the peer is banned.
 	fn is_banned(&self, peer_id: &PeerId) -> bool;
 
