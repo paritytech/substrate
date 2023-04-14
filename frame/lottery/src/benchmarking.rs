@@ -89,7 +89,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn set_calls(n: Linear<0, 1>) -> Result<(), BenchmarkError> {
+	fn set_calls(n: Linear<0, { T::MaxCalls::get() }>) -> Result<(), BenchmarkError> {
 		let calls = vec![frame_system::Call::<T>::remark { remark: vec![] }.into(); n as usize];
 		let origin =
 			T::ManagerOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
