@@ -37,6 +37,10 @@ check-dependent-polkadot:
     COMPANION_OVERRIDES: |
       substrate: polkadot-v*
       polkadot: release-v*
+    # enable the same feature flags as polkadot's test-linux-stable
+    COMPANION_CHECK_COMMAND: >
+      cargo check --all-targets --workspace
+      --features=runtime-benchmarks,runtime-metrics,try-runtime
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
 
