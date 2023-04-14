@@ -1127,13 +1127,13 @@ pub mod pallet {
 				Precision::BestEffort => value.min(max),
 				Precision::Exact => value,
 			};
+			ensure!(actual <= max, TokenError::FundsUnavailable);
 			if slashed == beneficiary {
 				return match status {
 					Status::Free => Ok(actual.saturating_sub(Self::unreserve(slashed, actual))),
 					Status::Reserved => Ok(actual),
 				}
 			}
-			ensure!(actual <= max, TokenError::FundsUnavailable);
 
 			let ((actual, maybe_dust_1), maybe_dust_2) = Self::try_mutate_account(
 				beneficiary,
