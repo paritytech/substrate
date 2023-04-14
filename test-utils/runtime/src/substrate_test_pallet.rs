@@ -129,7 +129,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Deposit given digest items into the system storage. They will be included in a header during finalization.
+		/// Deposit given digest items into the system storage. They will be included in a header
+		/// during finalization.
 		#[pallet::call_index(7)]
 		#[pallet::weight(100)]
 		pub fn deposit_log_digest_item(
@@ -209,10 +210,7 @@ pub mod pallet {
 			}
 		}
 
-		fn execute_storage_change(
-			key: Vec<u8>,
-			value: Option<Vec<u8>>
-		) -> DispatchResult {
+		fn execute_storage_change(key: Vec<u8>, value: Option<Vec<u8>>) -> DispatchResult {
 			match value {
 				Some(value) => storage::unhashed::put_raw(&key, &value),
 				None => storage::unhashed::kill(&key),
