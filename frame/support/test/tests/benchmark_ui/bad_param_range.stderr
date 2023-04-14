@@ -1,5 +1,7 @@
-error: The start of a `ParamRange` must be less than or equal to the end
-  --> tests/benchmark_ui/bad_param_range.rs:10:21
-   |
-10 |     fn bench(x: Linear<3, 1>) {
-   |                        ^
+error[E0080]: evaluation of constant value failed
+ --> tests/benchmark_ui/bad_param_range.rs:5:1
+  |
+5 | #[benchmarks]
+  | ^^^^^^^^^^^^^ attempt to compute `0_usize - 1_usize`, which would overflow
+  |
+  = note: this error originates in the macro `frame_benchmarking::v2::const_assert` which comes from the expansion of the attribute macro `benchmarks` (in Nightly builds, run with -Z macro-backtrace for more info)

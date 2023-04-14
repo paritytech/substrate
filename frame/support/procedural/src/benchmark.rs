@@ -682,11 +682,12 @@ struct UnrolledParams {
 	param_ranges: Vec<TokenStream2>,
 	param_names: Vec<TokenStream2>,
 	param_types: Vec<TokenStream2>,
+	param_conditions: Vec<TokenStream2>,
 }
 
 impl UnrolledParams {
 	/// Constructs an [`UnrolledParams`] from a [`Vec<ParamDef>`]
-	fn from(params: &Vec<ParamDef>) -> UnrolledParams {
+	fn from(params: &Vec<ParamDef>, home: TokenStream2) -> UnrolledParams {
 		let param_ranges: Vec<TokenStream2> = params
 			.iter()
 			.map(|p| {
@@ -703,6 +704,14 @@ impl UnrolledParams {
 				quote!(#name)
 			})
 			.collect();
+		let param_conditions: Vec<TokenStream2> = params
+			.iter()
+			.map(|p| {
+				let start = &p.start;
+				let end = &p.end;
+				quote!(#home::const_assert!(#start <= #end);)
+			})
+			.collect();
 		let param_types: Vec<TokenStream2> = params
 			.iter()
 			.map(|p| {
@@ -710,7 +719,7 @@ impl UnrolledParams {
 				quote!(#typ)
 			})
 			.collect();
-		UnrolledParams { param_ranges, param_names, param_types }
+		UnrolledParams { param_ranges, param_names, param_types, param_conditions }
 	}
 }
 
@@ -735,10 +744,11 @@ fn expand_benchmark(
 	let test_ident = Ident::new(format!("test_{}", name.to_string()).as_str(), Span::call_site());
 
 	// unroll params (prepare for quoting)
-	let unrolled = UnrolledParams::from(&benchmark_def.params);
+	let unrolled = UnrolledParams::from(&benchmark_def.params, home.clone());
 	let param_names = unrolled.param_names;
 	let param_ranges = unrolled.param_ranges;
 	let param_types = unrolled.param_types;
+	let param_conditions = unrolled.param_conditions;
 
 	let type_use_generics = match is_instance {
 		false => quote!(T),
@@ -880,6 +890,10 @@ fn expand_benchmark(
 		// compile-time assertions that each referenced param type implements ParamRange
 		#(
 			#home::assert_impl_all!(#param_types: #home::ParamRange);
+		)*
+
+		#(
+			#param_conditions
 		)*
 
 		#[allow(non_camel_case_types)]
