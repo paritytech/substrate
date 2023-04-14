@@ -135,7 +135,7 @@ impl ChainApi for TestApi {
 
 fn uxt(transfer: TransferData) -> Extrinsic {
 	//todo: empty signature removed...
-	ExtrinsicBuilder::new_bench_call(transfer).unsigned().build()
+	ExtrinsicBuilder::new_bench_call(transfer).build()
 }
 
 fn bench_configured(pool: Pool<TestApi>, number: u64) {

@@ -83,13 +83,13 @@ where
 		key: Vec<u8>,
 		value: Option<Vec<u8>>,
 	) -> Result<(), sp_blockchain::Error> {
-		self.push(ExtrinsicBuilder::new_storage_change_unsigned(key, value).unsigned().build())
+		self.push(ExtrinsicBuilder::new_storage_change_unsigned(key, value).build())
 	}
 
 	fn push_deposit_log_digest_item(
 		&mut self,
 		log: sp_runtime::generic::DigestItem,
 	) -> Result<(), sp_blockchain::Error> {
-		self.push(ExtrinsicBuilder::new_deposit_log_digest_item(log).unsigned().build())
+		self.push(ExtrinsicBuilder::new_deposit_log_digest_item(log).build())
 	}
 }

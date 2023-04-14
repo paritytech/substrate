@@ -80,9 +80,14 @@ impl ExtrinsicBuilder {
 		}
 	}
 
+	/// Create builder for given `RuntimeCall`. `Extrinsic` will be unsigned.
+	pub fn new_unsigned(function: impl Into<RuntimeCall>) -> Self {
+		Self { function: function.into(), signer: None, nonce: None }
+	}
+
 	/// Create builder for `pallet_call::bench_transfer` from given `TransferData`.
 	pub fn new_bench_call(transfer: TransferData) -> Self {
-		Self { function: PalletCall::bench_call { transfer }.into(), signer: None, nonce: None }
+		Self::new_unsigned(PalletCall::bench_call { transfer })
 	}
 
 	/// Create builder for given `Transfer`. Transfer `nonce` will be used as `Extrinsic` nonce.
@@ -111,7 +116,7 @@ impl ExtrinsicBuilder {
 	/// Create builder for `PalletCall::storage_change_unsigned` call using given parameters. Will
 	/// create unsigned Extrinsic.
 	pub fn new_storage_change_unsigned(key: Vec<u8>, value: Option<Vec<u8>>) -> Self {
-		Self::new(PalletCall::storage_change_unsigned { key, value }).unsigned()
+		Self::new_unsigned(PalletCall::storage_change_unsigned { key, value })
 	}
 
 	/// Create builder for `PalletCall::offchain_index_set` call using given parameters
@@ -131,7 +136,7 @@ impl ExtrinsicBuilder {
 
 	/// Create builder for `PalletCall::new_deposit_log_digest_item` call using given `log`
 	pub fn new_deposit_log_digest_item(log: sp_runtime::generic::DigestItem) -> Self {
-		Self::new(PalletCall::deposit_log_digest_item { log })
+		Self::new_unsigned(PalletCall::deposit_log_digest_item { log })
 	}
 
 	/// Create builder for `PalletCall::Call::new_deposit_log_digest_item`
@@ -151,12 +156,12 @@ impl ExtrinsicBuilder {
 
 	/// Create builder for `PalletCall::read` call using given parameters
 	pub fn new_read(count: u32) -> Self {
-		Self::new(PalletCall::read { count })
+		Self::new_unsigned(PalletCall::read { count })
 	}
 
 	/// Create builder for `PalletCall::read` call using given parameters
 	pub fn new_read_and_panic(count: u32) -> Self {
-		Self::new(PalletCall::read_and_panic { count })
+		Self::new_unsigned(PalletCall::read_and_panic { count })
 	}
 
 	/// Unsigned `Extrinsic` will be created

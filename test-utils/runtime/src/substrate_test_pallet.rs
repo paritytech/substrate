@@ -180,8 +180,7 @@ pub mod pallet {
 		/// Panics if it can not read `X` times.
 		#[pallet::call_index(11)]
 		#[pallet::weight(100)]
-		pub fn read(origin: OriginFor<T>, count: u32) -> DispatchResult {
-			ensure_signed(origin)?;
+		pub fn read(_origin: OriginFor<T>, count: u32) -> DispatchResult {
 			Self::execute_read(count, false)
 		}
 
@@ -190,14 +189,13 @@ pub mod pallet {
 		/// Returns `Ok` if it didn't read anything.
 		#[pallet::call_index(12)]
 		#[pallet::weight(100)]
-		pub fn read_and_panic(origin: OriginFor<T>, count: u32) -> DispatchResult {
-			ensure_signed(origin)?;
+		pub fn read_and_panic(_origin: OriginFor<T>, count: u32) -> DispatchResult {
 			Self::execute_read(count, true)
 		}
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub (crate) fn execute_read(read: u32, panic_at_end: bool) -> DispatchResult {
+		pub(crate) fn execute_read(read: u32, panic_at_end: bool) -> DispatchResult {
 			let mut next_key = vec![];
 			for _ in 0..(read as usize) {
 				if let Some(next) = sp_io::storage::next_key(&next_key) {
@@ -229,16 +227,15 @@ pub mod pallet {
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			log::trace!(target: LOG_TARGET, "validate_unsigned {call:?}");
 			match call {
-				// offchain testing requires unsigned include_data
-				Call::include_data { .. } => Ok(ValidTransaction { ..Default::default() }),
-
-				// consensus tests do not use signer and nonce:
-				Call::deposit_log_digest_item { .. } => Ok(Default::default()),
-
-				// some tests do not need to be complicated with signer and nonce, they also need
-				// reproducible block hash so no signature is allowed for this call
-				Call::storage_change_unsigned { .. } => Ok(Default::default()),
-
+				// Some tests do not need to be complicated with signer and nonce, some need
+				// reproducible block hash (call signature can't be there).
+				// Offchain testing requires unsigned include_data.
+				// Consensus tests do not use signer and nonce.
+				Call::include_data { .. } |
+				Call::deposit_log_digest_item { .. } |
+				Call::storage_change_unsigned { .. } |
+				Call::read { .. } |
+				Call::read_and_panic { .. } => Ok(Default::default()),
 				_ => Err(TransactionValidityError::Invalid(InvalidTransaction::Call)),
 			}
 		}

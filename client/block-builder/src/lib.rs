@@ -313,7 +313,7 @@ mod tests {
 	use sp_core::Blake2Hasher;
 	use sp_state_machine::Backend;
 	use substrate_test_runtime_client::{
-		runtime::Extrinsic, DefaultTestClientBuilderExt, TestClientBuilderExt,
+		runtime::ExtrinsicBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
 	};
 
 	#[test]
@@ -365,7 +365,7 @@ mod tests {
 		)
 		.unwrap();
 
-		block_builder.push(Extrinsic::ReadAndPanic(8)).unwrap_err();
+		block_builder.push(ExtrinsicBuilder::new_read_and_panic(8).build()).unwrap_err();
 
 		let block = block_builder.build().unwrap();
 
@@ -381,7 +381,7 @@ mod tests {
 		)
 		.unwrap();
 
-		block_builder.push(Extrinsic::Read(8)).unwrap();
+		block_builder.push(ExtrinsicBuilder::new_read(8).build()).unwrap();
 
 		let block = block_builder.build().unwrap();
 
