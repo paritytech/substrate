@@ -635,7 +635,7 @@ where
 					peer.last_notification_sent.elapsed() > INACTIVITY_EVICT_THRESHOLD;
 
 				if last_received_late && last_sent_late {
-					log::error!(target: "sync", "evict peer {id} since it has been idling for too long");
+					log::debug!(target: "sync", "evict peer {id} since it has been idling for too long");
 					self.network_service.report_peer(*id, rep::INACTIVE_SUBSTREAM);
 					self.network_service
 						.disconnect_peer(*id, self.block_announce_protocol_name.clone());
