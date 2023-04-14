@@ -21,14 +21,13 @@ use derive_syn_parse::Parse;
 use frame_support_procedural_tools::generate_crate_access_2018;
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
-use quote::{quote, quote_spanned, ToTokens};
+use quote::{quote, ToTokens};
 use syn::{
-	parenthesized,
 	parse::{Nothing, ParseStream},
 	parse_quote,
 	punctuated::Punctuated,
 	spanned::Spanned,
-	token::{Colon2, Comma, Gt, Lt, Paren},
+	token::{Comma, Gt, Lt, PathSep},
 	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod, LitInt,
 	Pat, Path, PathArguments, PathSegment, Result, ReturnType, Signature, Stmt, Token, Type,
 	TypePath, Visibility, WhereClause,
@@ -45,6 +44,9 @@ mod keywords {
 	custom_keyword!(skip_meta);
 	custom_keyword!(BenchmarkError);
 	custom_keyword!(Result);
+
+	pub const BENCHMARK_TOKEN: &str = stringify!(benchmark);
+	pub const BENCHMARKS_TOKEN: &str = stringify!(benchmarks);
 }
 
 /// This represents the raw parsed data for a param definition such as `x: Linear<10, 20>`.
@@ -95,27 +97,20 @@ impl syn::parse::Parse for BenchmarkAttrKeyword {
 
 impl syn::parse::Parse for BenchmarkAttrs {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
-		let lookahead = input.lookahead1();
-		if !lookahead.peek(Paren) {
-			let _nothing: Nothing = input.parse()?;
-			return Ok(BenchmarkAttrs { skip_meta: false, extra: false })
-		}
-		let content;
-		let _paren: Paren = parenthesized!(content in input);
 		let mut extra = false;
 		let mut skip_meta = false;
-		let args = Punctuated::<BenchmarkAttrKeyword, Token![,]>::parse_terminated(&content)?;
+		let args = Punctuated::<BenchmarkAttrKeyword, Token![,]>::parse_terminated(&input)?;
 		for arg in args.into_iter() {
 			match arg {
 				BenchmarkAttrKeyword::Extra => {
 					if extra {
-						return Err(content.error("`extra` can only be specified once"))
+						return Err(input.error("`extra` can only be specified once"))
 					}
 					extra = true;
 				},
 				BenchmarkAttrKeyword::SkipMeta => {
 					if skip_meta {
-						return Err(content.error("`skip_meta` can only be specified once"))
+						return Err(input.error("`skip_meta` can only be specified once"))
 					}
 					skip_meta = true;
 				},
@@ -150,8 +145,6 @@ struct BenchmarkDef {
 	call_def: BenchmarkCallDef,
 	verify_stmts: Vec<Stmt>,
 	last_stmt: Option<Stmt>,
-	extra: bool,
-	skip_meta: bool,
 	fn_sig: Signature,
 	fn_vis: Visibility,
 	fn_attrs: Vec<Attribute>,
@@ -218,7 +211,7 @@ fn parse_params(item_fn: &ItemFn) -> Result<Vec<ParamDef>> {
 			return Err(Error::new(
 					var_span,
 					"Benchmark parameter names must consist of a single lowercase letter (a-z) and no other characters.",
-				))
+				));
 		};
 		let name = ident.ident.to_token_stream().to_string();
 		if name.len() > 1 {
@@ -253,9 +246,9 @@ fn parse_params(item_fn: &ItemFn) -> Result<Vec<ParamDef>> {
 /// Used in several places where the `#[extrinsic_call]` or `#[body]` annotation is missing
 fn missing_call<T>(item_fn: &ItemFn) -> Result<T> {
 	return Err(Error::new(
-		item_fn.block.brace_token.span,
+		item_fn.block.brace_token.span.join(),
 		"No valid #[extrinsic_call] or #[block] annotation could be found in benchmark function body."
-	))
+	));
 }
 
 /// Finds the `BenchmarkCallDef` and its index (within the list of stmts for the fn) and
@@ -264,10 +257,10 @@ fn missing_call<T>(item_fn: &ItemFn) -> Result<T> {
 fn parse_call_def(item_fn: &ItemFn) -> Result<(usize, BenchmarkCallDef)> {
 	// #[extrinsic_call] / #[block] handling
 	let call_defs = item_fn.block.stmts.iter().enumerate().filter_map(|(i, child)| {
-			if let Stmt::Semi(Expr::Call(expr_call), _semi) = child {
+			if let Stmt::Expr(Expr::Call(expr_call), _semi) = child {
 				// #[extrinsic_call] case
 				expr_call.attrs.iter().enumerate().find_map(|(k, attr)| {
-					let segment = attr.path.segments.last()?;
+					let segment = attr.path().segments.last()?;
 					let _: keywords::extrinsic_call = syn::parse(segment.ident.to_token_stream().into()).ok()?;
 					let mut expr_call = expr_call.clone();
 
@@ -281,10 +274,10 @@ fn parse_call_def(item_fn: &ItemFn) -> Result<(usize, BenchmarkCallDef)> {
 
 					Some(Ok((i, BenchmarkCallDef::ExtrinsicCall { origin, expr_call, attr_span: attr.span() })))
 				})
-			} else if let Stmt::Expr(Expr::Block(block)) = child {
+			} else if let Stmt::Expr(Expr::Block(block), _) = child {
 				// #[block] case
 				block.attrs.iter().enumerate().find_map(|(k, attr)| {
-					let segment = attr.path.segments.last()?;
+					let segment = attr.path().segments.last()?;
 					let _: keywords::block = syn::parse(segment.ident.to_token_stream().into()).ok()?;
 					let mut block = block.clone();
 
@@ -310,7 +303,7 @@ fn parse_call_def(item_fn: &ItemFn) -> Result<(usize, BenchmarkCallDef)> {
 
 impl BenchmarkDef {
 	/// Constructs a [`BenchmarkDef`] by traversing an existing [`ItemFn`] node.
-	pub fn from(item_fn: &ItemFn, extra: bool, skip_meta: bool) -> Result<BenchmarkDef> {
+	pub fn from(item_fn: &ItemFn) -> Result<BenchmarkDef> {
 		let params = parse_params(item_fn)?;
 		ensure_valid_return_type(item_fn)?;
 		let (i, call_def) = parse_call_def(&item_fn)?;
@@ -346,8 +339,6 @@ impl BenchmarkDef {
 			call_def,
 			verify_stmts,
 			last_stmt,
-			extra,
-			skip_meta,
 			fn_sig: item_fn.sig.clone(),
 			fn_vis: item_fn.vis.clone(),
 			fn_attrs: item_fn.attrs.clone(),
@@ -375,7 +366,7 @@ pub fn benchmarks(
 	let mod_attrs: Vec<&Attribute> = module
 		.attrs
 		.iter()
-		.filter(|attr| syn::parse2::<keywords::benchmarks>(attr.to_token_stream()).is_err())
+		.filter(|attr| !attr.path().is_ident(keywords::BENCHMARKS_TOKEN))
 		.collect();
 
 	let mut benchmark_names: Vec<Ident> = Vec::new();
@@ -391,35 +382,32 @@ pub fn benchmarks(
 		let Item::Fn(func) = stmt else { return None };
 
 		// find #[benchmark] attribute on function def
-		let benchmark_attr = func.attrs.iter().find_map(|attr| {
-			let seg = attr.path.segments.last()?;
-			syn::parse::<keywords::benchmark>(seg.ident.to_token_stream().into()).ok()?;
-			Some(attr)
-		})?;
+		let benchmark_attr =
+			func.attrs.iter().find(|attr| attr.path().is_ident(keywords::BENCHMARK_TOKEN))?;
 
 		Some((benchmark_attr.clone(), func.clone(), stmt))
 	});
 
 	// parse individual benchmark defs and args
 	for (benchmark_attr, func, stmt) in benchmark_fn_metas {
-		// parse any args provided to #[benchmark]
-		let attr_tokens = benchmark_attr.tokens.to_token_stream().into();
-		let benchmark_args: BenchmarkAttrs = syn::parse(attr_tokens)?;
-
 		// parse benchmark def
-		let benchmark_def =
-			BenchmarkDef::from(&func, benchmark_args.extra, benchmark_args.skip_meta)?;
+		let benchmark_def = BenchmarkDef::from(&func)?;
 
 		// record benchmark name
 		let name = &func.sig.ident;
 		benchmark_names.push(name.clone());
 
-		// record name sets
-		if benchmark_def.extra {
-			extra_benchmark_names.push(name.clone());
-		}
-		if benchmark_def.skip_meta {
-			skip_meta_benchmark_names.push(name.clone())
+		// Check if we need to parse any args
+		if benchmark_attr.meta.require_path_only().is_err() {
+			// parse any args provided to #[benchmark]
+			let benchmark_attrs: BenchmarkAttrs = benchmark_attr.parse_args()?;
+
+			// record name sets
+			if benchmark_attrs.extra {
+				extra_benchmark_names.push(name.clone());
+			} else if benchmark_attrs.skip_meta {
+				skip_meta_benchmark_names.push(name.clone());
+			}
 		}
 
 		// expand benchmark
@@ -787,7 +775,8 @@ fn expand_benchmark(
 			// determine call name (handles `_` and normal call syntax)
 			let expr_span = expr_call.span();
 			let call_err = || {
-				quote_spanned!(expr_span=> "Extrinsic call must be a function call or `_`".to_compile_error()).into()
+				syn::Error::new(expr_span, "Extrinsic call must be a function call or `_`")
+					.to_compile_error()
 			};
 			let call_name = match *expr_call.func {
 				Expr::Path(expr_path) => {
@@ -795,10 +784,9 @@ fn expand_benchmark(
 					let Some(segment) = expr_path.path.segments.last() else { return call_err(); };
 					segment.ident.to_string()
 				},
-				Expr::Verbatim(tokens) => {
+				Expr::Infer(_) => {
 					// `_` style
 					// replace `_` with fn name
-					let Ok(_) = syn::parse::<Token![_]>(tokens.to_token_stream().into()) else { return call_err(); };
 					name.to_string()
 				},
 				_ => return call_err(),
@@ -806,7 +794,7 @@ fn expand_benchmark(
 
 			// modify extrinsic call to be prefixed with "new_call_variant"
 			let call_name = format!("new_call_variant_{}", call_name);
-			let mut punct: Punctuated<PathSegment, Colon2> = Punctuated::new();
+			let mut punct: Punctuated<PathSegment, PathSep> = Punctuated::new();
 			punct.push(PathSegment {
 				arguments: PathArguments::None,
 				ident: Ident::new(call_name.as_str(), Span::call_site()),
@@ -847,11 +835,10 @@ fn expand_benchmark(
 	let vis = benchmark_def.fn_vis;
 
 	// remove #[benchmark] attribute
-	let fn_attrs: Vec<&Attribute> = benchmark_def
+	let fn_attrs = benchmark_def
 		.fn_attrs
 		.iter()
-		.filter(|attr| !syn::parse2::<keywords::benchmark>(attr.path.to_token_stream()).is_ok())
-		.collect();
+		.filter(|attr| !attr.path().is_ident(keywords::BENCHMARK_TOKEN));
 
 	// modify signature generics, ident, and inputs, e.g:
 	// before: `fn bench(u: Linear<1, 100>) -> Result<(), BenchmarkError>`
@@ -874,10 +861,11 @@ fn expand_benchmark(
 		Some(stmt) => quote!(#stmt),
 		None => quote!(Ok(())),
 	};
+	let fn_attrs_clone = fn_attrs.clone();
 
 	let fn_def = quote! {
 		#(
-			#fn_attrs
+			#fn_attrs_clone
 		)*
 		#vis #sig {
 			#(
