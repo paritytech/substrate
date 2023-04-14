@@ -39,9 +39,6 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {}
 
 	#[pallet::storage]
-	pub type NewAuthorities<T> = StorageValue<_, Vec<AuthorityId>, OptionQuery>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
 	pub type Authorities<T> = StorageValue<_, Vec<AuthorityId>, ValueQuery>;
 
@@ -58,31 +55,24 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_n: T::BlockNumber) -> Weight {
-			Weight::zero()
-		}
-
-		fn on_finalize(_n: T::BlockNumber) {}
-	}
-
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Legacy call used in transaction pool benchmarks.
 		#[pallet::call_index(0)]
 		#[pallet::weight(100)]
 		pub fn bench_call(_origin: OriginFor<T>, _transfer: TransferData) -> DispatchResult {
 			Ok(())
 		}
 
+		/// Implicitly fill a block body with some data.
 		#[pallet::call_index(1)]
 		#[pallet::weight(100)]
 		pub fn include_data(origin: OriginFor<T>, _data: Vec<u8>) -> DispatchResult {
-			log::trace!(target: LOG_TARGET, "include_data");
 			frame_system::ensure_signed(origin)?;
 			Ok(())
 		}
 
+		/// Put/delete some data from storage. Intended to use as an unsigned extrinsic.
 		#[pallet::call_index(2)]
 		#[pallet::weight(100)]
 		pub fn storage_change_unsigned(
@@ -90,13 +80,10 @@ pub mod pallet {
 			key: Vec<u8>,
 			value: Option<Vec<u8>>,
 		) -> DispatchResult {
-			match value {
-				Some(value) => storage::unhashed::put_raw(&key, &value),
-				None => storage::unhashed::kill(&key),
-			}
-			Ok(())
+			Self::execute_storage_change(key, value)
 		}
 
+		/// Put/delete some data from storage. Intended to use as a signed extrinsic.
 		#[pallet::call_index(3)]
 		#[pallet::weight(100)]
 		pub fn storage_change(
@@ -105,13 +92,10 @@ pub mod pallet {
 			value: Option<Vec<u8>>,
 		) -> DispatchResult {
 			frame_system::ensure_signed(origin)?;
-			match value {
-				Some(value) => storage::unhashed::put_raw(&key, &value),
-				None => storage::unhashed::kill(&key),
-			}
-			Ok(())
+			Self::execute_storage_change(key, value)
 		}
 
+		/// Write a key value pair to the offchain database.
 		#[pallet::call_index(4)]
 		#[pallet::weight(100)]
 		pub fn offchain_index_set(
@@ -124,6 +108,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Remove a key and an associated value from the offchain database.
 		#[pallet::call_index(5)]
 		#[pallet::weight(100)]
 		pub fn offchain_index_clear(origin: OriginFor<T>, key: Vec<u8>) -> DispatchResult {
@@ -132,9 +117,10 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Create an index for this call.
 		#[pallet::call_index(6)]
 		#[pallet::weight(100)]
-		pub fn store(origin: OriginFor<T>, data: Vec<u8>) -> DispatchResult {
+		pub fn indexed_call(origin: OriginFor<T>, data: Vec<u8>) -> DispatchResult {
 			frame_system::ensure_signed(origin)?;
 			let content_hash = sp_io::hashing::blake2_256(&data);
 			let extrinsic_index: u32 =
@@ -143,6 +129,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Deposit given digest items into the system storage. They will be included in a header during finalization.
 		#[pallet::call_index(7)]
 		#[pallet::weight(100)]
 		pub fn deposit_log_digest_item(
@@ -153,6 +140,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// This call is validated as `ValidTransaction` with given priority.
 		#[pallet::call_index(8)]
 		#[pallet::weight(100)]
 		pub fn call_with_priority(
@@ -162,12 +150,14 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// This call is validated as non-propagable `ValidTransaction`.
 		#[pallet::call_index(9)]
 		#[pallet::weight(100)]
 		pub fn call_do_not_propagate(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
 		}
 
+		/// Fill the block weight up to the given ratio.
 		#[pallet::call_index(10)]
 		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
 		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResult {
@@ -195,7 +185,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub(crate) fn execute_read(read: u32, panic_at_end: bool) -> DispatchResult {
+		fn execute_read(read: u32, panic_at_end: bool) -> DispatchResult {
 			let mut next_key = vec![];
 			for _ in 0..(read as usize) {
 				if let Some(next) = sp_io::storage::next_key(&next_key) {
@@ -218,6 +208,17 @@ pub mod pallet {
 				Ok(())
 			}
 		}
+
+		fn execute_storage_change(
+			key: Vec<u8>,
+			value: Option<Vec<u8>>
+		) -> DispatchResult {
+			match value {
+				Some(value) => storage::unhashed::put_raw(&key, &value),
+				None => storage::unhashed::kill(&key),
+			}
+			Ok(())
+		}
 	}
 
 	#[pallet::validate_unsigned]
@@ -229,9 +230,7 @@ pub mod pallet {
 			match call {
 				// Some tests do not need to be complicated with signer and nonce, some need
 				// reproducible block hash (call signature can't be there).
-				// Offchain testing requires unsigned include_data.
-				// Consensus tests do not use signer and nonce.
-				Call::include_data { .. } |
+				// Offchain testing requires storage_change_unsigned.
 				Call::deposit_log_digest_item { .. } |
 				Call::storage_change_unsigned { .. } |
 				Call::read { .. } |

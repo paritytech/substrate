@@ -1003,7 +1003,7 @@ mod tests {
 				// when
 				// after validation `Store` will have priority set to 9001 (validate_transaction
 				// mock)
-				let xt = ExtrinsicBuilder::new_store(Vec::new()).build();
+				let xt = ExtrinsicBuilder::new_indexed_call(Vec::new()).build();
 				block_on(pool.submit_one(&BlockId::Number(1), SOURCE, xt)).unwrap();
 				assert_eq!(pool.validated_pool().status().ready, 2);
 

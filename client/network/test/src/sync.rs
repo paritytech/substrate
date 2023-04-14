@@ -1183,7 +1183,7 @@ async fn syncs_indexed_blocks() {
 		64,
 		BlockOrigin::Own,
 		|mut builder| {
-			let ex = ExtrinsicBuilder::new_store(n.to_le_bytes().to_vec()).nonce(n).build();
+			let ex = ExtrinsicBuilder::new_indexed_call(n.to_le_bytes().to_vec()).nonce(n).build();
 			n += 1;
 			builder.push(ex).unwrap();
 			builder.build().unwrap().block

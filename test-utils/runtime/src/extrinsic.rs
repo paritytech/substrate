@@ -124,9 +124,9 @@ impl ExtrinsicBuilder {
 		Self::new(PalletCall::offchain_index_clear { key })
 	}
 
-	/// Create builder for `PalletCall::new_store` call using given parameters
-	pub fn new_store(data: Vec<u8>) -> Self {
-		Self::new(PalletCall::store { data })
+	/// Create builder for `PalletCall::indexed_call` call using given parameters
+	pub fn new_indexed_call(data: Vec<u8>) -> Self {
+		Self::new(PalletCall::indexed_call { data })
 	}
 
 	/// Create builder for `PalletCall::new_deposit_log_digest_item` call using given `log`

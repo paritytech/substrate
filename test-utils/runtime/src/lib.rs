@@ -126,7 +126,7 @@ pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
 }
 
-/// Transfer data extracted from Extrinsic
+/// Transfer data extracted from Extrinsic containing `Balances::transfer_allow_death`.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct TransferData {
 	pub from: AccountId,
@@ -142,7 +142,6 @@ pub type Signature = sr25519::Signature;
 pub type Pair = sp_core::sr25519::Pair;
 
 /// The SignedExtension to the basic transaction logic.
-// pub type SignedExtra = SignedExtraDummy;
 pub type SignedExtra = (CheckNonce<Runtime>, CheckWeight<Runtime>, CheckSubstrateCall);
 /// The payload being signed in transactions.
 pub type SignedPayload = sp_runtime::generic::SignedPayload<RuntimeCall, SignedExtra>;
@@ -255,7 +254,7 @@ impl sp_runtime::traits::SignedExtension for CheckSubstrateCall {
 	type Call = RuntimeCall;
 	type AdditionalSigned = ();
 	type Pre = CheckSubstrateCall;
-	const IDENTIFIER: &'static str = "DummySignedExtension";
+	const IDENTIFIER: &'static str = "CheckSubstrateCall";
 
 	fn additional_signed(
 		&self,
@@ -365,16 +364,11 @@ impl frame_system::pallet::Config for Runtime {
 	type MaxConsumers = ConstU32<16>;
 }
 
-/// Money matters.
 pub mod currency {
 	use crate::Balance;
-	pub const MILLICENTS: Balance = 1_000_000_000;
-	pub const CENTS: Balance = 1_000 * MILLICENTS; // assume this is worth about a cent.
+	const MILLICENTS: Balance = 1_000_000_000;
+	const CENTS: Balance = 1_000 * MILLICENTS; // assume this is worth about a cent.
 	pub const DOLLARS: Balance = 100 * CENTS;
-
-	pub const fn deposit(items: u32, bytes: u32) -> Balance {
-		items as Balance * 15 * CENTS + (bytes as Balance) * 6 * CENTS
-	}
 }
 
 parameter_types! {
@@ -571,12 +565,10 @@ impl_runtime_apis! {
 		}
 
 		fn vec_with_capacity(size: u32) -> Vec<u8> {
-			// unimplemented!("is not expected to be invoked from non-wasm builds");
 			Vec::with_capacity(size as usize)
 		}
 
 		fn get_block_number() -> u64 {
-			// substrate_test_pallet::get_block_number().expect("Block number is initialized")
 			System::block_number()
 		}
 
@@ -674,7 +666,10 @@ impl_runtime_apis! {
 	impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
 		fn offchain_worker(header: &<Block as BlockT>::Header) {
 			let ext = Extrinsic::new_unsigned(
-				substrate_test_pallet::pallet::Call::include_data{data:header.number.encode()}.into(),
+				substrate_test_pallet::pallet::Call::storage_change_unsigned { 
+					key:b"some_key".encode(),
+					value:Some(header.number.encode())
+				}.into(),
 			);
 			sp_io::offchain::submit_transaction(ext.encode()).unwrap();
 		}

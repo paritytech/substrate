@@ -132,7 +132,7 @@ impl ChainApi for TestApi {
 				propagate: false,
 			}),
 			Extrinsic {
-				function: RuntimeCall::SubstrateTest(PalletCall::store { .. }), ..
+				function: RuntimeCall::SubstrateTest(PalletCall::indexed_call { .. }), ..
 			} => Ok(ValidTransaction {
 				priority: 9001,
 				requires: vec![],
