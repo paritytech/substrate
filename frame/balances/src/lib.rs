@@ -1105,9 +1105,7 @@ pub mod pallet {
 		/// Move the reserved balance of one account into the balance of another, according to
 		/// `status`. This will respect freezes/locks only if `fortitude` is `Polite`.
 		///
-		/// Is a no-op if:
-		/// - the value to be moved is zero; or
-		/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
+		/// Is a no-op if the value to be moved is zero.
 		///
 		/// NOTE: returns actual amount of transferred value in `Ok` case.
 		pub(crate) fn do_transfer_reserved(
@@ -1123,9 +1121,18 @@ pub mod pallet {
 			}
 
 			if slashed == beneficiary {
-				return match status {
-					Status::Free => Ok(value.saturating_sub(Self::unreserve(slashed, value))),
-					Status::Reserved => Ok(value.saturating_sub(Self::reserved_balance(slashed))),
+				return if precision == Precision::BestEffort {
+					match status {
+						Status::Free => Ok(value.saturating_sub(Self::unreserve(slashed, value))),
+						Status::Reserved => Ok(Self::reserved_balance(slashed).min(value)),
+					}
+				} else if Self::reserved_balance(slashed) >= value {
+					if status == Status::Free {
+						Self::unreserve(slashed, value);
+					}
+					Ok(value)
+				} else {
+					Err(TokenError::FundsUnavailable.into())
 				}
 			}
 
