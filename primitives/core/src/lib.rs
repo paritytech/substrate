@@ -460,6 +460,6 @@ mod tests {
 	#[test]
 	fn generate_feature_enabled_macro_works() {
 		generate_feature_enabled_macro!(if_not_test, not(test), $);
-		if_not_test!(panic!("This should panic"));
+		if_not_test!(panic!("This should not panic"));
 	}
 }
