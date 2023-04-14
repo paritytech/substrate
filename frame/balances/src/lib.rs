@@ -1120,21 +1120,20 @@ pub mod pallet {
 				return Ok(Zero::zero())
 			}
 
+			let max = <Self as fungible::InspectHold<_>>::reducible_total_balance_on_hold(
+				slashed, fortitude,
+			);
+			let actual = match precision {
+				Precision::BestEffort => value.min(max),
+				Precision::Exact => value,
+			};
 			if slashed == beneficiary {
-				return if precision == Precision::BestEffort {
-					match status {
-						Status::Free => Ok(value.saturating_sub(Self::unreserve(slashed, value))),
-						Status::Reserved => Ok(Self::reserved_balance(slashed).min(value)),
-					}
-				} else if Self::reserved_balance(slashed) >= value {
-					if status == Status::Free {
-						Self::unreserve(slashed, value);
-					}
-					Ok(value)
-				} else {
-					Err(TokenError::FundsUnavailable.into())
+				return match status {
+					Status::Free => Ok(actual.saturating_sub(Self::unreserve(slashed, actual))),
+					Status::Reserved => Ok(actual),
 				}
 			}
+			ensure!(actual <= max, TokenError::FundsUnavailable);
 
 			let ((actual, maybe_dust_1), maybe_dust_2) = Self::try_mutate_account(
 				beneficiary,
@@ -1143,15 +1142,6 @@ pub mod pallet {
 					Self::try_mutate_account(
 						slashed,
 						|from_account, _| -> Result<T::Balance, DispatchError> {
-							let max =
-								<Self as fungible::InspectHold<_>>::reducible_total_balance_on_hold(
-									slashed, fortitude,
-								);
-							let actual = match precision {
-								Precision::BestEffort => value.min(max),
-								Precision::Exact => value,
-							};
-							ensure!(actual <= max, TokenError::FundsUnavailable);
 							match status {
 								Status::Free =>
 									to_account.free = to_account
