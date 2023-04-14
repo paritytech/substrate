@@ -39,7 +39,7 @@ pub struct TypeValueDef {
 	/// The span of the pallet::type_value attribute.
 	pub attr_span: proc_macro2::Span,
 	/// Docs on the item.
-	pub docs: Vec<syn::Lit>,
+	pub docs: Vec<syn::Expr>,
 }
 
 impl TypeValueDef {
@@ -57,9 +57,9 @@ impl TypeValueDef {
 
 		let mut docs = vec![];
 		for attr in &item.attrs {
-			if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
+			if let syn::Meta::NameValue(meta) = &attr.meta {
 				if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
-					docs.push(meta.lit);
+					docs.push(meta.value.clone());
 					continue
 				}
 			}

@@ -133,14 +133,13 @@ impl GenesisConfigDef {
 				.attrs
 				.iter()
 				.map(|attr| {
-					let meta = attr.parse_meta()?;
-					if meta.path().is_ident("cfg") {
+					if attr.meta.path().is_ident("cfg") {
 						return Err(syn::Error::new(
-							meta.span(),
+							attr.meta.span(),
 							"extra genesis config items do not support `cfg` attribute",
 						))
 					}
-					Ok(meta)
+					Ok(attr.meta.clone())
 				})
 				.collect::<syn::Result<_>>()?;
 
