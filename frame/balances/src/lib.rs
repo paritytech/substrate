@@ -1135,29 +1135,26 @@ pub mod pallet {
 				}
 			}
 
-			let ((actual, maybe_dust_1), maybe_dust_2) = Self::try_mutate_account(
+			let ((_, maybe_dust_1), maybe_dust_2) = Self::try_mutate_account(
 				beneficiary,
-				|to_account, is_new| -> Result<(T::Balance, Option<T::Balance>), DispatchError> {
+				|to_account, is_new| -> Result<((), Option<T::Balance>), DispatchError> {
 					ensure!(!is_new, Error::<T, I>::DeadAccount);
-					Self::try_mutate_account(
-						slashed,
-						|from_account, _| -> Result<T::Balance, DispatchError> {
-							match status {
-								Status::Free =>
-									to_account.free = to_account
-										.free
-										.checked_add(&actual)
-										.ok_or(ArithmeticError::Overflow)?,
-								Status::Reserved =>
-									to_account.reserved = to_account
-										.reserved
-										.checked_add(&actual)
-										.ok_or(ArithmeticError::Overflow)?,
-							}
-							from_account.reserved.saturating_reduce(actual);
-							Ok(actual)
-						},
-					)
+					Self::try_mutate_account(slashed, |from_account, _| -> DispatchResult {
+						match status {
+							Status::Free =>
+								to_account.free = to_account
+									.free
+									.checked_add(&actual)
+									.ok_or(ArithmeticError::Overflow)?,
+							Status::Reserved =>
+								to_account.reserved = to_account
+									.reserved
+									.checked_add(&actual)
+									.ok_or(ArithmeticError::Overflow)?,
+						}
+						from_account.reserved.saturating_reduce(actual);
+						Ok(())
+					})
 				},
 			)?;
 
