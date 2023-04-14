@@ -1455,7 +1455,7 @@ mod tests {
 		ext.caller = Origin::Root;
 		assert_eq!(
 			execute(CODE_CALLER, vec![], ext),
-			Err(ExecError { error: DispatchError::BadOrigin, origin: ErrorOrigin::Caller })
+			Err(ExecError { error: DispatchError::RootNotAllowed, origin: ErrorOrigin::Caller })
 		);
 	}
 

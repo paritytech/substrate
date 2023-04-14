@@ -1634,7 +1634,7 @@ pub mod env {
 	#[prefixed_alias]
 	fn caller(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::Caller)?;
-		let caller = ctx.ext.caller().account_id()?;
+		let caller = ctx.ext.caller().account_id()?.clone();
 		Ok(ctx.write_sandbox_output(
 			memory,
 			out_ptr,

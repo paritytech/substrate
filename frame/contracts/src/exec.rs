@@ -196,7 +196,7 @@ pub trait Ext: sealing::Sealed {
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError>;
 
-	/// Returns the caller
+	/// Returns the caller.
 	fn caller(&self) -> Origin<Self::T>;
 
 	/// Check if a contract lives at the specified `address`.
@@ -834,11 +834,10 @@ where
 		let do_transaction = || {
 			// We need to charge the storage deposit before the initial transfer so that
 			// it can create the account in case the initial transfer is < ed.
-			// Root origins don't have an account associated with, so when the origin is root we
-			// can't charge the storage deposit.
-			if let (ExportedFunction::Constructor, Origin::Signed(origin)) =
-				(entry_point, &self.origin)
-			{
+			if entry_point == ExportedFunction::Constructor {
+				// Root origin can't be used to instantiate a contract, so it is safe to assume that
+				// if we reached this point the origin has an associated account.
+				let origin = &self.origin.account_id()?;
 				let frame = top_frame_mut!(self);
 				frame.nested_storage.charge_instantiate(
 					origin,
@@ -878,15 +877,12 @@ where
 						return Err(Error::<T>::TerminatedInConstructor.into())
 					}
 
-					let caller = &self.caller().account_id()?;
+					let caller = self.caller().account_id()?.clone();
 
 					// Deposit an instantiation event.
 					Contracts::<T>::deposit_event(
-						vec![T::Hashing::hash_of(caller), T::Hashing::hash_of(account_id)],
-						Event::Instantiated {
-							deployer: caller.clone(),
-							contract: account_id.clone(),
-						},
+						vec![T::Hashing::hash_of(&caller), T::Hashing::hash_of(account_id)],
+						Event::Instantiated { deployer: caller, contract: account_id.clone() },
 					);
 				},
 				(ExportedFunction::Call, Some(code_hash)) => {
@@ -1055,14 +1051,16 @@ where
 			return Ok(())
 		}
 
+		let value = frame.value_transferred;
+
 		// Get the account id from the Caller.
-		// If the caller is root, we don't need to transfer.
+		// If the caller is root there is no account to transfer from, and therefore we can't take
+		// any `value` other than 0.
 		let caller = match self.caller() {
 			Origin::Signed(caller) => caller,
-			Origin::Root => return Ok(()),
+			Origin::Root if value == 0u32.into() => return Ok(()),
+			Origin::Root => return DispatchError::RootNotAllowed.into(),
 		};
-
-		let value = frame.value_transferred;
 		Self::transfer(ExistenceRequirement::KeepAlive, &caller, &frame.account_id, value)
 	}
 
@@ -1168,12 +1166,12 @@ where
 		let contract_info = top_frame.contract_info().clone();
 		let account_id = top_frame.account_id.clone();
 		let value = top_frame.value_transferred;
-		let caller = self.caller().account_id()?;
+		let caller = self.caller().account_id()?.clone();
 		let executable = self.push_frame(
 			FrameArgs::Call {
 				dest: account_id,
 				cached_info: Some(contract_info),
-				delegated_call: Some(DelegatedCall { executable, caller: caller.clone() }),
+				delegated_call: Some(DelegatedCall { executable, caller }),
 			},
 			value,
 			Weight::zero(),
@@ -2202,6 +2200,36 @@ mod tests {
 				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn root_caller_does_not_succeed_when_value_not_zero() {
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			// root is the origin of the call stack.
+			assert!(ctx.ext.caller_is_root());
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_bob);
+			let contract_origin = Origin::Root;
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			// root -> BOB (caller is root)
+			let result = MockStack::run_call(
+				contract_origin,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				1,
+				vec![0],
+				None,
+				Determinism::Enforced,
+			);
+			assert_matches!(result, Err(_));
 		});
 	}
 

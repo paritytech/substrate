@@ -935,10 +935,10 @@ impl<T: Config> Origin<T> {
 impl<T: Config> Origin<T> {
 	/// Returns the account id of the caller if it has one.
 	/// It errors otherwise.
-	pub fn account_id(&self) -> Result<T::AccountId, DispatchError> {
+	pub fn account_id(&self) -> Result<&T::AccountId, DispatchError> {
 		match self {
-			Origin::Signed(id) => Ok(id.clone()),
-			Origin::Root => Err(DispatchError::BadOrigin),
+			Origin::Signed(id) => Ok(id),
+			Origin::Root => Err(DispatchError::RootNotAllowed),
 		}
 	}
 }
