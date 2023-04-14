@@ -33,8 +33,6 @@ sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transaction-pool" }
-#todo: remove?
-frame-system = { version = "4.0.0-dev", path = "../../frame/system" }
 
 [dev-dependencies]
 array-bytes = "4.1"

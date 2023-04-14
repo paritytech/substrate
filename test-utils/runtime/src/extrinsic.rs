@@ -82,7 +82,7 @@ impl ExtrinsicBuilder {
 
 	/// Create builder for `pallet_call::bench_transfer` from given `TransferData`.
 	pub fn new_bench_call(transfer: TransferData) -> Self {
-		Self::new(PalletCall::bench_call { transfer })
+		Self { function: PalletCall::bench_call { transfer }.into(), signer: None, nonce: None }
 	}
 
 	/// Create builder for given `Transfer`. Transfer `nonce` will be used as `Extrinsic` nonce.
