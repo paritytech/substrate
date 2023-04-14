@@ -338,6 +338,17 @@ where
 			})
 	}
 
+	/// Returns the error message or suggestion for possible fixes based on the given RPC error.
+	fn get_batch_rpc_error_message(e: String) -> String {
+		// If the error contains "Invalid request ID", the request likely failed
+		// because the user incorrectly configured their node args
+		if e.to_string().contains("Invalid request ID") {
+			"Did you forget to specify `--rpc-max-request-size` or `--rpc-max-response-size` when starting your node? See https://paritytech.github.io/substrate/master/try_runtime_cli/index.html#note-on-nodes-that-respond-to-try-runtime-requests".to_string()
+		} else {
+			format!("Unexpected RPC error: {}", e.to_string()).to_string()
+		}
+	}
+
 	/// Get all the keys at `prefix` at `hash` using the paged, safe RPC methods.
 	async fn rpc_get_keys_paged(
 		&self,
@@ -444,18 +455,21 @@ where
 							.unwrap();
 					}
 
-					let batch_response = rt
+					let batch_response = match rt
 						.block_on(thread_client.batch_request::<Option<StorageData>>(batch))
-						.map_err(|e| {
-							log::error!(
+					{
+						Ok(batch_response) => batch_response,
+						Err(e) => {
+							log::debug!(
 								target: LOG_TARGET,
-								"failed to execute batch: {:?}. Error: {:?}",
+								"chunk_keys: {:?}",
 								chunk_keys.iter().map(HexDisplay::from).collect::<Vec<_>>(),
-								e
 							);
-							"batch failed."
-						})
-						.unwrap();
+							let msg = Self::get_batch_rpc_error_message(e.to_string());
+							thread_sender.unbounded_send(Message::BatchFailed(msg)).unwrap();
+							return Default::default()
+						},
+					};
 
 					// Check if we got responses for all submitted requests.
 					assert_eq!(chunk_keys.len(), batch_response.len());
@@ -579,15 +593,15 @@ where
 			}
 
 			let batch_response =
-				client.batch_request::<Option<StorageData>>(batch_request).await.map_err(|e| {
-					log::error!(
-						target: LOG_TARGET,
-						"failed to execute batch: {:?}. Error: {:?}",
-						batch_child_key,
-						e
-					);
-					"batch failed."
-				})?;
+				match client.batch_request::<Option<StorageData>>(batch_request).await {
+					Ok(response) => response,
+					Err(e) => {
+						log::debug!(target: LOG_TARGET, "batch_child_key: {:?}", batch_child_key,);
+						let msg = Self::get_batch_rpc_error_message(e.to_string());
+						log::error!(target: LOG_TARGET, "{}", msg);
+						return Err("Batch RPC call failed.")
+					},
+				};
 
 			assert_eq!(batch_child_key.len(), batch_response.len());
 
