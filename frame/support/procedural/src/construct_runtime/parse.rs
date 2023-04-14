@@ -17,6 +17,7 @@
 
 use frame_support_procedural_tools::syn_ext as ext;
 use proc_macro2::{Span, TokenStream};
+use quote::ToTokens;
 use std::collections::{HashMap, HashSet};
 use syn::{
 	ext::IdentExt,
@@ -38,6 +39,10 @@ mod keyword {
 	syn::custom_keyword!(Origin);
 	syn::custom_keyword!(Inherent);
 	syn::custom_keyword!(ValidateUnsigned);
+	syn::custom_keyword!(FreezeReason);
+	syn::custom_keyword!(HoldReason);
+	syn::custom_keyword!(LockId);
+	syn::custom_keyword!(SlashReason);
 	syn::custom_keyword!(exclude_parts);
 	syn::custom_keyword!(use_parts);
 }
@@ -370,6 +375,10 @@ pub enum PalletPartKeyword {
 	Origin(keyword::Origin),
 	Inherent(keyword::Inherent),
 	ValidateUnsigned(keyword::ValidateUnsigned),
+	FreezeReason(keyword::FreezeReason),
+	HoldReason(keyword::HoldReason),
+	LockId(keyword::LockId),
+	SlashReason(keyword::SlashReason),
 }
 
 impl Parse for PalletPartKeyword {
@@ -392,6 +401,14 @@ impl Parse for PalletPartKeyword {
 			Ok(Self::Inherent(input.parse()?))
 		} else if lookahead.peek(keyword::ValidateUnsigned) {
 			Ok(Self::ValidateUnsigned(input.parse()?))
+		} else if lookahead.peek(keyword::FreezeReason) {
+			Ok(Self::FreezeReason(input.parse()?))
+		} else if lookahead.peek(keyword::HoldReason) {
+			Ok(Self::HoldReason(input.parse()?))
+		} else if lookahead.peek(keyword::LockId) {
+			Ok(Self::LockId(input.parse()?))
+		} else if lookahead.peek(keyword::SlashReason) {
+			Ok(Self::SlashReason(input.parse()?))
 		} else {
 			Err(lookahead.error())
 		}
@@ -410,6 +427,10 @@ impl PalletPartKeyword {
 			Self::Origin(_) => "Origin",
 			Self::Inherent(_) => "Inherent",
 			Self::ValidateUnsigned(_) => "ValidateUnsigned",
+			Self::FreezeReason(_) => "FreezeReason",
+			Self::HoldReason(_) => "HoldReason",
+			Self::LockId(_) => "LockId",
+			Self::SlashReason(_) => "SlashReason",
 		}
 	}
 
@@ -424,17 +445,21 @@ impl PalletPartKeyword {
 	}
 }
 
-impl Spanned for PalletPartKeyword {
-	fn span(&self) -> Span {
+impl ToTokens for PalletPartKeyword {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
 		match self {
-			Self::Pallet(inner) => inner.span(),
-			Self::Call(inner) => inner.span(),
-			Self::Storage(inner) => inner.span(),
-			Self::Event(inner) => inner.span(),
-			Self::Config(inner) => inner.span(),
-			Self::Origin(inner) => inner.span(),
-			Self::Inherent(inner) => inner.span(),
-			Self::ValidateUnsigned(inner) => inner.span(),
+			Self::Pallet(inner) => inner.to_tokens(tokens),
+			Self::Call(inner) => inner.to_tokens(tokens),
+			Self::Storage(inner) => inner.to_tokens(tokens),
+			Self::Event(inner) => inner.to_tokens(tokens),
+			Self::Config(inner) => inner.to_tokens(tokens),
+			Self::Origin(inner) => inner.to_tokens(tokens),
+			Self::Inherent(inner) => inner.to_tokens(tokens),
+			Self::ValidateUnsigned(inner) => inner.to_tokens(tokens),
+			Self::FreezeReason(inner) => inner.to_tokens(tokens),
+			Self::HoldReason(inner) => inner.to_tokens(tokens),
+			Self::LockId(inner) => inner.to_tokens(tokens),
+			Self::SlashReason(inner) => inner.to_tokens(tokens),
 		}
 	}
 }
@@ -657,7 +682,7 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 				.attrs
 				.iter()
 				.map(|attr| {
-					if attr.path.segments.len() != 1 || attr.path.segments[0].ident != "cfg" {
+					if attr.path().segments.first().map_or(false, |s| s.ident != "cfg") {
 						let msg = "Unsupported attribute, only #[cfg] is supported on pallet \
 						declarations in `construct_runtime`";
 						return Err(syn::Error::new(attr.span(), msg))

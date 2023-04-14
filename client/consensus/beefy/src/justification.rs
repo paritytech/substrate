@@ -21,38 +21,47 @@ use codec::{Decode, Encode};
 use sp_consensus::Error as ConsensusError;
 use sp_consensus_beefy::{
 	crypto::{AuthorityId, Signature},
-	ValidatorSet, VersionedFinalityProof,
+	ValidatorSet, ValidatorSetId, VersionedFinalityProof,
 };
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// A finality proof with matching BEEFY authorities' signatures.
-pub type BeefyVersionedFinalityProof<Block> =
-	sp_consensus_beefy::VersionedFinalityProof<NumberFor<Block>, Signature>;
+pub type BeefyVersionedFinalityProof<Block> = VersionedFinalityProof<NumberFor<Block>, Signature>;
+
+pub(crate) fn proof_block_num_and_set_id<Block: BlockT>(
+	proof: &BeefyVersionedFinalityProof<Block>,
+) -> (NumberFor<Block>, ValidatorSetId) {
+	match proof {
+		VersionedFinalityProof::V1(sc) =>
+			(sc.commitment.block_number, sc.commitment.validator_set_id),
+	}
+}
 
 /// Decode and verify a Beefy FinalityProof.
 pub(crate) fn decode_and_verify_finality_proof<Block: BlockT>(
 	encoded: &[u8],
 	target_number: NumberFor<Block>,
 	validator_set: &ValidatorSet<AuthorityId>,
-) -> Result<BeefyVersionedFinalityProof<Block>, ConsensusError> {
+) -> Result<BeefyVersionedFinalityProof<Block>, (ConsensusError, u32)> {
 	let proof = <BeefyVersionedFinalityProof<Block>>::decode(&mut &*encoded)
-		.map_err(|_| ConsensusError::InvalidJustification)?;
+		.map_err(|_| (ConsensusError::InvalidJustification, 0))?;
 	verify_with_validator_set::<Block>(target_number, validator_set, &proof).map(|_| proof)
 }
 
 /// Verify the Beefy finality proof against the validator set at the block it was generated.
-fn verify_with_validator_set<Block: BlockT>(
+pub(crate) fn verify_with_validator_set<Block: BlockT>(
 	target_number: NumberFor<Block>,
 	validator_set: &ValidatorSet<AuthorityId>,
 	proof: &BeefyVersionedFinalityProof<Block>,
-) -> Result<(), ConsensusError> {
+) -> Result<(), (ConsensusError, u32)> {
+	let mut signatures_checked = 0u32;
 	match proof {
 		VersionedFinalityProof::V1(signed_commitment) => {
 			if signed_commitment.signatures.len() != validator_set.len() ||
 				signed_commitment.commitment.validator_set_id != validator_set.id() ||
 				signed_commitment.commitment.block_number != target_number
 			{
-				return Err(ConsensusError::InvalidJustification)
+				return Err((ConsensusError::InvalidJustification, 0))
 			}
 
 			// Arrangement of signatures in the commitment should be in the same order
@@ -65,14 +74,17 @@ fn verify_with_validator_set<Block: BlockT>(
 				.filter(|(id, signature)| {
 					signature
 						.as_ref()
-						.map(|sig| BeefyKeystore::verify(id, sig, &message[..]))
+						.map(|sig| {
+							signatures_checked += 1;
+							BeefyKeystore::verify(id, sig, &message[..])
+						})
 						.unwrap_or(false)
 				})
 				.count();
 			if valid_signatures >= crate::round::threshold(validator_set.len()) {
 				Ok(())
 			} else {
-				Err(ConsensusError::InvalidJustification)
+				Err((ConsensusError::InvalidJustification, signatures_checked))
 			}
 		},
 	}
@@ -119,16 +131,16 @@ pub(crate) mod tests {
 		// wrong block number -> should fail verification
 		let good_proof = proof.clone().into();
 		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &good_proof) {
-			Err(ConsensusError::InvalidJustification) => (),
-			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
+			Err((ConsensusError::InvalidJustification, 0)) => (),
+			e => assert!(false, "Got unexpected {:?}", e),
 		};
 
 		// wrong validator set id -> should fail verification
 		let good_proof = proof.clone().into();
 		let other = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
 		match verify_with_validator_set::<Block>(block_num, &other, &good_proof) {
-			Err(ConsensusError::InvalidJustification) => (),
-			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
+			Err((ConsensusError::InvalidJustification, 0)) => (),
+			e => assert!(false, "Got unexpected {:?}", e),
 		};
 
 		// wrong signatures length -> should fail verification
@@ -139,8 +151,8 @@ pub(crate) mod tests {
 		};
 		bad_signed_commitment.signatures.pop().flatten().unwrap();
 		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &bad_proof.into()) {
-			Err(ConsensusError::InvalidJustification) => (),
-			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
+			Err((ConsensusError::InvalidJustification, 0)) => (),
+			e => assert!(false, "Got unexpected {:?}", e),
 		};
 
 		// not enough signatures -> should fail verification
@@ -150,9 +162,9 @@ pub(crate) mod tests {
 		};
 		// remove a signature (but same length)
 		*bad_signed_commitment.signatures.first_mut().unwrap() = None;
-		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &bad_proof.into()) {
-			Err(ConsensusError::InvalidJustification) => (),
-			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
+		match verify_with_validator_set::<Block>(block_num, &validator_set, &bad_proof.into()) {
+			Err((ConsensusError::InvalidJustification, 2)) => (),
+			e => assert!(false, "Got unexpected {:?}", e),
 		};
 
 		// not enough _correct_ signatures -> should fail verification
@@ -163,9 +175,9 @@ pub(crate) mod tests {
 		// change a signature to a different key
 		*bad_signed_commitment.signatures.first_mut().unwrap() =
 			Some(Keyring::Dave.sign(&bad_signed_commitment.commitment.encode()));
-		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &bad_proof.into()) {
-			Err(ConsensusError::InvalidJustification) => (),
-			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
+		match verify_with_validator_set::<Block>(block_num, &validator_set, &bad_proof.into()) {
+			Err((ConsensusError::InvalidJustification, 3)) => (),
+			e => assert!(false, "Got unexpected {:?}", e),
 		};
 	}
 

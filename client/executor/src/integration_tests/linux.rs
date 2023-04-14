@@ -21,7 +21,7 @@
 use super::mk_test_runtime;
 use crate::WasmExecutionMethod;
 use codec::Encode as _;
-use sc_executor_common::wasm_runtime::HeapAllocStrategy;
+use sc_executor_common::wasm_runtime::DEFAULT_HEAP_ALLOC_STRATEGY;
 
 mod smaps;
 
@@ -74,7 +74,7 @@ fn memory_consumption(wasm_method: WasmExecutionMethod) {
 	// For that we make a series of runtime calls, probing the RSS for the VMA matching the linear
 	// memory. After the call we expect RSS to be equal to 0.
 
-	let runtime = mk_test_runtime(wasm_method, HeapAllocStrategy::Static { extra_pages: 1024 });
+	let runtime = mk_test_runtime(wasm_method, DEFAULT_HEAP_ALLOC_STRATEGY);
 
 	let mut instance = runtime.new_instance().unwrap();
 	let heap_base = instance
