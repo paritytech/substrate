@@ -21,7 +21,7 @@ use std::{process, time::Duration};
 
 use crate::common::KillChildOnDrop;
 
-pub mod common;
+use substrate_cli_test_utils as common;
 pub mod websocket_server;
 
 #[tokio::test]
@@ -57,8 +57,9 @@ async fn telemetry_works() {
 						}
 					},
 
-					Event::TextFrame { .. } =>
-						panic!("Got a TextFrame over the socket, this is a bug"),
+					Event::TextFrame { .. } => {
+						panic!("Got a TextFrame over the socket, this is a bug")
+					},
 
 					// Connection has been closed.
 					Event::ConnectionError { .. } => {},

@@ -66,8 +66,8 @@
 //!
 //! # Example
 //!
-//! The ink! repository maintains an
-//! [end-to-end example](https://github.com/paritytech/ink/tree/master/examples/rand-extension)
+//! The ink-examples repository maintains an
+//! [end-to-end example](https://github.com/paritytech/ink-examples/tree/main/rand-extension)
 //! on how to use a chain extension in order to provide new features to ink! contracts.
 
 use crate::{

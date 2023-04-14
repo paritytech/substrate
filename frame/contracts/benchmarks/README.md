@@ -1,6 +1,6 @@
 # Benchmarks
 
-This directory contains real world (ink!, solang) contracts which are used in macro benchmarks.
+This directory contains real world ([ink!](https://use.ink), [solang](https://github.com/hyperledger/solang)) contracts which are used in macro benchmarks.
 Those benchmarks are not used to determine weights but rather to compare different contract
 languages and execution engines with larger wasm modules.
 

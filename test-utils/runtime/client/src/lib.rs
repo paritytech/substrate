@@ -38,6 +38,7 @@ use sp_core::{
 	Pair,
 };
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use substrate_test_client::sc_executor::WasmExecutor;
 use substrate_test_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
 
 /// A prelude to import in tests.
@@ -171,7 +172,7 @@ pub type Client<B> = client::Client<
 	client::LocalCallExecutor<
 		substrate_test_runtime::Block,
 		B,
-		sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch>,
+		NativeElseWasmExecutor<LocalExecutorDispatch>,
 	>,
 	substrate_test_runtime::Block,
 	substrate_test_runtime::RuntimeApi,
@@ -290,6 +291,6 @@ pub fn new() -> Client<Backend> {
 }
 
 /// Create a new native executor.
-pub fn new_native_executor() -> NativeElseWasmExecutor<LocalExecutorDispatch> {
-	NativeElseWasmExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8, 2)
+pub fn new_native_or_wasm_executor() -> NativeElseWasmExecutor<LocalExecutorDispatch> {
+	NativeElseWasmExecutor::new_with_wasm_executor(WasmExecutor::builder().build())
 }

@@ -23,7 +23,7 @@ pub use self::pallet::*;
 
 const LOG_TARGET: &str = "substrate_test_pallet";
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
 	use crate::TransferData;
@@ -173,6 +173,52 @@ pub mod pallet {
 		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResult {
 			ensure_signed(origin)?;
 			Ok(())
+		}
+
+		/// Read X times from the state some data.
+		///
+		/// Panics if it can not read `X` times.
+		#[pallet::call_index(11)]
+		#[pallet::weight(100)]
+		pub fn read(origin: OriginFor<T>, count: u32) -> DispatchResult {
+			ensure_signed(origin)?;
+			Self::execute_read(count, false)
+		}
+
+		/// Read X times from the state some data and then panic!
+		///
+		/// Returns `Ok` if it didn't read anything.
+		#[pallet::call_index(12)]
+		#[pallet::weight(100)]
+		pub fn read_and_panic(origin: OriginFor<T>, count: u32) -> DispatchResult {
+			ensure_signed(origin)?;
+			Self::execute_read(count, true)
+		}
+	}
+
+	impl<T: Config> Pallet<T> {
+		pub (crate) fn execute_read(read: u32, panic_at_end: bool) -> DispatchResult {
+			let mut next_key = vec![];
+			for _ in 0..(read as usize) {
+				if let Some(next) = sp_io::storage::next_key(&next_key) {
+					// Read the value
+					sp_io::storage::get(&next);
+
+					next_key = next;
+				} else {
+					if panic_at_end {
+						return Ok(())
+					} else {
+						panic!("Could not read {read} times from the state");
+					}
+				}
+			}
+
+			if panic_at_end {
+				panic!("BYE")
+			} else {
+				Ok(())
+			}
 		}
 	}
 

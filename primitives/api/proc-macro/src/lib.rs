@@ -25,6 +25,7 @@ mod common;
 mod decl_runtime_apis;
 mod impl_runtime_apis;
 mod mock_impl_runtime_apis;
+mod runtime_metadata;
 mod utils;
 
 #[proc_macro]

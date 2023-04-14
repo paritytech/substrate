@@ -149,6 +149,16 @@ impl ExtrinsicBuilder {
 		Self::new(PalletCall::call_with_priority { priority })
 	}
 
+	/// Create builder for `PalletCall::read` call using given parameters
+	pub fn new_read(count: u32) -> Self {
+		Self::new(PalletCall::read { count })
+	}
+
+	/// Create builder for `PalletCall::read` call using given parameters
+	pub fn new_read_and_panic(count: u32) -> Self {
+		Self::new(PalletCall::read_and_panic { count })
+	}
+
 	/// Unsigned `Extrinsic` will be created
 	pub fn unsigned(mut self) -> Self {
 		self.signer = None;
