@@ -24,4 +24,4 @@ sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/c
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 substrate-test-client = { version = "2.0.0", path = "../../client" }
-substrate-test-runtime = { version = "2.0.0", path = "../../runtime", features = ["force-debug"] }
+substrate-test-runtime = { version = "2.0.0", path = "../../runtime" }
