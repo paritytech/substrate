@@ -48,12 +48,7 @@ impl TransferData {
 			Extrinsic {
 				function: RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest, value }),
 				signature: Some((from, _, (CheckNonce(nonce), ..))),
-			} => Some(TransferData {
-				from: from.clone(),
-				to: dest.clone(),
-				amount: *value,
-				nonce: *nonce,
-			}),
+			} => Some(TransferData { from: *from, to: *dest, amount: *value, nonce: *nonce }),
 			Extrinsic {
 				function: RuntimeCall::SubstrateTest(PalletCall::bench_call { transfer }),
 				signature: None,
