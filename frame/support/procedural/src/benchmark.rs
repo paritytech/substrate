@@ -28,7 +28,7 @@ use syn::{
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{Comma, Gt, Lt, PathSep},
-	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod, LitInt,
+	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod,
 	Pat, Path, PathArguments, PathSegment, Result, ReturnType, Signature, Stmt, Token, Type,
 	TypePath, Visibility, WhereClause,
 };
