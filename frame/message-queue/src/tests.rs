@@ -1040,6 +1040,8 @@ fn execute_overweight_works() {
 		// Enqueue a message
 		let origin = MessageOrigin::Here;
 		MessageQueue::enqueue_message(msg("weight=6"), origin);
+		assert_eq!(QueueChanges::take(), vec![(origin, 1, 8)]);
+
 		// Load the current book
 		let book = BookStateFor::<Test>::get(origin);
 		assert_eq!(book.message_count, 1);
@@ -1047,7 +1049,6 @@ fn execute_overweight_works() {
 
 		// Mark the message as permanently overweight.
 		assert_eq!(MessageQueue::service_queues(4.into_weight()), 4.into_weight());
-		assert_eq!(QueueChanges::take(), vec![(origin, 1, 8)]);
 		assert_last_event::<Test>(
 			Event::OverweightEnqueued {
 				hash: <Test as frame_system::Config>::Hashing::hash(b"weight=6"),
@@ -1090,11 +1091,47 @@ fn execute_overweight_works() {
 
 #[test]
 fn discarding_overweight_works() {
-	new_test_ext::<Test>().execute_with(|| {});
+	new_test_ext::<Test>().execute_with(|| {
+		set_weight("bump_service_head", 1.into_weight());
+		set_weight("service_queue_base", 1.into_weight());
+		set_weight("service_page_base_completion", 1.into_weight());
+
+		let origin = MessageOrigin::Here;
+		MessageQueue::enqueue_messages(
+			[msg("weight=9"), msg("weight=8"), msg("weight=7")].into_iter(),
+			origin,
+		);
+		assert_eq!(QueueChanges::take(), vec![(origin, 3, 24)]);
+
+		// Mark the messages as permanently overweight.
+		assert_eq!(MessageQueue::service_queues(6.into_weight()), 6.into_weight());
+
+		// Sanity check the book and page.
+		let book = BookStateFor::<Test>::get(origin);
+		assert_eq!((book.message_count, book.count, book.size), (3, 3, 24));
+		assert!(QueueChanges::take().is_empty());
+		assert!(Pages::<Test>::contains_key(origin, 0));
+
+		// Now actually discard the messages.
+		for i in 0..=2u64 {
+			assert_ok!(MessageQueue::do_discard_overweight(origin, i as u32, 0));
+
+			// Check that the message was discarded.
+			let book = BookStateFor::<Test>::get(origin);
+			assert_eq!(
+				(book.message_count, book.count, book.size),
+				(2 - i, 2 - i as u32, 16 - i * 8)
+			);
+			assert!(!Pages::<Test>::contains_key(origin, i as u32));
+			assert_eq!(QueueChanges::take(), vec![(origin, 2 - i, 16 - i * 8)]);
+		}
+
+		assert_eq!(Pages::<Test>::iter().count(), 0, "All pages are gone");
+	});
 }
 
 #[test]
-fn discarding_overweight_wrong_bad_origin() {
+fn discarding_overweight_bad_origin() {
 	new_test_ext::<Test>().execute_with(|| {
 		assert_noop!(
 			MessageQueue::discard_overweight(
@@ -1104,6 +1141,35 @@ fn discarding_overweight_wrong_bad_origin() {
 				0
 			),
 			DispatchError::BadOrigin
+		);
+	});
+}
+
+#[test]
+fn discarding_overweight_bad_address() {
+	// Wrong page index.
+	new_test_ext::<Test>().execute_with(|| {
+		assert_noop!(
+			MessageQueue::discard_overweight(
+				frame_system::RawOrigin::Root.into(),
+				MessageOrigin::Here,
+				10,
+				0
+			),
+			Error::<Test>::NoPage
+		);
+	});
+	// Wrong message index.
+	new_test_ext::<Test>().execute_with(|| {
+		MessageQueue::enqueue_messages([msg("")].into_iter(), MessageOrigin::Here);
+		assert_noop!(
+			MessageQueue::discard_overweight(
+				frame_system::RawOrigin::Root.into(),
+				MessageOrigin::Here,
+				0,
+				1
+			),
+			Error::<Test>::NoMessage
 		);
 	});
 }
