@@ -98,7 +98,7 @@ mod dispatch;
 #[allow(deprecated)]
 pub use dispatch::EnsureOneOf;
 pub use dispatch::{
-	AsEnsureOriginWithArg, AsEnsureOriginWithContains, CallerTrait, EitherOf, EitherOfDiverse,
+	AsEnsureOriginWithArg, AsEnsureOriginWithContainsPair, CallerTrait, EitherOf, EitherOfDiverse,
 	EitherOfWithArg, EnsureOrigin, EnsureOriginEqualOrHigherPrivilege, EnsureOriginWithArg,
 	MapSuccess, NeverEnsureOrigin, OriginTrait, TryMapSuccess, UnfilteredDispatchable,
 };

@@ -559,7 +559,7 @@ pub mod pallet {
 		/// Such errors are expected, but not guaranteed, to resolve themselves eventually through
 		/// retrying.
 		TemporarilyUnprocessable,
-		/// The storage invariants of the pallets have been violated. Please report this as a bug.
+		/// A storage invariant of the pallet has been violated. Please report this as a bug.
 		Corruption,
 	}
 
@@ -661,8 +661,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let () = T::DiscardOverweightOrigin::ensure_origin(origin, &queue)?;
 
-			Self::do_discard_overweight(queue, page, index)?;
-			Ok(())
+			Self::do_discard_overweight(queue, page, index).map_err(Into::into)
 		}
 	}
 }

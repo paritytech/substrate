@@ -26,7 +26,7 @@ use crate as pallet_message_queue;
 use frame_support::{
 	parameter_types,
 	traits::{
-		AsEnsureOriginWithContains, ConstU32, ConstU64, EitherOfWithArg, Everything, IsInVec,
+		AsEnsureOriginWithContainsPair, ConstU32, ConstU64, EitherOfWithArg, Everything, IsInVec,
 		MapSuccess, *,
 	},
 };
@@ -34,7 +34,7 @@ use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup, TryMorphInto},
+	traits::{BlakeTwo256, IdentityLookup},
 };
 use sp_std::collections::btree_map::BTreeMap;
 
@@ -87,18 +87,23 @@ parameter_types! {
 	pub AliceBobCharlie: Vec<AccountId> = vec![ALICE, BOB, CHARLIE];
 }
 
+/// The mapping which account can discard messages from which queue.
+pub struct AllowedDiscarders;
+impl ContainsPair<AccountId, MessageOrigin> for AllowedDiscarders {
+	fn contains(a: &AccountId, b: &MessageOrigin) -> bool {
+		b == &MessageOrigin::Everywhere(*a)
+	}
+}
+
 /// The origin that can discard overweight messages.
 type DiscardOverweightOrigin = EitherOfWithArg<
 	// Root can discard from any queue.
-	AsEnsureOriginWithContains<EnsureRoot<AccountId>, Everything>,
+	AsEnsureOriginWithContainsPair<EnsureRoot<AccountId>, Everything>,
 	// `Alice`, `Bob` and `Charlie` can discard from their own queue.
 	MapSuccess<
-		AsEnsureOriginWithContains<
-			TryMapSuccess<
-				EnsureSignedBy<IsInVec<AliceBobCharlie>, AccountId>,
-				TryMorphInto<MessageOrigin>,
-			>,
-			Everything,
+		AsEnsureOriginWithContainsPair<
+			EnsureSignedBy<IsInVec<AliceBobCharlie>, AccountId>,
+			AllowedDiscarders,
 		>,
 		(),
 	>,

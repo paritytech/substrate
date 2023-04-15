@@ -338,7 +338,7 @@ fn post_conditions() {
 	next_block();
 }
 
-/// Pull a seed from env `TEST_SEED` or generate a random one. It is logged in both cases.
+/// Pull a seed from env `TEST_SEED` or generate a random one. Logged in both cases.
 fn gen_seed() -> u64 {
 	let s = std::env::var("TEST_SEED")
 		.ok()

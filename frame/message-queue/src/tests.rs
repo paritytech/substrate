@@ -23,6 +23,7 @@ use crate::{mock::*, *};
 
 use frame_support::{assert_noop, assert_ok, assert_storage_noop, StorageNoopGuard};
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use frame_system::RawOrigin;
 
 #[test]
 fn mocked_weight_works() {
@@ -1135,12 +1136,36 @@ fn discarding_overweight_bad_origin() {
 	new_test_ext::<Test>().execute_with(|| {
 		assert_noop!(
 			MessageQueue::discard_overweight(
-				frame_system::RawOrigin::Signed(10).into(),
+				RawOrigin::Signed(10).into(),
 				MessageOrigin::Here,
 				0,
 				0
 			),
 			DispatchError::BadOrigin
+		);
+	});
+	// Bob gets a `BadOrigin` error on Alice's queue.
+	new_test_ext::<Test>().execute_with(|| {
+		assert_noop!(
+			MessageQueue::discard_overweight(
+				RawOrigin::Signed(BOB).into(),
+				ALICE.into(),
+				0,
+				0
+			),
+			DispatchError::BadOrigin,
+		);
+	});
+	// ... but a `NoPage` error on his own queue.
+	new_test_ext::<Test>().execute_with(|| {
+		assert_noop!(
+			MessageQueue::discard_overweight(
+				RawOrigin::Signed(BOB).into(),
+				BOB.into(),
+				0,
+				0
+			),
+			Error::<Test>::NoPage,
 		);
 	});
 }
@@ -1151,7 +1176,7 @@ fn discarding_overweight_bad_address() {
 	new_test_ext::<Test>().execute_with(|| {
 		assert_noop!(
 			MessageQueue::discard_overweight(
-				frame_system::RawOrigin::Root.into(),
+				RawOrigin::Root.into(),
 				MessageOrigin::Here,
 				10,
 				0
@@ -1164,7 +1189,7 @@ fn discarding_overweight_bad_address() {
 		MessageQueue::enqueue_messages([msg("")].into_iter(), MessageOrigin::Here);
 		assert_noop!(
 			MessageQueue::discard_overweight(
-				frame_system::RawOrigin::Root.into(),
+				RawOrigin::Root.into(),
 				MessageOrigin::Here,
 				0,
 				1
