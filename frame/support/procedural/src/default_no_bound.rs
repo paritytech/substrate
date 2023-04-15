@@ -62,7 +62,7 @@ pub fn derive_default_no_bound(input: proc_macro::TokenStream) -> proc_macro::To
 			let default_variants = enum_
 				.variants
 				.into_iter()
-				.filter(|variant| variant.attrs.iter().any(|attr| attr.path.is_ident("default")))
+				.filter(|variant| variant.attrs.iter().any(|attr| attr.path().is_ident("default")))
 				.collect::<Vec<_>>();
 
 			match &*default_variants {
@@ -80,7 +80,7 @@ pub fn derive_default_no_bound(input: proc_macro::TokenStream) -> proc_macro::To
 					let variant_attrs = default_variant
 						.attrs
 						.iter()
-						.filter(|a| a.path.is_ident("default"))
+						.filter(|a| a.path().is_ident("default"))
 						.collect::<Vec<_>>();
 
 					// check that there is only one #[default] attribute on the variant

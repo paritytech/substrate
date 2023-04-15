@@ -6,7 +6,7 @@
 //! WORST CASE MAP SIZE: `1000000`
 //! HOSTNAME: `i9`, CPU: `13th Gen Intel(R) Core(TM) i9-13900K`
 //! EXECUTION: Some(Native), WASM-EXECUTION: Compiled, CHAIN: Some("dev"), DB CACHE: 1024
-
+// FAIL-CI rebench
 // Executed Command:
 // ./target/release/substrate
 // benchmark
