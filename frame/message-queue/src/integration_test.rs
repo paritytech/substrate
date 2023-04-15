@@ -130,10 +130,11 @@ fn stress_test_enqueue_and_service() {
 	let max_queues = 10_000;
 	let max_messages_per_queue = 10_000;
 	let max_msg_len = MaxMessageLenOf::<Test>::get();
-	let mut rng = StdRng::seed_from_u64(42);
 
 	new_test_ext::<Test>().execute_with(|| {
+		let mut rng = StdRng::seed_from_u64(gen_seed());
 		let mut msgs_remaining = 0;
+
 		for _ in 0..blocks {
 			// Start by enqueuing a large number of messages.
 			let enqueued =
@@ -178,9 +179,9 @@ fn stress_test_queue_suspension() {
 	let max_messages_per_queue = 10_000;
 	let (max_suspend_per_block, max_resume_per_block) = (100, 50);
 	let max_msg_len = MaxMessageLenOf::<Test>::get();
-	let mut rng = StdRng::seed_from_u64(41);
 
 	new_test_ext::<Test>().execute_with(|| {
+		let mut rng = StdRng::seed_from_u64(gen_seed());
 		let mut suspended = BTreeSet::<u32>::new();
 		let mut msgs_remaining = 0;
 
@@ -335,4 +336,15 @@ fn post_conditions() {
 	// This still works fine.
 	assert_eq!(MessageQueue::service_queues(Weight::MAX), Weight::zero(), "Nothing left");
 	next_block();
+}
+
+/// Pull a seed from env `TEST_SEED` or generate a random one. It is logged in both cases.
+fn gen_seed() -> u64 {
+	let s = std::env::var("TEST_SEED")
+		.ok()
+		.and_then(|s| s.parse().ok())
+		.unwrap_or_else(|| StdRng::from_entropy().gen());
+
+	log::info!("Using TEST_SEED={}", s);
+	s
 }
