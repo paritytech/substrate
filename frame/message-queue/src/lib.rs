@@ -191,11 +191,12 @@ pub mod weights;
 
 use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	defensive,
+	defensive, defensive_assert,
 	pallet_prelude::*,
 	traits::{
-		DefensiveTruncateFrom, DiscardOverweightError, EnqueueMessage, EnsureOriginWithArg,
-		ExecuteOverweightError, Footprint, ProcessMessage, ProcessMessageError, ServiceQueues,
+		DefensiveSaturating, DefensiveTruncateFrom, DiscardOverweightError, EnqueueMessage,
+		EnsureOriginWithArg, ExecuteOverweightError, Footprint, ProcessMessage,
+		ProcessMessageError, ServiceQueues,
 	},
 	BoundedSlice, CloneNoBound, DefaultNoBound,
 };
@@ -361,18 +362,21 @@ impl<
 		Some((pos, h.is_processed, item_slice))
 	}
 
-	/// Set the `is_processed` flag for the item at `pos` to be `true` if not already and decrement
-	/// the `remaining` counter of the page.
-	///
-	/// Does nothing if no [`ItemHeader`] could be decoded at the given position.
-	fn note_processed_at_pos(&mut self, pos: usize) {
-		if let Ok(mut h) = ItemHeader::<Size>::decode(&mut &self.heap[pos..]) {
-			if !h.is_processed {
-				h.is_processed = true;
-				h.using_encoded(|d| self.heap[pos..pos + d.len()].copy_from_slice(d));
-				self.remaining.saturating_dec();
-				self.remaining_size.saturating_reduce(h.payload_len);
-			}
+	/// Set the `is_processed` flag for the item at `pos` to be `true`. Errors if the message was
+	/// processed or could not be decoded.
+	fn note_processed_at_pos(&mut self, pos: usize) -> Result<(), ()> {
+		let Ok(mut h) = ItemHeader::<Size>::decode(&mut &self.heap[pos..]) else {
+			return Err(());
+		};
+
+		if !h.is_processed {
+			h.is_processed = true;
+			h.using_encoded(|d| self.heap[pos..pos + d.len()].copy_from_slice(d));
+			self.remaining.defensive_saturating_dec();
+			self.remaining_size.defensive_saturating_reduce(h.payload_len);
+			Ok(())
+		} else {
+			Err(())
 		}
 	}
 
