@@ -26,7 +26,7 @@ use sp_runtime::{
 	traits::{BadOrigin, Get, Member, Morph, TryMorph},
 	Either,
 };
-use sp_std::{cmp::Ordering, marker::PhantomData};
+use core::{cmp::Ordering, marker::PhantomData};
 
 use super::misc;
 
@@ -52,7 +52,7 @@ pub trait EnsureOrigin<OuterOrigin> {
 }
 
 /// [`EnsureOrigin`] implementation that always fails.
-pub struct NeverEnsureOrigin<Success>(sp_std::marker::PhantomData<Success>);
+pub struct NeverEnsureOrigin<Success>(PhantomData<Success>);
 impl<OO, Success> EnsureOrigin<OO> for NeverEnsureOrigin<Success> {
 	type Success = Success;
 	fn try_origin(o: OO) -> Result<Success, OO> {
@@ -114,7 +114,7 @@ impl<OO, Success> EnsureOrigin<OO> for NeverEnsureOrigin<Success> {
 /// assert!(EnsureOrigin::ensure_origin(Origin::NormalUser).is_err());
 /// ```
 pub struct EnsureOriginEqualOrHigherPrivilege<Origin, PrivilegeCmp>(
-	sp_std::marker::PhantomData<(Origin, PrivilegeCmp)>,
+	PhantomData<(Origin, PrivilegeCmp)>,
 );
 
 impl<OuterOrigin, Origin, PrivilegeCmp> EnsureOrigin<OuterOrigin>
@@ -169,7 +169,7 @@ pub trait EnsureOriginWithArg<OuterOrigin, Argument> {
 	fn try_successful_origin(a: &Argument) -> Result<OuterOrigin, ()>;
 }
 
-pub struct AsEnsureOriginWithArg<EO>(sp_std::marker::PhantomData<EO>);
+pub struct AsEnsureOriginWithArg<EO>(PhantomData<EO>);
 impl<OuterOrigin, Argument, EO: EnsureOrigin<OuterOrigin>>
 	EnsureOriginWithArg<OuterOrigin, Argument> for AsEnsureOriginWithArg<EO>
 {
@@ -196,13 +196,13 @@ impl<OuterOrigin, Argument, EO: EnsureOrigin<OuterOrigin>>
 }
 
 /// An `EnsureOrigin` that is filtered through a `ContainsPair` predicate.
-pub struct AsEnsureOriginWithContains<EO, Predicate>(sp_std::marker::PhantomData<(EO, Predicate)>);
+pub struct AsEnsureOriginWithContainsPair<EO, Predicate>(PhantomData<(EO, Predicate)>);
 impl<
 		OuterOrigin: Clone,
 		Argument,
 		EO: EnsureOrigin<OuterOrigin>,
 		Predicate: ContainsPair<EO::Success, Argument>,
-	> EnsureOriginWithArg<OuterOrigin, Argument> for AsEnsureOriginWithContains<EO, Predicate>
+	> EnsureOriginWithArg<OuterOrigin, Argument> for AsEnsureOriginWithContainsPair<EO, Predicate>
 {
 	/// A return type.
 	type Success = EO::Success;
@@ -296,7 +296,7 @@ impl<O: Clone, Original: EnsureOrigin<O>, Mutator: TryMorph<Original::Success>> 
 /// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
 ///
 /// Successful origin is derived from the left side.
-pub struct EitherOfDiverse<L, R>(sp_std::marker::PhantomData<(L, R)>);
+pub struct EitherOfDiverse<L, R>(PhantomData<(L, R)>);
 impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
 	EnsureOrigin<OuterOrigin> for EitherOfDiverse<L, R>
 {
@@ -327,7 +327,7 @@ pub type EnsureOneOf<L, R> = EitherOfDiverse<L, R>;
 /// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
 ///
 /// Successful origin is derived from the left side.
-pub struct EitherOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
+pub struct EitherOf<L, R>(PhantomData<(L, R)>);
 impl<
 		OuterOrigin,
 		L: EnsureOrigin<OuterOrigin>,
@@ -346,7 +346,7 @@ impl<
 }
 
 /// A homogenous typed `EitherOf` that additionally takes an argument.
-pub struct EitherOfWithArg<L, R>(sp_std::marker::PhantomData<(L, R)>);
+pub struct EitherOfWithArg<L, R>(PhantomData<(L, R)>);
 impl<
 		OuterOrigin,
 		Arg,
