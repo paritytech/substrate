@@ -23,7 +23,7 @@ struct ConstDef {
 	/// The type in Get, e.g. `u32` in `type Foo: Get<u32>;`, but `Self` is replaced by `T`
 	pub type_: syn::Type,
 	/// The doc associated
-	pub doc: Vec<syn::Lit>,
+	pub doc: Vec<syn::Expr>,
 	/// default_byte implementation
 	pub default_byte_impl: proc_macro2::TokenStream,
 	/// Constant name for Metadata (optional)

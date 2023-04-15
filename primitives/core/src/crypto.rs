@@ -21,8 +21,6 @@
 
 use crate::{ed25519, sr25519};
 #[cfg(feature = "std")]
-use base58::{FromBase58, ToBase58};
-#[cfg(feature = "std")]
 use bip39::{Language, Mnemonic, MnemonicType};
 use codec::{Decode, Encode, MaxEncodedLen};
 #[cfg(feature = "std")]
@@ -276,7 +274,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 		const CHECKSUM_LEN: usize = 2;
 		let body_len = Self::LEN;
 
-		let data = s.from_base58().map_err(|_| PublicError::BadBase58)?;
+		let data = bs58::decode(s).into_vec().map_err(|_| PublicError::BadBase58)?;
 		if data.len() < 2 {
 			return Err(PublicError::BadLength)
 		}
@@ -345,7 +343,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 		v.extend(self.as_ref());
 		let r = ss58hash(&v);
 		v.extend(&r[0..2]);
-		v.to_base58()
+		bs58::encode(v).into_string()
 	}
 
 	/// Return the ss58-check string for this key.
@@ -484,7 +482,7 @@ pub trait ByteArray: AsRef<[u8]> + AsMut<[u8]> + for<'a> TryFrom<&'a [u8], Error
 	}
 }
 
-/// Trait suitable for typical cryptographic PKI key public type.
+/// Trait suitable for typical cryptographic key public type.
 pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {}
 
 /// An opaque 32-byte cryptographic identifier.
