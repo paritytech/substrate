@@ -22,11 +22,11 @@ use crate::{
 	traits::ContainsPair,
 };
 use codec::MaxEncodedLen;
+use core::{cmp::Ordering, marker::PhantomData};
 use sp_runtime::{
 	traits::{BadOrigin, Get, Member, Morph, TryMorph},
 	Either,
 };
-use core::{cmp::Ordering, marker::PhantomData};
 
 use super::misc;
 

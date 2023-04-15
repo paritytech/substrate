@@ -1170,10 +1170,8 @@ impl pallet_message_queue::Config for Runtime {
 	type WeightInfo = ();
 	/// NOTE: Always set this to `NoopMessageProcessor` for benchmarking.
 	type MessageProcessor = pallet_message_queue::mock_helpers::NoopMessageProcessor<u32>;
-	type DiscardOverweightOrigin = AsEnsureOriginWithContainsPair<
-		EnsureRoot<AccountId>,
-		Everything,
-	>;
+	type DiscardOverweightOrigin =
+		AsEnsureOriginWithContainsPair<EnsureRoot<AccountId>, Everything>;
 	type Size = u32;
 	type QueueChangeHandler = ();
 	type HeapSize = ConstU32<{ 64 * 1024 }>;
