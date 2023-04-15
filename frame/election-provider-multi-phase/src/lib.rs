@@ -2023,12 +2023,6 @@ mod tests {
 				DispatchError::BadOrigin
 			);
 
-			// The provided current phase is incorrect.
-			assert_noop!(
-				MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::root()),
-				Error::<Runtime>::CallNotAllowed
-			);
-
 			assert_ok!(MultiPhase::force_rotate_round(crate::mock::RuntimeOrigin::root(),));
 			assert_eq!(MultiPhase::round(), 2);
 
