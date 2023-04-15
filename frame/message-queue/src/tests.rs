@@ -748,7 +748,7 @@ fn note_processed_at_pos_works() {
 			assert!(!processed);
 			assert_eq!(page.remaining as usize, msgs - i);
 
-			page.note_processed_at_pos(pos);
+			page.note_processed_at_pos(pos).unwrap();
 
 			let (_, processed, _) = page.peek_index(i).unwrap();
 			assert!(processed);
@@ -764,12 +764,12 @@ fn note_processed_at_pos_works() {
 }
 
 #[test]
-fn note_processed_at_pos_idempotent() {
+fn note_processed_at_pos_twice_errors() {
 	let (mut page, _) = full_page::<Test>();
-	page.note_processed_at_pos(0);
+	page.note_processed_at_pos(0).unwrap();
 
 	let original = page.clone();
-	page.note_processed_at_pos(0);
+	page.note_processed_at_pos(0).unwrap_err();
 	assert_eq!(page.heap, original.heap);
 }
 
@@ -786,7 +786,7 @@ fn is_complete_works() {
 			if i % 2 == 0 {
 				page.skip_first(false);
 			} else {
-				page.note_processed_at_pos(msg_enc_len * i);
+				page.note_processed_at_pos(msg_enc_len * i).unwrap();
 			}
 		}
 		// Not complete since `skip_first` was called with `false`.
@@ -795,7 +795,7 @@ fn is_complete_works() {
 			if i % 2 == 0 {
 				assert!(!page.is_complete());
 				let (pos, _, _) = page.peek_index(i).unwrap();
-				page.note_processed_at_pos(pos);
+				page.note_processed_at_pos(pos).unwrap();
 			}
 		}
 		assert!(page.is_complete());
@@ -1345,4 +1345,12 @@ fn bench_setup_sane() {
 			<Test as crate::Config>::DiscardOverweightOrigin::try_successful_origin(&queue)
 				.expect("Benchmarks need a valid discard origin when running them as tests");
 	});
+}
+
+#[test]
+fn item_header_constant_encoded_len() {
+	let m = ItemHeader::<<Test as Config>::Size>::max_encoded_len();
+	let s = ItemHeader::<<Test as Config>::Size> { payload_len: 0, is_processed: false };
+
+	assert_eq!(m, s.encode().len());
 }

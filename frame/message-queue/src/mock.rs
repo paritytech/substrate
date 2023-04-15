@@ -26,10 +26,10 @@ use crate as pallet_message_queue;
 use frame_support::{
 	parameter_types,
 	traits::{
-		AsEnsureOriginWithContains, ConstU32, ConstU64, EitherOfWithArg, Everything, MapSuccess, *,
+		AsEnsureOriginWithContains, ConstU32, ConstU64, EitherOfWithArg, Everything, IsInVec,
+		MapSuccess, *,
 	},
 };
-use frame_support::traits::IsInVec;
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{

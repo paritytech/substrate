@@ -462,6 +462,8 @@ pub mod pallet {
 		type MessageProcessor: ProcessMessage;
 
 		/// Page/heap size type.
+		///
+		/// Must have a constant encoded size across all instances to allow for in-place operations.
 		type Size: BaseArithmetic
 			+ Unsigned
 			+ Copy
@@ -479,9 +481,7 @@ pub mod pallet {
 
 		/// The only origin that can discard overweight messages via [`Self::discard_overweight`].
 		///
-		/// The origin decides who can discard overweight messages for which queues by using the
-		/// passed `MessageOrigin`. One example would be to allow each para-chain to discard UMP
-		/// messages that were sent by itself to unclog the queue.
+		/// The argument is the origin of the message that should be discarded.
 		type DiscardOverweightOrigin: EnsureOriginWithArg<
 			Self::RuntimeOrigin,
 			MessageOriginOf<Self>,
@@ -559,6 +559,8 @@ pub mod pallet {
 		/// Such errors are expected, but not guaranteed, to resolve themselves eventually through
 		/// retrying.
 		TemporarilyUnprocessable,
+		/// The storage invariants of the pallets have been violated. Please report this as a bug.
+		Corruption,
 	}
 
 	/// The index of the first and last (non-empty) pages.
@@ -645,11 +647,11 @@ pub mod pallet {
 
 		/// Discard an overweight message without processing it.
 		///
-		/// Can only be called by the `DiscardOverweightOrigin`.
+		/// Can only be called by `DiscardOverweightOrigin`.
 		#[pallet::call_index(2)]
 		#[pallet::weight(
-			T::WeightInfo::discard_overweight_page_updated().max(
-			T::WeightInfo::discard_overweight_page_removed())
+			T::WeightInfo::discard_overweight_page_updated()
+				.max(T::WeightInfo::discard_overweight_page_removed())
 		)]
 		pub fn discard_overweight(
 			origin: OriginFor<T>,
@@ -837,85 +839,6 @@ impl<T: Config> Pallet<T> {
 		BookStateFor::<T>::insert(origin, book_state);
 	}
 
-	pub fn do_discard_overweight(
-		origin: MessageOriginOf<T>,
-		page_index: PageIndex,
-		message_index: T::Size,
-	) -> Result<(), Error<T>> {
-		let (page, book_state, message_pos, message) =
-			Self::extract_overweight(&origin, page_index, message_index)?;
-		// We don't need to do a post-dispatch weight correction since we are only removing a
-		// message - not processing it.
-		let _page_removed = Self::remove_overweight(
-			origin.clone(),
-			book_state,
-			page,
-			page_index,
-			message_pos,
-			message.len(),
-		)?;
-		let hash = T::Hashing::hash(&message);
-		Self::deposit_event(Event::OverweightDiscarded { hash, origin, page_index, message_index });
-
-		Ok(())
-	}
-
-	/// Extract an overweight message.
-	fn extract_overweight(
-		queue: &MessageOriginOf<T>,
-		page_index: PageIndex,
-		message: T::Size,
-	) -> Result<(PageOf<T>, BookStateOf<T>, usize, Vec<u8>), Error<T>> {
-		let book_state = BookStateFor::<T>::get(queue);
-		let page = Pages::<T>::get(queue, page_index).ok_or(Error::<T>::NoPage)?;
-		let (pos, is_processed, payload) =
-			page.peek_index(message.into() as usize).ok_or(Error::<T>::NoMessage)?;
-		ensure!(
-			page_index < book_state.begin ||
-				(page_index == book_state.begin && pos < page.first.into() as usize),
-			Error::<T>::Queued
-		);
-		ensure!(!is_processed, Error::<T>::AlreadyProcessed);
-		let msg = payload.to_vec();
-		Ok((page, book_state, pos, msg))
-	}
-
-	/// Remove an overweight message.
-	///
-	/// Returns whether the page was removed.
-	///  - `true`: page removed
-	///  - `false`: page updated
-	fn remove_overweight(
-		origin: MessageOriginOf<T>,
-		mut book_state: BookStateOf<T>,
-		mut page: PageOf<T>,
-		page_index: PageIndex,
-		message_pos: usize,
-		payload_len: usize,
-	) -> Result<bool, Error<T>> {
-		page.note_processed_at_pos(message_pos);
-		book_state.message_count.saturating_dec();
-		book_state.size.saturating_reduce(payload_len as u64);
-		let result = if page.remaining.is_zero() {
-			debug_assert!(
-				page.remaining_size.is_zero(),
-				"no messages remaining; no space taken; qed"
-			);
-			Pages::<T>::remove(&origin, page_index);
-			debug_assert!(book_state.count >= 1, "page exists, so book must have pages");
-			book_state.count.saturating_dec();
-			true
-		// no need to consider .first or ready ring since processing an overweight page
-		// would not alter that state.
-		} else {
-			Pages::<T>::insert(&origin, page_index, page);
-			false
-		};
-		BookStateFor::<T>::insert(&origin, &book_state);
-		T::QueueChangeHandler::on_queue_changed(origin, book_state.message_count, book_state.size);
-		Ok(result)
-	}
-
 	/// Try to execute a single message that was marked as overweight.
 	///
 	/// The `weight_limit` is the weight that can be consumed to execute the message. The base
@@ -929,7 +852,6 @@ impl<T: Config> Pallet<T> {
 		let (page, book_state, pos, payload) =
 			Self::extract_overweight(&origin, page_index, index)?;
 
-		let payload_len = payload.len() as u64;
 		use MessageExecutionStatus::*;
 		let mut weight_counter = WeightMeter::from_limit(weight_limit);
 		let page_removed = match Self::process_message_payload(
@@ -944,14 +866,8 @@ impl<T: Config> Pallet<T> {
 		) {
 			Overweight | InsufficientWeight => Err(Error::<T>::InsufficientWeight),
 			Unprocessable { permanent: false } => Err(Error::<T>::TemporarilyUnprocessable),
-			Unprocessable { permanent: true } | Processed => Self::remove_overweight(
-				origin,
-				book_state,
-				page,
-				page_index,
-				pos,
-				payload_len as usize,
-			),
+			Unprocessable { permanent: true } | Processed =>
+				Self::remove_overweight(origin, book_state, page, page_index, pos, payload.len()),
 		}?;
 		let page_weight = match page_removed {
 			true => T::WeightInfo::execute_overweight_page_removed(),
@@ -1028,6 +944,85 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::PageReaped { origin: origin.clone(), index: page_index });
 
 		Ok(())
+	}
+
+	pub fn do_discard_overweight(
+		origin: MessageOriginOf<T>,
+		page_index: PageIndex,
+		message_index: T::Size,
+	) -> Result<(), Error<T>> {
+		let (page, book_state, message_pos, message) =
+			Self::extract_overweight(&origin, page_index, message_index)?;
+		// A post-dispatch refund is not needed since we don't process the message.
+		let _page_removed = Self::remove_overweight(
+			origin.clone(),
+			book_state,
+			page,
+			page_index,
+			message_pos,
+			message.len(),
+		)?;
+		let hash = T::Hashing::hash(&message);
+		Self::deposit_event(Event::OverweightDiscarded { hash, origin, page_index, message_index });
+
+		Ok(())
+	}
+
+	/// Extract an overweight message and return `(Page, Book, position, message)`.
+	fn extract_overweight(
+		queue: &MessageOriginOf<T>,
+		page_index: PageIndex,
+		message_index: T::Size,
+	) -> Result<(PageOf<T>, BookStateOf<T>, usize, Vec<u8>), Error<T>> {
+		let book_state = BookStateFor::<T>::get(queue);
+		let page = Pages::<T>::get(queue, page_index).ok_or(Error::<T>::NoPage)?;
+		let (pos, is_processed, payload) =
+			page.peek_index(message_index.into() as usize).ok_or(Error::<T>::NoMessage)?;
+
+		ensure!(!is_processed, Error::<T>::AlreadyProcessed);
+		ensure!(
+			page_index < book_state.begin ||
+				(page_index == book_state.begin && pos < page.first.into() as usize),
+			Error::<T>::Queued
+		);
+
+		let msg = payload.to_vec();
+		Ok((page, book_state, pos, msg))
+	}
+
+	/// Remove an overweight message.
+	///
+	/// Returns whether the page was removed.
+	fn remove_overweight(
+		origin: MessageOriginOf<T>,
+		mut book_state: BookStateOf<T>,
+		mut page: PageOf<T>,
+		page_index: PageIndex,
+		message_pos: usize,
+		payload_len: usize,
+	) -> Result<bool, Error<T>> {
+		page.note_processed_at_pos(message_pos).map_err(|_| Error::<T>::Corruption)?;
+		book_state.message_count.defensive_saturating_dec();
+		book_state.size.defensive_saturating_reduce(payload_len as u64);
+
+		let page_removed = if page.remaining.is_zero() {
+			defensive_assert!(
+				page.remaining_size.is_zero(),
+				"no messages remaining; no space taken; qed"
+			);
+			Pages::<T>::remove(&origin, page_index);
+			book_state.count.saturating_dec();
+			true
+		// no need to consider .first or ready ring since processing an overweight page
+		// would not alter that state.
+		} else {
+			Pages::<T>::insert(&origin, page_index, page);
+			false
+		};
+		BookStateFor::<T>::insert(&origin, &book_state);
+		T::QueueChangeHandler::on_queue_changed(origin, book_state.message_count, book_state.size);
+
+		Ok(page_removed)
 	}
 
 	/// Execute any messages remaining to be processed in the queue of `origin`, using up to
