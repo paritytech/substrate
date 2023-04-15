@@ -479,7 +479,8 @@ pub mod pallet {
 		/// removed.
 		type QueueChangeHandler: OnQueueChanged<<Self::MessageProcessor as ProcessMessage>::Origin>;
 
-		/// The only origin that can discard overweight messages via [`Self::discard_overweight`].
+		/// The only origin that can discard overweight messages via
+		/// [`crate::Pallet::discard_overweight`].
 		///
 		/// The argument is the origin of the message that should be discarded.
 		type DiscardOverweightOrigin: EnsureOriginWithArg<
@@ -1389,9 +1390,8 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 	fn discard_overweight(
 		(message_origin, page, index): Self::OverweightMessageAddress,
 	) -> Result<(), DiscardOverweightError> {
-		Pallet::<T>::do_discard_overweight(message_origin, page, index).map_err(|e| match e {
-			_ => DiscardOverweightError::NotFound,
-		})
+		Pallet::<T>::do_discard_overweight(message_origin, page, index)
+			.map_err(|_| DiscardOverweightError::NotFound)
 	}
 }
 
