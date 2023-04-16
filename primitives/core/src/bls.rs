@@ -26,13 +26,13 @@ use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretString
 #[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
 
-use w3f_bls::{DoublePublicKey, DoubleSignature, EngineBLS, SerializableToBytes, TinyBLS381};
-#[cfg(feature = "full_crypto")]
-use w3f_bls::{DoublePublicKeyScheme, Keypair, Message, SecretKey};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use w3f_bls::{DoublePublicKey, DoubleSignature, EngineBLS, SerializableToBytes, TinyBLS381};
+#[cfg(feature = "full_crypto")]
+use w3f_bls::{DoublePublicKeyScheme, Keypair, Message, SecretKey};
 
 use sp_runtime_interface::pass_by::PassByInner;
 use sp_std::{convert::TryFrom, marker::PhantomData, ops::Deref};
