@@ -2046,10 +2046,6 @@ impl_runtime_apis! {
 			Staking::api_nominations_quota(balance)
 		}
 
-		fn eras_stakers(era: sp_staking::EraIndex, account: AccountId) -> pallet_staking::Exposure<AccountId, Balance> {
-			Staking::api_eras_stakers(era, account)
-		}
-
 		fn era_page_count(era: sp_staking::EraIndex, account: AccountId) -> sp_staking::PageIndex {
 			Staking::api_era_page_count(era, account)
 		}
