@@ -19,19 +19,16 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Codec, Decode, Encode, HasCompact};
+use codec::Codec;
 
 sp_api::decl_runtime_apis! {
 	pub trait StakingApi<Balance, AccountId>
 		where
-			Balance: Codec + HasCompact,
-			AccountId: Encode + Decode,
+			Balance: Codec,
+			AccountId: Codec,
 	{
 		/// Returns the nominations quota for a nominator with a given balance.
 		fn nominations_quota(balance: Balance) -> u32;
-
-		/// Returns the full exposure of a validator at a given era.
-		fn eras_stakers(era: sp_staking::EraIndex, account: AccountId) -> sp_staking::Exposure<AccountId, Balance>;
 
 		/// Returns the count of pages exposure of the validator is split into.
 		fn era_page_count(era: sp_staking::EraIndex, account: AccountId) -> sp_staking::PageIndex;
