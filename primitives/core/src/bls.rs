@@ -26,9 +26,9 @@ use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretString
 #[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
 
-use bls_like::{DoublePublicKey, DoubleSignature, EngineBLS, SerializableToBytes, TinyBLS381};
+use w3f_bls::{DoublePublicKey, DoubleSignature, EngineBLS, SerializableToBytes, TinyBLS381};
 #[cfg(feature = "full_crypto")]
-use bls_like::{DoublePublicKeyScheme, Keypair, Message, SecretKey};
+use w3f_bls::{DoublePublicKeyScheme, Keypair, Message, SecretKey};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -40,7 +40,7 @@ use sp_std::{convert::TryFrom, marker::PhantomData, ops::Deref};
 /// BLS-377 specialized types
 pub mod bls377 {
 	use crate::crypto::CryptoTypeId;
-	use bls_like::TinyBLS377;
+	use w3f_bls::TinyBLS377;
 
 	/// An identifier used to match public keys against BLS12-377 keys
 	pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bls7");
@@ -61,7 +61,7 @@ pub mod bls377 {
 /// BLS-381 specialized types
 pub mod bls381 {
 	use crate::crypto::CryptoTypeId;
-	use bls_like::TinyBLS381;
+	use w3f_bls::TinyBLS381;
 
 	/// An identifier used to match public keys against BLS12-381 keys
 	pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bls8");
@@ -430,9 +430,9 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 		if seed_slice.len() != SECRET_KEY_SERIALIZED_SIZE {
 			return Err(SecretStringError::InvalidSeedLength)
 		}
-		let secret = bls_like::SecretKey::from_seed(seed_slice);
+		let secret = w3f_bls::SecretKey::from_seed(seed_slice);
 		let public = secret.into_public();
-		Ok(Pair(bls_like::Keypair { secret, public }))
+		Ok(Pair(w3f_bls::Keypair { secret, public }))
 	}
 
 	fn derive<Iter: Iterator<Item = DeriveJunction>>(
@@ -479,7 +479,7 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 			Ok(pk) => pk,
 			Err(_) => return false,
 		};
-		let public_key = match bls_like::double::DoublePublicKey::<T>::from_bytes(&pubkey_array) {
+		let public_key = match w3f_bls::double::DoublePublicKey::<T>::from_bytes(&pubkey_array) {
 			Ok(pk) => pk,
 			Err(_) => return false,
 		};
@@ -488,7 +488,7 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 			Ok(s) => s,
 			Err(_) => return false,
 		};
-		let sig = match bls_like::double::DoubleSignature::from_bytes(sig_array) {
+		let sig = match w3f_bls::double::DoubleSignature::from_bytes(sig_array) {
 			Ok(s) => s,
 			Err(_) => return false,
 		};

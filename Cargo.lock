@@ -854,28 +854,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
-name = "bls-like"
-version = "0.1.0"
-source = "git+https://github.com/w3f/bls#ef5fa78daa9d31a3df49296ba73d70c9bf5c0cfd"
-dependencies = [
- "ark-bls12-377",
- "ark-bls12-381",
- "ark-ec",
- "ark-ff",
- "ark-serialize",
- "ark-serialize-derive",
- "arrayref",
- "digest 0.10.6",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "rand_core 0.6.4",
- "sha2 0.10.6",
- "sha3",
- "thiserror",
- "zeroize",
-]
-
-[[package]]
 name = "bounded-collections"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10656,7 +10634,6 @@ dependencies = [
  "array-bytes",
  "bitflags",
  "blake2",
- "bls-like",
  "bounded-collections",
  "bs58",
  "criterion",
@@ -10694,6 +10671,7 @@ dependencies = [
  "substrate-bip39",
  "thiserror",
  "tiny-bip39",
+ "w3f-bls",
  "zeroize",
 ]
 
@@ -12479,6 +12457,29 @@ name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
+
+[[package]]
+name = "w3f-bls"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "218be9ac605377528b7d61801877857f790bc5522774fcca19ebf496049740b2"
+dependencies = [
+ "ark-bls12-377",
+ "ark-bls12-381",
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-serialize-derive",
+ "arrayref",
+ "digest 0.10.6",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "rand_core 0.6.4",
+ "sha2 0.10.6",
+ "sha3",
+ "thiserror",
+ "zeroize",
+]
 
 [[package]]
 name = "wait-timeout"
