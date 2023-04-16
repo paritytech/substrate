@@ -997,11 +997,11 @@ impl<T: Config> EraInfo<T> {
 		ClaimedRewards::<T>::get(era, validator).contains(&page)
 	}
 
-	/// Get exposure info for a validator at a given era and page.
+	/// Get exposure for a validator at a given era and page.
 	///
 	/// This builds a paged exposure from `ExposureOverview` and `ExposurePage` of the validator.
 	/// For older non-paged exposure, it returns the clipped exposure directly.
-	pub(crate) fn get_validator_exposure(
+	pub(crate) fn get_paged_exposure(
 		era: EraIndex,
 		validator: &T::AccountId,
 		page: PageIndex,
@@ -1035,8 +1035,8 @@ impl<T: Config> EraInfo<T> {
 		})
 	}
 
-	/// Get complete exposure of the validator at a given era.
-	pub(crate) fn get_non_paged_validator_exposure(
+	/// Get full exposure of the validator at a given era.
+	pub(crate) fn get_full_exposure(
 		era: EraIndex,
 		validator: &T::AccountId,
 	) -> Exposure<T::AccountId, BalanceOf<T>> {
@@ -1130,7 +1130,7 @@ impl<T: Config> EraInfo<T> {
 	}
 
 	/// Store exposure for elected validators at start of an era.
-	pub(crate) fn set_validator_exposure(
+	pub(crate) fn set_exposure(
 		era: EraIndex,
 		validator: &T::AccountId,
 		exposure: Exposure<T::AccountId, BalanceOf<T>>,

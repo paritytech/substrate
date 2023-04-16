@@ -198,7 +198,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let exposure =
-			EraInfo::<T>::get_validator_exposure(era, &ledger.stash, page).ok_or_else(|| {
+			EraInfo::<T>::get_paged_exposure(era, &ledger.stash, page).ok_or_else(|| {
 				Error::<T>::InvalidEraToReward
 					.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 			})?;
@@ -597,7 +597,7 @@ impl<T: Config> Pallet<T> {
 			// accumulate total stake
 			total_stake = total_stake.saturating_add(exposure.total);
 			// store staker exposure for this era
-			EraInfo::<T>::set_validator_exposure(new_planned_era, &stash, exposure);
+			EraInfo::<T>::set_exposure(new_planned_era, &stash, exposure);
 		});
 
 		let elected_stashes: BoundedVec<_, MaxWinnersOf<T>> = elected_stashes
@@ -1006,7 +1006,7 @@ impl<T: Config> Pallet<T> {
 		era: EraIndex,
 		account: &T::AccountId,
 	) -> Exposure<T::AccountId, BalanceOf<T>> {
-		EraInfo::<T>::get_non_paged_validator_exposure(era, &account)
+		EraInfo::<T>::get_full_exposure(era, &account)
 	}
 }
 
@@ -1726,7 +1726,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 				.map(|(who, value)| IndividualExposure { who: who.clone(), value: value.clone() })
 				.collect::<Vec<_>>();
 			let exposure = Exposure { total: Default::default(), own: Default::default(), others };
-			EraInfo::<T>::set_validator_exposure(*current_era, stash, exposure);
+			EraInfo::<T>::set_exposure(*current_era, stash, exposure);
 		}
 
 		fn set_current_era(era: EraIndex) {

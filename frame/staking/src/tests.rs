@@ -1736,7 +1736,7 @@ fn reward_to_stake_works() {
 			let _ = Balances::make_free_balance_be(&20, 1000);
 
 			// Bypass logic and change current exposure
-			EraInfo::<Test>::set_validator_exposure(
+			EraInfo::<Test>::set_exposure(
 				0,
 				&21,
 				Exposure { total: 69, own: 69, others: vec![] },
@@ -2206,7 +2206,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 
 		// Check reward
 		ErasRewardPoints::<Test>::insert(0, reward);
-		EraInfo::<Test>::set_validator_exposure(0, &11, exposure);
+		EraInfo::<Test>::set_exposure(0, &11, exposure);
 		ErasValidatorReward::<Test>::insert(0, stake);
 		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 0, 0));
 		assert_eq!(Balances::total_balance(&11), stake * 2);
@@ -2219,7 +2219,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		Staking::bond(RuntimeOrigin::signed(2), 20000, stake - 1, RewardDestination::default())
 			.unwrap();
 		// Override exposure of 11
-		EraInfo::<Test>::set_validator_exposure(
+		EraInfo::<Test>::set_exposure(
 			0,
 			&11,
 			Exposure {
@@ -3818,11 +3818,11 @@ fn test_multi_page_payout_stakers_by_page() {
 		mock::start_active_era(2);
 
 		// verify the exposures are calculated correctly.
-		let actual_exposure_0 = EraInfo::<Test>::get_validator_exposure(1, &11, 0).unwrap();
+		let actual_exposure_0 = EraInfo::<Test>::get_paged_exposure(1, &11, 0).unwrap();
 		assert_eq!(actual_exposure_0.total(), total_exposure);
 		assert_eq!(actual_exposure_0.own(), 1000);
 		assert_eq!(actual_exposure_0.others().len(), 64);
-		let actual_exposure_1 = EraInfo::<Test>::get_validator_exposure(1, &11, 1).unwrap();
+		let actual_exposure_1 = EraInfo::<Test>::get_paged_exposure(1, &11, 1).unwrap();
 		assert_eq!(actual_exposure_1.total(), total_exposure);
 		// own stake is only included once in the first page
 		assert_eq!(actual_exposure_1.own(), 0);
@@ -4017,11 +4017,11 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 		mock::start_active_era(2);
 
 		// verify the exposures are calculated correctly.
-		let actual_exposure_0 = EraInfo::<Test>::get_validator_exposure(1, &11, 0).unwrap();
+		let actual_exposure_0 = EraInfo::<Test>::get_paged_exposure(1, &11, 0).unwrap();
 		assert_eq!(actual_exposure_0.total(), total_exposure);
 		assert_eq!(actual_exposure_0.own(), 1000);
 		assert_eq!(actual_exposure_0.others().len(), 64);
-		let actual_exposure_1 = EraInfo::<Test>::get_validator_exposure(1, &11, 1).unwrap();
+		let actual_exposure_1 = EraInfo::<Test>::get_paged_exposure(1, &11, 1).unwrap();
 		assert_eq!(actual_exposure_1.total(), total_exposure);
 		// own stake is only included once in the first page
 		assert_eq!(actual_exposure_1.own(), 0);
@@ -4238,7 +4238,7 @@ fn test_page_count_and_size() {
 		// Since max exposure page count is 1, we should only have 1 page with clipped and sorted
 		// nominators.
 		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 1);
-		let exposure = EraInfo::<Test>::get_validator_exposure(1, &11, 0).unwrap();
+		let exposure = EraInfo::<Test>::get_paged_exposure(1, &11, 0).unwrap();
 		let mut previous_nominator_balance: Balance = u32::MAX as Balance;
 		exposure.others().iter().for_each(|e| {
 			// Nominators are sorted by balance in descending order.
@@ -4255,9 +4255,9 @@ fn test_page_count_and_size() {
 
 		assert_eq!(EraInfo::<Test>::get_page_count(2, &11), 2);
 		// first page has 64 nominators
-		assert_eq!(EraInfo::<Test>::get_validator_exposure(2, &11, 0).unwrap().others().len(), 64);
+		assert_eq!(EraInfo::<Test>::get_paged_exposure(2, &11, 0).unwrap().others().len(), 64);
 		// second page has 36 nominators
-		assert_eq!(EraInfo::<Test>::get_validator_exposure(2, &11, 1).unwrap().others().len(), 36);
+		assert_eq!(EraInfo::<Test>::get_paged_exposure(2, &11, 1).unwrap().others().len(), 36);
 
 		// now lets decrease page size
 		MaxExposurePageSize::set(32);
@@ -4265,10 +4265,10 @@ fn test_page_count_and_size() {
 		// now we expect 4 pages.
 		assert_eq!(EraInfo::<Test>::get_page_count(3, &11), 4);
 		// first 3 pages have 32 nominators each
-		assert_eq!(EraInfo::<Test>::get_validator_exposure(3, &11, 0).unwrap().others().len(), 32);
-		assert_eq!(EraInfo::<Test>::get_validator_exposure(3, &11, 1).unwrap().others().len(), 32);
-		assert_eq!(EraInfo::<Test>::get_validator_exposure(3, &11, 2).unwrap().others().len(), 32);
-		assert_eq!(EraInfo::<Test>::get_validator_exposure(3, &11, 3).unwrap().others().len(), 4);
+		assert_eq!(EraInfo::<Test>::get_paged_exposure(3, &11, 0).unwrap().others().len(), 32);
+		assert_eq!(EraInfo::<Test>::get_paged_exposure(3, &11, 1).unwrap().others().len(), 32);
+		assert_eq!(EraInfo::<Test>::get_paged_exposure(3, &11, 2).unwrap().others().len(), 32);
+		assert_eq!(EraInfo::<Test>::get_paged_exposure(3, &11, 3).unwrap().others().len(), 4);
 
 		// now lets decrease page size even more
 		MaxExposurePageSize::set(9);
@@ -4279,7 +4279,7 @@ fn test_page_count_and_size() {
 		// all nominators are sorted by balance in descending order.
 		let mut previous_nominator_balance: Balance = u32::MAX as Balance;
 		for page in 0..10 {
-			let exposure = EraInfo::<Test>::get_validator_exposure(4, &11, page).unwrap();
+			let exposure = EraInfo::<Test>::get_paged_exposure(4, &11, page).unwrap();
 			exposure.others().iter().for_each(|e| {
 				assert!(e.value < previous_nominator_balance);
 				previous_nominator_balance = e.value;
@@ -6397,11 +6397,11 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		);
 		// verify `EraInfo` returns page from paged storage
 		assert_eq!(
-			EraInfo::<Test>::get_validator_exposure(1, &11, 0).unwrap().others(),
+			EraInfo::<Test>::get_paged_exposure(1, &11, 0).unwrap().others(),
 			&actual_exposure_page_0.others
 		);
 		assert_eq!(
-			EraInfo::<Test>::get_validator_exposure(1, &11, 1).unwrap().others(),
+			EraInfo::<Test>::get_paged_exposure(1, &11, 1).unwrap().others(),
 			&actual_exposure_page_1.others
 		);
 		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 2);
@@ -6431,18 +6431,18 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		);
 
 		// verify `EraInfo` returns exposure from clipped storage
-		let actual_exposure_paged = EraInfo::<Test>::get_validator_exposure(1, &11, 0).unwrap();
+		let actual_exposure_paged = EraInfo::<Test>::get_paged_exposure(1, &11, 0).unwrap();
 		assert_eq!(actual_exposure_paged.others(), &clipped_exposure);
 		assert_eq!(actual_exposure_paged.own(), 1000);
 		assert_eq!(actual_exposure_paged.exposure_overview.page_count, 1);
 
-		let actual_exposure_full = EraInfo::<Test>::get_non_paged_validator_exposure(1, &11);
+		let actual_exposure_full = EraInfo::<Test>::get_full_exposure(1, &11);
 		assert_eq!(actual_exposure_full.others, expected_individual_exposures);
 		assert_eq!(actual_exposure_full.own, 1000);
 		assert_eq!(actual_exposure_full.total, total_exposure);
 
 		// for pages other than 0, clipped storage returns empty exposure
-		assert_eq!(EraInfo::<Test>::get_validator_exposure(1, &11, 1), None);
+		assert_eq!(EraInfo::<Test>::get_paged_exposure(1, &11, 1), None);
 		// page size is 1 for clipped storage
 		assert_eq!(EraInfo::<Test>::get_page_count(1, &11), 1);
 
