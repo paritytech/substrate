@@ -19,7 +19,8 @@
 use crate::{
 	communication::{
 		gossip::{proofs_topic, votes_topic, GossipFilterCfg, GossipMessage, GossipValidator},
-		request_response::outgoing_requests_engine::OnDemandJustificationsEngine,
+		peers::PeerReport,
+		request_response::outgoing_requests_engine::{OnDemandJustificationsEngine, ResponseInfo},
 	},
 	error::Error,
 	justification::BeefyVersionedFinalityProof,
@@ -34,7 +35,7 @@ use futures::{stream::Fuse, FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, HeaderBackend};
 use sc_network_gossip::GossipEngine;
-use sc_utils::notification::NotificationReceiver;
+use sc_utils::{mpsc::TracingUnboundedReceiver, notification::NotificationReceiver};
 use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_consensus::SyncOracle;
@@ -255,20 +256,6 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, P, R, S> {
-	pub backend: Arc<BE>,
-	pub payload_provider: P,
-	pub runtime: Arc<R>,
-	pub sync: Arc<S>,
-	pub key_store: BeefyKeystore,
-	pub gossip_engine: GossipEngine<B>,
-	pub gossip_validator: Arc<GossipValidator<B>>,
-	pub on_demand_justifications: OnDemandJustificationsEngine<B>,
-	pub links: BeefyVoterLinks<B>,
-	pub metrics: Option<VoterMetrics>,
-	pub persisted_state: PersistedState<B>,
-}
-
 #[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct PersistedState<B: Block> {
 	/// Best block we voted on.
@@ -311,28 +298,29 @@ impl<B: Block> PersistedState<B> {
 /// A BEEFY worker plays the BEEFY protocol
 pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, S> {
 	// utilities
-	backend: Arc<BE>,
-	payload_provider: P,
-	runtime: Arc<RuntimeApi>,
-	sync: Arc<S>,
-	key_store: BeefyKeystore,
+	pub backend: Arc<BE>,
+	pub payload_provider: P,
+	pub runtime: Arc<RuntimeApi>,
+	pub sync: Arc<S>,
+	pub key_store: BeefyKeystore,
 
 	// communication
-	gossip_engine: GossipEngine<B>,
-	gossip_validator: Arc<GossipValidator<B>>,
-	on_demand_justifications: OnDemandJustificationsEngine<B>,
+	pub gossip_engine: GossipEngine<B>,
+	pub gossip_validator: Arc<GossipValidator<B>>,
+	pub gossip_report_stream: TracingUnboundedReceiver<PeerReport>,
+	pub on_demand_justifications: OnDemandJustificationsEngine<B>,
 
 	// channels
 	/// Links between the block importer, the background voter and the RPC layer.
-	links: BeefyVoterLinks<B>,
+	pub links: BeefyVoterLinks<B>,
 
 	// voter state
 	/// BEEFY client metrics.
-	metrics: Option<VoterMetrics>,
+	pub metrics: Option<VoterMetrics>,
 	/// Buffer holding justifications for future processing.
-	pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
+	pub pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
 	/// Persisted voter state.
-	persisted_state: PersistedState<B>,
+	pub persisted_state: PersistedState<B>,
 }
 
 impl<B, BE, P, R, S> BeefyWorker<B, BE, P, R, S>
@@ -344,43 +332,6 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B>,
 {
-	/// Return a new BEEFY worker instance.
-	///
-	/// Note that a BEEFY worker is only fully functional if a corresponding
-	/// BEEFY pallet has been deployed on-chain.
-	///
-	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, R, S>) -> Self {
-		let WorkerParams {
-			backend,
-			payload_provider,
-			runtime,
-			key_store,
-			sync,
-			gossip_engine,
-			gossip_validator,
-			on_demand_justifications,
-			links,
-			metrics,
-			persisted_state,
-		} = worker_params;
-
-		BeefyWorker {
-			backend,
-			payload_provider,
-			runtime,
-			sync,
-			key_store,
-			gossip_engine,
-			gossip_validator,
-			on_demand_justifications,
-			links,
-			metrics,
-			pending_justifications: BTreeMap::new(),
-			persisted_state,
-		}
-	}
-
 	fn best_grandpa_block(&self) -> NumberFor<B> {
 		*self.persisted_state.voting_oracle.best_grandpa_block_header.number()
 	}
@@ -849,7 +800,12 @@ where
 			// Act on changed 'state'.
 			self.process_new_state();
 
+			// Mutable reference used to drive the gossip engine.
 			let mut gossip_engine = &mut self.gossip_engine;
+			// Use temp val and report after async section,
+			// to avoid having to Mutex-wrap `gossip_engine`.
+			let mut gossip_report: Option<PeerReport> = None;
+
 			// Wait for, and handle external events.
 			// The branches below only change 'state', actual voting happens afterwards,
 			// based on the new resulting 'state'.
@@ -870,11 +826,16 @@ where
 					return;
 				},
 				// Process incoming justifications as these can make some in-flight votes obsolete.
-				justif = self.on_demand_justifications.next().fuse() => {
-					if let Some(justif) = justif {
-						if let Err(err) = self.triage_incoming_justif(justif) {
-							debug!(target: LOG_TARGET, "🥩 {}", err);
-						}
+				response_info = self.on_demand_justifications.next().fuse() => {
+					match response_info {
+						ResponseInfo::ValidProof(justif, peer_report) => {
+							if let Err(err) = self.triage_incoming_justif(justif) {
+								debug!(target: LOG_TARGET, "🥩 {}", err);
+							}
+							gossip_report = Some(peer_report);
+						},
+						ResponseInfo::PeerReport(peer_report) => gossip_report = Some(peer_report),
+						ResponseInfo::Pending => (),
 					}
 				},
 				justif = block_import_justif.next() => {
@@ -918,6 +879,13 @@ where
 						return;
 					}
 				},
+				// Process peer reports.
+				report = self.gossip_report_stream.next() => {
+					gossip_report = report;
+				},
+			}
+			if let Some(PeerReport { who, cost_benefit }) = gossip_report {
+				self.gossip_engine.report(who, cost_benefit);
 			}
 		}
 	}
@@ -1122,7 +1090,8 @@ pub(crate) mod tests {
 		let network = peer.network_service().clone();
 		let sync = peer.sync_service().clone();
 		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
-		let gossip_validator = Arc::new(GossipValidator::new(known_peers.clone()));
+		let (gossip_validator, gossip_report_stream) = GossipValidator::new(known_peers.clone());
+		let gossip_validator = Arc::new(gossip_validator);
 		let gossip_engine = GossipEngine::new(
 			network.clone(),
 			sync.clone(),
@@ -1152,7 +1121,7 @@ pub(crate) mod tests {
 		)
 		.unwrap();
 		let payload_provider = MmrRootProvider::new(api.clone());
-		let worker_params = crate::worker::WorkerParams {
+		BeefyWorker {
 			backend,
 			payload_provider,
 			runtime: api,
@@ -1160,12 +1129,13 @@ pub(crate) mod tests {
 			links,
 			gossip_engine,
 			gossip_validator,
+			gossip_report_stream,
 			metrics,
 			sync: Arc::new(sync),
 			on_demand_justifications,
+			pending_justifications: BTreeMap::new(),
 			persisted_state,
-		};
-		BeefyWorker::<_, _, _, _, _>::new(worker_params)
+		}
 	}
 
 	#[test]

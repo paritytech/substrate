@@ -556,8 +556,9 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block> + HeaderBackend<Block>, Block: B
 		Ok(meta) => {
 			hashes.insert(meta.parent);
 		},
-		Err(err) =>
-			warn!(target: LOG_TARGET, "Failed to lookup metadata for block `{:?}`: {}", first, err,),
+		Err(err) => {
+			warn!(target: LOG_TARGET, "Failed to lookup metadata for block `{:?}`: {}", first, err,)
+		},
 	}
 
 	// Cleans data for finalized block's ancestors

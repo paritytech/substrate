@@ -122,9 +122,9 @@ impl sp_staking::StakingInterface for StakingMock {
 			BondedBalanceMap::get().get(who).copied(),
 		) {
 			(None, None) => Err(DispatchError::Other("balance not found")),
-			(Some(v), None) => Ok(Stake { total: v, active: 0, stash: *who }),
-			(None, Some(v)) => Ok(Stake { total: v, active: v, stash: *who }),
-			(Some(a), Some(b)) => Ok(Stake { total: a + b, active: b, stash: *who }),
+			(Some(v), None) => Ok(Stake { total: v, active: 0 }),
+			(None, Some(v)) => Ok(Stake { total: v, active: v }),
+			(Some(a), Some(b)) => Ok(Stake { total: a + b, active: b }),
 		}
 	}
 

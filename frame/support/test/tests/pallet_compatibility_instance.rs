@@ -298,9 +298,9 @@ mod test {
 			_ => unreachable!(),
 		};
 
-		let get_enum_variants = |ty_id| match types.resolve(ty_id).map(|ty| ty.type_def()) {
+		let get_enum_variants = |ty_id| match types.resolve(ty_id).map(|ty| ty.type_def.clone()) {
 			Some(ty) => match ty {
-				scale_info::TypeDef::Variant(var) => var.variants(),
+				scale_info::TypeDef::Variant(var) => var.variants,
 				_ => panic!("Expected variant type"),
 			},
 			_ => panic!("No type found"),
@@ -312,12 +312,12 @@ mod test {
 			for i in 0..vs1.len() {
 				let v1 = &vs2[i];
 				let v2 = &vs2[i];
-				assert_eq!(v1.fields().len(), v2.fields().len());
-				for f in 0..v1.fields().len() {
-					let f1 = &v1.fields()[f];
-					let f2 = &v2.fields()[f];
-					pretty_assertions::assert_eq!(f1.name(), f2.name());
-					pretty_assertions::assert_eq!(f1.ty(), f2.ty());
+				assert_eq!(v1.fields.len(), v2.fields.len());
+				for f in 0..v1.fields.len() {
+					let f1 = &v1.fields[f];
+					let f2 = &v2.fields[f];
+					pretty_assertions::assert_eq!(f1.name, f2.name);
+					pretty_assertions::assert_eq!(f1.ty, f2.ty);
 				}
 			}
 		};
@@ -325,23 +325,23 @@ mod test {
 		for i in vec![1, 3, 5].into_iter() {
 			pretty_assertions::assert_eq!(pallets[i].storage, pallets[i + 1].storage);
 
-			let call1_variants = get_enum_variants(pallets[i].calls.as_ref().unwrap().ty.id());
-			let call2_variants = get_enum_variants(pallets[i + 1].calls.as_ref().unwrap().ty.id());
-			assert_enum_variants(call1_variants, call2_variants);
+			let call1_variants = get_enum_variants(pallets[i].calls.as_ref().unwrap().ty.id);
+			let call2_variants = get_enum_variants(pallets[i + 1].calls.as_ref().unwrap().ty.id);
+			assert_enum_variants(&call1_variants, &call2_variants);
 
 			// event: check variants and fields but ignore the type name which will be different
-			let event1_variants = get_enum_variants(pallets[i].event.as_ref().unwrap().ty.id());
-			let event2_variants = get_enum_variants(pallets[i + 1].event.as_ref().unwrap().ty.id());
-			assert_enum_variants(event1_variants, event2_variants);
+			let event1_variants = get_enum_variants(pallets[i].event.as_ref().unwrap().ty.id);
+			let event2_variants = get_enum_variants(pallets[i + 1].event.as_ref().unwrap().ty.id);
+			assert_enum_variants(&event1_variants, &event2_variants);
 
-			let err1 = get_enum_variants(pallets[i].error.as_ref().unwrap().ty.id())
+			let err1 = get_enum_variants(pallets[i].error.as_ref().unwrap().ty.id)
 				.iter()
-				.filter(|v| v.name() == "__Ignore")
+				.filter(|v| v.name == "__Ignore")
 				.cloned()
 				.collect::<Vec<_>>();
-			let err2 = get_enum_variants(pallets[i + 1].error.as_ref().unwrap().ty.id())
+			let err2 = get_enum_variants(pallets[i + 1].error.as_ref().unwrap().ty.id)
 				.iter()
-				.filter(|v| v.name() == "__Ignore")
+				.filter(|v| v.name == "__Ignore")
 				.cloned()
 				.collect::<Vec<_>>();
 			assert_enum_variants(&err1, &err2);

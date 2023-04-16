@@ -202,6 +202,7 @@ members = [
 	"primitives/keystore",
 	"primitives/maybe-compressed-blob",
 	"primitives/merkle-mountain-range",
+	"primitives/metadata-ir",
 	"primitives/npos-elections",
 	"primitives/npos-elections/fuzzer",
 	"primitives/offchain",

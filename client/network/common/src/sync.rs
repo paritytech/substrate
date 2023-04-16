@@ -424,9 +424,9 @@ pub trait ChainSync<Block: BlockT>: Send {
 	///
 	/// If [`PollBlockAnnounceValidation::ImportHeader`] is returned, then the caller MUST try to
 	/// import passed header (call `on_block_data`). The network request isn't sent in this case.
-	fn poll_block_announce_validation<'a>(
+	fn poll_block_announce_validation(
 		&mut self,
-		cx: &mut std::task::Context<'a>,
+		cx: &mut std::task::Context<'_>,
 	) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
 
 	/// Call when a peer has disconnected.

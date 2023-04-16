@@ -2628,8 +2628,7 @@ mod tests {
 			conn,
 			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
 		);
-		if let Some(&PeerState::Incoming { ref connections, .. }) = notif.peers.get(&(peer, set_id))
-		{
+		if let Some(PeerState::Incoming { connections, .. }) = notif.peers.get(&(peer, set_id)) {
 			assert_eq!(connections.len(), 1);
 			assert_eq!(connections[0], (conn, ConnectionState::OpenDesiredByRemote));
 		} else {
@@ -2647,8 +2646,7 @@ mod tests {
 			},
 		));
 
-		if let Some(&PeerState::Incoming { ref connections, .. }) = notif.peers.get(&(peer, set_id))
-		{
+		if let Some(PeerState::Incoming { connections, .. }) = notif.peers.get(&(peer, set_id)) {
 			assert_eq!(connections.len(), 2);
 			assert_eq!(connections[0], (conn, ConnectionState::OpenDesiredByRemote));
 			assert_eq!(connections[1], (conn2, ConnectionState::Closed));
@@ -2797,8 +2795,7 @@ mod tests {
 			},
 		));
 
-		if let Some(&PeerState::Disabled { ref connections, .. }) = notif.peers.get(&(peer, set_id))
-		{
+		if let Some(PeerState::Disabled { connections, .. }) = notif.peers.get(&(peer, set_id)) {
 			assert_eq!(connections.len(), 1);
 			assert_eq!(connections[0], (conn1, ConnectionState::Closed));
 		} else {
@@ -2884,8 +2881,7 @@ mod tests {
 			));
 		}
 
-		if let Some(&PeerState::Disabled { ref connections, .. }) = notif.peers.get(&(peer, set_id))
-		{
+		if let Some(PeerState::Disabled { connections, .. }) = notif.peers.get(&(peer, set_id)) {
 			assert_eq!(connections[0], (conn1, ConnectionState::Closed));
 			assert_eq!(connections[1], (conn2, ConnectionState::Closed));
 		} else {
@@ -2900,8 +2896,7 @@ mod tests {
 			NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
 		);
 
-		if let Some(&PeerState::Enabled { ref connections, .. }) = notif.peers.get(&(peer, set_id))
-		{
+		if let Some(PeerState::Enabled { connections, .. }) = notif.peers.get(&(peer, set_id)) {
 			assert_eq!(connections[0], (conn1, ConnectionState::Opening));
 			assert_eq!(connections[1], (conn2, ConnectionState::Opening));
 		} else {
@@ -3297,8 +3292,7 @@ mod tests {
 			));
 		}
 
-		if let Some(&PeerState::Disabled { ref connections, .. }) = notif.peers.get(&(peer, set_id))
-		{
+		if let Some(PeerState::Disabled { connections, .. }) = notif.peers.get(&(peer, set_id)) {
 			assert_eq!(connections[0], (conn1, ConnectionState::Closed));
 			assert_eq!(connections[1], (conn2, ConnectionState::Closed));
 		} else {
@@ -3356,8 +3350,7 @@ mod tests {
 			));
 		}
 
-		if let Some(&PeerState::Disabled { ref connections, .. }) = notif.peers.get(&(peer, set_id))
-		{
+		if let Some(PeerState::Disabled { connections, .. }) = notif.peers.get(&(peer, set_id)) {
 			assert_eq!(connections[0], (conn1, ConnectionState::Closed));
 			assert_eq!(connections[1], (conn2, ConnectionState::Closed));
 		} else {
@@ -3413,8 +3406,7 @@ mod tests {
 			));
 		}
 
-		if let Some(&PeerState::Disabled { ref connections, .. }) = notif.peers.get(&(peer, set_id))
-		{
+		if let Some(PeerState::Disabled { connections, .. }) = notif.peers.get(&(peer, set_id)) {
 			assert_eq!(connections[0], (conn1, ConnectionState::Closed));
 			assert_eq!(connections[1], (conn2, ConnectionState::Closed));
 		} else {
@@ -3424,8 +3416,7 @@ mod tests {
 		// open substreams on both active connections
 		notif.peerset_report_connect(peer, set_id);
 
-		if let Some(&PeerState::Enabled { ref connections, .. }) = notif.peers.get(&(peer, set_id))
-		{
+		if let Some(PeerState::Enabled { connections, .. }) = notif.peers.get(&(peer, set_id)) {
 			assert_eq!(connections[0], (conn1, ConnectionState::Opening));
 			assert_eq!(connections[1], (conn2, ConnectionState::Closed));
 		} else {
