@@ -50,6 +50,15 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
+use frame_support::{
+	dispatch::{
+		DispatchClass, DispatchInfo, DispatchResult, GetDispatchInfo, Pays, PostDispatchInfo,
+	},
+	traits::{EstimateCallFee, Get},
+	weights::{Weight, WeightToFee},
+};
+pub use pallet::*;
+pub use payment::*;
 use sp_runtime::{
 	traits::{
 		Convert, DispatchInfoOf, Dispatchable, One, PostDispatchInfoOf, SaturatedConversion,
@@ -61,14 +70,7 @@ use sp_runtime::{
 	FixedPointNumber, FixedPointOperand, FixedU128, Perquintill, RuntimeDebug,
 };
 use sp_std::prelude::*;
-
-use frame_support::{
-	dispatch::{
-		DispatchClass, DispatchInfo, DispatchResult, GetDispatchInfo, Pays, PostDispatchInfo,
-	},
-	traits::{EstimateCallFee, Get},
-	weights::{Weight, WeightToFee},
-};
+pub use types::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 
 #[cfg(test)]
 mod mock;
@@ -77,10 +79,6 @@ mod tests;
 
 mod payment;
 mod types;
-
-pub use pallet::*;
-pub use payment::*;
-pub use types::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 
 /// Fee multiplier.
 pub type Multiplier = FixedU128;
@@ -101,7 +99,7 @@ type BalanceOf<T> = <<T as Config>::OnChargeTransaction as OnChargeTransaction<T
 /// 		t1 = (v * diff)
 /// 		t2 = (v * diff)^2 / 2
 /// 	then:
-/// 	next_multiplier = prev_multiplier * (1 + t1 + t2)
+ /// 	next_multiplier = prev_multiplier * (1 + t1 + t2)
 ///
 /// Where `(s', v)` must be given as the `Get` implementation of the `T` generic type. Moreover, `M`
 /// must provide the minimum allowed value for the multiplier. Note that a runtime should ensure
@@ -207,12 +205,14 @@ where
 		let normal_block_weight =
 			current_block_weight.get(DispatchClass::Normal).min(normal_max_weight);
 
-		// TODO: Handle all weight dimensions
-		let normal_max_weight = normal_max_weight.ref_time();
-		let normal_block_weight = normal_block_weight.ref_time();
+		let (normal_block_weight, normal_max_weight) = if normal_block_weight.ref_time() > normal_block_weight.proof_size() {
+			(normal_block_weight.ref_time(), normal_max_weight.ref_time())
+		} else {
+			(normal_block_weight.proof_size(), normal_max_weight.proof_size())
+		};
 
-		let s = S::get();
-		let v = V::get();
+		let s = S::get(); // target, 25% full
+		let v = V::get(); // Adjustment variable, 0.00001
 
 		let target_weight = (s * normal_max_weight) as u128;
 		let block_weight = normal_block_weight as u128;
@@ -290,9 +290,10 @@ const MULTIPLIER_DEFAULT_VALUE: Multiplier = Multiplier::from_u32(1);
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+
+	use super::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -711,14 +712,17 @@ where
 		tip: BalanceOf<T>,
 		final_fee: BalanceOf<T>,
 	) -> TransactionPriority {
-		// Calculate how many such extrinsics we could fit into an empty block and take
-		// the limitting factor.
+		// Calculate how many such extrinsics we could fit into an empty block and take the
+		// limiting factor.
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let max_block_length = *T::BlockLength::get().max.get(info.class) as u64;
 
-		// TODO: Take into account all dimensions of weight
-		let max_block_weight = max_block_weight.ref_time();
-		let info_weight = info.weight.ref_time();
+		// Take max of proof size or ref time and use the same dimension for max_block_weight.
+		let (info_weight, max_block_weight) = if info.weight.ref_time() > info.weight.proof_size() {
+			(info.weight.ref_time(), max_block_weight.ref_time())
+		} else {
+			(info.weight.proof_size(), max_block_weight.proof_size())
+		};
 
 		let bounded_weight = info_weight.clamp(1, max_block_weight);
 		let bounded_length = (len as u64).clamp(1, max_block_length);
