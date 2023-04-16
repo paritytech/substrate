@@ -1736,11 +1736,7 @@ fn reward_to_stake_works() {
 			let _ = Balances::make_free_balance_be(&20, 1000);
 
 			// Bypass logic and change current exposure
-			EraInfo::<Test>::set_exposure(
-				0,
-				&21,
-				Exposure { total: 69, own: 69, others: vec![] },
-			);
+			EraInfo::<Test>::set_exposure(0, &21, Exposure { total: 69, own: 69, others: vec![] });
 			<Ledger<Test>>::insert(
 				&20,
 				StakingLedger {
