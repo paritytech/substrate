@@ -424,10 +424,10 @@ mod multiplier_tests {
 			10u64 * mb,
 			Weight::from_parts(2147483647, 0),
 			Weight::from_parts(4294967295, 0),
-			BlockWeights::get().max_block / 2,
-			BlockWeights::get().max_block,
-			Weight::MAX / 2,
-			Weight::MAX,
+			BlockWeights::get().max_block.set_proof_size(0) / 2,
+			BlockWeights::get().max_block.set_proof_size(0),
+			Weight::MAX.set_proof_size(0) / 2,
+			Weight::MAX.set_proof_size(0),
 		]
 		.into_iter()
 		.for_each(|i| {
