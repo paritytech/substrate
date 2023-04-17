@@ -4519,11 +4519,75 @@ mod election_data_provider {
 	}
 
 	#[test]
-	fn set_minimum_active_stake_zero_correct() {
+	fn set_minimum_active_stake_lower_bond_works() {
+		// if there are no voters, minimum active stake is zero (should not happen).
 		ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+			assert_eq!(<Test as Config>::VoterList::count(), 0);
 			assert_ok!(<Staking as ElectionDataProvider>::electing_voters(None));
 			assert_eq!(MinimumActiveStake::<Test>::get(), 0);
 		});
+
+		// lower non-zero active stake below `MinNominatorBond` is the minimum active stake if
+		// it is selected as part of the npos voters.
+		ExtBuilder::default().has_stakers(true).nominate(true).build_and_execute(|| {
+			assert_eq!(MinNominatorBond::<Test>::get(), 1);
+			assert_eq!(<Test as Config>::VoterList::count(), 4);
+
+			assert_ok!(Staking::bond(RuntimeOrigin::signed(4), 5, Default::default(),));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(4), vec![1]));
+			assert_eq!(<Test as Config>::VoterList::count(), 5);
+
+			let voters_before = <Staking as ElectionDataProvider>::electing_voters(None).unwrap();
+			assert_eq!(MinimumActiveStake::<Test>::get(), 5);
+
+			// update minimum nominator bond.
+			MinNominatorBond::<Test>::set(10);
+			assert_eq!(MinNominatorBond::<Test>::get(), 10);
+			// voter list still considers nominator 4 for voting, even though its active stake is
+			// lower than `MinNominatorBond`.
+			assert_eq!(<Test as Config>::VoterList::count(), 5);
+
+			let voters = <Staking as ElectionDataProvider>::electing_voters(None).unwrap();
+			assert_eq!(voters_before, voters);
+
+			// minimum active stake is lower than `MinNominatorBond`.
+			assert_eq!(MinimumActiveStake::<Test>::get(), 5);
+		});
+	}
+
+	#[test]
+	fn set_minimum_active_bond_corrupt_state() {
+		ExtBuilder::default()
+			.has_stakers(true)
+			.nominate(true)
+			.add_staker(61, 61, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.build_and_execute(|| {
+				assert_eq!(Staking::weight_of(&101), 500);
+				let voters = <Staking as ElectionDataProvider>::electing_voters(None).unwrap();
+				assert_eq!(voters.len(), 5);
+				assert_eq!(MinimumActiveStake::<Test>::get(), 500);
+
+				assert_ok!(Staking::unbond(RuntimeOrigin::signed(101), 200));
+				start_active_era(10);
+				assert_ok!(Staking::unbond(RuntimeOrigin::signed(101), 100));
+				start_active_era(20);
+
+				// corrupt ledger state by lowering max unlocking chunks bounds.
+				MaxUnlockingChunks::set(1);
+
+				let voters = <Staking as ElectionDataProvider>::electing_voters(None).unwrap();
+				// number of returned voters decreases since ledger entry of stash 101 is now
+				// corrupt.
+				assert_eq!(voters.len(), 4);
+				// minimum active stake does not take into consideration the corrupt entry.
+				assert_eq!(MinimumActiveStake::<Test>::get(), 2_000);
+
+				// voter weight of corrupted ledger entry is 0.
+				assert_eq!(Staking::weight_of(&101), 0);
+
+				// reset max unlocking chunks for try_state to pass.
+				MaxUnlockingChunks::set(32);
+			})
 	}
 
 	#[test]
