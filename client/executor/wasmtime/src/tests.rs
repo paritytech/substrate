@@ -20,7 +20,7 @@ use codec::{Decode as _, Encode as _};
 use sc_executor_common::{
 	error::Error,
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{HeapAllocStrategy, WasmModule},
+	wasm_runtime::{HeapAllocStrategy, WasmModule, DEFAULT_HEAP_ALLOC_STRATEGY},
 };
 use sc_runtime_test::wasm_binary_unwrap;
 
@@ -93,7 +93,7 @@ impl RuntimeBuilder {
 			instantiation_strategy,
 			canonicalize_nans: false,
 			deterministic_stack: false,
-			heap_pages: HeapAllocStrategy::Static { extra_pages: 1024 },
+			heap_pages: DEFAULT_HEAP_ALLOC_STRATEGY,
 			precompile_runtime: false,
 			tmpdir: None,
 		}
@@ -477,7 +477,7 @@ fn test_instances_without_reuse_are_not_leaked() {
 				deterministic_stack_limit: None,
 				canonicalize_nans: false,
 				parallel_compilation: true,
-				heap_alloc_strategy: HeapAllocStrategy::Static { extra_pages: 2048 },
+				heap_alloc_strategy: DEFAULT_HEAP_ALLOC_STRATEGY,
 				wasm_multi_value: false,
 				wasm_bulk_memory: false,
 				wasm_reference_types: false,

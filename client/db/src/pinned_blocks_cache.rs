@@ -149,8 +149,9 @@ impl<Block: BlockT> PinnedBlocksCache<Block> {
 					self.cache.len()
 				);
 			},
-			None =>
-				log::warn!(target: LOG_TARGET, "Unable to bump reference count. hash = {}", hash),
+			None => {
+				log::warn!(target: LOG_TARGET, "Unable to bump reference count. hash = {}", hash)
+			},
 		};
 	}
 
