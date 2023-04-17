@@ -154,6 +154,17 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Mint an item of a particular collection with a royalty.
+		///
+		/// The origin must be Signed and the sender must comply with the `mint_settings` rules.
+		///
+		/// - `collection`: The collection of the item to be minted.
+		/// - `item`: An identifier of the new item.
+		/// - `mint_to`: Account into which the item will be minted.
+		/// - `item_settings`: The item's settings.
+		///
+		///
+		/// Emits `NftRoyaltyCreated` event when successful.
 		#[pallet::call_index(0)]
 		#[pallet::weight(0)]
 		pub fn mint_item_with_royalty(
