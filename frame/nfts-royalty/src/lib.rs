@@ -128,6 +128,13 @@ pub mod pallet {
 			nft: T::NftItemId,
 			new_royalty_recipient: T::AccountId,
 		},
+		/// The NFT royalty percentage of an existing NFT item was set.
+		NftRoyaltySet {
+			nft_collection: T::NftCollectionId,
+			nft: T::NftItemId,
+			royalty_percentage: Permill,
+			royalty_recipient: T::AccountId,
+		},
 	}
 
 	#[pallet::error]
@@ -136,6 +143,8 @@ pub mod pallet {
 		NoRoyaltiesExist,
 		/// The signing account has no permission to do the operation.
 		NoPermission,
+		/// The NFT does not exist.
+		NftDoesNotExist
 	}
 
 	#[pallet::call]
@@ -192,7 +201,6 @@ pub mod pallet {
 			collection_id: T::NftCollectionId,
 			item_id: T::NftItemId,
 		) -> DispatchResult {
-			// TODO: Check if this conversion makes sense
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?.unwrap();
@@ -243,6 +251,53 @@ pub mod pallet {
 				nft_collection: collection_id,
 				nft: item_id,
 				new_royalty_recipient
+			});
+
+			Ok(())
+		}
+
+		/// Set the royalties associated to an already existing item.
+		///
+		/// The origin must be the actual owner of the `item`.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item to set the royalty.
+		/// - `royalty_percentage`: Royalty percentage to be set.
+		/// - `royalty_recipient`: Account into which the item royalties will be transfered.
+		///
+		/// Emits `NftRoyaltiesTransfered`.
+		/// 
+		#[pallet::call_index(3)]
+		#[pallet::weight(0)]
+		pub fn set_item_with_royalty(
+			origin: OriginFor<T>,
+			collection_id: T::NftCollectionId,
+			item_id: T::NftItemId,
+			item_settings: ItemSettings,
+			royalty_percentage: Permill,
+			royalty_recipient: T::AccountId,
+		) -> DispatchResult {
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
+			let item_config = ItemConfig { settings: item_settings};
+			// TODO: Not sure how to check if an item exists
+			// ensure!(T::Nfts::exists(&collection_id, &item_id), Error::<T>::NftDoesNotExist);
+			// What happens if `maybe_check_origin` is None? None means it is ForceOrigin
+			ensure!(T::Nfts::owner(&collection_id, &item_id) == maybe_check_origin, Error::<T>::NoPermission);
+			NftWithRoyalty::<T>::insert(
+				(collection_id, item_id),
+				RoyaltyDetails::<T::AccountId> {
+					royalty_percentage,
+					royalty_recipient: royalty_recipient.clone(),
+				},
+			);
+
+			Self::deposit_event(Event::NftRoyaltySet {
+				nft_collection: collection_id,
+				nft: item_id,
+				royalty_percentage,
+				royalty_recipient: royalty_recipient.clone(),
 			});
 
 			Ok(())
