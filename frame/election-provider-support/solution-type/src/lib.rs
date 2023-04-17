@@ -161,7 +161,7 @@ fn check_attributes(input: ParseStream) -> syn::Result<bool> {
 		return Ok(false)
 	}
 	let attr = attrs.pop().expect("attributes vec with len 1 can be popped.");
-	if attr.path.is_ident("compact") {
+	if attr.path().is_ident("compact") {
 		Ok(true)
 	} else {
 		Err(syn::Error::new_spanned(attr, "compact solution can accept only #[compact]"))
@@ -200,7 +200,7 @@ impl Parse for SolutionDef {
 						format!("Expected binding: `{} = ...`", expected),
 					))
 				},
-				syn::GenericArgument::Binding(syn::Binding { ident, ty, .. }) => {
+				syn::GenericArgument::AssocType(syn::AssocType { ident, ty, .. }) => {
 					// check that we have the right keyword for this position in the argument list
 					if ident == expected {
 						Ok(ty.clone())

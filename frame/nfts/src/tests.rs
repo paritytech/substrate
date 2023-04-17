@@ -2700,7 +2700,11 @@ fn claim_swap_should_work() {
 		Balances::make_free_balance_be(&user_1, initial_balance);
 		Balances::make_free_balance_be(&user_2, initial_balance);
 
-		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_1.clone(), default_collection_config()));
+		assert_ok!(Nfts::force_create(
+			RuntimeOrigin::root(),
+			user_1.clone(),
+			default_collection_config()
+		));
 
 		assert_ok!(Nfts::mint(
 			RuntimeOrigin::signed(user_1.clone()),

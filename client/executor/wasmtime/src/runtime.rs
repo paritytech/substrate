@@ -26,7 +26,7 @@ use crate::{
 
 use sc_allocator::{AllocationStats, FreeingBumpHeapAllocator};
 use sc_executor_common::{
-	error::{Result, WasmError},
+	error::{Error, Result, WasmError},
 	runtime_blob::{
 		self, DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob,
 	},
@@ -776,7 +776,7 @@ fn extract_output_data(
 	// Get the size of the WASM memory in bytes.
 	let memory_size = ctx.as_context().data().memory().data_size(ctx);
 	if checked_range(output_ptr as usize, output_len as usize, memory_size).is_none() {
-		Err(WasmError::Other("output exceeds bounds of wasm memory".into()))?
+		Err(Error::OutputExceedsBounds)?
 	}
 	let mut output = vec![0; output_len as usize];
 

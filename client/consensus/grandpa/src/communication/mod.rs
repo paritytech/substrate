@@ -852,9 +852,7 @@ fn check_compact_commit<Block: BlockT>(
 
 	// check signatures on all contained precommits.
 	let mut buf = Vec::new();
-	for (i, (precommit, &(ref sig, ref id))) in
-		msg.precommits.iter().zip(&msg.auth_data).enumerate()
-	{
+	for (i, (precommit, (sig, id))) in msg.precommits.iter().zip(&msg.auth_data).enumerate() {
 		use crate::communication::gossip::Misbehavior;
 		use finality_grandpa::Message as GrandpaMessage;
 

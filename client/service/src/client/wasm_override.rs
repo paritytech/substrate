@@ -264,21 +264,26 @@ pub fn dummy_overrides() -> WasmOverride {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
+	use sc_executor::{HeapAllocStrategy, NativeElseWasmExecutor, WasmExecutor};
 	use std::fs::{self, File};
 	use substrate_test_runtime_client::LocalExecutorDispatch;
+
+	fn executor() -> NativeElseWasmExecutor<substrate_test_runtime_client::LocalExecutorDispatch> {
+		NativeElseWasmExecutor::<substrate_test_runtime_client::LocalExecutorDispatch>::new_with_wasm_executor(
+			WasmExecutor::builder()
+				.with_onchain_heap_alloc_strategy(HeapAllocStrategy::Static {extra_pages: 128})
+				.with_offchain_heap_alloc_strategy(HeapAllocStrategy::Static {extra_pages: 128})
+				.with_max_runtime_instances(1)
+				.with_runtime_cache_size(2)
+				.build()
+		)
+	}
 
 	fn wasm_test<F>(fun: F)
 	where
 		F: Fn(&Path, &[u8], &NativeElseWasmExecutor<LocalExecutorDispatch>),
 	{
-		let exec =
-			NativeElseWasmExecutor::<substrate_test_runtime_client::LocalExecutorDispatch>::new(
-				WasmExecutionMethod::Interpreted,
-				Some(128),
-				1,
-				2,
-			);
+		let exec = executor();
 		let bytes = substrate_test_runtime::wasm_binary_unwrap();
 		let dir = tempfile::tempdir().expect("Create a temporary directory");
 		fun(dir.path(), bytes, &exec);
@@ -287,12 +292,7 @@ mod tests {
 
 	#[test]
 	fn should_get_runtime_version() {
-		let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new(
-			WasmExecutionMethod::Interpreted,
-			Some(128),
-			1,
-			2,
-		);
+		let executor = executor();
 
 		let version = WasmOverride::runtime_version(
 			&executor,

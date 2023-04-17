@@ -1,4 +1,4 @@
-error: The `pallet_doc` attribute must receive only one argument. Supported format: `pallet_doc(PATH)`
+error: The `pallet_doc` received an unsupported argument. Supported format: `pallet_doc("PATH")`
  --> tests/pallet_ui/pallet_doc_multiple_args.rs:3:1
   |
 3 | #[pallet_doc("A", "B")]
