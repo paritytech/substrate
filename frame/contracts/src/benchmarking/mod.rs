@@ -535,6 +535,38 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[pov_mode = Measured]
+	seal_caller_is_root {
+		let r in 0 .. API_BENCHMARK_RUNS;
+		let o in 0 .. 1;
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "seal_caller_is_root",
+				params: vec![],
+				return_type: Some(ValueType::I32),
+			}],
+			call_body: Some(body::repeated(r, &[
+				Instruction::Call(0),
+				Instruction::Drop,
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origins = vec![
+			RawOrigin::Signed(instance.caller.clone()),
+			RawOrigin::Root,
+		];
+		let limits = vec![
+			None,
+			Some(BalanceOf::<T>::max_value().into()),
+		];
+		let origin = origins[o as usize].clone();
+		let limit = limits[o as usize].clone();
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, limit, vec![])
+
+	#[pov_mode = Measured]
 	seal_address {
 		let r in 0 .. API_BENCHMARK_RUNS;
 		let instance = Contract::<T>::new(WasmModule::getter(
