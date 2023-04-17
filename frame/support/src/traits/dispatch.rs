@@ -204,7 +204,6 @@ impl<
 		Predicate: ContainsPair<EO::Success, Argument>,
 	> EnsureOriginWithArg<OuterOrigin, Argument> for AsEnsureOriginWithContainsPair<EO, Predicate>
 {
-	/// A return type.
 	type Success = EO::Success;
 
 	/// Perform the origin check, returning the origin value if unsuccessful. This allows chaining.
@@ -219,12 +218,10 @@ impl<
 	}
 
 	/// Returns an outer origin capable of passing `try_origin` check.
-	///
-	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin(arg: &Argument) -> Result<OuterOrigin, ()> {
 		EO::try_successful_origin().and_then(|o| {
-			let i = EO::ensure_origin(o.clone()).map_err(|_| ())?; // FAIL-CI is this stupid?
+			let i = EO::ensure_origin(o.clone()).map_err(|_| ())?;
 			if Predicate::contains(&i, arg) {
 				Ok(o)
 			} else {
