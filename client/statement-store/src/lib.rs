@@ -109,7 +109,7 @@ struct StatementsForAccount {
 
 impl PartialOrd for PriorityKey {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-		Some(self.priority.cmp(&other.priority).then_with(|| self.hash.cmp(&other.hash)))
+		Some(self.cmp(other))
 	}
 }
 
@@ -430,7 +430,7 @@ impl Index {
 							priority: channel_record.priority,
 						};
 						if let Some((_channel, len)) = account_rec.by_priority.get(&key) {
-							would_free_size = *len;
+							would_free_size += *len;
 							evicted.insert(channel_record.hash);
 						}
 					}

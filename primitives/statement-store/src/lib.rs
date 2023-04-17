@@ -128,9 +128,9 @@ impl Proof {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, sp_core::RuntimeDebug, Clone, PartialEq, Eq)]
-/// Statement attributes. Each statement is a list of 0 or more fields. Fields may only appear in
+/// Statement attributes. Each statement is a list of 0 or more fields. Fields may only appear once and in
 /// the order declared here.
+#[derive(Encode, Decode, TypeInfo, sp_core::RuntimeDebug, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Field {
 	/// Statement proof.
@@ -153,8 +153,8 @@ pub enum Field {
 	Data(Vec<u8>) = 8,
 }
 
-#[derive(TypeInfo, sp_core::RuntimeDebug, PassByCodec, Clone, PartialEq, Eq, Default)]
 /// Statement structure.
+#[derive(TypeInfo, sp_core::RuntimeDebug, PassByCodec, Clone, PartialEq, Eq, Default)]
 pub struct Statement {
 	proof: Option<Proof>,
 	decryption_key: Option<DecryptionKey>,

@@ -112,7 +112,7 @@ where
 	<T as frame_system::Config>::RuntimeEvent: TryInto<pallet::Event<T>>,
 	sp_statement_store::BlockHash: From<<T as frame_system::Config>::Hash>,
 {
-	/// Validate a statement against current state. This is supposed ti be called by the statement
+	/// Validate a statement against current state. This is supposed to be called by the statement
 	/// store on the host side.
 	pub fn validate_statement(
 		_source: StatementSource,
