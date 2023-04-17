@@ -307,6 +307,10 @@ where
 	B::Hash: DeserializeOwned,
 	B::Header: DeserializeOwned,
 {
+	const AIMD_LINEAR_INCREASE_FACTOR: usize = 500;
+	const AIMD_BASE_VALUE: usize = 20000;
+	const AIMD_EXPONENTIAL_DECREASE_FACTOR: usize = 2;
+
 	/// Get the number of threads to use.
 	fn threads() -> NonZeroUsize {
 		thread::available_parallelism()
@@ -395,6 +399,106 @@ where
 		Ok(keys)
 	}
 
+	/// Retrieves storage data from a list of storage keys using an
+	/// additive-increase/multiplicative-decrease (AIMD) algorithm to manage batch sizes.
+	///
+	/// This function uses batch requests to query storage data from a given list of storage keys.
+	/// It utilizes an additive-increase/multiplicative-decrease (AIMD) algorithm to handle the
+	/// batch request sizes. The algorithm starts with a base batch size and linearly increases it
+	/// after each successful batch request, or exponentially decreases it when encountering an
+	/// error.
+	///
+	/// # Arguments
+	///
+	/// * thread_client - An Arc<WsClient> representing the WebSocket client.
+	/// * remaining_keys - A Vec<StorageKey> containing the storage keys to be queried.
+	/// * batch_size - A usize representing the initial batch request size.
+	/// * at - A B::Hash representing the block hash at which the storage data should be queried.
+	///
+	/// # Returns
+	///
+	/// * Result<Vec<Option<StorageData>>, String> - A result containing a vector of
+	///   Option<StorageData> if successful,
+	/// where each item corresponds to the storage data for each key, or an error message if the
+	/// operation fails.
+	///
+	/// # Errors
+	///
+	/// This function returns an error message as a String in case of any failure during batch
+	/// request construction, batch request execution, or processing the batch response.
+	fn get_storage_data_aimd(
+		thread_client: Arc<WsClient>,
+		remaining_keys: Vec<StorageKey>,
+		batch_size: usize,
+		at: B::Hash,
+	) -> Result<Vec<Option<StorageData>>, String> {
+		// All keys have been processed
+		if remaining_keys.is_empty() {
+			return Ok(vec![])
+		}
+
+		log::debug!(
+			target: LOG_TARGET,
+			"Remaining keys: {} Batch request size: {}",
+			remaining_keys.len(),
+			batch_size,
+		);
+
+		// Keys to attempt to query this page
+		let page = remaining_keys.iter().take(batch_size).cloned().collect::<Vec<_>>();
+
+		// Build the batch request
+		let rt = tokio::runtime::Runtime::new().unwrap();
+		let mut batch = BatchRequestBuilder::new();
+		for key in page.iter() {
+			batch
+				.insert("state_getStorage", rpc_params![key, at])
+				.map_err(|_| "Invalid batch params")
+				.unwrap();
+		}
+		let batch_response =
+			match rt.block_on(thread_client.batch_request::<Option<StorageData>>(batch)) {
+				Ok(batch_response) => batch_response,
+				Err(e) => {
+					if batch_size == 1 {
+						return Err(e.to_string())
+					}
+
+					log::debug!(
+						target: LOG_TARGET,
+						"Batch request failed, trying again with smaller batch size",
+					);
+
+					return Self::get_storage_data_aimd(
+						thread_client,
+						remaining_keys,
+						batch_size / Self::AIMD_EXPONENTIAL_DECREASE_FACTOR,
+						at,
+					)
+				},
+			};
+
+		// Collect the data from this batch
+		let mut data: Vec<Option<StorageData>> = vec![];
+		for item in batch_response.into_iter() {
+			match item {
+				Ok(x) => data.push(x),
+				Err(e) => return Err(e.message().to_string()),
+			}
+		}
+
+		// Return this data joined with the remaining keys
+		let remaining_keys = remaining_keys.iter().skip(batch_size).cloned().collect::<Vec<_>>();
+		let mut rest = Self::get_storage_data_aimd(
+			thread_client,
+			remaining_keys,
+			batch_size + Self::AIMD_LINEAR_INCREASE_FACTOR,
+			at,
+		)?;
+		data.append(&mut rest);
+		Ok(data)
+	}
+
 	/// Synonym of `getPairs` that uses paged queries to first get the keys, and then
 	/// map them to values one by one.
 	///
@@ -439,85 +543,62 @@ where
 		let (tx, mut rx) = mpsc::unbounded::<Message>();
 
 		for thread_keys in keys_chunked {
-			let thread_client = client.clone();
+			let thread_keys_len = thread_keys.len();
 			let thread_sender = tx.clone();
+			let thread_client = client.clone();
 			let handle = std::thread::spawn(move || {
-				let rt = tokio::runtime::Runtime::new().unwrap();
 				let mut thread_key_values = Vec::with_capacity(thread_keys.len());
 
-				for chunk_keys in thread_keys.chunks(DEFAULT_VALUE_DOWNLOAD_BATCH) {
-					let mut batch = BatchRequestBuilder::new();
+				let storage_data = match Self::get_storage_data_aimd(
+					thread_client.clone(),
+					thread_keys.to_vec(),
+					Self::AIMD_BASE_VALUE,
+					at,
+				) {
+					Ok(storage_data) => storage_data,
+					Err(e) => {
+						thread_sender.unbounded_send(Message::BatchFailed(e)).unwrap();
+						return Default::default()
+					},
+				};
 
-					for key in chunk_keys.iter() {
-						batch
-							.insert("state_getStorage", rpc_params![key, at])
-							.map_err(|_| "Invalid batch params")
-							.unwrap();
-					}
+				// Check if we got responses for all submitted requests.
+				assert_eq!(thread_keys_len, storage_data.len());
 
-					let batch_response = match rt
-						.block_on(thread_client.batch_request::<Option<StorageData>>(batch))
-					{
-						Ok(batch_response) => batch_response,
-						Err(e) => {
-							log::debug!(
+				let mut batch_kv = Vec::with_capacity(thread_keys.len());
+				for (key, maybe_value) in thread_keys.into_iter().zip(storage_data) {
+					match maybe_value {
+						Some(data) => {
+							thread_key_values.push((key.clone(), data.clone()));
+							batch_kv.push((key.clone().0, data.0));
+						},
+						None => {
+							log::warn!(
 								target: LOG_TARGET,
-								"chunk_keys: {:?}",
-								chunk_keys.iter().map(HexDisplay::from).collect::<Vec<_>>(),
+								"key {:?} had none corresponding value.",
+								&key
 							);
-							let msg = Self::get_batch_rpc_error_message(e.to_string());
-							thread_sender.unbounded_send(Message::BatchFailed(msg)).unwrap();
-							return Default::default()
+							let data = StorageData(vec![]);
+							thread_key_values.push((key.clone(), data.clone()));
+							batch_kv.push((key.clone().0, data.0));
 						},
 					};
 
-					// Check if we got responses for all submitted requests.
-					assert_eq!(chunk_keys.len(), batch_response.len());
-
-					let mut batch_kv = Vec::with_capacity(chunk_keys.len());
-					for (key, maybe_value) in chunk_keys.into_iter().zip(batch_response) {
-						match maybe_value {
-							Ok(Some(data)) => {
-								thread_key_values.push((key.clone(), data.clone()));
-								batch_kv.push((key.clone().0, data.0));
-							},
-							Ok(None) => {
-								log::warn!(
-									target: LOG_TARGET,
-									"key {:?} had none corresponding value.",
-									&key
-								);
-								let data = StorageData(vec![]);
-								thread_key_values.push((key.clone(), data.clone()));
-								batch_kv.push((key.clone().0, data.0));
-							},
-							Err(e) => {
-								let reason = format!("key {:?} failed: {:?}", &key, e);
-								log::error!(target: LOG_TARGET, "Reason: {}", reason);
-								// Signal failures to the main thread, stop aggregating (key, value)
-								// pairs and return immediately an error.
-								thread_sender.unbounded_send(Message::BatchFailed(reason)).unwrap();
-								return Default::default()
-							},
-						};
-
-						if thread_key_values.len() % (thread_keys.len() / 10).max(1) == 0 {
-							let ratio: f64 =
-								thread_key_values.len() as f64 / thread_keys.len() as f64;
-							log::debug!(
-								target: LOG_TARGET,
-								"[thread = {:?}] progress = {:.2} [{} / {}]",
-								std::thread::current().id(),
-								ratio,
-								thread_key_values.len(),
-								thread_keys.len(),
-							);
-						}
+					if thread_key_values.len() % (thread_keys_len / 10).max(1) == 0 {
+						let ratio: f64 = thread_key_values.len() as f64 / thread_keys_len as f64;
+						log::debug!(
+							target: LOG_TARGET,
+							"[thread = {:?}] progress = {:.2} [{} / {}]",
+							std::thread::current().id(),
+							ratio,
+							thread_key_values.len(),
+							thread_keys_len,
+						);
 					}
-
-					// Send this batch to the main thread to start inserting.
-					thread_sender.unbounded_send(Message::Batch(batch_kv)).unwrap();
 				}
+
+				// Send this batch to the main thread to start inserting.
+				thread_sender.unbounded_send(Message::Batch(batch_kv)).unwrap();
 
 				thread_sender.unbounded_send(Message::Terminated).unwrap();
 				thread_key_values
