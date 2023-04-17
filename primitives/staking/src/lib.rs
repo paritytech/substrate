@@ -58,8 +58,6 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 /// A struct that reflects stake that an account has in the staking system. Provides a set of
 /// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
 pub struct Stake<T: StakingInterface + ?Sized> {
-	/// The stash account whose balance is actually locked and at stake.
-	pub stash: T::AccountId,
 	/// The total stake that `stash` has in the staking system. This includes the
 	/// `active` stake, and any funds currently in the process of unbonding via
 	/// [`StakingInterface::unbond`].

@@ -76,7 +76,7 @@
 //! The Contract module is a work in progress. The following examples show how this Contract module
 //! can be used to instantiate and call contracts.
 //!
-//! * [`ink`](https://github.com/paritytech/ink) is
+//! * [`ink!`](https://use.ink) is
 //! an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
 //! WebAssembly based smart contracts in the Rust programming language.
 
@@ -115,7 +115,7 @@ use frame_support::{
 		tokens::fungible::Inspect, ConstU32, Contains, Currency, Get, Randomness,
 		ReservableCurrency, Time,
 	},
-	weights::{OldWeight, Weight},
+	weights::Weight,
 	BoundedVec, WeakBoundedVec,
 };
 use frame_system::{EventRecord, Pallet as System};
@@ -151,6 +151,12 @@ type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup
 type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 type EventRecordOf<T> =
 	EventRecord<<T as frame_system::Config>::RuntimeEvent, <T as frame_system::Config>::Hash>;
+
+/// The old weight type.
+///
+/// This is a copy of the [`frame_support::weights::OldWeight`] type since the contracts pallet
+/// needs to support it indefinitely.
+type OldWeight = u64;
 
 /// Used as a sentinel value when reading and writing contract memory.
 ///
@@ -1339,7 +1345,7 @@ impl<T: Config> Pallet<T> {
 	/// Used by backwards compatible extrinsics. We cannot just set the proof_size weight limit to
 	/// zero or an old `Call` will just fail with OutOfGas.
 	fn compat_weight_limit(gas_limit: OldWeight) -> Weight {
-		Weight::from_parts(gas_limit.0, u64::from(T::MaxCodeLen::get()) * 2)
+		Weight::from_parts(gas_limit, u64::from(T::MaxCodeLen::get()) * 2)
 	}
 }
 

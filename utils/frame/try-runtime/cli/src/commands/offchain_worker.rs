@@ -97,7 +97,7 @@ where
 		&executor,
 		"OffchainWorkerApi_offchain_worker",
 		&payload,
-		full_extensions(),
+		full_extensions(executor.clone()),
 	)?;
 
 	Ok(())
