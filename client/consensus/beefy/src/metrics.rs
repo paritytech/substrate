@@ -228,8 +228,8 @@ impl PrometheusRegister for OnDemandIncomingRequestsMetrics {
 pub struct OnDemandOutgoingRequestsMetrics {
 	/// Number of times there was no good peer to request justification from
 	pub beefy_on_demand_justification_no_peer_to_request_from: Counter<U64>,
-	/// Number of on-demand justification peer hang up
-	pub beefy_on_demand_justification_peer_hang_up: Counter<U64>,
+	/// Number of on-demand justification peer refused valid requests
+	pub beefy_on_demand_justification_peer_refused: Counter<U64>,
 	/// Number of on-demand justification peer error
 	pub beefy_on_demand_justification_peer_error: Counter<U64>,
 	/// Number of on-demand justification invalid proof
@@ -249,10 +249,10 @@ impl PrometheusRegister for OnDemandOutgoingRequestsMetrics {
 				)?,
 				registry,
 			)?,
-			beefy_on_demand_justification_peer_hang_up: register(
+			beefy_on_demand_justification_peer_refused: register(
 				Counter::new(
-					"substrate_beefy_on_demand_justification_peer_hang_up",
-					"Number of on-demand justification peer hang up",
+					"beefy_on_demand_justification_peer_refused",
+					"Number of on-demand justification peer refused valid requests",
 				)?,
 				registry,
 			)?,
