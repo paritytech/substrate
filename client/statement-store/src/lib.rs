@@ -263,26 +263,26 @@ impl Index {
 		self.expired.contains_key(hash)
 	}
 
-	fn iter(
+	fn iterate_with(
 		&self,
 		key: Option<DecryptionKey>,
-		topics: &[Topic],
+		match_all_topics: &[Topic],
 		mut f: impl FnMut(&Hash) -> Result<()>,
 	) -> Result<()> {
 		let empty = HashSet::new();
 		let mut sets: [&HashSet<Hash>; 4] = [&empty; 4];
-		if topics.len() > 4 {
+		if match_all_topics.len() > 4 {
 			return Ok(())
 		}
-		for (i, t) in topics.iter().enumerate() {
+		for (i, t) in match_all_topics.iter().enumerate() {
 			let set = self.by_topic.get(t);
 			if set.map(|s| s.len()).unwrap_or(0) == 0 {
-				// At least one of the topics does not exist in the index.
+				// At least one of the match_all_topics does not exist in the index.
 				return Ok(())
 			}
 			sets[i] = set.expect("Function returns if set is None");
 		}
-		let sets = &mut sets[0..topics.len()];
+		let sets = &mut sets[0..match_all_topics.len()];
 		if sets.is_empty() && key.is_none() {
 			// Iterate all entries
 			for h in self.entries.keys() {
@@ -475,10 +475,10 @@ impl Index {
 				continue
 			}
 
-			if entry.priority >= priority {
+			if entry.priority >= validation.global_priority {
 				log::debug!(
 					target: LOG_TARGET,
-					"Ignored message due global to constraints {:?} {} < {}",
+					"Ignored message due to global constraints {:?} {} < {}",
 					HexDisplay::from(&hash),
 					priority,
 					entry.priority,
@@ -492,7 +492,7 @@ impl Index {
 		for h in &evicted {
 			self.make_expired(h, current_time);
 		}
-		self.insert_new(hash, *account, priority, statement);
+		self.insert_new(hash, *account, validation.global_priority, statement);
 		MaybeInserted::Inserted(evicted)
 	}
 }
@@ -581,6 +581,8 @@ impl Store {
 
 	/// Create memory index from the data.
 	// This may be moved to a background thread if it slows startup too much.
+	// This function should only be used on startup. There should be no other DB operations when
+	// iterating the index.
 	fn populate(&self) -> Result<()> {
 		{
 			let mut index = self.index.write();
@@ -602,6 +604,12 @@ impl Store {
 								account_id,
 								statement_with_meta.meta.global_priority,
 								&statement_with_meta.statement,
+							);
+						} else {
+							log::debug!(
+								target: LOG_TARGET,
+								"Error decoding statement loaded from the DB: {:?}",
+								HexDisplay::from(&hash)
 							);
 						}
 					}
@@ -638,7 +646,7 @@ impl Store {
 	) -> Result<Vec<R>> {
 		let mut result = Vec::new();
 		let index = self.index.read();
-		index.iter(key, match_all_topics, |hash| {
+		index.iterate_with(key, match_all_topics, |hash| {
 			match self.db.get(col::STATEMENTS, hash).map_err(|e| Error::Db(e.to_string()))? {
 				Some(entry) => {
 					if let Ok(statement) = StatementWithMeta::decode(&mut entry.as_slice()) {
@@ -1216,10 +1224,10 @@ mod tests {
 		assert_eq!(store.index.read().entries.len(), 4);
 
 		// Should be over the global size limit
-		assert_eq!(store.submit(statement(4, 1, None, 700), source), ignored);
+		assert_eq!(store.submit(statement(1, 1, None, 700), source), ignored);
 		// Should be over the global count limit
 		store.index.write().max_entries = 4;
-		assert_eq!(store.submit(statement(4, 1, None, 100), source), ignored);
+		assert_eq!(store.submit(statement(1, 1, None, 100), source), ignored);
 		// Should evict statement from account 1
 		assert_eq!(store.submit(statement(4, 6, None, 100), source), ok);
 		assert_eq!(store.index.read().expired.len(), 7);
