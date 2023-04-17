@@ -1,6 +1,6 @@
 # Referenda Pallet
 
-- [`assembly::Config`](https://docs.rs/pallet-referenda/latest/pallet_referenda/pallet/trait.Config.html)
+- [`Config`](https://docs.rs/pallet-referenda/latest/pallet_referenda/pallet/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-referenda/latest/pallet_referenda/pallet/enum.Call.html)
 
 ## Overview
