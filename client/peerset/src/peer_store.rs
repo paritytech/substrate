@@ -36,8 +36,8 @@ pub const BANNED_THRESHOLD: i32 = 82 * (i32::MIN / 100);
 const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
 /// Relative decrement of a reputation value that is applied every second. I.e., for inverse
 /// decrement of 50 we decrease absolute value of the reputation by 1/50. This corresponds to a
-/// factor of `k = 0.98`. It takes `ln(0.5) / ln(k)` seconds to reduce the reputation by half, or
-/// 34.3 seconds for the values above. In this setup the maximum allowed absolute value of
+/// factor of `k = 0.98`. It takes ~ `ln(0.5) / ln(k)` seconds to reduce the reputation by half,
+/// or 34.3 seconds for the values above. In this setup the maximum allowed absolute value of
 /// `i32::MAX` becomes 0 in ~1100 seconds.
 const INVERSE_DECREMENT: i32 = 50;
 /// Amount of time between the moment we last updated the [`PeerStore`] entry and the moment we
@@ -282,5 +282,76 @@ impl PeerStore {
 			self.inner.lock().unwrap().progress_time(seconds_passed);
 			let _ = Delay::new(Duration::from_secs(1)).await;
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::PeerInfo;
+
+	#[test]
+	fn decaying_zero_reputation_yields_zero() {
+		let mut peer_info = PeerInfo::default();
+		assert_eq!(peer_info.reputation, 0);
+
+		peer_info.decay_reputation(1);
+		assert_eq!(peer_info.reputation, 0);
+
+		peer_info.decay_reputation(100_000);
+		assert_eq!(peer_info.reputation, 0);
+	}
+
+	#[test]
+	fn decaying_positive_reputation_decreases_it() {
+		const INITIAL_REPUTATION: i32 = 100;
+
+		let mut peer_info = PeerInfo::default();
+		peer_info.reputation = INITIAL_REPUTATION;
+
+		peer_info.decay_reputation(1);
+		assert!(peer_info.reputation >= 0);
+		assert!(peer_info.reputation < INITIAL_REPUTATION);
+	}
+
+	#[test]
+	fn decaying_negative_reputation_increases_it() {
+		const INITIAL_REPUTATION: i32 = -100;
+
+		let mut peer_info = PeerInfo::default();
+		peer_info.reputation = INITIAL_REPUTATION;
+
+		peer_info.decay_reputation(1);
+		assert!(peer_info.reputation <= 0);
+		assert!(peer_info.reputation > INITIAL_REPUTATION);
+	}
+
+	#[test]
+	fn decaying_max_reputation_finally_yields_zero() {
+		const INITIAL_REPUTATION: i32 = i32::MAX;
+		const SECONDS: u64 = 1000;
+
+		let mut peer_info = PeerInfo::default();
+		peer_info.reputation = INITIAL_REPUTATION;
+
+		peer_info.decay_reputation(SECONDS / 2);
+		assert!(peer_info.reputation > 0);
+
+		peer_info.decay_reputation(SECONDS / 2);
+		assert_eq!(peer_info.reputation, 0);
+	}
+
+	#[test]
+	fn decaying_min_reputation_finally_yields_zero() {
+		const INITIAL_REPUTATION: i32 = i32::MIN;
+		const SECONDS: u64 = 1000;
+
+		let mut peer_info = PeerInfo::default();
+		peer_info.reputation = INITIAL_REPUTATION;
+
+		peer_info.decay_reputation(SECONDS / 2);
+		assert!(peer_info.reputation < 0);
+
+		peer_info.decay_reputation(SECONDS / 2);
+		assert_eq!(peer_info.reputation, 0);
 	}
 }
