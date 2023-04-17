@@ -865,6 +865,12 @@ pub fn generate_store(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+// FAIL-CI doc
+#[proc_macro_attribute]
+pub fn call_weight(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// To generate the full storage info (used for PoV calculation) use the attribute
 /// `#[pallet::generate_storage_info]`, e.g.:
 ///

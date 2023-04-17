@@ -27,6 +27,7 @@ mod keyword {
 	syn::custom_keyword!(without_storage_info);
 	syn::custom_keyword!(storage_version);
 	syn::custom_keyword!(Store);
+	syn::custom_keyword!(call_weight);
 }
 
 /// Definition of the pallet pallet.
@@ -46,24 +47,35 @@ pub struct PalletStructDef {
 	pub without_storage_info: Option<proc_macro2::Span>,
 	/// The current storage version of the pallet.
 	pub storage_version: Option<syn::Path>,
+	pub call_weight: Option<PalletCallWeight>,
 }
 
 /// Parse for one variant of:
 /// * `#[pallet::generate_store($vis trait Store)]`
 /// * `#[pallet::without_storage_info]`
 /// * `#[pallet::storage_version(STORAGE_VERSION)]`
+/// * `#[pallet::call_weight($weight_trait)]`
 pub enum PalletStructAttr {
 	GenerateStore { span: proc_macro2::Span, vis: syn::Visibility, keyword: keyword::Store },
 	WithoutStorageInfoTrait(proc_macro2::Span),
 	StorageVersion { storage_version: syn::Path, span: proc_macro2::Span },
+	CallWeight(PalletCallWeight),
+}
+
+#[derive(Clone)]
+pub struct PalletCallWeight {
+	// FAIL-CI rename
+	pub weight_info: syn::Type,
+	pub span: proc_macro2::Span,
 }
 
 impl PalletStructAttr {
 	fn span(&self) -> proc_macro2::Span {
 		match self {
-			Self::GenerateStore { span, .. } => *span,
-			Self::WithoutStorageInfoTrait(span) => *span,
-			Self::StorageVersion { span, .. } => *span,
+			Self::GenerateStore { span, .. } |
+			Self::WithoutStorageInfoTrait(span) |
+			Self::StorageVersion { span, .. } |
+			Self::CallWeight(PalletCallWeight { span, .. }) => *span,
 		}
 	}
 }
@@ -97,6 +109,14 @@ impl syn::parse::Parse for PalletStructAttr {
 			let storage_version = version_content.parse::<syn::Path>()?;
 
 			Ok(Self::StorageVersion { storage_version, span })
+		} else if lookahead.peek(keyword::call_weight) {
+			let span = content.parse::<keyword::call_weight>().expect("peeked").span();
+			let attr_content;
+			syn::parenthesized!(attr_content in content);
+			attr_content.parse::<syn::Token![trait]>()?;
+			let weight_info = attr_content.parse::<syn::Type>()?;
+
+			Ok(Self::CallWeight(PalletCallWeight { weight_info, span }))
 		} else {
 			Err(lookahead.error())
 		}
@@ -119,6 +139,7 @@ impl PalletStructDef {
 		let mut store = None;
 		let mut without_storage_info = None;
 		let mut storage_version_found = None;
+		let mut call_weight = None;
 
 		let struct_attrs: Vec<PalletStructAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
 		for attr in struct_attrs {
@@ -135,6 +156,9 @@ impl PalletStructDef {
 					if storage_version_found.is_none() =>
 				{
 					storage_version_found = Some(storage_version);
+				},
+				PalletStructAttr::CallWeight(cw) if call_weight.is_none() => {
+					call_weight = Some(cw);
 				},
 				attr => {
 					let msg = "Unexpected duplicated attribute";
@@ -166,6 +190,7 @@ impl PalletStructDef {
 			attr_span,
 			without_storage_info,
 			storage_version: storage_version_found,
+			call_weight,
 		})
 	}
 }

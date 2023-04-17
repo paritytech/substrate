@@ -2529,7 +2529,7 @@ pub mod pallet_prelude {
 /// 	#[pallet::extra_constants]
 /// 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 /// 		/// Some description
-/// 		fn exra_constant_name() -> u128 { 4u128 }
+/// 		fn extra_constant_name() -> u128 { 4u128 }
 /// 	}
 ///
 /// 	#[pallet::pallet]

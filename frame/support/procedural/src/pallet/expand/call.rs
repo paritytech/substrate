@@ -15,7 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{pallet::Def, COUNTER};
+use crate::{
+	pallet::{parse::call::CallWeightDef, Def},
+	COUNTER,
+};
 use quote::ToTokens;
 use syn::spanned::Spanned;
 
@@ -74,15 +77,11 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		call_index_warnings.push(warning);
 	}
 
-	let fn_weight = methods.iter().map(|method| &method.weight);
+	let mut fn_weight = Vec::<syn::Expr>::new();
 	let mut weight_warnings = Vec::new();
-	for weight in fn_weight.clone() {
-		if def.dev_mode {
-			continue
-		}
-
-		match weight {
-			syn::Expr::Lit(lit) => {
+	for method in methods.iter() {
+		match &method.weight {
+			CallWeightDef::Immediate(e @ syn::Expr::Lit(lit)) if !def.dev_mode => {
 				let warning = proc_macro_warning::Warning::new_deprecated("ConstantWeight")
 					.index(weight_warnings.len())
 					.old("use hard-coded constant as call weight")
@@ -91,10 +90,33 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 					.span(lit.span())
 					.build();
 				weight_warnings.push(warning);
+				fn_weight.push(e.clone());
 			},
-			_ => {},
+			CallWeightDef::Immediate(e) => fn_weight.push(e.clone()),
+			CallWeightDef::PalletInherited => {
+				// FAIL-CI check this already in the parsing step.
+				if let Some(ref pallet_weight) = def.pallet_struct.call_weight {
+					let t = &pallet_weight.weight_info;
+					let n = &method.name;
+
+					fn_weight.push(
+						syn::parse::<syn::Expr>(
+							quote::quote!({
+								#t :: #n ()
+							})
+							.into(),
+						)
+						.expect("FAIL-CI"),
+					);
+				} else {
+					panic!(
+						"Pallet call weight must be defined when using `#[pallet::call_weight]`"
+					);
+				}
+			},
 		}
 	}
+	debug_assert_eq!(fn_weight.len(), methods.len());
 
 	let fn_doc = methods.iter().map(|method| &method.docs).collect::<Vec<_>>();
 

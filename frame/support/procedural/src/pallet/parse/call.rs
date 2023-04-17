@@ -48,6 +48,17 @@ pub struct CallDef {
 	pub docs: Vec<syn::Expr>,
 }
 
+#[derive(Clone)]
+pub enum CallWeightDef {
+	/// Explicitly set on the call itself. This value is used.
+	Immediate(syn::Expr),
+
+	/// Inherits whatever value is configured on the pallet level.
+	///
+	/// The concrete value is not known at this point.
+	PalletInherited,
+}
+
 /// Definition of dispatchable typically: `#[weight...] fn foo(origin .., param1: ...) -> ..`
 #[derive(Clone)]
 pub struct CallVariantDef {
@@ -55,8 +66,8 @@ pub struct CallVariantDef {
 	pub name: syn::Ident,
 	/// Information on args: `(is_compact, name, type)`
 	pub args: Vec<(bool, syn::Ident, Box<syn::Type>)>,
-	/// Weight formula.
-	pub weight: syn::Expr,
+	/// Weight for the call.
+	pub weight: CallWeightDef,
 	/// Call index of the dispatchable.
 	pub call_index: u8,
 	/// Whether an explicit call index was specified.
@@ -228,18 +239,21 @@ impl CallDef {
 					weight_attrs.push(FunctionAttr::Weight(empty_weight));
 				}
 
-				if weight_attrs.len() != 1 {
+				let weight = if weight_attrs.len() == 1 {
+					match weight_attrs.pop().unwrap() {
+						FunctionAttr::Weight(w) => CallWeightDef::Immediate(w),
+						_ => unreachable!("checked during creation of the let binding"),
+					}
+				} else if weight_attrs.len() == 0 { // FAIL-CI check that pallet defines
+					CallWeightDef::PalletInherited
+				/*} else {
 					let msg = if weight_attrs.is_empty() {
-						"Invalid pallet::call, requires weight attribute i.e. `#[pallet::weight($expr)]`"
-					} else {
-						"Invalid pallet::call, too many weight attributes given"
-					};
+						"Invalid pallet::call, requires weight attribute i.e. `#[pallet::weight($expr)]` or a pallet-wide weight info i.e. `#[pallet::call_weight(T::WeightInfo)]`"*/
+				} else {
+					let msg = "Invalid pallet::call, too many weight attributes given";
 					return Err(syn::Error::new(method.sig.span(), msg))
-				}
-				let weight = match weight_attrs.pop().unwrap() {
-					FunctionAttr::Weight(w) => w,
-					_ => unreachable!("checked during creation of the let binding"),
 				};
+				
 
 				if call_idx_attrs.len() > 1 {
 					let msg = "Invalid pallet::call, too many call_index attributes given";
