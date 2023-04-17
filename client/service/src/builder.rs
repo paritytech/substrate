@@ -71,6 +71,7 @@ use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_keystore::KeystorePtr;
 use sp_runtime::traits::{Block as BlockT, BlockIdTo, NumberFor, Zero};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
+use sc_client_api::execution_extensions::ExtensionsFactory;
 
 /// Full client type.
 pub type TFullClient<TBl, TRtApi, TExec> =
@@ -129,6 +130,7 @@ pub fn new_full_parts<TBl, TRtApi, TExec>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
 	executor: TExec,
+	extensions_factory: Option<Box<dyn ExtensionsFactory<TBl>>>,
 ) -> Result<TFullParts<TBl, TRtApi, TExec>, Error>
 where
 	TBl: BlockT,
@@ -143,7 +145,7 @@ where
 		executor.clone(),
 	)?;
 
-	new_full_parts_with_genesis_builder(config, telemetry, executor, backend, genesis_block_builder)
+	new_full_parts_with_genesis_builder(config, telemetry, executor, backend, genesis_block_builder, extensions_factory)
 }
 
 /// Create the initial parts of a full node.
@@ -153,6 +155,7 @@ pub fn new_full_parts_with_genesis_builder<TBl, TRtApi, TExec, TBuildGenesisBloc
 	executor: TExec,
 	backend: Arc<TFullBackend<TBl>>,
 	genesis_block_builder: TBuildGenesisBlock,
+	extensions_factory: Option<Box<dyn ExtensionsFactory<TBl>>>,
 ) -> Result<TFullParts<TBl, TRtApi, TExec>, Error>
 where
 	TBl: BlockT,
@@ -184,6 +187,7 @@ where
 			Some(keystore_container.keystore()),
 			sc_offchain::OffchainDb::factory_from_backend(&*backend),
 			Arc::new(executor.clone()),
+			extensions_factory,
 		);
 
 		let wasm_runtime_substitutes = config

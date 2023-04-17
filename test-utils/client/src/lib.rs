@@ -297,6 +297,7 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 				self.keystore.clone(),
 				sc_offchain::OffchainDb::factory_from_backend(&*self.backend),
 				Arc::new(executor),
+				None
 			),
 		)
 		.expect("Creates LocalCallExecutor");

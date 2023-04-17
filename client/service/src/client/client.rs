@@ -88,6 +88,7 @@ use std::{
 	sync::Arc,
 };
 
+use sc_client_api::execution_extensions::ExtensionsFactory;
 #[cfg(feature = "test-helpers")]
 use {
 	super::call_executor::LocalCallExecutor, sc_client_api::in_mem, sp_core::traits::CodeExecutor,
@@ -186,6 +187,7 @@ where
 		prometheus_registry,
 		telemetry,
 		config,
+		None
 	)
 }
 
@@ -244,6 +246,7 @@ where
 		keystore,
 		sc_offchain::OffchainDb::factory_from_backend(&*backend),
 		Arc::new(executor.clone()),
+		None,
 	);
 
 	let call_executor =

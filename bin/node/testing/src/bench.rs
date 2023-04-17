@@ -420,6 +420,7 @@ impl BenchDb {
 				None,
 				None,
 				Arc::new(executor),
+				None
 			),
 			Box::new(task_executor.clone()),
 			None,

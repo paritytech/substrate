@@ -75,6 +75,7 @@ pub fn new_partial(
 			config,
 			telemetry.as_ref().map(|(_, telemetry)| telemetry.handle()),
 			executor,
+			None
 		)?;
 	let client = Arc::new(client);
 

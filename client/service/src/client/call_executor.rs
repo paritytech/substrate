@@ -432,6 +432,7 @@ mod tests {
 				None,
 				None,
 				Arc::new(executor.clone()),
+				None,
 			)),
 		};
 

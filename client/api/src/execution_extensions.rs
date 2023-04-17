@@ -184,9 +184,11 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 		keystore: Option<KeystorePtr>,
 		offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
 		read_runtime_version: Arc<dyn ReadRuntimeVersion>,
+		extensions_factory: Option<Box<dyn ExtensionsFactory<Block>>>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
-		let extensions_factory = Box::new(());
+		let extensions_factory =
+			if let Some(factory) = extensions_factory { factory } else { Box::new(()) };
 		Self {
 			strategies,
 			keystore,
