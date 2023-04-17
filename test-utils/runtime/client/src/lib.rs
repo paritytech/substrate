@@ -39,7 +39,7 @@ use sp_core::{
 };
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use substrate_test_client::sc_executor::WasmExecutor;
-use substrate_test_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
+use substrate_test_runtime::genesismap::{additional_storage_with_genesis, GenesisConfigBuilder};
 
 /// A prelude to import in tests.
 pub mod prelude {
@@ -92,8 +92,8 @@ pub struct GenesisParameters {
 }
 
 impl GenesisParameters {
-	fn genesis_config(&self) -> GenesisConfig {
-		GenesisConfig::new(
+	fn genesis_config(&self) -> GenesisConfigBuilder {
+		GenesisConfigBuilder::new(
 			vec![
 				sr25519::Public::from(Sr25519Keyring::Alice).into(),
 				sr25519::Public::from(Sr25519Keyring::Bob).into(),

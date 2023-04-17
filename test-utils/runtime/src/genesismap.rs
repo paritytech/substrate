@@ -17,7 +17,10 @@
 
 //! Tool for creating the genesis block.
 
-use super::{substrate_test_pallet, wasm_binary_unwrap, AccountId, AuthorityId, Balance, Runtime};
+use super::{
+	substrate_test_pallet, wasm_binary_unwrap, AccountId, AuthorityId, Balance, GenesisConfig,
+	Runtime,
+};
 use codec::{Encode, Joiner};
 use frame_support::traits::GenesisBuild;
 use sc_service::construct_genesis_block;
@@ -26,11 +29,14 @@ use sp_core::{
 	storage::{well_known_keys, StateVersion, Storage},
 };
 use sp_io::hashing::twox_128;
-use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use sp_runtime::{
+	traits::{Block as BlockT, Hash as HashT, Header as HeaderT},
+	BuildStorage,
+};
 use std::collections::BTreeMap;
 
 /// Configuration of a general Substrate test genesis block.
-pub struct GenesisConfig {
+pub struct GenesisConfigBuilder {
 	authorities: Vec<AuthorityId>,
 	balances: Vec<(AccountId, u64)>,
 	heap_pages_override: Option<u64>,
@@ -38,7 +44,7 @@ pub struct GenesisConfig {
 	extra_storage: Storage,
 }
 
-impl GenesisConfig {
+impl GenesisConfigBuilder {
 	pub fn new(
 		authorities: Vec<AuthorityId>,
 		endowed_accounts: Vec<AccountId>,
@@ -46,7 +52,7 @@ impl GenesisConfig {
 		heap_pages_override: Option<u64>,
 		extra_storage: Storage,
 	) -> Self {
-		GenesisConfig {
+		GenesisConfigBuilder {
 			authorities,
 			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
 			heap_pages_override,
@@ -55,44 +61,38 @@ impl GenesisConfig {
 	}
 
 	pub fn genesis_map(&self) -> Storage {
-		let wasm_runtime = wasm_binary_unwrap().to_vec();
-		let mut map: BTreeMap<Vec<u8>, Vec<u8>> = vec![
-			(well_known_keys::CODE.into(), wasm_runtime),
-			(
-				well_known_keys::HEAP_PAGES.into(),
-				vec![].and(&(self.heap_pages_override.unwrap_or(16_u64))),
-			),
-		]
-		.into_iter()
-		.collect();
-
-		// Add the extra storage entries.
-		map.extend(self.extra_storage.top.clone().into_iter());
-
-		// Assimilate the system genesis config.
-		let mut storage =
-			Storage { top: map, children_default: self.extra_storage.children_default.clone() };
-
-		<substrate_test_pallet::GenesisConfig as GenesisBuild<Runtime>>::assimilate_storage(
-			&substrate_test_pallet::GenesisConfig { authorities: self.authorities.clone() },
-			&mut storage,
-		)
-		.expect("Adding `system::GenesisConfig` to the genesis");
-
-		<pallet_babe::GenesisConfig as GenesisBuild<Runtime>>::assimilate_storage(
-			&pallet_babe::GenesisConfig {
+		let genesis_config = GenesisConfig {
+			system: frame_system::GenesisConfig { code: wasm_binary_unwrap().to_vec() },
+			babe: pallet_babe::GenesisConfig {
 				authorities: self.authorities.clone().into_iter().map(|x| (x, 1)).collect(),
 				epoch_config: Some(crate::TEST_RUNTIME_BABE_EPOCH_CONFIGURATION),
 			},
-			&mut storage,
-		)
-		.expect("Adding `pallet_babe::GenesisConfig` to the genesis");
+			// substrate_test: Default::default(),
+			substrate_test: substrate_test_pallet::GenesisConfig {
+				authorities: self.authorities.clone(),
+			},
+			balances: pallet_balances::GenesisConfig { balances: self.balances.clone() },
+		};
+		let mut storage = genesis_config
+			.build_storage()
+			.expect("Build storage from substrate_test runtime GenesisConfig");
 
-		<pallet_balances::GenesisConfig<Runtime> as GenesisBuild<Runtime>>::assimilate_storage(
-			&pallet_balances::GenesisConfig { balances: self.balances.clone() },
-			&mut storage,
-		)
-		.expect("Adding `pallet_balances::GenesisConfig` to the genesis");
+		{
+			let map: BTreeMap<Vec<u8>, Vec<u8>> = vec![(
+				well_known_keys::HEAP_PAGES.into(),
+				vec![].and(&(self.heap_pages_override.unwrap_or(16_u64))),
+			)]
+			.into_iter()
+			.collect();
+
+			storage.top.extend(map);
+		}
+
+		// Add the extra storage entries.
+		storage.top.extend(self.extra_storage.top.clone().into_iter());
+		storage
+			.children_default
+			.extend(self.extra_storage.children_default.clone().into_iter());
 
 		storage
 	}
