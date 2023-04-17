@@ -19,7 +19,8 @@ use crate::{
 	pallet::{parse::call::CallWeightDef, Def},
 	COUNTER,
 };
-use quote::ToTokens;
+use proc_macro2::TokenStream as TokenStream2;
+use quote::{quote, ToTokens};
 use syn::spanned::Spanned;
 
 ///
@@ -77,10 +78,13 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		call_index_warnings.push(warning);
 	}
 
-	let mut fn_weight = Vec::<syn::Expr>::new();
+	let mut fn_weight = Vec::<TokenStream2>::new();
 	let mut weight_warnings = Vec::new();
 	for method in methods.iter() {
 		match &method.weight {
+			CallWeightDef::DevModeDefault => {
+				fn_weight.push(syn::parse_quote!(0));
+			},
 			CallWeightDef::Immediate(e @ syn::Expr::Lit(lit)) if !def.dev_mode => {
 				let warning = proc_macro_warning::Warning::new_deprecated("ConstantWeight")
 					.index(weight_warnings.len())
@@ -90,29 +94,22 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 					.span(lit.span())
 					.build();
 				weight_warnings.push(warning);
-				fn_weight.push(e.clone());
+				fn_weight.push(e.into_token_stream());
 			},
-			CallWeightDef::Immediate(e) => fn_weight.push(e.clone()),
-			CallWeightDef::PalletInherited => {
-				// FAIL-CI check this already in the parsing step.
-				if let Some(ref pallet_weight) = def.pallet_struct.call_weight {
-					let t = &pallet_weight.weight_info;
-					let n = &method.name;
+			CallWeightDef::Immediate(e) => fn_weight.push(e.into_token_stream()),
+			CallWeightDef::Inherited => {
+				let pallet_weight = def
+					.call
+					.as_ref()
+					.expect("we have methods; we have calls; qed")
+					.call_weight
+					.as_ref()
+					.expect("the parser prevents this");
 
-					fn_weight.push(
-						syn::parse::<syn::Expr>(
-							quote::quote!({
-								#t :: #n ()
-							})
-							.into(),
-						)
-						.expect("FAIL-CI"),
-					);
-				} else {
-					panic!(
-						"Pallet call weight must be defined when using `#[pallet::call_weight]`"
-					);
-				}
+				// Expand `<T as Config>::WeightInfo::call_name()`.
+				let t = &pallet_weight.typename;
+				let n = &method.name;
+				fn_weight.push(quote!({ #t :: #n ()	}));
 			},
 		}
 	}

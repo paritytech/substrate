@@ -284,7 +284,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	#[pallet::call_weight(trait <T as crate::Config<I>>::WeightInfo)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::event]
@@ -520,7 +519,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call]
+	#[pallet::call(trait <T as Config<I>>::WeightInfo)]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Transfer some liquid free balance to another account.
 		///

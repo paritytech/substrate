@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::helper;
+use super::{helper, RuntimeCallWeightAttr};
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 use std::collections::HashMap;
@@ -46,17 +46,20 @@ pub struct CallDef {
 	pub attr_span: proc_macro2::Span,
 	/// Docs, specified on the impl Block.
 	pub docs: Vec<syn::Expr>,
+	pub call_weight: Option<RuntimeCallWeightAttr>,
 }
 
 #[derive(Clone)]
 pub enum CallWeightDef {
+	/// The default value that should be set for dev-mode pallets. Usually zero.
+	DevModeDefault,
 	/// Explicitly set on the call itself. This value is used.
 	Immediate(syn::Expr),
 
 	/// Inherits whatever value is configured on the pallet level.
 	///
 	/// The concrete value is not known at this point.
-	PalletInherited,
+	Inherited,
 }
 
 /// Definition of dispatchable typically: `#[weight...] fn foo(origin .., param1: ...) -> ..`
@@ -162,6 +165,7 @@ impl CallDef {
 		index: usize,
 		item: &mut syn::Item,
 		dev_mode: bool,
+		pallet_call_weight: Option<RuntimeCallWeightAttr>,
 	) -> syn::Result<Self> {
 		let item_impl = if let syn::Item::Impl(item) = item {
 			item
@@ -239,21 +243,18 @@ impl CallDef {
 					weight_attrs.push(FunctionAttr::Weight(empty_weight));
 				}
 
-				let weight = if weight_attrs.len() == 1 {
-					match weight_attrs.pop().unwrap() {
+				let weight = match weight_attrs.len() {
+					0 if pallet_call_weight.is_some() => CallWeightDef::Inherited,
+					0 if dev_mode => CallWeightDef::DevModeDefault,
+					1 => match weight_attrs.pop().unwrap() {
 						FunctionAttr::Weight(w) => CallWeightDef::Immediate(w),
 						_ => unreachable!("checked during creation of the let binding"),
-					}
-				} else if weight_attrs.len() == 0 { // FAIL-CI check that pallet defines
-					CallWeightDef::PalletInherited
-				/*} else {
-					let msg = if weight_attrs.is_empty() {
-						"Invalid pallet::call, requires weight attribute i.e. `#[pallet::weight($expr)]` or a pallet-wide weight info i.e. `#[pallet::call_weight(T::WeightInfo)]`"*/
-				} else {
-					let msg = "Invalid pallet::call, too many weight attributes given";
-					return Err(syn::Error::new(method.sig.span(), msg))
+					},
+					_ => {
+						let msg = "Invalid pallet::call, too many weight attributes given";
+						return Err(syn::Error::new(method.sig.span(), msg))
+					},
 				};
-				
 
 				if call_idx_attrs.len() > 1 {
 					let msg = "Invalid pallet::call, too many call_index attributes given";
@@ -335,6 +336,7 @@ impl CallDef {
 			methods,
 			where_clause: item_impl.generics.where_clause.clone(),
 			docs: get_doc_literals(&item_impl.attrs),
+			call_weight: pallet_call_weight,
 		})
 	}
 }

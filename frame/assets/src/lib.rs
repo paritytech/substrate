@@ -202,7 +202,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	#[pallet::call_weight(trait <T as Config<I>>::WeightInfo)]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -569,7 +568,7 @@ pub mod pallet {
 		CallbackFailed,
 	}
 
-	#[pallet::call]
+	#[pallet::call(trait <T as Config<I>>::WeightInfo)]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Issue a new class of fungible assets from a public origin.
 		///

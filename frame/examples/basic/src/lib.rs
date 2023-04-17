@@ -379,7 +379,6 @@ pub mod pallet {
 	// Simple declaration of the `Pallet` type. It is placeholder we use to implement traits and
 	// method.
 	#[pallet::pallet]
-	#[pallet::call_weight(trait <T as crate::Config>::WeightInfo)]
 	pub struct Pallet<T>(_);
 
 	// Pallet implements [`Hooks`] trait to define some logic to execute in some context.
@@ -442,7 +441,7 @@ pub mod pallet {
 	// against them as the first thing you do in your function. There are three convenience calls
 	// in system that do the matching for you and return a convenient result: `ensure_signed`,
 	// `ensure_root` and `ensure_none`.
-	#[pallet::call]
+	#[pallet::call(trait <T as Config>::WeightInfo)]
 	impl<T: Config> Pallet<T> {
 		/// This is your public interface. Be extremely careful.
 		/// This is just a simple example of how to interact with the pallet from the external
@@ -498,7 +497,6 @@ pub mod pallet {
 		// The weight for this extrinsic we rely on the auto-generated `WeightInfo` from the
 		// benchmark toolchain.
 		#[pallet::call_index(0)]
-		// The weight is calculated from the `#[pallet::call_weight]` attribute.
 		pub fn accumulate_dummy(origin: OriginFor<T>, increase_by: T::Balance) -> DispatchResult {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;

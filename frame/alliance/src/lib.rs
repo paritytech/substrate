@@ -223,7 +223,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::storage_version(migration::STORAGE_VERSION)]
-	//#[pallet::call_weight(trait <T as Config<I>>::WeightInfo)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -498,7 +497,7 @@ pub mod pallet {
 	pub type UnscrupulousWebsites<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BoundedVec<UrlOf<T, I>, T::MaxUnscrupulousItems>, ValueQuery>;
 
-	#[pallet::call]
+	#[pallet::call(trait <T as Config<I>>::WeightInfo)]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Add a new proposal to be voted on.
 		///

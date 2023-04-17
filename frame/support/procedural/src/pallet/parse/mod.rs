@@ -110,8 +110,8 @@ impl Def {
 					let m = hooks::HooksDef::try_from(span, index, item)?;
 					hooks = Some(m);
 				},
-				Some(PalletAttr::RuntimeCall(span)) if call.is_none() =>
-					call = Some(call::CallDef::try_from(span, index, item, dev_mode)?),
+				Some(PalletAttr::RuntimeCall(cw, span)) if call.is_none() =>
+					call = Some(call::CallDef::try_from(span, index, item, dev_mode, cw)?),
 				Some(PalletAttr::Error(span)) if error.is_none() =>
 					error = Some(error::ErrorDef::try_from(span, index, item)?),
 				Some(PalletAttr::RuntimeEvent(span)) if event.is_none() =>
@@ -425,7 +425,7 @@ enum PalletAttr {
 	Config(proc_macro2::Span),
 	Pallet(proc_macro2::Span),
 	Hooks(proc_macro2::Span),
-	RuntimeCall(proc_macro2::Span),
+	RuntimeCall(Option<RuntimeCallWeightAttr>, proc_macro2::Span),
 	Error(proc_macro2::Span),
 	RuntimeEvent(proc_macro2::Span),
 	RuntimeOrigin(proc_macro2::Span),
@@ -445,7 +445,7 @@ impl PalletAttr {
 			Self::Config(span) => *span,
 			Self::Pallet(span) => *span,
 			Self::Hooks(span) => *span,
-			Self::RuntimeCall(span) => *span,
+			Self::RuntimeCall(_, span) => *span,
 			Self::Error(span) => *span,
 			Self::RuntimeEvent(span) => *span,
 			Self::RuntimeOrigin(span) => *span,
@@ -477,7 +477,17 @@ impl syn::parse::Parse for PalletAttr {
 		} else if lookahead.peek(keyword::hooks) {
 			Ok(PalletAttr::Hooks(content.parse::<keyword::hooks>()?.span()))
 		} else if lookahead.peek(keyword::call) {
-			Ok(PalletAttr::RuntimeCall(content.parse::<keyword::call>()?.span()))
+			let span = content.parse::<keyword::call>().expect("peeked").span();
+			if content.is_empty() {
+				return Ok(PalletAttr::RuntimeCall(None, span))
+			}
+
+			let attr_content;
+			syn::parenthesized!(attr_content in content);
+			attr_content.parse::<syn::Token![trait]>()?;
+			let typename = attr_content.parse::<syn::Type>()?;
+
+			Ok(PalletAttr::RuntimeCall(Some(RuntimeCallWeightAttr { typename, span }), span))
 		} else if lookahead.peek(keyword::error) {
 			Ok(PalletAttr::Error(content.parse::<keyword::error>()?.span()))
 		} else if lookahead.peek(keyword::event) {
@@ -504,4 +514,11 @@ impl syn::parse::Parse for PalletAttr {
 			Err(lookahead.error())
 		}
 	}
+}
+
+/// The optional weight annotation on a `#[pallet::call]` like `#[pallet::call(trait $type)]`
+#[derive(Clone)]
+pub struct RuntimeCallWeightAttr {
+	pub typename: syn::Type,
+	pub span: proc_macro2::Span,
 }
