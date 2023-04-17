@@ -95,6 +95,8 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>);
 
 	/// Fired when someone sets their intention to nominate.
+	///
+	/// This should never be fired for for existing nominators.
 	fn on_nominator_add(who: &AccountId);
 
 	/// Fired when an existing nominator updates their nominations.
@@ -103,6 +105,12 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 	/// `on_stake_update` should be used, followed by querying whether `who` was a validator or a
 	/// nominator.
 	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>);
+
+	/// Fired when someone removes their intention to nominate, either due to chill or validating.
+	///
+	/// The set of nominations at the time of removal is provided as it can no longer be fetched in
+	/// any way.
+	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>);
 
 	/// Fired when someone sets their intention to validate.
 	///
@@ -116,9 +124,6 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 
 	/// Fired when someone removes their intention to validate, either due to chill or nominating.
 	fn on_validator_remove(who: &AccountId); // only fire this event when this is an actual Validator
-
-	/// Fired when someone removes their intention to nominate, either due to chill or validating.
-	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>); // only fire this if this is an actual Nominator
 
 	/// fired when someone is fully unstaked.
 	fn on_unstake(who: &AccountId); // -> basically `kill_stash`

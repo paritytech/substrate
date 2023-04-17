@@ -22,6 +22,10 @@ use sp_staking::OnStakingUpdate;
 
 type VoterList = VoterBagsList;
 
+fn backend() -> Vec<AccountId> {
+	VoterList::iter().collect::<Vec<_>>()
+}
+
 #[test]
 fn initial_state_works() {
 	ExtBuilder::default().build_and_execute(|| {
@@ -37,7 +41,14 @@ fn initial_state_works() {
 			assert_eq!(VoterList::get_score(n).unwrap(), *s as VoteWeight);
 		}
 
-		assert_eq!(VoterList::iter().collect::<Vec<_>>(), vec![30, 25, 20, 15, 10, 5]);
+		// initial validators
+		assert_eq!(TestValidators::get().keys().cloned().collect::<Vec<_>>(), vec![10, 20, 30]);
+		// initial nominators
+
+		assert_eq!(TestNominators::get().keys().cloned().collect::<Vec<_>>(), vec![5u64, 15, 25]);
+
+		// initial voters.
+		assert_eq!(backend(), vec![30, 25, 20, 15, 10, 5]);
 	})
 }
 
@@ -49,22 +60,20 @@ mod on_stake_update {
 		expected = "Defensive failure has been triggered!: \"received update for a staker who is not a staker\""
 	)]
 	fn not_bonded() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_storage_noop!(StakeTracker::on_stake_update(&42, None));
-		});
+		ExtBuilder::default().build_and_execute(|| StakeTracker::on_stake_update(&42, None));
 	}
 
 	#[test]
 	fn validator() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given
-			assert_eq!(VoterList::iter().collect::<Vec<_>>(), vec![30, 25, 20, 15, 10, 5]);
+			assert_eq!(backend(), vec![30, 25, 20, 15, 10, 5]);
 
 			// when
 			set_validator_stake(10, 22);
 
 			// then 10 gets promoted.
-			assert_eq!(VoterList::iter().collect::<Vec<_>>(), vec![30, 25, 10, 20, 15, 5]);
+			assert_eq!(backend(), vec![30, 25, 10, 20, 15, 5]);
 		})
 	}
 
@@ -72,13 +81,13 @@ mod on_stake_update {
 	fn nominator() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given
-			assert_eq!(VoterList::iter().collect::<Vec<_>>(), vec![30, 25, 20, 15, 10, 5]);
+			assert_eq!(backend(), vec![30, 25, 20, 15, 10, 5]);
 
 			// when
 			set_nominator_stake(5, 12);
 
 			// then 10 gets promoted.
-			assert_eq!(VoterList::iter().collect::<Vec<_>>(), vec![30, 25, 20, 15, 5, 10]);
+			assert_eq!(backend(), vec![30, 25, 20, 15, 5, 10]);
 		})
 	}
 }
@@ -90,24 +99,24 @@ mod on_nominator_add {
 	fn works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given
-			assert_eq!(VoterList::iter().collect::<Vec<_>>(), vec![30, 25, 20, 15, 10, 5]);
+			assert_eq!(backend(), vec![30, 25, 20, 15, 10, 5]);
 
 			// when
 			add_nominator(35, 35);
 
 			// then 35 is inserted.
-			assert_eq!(VoterList::iter().collect::<Vec<_>>(), vec![35, 30, 25, 20, 15, 10, 5]);
+			assert_eq!(backend(), vec![35, 30, 25, 20, 15, 10, 5]);
 
 			// when
 			add_nominator(6, 6);
 
 			// then 6 is inserted.
-			assert_eq!(VoterList::iter().collect::<Vec<_>>(), vec![35, 30, 25, 20, 15, 10, 5, 6]);
+			assert_eq!(backend(), vec![35, 30, 25, 20, 15, 10, 5, 6]);
 		});
 	}
 
 	#[test]
-	#[should_panic(expected = "Nominator inserted into VoterList; qed")]
+	#[should_panic(expected = "existent nominator would not be added again; qed")]
 	fn defensive_when_in_list() {
 		ExtBuilder::default().build_and_execute(|| {
 			let n = TestNominators::get();
@@ -121,7 +130,7 @@ mod on_nominator_update {
 	use super::*;
 
 	#[test]
-	#[should_panic(expected = "Active nominator is in the VoterList; qed")]
+	#[should_panic(expected = "non-existent nominator would not be updated; qed")]
 	fn defensive_not_in_list() {
 		ExtBuilder::default()
 			.build_and_execute(|| StakeTracker::on_nominator_update(&42, Vec::new()));
@@ -131,7 +140,7 @@ mod on_nominator_update {
 	fn noop_if_in_list() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given
-			assert_eq!(VoterList::iter().collect::<Vec<_>>(), vec![30, 25, 20, 15, 10, 5]);
+			assert_eq!(backend(), vec![30, 25, 20, 15, 10, 5]);
 
 			// when, then
 			assert_storage_noop!(StakeTracker::on_nominator_update(&5, Vec::new()));
@@ -146,24 +155,24 @@ mod on_validator_add {
 	fn works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given
-			assert_eq!(VoterList::iter().collect::<Vec<_>>(), vec![30, 25, 20, 15, 10, 5]);
+			assert_eq!(backend(), vec![30, 25, 20, 15, 10, 5]);
 
 			// when
 			add_validator(11, 11);
 
 			// then
-			assert_eq!(VoterList::iter().collect::<Vec<_>>(), vec![30, 25, 20, 15, 11, 10, 5]);
+			assert_eq!(backend(), vec![30, 25, 20, 15, 11, 10, 5]);
 
 			// when
 			add_validator(40, 40);
 
 			// then
-			assert_eq!(VoterList::iter().collect::<Vec<_>>(), vec![40, 30, 25, 20, 15, 11, 10, 5]);
+			assert_eq!(backend(), vec![40, 30, 25, 20, 15, 11, 10, 5]);
 		});
 	}
 
 	#[test]
-	#[should_panic(expected = "Validator inserted into VoterList; qed")]
+	#[should_panic(expected = "existent validator would not be added again; qed")]
 	fn defensive_when_in_list() {
 		ExtBuilder::default().build_and_execute(|| {
 			let v = TestValidators::get();
@@ -173,122 +182,126 @@ mod on_validator_add {
 	}
 }
 
-// mod on_validator_update {
-// 	use super::*;
+mod on_validator_update {
+	use super::*;
 
-// 	#[test]
-// 	fn noop() {
-// 		ExtBuilder::default().build_and_execute(|| {
-// 			assert_eq!(VoterList::count(), 0);
+	#[test]
+	fn noop_if_in_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(backend(), vec![30, 25, 20, 15, 10, 5]);
 
-// 			let id = 10;
+			// when, then
+			assert_storage_noop!(StakeTracker::on_validator_update(&10));
+		});
+	}
 
-// 			StakeTracker::on_validator_add(&id);
-// 			assert_storage_noop!(StakeTracker::on_validator_update(&id));
-// 			assert_eq!(VoterList::count(), 1);
-// 		});
-// 	}
+	#[test]
+	#[should_panic(expected = "non-existent validator would not be updated; qed")]
+	fn defensive_when_not_in_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_storage_noop!(StakeTracker::on_validator_update(&42));
+		});
+	}
+}
 
-// 	#[test]
-// 	#[should_panic(expected = "Active validator is in the VoterList; qed")]
-// 	fn defensive_not_in_list() {
-// 		ExtBuilder::default().build_and_execute(|| {
-// 			assert_eq!(VoterList::count(), 0);
-// 			StakeTracker::on_validator_update(&10)
-// 		});
-// 	}
-// }
+mod on_validator_remove {
+	use super::*;
 
-// mod on_validator_remove {
-// 	use super::*;
+	#[test]
+	fn works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(backend(), vec![30, 25, 20, 15, 10, 5]);
 
-// 	#[test]
-// 	fn works_for_validator_and_nominator() {
-// 		ExtBuilder::default().build_and_execute(|| {
-// 			assert_eq!(VoterList::count(), 0);
+			// when
+			StakeTracker::on_validator_remove(&10);
 
-// 			let validator_id = 10;
-// 			let nominator_id = 20;
+			// then
+			assert_eq!(backend(), vec![30, 25, 20, 15, 5]);
 
-// 			StakeTracker::on_validator_add(&validator_id);
-// 			StakeTracker::on_validator_remove(&validator_id);
+			// when
+			StakeTracker::on_validator_remove(&30);
 
-// 			assert_eq!(VoterList::count(), 0);
+			// then
+			assert_eq!(backend(), vec![25, 20, 15, 5]);
+		});
+	}
 
-// 			StakeTracker::on_nominator_add(&nominator_id);
-// 			StakeTracker::on_validator_remove(&nominator_id);
+	#[test]
+	#[should_panic(expected = "non-existent validator would be removed; qed")]
+	fn defensive_when_not_in_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			StakeTracker::on_validator_remove(&42);
+		});
+	}
+}
 
-// 			assert_eq!(VoterList::count(), 0);
-// 		});
-// 	}
+mod on_nominator_remove {
+	use super::*;
 
-// 	#[test]
-// 	#[should_panic(expected = "Validator removed from VoterList; qed")]
-// 	fn defensive_when_not_in_list() {
-// 		ExtBuilder::default().build_and_execute(|| {
-// 			assert_eq!(VoterList::count(), 0);
-// 			StakeTracker::on_validator_remove(&10);
-// 		});
-// 	}
-// }
+	#[test]
+	fn works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(backend(), vec![30, 25, 20, 15, 10, 5]);
 
-// mod on_nominator_remove {
-// 	use super::*;
+			// when
+			StakeTracker::on_nominator_remove(&5, Default::default());
 
-// 	#[test]
-// 	fn works_for_nominator_and_validator() {
-// 		ExtBuilder::default().build_and_execute(|| {
-// 			assert_eq!(VoterList::count(), 0);
+			// then
+			assert_eq!(backend(), vec![30, 25, 20, 15, 10]);
 
-// 			let validator_id = 10;
-// 			let nominator_id = 20;
+			// when
+			StakeTracker::on_nominator_remove(&25, Default::default());
 
-// 			StakeTracker::on_nominator_add(&nominator_id);
-// 			StakeTracker::on_nominator_remove(&nominator_id, Vec::new());
+			// then
+			assert_eq!(backend(), vec![30, 20, 15, 10]);
+		});
+	}
 
-// 			assert_eq!(VoterList::count(), 0);
+	#[test]
+	#[should_panic(expected = "non-existent nominator would bot be removed; qed")]
+	fn defensive_when_not_in_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			StakeTracker::on_nominator_remove(&42, vec![]);
+		});
+	}
+}
 
-// 			StakeTracker::on_validator_add(&validator_id);
-// 			StakeTracker::on_nominator_remove(&validator_id, Vec::new());
+mod on_unstake {
+	use super::*;
 
-// 			assert_eq!(VoterList::count(), 0);
-// 		});
-// 	}
+	#[test]
+	fn noop_when_not_in_list_and_invalid() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(backend(), vec![30, 25, 20, 15, 10, 5]);
 
-// 	#[test]
-// 	#[should_panic(expected = "Nominator removed from VoterList; qed")]
-// 	fn defensive_when_not_in_list() {
-// 		ExtBuilder::default().build_and_execute(|| {
-// 			assert_eq!(VoterList::count(), 0);
-// 			StakeTracker::on_nominator_remove(&20, vec![]);
-// 		});
-// 	}
-// }
+			// when a validator leaves.
+			StakeTracker::on_validator_remove(&30);
 
-// mod on_unstake {
-// 	use super::*;
+			// then
+			assert_eq!(backend(), vec![25, 20, 15, 10, 5]);
+			assert_storage_noop!(StakeTracker::on_unstake(&30));
 
-// 	#[test]
-// 	// By the time this is called - staker has to already be removed from the list. Otherwise we hit
-// 	// the defensive path.
-// 	fn noop_when_not_in_list() {
-// 		ExtBuilder::default().build_and_execute(|| {
-// 			assert_eq!(VoterList::count(), 0);
+			// when a nominator leaves.
+			StakeTracker::on_validator_remove(&25);
 
-// 			// any staker
-// 			for id in stakers() {
-// 				assert_storage_noop!(StakeTracker::on_unstake(&id));
-// 			}
-// 		});
-// 	}
+			// then
+			assert_eq!(backend(), vec![20, 15, 10, 5]);
+			assert_storage_noop!(StakeTracker::on_unstake(&25));
 
-// 	#[test]
-// 	#[should_panic(expected = "The staker has already been removed; qed")]
-// 	fn defensive_when_in_list() {
-// 		ExtBuilder::default().build_and_execute(|| {
-// 			assert_eq!(VoterList::count(), 0);
-// 			let _ = VoterList::on_insert(10, 100);
-// 			StakeTracker::on_unstake(&10);
-// 		});
-// 	}
-// }
+			// if a non-voter is unstaked
+			assert_storage_noop!(StakeTracker::on_unstake(&42));
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "existent voter cannot be unstaked; qed")]
+	fn defensive_when_in_list() {
+		ExtBuilder::default().build_and_execute(|| {
+			StakeTracker::on_unstake(&10);
+		});
+	}
+}

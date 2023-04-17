@@ -113,48 +113,51 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 					T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active))
 						.defensive_proof("Validator's position in VoterList updated; qed");
 			}
-
-		// else, this staker must have been in "chilled" state.
-		} else {
-			defensive!("received update for a staker who is not a staker");
 		}
+		// else, this staker must have been in "chilled" state.
 	}
 
 	fn on_nominator_add(who: &T::AccountId) {
+		// defensive based on the contract that staking would not call insert/updates mistakenly.
 		let _ = T::VoterList::on_insert(who.clone(), Self::active_vote_of(who))
-			.defensive_proof("Nominator inserted into VoterList; qed");
+			.defensive_proof("existent nominator would not be added again; qed");
 	}
 
 	fn on_nominator_update(who: &T::AccountId, _prev_nominations: Vec<T::AccountId>) {
+		// defensive based on the contract that staking would not call insert/updates mistakenly.
 		if !T::VoterList::contains(who) {
-			defensive!("Active nominator is in the VoterList; qed");
+			defensive!("non-existent nominator would not be updated; qed");
 		}
 	}
 
 	fn on_validator_add(who: &T::AccountId) {
+		// defensive based on the contract that staking would not call insert/updates mistakenly.
 		let _ = T::VoterList::on_insert(who.clone(), Self::active_vote_of(who))
-			.defensive_proof("Validator inserted into VoterList; qed");
+			.defensive_proof("existent validator would not be added again; qed");
 	}
 
 	fn on_validator_update(who: &T::AccountId) {
+		// defensive based on the contract that staking would not call insert/updates mistakenly.
 		if !T::VoterList::contains(who) {
-			defensive!("Active validator is in the VoterList; qed");
+			defensive!("non-existent validator would not be updated; qed");
 		}
 	}
 
 	fn on_validator_remove(who: &T::AccountId) {
-		let _ =
-			T::VoterList::on_remove(who).defensive_proof("Validator removed from VoterList; qed");
+		// defensive based on the contract that staking would not call insert/updates mistakenly.
+		let _ = T::VoterList::on_remove(who)
+			.defensive_proof("non-existent validator would be removed; qed");
 	}
 
 	fn on_nominator_remove(who: &T::AccountId, _nominations: Vec<T::AccountId>) {
-		let _ =
-			T::VoterList::on_remove(who).defensive_proof("Nominator removed from VoterList; qed");
+		// defensive based on the contract that staking would not call insert/updates mistakenly.
+		let _ = T::VoterList::on_remove(who)
+			.defensive_proof("non-existent nominator would bot be removed; qed");
 	}
 
 	fn on_unstake(who: &T::AccountId) {
 		if T::VoterList::contains(who) {
-			defensive!("The staker has already been removed; qed");
+			defensive!("existent voter cannot be unstaked; qed");
 		}
 	}
 }
