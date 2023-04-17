@@ -106,10 +106,10 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 					.as_ref()
 					.expect("the parser prevents this");
 
-				// Expand `<T as Config>::WeightInfo::call_name()`.
+				// Expand `<<T as Config>::WeightInfo>::call_name()`.
 				let t = &pallet_weight.typename;
 				let n = &method.name;
-				fn_weight.push(quote!({ #t :: #n ()	}));
+				fn_weight.push(quote!({ < #t > :: #n ()	}));
 			},
 		}
 	}

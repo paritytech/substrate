@@ -484,7 +484,7 @@ impl syn::parse::Parse for PalletAttr {
 
 			let attr_content;
 			syn::parenthesized!(attr_content in content);
-			attr_content.parse::<syn::Token![trait]>()?;
+			attr_content.parse::<syn::Token![impl]>()?;
 			let typename = attr_content.parse::<syn::Type>()?;
 
 			Ok(PalletAttr::RuntimeCall(Some(RuntimeCallWeightAttr { typename, span }), span))
@@ -516,7 +516,7 @@ impl syn::parse::Parse for PalletAttr {
 	}
 }
 
-/// The optional weight annotation on a `#[pallet::call]` like `#[pallet::call(trait $type)]`
+/// The optional weight annotation on a `#[pallet::call]` like `#[pallet::call(impl $type)]`
 #[derive(Clone)]
 pub struct RuntimeCallWeightAttr {
 	pub typename: syn::Type,

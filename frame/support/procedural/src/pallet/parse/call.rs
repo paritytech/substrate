@@ -246,6 +246,10 @@ impl CallDef {
 				let weight = match weight_attrs.len() {
 					0 if pallet_call_weight.is_some() => CallWeightDef::Inherited,
 					0 if dev_mode => CallWeightDef::DevModeDefault,
+					0 => return Err(syn::Error::new(
+						method.sig.span(),
+						"A pallet::call requires either a concrete `#[pallet::weight($expr)]` or an inherited weight from the `#[pallet:call(trait  ...)]` attribute, but none were given.",
+					)),
 					1 => match weight_attrs.pop().unwrap() {
 						FunctionAttr::Weight(w) => CallWeightDef::Immediate(w),
 						_ => unreachable!("checked during creation of the let binding"),
