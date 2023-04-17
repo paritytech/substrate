@@ -22,9 +22,9 @@ use crate as pallet_nfts_royalty;
 
 use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64}
+	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
 };
-use pallet_nfts::{PalletFeatures};
+use pallet_nfts::PalletFeatures;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -38,7 +38,6 @@ type Signature = MultiSignature;
 type AccountPublic = <Signature as Verify>::Signer;
 type AccountId = <AccountPublic as IdentifyAccount>::AccountId;
 
-
 // Configure a mock runtime to test the pallet.
 construct_runtime!(
 	pub enum Test where
@@ -49,7 +48,7 @@ construct_runtime!(
 		System: frame_system,
 		Balances: pallet_balances,
 		Nfts: pallet_nfts,
-        NftsRoyalty: pallet_nfts_royalty,
+		NftsRoyalty: pallet_nfts_royalty,
 	}
 );
 impl frame_system::Config for Test {
@@ -94,7 +93,6 @@ impl pallet_balances::Config for Test {
 	type HoldIdentifier = ();
 	type MaxHolds = ();
 }
-
 
 parameter_types! {
 	pub storage Features: PalletFeatures = PalletFeatures::all_enabled();
