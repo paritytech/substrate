@@ -932,6 +932,7 @@ struct InstantiateInput<T: Config> {
 	salt: Vec<u8>,
 }
 
+#[derive(PartialEq)]
 pub enum CollectEvents {
 	/// # Note
 	///
@@ -944,10 +945,11 @@ pub enum CollectEvents {
 	Skip,
 }
 
+#[derive(PartialEq)]
 pub enum DebugInfo {
 	/// # Note
 	///
-	/// This should only ever be set to `UnsafeYes` when executing as an RPC because
+	/// This should only ever be set to `UnsafeDebug` when executing as an RPC because
 	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
 	UnsafeDebug,
 	Skip,
@@ -1201,7 +1203,7 @@ impl<T: Config> Pallet<T> {
 		debug: DebugInfo,
 		collect_events: CollectEvents,
 	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>, EventRecordOf<T>> {
-		let mut debug_message = if matches!(debug, DebugInfo::UnsafeDebug) {
+		let mut debug_message = if debug == DebugInfo::UnsafeDebug {
 			Some(DebugBufferVec::<T>::default())
 		} else {
 			None
@@ -1216,7 +1218,7 @@ impl<T: Config> Pallet<T> {
 		};
 		let output = InstantiateInput::<T> { code, salt }.run_guarded(common);
 		// collect events if CollectEvents is UnsafeCollect
-		let events = if matches!(collect_events, CollectEvents::UnsafeCollect) {
+		let events = if collect_events == CollectEvents::UnsafeCollect {
 			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
 		} else {
 			None
