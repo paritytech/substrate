@@ -19,7 +19,6 @@
 
 use super::{
 	substrate_test_pallet, wasm_binary_unwrap, AccountId, AuthorityId, Balance, GenesisConfig,
-	Runtime,
 };
 use codec::{Encode, Joiner};
 use sc_service::construct_genesis_block;
