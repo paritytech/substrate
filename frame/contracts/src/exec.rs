@@ -435,7 +435,7 @@ pub struct Frame<T: Config> {
 	/// If `false` the contract enabled its defense against reentrance attacks.
 	allows_reentry: bool,
 	/// The caller of the currently executing frame which was spawned by `delegate_call`.
-	delegate_caller: Option<T::AccountId>,
+	delegate_caller: Option<Origin<T>>,
 }
 
 /// Used in a delegate call frame arguments in order to override the executable and caller.
@@ -443,7 +443,7 @@ struct DelegatedCall<T: Config, E> {
 	/// The executable which is run instead of the contracts own `executable`.
 	executable: E,
 	/// The account id of the caller contract.
-	caller: T::AccountId,
+	caller: Origin<T>,
 }
 
 /// Parameter passed in when creating a new `Frame`.
@@ -1172,12 +1172,11 @@ where
 		let contract_info = top_frame.contract_info().clone();
 		let account_id = top_frame.account_id.clone();
 		let value = top_frame.value_transferred;
-		let caller = self.caller().account_id()?.clone();
 		let executable = self.push_frame(
 			FrameArgs::Call {
 				dest: account_id,
 				cached_info: Some(contract_info),
-				delegated_call: Some(DelegatedCall { executable, caller }),
+				delegated_call: Some(DelegatedCall { executable, caller: self.caller() }),
 			},
 			value,
 			Weight::zero(),
@@ -1271,7 +1270,7 @@ where
 
 	fn caller(&self) -> Origin<T> {
 		if let Some(caller) = &self.top_frame().delegate_caller {
-			Origin::Signed(caller.clone())
+			caller.clone()
 		} else {
 			self.frames()
 				.nth(1)
