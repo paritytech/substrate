@@ -528,10 +528,26 @@ impl syn::parse::Parse for RuntimeCallWeightAttr {
 		syn::parenthesized!(content in input);
 		content.parse::<keyword::weight>()?;
 
-		let weight_content;
-		syn::parenthesized!(weight_content in content);
-		let typename = weight_content.parse::<syn::Type>()?;
+		let lookahead = content.lookahead1();
 
-		Ok(RuntimeCallWeightAttr { typename, span: input.span() })
+		let typename = if lookahead.peek(syn::token::Paren) {
+			let weight_content;
+			syn::parenthesized!(weight_content in content);
+			weight_content.parse::<syn::Type>()?
+		} else if lookahead.peek(syn::Token![=]) {
+			content.parse::<syn::Token![=]>().expect("peeked");
+			let typename = content.parse::<syn::Type>()?;
+			if !content.is_empty() {
+				return Err(content.error("unexpected stray tokens"))
+			}
+			typename
+		} else {
+			return Err(lookahead.error())
+		};
+
+		Ok(Self {
+			typename,
+			span: content.span(),
+		})
 	}
 }

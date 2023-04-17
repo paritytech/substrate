@@ -12,7 +12,7 @@ impl WeightInfo for () {
 }
 
 #[frame_support::pallet]
-mod pallet {
+mod parentheses {
 	use super::*;
 
 	#[pallet::config]
@@ -24,6 +24,27 @@ mod pallet {
 
 	// Crazy man just uses `()`, but it still works ;)
 	#[pallet::call(weight(()))]
+	impl<T: Config> Pallet<T> {
+		#[pallet::call_index(0)]
+		pub fn foo(_: OriginFor<T>) -> DispatchResult {
+			Ok(())
+		}
+	}
+}
+
+#[frame_support::pallet]
+mod assign {
+	use super::*;
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+	}
+
+	#[pallet::pallet]
+	pub struct Pallet<T>(core::marker::PhantomData<T>);
+
+	// Crazy man just uses `()`, but it still works ;)
+	#[pallet::call(weight = ())]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
 		pub fn foo(_: OriginFor<T>) -> DispatchResult {

@@ -1,29 +1,11 @@
-error[E0412]: cannot find type `OriginFor` in this scope
-  --> tests/pallet_ui/call_weight_inherited_invalid4.rs:19:17
+error[E0599]: no function or associated item named `foo` found for associated type `<T as Config>::WeightInfo` in the current scope
+  --> tests/pallet_ui/call_weight_inherited_invalid4.rs:24:10
    |
-19 |         pub fn foo(_: OriginFor<T>) -> DispatchResult {
-   |                       ^^^^^^^^^ not found in this scope
-   |
-help: consider importing this type alias
-   |
-6  |     use frame_system::pallet_prelude::OriginFor;
-   |
-
-error[E0412]: cannot find type `DispatchResult` in this scope
-  --> tests/pallet_ui/call_weight_inherited_invalid4.rs:19:34
-   |
-19 |         pub fn foo(_: OriginFor<T>) -> DispatchResult {
-   |                                        ^^^^^^^^^^^^^^ not found in this scope
-   |
-help: consider importing one of these items
-   |
-6  |     use frame_support::pallet_prelude::DispatchResult;
-   |
-6  |     use sp_runtime::DispatchResult;
-   |
+24 |         pub fn foo(_: OriginFor<T>) -> DispatchResult {
+   |                ^^^ function or associated item not found in `<T as Config>::WeightInfo`
 
 error[E0599]: no function or associated item named `foo` found for associated type `<T as Config>::WeightInfo` in the current scope
-  --> tests/pallet_ui/call_weight_inherited_invalid4.rs:19:10
+  --> tests/pallet_ui/call_weight_inherited_invalid4.rs:45:10
    |
-19 |         pub fn foo(_: OriginFor<T>) -> DispatchResult {
+45 |         pub fn foo(_: OriginFor<T>) -> DispatchResult {
    |                ^^^ function or associated item not found in `<T as Config>::WeightInfo`
