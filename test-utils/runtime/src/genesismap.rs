@@ -22,7 +22,6 @@ use super::{
 	Runtime,
 };
 use codec::{Encode, Joiner};
-use frame_support::traits::GenesisBuild;
 use sc_service::construct_genesis_block;
 use sp_core::{
 	map,
@@ -67,7 +66,6 @@ impl GenesisConfigBuilder {
 				authorities: self.authorities.clone().into_iter().map(|x| (x, 1)).collect(),
 				epoch_config: Some(crate::TEST_RUNTIME_BABE_EPOCH_CONFIGURATION),
 			},
-			// substrate_test: Default::default(),
 			substrate_test: substrate_test_pallet::GenesisConfig {
 				authorities: self.authorities.clone(),
 			},
