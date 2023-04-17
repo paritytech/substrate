@@ -35,35 +35,35 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
+use frame_system::Config as SystemConfig;
 pub use pallet::*;
 pub use scale_info::Type;
-pub use types::*;
-use frame_system::Config as SystemConfig;
 use sp_runtime::traits::StaticLookup;
+pub use types::*;
 
 /// The log target of this pallet.
 pub const LOG_TARGET: &'static str = "runtime::nfts-royalty";
 
 type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
 
-// type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
-
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
-	use pallet_nfts::{ItemSettings, ItemConfig};
-	use sp_std::fmt::Display;
+	// TODO: Probably a better way to do this than importing from pallet_nfts.
 	use frame_system::pallet_prelude::*;
+	use pallet_nfts::{ItemConfig, ItemSettings};
+	use sp_std::fmt::Display;
 
 	use frame_support::{
 		pallet_prelude::*,
 		sp_runtime::Permill,
 		traits::{
-			tokens::{
-				nonfungibles_v2::{Inspect as NonFungiblesInspect, Mutate as NonFungiblesMutate},
+			tokens::nonfungibles_v2::{
+				Inspect as NonFungiblesInspect, InspectEnumerable as NonFungiblesInspectEnumerable,
+				Mutate as NonFungiblesMutate,
 			},
-			ReservableCurrency
-		}
+			ReservableCurrency,
+		},
 	};
 
 	/// The current storage version.
@@ -96,10 +96,15 @@ pub mod pallet {
 				Self::AccountId,
 				ItemId = Self::NftItemId,
 				CollectionId = Self::NftCollectionId,
-			> + NonFungiblesMutate<Self::AccountId,ItemConfig>;
+			> + NonFungiblesMutate<Self::AccountId, ItemConfig>
+			+ NonFungiblesInspectEnumerable<
+				Self::AccountId,
+				ItemId = Self::NftItemId,
+				CollectionId = Self::NftCollectionId,
+			>;
 	}
 
-	/// Keeps track of the corresponding NFT ID, royalty percentage, and royalty recipient.
+	/// The storage for NFTs with a royalty.
 	#[pallet::storage]
 	#[pallet::getter(fn nft_with_royalty)]
 	pub type NftWithRoyalty<T: Config> = StorageMap<
@@ -121,9 +126,9 @@ pub mod pallet {
 			royalty_recipient: T::AccountId,
 		},
 		/// An NFT royalty was destroyed.
-		NftRoyaltyBurned { nft_collection: T::NftCollectionId, nft: T::NftItemId},
+		NftRoyaltyBurned { nft_collection: T::NftCollectionId, nft: T::NftItemId },
 		/// The NFT royalty whas been transfered.
-		NftRoyaltiesTransfered {
+		NftRoyaltyTransfered {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftItemId,
 			new_royalty_recipient: T::AccountId,
@@ -139,16 +144,16 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The item ID has not royalties associated.
-		NoRoyaltiesExist,
+		/// The item ID has not royalty associated.
+		NoRoyaltyExists,
 		/// The signing account has no permission to do the operation.
 		NoPermission,
 		/// The NFT does not exist.
-		NftDoesNotExist
+		NftDoesNotExist,
 	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {	
+	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
 		#[pallet::weight(0)]
 		pub fn mint_item_with_royalty(
@@ -163,7 +168,7 @@ pub mod pallet {
 			ensure_signed(origin)?;
 			let mint_to = T::Lookup::lookup(mint_to)?;
 
-			let item_config = ItemConfig { settings: item_settings};
+			let item_config = ItemConfig { settings: item_settings };
 			T::Nfts::mint_into(&collection_id, &item_id, &mint_to, &item_config, false)?;
 
 			NftWithRoyalty::<T>::insert(
@@ -193,7 +198,7 @@ pub mod pallet {
 		/// - `item`: The item to be burned.
 		///
 		/// Emits `Burned`.
-		/// 
+		///
 		#[pallet::call_index(1)]
 		#[pallet::weight(0)]
 		pub fn burn_item_with_royalty(
@@ -203,10 +208,12 @@ pub mod pallet {
 		) -> DispatchResult {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?.unwrap();
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?
+				.unwrap();
 
 			// TODO: Decide if throws an error if has not royalties or just burn it
-			<NftWithRoyalty<T>>::take((collection_id, item_id)).ok_or(Error::<T>::NoRoyaltiesExist)?;
+			<NftWithRoyalty<T>>::take((collection_id, item_id))
+				.ok_or(Error::<T>::NoRoyaltyExists)?;
 
 			T::Nfts::burn(&collection_id, &item_id, Some(&maybe_check_origin))?;
 
@@ -225,11 +232,11 @@ pub mod pallet {
 		/// - `item`: The item to be burned.
 		/// - `new_royalty_recipient`: Account into which the item royalties will be transfered.
 		///
-		/// Emits `NftRoyaltiesTransfered`.
-		/// 
+		/// Emits `NftRoyaltyTransfered`.
+		///
 		#[pallet::call_index(2)]
 		#[pallet::weight(0)]
-		pub fn transfer_royalties_recipient(
+		pub fn transfer_royalty_recipient(
 			origin: OriginFor<T>,
 			collection_id: T::NftCollectionId,
 			item_id: T::NftItemId,
@@ -237,7 +244,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 
-			let item_royalties = <NftWithRoyalty<T>>::take((collection_id, item_id)).ok_or(Error::<T>::NoRoyaltiesExist)?;
+			let item_royalties = <NftWithRoyalty<T>>::take((collection_id, item_id))
+				.ok_or(Error::<T>::NoRoyaltyExists)?;
 			ensure!(item_royalties.royalty_recipient == caller, Error::<T>::NoPermission);
 
 			NftWithRoyalty::<T>::insert(
@@ -247,10 +255,10 @@ pub mod pallet {
 					royalty_recipient: new_royalty_recipient.clone(),
 				},
 			);
-			Self::deposit_event(Event::NftRoyaltiesTransfered {
+			Self::deposit_event(Event::NftRoyaltyTransfered {
 				nft_collection: collection_id,
 				nft: item_id,
-				new_royalty_recipient
+				new_royalty_recipient,
 			});
 
 			Ok(())
@@ -265,8 +273,8 @@ pub mod pallet {
 		/// - `royalty_percentage`: Royalty percentage to be set.
 		/// - `royalty_recipient`: Account into which the item royalties will be transfered.
 		///
-		/// Emits `NftRoyaltiesTransfered`.
-		/// 
+		/// Emits `NftRoyaltyTransfered`.
+		///
 		#[pallet::call_index(3)]
 		#[pallet::weight(0)]
 		pub fn set_item_with_royalty(
@@ -280,11 +288,15 @@ pub mod pallet {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			let item_config = ItemConfig { settings: item_settings};
+			let item_config = ItemConfig { settings: item_settings };
 			// TODO: Not sure how to check if an item exists
+			// Use Inspect Enumberable
 			// ensure!(T::Nfts::exists(&collection_id, &item_id), Error::<T>::NftDoesNotExist);
 			// What happens if `maybe_check_origin` is None? None means it is ForceOrigin
-			ensure!(T::Nfts::owner(&collection_id, &item_id) == maybe_check_origin, Error::<T>::NoPermission);
+			ensure!(
+				T::Nfts::owner(&collection_id, &item_id) == maybe_check_origin,
+				Error::<T>::NoPermission
+			);
 			NftWithRoyalty::<T>::insert(
 				(collection_id, item_id),
 				RoyaltyDetails::<T::AccountId> {
@@ -303,7 +315,7 @@ pub mod pallet {
 			Ok(())
 		}
 	}
-	
+
 	impl<T: Config> Pallet<T> {
 		// private functions
 	}
