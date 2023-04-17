@@ -17,7 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use serde::Serialize;
-use rayon::prelude::*;
 use std::{
 	borrow::{Cow, ToOwned},
 	fmt,
@@ -116,22 +115,18 @@ pub fn run_benchmark(benchmark: Box<dyn BenchmarkDescription>, mode: Mode) -> Be
 	let name = benchmark.name().to_owned();
 	let mut benchmark = benchmark.setup();
 
-	let durations: Vec<u128> = (0..50)
-		.into_par_iter()
-		.map(|_| benchmark.run(mode).as_nanos())
-		.collect();
+	let mut durations: Vec<u128> = vec![];
+	for _ in 0..50 {
+		let duration = benchmark.run(mode);
+		durations.push(duration.as_nanos());
+	}
 
-	let mut sorted_durations = durations.clone();
-	sorted_durations.par_sort_unstable();
+	durations.sort();
 
 	let raw_average = (durations.iter().sum::<u128>() / (durations.len() as u128)) as u64;
-	let average = (sorted_durations.iter().skip(10).take(30).sum::<u128>() / 30) as u64;
+	let average = (durations.iter().skip(10).take(30).sum::<u128>() / 30) as u64;
 
-	BenchmarkOutput {
-		name: name.into(),
-		raw_average,
-		average,
-	}
+	BenchmarkOutput { name: name.into(), raw_average, average }
 }
 
 macro_rules! matrix(
