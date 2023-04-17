@@ -948,6 +948,7 @@ pub enum CollectEvents {
 	Skip,
 }
 
+/// Determines whether debug messages will be collected.
 #[derive(PartialEq)]
 pub enum DebugInfo {
 	/// Collect debug messages.
