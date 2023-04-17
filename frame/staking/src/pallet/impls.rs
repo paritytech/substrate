@@ -784,12 +784,21 @@ impl<T: Config> Pallet<T> {
 
 			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
 				let voter_weight = weight_of(&voter);
+
+				// if voter weight is zero, it may be due to encoding issues or data
+				// inconsistencies. do not consider nominator and skip updating `min_active_stake`.
+				if voter_weight.is_zero() {
+					log!(warn, "active nominator balance in ledger is 0, this may be due to encoding issues or data inconsistencies. skip this voter.");
+					continue
+				}
+
 				if !targets.is_empty() {
 					all_voters.push((voter.clone(), voter_weight, targets));
 					nominators_taken.saturating_inc();
 				} else {
 					// Technically should never happen, but not much we can do about it.
 				}
+
 				min_active_stake =
 					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
 			} else if Validators::<T>::contains_key(&voter) {
@@ -822,8 +831,11 @@ impl<T: Config> Pallet<T> {
 
 		Self::register_weight(T::WeightInfo::get_npos_voters(validators_taken, nominators_taken));
 
-		let min_active_stake: T::CurrencyBalance =
-			if all_voters.len() == 0 { 0u64.into() } else { min_active_stake.into() };
+		let min_active_stake: T::CurrencyBalance = if all_voters.len() == 0 {
+			MinNominatorBond::<T>::get().into()
+		} else {
+			min_active_stake.into()
+		};
 
 		MinimumActiveStake::<T>::put(min_active_stake);
 
