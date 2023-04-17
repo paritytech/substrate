@@ -123,7 +123,7 @@ impl Ord for PriorityKey {
 struct Index {
 	by_topic: HashMap<Topic, HashSet<Hash>>,
 	by_dec_key: HashMap<DecryptionKey, HashSet<Hash>>,
-	statement_topics: HashMap<Hash, ([Option<Topic>; 4], Option<DecryptionKey>)>,
+	topics_and_keys: HashMap<Hash, ([Option<Topic>; 4], Option<DecryptionKey>)>,
 	entries: HashMap<Hash, (AccountId, u32, u32)>, /* Statement hash -> (Account id,
 	                                                * global_priority, priority) */
 	expired: HashMap<Hash, u64>, // Value is expiration timestamp.
@@ -228,7 +228,7 @@ impl Index {
 			self.by_dec_key.entry(*k).or_default().insert(hash);
 		}
 		if nt > 0 || key.is_some() {
-			self.statement_topics.insert(hash, (all_topics, key));
+			self.topics_and_keys.insert(hash, (all_topics, key));
 		}
 		let priority = statement.priority().unwrap_or(0);
 		self.entries.insert(hash, (account, global_priority, priority));
@@ -341,7 +341,7 @@ impl Index {
 			let key = PriorityKey { hash: *hash, priority: global_priority };
 			let len = self.by_global_priority.remove(&key).unwrap_or(0);
 			self.total_size -= len;
-			if let Some((topics, key)) = self.statement_topics.remove(hash) {
+			if let Some((topics, key)) = self.topics_and_keys.remove(hash) {
 				for t in topics.into_iter().flatten() {
 					if let Some(set) = self.by_topic.get_mut(&t) {
 						set.remove(hash);
