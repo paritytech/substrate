@@ -309,12 +309,13 @@ where
 {
 	const AIMD_LINEAR_INCREASE_FACTOR: usize = 500;
 	const AIMD_BASE_VALUE: usize = 20000;
-	const AIMD_EXPONENTIAL_DECREASE_FACTOR: usize = 2;
+	// const AIMD_EXPONENTIAL_DECREASE_FACTOR: usize = 2;
 
 	/// Get the number of threads to use.
 	fn threads() -> NonZeroUsize {
-		thread::available_parallelism()
-			.unwrap_or(NonZeroUsize::new(4usize).expect("4 is non-zero; qed"))
+		NonZeroUsize::new(1usize).expect("1 is non-zero; qed")
+		// thread::available_parallelism()
+		// 	.unwrap_or(NonZeroUsize::new(4usize).expect("4 is non-zero; qed"))
 	}
 
 	async fn rpc_get_storage(
@@ -437,7 +438,7 @@ where
 			return Ok(vec![])
 		}
 
-		log::debug!(
+		log::info!(
 			target: LOG_TARGET,
 			"Remaining keys: {} Batch request size: {}",
 			remaining_keys.len(),
@@ -472,7 +473,8 @@ where
 					return Self::get_storage_data_aimd(
 						thread_client,
 						remaining_keys,
-						batch_size / Self::AIMD_EXPONENTIAL_DECREASE_FACTOR,
+						// batch_size / Self::AIMD_EXPONENTIAL_DECREASE_FACTOR,
+						1,
 						at,
 					)
 				},
