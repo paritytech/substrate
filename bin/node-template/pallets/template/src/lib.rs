@@ -14,8 +14,15 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 pub mod weights;
+
+mod section;
+
 pub use weights::*;
 
+use macro_magic::*;
+use frame_support::pallet_macros::*;
+
+#[import_section(section)]
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -34,13 +41,13 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-	// The pallet's runtime storage items.
-	// https://docs.substrate.io/main-docs/build/runtime-storage/
-	#[pallet::storage]
-	#[pallet::getter(fn something)]
-	// Learn more about declaring storage items:
-	// https://docs.substrate.io/main-docs/build/runtime-storage/#declaring-storage-items
-	pub type Something<T> = StorageValue<_, u32>;
+	// // The pallet's runtime storage items.
+	// // https://docs.substrate.io/main-docs/build/runtime-storage/
+	// #[pallet::storage]
+	// #[pallet::getter(fn something)]
+	// // Learn more about declaring storage items:
+	// // https://docs.substrate.io/main-docs/build/runtime-storage/#declaring-storage-items
+	// pub type Something<T> = StorageValue<_, u32>;
 
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/main-docs/build/events-errors/

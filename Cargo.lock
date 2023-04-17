@@ -2486,6 +2486,7 @@ dependencies = [
  "derive-syn-parse",
  "frame-support-procedural-tools",
  "itertools",
+ "macro_magic",
  "proc-macro-warning",
  "proc-macro2",
  "quote",
@@ -4482,6 +4483,53 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b823e83b2affd8f40a9ee8c29dbc56404c1e34cd2710921f2801e2cf29527afa"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "macro_magic"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "095e666ccc1f8414c3eb162bae48f75ffc8daaf7a6533100f6887dd82ae7fc00"
+dependencies = [
+ "macro_magic_core",
+ "macro_magic_macros",
+ "quote",
+ "syn 2.0.14",
+]
+
+[[package]]
+name = "macro_magic_core"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b32a8723ac45b0e53b693731cad558c238922bb5b9714e3509910e8cb74608d4"
+dependencies = [
+ "derive-syn-parse",
+ "macro_magic_core_macros",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.14",
+]
+
+[[package]]
+name = "macro_magic_core_macros"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eadf29df043ac09b33b9c14a5eb738b5f3c9c6d1220a1ad54e0ff15eebd0e8af"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.14",
+]
+
+[[package]]
+name = "macro_magic_macros"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1d0f5d071fdf1bcd3fcec09df36025ad430960a51dd6c60293ef1ad04825fff"
+dependencies = [
+ "macro_magic_core",
+ "quote",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -6860,6 +6908,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "macro_magic",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
