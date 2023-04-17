@@ -1,5 +1,5 @@
-error: unexpected token
-  --> tests/pallet_ui/call_weight_inherited_invalid2.rs:19:48
+error: expected `=`
+  --> tests/pallet_ui/call_weight_inherited_invalid2.rs:19:30
    |
-19 |     #[pallet::call(impl <T as Config>::WeightInfo 654)]
-   |                                                   ^^^
+19 |     #[pallet::call(weight(prefix))]
+   |                                 ^

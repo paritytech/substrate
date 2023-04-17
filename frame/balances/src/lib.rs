@@ -519,7 +519,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call(impl <T as Config<I>>::WeightInfo)]
+	#[pallet::call(weight(prefix = <T as Config<I>>::WeightInfo))]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Transfer some liquid free balance to another account.
 		///

@@ -402,6 +402,8 @@ impl GenericKind {
 mod keyword {
 	syn::custom_keyword!(origin);
 	syn::custom_keyword!(call);
+	syn::custom_keyword!(weight);
+	syn::custom_keyword!(prefix);
 	syn::custom_keyword!(event);
 	syn::custom_keyword!(config);
 	syn::custom_keyword!(hooks);
@@ -484,8 +486,12 @@ impl syn::parse::Parse for PalletAttr {
 
 			let attr_content;
 			syn::parenthesized!(attr_content in content);
-			attr_content.parse::<syn::Token![impl]>()?;
-			let typename = attr_content.parse::<syn::Type>()?;
+			attr_content.parse::<keyword::weight>()?;
+			let weight_content;
+			syn::parenthesized!(weight_content in attr_content);
+			weight_content.parse::<keyword::prefix>()?;
+			weight_content.parse::<syn::Token![=]>()?;
+			let typename = weight_content.parse::<syn::Type>()?;
 
 			Ok(PalletAttr::RuntimeCall(Some(RuntimeCallWeightAttr { typename, span }), span))
 		} else if lookahead.peek(keyword::error) {
@@ -516,7 +522,8 @@ impl syn::parse::Parse for PalletAttr {
 	}
 }
 
-/// The optional weight annotation on a `#[pallet::call]` like `#[pallet::call(impl $type)]`
+/// The optional weight annotation on a `#[pallet::call]` like `#[pallet::call(weight_prefix
+/// $type)]`
 #[derive(Clone)]
 pub struct RuntimeCallWeightAttr {
 	pub typename: syn::Type,

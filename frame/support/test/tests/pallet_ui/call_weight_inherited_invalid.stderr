@@ -1,4 +1,4 @@
-error: expected `impl`
+error: expected `weight`
   --> tests/pallet_ui/call_weight_inherited_invalid.rs:19:17
    |
 19 |     #[pallet::call(123)]

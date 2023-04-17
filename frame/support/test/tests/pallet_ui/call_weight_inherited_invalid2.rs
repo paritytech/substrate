@@ -16,7 +16,7 @@ mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T>(core::marker::PhantomData<T>);
 
-	#[pallet::call(impl <T as Config>::WeightInfo 654)]
+	#[pallet::call(weight(prefix))]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
 		pub fn foo(_: OriginFor<T>) -> DispatchResult {

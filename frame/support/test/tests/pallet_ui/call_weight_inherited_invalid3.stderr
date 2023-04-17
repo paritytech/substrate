@@ -1,0 +1,5 @@
+error: expected one of: `for`, parentheses, `fn`, `unsafe`, `extern`, identifier, `::`, `<`, `dyn`, square brackets, `*`, `&`, `!`, `impl`, `_`, lifetime
+  --> tests/pallet_ui/call_weight_inherited_invalid3.rs:19:33
+   |
+19 |     #[pallet::call(weight(prefix = 123))]
+   |                                    ^^^
