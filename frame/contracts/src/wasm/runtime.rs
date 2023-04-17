@@ -191,6 +191,8 @@ pub enum RuntimeCosts {
 	OwnCodeHash,
 	/// Weight of calling `seal_caller_is_origin`.
 	CallerIsOrigin,
+	/// Weight of calling `seal_caller_is_root`.
+	CallerIsRoot,
 	/// Weight of calling `seal_address`.
 	Address,
 	/// Weight of calling `seal_gas_left`.
@@ -283,6 +285,7 @@ impl RuntimeCosts {
 			CodeHash => s.code_hash,
 			OwnCodeHash => s.own_code_hash,
 			CallerIsOrigin => s.caller_is_origin,
+			CallerIsRoot => s.caller_is_root,
 			Address => s.address,
 			GasLeft => s.gas_left,
 			Balance => s.balance,
@@ -1743,6 +1746,20 @@ pub mod env {
 	fn caller_is_origin(ctx: _, _memory: _) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::CallerIsOrigin)?;
 		Ok(ctx.ext.caller_is_origin() as u32)
+	}
+
+	/// Checks whether the caller of the current contract is root.
+	///
+	/// Note that this is only possible when root is the origin of the whole call stack.
+	///
+	/// A return value of `true` indicates that this contract is being called by a root origin
+	/// and `false` indicates that the caller is a signed origin.
+	///
+	/// Returned value is a `u32`-encoded boolean: (`0 = false`, `1 = true`).
+	#[prefixed_alias]
+	fn caller_is_root(ctx: _, _memory: _) -> Result<u32, TrapReason> {
+		ctx.charge_gas(RuntimeCosts::CallerIsRoot)?;
+		Ok(ctx.ext.caller_is_root() as u32)
 	}
 
 	/// Stores the address of the current contract into the supplied buffer.

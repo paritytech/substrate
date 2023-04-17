@@ -63,6 +63,7 @@ pub trait WeightInfo {
 	fn seal_code_hash(r: u32, ) -> Weight;
 	fn seal_own_code_hash(r: u32, ) -> Weight;
 	fn seal_caller_is_origin(r: u32, ) -> Weight;
+	fn seal_caller_is_root(r: u32, ) -> Weight;
 	fn seal_address(r: u32, ) -> Weight;
 	fn seal_gas_left(r: u32, ) -> Weight;
 	fn seal_balance(r: u32, ) -> Weight;
@@ -488,6 +489,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(6_u64))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
 			.saturating_add(Weight::from_parts(0, 3).saturating_mul(r.into()))
+	}
+	fn seal_caller_is_root(_r: u32, ) -> Weight {
+		Weight::zero()
 	}
 	/// Storage: System Account (r:1 w:0)
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: Measured)
@@ -2480,6 +2484,9 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(6_u64))
 			.saturating_add(RocksDbWeight::get().writes(3_u64))
 			.saturating_add(Weight::from_parts(0, 3).saturating_mul(r.into()))
+	}
+	fn seal_caller_is_root(_r: u32, ) -> Weight {
+		Weight::zero()
 	}
 	/// Storage: System Account (r:1 w:0)
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: Measured)
