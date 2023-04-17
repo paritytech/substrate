@@ -932,8 +932,11 @@ struct InstantiateInput<T: Config> {
 	salt: Vec<u8>,
 }
 
+/// Determines whether events should be collected during execution.
 #[derive(PartialEq)]
 pub enum CollectEvents {
+	/// Collect events.
+	///
 	/// # Note
 	///
 	/// Events should only be collected when called off-chain, as this would
@@ -941,17 +944,19 @@ pub enum CollectEvents {
 	///
 	/// **Never** use this mode for on-chain execution.
 	UnsafeCollect,
-	/// Events should not be collected.
+	/// Skip event collection.
 	Skip,
 }
 
 #[derive(PartialEq)]
 pub enum DebugInfo {
+	/// Collect debug messages.
 	/// # Note
 	///
 	/// This should only ever be set to `UnsafeDebug` when executing as an RPC because
 	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
 	UnsafeDebug,
+	/// Skip collection of debug messages.
 	Skip,
 }
 
@@ -1135,7 +1140,7 @@ impl<T: Config> Pallet<T> {
 	/// information.
 	///
 	/// If `collect_events` is set to `CollectEvents::UnsafeCollect` it collects all the Events
-	/// emitted in the block so far.
+	/// emitted in the block so far and the ones emitted during the execution of this contract.
 	pub fn bare_call(
 		origin: T::AccountId,
 		dest: T::AccountId,
