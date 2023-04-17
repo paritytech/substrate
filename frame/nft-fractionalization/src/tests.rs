@@ -196,7 +196,7 @@ fn unify_should_work() {
 				asset_id,
 				account(1),
 			),
-			Error::<Test>::DataNotFound
+			Error::<Test>::NftNotFound
 		);
 		assert_noop!(
 			NftFractionalization::unify(
@@ -206,7 +206,7 @@ fn unify_should_work() {
 				asset_id + 1,
 				account(1),
 			),
-			Error::<Test>::DataNotFound
+			Error::<Test>::IncorrectAssetId
 		);
 
 		// can't unify the asset a user doesn't hold

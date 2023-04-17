@@ -23,7 +23,7 @@ use crate as pallet_nft_fractionalization;
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{tokens::nonfungibles_v2::Inspect, AsEnsureOriginWithArg, ConstU32, ConstU64, Locker},
-	PalletId,
+	BoundedVec, PalletId,
 };
 use frame_system::EnsureSigned;
 use pallet_nfts::{PalletFeatures, LOCKED_NFT_KEY};
@@ -93,6 +93,10 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ConstU32<50>;
 	type ReserveIdentifier = [u8; 8];
+	type HoldIdentifier = ();
+	type MaxHolds = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
 }
 
 impl pallet_assets::Config for Test {
@@ -161,9 +165,10 @@ impl pallet_nfts::Config for Test {
 }
 
 parameter_types! {
+	pub const StringLimit: u32 = 50;
 	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
-	pub NewAssetSymbol: Vec<u8> = (*b"FRAC").into();
-	pub NewAssetName: Vec<u8> = (*b"Frac").into();
+	pub NewAssetSymbol: BoundedVec<u8, StringLimit> = (*b"FRAC").to_vec().try_into().unwrap();
+	pub NewAssetName: BoundedVec<u8, StringLimit> = (*b"Frac").to_vec().try_into().unwrap();
 }
 
 impl Config for Test {
@@ -180,6 +185,7 @@ impl Config for Test {
 	type Nfts = Nfts;
 	type PalletId = NftFractionalizationPalletId;
 	type WeightInfo = ();
+	type StringLimit = StringLimit;
 }
 
 // Build genesis storage according to the mock runtime.
