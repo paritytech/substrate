@@ -413,23 +413,6 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
 
-		let event = match self.behaviour.poll(cx, params) {
-			Poll::Pending => return Poll::Pending,
-			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
-			Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }) =>
-				return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }),
-			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
-				return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-					peer_id,
-					handler,
-					event,
-				}),
-			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
-				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
-			Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
-				return Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }),
-		};
-
 		while let Poll::Ready(Some(validation_result)) =
 			self.sync_substream_validations.poll_next_unpin(cx)
 		{
@@ -446,6 +429,23 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 				},
 			}
 		}
+
+		let event = match self.behaviour.poll(cx, params) {
+			Poll::Pending => return Poll::Pending,
+			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
+			Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }) =>
+				return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }),
+			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
+				return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
+					peer_id,
+					handler,
+					event,
+				}),
+			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
+				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
+			Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
+				return Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }),
+		};
 
 		let outcome = match event {
 			NotificationsOut::CustomProtocolOpen {
@@ -509,7 +509,6 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 							) {
 								Ok(handshake) => {
 									let roles = handshake.roles;
-									self.peers.insert(peer_id, roles);
 
 									let (tx, rx) = oneshot::channel();
 									let _ = self.tx.unbounded_send(
