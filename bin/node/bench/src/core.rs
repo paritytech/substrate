@@ -72,24 +72,13 @@ pub struct NsFormatter(pub u64);
 impl fmt::Display for NsFormatter {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		let v = self.0;
-
-		if v < 100 {
-			return write!(f, "{} ns", v)
+		match v {
+			v if v < 100 => write!(f, "{} ns", v),
+			v if v < 100_000 => write!(f, "{:.1} µs", v as f64 / 1000.0),
+			v if v < 1_000_000 => write!(f, "{:.4} ms", v as f64 / 1_000_000.0),
+			v if v < 100_000_000 => write!(f, "{:.1} ms", v as f64 / 1_000_000.0),
+			_ => write!(f, "{:.4} s", v as f64 / 1_000_000_000.0),
 		}
-
-		if self.0 < 100_000 {
-			return write!(f, "{:.1} µs", v as f64 / 1000.0)
-		}
-
-		if self.0 < 1_000_000 {
-			return write!(f, "{:.4} ms", v as f64 / 1_000_000.0)
-		}
-
-		if self.0 < 100_000_000 {
-			return write!(f, "{:.1} ms", v as f64 / 1_000_000.0)
-		}
-
-		write!(f, "{:.4} s", v as f64 / 1_000_000_000.0)
 	}
 }
 
