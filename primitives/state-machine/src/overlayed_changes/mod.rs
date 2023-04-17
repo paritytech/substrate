@@ -234,23 +234,6 @@ impl OverlayedChanges {
 		})
 	}
 
-	/// Returns mutable reference to current value.
-	/// If there is no value in the overlay, the given callback is used to initiate the value.
-	/// Warning this function registers a change, so the mutable reference MUST be modified.
-	///
-	/// Can be rolled back or committed when called inside a transaction.
-	#[must_use = "A change was registered, so this value MUST be modified."]
-	pub fn value_mut_or_insert_with(
-		&mut self,
-		key: &[u8],
-		init: impl Fn() -> StorageValue,
-	) -> &mut StorageValue {
-		let value = self.top.modify(key.to_vec(), init, self.extrinsic_index());
-
-		// if the value was deleted initialise it back with an empty vec
-		value.get_or_insert_with(StorageValue::default)
-	}
-
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be referred
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
@@ -269,6 +252,27 @@ impl OverlayedChanges {
 		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
 		self.stats.tally_write_overlay(size_write);
 		self.top.set(key, val, self.extrinsic_index());
+	}
+
+	/// Append a value to encoded storage.
+	pub fn append_storage(&mut self, key: StorageKey, val: StorageValue) {
+		let extrinsic_index = self.extrinsic_index();
+		let size_write = val.len() as u64;
+		self.stats.tally_write_overlay(size_write);
+		self.top.append_storage(key, val, extrinsic_index);
+	}
+
+	/// Append a value to storage, init with existing value if first write.
+	pub fn append_storage_init(
+		&mut self,
+		key: StorageKey,
+		val: StorageValue,
+		init: impl Fn() -> StorageValue,
+	) {
+		let extrinsic_index = self.extrinsic_index();
+		let size_write = val.len() as u64;
+		self.stats.tally_write_overlay(size_write);
+		self.top.append_storage_init(key, val, init, extrinsic_index);
 	}
 
 	/// Set a new value for the specified key and child.
@@ -373,7 +377,7 @@ impl OverlayedChanges {
 		});
 		self.offchain
 			.overlay_mut()
-			.rollback_transaction()
+			.rollback_transaction_simple()
 			.expect("Top and offchain changesets are started in lockstep; qed");
 		Ok(())
 	}
@@ -391,7 +395,7 @@ impl OverlayedChanges {
 		}
 		self.offchain
 			.overlay_mut()
-			.commit_transaction()
+			.commit_transaction_simple()
 			.expect("Top and offchain changesets are started in lockstep; qed");
 		Ok(())
 	}
@@ -427,7 +431,7 @@ impl OverlayedChanges {
 		}
 		self.offchain
 			.overlay_mut()
-			.exit_runtime()
+			.exit_runtime_simple()
 			.expect("Top and offchain changesets are started in lockstep; qed");
 		Ok(())
 	}
@@ -451,10 +455,10 @@ impl OverlayedChanges {
 	) {
 		use sp_std::mem::take;
 		(
-			take(&mut self.top).drain_commited(),
-			take(&mut self.children)
-				.into_iter()
-				.map(|(key, (val, info))| (key, (val.drain_commited(), info))),
+			take(&mut self.top).drain_commited().map(|(k, v)| (k, v.to_option())),
+			take(&mut self.children).into_iter().map(|(key, (val, info))| {
+				(key, (val.drain_commited().map(|(k, v)| (k, v.to_option())), info))
+			}),
 		)
 	}
 

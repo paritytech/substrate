@@ -22,7 +22,7 @@ use crate::overlayed_changes::OverlayedExtensions;
 use crate::{
 	backend::Backend, IndexOperation, IterArgs, OverlayedChanges, StorageKey, StorageValue,
 };
-use codec::{Decode, Encode, EncodeAppend};
+use codec::{Compact, CompactLen, Decode, Encode, EncodeAppend};
 use hash_db::Hasher;
 #[cfg(feature = "std")]
 use sp_core::hexdisplay::HexDisplay;
@@ -525,10 +525,9 @@ where
 		self.mark_dirty();
 
 		let backend = &mut self.backend;
-		let current_value = self.overlay.value_mut_or_insert_with(&key, || {
+		self.overlay.append_storage_init(key.clone(), value, || {
 			backend.storage(&key).expect(EXT_NOT_ALLOWED_TO_FAIL).unwrap_or_default()
 		});
-		StorageAppend::new(current_value).append(value);
 	}
 
 	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8> {
@@ -824,10 +823,34 @@ impl<'a> StorageAppend<'a> {
 		Self(storage)
 	}
 
+	/// Extract current length if defined.
+	pub fn extract_length_data(&self) -> Option<u32> {
+		let len = u32::from(Compact::<u32>::decode(&mut &self.0[..]).ok()?);
+		Some(len)
+	}
+
+	/// Replace current length if defined.
+	pub fn replace_length_data(&mut self, old_length: u32, new_length: u32) {
+		let encoded_len = Compact::<u32>::compact_len(&old_length);
+		let encoded_new = Compact::<u32>(new_length).encode();
+		if encoded_len > encoded_new.len() {
+			let diff = encoded_len - encoded_new.len();
+			*self.0 = self.0.split_off(diff);
+		} else if encoded_len < encoded_new.len() {
+			let diff = encoded_new.len() - encoded_len;
+			// Non constant change
+			for _ in 0..diff {
+				self.0.insert(0, 0);
+			}
+		}
+		self.0[0..encoded_new.len()].copy_from_slice(&encoded_new);
+	}
+
 	/// Append the given `value` to the storage item.
 	///
-	/// If appending fails, `[value]` is stored in the storage item.
-	pub fn append(&mut self, value: Vec<u8>) {
+	/// If appending fails, `[value]` is stored in the storage item and we return false.
+	pub fn append(&mut self, value: Vec<u8>) -> bool {
+		let mut result = true;
 		let value = vec![EncodeOpaqueValue(value)];
 
 		let item = sp_std::mem::take(self.0);
@@ -835,6 +858,7 @@ impl<'a> StorageAppend<'a> {
 		*self.0 = match Vec::<EncodeOpaqueValue>::append_or_new(item, &value) {
 			Ok(item) => item,
 			Err(_) => {
+				result = false;
 				log_error!(
 					target: "runtime",
 					"Failed to append value, resetting storage item to `[value]`.",
@@ -842,6 +866,7 @@ impl<'a> StorageAppend<'a> {
 				value.encode()
 			},
 		};
+		result
 	}
 }
 
