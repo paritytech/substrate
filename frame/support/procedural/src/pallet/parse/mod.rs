@@ -522,32 +522,24 @@ pub struct RuntimeCallWeightAttr {
 }
 
 impl syn::parse::Parse for RuntimeCallWeightAttr {
-	// Parses `(weight($type))`.
+	// Parses `(weight($type))` or `(weight = $type)`.
 	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
 		let content;
 		syn::parenthesized!(content in input);
 		content.parse::<keyword::weight>()?;
-
 		let lookahead = content.lookahead1();
 
-		let typename = if lookahead.peek(syn::token::Paren) {
-			let weight_content;
-			syn::parenthesized!(weight_content in content);
-			weight_content.parse::<syn::Type>()?
+		let buffer = if lookahead.peek(syn::token::Paren) {
+			let inner;
+			syn::parenthesized!(inner in content);
+			inner
 		} else if lookahead.peek(syn::Token![=]) {
 			content.parse::<syn::Token![=]>().expect("peeked");
-			let typename = content.parse::<syn::Type>()?;
-			if !content.is_empty() {
-				return Err(content.error("unexpected stray tokens"))
-			}
-			typename
+			content
 		} else {
 			return Err(lookahead.error())
 		};
 
-		Ok(Self {
-			typename,
-			span: content.span(),
-		})
+		Ok(Self { typename: buffer.parse()?, span: input.span() })
 	}
 }
