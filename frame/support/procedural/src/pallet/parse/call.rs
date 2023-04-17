@@ -248,7 +248,7 @@ impl CallDef {
 					0 if dev_mode => CallWeightDef::DevModeDefault,
 					0 => return Err(syn::Error::new(
 						method.sig.span(),
-						"A pallet::call requires either a concrete `#[pallet::weight($expr)]` or an inherited weight from the `#[pallet:call(trait  ...)]` attribute, but none were given.",
+						"A pallet::call requires either a concrete `#[pallet::weight($expr)]` or an inherited weight from the `#[pallet:call(weight($type))]` attribute, but none were given.",
 					)),
 					1 => match weight_attrs.pop().unwrap() {
 						FunctionAttr::Weight(w) => CallWeightDef::Immediate(w),

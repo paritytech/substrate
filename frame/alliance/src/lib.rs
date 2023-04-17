@@ -497,7 +497,7 @@ pub mod pallet {
 	pub type UnscrupulousWebsites<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BoundedVec<UrlOf<T, I>, T::MaxUnscrupulousItems>, ValueQuery>;
 
-	#[pallet::call(weight(prefix = <T as Config<I>>::WeightInfo))]
+	#[pallet::call(weight(<T as Config<I>>::WeightInfo))]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Add a new proposal to be voted on.
 		///

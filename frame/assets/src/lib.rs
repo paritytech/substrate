@@ -568,7 +568,7 @@ pub mod pallet {
 		CallbackFailed,
 	}
 
-	#[pallet::call(weight(prefix = <T as Config<I>>::WeightInfo))]
+	#[pallet::call(weight(<T as Config<I>>::WeightInfo))]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Issue a new class of fungible assets from a public origin.
 		///

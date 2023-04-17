@@ -1,4 +1,4 @@
-error: A pallet::call requires either a concrete weight via `#[pallet::weight]` or an inherited one from the `#[pallet:call(trait  ...)]` attribute but none were given.
+error: A pallet::call requires either a concrete `#[pallet::weight($expr)]` or an inherited weight from the `#[pallet:call(weight($type))]` attribute, but none were given.
   --> tests/pallet_ui/dev_mode_without_arg.rs:22:7
    |
 22 |         pub fn my_call(_origin: OriginFor<T>) -> DispatchResult {

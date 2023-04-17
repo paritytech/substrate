@@ -1,5 +1,16 @@
-error: expected `=`
-  --> tests/pallet_ui/call_weight_inherited_invalid2.rs:19:30
+error[E0412]: cannot find type `OriginFor` in this scope
+  --> tests/pallet_ui/call_weight_inherited_invalid2.rs:22:17
+   |
+22 |         pub fn foo(_: OriginFor<T>) -> DispatchResult {
+   |                       ^^^^^^^^^ not found in this scope
+   |
+help: consider importing this type alias
+   |
+9  |     use frame_system::pallet_prelude::OriginFor;
+   |
+
+error[E0412]: cannot find type `prefix` in this scope
+  --> tests/pallet_ui/call_weight_inherited_invalid2.rs:19:24
    |
 19 |     #[pallet::call(weight(prefix))]
-   |                                 ^
+   |                           ^^^^^^ not found in this scope

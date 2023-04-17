@@ -427,6 +427,7 @@ enum PalletAttr {
 	Config(proc_macro2::Span),
 	Pallet(proc_macro2::Span),
 	Hooks(proc_macro2::Span),
+	/// A `#[pallet::call]` with or without `#[pallet::call(weight($type))]` attribute.
 	RuntimeCall(Option<RuntimeCallWeightAttr>, proc_macro2::Span),
 	Error(proc_macro2::Span),
 	RuntimeEvent(proc_macro2::Span),
@@ -480,20 +481,11 @@ impl syn::parse::Parse for PalletAttr {
 			Ok(PalletAttr::Hooks(content.parse::<keyword::hooks>()?.span()))
 		} else if lookahead.peek(keyword::call) {
 			let span = content.parse::<keyword::call>().expect("peeked").span();
-			if content.is_empty() {
-				return Ok(PalletAttr::RuntimeCall(None, span))
-			}
-
-			let attr_content;
-			syn::parenthesized!(attr_content in content);
-			attr_content.parse::<keyword::weight>()?;
-			let weight_content;
-			syn::parenthesized!(weight_content in attr_content);
-			weight_content.parse::<keyword::prefix>()?;
-			weight_content.parse::<syn::Token![=]>()?;
-			let typename = weight_content.parse::<syn::Type>()?;
-
-			Ok(PalletAttr::RuntimeCall(Some(RuntimeCallWeightAttr { typename, span }), span))
+			let attr = match content.is_empty() {
+				true => None,
+				false => Some(RuntimeCallWeightAttr::parse(&content)?),
+			};
+			Ok(PalletAttr::RuntimeCall(attr, span))
 		} else if lookahead.peek(keyword::error) {
 			Ok(PalletAttr::Error(content.parse::<keyword::error>()?.span()))
 		} else if lookahead.peek(keyword::event) {
@@ -522,10 +514,24 @@ impl syn::parse::Parse for PalletAttr {
 	}
 }
 
-/// The optional weight annotation on a `#[pallet::call]` like `#[pallet::call(weight_prefix
-/// $type)]`
+/// The optional weight annotation on a `#[pallet::call]` like `#[pallet::call(weight($type))]`.
 #[derive(Clone)]
 pub struct RuntimeCallWeightAttr {
 	pub typename: syn::Type,
 	pub span: proc_macro2::Span,
+}
+
+impl syn::parse::Parse for RuntimeCallWeightAttr {
+	// Parses `(weight($type))`.
+	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+		let content;
+		syn::parenthesized!(content in input);
+		content.parse::<keyword::weight>()?;
+
+		let weight_content;
+		syn::parenthesized!(weight_content in content);
+		let typename = weight_content.parse::<syn::Type>()?;
+
+		Ok(RuntimeCallWeightAttr { typename, span: input.span() })
+	}
 }
