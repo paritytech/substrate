@@ -1611,7 +1611,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
 		Self::bonded(who)
 			.and_then(|c| Self::ledger(c))
-			.map(|l| Stake { stash: l.stash, total: l.total, active: l.active })
+			.map(|l| Stake { total: l.total, active: l.active })
 			.ok_or(Error::<T>::NotStash.into())
 	}
 
