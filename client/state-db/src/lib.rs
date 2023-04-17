@@ -187,12 +187,14 @@ impl fmt::Debug for StateDbError {
 				"Incompatible pruning modes [stored: {:?}; requested: {:?}]",
 				stored, requested
 			),
-			Self::TooManySiblingBlocks { number } =>
-				write!(f, "Too many sibling blocks at #{number} inserted"),
+			Self::TooManySiblingBlocks { number } => {
+				write!(f, "Too many sibling blocks at #{number} inserted")
+			},
 			Self::BlockAlreadyExists => write!(f, "Block already exists"),
 			Self::Metadata(message) => write!(f, "Invalid metadata: {}", message),
-			Self::BlockUnavailable =>
-				write!(f, "Trying to get a block record from db while it is not commit to db yet"),
+			Self::BlockUnavailable => {
+				write!(f, "Trying to get a block record from db while it is not commit to db yet")
+			},
 			Self::BlockMissing => write!(f, "Block record is missing from the pruning window"),
 		}
 	}
