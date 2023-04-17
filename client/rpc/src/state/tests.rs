@@ -29,7 +29,6 @@ use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
 use sp_consensus::BlockOrigin;
 use sp_core::{hash::H256, storage::ChildInfo};
-use sp_keyring::AccountKeyring::{Alice, Bob, Charlie, Dave, Eve};
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	prelude::*,
@@ -295,21 +294,11 @@ async fn should_query_storage() {
 			let mut builder = client.new_block(Default::default()).unwrap();
 			// fake change: None -> None -> None
 			builder
-				.push(
-					ExtrinsicBuilder::new_storage_change(vec![1], None)
-						.nonce(index)
-						.signer(Alice.into())
-						.build(),
-				)
+				.push(ExtrinsicBuilder::new_storage_change(vec![1], None).build())
 				.unwrap();
 			// fake change: None -> Some(value) -> Some(value)
 			builder
-				.push(
-					ExtrinsicBuilder::new_storage_change(vec![2], Some(vec![2]))
-						.nonce(index)
-						.signer(Bob.into())
-						.build(),
-				)
+				.push(ExtrinsicBuilder::new_storage_change(vec![2], Some(vec![2])).build())
 				.unwrap();
 			// actual change: None -> Some(value) -> None
 			builder
@@ -318,8 +307,6 @@ async fn should_query_storage() {
 						vec![3],
 						if index == 0 { Some(vec![3]) } else { None },
 					)
-					.nonce(index)
-					.signer(Charlie.into())
 					.build(),
 				)
 				.unwrap();
@@ -330,18 +317,13 @@ async fn should_query_storage() {
 						vec![4],
 						if index == 0 { None } else { Some(vec![4]) },
 					)
-					.nonce(index)
-					.signer(Dave.into())
 					.build(),
 				)
 				.unwrap();
 			// actual change: Some(value1) -> Some(value2)
 			builder
 				.push(
-					ExtrinsicBuilder::new_storage_change(vec![5], Some(vec![index as u8]))
-						.nonce(index)
-						.signer(Eve.into())
-						.build(),
+					ExtrinsicBuilder::new_storage_change(vec![5], Some(vec![index as u8])).build(),
 				)
 				.unwrap();
 			let block = builder.build().unwrap().block;

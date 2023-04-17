@@ -390,7 +390,7 @@ mod tests {
 		assert_eq!(
 			matches!(
 				pool.0.ready().next().unwrap().data().function,
-				RuntimeCall::SubstrateTest(PalletCall::storage_change_unsigned { .. })
+				RuntimeCall::SubstrateTest(PalletCall::storage_change { .. })
 			),
 			true
 		);

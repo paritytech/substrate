@@ -128,7 +128,7 @@ impl MockClient {
 		let mut block_builder = client.new_block_at(hash, Default::default(), false).unwrap();
 		// Make sure the block has a different hash than its siblings
 		block_builder
-			.push_storage_change_unsigned(b"name".to_vec(), Some(name.to_vec()))
+			.push_storage_change(b"name".to_vec(), Some(name.to_vec()))
 			.unwrap();
 		let block = block_builder.build().unwrap().block;
 		client.import(BlockOrigin::Own, block.clone()).await.unwrap();

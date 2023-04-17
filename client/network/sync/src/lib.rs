@@ -3424,9 +3424,7 @@ mod test {
 		let mut block_builder = client.new_block_at(at, Default::default(), false).unwrap();
 
 		if fork {
-			block_builder
-				.push_storage_change_unsigned(vec![1, 2, 3], Some(vec![4, 5, 6]))
-				.unwrap();
+			block_builder.push_storage_change(vec![1, 2, 3], Some(vec![4, 5, 6])).unwrap();
 		}
 
 		let block = block_builder.build().unwrap().block;
@@ -3479,9 +3477,7 @@ mod test {
 		let mut build_block_at = |at, import| {
 			let mut block_builder = client2.new_block_at(at, Default::default(), false).unwrap();
 			// Make sure we generate a different block as fork
-			block_builder
-				.push_storage_change_unsigned(vec![1, 2, 3], Some(vec![4, 5, 6]))
-				.unwrap();
+			block_builder.push_storage_change(vec![1, 2, 3], Some(vec![4, 5, 6])).unwrap();
 
 			let block = block_builder.build().unwrap().block;
 

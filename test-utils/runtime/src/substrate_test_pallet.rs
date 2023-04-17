@@ -75,28 +75,20 @@ pub mod pallet {
 		/// Put/delete some data from storage. Intended to use as an unsigned extrinsic.
 		#[pallet::call_index(2)]
 		#[pallet::weight(100)]
-		pub fn storage_change_unsigned(
+		pub fn storage_change(
 			_origin: OriginFor<T>,
 			key: Vec<u8>,
 			value: Option<Vec<u8>>,
 		) -> DispatchResult {
-			Self::execute_storage_change(key, value)
-		}
-
-		/// Put/delete some data from storage. Intended to use as a signed extrinsic.
-		#[pallet::call_index(3)]
-		#[pallet::weight(100)]
-		pub fn storage_change(
-			origin: OriginFor<T>,
-			key: Vec<u8>,
-			value: Option<Vec<u8>>,
-		) -> DispatchResult {
-			frame_system::ensure_signed(origin)?;
-			Self::execute_storage_change(key, value)
+			match value {
+				Some(value) => storage::unhashed::put_raw(&key, &value),
+				None => storage::unhashed::kill(&key),
+			}
+			Ok(())
 		}
 
 		/// Write a key value pair to the offchain database.
-		#[pallet::call_index(4)]
+		#[pallet::call_index(3)]
 		#[pallet::weight(100)]
 		pub fn offchain_index_set(
 			origin: OriginFor<T>,
@@ -109,7 +101,7 @@ pub mod pallet {
 		}
 
 		/// Remove a key and an associated value from the offchain database.
-		#[pallet::call_index(5)]
+		#[pallet::call_index(4)]
 		#[pallet::weight(100)]
 		pub fn offchain_index_clear(origin: OriginFor<T>, key: Vec<u8>) -> DispatchResult {
 			frame_system::ensure_signed(origin)?;
@@ -118,7 +110,7 @@ pub mod pallet {
 		}
 
 		/// Create an index for this call.
-		#[pallet::call_index(6)]
+		#[pallet::call_index(5)]
 		#[pallet::weight(100)]
 		pub fn indexed_call(origin: OriginFor<T>, data: Vec<u8>) -> DispatchResult {
 			frame_system::ensure_signed(origin)?;
@@ -131,7 +123,7 @@ pub mod pallet {
 
 		/// Deposit given digest items into the system storage. They will be included in a header
 		/// during finalization.
-		#[pallet::call_index(7)]
+		#[pallet::call_index(6)]
 		#[pallet::weight(100)]
 		pub fn deposit_log_digest_item(
 			_origin: OriginFor<T>,
@@ -142,7 +134,7 @@ pub mod pallet {
 		}
 
 		/// This call is validated as `ValidTransaction` with given priority.
-		#[pallet::call_index(8)]
+		#[pallet::call_index(7)]
 		#[pallet::weight(100)]
 		pub fn call_with_priority(
 			_origin: OriginFor<T>,
@@ -152,14 +144,14 @@ pub mod pallet {
 		}
 
 		/// This call is validated as non-propagable `ValidTransaction`.
-		#[pallet::call_index(9)]
+		#[pallet::call_index(8)]
 		#[pallet::weight(100)]
 		pub fn call_do_not_propagate(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
 		}
 
 		/// Fill the block weight up to the given ratio.
-		#[pallet::call_index(10)]
+		#[pallet::call_index(9)]
 		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
 		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResult {
 			ensure_signed(origin)?;
@@ -169,7 +161,7 @@ pub mod pallet {
 		/// Read X times from the state some data.
 		///
 		/// Panics if it can not read `X` times.
-		#[pallet::call_index(11)]
+		#[pallet::call_index(10)]
 		#[pallet::weight(100)]
 		pub fn read(_origin: OriginFor<T>, count: u32) -> DispatchResult {
 			Self::execute_read(count, false)
@@ -178,7 +170,7 @@ pub mod pallet {
 		/// Read X times from the state some data and then panic!
 		///
 		/// Returns `Ok` if it didn't read anything.
-		#[pallet::call_index(12)]
+		#[pallet::call_index(11)]
 		#[pallet::weight(100)]
 		pub fn read_and_panic(_origin: OriginFor<T>, count: u32) -> DispatchResult {
 			Self::execute_read(count, true)
@@ -209,14 +201,6 @@ pub mod pallet {
 				Ok(())
 			}
 		}
-
-		fn execute_storage_change(key: Vec<u8>, value: Option<Vec<u8>>) -> DispatchResult {
-			match value {
-				Some(value) => storage::unhashed::put_raw(&key, &value),
-				None => storage::unhashed::kill(&key),
-			}
-			Ok(())
-		}
 	}
 
 	#[pallet::validate_unsigned]
@@ -228,9 +212,9 @@ pub mod pallet {
 			match call {
 				// Some tests do not need to be complicated with signer and nonce, some need
 				// reproducible block hash (call signature can't be there).
-				// Offchain testing requires storage_change_unsigned.
+				// Offchain testing requires storage_change.
 				Call::deposit_log_digest_item { .. } |
-				Call::storage_change_unsigned { .. } |
+				Call::storage_change { .. } |
 				Call::read { .. } |
 				Call::read_and_panic { .. } => Ok(Default::default()),
 				_ => Err(TransactionValidityError::Invalid(InvalidTransaction::Call)),

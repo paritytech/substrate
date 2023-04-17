@@ -1299,14 +1299,13 @@ async fn syncs_huge_blocks() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(2);
 
-	let mut nonce = 0;
 	// Increase heap space for bigger blocks.
 	net.peer(0).generate_blocks(1, BlockOrigin::Own, |mut builder| {
 		builder.push_storage_change(HEAP_PAGES.to_vec(), Some(256u64.encode())).unwrap();
-		nonce += 1;
 		builder.build().unwrap().block
 	});
 
+	let mut nonce = 0;
 	net.peer(0).generate_blocks(32, BlockOrigin::Own, |mut builder| {
 		// Add 32 extrinsics 32k each = 1MiB total
 		for _ in 0..32u64 {

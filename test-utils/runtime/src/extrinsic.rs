@@ -103,15 +103,10 @@ impl ExtrinsicBuilder {
 		Self::new(PalletCall::include_data { data })
 	}
 
-	/// Create builder for `PalletCall::storage_change` call using given parameters
-	pub fn new_storage_change(key: Vec<u8>, value: Option<Vec<u8>>) -> Self {
-		Self::new(PalletCall::storage_change { key, value })
-	}
-
-	/// Create builder for `PalletCall::storage_change_unsigned` call using given parameters. Will
+	/// Create builder for `PalletCall::storage_change` call using given parameters. Will
 	/// create unsigned Extrinsic.
-	pub fn new_storage_change_unsigned(key: Vec<u8>, value: Option<Vec<u8>>) -> Self {
-		Self::new_unsigned(PalletCall::storage_change_unsigned { key, value })
+	pub fn new_storage_change(key: Vec<u8>, value: Option<Vec<u8>>) -> Self {
+		Self::new_unsigned(PalletCall::storage_change { key, value })
 	}
 
 	/// Create builder for `PalletCall::offchain_index_set` call using given parameters
