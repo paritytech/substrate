@@ -50,8 +50,9 @@
 //! Based on research at <https://research.web3.foundation/en/latest/polkadot/slashing/npos.html>
 
 use crate::{
-	BalanceOf, Config, Error, Exposure, NegativeImbalanceOf, Pallet, Perbill, SessionInterface,
-	Store, UnappliedSlash,
+	BalanceOf, Config, Error, Exposure, NegativeImbalanceOf, NominatorSlashInEra,
+	OffendingValidators, Pallet, Perbill, SessionInterface, SpanSlash, UnappliedSlash,
+	ValidatorSlashInEra,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -239,14 +240,13 @@ pub(crate) fn compute_slash<T: Config>(
 		return None
 	}
 
-	let prior_slash_p =
-		<Pallet<T> as Store>::ValidatorSlashInEra::get(&params.slash_era, params.stash)
-			.map_or(Zero::zero(), |(prior_slash_proportion, _)| prior_slash_proportion);
+	let prior_slash_p = ValidatorSlashInEra::<T>::get(&params.slash_era, params.stash)
+		.map_or(Zero::zero(), |(prior_slash_proportion, _)| prior_slash_proportion);
 
 	// compare slash proportions rather than slash values to avoid issues due to rounding
 	// error.
 	if params.slash.deconstruct() > prior_slash_p.deconstruct() {
-		<Pallet<T> as Store>::ValidatorSlashInEra::insert(
+		ValidatorSlashInEra::<T>::insert(
 			&params.slash_era,
 			params.stash,
 			&(params.slash, own_slash),
@@ -327,7 +327,7 @@ fn kick_out_if_recent<T: Config>(params: SlashParams<T>) {
 /// If after adding the validator `OffendingValidatorsThreshold` is reached
 /// a new era will be forced.
 fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
-	<Pallet<T> as Store>::OffendingValidators::mutate(|offending| {
+	OffendingValidators::<T>::mutate(|offending| {
 		let validators = T::SessionInterface::validators();
 		let validator_index = match validators.iter().position(|i| i == stash) {
 			Some(index) => index,
@@ -388,10 +388,9 @@ fn slash_nominators<T: Config>(
 			let own_slash_difference = own_slash_by_validator.saturating_sub(own_slash_prior);
 
 			let mut era_slash =
-				<Pallet<T> as Store>::NominatorSlashInEra::get(&params.slash_era, stash)
-					.unwrap_or_else(Zero::zero);
+				NominatorSlashInEra::<T>::get(&params.slash_era, stash).unwrap_or_else(Zero::zero);
 			era_slash += own_slash_difference;
-			<Pallet<T> as Store>::NominatorSlashInEra::insert(&params.slash_era, stash, &era_slash);
+			NominatorSlashInEra::<T>::insert(&params.slash_era, stash, &era_slash);
 
 			era_slash
 		};
@@ -445,9 +444,9 @@ fn fetch_spans<'a, T: Config + 'a>(
 	slash_of: &'a mut BalanceOf<T>,
 	reward_proportion: Perbill,
 ) -> InspectingSpans<'a, T> {
-	let spans = <Pallet<T> as Store>::SlashingSpans::get(stash).unwrap_or_else(|| {
+	let spans = crate::SlashingSpans::<T>::get(stash).unwrap_or_else(|| {
 		let spans = SlashingSpans::new(window_start);
-		<Pallet<T> as Store>::SlashingSpans::insert(stash, &spans);
+		crate::SlashingSpans::<T>::insert(stash, &spans);
 		spans
 	});
 
@@ -496,7 +495,7 @@ impl<'a, T: 'a + Config> InspectingSpans<'a, T> {
 	) -> Option<SpanIndex> {
 		let target_span = self.era_span(slash_era)?;
 		let span_slash_key = (self.stash.clone(), target_span.index);
-		let mut span_record = <Pallet<T> as Store>::SpanSlash::get(&span_slash_key);
+		let mut span_record = SpanSlash::<T>::get(&span_slash_key);
 		let mut changed = false;
 
 		let reward = if span_record.slashed < slash {
@@ -527,7 +526,7 @@ impl<'a, T: 'a + Config> InspectingSpans<'a, T> {
 
 		if changed {
 			self.dirty = true;
-			<Pallet<T> as Store>::SpanSlash::insert(&span_slash_key, &span_record);
+			SpanSlash::<T>::insert(&span_slash_key, &span_record);
 		}
 
 		Some(target_span.index)
@@ -543,20 +542,20 @@ impl<'a, T: 'a + Config> Drop for InspectingSpans<'a, T> {
 
 		if let Some((start, end)) = self.spans.prune(self.window_start) {
 			for span_index in start..end {
-				<Pallet<T> as Store>::SpanSlash::remove(&(self.stash.clone(), span_index));
+				SpanSlash::<T>::remove(&(self.stash.clone(), span_index));
 			}
 		}
 
-		<Pallet<T> as Store>::SlashingSpans::insert(self.stash, &self.spans);
+		crate::SlashingSpans::<T>::insert(self.stash, &self.spans);
 	}
 }
 
 /// Clear slashing metadata for an obsolete era.
 pub(crate) fn clear_era_metadata<T: Config>(obsolete_era: EraIndex) {
 	#[allow(deprecated)]
-	<Pallet<T> as Store>::ValidatorSlashInEra::remove_prefix(&obsolete_era, None);
+	ValidatorSlashInEra::<T>::remove_prefix(&obsolete_era, None);
 	#[allow(deprecated)]
-	<Pallet<T> as Store>::NominatorSlashInEra::remove_prefix(&obsolete_era, None);
+	NominatorSlashInEra::<T>::remove_prefix(&obsolete_era, None);
 }
 
 /// Clear slashing metadata for a dead account.
@@ -564,7 +563,7 @@ pub(crate) fn clear_stash_metadata<T: Config>(
 	stash: &T::AccountId,
 	num_slashing_spans: u32,
 ) -> DispatchResult {
-	let spans = match <Pallet<T> as Store>::SlashingSpans::get(stash) {
+	let spans = match crate::SlashingSpans::<T>::get(stash) {
 		None => return Ok(()),
 		Some(s) => s,
 	};
@@ -574,7 +573,7 @@ pub(crate) fn clear_stash_metadata<T: Config>(
 		Error::<T>::IncorrectSlashingSpans
 	);
 
-	<Pallet<T> as Store>::SlashingSpans::remove(stash);
+	crate::SlashingSpans::<T>::remove(stash);
 
 	// kill slashing-span metadata for account.
 	//
@@ -582,7 +581,7 @@ pub(crate) fn clear_stash_metadata<T: Config>(
 	// in that case, they may re-bond, but it would count again as span 0. Further ancient
 	// slashes would slash into this new bond, since metadata has now been cleared.
 	for span in spans.iter() {
-		<Pallet<T> as Store>::SpanSlash::remove(&(stash.clone(), span.index));
+		SpanSlash::<T>::remove(&(stash.clone(), span.index));
 	}
 
 	Ok(())

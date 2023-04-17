@@ -23,12 +23,17 @@ use crate::{
 };
 use codec::Encode;
 use frame_election_provider_support::{NposSolution, NposSolver, PerThing128, VoteWeight};
-use frame_support::{dispatch::DispatchResult, ensure, traits::Get, BoundedVec};
+use frame_support::{
+	dispatch::DispatchResult,
+	ensure,
+	traits::{DefensiveResult, Get},
+	BoundedVec,
+};
 use frame_system::offchain::SubmitTransaction;
 use scale_info::TypeInfo;
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized, ElectionResult,
-	ElectionScore,
+	ElectionScore, EvaluateSupport,
 };
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
@@ -351,7 +356,7 @@ impl<T: Config> Pallet<T> {
 
 		// ensure score is being improved. Panic henceforth.
 		ensure!(
-			Self::queued_solution().map_or(true, |q: ReadySolution<_>| raw_solution
+			Self::queued_solution().map_or(true, |q: ReadySolution<_, _>| raw_solution
 				.score
 				.strict_threshold_better(q.score, T::BetterUnsignedThreshold::get())),
 			Error::<T>::PreDispatchWeakSubmission,
@@ -387,6 +392,8 @@ pub trait MinerConfig {
 	///
 	/// The weight is computed using `solution_weight`.
 	type MaxWeight: Get<Weight>;
+	/// The maximum number of winners that can be elected.
+	type MaxWinners: Get<u32>;
 	/// Something that can compute the weight of a solution.
 	///
 	/// This weight estimate is then used to trim the solution, based on [`MinerConfig::MaxWeight`].
@@ -689,6 +696,91 @@ impl<T: MinerConfig> Miner<T> {
 		);
 		final_decision
 	}
+
+	/// Checks the feasibility of a solution.
+	pub fn feasibility_check(
+		raw_solution: RawSolution<SolutionOf<T>>,
+		compute: ElectionCompute,
+		desired_targets: u32,
+		snapshot: RoundSnapshot<T::AccountId, MinerVoterOf<T>>,
+		current_round: u32,
+		minimum_untrusted_score: Option<ElectionScore>,
+	) -> Result<ReadySolution<T::AccountId, T::MaxWinners>, FeasibilityError> {
+		let RawSolution { solution, score, round } = raw_solution;
+		let RoundSnapshot { voters: snapshot_voters, targets: snapshot_targets } = snapshot;
+
+		// First, check round.
+		ensure!(current_round == round, FeasibilityError::InvalidRound);
+
+		// Winners are not directly encoded in the solution.
+		let winners = solution.unique_targets();
+
+		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
+		// Fail early if targets requested by data provider exceed maximum winners supported.
+		ensure!(desired_targets <= T::MaxWinners::get(), FeasibilityError::TooManyDesiredTargets);
+
+		// Ensure that the solution's score can pass absolute min-score.
+		let submitted_score = raw_solution.score;
+		ensure!(
+			minimum_untrusted_score.map_or(true, |min_score| {
+				submitted_score.strict_threshold_better(min_score, sp_runtime::Perbill::zero())
+			}),
+			FeasibilityError::UntrustedScoreTooLow
+		);
+
+		// ----- Start building. First, we need some closures.
+		let cache = helpers::generate_voter_cache::<T>(&snapshot_voters);
+		let voter_at = helpers::voter_at_fn::<T>(&snapshot_voters);
+		let target_at = helpers::target_at_fn::<T>(&snapshot_targets);
+		let voter_index = helpers::voter_index_fn_usize::<T>(&cache);
+
+		// Then convert solution -> assignment. This will fail if any of the indices are gibberish,
+		// namely any of the voters or targets.
+		let assignments = solution
+			.into_assignment(voter_at, target_at)
+			.map_err::<FeasibilityError, _>(Into::into)?;
+
+		// Ensure that assignments is correct.
+		let _ = assignments.iter().try_for_each(|assignment| {
+			// Check that assignment.who is actually a voter (defensive-only).
+			// NOTE: while using the index map from `voter_index` is better than a blind linear
+			// search, this *still* has room for optimization. Note that we had the index when
+			// we did `solution -> assignment` and we lost it. Ideal is to keep the index
+			// around.
+
+			// Defensive-only: must exist in the snapshot.
+			let snapshot_index =
+				voter_index(&assignment.who).ok_or(FeasibilityError::InvalidVoter)?;
+			// Defensive-only: index comes from the snapshot, must exist.
+			let (_voter, _stake, targets) =
+				snapshot_voters.get(snapshot_index).ok_or(FeasibilityError::InvalidVoter)?;
+
+			// Check that all of the targets are valid based on the snapshot.
+			if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
+				return Err(FeasibilityError::InvalidVote)
+			}
+			Ok(())
+		})?;
+
+		// ----- Start building support. First, we need one more closure.
+		let stake_of = helpers::stake_of_fn::<T>(&snapshot_voters, &cache);
+
+		// This might fail if the normalization fails. Very unlikely. See `integrity_test`.
+		let staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
+			.map_err::<FeasibilityError, _>(Into::into)?;
+		let supports = sp_npos_elections::to_supports(&staked_assignments);
+
+		// Finally, check that the claimed score was indeed correct.
+		let known_score = supports.evaluate();
+		ensure!(known_score == score, FeasibilityError::InvalidScore);
+
+		// Size of winners in miner solution is equal to `desired_targets` <= `MaxWinners`.
+		let supports = supports
+			.try_into()
+			.defensive_map_err(|_| FeasibilityError::BoundedConversionFailed)?;
+
+		Ok(ReadySolution { supports, compute, score })
+	}
 }
 
 #[cfg(test)]
@@ -701,345 +793,177 @@ mod max_weight {
 		let w = SolutionOrSnapshotSize { voters: 10, targets: 0 };
 		MockWeightInfo::set(crate::mock::MockedWeightInfo::Complex);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::zero().set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(0, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(999, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1000, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1001).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1001, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1990).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1990, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1999, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2000, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2001).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2001, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2010).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2010, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2990).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2990, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2999, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(3000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(3000, u64::MAX)),
 			3
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(3333).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(3333, u64::MAX)),
 			3
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(5500).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(5500, u64::MAX)),
 			5
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(7777).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(7777, u64::MAX)),
 			7
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(9999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(9999, u64::MAX)),
 			9
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(10_000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(10_000, u64::MAX)),
 			10
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(10_999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(10_999, u64::MAX)),
 			10
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(11_000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(11_000, u64::MAX)),
 			10
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(22_000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(22_000, u64::MAX)),
 			10
 		);
 
 		let w = SolutionOrSnapshotSize { voters: 1, targets: 0 };
 
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(0).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(0, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(999, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1000, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1001).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1001, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1990).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1990, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1999, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2000, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2001).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2001, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2010).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2010, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(3333).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(3333, u64::MAX)),
 			1
 		);
 
 		let w = SolutionOrSnapshotSize { voters: 2, targets: 0 };
 
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(0).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(0, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(999, u64::MAX)),
 			0
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1000, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1001).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1001, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(1999).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(1999, u64::MAX)),
 			1
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2000).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2000, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2001).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2001, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(2010).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(2010, u64::MAX)),
 			2
 		);
 		assert_eq!(
-			Miner::<Runtime>::maximum_voter_for_weight(
-				0,
-				w,
-				Weight::from_ref_time(3333).set_proof_size(u64::MAX)
-			),
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_parts(3333, u64::MAX)),
 			2
 		);
 	}
@@ -1340,7 +1264,7 @@ mod tests {
 	#[test]
 	fn miner_trims_weight() {
 		ExtBuilder::default()
-			.miner_weight(Weight::from_ref_time(100).set_proof_size(u64::MAX))
+			.miner_weight(Weight::from_parts(100, u64::MAX))
 			.mock_weight_info(crate::mock::MockedWeightInfo::Basic)
 			.build_and_execute(|| {
 				roll_to_unsigned();
@@ -1354,11 +1278,11 @@ mod tests {
 					raw.solution.unique_targets().len() as u32,
 				);
 				// default solution will have 5 edges (5 * 5 + 10)
-				assert_eq!(solution_weight, Weight::from_ref_time(35));
+				assert_eq!(solution_weight, Weight::from_parts(35, 0));
 				assert_eq!(raw.solution.voter_count(), 5);
 
 				// now reduce the max weight
-				<MinerMaxWeight>::set(Weight::from_ref_time(25).set_proof_size(u64::MAX));
+				<MinerMaxWeight>::set(Weight::from_parts(25, u64::MAX));
 
 				let (raw, witness) = MultiPhase::mine_solution().unwrap();
 				let solution_weight = <Runtime as MinerConfig>::solution_weight(
@@ -1368,7 +1292,7 @@ mod tests {
 					raw.solution.unique_targets().len() as u32,
 				);
 				// default solution will have 5 edges (5 * 5 + 10)
-				assert_eq!(solution_weight, Weight::from_ref_time(25));
+				assert_eq!(solution_weight, Weight::from_parts(25, 0));
 				assert_eq!(raw.solution.voter_count(), 3);
 			})
 	}

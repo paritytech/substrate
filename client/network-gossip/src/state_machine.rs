@@ -22,7 +22,8 @@ use ahash::AHashSet;
 use libp2p::PeerId;
 use lru::LruCache;
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
-use sc_network_common::protocol::{role::ObservedRole, ProtocolName};
+use sc_network::types::ProtocolName;
+use sc_network_common::role::ObservedRole;
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
 use std::{collections::HashMap, iter, num::NonZeroUsize, sync::Arc, time, time::Instant};
 
@@ -354,7 +355,15 @@ impl<B: BlockT> ConsensusGossip<B> {
 					protocol = %self.protocol,
 					"Ignored already known message",
 				);
-				network.report_peer(who, rep::DUPLICATE_GOSSIP);
+
+				// If the peer already send us the message once, let's report them.
+				if self
+					.peers
+					.get_mut(&who)
+					.map_or(false, |p| !p.known_messages.insert(message_hash))
+				{
+					network.report_peer(who, rep::DUPLICATE_GOSSIP);
+				}
 				continue
 			}
 
@@ -517,13 +526,10 @@ mod tests {
 	use super::*;
 	use crate::multiaddr::Multiaddr;
 	use futures::prelude::*;
-	use sc_network_common::{
-		config::MultiaddrWithPeerId,
-		protocol::event::Event,
-		service::{
-			NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
-			NotificationSender, NotificationSenderError,
-		},
+	use sc_network::{
+		config::MultiaddrWithPeerId, event::Event, NetworkBlock, NetworkEventStream,
+		NetworkNotification, NetworkPeers, NotificationSenderError,
+		NotificationSenderT as NotificationSender,
 	};
 	use sc_peerset::ReputationChange;
 	use sp_runtime::{
@@ -675,6 +681,10 @@ mod tests {
 		) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
 			unimplemented!();
 		}
+
+		fn set_notification_handshake(&self, _protocol: ProtocolName, _handshake: Vec<u8>) {
+			unimplemented!();
+		}
 	}
 
 	impl NetworkBlock<<Block as BlockT>::Hash, NumberFor<Block>> for NoOpNetwork {
@@ -812,6 +822,32 @@ mod tests {
 			to_forward.is_empty(),
 			"Expected `on_incoming` to ignore message from unregistered peer but got {:?}",
 			to_forward,
+		);
+	}
+
+	// Two peers can send us the same gossip message. We should not report the second peer
+	// sending the gossip message as long as its the first time the peer send us this message.
+	#[test]
+	fn do_not_report_peer_for_first_time_duplicate_gossip_message() {
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into(), None);
+
+		let mut network = NoOpNetwork::default();
+
+		let peer_id = PeerId::random();
+		consensus.new_peer(&mut network, peer_id, ObservedRole::Full);
+		assert!(consensus.peers.contains_key(&peer_id));
+
+		let peer_id2 = PeerId::random();
+		consensus.new_peer(&mut network, peer_id2, ObservedRole::Full);
+		assert!(consensus.peers.contains_key(&peer_id2));
+
+		let message = vec![vec![1, 2, 3]];
+		consensus.on_incoming(&mut network, peer_id, message.clone());
+		consensus.on_incoming(&mut network, peer_id2, message.clone());
+
+		assert_eq!(
+			vec![(peer_id, rep::GOSSIP_SUCCESS)],
+			network.inner.lock().unwrap().peer_reports
 		);
 	}
 }

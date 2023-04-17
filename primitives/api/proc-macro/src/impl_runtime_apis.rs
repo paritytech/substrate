@@ -17,7 +17,7 @@
 
 use crate::utils::{
 	extract_all_signature_types, extract_block_type_from_trait_path, extract_impl_trait,
-	extract_parameter_names_types_and_borrows, generate_crate_access, generate_hidden_includes,
+	extract_parameter_names_types_and_borrows, generate_crate_access,
 	generate_runtime_mod_name_for_trait, parse_runtime_api_version, prefix_function_with_trait,
 	versioned_trait_name, AllowSelfRefInParameters, RequireQualifiedTraitPath,
 };
@@ -37,9 +37,6 @@ use syn::{
 };
 
 use std::collections::HashSet;
-
-/// Unique identifier used to make the hidden includes unique for this macro.
-const HIDDEN_INCLUDES_ID: &str = "IMPL_RUNTIME_APIS";
 
 /// The structure used for parsing the runtime api implementations.
 struct RuntimeApiImpls {
@@ -73,7 +70,7 @@ fn generate_impl_call(
 	let params =
 		extract_parameter_names_types_and_borrows(signature, AllowSelfRefInParameters::No)?;
 
-	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
+	let c = generate_crate_access();
 	let fn_name = &signature.ident;
 	let fn_name_str = fn_name.to_string();
 	let pnames = params.iter().map(|v| &v.0);
@@ -81,15 +78,33 @@ fn generate_impl_call(
 	let ptypes = params.iter().map(|v| &v.1);
 	let pborrow = params.iter().map(|v| &v.2);
 
+	let decode_params = if params.is_empty() {
+		quote!()
+	} else {
+		let let_binding = if params.len() == 1 {
+			quote! {
+				let #( #pnames )* : #( #ptypes )*
+			}
+		} else {
+			quote! {
+				let ( #( #pnames ),* ) : ( #( #ptypes ),* )
+			}
+		};
+
+		quote!(
+			#let_binding =
+				match #c::DecodeLimit::decode_all_with_depth_limit(
+					#c::MAX_EXTRINSIC_DEPTH,
+					&mut #input,
+				) {
+					Ok(res) => res,
+					Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e),
+				};
+		)
+	};
+
 	Ok(quote!(
-		let (#( #pnames ),*) : ( #( #ptypes ),* ) =
-			match #c::DecodeLimit::decode_all_with_depth_limit(
-				#c::MAX_EXTRINSIC_DEPTH,
-				&mut #input,
-			) {
-				Ok(res) => res,
-				Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e),
-			};
+		#decode_params
 
 		#[allow(deprecated)]
 		<#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames2 ),*)
@@ -134,8 +149,8 @@ fn generate_impl_calls(
 
 /// Generate the dispatch function that is used in native to call into the runtime.
 fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
-	let data = Ident::new("__sp_api__input_data", Span::call_site());
-	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
+	let data = Ident::new("_sp_api_input_data_", Span::call_site());
+	let c = generate_crate_access();
 	let impl_calls =
 		generate_impl_calls(impls, &data)?
 			.into_iter()
@@ -161,7 +176,7 @@ fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 /// Generate the interface functions that are used to call into the runtime in wasm.
 fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let input = Ident::new("input", Span::call_site());
-	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
+	let c = generate_crate_access();
 
 	let impl_calls =
 		generate_impl_calls(impls, &input)?
@@ -195,7 +210,7 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 }
 
 fn generate_runtime_api_base_structures() -> Result<TokenStream> {
-	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+	let crate_ = generate_crate_access();
 
 	Ok(quote!(
 		pub struct RuntimeApi {}
@@ -414,7 +429,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	fn process(mut self, input: ItemImpl) -> ItemImpl {
 		let mut input = self.fold_item_impl(input);
 
-		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+		let crate_ = generate_crate_access();
 
 		// Delete all functions, because all of them are default implemented by
 		// `decl_runtime_apis!`. We only need to implement the `__runtime_api_internal_call_api_at`
@@ -423,7 +438,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		input.items.push(parse_quote! {
 			fn __runtime_api_internal_call_api_at(
 				&self,
-				at: <__SR_API_BLOCK__ as #crate_::BlockT>::Hash,
+				at: <__SrApiBlock__ as #crate_::BlockT>::Hash,
 				context: #crate_::ExecutionContext,
 				params: std::vec::Vec<u8>,
 				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
@@ -435,7 +450,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				}
 
 				let res = (|| {
-					let version = #crate_::CallApiAt::<__SR_API_BLOCK__>::runtime_version_at(
+					let version = #crate_::CallApiAt::<__SrApiBlock__>::runtime_version_at(
 						self.call,
 						at,
 					)?;
@@ -450,7 +465,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 						recorder: &self.recorder,
 					};
 
-					#crate_::CallApiAt::<__SR_API_BLOCK__>::call_api_at(
+					#crate_::CallApiAt::<__SrApiBlock__>::call_api_at(
 						self.call,
 						params,
 					)
@@ -469,7 +484,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	fn fold_type_path(&mut self, input: TypePath) -> TypePath {
 		let new_ty_path =
-			if input == *self.runtime_block { parse_quote!(__SR_API_BLOCK__) } else { input };
+			if input == *self.runtime_block { parse_quote!(__SrApiBlock__) } else { input };
 
 		fold::fold_type_path(self, new_ty_path)
 	}
@@ -480,25 +495,26 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		// Before we directly had the final block type and rust could determine that it is unwind
 		// safe, but now we just have a generic parameter `Block`.
 
-		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+		let crate_ = generate_crate_access();
 
 		// Implement the trait for the `RuntimeApiImpl`
 		input.self_ty =
-			Box::new(parse_quote!( RuntimeApiImpl<__SR_API_BLOCK__, RuntimeApiImplCall> ));
+			Box::new(parse_quote!( RuntimeApiImpl<__SrApiBlock__, RuntimeApiImplCall> ));
 
 		input.generics.params.push(parse_quote!(
-			__SR_API_BLOCK__: #crate_::BlockT + std::panic::UnwindSafe +
+			__SrApiBlock__: #crate_::BlockT + std::panic::UnwindSafe +
 				std::panic::RefUnwindSafe
 		));
-		input.generics.params.push(
-			parse_quote!( RuntimeApiImplCall: #crate_::CallApiAt<__SR_API_BLOCK__> + 'static ),
-		);
+		input
+			.generics
+			.params
+			.push(parse_quote!( RuntimeApiImplCall: #crate_::CallApiAt<__SrApiBlock__> + 'static ));
 
 		let where_clause = input.generics.make_where_clause();
 
 		where_clause.predicates.push(parse_quote! {
 			RuntimeApiImplCall::StateBackend:
-				#crate_::StateBackend<#crate_::HashFor<__SR_API_BLOCK__>>
+				#crate_::StateBackend<#crate_::HashFor<__SrApiBlock__>>
 		});
 
 		where_clause.predicates.push(parse_quote! { &'static RuntimeApiImplCall: Send });
@@ -511,7 +527,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		});
 
 		where_clause.predicates.push(parse_quote! {
-			__SR_API_BLOCK__::Header: std::panic::UnwindSafe + std::panic::RefUnwindSafe
+			__SrApiBlock__::Header: std::panic::UnwindSafe + std::panic::RefUnwindSafe
 		});
 
 		input.attrs = filter_cfg_attrs(&input.attrs);
@@ -574,7 +590,7 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let mut sections = Vec::<TokenStream>::with_capacity(impls.len());
 	let mut processed_traits = HashSet::new();
 
-	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
+	let c = generate_crate_access();
 
 	for impl_ in impls {
 		let api_ver = extract_api_version(&impl_.attrs, impl_.span())?.map(|a| a as u32);
@@ -629,14 +645,11 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let dispatch_impl = generate_dispatch_function(api_impls)?;
 	let api_impls_for_runtime = generate_api_impl_for_runtime(api_impls)?;
 	let base_runtime_api = generate_runtime_api_base_structures()?;
-	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
 	let runtime_api_versions = generate_runtime_api_versions(api_impls)?;
 	let wasm_interface = generate_wasm_interface(api_impls)?;
 	let api_impls_for_runtime_api = generate_api_impl_for_runtime_api(api_impls)?;
 
-	Ok(quote!(
-		#hidden_includes
-
+	let impl_ = quote!(
 		#base_runtime_api
 
 		#api_impls_for_runtime
@@ -652,7 +665,15 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 
 			#wasm_interface
 		}
-	))
+	);
+
+	let impl_ = expander::Expander::new("impl_runtime_apis")
+		.dry(std::env::var("SP_API_EXPAND").is_err())
+		.verbose(true)
+		.write_to_out_dir(impl_)
+		.expect("Does not fail because of IO in OUT_DIR; qed");
+
+	Ok(impl_)
 }
 
 // Filters all attributes except the cfg ones.

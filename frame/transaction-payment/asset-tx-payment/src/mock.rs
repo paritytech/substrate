@@ -40,7 +40,8 @@ type Balance = u64;
 type AccountId = u64;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime
+	where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
@@ -67,7 +68,7 @@ impl Get<frame_system::limits::BlockWeights> for BlockWeights {
 				weights.base_extrinsic = ExtrinsicBaseWeight::get().into();
 			})
 			.for_class(DispatchClass::non_mandatory(), |weights| {
-				weights.max_total = Weight::from_ref_time(1024).set_proof_size(u64::MAX).into();
+				weights.max_total = Weight::from_parts(1024, u64::MAX).into();
 			})
 			.build_or_panic()
 	}
@@ -119,6 +120,10 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = ();
 	type MaxReserves = ConstU32<50>;
 	type ReserveIdentifier = [u8; 8];
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 impl WeightToFeeT for WeightToFee {
@@ -192,7 +197,7 @@ impl pallet_authorship::Config for Runtime {
 
 pub struct CreditToBlockAuthor;
 impl HandleCredit<AccountId, Assets> for CreditToBlockAuthor {
-	fn handle_credit(credit: CreditOf<AccountId, Assets>) {
+	fn handle_credit(credit: Credit<AccountId, Assets>) {
 		if let Some(author) = pallet_authorship::Pallet::<Runtime>::author() {
 			// What to do in case paying the author fails (e.g. because `fee < min_balance`)
 			// default: drop the result which will trigger the `OnDrop` of the imbalance.

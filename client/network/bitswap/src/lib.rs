@@ -26,9 +26,9 @@ use libp2p::core::PeerId;
 use log::{debug, error, trace};
 use prost::Message;
 use sc_client_api::BlockBackend;
-use sc_network_common::{
-	protocol::ProtocolName,
+use sc_network::{
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+	types::ProtocolName,
 };
 use schema::bitswap::{
 	message::{wantlist::WantType, Block as MessageBlock, BlockPresence, BlockPresenceType},
@@ -127,8 +127,9 @@ impl<B: BlockT> BitswapRequestHandler<B> {
 					};
 
 					match pending_response.send(response) {
-						Ok(()) =>
-							trace!(target: LOG_TARGET, "Handled bitswap request from {peer}.",),
+						Ok(()) => {
+							trace!(target: LOG_TARGET, "Handled bitswap request from {peer}.",)
+						},
 						Err(_) => debug!(
 							target: LOG_TARGET,
 							"Failed to handle light client request from {peer}: {}",

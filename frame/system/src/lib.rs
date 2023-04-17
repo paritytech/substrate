@@ -357,7 +357,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -878,12 +877,9 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<O, ()> {
-		let zero_account_id =
-			AccountId::decode(&mut TrailingZeroInput::zeroes()).map_err(|_| ())?;
-		let members = Who::sorted_members();
-		let first_member = match members.get(0) {
+		let first_member = match Who::sorted_members().first() {
 			Some(account) => account.clone(),
-			None => zero_account_id,
+			None => AccountId::decode(&mut TrailingZeroInput::zeroes()).map_err(|_| ())?,
 		};
 		Ok(O::from(RawOrigin::Signed(first_member)))
 	}
@@ -1665,10 +1661,6 @@ impl<T: Config> BlockNumberProvider for Pallet<T> {
 	}
 }
 
-fn is_providing<T: Default + Eq>(d: &T) -> bool {
-	d != &T::default()
-}
-
 /// Implement StoredMap for a simple single-item, provide-when-not-default system. This works fine
 /// for storing a single item which allows the account to continue existing as long as it's not
 /// empty/default.
@@ -1684,23 +1676,12 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 		f: impl FnOnce(&mut Option<T::AccountData>) -> Result<R, E>,
 	) -> Result<R, E> {
 		let account = Account::<T>::get(k);
-		let was_providing = is_providing(&account.data);
-		let mut some_data = if was_providing { Some(account.data) } else { None };
+		let is_default = account.data == T::AccountData::default();
+		let mut some_data = if is_default { None } else { Some(account.data) };
 		let result = f(&mut some_data)?;
-		let is_providing = some_data.is_some();
-		if !was_providing && is_providing {
-			Self::inc_providers(k);
-		} else if was_providing && !is_providing {
-			match Self::dec_providers(k)? {
-				DecRefStatus::Reaped => return Ok(result),
-				DecRefStatus::Exists => {
-					// Update value as normal...
-				},
-			}
-		} else if !was_providing && !is_providing {
-			return Ok(result)
+		if Self::providers(k) > 0 {
+			Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
 		}
-		Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
 		Ok(result)
 	}
 }
