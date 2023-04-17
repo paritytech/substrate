@@ -99,6 +99,8 @@ pub mod pallet {
 		/// The currency mechanism, used for paying for deposits.
 		type Currency: ReservableCurrency<Self::AccountId>;
 
+		/// The deposit paid by the user locking an NFT. The deposit is returned to the original NFT
+		/// owner when the asset is unified and the NFT is unlocked.
 		#[pallet::constant]
 		type Deposit: Get<DepositOf<Self>>;
 
