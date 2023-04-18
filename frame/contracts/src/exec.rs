@@ -1297,10 +1297,7 @@ where
 
 	fn caller_is_root(&self) -> bool {
 		// if the caller isn't origin, then it can't be root.
-		if !self.caller_is_origin() {
-			return false
-		}
-		matches!(self.origin, Origin::Root)
+		self.caller_is_origin() && self.origin == Origin::Root
 	}
 
 	fn balance(&self) -> BalanceOf<T> {

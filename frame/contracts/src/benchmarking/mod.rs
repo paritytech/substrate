@@ -537,7 +537,6 @@ benchmarks! {
 	#[pov_mode = Measured]
 	seal_caller_is_root {
 		let r in 0 .. API_BENCHMARK_RUNS;
-		let o in 0 .. 1;
 
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
@@ -562,6 +561,7 @@ benchmarks! {
 			None,
 			Some(BalanceOf::<T>::max_value().into()),
 		];
+		let o = r % 2;
 		let origin = origins[o as usize].clone();
 		let limit = limits[o as usize].clone();
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, limit, vec![])

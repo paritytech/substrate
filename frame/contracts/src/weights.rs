@@ -64,7 +64,7 @@ pub trait WeightInfo {
 	fn seal_code_hash(r: u32, ) -> Weight;
 	fn seal_own_code_hash(r: u32, ) -> Weight;
 	fn seal_caller_is_origin(r: u32, ) -> Weight;
-	fn seal_caller_is_root(r: u32, o: u32, ) -> Weight;
+	fn seal_caller_is_root(r: u32, ) -> Weight;
 	fn seal_address(r: u32, ) -> Weight;
 	fn seal_gas_left(r: u32, ) -> Weight;
 	fn seal_balance(r: u32, ) -> Weight;
@@ -503,7 +503,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: Measured)
 	/// The range of component `r` is `[0, 1600]`.
 	/// The range of component `o` is `[0, 1]`.
-	fn seal_caller_is_root(r: u32, _o: u32, ) -> Weight {
+	fn seal_caller_is_root(r: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `776 + r * (3 ±0)`
 		//  Estimated: `17460485980251150336 + r * (3 ±0)`
@@ -2519,7 +2519,7 @@ impl WeightInfo for () {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: Measured)
 	/// The range of component `r` is `[0, 1600]`.
 	/// The range of component `o` is `[0, 1]`.
-	fn seal_caller_is_root(r: u32, _o: u32, ) -> Weight {
+	fn seal_caller_is_root(r: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `776 + r * (3 ±0)`
 		//  Estimated: `17460485980251150336 + r * (3 ±0)`
