@@ -21,9 +21,8 @@ use std::{convert::TryInto, sync::Arc};
 
 use codec::{Codec, Decode};
 use jsonrpsee::{
-	core::{Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::error::{CallError, ErrorCode, ErrorObject},
+	types::error::{ErrorObject, ErrorObjectOwned},
 };
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 use sp_api::ProvideRuntimeApi;
@@ -37,14 +36,14 @@ pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as Tra
 #[rpc(client, server)]
 pub trait TransactionPaymentApi<BlockHash, ResponseType> {
 	#[method(name = "payment_queryInfo")]
-	fn query_info(&self, encoded_xt: Bytes, at: Option<BlockHash>) -> RpcResult<ResponseType>;
+	fn query_info(&self, encoded_xt: Bytes, at: Option<BlockHash>) -> Result<ResponseType, Error>;
 
 	#[method(name = "payment_queryFeeDetails")]
 	fn query_fee_details(
 		&self,
 		encoded_xt: Bytes,
 		at: Option<BlockHash>,
-	) -> RpcResult<FeeDetails<NumberOrHex>>;
+	) -> Result<FeeDetails<NumberOrHex>, Error>;
 }
 
 /// Provides RPC methods to query a dispatchable's class, weight and fee.
@@ -64,16 +63,21 @@ impl<C, P> TransactionPayment<C, P> {
 /// Error type of this RPC api.
 pub enum Error {
 	/// The transaction was not decodable.
-	DecodeError,
+	DecodeError { msg: String, err: codec::Error },
 	/// The call to runtime failed.
-	RuntimeError,
+	RuntimeError { msg: String, err: sp_api::ApiError },
+	/// Balance too large
+	BalanceTooLarge(String),
 }
 
-impl From<Error> for i32 {
-	fn from(e: Error) -> i32 {
-		match e {
-			Error::RuntimeError => 1,
-			Error::DecodeError => 2,
+impl From<Error> for ErrorObjectOwned {
+	fn from(err: Error) -> Self {
+		match err {
+			Error::RuntimeError { msg, err } =>
+				ErrorObject::owned(1, msg, Some(format!("{:?}", err))),
+			Error::DecodeError { msg, err } =>
+				ErrorObject::owned(2, msg, Some(format!("{:?}", err))),
+			Error::BalanceTooLarge(msg) => ErrorObject::owned(3, msg, None::<()>),
 		}
 	}
 }
@@ -93,31 +97,20 @@ where
 		&self,
 		encoded_xt: Bytes,
 		at: Option<Block::Hash>,
-	) -> RpcResult<RuntimeDispatchInfo<Balance, sp_weights::Weight>> {
+	) -> Result<RuntimeDispatchInfo<Balance, sp_weights::Weight>, Error> {
 		let api = self.client.runtime_api();
 		let at_hash = at.unwrap_or_else(|| self.client.info().best_hash);
 
 		let encoded_len = encoded_xt.len() as u32;
 
 		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| {
-			CallError::Custom(ErrorObject::owned(
-				Error::DecodeError.into(),
-				"Unable to query dispatch info.",
-				Some(format!("{:?}", e)),
-			))
+			Error::DecodeError { msg: "Unable to query dispatch info.".to_string(), err: e }
 		})?;
 
-		fn map_err(error: impl ToString, desc: &'static str) -> CallError {
-			CallError::Custom(ErrorObject::owned(
-				Error::RuntimeError.into(),
-				desc,
-				Some(error.to_string()),
-			))
-		}
-
-		let res = api
-			.query_info(at_hash, uxt, encoded_len)
-			.map_err(|e| map_err(e, "Unable to query dispatch info."))?;
+		let res = api.query_info(at_hash, uxt, encoded_len).map_err(|e| Error::RuntimeError {
+			msg: "Unable to query dispatch info.".to_string(),
+			err: e,
+		})?;
 
 		Ok(RuntimeDispatchInfo {
 			weight: res.weight,
@@ -130,34 +123,28 @@ where
 		&self,
 		encoded_xt: Bytes,
 		at: Option<Block::Hash>,
-	) -> RpcResult<FeeDetails<NumberOrHex>> {
+	) -> Result<FeeDetails<NumberOrHex>, Error> {
 		let api = self.client.runtime_api();
 		let at_hash = at.unwrap_or_else(|| self.client.info().best_hash);
 
 		let encoded_len = encoded_xt.len() as u32;
 
 		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| {
-			CallError::Custom(ErrorObject::owned(
-				Error::DecodeError.into(),
-				"Unable to query fee details.",
-				Some(format!("{:?}", e)),
-			))
+			Error::DecodeError { msg: "Unable to query fee details.".to_string(), err: e }
 		})?;
-		let fee_details = api.query_fee_details(at_hash, uxt, encoded_len).map_err(|e| {
-			CallError::Custom(ErrorObject::owned(
-				Error::RuntimeError.into(),
-				"Unable to query fee details.",
-				Some(e.to_string()),
-			))
-		})?;
+		let fee_details =
+			api.query_fee_details(at_hash, uxt, encoded_len)
+				.map_err(|e| Error::RuntimeError {
+					msg: "Unable to query fee details.".to_string(),
+					err: e,
+				})?;
 
 		let try_into_rpc_balance = |value: Balance| {
 			value.try_into().map_err(|_| {
-				JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
-					ErrorCode::InvalidParams.code(),
-					format!("{} doesn't fit in NumberOrHex representation", value),
-					None::<()>,
-				)))
+				Error::BalanceTooLarge(format!(
+					"{} doesn't fit in NumberOrHex representation",
+					value
+				))
 			})
 		};
 

@@ -23,17 +23,11 @@ mod tests;
 
 use std::sync::Arc;
 
-use crate::{
-	utils::{accept_and_pipe_from_stream, SubscriptionResponse},
-	SubscriptionTaskExecutor,
-};
+use crate::{utils::accept_and_pipe_from_stream, SubscriptionTaskExecutor};
 
 use codec::{Decode, Encode};
 use futures::TryFutureExt;
-use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
-	PendingSubscriptionSink,
-};
+use jsonrpsee::{core::async_trait, PendingSubscriptionSink};
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{
 	error::IntoPoolError, BlockHash, InPoolTransaction, TransactionFor, TransactionPool,
@@ -93,7 +87,7 @@ where
 	P::Hash: Unpin,
 	<P::Block as BlockT>::Hash: Unpin,
 {
-	async fn submit_extrinsic(&self, ext: Bytes) -> RpcResult<TxHash<P>> {
+	async fn submit_extrinsic(&self, ext: Bytes) -> Result<TxHash<P>> {
 		let xt = match Decode::decode(&mut &ext[..]) {
 			Ok(xt) => xt,
 			Err(err) => return Err(Error::Client(Box::new(err)).into()),
@@ -110,7 +104,7 @@ where
 			})
 	}
 
-	fn insert_key(&self, key_type: String, suri: String, public: Bytes) -> RpcResult<()> {
+	fn insert_key(&self, key_type: String, suri: String, public: Bytes) -> Result<()> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
@@ -120,7 +114,7 @@ where
 		Ok(())
 	}
 
-	fn rotate_keys(&self) -> RpcResult<Bytes> {
+	fn rotate_keys(&self) -> Result<Bytes> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let best_block_hash = self.client.info().best_hash;
@@ -131,7 +125,7 @@ where
 			.map_err(|api_err| Error::Client(Box::new(api_err)).into())
 	}
 
-	fn has_session_keys(&self, session_keys: Bytes) -> RpcResult<bool> {
+	fn has_session_keys(&self, session_keys: Bytes) -> Result<bool> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let best_block_hash = self.client.info().best_hash;
@@ -145,21 +139,21 @@ where
 		Ok(self.keystore.has_keys(&keys))
 	}
 
-	fn has_key(&self, public_key: Bytes, key_type: String) -> RpcResult<bool> {
+	fn has_key(&self, public_key: Bytes, key_type: String) -> Result<bool> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
 		Ok(self.keystore.has_keys(&[(public_key.to_vec(), key_type)]))
 	}
 
-	fn pending_extrinsics(&self) -> RpcResult<Vec<Bytes>> {
+	fn pending_extrinsics(&self) -> Result<Vec<Bytes>> {
 		Ok(self.pool.ready().map(|tx| tx.data().encode().into()).collect())
 	}
 
 	fn remove_extrinsic(
 		&self,
 		bytes_or_hash: Vec<hash::ExtrinsicOrHash<TxHash<P>>>,
-	) -> RpcResult<Vec<TxHash<P>>> {
+	) -> Result<Vec<TxHash<P>>> {
 		self.deny_unsafe.check_if_safe()?;
 		let hashes = bytes_or_hash
 			.into_iter()
@@ -185,7 +179,7 @@ where
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| Error::from(e)) {
 			Ok(dxt) => dxt,
 			Err(e) => {
-				pending.reject(JsonRpseeError::from(e)).await;
+				pending.reject(e).await;
 				return
 			},
 		};
@@ -202,11 +196,11 @@ where
 		let stream = match submit.await {
 			Ok(stream) => stream,
 			Err(err) => {
-				let _ = pending.reject(JsonRpseeError::from(err)).await;
+				pending.reject(err).await;
 				return
 			},
 		};
 
-		let _: SubscriptionResponse<()> = accept_and_pipe_from_stream(pending, stream).await;
+		accept_and_pipe_from_stream::<_, _, ()>(pending, stream).await;
 	}
 }

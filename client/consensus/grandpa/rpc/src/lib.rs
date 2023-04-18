@@ -24,7 +24,7 @@ use log::warn;
 use std::sync::Arc;
 
 use jsonrpsee::{
-	core::{async_trait, server::PendingSubscriptionSink, RpcResult},
+	core::{async_trait, server::PendingSubscriptionSink},
 	proc_macros::rpc,
 };
 
@@ -33,16 +33,13 @@ mod finality;
 mod notification;
 mod report;
 
-use sc_consensus_grandpa::GrandpaJustificationStream;
-use sc_rpc::{
-	utils::{accept_and_pipe_from_stream, SubscriptionResponse},
-	SubscriptionTaskExecutor,
-};
-use sp_runtime::traits::{Block as BlockT, NumberFor};
-
+use error::Error;
 use finality::{EncodedFinalityProof, RpcFinalityProofProvider};
 use notification::JustificationNotification;
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
+use sc_consensus_grandpa::GrandpaJustificationStream;
+use sc_rpc::{utils::accept_and_pipe_from_stream, SubscriptionTaskExecutor};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// Provides RPC methods for interacting with GRANDPA.
 #[rpc(client, server)]
@@ -50,7 +47,7 @@ pub trait GrandpaApi<Notification, Hash, Number> {
 	/// Returns the state of the current best round state as well as the
 	/// ongoing background rounds.
 	#[method(name = "grandpa_roundState")]
-	async fn round_state(&self) -> RpcResult<ReportedRoundStates>;
+	async fn round_state(&self) -> Result<ReportedRoundStates, Error>;
 
 	/// Returns the block most recently finalized by Grandpa, alongside
 	/// side its justification.
@@ -64,7 +61,7 @@ pub trait GrandpaApi<Notification, Hash, Number> {
 	/// Prove finality for the given block number by returning the Justification for the last block
 	/// in the set and all the intermediary headers to link them together.
 	#[method(name = "grandpa_proveFinality")]
-	async fn prove_finality(&self, block: Number) -> RpcResult<Option<EncodedFinalityProof>>;
+	async fn prove_finality(&self, block: Number) -> Result<Option<EncodedFinalityProof>, Error>;
 }
 
 /// Provides RPC methods for interacting with GRANDPA.
@@ -106,8 +103,8 @@ where
 	Block: BlockT,
 	ProofProvider: RpcFinalityProofProvider<Block> + Send + Sync + 'static,
 {
-	async fn round_state(&self) -> RpcResult<ReportedRoundStates> {
-		ReportedRoundStates::from(&self.authority_set, &self.voter_state).map_err(Into::into)
+	async fn round_state(&self) -> Result<ReportedRoundStates, Error> {
+		ReportedRoundStates::from(&self.authority_set, &self.voter_state)
 	}
 
 	async fn subscribe_justifications(&self, pending: PendingSubscriptionSink) {
@@ -117,20 +114,17 @@ where
 			},
 		);
 
-		let _: SubscriptionResponse<()> = accept_and_pipe_from_stream(pending, stream).await;
+		accept_and_pipe_from_stream::<_, _, ()>(pending, stream).await;
 	}
 
 	async fn prove_finality(
 		&self,
 		block: NumberFor<Block>,
-	) -> RpcResult<Option<EncodedFinalityProof>> {
-		self.finality_proof_provider
-			.rpc_prove_finality(block)
-			.map_err(|e| {
-				warn!("Error proving finality: {}", e);
-				error::Error::ProveFinalityFailed(e)
-			})
-			.map_err(Into::into)
+	) -> Result<Option<EncodedFinalityProof>, Error> {
+		self.finality_proof_provider.rpc_prove_finality(block).map_err(|e| {
+			warn!("Error proving finality: {}", e);
+			error::Error::ProveFinalityFailed(e)
+		})
 	}
 }
 

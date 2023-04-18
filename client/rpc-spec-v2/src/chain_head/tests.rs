@@ -8,7 +8,6 @@ use jsonrpsee::{
 	core::{
 		error::Error, server::Subscription as RpcSubscription, EmptyServerParams as EmptyParams,
 	},
-	types::error::CallError,
 	RpcModule,
 };
 use sc_block_builder::BlockBuilderProvider;
@@ -302,7 +301,7 @@ async fn get_header() {
 		.await
 		.unwrap_err();
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+		Error::Call(e) if e.code() == 2001 && e.message() == "Invalid block hash"
 	);
 
 	// Obtain the valid header.
@@ -332,7 +331,7 @@ async fn get_body() {
 		.await
 		.unwrap_err();
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+		Error::Call(err) if err.code() == 2001 && err.message() == "Invalid block hash"
 	);
 
 	// Obtain valid the body (list of extrinsics).
@@ -407,7 +406,7 @@ async fn call_runtime() {
 		.await
 		.unwrap_err();
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+		Error::Call(err) if err.code() == 2001 && err.message() == "Invalid block hash"
 	);
 
 	// Pass an invalid parameters that cannot be decode.
@@ -419,7 +418,7 @@ async fn call_runtime() {
 		.await
 		.unwrap_err();
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2003 && err.message().contains("Invalid parameter")
+		Error::Call(err) if err.code() == 2003 && err.message().contains("Invalid parameter")
 	);
 
 	let alice_id = AccountKeyring::Alice.to_account_id();
@@ -502,7 +501,7 @@ async fn call_runtime_without_flag() {
 		.unwrap_err();
 
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2003 && err.message().contains("The runtime updates flag must be set")
+		Error::Call(err) if err.code() == 2003 && err.message().contains("The runtime updates flag must be set")
 	);
 }
 
@@ -527,7 +526,7 @@ async fn get_storage() {
 		.await
 		.unwrap_err();
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+		Error::Call(err) if err.code() == 2001 && err.message() == "Invalid block hash"
 	);
 
 	// Valid call without storage at the key.
@@ -864,7 +863,7 @@ async fn follow_with_unpin() {
 		.await
 		.unwrap_err();
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+		Error::Call(err) if err.code() == 2001 && err.message() == "Invalid block hash"
 	);
 
 	// To not exceed the number of pinned blocks, we need to unpin before the next import.

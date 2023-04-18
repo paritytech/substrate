@@ -23,7 +23,8 @@
 pub mod error;
 
 use codec::{Decode, Encode};
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use error::Error;
+use jsonrpsee::proc_macros::rpc;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 
@@ -59,5 +60,5 @@ pub trait DevApi<Hash> {
 	/// at the queried node. If either the specified block or the parent is pruned,
 	/// this function will return `None`.
 	#[method(name = "dev_getBlockStats")]
-	fn block_stats(&self, block_hash: Hash) -> RpcResult<Option<BlockStats>>;
+	fn block_stats(&self, block_hash: Hash) -> Result<Option<BlockStats>, Error>;
 }

@@ -29,11 +29,7 @@ use crate::{
 	},
 	SubscriptionTaskExecutor,
 };
-use jsonrpsee::{
-	core::async_trait,
-	types::error::{CallError, ErrorObject},
-	PendingSubscriptionSink,
-};
+use jsonrpsee::{core::async_trait, types::error::ErrorObject, PendingSubscriptionSink};
 use sc_rpc::utils::SubscriptionResponse;
 use sc_transaction_pool_api::{
 	error::IntoPoolError, BlockHash, TransactionFor, TransactionPool, TransactionSource,
@@ -99,11 +95,11 @@ where
 		let decoded_extrinsic = match TransactionFor::<Pool>::decode(&mut &xt[..]) {
 			Ok(decoded_extrinsic) => decoded_extrinsic,
 			Err(e) => {
-				let err = CallError::Custom(ErrorObject::owned(
+				let err = ErrorObject::owned(
 					BAD_FORMAT,
 					format!("Extrinsic has invalid format: {}", e),
 					None::<()>,
-				));
+				);
 				pending.reject(err).await;
 				return SubscriptionResponse::Closed
 			},

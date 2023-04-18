@@ -22,7 +22,6 @@
 #[cfg(test)]
 mod tests;
 
-use jsonrpsee::core::RpcResult;
 use sc_client_api::{BlockBackend, HeaderBackend};
 use sc_rpc_api::{dev::error::Error, DenyUnsafe};
 use sp_api::{ApiExt, Core, ProvideRuntimeApi};
@@ -65,7 +64,7 @@ where
 		+ 'static,
 	Client::Api: Core<Block>,
 {
-	fn block_stats(&self, hash: Block::Hash) -> RpcResult<Option<BlockStats>> {
+	fn block_stats(&self, hash: Block::Hash) -> Result<Option<BlockStats>, Error> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let block = {

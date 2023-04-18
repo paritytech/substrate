@@ -31,9 +31,9 @@ use sp_runtime::traits::Block as BlockT;
 
 use futures::{task::SpawnError, FutureExt, StreamExt};
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	core::async_trait,
 	proc_macros::rpc,
-	types::{error::CallError, ErrorObject},
+	types::{ErrorObject, ErrorObjectOwned},
 	PendingSubscriptionSink,
 };
 use log::warn;
@@ -72,15 +72,11 @@ impl From<Error> for ErrorCode {
 	}
 }
 
-impl From<Error> for JsonRpseeError {
+impl From<Error> for ErrorObjectOwned {
 	fn from(error: Error) -> Self {
 		let message = error.to_string();
 		let code = ErrorCode::from(error);
-		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
-			code as i32,
-			message,
-			None::<()>,
-		)))
+		ErrorObject::owned(code as i32, message, None::<()>)
 	}
 }
 
@@ -101,7 +97,7 @@ pub trait BeefyApi<Notification, Hash> {
 	/// in the network or if the client is still initializing or syncing with the network.
 	/// In such case an error would be returned.
 	#[method(name = "beefy_getFinalizedHead")]
-	async fn latest_finalized(&self) -> RpcResult<Hash>;
+	async fn latest_finalized(&self) -> Result<Hash, Error>;
 }
 
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
@@ -150,13 +146,8 @@ where
 		let _: SubscriptionResponse<()> = accept_and_pipe_from_stream(pending, stream).await;
 	}
 
-	async fn latest_finalized(&self) -> RpcResult<Block::Hash> {
-		self.beefy_best_block
-			.read()
-			.as_ref()
-			.cloned()
-			.ok_or(Error::EndpointNotReady)
-			.map_err(Into::into)
+	async fn latest_finalized(&self) -> Result<Block::Hash, Error> {
+		self.beefy_best_block.read().as_ref().cloned().ok_or(Error::EndpointNotReady)
 	}
 }
 

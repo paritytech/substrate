@@ -21,10 +21,7 @@ use super::*;
 use crate::testing::{test_executor, timeout_secs};
 use assert_matches::assert_matches;
 use futures::executor;
-use jsonrpsee::{
-	core::{EmptyServerParams as EmptyParams, Error as RpcError},
-	types::{error::CallError as RpcCallError, ErrorObject},
-};
+use jsonrpsee::core::{EmptyServerParams as EmptyParams, Error as RpcError};
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
 use sp_consensus::BlockOrigin;
@@ -206,11 +203,9 @@ async fn should_call_contract() {
 	let genesis_hash = client.genesis_hash();
 	let (client, _child) = new_full(client, test_executor(), DenyUnsafe::No);
 
-	use jsonrpsee::{core::Error, types::error::CallError};
-
 	assert_matches!(
 		client.call("balanceOf".into(), Bytes(vec![1, 2, 3]), Some(genesis_hash).into()),
-		Err(Error::Call(CallError::Failed(_)))
+		Err(Error::Client(_))
 	)
 }
 
@@ -371,108 +366,48 @@ async fn should_query_storage() {
 		assert_eq!(result.unwrap(), expected);
 
 		// Inverted range.
-		let result = api.query_storage(keys.clone(), block1_hash, Some(genesis_hash));
-
-		assert_eq!(
-			result.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
-				4001,
-				Error::InvalidBlockRange {
-					from: format!("1 ({:?})", block1_hash),
-					to: format!("0 ({:?})", genesis_hash),
-					details: "from number > to number".to_owned(),
-				}
-				.to_string(),
-				None::<()>,
-			))))
-			.map_err(|e| e.to_string())
+		assert_matches!(
+			api.query_storage(keys.clone(), block1_hash, Some(genesis_hash)),
+			Err(Error::InvalidBlockRange { from, to, details }) if from == format!("1 ({:?})", block1_hash) && to == format!("0 ({:?})", genesis_hash) && details == "from number > to number".to_owned()
 		);
 
 		let random_hash1 = H256::random();
 		let random_hash2 = H256::random();
 
 		// Invalid second hash.
-		let result = api.query_storage(keys.clone(), genesis_hash, Some(random_hash1));
-
-		assert_eq!(
-			result.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
-				4001,
-				Error::InvalidBlockRange {
-					from: format!("{:?}", genesis_hash),
-					to: format!("{:?}", Some(random_hash1)),
-					details: format!(
-						"UnknownBlock: Header was not found in the database: {:?}",
-						random_hash1
-					),
-				}
-				.to_string(),
-				None::<()>,
-			))))
-			.map_err(|e| e.to_string())
+		assert_matches!(
+			api.query_storage(keys.clone(), genesis_hash, Some(random_hash1)),
+			Err(Error::InvalidBlockRange { from, to, details }) if from == format!("{:?}", genesis_hash) && to == format!("{:?}", Some(random_hash1)) && details == format!(
+				"UnknownBlock: Header was not found in the database: {:?}",
+				random_hash1
+			)
 		);
 
 		// Invalid first hash with Some other hash.
-		let result = api.query_storage(keys.clone(), random_hash1, Some(genesis_hash));
-
-		assert_eq!(
-			result.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
-				4001,
-				Error::InvalidBlockRange {
-					from: format!("{:?}", random_hash1),
-					to: format!("{:?}", Some(genesis_hash)),
-					details: format!(
-						"UnknownBlock: Header was not found in the database: {:?}",
-						random_hash1
-					),
-				}
-				.to_string(),
-				None::<()>,
-			))))
-			.map_err(|e| e.to_string()),
+		assert_matches!(
+			api.query_storage(keys.clone(), random_hash1, Some(genesis_hash)),
+			Err(Error::InvalidBlockRange { from, to, details }) if from == format!("{:?}", random_hash1) && to == format!("{:?}", Some(genesis_hash)) && details == format!(
+				"UnknownBlock: Header was not found in the database: {:?}",
+				random_hash1
+			)
 		);
 
 		// Invalid first hash with None.
-		let result = api.query_storage(keys.clone(), random_hash1, None);
-
-		assert_eq!(
-			result.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
-				4001,
-				Error::InvalidBlockRange {
-					from: format!("{:?}", random_hash1),
-					to: format!("{:?}", Some(block2_hash)), // Best block hash.
-					details: format!(
-						"UnknownBlock: Header was not found in the database: {:?}",
-						random_hash1
-					),
-				}
-				.to_string(),
-				None::<()>,
-			))))
-			.map_err(|e| e.to_string()),
+		assert_matches!(
+			api.query_storage(keys.clone(), random_hash1, None),
+			Err(Error::InvalidBlockRange { from, to, details }) if from == format!("{:?}", random_hash1) && to == format!("{:?}", Some(block2_hash)) && details == format!(
+				"UnknownBlock: Header was not found in the database: {:?}",
+				random_hash1
+			)
 		);
 
 		// Both hashes invalid.
-		let result = api.query_storage(keys.clone(), random_hash1, Some(random_hash2));
-
-		assert_eq!(
-			result.map_err(|e| e.to_string()),
-			Err(RpcError::Call(RpcCallError::Custom(ErrorObject::owned(
-				4001,
-				Error::InvalidBlockRange {
-					from: format!("{:?}", random_hash1), // First hash not found.
-					to: format!("{:?}", Some(random_hash2)),
-					details: format!(
-						"UnknownBlock: Header was not found in the database: {:?}",
-						random_hash1
-					),
-				}
-				.to_string(),
-				None::<()>
-			))))
-			.map_err(|e| e.to_string()),
+		assert_matches!(
+			api.query_storage(keys.clone(), random_hash1, Some(random_hash2)),
+			Err(Error::InvalidBlockRange { from, to, details }) if from == format!("{:?}", random_hash1) && to == format!("{:?}", Some(random_hash2)) && details == format!(
+				"UnknownBlock: Header was not found in the database: {:?}",
+				random_hash1
+			)
 		);
 
 		// single block range
@@ -557,7 +492,7 @@ async fn wildcard_storage_subscriptions_are_rpc_unsafe() {
 
 	let api_rpc = api.into_rpc();
 	let err = api_rpc.subscribe_unbounded("state_subscribeStorage", EmptyParams::new()).await;
-	assert_matches!(err, Err(RpcError::Call(RpcCallError::Custom(e))) if e.message() == "RPC call is unsafe to be called externally");
+	assert_matches!(err, Err(RpcError::Call(e)) if e.message() == "RPC call is unsafe to be called externally");
 }
 
 #[tokio::test]

@@ -44,7 +44,7 @@ pub mod testing;
 /// Task executor that is being used by RPC subscriptions.
 pub type SubscriptionTaskExecutor = std::sync::Arc<dyn sp_core::traits::SpawnNamed>;
 
-/// todo..
+/// JSON-RPC helpers.
 pub mod utils {
 	use futures::{Stream, StreamExt};
 	use jsonrpsee::{
@@ -53,7 +53,7 @@ pub mod utils {
 	};
 	use sp_runtime::Serialize;
 
-	/// RE-WRITE / REMOVE
+	/// Similar to [`pipe_from_stream`] but also attempts to accept the subscription.
 	pub async fn accept_and_pipe_from_stream<S, T, R>(
 		pending: PendingSubscriptionSink,
 		stream: S,
@@ -69,7 +69,9 @@ pub mod utils {
 		pipe_from_stream(sink, stream).await
 	}
 
-	/// RE-WRITE / REMOVE
+	/// Feed items to the subscription from the underlying stream
+	/// if the subscription can't keep up with the underlying stream
+	/// it's dropped
 	pub async fn pipe_from_stream<S, T, R>(
 		sink: SubscriptionSink,
 		mut stream: S,
@@ -100,7 +102,7 @@ pub mod utils {
 		}
 	}
 
-	/// ...
+	/// Subscription response type for substrate.
 	pub enum SubscriptionResponse<T> {
 		/// The subscription was closed, no further message is sent.
 		Closed,
