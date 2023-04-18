@@ -23,7 +23,10 @@ mod tests;
 
 use std::sync::Arc;
 
-use crate::{utils::accept_and_pipe_from_stream, SubscriptionTaskExecutor};
+use crate::{
+	utils::{accept_and_pipe_from_stream, SubscriptionResponse},
+	SubscriptionTaskExecutor,
+};
 
 use codec::{Decode, Encode};
 use futures::TryFutureExt;
@@ -203,6 +206,6 @@ where
 			},
 		};
 
-		let _ = accept_and_pipe_from_stream::<_, _, ()>(pending, stream).await;
+		let _: SubscriptionResponse<()> = accept_and_pipe_from_stream(pending, stream).await;
 	}
 }

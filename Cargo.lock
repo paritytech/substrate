@@ -3068,7 +3068,7 @@ dependencies = [
  "rustls 0.20.7",
  "rustls-native-certs",
  "tokio",
- "tokio-rustls",
+ "tokio-rustls 0.23.4",
 ]
 
 [[package]]
@@ -3321,22 +3321,21 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee"
-version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#363d28128172a1d8797d18c72a51bec6afdc7bb0"
+version = "0.17.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#1cde29c0280abfe13d6f59d91c7d6a78bb683515"
 dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-proc-macros",
  "jsonrpsee-server",
  "jsonrpsee-types",
  "jsonrpsee-ws-client",
- "tokio",
  "tracing",
 ]
 
 [[package]]
 name = "jsonrpsee-client-transport"
-version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#363d28128172a1d8797d18c72a51bec6afdc7bb0"
+version = "0.17.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#1cde29c0280abfe13d6f59d91c7d6a78bb683515"
 dependencies = [
  "futures-util",
  "http",
@@ -3346,15 +3345,15 @@ dependencies = [
  "soketto",
  "thiserror",
  "tokio",
- "tokio-rustls",
+ "tokio-rustls 0.24.0",
  "tokio-util",
  "tracing",
 ]
 
 [[package]]
 name = "jsonrpsee-core"
-version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#363d28128172a1d8797d18c72a51bec6afdc7bb0"
+version = "0.17.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#1cde29c0280abfe13d6f59d91c7d6a78bb683515"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -3379,8 +3378,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-proc-macros"
-version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#363d28128172a1d8797d18c72a51bec6afdc7bb0"
+version = "0.17.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#1cde29c0280abfe13d6f59d91c7d6a78bb683515"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -3391,8 +3390,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-server"
-version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#363d28128172a1d8797d18c72a51bec6afdc7bb0"
+version = "0.17.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#1cde29c0280abfe13d6f59d91c7d6a78bb683515"
 dependencies = [
  "futures-util",
  "hyper",
@@ -3410,8 +3409,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-types"
-version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#363d28128172a1d8797d18c72a51bec6afdc7bb0"
+version = "0.17.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#1cde29c0280abfe13d6f59d91c7d6a78bb683515"
 dependencies = [
  "anyhow",
  "beef",
@@ -3423,8 +3422,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-client"
-version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-subscription-api-option-result#363d28128172a1d8797d18c72a51bec6afdc7bb0"
+version = "0.17.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#1cde29c0280abfe13d6f59d91c7d6a78bb683515"
 dependencies = [
  "http",
  "jsonrpsee-client-transport",
@@ -7774,6 +7773,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustls"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07180898a28ed6a7f7ba2311594308f595e3dd2e3c3812fa0a80a47b45f17e5d"
+dependencies = [
+ "log",
+ "ring",
+ "rustls-webpki",
+ "sct 0.7.0",
+]
+
+[[package]]
 name = "rustls-native-certs"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7792,6 +7803,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0864aeff53f8c05aa08d86e5ef839d3dfcf07aeba2db32f12db0ef716e87bd55"
 dependencies = [
  "base64",
+]
+
+[[package]]
+name = "rustls-webpki"
+version = "0.100.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6207cd5ed3d8dca7816f8f3725513a34609c0c765bf652b8c3cb4cfd87db46b"
+dependencies = [
+ "ring",
+ "untrusted",
 ]
 
 [[package]]
@@ -11108,6 +11129,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-rustls"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0d409377ff5b1e3ca6437aa86c1eb7d40c134bfec254e44c830defa92669db5"
+dependencies = [
+ "rustls 0.21.0",
+ "tokio",
+]
+
+[[package]]
 name = "tokio-stream"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11483,7 +11514,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
  "digest 0.10.6",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

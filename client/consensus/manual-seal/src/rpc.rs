@@ -91,7 +91,7 @@ pub struct ManualSeal<Hash> {
 }
 
 /// return type of `engine_createBlock`
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct CreatedBlock<Hash> {
 	/// hash of the created block.
 	pub hash: Hash,

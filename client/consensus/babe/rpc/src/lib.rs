@@ -152,7 +152,7 @@ where
 }
 
 /// Holds information about the `slot`'s that can be claimed by a given key.
-#[derive(Default, Debug, Deserialize, Serialize)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub struct EpochAuthorship {
 	/// the array of primary slots that can be claimed
 	primary: Vec<u64>,

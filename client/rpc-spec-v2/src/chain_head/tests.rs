@@ -3,8 +3,7 @@ use assert_matches::assert_matches;
 use codec::{Decode, Encode};
 use jsonrpsee::{
 	core::{
-		error::Error, server::rpc_module::Subscription as RpcSubscription,
-		EmptyServerParams as EmptyParams,
+		error::Error, server::Subscription as RpcSubscription, EmptyServerParams as EmptyParams,
 	},
 	types::error::CallError,
 	RpcModule,

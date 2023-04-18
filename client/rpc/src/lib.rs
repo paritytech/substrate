@@ -115,7 +115,7 @@ pub mod utils {
 				Self::Event(ev) => {
 					let msg = SubscriptionMessage::from_json(&ev)
 						.expect("JSON serialization infallible; qed");
-					SubscriptionCloseResponse::Some(msg)
+					SubscriptionCloseResponse::Notif(msg)
 				},
 			}
 		}

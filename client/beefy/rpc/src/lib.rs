@@ -23,7 +23,10 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-use sc_rpc::{utils::accept_and_pipe_from_stream, SubscriptionTaskExecutor};
+use sc_rpc::{
+	utils::{accept_and_pipe_from_stream, SubscriptionResponse},
+	SubscriptionTaskExecutor,
+};
 use sp_runtime::traits::Block as BlockT;
 
 use futures::{task::SpawnError, FutureExt, StreamExt};
@@ -144,7 +147,7 @@ where
 			.subscribe(100_000)
 			.map(|vfp| notification::EncodedVersionedFinalityProof::new::<Block>(vfp));
 
-		let _ = accept_and_pipe_from_stream(pending, stream).await;
+		let _: SubscriptionResponse<()> = accept_and_pipe_from_stream(pending, stream).await;
 	}
 
 	async fn latest_finalized(&self) -> RpcResult<Block::Hash> {

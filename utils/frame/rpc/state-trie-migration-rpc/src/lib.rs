@@ -112,7 +112,7 @@ where
 }
 
 /// Current state migration status.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct MigrationStatusResult {

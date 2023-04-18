@@ -25,7 +25,10 @@ use super::{
 	error::{Error, Result},
 	ChildStateBackend, StateBackend,
 };
-use crate::{utils::accept_and_pipe_from_stream, DenyUnsafe, SubscriptionTaskExecutor};
+use crate::{
+	utils::{accept_and_pipe_from_stream, SubscriptionResponse},
+	DenyUnsafe, SubscriptionTaskExecutor,
+};
 
 use futures::{future, stream, StreamExt};
 use jsonrpsee::{
@@ -424,7 +427,7 @@ where
 
 		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
 
-		_ = accept_and_pipe_from_stream::<_, _, ()>(pending, stream).await;
+		let _: SubscriptionResponse<()> = accept_and_pipe_from_stream(pending, stream).await;
 	}
 
 	async fn subscribe_storage(
@@ -470,7 +473,7 @@ where
 			.chain(storage_stream)
 			.filter(|storage| future::ready(!storage.changes.is_empty()));
 
-		_ = accept_and_pipe_from_stream::<_, _, ()>(pending, stream).await;
+		let _: SubscriptionResponse<()> = accept_and_pipe_from_stream(pending, stream).await;
 		log::info!("Dropping a storage subscription; count={}", Arc::strong_count(&c) - 1);
 	}
 

@@ -35,7 +35,10 @@ mod notification;
 mod report;
 
 use sc_finality_grandpa::GrandpaJustificationStream;
-use sc_rpc::{utils::accept_and_pipe_from_stream, SubscriptionTaskExecutor};
+use sc_rpc::{
+	utils::{accept_and_pipe_from_stream, SubscriptionResponse},
+	SubscriptionTaskExecutor,
+};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use finality::{EncodedFinalityProof, RpcFinalityProofProvider};
@@ -115,7 +118,7 @@ where
 			},
 		);
 
-		let _ = accept_and_pipe_from_stream(pending, stream).await;
+		let _: SubscriptionResponse<()> = accept_and_pipe_from_stream(pending, stream).await;
 	}
 
 	async fn prove_finality(

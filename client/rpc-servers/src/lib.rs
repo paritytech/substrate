@@ -192,9 +192,9 @@ fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModu
 
 	rpc_api
 		.register_method("rpc_methods", move |_, _| {
-			Ok(serde_json::json!({
+			serde_json::json!({
 				"methods": available_methods,
-			}))
+			})
 		})
 		.expect("infallible all other methods have their own address space; qed");
 
