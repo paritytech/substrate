@@ -194,7 +194,7 @@ impl Decode for Statement {
 
 impl Encode for Statement {
 	fn encode(&self) -> Vec<u8> {
-		self.encoded(true)
+		self.encoded(false)
 	}
 }
 
@@ -392,7 +392,7 @@ impl Statement {
 
 	/// Return encoded fields that can be signed to construct or verify a proof
 	fn signature_material(&self) -> Vec<u8> {
-		self.encoded(false)
+		self.encoded(true)
 	}
 
 	/// Return a copy of this statement with proof removed
@@ -433,10 +433,10 @@ impl Statement {
 		self.data = Some(data)
 	}
 
-	fn encoded(&self, with_proof: bool) -> Vec<u8> {
+	fn encoded(&self, for_signing: bool) -> Vec<u8> {
 		// Encoding matches that of Vec<Field>. Basically this just means accepting that there
 		// will be a prefix of vector length.
-		let num_fields = if with_proof && self.proof.is_some() { 1 } else { 0 } +
+		let num_fields = if !for_signing && self.proof.is_some() { 1 } else { 0 } +
 			if self.decryption_key.is_some() { 1 } else { 0 } +
 			if self.priority.is_some() { 1 } else { 0 } +
 			if self.channel.is_some() { 1 } else { 0 } +
@@ -444,10 +444,10 @@ impl Statement {
 			self.num_topics as u32;
 
 		let mut output = Vec::new();
-		let compact_len = codec::Compact::<u32>(num_fields);
-		compact_len.encode_to(&mut output);
+		if !for_signing {
+			let compact_len = codec::Compact::<u32>(num_fields);
+			compact_len.encode_to(&mut output);
 
-		if with_proof {
 			if let Some(proof) = &self.proof {
 				0u8.encode_to(&mut output);
 				proof.encode_to(&mut output);
