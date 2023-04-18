@@ -35,7 +35,6 @@ use sp_consensus_babe::{
 use sp_consensus_slots::Slot;
 use sp_core::{
 	crypto::{VrfVerifier, Wraps},
-	sr25519::vrf,
 	Pair,
 };
 use sp_runtime::{traits::Header, DigestItem};
@@ -181,14 +180,15 @@ fn check_primary_header<B: BlockT + Sized>(
 	let threshold =
 		calculate_primary_threshold(c, &epoch.authorities, pre_digest.authority_index as usize);
 
-	let score = vrf::make_bytes::<[u8; AUTHORING_SCORE_LENGTH]>(
-		AUTHORING_SCORE_VRF_CONTEXT,
-		authority_id.as_ref(),
-		&transcript,
-		&pre_digest.vrf_signature.output,
-	)
-	.map(u128::from_le_bytes)
-	.map_err(|_| babe_err(Error::VrfVerificationFailed))?;
+	let score = authority_id
+		.as_inner_ref()
+		.make_bytes::<[u8; AUTHORING_SCORE_LENGTH]>(
+			AUTHORING_SCORE_VRF_CONTEXT,
+			&transcript,
+			&pre_digest.vrf_signature.output,
+		)
+		.map(u128::from_le_bytes)
+		.map_err(|_| babe_err(Error::VrfVerificationFailed))?;
 
 	if score >= threshold {
 		return Err(babe_err(Error::VrfThresholdExceeded(threshold)))

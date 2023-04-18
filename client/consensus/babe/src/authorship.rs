@@ -26,7 +26,11 @@ use sp_consensus_babe::{
 	digests::{PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest},
 	make_transcript, AuthorityId, BabeAuthorityWeight, Randomness, Slot,
 };
-use sp_core::{blake2_256, crypto::ByteArray, sr25519::vrf, U256};
+use sp_core::{
+	blake2_256,
+	crypto::{ByteArray, Wraps},
+	U256,
+};
 use sp_keystore::KeystorePtr;
 
 /// Calculates the primary selection threshold for a given authority, taking
@@ -242,14 +246,15 @@ fn claim_primary_slot(
 		if let Ok(Some(vrf_signature)) = result {
 			let threshold = calculate_primary_threshold(c, authorities, *authority_index);
 
-			let can_claim = vrf::make_bytes::<[u8; AUTHORING_SCORE_LENGTH]>(
-				AUTHORING_SCORE_VRF_CONTEXT,
-				authority_id.as_ref(),
-				&transcript,
-				&vrf_signature.output,
-			)
-			.map(|bytes| u128::from_le_bytes(bytes) < threshold)
-			.unwrap_or_default();
+			let can_claim = authority_id
+				.as_inner_ref()
+				.make_bytes::<[u8; AUTHORING_SCORE_LENGTH]>(
+					AUTHORING_SCORE_VRF_CONTEXT,
+					&transcript,
+					&vrf_signature.output,
+				)
+				.map(|bytes| u128::from_le_bytes(bytes) < threshold)
+				.unwrap_or_default();
 
 			if can_claim {
 				let pre_digest = PreDigest::Primary(PrimaryPreDigest {

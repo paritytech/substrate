@@ -322,13 +322,9 @@ pub fn make_vrf_output(
 
 	let signature = pair.as_ref().vrf_sign(&transcript);
 
-	let randomness = sp_core::sr25519::vrf::make_bytes(
-		sp_consensus_babe::RANDOMNESS_VRF_CONTEXT,
-		pair.public().as_ref(),
-		&transcript,
-		&signature.output,
-	)
-	.expect("vrf make bytes");
+	let randomness = pair
+		.as_ref()
+		.make_bytes::<Randomness>(sp_consensus_babe::RANDOMNESS_VRF_CONTEXT, &transcript);
 
 	(signature, randomness)
 }

@@ -35,6 +35,7 @@ use sp_consensus_babe::{
 	EquivocationProof, Randomness as BabeRandomness, Slot, BABE_ENGINE_ID, RANDOMNESS_LENGTH,
 	RANDOMNESS_VRF_CONTEXT,
 };
+use sp_core::crypto::Wraps;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
@@ -360,6 +361,7 @@ pub mod pallet {
 					let randomness: Option<BabeRandomness> = Authorities::<T>::get()
 						.get(authority_index as usize)
 						.and_then(|(authority, _)| {
+							let public = authority.as_inner_ref();
 							let transcript = sp_consensus_babe::make_transcript(
 								&Self::randomness(),
 								CurrentSlot::<T>::get(),
@@ -370,17 +372,17 @@ pub mod pallet {
 							// execution. We don't run the verification again here to avoid slowing
 							// down the runtime.
 							debug_assert!({
-								use sp_core::crypto::{VrfVerifier, Wraps};
-								authority.as_inner_ref().vrf_verify(&transcript, &vrf_signature)
+								use sp_core::crypto::VrfVerifier;
+								public.vrf_verify(&transcript, &vrf_signature)
 							});
 
-							sp_core::sr25519::vrf::make_bytes(
-								RANDOMNESS_VRF_CONTEXT,
-								authority.as_ref(),
-								&transcript,
-								&vrf_signature.output,
-							)
-							.ok()
+							public
+								.make_bytes(
+									RANDOMNESS_VRF_CONTEXT,
+									&transcript,
+									&vrf_signature.output,
+								)
+								.ok()
 						});
 
 					if let Some(randomness) = pre_digest.is_primary().then(|| randomness).flatten()

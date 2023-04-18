@@ -696,24 +696,39 @@ pub mod vrf {
 		}
 	}
 
-	/// Generate bytes from the given VRF configuration.
-	pub fn make_bytes<B: Default + AsMut<[u8]>>(
-		context: &[u8],
-		public: &Public,
-		transcript: &VrfTranscript,
-		output: &VrfOutput,
-	) -> Result<B, codec::Error> {
-		let pubkey = schnorrkel::PublicKey::from_bytes(public).map_err(convert_error)?;
-		let inout = output
-			.0
-			.attach_input_hash(&pubkey, transcript.0.clone())
-			.map_err(convert_error)?;
-		Ok(inout.make_bytes::<B>(context))
+	#[cfg(feature = "full_crypto")]
+	impl Pair {
+		/// Generate bytes from the given VRF configuration.
+		pub fn make_bytes<B: Default + AsMut<[u8]>>(
+			&self,
+			context: &[u8],
+			transcript: &VrfTranscript,
+		) -> B {
+			let inout = self.0.vrf_create_hash(transcript.0.clone());
+			inout.make_bytes::<B>(context)
+		}
+	}
+
+	impl Public {
+		/// Generate bytes from the given VRF configuration.
+		pub fn make_bytes<B: Default + AsMut<[u8]>>(
+			&self,
+			context: &[u8],
+			transcript: &VrfTranscript,
+			output: &VrfOutput,
+		) -> Result<B, codec::Error> {
+			let pubkey = schnorrkel::PublicKey::from_bytes(&self.0).map_err(convert_error)?;
+			let inout = output
+				.0
+				.attach_input_hash(&pubkey, transcript.0.clone())
+				.map_err(convert_error)?;
+			Ok(inout.make_bytes::<B>(context))
+		}
 	}
 }
 
 #[cfg(test)]
-mod compatibility_test {
+mod tests {
 	use super::*;
 	use crate::crypto::{Ss58Codec, DEV_ADDRESS, DEV_PHRASE};
 	use serde_json;
@@ -942,5 +957,21 @@ mod compatibility_test {
 		assert!(deserialize_signature("\"Not an actual signature.\"").is_err());
 		// Poorly-sized
 		assert!(deserialize_signature("\"abc123\"").is_err());
+	}
+
+	#[test]
+	fn vrf_make_bytes_matches() {
+		use super::vrf::*;
+		use crate::crypto::VrfSigner;
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let public = pair.public();
+		let transcript = VrfTranscript::new(b"test", &[(b"foo", b"bar")]);
+
+		let signature = pair.vrf_sign(&transcript);
+
+		let ctx = b"randbytes";
+		let b1 = pair.make_bytes::<[u8; 32]>(ctx, &transcript);
+		let b2 = public.make_bytes::<[u8; 32]>(ctx, &transcript, &signature.output).unwrap();
+		assert_eq!(b1, b2);
 	}
 }
