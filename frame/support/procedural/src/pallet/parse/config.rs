@@ -61,7 +61,7 @@ pub struct ConstMetadataDef {
 	/// The type in Get, e.g. `u32` in `type Foo: Get<u32>;`, but `Self` is replaced by `T`
 	pub type_: syn::Type,
 	/// The doc associated
-	pub doc: Vec<syn::Lit>,
+	pub doc: Vec<syn::Expr>,
 }
 
 impl TryFrom<&syn::TraitItemType> for ConstMetadataDef {
@@ -124,23 +124,35 @@ impl syn::parse::Parse for DisableFrameSystemSupertraitCheck {
 }
 
 /// Parse for `#[pallet::constant]`
-pub struct TypeAttrConst(proc_macro2::Span);
-
-impl Spanned for TypeAttrConst {
-	fn span(&self) -> proc_macro2::Span {
-		self.0
-	}
+pub struct TypeAttrConst {
+	pound_token: syn::Token![#],
+	bracket_token: syn::token::Bracket,
+	pallet_ident: syn::Ident,
+	path_sep_token: syn::token::PathSep,
+	constant_keyword: keyword::constant,
 }
 
 impl syn::parse::Parse for TypeAttrConst {
 	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-		input.parse::<syn::Token![#]>()?;
+		let pound_token = input.parse::<syn::Token![#]>()?;
 		let content;
-		syn::bracketed!(content in input);
-		content.parse::<syn::Ident>()?;
-		content.parse::<syn::Token![::]>()?;
+		let bracket_token = syn::bracketed!(content in input);
+		let pallet_ident = content.parse::<syn::Ident>()?;
+		let path_sep_token = content.parse::<syn::Token![::]>()?;
+		let constant_keyword = content.parse::<keyword::constant>()?;
 
-		Ok(TypeAttrConst(content.parse::<keyword::constant>()?.span()))
+		Ok(Self { pound_token, bracket_token, pallet_ident, path_sep_token, constant_keyword })
+	}
+}
+
+impl ToTokens for TypeAttrConst {
+	fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+		self.pound_token.to_tokens(tokens);
+		self.bracket_token.surround(tokens, |tokens| {
+			self.pallet_ident.to_tokens(tokens);
+			self.path_sep_token.to_tokens(tokens);
+			self.constant_keyword.to_tokens(tokens);
+		})
 	}
 }
 

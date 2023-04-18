@@ -158,8 +158,9 @@ fn finality_notification_check(
 			assert_eq!(notif.hash, *finalized.last().unwrap());
 			assert_eq!(stale_heads, stale_heads_expected);
 		},
-		Err(TryRecvError::Closed) =>
-			panic!("unexpected notification result, client send channel was closed"),
+		Err(TryRecvError::Closed) => {
+			panic!("unexpected notification result, client send channel was closed")
+		},
 		Err(TryRecvError::Empty) => assert!(finalized.is_empty()),
 	}
 }
