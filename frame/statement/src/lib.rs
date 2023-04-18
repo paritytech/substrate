@@ -22,6 +22,16 @@
 //! ## Overview
 //!
 //! The Statement pallet provides means to create and validate statements for the statement store.
+//!
+//! For each statement validation function calculates the following three values based on the
+//! statement author balance:
+//! `max_count`: Maximum number of statements allowed for the author (signer) of this statement.
+//! `max_size`: Maximum total size of statements allowed for the author (signer) of this statement.
+//! `global_priority`: A numerical value that defines the order in which statements are evicted when
+//! the statement store hits global constraints. This is simply balance divided by `StatementCost`.
+//!
+//! This pallet also contains an offchain worker that turns on-chain statement events into
+//! statements. These statements are placed in the store and propagated over the network.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
