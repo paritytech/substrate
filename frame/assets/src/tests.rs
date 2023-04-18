@@ -767,17 +767,10 @@ fn freeze_creating_works() {
 		assert_eq!(Assets::balance(0, 1), 50);
 		assert_eq!(Assets::balance(0, 2), 50);
 		assert_ok!(Assets::thaw(RuntimeOrigin::signed(1), 0, 2));
-		// freezer cannot burn funds. admin can but should do so via `burn` first.
-		assert_noop!(
-			Assets::refund_other(RuntimeOrigin::signed(1), 0, 2),
-			Error::<Test>::WouldBurn
-		);
-		assert_eq!(Balances::reserved_balance(&1), 10);
-		assert_ok!(Assets::transfer(RuntimeOrigin::signed(2), 0, 1, 50));
-		assert_eq!(Assets::balance(0, 2), 0);
-		// now that the balance is 0, the freezer (`1`) can get their deposit back
+		// refunds and changes the existence reason.
 		assert_ok!(Assets::refund_other(RuntimeOrigin::signed(1), 0, 2));
 		assert_eq!(Balances::reserved_balance(&1), 0);
+		// TODO more tests
 	});
 }
 

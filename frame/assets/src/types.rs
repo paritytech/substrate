@@ -109,8 +109,9 @@ pub enum ExistenceReason<Balance, AccountId> {
 	#[codec(index = 3)]
 	DepositRefunded,
 	/// Some other `AccountId` has placed a deposit to make this account exist.
+	/// An account with such a reason might not be referenced in `system`.
 	#[codec(index = 4)]
-	DepositFrom(AccountId, Balance),
+	ForeignDeposit(AccountId, Balance),
 }
 
 impl<Balance, AccountId> ExistenceReason<Balance, AccountId>
@@ -121,12 +122,12 @@ where
 	/// `who` is the owner of the account and the deposit of `DepositHeld` variant.
 	pub(crate) fn take_deposit(&mut self, who: &AccountId) -> Option<(AccountId, Balance)> {
 		use ExistenceReason::*;
-		if !matches!(self, DepositHeld(_) | DepositFrom(..)) {
+		if !matches!(self, DepositHeld(_) | ForeignDeposit(..)) {
 			return None
 		}
 		match sp_std::mem::replace(self, DepositRefunded) {
 			DepositHeld(deposit) => Some((who.clone(), deposit)),
-			DepositFrom(depositor, deposit) => Some((depositor, deposit)),
+			ForeignDeposit(depositor, deposit) => Some((depositor, deposit)),
 			_ => None,
 		}
 	}
@@ -142,6 +143,20 @@ pub struct AssetAccount<Balance, DepositBalance, Extra, AccountId> {
 	pub(super) reason: ExistenceReason<DepositBalance, AccountId>,
 	/// Additional "sidecar" data, in case some other pallet wants to use this storage item.
 	pub(super) extra: Extra,
+}
+
+impl<Balance, DepositBalance, Extra, AccountId>
+	AssetAccount<Balance, DepositBalance, Extra, AccountId>
+where
+	Balance: sp_runtime::traits::Zero,
+{
+	/// Returns `true` if the account's balance is zero and its existence reason is foreign (not
+	/// account holder) deposit. Accounts with foreign deposits usually created by `freezer` to
+	/// freeze a non-existing asset account.
+	/// Such an account might not be referenced in `system`.
+	pub(crate) fn empty_with_deposit(&self) -> bool {
+		self.balance.is_zero() && matches!(self.reason, ExistenceReason::ForeignDeposit(..))
+	}
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, Default, RuntimeDebug, MaxEncodedLen, TypeInfo)]
