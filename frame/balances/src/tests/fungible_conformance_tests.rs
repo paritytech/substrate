@@ -28,9 +28,7 @@ macro_rules! run_tests {
 					let trap_account = <Test as frame_system::Config>::AccountId::from(65174286u64);
 					let builder = ExtBuilder::default().existential_deposit($ext_deposit).dust_trap(trap_account);
 					builder.build_and_execute_with(|| {
-						// Initialise the trap account
 						Balances::set_balance(&trap_account, Balances::minimum_balance());
-						// Run the test
 						$parent_module::$child_module::$name::<
 							Balances,
 							<Test as frame_system::Config>::AccountId,
@@ -42,7 +40,6 @@ macro_rules! run_tests {
 				fn [< $name _existential_deposit_ $ext_deposit _dust_trap_off >]() {
 					let builder = ExtBuilder::default().existential_deposit($ext_deposit);
 					builder.build_and_execute_with(|| {
-						// Run the test
 						$parent_module::$child_module::$name::<
 							Balances,
 							<Test as frame_system::Config>::AccountId,
