@@ -59,7 +59,7 @@ where
 		}
 	}
 
-	/// Get header of a chain block.
+	/// Get header of a block.
 	fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error>;
 
 	/// Get header and body of a chain block.
