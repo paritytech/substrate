@@ -138,7 +138,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if amount < details.min_balance {
 				return DepositConsequence::BelowMinimum
 			}
-			if !details.is_sufficient && !frame_system::Pallet::<T>::can_inc_consumer(who) {
+			if !details.is_sufficient && !frame_system::Pallet::<T>::can_accrue_consumers(who, 2) {
 				return DepositConsequence::CannotCreate
 			}
 			if details.is_sufficient && details.sufficients.checked_add(1).is_none() {

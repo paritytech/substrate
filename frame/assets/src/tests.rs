@@ -21,7 +21,7 @@ use super::*;
 use crate::{mock::*, Error};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{fungibles::InspectEnumerable, Currency},
+	traits::{fungibles::InspectEnumerable, Currency, tokens::Preservation::Protect},
 };
 use pallet_balances::Error as BalancesError;
 use sp_io::storage;
@@ -31,6 +31,25 @@ fn asset_ids() -> Vec<u32> {
 	let mut s: Vec<_> = Assets::asset_ids().collect();
 	s.sort();
 	s
+}
+
+#[test]
+fn transfer_should_never_burn() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, false, 1));
+		Balances::make_free_balance_be(&1, 100);
+		Balances::make_free_balance_be(&2, 100);
+
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
+		assert_eq!(Assets::balance(0, 1), 100);
+
+		while System::inc_consumers(&2).is_ok() {}
+		let _ = System::dec_consumers(&2);
+		// Exactly one consumer ref remaining.
+
+		let _ = <Assets as fungibles::Mutate<_>>::transfer(0, &1, &2, 50, Protect);
+		assert_eq!(Assets::balance(0, 1) + Assets::balance(0, 2), 100);
+	});
 }
 
 #[test]
