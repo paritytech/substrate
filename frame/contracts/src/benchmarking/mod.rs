@@ -928,9 +928,9 @@ benchmarks! {
 			Weight::MAX,
 			None,
 			vec![],
-			true,
+			DebugInfo::UnsafeDebug,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result?;
 	}
@@ -978,9 +978,9 @@ benchmarks! {
 			Weight::MAX,
 			None,
 			vec![],
-			true,
+			DebugInfo::UnsafeDebug,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result?;
 	}
@@ -3159,9 +3159,9 @@ benchmarks! {
 			Weight::MAX,
 			None,
 			data,
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result?;
 	}
@@ -3209,9 +3209,9 @@ benchmarks! {
 			Weight::MAX,
 			None,
 			data,
-			false,
+			DebugInfo::Skip,
 			Determinism::Enforced,
-			false,
+			CollectEvents::Skip,
 		)
 		.result?;
 	}
