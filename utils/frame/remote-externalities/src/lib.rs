@@ -20,8 +20,13 @@
 //! An equivalent of `sp_io::TestExternalities` that can load its state from a remote substrate
 //! based chain, or a local state snapshot file.
 
+use async_recursion::async_recursion;
 use codec::{Decode, Encode};
 use futures::{channel::mpsc, stream::StreamExt};
+use jsonrpsee::{
+	core::params::ArrayParams,
+	http_client::{HttpClient, HttpClientBuilder},
+};
 use log::*;
 use serde::de::DeserializeOwned;
 use sp_core::{
@@ -43,10 +48,6 @@ use std::{
 	thread,
 };
 use substrate_rpc_client::{rpc_params, BatchRequestBuilder, ChainApi, ClientT, StateApi};
-use jsonrpsee::{
-	core::params::ArrayParams,
-	http_client::{HttpClient, HttpClientBuilder},
-};
 
 type KeyValue = (StorageKey, StorageData);
 type TopKeyValues = Vec<KeyValue>;
@@ -319,14 +320,15 @@ where
 	B::Hash: DeserializeOwned,
 	B::Header: DeserializeOwned,
 {
-	const AIMD_LINEAR_INCREASE_FACTOR: usize = 100;
-	const AIMD_BASE_VALUE: usize = 5000;
-	const AIMD_EXPONENTIAL_DECREASE_FACTOR: usize = 2;
+	const BATCH_SIZE_INCREASE_FACTOR: f32 = 1.10;
+	const BATCH_SIZE_DECREASE_FACTOR: f32 = 0.50;
+	const INITIAL_BATCH_SIZE: usize = 5000;
 
 	/// Get the number of threads to use.
 	fn threads() -> NonZeroUsize {
-		thread::available_parallelism()
-			.unwrap_or(NonZeroUsize::new(4usize).expect("4 is non-zero; qed"))
+		// Greater than 4 threads yields no performance improvement. With dynamic batch sizing,
+		// 4 threads are well capable of saturating the nodes ability to serve requests.
+		NonZeroUsize::new(4usize).expect("4 is non-zero; qed")
 	}
 
 	async fn rpc_get_storage(
@@ -427,9 +429,10 @@ where
 	///
 	/// This function returns an error message as a String in case of any failure during batch
 	/// request construction, batch request execution, or processing the batch response.
-	fn get_storage_data_aimd(
-		thread_client: Arc<HttpClient>,
-		remaining_payloads: Vec<(&str, ArrayParams)>,
+	#[async_recursion]
+	async fn get_storage_data_aimd(
+		client: Arc<HttpClient>,
+		remaining_payloads: Vec<(String, ArrayParams)>,
 		batch_size: usize,
 	) -> Result<Vec<Option<StorageData>>, String> {
 		// All payloads have been processed
@@ -455,28 +458,27 @@ where
 				.map_err(|_| "Invalid batch params")
 				.unwrap();
 		}
-		let rt = tokio::runtime::Runtime::new().unwrap();
-		let batch_response =
-			match rt.block_on(thread_client.batch_request::<Option<StorageData>>(batch)) {
-				Ok(batch_response) => batch_response,
-				Err(e) => {
-					if batch_size < 2 {
-						return Err(e.to_string())
-					}
+		let batch_response = match client.batch_request::<Option<StorageData>>(batch).await {
+			Ok(batch_response) => batch_response,
+			Err(e) => {
+				if batch_size < 2 {
+					return Err(e.to_string())
+				}
 
-					log::debug!(
-						target: LOG_TARGET,
-						"Batch request failed, trying again with smaller batch size. {}",
-						e.to_string()
-					);
+				log::debug!(
+					target: LOG_TARGET,
+					"Batch request failed, trying again with smaller batch size. {}",
+					e.to_string()
+				);
 
-					return Self::get_storage_data_aimd(
-						thread_client,
-						remaining_payloads,
-						batch_size / Self::AIMD_EXPONENTIAL_DECREASE_FACTOR,
-					)
-				},
-			};
+				return Self::get_storage_data_aimd(
+					client,
+					remaining_payloads,
+					(batch_size as f32 * Self::BATCH_SIZE_DECREASE_FACTOR) as usize,
+				)
+				.await
+			},
+		};
 
 		// Collect the data from this batch
 		let mut data: Vec<Option<StorageData>> = vec![];
@@ -491,10 +493,12 @@ where
 		let remaining_payloads =
 			remaining_payloads.iter().skip(batch_size).cloned().collect::<Vec<_>>();
 		let mut rest = Self::get_storage_data_aimd(
-			thread_client,
+			client,
 			remaining_payloads,
-			batch_size + Self::AIMD_LINEAR_INCREASE_FACTOR,
-		)?;
+			// + 1 to ensure we always increase by at least 1
+			(batch_size as f32 * Self::BATCH_SIZE_INCREASE_FACTOR) as usize + 1,
+		)
+		.await?;
 		data.append(&mut rest);
 		Ok(data)
 	}
@@ -551,13 +555,15 @@ where
 
 				let payloads = thread_keys
 					.iter()
-					.map(|key| ("state_getStorage", rpc_params!(key, at)))
+					.map(|key| ("state_getStorage".to_string(), rpc_params!(key, at)))
 					.collect::<Vec<_>>();
-				let storage_data = match Self::get_storage_data_aimd(
+
+				let rt = tokio::runtime::Runtime::new().unwrap();
+				let storage_data = match rt.block_on(Self::get_storage_data_aimd(
 					thread_client,
 					payloads,
-					Self::AIMD_BASE_VALUE,
-				) {
+					Self::INITIAL_BATCH_SIZE,
+				)) {
 					Ok(storage_data) => storage_data,
 					Err(e) => {
 						thread_sender.unbounded_send(Message::BatchFailed(e)).unwrap();
@@ -663,7 +669,7 @@ where
 			.iter()
 			.map(|key| {
 				(
-					"childstate_getStorage",
+					"childstate_getStorage".to_string(),
 					rpc_params![
 						PrefixedStorageKey::new(prefixed_top_key.as_ref().to_vec()),
 						key,
@@ -674,7 +680,7 @@ where
 			.collect::<Vec<_>>();
 
 		let storage_data =
-			match Self::get_storage_data_aimd(client.clone(), payloads, Self::AIMD_BASE_VALUE) {
+			match Self::get_storage_data_aimd(client, payloads, Self::INITIAL_BATCH_SIZE).await {
 				Ok(storage_data) => storage_data,
 				Err(e) => {
 					log::error!(target: LOG_TARGET, "batch processing failed: {:?}", e);
