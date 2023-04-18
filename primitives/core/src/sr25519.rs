@@ -547,11 +547,14 @@ pub mod vrf {
 	#[cfg(feature = "full_crypto")]
 	use crate::crypto::VrfSigner;
 	use crate::crypto::{VrfCrypto, VrfVerifier};
-	pub use schnorrkel::vrf::VRF_OUTPUT_LENGTH;
-	use schnorrkel::{errors::MultiSignatureStage, vrf::VRF_PROOF_LENGTH, SignatureError};
+	use schnorrkel::{
+		errors::MultiSignatureStage,
+		vrf::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
+		SignatureError,
+	};
 
 	/// VRF transcript ready to be used for VRF sign/verify operations.
-	pub struct VrfTranscript(merlin::Transcript);
+	pub struct VrfTranscript(pub merlin::Transcript);
 
 	impl VrfTranscript {
 		/// Build a new transcript ready to be used by a VRF signer/verifier.
@@ -559,14 +562,6 @@ pub mod vrf {
 			let mut transcript = merlin::Transcript::new(label);
 			data.iter().for_each(|(l, b)| transcript.append_message(l, b));
 			VrfTranscript(transcript)
-		}
-	}
-
-	impl Deref for VrfTranscript {
-		type Target = merlin::Transcript;
-
-		fn deref(&self) -> &Self::Target {
-			&self.0
 		}
 	}
 
@@ -582,14 +577,6 @@ pub mod vrf {
 	/// VRF output type suitable for schnorrkel operations.
 	#[derive(Clone, Debug, PartialEq, Eq)]
 	pub struct VrfOutput(pub schnorrkel::vrf::VRFOutput);
-
-	impl Deref for VrfOutput {
-		type Target = schnorrkel::vrf::VRFOutput;
-
-		fn deref(&self) -> &Self::Target {
-			&self.0
-		}
-	}
 
 	impl Encode for VrfOutput {
 		fn encode(&self) -> Vec<u8> {
@@ -621,14 +608,6 @@ pub mod vrf {
 	/// VRF proof type suitable for schnorrkel operations.
 	#[derive(Clone, Debug, PartialEq, Eq)]
 	pub struct VrfProof(pub schnorrkel::vrf::VRFProof);
-
-	impl Deref for VrfProof {
-		type Target = schnorrkel::vrf::VRFProof;
-
-		fn deref(&self) -> &Self::Target {
-			&self.0
-		}
-	}
 
 	impl Encode for VrfProof {
 		fn encode(&self) -> Vec<u8> {
@@ -680,7 +659,7 @@ pub mod vrf {
 		fn vrf_verify(&self, transcript: &Self::VrfInput, signature: &Self::VrfSignature) -> bool {
 			schnorrkel::PublicKey::from_bytes(self)
 				.and_then(|public| {
-					public.vrf_verify(transcript.0.clone(), &signature.output, &signature.proof)
+					public.vrf_verify(transcript.0.clone(), &signature.output.0, &signature.proof.0)
 				})
 				.is_ok()
 		}
@@ -725,8 +704,10 @@ pub mod vrf {
 		output: &VrfOutput,
 	) -> Result<B, codec::Error> {
 		let pubkey = schnorrkel::PublicKey::from_bytes(public).map_err(convert_error)?;
-		let inout =
-			output.attach_input_hash(&pubkey, transcript.0.clone()).map_err(convert_error)?;
+		let inout = output
+			.0
+			.attach_input_hash(&pubkey, transcript.0.clone())
+			.map_err(convert_error)?;
 		Ok(inout.make_bytes::<B>(context))
 	}
 }
