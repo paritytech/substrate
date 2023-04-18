@@ -18,11 +18,13 @@
 //! Rpc for state migration.
 
 use jsonrpsee::{
-	core::{Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::error::{CallError, ErrorCode, ErrorObject},
+	types::{
+		error::{CallError, ErrorCode, ErrorObject},
+		ErrorObjectOwned,
+	},
 };
-use sc_rpc_api::DenyUnsafe;
+use sc_rpc_api::{DenyUnsafe, UnsafeRpcError};
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::Block as BlockT;
 use std::sync::Arc;
@@ -135,7 +137,7 @@ pub trait StateMigrationApi<BlockHash> {
 	/// won't change any state. Nonetheless it is a VERY costy call that should be
 	/// only exposed to trusted peers.
 	#[method(name = "state_trieMigrationStatus")]
-	fn call(&self, at: Option<BlockHash>) -> RpcResult<MigrationStatusResult>;
+	fn call(&self, at: Option<BlockHash>) -> Result<MigrationStatusResult, Error>;
 }
 
 /// An implementation of state migration specific RPC methods.
@@ -159,19 +161,41 @@ where
 	C: Send + Sync + 'static + sc_client_api::HeaderBackend<B>,
 	BA: 'static + sc_client_api::backend::Backend<B>,
 {
-	fn call(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<MigrationStatusResult> {
+	fn call(&self, at: Option<<B as BlockT>::Hash>) -> Result<MigrationStatusResult, Error> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let hash = at.unwrap_or_else(|| self.client.info().best_hash);
-		let state = self.backend.state_at(hash).map_err(error_into_rpc_err)?;
-		migration_status(&state).map_err(error_into_rpc_err)
+		let state = self.backend.state_at(hash).map_err(|e| Error::Client(e.to_string()))?;
+		migration_status(&state).map_err(|e| Error::Client(e.to_string()))
 	}
 }
 
-fn error_into_rpc_err(err: impl std::fmt::Display) -> JsonRpseeError {
-	JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
-		ErrorCode::InternalError.code(),
-		"Error while checking migration state",
-		Some(err.to_string()),
-	)))
+/// Error.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+	/// Client error.
+	#[error("Client error: {}", .0)]
+	Client(String),
+	/// Call to an unsafe RPC was denied.
+	#[error(transparent)]
+	UnsafeRpcCalled(#[from] UnsafeRpcError),
+}
+
+impl From<Error> for ErrorObjectOwned {
+	fn from(e: Error) -> Self {
+		match e {
+			Error::Client(err) => ErrorObject::owned(
+				ErrorCode::InternalError.code(),
+				"Error while checking migration state",
+				Some(err.to_string()),
+			),
+			Error::UnsafeRpcCalled(e) => e.into(),
+		}
+	}
+}
+
+impl From<CallError> for Error {
+	fn from(err: CallError) -> Self {
+		err.into()
+	}
 }

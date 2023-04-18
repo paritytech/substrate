@@ -25,6 +25,7 @@ sp-block-builder = { version = "4.0.0-dev", path = "../../../../primitives/block
 sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
 sp-core = { version = "7.0.0", path = "../../../../primitives/core" }
 sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
+thiserror = "1.0.40"
 
 [dev-dependencies]
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../../client/transaction-pool" }

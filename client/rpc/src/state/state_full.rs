@@ -31,10 +31,7 @@ use crate::{
 };
 
 use futures::{future, stream, StreamExt};
-use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError},
-	PendingSubscriptionSink,
-};
+use jsonrpsee::{core::async_trait, types::ErrorObject, PendingSubscriptionSink};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
 	StorageProvider,
@@ -388,7 +385,7 @@ where
 		{
 			Ok(initial) => initial,
 			Err(e) => {
-				_ = pending.reject(JsonRpseeError::from(e)).await;
+				_ = pending.reject(ErrorObject::from(e)).await;
 				return
 			},
 		};
@@ -426,9 +423,7 @@ where
 		let stream = match self.client.storage_changes_notification_stream(keys.as_deref(), None) {
 			Ok(stream) => stream,
 			Err(blockchain_err) => {
-				let _ = pending
-					.reject(JsonRpseeError::from(Error::Client(Box::new(blockchain_err))))
-					.await;
+				let _ = pending.reject(Error::Client(Box::new(blockchain_err))).await;
 				return
 			},
 		};

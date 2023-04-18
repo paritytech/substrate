@@ -20,14 +20,14 @@
 
 use futures::TryFutureExt;
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	core::async_trait,
 	proc_macros::rpc,
-	types::{error::CallError, ErrorObject},
+	types::{ErrorObject, ErrorObjectOwned},
 };
 
 use sc_consensus_babe::{authorship, Epoch};
 use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};
-use sc_rpc_api::DenyUnsafe;
+use sc_rpc_api::{DenyUnsafe, UnsafeRpcError};
 use serde::{Deserialize, Serialize};
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppCrypto;
@@ -47,7 +47,7 @@ pub trait BabeApi {
 	/// Returns data about which slots (primary or secondary) can be claimed in the current epoch
 	/// with the keys in the keystore.
 	#[method(name = "babe_epochAuthorship")]
-	async fn epoch_authorship(&self) -> RpcResult<HashMap<AuthorityId, EpochAuthorship>>;
+	async fn epoch_authorship(&self) -> Result<HashMap<AuthorityId, EpochAuthorship>, Error>;
 }
 
 /// Provides RPC methods for interacting with Babe.
@@ -91,7 +91,7 @@ where
 	C::Api: BabeRuntimeApi<B>,
 	SC: SelectChain<B> + Clone + 'static,
 {
-	async fn epoch_authorship(&self) -> RpcResult<HashMap<AuthorityId, EpochAuthorship>> {
+	async fn epoch_authorship(&self) -> Result<HashMap<AuthorityId, EpochAuthorship>, Error> {
 		self.deny_unsafe.check_if_safe()?;
 		let header = self.select_chain.best_chain().map_err(Error::Consensus).await?;
 		let epoch_start = self
@@ -168,15 +168,14 @@ pub enum Error {
 	/// Errors that can be formatted as a String
 	#[error("{0}")]
 	StringError(String),
+	/// Call to an unsafe RPC was denied.
+	#[error(transparent)]
+	UnsafeRpcCalled(#[from] UnsafeRpcError),
 }
 
-impl From<Error> for JsonRpseeError {
+impl From<Error> for ErrorObjectOwned {
 	fn from(error: Error) -> Self {
-		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
-			1234,
-			error.to_string(),
-			None::<()>,
-		)))
+		ErrorObject::owned(1234, error.to_string(), None::<()>)
 	}
 }
 
