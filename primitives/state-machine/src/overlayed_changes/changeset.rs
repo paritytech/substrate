@@ -223,7 +223,7 @@ impl<V> OverlayedEntry<V> {
 	///
 	/// This makes sure that the old version is not overwritten and can be properly
 	/// rolled back when required.
-	fn set_value(&mut self, value: V, first_write_in_tx: bool, at_extrinsic: Option<u32>) {
+	fn set_simple(&mut self, value: V, first_write_in_tx: bool, at_extrinsic: Option<u32>) {
 		if first_write_in_tx || self.transactions.is_empty() {
 			self.transactions.push(InnerValue { value, extrinsics: Default::default() });
 		} else {
@@ -293,10 +293,11 @@ impl OverlayedEntry<StorageEntry> {
 		}
 	}
 
-	/// Writes a new version of a value.
+	/// Append content to a value, updating a prefixed compact encoded length.
 	///
 	/// This makes sure that the old version is not overwritten and can be properly
 	/// rolled back when required.
+	/// This avoid copying value from previous transaction.
 	fn append(&mut self, value: StorageValue, first_write_in_tx: bool, at_extrinsic: Option<u32>) {
 		let mut buffer = Vec::new();
 		if self.transactions.is_empty() {
@@ -426,9 +427,9 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 	/// Set a new value for the specified key.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub fn set_value(&mut self, key: K, value: V, at_extrinsic: Option<u32>) {
+	pub fn set_simple(&mut self, key: K, value: V, at_extrinsic: Option<u32>) {
 		let overlayed = self.changes.entry(key.clone()).or_default();
-		overlayed.set_value(value, insert_dirty(&mut self.dirty_keys, key), at_extrinsic);
+		overlayed.set_simple(value, insert_dirty(&mut self.dirty_keys, key), at_extrinsic);
 	}
 
 	/// Get a list of all changes as seen by current transaction.
@@ -1011,13 +1012,10 @@ mod test {
 		assert_changes(&changeset, &all_changes);
 
 		changeset.start_transaction();
-		let val3_3 = vec![b"valinit".to_vec(), b"-modified".to_vec(), b"-twice".to_vec(), b"-2".to_vec()].encode();
-		changeset.append_storage_init(
-			b"key3".to_vec(),
-			b"-2".to_vec().encode(),
-			init,
-			Some(21),
-		);
+		let val3_3 =
+			vec![b"valinit".to_vec(), b"-modified".to_vec(), b"-twice".to_vec(), b"-2".to_vec()]
+				.encode();
+		changeset.append_storage_init(b"key3".to_vec(), b"-2".to_vec().encode(), init, Some(21));
 		let all_changes2: Changes = vec![
 			(b"key0", (Some(val0_2.as_slice()), vec![0, 10])),
 			(b"key1", (Some(val1.as_slice()), vec![1, 20])),
@@ -1029,7 +1027,13 @@ mod test {
 
 		assert_changes(&changeset, &all_changes);
 		changeset.start_transaction();
-		let val3_4 = vec![b"valinit".to_vec(), b"-modified".to_vec(), b"-twice".to_vec(), b"-thrice".to_vec()].encode();
+		let val3_4 = vec![
+			b"valinit".to_vec(),
+			b"-modified".to_vec(),
+			b"-twice".to_vec(),
+			b"-thrice".to_vec(),
+		]
+		.encode();
 		changeset.append_storage_init(
 			b"key3".to_vec(),
 			b"-thrice".to_vec().encode(),
