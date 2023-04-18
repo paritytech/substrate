@@ -21,7 +21,7 @@
 
 use super::*;
 use crate::mock::{
-	new_test_ext, offence_reports, report_id, with_on_offence_fractions, Offence, Offences,
+	new_test_ext, offence_reports, with_on_offence_fractions, Offence, Offences,
 	RuntimeEvent, System, KIND,
 };
 use frame_system::{EventRecord, Phase};

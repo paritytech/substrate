@@ -28,7 +28,7 @@ mod tests;
 
 use core::marker::PhantomData;
 
-use codec::{Decode, Encode};
+use codec::Encode;
 use frame_support::weights::Weight;
 use sp_runtime::{traits::Hash, Perbill};
 use sp_staking::{
@@ -177,7 +177,7 @@ impl<T: Config> Pallet<T> {
 					OffenceDetails { offender, reporters: reporters.clone() },
 				);
 
-				storage.insert(time_slot, report_id);
+				storage.insert(report_id);
 			}
 		}
 
@@ -226,7 +226,7 @@ impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 	}
 
 	/// Insert a new report to the index.
-	fn insert(&mut self, time_slot: &O::TimeSlot, report_id: ReportIdOf<T>) {
+	fn insert(&mut self, report_id: ReportIdOf<T>) {
 		// Update the list of concurrent reports.
 		self.concurrent_reports.push(report_id);
 	}
