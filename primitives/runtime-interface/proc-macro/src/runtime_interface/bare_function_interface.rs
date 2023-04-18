@@ -36,8 +36,7 @@ use crate::utils::{
 };
 
 use syn::{
-	parse_quote, spanned::Spanned, FnArg, Ident, ItemTrait, Result, Signature, Token,
-	TraitItemMethod,
+	parse_quote, spanned::Spanned, FnArg, Ident, ItemTrait, Result, Signature, Token, TraitItemFn,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -116,7 +115,7 @@ fn function_no_std_impl(
 		quote! {}
 	};
 
-	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
+	let attrs = method.attrs.iter().filter(|a| !a.path().is_ident("version"));
 
 	let cfg_wasm_only = if is_wasm_only {
 		quote! { #[cfg(target_arch = "wasm32")] }
@@ -139,12 +138,12 @@ fn function_no_std_impl(
 /// Generate call to latest function version for `cfg((feature = "std")`
 ///
 /// This should generate simple `fn func(..) { func_version_<latest_version>(..) }`.
-fn function_std_latest_impl(method: &TraitItemMethod, latest_version: u32) -> Result<TokenStream> {
+fn function_std_latest_impl(method: &TraitItemFn, latest_version: u32) -> Result<TokenStream> {
 	let function_name = &method.sig.ident;
 	let args = get_function_arguments(&method.sig).map(FnArg::Typed);
 	let arg_names = get_function_argument_names(&method.sig).collect::<Vec<_>>();
 	let return_value = &method.sig.output;
-	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
+	let attrs = method.attrs.iter().filter(|a| !a.path().is_ident("version"));
 	let latest_function_name =
 		create_function_ident_with_version(&method.sig.ident, latest_version);
 
@@ -162,7 +161,7 @@ fn function_std_latest_impl(method: &TraitItemMethod, latest_version: u32) -> Re
 /// Generates the bare function implementation for `cfg(feature = "std")`.
 fn function_std_impl(
 	trait_name: &Ident,
-	method: &TraitItemMethod,
+	method: &TraitItemFn,
 	version: u32,
 	is_wasm_only: bool,
 	tracing: bool,
@@ -185,7 +184,7 @@ fn function_std_impl(
 		.take(1),
 	);
 	let return_value = &method.sig.output;
-	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
+	let attrs = method.attrs.iter().filter(|a| !a.path().is_ident("version"));
 	// Don't make the function public accessible when this is a wasm only interface.
 	let call_to_trait = generate_call_to_trait(trait_name, method, version, is_wasm_only);
 	let call_to_trait = if !tracing {
@@ -210,7 +209,7 @@ fn function_std_impl(
 /// Generate the call to the interface trait.
 fn generate_call_to_trait(
 	trait_name: &Ident,
-	method: &TraitItemMethod,
+	method: &TraitItemFn,
 	version: u32,
 	is_wasm_only: bool,
 ) -> TokenStream {
