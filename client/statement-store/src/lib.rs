@@ -46,7 +46,7 @@
 
 mod metrics;
 
-pub use sp_statement_store::{Error, StatementStore};
+pub use sp_statement_store::{Error, StatementStore, MAX_TOPICS};
 
 use metrics::MetricsLink as PrometheusMetrics;
 use parking_lot::RwLock;
@@ -128,7 +128,7 @@ struct StatementsForAccount {
 struct Index {
 	by_topic: HashMap<Topic, HashSet<Hash>>,
 	by_dec_key: HashMap<DecryptionKey, HashSet<Hash>>,
-	topics_and_keys: HashMap<Hash, ([Option<Topic>; 4], Option<DecryptionKey>)>,
+	topics_and_keys: HashMap<Hash, ([Option<Topic>; MAX_TOPICS], Option<DecryptionKey>)>,
 	entries: HashMap<Hash, (AccountId, GlobalPriority, Priority)>, /* Statement hash -> (Account id,
 	                                                * global_priority, priority) */
 	expired: HashMap<Hash, u64>, // Value is expiration timestamp.
@@ -221,7 +221,7 @@ impl Index {
 		global_priority: GlobalPriority,
 		statement: &Statement,
 	) {
-		let mut all_topics = [None; 4];
+		let mut all_topics = [None; MAX_TOPICS];
 		let mut nt = 0;
 		while let Some(t) = statement.topic(nt) {
 			self.by_topic.entry(t).or_default().insert(hash);
@@ -275,8 +275,8 @@ impl Index {
 		mut f: impl FnMut(&Hash) -> Result<()>,
 	) -> Result<()> {
 		let empty = HashSet::new();
-		let mut sets: [&HashSet<Hash>; 4] = [&empty; 4];
-		if match_all_topics.len() > 4 {
+		let mut sets: [&HashSet<Hash>; MAX_TOPICS] = [&empty; MAX_TOPICS];
+		if match_all_topics.len() > MAX_TOPICS {
 			return Ok(())
 		}
 		for (i, t) in match_all_topics.iter().enumerate() {

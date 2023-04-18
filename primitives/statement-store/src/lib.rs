@@ -41,6 +41,9 @@ pub type AccountId = [u8; 32];
 /// Statement channel.
 pub type Channel = [u8; 32];
 
+/// Total number of topic fields allowed.
+pub const MAX_TOPICS: usize = 4;
+
 #[cfg(feature = "std")]
 pub use store_api::{
 	Error, NetworkPriority, Result, StatementSource, StatementStore, SubmitResult,
@@ -161,7 +164,7 @@ pub struct Statement {
 	channel: Option<Channel>,
 	priority: Option<u32>,
 	num_topics: u8,
-	topics: [Topic; 4],
+	topics: [Topic; MAX_TOPICS],
 	data: Option<Vec<u8>>,
 }
 
@@ -414,7 +417,7 @@ impl Statement {
 
 	/// Set topic by index.
 	pub fn set_topic(&mut self, index: usize, topic: Topic) {
-		if index < 4 {
+		if index < MAX_TOPICS {
 			self.topics[index] = topic;
 			self.num_topics = self.num_topics.max(index as u8 + 1);
 		}
