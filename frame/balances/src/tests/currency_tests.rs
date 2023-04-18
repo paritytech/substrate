@@ -1181,6 +1181,16 @@ fn named_reserve_should_work() {
 }
 
 #[test]
+fn reserve_must_succeed_if_can_reserve_does() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		let _ = Balances::deposit_creating(&1, 1);
+		let _ = Balances::deposit_creating(&2, 2);
+		assert!(Balances::can_reserve(&1, 1) == Balances::reserve(&1, 1).is_ok());
+		assert!(Balances::can_reserve(&2, 1) == Balances::reserve(&2, 1).is_ok());
+	});
+}
+
+#[test]
 fn reserved_named_to_yourself_should_work() {
 	ExtBuilder::default().build_and_execute_with(|| {
 		let _ = Balances::deposit_creating(&1, 110);

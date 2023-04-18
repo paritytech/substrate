@@ -483,12 +483,7 @@ where
 	///
 	/// Always `true` if value to be reserved is zero.
 	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
-		if value.is_zero() {
-			return true
-		}
-		Self::account(who).free.checked_sub(&value).map_or(false, |new_balance| {
-			Self::ensure_can_withdraw(who, value, WithdrawReasons::RESERVE, new_balance).is_ok()
-		})
+		value <= <Self as fungible::Inspect<_>>::reducible_balance(who, Protect, Force)
 	}
 
 	fn reserved_balance(who: &T::AccountId) -> Self::Balance {
