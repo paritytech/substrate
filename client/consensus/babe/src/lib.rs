@@ -89,8 +89,8 @@ use prometheus_endpoint::Registry;
 use schnorrkel::SignatureError;
 
 use sc_client_api::{
-	backend::AuxStore, AuxDataOperations, Backend as BackendT, BlockchainEvents,
-	FinalityNotification, PreCommitActions, ProvideUncles, UsageProvider,
+	backend::AuxStore, AuxDataOperations, Backend as BackendT, FinalityNotification,
+	PreCommitActions, UsageProvider,
 };
 use sc_consensus::{
 	block_import::{
@@ -338,6 +338,9 @@ pub enum Error<B: BlockT> {
 	/// Create inherents error.
 	#[error("Creating inherents failed: {0}")]
 	CreateInherents(sp_inherents::Error),
+	/// Background worker is not running and therefore requests cannot be answered.
+	#[error("Background worker is not running")]
+	BackgroundWorkerTerminated,
 	/// Client error
 	#[error(transparent)]
 	Client(sp_blockchain::Error),
@@ -475,9 +478,6 @@ pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, L, Error>(
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B>
-		+ ProvideUncles<B>
-		+ BlockchainEvents<B>
-		+ PreCommitActions<B>
 		+ HeaderBackend<B>
 		+ HeaderMetadata<B, Error = ClientError>
 		+ Send
@@ -498,8 +498,6 @@ where
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
-	const HANDLE_BUFFER_SIZE: usize = 1024;
-
 	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
 
 	let worker = BabeSlotWorker {
@@ -529,17 +527,7 @@ where
 		create_inherent_data_providers,
 	);
 
-	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
-
-	let answer_requests =
-		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes);
-
-	let inner = future::select(Box::pin(slot_worker), Box::pin(answer_requests));
-	Ok(BabeWorker {
-		inner: Box::pin(inner.map(|_| ())),
-		slot_notification_sinks,
-		handle: BabeWorkerHandle(worker_tx),
-	})
+	Ok(BabeWorker { inner: Box::pin(slot_worker), slot_notification_sinks })
 }
 
 // Remove obsolete block's weight data by leveraging finality notifications.
@@ -593,42 +581,26 @@ async fn answer_requests<B: BlockT, C>(
 	client: Arc<C>,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 ) where
-	C: ProvideRuntimeApi<B>
-		+ ProvideUncles<B>
-		+ BlockchainEvents<B>
-		+ HeaderBackend<B>
-		+ HeaderMetadata<B, Error = ClientError>
-		+ Send
-		+ Sync
-		+ 'static,
+	C: HeaderBackend<B> + HeaderMetadata<B, Error = ClientError>,
 {
 	while let Some(request) = request_rx.next().await {
 		match request {
-			BabeRequest::EpochForChild(parent_hash, parent_number, slot_number, response) => {
+			BabeRequest::EpochData(response) => {
+				let _ = response.send(epoch_changes.shared_data().clone());
+			},
+			BabeRequest::EpochDataForChildOf(parent_hash, parent_number, slot, response) => {
 				let lookup = || {
 					let epoch_changes = epoch_changes.shared_data();
-					let epoch_descriptor = epoch_changes
-						.epoch_descriptor_for_child_of(
+					epoch_changes
+						.epoch_data_for_child_of(
 							descendent_query(&*client),
 							&parent_hash,
 							parent_number,
-							slot_number,
+							slot,
+							|slot| Epoch::genesis(&config, slot),
 						)
 						.map_err(|e| Error::<B>::ForkTree(Box::new(e)))?
-						.ok_or(Error::<B>::FetchEpoch(parent_hash))?;
-
-					let viable_epoch = epoch_changes
-						.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&config, slot))
-						.ok_or(Error::<B>::FetchEpoch(parent_hash))?;
-
-					Ok(sp_consensus_babe::Epoch {
-						epoch_index: viable_epoch.as_ref().epoch_index,
-						start_slot: viable_epoch.as_ref().start_slot,
-						duration: viable_epoch.as_ref().duration,
-						authorities: viable_epoch.as_ref().authorities.clone(),
-						randomness: viable_epoch.as_ref().randomness,
-						config: viable_epoch.as_ref().config.clone(),
-					})
+						.ok_or(Error::<B>::FetchEpoch(parent_hash))
 				};
 
 				let _ = response.send(lookup());
@@ -638,17 +610,13 @@ async fn answer_requests<B: BlockT, C>(
 }
 
 /// Requests to the BABE service.
-#[non_exhaustive]
-pub enum BabeRequest<B: BlockT> {
+enum BabeRequest<B: BlockT> {
+	/// Request all available epoch data.
+	EpochData(oneshot::Sender<EpochChangesFor<B, Epoch>>),
 	/// Request the epoch that a child of the given block, with the given slot number would have.
 	///
 	/// The parent block is identified by its hash and number.
-	EpochForChild(
-		B::Hash,
-		NumberFor<B>,
-		Slot,
-		oneshot::Sender<Result<sp_consensus_babe::Epoch, Error<B>>>,
-	),
+	EpochDataForChildOf(B::Hash, NumberFor<B>, Slot, oneshot::Sender<Result<Epoch, Error<B>>>),
 }
 
 /// A handle to the BABE worker for issuing requests.
@@ -656,11 +624,41 @@ pub enum BabeRequest<B: BlockT> {
 pub struct BabeWorkerHandle<B: BlockT>(Sender<BabeRequest<B>>);
 
 impl<B: BlockT> BabeWorkerHandle<B> {
-	/// Send a request to the BABE service.
-	pub async fn send(&mut self, request: BabeRequest<B>) {
-		// Failure to send means that the service is down.
-		// This will manifest as the receiver of the request being dropped.
-		let _ = self.0.send(request).await;
+	async fn send_request(&self, request: BabeRequest<B>) -> Result<(), Error<B>> {
+		match self.0.clone().send(request).await {
+			Err(err) if err.is_disconnected() => return Err(Error::BackgroundWorkerTerminated),
+			Err(err) => warn!(
+				target: LOG_TARGET,
+				"Unhandled error when sending request to worker: {:?}", err
+			),
+			_ => {},
+		}
+
+		Ok(())
+	}
+
+	/// Fetch all available epoch data.
+	pub async fn epoch_data(&self) -> Result<EpochChangesFor<B, Epoch>, Error<B>> {
+		let (tx, rx) = oneshot::channel();
+		self.send_request(BabeRequest::EpochData(tx)).await?;
+
+		rx.await.or(Err(Error::BackgroundWorkerTerminated))
+	}
+
+	/// Fetch the epoch that a child of the given block, with the given slot number would have.
+	///
+	/// The parent block is identified by its hash and number.
+	pub async fn epoch_data_for_child_of(
+		&self,
+		parent_hash: B::Hash,
+		parent_number: NumberFor<B>,
+		slot: Slot,
+	) -> Result<Epoch, Error<B>> {
+		let (tx, rx) = oneshot::channel();
+		self.send_request(BabeRequest::EpochDataForChildOf(parent_hash, parent_number, slot, tx))
+			.await?;
+
+		rx.await.or(Err(Error::BackgroundWorkerTerminated))?
 	}
 }
 
@@ -669,7 +667,6 @@ impl<B: BlockT> BabeWorkerHandle<B> {
 pub struct BabeWorker<B: BlockT> {
 	inner: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
-	handle: BabeWorkerHandle<B>,
 }
 
 impl<B: BlockT> BabeWorker<B> {
@@ -683,11 +680,6 @@ impl<B: BlockT> BabeWorker<B> {
 		let (sink, stream) = channel(CHANNEL_BUFFER_SIZE);
 		self.slot_notification_sinks.lock().push(sink);
 		stream
-	}
-
-	/// Get a handle to the worker.
-	pub fn handle(&self) -> BabeWorkerHandle<B> {
-		self.handle.clone()
 	}
 }
 
@@ -1790,7 +1782,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CIDP>(
 	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
 	telemetry: Option<TelemetryHandle>,
-) -> ClientResult<DefaultImportQueue<Block, Client>>
+) -> ClientResult<(DefaultImportQueue<Block, Client>, BabeWorkerHandle<Block>)>
 where
 	Inner: BlockImport<
 			Block,
@@ -1811,16 +1803,28 @@ where
 	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
 {
+	const HANDLE_BUFFER_SIZE: usize = 1024;
+
 	let verifier = BabeVerifier {
 		select_chain,
 		create_inherent_data_providers,
-		config: babe_link.config,
-		epoch_changes: babe_link.epoch_changes,
+		config: babe_link.config.clone(),
+		epoch_changes: babe_link.epoch_changes.clone(),
 		telemetry,
-		client,
+		client: client.clone(),
 	};
 
-	Ok(BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry))
+	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
+
+	let answer_requests =
+		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes);
+
+	spawner.spawn_essential("babe-worker", Some("babe"), answer_requests.boxed());
+
+	Ok((
+		BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry),
+		BabeWorkerHandle(worker_tx),
+	))
 }
 
 /// Reverts protocol aux data to at most the last finalized block.
