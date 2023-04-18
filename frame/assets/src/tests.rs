@@ -21,7 +21,7 @@ use super::*;
 use crate::{mock::*, Error};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{fungibles::InspectEnumerable, Currency, tokens::Preservation::Protect},
+	traits::{fungibles::InspectEnumerable, tokens::Preservation::Protect, Currency},
 };
 use pallet_balances::Error as BalancesError;
 use sp_io::storage;
