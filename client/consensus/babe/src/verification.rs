@@ -190,7 +190,7 @@ fn check_primary_header<B: BlockT + Sized>(
 	.map(u128::from_le_bytes)
 	.map_err(|_| babe_err(Error::VrfVerificationFailed))?;
 
-	if threshold <= score {
+	if score >= threshold {
 		return Err(babe_err(Error::VrfThresholdExceeded(threshold)))
 	}
 
