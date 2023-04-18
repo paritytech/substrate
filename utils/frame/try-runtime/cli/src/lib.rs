@@ -97,18 +97,6 @@
 //! > If anything, in most cases, we expect spec-versions to NOT match, because try-runtime is all
 //! > about testing unreleased runtimes.
 //!
-//! ## Note on nodes that respond to `try-runtime` requests.
-//!
-//! There are a number of flags that need to be preferably set on a running node in order to work
-//! well with try-runtime's expensive RPC queries:
-//!
-//! - set `--rpc-max-response-size 1000` and
-//! - `--rpc-max-request-size 1000` to ensure connections are not dropped in case the state is
-//!   large.
-//! - set `--rpc-cors all` to ensure ws connections can come through.
-//!
-//! Note that *none* of the try-runtime operations need unsafe RPCs.
-//!
 //! ## Note on signature and state-root checks
 //!
 //! All of the commands calling into `TryRuntime_execute_block` ([`Command::ExecuteBlock`] and
