@@ -74,7 +74,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if depositor == who {
 				ExistenceReason::DepositHeld(deposit)
 			} else {
-				ExistenceReason::ForeignDeposit(depositor.clone(), deposit)
+				ExistenceReason::DepositFrom(depositor.clone(), deposit)
 			}
 		} else if d.is_sufficient {
 			frame_system::Pallet::<T>::inc_sufficients(who);
@@ -109,8 +109,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				frame_system::Pallet::<T>::dec_sufficients(who);
 			},
 			DepositRefunded => {},
-			DepositHeld(_) | ForeignDeposit(..) if !force => return Keep,
-			DepositHeld(_) | ForeignDeposit(..) => {},
+			DepositHeld(_) | DepositFrom(..) if !force => return Keep,
+			DepositHeld(_) | DepositFrom(..) => {},
 		}
 		d.accounts = d.accounts.saturating_sub(1);
 		Remove
@@ -136,10 +136,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if increase_supply && details.supply.checked_add(&amount).is_none() {
 			return DepositConsequence::Overflow
 		}
-		let maybe_balance = match Account::<T, I>::get(id, who) {
-			Some(a) if !a.empty_with_deposit() => Some(a.balance),
-			_ => None,
-		};
+		let maybe_balance = Account::<T, I>::get(id, who)
+			.filter(|a| {
+				!(a.balance.is_zero() && matches!(a.reason, ExistenceReason::DepositFrom(..)))
+			})
+			.map(|a| a.balance);
 		if let Some(balance) = maybe_balance {
 			if balance.checked_add(&amount).is_none() {
 				return DepositConsequence::Overflow
@@ -340,8 +341,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Returns an account's existence reason deposit.
 	/// Destroys zero balance accounts and non-zero if `allow_burn` is true.
-	/// For the non-zero accounts with foreign deposits updates the existence reason by incrementing
-	/// a system reference.
+	/// For the non-zero balance accounts with `DepositFrom` existence reason it returns the deposit
+	/// by updating the reason to a system reference.
 	pub(super) fn do_refund(
 		caller: &T::AccountId,
 		id: T::AssetId,
@@ -365,10 +366,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		T::Currency::unreserve(&depositor, deposit);
 
-		debug_assert!(
-			Remove == Self::dead_account(&who, &mut details, &account.reason, false),
-			"refund did not result in dead account?!"
-		);
+		if Self::dead_account(&who, &mut details, &account.reason, false).ne(&Remove) {
+			debug_assert!(true, "refund did not result in dead account?!");
+			Account::<T, I>::insert(id, &who, account);
+			return Ok(());
+		}
 
 		if !account.balance.is_zero() && &depositor != who {
 			// Should not fail as a possibility of a reference increment was checked by
