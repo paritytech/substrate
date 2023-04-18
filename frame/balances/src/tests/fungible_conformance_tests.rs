@@ -23,43 +23,42 @@ use paste::paste;
 // $cm = child module
 // shorthand so each run_tests! call can fit on one line
 macro_rules! run_tests {
-    ($pm:tt :: $cm:tt, $ext_deposit:expr, $dust_trap:expr, $($name:ident),*) => {
+    ($pm:tt :: $cm:tt, $ext_deposit:expr, $($name:ident),*) => {
 		$(
 			paste! {
 				#[test]
-				fn [< $name _existential_deposit_ $ext_deposit _dust_trap_ $dust_trap >]() {
-					let (trap_account, builder) = match $dust_trap {
-						"on" => {
-							let trap_account = <Test as frame_system::Config>::AccountId::from(65174286u64);
-							let builder = ExtBuilder::default().existential_deposit($ext_deposit).dust_trap(trap_account);
-							(Some(trap_account), builder)
-						},
-						"off" => {
-							let builder = ExtBuilder::default().existential_deposit($ext_deposit);
-							(None, builder)
-						},
-						_ => panic!("dust_trap must be either \"on\" or \"off\"")
-					};
+				fn [< $name _existential_deposit_ $ext_deposit _dust_trap_on >]() {
+					let trap_account = <Test as frame_system::Config>::AccountId::from(65174286u64);
+					let builder = ExtBuilder::default().existential_deposit($ext_deposit).dust_trap(trap_account);
 					builder.build_and_execute_with(|| {
-						// Initialise the trap account if it is being used
-						if let Some(trap_account) = trap_account {
-							Balances::set_balance(&trap_account, Balances::minimum_balance());
-						};
+						// Initialise the trap account
+						Balances::set_balance(&trap_account, Balances::minimum_balance());
 						// Run the test
 						$pm::$cm::$name::<
 							Balances,
 							<Test as frame_system::Config>::AccountId,
-						>(trap_account);
+						>(Some(trap_account));
+					});
+				}
+
+				#[test]
+				fn [< $name _existential_deposit_ $ext_deposit _dust_trap_off >]() {
+					let builder = ExtBuilder::default().existential_deposit($ext_deposit);
+					builder.build_and_execute_with(|| {
+						// Run the test
+						$pm::$cm::$name::<
+							Balances,
+							<Test as frame_system::Config>::AccountId,
+						>(None);
 					});
 				}
 			}
 		)*
 	};
-	($pm:tt :: $cm:tt, $ext_deposit:expr, $dust_trap:expr) => {
+	($pm:tt :: $cm:tt, $ext_deposit:expr) => {
 		run_tests!(
 			$pm::$cm,
 			$ext_deposit,
-			$dust_trap,
 			mint_into_success,
 			mint_into_overflow,
 			mint_into_below_minimum,
@@ -89,11 +88,7 @@ macro_rules! run_tests {
 	};
 }
 
-run_tests!(conformance_tests::inspect_mutate, 1, "off");
-run_tests!(conformance_tests::inspect_mutate, 1, "on");
-run_tests!(conformance_tests::inspect_mutate, 2, "off");
-run_tests!(conformance_tests::inspect_mutate, 2, "on");
-run_tests!(conformance_tests::inspect_mutate, 5, "off");
-run_tests!(conformance_tests::inspect_mutate, 5, "on");
-run_tests!(conformance_tests::inspect_mutate, 1000, "off");
-run_tests!(conformance_tests::inspect_mutate, 1000, "on");
+run_tests!(conformance_tests::inspect_mutate, 1);
+run_tests!(conformance_tests::inspect_mutate, 2);
+run_tests!(conformance_tests::inspect_mutate, 5);
+run_tests!(conformance_tests::inspect_mutate, 1000);
