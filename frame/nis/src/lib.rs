@@ -537,7 +537,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Place a bid.
 		///
@@ -655,6 +655,7 @@ pub mod pallet {
 		///
 		/// - `origin`: Must be accepted by `FundOrigin`.
 		#[pallet::call_index(2)]
+		#[pallet::weight(T::WeightInfo::fund_deficit())]
 		pub fn fund_deficit(origin: OriginFor<T>) -> DispatchResult {
 			T::FundOrigin::ensure_origin(origin)?;
 			let summary: SummaryRecordOf<T> = Summary::<T>::get();
@@ -676,6 +677,7 @@ pub mod pallet {
 		/// - `portion`: If `Some`, then only the given portion of the receipt should be thawed. If
 		///   `None`, then all of it should be.
 		#[pallet::call_index(3)]
+		#[pallet::weight(T::WeightInfo::thaw_private())]
 		pub fn thaw_private(
 			origin: OriginFor<T>,
 			#[pallet::compact] index: ReceiptIndex,
@@ -781,6 +783,7 @@ pub mod pallet {
 		///   for receipt `index`.
 		/// - `index`: The index of the receipt.
 		#[pallet::call_index(4)]
+		#[pallet::weight(T::WeightInfo::thaw_communal())]
 		pub fn thaw_communal(
 			origin: OriginFor<T>,
 			#[pallet::compact] index: ReceiptIndex,
@@ -831,6 +834,7 @@ pub mod pallet {
 
 		/// Make a private receipt communal and create fungible counterparts for its owner.
 		#[pallet::call_index(5)]
+		#[pallet::weight(T::WeightInfo::communify())]
 		pub fn communify(
 			origin: OriginFor<T>,
 			#[pallet::compact] index: ReceiptIndex,
@@ -868,6 +872,7 @@ pub mod pallet {
 
 		/// Make a communal receipt private and burn fungible counterparts from its owner.
 		#[pallet::call_index(6)]
+		#[pallet::weight(T::WeightInfo::privatize())]
 		pub fn privatize(
 			origin: OriginFor<T>,
 			#[pallet::compact] index: ReceiptIndex,

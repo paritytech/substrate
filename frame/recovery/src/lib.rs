@@ -363,7 +363,7 @@ pub mod pallet {
 	#[pallet::getter(fn proxy)]
 	pub type Proxy<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::AccountId>;
 
-	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Send a call through a recovered account.
 		///
@@ -404,6 +404,7 @@ pub mod pallet {
 		/// - `lost`: The "lost account" to be recovered.
 		/// - `rescuer`: The "rescuer account" which can call as the lost account.
 		#[pallet::call_index(1)]
+		#[pallet::weight(T::WeightInfo::set_recovered())]
 		pub fn set_recovered(
 			origin: OriginFor<T>,
 			lost: AccountIdLookupOf<T>,
@@ -490,6 +491,7 @@ pub mod pallet {
 		/// - `account`: The lost account that you want to recover. This account needs to be
 		///   recoverable (i.e. have a recovery configuration).
 		#[pallet::call_index(3)]
+		#[pallet::weight(T::WeightInfo::initiate_recovery())]
 		pub fn initiate_recovery(
 			origin: OriginFor<T>,
 			account: AccountIdLookupOf<T>,
@@ -687,6 +689,7 @@ pub mod pallet {
 		/// Parameters:
 		/// - `account`: The recovered account you are able to call on-behalf-of.
 		#[pallet::call_index(8)]
+		#[pallet::weight(T::WeightInfo::cancel_recovered())]
 		pub fn cancel_recovered(
 			origin: OriginFor<T>,
 			account: AccountIdLookupOf<T>,

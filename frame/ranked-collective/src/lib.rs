@@ -428,7 +428,7 @@ pub mod pallet {
 		NoPermission,
 	}
 
-	#[pallet::call(weight = <T as crate::Config<I>>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Introduce a new member.
 		///
@@ -438,6 +438,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::call_index(0)]
+		#[pallet::weight(T::WeightInfo::add_member())]
 		pub fn add_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let _ = T::PromoteOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -516,6 +517,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`, less if there was no previous vote on the poll by the member.
 		#[pallet::call_index(4)]
+		#[pallet::weight(T::WeightInfo::vote())]
 		pub fn vote(
 			origin: OriginFor<T>,
 			poll: PollIndexOf<T, I>,

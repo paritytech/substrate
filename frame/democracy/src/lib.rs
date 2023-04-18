@@ -576,7 +576,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Propose a sensitive action to be taken.
 		///
@@ -588,6 +588,7 @@ pub mod pallet {
 		///
 		/// Emits `Proposed`.
 		#[pallet::call_index(0)]
+		#[pallet::weight(T::WeightInfo::propose())]
 		pub fn propose(
 			origin: OriginFor<T>,
 			proposal: BoundedCallOf<T>,
@@ -630,6 +631,7 @@ pub mod pallet {
 		///
 		/// - `proposal`: The index of the proposal to second.
 		#[pallet::call_index(1)]
+		#[pallet::weight(T::WeightInfo::second())]
 		pub fn second(
 			origin: OriginFor<T>,
 			#[pallet::compact] proposal: PropIndex,
@@ -697,6 +699,7 @@ pub mod pallet {
 		///
 		/// - `proposal_hash`: The preimage hash of the proposal.
 		#[pallet::call_index(4)]
+		#[pallet::weight(T::WeightInfo::external_propose())]
 		pub fn external_propose(
 			origin: OriginFor<T>,
 			proposal: BoundedCallOf<T>,
@@ -725,6 +728,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::call_index(5)]
+		#[pallet::weight(T::WeightInfo::external_propose_majority())]
 		pub fn external_propose_majority(
 			origin: OriginFor<T>,
 			proposal: BoundedCallOf<T>,
@@ -746,6 +750,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::call_index(6)]
+		#[pallet::weight(T::WeightInfo::external_propose_default())]
 		pub fn external_propose_default(
 			origin: OriginFor<T>,
 			proposal: BoundedCallOf<T>,
@@ -772,6 +777,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::fast_track())]
 		pub fn fast_track(
 			origin: OriginFor<T>,
 			proposal_hash: H256,
@@ -825,6 +831,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(V + log(V))` where V is number of `existing vetoers`
 		#[pallet::call_index(8)]
+		#[pallet::weight(T::WeightInfo::veto_external())]
 		pub fn veto_external(origin: OriginFor<T>, proposal_hash: H256) -> DispatchResult {
 			let who = T::VetoOrigin::ensure_origin(origin)?;
 
@@ -860,6 +867,7 @@ pub mod pallet {
 		///
 		/// # Weight: `O(1)`.
 		#[pallet::call_index(9)]
+		#[pallet::weight(T::WeightInfo::cancel_referendum())]
 		pub fn cancel_referendum(
 			origin: OriginFor<T>,
 			#[pallet::compact] ref_index: ReferendumIndex,
@@ -934,6 +942,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`.
 		#[pallet::call_index(12)]
+		#[pallet::weight(T::WeightInfo::clear_public_proposals())]
 		pub fn clear_public_proposals(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
 			<PublicProps<T>>::kill();
@@ -1087,6 +1096,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(p)` where `p = PublicProps::<T>::decode_len()`
 		#[pallet::call_index(17)]
+		#[pallet::weight(T::WeightInfo::cancel_proposal())]
 		pub fn cancel_proposal(
 			origin: OriginFor<T>,
 			#[pallet::compact] prop_index: PropIndex,

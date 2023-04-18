@@ -576,10 +576,11 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Remove a page which has no more messages remaining to be processed or is stale.
 		#[pallet::call_index(0)]
+		#[pallet::weight(T::WeightInfo::reap_page())]
 		pub fn reap_page(
 			origin: OriginFor<T>,
 			message_origin: MessageOriginOf<T>,

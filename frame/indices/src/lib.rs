@@ -77,7 +77,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Assign an previously unassigned index.
 		///
@@ -92,6 +92,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - `O(1)`.
 		#[pallet::call_index(0)]
+		#[pallet::weight(T::WeightInfo::claim())]
 		pub fn claim(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -117,6 +118,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - `O(1)`.
 		#[pallet::call_index(1)]
+		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
 			origin: OriginFor<T>,
 			new: AccountIdLookupOf<T>,
@@ -151,6 +153,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - `O(1)`.
 		#[pallet::call_index(2)]
+		#[pallet::weight(T::WeightInfo::free())]
 		pub fn free(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -179,6 +182,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - `O(1)`.
 		#[pallet::call_index(3)]
+		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
 			origin: OriginFor<T>,
 			new: AccountIdLookupOf<T>,
@@ -211,6 +215,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - `O(1)`.
 		#[pallet::call_index(4)]
+		#[pallet::weight(T::WeightInfo::freeze())]
 		pub fn freeze(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 

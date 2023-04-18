@@ -116,9 +116,10 @@ pub mod pallet {
 	pub type WhitelistedCall<T: Config> =
 		StorageMap<_, Twox64Concat, PreimageHash, (), OptionQuery>;
 
-	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
+		#[pallet::weight(T::WeightInfo::whitelist_call())]
 		pub fn whitelist_call(origin: OriginFor<T>, call_hash: PreimageHash) -> DispatchResult {
 			T::WhitelistOrigin::ensure_origin(origin)?;
 
@@ -136,6 +137,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(1)]
+		#[pallet::weight(T::WeightInfo::remove_whitelisted_call())]
 		pub fn remove_whitelisted_call(
 			origin: OriginFor<T>,
 			call_hash: PreimageHash,

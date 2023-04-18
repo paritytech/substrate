@@ -411,7 +411,7 @@ pub mod pallet {
 		PreimageNotExist,
 	}
 
-	#[pallet::call(weight = <T as crate::Config<I>>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Propose a referendum on a privileged action.
 		///
@@ -423,6 +423,7 @@ pub mod pallet {
 		///
 		/// Emits `Submitted`.
 		#[pallet::call_index(0)]
+		#[pallet::weight(T::WeightInfo::submit())]
 		pub fn submit(
 			origin: OriginFor<T>,
 			proposal_origin: Box<PalletsOriginOf<T>>,
@@ -498,6 +499,7 @@ pub mod pallet {
 		///
 		/// Emits `DecisionDepositRefunded`.
 		#[pallet::call_index(2)]
+		#[pallet::weight(T::WeightInfo::refund_decision_deposit())]
 		pub fn refund_decision_deposit(
 			origin: OriginFor<T>,
 			index: ReferendumIndex,
@@ -527,6 +529,7 @@ pub mod pallet {
 		///
 		/// Emits `Cancelled`.
 		#[pallet::call_index(3)]
+		#[pallet::weight(T::WeightInfo::cancel())]
 		pub fn cancel(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::CancelOrigin::ensure_origin(origin)?;
 			let status = Self::ensure_ongoing(index)?;
@@ -551,6 +554,7 @@ pub mod pallet {
 		///
 		/// Emits `Killed` and `DepositSlashed`.
 		#[pallet::call_index(4)]
+		#[pallet::weight(T::WeightInfo::kill())]
 		pub fn kill(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::KillOrigin::ensure_origin(origin)?;
 			let status = Self::ensure_ongoing(index)?;
@@ -633,6 +637,7 @@ pub mod pallet {
 		///
 		/// Emits `SubmissionDepositRefunded`.
 		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::refund_submission_deposit())]
 		pub fn refund_submission_deposit(
 			origin: OriginFor<T>,
 			index: ReferendumIndex,

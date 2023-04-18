@@ -196,7 +196,7 @@ pub mod pallet {
 		BadClass,
 	}
 
-	#[pallet::call(weight = <T as crate::Config<I>>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Vote in a poll. If `vote.is_aye()`, the vote is to enact the proposal;
 		/// otherwise it is a vote to keep the status quo.
@@ -296,6 +296,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(R)` with R number of vote of target.
 		#[pallet::call_index(3)]
+		#[pallet::weight(T::WeightInfo::unlock())]
 		pub fn unlock(
 			origin: OriginFor<T>,
 			class: ClassOf<T, I>,
@@ -337,6 +338,7 @@ pub mod pallet {
 		/// Weight: `O(R + log R)` where R is the number of polls that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
 		#[pallet::call_index(4)]
+		#[pallet::weight(T::WeightInfo::remove_vote())]
 		pub fn remove_vote(
 			origin: OriginFor<T>,
 			class: Option<ClassOf<T, I>>,
@@ -363,6 +365,7 @@ pub mod pallet {
 		/// Weight: `O(R + log R)` where R is the number of polls that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
 		#[pallet::call_index(5)]
+		#[pallet::weight(T::WeightInfo::remove_other_vote())]
 		pub fn remove_other_vote(
 			origin: OriginFor<T>,
 			target: AccountIdLookupOf<T>,

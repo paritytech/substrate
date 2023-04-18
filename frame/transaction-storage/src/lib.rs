@@ -179,7 +179,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Index and store data off chain. Minimum data size is 1 bytes, maximum is
 		/// `MaxTransactionSize`. Data will be removed after `STORAGE_PERIOD` blocks, unless `renew`
@@ -235,6 +235,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1).
 		#[pallet::call_index(1)]
+		#[pallet::weight(T::WeightInfo::renew())]
 		pub fn renew(
 			origin: OriginFor<T>,
 			block: T::BlockNumber,

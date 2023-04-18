@@ -181,7 +181,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Report voter equivocation/misbehavior. This method will verify the
 		/// equivocation proof and validate the given key ownership proof
@@ -242,6 +242,7 @@ pub mod pallet {
 		///
 		/// Only callable by root.
 		#[pallet::call_index(2)]
+		#[pallet::weight(T::WeightInfo::note_stalled())]
 		pub fn note_stalled(
 			origin: OriginFor<T>,
 			delay: T::BlockNumber,

@@ -327,7 +327,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Vote for a set of candidates for the upcoming round of election. This can be called to
 		/// set the initial votes, or update already existing votes.
@@ -414,6 +414,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this call must be signed and be a voter.
 		#[pallet::call_index(1)]
+		#[pallet::weight(T::WeightInfo::remove_voter())]
 		pub fn remove_voter(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_voter(&who), Error::<T>::MustBeVoter);

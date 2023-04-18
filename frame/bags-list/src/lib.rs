@@ -211,7 +211,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call(weight = <T as crate::Config<I>>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Declare that some `dislocated` account has, through rewards or penalties, sufficiently
 		/// changed its score that it should properly fall into a different bag than its current
@@ -243,6 +243,7 @@ pub mod pallet {
 		/// - both nodes are within the same bag,
 		/// - and `origin` has a greater `Score` than `lighter`.
 		#[pallet::call_index(1)]
+		#[pallet::weight(T::WeightInfo::put_in_front_of())]
 		pub fn put_in_front_of(
 			origin: OriginFor<T>,
 			lighter: AccountIdLookupOf<T>,

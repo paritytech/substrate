@@ -829,7 +829,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
 		/// be the account that controls it.
@@ -847,6 +847,7 @@ pub mod pallet {
 		/// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned
 		/// unless the `origin` falls below _existential deposit_ and gets removed as dust.
 		#[pallet::call_index(0)]
+		#[pallet::weight(T::WeightInfo::bond())]
 		pub fn bond(
 			origin: OriginFor<T>,
 			controller: AccountIdLookupOf<T>,
@@ -915,6 +916,7 @@ pub mod pallet {
 		/// - Independent of the arguments. Insignificant complexity.
 		/// - O(1).
 		#[pallet::call_index(1)]
+		#[pallet::weight(T::WeightInfo::bond_extra())]
 		pub fn bond_extra(
 			origin: OriginFor<T>,
 			#[pallet::compact] max_additional: BalanceOf<T>,
@@ -1091,6 +1093,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		#[pallet::call_index(4)]
+		#[pallet::weight(T::WeightInfo::validate())]
 		pub fn validate(origin: OriginFor<T>, prefs: ValidatorPrefs) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
@@ -1201,6 +1204,7 @@ pub mod pallet {
 		/// - Contains one read.
 		/// - Writes are limited to the `origin` account key.
 		#[pallet::call_index(6)]
+		#[pallet::weight(T::WeightInfo::chill())]
 		pub fn chill(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -1221,6 +1225,7 @@ pub mod pallet {
 		/// - Writes are limited to the `origin` account key.
 		/// ---------
 		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::set_payee())]
 		pub fn set_payee(
 			origin: OriginFor<T>,
 			payee: RewardDestination<T::AccountId>,
@@ -1244,6 +1249,7 @@ pub mod pallet {
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
 		#[pallet::call_index(8)]
+		#[pallet::weight(T::WeightInfo::set_controller())]
 		pub fn set_controller(
 			origin: OriginFor<T>,
 			controller: AccountIdLookupOf<T>,
@@ -1270,6 +1276,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// O(1)
 		#[pallet::call_index(9)]
+		#[pallet::weight(T::WeightInfo::set_validator_count())]
 		pub fn set_validator_count(
 			origin: OriginFor<T>,
 			#[pallet::compact] new: u32,
@@ -1347,6 +1354,7 @@ pub mod pallet {
 		/// - No arguments.
 		/// - Weight: O(1)
 		#[pallet::call_index(12)]
+		#[pallet::weight(T::WeightInfo::force_no_eras())]
 		pub fn force_no_eras(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::set_force_era(Forcing::ForceNone);
@@ -1368,6 +1376,7 @@ pub mod pallet {
 		/// - No arguments.
 		/// - Weight: O(1)
 		#[pallet::call_index(13)]
+		#[pallet::weight(T::WeightInfo::force_new_era())]
 		pub fn force_new_era(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::set_force_era(Forcing::ForceNew);
@@ -1418,6 +1427,7 @@ pub mod pallet {
 		/// If this is called just before a new era is triggered, the election process may not
 		/// have enough blocks to get a result.
 		#[pallet::call_index(16)]
+		#[pallet::weight(T::WeightInfo::force_new_era_always())]
 		pub fn force_new_era_always(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::set_force_era(Forcing::ForceAlways);
@@ -1672,6 +1682,7 @@ pub mod pallet {
 		/// This can be helpful if bond requirements are updated, and we need to remove old users
 		/// who do not satisfy these requirements.
 		#[pallet::call_index(23)]
+		#[pallet::weight(T::WeightInfo::chill_other())]
 		pub fn chill_other(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
 			// Anyone can call this function.
 			let caller = ensure_signed(origin)?;
@@ -1734,6 +1745,7 @@ pub mod pallet {
 		/// validator who already has a commission greater than or equal to the minimum. Any account
 		/// can call this.
 		#[pallet::call_index(24)]
+		#[pallet::weight(T::WeightInfo::force_apply_min_commission())]
 		pub fn force_apply_min_commission(
 			origin: OriginFor<T>,
 			validator_stash: T::AccountId,
@@ -1757,6 +1769,7 @@ pub mod pallet {
 		/// This call has lower privilege requirements than `set_staking_config` and can be called
 		/// by the `T::AdminOrigin`. Root can always call this.
 		#[pallet::call_index(25)]
+		#[pallet::weight(T::WeightInfo::set_min_commission())]
 		pub fn set_min_commission(origin: OriginFor<T>, new: Perbill) -> DispatchResult {
 			T::AdminOrigin::ensure_origin(origin)?;
 			MinCommission::<T>::put(new);

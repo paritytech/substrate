@@ -343,7 +343,7 @@ pub mod pallet {
 		spend_in_context: BTreeMap<Balance, Balance>,
 	}
 
-	#[pallet::call(weight = <T as crate::Config<I>>::WeightInfo)]
+	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
@@ -352,6 +352,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1)
 		#[pallet::call_index(0)]
+		#[pallet::weight(T::WeightInfo::propose_spend())]
 		pub fn propose_spend(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T, I>,
@@ -429,6 +430,7 @@ pub mod pallet {
 		/// NOTE: For record-keeping purposes, the proposer is deemed to be equivalent to the
 		/// beneficiary.
 		#[pallet::call_index(3)]
+		#[pallet::weight(T::WeightInfo::spend())]
 		pub fn spend(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T, I>,
