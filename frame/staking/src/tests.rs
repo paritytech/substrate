@@ -4516,39 +4516,44 @@ mod election_data_provider {
 	}
 
 	#[test]
-	fn set_minimum_active_stake_lower_bound_works() {
-		// the minimum active stake should never be below `MinNominatorBond`, even in the extreme
-		// case where there are no nominators (should not happen in any case).
+	fn set_minimum_active_stake_lower_bond_works() {
+		// if there are no voters, minimum active stake is `MinNominatorBond` (should not happen).
 		ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 			assert_eq!(<Test as Config>::VoterList::count(), 0);
 			assert_ok!(<Staking as ElectionDataProvider>::electing_voters(None));
 			assert_eq!(MinimumActiveStake::<Test>::get(), MinNominatorBond::<Test>::get());
 		});
 
-		// nominators with no balance (defensive, should not happen).
-		ExtBuilder::default().has_stakers(true).build_and_execute(|| {
+		// lower non-zero active stake below `MinNominatorBond` is the minimum active stake if
+		// it is selected as part of the npos voters.
+		ExtBuilder::default().has_stakers(true).nominate(true).build_and_execute(|| {
+			assert_eq!(MinNominatorBond::<Test>::get(), 1);
 			assert_eq!(<Test as Config>::VoterList::count(), 4);
 
-			Staking::do_add_nominator(
-				&10,
-				Nominations {
-					targets: bounded_vec![11],
-					submitted_in: Default::default(),
-					suppressed: false,
-				},
-			);
+			assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 5, Default::default(),));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(4), vec![1]));
+			assert_eq!(<Test as Config>::VoterList::count(), 5);
 
-			// verify if nominator 10 is part of the voter list but its voter weight is zero. this
-			// should not happen in normal conditions but could happen in case of encoding error.
-			assert!(<Test as Config>::VoterList::contains(&10));
-			assert!(Staking::weight_of(&10).is_zero());
+			let voters_before = <Staking as ElectionDataProvider>::electing_voters(None).unwrap();
+			assert_eq!(MinimumActiveStake::<Test>::get(), 5);
 
-			assert_eq!(MinimumActiveStake::<Test>::get(), Staking::weight_of(&101).into());
+			// update minimum nominator bond.
+			MinNominatorBond::<Test>::set(10);
+			assert_eq!(MinNominatorBond::<Test>::get(), 10);
+			// voter list still considers nominator 4 for voting, even though its active stake is
+			// lower than `MinNominatorBond`.
+			assert_eq!(<Test as Config>::VoterList::count(), 5);
+
+			let voters = <Staking as ElectionDataProvider>::electing_voters(None).unwrap();
+			assert_eq!(voters_before, voters);
+
+			// minimum active stake is lower than `MinNominatorBond`.
+			assert_eq!(MinimumActiveStake::<Test>::get(), 5);
 		});
 	}
 
 	#[test]
-	fn set_minimum_active_bound_corrupt_state() {
+	fn set_minimum_active_bond_corrupt_state() {
 		ExtBuilder::default()
 			.has_stakers(true)
 			.nominate(true)

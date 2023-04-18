@@ -783,8 +783,7 @@ impl<T: Config> Pallet<T> {
 			};
 
 			let voter_weight = weight_of(&voter);
-			// if voter weight is zero, it may be due to encoding issues or data inconsistencies. Do
-			// not consider this voter.
+			// if voter weight is zero, do not consider this voter for the snapshot.
 			if voter_weight.is_zero() {
 				voters_seen.saturating_dec();
 				log!(warn, "voter's active balance is 0. skip this voter.");
@@ -798,7 +797,6 @@ impl<T: Config> Pallet<T> {
 				} else {
 					// Technically should never happen, but not much we can do about it.
 				}
-
 				min_active_stake =
 					if voter_weight < min_active_stake { voter_weight } else { min_active_stake };
 			} else if Validators::<T>::contains_key(&voter) {
