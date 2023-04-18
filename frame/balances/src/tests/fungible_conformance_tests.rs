@@ -19,11 +19,8 @@ use super::*;
 use frame_support::traits::fungible::{conformance_tests, Inspect, Mutate};
 use paste::paste;
 
-// $pm = parent module
-// $cm = child module
-// shorthand so each run_tests! call can fit on one line
 macro_rules! run_tests {
-    ($pm:tt :: $cm:tt, $ext_deposit:expr, $($name:ident),*) => {
+    ($parent_module:tt :: $child_module:tt, $ext_deposit:expr, $($name:ident),*) => {
 		$(
 			paste! {
 				#[test]
@@ -34,7 +31,7 @@ macro_rules! run_tests {
 						// Initialise the trap account
 						Balances::set_balance(&trap_account, Balances::minimum_balance());
 						// Run the test
-						$pm::$cm::$name::<
+						$parent_module::$child_module::$name::<
 							Balances,
 							<Test as frame_system::Config>::AccountId,
 						>(Some(trap_account));
@@ -46,7 +43,7 @@ macro_rules! run_tests {
 					let builder = ExtBuilder::default().existential_deposit($ext_deposit);
 					builder.build_and_execute_with(|| {
 						// Run the test
-						$pm::$cm::$name::<
+						$parent_module::$child_module::$name::<
 							Balances,
 							<Test as frame_system::Config>::AccountId,
 						>(None);
@@ -55,9 +52,9 @@ macro_rules! run_tests {
 			}
 		)*
 	};
-	($pm:tt :: $cm:tt, $ext_deposit:expr) => {
+	($parent_module:tt :: $child_module:tt, $ext_deposit:expr) => {
 		run_tests!(
-			$pm::$cm,
+			$parent_module::$child_module,
 			$ext_deposit,
 			mint_into_success,
 			mint_into_overflow,
