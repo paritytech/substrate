@@ -48,22 +48,3 @@ mod benchmarks {
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_bench_ext(), crate::mock::Test);
 }
-/*
-
-benchmarks! {
-	set_key {
-
-		let caller: T::AccountId = whitelisted_caller();
-		Key::<T>::put(caller.clone());
-
-		let new_sudoer: T::AccountId = account("sudoer", 0, SEED);
-		let new_sudoer_lookup = T::Lookup::unlookup(new_sudoer.clone());
-
-	}: _(RawOrigin::Signed(caller.clone()), new_sudoer_lookup)
-	verify {
-		assert_last_event::<T>(Event::KeyChanged { old_sudoer: Some(caller)}.into());
-	}
-
-	impl_benchmark_test_suite!(Pallet, crate::mock::new_bench_ext(), crate::mock::Test);
-}
-*/
