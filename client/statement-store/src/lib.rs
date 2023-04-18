@@ -85,38 +85,43 @@ mod col {
 	pub const COUNT: u8 = 3;
 }
 
-#[derive(PartialEq, Eq)]
-struct PriorityKey {
-	hash: Hash,
-	priority: u32,
-}
+#[derive(Eq, PartialEq, Debug, Ord, PartialOrd, Clone, Copy)]
+struct Priority(u32);
+#[derive(Eq, PartialEq, Debug, Ord, PartialOrd, Clone, Copy, Encode, Decode)]
+struct GlobalPriority(u32);
 
 #[derive(PartialEq, Eq)]
-struct ChannelEntry {
+struct PriorityKey<P> {
 	hash: Hash,
-	priority: u32,
+	priority: P,
 }
 
-#[derive(Default)]
-struct StatementsForAccount {
-	// Statements ordered by priority.
-	by_priority: BTreeMap<PriorityKey, (Option<Channel>, usize)>,
-	// Channel to statement map. Only one statement per channel is allowed.
-	channels: HashMap<Channel, ChannelEntry>,
-	// Sum of all `Data` field sizes.
-	data_size: usize,
-}
-
-impl PartialOrd for PriorityKey {
+impl<P: Ord> PartialOrd for PriorityKey<P> {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
 		Some(self.cmp(other))
 	}
 }
 
-impl Ord for PriorityKey {
+impl<P: Ord> Ord for PriorityKey<P> {
 	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
 		self.priority.cmp(&other.priority).then_with(|| self.hash.cmp(&other.hash))
 	}
+}
+
+#[derive(PartialEq, Eq)]
+struct ChannelEntry {
+	hash: Hash,
+	priority: Priority,
+}
+
+#[derive(Default)]
+struct StatementsForAccount {
+	// Statements ordered by priority.
+	by_priority: BTreeMap<PriorityKey<Priority>, (Option<Channel>, usize)>,
+	// Channel to statement map. Only one statement per channel is allowed.
+	channels: HashMap<Channel, ChannelEntry>,
+	// Sum of all `Data` field sizes.
+	data_size: usize,
 }
 
 #[derive(Default)]
@@ -124,11 +129,11 @@ struct Index {
 	by_topic: HashMap<Topic, HashSet<Hash>>,
 	by_dec_key: HashMap<DecryptionKey, HashSet<Hash>>,
 	topics_and_keys: HashMap<Hash, ([Option<Topic>; 4], Option<DecryptionKey>)>,
-	entries: HashMap<Hash, (AccountId, u32, u32)>, /* Statement hash -> (Account id,
+	entries: HashMap<Hash, (AccountId, GlobalPriority, Priority)>, /* Statement hash -> (Account id,
 	                                                * global_priority, priority) */
 	expired: HashMap<Hash, u64>, // Value is expiration timestamp.
 	accounts: HashMap<AccountId, StatementsForAccount>,
-	by_global_priority: BTreeMap<PriorityKey, usize>,
+	by_global_priority: BTreeMap<PriorityKey<GlobalPriority>, usize>,
 	max_entries: usize,
 	max_size: usize,
 	total_size: usize,
@@ -184,7 +189,7 @@ pub struct Store {
 
 #[derive(Encode, Decode, Clone)]
 struct StatementMeta {
-	global_priority: u32,
+	global_priority: GlobalPriority,
 }
 
 #[derive(Encode, Decode)]
@@ -213,7 +218,7 @@ impl Index {
 		&mut self,
 		hash: Hash,
 		account: AccountId,
-		global_priority: u32,
+		global_priority: GlobalPriority,
 		statement: &Statement,
 	) {
 		let mut all_topics = [None; 4];
@@ -230,7 +235,7 @@ impl Index {
 		if nt > 0 || key.is_some() {
 			self.topics_and_keys.insert(hash, (all_topics, key));
 		}
-		let priority = statement.priority().unwrap_or(0);
+		let priority = Priority(statement.priority().unwrap_or(0));
 		self.entries.insert(hash, (account, global_priority, priority));
 		self.by_global_priority
 			.insert(PriorityKey { hash, priority: global_priority }, statement.data_len());
@@ -396,7 +401,7 @@ impl Index {
 
 		let mut evicted = HashSet::new();
 		let mut would_free_size = 0;
-		let priority = statement.priority().unwrap_or(0);
+		let priority = Priority(statement.priority().unwrap_or(0));
 		let (max_size, max_count) = (validation.max_size as usize, validation.max_count as usize);
 		// It may happen that we can't delete enough lower priority messages
 		// to satisfy size constraints. We check for that before deleting anything,
@@ -408,7 +413,7 @@ impl Index {
 						// Trying to replace channel message with lower priority
 						log::debug!(
 							target: LOG_TARGET,
-							"Ignored lower priority channel message: {:?} {} <= {}",
+							"Ignored lower priority channel message: {:?} {:?} <= {:?}",
 							HexDisplay::from(&hash),
 							priority,
 							channel_record.priority,
@@ -419,7 +424,7 @@ impl Index {
 						// below.
 						log::debug!(
 							target: LOG_TARGET,
-							"Replacing higher priority channel message: {:?} ({}) > {:?} ({})",
+							"Replacing higher priority channel message: {:?} ({:?}) > {:?} ({:?})",
 							HexDisplay::from(&hash),
 							priority,
 							HexDisplay::from(&channel_record.hash),
@@ -451,7 +456,7 @@ impl Index {
 				if entry.priority >= priority {
 					log::debug!(
 						target: LOG_TARGET,
-						"Ignored message due to constraints {:?} {} < {}",
+						"Ignored message due to constraints {:?} {:?} < {:?}",
 						HexDisplay::from(&hash),
 						priority,
 						entry.priority,
@@ -462,6 +467,7 @@ impl Index {
 				would_free_size += len;
 			}
 		}
+		let global_priority = GlobalPriority(validation.global_priority);
 		// Now check global constraints as well.
 		for (entry, len) in self.by_global_priority.iter() {
 			if (self.total_size - would_free_size + statement_len <= self.max_size) &&
@@ -475,10 +481,10 @@ impl Index {
 				continue
 			}
 
-			if entry.priority >= validation.global_priority {
+			if entry.priority >= global_priority {
 				log::debug!(
 					target: LOG_TARGET,
-					"Ignored message due to global constraints {:?} {} < {}",
+					"Ignored message due to global constraints {:?} {:?} < {:?}",
 					HexDisplay::from(&hash),
 					priority,
 					entry.priority,
@@ -492,7 +498,7 @@ impl Index {
 		for h in &evicted {
 			self.make_expired(h, current_time);
 		}
-		self.insert_new(hash, *account, validation.global_priority, statement);
+		self.insert_new(hash, *account, global_priority, statement);
 		MaybeInserted::Inserted(evicted)
 	}
 }
@@ -857,7 +863,7 @@ impl StatementStore for Store {
 		};
 
 		let statement_with_meta = StatementWithMeta {
-			meta: StatementMeta { global_priority: validation.global_priority },
+			meta: StatementMeta { global_priority: GlobalPriority(validation.global_priority) },
 			statement,
 		};
 
