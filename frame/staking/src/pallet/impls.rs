@@ -782,16 +782,16 @@ impl<T: Config> Pallet<T> {
 				None => break,
 			};
 
+			let voter_weight = weight_of(&voter);
+			// if voter weight is zero, it may be due to encoding issues or data inconsistencies. Do
+			// not consider this voter.
+			if voter_weight.is_zero() {
+				voters_seen.saturating_dec();
+				log!(warn, "voter's active balance is 0. skip this voter.");
+				continue
+			}
+
 			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
-				let voter_weight = weight_of(&voter);
-
-				// if voter weight is zero, it may be due to encoding issues or data
-				// inconsistencies. do not consider nominator and skip updating `min_active_stake`.
-				if voter_weight.is_zero() {
-					log!(warn, "active nominator balance in ledger is 0, this may be due to encoding issues or data inconsistencies. skip this voter.");
-					continue
-				}
-
 				if !targets.is_empty() {
 					all_voters.push((voter.clone(), voter_weight, targets));
 					nominators_taken.saturating_inc();
@@ -805,7 +805,7 @@ impl<T: Config> Pallet<T> {
 				// if this voter is a validator:
 				let self_vote = (
 					voter.clone(),
-					weight_of(&voter),
+					voter_weight,
 					vec![voter.clone()]
 						.try_into()
 						.expect("`MaxVotesPerVoter` must be greater than or equal to 1"),
