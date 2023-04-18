@@ -30,7 +30,7 @@ use codec::{Decode, Encode, Error as CodecError};
 use sc_network::{config::RequestResponseConfig, PeerId};
 use sp_runtime::traits::{Block, NumberFor};
 
-use crate::communication::beefy_protocol_name::justifications_protocol_name;
+use crate::communication::{beefy_protocol_name::justifications_protocol_name, peers::PeerReport};
 use incoming_requests_handler::IncomingRequestReceiver;
 
 // 10 seems reasonable, considering justifs are explicitly requested only
@@ -76,7 +76,7 @@ pub struct JustificationRequest<B: Block> {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
+pub(crate) enum Error {
 	#[error(transparent)]
 	Client(#[from] sp_blockchain::Error),
 
@@ -99,5 +99,8 @@ pub enum Error {
 	SendResponse,
 
 	#[error("Received invalid response.")]
-	InvalidResponse,
+	InvalidResponse(PeerReport),
+
+	#[error("Internal error while getting response.")]
+	ResponseError,
 }
