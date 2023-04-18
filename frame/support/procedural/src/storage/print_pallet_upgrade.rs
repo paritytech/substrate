@@ -273,14 +273,12 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 			doc = line.doc_attrs.iter().fold(String::new(), |mut res, attr| {
 				if let syn::Meta::NameValue(name_value) = attr {
 					if name_value.path.is_ident("doc") {
-						if let syn::Lit::Str(string) = &name_value.lit {
-							res = format!(
-								"{}
-	///{}",
-								res,
-								string.value(),
-							);
-						}
+						res = format!(
+							"{}
+							///{}",
+							res,
+							name_value.value.to_token_stream(),
+						);
 					}
 				}
 				res

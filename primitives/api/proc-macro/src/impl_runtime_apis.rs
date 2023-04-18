@@ -15,14 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::utils::{
-	extract_all_signature_types, extract_block_type_from_trait_path, extract_impl_trait,
-	extract_parameter_names_types_and_borrows, generate_crate_access,
-	generate_runtime_mod_name_for_trait, parse_runtime_api_version, prefix_function_with_trait,
-	versioned_trait_name, AllowSelfRefInParameters, RequireQualifiedTraitPath,
+use crate::{
+	common::API_VERSION_ATTRIBUTE,
+	runtime_metadata::generate_impl_runtime_metadata,
+	utils::{
+		extract_all_signature_types, extract_block_type_from_trait_path, extract_impl_trait,
+		extract_parameter_names_types_and_borrows, generate_crate_access,
+		generate_runtime_mod_name_for_trait, parse_runtime_api_version, prefix_function_with_trait,
+		versioned_trait_name, AllowSelfRefInParameters, RequireQualifiedTraitPath,
+	},
 };
-
-use crate::common::API_VERSION_ATTRIBUTE;
 
 use proc_macro2::{Span, TokenStream};
 
@@ -137,7 +139,7 @@ fn generate_impl_calls(
 			.ident;
 
 		for item in &impl_.items {
-			if let ImplItem::Method(method) = item {
+			if let ImplItem::Fn(method) = item {
 				let impl_call =
 					generate_impl_call(&method.sig, &impl_.self_ty, input, &impl_trait)?;
 
@@ -685,6 +687,7 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let runtime_api_versions = generate_runtime_api_versions(api_impls)?;
 	let wasm_interface = generate_wasm_interface(api_impls)?;
 	let api_impls_for_runtime_api = generate_api_impl_for_runtime_api(api_impls)?;
+	let runtime_metadata = generate_impl_runtime_metadata(api_impls)?;
 
 	let impl_ = quote!(
 		#base_runtime_api
@@ -694,6 +697,8 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 		#api_impls_for_runtime_api
 
 		#runtime_api_versions
+
+		#runtime_metadata
 
 		pub mod api {
 			use super::*;
@@ -715,7 +720,7 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 
 // Filters all attributes except the cfg ones.
 fn filter_cfg_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
-	attrs.iter().filter(|a| a.path.is_ident("cfg")).cloned().collect()
+	attrs.iter().filter(|a| a.path().is_ident("cfg")).cloned().collect()
 }
 
 // Extracts the value of `API_VERSION_ATTRIBUTE` and handles errors.
@@ -727,7 +732,7 @@ fn extract_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<u64>
 	// First fetch all `API_VERSION_ATTRIBUTE` values (should be only one)
 	let api_ver = attrs
 		.iter()
-		.filter(|a| a.path.is_ident(API_VERSION_ATTRIBUTE))
+		.filter(|a| a.path().is_ident(API_VERSION_ATTRIBUTE))
 		.collect::<Vec<_>>();
 
 	if api_ver.len() > 1 {

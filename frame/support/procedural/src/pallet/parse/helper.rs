@@ -56,7 +56,7 @@ where
 	let attrs = if let Some(attrs) = item.mut_item_attrs() { attrs } else { return Ok(None) };
 
 	if let Some(index) = attrs.iter().position(|attr| {
-		attr.path.segments.first().map_or(false, |segment| segment.ident == "pallet")
+		attr.path().segments.first().map_or(false, |segment| segment.ident == "pallet")
 	}) {
 		let pallet_attr = attrs.remove(index);
 		Ok(Some(syn::parse2(pallet_attr.into_token_stream())?))
@@ -84,7 +84,7 @@ pub fn get_item_cfg_attrs(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
 	attrs
 		.iter()
 		.filter_map(|attr| {
-			if attr.path.segments.first().map_or(false, |segment| segment.ident == "cfg") {
+			if attr.path().segments.first().map_or(false, |segment| segment.ident == "cfg") {
 				Some(attr.clone())
 			} else {
 				None
@@ -103,7 +103,6 @@ impl MutItemAttrs for syn::Item {
 			Self::ForeignMod(item) => Some(item.attrs.as_mut()),
 			Self::Impl(item) => Some(item.attrs.as_mut()),
 			Self::Macro(item) => Some(item.attrs.as_mut()),
-			Self::Macro2(item) => Some(item.attrs.as_mut()),
 			Self::Mod(item) => Some(item.attrs.as_mut()),
 			Self::Static(item) => Some(item.attrs.as_mut()),
 			Self::Struct(item) => Some(item.attrs.as_mut()),
@@ -121,7 +120,7 @@ impl MutItemAttrs for syn::TraitItem {
 	fn mut_item_attrs(&mut self) -> Option<&mut Vec<syn::Attribute>> {
 		match self {
 			Self::Const(item) => Some(item.attrs.as_mut()),
-			Self::Method(item) => Some(item.attrs.as_mut()),
+			Self::Fn(item) => Some(item.attrs.as_mut()),
 			Self::Type(item) => Some(item.attrs.as_mut()),
 			Self::Macro(item) => Some(item.attrs.as_mut()),
 			_ => None,
@@ -141,7 +140,7 @@ impl MutItemAttrs for syn::ItemMod {
 	}
 }
 
-impl MutItemAttrs for syn::ImplItemMethod {
+impl MutItemAttrs for syn::ImplItemFn {
 	fn mut_item_attrs(&mut self) -> Option<&mut Vec<syn::Attribute>> {
 		Some(&mut self.attrs)
 	}
