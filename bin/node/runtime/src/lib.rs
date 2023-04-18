@@ -2145,9 +2145,9 @@ impl_runtime_apis! {
 				gas_limit,
 				storage_deposit_limit,
 				input_data,
-				true,
+				pallet_contracts::DebugInfo::UnsafeDebug,
 				pallet_contracts::Determinism::Enforced,
-				true,
+				pallet_contracts::CollectEvents::UnsafeCollect,
 			)
 		}
 
@@ -2170,8 +2170,8 @@ impl_runtime_apis! {
 				code,
 				data,
 				salt,
-				true,
-				true,
+				pallet_contracts::DebugInfo::UnsafeDebug,
+				pallet_contracts::CollectEvents::UnsafeCollect,
 			)
 		}
 
