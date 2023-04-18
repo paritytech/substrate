@@ -129,8 +129,9 @@ struct Index {
 	by_topic: HashMap<Topic, HashSet<Hash>>,
 	by_dec_key: HashMap<Option<DecryptionKey>, HashSet<Hash>>,
 	topics_and_keys: HashMap<Hash, ([Option<Topic>; MAX_TOPICS], Option<DecryptionKey>)>,
-	entries: HashMap<Hash, (AccountId, GlobalPriority, Priority)>, /* Statement hash -> (Account id,
-	                                                * global_priority, priority) */
+	entries: HashMap<Hash, (AccountId, GlobalPriority, Priority)>, /* Statement hash -> (Account
+	                                                                * id,
+	                                                                * global_priority, priority) */
 	expired: HashMap<Hash, u64>, // Value is expiration timestamp.
 	accounts: HashMap<AccountId, StatementsForAccount>,
 	by_global_priority: BTreeMap<PriorityKey<GlobalPriority>, usize>,
@@ -329,14 +330,18 @@ impl Index {
 			self.total_size -= len;
 			if let Some((topics, key)) = self.topics_and_keys.remove(hash) {
 				for t in topics.into_iter().flatten() {
-					if let std::collections::hash_map::Entry::Occupied(mut set) = self.by_topic.entry(t) {
+					if let std::collections::hash_map::Entry::Occupied(mut set) =
+						self.by_topic.entry(t)
+					{
 						set.get_mut().remove(hash);
 						if set.get().is_empty() {
 							set.remove_entry();
 						}
 					}
 				}
-				if let std::collections::hash_map::Entry::Occupied(mut set) = self.by_dec_key.entry(key) {
+				if let std::collections::hash_map::Entry::Occupied(mut set) =
+					self.by_dec_key.entry(key)
+				{
 					set.get_mut().remove(hash);
 					if set.get().is_empty() {
 						set.remove_entry();
@@ -939,8 +944,8 @@ mod tests {
 	use sp_core::Pair;
 	use sp_statement_store::{
 		runtime_api::{InvalidStatement, ValidStatement, ValidateStatement},
-		AccountId, Channel, NetworkPriority, Proof, SignatureVerificationResult, Statement,
-		StatementSource, StatementStore, SubmitResult, Topic, DecryptionKey,
+		AccountId, Channel, DecryptionKey, NetworkPriority, Proof, SignatureVerificationResult,
+		Statement, StatementSource, StatementStore, SubmitResult, Topic,
 	};
 
 	type Extrinsic = sp_runtime::OpaqueExtrinsic;
@@ -1040,7 +1045,11 @@ mod tests {
 		signed_statement_with_topics(data, &[], None)
 	}
 
-	fn signed_statement_with_topics(data: u8, topics: &[Topic], dec_key: Option<DecryptionKey>) -> Statement {
+	fn signed_statement_with_topics(
+		data: u8,
+		topics: &[Topic],
+		dec_key: Option<DecryptionKey>,
+	) -> Statement {
 		let mut statement = Statement::new();
 		statement.set_plain_data(vec![data]);
 		for i in 0..topics.len() {
@@ -1159,12 +1168,11 @@ mod tests {
 		let assert_topics = |topics: &[u64], key: Option<u64>, expected: &[u8]| {
 			let key = key.map(dec_key);
 			let topics: Vec<_> = topics.iter().map(|t| topic(*t)).collect();
-			let mut got_vals: Vec<_> =
-				if let Some(key) = key {
-					store.posted(&topics, key).unwrap().into_iter().map(|d| d[0]).collect()
-				} else {
-					store.broadcasts(&topics).unwrap().into_iter().map(|d| d[0]).collect()
-				};
+			let mut got_vals: Vec<_> = if let Some(key) = key {
+				store.posted(&topics, key).unwrap().into_iter().map(|d| d[0]).collect()
+			} else {
+				store.broadcasts(&topics).unwrap().into_iter().map(|d| d[0]).collect()
+			};
 			got_vals.sort();
 			assert_eq!(expected.to_vec(), got_vals);
 		};

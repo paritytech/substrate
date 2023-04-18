@@ -131,8 +131,8 @@ impl Proof {
 	}
 }
 
-/// Statement attributes. Each statement is a list of 0 or more fields. Fields may only appear once and in
-/// the order declared here.
+/// Statement attributes. Each statement is a list of 0 or more fields. Fields may only appear once
+/// and in the order declared here.
 #[derive(Encode, Decode, TypeInfo, sp_core::RuntimeDebug, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Field {
