@@ -62,7 +62,7 @@ where
 	/// Get header of a block.
 	fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error>;
 
-	/// Get header and body of a chain block.
+	/// Get header and body of a block.
 	fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error>;
 
 	/// Get hash of the n-th block in the canon chain.
