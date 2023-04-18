@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@ use codec::Encode;
 
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{WasmInstance, WasmModule},
+	wasm_runtime::{WasmInstance, WasmModule, DEFAULT_HEAP_ALLOC_STRATEGY},
 };
 use sc_executor_wasmtime::InstantiationStrategy;
 use sc_runtime_test::wasm_binary_unwrap as test_runtime;
@@ -48,31 +48,33 @@ fn initialize(
 	_tmpdir: &mut Option<tempfile::TempDir>,
 	runtime: &[u8],
 	method: Method,
-) -> Arc<dyn WasmModule> {
+) -> Box<dyn WasmModule> {
 	let blob = RuntimeBlob::uncompress_if_needed(runtime).unwrap();
 	let host_functions = sp_io::SubstrateHostFunctions::host_functions();
-	let heap_pages = 2048;
 	let allow_missing_func_imports = true;
 
 	match method {
 		Method::Interpreted => sc_executor_wasmi::create_runtime(
 			blob,
-			heap_pages,
+			DEFAULT_HEAP_ALLOC_STRATEGY,
 			host_functions,
 			allow_missing_func_imports,
 		)
-		.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
+		.map(|runtime| -> Box<dyn WasmModule> { Box::new(runtime) }),
 		Method::Compiled { instantiation_strategy, precompile } => {
 			let config = sc_executor_wasmtime::Config {
 				allow_missing_func_imports,
 				cache_path: None,
 				semantics: sc_executor_wasmtime::Semantics {
-					extra_heap_pages: heap_pages,
+					heap_alloc_strategy: DEFAULT_HEAP_ALLOC_STRATEGY,
 					instantiation_strategy,
 					deterministic_stack_limit: None,
 					canonicalize_nans: false,
 					parallel_compilation: true,
-					max_memory_size: None,
+					wasm_multi_value: false,
+					wasm_bulk_memory: false,
+					wasm_reference_types: false,
+					wasm_simd: false,
 				},
 			};
 
@@ -96,7 +98,7 @@ fn initialize(
 			} else {
 				sc_executor_wasmtime::create_runtime::<sp_io::SubstrateHostFunctions>(blob, config)
 			}
-			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
+			.map(|runtime| -> Box<dyn WasmModule> { Box::new(runtime) })
 		},
 	}
 	.unwrap()

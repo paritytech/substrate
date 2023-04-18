@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,8 +58,6 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 /// A struct that reflects stake that an account has in the staking system. Provides a set of
 /// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
 pub struct Stake<T: StakingInterface + ?Sized> {
-	/// The stash account whose balance is actually locked and at stake.
-	pub stash: T::AccountId,
 	/// The total stake that `stash` has in the staking system. This includes the
 	/// `active` stake, and any funds currently in the process of unbonding via
 	/// [`StakingInterface::unbond`].

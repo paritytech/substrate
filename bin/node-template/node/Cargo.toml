@@ -5,7 +5,7 @@ description = "A fresh FRAME-based Substrate node, ready for hacking."
 authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
 homepage = "https://substrate.io/"
 edition = "2021"
-license = "Unlicense"
+license = "MIT-0"
 publish = false
 repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
 build = "build.rs"
@@ -32,8 +32,8 @@ sc-consensus-aura = { version = "0.10.0-dev", path = "../../../client/consensus/
 sp-consensus-aura = { version = "0.10.0-dev", path = "../../../primitives/consensus/aura" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
-sc-finality-grandpa = { version = "0.10.0-dev", path = "../../../client/finality-grandpa" }
-sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
+sc-consensus-grandpa = { version = "0.10.0-dev", path = "../../../client/consensus/grandpa" }
+sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/grandpa" }
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-io = { version = "7.0.0", path = "../../../primitives/io" }

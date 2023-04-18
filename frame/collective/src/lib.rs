@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,14 +50,14 @@ use sp_std::{marker::PhantomData, prelude::*, result};
 use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{
-		DispatchError, DispatchResultWithPostInfo, Dispatchable, GetDispatchInfo, Pays,
-		PostDispatchInfo,
+		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, GetDispatchInfo,
+		Pays, PostDispatchInfo,
 	},
 	ensure,
 	traits::{
 		Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers, StorageVersion,
 	},
-	weights::{OldWeight, Weight},
+	weights::Weight,
 };
 
 #[cfg(test)]
@@ -175,7 +175,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -215,6 +214,9 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Origin allowed to set collective members
+		type SetMembersOrigin: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 	}
 
 	#[pallet::genesis_config]
@@ -339,6 +341,15 @@ pub mod pallet {
 		WrongProposalLength,
 	}
 
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			Self::do_try_state()?;
+			Ok(())
+		}
+	}
+
 	// Note that councillor operations are assigned to the operational class.
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -349,7 +360,7 @@ pub mod pallet {
 		/// - `old_count`: The upper bound for the previous number of members in storage. Used for
 		///   weight estimation.
 		///
-		/// Requires root origin.
+		/// The dispatch of this call must be `SetMembersOrigin`.
 		///
 		/// NOTE: Does not enforce the expected `MaxMembers` limit on the amount of members, but
 		///       the weight estimations rely on it to estimate dispatchable weight.
@@ -361,19 +372,11 @@ pub mod pallet {
 		/// Any call to `set_members` must be careful that the member set doesn't get out of sync
 		/// with other logic managing the member set.
 		///
-		/// # <weight>
-		/// ## Weight
+		/// ## Complexity:
 		/// - `O(MP + N)` where:
 		///   - `M` old-members-count (code- and governance-bounded)
 		///   - `N` new-members-count (code- and governance-bounded)
 		///   - `P` proposals-count (code-bounded)
-		/// - DB:
-		///   - 1 storage mutation (codec `O(M)` read, `O(N)` write) for reading and writing the
-		///     members
-		///   - 1 storage read (codec `O(P)`) for reading the proposals
-		///   - `P` storage mutations (codec `O(M)`) for updating the votes for each proposal
-		///   - 1 storage write (codec `O(1)`) for deleting the old `prime` and setting the new one
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight((
 			T::WeightInfo::set_members(
@@ -389,7 +392,7 @@ pub mod pallet {
 			prime: Option<T::AccountId>,
 			old_count: MemberCount,
 		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
+			T::SetMembersOrigin::ensure_origin(origin)?;
 			if new_members.len() > T::MaxMembers::get() as usize {
 				log::error!(
 					target: LOG_TARGET,
@@ -425,13 +428,11 @@ pub mod pallet {
 		///
 		/// Origin must be a member of the collective.
 		///
-		/// # <weight>
-		/// ## Weight
-		/// - `O(M + P)` where `M` members-count (code-bounded) and `P` complexity of dispatching
-		///   `proposal`
-		/// - DB: 1 read (codec `O(M)`) + DB access of `proposal`
-		/// - 1 event
-		/// # </weight>
+		/// ## Complexity:
+		/// - `O(B + M + P)` where:
+		/// - `B` is `proposal` size in bytes (length-fee-bounded)
+		/// - `M` members-count (code-bounded)
+		/// - `P` complexity of dispatching `proposal`
 		#[pallet::call_index(1)]
 		#[pallet::weight((
 			T::WeightInfo::execute(
@@ -476,26 +477,13 @@ pub mod pallet {
 		/// `threshold` determines whether `proposal` is executed directly (`threshold < 2`)
 		/// or put up for voting.
 		///
-		/// # <weight>
-		/// ## Weight
+		/// ## Complexity
 		/// - `O(B + M + P1)` or `O(B + M + P2)` where:
 		///   - `B` is `proposal` size in bytes (length-fee-bounded)
 		///   - `M` is members-count (code- and governance-bounded)
 		///   - branching is influenced by `threshold` where:
 		///     - `P1` is proposal execution complexity (`threshold < 2`)
 		///     - `P2` is proposals-count (code-bounded) (`threshold >= 2`)
-		/// - DB:
-		///   - 1 storage read `is_member` (codec `O(M)`)
-		///   - 1 storage read `ProposalOf::contains_key` (codec `O(1)`)
-		///   - DB accesses influenced by `threshold`:
-		///     - EITHER storage accesses done by `proposal` (`threshold < 2`)
-		///     - OR proposal insertion (`threshold <= 2`)
-		///       - 1 storage mutation `Proposals` (codec `O(P2)`)
-		///       - 1 storage mutation `ProposalCount` (codec `O(1)`)
-		///       - 1 storage write `ProposalOf` (codec `O(B)`)
-		///       - 1 storage write `Voting` (codec `O(M)`)
-		///   - 1 event
-		/// # </weight>
 		#[pallet::call_index(2)]
 		#[pallet::weight((
 			if *threshold < 2 {
@@ -554,14 +542,8 @@ pub mod pallet {
 		/// Transaction fees will be waived if the member is voting on any particular proposal
 		/// for the first time and the call is successful. Subsequent vote changes will charge a
 		/// fee.
-		/// # <weight>
-		/// ## Weight
+		/// ## Complexity
 		/// - `O(M)` where `M` is members-count (code- and governance-bounded)
-		/// - DB:
-		///   - 1 storage read `Members` (codec `O(M)`)
-		///   - 1 storage mutation `Voting` (codec `O(M)`)
-		/// - 1 event
-		/// # </weight>
 		#[pallet::call_index(3)]
 		#[pallet::weight((T::WeightInfo::vote(T::MaxMembers::get()), DispatchClass::Operational))]
 		pub fn vote(
@@ -584,67 +566,7 @@ pub mod pallet {
 			}
 		}
 
-		/// Close a vote that is either approved, disapproved or whose voting period has ended.
-		///
-		/// May be called by any signed account in order to finish voting and close the proposal.
-		///
-		/// If called before the end of the voting period it will only close the vote if it is
-		/// has enough votes to be approved or disapproved.
-		///
-		/// If called after the end of the voting period abstentions are counted as rejections
-		/// unless there is a prime member set and the prime member cast an approval.
-		///
-		/// If the close operation completes successfully with disapproval, the transaction fee will
-		/// be waived. Otherwise execution of the approved operation will be charged to the caller.
-		///
-		/// + `proposal_weight_bound`: The maximum amount of weight consumed by executing the closed
-		/// proposal.
-		/// + `length_bound`: The upper bound for the length of the proposal in storage. Checked via
-		/// `storage::read` so it is `size_of::<u32>() == 4` larger than the pure length.
-		///
-		/// # <weight>
-		/// ## Weight
-		/// - `O(B + M + P1 + P2)` where:
-		///   - `B` is `proposal` size in bytes (length-fee-bounded)
-		///   - `M` is members-count (code- and governance-bounded)
-		///   - `P1` is the complexity of `proposal` preimage.
-		///   - `P2` is proposal-count (code-bounded)
-		/// - DB:
-		///  - 2 storage reads (`Members`: codec `O(M)`, `Prime`: codec `O(1)`)
-		///  - 3 mutations (`Voting`: codec `O(M)`, `ProposalOf`: codec `O(B)`, `Proposals`: codec
-		///    `O(P2)`)
-		///  - any mutations done while executing `proposal` (`P1`)
-		/// - up to 3 events
-		/// # </weight>
-		#[pallet::call_index(4)]
-		#[pallet::weight((
-			{
-				let b = *length_bound;
-				let m = T::MaxMembers::get();
-				let p1 = *proposal_weight_bound;
-				let p2 = T::MaxProposals::get();
-				T::WeightInfo::close_early_approved(b, m, p2)
-					.max(T::WeightInfo::close_early_disapproved(m, p2))
-					.max(T::WeightInfo::close_approved(b, m, p2))
-					.max(T::WeightInfo::close_disapproved(m, p2))
-					.saturating_add(p1.into())
-			},
-			DispatchClass::Operational
-		))]
-		#[allow(deprecated)]
-		#[deprecated(note = "1D weight is used in this extrinsic, please migrate to `close`")]
-		pub fn close_old_weight(
-			origin: OriginFor<T>,
-			proposal_hash: T::Hash,
-			#[pallet::compact] index: ProposalIndex,
-			#[pallet::compact] proposal_weight_bound: OldWeight,
-			#[pallet::compact] length_bound: u32,
-		) -> DispatchResultWithPostInfo {
-			let proposal_weight_bound: Weight = proposal_weight_bound.into();
-			let _ = ensure_signed(origin)?;
-
-			Self::do_close(proposal_hash, index, proposal_weight_bound, length_bound)
-		}
+		// Index 4 was `close_old_weight`; it was removed due to weights v1 deprecation.
 
 		/// Disapprove a proposal, close, and remove it from the system, regardless of its current
 		/// state.
@@ -654,12 +576,8 @@ pub mod pallet {
 		/// Parameters:
 		/// * `proposal_hash`: The hash of the proposal that should be disapproved.
 		///
-		/// # <weight>
-		/// Complexity: O(P) where P is the number of max proposals
-		/// DB Weight:
-		/// * Reads: Proposals
-		/// * Writes: Voting, Proposals, ProposalOf
-		/// # </weight>
+		/// ## Complexity
+		/// O(P) where P is the number of max proposals
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::disapprove_proposal(T::MaxProposals::get()))]
 		pub fn disapprove_proposal(
@@ -689,20 +607,12 @@ pub mod pallet {
 		/// + `length_bound`: The upper bound for the length of the proposal in storage. Checked via
 		/// `storage::read` so it is `size_of::<u32>() == 4` larger than the pure length.
 		///
-		/// # <weight>
-		/// ## Weight
+		/// ## Complexity
 		/// - `O(B + M + P1 + P2)` where:
 		///   - `B` is `proposal` size in bytes (length-fee-bounded)
 		///   - `M` is members-count (code- and governance-bounded)
 		///   - `P1` is the complexity of `proposal` preimage.
 		///   - `P2` is proposal-count (code-bounded)
-		/// - DB:
-		///  - 2 storage reads (`Members`: codec `O(M)`, `Prime`: codec `O(1)`)
-		///  - 3 mutations (`Voting`: codec `O(M)`, `ProposalOf`: codec `O(B)`, `Proposals`: codec
-		///    `O(P2)`)
-		///  - any mutations done while executing `proposal` (`P1`)
-		/// - up to 3 events
-		/// # </weight>
 		#[pallet::call_index(6)]
 		#[pallet::weight((
 			{
@@ -1015,6 +925,111 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		num_proposals as u32
 	}
+
+	/// Ensure the correctness of the state of this pallet.
+	///
+	/// The following expectation must always apply.
+	///
+	/// ## Expectations:
+	///
+	/// Looking at proposals:
+	///
+	/// * Each hash of a proposal that is stored inside `Proposals` must have a
+	/// call mapped to it inside the `ProposalOf` storage map.
+	/// * `ProposalCount` must always be more or equal to the number of
+	/// proposals inside the `Proposals` storage value. The reason why
+	/// `ProposalCount` can be more is because when a proposal is removed the
+	/// count is not deducted.
+	/// * Count of `ProposalOf` should match the count of `Proposals`
+	///
+	/// Looking at votes:
+	/// * The sum of aye and nay votes for a proposal can never exceed
+	///  `MaxMembers`.
+	/// * The proposal index inside the `Voting` storage map must be unique.
+	/// * All proposal hashes inside `Voting` must exist in `Proposals`.
+	///
+	/// Looking at members:
+	/// * The members count must never exceed `MaxMembers`.
+	/// * All the members must be sorted by value.
+	///
+	/// Looking at prime account:
+	/// * The prime account must be a member of the collective.
+	#[cfg(any(feature = "try-runtime", test))]
+	fn do_try_state() -> DispatchResult {
+		Self::proposals().into_iter().try_for_each(|proposal| -> DispatchResult {
+			ensure!(
+				Self::proposal_of(proposal).is_some(),
+				DispatchError::Other(
+					"Proposal hash from `Proposals` is not found inside the `ProposalOf` mapping."
+				)
+			);
+			Ok(())
+		})?;
+
+		ensure!(
+			Self::proposals().into_iter().count() <= Self::proposal_count() as usize,
+			DispatchError::Other("The actual number of proposals is greater than `ProposalCount`")
+		);
+		ensure!(
+			Self::proposals().into_iter().count() == <ProposalOf<T, I>>::iter_keys().count(),
+			DispatchError::Other("Proposal count inside `Proposals` is not equal to the proposal count in `ProposalOf`")
+		);
+
+		Self::proposals().into_iter().try_for_each(|proposal| -> DispatchResult {
+			if let Some(votes) = Self::voting(proposal) {
+				let ayes = votes.ayes.len();
+				let nays = votes.nays.len();
+
+				ensure!(
+					ayes.saturating_add(nays) <= T::MaxMembers::get() as usize,
+					DispatchError::Other("The sum of ayes and nays is greater than `MaxMembers`")
+				);
+			}
+			Ok(())
+		})?;
+
+		let mut proposal_indices = vec![];
+		Self::proposals().into_iter().try_for_each(|proposal| -> DispatchResult {
+			if let Some(votes) = Self::voting(proposal) {
+				let proposal_index = votes.index;
+				ensure!(
+					!proposal_indices.contains(&proposal_index),
+					DispatchError::Other("The proposal index is not unique.")
+				);
+				proposal_indices.push(proposal_index);
+			}
+			Ok(())
+		})?;
+
+		<Voting<T, I>>::iter_keys().try_for_each(|proposal_hash| -> DispatchResult {
+			ensure!(
+				Self::proposals().contains(&proposal_hash),
+				DispatchError::Other(
+					"`Proposals` doesn't contain the proposal hash from the `Voting` storage map."
+				)
+			);
+			Ok(())
+		})?;
+
+		ensure!(
+			Self::members().len() <= T::MaxMembers::get() as usize,
+			DispatchError::Other("The member count is greater than `MaxMembers`.")
+		);
+
+		ensure!(
+			Self::members().windows(2).all(|members| members[0] <= members[1]),
+			DispatchError::Other("The members are not sorted by value.")
+		);
+
+		if let Some(prime) = Self::prime() {
+			ensure!(
+				Self::members().contains(&prime),
+				DispatchError::Other("Prime account is not a member.")
+			);
+		}
+
+		Ok(())
+	}
 }
 
 impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
@@ -1023,18 +1038,11 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 	/// NOTE: Does not enforce the expected `MaxMembers` limit on the amount of members, but
 	///       the weight estimations rely on it to estimate dispatchable weight.
 	///
-	/// # <weight>
-	/// ## Weight
+	/// ## Complexity
 	/// - `O(MP + N)`
 	///   - where `M` old-members-count (governance-bounded)
 	///   - where `N` new-members-count (governance-bounded)
 	///   - where `P` proposals-count
-	/// - DB:
-	///   - 1 storage read (codec `O(P)`) for reading the proposals
-	///   - `P` storage mutations for updating the votes (codec `O(M)`)
-	///   - 1 storage write (codec `O(N)`) for storing the new members
-	///   - 1 storage write (codec `O(1)`) for deleting the old prime
-	/// # </weight>
 	fn change_members_sorted(
 		_incoming: &[T::AccountId],
 		outgoing: &[T::AccountId],

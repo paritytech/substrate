@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -273,6 +273,7 @@ impl ChildInfo {
 	/// Returns byte sequence (keyspace) that can be use by underlying db to isolate keys.
 	/// This is a unique id of the child trie. The collision resistance of this value
 	/// depends on the type of child info use. For `ChildInfo::Default` it is and need to be.
+	#[inline]
 	pub fn keyspace(&self) -> &[u8] {
 		match self {
 			ChildInfo::ParentKeyId(..) => self.storage_key(),

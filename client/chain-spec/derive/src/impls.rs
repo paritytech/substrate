@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ pub fn extension_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 			.named
 			.iter()
 			.find_map(|f| {
-				if f.attrs.iter().any(|attr| attr.path.is_ident(ATTRIBUTE_NAME)) {
+				if f.attrs.iter().any(|attr| attr.path().is_ident(ATTRIBUTE_NAME)) {
 					let typ = &f.ty;
 					Some(quote! { #typ })
 				} else {

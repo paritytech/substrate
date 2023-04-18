@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,6 +37,17 @@ frame_benchmarking::benchmarks! {
 		Value::<T>::put(123);
 	}: {
 		assert_eq!(Value::<T>::get(), Some(123));
+	}
+
+	#[pov_mode = MaxEncodedLen {
+		Pov::Value2: Ignored
+	}]
+	storage_single_value_ignored_some_read {
+		Value::<T>::put(123);
+		Value2::<T>::put(123);
+	}: {
+		assert_eq!(Value::<T>::get(), Some(123));
+		assert_eq!(Value2::<T>::get(), Some(123));
 	}
 
 	storage_single_value_read_twice {
@@ -181,6 +192,7 @@ frame_benchmarking::benchmarks! {
 
 	// Same as above, but we still expect a mathematical worst case PoV size for the bounded one.
 	storage_value_bounded_and_unbounded_read {
+		(0..1024).for_each(|i| Map1M::<T>::insert(i, i));
 	}: {
 		assert!(UnboundedValue::<T>::get().is_none());
 		assert!(BoundedValue::<T>::get().is_none());
@@ -303,6 +315,19 @@ frame_benchmarking::benchmarks! {
 		let call = Call::<T>::noop { };
 	}: {
 		call.dispatch_bypass_filter(RawOrigin::Root.into()).unwrap();
+	}
+
+	storage_iteration {
+		for i in 0..65000 {
+			UnboundedMapTwox::<T>::insert(i, sp_std::vec![0; 64]);
+		}
+	}: {
+		for (key, value) in UnboundedMapTwox::<T>::iter() {
+			unsafe {
+				core::ptr::read_volatile(&key);
+				core::ptr::read_volatile(value.as_ptr());
+			}
+		}
 	}
 
 	impl_benchmark_test_suite!(
