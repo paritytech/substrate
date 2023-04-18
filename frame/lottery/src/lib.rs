@@ -282,7 +282,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call]
+	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
 	impl<T: Config> Pallet<T> {
 		/// Buy a ticket to enter the lottery.
 		///
@@ -346,7 +346,6 @@ pub mod pallet {
 		/// * `delay`: How long after the lottery end we should wait before picking a winner.
 		/// * `repeat`: If the lottery should repeat when completed.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::start_lottery())]
 		pub fn start_lottery(
 			origin: OriginFor<T>,
 			price: BalanceOf<T>,
@@ -379,7 +378,6 @@ pub mod pallet {
 		///
 		/// This extrinsic must be called by the `ManagerOrigin`.
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::stop_repeat())]
 		pub fn stop_repeat(origin: OriginFor<T>) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			Lottery::<T>::mutate(|mut lottery| {

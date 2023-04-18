@@ -578,7 +578,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call]
+	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
 	impl<T: Config> Pallet<T> {
 		/// Sets the session key(s) of the function caller to `keys`.
 		/// Allows an account to set its session key prior to becoming a validator.
@@ -590,7 +590,6 @@ pub mod pallet {
 		/// - `O(1)`. Actual cost depends on the number of length of `T::Keys::key_ids()` which is
 		///   fixed.
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::set_keys())]
 		pub fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(keys.ownership_proof_is_valid(&proof), Error::<T>::InvalidProof);
@@ -612,7 +611,6 @@ pub mod pallet {
 		/// - `O(1)` in number of key types. Actual cost depends on the number of length of
 		///   `T::Keys::key_ids()` which is fixed.
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::purge_keys())]
 		pub fn purge_keys(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_purge_keys(&who)?;

@@ -1859,7 +1859,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call]
+	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
 	impl<T: Config> Pallet<T> {
 		/// Stake funds with a pool. The amount to bond is transferred from the member to the
 		/// pools account and immediately increases the pools bond.
@@ -1872,7 +1872,6 @@ pub mod pallet {
 		///   `existential deposit + amount` in their account.
 		/// * Only a pool with [`PoolState::Open`] can be joined
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::join())]
 		pub fn join(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
@@ -1953,7 +1952,6 @@ pub mod pallet {
 		///
 		/// See `claim_payout_other` to caim rewards on bahalf of some `other` pool member.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::claim_payout())]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			Self::do_claim_payout(signer.clone(), signer)
@@ -1991,7 +1989,6 @@ pub mod pallet {
 		/// in which case, the result of this call will likely be the `NoMoreChunks` error from the
 		/// staking system.
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::unbond())]
 		pub fn unbond(
 			origin: OriginFor<T>,
 			member_account: AccountIdLookupOf<T>,
@@ -2230,7 +2227,6 @@ pub mod pallet {
 		/// In addition to `amount`, the caller will transfer the existential deposit; so the caller
 		/// needs at have at least `amount + existential_deposit` transferrable.
 		#[pallet::call_index(6)]
-		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
@@ -2303,7 +2299,6 @@ pub mod pallet {
 		/// 2. if the pool conditions to be open are NOT met (as described by `ok_to_be_open`), and
 		///    then the state of the pool can be permissionlessly changed to `Destroying`.
 		#[pallet::call_index(9)]
-		#[pallet::weight(T::WeightInfo::set_state())]
 		pub fn set_state(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -2365,7 +2360,6 @@ pub mod pallet {
 		/// * `max_members_per_pool` - Set [`MaxPoolMembersPerPool`].
 		/// * `global_max_commission` - Set [`GlobalMaxCommission`].
 		#[pallet::call_index(11)]
-		#[pallet::weight(T::WeightInfo::set_configs())]
 		pub fn set_configs(
 			origin: OriginFor<T>,
 			min_join_bond: ConfigOp<BalanceOf<T>>,
@@ -2404,7 +2398,6 @@ pub mod pallet {
 		/// It emits an event, notifying UIs of the role change. This event is quite relevant to
 		/// most pool members and they should be informed of changes to pool roles.
 		#[pallet::call_index(12)]
-		#[pallet::weight(T::WeightInfo::update_roles())]
 		pub fn update_roles(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -2457,7 +2450,6 @@ pub mod pallet {
 		/// This directly forward the call to the staking pallet, on behalf of the pool bonded
 		/// account.
 		#[pallet::call_index(13)]
-		#[pallet::weight(T::WeightInfo::chill())]
 		pub fn chill(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
@@ -2533,7 +2525,6 @@ pub mod pallet {
 		///
 		/// - If a `None` is supplied to `new_commission`, existing commission will be removed.
 		#[pallet::call_index(17)]
-		#[pallet::weight(T::WeightInfo::set_commission())]
 		pub fn set_commission(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -2569,7 +2560,6 @@ pub mod pallet {
 		/// - Current commission will be lowered in the event it is higher than a new max
 		///   commission.
 		#[pallet::call_index(18)]
-		#[pallet::weight(T::WeightInfo::set_commission_max())]
 		pub fn set_commission_max(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -2591,7 +2581,6 @@ pub mod pallet {
 		/// Initial change rate is not bounded, whereas subsequent updates can only be more
 		/// restrictive than the current.
 		#[pallet::call_index(19)]
-		#[pallet::weight(T::WeightInfo::set_commission_change_rate())]
 		pub fn set_commission_change_rate(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -2617,7 +2606,6 @@ pub mod pallet {
 		/// commission is paid out and added to total claimed commission`. Total pending commission
 		/// is reset to zero. the current.
 		#[pallet::call_index(20)]
-		#[pallet::weight(T::WeightInfo::claim_commission())]
 		pub fn claim_commission(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_claim_commission(who, pool_id)

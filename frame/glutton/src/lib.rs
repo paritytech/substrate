@@ -139,7 +139,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call]
+	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
 	impl<T: Config> Pallet<T> {
 		/// Initializes the pallet by writing into `TrashData`.
 		///
@@ -178,7 +178,6 @@ pub mod pallet {
 		///
 		/// Only callable by Root.
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::set_compute())]
 		pub fn set_compute(origin: OriginFor<T>, compute: Perbill) -> DispatchResult {
 			ensure_root(origin)?;
 			Compute::<T>::set(compute);
@@ -192,7 +191,6 @@ pub mod pallet {
 		///
 		/// Only callable by Root.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::set_storage())]
 		pub fn set_storage(origin: OriginFor<T>, storage: Perbill) -> DispatchResult {
 			ensure_root(origin)?;
 			Storage::<T>::set(storage);

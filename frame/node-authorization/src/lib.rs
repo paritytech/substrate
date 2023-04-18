@@ -201,7 +201,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call]
+	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
 	impl<T: Config> Pallet<T> {
 		/// Add a node to the set of well known nodes. If the node is already claimed, the owner
 		/// will be updated and keep the existing additional connection unchanged.
@@ -322,7 +322,6 @@ pub mod pallet {
 		///
 		/// - `node`: identifier of the node.
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::claim_node())]
 		pub fn claim_node(origin: OriginFor<T>, node: PeerId) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -340,7 +339,6 @@ pub mod pallet {
 		///
 		/// - `node`: identifier of the node.
 		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::remove_claim())]
 		pub fn remove_claim(origin: OriginFor<T>, node: PeerId) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -361,7 +359,6 @@ pub mod pallet {
 		/// - `node`: identifier of the node.
 		/// - `owner`: new owner of the node.
 		#[pallet::call_index(6)]
-		#[pallet::weight(T::WeightInfo::transfer_node())]
 		pub fn transfer_node(
 			origin: OriginFor<T>,
 			node: PeerId,
@@ -385,7 +382,6 @@ pub mod pallet {
 		/// - `node`: identifier of the node.
 		/// - `connections`: additonal nodes from which the connections are allowed.
 		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::add_connections())]
 		pub fn add_connections(
 			origin: OriginFor<T>,
 			node: PeerId,
@@ -420,7 +416,6 @@ pub mod pallet {
 		/// - `node`: identifier of the node.
 		/// - `connections`: additonal nodes from which the connections are not allowed anymore.
 		#[pallet::call_index(8)]
-		#[pallet::weight(T::WeightInfo::remove_connections())]
 		pub fn remove_connections(
 			origin: OriginFor<T>,
 			node: PeerId,

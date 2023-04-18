@@ -146,7 +146,7 @@ pub mod pallet {
 	pub(super) type PreimageFor<T: Config> =
 		StorageMap<_, Identity, (T::Hash, u32), BoundedVec<u8, ConstU32<MAX_SIZE>>>;
 
-	#[pallet::call]
+	#[pallet::call(weight = <T as crate::Config>::WeightInfo)]
 	impl<T: Config> Pallet<T> {
 		/// Register a preimage on-chain.
 		///
@@ -173,7 +173,6 @@ pub mod pallet {
 		/// - `hash`: The hash of the preimage to be removed from the store.
 		/// - `len`: The length of the preimage of `hash`.
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::unnote_preimage())]
 		pub fn unnote_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			let maybe_sender = Self::ensure_signed_or_manager(origin)?;
 			Self::do_unnote_preimage(&hash, maybe_sender)
@@ -184,7 +183,6 @@ pub mod pallet {
 		/// If the preimage requests has already been provided on-chain, we unreserve any deposit
 		/// a user may have paid, and take the control of the preimage out of their hands.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::request_preimage())]
 		pub fn request_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			Self::do_request_preimage(&hash);
@@ -195,7 +193,6 @@ pub mod pallet {
 		///
 		/// NOTE: THIS MUST NOT BE CALLED ON `hash` MORE TIMES THAN `request_preimage`.
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::unrequest_preimage())]
 		pub fn unrequest_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			Self::do_unrequest_preimage(&hash)
