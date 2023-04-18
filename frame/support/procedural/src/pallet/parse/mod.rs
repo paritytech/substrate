@@ -427,7 +427,35 @@ enum PalletAttr {
 	Config(proc_macro2::Span),
 	Pallet(proc_macro2::Span),
 	Hooks(proc_macro2::Span),
-	/// A `#[pallet::call]` with or without `#[pallet::call(weight($type))]` attribute.
+	/// A `#[pallet::call]` with optional attribute.
+	///
+	/// # Attributes
+	///
+	/// All attributes can be assigned by calling or assigning to them.
+	///
+	/// ## `weight`
+	///
+	/// Can be used to reduce the repetitive weight annotation in the trivial case. Instead of
+	/// writing:
+	///
+	/// ```ignore
+	/// #[pallet::call]
+	/// impl<T: Config> Pallet<T> {
+	///     #[pallet::weight(T::WeightInfo::create())]
+	///     pub fn create(
+	/// ```
+	/// you can now do:
+	///
+	/// ```ignore
+	/// #[pallet::call(weight = <T as crate::Config>::WeightInfo)]
+	/// impl<T: Config> Pallet<T> {
+	///     pub fn create(
+	/// ```
+	///
+	/// Both code snippets are equivalent. The passed type will be prepended to the name of the
+	/// call - if there is no `weight` attribute set on the call. This works together with
+	/// instanced pallets by using `Config<I>`. This attribute takes precedence over the default
+	/// weight if the pallet is in dev-mode.
 	RuntimeCall(Option<RuntimeCallWeightAttr>, proc_macro2::Span),
 	Error(proc_macro2::Span),
 	RuntimeEvent(proc_macro2::Span),
