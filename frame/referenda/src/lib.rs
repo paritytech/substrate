@@ -1292,8 +1292,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Looking at referenda info:
 	///
 	/// * The submission deposit cannot be less than `T::SubmissionDeposit`.
+	/// * There must exist track info for the track of the referendum.
+	/// * The decision deposit if provided cannot be less than the decision deposit of the track.
+	/// * The deciding stage has to begin before confirmation period.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn do_try_state() -> DispatchResult {
+		use sp_runtime::traits::Bounded;
+
 		ensure!(
 			ReferendumCount::<T, I>::get() as usize ==
 				ReferendumInfoFor::<T, I>::iter_keys().count(),
@@ -1308,8 +1313,31 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ReferendumInfo::Ongoing(status) => {
 						ensure!(
 							status.submission_deposit.amount >= T::SubmissionDeposit::get(),
-							DispatchError::Other("Incorrect submission deposit.")
+							DispatchError::Other("Submission deposit too small.")
 						);
+
+						ensure!(
+							Self::track(status.track).is_some(),
+							DispatchError::Other("No track info for the track of the referendum.")
+						);
+
+						if let Some(decision_deposit) = status.decision_deposit {
+							ensure!(
+								decision_deposit.amount >=
+									Self::track(status.track).unwrap().decision_deposit,
+								DispatchError::Other("Decision deposit too small.")
+							)
+						}
+
+						if let Some(deciding) = status.deciding {
+							ensure!(
+								deciding.since <
+									deciding.confirming.unwrap_or(T::BlockNumber::max_value()),
+								DispatchError::Other(
+									"Deciding status cannot begin before confirming stage."
+								)
+							)
+						}
 					},
 					_ => {},
 				}
