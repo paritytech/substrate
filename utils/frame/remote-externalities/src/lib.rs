@@ -326,9 +326,8 @@ where
 
 	/// Get the number of threads to use.
 	fn threads() -> NonZeroUsize {
-		// Greater than 4 threads yields no performance improvement. With dynamic batch sizing,
-		// 4 threads are well capable of saturating the nodes ability to serve requests.
-		NonZeroUsize::new(4usize).expect("4 is non-zero; qed")
+		thread::available_parallelism()
+			.unwrap_or(NonZeroUsize::new(4usize).expect("4 is non-zero; qed"))
 	}
 
 	async fn rpc_get_storage(
@@ -430,7 +429,7 @@ where
 	///
 	/// # Example
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use your_crate::{get_storage_data_dynamic_batch_size, HttpClient, ArrayParams};
 	/// use std::sync::Arc;
 	///
@@ -440,7 +439,7 @@ where
 	///         ("some_method".to_string(), ArrayParams::new(vec![])),
 	///         ("another_method".to_string(), ArrayParams::new(vec![])),
 	///     ];
-	///     let batch_size = 10;
+	///     let initial_batch_size = 10;
 	///
 	///     let storage_data = get_storage_data_dynamic_batch_size(client, payloads, batch_size).await;
 	///     match storage_data {
@@ -452,7 +451,7 @@ where
 
 	#[async_recursion]
 	async fn get_storage_data_dynamic_batch_size(
-		client: Arc<HttpClient>,
+		client: &Arc<HttpClient>,
 		remaining_payloads: Vec<(String, ArrayParams)>,
 		batch_size: usize,
 	) -> Result<Vec<Option<StorageData>>, String> {
@@ -581,7 +580,7 @@ where
 
 				let rt = tokio::runtime::Runtime::new().unwrap();
 				let storage_data = match rt.block_on(Self::get_storage_data_dynamic_batch_size(
-					thread_client,
+					&thread_client,
 					payloads,
 					Self::INITIAL_BATCH_SIZE,
 				)) {
@@ -679,7 +678,7 @@ where
 
 	/// Get the values corresponding to `child_keys` at the given `prefixed_top_key`.
 	pub(crate) async fn rpc_child_get_storage_paged(
-		client: Arc<HttpClient>,
+		client: &Arc<HttpClient>,
 		prefixed_top_key: &StorageKey,
 		child_keys: Vec<StorageKey>,
 		at: B::Hash,
@@ -722,7 +721,7 @@ where
 			.map(|(key, maybe_value)| match maybe_value {
 				Some(v) => (key.clone(), v),
 				None => {
-					log::warn!(target: LOG_TARGET, "key {:?} had none corresponding value.", &key);
+					log::warn!(target: LOG_TARGET, "key {:?} had no corresponding value.", &key);
 					(key.clone(), StorageData(vec![]))
 				},
 			})
@@ -788,107 +787,44 @@ where
 			return Ok(Default::default())
 		}
 
-		// div-ceil simulation.
-		let threads = Self::threads().get();
-		let child_roots_per_thread = (child_roots.len() + threads - 1) / threads;
-
 		info!(
 			target: LOG_TARGET,
-			"👩‍👦 scraping child-tree data from {} top keys, split among {} threads, {} top keys per thread",
+			"👩‍👦 scraping child-tree data from {} top keys",
 			child_roots.len(),
-			threads,
-			child_roots_per_thread,
 		);
 
-		// NOTE: the threading done here is the simpler, yet slightly un-elegant because we are
-		// splitting child root among threads, and it is very common for these root to have vastly
-		// different child tries underneath them, causing some threads to finish way faster than
-		// others. Certainly still better than single thread though.
-		let mut handles = vec![];
-		let client = self.as_online().rpc_client_cloned();
 		let at = self.as_online().at_expected();
 
-		enum Message {
-			Terminated,
-			Batch((ChildInfo, Vec<(Vec<u8>, Vec<u8>)>)),
-		}
-		let (tx, mut rx) = mpsc::unbounded::<Message>();
+		let client = self.as_online().rpc_client();
+		let arc_client = self.as_online().rpc_client_cloned();
+		let mut child_kv = vec![];
+		for prefixed_top_key in child_roots {
+			let child_keys =
+				Self::rpc_child_get_keys(&client, &prefixed_top_key, StorageKey(vec![]), at)
+					.await?;
 
-		for thread_child_roots in child_roots
-			.chunks(child_roots_per_thread)
-			.map(|x| x.into())
-			.collect::<Vec<Vec<_>>>()
-		{
-			let thread_client = client.clone();
-			let thread_sender = tx.clone();
-			let handle = thread::spawn(move || {
-				let rt = tokio::runtime::Runtime::new().unwrap();
-				let mut thread_child_kv = vec![];
-				for prefixed_top_key in thread_child_roots {
-					let child_keys = rt.block_on(Self::rpc_child_get_keys(
-						&thread_client,
-						&prefixed_top_key,
-						StorageKey(vec![]),
-						at,
-					))?;
-					let child_kv_inner = rt.block_on(Self::rpc_child_get_storage_paged(
-						thread_client.clone(),
-						&prefixed_top_key,
-						child_keys,
-						at,
-					))?;
+			let child_kv_inner =
+				Self::rpc_child_get_storage_paged(&arc_client, &prefixed_top_key, child_keys, at)
+					.await?;
 
-					let prefixed_top_key = PrefixedStorageKey::new(prefixed_top_key.clone().0);
-					let un_prefixed = match ChildType::from_prefixed_key(&prefixed_top_key) {
-						Some((ChildType::ParentKeyId, storage_key)) => storage_key,
-						None => {
-							log::error!(target: LOG_TARGET, "invalid key: {:?}", prefixed_top_key);
-							return Err("Invalid child key")
-						},
-					};
-
-					thread_sender
-						.unbounded_send(Message::Batch((
-							ChildInfo::new_default(un_prefixed),
-							child_kv_inner
-								.iter()
-								.cloned()
-								.map(|(k, v)| (k.0, v.0))
-								.collect::<Vec<_>>(),
-						)))
-						.unwrap();
-					thread_child_kv.push((ChildInfo::new_default(un_prefixed), child_kv_inner));
-				}
-
-				thread_sender.unbounded_send(Message::Terminated).unwrap();
-				Ok(thread_child_kv)
-			});
-			handles.push(handle);
-		}
-
-		// first, wait until all threads send a `Terminated` message, in the meantime populate
-		// `pending_ext`.
-		let mut terminated = 0usize;
-		loop {
-			match rx.next().await.unwrap() {
-				Message::Batch((info, kvs)) =>
-					for (k, v) in kvs {
-						pending_ext.insert_child(info.clone(), k, v);
-					},
-				Message::Terminated => {
-					terminated += 1;
-					if terminated == handles.len() {
-						break
-					}
+			let prefixed_top_key = PrefixedStorageKey::new(prefixed_top_key.clone().0);
+			let un_prefixed = match ChildType::from_prefixed_key(&prefixed_top_key) {
+				Some((ChildType::ParentKeyId, storage_key)) => storage_key,
+				None => {
+					log::error!(target: LOG_TARGET, "invalid key: {:?}", prefixed_top_key);
+					return Err("Invalid child key")
 				},
+			};
+
+			let info = ChildInfo::new_default(un_prefixed);
+			let key_values =
+				child_kv_inner.iter().cloned().map(|(k, v)| (k.0, v.0)).collect::<Vec<_>>();
+			child_kv.push((info.clone(), child_kv_inner));
+			for (k, v) in key_values {
+				pending_ext.insert_child(info.clone(), k, v);
 			}
 		}
 
-		let child_kv = handles
-			.into_iter()
-			.flat_map(|h| h.join().unwrap())
-			.flatten()
-			.collect::<Vec<_>>();
 		Ok(child_kv)
 	}
 
