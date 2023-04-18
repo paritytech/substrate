@@ -24,7 +24,7 @@ use sc_consensus_epochs::Epoch as EpochT;
 use sp_application_crypto::AppCrypto;
 use sp_consensus_babe::{
 	digests::{PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest},
-	make_transcript, AuthorityId, BabeAuthorityWeight, Slot,
+	make_transcript, AuthorityId, BabeAuthorityWeight, Randomness, Slot,
 };
 use sp_core::{blake2_256, crypto::ByteArray, sr25519::vrf, U256};
 use sp_keystore::KeystorePtr;
@@ -99,7 +99,7 @@ pub(super) fn calculate_primary_threshold(
 pub(super) fn secondary_slot_author(
 	slot: Slot,
 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
-	randomness: [u8; 32],
+	randomness: Randomness,
 ) -> Option<&AuthorityId> {
 	if authorities.is_empty() {
 		return None

@@ -32,8 +32,8 @@ use frame_support::{
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
 	AllowedSlots, BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
-	EquivocationProof, Randomness as BabeRandomness, Slot, BABE_ENGINE_ID, PUBLIC_KEY_LENGTH,
-	RANDOMNESS_LENGTH, RANDOMNESS_VRF_CONTEXT,
+	EquivocationProof, Randomness as BabeRandomness, Slot, BABE_ENGINE_ID, RANDOMNESS_LENGTH,
+	RANDOMNESS_VRF_CONTEXT,
 };
 use sp_runtime::{
 	generic::DigestItem,
@@ -482,9 +482,6 @@ pub mod pallet {
 		}
 	}
 }
-
-/// A BABE public key
-pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
 
 impl<T: Config> FindAuthor<u32> for Pallet<T> {
 	fn find_author<'a, I>(digests: I) -> Option<u32>

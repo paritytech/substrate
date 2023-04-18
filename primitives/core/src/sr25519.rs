@@ -717,7 +717,7 @@ pub mod vrf {
 		}
 	}
 
-	/// Generate a given amount of bytes from the given VRF configuration.
+	/// Generate bytes from the given VRF configuration.
 	pub fn make_bytes<B: Default + AsMut<[u8]>>(
 		context: &[u8],
 		public: &Public,

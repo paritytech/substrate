@@ -25,7 +25,7 @@ use frame_support::{
 	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
 };
 use pallet_session::historical as pallet_session_historical;
-use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot, VrfSignature, RANDOMNESS_LENGTH};
+use sp_consensus_babe::{AuthorityId, AuthorityPair, Randomness, Slot, VrfSignature};
 use sp_core::{
 	crypto::{KeyTypeId, Pair, VrfSigner},
 	H256, U256,
@@ -317,12 +317,12 @@ pub fn make_secondary_vrf_pre_digest(
 pub fn make_vrf_output(
 	slot: Slot,
 	pair: &sp_consensus_babe::AuthorityPair,
-) -> (VrfSignature, [u8; RANDOMNESS_LENGTH]) {
+) -> (VrfSignature, Randomness) {
 	let transcript = sp_consensus_babe::make_transcript(&Babe::randomness(), slot, 0);
 
 	let signature = pair.as_ref().vrf_sign(&transcript);
 
-	let randomness = sp_core::sr25519::vrf::make_bytes::<[u8; RANDOMNESS_LENGTH]>(
+	let randomness = sp_core::sr25519::vrf::make_bytes(
 		sp_consensus_babe::RANDOMNESS_VRF_CONTEXT,
 		pair.public().as_ref(),
 		&transcript,

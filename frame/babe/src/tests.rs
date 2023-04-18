@@ -25,10 +25,12 @@ use frame_support::{
 };
 use mock::*;
 use pallet_session::ShouldEndSession;
-use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot, VrfSignature};
+use sp_consensus_babe::{
+	AllowedSlots, BabeEpochConfiguration, Slot, VrfSignature, RANDOMNESS_LENGTH,
+};
 use sp_core::crypto::Pair;
 
-const EMPTY_RANDOMNESS: [u8; 32] = [
+const EMPTY_RANDOMNESS: [u8; RANDOMNESS_LENGTH] = [
 	74, 25, 49, 128, 53, 97, 244, 49, 222, 202, 176, 2, 231, 66, 95, 10, 133, 49, 213, 228, 86,
 	161, 164, 127, 217, 153, 138, 37, 48, 192, 248, 0,
 ];

@@ -343,7 +343,7 @@ pub struct Epoch {
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch.
-	pub randomness: [u8; RANDOMNESS_LENGTH],
+	pub randomness: Randomness,
 	/// Configuration of the epoch.
 	pub config: BabeEpochConfiguration,
 }
