@@ -1442,6 +1442,14 @@ pub fn composite_enum(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+#[proc_macro_attribute]
+pub fn export_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	match macro_magic::mm_core::export_tokens_internal(attr, tokens, false) {
+		Ok(tokens) => tokens.into(),
+		Err(err) => err.to_compile_error().into(),
+	}
+}
+
 #[import_tokens_attr]
 #[proc_macro_attribute]
 pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
@@ -1455,9 +1463,4 @@ pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 	quote! {
 		#internal_mod
 	}.into()
-}
-
-#[proc_macro_attribute]
-pub fn dummy_section(_attr: TokenStream, _tokens: TokenStream) -> TokenStream {
-	quote! {}.into()
 }
