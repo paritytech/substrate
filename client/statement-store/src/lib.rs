@@ -127,7 +127,7 @@ struct StatementsForAccount {
 #[derive(Default)]
 struct Index {
 	by_topic: HashMap<Topic, HashSet<Hash>>,
-	by_dec_key: HashMap<DecryptionKey, HashSet<Hash>>,
+	by_dec_key: HashMap<Option<DecryptionKey>, HashSet<Hash>>,
 	topics_and_keys: HashMap<Hash, ([Option<Topic>; MAX_TOPICS], Option<DecryptionKey>)>,
 	entries: HashMap<Hash, (AccountId, GlobalPriority, Priority)>, /* Statement hash -> (Account id,
 	                                                * global_priority, priority) */
@@ -229,9 +229,7 @@ impl Index {
 			nt += 1;
 		}
 		let key = statement.decryption_key();
-		if let Some(k) = &key {
-			self.by_dec_key.entry(*k).or_default().insert(hash);
-		}
+		self.by_dec_key.entry(key).or_default().insert(hash);
 		if nt > 0 || key.is_some() {
 			self.topics_and_keys.insert(hash, (all_topics, key));
 		}
@@ -275,52 +273,35 @@ impl Index {
 		mut f: impl FnMut(&Hash) -> Result<()>,
 	) -> Result<()> {
 		let empty = HashSet::new();
-		let mut sets: [&HashSet<Hash>; MAX_TOPICS] = [&empty; MAX_TOPICS];
+		let mut sets: [&HashSet<Hash>; MAX_TOPICS + 1] = [&empty; MAX_TOPICS + 1];
 		if match_all_topics.len() > MAX_TOPICS {
 			return Ok(())
 		}
+		let key_set = self.by_dec_key.get(&key);
+		if key_set.map(|s| s.len()).unwrap_or(0) == 0 {
+			// Key does not exist in the index.
+			return Ok(())
+		}
+		sets[0] = key_set.expect("Function returns if key_set is None");
 		for (i, t) in match_all_topics.iter().enumerate() {
 			let set = self.by_topic.get(t);
 			if set.map(|s| s.len()).unwrap_or(0) == 0 {
 				// At least one of the match_all_topics does not exist in the index.
 				return Ok(())
 			}
-			sets[i] = set.expect("Function returns if set is None");
+			sets[i + 1] = set.expect("Function returns if set is None");
 		}
-		let sets = &mut sets[0..match_all_topics.len()];
-		if sets.is_empty() && key.is_none() {
-			// Iterate all entries
-			for h in self.entries.keys() {
-				log::trace!(target: LOG_TARGET, "Iterating: {:?}", HexDisplay::from(h));
-				f(h)?
-			}
-		} else {
-			// Start with the smallest topic set or the key set.
-			sets.sort_by_key(|s| s.len());
-			if let Some(key) = key {
-				let key_set =
-					if let Some(set) = self.by_dec_key.get(&key) { set } else { return Ok(()) };
-				for item in key_set {
-					if sets.iter().all(|set| set.contains(item)) {
-						log::trace!(
-							target: LOG_TARGET,
-							"Iterating by key: {:?}",
-							HexDisplay::from(item)
-						);
-						f(item)?
-					}
-				}
-			} else {
-				for item in sets[0] {
-					if sets[1..].iter().all(|set| set.contains(item)) {
-						log::trace!(
-							target: LOG_TARGET,
-							"Iterating by topic: {:?}",
-							HexDisplay::from(item)
-						);
-						f(item)?
-					}
-				}
+		let sets = &mut sets[0..match_all_topics.len() + 1];
+		// Start with the smallest topic set or the key set.
+		sets.sort_by_key(|s| s.len());
+		for item in sets[0] {
+			if sets[1..].iter().all(|set| set.contains(item)) {
+				log::trace!(
+					target: LOG_TARGET,
+					"Iterating by topic/key: statement {:?}",
+					HexDisplay::from(item)
+				);
+				f(item)?
 			}
 		}
 		Ok(())
@@ -352,10 +333,8 @@ impl Index {
 						set.remove(hash);
 					}
 				}
-				if let Some(k) = key {
-					if let Some(set) = self.by_dec_key.get_mut(&k) {
-						set.remove(hash);
-					}
+				if let Some(set) = self.by_dec_key.get_mut(&key) {
+					set.remove(hash);
 				}
 			}
 			self.expired.insert(*hash, current_time);
@@ -955,7 +934,7 @@ mod tests {
 	use sp_statement_store::{
 		runtime_api::{InvalidStatement, ValidStatement, ValidateStatement},
 		AccountId, Channel, NetworkPriority, Proof, SignatureVerificationResult, Statement,
-		StatementSource, StatementStore, SubmitResult, Topic,
+		StatementSource, StatementStore, SubmitResult, Topic, DecryptionKey,
 	};
 
 	type Extrinsic = sp_runtime::OpaqueExtrinsic;
@@ -1052,14 +1031,17 @@ mod tests {
 	}
 
 	fn signed_statement(data: u8) -> Statement {
-		signed_statement_with_topics(data, &[])
+		signed_statement_with_topics(data, &[], None)
 	}
 
-	fn signed_statement_with_topics(data: u8, topics: &[Topic]) -> Statement {
+	fn signed_statement_with_topics(data: u8, topics: &[Topic], dec_key: Option<DecryptionKey>) -> Statement {
 		let mut statement = Statement::new();
 		statement.set_plain_data(vec![data]);
 		for i in 0..topics.len() {
 			statement.set_topic(i, topics[i]);
+		}
+		if let Some(key) = dec_key {
+			statement.set_decryption_key(key);
 		}
 		let kp = sp_core::ed25519::Pair::from_string("//Alice", None).unwrap();
 		statement.sign_ed25519_private(&kp);
@@ -1070,6 +1052,12 @@ mod tests {
 		let mut topic: Topic = Default::default();
 		topic[0..8].copy_from_slice(&data.to_le_bytes());
 		topic
+	}
+
+	fn dec_key(data: u64) -> DecryptionKey {
+		let mut dec_key: DecryptionKey = Default::default();
+		dec_key[0..8].copy_from_slice(&data.to_le_bytes());
+		dec_key
 	}
 
 	fn account(id: u64) -> AccountId {
@@ -1149,39 +1137,47 @@ mod tests {
 	}
 
 	#[test]
-	fn search_by_topic() {
+	fn search_by_topic_and_key() {
 		let (store, _temp) = test_store();
 		let statement0 = signed_statement(0);
-		let statement1 = signed_statement_with_topics(1, &[topic(0)]);
-		let statement2 = signed_statement_with_topics(2, &[topic(0), topic(1)]);
-		let statement3 = signed_statement_with_topics(3, &[topic(0), topic(1), topic(2)]);
+		let statement1 = signed_statement_with_topics(1, &[topic(0)], None);
+		let statement2 = signed_statement_with_topics(2, &[topic(0), topic(1)], Some(dec_key(2)));
+		let statement3 = signed_statement_with_topics(3, &[topic(0), topic(1), topic(2)], None);
 		let statement4 =
-			signed_statement_with_topics(4, &[topic(0), topic(42), topic(2), topic(3)]);
+			signed_statement_with_topics(4, &[topic(0), topic(42), topic(2), topic(3)], None);
 		let statements = vec![statement0, statement1, statement2, statement3, statement4];
 		for s in &statements {
 			store.submit(s.clone(), StatementSource::Network);
 		}
 
-		let assert_topics = |topics: &[u64], expected: &[u8]| {
+		let assert_topics = |topics: &[u64], key: Option<u64>, expected: &[u8]| {
+			let key = key.map(dec_key);
 			let topics: Vec<_> = topics.iter().map(|t| topic(*t)).collect();
 			let mut got_vals: Vec<_> =
-				store.broadcasts(&topics).unwrap().into_iter().map(|d| d[0]).collect();
+				if let Some(key) = key {
+					store.posted(&topics, key).unwrap().into_iter().map(|d| d[0]).collect()
+				} else {
+					store.broadcasts(&topics).unwrap().into_iter().map(|d| d[0]).collect()
+				};
 			got_vals.sort();
 			assert_eq!(expected.to_vec(), got_vals);
 		};
 
-		assert_topics(&[], &[0, 1, 2, 3, 4]);
-		assert_topics(&[0], &[1, 2, 3, 4]);
-		assert_topics(&[1], &[2, 3]);
-		assert_topics(&[2], &[3, 4]);
-		assert_topics(&[3], &[4]);
-		assert_topics(&[42], &[4]);
+		assert_topics(&[], None, &[0, 1, 3, 4]);
+		assert_topics(&[], Some(2), &[2]);
+		assert_topics(&[0], None, &[1, 3, 4]);
+		assert_topics(&[1], None, &[3]);
+		assert_topics(&[2], None, &[3, 4]);
+		assert_topics(&[3], None, &[4]);
+		assert_topics(&[42], None, &[4]);
 
-		assert_topics(&[0, 1], &[2, 3]);
-		assert_topics(&[1, 2], &[3]);
-		assert_topics(&[99], &[]);
-		assert_topics(&[0, 99], &[]);
-		assert_topics(&[0, 1, 2, 3, 42], &[]);
+		assert_topics(&[0, 1], None, &[3]);
+		assert_topics(&[0, 1], Some(2), &[2]);
+		assert_topics(&[0, 1, 99], Some(2), &[]);
+		assert_topics(&[1, 2], None, &[3]);
+		assert_topics(&[99], None, &[]);
+		assert_topics(&[0, 99], None, &[]);
+		assert_topics(&[0, 1, 2, 3, 42], None, &[]);
 	}
 
 	#[test]
