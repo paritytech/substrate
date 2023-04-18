@@ -30,16 +30,13 @@ pub use substrate_test_runtime as runtime;
 
 pub use self::block_builder_ext::BlockBuilderExt;
 
-use sc_chain_spec::construct_genesis_block;
-use sp_api::StateVersion;
 use sp_core::{
 	sr25519,
 	storage::{ChildInfo, Storage, StorageChild},
 	Pair,
 };
-use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use substrate_test_client::sc_executor::WasmExecutor;
-use substrate_test_runtime::genesismap::{additional_storage_with_genesis, GenesisConfigBuilder};
+use substrate_test_runtime::genesismap::GenesisStorageBuilder;
 
 /// A prelude to import in tests.
 pub mod prelude {
@@ -92,8 +89,20 @@ pub struct GenesisParameters {
 }
 
 impl GenesisParameters {
-	fn genesis_config(&self) -> GenesisConfigBuilder {
-		GenesisConfigBuilder::new(
+	/// Set the wasm code that should be used at genesis.
+	pub fn set_wasm_code(&mut self, code: Vec<u8>) {
+		self.wasm_code = Some(code);
+	}
+
+	/// Access extra genesis storage.
+	pub fn extra_storage(&mut self) -> &mut Storage {
+		&mut self.extra_storage
+	}
+}
+
+impl GenesisInit for GenesisParameters {
+	fn genesis_storage(&self) -> Storage {
+		let mut builder = GenesisStorageBuilder::new(
 			vec![
 				sr25519::Public::from(Sr25519Keyring::Alice).into(),
 				sr25519::Public::from(Sr25519Keyring::Bob).into(),
@@ -111,50 +120,13 @@ impl GenesisParameters {
 			1000 * runtime::currency::DOLLARS,
 			self.heap_pages_override,
 			self.extra_storage.clone(),
-		)
-	}
+		);
 
-	/// Set the wasm code that should be used at genesis.
-	pub fn set_wasm_code(&mut self, code: Vec<u8>) {
-		self.wasm_code = Some(code);
-	}
-
-	/// Access extra genesis storage.
-	pub fn extra_storage(&mut self) -> &mut Storage {
-		&mut self.extra_storage
-	}
-}
-
-impl GenesisInit for GenesisParameters {
-	fn genesis_storage(&self) -> Storage {
-		use codec::Encode;
-
-		let mut storage = self.genesis_config().genesis_map();
-
-		if let Some(ref code) = self.wasm_code {
-			storage
-				.top
-				.insert(sp_core::storage::well_known_keys::CODE.to_vec(), code.clone());
+		if let Some(ref wasm_code) = self.wasm_code {
+			builder.with_wasm_code(wasm_code.clone());
 		}
 
-		let child_roots = storage.children_default.values().map(|child_content| {
-			let state_root =
-				<<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-					child_content.data.clone().into_iter().collect(),
-					sp_runtime::StateVersion::V1,
-				);
-			let prefixed_storage_key = child_content.child_info.prefixed_storage_key();
-			(prefixed_storage_key.into_inner(), state_root.encode())
-		});
-		let state_root =
-			<<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-				storage.top.clone().into_iter().chain(child_roots).collect(),
-				sp_runtime::StateVersion::V1,
-			);
-		let block: runtime::Block = construct_genesis_block(state_root, StateVersion::V1);
-		storage.top.extend(additional_storage_with_genesis(&block));
-
-		storage
+		builder.build_storage()
 	}
 }
 

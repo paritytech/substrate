@@ -49,7 +49,7 @@ use substrate_test_runtime_client::{
 	prelude::*,
 	runtime::{
 		currency::DOLLARS,
-		genesismap::{insert_genesis_block, GenesisConfigBuilder},
+		genesismap::{insert_genesis_block, GenesisStorageBuilder},
 		Block, BlockNumber, Digest, Hash, Header, RuntimeApi, Transfer,
 	},
 	AccountKeyring, BlockBuilderExt, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt,
@@ -169,14 +169,14 @@ fn finality_notification_check(
 
 #[test]
 fn construct_genesis_should_work_with_native() {
-	let mut storage = GenesisConfigBuilder::new(
+	let mut storage = GenesisStorageBuilder::new(
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 		1000 * DOLLARS,
 		None,
 		Default::default(),
 	)
-	.genesis_map();
+	.build_storage();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
 	let backend = InMemoryBackend::from((storage, StateVersion::default()));
@@ -202,14 +202,14 @@ fn construct_genesis_should_work_with_native() {
 
 #[test]
 fn construct_genesis_should_work_with_wasm() {
-	let mut storage = GenesisConfigBuilder::new(
+	let mut storage = GenesisStorageBuilder::new(
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 		1000 * DOLLARS,
 		None,
 		Default::default(),
 	)
-	.genesis_map();
+	.build_storage();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
 	let backend = InMemoryBackend::from((storage, StateVersion::default()));
@@ -1746,7 +1746,6 @@ fn storage_keys_works() {
 	// 00771836bebdd29870ff246d305c578c4e7b9012096b41c4eb3aaf947f6ea429 System|:__STORAGE_VERSION__:
 	// 00771836bebdd29870ff246d305c578c5e0621c4869aa60c02be9adcc98a0d1d SubstrateTest|Authorities
 	//
-	// 0befda6e1ca4ef40219d588a727f1271                                 latest
 	// 1cb6f36e027abb2091cfb5110ab5087f4e7b9012096b41c4eb3aaf947f6ea429 Babe|:__STORAGE_VERSION__:
 	// 1cb6f36e027abb2091cfb5110ab5087f5e0621c4869aa60c02be9adcc98a0d1d Babe|Authorities
 	// 1cb6f36e027abb2091cfb5110ab5087f66e8f035c8adbe7f1547b43c51e6f8a4 Babe|SegmentIndex
@@ -1801,7 +1800,7 @@ fn storage_keys_works() {
 	let res: Vec<_> = client
 		.storage_keys(block_hash, Some(&prefix), None)
 		.unwrap()
-		.take(20)
+		.take(19)
 		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
 	assert_eq!(
@@ -1809,7 +1808,6 @@ fn storage_keys_works() {
 		[
 			"00771836bebdd29870ff246d305c578c4e7b9012096b41c4eb3aaf947f6ea429",
 			"00771836bebdd29870ff246d305c578c5e0621c4869aa60c02be9adcc98a0d1d",
-			"0befda6e1ca4ef40219d588a727f1271",
             "1cb6f36e027abb2091cfb5110ab5087f4e7b9012096b41c4eb3aaf947f6ea429",
 			"1cb6f36e027abb2091cfb5110ab5087f5e0621c4869aa60c02be9adcc98a0d1d",
 			"1cb6f36e027abb2091cfb5110ab5087f66e8f035c8adbe7f1547b43c51e6f8a4",
@@ -1834,7 +1832,7 @@ fn storage_keys_works() {
 	let res: Vec<_> = client
 		.storage_keys(block_hash, Some(&prefix), Some(&StorageKey("".into())))
 		.unwrap()
-		.take(20)
+		.take(19)
 		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
 	assert_eq!(
@@ -1842,7 +1840,6 @@ fn storage_keys_works() {
 		[
 			"00771836bebdd29870ff246d305c578c4e7b9012096b41c4eb3aaf947f6ea429",
 			"00771836bebdd29870ff246d305c578c5e0621c4869aa60c02be9adcc98a0d1d",
-			"0befda6e1ca4ef40219d588a727f1271",
             "1cb6f36e027abb2091cfb5110ab5087f4e7b9012096b41c4eb3aaf947f6ea429",
 			"1cb6f36e027abb2091cfb5110ab5087f5e0621c4869aa60c02be9adcc98a0d1d",
 			"1cb6f36e027abb2091cfb5110ab5087f66e8f035c8adbe7f1547b43c51e6f8a4",

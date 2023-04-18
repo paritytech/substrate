@@ -22,27 +22,28 @@ use super::{
 };
 use codec::{Encode, Joiner};
 use sc_service::construct_genesis_block;
-use sp_core::{
-	map,
-	storage::{well_known_keys, StateVersion, Storage},
-};
-use sp_io::hashing::twox_128;
+use sp_core::storage::{well_known_keys, StateVersion, Storage};
 use sp_runtime::{
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT},
 	BuildStorage,
 };
-use std::collections::BTreeMap;
 
-/// Configuration of a general Substrate test genesis block.
-pub struct GenesisConfigBuilder {
+/// Builder for generating storage from substrate-test-runtime genesis config. Default storage can
+/// be extended with additional key-value pairs.
+pub struct GenesisStorageBuilder {
 	authorities: Vec<AuthorityId>,
 	balances: Vec<(AccountId, u64)>,
 	heap_pages_override: Option<u64>,
 	/// Additional storage key pairs that will be added to the genesis map.
 	extra_storage: Storage,
+	wasm_code: Option<Vec<u8>>,
 }
 
-impl GenesisConfigBuilder {
+impl GenesisStorageBuilder {
+	/// Creates a storage builder for genesis config. `substrage test runtime` `GenesisConfig` is
+	/// initialized with provided `authorities`, `endowed_accounts` with given balance. Key-pairs
+	/// from `extra_storage` will be injected into built storage. `HEAP_PAGES` key and value will
+	/// also be placed into storage.
 	pub fn new(
 		authorities: Vec<AuthorityId>,
 		endowed_accounts: Vec<AccountId>,
@@ -50,17 +51,26 @@ impl GenesisConfigBuilder {
 		heap_pages_override: Option<u64>,
 		extra_storage: Storage,
 	) -> Self {
-		GenesisConfigBuilder {
+		GenesisStorageBuilder {
 			authorities,
 			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
 			heap_pages_override,
 			extra_storage,
+			wasm_code: None,
 		}
 	}
 
-	pub fn genesis_map(&self) -> Storage {
+	/// Override default wasm code to be placed into GenesisConfig.
+	pub fn with_wasm_code(&mut self, wasm_code: Vec<u8>) {
+		self.wasm_code = Some(wasm_code);
+	}
+
+	/// Builds the `GenesisConfig` and returns its storage.
+	pub fn build_storage(&mut self) -> Storage {
 		let genesis_config = GenesisConfig {
-			system: frame_system::GenesisConfig { code: wasm_binary_unwrap().to_vec() },
+			system: frame_system::GenesisConfig {
+				code: self.wasm_code.clone().unwrap_or(wasm_binary_unwrap().to_vec()),
+			},
 			babe: pallet_babe::GenesisConfig {
 				authorities: self.authorities.clone().into_iter().map(|x| (x, 1)).collect(),
 				epoch_config: Some(crate::TEST_RUNTIME_BABE_EPOCH_CONFIGURATION),
@@ -72,24 +82,16 @@ impl GenesisConfigBuilder {
 		};
 		let mut storage = genesis_config
 			.build_storage()
-			.expect("Build storage from substrate_test runtime GenesisConfig");
+			.expect("Build storage from substrate-test-runtime GenesisConfig");
 
-		{
-			let map: BTreeMap<Vec<u8>, Vec<u8>> = vec![(
-				well_known_keys::HEAP_PAGES.into(),
-				vec![].and(&(self.heap_pages_override.unwrap_or(16_u64))),
-			)]
-			.into_iter()
-			.collect();
+		let extras = std::iter::once((
+			well_known_keys::HEAP_PAGES.into(),
+			vec![].and(&(self.heap_pages_override.unwrap_or(16_u64))),
+		))
+		.chain(self.extra_storage.top.clone());
+		storage.top.extend(extras);
 
-			storage.top.extend(map);
-		}
-
-		// Add the extra storage entries.
-		storage.top.extend(self.extra_storage.top.clone().into_iter());
-		storage
-			.children_default
-			.extend(self.extra_storage.children_default.clone().into_iter());
+		storage.children_default.extend(self.extra_storage.children_default.clone());
 
 		storage
 	}
@@ -112,12 +114,6 @@ pub fn insert_genesis_block(storage: &mut Storage) -> sp_core::hash::H256 {
 	);
 	let block: crate::Block = construct_genesis_block(state_root, StateVersion::V1);
 	let genesis_hash = block.header.hash();
-	storage.top.extend(additional_storage_with_genesis(&block));
-	genesis_hash
-}
 
-pub fn additional_storage_with_genesis(genesis_block: &crate::Block) -> BTreeMap<Vec<u8>, Vec<u8>> {
-	map![
-		twox_128(&b"latest"[..]).to_vec() => genesis_block.hash().as_fixed_bytes().to_vec()
-	]
+	genesis_hash
 }
