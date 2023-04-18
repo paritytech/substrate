@@ -1457,7 +1457,9 @@ pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 	let mut internal_mod = parse_macro_input!(tokens as ItemMod);
 
 	if let Some(ref mut content) = internal_mod.content {
-		content.1.extend(foreign_mod.content.unwrap().1);
+		if let Some(foreign_content) = foreign_mod.content {
+			content.1.extend(foreign_content.1);
+		}
 	}
 
 	quote! {
