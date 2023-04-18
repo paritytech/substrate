@@ -220,7 +220,7 @@ pub mod pallet {
 	}
 }
 
-// Exposes conversion of an arbitrary balance of an asset to native balance.
+/// Exposes conversion of an arbitrary balance of an asset to native balance.
 impl<T> ConversionFromAssetBalance<BalanceOf<T>, AssetIdOf<T>, BalanceOf<T>> for Pallet<T>
 where
 	T: Config,
