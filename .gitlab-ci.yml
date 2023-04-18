@@ -215,11 +215,6 @@ default:
 .zombienet-refs:
   extends: .build-refs
 
-.nightly-pipeline:
-  rules:
-    # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
-    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
-
 .crates-publishing-variables:
   variables:
     CRATESIO_CRATES_OWNER: parity-crate-owner
