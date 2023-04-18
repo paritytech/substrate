@@ -569,8 +569,7 @@ where
 			let handle = std::thread::spawn(move || {
 				// Process the payloads in chunks so each thread can pass kvs back to the main
 				// thread to start inserting before all of the data has been queried from the node.
-				// A little faster than waiting for all data to be queried before starting to
-				// insert.
+				// Inserting data takes a very long time, so the earlier it can start the better.
 				let mut thread_key_values = vec![];
 				let chunk_size = thread_keys.len() / 10;
 				for thread_keys_chunk in thread_keys.chunks(chunk_size) {
