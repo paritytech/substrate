@@ -42,8 +42,10 @@ use std::{
 	sync::Arc,
 	thread,
 };
-use substrate_rpc_client::{
-	rpc_params, ws_client, BatchRequestBuilder, ChainApi, ClientT, StateApi, WsClient,
+use substrate_rpc_client::{rpc_params, BatchRequestBuilder, ChainApi, ClientT, StateApi};
+use jsonrpsee::{
+	core::params::ArrayParams,
+	http_client::{HttpClient, HttpClientBuilder},
 };
 
 type KeyValue = (StorageKey, StorageData);
@@ -51,8 +53,7 @@ type TopKeyValues = Vec<KeyValue>;
 type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
 
 const LOG_TARGET: &str = "remote-ext";
-const DEFAULT_WS_ENDPOINT: &str = "wss://rpc.polkadot.io:443";
-const DEFAULT_VALUE_DOWNLOAD_BATCH: usize = 4096;
+const DEFAULT_HTTP_ENDPOINT: &str = "https://rpc.polkadot.io:443";
 // NOTE: increasing this value does not seem to impact speed all that much.
 const DEFAULT_KEY_DOWNLOAD_PAGE: u32 = 1000;
 /// The snapshot that we store on disk.
@@ -117,36 +118,47 @@ pub struct OfflineConfig {
 pub enum Transport {
 	/// Use the `URI` to open a new WebSocket connection.
 	Uri(String),
-	/// Use existing WebSocket connection.
-	RemoteClient(Arc<WsClient>),
+	/// Use HTTP connection.
+	RemoteClient(Arc<HttpClient>),
 }
 
 impl Transport {
-	fn as_client(&self) -> Option<&WsClient> {
+	fn as_client(&self) -> Option<&HttpClient> {
 		match self {
 			Self::RemoteClient(client) => Some(client),
 			_ => None,
 		}
 	}
 
-	fn as_client_cloned(&self) -> Option<Arc<WsClient>> {
+	fn as_client_cloned(&self) -> Option<Arc<HttpClient>> {
 		match self {
 			Self::RemoteClient(client) => Some(client.clone()),
 			_ => None,
 		}
 	}
 
-	// Open a new WebSocket connection if it's not connected.
+	// Build an HttpClient from a URI.
 	async fn map_uri(&mut self) -> Result<(), &'static str> {
 		if let Self::Uri(uri) = self {
 			log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
 
-			let ws_client = ws_client(uri).await.map_err(|e| {
+			// If we have a ws uri, try to convert it to an http uri.
+			// We use an HTTP client rather than WS because WS starts to choke with "accumulated
+			// message length exceeds maximum" errors after processing ~10k keys when fetching
+			// from a node running a default configuration.
+			let uri = if uri.starts_with("ws://") {
+				uri.replace("ws://", "http://")
+			} else if uri.starts_with("wss://") {
+				uri.replace("wss://", "https://")
+			} else {
+				uri.clone()
+			};
+			let http_client = HttpClientBuilder::default().build(uri).map_err(|e| {
 				log::error!(target: LOG_TARGET, "error: {:?}", e);
-				"failed to build ws client"
+				"failed to build http client"
 			})?;
 
-			*self = Self::RemoteClient(Arc::new(ws_client))
+			*self = Self::RemoteClient(Arc::new(http_client))
 		}
 
 		Ok(())
@@ -159,8 +171,8 @@ impl From<String> for Transport {
 	}
 }
 
-impl From<Arc<WsClient>> for Transport {
-	fn from(client: Arc<WsClient>) -> Self {
+impl From<Arc<HttpClient>> for Transport {
+	fn from(client: Arc<HttpClient>) -> Self {
 		Transport::RemoteClient(client)
 	}
 }
@@ -189,18 +201,18 @@ pub struct OnlineConfig<B: BlockT> {
 }
 
 impl<B: BlockT> OnlineConfig<B> {
-	/// Return rpc (ws) client reference.
-	fn rpc_client(&self) -> &WsClient {
+	/// Return rpc (http) client reference.
+	fn rpc_client(&self) -> &HttpClient {
 		self.transport
 			.as_client()
-			.expect("ws client must have been initialized by now; qed.")
+			.expect("http client must have been initialized by now; qed.")
 	}
 
-	/// Return a cloned rpc (ws) client, suitable for being moved to threads.
-	fn rpc_client_cloned(&self) -> Arc<WsClient> {
+	/// Return a cloned rpc (http) client, suitable for being moved to threads.
+	fn rpc_client_cloned(&self) -> Arc<HttpClient> {
 		self.transport
 			.as_client_cloned()
-			.expect("ws client must have been initialized by now; qed.")
+			.expect("http client must have been initialized by now; qed.")
 	}
 
 	fn at_expected(&self) -> B::Hash {
@@ -211,7 +223,7 @@ impl<B: BlockT> OnlineConfig<B> {
 impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self {
-			transport: Transport::from(DEFAULT_WS_ENDPOINT.to_owned()),
+			transport: Transport::from(DEFAULT_HTTP_ENDPOINT.to_owned()),
 			child_trie: true,
 			at: None,
 			state_snapshot: None,
@@ -307,8 +319,8 @@ where
 	B::Hash: DeserializeOwned,
 	B::Header: DeserializeOwned,
 {
-	const AIMD_LINEAR_INCREASE_FACTOR: usize = 500;
-	const AIMD_BASE_VALUE: usize = 20000;
+	const AIMD_LINEAR_INCREASE_FACTOR: usize = 100;
+	const AIMD_BASE_VALUE: usize = 5000;
 	const AIMD_EXPONENTIAL_DECREASE_FACTOR: usize = 2;
 
 	/// Get the number of threads to use.
@@ -340,17 +352,6 @@ where
 				error!(target: LOG_TARGET, "Error = {:?}", e);
 				"rpc finalized_head failed."
 			})
-	}
-
-	/// Returns the error message or suggestion for possible fixes based on the given RPC error.
-	fn get_batch_rpc_error_message(e: String) -> String {
-		// If the error contains "Invalid request ID", the request likely failed
-		// because the user incorrectly configured their node args
-		if e.to_string().contains("Invalid request ID") {
-			"Did you forget to specify `--rpc-max-request-size` or `--rpc-max-response-size` when starting your node? See https://paritytech.github.io/substrate/master/try_runtime_cli/index.html#note-on-nodes-that-respond-to-try-runtime-requests".to_string()
-		} else {
-			format!("Unexpected RPC error: {}", e.to_string()).to_string()
-		}
 	}
 
 	/// Get all the keys at `prefix` at `hash` using the paged, safe RPC methods.
@@ -410,7 +411,7 @@ where
 	///
 	/// # Arguments
 	///
-	/// * thread_client - An Arc<WsClient> representing the WebSocket client.
+	/// * thread_client - An Arc<HttpClient> representing the WebSocket client.
 	/// * remaining_keys - A Vec<StorageKey> containing the storage keys to be queried.
 	/// * batch_size - A usize representing the initial batch request size.
 	/// * at - A B::Hash representing the block hash at which the storage data should be queried.
@@ -427,53 +428,52 @@ where
 	/// This function returns an error message as a String in case of any failure during batch
 	/// request construction, batch request execution, or processing the batch response.
 	fn get_storage_data_aimd(
-		thread_client: Arc<WsClient>,
-		remaining_keys: Vec<StorageKey>,
+		thread_client: Arc<HttpClient>,
+		remaining_payloads: Vec<(&str, ArrayParams)>,
 		batch_size: usize,
-		at: B::Hash,
 	) -> Result<Vec<Option<StorageData>>, String> {
-		// All keys have been processed
-		if remaining_keys.is_empty() {
+		// All payloads have been processed
+		if remaining_payloads.is_empty() {
 			return Ok(vec![])
-		}
+		};
 
 		log::debug!(
 			target: LOG_TARGET,
-			"Remaining keys: {} Batch request size: {}",
-			remaining_keys.len(),
+			"Remaining payloads: {} Batch request size: {}",
+			remaining_payloads.len(),
 			batch_size,
 		);
 
-		// Keys to attempt to query this page
-		let page = remaining_keys.iter().take(batch_size).cloned().collect::<Vec<_>>();
+		// Payloads to attempt to process this batch
+		let page = remaining_payloads.iter().take(batch_size).cloned().collect::<Vec<_>>();
 
 		// Build the batch request
-		let rt = tokio::runtime::Runtime::new().unwrap();
 		let mut batch = BatchRequestBuilder::new();
-		for key in page.iter() {
+		for (method, params) in page.iter() {
 			batch
-				.insert("state_getStorage", rpc_params![key, at])
+				.insert(method, params.clone())
 				.map_err(|_| "Invalid batch params")
 				.unwrap();
 		}
+		let rt = tokio::runtime::Runtime::new().unwrap();
 		let batch_response =
 			match rt.block_on(thread_client.batch_request::<Option<StorageData>>(batch)) {
 				Ok(batch_response) => batch_response,
 				Err(e) => {
-					if batch_size == 1 {
+					if batch_size < 2 {
 						return Err(e.to_string())
 					}
 
 					log::debug!(
 						target: LOG_TARGET,
-						"Batch request failed, trying again with smaller batch size",
+						"Batch request failed, trying again with smaller batch size. {}",
+						e.to_string()
 					);
 
 					return Self::get_storage_data_aimd(
 						thread_client,
-						remaining_keys,
+						remaining_payloads,
 						batch_size / Self::AIMD_EXPONENTIAL_DECREASE_FACTOR,
-						at,
 					)
 				},
 			};
@@ -488,12 +488,12 @@ where
 		}
 
 		// Return this data joined with the remaining keys
-		let remaining_keys = remaining_keys.iter().skip(batch_size).cloned().collect::<Vec<_>>();
+		let remaining_payloads =
+			remaining_payloads.iter().skip(batch_size).cloned().collect::<Vec<_>>();
 		let mut rest = Self::get_storage_data_aimd(
 			thread_client,
-			remaining_keys,
+			remaining_payloads,
 			batch_size + Self::AIMD_LINEAR_INCREASE_FACTOR,
-			at,
 		)?;
 		data.append(&mut rest);
 		Ok(data)
@@ -549,11 +549,14 @@ where
 			let handle = std::thread::spawn(move || {
 				let mut thread_key_values = Vec::with_capacity(thread_keys.len());
 
+				let payloads = thread_keys
+					.iter()
+					.map(|key| ("state_getStorage", rpc_params!(key, at)))
+					.collect::<Vec<_>>();
 				let storage_data = match Self::get_storage_data_aimd(
-					thread_client.clone(),
-					thread_keys.to_vec(),
+					thread_client,
+					payloads,
 					Self::AIMD_BASE_VALUE,
-					at,
 				) {
 					Ok(storage_data) => storage_data,
 					Err(e) => {
@@ -649,73 +652,53 @@ where
 
 	/// Get the values corresponding to `child_keys` at the given `prefixed_top_key`.
 	pub(crate) async fn rpc_child_get_storage_paged(
-		client: &WsClient,
+		client: Arc<HttpClient>,
 		prefixed_top_key: &StorageKey,
 		child_keys: Vec<StorageKey>,
 		at: B::Hash,
 	) -> Result<Vec<KeyValue>, &'static str> {
-		let mut child_kv_inner = vec![];
-		let mut batch_success = true;
+		let child_keys_len = child_keys.len();
 
-		for batch_child_key in child_keys.chunks(DEFAULT_VALUE_DOWNLOAD_BATCH) {
-			let mut batch_request = BatchRequestBuilder::new();
+		let payloads = child_keys
+			.iter()
+			.map(|key| {
+				(
+					"childstate_getStorage",
+					rpc_params![
+						PrefixedStorageKey::new(prefixed_top_key.as_ref().to_vec()),
+						key,
+						at
+					],
+				)
+			})
+			.collect::<Vec<_>>();
 
-			for key in batch_child_key {
-				batch_request
-					.insert(
-						"childstate_getStorage",
-						rpc_params![
-							PrefixedStorageKey::new(prefixed_top_key.as_ref().to_vec()),
-							key,
-							at
-						],
-					)
-					.map_err(|_| "Invalid batch params")?;
-			}
+		let storage_data =
+			match Self::get_storage_data_aimd(client.clone(), payloads, Self::AIMD_BASE_VALUE) {
+				Ok(storage_data) => storage_data,
+				Err(e) => {
+					log::error!(target: LOG_TARGET, "batch processing failed: {:?}", e);
+					return Err("batch processing failed")
+				},
+			};
 
-			let batch_response =
-				match client.batch_request::<Option<StorageData>>(batch_request).await {
-					Ok(response) => response,
-					Err(e) => {
-						log::debug!(target: LOG_TARGET, "batch_child_key: {:?}", batch_child_key,);
-						let msg = Self::get_batch_rpc_error_message(e.to_string());
-						log::error!(target: LOG_TARGET, "{}", msg);
-						return Err("Batch RPC call failed.")
-					},
-				};
+		assert_eq!(child_keys_len, storage_data.len());
 
-			assert_eq!(batch_child_key.len(), batch_response.len());
-
-			for (key, maybe_value) in batch_child_key.iter().zip(batch_response) {
-				match maybe_value {
-					Ok(Some(v)) => {
-						child_kv_inner.push((key.clone(), v));
-					},
-					Ok(None) => {
-						log::warn!(
-							target: LOG_TARGET,
-							"key {:?} had none corresponding value.",
-							&key
-						);
-						child_kv_inner.push((key.clone(), StorageData(vec![])));
-					},
-					Err(e) => {
-						log::error!(target: LOG_TARGET, "key {:?} failed: {:?}", &key, e);
-						batch_success = false;
-					},
-				};
-			}
-		}
-
-		if batch_success {
-			Ok(child_kv_inner)
-		} else {
-			Err("batch failed.")
-		}
+		Ok(child_keys
+			.iter()
+			.zip(storage_data)
+			.map(|(key, maybe_value)| match maybe_value {
+				Some(v) => (key.clone(), v),
+				None => {
+					log::warn!(target: LOG_TARGET, "key {:?} had none corresponding value.", &key);
+					(key.clone(), StorageData(vec![]))
+				},
+			})
+			.collect::<Vec<_>>())
 	}
 
 	pub(crate) async fn rpc_child_get_keys(
-		client: &WsClient,
+		client: &HttpClient,
 		prefixed_top_key: &StorageKey,
 		child_prefix: StorageKey,
 		at: B::Hash,
@@ -817,7 +800,7 @@ where
 						at,
 					))?;
 					let child_kv_inner = rt.block_on(Self::rpc_child_get_storage_paged(
-						&thread_client,
+						thread_client.clone(),
 						&prefixed_top_key,
 						child_keys,
 						at,
@@ -936,7 +919,7 @@ where
 	///
 	/// initializes the remote client in `transport`, and sets the `at` field, if not specified.
 	async fn init_remote_client(&mut self) -> Result<(), &'static str> {
-		// First, initialize the ws client.
+		// First, initialize the http client.
 		self.as_online_mut().transport.map_uri().await?;
 
 		// Then, if `at` is not set, set it.
