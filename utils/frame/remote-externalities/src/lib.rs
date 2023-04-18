@@ -567,67 +567,78 @@ where
 		let (tx, mut rx) = mpsc::unbounded::<Message>();
 
 		for thread_keys in keys_chunked {
-			let thread_keys_len = thread_keys.len();
 			let thread_sender = tx.clone();
 			let thread_client = client.clone();
 			let handle = std::thread::spawn(move || {
-				let mut thread_key_values = Vec::with_capacity(thread_keys.len());
+				// Process the payloads in chunks so each thread can pass kvs back to the main
+				// thread to start inserting before all of the data has been queried from the node.
+				// A little faster than waiting for all data to be queried before starting to
+				// insert.
+				let mut thread_key_values = vec![];
+				let chunk_size = thread_keys.len() / 10;
+				for thread_keys_chunk in thread_keys.chunks(chunk_size) {
+					let mut thread_key_chunk_values = Vec::with_capacity(thread_keys_chunk.len());
 
-				let payloads = thread_keys
-					.iter()
-					.map(|key| ("state_getStorage".to_string(), rpc_params!(key, at)))
-					.collect::<Vec<_>>();
+					let payloads = thread_keys_chunk
+						.iter()
+						.map(|key| ("state_getStorage".to_string(), rpc_params!(key, at)))
+						.collect::<Vec<_>>();
 
-				let rt = tokio::runtime::Runtime::new().unwrap();
-				let storage_data = match rt.block_on(Self::get_storage_data_dynamic_batch_size(
-					&thread_client,
-					payloads,
-					Self::INITIAL_BATCH_SIZE,
-				)) {
-					Ok(storage_data) => storage_data,
-					Err(e) => {
-						thread_sender.unbounded_send(Message::BatchFailed(e)).unwrap();
-						return Default::default()
-					},
-				};
-
-				// Check if we got responses for all submitted requests.
-				assert_eq!(thread_keys_len, storage_data.len());
-
-				let mut batch_kv = Vec::with_capacity(thread_keys.len());
-				for (key, maybe_value) in thread_keys.into_iter().zip(storage_data) {
-					match maybe_value {
-						Some(data) => {
-							thread_key_values.push((key.clone(), data.clone()));
-							batch_kv.push((key.clone().0, data.0));
-						},
-						None => {
-							log::warn!(
-								target: LOG_TARGET,
-								"key {:?} had none corresponding value.",
-								&key
-							);
-							let data = StorageData(vec![]);
-							thread_key_values.push((key.clone(), data.clone()));
-							batch_kv.push((key.clone().0, data.0));
+					let rt = tokio::runtime::Runtime::new().unwrap();
+					let storage_data = match rt.block_on(Self::get_storage_data_dynamic_batch_size(
+						&thread_client,
+						payloads,
+						Self::INITIAL_BATCH_SIZE,
+					)) {
+						Ok(storage_data) => storage_data,
+						Err(e) => {
+							thread_sender.unbounded_send(Message::BatchFailed(e)).unwrap();
+							return Default::default()
 						},
 					};
 
-					if thread_key_values.len() % (thread_keys_len / 10).max(1) == 0 {
-						let ratio: f64 = thread_key_values.len() as f64 / thread_keys_len as f64;
-						log::debug!(
-							target: LOG_TARGET,
-							"[thread = {:?}] progress = {:.2} [{} / {}]",
-							std::thread::current().id(),
-							ratio,
-							thread_key_values.len(),
-							thread_keys_len,
-						);
-					}
-				}
+					// Check if we got responses for all submitted requests.
+					assert_eq!(thread_keys_chunk.len(), storage_data.len());
 
-				// Send this batch to the main thread to start inserting.
-				thread_sender.unbounded_send(Message::Batch(batch_kv)).unwrap();
+					let mut batch_kv = Vec::with_capacity(thread_keys_chunk.len());
+					for (key, maybe_value) in thread_keys_chunk.iter().zip(storage_data) {
+						match maybe_value {
+							Some(data) => {
+								thread_key_chunk_values.push((key.clone(), data.clone()));
+								batch_kv.push((key.clone().0, data.0));
+							},
+							None => {
+								log::warn!(
+									target: LOG_TARGET,
+									"key {:?} had none corresponding value.",
+									&key
+								);
+								let data = StorageData(vec![]);
+								thread_key_chunk_values.push((key.clone(), data.clone()));
+								batch_kv.push((key.clone().0, data.0));
+							},
+						};
+
+						if thread_key_chunk_values.len() % (thread_keys_chunk.len() / 10).max(1) ==
+							0
+						{
+							let ratio: f64 = thread_key_chunk_values.len() as f64 /
+								thread_keys_chunk.len() as f64;
+							log::debug!(
+								target: LOG_TARGET,
+								"[thread = {:?}] progress = {:.2} [{} / {}]",
+								std::thread::current().id(),
+								ratio,
+								thread_key_chunk_values.len(),
+								thread_keys_chunk.len(),
+							);
+						}
+					}
+
+					// Send this chunk to the main thread to start inserting.
+					thread_sender.unbounded_send(Message::Batch(batch_kv)).unwrap();
+					thread_key_values.extend(thread_key_chunk_values);
+				}
 
 				thread_sender.unbounded_send(Message::Terminated).unwrap();
 				thread_key_values
