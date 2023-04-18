@@ -40,7 +40,7 @@ use sc_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::Block as BlockT;
 
 use std::{
-	collections::{HashMap, HashSet, VecDeque},
+	collections::{HashMap, HashSet},
 	future::Future,
 	iter,
 	pin::Pin,
