@@ -780,7 +780,7 @@ mod test {
 	}
 
 	fn assert_drained_changes(is: OverlayedChangeSet, expected: Changes) {
-		let is = is.drain_commited().collect::<Vec<_>>();
+		let is = is.drain_commited().map(|(k, v)| (k, v.to_option())).collect::<Vec<_>>();
 		let expected = expected
 			.iter()
 			.map(|(k, v)| (k.to_vec(), v.0.map(From::from)))
@@ -789,7 +789,7 @@ mod test {
 	}
 
 	fn assert_drained(is: OverlayedChangeSet, expected: Drained) {
-		let is = is.drain_commited().collect::<Vec<_>>();
+		let is = is.drain_commited().map(|(k, v)| (k, v.to_option())).collect::<Vec<_>>();
 		let expected = expected
 			.iter()
 			.map(|(k, v)| (k.to_vec(), v.map(From::from)))
@@ -936,17 +936,33 @@ mod test {
 	}
 
 	#[test]
-	fn modify_works() {
+	fn append_works() {
+		use codec::Encode;
 		let mut changeset = OverlayedChangeSet::default();
 		assert_eq!(changeset.transaction_depth(), 0);
-		let init = || b"valinit".to_vec();
+		let init = || vec![b"valinit".to_vec()].encode();
 
 		// committed set
-		changeset.set(b"key0".to_vec(), Some(b"val0".to_vec()), Some(0));
+		let val0 = vec![b"val0".to_vec()].encode();
+		changeset.set(b"key0".to_vec(), Some(val0.clone()), Some(0));
 		changeset.set(b"key1".to_vec(), None, Some(1));
-		let val = changeset.modify(b"key3".to_vec(), init, Some(3));
-		assert_eq!(val, &Some(b"valinit".to_vec()));
-		val.as_mut().unwrap().extend_from_slice(b"-modified");
+		let all_changes: Changes =
+			vec![(b"key0", (Some(val0.as_slice()), vec![0])), (b"key1", (None, vec![1]))];
+
+		assert_changes(&changeset, &all_changes);
+		changeset.append_storage_init(
+			b"key3".to_vec(),
+			b"-modified".to_vec().encode(),
+			init,
+			Some(3),
+		);
+		let val3 = vec![b"valinit".to_vec(), b"-modified".to_vec()].encode();
+		let all_changes: Changes = vec![
+			(b"key0", (Some(val0.as_slice()), vec![0])),
+			(b"key1", (None, vec![1])),
+			(b"key3", (Some(val3.as_slice()), vec![3])),
+		];
+		assert_changes(&changeset, &all_changes);
 
 		changeset.start_transaction();
 		assert_eq!(changeset.transaction_depth(), 1);
@@ -954,25 +970,34 @@ mod test {
 		assert_eq!(changeset.transaction_depth(), 2);
 
 		// non existing value -> init value should be returned
-		let val = changeset.modify(b"key2".to_vec(), init, Some(2));
-		assert_eq!(val, &Some(b"valinit".to_vec()));
-		val.as_mut().unwrap().extend_from_slice(b"-modified");
-
-		// existing value should be returned by modify
-		let val = changeset.modify(b"key0".to_vec(), init, Some(10));
-		assert_eq!(val, &Some(b"val0".to_vec()));
-		val.as_mut().unwrap().extend_from_slice(b"-modified");
+		changeset.append_storage_init(
+			b"key2".to_vec(),
+			b"-modified".to_vec().encode(),
+			init,
+			Some(2),
+		);
+		// existing value should be reuse on append
+		changeset.append_storage_init(
+			b"key0".to_vec(),
+			b"-modified".to_vec().encode(),
+			init,
+			Some(10),
+		);
 
 		// should work for deleted keys
-		let val = changeset.modify(b"key1".to_vec(), init, Some(20));
-		assert_eq!(val, &None);
-		*val = Some(b"deleted-modified".to_vec());
-
+		changeset.append_storage_init(
+			b"key1".to_vec(),
+			b"deleted-modified".to_vec().encode(),
+			init,
+			Some(20),
+		);
+		let val0_2 = vec![b"val0".to_vec(), b"-modified".to_vec()].encode();
+		let val1 = vec![b"deleted-modified".to_vec()].encode();
 		let all_changes: Changes = vec![
-			(b"key0", (Some(b"val0-modified"), vec![0, 10])),
-			(b"key1", (Some(b"deleted-modified"), vec![1, 20])),
-			(b"key2", (Some(b"valinit-modified"), vec![2])),
-			(b"key3", (Some(b"valinit-modified"), vec![3])),
+			(b"key0", (Some(val0_2.as_slice()), vec![0, 10])),
+			(b"key1", (Some(val1.as_slice()), vec![1, 20])),
+			(b"key2", (Some(val3.as_slice()), vec![2])),
+			(b"key3", (Some(val3.as_slice()), vec![3])),
 		];
 		assert_changes(&changeset, &all_changes);
 		changeset.commit_transaction().unwrap();
@@ -982,9 +1007,9 @@ mod test {
 		changeset.rollback_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 0);
 		let rolled_back: Changes = vec![
-			(b"key0", (Some(b"val0"), vec![0])),
+			(b"key0", (Some(val0.as_slice()), vec![0])),
 			(b"key1", (None, vec![1])),
-			(b"key3", (Some(b"valinit-modified"), vec![3])),
+			(b"key3", (Some(val3.as_slice()), vec![3])),
 		];
 		assert_changes(&changeset, &rolled_back);
 		assert_drained_changes(changeset, rolled_back);
