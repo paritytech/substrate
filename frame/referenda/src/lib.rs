@@ -66,6 +66,7 @@
 
 use codec::{Codec, Encode};
 use frame_support::{
+	dispatch::DispatchResult,
 	ensure,
 	traits::{
 		schedule::{
@@ -409,6 +410,15 @@ pub mod pallet {
 		BadStatus,
 		/// The preimage does not exist.
 		PreimageNotExist,
+	}
+
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
+			Self::do_try_state()?;
+			Ok(())
+		}
 	}
 
 	#[pallet::call]
@@ -1269,5 +1279,44 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(hash) = MetadataOf::<T, I>::take(index) {
 			Self::deposit_event(Event::<T, I>::MetadataCleared { index, hash });
 		}
+	}
+
+	/// Ensure the correctness of the state of this pallet.
+	///
+	/// The following assertions must always apply.
+	///
+	/// Looking at referenda:
+	///
+	/// * `ReferendumCount` must always be equal to the number of referenda in `ReferendumInfoFor`.
+	///
+	/// Looking at referenda info:
+	///
+	/// * The submission deposit cannot be less than `T::SubmissionDeposit`.
+	#[cfg(any(feature = "try-runtime", test))]
+	fn do_try_state() -> DispatchResult {
+		ensure!(
+			ReferendumCount::<T, I>::get() as usize ==
+				ReferendumInfoFor::<T, I>::iter_keys().count(),
+			DispatchError::Other(
+				"Number of referenda in `ReferendumInfoFor` is greater than `ReferendumCount`"
+			)
+		);
+
+		ReferendumInfoFor::<T, I>::iter().try_for_each(
+			|(_, referendum)| -> Result<(), DispatchError> {
+				match referendum {
+					ReferendumInfo::Ongoing(status) => {
+						ensure!(
+							status.submission_deposit.amount >= T::SubmissionDeposit::get(),
+							DispatchError::Other("Incorrect submission deposit.")
+						);
+					},
+					_ => {},
+				}
+				Ok(())
+			},
+		)?;
+
+		Ok(())
 	}
 }
