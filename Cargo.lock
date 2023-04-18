@@ -9484,6 +9484,7 @@ dependencies = [
  "async-channel",
  "fdlimit",
  "futures",
+ "hex",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",

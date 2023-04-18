@@ -1738,21 +1738,17 @@ fn storage_keys_prefix_and_start_key_works() {
 	assert_eq!(res, [b"third".to_vec()]);
 }
 
-#[test]
-fn storage_keys_works() {
-	sp_tracing::try_init_simple();
-
-	// hexstring -> keys mapping legend (some of them are twox_128 or blake2_256 hashed):
+#[cfg(test)]
+mod storage_key_generator {
+	// hexstring -> keys mapping legend (some of them are twox_128 or blake2_256 hashed).
+	//
 	// 00771836bebdd29870ff246d305c578c4e7b9012096b41c4eb3aaf947f6ea429 System|:__STORAGE_VERSION__:
 	// 00771836bebdd29870ff246d305c578c5e0621c4869aa60c02be9adcc98a0d1d SubstrateTest|Authorities
-	//
 	// 1cb6f36e027abb2091cfb5110ab5087f4e7b9012096b41c4eb3aaf947f6ea429 Babe|:__STORAGE_VERSION__:
 	// 1cb6f36e027abb2091cfb5110ab5087f5e0621c4869aa60c02be9adcc98a0d1d Babe|Authorities
 	// 1cb6f36e027abb2091cfb5110ab5087f66e8f035c8adbe7f1547b43c51e6f8a4 Babe|SegmentIndex
 	// 1cb6f36e027abb2091cfb5110ab5087faacf00b9b41fda7a9268821c2a2b3e4c Babe|NextAuthorities
 	// 1cb6f36e027abb2091cfb5110ab5087fdc6b171b77304263c292cc3ea5ed31ef Babe|EpochConfig
-	//
-	//
 	// 26aa394eea5630e07c48ae0c9558cef74e7b9012096b41c4eb3aaf947f6ea429 System|:__STORAGE_VERSION__:
 	// 26aa394eea5630e07c48ae0c9558cef75684a022a34dd8bfa2baaf44f172b710 System|UpgradedToU32RefCount
 	// 26aa394eea5630e07c48ae0c9558cef78a42f33323cb5ced3b44dd825fda9fcc System|ParentHash
@@ -1760,8 +1756,7 @@ fn storage_keys_works() {
 	// 26aa394eea5630e07c48ae0c9558cef7a7fd6c28836b9a28522dc924110cf439
 	// System|UpgradedToTripleRefCount
 	//
-	// 26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9 System::Account |
-	// blake2_128Concat(AccountId)
+	// System|Account|blake2_128Concat(AccountId)
 	// 26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da901cae4e3edfbb32c91ed3f01ab964f4eeeab50338d8e5176d3141802d7b010a55dadcd5f23cf8aaafa724627e967e90e  "//11"
 	// 26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da91b614bd4a126f2d5d294e9a8af9da25248d7e931307afb4b68d8d565d4c66e00d856c6d65f5fed6bb82dcfb60e936c67  "//4"
 	// 26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da94b21aff9fe1e8b2fc4b0775b8cbeff28ba8e2c7594dd74730f3ca835e95455d199261897edc9735d602ea29615e2b10b  "//7"
@@ -1782,19 +1777,91 @@ fn storage_keys_works() {
 	// 26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9f5d6f1c082fe63eec7a71fcad00f4a892e3d43b7b0d04e776e69e7be35247cecdac65504c579195731eaf64b7940966e  "//12"
 	// 26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9fbf0818841edf110e05228a6379763c4fc3c37459d9bdc61f58a5ebc01e9e2305a19d390c0543dc733861ec3cf1de01f  "//15"
 	// 26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8 System|LastRuntimeUpgrade
-	//
 	// 3a636f6465                                                       :code
 	// 3a65787472696e7369635f696e646578                                 :extrinsic_index
 	// 3a686561707061676573                                             :heappages
-	//
 	// c2261276cc9d1f8598ea4b6a74b15c2f4e7b9012096b41c4eb3aaf947f6ea429
 	// Balances|:__STORAGE_VERSION__:
-	// c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80 Balances:TotalIssuance
+	// c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80 Balances|TotalIssuance
+
+	use super::*;
+	use sp_core::Pair;
+
+	fn concat_hashes(input: &Vec<&[u8]>) -> String {
+		// sp_core::hashing::twox_128(input[0]).encode_hex::<String>()
+		input.iter().map(|s| sp_core::hashing::twox_128(s)).map(hex::encode).collect()
+	}
+
+	fn twox_64_concat(x: &[u8]) -> Vec<u8> {
+		sp_core::hashing::twox_64(x).iter().chain(x.iter()).cloned().collect::<Vec<_>>()
+	}
+
+	pub(crate) fn expected_keys() -> Vec<String> {
+		let literals: Vec<&[u8]> = vec![b":code", b":extrinsic_index", b":heappages"];
+
+		let keys: Vec<Vec<&[u8]>> = vec![
+			vec![b"Babe", b"Authorities"],
+			vec![b"Babe", b"EpochConfig"],
+			vec![b"Babe", b"NextAuthorities"],
+			vec![b"Babe", b"SegmentIndex"],
+			vec![b"Babe", b":__STORAGE_VERSION__:"],
+			vec![b"Balances", b":__STORAGE_VERSION__:"],
+			vec![b"Balances", b"TotalIssuance"],
+			vec![b"SubstrateTest", b"Authorities"],
+			vec![b"SubstrateTest", b":__STORAGE_VERSION__:"],
+			vec![b"System", b"LastRuntimeUpgrade"],
+			vec![b"System", b"ParentHash"],
+			vec![b"System", b":__STORAGE_VERSION__:"],
+			vec![b"System", b"UpgradedToTripleRefCount"],
+			vec![b"System", b"UpgradedToU32RefCount"],
+		];
+
+		let mut expected_keys = keys.iter().map(concat_hashes).collect::<Vec<String>>();
+
+		expected_keys.extend(literals.iter().map(hex::encode));
+
+		let balances_map_keys = (0..16_usize)
+			.into_iter()
+			.map(|i| AccountKeyring::numeric(i).public().to_vec())
+			.chain(vec![
+				AccountKeyring::Alice.public().to_vec(),
+				AccountKeyring::Bob.public().to_vec(),
+				AccountKeyring::Charlie.public().to_vec(),
+			])
+			.map(|pubkey| {
+				sp_core::hashing::blake2_128(&pubkey)
+					.iter()
+					.chain(pubkey.iter())
+					.cloned()
+					.collect::<Vec<u8>>()
+			})
+			.map(|hash_pubkey| {
+				[concat_hashes(&vec![b"System", b"Account"]), hex::encode(hash_pubkey)].concat()
+			});
+
+		expected_keys.extend(balances_map_keys);
+
+		expected_keys.push(
+			[
+				concat_hashes(&vec![b"System", b"BlockHash"]),
+				hex::encode(0u64.using_encoded(twox_64_concat)),
+			]
+			.concat(),
+		);
+
+		expected_keys.sort();
+		expected_keys
+	}
+}
+
+#[test]
+fn storage_keys_works() {
+	sp_tracing::try_init_simple();
+
+	let expected_keys = storage_key_generator::expected_keys();
 
 	let client = substrate_test_runtime_client::new();
-
 	let block_hash = client.info().best_hash;
-
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked(""));
 
 	let res: Vec<_> = client
@@ -1803,30 +1870,8 @@ fn storage_keys_works() {
 		.take(19)
 		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
-	assert_eq!(
-		res,
-		[
-			"00771836bebdd29870ff246d305c578c4e7b9012096b41c4eb3aaf947f6ea429",
-			"00771836bebdd29870ff246d305c578c5e0621c4869aa60c02be9adcc98a0d1d",
-            "1cb6f36e027abb2091cfb5110ab5087f4e7b9012096b41c4eb3aaf947f6ea429",
-			"1cb6f36e027abb2091cfb5110ab5087f5e0621c4869aa60c02be9adcc98a0d1d",
-			"1cb6f36e027abb2091cfb5110ab5087f66e8f035c8adbe7f1547b43c51e6f8a4",
-			"1cb6f36e027abb2091cfb5110ab5087faacf00b9b41fda7a9268821c2a2b3e4c",
-			"1cb6f36e027abb2091cfb5110ab5087fdc6b171b77304263c292cc3ea5ed31ef",
-			"26aa394eea5630e07c48ae0c9558cef74e7b9012096b41c4eb3aaf947f6ea429",
-			"26aa394eea5630e07c48ae0c9558cef75684a022a34dd8bfa2baaf44f172b710",
-			"26aa394eea5630e07c48ae0c9558cef78a42f33323cb5ced3b44dd825fda9fcc",
-			"26aa394eea5630e07c48ae0c9558cef7a44704b568d21667356a5a050c118746bb1bdbcacd6ac9340000000000000000",
-			"26aa394eea5630e07c48ae0c9558cef7a7fd6c28836b9a28522dc924110cf439",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da901cae4e3edfbb32c91ed3f01ab964f4eeeab50338d8e5176d3141802d7b010a55dadcd5f23cf8aaafa724627e967e90e",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da91b614bd4a126f2d5d294e9a8af9da25248d7e931307afb4b68d8d565d4c66e00d856c6d65f5fed6bb82dcfb60e936c67",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da94b21aff9fe1e8b2fc4b0775b8cbeff28ba8e2c7594dd74730f3ca835e95455d199261897edc9735d602ea29615e2b10b",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da94f9aea1afa791265fae359272badc1cf8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da95786a2916fcb81e1bd5dcd81e0d2452884617f575372edb5a36d85c04cdf2e4699f96fe33eb5f94a28c041b88e398d0c",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da95b8542d9672c7b7e779cc7c1e6b605691c2115d06120ea2bee32dd601d02f36367564e7ddf84ae2717ca3f097459652e",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da996c30bdbfab640838e6b6d3c33ab4adb4211b79e34ee8072eab506edd4b93a7b85a14c9a05e5cdd056d98e7dbca87730",
-		]
-	);
+
+	assert_eq!(res, expected_keys[0..19],);
 
 	// Starting at an empty key nothing gets skipped.
 	let res: Vec<_> = client
@@ -1835,30 +1880,7 @@ fn storage_keys_works() {
 		.take(19)
 		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
-	assert_eq!(
-		res,
-		[
-			"00771836bebdd29870ff246d305c578c4e7b9012096b41c4eb3aaf947f6ea429",
-			"00771836bebdd29870ff246d305c578c5e0621c4869aa60c02be9adcc98a0d1d",
-            "1cb6f36e027abb2091cfb5110ab5087f4e7b9012096b41c4eb3aaf947f6ea429",
-			"1cb6f36e027abb2091cfb5110ab5087f5e0621c4869aa60c02be9adcc98a0d1d",
-			"1cb6f36e027abb2091cfb5110ab5087f66e8f035c8adbe7f1547b43c51e6f8a4",
-			"1cb6f36e027abb2091cfb5110ab5087faacf00b9b41fda7a9268821c2a2b3e4c",
-			"1cb6f36e027abb2091cfb5110ab5087fdc6b171b77304263c292cc3ea5ed31ef",
-			"26aa394eea5630e07c48ae0c9558cef74e7b9012096b41c4eb3aaf947f6ea429",
-			"26aa394eea5630e07c48ae0c9558cef75684a022a34dd8bfa2baaf44f172b710",
-			"26aa394eea5630e07c48ae0c9558cef78a42f33323cb5ced3b44dd825fda9fcc",
-			"26aa394eea5630e07c48ae0c9558cef7a44704b568d21667356a5a050c118746bb1bdbcacd6ac9340000000000000000",
-			"26aa394eea5630e07c48ae0c9558cef7a7fd6c28836b9a28522dc924110cf439",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da901cae4e3edfbb32c91ed3f01ab964f4eeeab50338d8e5176d3141802d7b010a55dadcd5f23cf8aaafa724627e967e90e",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da91b614bd4a126f2d5d294e9a8af9da25248d7e931307afb4b68d8d565d4c66e00d856c6d65f5fed6bb82dcfb60e936c67",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da94b21aff9fe1e8b2fc4b0775b8cbeff28ba8e2c7594dd74730f3ca835e95455d199261897edc9735d602ea29615e2b10b",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da94f9aea1afa791265fae359272badc1cf8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da95786a2916fcb81e1bd5dcd81e0d2452884617f575372edb5a36d85c04cdf2e4699f96fe33eb5f94a28c041b88e398d0c",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da95b8542d9672c7b7e779cc7c1e6b605691c2115d06120ea2bee32dd601d02f36367564e7ddf84ae2717ca3f097459652e",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da996c30bdbfab640838e6b6d3c33ab4adb4211b79e34ee8072eab506edd4b93a7b85a14c9a05e5cdd056d98e7dbca87730",
-		]
-	);
+	assert_eq!(res, expected_keys[0..19],);
 
 	// Starting at an incomplete key nothing gets skipped.
 	let res: Vec<_> = client
@@ -1873,13 +1895,12 @@ fn storage_keys_works() {
 		.collect();
 	assert_eq!(
 		res,
-		[
-			"3a636f6465",
-			"3a65787472696e7369635f696e646578",
-			"3a686561707061676573",
-			"c2261276cc9d1f8598ea4b6a74b15c2f4e7b9012096b41c4eb3aaf947f6ea429",
-			"c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80",
-		]
+		expected_keys
+			.iter()
+			.filter(|&i| i > &"3a636f64".to_string())
+			.take(8)
+			.cloned()
+			.collect::<Vec<String>>()
 	);
 
 	// Starting at a complete key the first key is skipped.
@@ -1895,21 +1916,20 @@ fn storage_keys_works() {
 		.collect();
 	assert_eq!(
 		res,
-		[
-			"3a65787472696e7369635f696e646578",
-			"3a686561707061676573",
-			"c2261276cc9d1f8598ea4b6a74b15c2f4e7b9012096b41c4eb3aaf947f6ea429",
-			"c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80",
-		]
+		expected_keys
+			.iter()
+			.filter(|&i| i > &"3a636f6465".to_string())
+			.take(8)
+			.cloned()
+			.collect::<Vec<String>>()
 	);
 
+	const SOME_BALANCE_KEY : &str = "26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9e2c1dc507e2035edbbd8776c440d870460c57f0008067cc01c5ff9eb2e2f9b3a94299a915a91198bd1021a6c55596f57";
 	let res: Vec<_> = client
 		.storage_keys(
 			block_hash,
 			Some(&prefix),
-			Some(&StorageKey(array_bytes::hex2bytes_unchecked(
-				"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9e2c1dc507e2035edbbd8776c440d870460c57f0008067cc01c5ff9eb2e2f9b3a94299a915a91198bd1021a6c55596f57",
-			))),
+			Some(&StorageKey(array_bytes::hex2bytes_unchecked(SOME_BALANCE_KEY))),
 		)
 		.unwrap()
 		.take(8)
@@ -1917,16 +1937,12 @@ fn storage_keys_works() {
 		.collect();
 	assert_eq!(
 		res,
-		[
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9eca0e653a94f4080f6311b4e7b6934eb2afba9278e30ccf6a6ceb3a8b6e336b70068f045c666f2e7f4f9cc5f47db8972",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9ee8bf7ef90fc56a8aa3b90b344c599550c29b161e27ff8ba45bf6bad4711f326fc506a8803453a4d7e3158e993495f10",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9f5d6f1c082fe63eec7a71fcad00f4a892e3d43b7b0d04e776e69e7be35247cecdac65504c579195731eaf64b7940966e",
-			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9fbf0818841edf110e05228a6379763c4fc3c37459d9bdc61f58a5ebc01e9e2305a19d390c0543dc733861ec3cf1de01f",
-			"26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
-			"3a636f6465",
-			"3a65787472696e7369635f696e646578",
-			"3a686561707061676573",
-		]
+		expected_keys
+			.iter()
+			.filter(|&i| i > &SOME_BALANCE_KEY.to_string())
+			.take(8)
+			.cloned()
+			.collect::<Vec<String>>()
 	);
 }
 
