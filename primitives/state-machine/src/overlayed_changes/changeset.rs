@@ -971,6 +971,14 @@ mod test {
 
 		// non existing value -> init value should be returned
 		changeset.append_storage_init(
+			b"key3".to_vec(),
+			b"-twice".to_vec().encode(),
+			init,
+			Some(15),
+		);
+
+		// non existing value -> init value should be returned
+		changeset.append_storage_init(
 			b"key2".to_vec(),
 			b"-modified".to_vec().encode(),
 			init,
@@ -992,12 +1000,13 @@ mod test {
 			Some(20),
 		);
 		let val0_2 = vec![b"val0".to_vec(), b"-modified".to_vec()].encode();
+		let val3_2 = vec![b"valinit".to_vec(), b"-modified".to_vec(), b"-twice".to_vec()].encode();
 		let val1 = vec![b"deleted-modified".to_vec()].encode();
 		let all_changes: Changes = vec![
 			(b"key0", (Some(val0_2.as_slice()), vec![0, 10])),
 			(b"key1", (Some(val1.as_slice()), vec![1, 20])),
 			(b"key2", (Some(val3.as_slice()), vec![2])),
-			(b"key3", (Some(val3.as_slice()), vec![3])),
+			(b"key3", (Some(val3_2.as_slice()), vec![3, 15])),
 		];
 		assert_changes(&changeset, &all_changes);
 		changeset.commit_transaction().unwrap();
