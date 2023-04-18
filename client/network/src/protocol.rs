@@ -77,8 +77,6 @@ type PendingSyncSubstreamValidation =
 
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT> {
-	/// Pending list of messages to return from `poll` as a priority.
-	pending_messages: VecDeque<CustomMessageOutcome>,
 	/// Used to report reputation changes.
 	peerset_handle: sc_peerset::PeersetHandle,
 	/// Handles opening the unique substream and sending and receiving raw messages.
@@ -181,7 +179,6 @@ impl<B: BlockT> Protocol<B> {
 		};
 
 		let protocol = Self {
-			pending_messages: VecDeque::new(),
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
 			notification_protocols: iter::once(block_announces_protocol.notifications_protocol)
@@ -409,10 +406,6 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
 	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
-		if let Some(message) = self.pending_messages.pop_front() {
-			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
-		}
-
 		while let Poll::Ready(Some(validation_result)) =
 			self.sync_substream_validations.poll_next_unpin(cx)
 		{
@@ -641,10 +634,6 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 
 		if !matches!(outcome, CustomMessageOutcome::None) {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome))
-		}
-
-		if let Some(message) = self.pending_messages.pop_front() {
-			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
 
 		// This block can only be reached if an event was pulled from the behaviour and that
