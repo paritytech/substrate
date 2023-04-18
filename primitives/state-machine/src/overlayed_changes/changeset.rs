@@ -1009,6 +1009,41 @@ mod test {
 			(b"key3", (Some(val3_2.as_slice()), vec![3, 15])),
 		];
 		assert_changes(&changeset, &all_changes);
+
+		changeset.start_transaction();
+		let val3_3 = vec![b"valinit".to_vec(), b"-modified".to_vec(), b"-twice".to_vec(), b"-2".to_vec()].encode();
+		changeset.append_storage_init(
+			b"key3".to_vec(),
+			b"-2".to_vec().encode(),
+			init,
+			Some(21),
+		);
+		let all_changes2: Changes = vec![
+			(b"key0", (Some(val0_2.as_slice()), vec![0, 10])),
+			(b"key1", (Some(val1.as_slice()), vec![1, 20])),
+			(b"key2", (Some(val3.as_slice()), vec![2])),
+			(b"key3", (Some(val3_3.as_slice()), vec![3, 15, 21])),
+		];
+		assert_changes(&changeset, &all_changes2);
+		changeset.rollback_transaction().unwrap();
+
+		assert_changes(&changeset, &all_changes);
+		changeset.start_transaction();
+		let val3_4 = vec![b"valinit".to_vec(), b"-modified".to_vec(), b"-twice".to_vec(), b"-thrice".to_vec()].encode();
+		changeset.append_storage_init(
+			b"key3".to_vec(),
+			b"-thrice".to_vec().encode(),
+			init,
+			Some(25),
+		);
+		let all_changes: Changes = vec![
+			(b"key0", (Some(val0_2.as_slice()), vec![0, 10])),
+			(b"key1", (Some(val1.as_slice()), vec![1, 20])),
+			(b"key2", (Some(val3.as_slice()), vec![2])),
+			(b"key3", (Some(val3_4.as_slice()), vec![3, 15, 25])),
+		];
+		assert_changes(&changeset, &all_changes);
+		changeset.commit_transaction().unwrap();
 		changeset.commit_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 1);
 		assert_changes(&changeset, &all_changes);
