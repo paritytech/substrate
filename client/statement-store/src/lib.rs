@@ -329,12 +329,18 @@ impl Index {
 			self.total_size -= len;
 			if let Some((topics, key)) = self.topics_and_keys.remove(hash) {
 				for t in topics.into_iter().flatten() {
-					if let Some(set) = self.by_topic.get_mut(&t) {
-						set.remove(hash);
+					if let std::collections::hash_map::Entry::Occupied(mut set) = self.by_topic.entry(t) {
+						set.get_mut().remove(hash);
+						if set.get().is_empty() {
+							set.remove_entry();
+						}
 					}
 				}
-				if let Some(set) = self.by_dec_key.get_mut(&key) {
-					set.remove(hash);
+				if let std::collections::hash_map::Entry::Occupied(mut set) = self.by_dec_key.entry(key) {
+					set.get_mut().remove(hash);
+					if set.get().is_empty() {
+						set.remove_entry();
+					}
 				}
 			}
 			self.expired.insert(*hash, current_time);
