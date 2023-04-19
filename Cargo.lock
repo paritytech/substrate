@@ -5191,7 +5191,6 @@ dependencies = [
  "sc-client-api",
  "sc-consensus-babe",
  "sc-consensus-babe-rpc",
- "sc-consensus-epochs",
  "sc-consensus-grandpa",
  "sc-consensus-grandpa-rpc",
  "sc-rpc",
