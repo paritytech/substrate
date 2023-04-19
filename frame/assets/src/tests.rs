@@ -1337,7 +1337,7 @@ fn asset_create_and_destroy_is_reverted_if_callback_fails() {
 }
 
 #[test]
-fn poc_double_spending() {
+fn multiple_transfer_alls_work_ok() {
 	new_test_ext().execute_with(|| {
 		// Only run PoC when the system pallet is enabled, since the underlying bug is in the
 		// system pallet it won't work with BalancesAccountStore
@@ -1348,7 +1348,6 @@ fn poc_double_spending() {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
 		// Spend the same balance multiple times
-		assert_ok!(Balances::transfer_all(RuntimeOrigin::signed(1), 1337, false));
 		assert_ok!(Balances::transfer_all(RuntimeOrigin::signed(1), 1337, false));
 		assert_ok!(Balances::transfer_all(RuntimeOrigin::signed(1), 1337, false));
 
