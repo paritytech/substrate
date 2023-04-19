@@ -103,12 +103,11 @@ benchmarks! {
 			T::Balance: From<u128> + Into<u128>,
 			T::Assets: Create<T::AccountId> + Mutate<T::AccountId>,
 			T::PoolAssetId: Into<u32>,
-			T::AssetId: From<u32>,
 	}
 
 	create_pool {
 		let asset1 = T::MultiAssetIdConverter::get_native();
-		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0_u32.into());
+		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(T::BenchmarkHelper::asset_id(0_u32));
 		let (caller, _) = create_asset::<T>(asset2);
 	}: _(SystemOrigin::Signed(caller.clone()), asset1, asset2)
 	verify {
@@ -119,7 +118,7 @@ benchmarks! {
 
 	add_liquidity {
 		let asset1 = T::MultiAssetIdConverter::get_native();
-		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
+		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(T::BenchmarkHelper::asset_id(0));
 		let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 		let ed: u128 = T::Currency::minimum_balance().into();
 		let add_amount = 1000 + ed;
@@ -136,14 +135,14 @@ benchmarks! {
 			add_amount.into()
 		);
 		assert_eq!(
-			T::Assets::balance(0.into(), &AssetConversion::<T>::get_pool_account(pool_id)),
+			T::Assets::balance(T::BenchmarkHelper::asset_id(0), &AssetConversion::<T>::get_pool_account(pool_id)),
 			1000.into()
 		);
 	}
 
 	remove_liquidity {
 		let asset1 = T::MultiAssetIdConverter::get_native();
-		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
+		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(T::BenchmarkHelper::asset_id(0));
 		let (lp_token, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 		let ed: u128 = T::Currency::minimum_balance().into();
 		let add_amount = 100 * ed;
@@ -172,9 +171,9 @@ benchmarks! {
 
 	swap_exact_tokens_for_tokens {
 		let asset1 = T::MultiAssetIdConverter::get_native();
-		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
-		let asset3 = T::MultiAssetIdConverter::into_multiasset_id(1.into());
-		let asset4 = T::MultiAssetIdConverter::into_multiasset_id(2.into());
+		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(T::BenchmarkHelper::asset_id(0));
+		let asset3 = T::MultiAssetIdConverter::into_multiasset_id(T::BenchmarkHelper::asset_id(1));
+		let asset4 = T::MultiAssetIdConverter::into_multiasset_id(T::BenchmarkHelper::asset_id(2));
 
 		let (_, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 		let (_, _) = create_asset::<T>(asset3);
@@ -229,9 +228,9 @@ benchmarks! {
 
 	swap_tokens_for_exact_tokens {
 		let asset1 = T::MultiAssetIdConverter::get_native();
-		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
-		let asset3 = T::MultiAssetIdConverter::into_multiasset_id(1.into());
-		let asset4 = T::MultiAssetIdConverter::into_multiasset_id(2.into());
+		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(T::BenchmarkHelper::asset_id(0));
+		let asset3 = T::MultiAssetIdConverter::into_multiasset_id(T::BenchmarkHelper::asset_id(1));
+		let asset4 = T::MultiAssetIdConverter::into_multiasset_id(T::BenchmarkHelper::asset_id(2));
 
 		let (_, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 		let (_, _) = create_asset::<T>(asset3);
@@ -274,10 +273,10 @@ benchmarks! {
 			0.into(),
 			caller.clone(),
 		)?;
-		let asset4_balance = T::Assets::balance(2.into(), &caller);
+		let asset4_balance = T::Assets::balance(T::BenchmarkHelper::asset_id(2), &caller);
 	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 100.into(), add_amount1.into(), caller.clone(), false)
 	verify {
-		let new_asset4_balance = T::Assets::balance(2.into(), &caller);
+		let new_asset4_balance = T::Assets::balance(T::BenchmarkHelper::asset_id(2), &caller);
 		assert_eq!(
 			new_asset4_balance,
 			asset4_balance + 100.into()

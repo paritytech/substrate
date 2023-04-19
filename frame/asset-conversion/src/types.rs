@@ -46,6 +46,13 @@ pub trait MultiAssetIdConverter<MultiAssetId, AssetId> {
 	fn into_multiasset_id(asset: AssetId) -> MultiAssetId;
 }
 
+/// Benchmark Helper
+#[cfg(feature = "runtime-benchmarks")]
+pub trait BenchmarkHelper<AssetId> {
+	/// Returns an asset id from a given integer.
+	fn asset_id(asset_id: u32) -> AssetId;
+}
+
 /// An implementation of MultiAssetId that chooses between Native and an asset.
 #[derive(Decode, Encode, Default, MaxEncodedLen, TypeInfo, Clone, Copy, Debug)]
 pub enum NativeOrAssetId<AssetId>
