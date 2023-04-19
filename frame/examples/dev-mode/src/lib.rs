@@ -24,7 +24,6 @@
 //! Run `cargo doc --package pallet-dev-mode --open` to view this pallet's documentation.
 //!
 //! **Dev mode is not meant to be used in production.**
-//!
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -65,19 +64,12 @@ pub mod pallet {
 		pub fn add_dummy(origin: OriginFor<T>, id: T::AccountId) -> DispatchResult {
 			ensure_root(origin)?;
 
-			let dummy = id.clone();
-			Dummy::<T>::mutate(
-				|may_be_dummies| -> DispatchResult {
-					if let Some(dummies) = may_be_dummies.as_mut() {
-						dummies.push(dummy);
-					} else {
-						let mut v = vec![];
-						v.push(dummy);
-						*may_be_dummies = Some(v);
-					}
-					Ok(())
-				},
-			)?;
+			if let Some(mut dummies) = Dummy::<T>::get() {
+				dummies.push(id.clone());
+				Dummy::<T>::set(Some(dummies));
+			} else {
+				Dummy::<T>::set(Some(vec![id.clone()]));
+			}
 
 			// Let's deposit an event to let the outside world know this happened.
 			Self::deposit_event(Event::AddDummy { account: id });
@@ -105,22 +97,21 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		AddDummy {
-			account: T::AccountId,
-		},
-		SetBar {
-			account: T::AccountId,
-			balance: BalanceOf<T>,
-		},
+		AddDummy { account: T::AccountId },
+		SetBar { account: T::AccountId, balance: BalanceOf<T> },
 	}
 
 	// The MEL requirement for bounded pallets is skipped by `dev_mode`.
+	// This means that all storages are marked as unbounded.
+	// This is equivalent to specifying `#[pallet::unbounded]` on this type definitions.
+	// When the dev_mode is removed, we would need to implement implement `MaxEncodedLen`.
 	#[pallet::storage]
-	#[pallet::getter(fn dummy)]
-	type Dummy<T: Config> = StorageValue<_, Vec<T::AccountId>>;
+	pub type Dummy<T: Config> = StorageValue<_, Vec<T::AccountId>>;
 
-	// The Hasher requirement is skipped by `dev_mode`.
+	// The Hasher requirement is skipped by `dev_mode`. So, second parameter can be `_`
+	// and `Blake2_128Concat` is used as a default.
+	// When the dev_mode is removed, we would need to specify the hasher like so:
+	// `pub type Bar<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance>;`.
 	#[pallet::storage]
-	#[pallet::getter(fn bar)]
-	pub(super) type Bar<T: Config> = StorageMap<_, _, T::AccountId, T::Balance>;
+	pub type Bar<T: Config> = StorageMap<_, _, T::AccountId, T::Balance>;
 }

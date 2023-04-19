@@ -18,10 +18,7 @@
 //! Tests for pallet-dev-mode.
 
 use crate::*;
-use frame_support::{
-	assert_ok,
-	traits::ConstU64,
-};
+use frame_support::{assert_ok, traits::ConstU64};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -110,16 +107,16 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 #[test]
 fn it_works_for_optional_value() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Example::dummy(), None);
+		assert_eq!(Dummy::<Test>::get(), None);
 
 		let val1 = 42;
 		assert_ok!(Example::add_dummy(RuntimeOrigin::root(), val1));
-		assert_eq!(Example::dummy(), Some(vec![val1]));
+		assert_eq!(Dummy::<Test>::get(), Some(vec![val1]));
 
 		// Check that accumulate works when we have Some value in Dummy already.
 		let val2 = 27;
 		assert_ok!(Example::add_dummy(RuntimeOrigin::root(), val2));
-		assert_eq!(Example::dummy(), Some(vec![val1, val2]));
+		assert_eq!(Dummy::<Test>::get(), Some(vec![val1, val2]));
 	});
 }
 
@@ -128,7 +125,6 @@ fn set_dummy_works() {
 	new_test_ext().execute_with(|| {
 		let test_val = 133;
 		assert_ok!(Example::set_bar(RuntimeOrigin::signed(1), test_val.into()));
-		assert_eq!(Example::bar(1), Some(test_val));
+		assert_eq!(Bar::<Test>::get(1), Some(test_val));
 	});
 }
-
