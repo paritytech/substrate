@@ -64,6 +64,7 @@ use sp_runtime::{
 	traits::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Ensure, MaybeDisplay, Zero},
 	DispatchError,
 };
+use sp_std::vec;
 pub use types::*;
 pub use weights::WeightInfo;
 
@@ -274,8 +275,8 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T>
-	where
-		T::AssetId: From<u32>,
+	// where
+	// T::AssetId: From<u32>,
 	{
 		fn integrity_test() {
 			sp_std::if_std! {
@@ -283,10 +284,13 @@ pub mod pallet {
 					// ensure that the `AccountId` is set properly and doesn't generate the same
 					// pool account for different pool ids.
 					let native = T::MultiAssetIdConverter::get_native();
-					let asset_1 = T::MultiAssetIdConverter::into_multiasset_id(1.into());
-					let asset_2 = T::MultiAssetIdConverter::into_multiasset_id(2.into());
+					// Decode the asset ids from bytes.
+					let asset_1 = T::MultiAssetIdConverter::into_multiasset_id(T::AssetId::decode(&mut vec![0u8, 0, 0, 1].as_slice()).unwrap());
+					let asset_2 = T::MultiAssetIdConverter::into_multiasset_id(T::AssetId::decode(&mut vec![255u8, 255, 255, 255].as_slice()).unwrap());
+					assert!(asset_1 != asset_2, "unfortunatly decoded to be the same asset.");
 					let pool_account_1 = Self::get_pool_account((native, asset_1));
 					let pool_account_2 = Self::get_pool_account((native, asset_2));
+					assert!(sp_std::mem::size_of::<T::AccountId>() >= sp_std::mem::size_of::<u128>());
 					assert!(
 						pool_account_1 != pool_account_2,
 						"AccountId should be set at least to u128"
@@ -688,6 +692,8 @@ pub mod pallet {
 		/// the value and only call this once.
 		pub fn get_pool_account(pool_id: PoolIdOf<T>) -> T::AccountId {
 			T::PalletId::get().into_sub_account_truncating(pool_id)
+			// let sub = sp_io::hashing::blake2_256(&Encode::encode(&pool_id)[..]);
+			// T::PalletId::get().into_sub_account_truncating(sub)
 		}
 
 		fn get_balance(
