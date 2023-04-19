@@ -159,7 +159,7 @@ pub struct StorageDef {
 	/// The keys and value metadata of the storage.
 	pub metadata: Metadata,
 	/// The doc associated to the storage.
-	pub docs: Vec<syn::Lit>,
+	pub docs: Vec<syn::Expr>,
 	/// A set of usage of instance, must be check for consistency with config.
 	pub instances: Vec<helper::InstanceUsage>,
 	/// Optional getter to generate. If some then query_kind is ensured to be some as well.
@@ -270,7 +270,7 @@ enum StorageKind {
 /// Check the generics in the `map` contains the generics in `gen` may contains generics in
 /// `optional_gen`, and doesn't contains any other.
 fn check_generics(
-	map: &HashMap<String, syn::Binding>,
+	map: &HashMap<String, syn::AssocType>,
 	mandatory_generics: &[&str],
 	optional_generics: &[&str],
 	storage_type_name: &str,
@@ -331,9 +331,9 @@ fn check_generics(
 fn process_named_generics(
 	storage: &StorageKind,
 	args_span: proc_macro2::Span,
-	args: &[syn::Binding],
+	args: &[syn::AssocType],
 ) -> syn::Result<(Option<StorageGenerics>, Metadata, Option<syn::Type>, bool)> {
-	let mut parsed = HashMap::<String, syn::Binding>::new();
+	let mut parsed = HashMap::<String, syn::AssocType>::new();
 
 	// Ensure no duplicate.
 	for arg in args {
@@ -610,12 +610,12 @@ fn process_generics(
 			})
 			.collect::<Vec<_>>();
 		process_unnamed_generics(&storage_kind, args_span, &args, dev_mode)
-	} else if args.args.iter().all(|gen| matches!(gen, syn::GenericArgument::Binding(_))) {
+	} else if args.args.iter().all(|gen| matches!(gen, syn::GenericArgument::AssocType(_))) {
 		let args = args
 			.args
 			.iter()
 			.map(|gen| match gen {
-				syn::GenericArgument::Binding(gen) => gen.clone(),
+				syn::GenericArgument::AssocType(gen) => gen.clone(),
 				_ => unreachable!("It is asserted above that all generics are bindings"),
 			})
 			.collect::<Vec<_>>();

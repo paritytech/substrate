@@ -81,13 +81,14 @@ where
 	fn check_override<'a>(
 		&'a self,
 		onchain_code: RuntimeCode<'a>,
-		hash: <Block as BlockT>::Hash,
+		state: &B::State,
+		hash: Block::Hash,
 	) -> sp_blockchain::Result<(RuntimeCode<'a>, RuntimeVersion)>
 	where
 		Block: BlockT,
 		B: backend::Backend<Block>,
 	{
-		let on_chain_version = self.on_chain_runtime_version(hash)?;
+		let on_chain_version = self.on_chain_runtime_version(&onchain_code, state)?;
 		let code_and_version = if let Some(d) = self.wasm_override.as_ref().as_ref().and_then(|o| {
 			o.get(
 				&on_chain_version.spec_version,
@@ -115,17 +116,18 @@ where
 	}
 
 	/// Returns the on chain runtime version.
-	fn on_chain_runtime_version(&self, hash: Block::Hash) -> sp_blockchain::Result<RuntimeVersion> {
+	fn on_chain_runtime_version(
+		&self,
+		code: &RuntimeCode,
+		state: &B::State,
+	) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 
-		let state = self.backend.state_at(hash)?;
 		let mut cache = StorageTransactionCache::<Block, B::State>::default();
-		let mut ext = Ext::new(&mut overlay, &mut cache, &state, None);
-		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-		let runtime_code =
-			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
+		let mut ext = Ext::new(&mut overlay, &mut cache, state, None);
+
 		self.executor
-			.runtime_version(&mut ext, &runtime_code)
+			.runtime_version(&mut ext, code)
 			.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()))
 	}
 }
@@ -176,7 +178,7 @@ where
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 
-		let runtime_code = self.check_override(runtime_code, at_hash)?.0;
+		let runtime_code = self.check_override(runtime_code, &state, at_hash)?.0;
 
 		let extensions = self.execution_extensions.extensions(
 			at_hash,
@@ -233,7 +235,7 @@ where
 
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
-		let runtime_code = self.check_override(runtime_code, at_hash)?.0;
+		let runtime_code = self.check_override(runtime_code, &state, at_hash)?.0;
 
 		match recorder {
 			Some(recorder) => {
@@ -282,7 +284,7 @@ where
 
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
-		self.check_override(runtime_code, at_hash).map(|(_, v)| v)
+		self.check_override(runtime_code, &state, at_hash).map(|(_, v)| v)
 	}
 
 	fn prove_execution(
@@ -300,7 +302,7 @@ where
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(trie_backend);
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
-		let runtime_code = self.check_override(runtime_code, at_hash)?.0;
+		let runtime_code = self.check_override(runtime_code, &state, at_hash)?.0;
 
 		sp_state_machine::prove_execution_on_trie_backend(
 			trie_backend,
@@ -436,7 +438,11 @@ mod tests {
 		};
 
 		let check = call_executor
-			.check_override(onchain_code, backend.blockchain().info().genesis_hash)
+			.check_override(
+				onchain_code,
+				&backend.state_at(backend.blockchain().info().genesis_hash).unwrap(),
+				backend.blockchain().info().genesis_hash,
+			)
 			.expect("RuntimeCode override")
 			.0;
 
