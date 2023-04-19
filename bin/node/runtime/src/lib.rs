@@ -1653,6 +1653,7 @@ parameter_types! {
 impl pallet_nft_fractionalization::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Deposit = AssetDeposit;
+	type ExistentialDeposit = ExistentialDeposit;
 	type Currency = Balances;
 	type NewAssetSymbol = NewAssetSymbol;
 	type NewAssetName = NewAssetName;

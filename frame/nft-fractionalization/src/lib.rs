@@ -106,6 +106,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type Deposit: Get<DepositOf<Self>>;
 
+		#[pallet::constant]
+		type ExistentialDeposit: Get<DepositOf<Self>>;
+
 		/// Identifier for the collection of NFT.
 		type NftCollectionId: Member + Parameter + MaxEncodedLen + Copy + Display;
 
@@ -368,8 +371,17 @@ pub mod pallet {
 				String::from_utf8_lossy(&T::NewAssetName::get())
 			);
 			let symbol: &[u8] = &T::NewAssetSymbol::get();
+			let existential_deposit = T::ExistentialDeposit::get();
+			let pallet_account_balance = T::Currency::free_balance(&pallet_account);
+			if pallet_account_balance < existential_deposit {
+				T::Currency::transfer(
+					&depositor,
+					&pallet_account,
+					existential_deposit,
+					ExistenceRequirement::KeepAlive,
+				)?;
+			}	
 			let deposit = T::Assets::calc(name.as_bytes(), symbol);
-
 			if deposit != Zero::zero() {
 				T::Currency::transfer(
 					&depositor,

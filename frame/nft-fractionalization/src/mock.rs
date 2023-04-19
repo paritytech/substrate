@@ -174,6 +174,7 @@ parameter_types! {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Deposit = ConstU64<1>;
+	type ExistentialDeposit = ConstU64<1>;
 	type Currency = Balances;
 	type NewAssetSymbol = NewAssetSymbol;
 	type NewAssetName = NewAssetName;

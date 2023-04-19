@@ -26,7 +26,7 @@ use frame_support::{
 	},
 };
 use pallet_nfts::CollectionConfig;
-use sp_runtime::{DispatchError, ModuleError};
+use sp_runtime::{DispatchError, ModuleError, TokenError::FundsUnavailable};
 
 fn assets() -> Vec<u32> {
 	let mut s: Vec<_> = <<Test as Config>::Assets>::asset_ids().collect();
@@ -196,7 +196,7 @@ fn unify_should_work() {
 				asset_id,
 				account(1),
 			),
-			Error::<Test>::NftNotFound
+			Error::<Test>::NftNotFractionalized
 		);
 		assert_noop!(
 			NftFractionalization::unify(
@@ -218,11 +218,7 @@ fn unify_should_work() {
 				asset_id,
 				account(1),
 			),
-			DispatchError::Module(ModuleError {
-				index: 2,
-				error: [1, 0, 0, 0],
-				message: Some("NoAccount")
-			})
+			DispatchError::Token(FundsUnavailable)
 		);
 
 		assert_ok!(NftFractionalization::unify(
@@ -266,11 +262,7 @@ fn unify_should_work() {
 				asset_id,
 				account(1),
 			),
-			DispatchError::Module(ModuleError {
-				index: 2,
-				error: [0, 0, 0, 0],
-				message: Some("BalanceLow")
-			})
+			DispatchError::Token(FundsUnavailable)
 		);
 
 		assert_ok!(Assets::transfer(RuntimeOrigin::signed(account(2)), asset_id, account(1), 1));
