@@ -18,9 +18,8 @@
 use super::*;
 use crate::{self as multi_phase, unsigned::MinerConfig};
 use frame_election_provider_support::{
-	data_provider,
-	onchain::{self},
-	DataProviderBounds, ElectionBounds, ElectionDataProvider, NposSolution, SequentialPhragmen,
+	bounds::{DataProviderBounds, ElectionBounds},
+	data_provider, onchain, ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
@@ -304,8 +303,8 @@ parameter_types! {
 
 	#[derive(Debug)]
 	pub static MaxWinners: u32 = 200;
-	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
-	pub static ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::new()
+	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::default().build();
+	pub static ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::default()
 		.targets_count(5_000.into()).voters_count(1_250.into()).build();
 
 	pub static EpochLength: u64 = 30;

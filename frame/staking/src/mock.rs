@@ -19,7 +19,8 @@
 
 use crate::{self as pallet_staking, *};
 use frame_election_provider_support::{
-	onchain, ElectionBounds, ElectionBoundsBuilder, SequentialPhragmen, VoteWeight,
+	bounds::{ElectionBounds, ElectionBoundsBuilder},
+	onchain, SequentialPhragmen, VoteWeight,
 };
 use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
@@ -239,7 +240,7 @@ parameter_types! {
 	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 	pub static MaxWinners: u32 = 100;
-	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
+	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::default().build();
 	pub static AbsoluteMaxNominations: u32 = 16;
 }
 

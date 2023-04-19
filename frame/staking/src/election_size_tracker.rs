@@ -30,31 +30,33 @@
 //!
 //! ### Example
 //!
-//! ```rust,ignore
-//!     // instantiates a new tracker.
-//!     let mut size_tracker = StaticTracker::<Staking>::default();
+//! ```ignore
+//! use pallet_staking::election_size_tracker::*;
 //!
-//!     let voter_bounds = ElectionBoundsBuilder::new().voter_size(1_00.into()).build().voters;
+//! // instantiates a new tracker.
+//! let mut size_tracker = StaticTracker::<Staking>::default();
 //!
-//!     let mut sorted_voters = T::VoterList.iter();
-//!     let mut selected_voters = vec![];
+//! let voter_bounds = ElectionBoundsBuilder::default().voter_size(1_00.into()).build().voters;
 //!
-//!     // fit as many voters in the vec as the bounds permit.
-//!     for v in sorted_voters {
-//!         let voter = (v, weight_of(&v), targets_of(&v));
-//!         if size_tracker.try_register_voter(&voter, &voter_bounds).is_err() {
-//!             log!(warn, "voter bounds size exhausted");
-//!             break
-//!         }
-//!         selected_voters.push(voter);
+//! let mut sorted_voters = T::VoterList.iter();
+//! let mut selected_voters = vec![];
+//!
+//! // fit as many voters in the vec as the bounds permit.
+//! for v in sorted_voters {
+//!     let voter = (v, weight_of(&v), targets_of(&v));
+//!     if size_tracker.try_register_voter(&voter, &voter_bounds).is_err() {
+//!         // voter bounds size exhausted
+//!         break;
 //!     }
+//!     selected_voters.push(voter);
+//! }
 //!
-//!     // The SCALE encoded size in bytes of `selected_voters` is guaranteed to be below
-//!     // `voter_bounds`.
-//!     debug_assert!(
-//!         selected_voters.encoded_size() <=
-//!         SizeTracker::<Staking>::final_byte_size_of(size_tracker.num_voters, size_tracker.size)
-//!     );
+//! // The SCALE encoded size in bytes of `selected_voters` is guaranteed to be below
+//! // `voter_bounds`.
+//! debug_assert!(
+//!     selected_voters.encoded_size() <=
+//!     SizeTracker::<Staking>::final_byte_size_of(size_tracker.num_voters, size_tracker.size)
+//! );
 //! ```
 //!
 //! ### Implementation Details
@@ -69,7 +71,8 @@
 
 use codec::Encode;
 use frame_election_provider_support::{
-	DataProviderBounds, ElectionDataProvider, SizeBound, VoterOf,
+	bounds::{DataProviderBounds, SizeBound},
+	ElectionDataProvider, VoterOf,
 };
 
 /// Keeps track of the SCALE encoded byte length of the snapshot's voters struct.
@@ -147,7 +150,7 @@ mod tests {
 		mock::{AccountId, Staking, Test},
 		BoundedVec, MaxNominationsOf,
 	};
-	use frame_election_provider_support::ElectionBoundsBuilder;
+	use frame_election_provider_support::bounds::ElectionBoundsBuilder;
 	use sp_core::bounded_vec;
 
 	type Voters = BoundedVec<AccountId, MaxNominationsOf<Test>>;
@@ -156,7 +159,7 @@ mod tests {
 	pub fn election_size_tracker_works() {
 		let mut voters: Vec<(u64, u64, Voters)> = vec![];
 		let mut size_tracker = StaticTracker::<Staking>::default();
-		let voter_bounds = ElectionBoundsBuilder::new().voters_size(1_50.into()).build().voters;
+		let voter_bounds = ElectionBoundsBuilder::default().voters_size(1_50.into()).build().voters;
 
 		// register 1 voter with 1 vote.
 		let voter = (1, 10, bounded_vec![2]);
@@ -202,7 +205,7 @@ mod tests {
 	pub fn election_size_tracker_bounds_works() {
 		let mut voters: Vec<(u64, u64, Voters)> = vec![];
 		let mut size_tracker = StaticTracker::<Staking>::default();
-		let voter_bounds = ElectionBoundsBuilder::new().voters_size(1_00.into()).build().voters;
+		let voter_bounds = ElectionBoundsBuilder::default().voters_size(1_00.into()).build().voters;
 
 		let voter = (1, 10, bounded_vec![2]);
 		assert!(size_tracker.try_register_voter(&voter, &voter_bounds).is_ok());

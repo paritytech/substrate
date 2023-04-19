@@ -38,8 +38,8 @@ use sp_std::prelude::*;
 use std::collections::BTreeMap;
 
 use frame_election_provider_support::{
-	onchain, ElectionBoundsBuilder, ElectionDataProvider, ExtendedBalance, SequentialPhragmen,
-	Weight,
+	bounds::ElectionBoundsBuilder, onchain, ElectionDataProvider, ExtendedBalance,
+	SequentialPhragmen, Weight,
 };
 use pallet_election_provider_multi_phase::{
 	unsigned::MinerConfig, ElectionCompute, QueuedSolution, SolutionAccuracyOf,
@@ -126,10 +126,10 @@ impl pallet_balances::Config for Runtime {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
-    type MaxHolds = ();
-    type MaxFreezes = ();
-    type HoldIdentifier = ();
-    type FreezeIdentifier = ();
+	type MaxHolds = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type FreezeIdentifier = ();
 	type WeightInfo = ();
 }
 
@@ -189,7 +189,7 @@ parameter_types! {
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static TransactionPriority: transaction_validity::TransactionPriority = 1;
 	pub static MaxWinners: u32 = 100;
-	pub static ElectionBounds: frame_election_provider_support::ElectionBounds = ElectionBoundsBuilder::new()
+	pub static ElectionBounds: frame_election_provider_support::bounds::ElectionBounds = ElectionBoundsBuilder::default()
 		.voters_count(1_000.into()).targets_count(1_000.into()).build();
 }
 

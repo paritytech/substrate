@@ -19,7 +19,8 @@ use super::*;
 use crate as root_offences;
 
 use frame_election_provider_support::{
-	onchain, ElectionBounds, ElectionBoundsBuilder, SequentialPhragmen,
+	bounds::{ElectionBounds, ElectionBoundsBuilder},
+	onchain, SequentialPhragmen,
 };
 use frame_support::{
 	parameter_types,
@@ -141,7 +142,7 @@ pallet_staking_reward_curve::build! {
 }
 
 parameter_types! {
-	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
+	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::default().build();
 }
 
 pub struct OnChainSeqPhragmen;

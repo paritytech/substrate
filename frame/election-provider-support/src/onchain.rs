@@ -20,9 +20,9 @@
 //! careful when using it onchain.
 
 use crate::{
-	BoundedSupportsOf, DataProviderBounds, Debug, ElectionBounds, ElectionBoundsBuilder,
-	ElectionDataProvider, ElectionProvider, ElectionProviderBase, InstantElectionProvider,
-	NposSolver, WeightInfo,
+	bounds::{DataProviderBounds, ElectionBounds, ElectionBoundsBuilder},
+	BoundedSupportsOf, Debug, ElectionDataProvider, ElectionProvider, ElectionProviderBase,
+	InstantElectionProvider, NposSolver, WeightInfo,
 };
 use frame_support::{dispatch::DispatchClass, traits::Get};
 use sp_npos_elections::{
@@ -235,7 +235,7 @@ mod tests {
 	parameter_types! {
 		pub static MaxWinners: u32 = 10;
 		pub static DesiredTargets: u32 = 2;
-		pub static ElectionBounds: crate::ElectionBounds = ElectionBoundsBuilder::new().voters_count(600.into()).targets_count(400.into()).build();
+		pub static Bounds: ElectionBounds = ElectionBoundsBuilder::default().voters_count(600.into()).targets_count(400.into()).build();
 	}
 
 	impl Config for PhragmenParams {
@@ -244,7 +244,7 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		type MaxWinners = MaxWinners;
-		type Bounds = ElectionBounds;
+		type Bounds = Bounds;
 	}
 
 	impl Config for PhragMMSParams {
@@ -253,7 +253,7 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		type MaxWinners = MaxWinners;
-		type Bounds = ElectionBounds;
+		type Bounds = Bounds;
 	}
 
 	mod mock_data_provider {

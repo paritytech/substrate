@@ -21,7 +21,8 @@
 
 use super::*;
 use frame_election_provider_support::{
-	onchain, ElectionBounds, ElectionBoundsBuilder, SequentialPhragmen,
+	bounds::{ElectionBounds, ElectionBoundsBuilder},
+	onchain, SequentialPhragmen,
 };
 use frame_support::{
 	parameter_types,
@@ -144,7 +145,7 @@ pallet_staking_reward_curve::build! {
 }
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
-	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
+	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::default().build();
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<RuntimeCall, ()>;

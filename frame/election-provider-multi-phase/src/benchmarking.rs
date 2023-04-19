@@ -20,7 +20,7 @@
 use super::*;
 use crate::{unsigned::IndexAssignmentOf, Pallet as MultiPhase};
 use frame_benchmarking::account;
-use frame_election_provider_support::DataProviderBounds;
+use frame_election_provider_support::bounds::DataProviderBounds;
 use frame_support::{
 	assert_ok,
 	traits::{Hooks, TryCollect},

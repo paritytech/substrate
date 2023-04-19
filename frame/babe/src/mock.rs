@@ -20,7 +20,8 @@
 use crate::{self as pallet_babe, Config, CurrentSlot};
 use codec::Encode;
 use frame_election_provider_support::{
-	onchain, ElectionBounds, ElectionBoundsBuilder, SequentialPhragmen,
+	bounds::{ElectionBounds, ElectionBoundsBuilder},
+	onchain, SequentialPhragmen,
 };
 use frame_support::{
 	parameter_types,
@@ -169,7 +170,7 @@ parameter_types! {
 	pub const SlashDeferDuration: EraIndex = 0;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(16);
-	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::new().build();
+	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::default().build();
 }
 
 pub struct OnChainSeqPhragmen;

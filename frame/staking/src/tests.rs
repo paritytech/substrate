@@ -19,7 +19,8 @@
 
 use super::{ConfigOp, Event, *};
 use frame_election_provider_support::{
-	DataProviderBounds, ElectionBoundsBuilder, ElectionProvider, SortedListProvider, Support,
+	bounds::{DataProviderBounds, ElectionBoundsBuilder},
+	ElectionProvider, SortedListProvider, Support,
 };
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
@@ -4514,7 +4515,7 @@ mod election_data_provider {
 
 				// remove staker with lower bond by limiting the number of voters and check
 				// `MinimumActiveStake` again after electing voters.
-				let bounds = ElectionBoundsBuilder::new().voters_count(5.into()).build();
+				let bounds = ElectionBoundsBuilder::default().voters_count(5.into()).build();
 				assert_ok!(<Staking as ElectionDataProvider>::electing_voters(bounds.voters));
 				assert_eq!(MinimumActiveStake::<Test>::get(), 50);
 			});
@@ -4570,7 +4571,7 @@ mod election_data_provider {
 				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
 			)
 			.build_and_execute(|| {
-				let bounds_builder = ElectionBoundsBuilder::new();
+				let bounds_builder = ElectionBoundsBuilder::default();
 				// all voters ordered by stake,
 				assert_eq!(
 					<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
@@ -4605,7 +4606,7 @@ mod election_data_provider {
 				// sum of all nominators who'd be voters (1), plus the self-votes (4).
 				assert_eq!(<Test as Config>::VoterList::count(), 5);
 
-				let bounds_builder = ElectionBoundsBuilder::new();
+				let bounds_builder = ElectionBoundsBuilder::default();
 
 				// if limits is less..
 				assert_eq!(
@@ -4664,13 +4665,13 @@ mod election_data_provider {
 	fn respects_snapshot_size_limits() {
 		ExtBuilder::default().build_and_execute(|| {
 			// set size bounds that allows only for 1 voter.
-			let bounds = ElectionBoundsBuilder::new().voters_size(26.into()).build();
+			let bounds = ElectionBoundsBuilder::default().voters_size(26.into()).build();
 			let elected = Staking::electing_voters(bounds.voters).unwrap();
 			assert!(elected.encoded_size() == 26 as usize);
 			let prev_len = elected.len();
 
 			// larger size bounds means more quota for voters.
-			let bounds = ElectionBoundsBuilder::new().voters_size(100.into()).build();
+			let bounds = ElectionBoundsBuilder::default().voters_size(100.into()).build();
 			let elected = Staking::electing_voters(bounds.voters).unwrap();
 			assert!(elected.encoded_size() <= 100 as usize);
 			assert!(elected.len() > 1 && elected.len() > prev_len);
@@ -4737,7 +4738,7 @@ mod election_data_provider {
 			)
 			.build_and_execute(|| {
 				// nominations of controller 70 won't be added due to voter size limit exceeded.
-				let bounds = ElectionBoundsBuilder::new().voters_size(100.into()).build();
+				let bounds = ElectionBoundsBuilder::default().voters_size(100.into()).build();
 				assert_eq!(
 					Staking::electing_voters(bounds.voters)
 						.unwrap()
@@ -4754,7 +4755,7 @@ mod election_data_provider {
 
 				// however, if the election voter size bounds were largers, the snapshot would
 				// include the electing voters of 70.
-				let bounds = ElectionBoundsBuilder::new().voters_size(1_000.into()).build();
+				let bounds = ElectionBoundsBuilder::default().voters_size(1_000.into()).build();
 				assert_eq!(
 					Staking::electing_voters(bounds.voters)
 						.unwrap()

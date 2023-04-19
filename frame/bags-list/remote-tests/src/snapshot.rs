@@ -16,7 +16,7 @@
 
 //! Test to execute the snapshot using the voter bag.
 
-use frame_election_provider_support::{ElectionBounds, SortedListProvider};
+use frame_election_provider_support::{bounds::ElectionBounds, SortedListProvider};
 use frame_support::traits::PalletInfoAccess;
 use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::{traits::Block as BlockT, DeserializeOwned};

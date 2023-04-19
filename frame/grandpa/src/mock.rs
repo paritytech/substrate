@@ -23,7 +23,8 @@ use crate::{self as pallet_grandpa, AuthorityId, AuthorityList, Config, Consensu
 use ::grandpa as finality_grandpa;
 use codec::Encode;
 use frame_election_provider_support::{
-	onchain, ElectionBounds, ElectionBoundsBuilder, SequentialPhragmen,
+	bounds::{ElectionBounds, ElectionBoundsBuilder},
+	onchain, SequentialPhragmen,
 };
 use frame_support::{
 	parameter_types,
@@ -173,7 +174,7 @@ parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
-	pub static ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::new().build();
+	pub static ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::default().build();
 }
 
 pub struct OnChainSeqPhragmen;

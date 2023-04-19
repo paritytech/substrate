@@ -24,8 +24,8 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
-	onchain, BalancingConfig, ElectionBounds, ElectionBoundsBuilder, ElectionDataProvider,
-	SequentialPhragmen, VoteWeight,
+	bounds::{ElectionBounds, ElectionBoundsBuilder},
+	onchain, BalancingConfig, ElectionDataProvider, SequentialPhragmen, VoteWeight,
 };
 use frame_support::{
 	construct_runtime,
@@ -654,9 +654,9 @@ frame_election_provider_support::generate_solution_type!(
 parameter_types! {
 	// Note: the EPM in this runtime runs the election on-chain. The election bounds must be
 	// carefully set so that an election round fits in one block.
-	pub ElectionBoundsMultiPhase: ElectionBounds = ElectionBoundsBuilder::new()
+	pub ElectionBoundsMultiPhase: ElectionBounds = ElectionBoundsBuilder::default()
 		.voters_count(10_000.into()).targets_count(1_500.into()).build();
-	pub ElectionBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::new()
+	pub ElectionBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::default()
 		.voters_count(5_000.into()).targets_count(1_250.into()).build();
 
 	pub MaxNominations: u32 = <NposSolution16 as frame_election_provider_support::NposSolution>::LIMIT as u32;

@@ -18,7 +18,8 @@
 use std::vec;
 
 use frame_election_provider_support::{
-	onchain, ElectionBounds, ElectionBoundsBuilder, SequentialPhragmen,
+	bounds::{ElectionBounds, ElectionBoundsBuilder},
+	onchain, SequentialPhragmen,
 };
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -192,7 +193,7 @@ parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
-	pub static ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::new().build();
+	pub static ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::default().build();
 }
 
 pub struct OnChainSeqPhragmen;
