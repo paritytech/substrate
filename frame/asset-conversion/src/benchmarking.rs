@@ -174,13 +174,16 @@ benchmarks! {
 		let asset1 = T::MultiAssetIdConverter::get_native();
 		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
 		let asset3 = T::MultiAssetIdConverter::into_multiasset_id(1.into());
+		let asset4 = T::MultiAssetIdConverter::into_multiasset_id(2.into());
 
 		let (_, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 		let (_, _) = create_asset::<T>(asset3);
 		AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2, asset3)?;
+		let (_, _) = create_asset::<T>(asset4);
+		AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset3, asset4)?;
 
 		let path: BoundedVec<_, T::MaxSwapPathLength> =
-			BoundedVec::try_from(vec![asset1, asset2, asset3]).unwrap();
+			BoundedVec::try_from(vec![asset1, asset2, asset3, asset4]).unwrap();
 		let ed: u128 = T::Currency::minimum_balance().into();
 		let add_amount1 = 100 * ed;
 
@@ -204,6 +207,16 @@ benchmarks! {
 			0.into(),
 			caller.clone(),
 		)?;
+		AssetConversion::<T>::add_liquidity(
+			SystemOrigin::Signed(caller.clone()).into(),
+			asset3,
+			asset4,
+			2000.into(),
+			2000.into(),
+			0.into(),
+			0.into(),
+			caller.clone(),
+		)?;
 		let asset1_balance = T::Currency::balance(&caller);
 	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), ed.into(), 1.into(), caller.clone(), false)
 	verify {
@@ -218,13 +231,16 @@ benchmarks! {
 		let asset1 = T::MultiAssetIdConverter::get_native();
 		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(0.into());
 		let asset3 = T::MultiAssetIdConverter::into_multiasset_id(1.into());
+		let asset4 = T::MultiAssetIdConverter::into_multiasset_id(2.into());
 
 		let (_, caller, _) = create_asset_and_pool::<T>(asset1, asset2);
 		let (_, _) = create_asset::<T>(asset3);
 		AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2, asset3)?;
+		let (_, _) = create_asset::<T>(asset4);
+		AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset3, asset4)?;
 
 		let path: BoundedVec<_, T::MaxSwapPathLength> =
-			BoundedVec::try_from(vec![asset1, asset2, asset3]).unwrap();
+			BoundedVec::try_from(vec![asset1, asset2, asset3, asset4]).unwrap();
 		let ed: u128 = T::Currency::minimum_balance().into();
 		let add_amount1 = 1000 + ed;
 
@@ -248,13 +264,23 @@ benchmarks! {
 			0.into(),
 			caller.clone(),
 		)?;
-		let asset3_balance = T::Assets::balance(1.into(), &caller);
+		AssetConversion::<T>::add_liquidity(
+			SystemOrigin::Signed(caller.clone()).into(),
+			asset3,
+			asset4,
+			2000.into(),
+			2000.into(),
+			0.into(),
+			0.into(),
+			caller.clone(),
+		)?;
+		let asset4_balance = T::Assets::balance(2.into(), &caller);
 	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 100.into(), add_amount1.into(), caller.clone(), false)
 	verify {
-		let new_asset3_balance = T::Assets::balance(1.into(), &caller);
+		let new_asset4_balance = T::Assets::balance(2.into(), &caller);
 		assert_eq!(
-			new_asset3_balance,
-			asset3_balance + 100.into()
+			new_asset4_balance,
+			asset4_balance + 100.into()
 		);
 	}
 
