@@ -33,7 +33,7 @@ sp-weights = { version = "4.0.0", default-features = false, path = "../weights" 
 [dev-dependencies]
 rand = "0.8.5"
 serde_json = "1.0.85"
-zstd = { version = "0.11.2", default-features = false }
+zstd = { version = "0.12.3", default-features = false }
 sp-api = { version = "4.0.0-dev", path = "../api" }
 sp-state-machine = { version = "0.13.0", path = "../state-machine" }
 sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }

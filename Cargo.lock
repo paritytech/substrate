@@ -2406,7 +2406,7 @@ dependencies = [
  "quote",
  "scale-info",
  "sp-arithmetic",
- "syn 1.0.109",
+ "syn 2.0.14",
  "trybuild",
 ]
 
@@ -2544,7 +2544,7 @@ dependencies = [
  "proc-macro-warning",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -2555,7 +2555,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -2564,7 +2564,7 @@ version = "3.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -2996,9 +2996,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.3.16"
+version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5be7b54589b581f624f566bf5d8eb2bab1db736c51528720b6bd36b96b55924d"
+checksum = "66b91535aa35fea1523ad1b86cb6b53c28e0ae566ba4a460f4457e936cad7c6f"
 dependencies = [
  "bytes",
  "fnv",
@@ -3690,6 +3690,7 @@ dependencies = [
  "log",
  "node-primitives",
  "pallet-alliance",
+ "pallet-asset-rate",
  "pallet-asset-tx-payment",
  "pallet-assets",
  "pallet-authority-discovery",
@@ -5189,7 +5190,6 @@ dependencies = [
  "sc-client-api",
  "sc-consensus-babe",
  "sc-consensus-babe-rpc",
- "sc-consensus-epochs",
  "sc-consensus-grandpa",
  "sc-consensus-grandpa-rpc",
  "sc-rpc",
@@ -5605,6 +5605,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-asset-rate"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-asset-tx-payment"
 version = "4.0.0-dev"
 dependencies = [
@@ -5726,7 +5742,6 @@ dependencies = [
  "scale-info",
  "sp-application-crypto",
  "sp-consensus-babe",
- "sp-consensus-vrf",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -5959,7 +5974,7 @@ version = "4.0.0-dev"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -6842,7 +6857,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sp-runtime",
- "syn 1.0.109",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -6883,7 +6898,7 @@ dependencies = [
  "substrate-state-trie-migration-rpc",
  "thousands",
  "tokio",
- "zstd",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
@@ -7572,7 +7587,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e17d47ce914bf4de440332250b0edd23ce48c005f59fab39d3335866b114f11a"
 dependencies = [
  "thiserror",
- "toml",
+ "toml 0.5.11",
 ]
 
 [[package]]
@@ -7601,9 +7616,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro-warning"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d4f284d87b9cedc2ff57223cbc4e3937cd6063c01e92c8e2a8c080df0013933"
+checksum = "f0e25495609acefcaeb5052edad8ac91017c9bc98fc38ef321ed524e50b68bac"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8459,7 +8474,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -8636,7 +8651,6 @@ dependencies = [
  "fork-tree",
  "futures",
  "log",
- "merlin",
  "num-bigint",
  "num-rational",
  "num-traits",
@@ -8653,7 +8667,6 @@ dependencies = [
  "sc-network-test",
  "sc-telemetry",
  "scale-info",
- "schnorrkel",
  "sp-api",
  "sp-application-crypto",
  "sp-block-builder",
@@ -8661,7 +8674,6 @@ dependencies = [
  "sp-consensus",
  "sp-consensus-babe",
  "sp-consensus-slots",
- "sp-consensus-vrf",
  "sp-core",
  "sp-inherents",
  "sp-keyring",
@@ -9688,7 +9700,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -10005,6 +10017,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_spanned"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0efd8caf556a6cebd3b285caf480045fcc1ac04f6bd786b09a6f11af30c4fcf4"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "sha-1"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10239,7 +10260,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -10394,7 +10415,6 @@ name = "sp-consensus-babe"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "merlin",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -10402,7 +10422,6 @@ dependencies = [
  "sp-application-crypto",
  "sp-consensus",
  "sp-consensus-slots",
- "sp-consensus-vrf",
  "sp-core",
  "sp-inherents",
  "sp-keystore",
@@ -10471,18 +10490,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-consensus-vrf"
-version = "0.10.0-dev"
-dependencies = [
- "parity-scale-codec",
- "scale-info",
- "schnorrkel",
- "sp-core",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "sp-core"
 version = "7.0.0"
 dependencies = [
@@ -10548,7 +10555,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sp-core-hashing",
- "syn 1.0.109",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -10565,7 +10572,7 @@ version = "5.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -10633,12 +10640,10 @@ name = "sp-keystore"
 version = "0.13.0"
 dependencies = [
  "futures",
- "merlin",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "schnorrkel",
  "serde",
  "sp-core",
  "sp-externalities",
@@ -10650,7 +10655,7 @@ name = "sp-maybe-compressed-blob"
 version = "4.1.0-dev"
 dependencies = [
  "thiserror",
- "zstd",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
@@ -10761,7 +10766,7 @@ dependencies = [
  "sp-tracing",
  "sp-weights",
  "substrate-test-runtime-client",
- "zstd",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
@@ -10795,7 +10800,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -11020,7 +11025,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sp-version",
- "syn 1.0.109",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -11446,7 +11451,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -11469,7 +11474,7 @@ dependencies = [
  "sp-maybe-compressed-blob",
  "strum",
  "tempfile",
- "toml",
+ "toml 0.7.3",
  "walkdir",
  "wasm-opt",
 ]
@@ -11827,6 +11832,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b403acf6f2bb0859c93c7f0d967cb4a75a7ac552100f9322faf64dc047669b21"
+dependencies = [
+ "serde",
+ "serde_spanned",
+ "toml_datetime",
+ "toml_edit",
+]
+
+[[package]]
+name = "toml_datetime"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ab8ed2edee10b50132aed5f331333428b011c99402b5a534154ed15746f9622"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "toml_edit"
+version = "0.19.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "239410c8609e8125456927e6707163a3b1fdb40561e4b803bc041f466ccfdc13"
+dependencies = [
+ "indexmap",
+ "serde",
+ "serde_spanned",
+ "toml_datetime",
+ "winnow",
+]
+
+[[package]]
 name = "tower"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12110,7 +12149,7 @@ dependencies = [
  "substrate-cli-test-utils",
  "substrate-rpc-client",
  "tokio",
- "zstd",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
@@ -12657,9 +12696,9 @@ dependencies = [
  "rustix 0.36.12",
  "serde",
  "sha2 0.10.6",
- "toml",
+ "toml 0.5.11",
  "windows-sys 0.42.0",
- "zstd",
+ "zstd 0.11.2+zstd.1.5.2",
 ]
 
 [[package]]
@@ -13314,6 +13353,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a515f5799fe4961cb532f983ce2b23082366b898e52ffbce459c86f67c8378a"
 
 [[package]]
+name = "winnow"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae8970b36c66498d8ff1d66685dc86b91b29db0c7739899012f63a63814b4b28"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "winreg"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13445,7 +13493,16 @@ version = "0.11.2+zstd.1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20cc960326ece64f010d2d2107537f26dc589a6573a316bd5b1dba685fa5fde4"
 dependencies = [
- "zstd-safe",
+ "zstd-safe 5.0.2+zstd.1.5.2",
+]
+
+[[package]]
+name = "zstd"
+version = "0.12.3+zstd.1.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76eea132fb024e0e13fd9c2f5d5d595d8a967aa72382ac2f9d39fcc95afd0806"
+dependencies = [
+ "zstd-safe 6.0.5+zstd.1.5.4",
 ]
 
 [[package]]
@@ -13453,6 +13510,16 @@ name = "zstd-safe"
 version = "5.0.2+zstd.1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d2a5585e04f9eea4b2a3d1eca508c4dee9592a89ef6f450c11719da0726f4db"
+dependencies = [
+ "libc",
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "6.0.5+zstd.1.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d56d9e60b4b1758206c238a10165fbcae3ca37b01744e394c463463f6529d23b"
 dependencies = [
  "libc",
  "zstd-sys",
