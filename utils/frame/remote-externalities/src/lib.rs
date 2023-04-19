@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use futures::{channel::mpsc, stream::StreamExt};
 use jsonrpsee::{
 	core::params::ArrayParams,
-	http_client::{HttpClient, HttpClientBuilder},
+	ws_client::{WsClient, WsClientBuilder},
 };
 use log::*;
 use serde::de::DeserializeOwned;
@@ -54,7 +54,7 @@ type TopKeyValues = Vec<KeyValue>;
 type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
 
 const LOG_TARGET: &str = "remote-ext";
-const DEFAULT_HTTP_ENDPOINT: &str = "https://rpc.polkadot.io:443";
+const DEFAULT_WS_ENDPOINT: &str = "wss://rpc.polkadot.io:443";
 /// The snapshot that we store on disk.
 #[derive(Decode, Encode)]
 struct Snapshot<B: BlockT> {
@@ -117,47 +117,36 @@ pub struct OfflineConfig {
 pub enum Transport {
 	/// Use the `URI` to open a new WebSocket connection.
 	Uri(String),
-	/// Use HTTP connection.
-	RemoteClient(Arc<HttpClient>),
+	/// Use WS connection.
+	RemoteClient(Arc<WsClient>),
 }
 
 impl Transport {
-	fn as_client(&self) -> Option<&HttpClient> {
+	fn as_client(&self) -> Option<&WsClient> {
 		match self {
 			Self::RemoteClient(client) => Some(client),
 			_ => None,
 		}
 	}
 
-	fn as_client_cloned(&self) -> Option<Arc<HttpClient>> {
+	fn as_client_cloned(&self) -> Option<Arc<WsClient>> {
 		match self {
 			Self::RemoteClient(client) => Some(client.clone()),
 			_ => None,
 		}
 	}
 
-	// Build an HttpClient from a URI.
+	// Build an WsClient from a URI.
 	async fn map_uri(&mut self) -> Result<(), &'static str> {
 		if let Self::Uri(uri) = self {
 			log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
 
-			// If we have a ws uri, try to convert it to an http uri.
-			// We use an HTTP client rather than WS because WS starts to choke with "accumulated
-			// message length exceeds maximum" errors after processing ~10k keys when fetching
-			// from a node running a default configuration.
-			let uri = if uri.starts_with("ws://") {
-				uri.replace("ws://", "http://")
-			} else if uri.starts_with("wss://") {
-				uri.replace("wss://", "https://")
-			} else {
-				uri.clone()
-			};
-			let http_client = HttpClientBuilder::default().build(uri).map_err(|e| {
+			let ws_client = WsClientBuilder::default().build(uri).await.map_err(|e| {
 				log::error!(target: LOG_TARGET, "error: {:?}", e);
-				"failed to build http client"
+				"failed to build ws client"
 			})?;
 
-			*self = Self::RemoteClient(Arc::new(http_client))
+			*self = Self::RemoteClient(Arc::new(ws_client))
 		}
 
 		Ok(())
@@ -170,8 +159,8 @@ impl From<String> for Transport {
 	}
 }
 
-impl From<Arc<HttpClient>> for Transport {
-	fn from(client: Arc<HttpClient>) -> Self {
+impl From<Arc<WsClient>> for Transport {
+	fn from(client: Arc<WsClient>) -> Self {
 		Transport::RemoteClient(client)
 	}
 }
@@ -200,18 +189,18 @@ pub struct OnlineConfig<B: BlockT> {
 }
 
 impl<B: BlockT> OnlineConfig<B> {
-	/// Return rpc (http) client reference.
-	fn rpc_client(&self) -> &HttpClient {
+	/// Return rpc (ws) client reference.
+	fn rpc_client(&self) -> &WsClient {
 		self.transport
 			.as_client()
-			.expect("http client must have been initialized by now; qed.")
+			.expect("ws client must have been initialized by now; qed.")
 	}
 
-	/// Return a cloned rpc (http) client, suitable for being moved to threads.
-	fn rpc_client_cloned(&self) -> Arc<HttpClient> {
+	/// Return a cloned rpc (ws) client, suitable for being moved to threads.
+	fn rpc_client_cloned(&self) -> Arc<WsClient> {
 		self.transport
 			.as_client_cloned()
-			.expect("http client must have been initialized by now; qed.")
+			.expect("ws client must have been initialized by now; qed.")
 	}
 
 	fn at_expected(&self) -> B::Hash {
@@ -222,7 +211,7 @@ impl<B: BlockT> OnlineConfig<B> {
 impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self {
-			transport: Transport::from(DEFAULT_HTTP_ENDPOINT.to_owned()),
+			transport: Transport::from(DEFAULT_WS_ENDPOINT.to_owned()),
 			child_trie: true,
 			at: None,
 			state_snapshot: None,
@@ -326,8 +315,9 @@ where
 
 	/// Get the number of threads to use.
 	fn threads() -> NonZeroUsize {
-		thread::available_parallelism()
-			.unwrap_or(NonZeroUsize::new(4usize).expect("4 is non-zero; qed"))
+		NonZeroUsize::new(4usize).expect("4 is non-zero; qed")
+		// thread::available_parallelism()
+		// 	.unwrap_or(NonZeroUsize::new(4usize).expect("4 is non-zero; qed"))
 	}
 
 	async fn rpc_get_storage(
@@ -408,7 +398,7 @@ where
 	///
 	/// # Arguments
 	///
-	/// * `client` - An `Arc` wrapped `HttpClient` used for making the requests.
+	/// * `client` - An `Arc` wrapped `WsClient` used for making the requests.
 	/// * `payloads` - A vector of tuples containing a JSONRPC method name and `ArrayParams`
 	/// * `batch_size` - The initial batch size to use for the request. The batch size will be
 	///   adjusted dynamically in case of failure.
@@ -429,11 +419,11 @@ where
 	/// # Example
 	///
 	/// ```ignore
-	/// use your_crate::{get_storage_data_dynamic_batch_size, HttpClient, ArrayParams};
+	/// use your_crate::{get_storage_data_dynamic_batch_size, WsClient, ArrayParams};
 	/// use std::sync::Arc;
 	///
 	/// async fn example() {
-	///     let client = Arc::new(HttpClient::new());
+	///     let client = Arc::new(WsClient::new());
 	///     let payloads = vec![
 	///         ("some_method".to_string(), ArrayParams::new(vec![])),
 	///         ("another_method".to_string(), ArrayParams::new(vec![])),
@@ -449,7 +439,7 @@ where
 	/// ```
 	#[async_recursion]
 	async fn get_storage_data_dynamic_batch_size(
-		client: &Arc<HttpClient>,
+		client: &Arc<WsClient>,
 		payloads: Vec<(String, ArrayParams)>,
 		batch_size: usize,
 	) -> Result<Vec<Option<StorageData>>, String> {
@@ -571,7 +561,7 @@ where
 				// thread to start inserting before all of the data has been queried from the node.
 				// Inserting data takes a very long time, so the earlier it can start the better.
 				let mut thread_key_values = vec![];
-				let chunk_size = thread_keys.len() / 10;
+				let chunk_size = thread_keys.len() / 1;
 				for thread_keys_chunk in thread_keys.chunks(chunk_size) {
 					let mut thread_key_chunk_values = Vec::with_capacity(thread_keys_chunk.len());
 
@@ -681,7 +671,7 @@ where
 
 	/// Get the values corresponding to `child_keys` at the given `prefixed_top_key`.
 	pub(crate) async fn rpc_child_get_storage_paged(
-		client: &Arc<HttpClient>,
+		client: &Arc<WsClient>,
 		prefixed_top_key: &StorageKey,
 		child_keys: Vec<StorageKey>,
 		at: B::Hash,
@@ -732,7 +722,7 @@ where
 	}
 
 	pub(crate) async fn rpc_child_get_keys(
-		client: &HttpClient,
+		client: &WsClient,
 		prefixed_top_key: &StorageKey,
 		child_prefix: StorageKey,
 		at: B::Hash,
@@ -890,7 +880,7 @@ where
 	///
 	/// initializes the remote client in `transport`, and sets the `at` field, if not specified.
 	async fn init_remote_client(&mut self) -> Result<(), &'static str> {
-		// First, initialize the http client.
+		// First, initialize the ws client.
 		self.as_online_mut().transport.map_uri().await?;
 
 		// Then, if `at` is not set, set it.
