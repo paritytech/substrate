@@ -456,7 +456,7 @@ enum PalletAttr {
 	/// call - if there is no `weight` attribute set on the call. This works together with
 	/// instanced pallets by using `Config<I>`. This attribute takes precedence over the default
 	/// weight if the pallet is in dev-mode.
-	RuntimeCall(Option<RuntimeCallWeightAttr>, proc_macro2::Span),
+	RuntimeCall(Option<InheritedCallWeightAttr>, proc_macro2::Span),
 	Error(proc_macro2::Span),
 	RuntimeEvent(proc_macro2::Span),
 	RuntimeOrigin(proc_macro2::Span),
@@ -511,7 +511,7 @@ impl syn::parse::Parse for PalletAttr {
 			let span = content.parse::<keyword::call>().expect("peeked").span();
 			let attr = match content.is_empty() {
 				true => None,
-				false => Some(RuntimeCallWeightAttr::parse(&content)?),
+				false => Some(InheritedCallWeightAttr::parse(&content)?),
 			};
 			Ok(PalletAttr::RuntimeCall(attr, span))
 		} else if lookahead.peek(keyword::error) {
@@ -544,12 +544,12 @@ impl syn::parse::Parse for PalletAttr {
 
 /// The optional weight annotation on a `#[pallet::call]` like `#[pallet::call(weight($type))]`.
 #[derive(Clone)]
-pub struct RuntimeCallWeightAttr {
+pub struct InheritedCallWeightAttr {
 	pub typename: syn::Type,
 	pub span: proc_macro2::Span,
 }
 
-impl syn::parse::Parse for RuntimeCallWeightAttr {
+impl syn::parse::Parse for InheritedCallWeightAttr {
 	// Parses `(weight($type))` or `(weight = $type)`.
 	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
 		let content;

@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{helper, RuntimeCallWeightAttr};
+use super::{helper, InheritedCallWeightAttr};
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 use std::collections::HashMap;
@@ -46,15 +46,18 @@ pub struct CallDef {
 	pub attr_span: proc_macro2::Span,
 	/// Docs, specified on the impl Block.
 	pub docs: Vec<syn::Expr>,
-	pub call_weight: Option<RuntimeCallWeightAttr>,
+	/// The optional `weight` attribute on the `pallet::call`.
+	pub inherited_call_weight: Option<InheritedCallWeightAttr>,
 }
 
+/// The weight of a call.
 #[derive(Clone)]
 pub enum CallWeightDef {
+	/// Explicitly set on the call itself with `#[pallet::weight(…)]`. This value is used.
+	Immediate(syn::Expr),
+
 	/// The default value that should be set for dev-mode pallets. Usually zero.
 	DevModeDefault,
-	/// Explicitly set on the call itself. This value is used.
-	Immediate(syn::Expr),
 
 	/// Inherits whatever value is configured on the pallet level.
 	///
@@ -165,7 +168,7 @@ impl CallDef {
 		index: usize,
 		item: &mut syn::Item,
 		dev_mode: bool,
-		pallet_call_weight: Option<RuntimeCallWeightAttr>,
+		inherited_call_weight: Option<InheritedCallWeightAttr>,
 	) -> syn::Result<Self> {
 		let item_impl = if let syn::Item::Impl(item) = item {
 			item
@@ -244,7 +247,7 @@ impl CallDef {
 				}
 
 				let weight = match weight_attrs.len() {
-					0 if pallet_call_weight.is_some() => CallWeightDef::Inherited,
+					0 if inherited_call_weight.is_some() => CallWeightDef::Inherited,
 					0 if dev_mode => CallWeightDef::DevModeDefault,
 					0 => return Err(syn::Error::new(
 						method.sig.span(),
@@ -340,7 +343,7 @@ impl CallDef {
 			methods,
 			where_clause: item_impl.generics.where_clause.clone(),
 			docs: get_doc_literals(&item_impl.attrs),
-			call_weight: pallet_call_weight,
+			inherited_call_weight,
 		})
 	}
 }
