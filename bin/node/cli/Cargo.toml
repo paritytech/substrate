@@ -127,6 +127,7 @@ tokio-util = { version = "0.7.4", features = ["compat"] }
 wait-timeout = "0.2"
 substrate-rpc-client = { path = "../../../utils/frame/rpc/client" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
+substrate-cli-test-utils = { path = "../../../test-utils/cli" }
 
 [build-dependencies]
 clap = { version = "4.0.9", optional = true }

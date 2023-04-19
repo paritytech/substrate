@@ -31,7 +31,11 @@ use sp_runtime::traits::{Block, NumberFor};
 use std::{collections::VecDeque, result::Result, sync::Arc};
 
 use crate::{
-	communication::request_response::{Error, JustificationRequest, BEEFY_SYNC_LOG_TARGET},
+	communication::{
+		benefit, cost,
+		peers::PeerReport,
+		request_response::{Error, JustificationRequest, BEEFY_SYNC_LOG_TARGET},
+	},
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
 	metric_inc,
 	metrics::{register_metrics, OnDemandOutgoingRequestsMetrics},
@@ -52,6 +56,16 @@ struct RequestInfo<B: Block> {
 enum State<B: Block> {
 	Idle,
 	AwaitingResponse(PeerId, RequestInfo<B>, ResponseReceiver),
+}
+
+/// Possible engine responses.
+pub(crate) enum ResponseInfo<B: Block> {
+	/// No peer response available yet.
+	Pending,
+	/// Valid justification provided alongside peer reputation changes.
+	ValidProof(BeefyVersionedFinalityProof<B>, PeerReport),
+	/// No justification yet, only peer reputation changes.
+	PeerReport(PeerReport),
 }
 
 pub struct OnDemandJustificationsEngine<B: Block> {
@@ -84,12 +98,10 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 	}
 
 	fn reset_peers_cache_for_block(&mut self, block: NumberFor<B>) {
-		// TODO (issue #12296): replace peer selection with generic one that involves all protocols.
 		self.peers_cache = self.live_peers.lock().further_than(block);
 	}
 
 	fn try_next_peer(&mut self) -> Option<PeerId> {
-		// TODO (issue #12296): replace peer selection with generic one that involves all protocols.
 		let live = self.live_peers.lock();
 		while let Some(peer) = self.peers_cache.pop_front() {
 			if live.contains(&peer) {
@@ -159,24 +171,19 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 
 	fn process_response(
 		&mut self,
-		peer: PeerId,
+		peer: &PeerId,
 		req_info: &RequestInfo<B>,
 		response: Result<Response, Canceled>,
 	) -> Result<BeefyVersionedFinalityProof<B>, Error> {
 		response
 			.map_err(|e| {
-				metric_inc!(self, beefy_on_demand_justification_peer_hang_up);
 				debug!(
 					target: BEEFY_SYNC_LOG_TARGET,
-					"🥩 for on demand justification #{:?}, peer {:?} hung up: {:?}",
-					req_info.block,
-					peer,
-					e
+					"🥩 on-demand sc-network channel sender closed, err: {:?}", e
 				);
-				Error::InvalidResponse
+				Error::ResponseError
 			})?
 			.map_err(|e| {
-				metric_inc!(self, beefy_on_demand_justification_peer_error);
 				debug!(
 					target: BEEFY_SYNC_LOG_TARGET,
 					"🥩 for on demand justification #{:?}, peer {:?} error: {:?}",
@@ -184,7 +191,18 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 					peer,
 					e
 				);
-				Error::InvalidResponse
+				match e {
+					RequestFailure::Refused => {
+						metric_inc!(self, beefy_on_demand_justification_peer_refused);
+						let peer_report =
+							PeerReport { who: *peer, cost_benefit: cost::REFUSAL_RESPONSE };
+						Error::InvalidResponse(peer_report)
+					},
+					_ => {
+						metric_inc!(self, beefy_on_demand_justification_peer_error);
+						Error::ResponseError
+					},
+				}
 			})
 			.and_then(|encoded| {
 				decode_and_verify_finality_proof::<B>(
@@ -192,23 +210,26 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 					req_info.block,
 					&req_info.active_set,
 				)
-				.map_err(|e| {
+				.map_err(|(err, signatures_checked)| {
 					metric_inc!(self, beefy_on_demand_justification_invalid_proof);
 					debug!(
 						target: BEEFY_SYNC_LOG_TARGET,
 						"🥩 for on demand justification #{:?}, peer {:?} responded with invalid proof: {:?}",
-						req_info.block, peer, e
+						req_info.block, peer, err
 					);
-					Error::InvalidResponse
+					let mut cost = cost::INVALID_PROOF;
+					cost.value +=
+						cost::PER_SIGNATURE_CHECKED.saturating_mul(signatures_checked as i32);
+					Error::InvalidResponse(PeerReport { who: *peer, cost_benefit: cost })
 				})
 			})
 	}
 
-	pub async fn next(&mut self) -> Option<BeefyVersionedFinalityProof<B>> {
+	pub(crate) async fn next(&mut self) -> ResponseInfo<B> {
 		let (peer, req_info, resp) = match &mut self.state {
 			State::Idle => {
 				futures::future::pending::<()>().await;
-				return None
+				return ResponseInfo::Pending
 			},
 			State::AwaitingResponse(peer, req_info, receiver) => {
 				let resp = receiver.await;
@@ -220,8 +241,8 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 		self.state = State::Idle;
 
 		let block = req_info.block;
-		self.process_response(peer, &req_info, resp)
-			.map_err(|_| {
+		match self.process_response(&peer, &req_info, resp) {
+			Err(err) => {
 				// No valid justification received, try next peer in our set.
 				if let Some(peer) = self.try_next_peer() {
 					self.request_from_peer(peer, req_info);
@@ -231,15 +252,22 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 						"🥩 ran out of peers to request justif #{:?} from", block
 					);
 				}
-			})
-			.map(|proof| {
+				// Report peer based on error type.
+				if let Error::InvalidResponse(peer_report) = err {
+					ResponseInfo::PeerReport(peer_report)
+				} else {
+					ResponseInfo::Pending
+				}
+			},
+			Ok(proof) => {
 				metric_inc!(self, beefy_on_demand_justification_good_proof);
 				debug!(
 					target: BEEFY_SYNC_LOG_TARGET,
 					"🥩 received valid on-demand justif #{:?} from {:?}", block, peer
 				);
-				proof
-			})
-			.ok()
+				let peer_report = PeerReport { who: peer, cost_benefit: benefit::VALIDATED_PROOF };
+				ResponseInfo::ValidProof(proof, peer_report)
+			},
+		}
 	}
 }
