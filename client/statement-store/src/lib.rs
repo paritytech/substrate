@@ -262,10 +262,6 @@ impl Index {
 		self.expired.insert(hash, timestamp);
 	}
 
-	fn is_expired(&self, hash: &Hash) -> bool {
-		self.expired.contains_key(hash)
-	}
-
 	fn iterate_with(
 		&self,
 		key: Option<DecryptionKey>,
@@ -724,26 +720,6 @@ impl Store {
 }
 
 impl StatementStore for Store {
-	/// Return all statements SCALE-encoded.
-	fn dump_encoded(&self) -> Result<Vec<(Hash, Vec<u8>)>> {
-		let index = self.index.read();
-		let mut result = Vec::with_capacity(index.entries.len());
-		for h in self.index.read().entries.keys() {
-			let encoded = self.db.get(col::STATEMENTS, h).map_err(|e| Error::Db(e.to_string()))?;
-			if let Some(encoded) = encoded {
-				if let Ok(entry) = StatementWithMeta::decode(&mut encoded.as_slice()) {
-					entry.statement.using_encoded(|statement| {
-						let hash = sp_statement_store::hash_encoded(statement);
-						if !self.index.read().is_expired(&hash) {
-							result.push((hash, entry.statement.encode()));
-						}
-					});
-				}
-			}
-		}
-		Ok(result)
-	}
-
 	/// Return all statements.
 	fn dump(&self) -> Result<Vec<(Hash, Statement)>> {
 		let index = self.index.read();

@@ -63,9 +63,6 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Statement store API.
 pub trait StatementStore: Send + Sync {
-	/// Return all statements, SCALE-encoded.
-	fn dump_encoded(&self) -> Result<Vec<(Hash, Vec<u8>)>>;
-
 	/// Return all statements.
 	fn dump(&self) -> Result<Vec<(Hash, Statement)>>;
 
