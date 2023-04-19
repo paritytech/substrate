@@ -13,18 +13,6 @@ use codec::{Decode, Encode};
 const HOST_CALL: ark_scale::Usage = ark_scale::HOST_CALL;
 type ArkScale<T> = ark_scale::ArkScale<T, HOST_CALL>;
 
-fn serialize_result(result: impl CanonicalSerialize) -> Vec<u8> {
-	let mut serialized_result = vec![0u8; result.serialized_size(Compress::No)];
-	let mut cursor = Cursor::new(&mut serialized_result[..]);
-	result.serialize_uncompressed(&mut cursor).unwrap();
-	serialized_result
-}
-
-fn deserialize_argument<Field: CanonicalDeserialize>(argument: &Vec<u8>) -> Field {
-	let cursor = Cursor::new(argument);
-	Field::deserialize_with_mode(cursor, Compress::No, Validate::No).unwrap()
-}
-
 /// Compute a multi miller loop through arkworks
 pub fn multi_miller_loop_generic<Curve: Pairing>(g1: Vec<u8>, g2: Vec<u8>) -> Result<Vec<u8>, ()> {
 	let g1 =

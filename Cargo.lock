@@ -646,7 +646,7 @@ dependencies = [
  "log",
  "parking",
  "polling",
- "rustix 0.37.11",
+ "rustix 0.37.12",
  "slab",
  "socket2",
  "waker-fn",
@@ -1161,7 +1161,7 @@ name = "chain-spec-builder"
 version = "2.0.0"
 dependencies = [
  "ansi_term",
- "clap 4.2.2",
+ "clap 4.2.3",
  "node-cli",
  "rand 0.8.5",
  "sc-chain-spec",
@@ -1287,9 +1287,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.2.2"
+version = "4.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b802d85aaf3a1cdb02b224ba472ebdea62014fccfcb269b95a4d76443b5ee5a"
+checksum = "49f9152d70e42172fdb87de2efd7327160beee37886027cf86f30a233d5b30b4"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -1298,9 +1298,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.2.2"
+version = "4.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14a1a858f532119338887a4b8e1af9c60de8249cd7bafd68036a489e261e37b6"
+checksum = "e067b220911598876eb55d52725ddcc201ffe3f0904018195973bc5b012ea2ca"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1315,7 +1315,7 @@ version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "01c22dcfb410883764b29953103d9ef7bb8fe21b3fa1158bc99986c2067294bd"
 dependencies = [
- "clap 4.2.2",
+ "clap 4.2.3",
 ]
 
 [[package]]
@@ -2566,7 +2566,7 @@ dependencies = [
  "Inflector",
  "array-bytes",
  "chrono",
- "clap 4.2.2",
+ "clap 4.2.3",
  "comfy-table",
  "frame-benchmarking",
  "frame-support",
@@ -2657,7 +2657,7 @@ dependencies = [
 name = "frame-election-solution-type-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 4.2.2",
+ "clap 4.2.3",
  "frame-election-provider-solution-type",
  "frame-election-provider-support",
  "frame-support",
@@ -3223,9 +3223,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.3.17"
+version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66b91535aa35fea1523ad1b86cb6b53c28e0ae566ba4a460f4457e936cad7c6f"
+checksum = "17f8a914c2987b688368b5138aa05321db91f4090cf26118185672ad588bce21"
 dependencies = [
  "bytes",
  "fnv",
@@ -3686,7 +3686,7 @@ checksum = "adcf93614601c8129ddf72e2d5633df827ba6551541c6d8c59520a371475be1f"
 dependencies = [
  "hermit-abi 0.3.1",
  "io-lifetimes 1.0.10",
- "rustix 0.37.11",
+ "rustix 0.37.12",
  "windows-sys 0.48.0",
 ]
 
@@ -4646,9 +4646,9 @@ checksum = "f051f77a7c8e6957c0696eac88f26b0117e54f52d3fc682ab19397a8812846a4"
 
 [[package]]
 name = "linux-raw-sys"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d59d8c75012853d2e872fb56bc8a2e53718e2cafe1a4c823143141c6d90c322f"
+checksum = "3f508063cc7bb32987c71511216bd5a32be15bccb6a80b52df8b9d7f01fc3aa2"
 
 [[package]]
 name = "lite-json"
@@ -4794,7 +4794,7 @@ version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ffc89ccdc6e10d6907450f753537ebc5c5d3460d2e4e62ea74bd571db62c0f9e"
 dependencies = [
- "rustix 0.37.11",
+ "rustix 0.37.12",
 ]
 
 [[package]]
@@ -5198,7 +5198,7 @@ name = "node-bench"
 version = "0.9.0-dev"
 dependencies = [
  "array-bytes",
- "clap 4.2.2",
+ "clap 4.2.3",
  "derive_more",
  "fs_extra",
  "futures",
@@ -5235,7 +5235,7 @@ version = "3.0.0-dev"
 dependencies = [
  "array-bytes",
  "assert_cmd",
- "clap 4.2.2",
+ "clap 4.2.3",
  "clap_complete",
  "criterion",
  "frame-benchmarking-cli",
@@ -5357,7 +5357,7 @@ dependencies = [
 name = "node-inspect"
 version = "0.9.0-dev"
 dependencies = [
- "clap 4.2.2",
+ "clap 4.2.3",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-api",
@@ -5416,7 +5416,7 @@ dependencies = [
 name = "node-runtime-generate-bags"
 version = "3.0.0"
 dependencies = [
- "clap 4.2.2",
+ "clap 4.2.3",
  "generate-bags",
  "kitchensink-runtime",
 ]
@@ -5425,7 +5425,7 @@ dependencies = [
 name = "node-template"
 version = "4.0.0-dev"
 dependencies = [
- "clap 4.2.2",
+ "clap 4.2.3",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-system",
@@ -8438,15 +8438,15 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.37.11"
+version = "0.37.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85597d61f83914ddeba6a47b3b8ffe7365107221c2e557ed94426489fefb5f77"
+checksum = "722529a737f5a942fdbac3a46cee213053196737c5eaa3386d52e85b786f2659"
 dependencies = [
  "bitflags",
  "errno 0.3.1",
  "io-lifetimes 1.0.10",
  "libc",
- "linux-raw-sys 0.3.1",
+ "linux-raw-sys 0.3.2",
  "windows-sys 0.48.0",
 ]
 
@@ -8672,7 +8672,7 @@ version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
  "chrono",
- "clap 4.2.2",
+ "clap 4.2.3",
  "fdlimit",
  "futures",
  "futures-timer",
@@ -9788,7 +9788,7 @@ dependencies = [
 name = "sc-storage-monitor"
 version = "0.1.0"
 dependencies = [
- "clap 4.2.2",
+ "clap 4.2.3",
  "fs4",
  "futures",
  "log",
@@ -10533,14 +10533,16 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#2af7bb2777869905bb0051bf9e1e70d380ebe4ab"
+source = "git+https://github.com/paritytech/ark-substrate?branch=ark-scale-integration#0cacab2f7950a7d7a2b9fd9ff2372e3bd2581ea8"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
  "ark-r1cs-std",
+ "ark-scale",
  "ark-serialize",
  "ark-std",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
+ "parity-scale-codec",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=ark-scale-integration)",
  "sp-ark-utils",
  "sp-arkworks",
 ]
@@ -10548,14 +10550,16 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#2af7bb2777869905bb0051bf9e1e70d380ebe4ab"
+source = "git+https://github.com/paritytech/ark-substrate?branch=ark-scale-integration#0cacab2f7950a7d7a2b9fd9ff2372e3bd2581ea8"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
  "ark-ff",
+ "ark-scale",
  "ark-serialize",
  "ark-std",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
+ "parity-scale-codec",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=ark-scale-integration)",
  "sp-ark-utils",
  "sp-arkworks",
 ]
@@ -10563,13 +10567,15 @@ dependencies = [
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#2af7bb2777869905bb0051bf9e1e70d380ebe4ab"
+source = "git+https://github.com/paritytech/ark-substrate?branch=ark-scale-integration#0cacab2f7950a7d7a2b9fd9ff2372e3bd2581ea8"
 dependencies = [
  "ark-bw6-761",
  "ark-ff",
+ "ark-scale",
  "ark-serialize",
  "ark-std",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
+ "parity-scale-codec",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=ark-scale-integration)",
  "sp-ark-utils",
  "sp-arkworks",
 ]
@@ -10577,28 +10583,32 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#2af7bb2777869905bb0051bf9e1e70d380ebe4ab"
+source = "git+https://github.com/paritytech/ark-substrate?branch=ark-scale-integration#0cacab2f7950a7d7a2b9fd9ff2372e3bd2581ea8"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
  "ark-r1cs-std",
+ "ark-scale",
  "ark-serialize",
  "ark-std",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
+ "parity-scale-codec",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=ark-scale-integration)",
  "sp-ark-utils",
 ]
 
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#2af7bb2777869905bb0051bf9e1e70d380ebe4ab"
+source = "git+https://github.com/paritytech/ark-substrate?branch=ark-scale-integration#0cacab2f7950a7d7a2b9fd9ff2372e3bd2581ea8"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
  "ark-r1cs-std",
+ "ark-scale",
  "ark-serialize",
  "ark-std",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
+ "parity-scale-codec",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=ark-scale-integration)",
  "sp-ark-utils",
 ]
 
@@ -10622,7 +10632,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-models"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#2af7bb2777869905bb0051bf9e1e70d380ebe4ab"
+source = "git+https://github.com/paritytech/ark-substrate?branch=ark-scale-integration#0cacab2f7950a7d7a2b9fd9ff2372e3bd2581ea8"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -10638,7 +10648,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-utils"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#2af7bb2777869905bb0051bf9e1e70d380ebe4ab"
+source = "git+https://github.com/paritytech/ark-substrate?branch=ark-scale-integration#0cacab2f7950a7d7a2b9fd9ff2372e3bd2581ea8"
 dependencies = [
  "ark-serialize",
  "ark-std",
@@ -11065,7 +11075,7 @@ dependencies = [
 name = "sp-npos-elections-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 4.2.2",
+ "clap 4.2.3",
  "honggfuzz",
  "parity-scale-codec",
  "rand 0.8.5",
@@ -11553,7 +11563,7 @@ dependencies = [
 name = "subkey"
 version = "3.0.0"
 dependencies = [
- "clap 4.2.2",
+ "clap 4.2.3",
  "sc-cli",
 ]
 
@@ -11595,7 +11605,7 @@ dependencies = [
 name = "substrate-frame-cli"
 version = "4.0.0-dev"
 dependencies = [
- "clap 4.2.2",
+ "clap 4.2.3",
  "frame-support",
  "frame-system",
  "sc-cli",
@@ -11930,7 +11940,7 @@ dependencies = [
  "cfg-if",
  "fastrand",
  "redox_syscall 0.3.5",
- "rustix 0.37.11",
+ "rustix 0.37.12",
  "windows-sys 0.45.0",
 ]
 
@@ -12478,7 +12488,7 @@ version = "0.10.0-dev"
 dependencies = [
  "assert_cmd",
  "async-trait",
- "clap 4.2.2",
+ "clap 4.2.3",
  "frame-remote-externalities",
  "frame-try-runtime",
  "hex",

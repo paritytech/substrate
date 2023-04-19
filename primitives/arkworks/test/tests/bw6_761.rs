@@ -6,16 +6,16 @@ use sp_ark_bw6_761::HostFunctions;
 pub struct Host;
 
 impl HostFunctions for Host {
-	fn bw6_761_multi_miller_loop(a: Vec<Vec<u8>>, b: Vec<Vec<u8>>) -> Result<Vec<u8>, ()> {
+	fn bw6_761_multi_miller_loop(a: Vec<u8>, b: Vec<u8>) -> Result<Vec<u8>, ()> {
 		sp_io::elliptic_curves::bw6_761_multi_miller_loop(a, b)
 	}
 	fn bw6_761_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, ()> {
 		sp_io::elliptic_curves::bw6_761_final_exponentiation(f12)
 	}
-	fn bw6_761_msm_g1(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Result<Vec<u8>, ()> {
+	fn bw6_761_msm_g1(bases: Vec<u8>, bigints: Vec<u8>) -> Result<Vec<u8>, ()> {
 		sp_io::elliptic_curves::bw6_761_msm_g1(bases, bigints)
 	}
-	fn bw6_761_msm_g2(bases: Vec<Vec<u8>>, bigints: Vec<Vec<u8>>) -> Result<Vec<u8>, ()> {
+	fn bw6_761_msm_g2(bases: Vec<u8>, bigints: Vec<u8>) -> Result<Vec<u8>, ()> {
 		sp_io::elliptic_curves::bw6_761_msm_g2(bases, bigints)
 	}
 }
