@@ -43,6 +43,3 @@ sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
 sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-
-[dev-dependencies]
-hex = { version = "0.4.3" }

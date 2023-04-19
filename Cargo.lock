@@ -9483,7 +9483,6 @@ dependencies = [
  "async-channel",
  "fdlimit",
  "futures",
- "hex",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -11304,12 +11303,12 @@ dependencies = [
 name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
- "cfg-if",
  "frame-executive",
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
  "futures",
+ "hex",
  "log",
  "memory-db",
  "pallet-babe",
