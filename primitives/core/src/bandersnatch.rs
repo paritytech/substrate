@@ -23,7 +23,7 @@
 use crate::crypto::Ss58Codec;
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError};
-use bandersnatch_vrfs::{PublicKey, SecretKey, ThinVrfSignature};
+use bandersnatch_vrfs::{CanonicalSerialize, PublicKey, SecretKey, ThinVrfSignature};
 #[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
 
@@ -221,8 +221,7 @@ impl CryptoType for Signature {
 #[cfg(feature = "full_crypto")]
 type Seed = [u8; SEED_SERIALIZED_LEN];
 
-use bandersnatch_vrfs::SigningTranscript;
-use merlin::Transcript;
+use bandersnatch_vrfs::Transcript;
 
 /// DAVXY TODO: DOCS
 #[cfg(feature = "full_crypto")]
@@ -244,7 +243,7 @@ impl TraitPair for Pair {
 		}
 		let mut seed_raw = [0; SEED_SERIALIZED_LEN];
 		seed_raw.copy_from_slice(seed_slice);
-		let secret = SecretKey::from_seed(seed_raw);
+		let secret = SecretKey::from_seed(&seed_raw);
 		Ok(Pair(secret))
 	}
 
@@ -282,11 +281,11 @@ impl TraitPair for Pair {
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Signature {
 		let mut t = Transcript::new(b"SigningContext");
-		t.append_message(b"", message);
+		t.append_slice(message);
 		// // TODO DAVXY: looks like we require to clone to call sign... is this required?
 		let sign: ThinVrfSignature<0> = self.0.clone().sign_thin_vrf(t, &[]);
 		let mut raw = [0; SIGNATURE_SERIALIZED_LEN];
-		sign.signature.serialize(raw.as_mut_slice());
+		sign.serialize_compressed(raw.as_mut_slice());
 		Signature(raw)
 	}
 
@@ -334,7 +333,7 @@ mod tests {
 
 	#[test]
 	fn assumptions_check() {
-		let pair = SecretKey::from_seed([0; SEED_SERIALIZED_LEN]);
+		let pair = SecretKey::from_seed(&[0; SEED_SERIALIZED_LEN]);
 		let public = pair.to_public();
 		assert_eq!(public.0.size_of_serialized(), PUBLIC_SERIALIZED_LEN);
 	}

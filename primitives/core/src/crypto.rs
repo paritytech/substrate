@@ -15,11 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// tag::description[]
 //! Cryptographic utilities.
-// end::description[]
 
-// use crate::{ed25519, sr25519};
+use crate::{ed25519, sr25519};
 #[cfg(feature = "std")]
 use bip39::{Language, Mnemonic, MnemonicType};
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -559,17 +557,17 @@ impl From<AccountId32> for [u8; 32] {
 	}
 }
 
-// impl From<sr25519::Public> for AccountId32 {
-// 	fn from(k: sr25519::Public) -> Self {
-// 		k.0.into()
-// 	}
-// }
+impl From<sr25519::Public> for AccountId32 {
+	fn from(k: sr25519::Public) -> Self {
+		k.0.into()
+	}
+}
 
-// impl From<ed25519::Public> for AccountId32 {
-// 	fn from(k: ed25519::Public) -> Self {
-// 		k.0.into()
-// 	}
-// }
+impl From<ed25519::Public> for AccountId32 {
+	fn from(k: ed25519::Public) -> Self {
+		k.0.into()
+	}
+}
 
 #[cfg(feature = "std")]
 impl std::fmt::Display for AccountId32 {

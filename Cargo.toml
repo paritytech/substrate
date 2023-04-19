@@ -328,5 +328,6 @@ lto = "fat"
 # https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
 codegen-units = 1
 
-[patch.crates-io]
+[patch."https://github.com/w3f/ring-vrf"]
+bandersnatch_vrfs = { path = "/mnt/ssd/users/develop/w3f/ring-vrf/bandersnatch_vrfs" }
 dleq_vrf = { path = "/mnt/ssd/users/develop/w3f/ring-vrf/dleq_vrf" }
