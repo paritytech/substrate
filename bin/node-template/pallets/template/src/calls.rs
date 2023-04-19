@@ -20,7 +20,7 @@ mod calls {
 			// Update storage.
 			<Something<T>>::put(something);
 
-			// <Something2<T>>::put(something);
+			<Something2<T>>::put(something);
 
 			// Emit an event.
 			Self::deposit_event(Event::SomethingStored { something, who });

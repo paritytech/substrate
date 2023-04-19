@@ -25,6 +25,7 @@ use crate::{
 use quote::ToTokens;
 use std::{collections::HashMap, ops::IndexMut};
 use syn::spanned::Spanned;
+use proc_macro2::Span;
 
 /// Generate the prefix_ident related to the storage.
 /// prefix_ident is used for the prefix struct to be given to storage as first generic param.
@@ -348,7 +349,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 		let cfg_attrs = &storage.cfg_attrs;
 
-		quote::quote_spanned!(storage.attr_span =>
+		// Since we are using `entries` defined later, we need to specify `call_site` to disable macro hygiene.
+		quote::quote_spanned!(Span::call_site() =>
 			#(#cfg_attrs)*
 			{
 				<#full_ident as #frame_support::storage::StorageEntryMetadataBuilder>::build_metadata(

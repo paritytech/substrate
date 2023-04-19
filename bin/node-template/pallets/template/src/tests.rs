@@ -10,6 +10,8 @@ fn it_works_for_default_value() {
 		assert_ok!(TemplateModule::do_something(RuntimeOrigin::signed(1), 42));
 		// Read pallet storage and assert an expected result.
 		assert_eq!(TemplateModule::something(), Some(42));
+
+		assert_eq!(TemplateModule::something2(), Some(42));
 		// Assert that the correct event was deposited
 		System::assert_last_event(Event::SomethingStored { something: 42, who: 1 }.into());
 	});
