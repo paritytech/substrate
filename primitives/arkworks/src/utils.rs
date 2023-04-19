@@ -6,15 +6,16 @@ use ark_ec::{
 	twisted_edwards::TECurveConfig,
 	CurveConfig, VariableBaseMSM,
 };
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
-use ark_std::{io::Cursor, vec, vec::Vec};
+use ark_std::vec::Vec;
 use codec::{Decode, Encode};
 
 const HOST_CALL: ark_scale::Usage = ark_scale::HOST_CALL;
 type ArkScale<T> = ark_scale::ArkScale<T, HOST_CALL>;
 
-/// Compute a multi miller loop through arkworks
-pub fn multi_miller_loop_generic<Curve: Pairing>(g1: Vec<u8>, g2: Vec<u8>) -> Result<Vec<u8>, ()> {
+pub(crate) fn multi_miller_loop_generic<Curve: Pairing>(
+	g1: Vec<u8>,
+	g2: Vec<u8>,
+) -> Result<Vec<u8>, ()> {
 	let g1 =
 		<ArkScale<Vec<<Curve as Pairing>::G1Affine>> as Decode>::decode(&mut g1.clone().as_slice())
 			.map_err(|_| ())?;
@@ -28,8 +29,7 @@ pub fn multi_miller_loop_generic<Curve: Pairing>(g1: Vec<u8>, g2: Vec<u8>) -> Re
 	Ok(<ArkScale<<Curve as Pairing>::TargetField> as Encode>::encode(&result))
 }
 
-/// Compute a final exponentiation through arkworks
-pub fn final_exponentiation_generic<Curve: Pairing>(target: Vec<u8>) -> Result<Vec<u8>, ()> {
+pub(crate) fn final_exponentiation_generic<Curve: Pairing>(target: Vec<u8>) -> Result<Vec<u8>, ()> {
 	let target = <ArkScale<<Curve as Pairing>::TargetField> as Decode>::decode(
 		&mut target.clone().as_slice(),
 	)
@@ -41,8 +41,7 @@ pub fn final_exponentiation_generic<Curve: Pairing>(target: Vec<u8>) -> Result<V
 	Ok(<ArkScale<PairingOutput<Curve>> as Encode>::encode(&result))
 }
 
-/// Compute a multi scalar multiplication for short_weierstrass through arkworks
-pub fn msm_sw_generic<Curve: SWCurveConfig>(
+pub(crate) fn msm_sw_generic<Curve: SWCurveConfig>(
 	bases: Vec<u8>,
 	scalars: Vec<u8>,
 ) -> Result<Vec<u8>, ()> {
@@ -63,8 +62,7 @@ pub fn msm_sw_generic<Curve: SWCurveConfig>(
 	Ok(<ArkScale<short_weierstrass::Projective<Curve>> as Encode>::encode(&result))
 }
 
-/// Compute a multi scalar mulitplication for twisted_edwards through arkworks
-pub fn msm_te_generic<Curve: TECurveConfig>(
+pub(crate) fn msm_te_generic<Curve: TECurveConfig>(
 	bases: Vec<u8>,
 	scalars: Vec<u8>,
 ) -> Result<Vec<u8>, ()> {
@@ -84,8 +82,7 @@ pub fn msm_te_generic<Curve: TECurveConfig>(
 	Ok(<ArkScale<twisted_edwards::Projective<Curve>> as Encode>::encode(&result))
 }
 
-/// Compute a projective scalar multiplication on G2 through arkworks
-pub fn mul_projective_generic<Group: SWCurveConfig>(
+pub(crate) fn mul_projective_generic<Group: SWCurveConfig>(
 	base: Vec<u8>,
 	scalar: Vec<u8>,
 ) -> Result<Vec<u8>, ()> {
@@ -102,8 +99,7 @@ pub fn mul_projective_generic<Group: SWCurveConfig>(
 	Ok(<ArkScale<short_weierstrass::Projective<Group>> as Encode>::encode(&result))
 }
 
-/// Compute a projective scalar multiplication for twisted_edwards through arkworks
-pub fn mul_projective_te_generic<Group: TECurveConfig>(
+pub(crate) fn mul_projective_te_generic<Group: TECurveConfig>(
 	base: Vec<u8>,
 	scalar: Vec<u8>,
 ) -> Result<Vec<u8>, ()> {
@@ -120,8 +116,7 @@ pub fn mul_projective_te_generic<Group: TECurveConfig>(
 	Ok(<ArkScale<twisted_edwards::Projective<Group>> as Encode>::encode(&result))
 }
 
-/// Compute a affine scalar multiplication through arkworks
-pub fn mul_affine_generic<Group: SWCurveConfig>(
+pub(crate) fn mul_affine_generic<Group: SWCurveConfig>(
 	base: Vec<u8>,
 	scalar: Vec<u8>,
 ) -> Result<Vec<u8>, ()> {
@@ -138,8 +133,7 @@ pub fn mul_affine_generic<Group: SWCurveConfig>(
 	Ok(<ArkScale<short_weierstrass::Projective<Group>> as Encode>::encode(&result))
 }
 
-/// Compute a scalar multiplication on G2 through arkworks
-pub fn mul_affine_te_generic<Group: TECurveConfig>(
+pub(crate) fn mul_affine_te_generic<Group: TECurveConfig>(
 	base: Vec<u8>,
 	scalar: Vec<u8>,
 ) -> Result<Vec<u8>, ()> {
