@@ -190,7 +190,6 @@ members = [
 	"primitives/consensus/grandpa",
 	"primitives/consensus/pow",
 	"primitives/consensus/slots",
-	"primitives/consensus/vrf",
 	"primitives/core",
 	"primitives/core/hashing",
 	"primitives/core/hashing/proc-macro",

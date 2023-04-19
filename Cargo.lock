@@ -5695,7 +5695,6 @@ dependencies = [
  "scale-info",
  "sp-application-crypto",
  "sp-consensus-babe",
- "sp-consensus-vrf",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -8594,7 +8593,6 @@ dependencies = [
  "fork-tree",
  "futures",
  "log",
- "merlin",
  "num-bigint",
  "num-rational",
  "num-traits",
@@ -8611,7 +8609,6 @@ dependencies = [
  "sc-network-test",
  "sc-telemetry",
  "scale-info",
- "schnorrkel",
  "sp-api",
  "sp-application-crypto",
  "sp-block-builder",
@@ -8619,7 +8616,6 @@ dependencies = [
  "sp-consensus",
  "sp-consensus-babe",
  "sp-consensus-slots",
- "sp-consensus-vrf",
  "sp-core",
  "sp-inherents",
  "sp-keyring",
@@ -10361,7 +10357,6 @@ name = "sp-consensus-babe"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "merlin",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -10369,7 +10364,6 @@ dependencies = [
  "sp-application-crypto",
  "sp-consensus",
  "sp-consensus-slots",
- "sp-consensus-vrf",
  "sp-core",
  "sp-inherents",
  "sp-keystore",
@@ -10435,18 +10429,6 @@ dependencies = [
  "serde",
  "sp-std",
  "sp-timestamp",
-]
-
-[[package]]
-name = "sp-consensus-vrf"
-version = "0.10.0-dev"
-dependencies = [
- "parity-scale-codec",
- "scale-info",
- "schnorrkel",
- "sp-core",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
@@ -10600,12 +10582,10 @@ name = "sp-keystore"
 version = "0.13.0"
 dependencies = [
  "futures",
- "merlin",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "schnorrkel",
  "serde",
  "sp-core",
  "sp-externalities",
