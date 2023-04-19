@@ -20,7 +20,7 @@ use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 use tempfile::tempdir;
 
-pub mod common;
+use substrate_cli_test_utils as common;
 
 #[tokio::test]
 #[cfg(unix)]

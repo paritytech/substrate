@@ -28,11 +28,8 @@ use rand::{rngs::OsRng, RngCore};
 #[cfg(feature = "std")]
 use regex::Regex;
 use scale_info::TypeInfo;
-/// Trait for accessing reference to `SecretString`.
-pub use secrecy::ExposeSecret;
-/// A store for sensitive data.
 #[cfg(feature = "std")]
-pub use secrecy::SecretString;
+pub use secrecy::{ExposeSecret, SecretString};
 use sp_runtime_interface::pass_by::PassByInner;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
@@ -1100,6 +1097,27 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 		res.0.copy_from_slice(&b[0..4]);
 		Ok(res)
 	}
+}
+
+/// Trait grouping types shared by a VRF signer and verifiers.
+pub trait VrfCrypto {
+	/// Associated signature type.
+	type VrfSignature;
+
+	/// Vrf input data. Generally some form of transcript.
+	type VrfInput;
+}
+
+/// VRF Signer.
+pub trait VrfSigner: VrfCrypto {
+	/// Sign input data.
+	fn vrf_sign(&self, data: &Self::VrfInput) -> Self::VrfSignature;
+}
+
+/// VRF Verifier.
+pub trait VrfVerifier: VrfCrypto {
+	/// Verify input data signature.
+	fn vrf_verify(&self, data: &Self::VrfInput, signature: &Self::VrfSignature) -> bool;
 }
 
 /// An identifier for a specific cryptographic algorithm used by a key pair

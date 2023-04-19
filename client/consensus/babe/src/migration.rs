@@ -18,7 +18,7 @@
 
 use crate::{
 	AuthorityId, BabeAuthorityWeight, BabeConfiguration, BabeEpochConfiguration, Epoch,
-	NextEpochDescriptor, VRF_OUTPUT_LENGTH,
+	NextEpochDescriptor, Randomness,
 };
 use codec::{Decode, Encode};
 use sc_consensus_epochs::Epoch as EpochT;
@@ -36,7 +36,7 @@ pub struct EpochV0 {
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch.
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	pub randomness: Randomness,
 }
 
 impl EpochT for EpochV0 {

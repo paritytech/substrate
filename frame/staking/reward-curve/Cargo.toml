@@ -16,9 +16,9 @@ proc-macro = true
 
 [dependencies]
 proc-macro-crate = "1.1.3"
-proc-macro2 = "1.0.37"
-quote = "1.0.10"
-syn = { version = "1.0.98", features = ["full", "visit"] }
+proc-macro2 = "1.0.56"
+quote = "1.0.26"
+syn = { version = "2.0.14", features = ["full", "visit"] }
 
 [dev-dependencies]
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }

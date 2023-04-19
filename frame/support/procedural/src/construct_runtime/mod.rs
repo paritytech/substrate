@@ -224,7 +224,7 @@ fn construct_runtime_final_expansion(
 	let system_pallet =
 		pallets.iter().find(|decl| decl.name == SYSTEM_PALLET_NAME).ok_or_else(|| {
 			syn::Error::new(
-				pallets_token.span,
+				pallets_token.span.join(),
 				"`System` pallet declaration is missing. \
 			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
 			)
@@ -268,6 +268,10 @@ fn construct_runtime_final_expansion(
 	let inherent =
 		expand::expand_outer_inherent(&name, &block, &unchecked_extrinsic, &pallets, &scrate);
 	let validate_unsigned = expand::expand_outer_validate_unsigned(&name, &pallets, &scrate);
+	let freeze_reason = expand::expand_outer_freeze_reason(&pallets, &scrate);
+	let hold_reason = expand::expand_outer_hold_reason(&pallets, &scrate);
+	let lock_id = expand::expand_outer_lock_id(&pallets, &scrate);
+	let slash_reason = expand::expand_outer_slash_reason(&pallets, &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
 	let static_assertions = decl_static_assertions(&name, &pallets, &scrate);
 
@@ -292,6 +296,31 @@ fn construct_runtime_final_expansion(
 			type RuntimeBlock = #block;
 		}
 
+		// Each runtime must expose the `runtime_metadata()` to fetch the runtime API metadata.
+		// The function is implemented by calling `impl_runtime_apis!`.
+		//
+		// However, the `construct_runtime!` may be called without calling `impl_runtime_apis!`.
+		// Rely on the `Deref` trait to differentiate between a runtime that implements
+		// APIs (by macro impl_runtime_apis!) and a runtime that is simply created (by macro construct_runtime!).
+		//
+		// Both `InternalConstructRuntime` and `InternalImplRuntimeApis` expose a `runtime_metadata()` function.
+		// `InternalConstructRuntime` is implemented by the `construct_runtime!` for Runtime references (`& Runtime`),
+		// while `InternalImplRuntimeApis` is implemented by the `impl_runtime_apis!` for Runtime (`Runtime`).
+		//
+		// Therefore, the `Deref` trait will resolve the `runtime_metadata` from `impl_runtime_apis!`
+		// when both macros are called; and will resolve an empty `runtime_metadata` when only the `construct_runtime!`
+		// is called.
+
+		#[doc(hidden)]
+		trait InternalConstructRuntime {
+			#[inline(always)]
+			fn runtime_metadata(&self) -> #scrate::sp_std::vec::Vec<#scrate::metadata_ir::RuntimeApiMetadataIR> {
+				Default::default()
+			}
+		}
+		#[doc(hidden)]
+		impl InternalConstructRuntime for &#name {}
+
 		#outer_event
 
 		#outer_origin
@@ -309,6 +338,14 @@ fn construct_runtime_final_expansion(
 		#inherent
 
 		#validate_unsigned
+
+		#freeze_reason
+
+		#hold_reason
+
+		#lock_id
+
+		#slash_reason
 
 		#integrity_test
 

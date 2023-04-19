@@ -61,15 +61,13 @@ impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
 
 	fn has_good_judgement(who: &AccountId) -> bool {
 		use pallet_identity::Judgement;
-		if let Some(judgements) =
-			crate::Identity::identity(who).map(|registration| registration.judgements)
-		{
-			judgements
-				.iter()
-				.any(|(_, j)| matches!(j, Judgement::KnownGood | Judgement::Reasonable))
-		} else {
-			false
-		}
+		crate::Identity::identity(who)
+			.map(|registration| registration.judgements)
+			.map_or(false, |judgements| {
+				judgements
+					.iter()
+					.any(|(_, j)| matches!(j, Judgement::KnownGood | Judgement::Reasonable))
+			})
 	}
 
 	fn super_account_id(who: &AccountId) -> Option<AccountId> {

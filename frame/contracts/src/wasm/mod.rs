@@ -370,13 +370,11 @@ mod tests {
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
-		BalanceOf, CodeHash, Error, Pallet as Contracts,
+		BalanceOf, CodeHash, Error, OldWeight, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
 	use frame_support::{
-		assert_err, assert_ok,
-		dispatch::DispatchResultWithPostInfo,
-		weights::{OldWeight, Weight},
+		assert_err, assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight,
 	};
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
@@ -436,6 +434,7 @@ mod tests {
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
 		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
+		sr25519_verify: RefCell<Vec<([u8; 64], Vec<u8>, [u8; 32])>>,
 		code_hashes: Vec<CodeHash<Test>>,
 	}
 
@@ -460,6 +459,7 @@ mod tests {
 				gas_meter: GasMeter::new(Weight::from_parts(10_000_000_000, 10 * 1024 * 1024)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
+				sr25519_verify: Default::default(),
 			}
 		}
 	}
@@ -613,6 +613,10 @@ mod tests {
 		) -> Result<[u8; 33], ()> {
 			self.ecdsa_recover.borrow_mut().push((*signature, *message_hash));
 			Ok([3; 33])
+		}
+		fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool {
+			self.sr25519_verify.borrow_mut().push((*signature, message.to_vec(), *pub_key));
+			true
 		}
 		fn contract_info(&mut self) -> &mut crate::ContractInfo<Self::T> {
 			unimplemented!()
@@ -1321,6 +1325,49 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn contract_sr25519() {
+		const CODE_SR25519: &str = r#"
+(module
+	(import "seal0" "sr25519_verify" (func $sr25519_verify (param i32 i32 i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(drop
+			(call $sr25519_verify
+				(i32.const 0) ;; Pointer to signature.
+				(i32.const 64) ;; Pointer to public key.
+				(i32.const 16) ;; message length.
+				(i32.const 96) ;; Pointer to message.
+			)
+		)
+	)
+	(func (export "deploy"))
+
+	;; Signature (64 bytes)
+	(data (i32.const 0)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+
+	;;  public key (32 bytes)
+	(data (i32.const 64)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+
+	;;  message. (16 bytes)
+	(data (i32.const 96)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+)
+"#;
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(&CODE_SR25519, vec![], &mut mock_ext));
+		assert_eq!(mock_ext.sr25519_verify.into_inner(), [([1; 64], [1; 16].to_vec(), [1; 32])]);
+	}
+
 	const CODE_GET_STORAGE: &str = r#"
 (module
 	(import "seal0" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32) (result i32)))
@@ -1632,11 +1679,22 @@ mod tests {
 
 		let output = execute(CODE_GAS_LEFT, vec![], &mut ext).unwrap();
 
-		let OldWeight(gas_left) = OldWeight::decode(&mut &*output.data).unwrap();
+		let gas_left = OldWeight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
 		// TODO: account for proof size weight
 		assert!(gas_left < gas_limit.ref_time(), "gas_left must be less than initial");
 		assert!(gas_left > actual_left.ref_time(), "gas_left must be greater than final");
+	}
+
+	/// Test that [`frame_support::weights::OldWeight`] en/decodes the same as our
+	/// [`crate::OldWeight`].
+	#[test]
+	fn old_weight_decode() {
+		#![allow(deprecated)]
+		let sp = frame_support::weights::OldWeight(42).encode();
+		let our = crate::OldWeight::decode(&mut &*sp).unwrap();
+
+		assert_eq!(our, 42);
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
