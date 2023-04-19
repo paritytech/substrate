@@ -561,7 +561,8 @@ mod tests {
 	fn data_provider_should_respect_target_limits() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given a reduced expectation of maximum electable targets
-			let new_bounds = crate::ElectionBoundsBuilder::default().targets_count(2.into()).build();
+			let new_bounds =
+				crate::ElectionBoundsBuilder::default().targets_count(2.into()).build();
 			ElectionsBounds::set(new_bounds);
 			// and a data provider that does not respect limits
 			DataProviderAllowBadData::set(true);

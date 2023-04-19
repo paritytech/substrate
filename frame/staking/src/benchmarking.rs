@@ -810,7 +810,8 @@ benchmarks! {
 
 		let num_voters = (v + n) as usize;
 	}: {
-		let voters = <Staking<T>>::get_npos_voters(DataProviderBounds::new_unbounded());
+		// default bounds are unbounded.
+		let voters = <Staking<T>>::get_npos_voters(DataProviderBounds::default());
 		assert_eq!(voters.len(), num_voters);
 	}
 
@@ -824,7 +825,8 @@ benchmarks! {
 			v, n, MaxNominationsOf::<T>::get() as usize, false, None
 		)?;
 	}: {
-		let targets = <Staking<T>>::get_npos_targets(DataProviderBounds::new_unbounded());
+		// default bounds are unbounded.
+		let targets = <Staking<T>>::get_npos_targets(DataProviderBounds::default());
 		assert_eq!(targets.len() as u32, v);
 	}
 

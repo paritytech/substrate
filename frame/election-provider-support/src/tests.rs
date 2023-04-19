@@ -452,4 +452,3 @@ fn index_assignments_generate_same_solution_as_plain_assignments() {
 
 	assert_eq!(solution, index_compact);
 }
-

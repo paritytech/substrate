@@ -145,7 +145,7 @@
 //!     impl<T: Config> ElectionProvider for GenericElectionProvider<T> {
 //!         fn ongoing() -> bool { false }
 //!         fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
-//!             Self::DataProvider::electable_targets(DataProviderBounds::new_unbounded())
+//!             Self::DataProvider::electable_targets(DataProviderBounds::default())
 //!                 .map_err(|_| "failed to elect")
 //!                 .map(|t| bounded_vec![(t[0], Support::default())])
 //!         }

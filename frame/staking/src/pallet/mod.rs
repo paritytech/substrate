@@ -1164,8 +1164,7 @@ pub mod pallet {
 
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(
-				targets.len() <=
-					T::NominationsQuota::get_quota(Self::weight_of(&stash).into()) as usize,
+				targets.len() <= T::NominationsQuota::get_quota(ledger.active) as usize,
 				Error::<T>::TooManyTargets
 			);
 

@@ -759,12 +759,12 @@ impl<T: Config> Pallet<T> {
 	pub fn get_npos_voters(bounds: DataProviderBounds) -> Vec<VoterOf<Self>> {
 		let mut voters_size_tracker: StaticTracker<Self> = StaticTracker::default();
 
-		let max_allowed_len = {
+		let final_predicted_len = {
 			let all_voter_count = T::VoterList::count();
 			bounds.count.unwrap_or(all_voter_count.into()).min(all_voter_count.into()).0
 		};
 
-		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len as usize);
+		let mut all_voters = Vec::<_>::with_capacity(final_predicted_len as usize);
 
 		// cache a few things.
 		let weight_of = Self::weight_of_fn();
@@ -775,8 +775,8 @@ impl<T: Config> Pallet<T> {
 		let mut min_active_stake = u64::MAX;
 
 		let mut sorted_voters = T::VoterList::iter();
-		while all_voters.len() < max_allowed_len as usize &&
-			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
+		while all_voters.len() < final_predicted_len as usize &&
+			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * final_predicted_len as u32)
 		{
 			let voter = match sorted_voters.next() {
 				Some(voter) => {
@@ -844,7 +844,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// all_voters should have not re-allocated.
-		debug_assert!(all_voters.capacity() == max_allowed_len as usize);
+		debug_assert!(all_voters.capacity() == final_predicted_len as usize);
 
 		Self::register_weight(T::WeightInfo::get_npos_voters(validators_taken, nominators_taken));
 
@@ -868,7 +868,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	pub fn get_npos_targets(target_bounds: DataProviderBounds) -> Vec<T::AccountId> {
-		let max_allowed_len = {
+		let final_predicted_len = {
 			let all_target_count = T::TargetList::count();
 			target_bounds
 				.count
@@ -877,12 +877,12 @@ impl<T: Config> Pallet<T> {
 				.0
 		};
 
-		let mut all_targets = Vec::<T::AccountId>::with_capacity(max_allowed_len as usize);
+		let mut all_targets = Vec::<T::AccountId>::with_capacity(final_predicted_len as usize);
 		let mut targets_seen = 0;
 
 		let mut targets_iter = T::TargetList::iter();
-		while all_targets.len() < max_allowed_len as usize &&
-			targets_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
+		while all_targets.len() < final_predicted_len as usize &&
+			targets_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * final_predicted_len as u32)
 		{
 			let target = match targets_iter.next() {
 				Some(target) => {

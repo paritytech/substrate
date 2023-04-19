@@ -130,18 +130,13 @@ impl Add for SizeBound {
 /// of the SCALE encoded result.
 ///
 /// `None` represents unlimited bounds in both `count` and `size` axis.
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Default, Debug, Eq, PartialEq)]
 pub struct DataProviderBounds {
 	pub count: Option<CountBound>,
 	pub size: Option<SizeBound>,
 }
 
 impl DataProviderBounds {
-	/// Constructor with unbounded data provider limits.
-	pub fn new_unbounded() -> Self {
-		DataProviderBounds { count: None, size: None }
-	}
-
 	///  Returns true if `given_count` exhausts `self.count`.
 	pub fn count_exhausted(self, given_count: CountBound) -> bool {
 		self.count.map_or(false, |count| given_count > count)
@@ -300,7 +295,7 @@ mod test {
 
 	#[test]
 	fn data_provider_bounds_unbounded() {
-		let bounds = DataProviderBounds::new_unbounded();
+		let bounds = DataProviderBounds::default();
 		assert!(!bounds.exhausted(None, None));
 		assert!(!bounds.exhausted(SizeBound(u32::MAX).into(), CountBound(u32::MAX).into()));
 	}
@@ -331,6 +326,35 @@ mod test {
 		// exhausts bounds.
 		assert!(bounds.targets.exhausted(None, CountBound(201).into()));
 		assert!(bounds.targets.exhausted(SizeBound(2_001).into(), None));
+	}
+
+	#[test]
+	fn data_provider_max_unbounded_works() {
+		let unbounded = DataProviderBounds::default();
+
+		// max of some bounds with unbounded data provider bounds will always return the defined
+		// bounds.
+		let bounds = DataProviderBounds { count: CountBound(5).into(), size: SizeBound(10).into() };
+		assert_eq!(unbounded.max(bounds), bounds);
+
+		let bounds = DataProviderBounds { count: None, size: SizeBound(10).into() };
+		assert_eq!(unbounded.max(bounds), bounds);
+
+		let bounds = DataProviderBounds { count: CountBound(5).into(), size: None };
+		assert_eq!(unbounded.max(bounds), bounds);
+	}
+
+	#[test]
+	fn data_provider_max_bounded_works() {
+		let bounds_one =
+			DataProviderBounds { count: CountBound(10).into(), size: SizeBound(100).into() };
+		let bounds_two =
+			DataProviderBounds { count: CountBound(100).into(), size: SizeBound(10).into() };
+		let max_bounds_expected =
+			DataProviderBounds { count: CountBound(10).into(), size: SizeBound(10).into() };
+
+		assert_eq!(bounds_one.max(bounds_two), max_bounds_expected);
+		assert_eq!(bounds_two.max(bounds_one), max_bounds_expected);
 	}
 
 	#[test]

@@ -1551,11 +1551,12 @@ impl<T: Config> Pallet<T> {
 		<QueuedSolution<T>>::take()
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|_| {
-				// calling `instant_elect` with unbounded data provider bounds means that the
-				// on-chain `T:Bounds` configs will *not* be overwritten.
+				// default data provider bounds are unbounded. calling `instant_elect` with
+				// unbounded data provider bounds means that the on-chain `T:Bounds` configs will
+				// *not* be overwritten.
 				T::Fallback::instant_elect(
-					DataProviderBounds::new_unbounded(),
-					DataProviderBounds::new_unbounded(),
+					DataProviderBounds::default(),
+					DataProviderBounds::default(),
 				)
 				.map_err(|fe| ElectionError::Fallback(fe))
 				.and_then(|supports| {

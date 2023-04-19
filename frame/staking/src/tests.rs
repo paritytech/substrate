@@ -4508,8 +4508,9 @@ mod election_data_provider {
 			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.add_staker(81, 80, 50, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.build_and_execute(|| {
+				// default bounds are unbounded.
 				assert_ok!(<Staking as ElectionDataProvider>::electing_voters(
-					DataProviderBounds::new_unbounded()
+					DataProviderBounds::default()
 				));
 				assert_eq!(MinimumActiveStake::<Test>::get(), 10);
 
@@ -4524,8 +4525,9 @@ mod election_data_provider {
 	#[test]
 	fn set_minimum_active_stake_zero_correct() {
 		ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+			// default bounds are unbounded.
 			assert_ok!(<Staking as ElectionDataProvider>::electing_voters(
-				DataProviderBounds::new_unbounded()
+				DataProviderBounds::default()
 			));
 			assert_eq!(MinimumActiveStake::<Test>::get(), 0);
 		});
@@ -4534,8 +4536,9 @@ mod election_data_provider {
 	#[test]
 	fn voters_include_self_vote() {
 		ExtBuilder::default().nominate(false).build_and_execute(|| {
+			// default bounds are unbounded.
 			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::electing_voters(
-				DataProviderBounds::new_unbounded()
+				DataProviderBounds::default()
 			)
 			.unwrap()
 			.into_iter()
@@ -4716,7 +4719,7 @@ mod election_data_provider {
 				// even through 61 has nomination quota of 2 at the time of the election, all the
 				// nominations (5) will be used.
 				assert_eq!(
-					Staking::electing_voters(DataProviderBounds::new_unbounded())
+					Staking::electing_voters(DataProviderBounds::default())
 						.unwrap()
 						.iter()
 						.map(|(stash, _, targets)| (*stash, targets.len()))
@@ -5228,7 +5231,8 @@ fn change_of_absolute_max_nominations() {
 				vec![(70, 3), (101, 2), (60, 1)]
 			);
 
-			let bounds = DataProviderBounds::new_unbounded();
+			// default bounds are unbounded.
+			let bounds = DataProviderBounds::default();
 
 			// 3 validators and 3 nominators
 			assert_eq!(Staking::electing_voters(bounds).unwrap().len(), 3 + 3);
@@ -5320,7 +5324,7 @@ fn nomination_quota_max_changes_decoding() {
 			// pre-condition.
 			assert_eq!(MaxNominationsOf::<Test>::get(), 16);
 
-			let unbonded_election = DataProviderBounds::new_unbounded();
+			let unbonded_election = DataProviderBounds::default();
 
 			assert_eq!(
 				Nominators::<Test>::iter()
