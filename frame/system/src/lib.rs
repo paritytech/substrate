@@ -1447,7 +1447,7 @@ impl<T: Config> Pallet<T> {
 	/// Should only be called if you know what you are doing and outside of the runtime block
 	/// execution else it can have a large impact on the PoV size of a block.
 	pub fn event_no_consensus(index: usize) -> Option<T::RuntimeEvent> {
-		Events::<T>::get().get(index).map(|e| e.event.clone())
+		Self::read_events_no_consensus().nth(index).map(|e| e.event.clone())
 	}
 
 	/// Get the current events deposited by the runtime.
