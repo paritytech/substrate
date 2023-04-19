@@ -221,7 +221,7 @@ fn motions_basic_environment_works() {
 
 #[test]
 fn proposal_weight_limit_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 
