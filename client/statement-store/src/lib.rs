@@ -516,13 +516,17 @@ impl Store {
 
 		// Perform periodic statement store maintenance
 		let worker_store = store.clone();
-		task_spawner.spawn("statement-store-notifications", Some("statement-store"), Box::pin(async move {
-			let mut interval = tokio::time::interval(MAINTENANCE_PERIOD);
-			loop {
-				interval.tick().await;
-				worker_store.maintain();
-			}
-		}));
+		task_spawner.spawn(
+			"statement-store-notifications",
+			Some("statement-store"),
+			Box::pin(async move {
+				let mut interval = tokio::time::interval(MAINTENANCE_PERIOD);
+				loop {
+					interval.tick().await;
+					worker_store.maintain();
+				}
+			}),
+		);
 
 		Ok(store)
 	}

@@ -234,7 +234,8 @@ pub fn new_partial(
 		client.clone(),
 		config.prometheus_registry(),
 		&task_manager.spawn_handle(),
-	).map_err(|e| ServiceError::Other(format!("Statement store error: {:?}", e)))?;
+	)
+	.map_err(|e| ServiceError::Other(format!("Statement store error: {:?}", e)))?;
 
 	let (rpc_extensions_builder, rpc_setup) = {
 		let (_, grandpa_link, _) = &import_setup;
@@ -349,16 +350,13 @@ pub fn new_full_base(
 	let statement_handler_proto = sc_network_statement::StatementHandlerPrototype::new(
 		config.protocol_id().clone(),
 		client
-		.block_hash(0u32.into())
-		.ok()
-		.flatten()
-		.expect("Genesis block exists; qed"),
+			.block_hash(0u32.into())
+			.ok()
+			.flatten()
+			.expect("Genesis block exists; qed"),
 		config.chain_spec.fork_id(),
 	);
-	config
-		.network
-		.extra_sets
-		.push(statement_handler_proto.set_config());
+	config.network.extra_sets.push(statement_handler_proto.set_config());
 
 	config
 		.network
