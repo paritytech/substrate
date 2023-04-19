@@ -150,6 +150,8 @@ pub mod pallet {
 		NoPermission,
 		/// The NFT does not exist.
 		NftDoesNotExist,
+		/// The NFT already has a royalty.
+		RoyaltyAlreadyExists,
 	}
 
 	#[pallet::call]
@@ -299,15 +301,24 @@ pub mod pallet {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
+
+			if let Some(check_origin) = maybe_check_origin {
+				ensure!(
+					T::Nfts::owner(&collection_id, &item_id) == Some(check_origin),
+					Error::<T>::NoPermission
+				);
+			}
 			let item_config = ItemConfig { settings: item_settings };
 			// TODO: Not sure how to check if an item exists
 			// Use Inspect Enumberable
-			// ensure!(T::Nfts::exists(&collection_id, &item_id), Error::<T>::NftDoesNotExist);
-			// What happens if `maybe_check_origin` is None? None means it is ForceOrigin
+			// ensure!(T::Nfts::items(&collection_id).find(|id| id == item_id), Error::<T>::NftDoesNotExist);
+
+			// Check whether the item has already a royalty, if so do not allow to set it again
 			ensure!(
-				T::Nfts::owner(&collection_id, &item_id) == maybe_check_origin,
-				Error::<T>::NoPermission
+				<NftWithRoyalty<T>>::get((collection_id, item_id)).is_none(),
+				Error::<T>::RoyaltyAlreadyExists
 			);
+
 			NftWithRoyalty::<T>::insert(
 				(collection_id, item_id),
 				RoyaltyDetails::<T::AccountId> {

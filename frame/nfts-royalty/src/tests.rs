@@ -21,7 +21,7 @@ use crate::{mock::*, Error, NftWithRoyalty};
 use frame_support::{assert_noop, assert_ok};
 use pallet_nfts::{
 	Account, CollectionAccount, CollectionConfig, CollectionSetting, CollectionSettings,
-	Error as NftErrors, ItemSettings, MintSettings,
+	Error as NftErrors, ItemSettings, MintSettings, ItemConfig
 };
 pub use sp_runtime::{DispatchError, ModuleError, Permill};
 
@@ -184,4 +184,32 @@ fn transfer_royalties_should_fail_if_not_royalties_recipient() {
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
 	});
+}
+
+#[test]
+fn set_item_with_royalty_should_work() {
+    new_test_ext().execute_with(|| {
+        create_collection();
+        assert_ok!(Nfts::force_mint(
+            RuntimeOrigin::signed(account(1)),
+            0,
+            43,
+            account(1),
+            ItemConfig { settings: ItemSettings::all_enabled() }
+        ));
+        // Make sure the item does not already exist in royalties pallet storage.
+        assert_eq!(NftWithRoyalty::<Test>::get((0, 43)), None);
+        assert_ok!(NftsRoyalty::set_item_with_royalty(
+            RuntimeOrigin::signed(account(1)),
+            0,
+            43,
+            ItemSettings::all_enabled(),
+            Permill::from_percent(5),
+            account(1)
+        ));
+        // Read royalties pallet storage.
+        let nft_with_royalty = NftWithRoyalty::<Test>::get((0, 43)).unwrap();
+        assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
+        assert_eq!(nft_with_royalty.royalty_recipient, account(1));
+    });
 }
