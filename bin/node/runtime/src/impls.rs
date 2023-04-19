@@ -64,9 +64,9 @@ impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
 		crate::Identity::identity(who)
 			.map(|registration| registration.judgements)
 			.map_or(false, |judgements| {
-				judgements.iter().any(|(_, j)| {
-					matches!(j, Judgement::KnownGood | Judgement::Reasonable)
-				})
+				judgements
+					.iter()
+					.any(|(_, j)| matches!(j, Judgement::KnownGood | Judgement::Reasonable))
 			})
 	}
 
