@@ -850,7 +850,7 @@ where
 					&frame.account_id,
 					frame.contract_info.get(&frame.account_id),
 				)?;
-			};
+			}
 
 			// Every non delegate call or instantiate also optionally transfers the balance.
 			self.initial_transfer()?;
