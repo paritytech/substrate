@@ -558,7 +558,7 @@ mod test {
 		);
 		let message = b"";
 		let signature =
-	hex!("d1e3013161991e142d8751017d4996209c2ff8a9ee160f373733eda3b4b785ba6edce9f45f87104bbe07aa6aa6eb278063a6dd84e71b6f9ff7da6cf9a0cf175395312bd947d71efff5732bbfd206530695a84b78aba871705f494933e68f1a23c03e4cf57870a2ac0181dbba503ac503"
+	hex!("d1e3013161991e142d8751017d4996209c2ff8a9ee160f373733eda3b4b785ba6edce9f45f87104bbe07aa6aa6eb2780aa705efb2c13d3b317d6409d159d23bdc7cdd5c2a832d1551cf49d811d49c901495e527dbd532e3a462335ce2686009104aba7bc11c5b22be78f3198d2727a0b"
 	);
 		let signature = Signature::unchecked_from(signature);
 		assert!(pair.sign(&message[..]) == signature);
@@ -581,15 +581,15 @@ mod test {
 		);
 		let message = b"";
 		let signature =
-	hex!("bbb395bbdee1a35930912034f5fde3b36df2835a0536c865501b0675776a1d5931a3bea2e66eff73b2546c6af2061a80c793682f8f4efe26350d5c754d690d76c4768a0387edec797164be22cda8541003ea83652abe05454470bbdc4de35f7903b03bba7839aceb897a13b128f38e0b"
+	hex!("bbb395bbdee1a35930912034f5fde3b36df2835a0536c865501b0675776a1d5931a3bea2e66eff73b2546c6af2061a8019223e4ebbbed661b2538e0f5823f2c708eb89c406beca8fcb53a5c13dbc7c0c42e4cf2be2942bba96ea29297915a06bd2b1b979c0e2ac8fd4ec684a6b5d110c"
 	);
 		let expected_signature = Signature::unchecked_from(signature);
 		println!("signature is {:?}", pair.sign(&message[..]));
 		let signature = pair.sign(&message[..]);
 		assert!(signature == expected_signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
-	}
-
+	
+}
 	#[test]
 	fn generated_pair_should_work() {
 		let (pair, _) = Pair::generate();
