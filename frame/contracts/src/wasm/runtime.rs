@@ -1756,6 +1756,7 @@ pub mod env {
 	/// and `false` indicates that the caller is a signed origin.
 	///
 	/// Returned value is a `u32`-encoded boolean: (`0 = false`, `1 = true`).
+	#[unstable]
 	fn caller_is_root(ctx: _, _memory: _) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::CallerIsRoot)?;
 		Ok(ctx.ext.caller_is_root() as u32)
