@@ -1852,13 +1852,94 @@ mod storage_key_generator {
 		expected_keys.sort();
 		expected_keys
 	}
+
+	pub fn expected_keys2() -> Vec<String> {
+		// hexstring -> keys mapping legend (some of them are twox_128 or blake2_256 hashed).
+		vec![
+			//System|:__STORAGE_VERSION__:
+			"00771836bebdd29870ff246d305c578c4e7b9012096b41c4eb3aaf947f6ea429",
+			//SubstrateTest|Authorities
+			"00771836bebdd29870ff246d305c578c5e0621c4869aa60c02be9adcc98a0d1d",
+			//Babe|:__STORAGE_VERSION__:
+			"1cb6f36e027abb2091cfb5110ab5087f4e7b9012096b41c4eb3aaf947f6ea429",
+			//Babe|Authorities
+			"1cb6f36e027abb2091cfb5110ab5087f5e0621c4869aa60c02be9adcc98a0d1d",
+			//Babe|SegmentIndex
+			"1cb6f36e027abb2091cfb5110ab5087f66e8f035c8adbe7f1547b43c51e6f8a4",
+			//Babe|NextAuthorities
+			"1cb6f36e027abb2091cfb5110ab5087faacf00b9b41fda7a9268821c2a2b3e4c",
+			//Babe|EpochConfig
+			"1cb6f36e027abb2091cfb5110ab5087fdc6b171b77304263c292cc3ea5ed31ef",
+			//System|:__STORAGE_VERSION__:
+			"26aa394eea5630e07c48ae0c9558cef74e7b9012096b41c4eb3aaf947f6ea429",
+			//System|UpgradedToU32RefCount
+			"26aa394eea5630e07c48ae0c9558cef75684a022a34dd8bfa2baaf44f172b710",
+			//System|ParentHash
+			"26aa394eea5630e07c48ae0c9558cef78a42f33323cb5ced3b44dd825fda9fcc",
+			//System::BlockHash|0
+			"26aa394eea5630e07c48ae0c9558cef7a44704b568d21667356a5a050c118746bb1bdbcacd6ac9340000000000000000",
+			//System|UpgradedToTripleRefCount
+			"26aa394eea5630e07c48ae0c9558cef7a7fd6c28836b9a28522dc924110cf439",
+
+			// System|Account|blake2_128Concat("//11")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da901cae4e3edfbb32c91ed3f01ab964f4eeeab50338d8e5176d3141802d7b010a55dadcd5f23cf8aaafa724627e967e90e",
+			// System|Account|blake2_128Concat("//4")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da91b614bd4a126f2d5d294e9a8af9da25248d7e931307afb4b68d8d565d4c66e00d856c6d65f5fed6bb82dcfb60e936c67",
+			// System|Account|blake2_128Concat("//7")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da94b21aff9fe1e8b2fc4b0775b8cbeff28ba8e2c7594dd74730f3ca835e95455d199261897edc9735d602ea29615e2b10b",
+			// System|Account|blake2_128Concat("//Bob")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da94f9aea1afa791265fae359272badc1cf8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48",
+			// System|Account|blake2_128Concat("//3")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da95786a2916fcb81e1bd5dcd81e0d2452884617f575372edb5a36d85c04cdf2e4699f96fe33eb5f94a28c041b88e398d0c",
+			// System|Account|blake2_128Concat("//14")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da95b8542d9672c7b7e779cc7c1e6b605691c2115d06120ea2bee32dd601d02f36367564e7ddf84ae2717ca3f097459652e",
+			// System|Account|blake2_128Concat("//6")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da996c30bdbfab640838e6b6d3c33ab4adb4211b79e34ee8072eab506edd4b93a7b85a14c9a05e5cdd056d98e7dbca87730",
+			// System|Account|blake2_128Concat("//9")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da99dc65b1339ec388fbf2ca0cdef51253512c6cfd663203ea16968594f24690338befd906856c4d2f4ef32dad578dba20c",
+			// System|Account|blake2_128Concat("//8")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da99e6eb5abd62f5fd54793da91a47e6af6125d57171ff9241f07acaa1bb6a6103517965cf2cd00e643b27e7599ebccba70",
+			// System|Account|blake2_128Concat("//Charlie")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9b0edae20838083f2cde1c4080db8cf8090b5ab205c6974c9ea841be688864633dc9ca8a357843eeacf2314649965fe22",
+			// System|Account|blake2_128Concat("//10")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9d0052993b6f3bd0544fd1f5e4125b9fbde3e789ecd53431fe5c06c12b72137153496dace35c695b5f4d7b41f7ed5763b",
+			// System|Account|blake2_128Concat("//1")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9d6b7e9a5f12bc571053265dade10d3b4b606fc73f57f03cdb4c932d475ab426043e429cecc2ffff0d2672b0df8398c48",
+			// System|Account|blake2_128Concat("//Alice")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9de1e86a9a8c739864cf3cc5ec2bea59fd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+			// System|Account|blake2_128Concat("//2")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9e1a35f56ee295d39287cbffcfc60c4b346f136b564e1fad55031404dd84e5cd3fa76bfe7cc7599b39d38fd06663bbc0a",
+			// System|Account|blake2_128Concat("//5")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9e2c1dc507e2035edbbd8776c440d870460c57f0008067cc01c5ff9eb2e2f9b3a94299a915a91198bd1021a6c55596f57",
+			// System|Account|blake2_128Concat("//0")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9eca0e653a94f4080f6311b4e7b6934eb2afba9278e30ccf6a6ceb3a8b6e336b70068f045c666f2e7f4f9cc5f47db8972",
+			// System|Account|blake2_128Concat("//13")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9ee8bf7ef90fc56a8aa3b90b344c599550c29b161e27ff8ba45bf6bad4711f326fc506a8803453a4d7e3158e993495f10",
+			// System|Account|blake2_128Concat("//12")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9f5d6f1c082fe63eec7a71fcad00f4a892e3d43b7b0d04e776e69e7be35247cecdac65504c579195731eaf64b7940966e",
+			// System|Account|blake2_128Concat("//15")
+			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9fbf0818841edf110e05228a6379763c4fc3c37459d9bdc61f58a5ebc01e9e2305a19d390c0543dc733861ec3cf1de01f",
+			// System|LastRuntimeUpgrade
+			"26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+			// :code
+			"3a636f6465",
+			// :extrinsic_index
+			"3a65787472696e7369635f696e646578",
+			// :heappages
+			"3a686561707061676573",
+			// Balances|:__STORAGE_VERSION__:
+			"c2261276cc9d1f8598ea4b6a74b15c2f4e7b9012096b41c4eb3aaf947f6ea429",
+			// Balances|TotalIssuance
+			"c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80",
+		].into_iter().map(String::from).collect::<Vec<_>>()
+	}
 }
 
 #[test]
 fn storage_keys_works() {
 	sp_tracing::try_init_simple();
 
-	let expected_keys = storage_key_generator::expected_keys();
+	let expected_keys = storage_key_generator::expected_keys2();
 
 	let client = substrate_test_runtime_client::new();
 	let block_hash = client.info().best_hash;
