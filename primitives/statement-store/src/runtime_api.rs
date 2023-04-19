@@ -118,11 +118,11 @@ pub enum SubmitResult {
 
 /// Export functions for the WASM host.
 #[cfg(feature = "std")]
-pub type HostFunctions = (io::HostFunctions,);
+pub type HostFunctions = (statement_store::HostFunctions,);
 
 /// Host interface
 #[runtime_interface]
-pub trait Io {
+pub trait StatementStore {
 	/// Submit a new new statement. The statement will be broadcast to the network.
 	/// This is meant to be used by the offchain worker.
 	fn submit_statement(&mut self, statement: Statement) -> SubmitResult {

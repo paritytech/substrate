@@ -208,7 +208,7 @@ where
 					};
 					statement.set_proof(proof);
 				}
-				sp_statement_store::runtime_api::io::submit_statement(statement);
+				sp_statement_store::runtime_api::statement_store::submit_statement(statement);
 			}
 		}
 	}
