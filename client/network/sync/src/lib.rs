@@ -2189,7 +2189,9 @@ where
 			.collect::<Vec<_>>();
 
 		for (id, request, response) in ready_responses {
-			self.pending_responses.remove(&id).expect("Peer was just iterated and exist; qed");
+			self.pending_responses
+				.remove(&id)
+				.expect("Peer was just iterated and exist; qed");
 
 			match response {
 				Ok(Ok(resp)) => match request {
