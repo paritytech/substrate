@@ -54,6 +54,7 @@ frame-election-provider-support = { version = "4.0.0-dev", default-features = fa
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
 frame-try-runtime = { version = "0.10.0-dev", default-features = false, path = "../../../frame/try-runtime", optional = true }
 pallet-alliance = { version = "4.0.0-dev", default-features = false, path = "../../../frame/alliance" }
+pallet-asset-rate = { version = "4.0.0-dev", default-features = false, path = "../../../frame/asset-rate" }
 pallet-assets = { version = "4.0.0-dev", default-features = false, path = "../../../frame/assets" }
 pallet-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/authority-discovery" }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../../../frame/authorship" }
@@ -204,8 +205,9 @@ std = [
 	"pallet-transaction-payment/std",
 	"pallet-transaction-storage/std",
 	"pallet-treasury/std",
-	"sp-statement-store/std",
+	"pallet-asset-rate/std",
 	"sp-transaction-pool/std",
+	"sp-statement-store/std",
 	"pallet-utility/std",
 	"sp-version/std",
 	"pallet-society/std",
@@ -276,6 +278,7 @@ runtime-benchmarks = [
 	"pallet-tips/runtime-benchmarks",
 	"pallet-transaction-storage/runtime-benchmarks",
 	"pallet-treasury/runtime-benchmarks",
+	"pallet-asset-rate/runtime-benchmarks",
 	"pallet-utility/runtime-benchmarks",
 	"pallet-uniques/runtime-benchmarks",
 	"pallet-nfts/runtime-benchmarks",
@@ -338,6 +341,7 @@ try-runtime = [
 	"pallet-timestamp/try-runtime",
 	"pallet-tips/try-runtime",
 	"pallet-treasury/try-runtime",
+	"pallet-asset-rate/try-runtime",
 	"pallet-utility/try-runtime",
 	"pallet-transaction-payment/try-runtime",
 	"pallet-asset-tx-payment/try-runtime",

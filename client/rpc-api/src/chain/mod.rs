@@ -29,7 +29,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[method(name = "chain_getHeader", blocking)]
 	fn header(&self, hash: Option<Hash>) -> RpcResult<Option<Header>>;
 
-	/// Get header and body of a relay chain block.
+	/// Get header and body of a block.
 	#[method(name = "chain_getBlock", blocking)]
 	fn block(&self, hash: Option<Hash>) -> RpcResult<Option<SignedBlock>>;
 
