@@ -105,8 +105,6 @@ node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 serde_json = "1.0.85"
 
-tokio = { version = "1.22.0", features = ["macros", "time", "parking_lot"] }
-
 [dev-dependencies]
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
 sc-client-db = { version = "0.10.0-dev", path = "../../../client/db" }

@@ -233,6 +233,7 @@ pub fn new_partial(
 		&config.data_path,
 		client.clone(),
 		config.prometheus_registry(),
+		&task_manager.spawn_handle(),
 	).map_err(|e| ServiceError::Other(format!("Statement store error: {:?}", e)))?;
 
 	let (rpc_extensions_builder, rpc_setup) = {
@@ -562,16 +563,6 @@ pub fn new_full_base(
 			grandpa::run_grandpa_voter(grandpa_config)?,
 		);
 	}
-
-	// Perform periodic statement store maintenance
-	let store = statement_store.clone();
-	task_manager.spawn_handle().spawn("statement-store-notifications", Some("statement-store"), async move {
-		let mut interval = tokio::time::interval(sc_statement_store::MAINTENANCE_PERIOD);
-		loop {
-			interval.tick().await;
-			store.maintain();
-		}
-	});
 
 	// Spawn statement protocol worker
 	let statement_protocol_executor = {

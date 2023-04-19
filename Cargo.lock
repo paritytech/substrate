@@ -9606,6 +9606,7 @@ dependencies = [
  "sp-tracing",
  "substrate-prometheus-endpoint",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

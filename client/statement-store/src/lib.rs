@@ -53,7 +53,7 @@ use parking_lot::RwLock;
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
-use sp_core::{hexdisplay::HexDisplay, Decode, Encode};
+use sp_core::{hexdisplay::HexDisplay, traits::SpawnNamed, Decode, Encode};
 use sp_runtime::traits::Block as BlockT;
 use sp_statement_store::{
 	runtime_api::{InvalidStatement, StatementSource, ValidStatement, ValidateStatement},
@@ -74,8 +74,7 @@ const PURGE_AFTER: u64 = 2 * 24 * 60 * 60; //48h
 const MAX_TOTAL_STATEMENTS: usize = 8192;
 const MAX_TOTAL_SIZE: usize = 64 * 1024 * 1024;
 
-/// Suggested maintenance period. A good value to call `Store::maintain` with.
-pub const MAINTENANCE_PERIOD: std::time::Duration = std::time::Duration::from_secs(30);
+const MAINTENANCE_PERIOD: std::time::Duration = std::time::Duration::from_secs(30);
 
 mod col {
 	pub const META: u8 = 0;
@@ -499,6 +498,7 @@ impl Store {
 		path: &std::path::Path,
 		client: Arc<Client>,
 		prometheus: Option<&PrometheusRegistry>,
+		task_spawner: &dyn SpawnNamed,
 	) -> Result<Arc<Store>>
 	where
 		Block: BlockT,
@@ -513,6 +513,17 @@ impl Store {
 	{
 		let store = Arc::new(Self::new(path, client.clone(), prometheus)?);
 		client.execution_extensions().register_statement_store(store.clone());
+
+		// Perform periodic statement store maintenance
+		let worker_store = store.clone();
+		task_spawner.spawn("statement-store-notifications", Some("statement-store"), Box::pin(async move {
+			let mut interval = tokio::time::interval(MAINTENANCE_PERIOD);
+			loop {
+				interval.tick().await;
+				worker_store.maintain();
+			}
+		}));
+
 		Ok(store)
 	}
 
