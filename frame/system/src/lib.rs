@@ -1690,8 +1690,10 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 		let is_default = account.data == T::AccountData::default();
 		let mut some_data = if is_default { None } else { Some(account.data) };
 		let result = f(&mut some_data)?;
-		if Self::providers(k) > 0 {
+		if Self::providers(k) > 0 || Self::sufficients(k) > 0 {
 			Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
+		} else {
+			Account::<T>::remove(k)
 		}
 		Ok(result)
 	}
