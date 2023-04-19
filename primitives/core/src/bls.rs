@@ -588,8 +588,7 @@ mod test {
 		let signature = pair.sign(&message[..]);
 		assert!(signature == expected_signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
-	
-}
+	}
 	#[test]
 	fn generated_pair_should_work() {
 		let (pair, _) = Pair::generate();
