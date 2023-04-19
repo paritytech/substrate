@@ -16,10 +16,9 @@
 // limitations under the License.
 
 //! Keystore traits
-pub mod testing;
-pub mod vrf;
 
-use crate::vrf::{VRFSignature, VRFTranscriptData};
+pub mod testing;
+
 use sp_core::{
 	bls381,
 	crypto::{ByteArray, CryptoTypeId, KeyTypeId},
@@ -89,8 +88,8 @@ pub trait Keystore: Send + Sync {
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript_data: VRFTranscriptData,
-	) -> Result<Option<VRFSignature>, Error>;
+		transcript: &sr25519::vrf::VrfTranscript,
+	) -> Result<Option<sr25519::vrf::VrfSignature>, Error>;
 
 	/// Returns all ed25519 public keys for the given key type.
 	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public>;
