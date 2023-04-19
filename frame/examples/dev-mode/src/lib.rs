@@ -24,6 +24,7 @@
 //! Run `cargo doc --package pallet-dev-mode --open` to view this pallet's documentation.
 //!
 //! **Dev mode is not meant to be used in production.**
+
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
