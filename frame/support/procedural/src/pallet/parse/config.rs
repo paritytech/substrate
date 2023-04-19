@@ -31,8 +31,6 @@ mod keyword {
 	syn::custom_keyword!(IsType);
 	syn::custom_keyword!(RuntimeEvent);
 	syn::custom_keyword!(Event);
-	syn::custom_keyword!(constant);
-	syn::custom_keyword!(no_default);
 	syn::custom_keyword!(frame_system);
 	syn::custom_keyword!(disable_frame_system_supertrait_check);
 }
