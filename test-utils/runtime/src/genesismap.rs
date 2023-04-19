@@ -18,7 +18,8 @@
 //! Tool for creating the genesis block.
 
 use super::{
-	substrate_test_pallet, wasm_binary_unwrap, AccountId, AuthorityId, Balance, GenesisConfig,
+	currency, substrate_test_pallet, wasm_binary_unwrap, AccountId, AuthorityId, Balance,
+	GenesisConfig,
 };
 use codec::{Encode, Joiner};
 use sc_service::construct_genesis_block;
@@ -38,6 +39,31 @@ pub struct GenesisStorageBuilder {
 	extra_storage: Storage,
 	wasm_code: Option<Vec<u8>>,
 }
+use sp_core::{sr25519, Pair};
+use sp_keyring::{AccountKeyring, Sr25519Keyring};
+
+impl Default for GenesisStorageBuilder {
+	/// Creates a builder with default settings for `substrate_test_runtime`.
+	fn default() -> Self {
+		Self::new(
+			vec![
+				sr25519::Public::from(Sr25519Keyring::Alice).into(),
+				sr25519::Public::from(Sr25519Keyring::Bob).into(),
+				sr25519::Public::from(Sr25519Keyring::Charlie).into(),
+			],
+			(0..16_usize)
+				.into_iter()
+				.map(|i| AccountKeyring::numeric(i).public())
+				.chain(vec![
+					AccountKeyring::Alice.into(),
+					AccountKeyring::Bob.into(),
+					AccountKeyring::Charlie.into(),
+				])
+				.collect(),
+			1000 * currency::DOLLARS,
+		)
+	}
+}
 
 impl GenesisStorageBuilder {
 	/// Creates a storage builder for genesis config. `substrage test runtime` `GenesisConfig` is
@@ -48,21 +74,30 @@ impl GenesisStorageBuilder {
 		authorities: Vec<AuthorityId>,
 		endowed_accounts: Vec<AccountId>,
 		balance: Balance,
-		heap_pages_override: Option<u64>,
-		extra_storage: Storage,
 	) -> Self {
 		GenesisStorageBuilder {
 			authorities,
 			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
-			heap_pages_override,
-			extra_storage,
+			heap_pages_override: None,
+			extra_storage: Default::default(),
 			wasm_code: None,
 		}
 	}
 
 	/// Override default wasm code to be placed into GenesisConfig.
-	pub fn with_wasm_code(&mut self, wasm_code: Vec<u8>) {
-		self.wasm_code = Some(wasm_code);
+	pub fn with_wasm_code(mut self, wasm_code: &Option<Vec<u8>>) -> Self {
+		self.wasm_code = wasm_code.clone();
+		self
+	}
+
+	pub fn with_heap_pages(mut self, heap_pages_override: Option<u64>) -> Self {
+		self.heap_pages_override = heap_pages_override;
+		self
+	}
+
+	pub fn with_extra_storage(mut self, storage: Storage) -> Self {
+		self.extra_storage = storage;
+		self
 	}
 
 	/// Builds the `GenesisConfig` and returns its storage.
@@ -80,17 +115,17 @@ impl GenesisStorageBuilder {
 			},
 			balances: pallet_balances::GenesisConfig { balances: self.balances.clone() },
 		};
+
 		let mut storage = genesis_config
 			.build_storage()
 			.expect("Build storage from substrate-test-runtime GenesisConfig");
 
-		let extras = std::iter::once((
+		storage.top.extend(std::iter::once((
 			well_known_keys::HEAP_PAGES.into(),
 			vec![].and(&(self.heap_pages_override.unwrap_or(16_u64))),
-		))
-		.chain(self.extra_storage.top.clone());
-		storage.top.extend(extras);
+		)));
 
+		storage.top.extend(self.extra_storage.top.clone());
 		storage.children_default.extend(self.extra_storage.children_default.clone());
 
 		storage

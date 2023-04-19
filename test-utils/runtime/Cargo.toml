@@ -62,6 +62,7 @@ sc-block-builder = { version = "0.10.0-dev", path = "../../client/block-builder"
 sc-executor = { version = "0.10.0-dev", path = "../../client/executor" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 substrate-test-runtime-client = { version = "2.0.0", path = "./client" }
+sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../utils/wasm-builder", optional = true }

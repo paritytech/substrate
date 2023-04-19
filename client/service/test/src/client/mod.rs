@@ -173,8 +173,6 @@ fn construct_genesis_should_work_with_native() {
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 		1000 * DOLLARS,
-		None,
-		Default::default(),
 	)
 	.build_storage();
 	let genesis_hash = insert_genesis_block(&mut storage);
@@ -206,8 +204,6 @@ fn construct_genesis_should_work_with_wasm() {
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 		1000 * DOLLARS,
-		None,
-		Default::default(),
 	)
 	.build_storage();
 	let genesis_hash = insert_genesis_block(&mut storage);

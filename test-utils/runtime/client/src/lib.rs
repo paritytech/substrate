@@ -30,11 +30,7 @@ pub use substrate_test_runtime as runtime;
 
 pub use self::block_builder_ext::BlockBuilderExt;
 
-use sp_core::{
-	sr25519,
-	storage::{ChildInfo, Storage, StorageChild},
-	Pair,
-};
+use sp_core::storage::{ChildInfo, Storage, StorageChild};
 use substrate_test_client::sc_executor::WasmExecutor;
 use substrate_test_runtime::genesismap::GenesisStorageBuilder;
 
@@ -102,31 +98,11 @@ impl GenesisParameters {
 
 impl GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> Storage {
-		let mut builder = GenesisStorageBuilder::new(
-			vec![
-				sr25519::Public::from(Sr25519Keyring::Alice).into(),
-				sr25519::Public::from(Sr25519Keyring::Bob).into(),
-				sr25519::Public::from(Sr25519Keyring::Charlie).into(),
-			],
-			(0..16_usize)
-				.into_iter()
-				.map(|i| AccountKeyring::numeric(i).public())
-				.chain(vec![
-					AccountKeyring::Alice.into(),
-					AccountKeyring::Bob.into(),
-					AccountKeyring::Charlie.into(),
-				])
-				.collect(),
-			1000 * runtime::currency::DOLLARS,
-			self.heap_pages_override,
-			self.extra_storage.clone(),
-		);
-
-		if let Some(ref wasm_code) = self.wasm_code {
-			builder.with_wasm_code(wasm_code.clone());
-		}
-
-		builder.build_storage()
+		GenesisStorageBuilder::default()
+			.with_heap_pages(self.heap_pages_override)
+			.with_wasm_code(&self.wasm_code)
+			.with_extra_storage(self.extra_storage.clone())
+			.build_storage()
 	}
 }
 

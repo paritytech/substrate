@@ -980,11 +980,15 @@ pub mod storage_key_generator {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use codec::Encode;
+	use frame_support::dispatch::DispatchInfo;
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_api::ProvideRuntimeApi;
 	use sp_consensus::BlockOrigin;
 	use sp_core::{storage::well_known_keys::HEAP_PAGES, ExecutionContext};
+	use sp_keyring::AccountKeyring;
+	use sp_runtime::{traits::SignedExtension, transaction_validity::InvalidTransaction};
 	use sp_state_machine::ExecutionStrategy;
 	use substrate_test_runtime_client::{
 		prelude::*, runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder,
@@ -1039,7 +1043,6 @@ mod tests {
 	}
 
 	fn witness_backend() -> (sp_trie::MemoryDB<crate::Hashing>, crate::Hash) {
-		use sp_trie::TrieMut;
 		let mut root = crate::Hash::default();
 		let mut mdb = sp_trie::MemoryDB::<crate::Hashing>::default();
 		{
@@ -1063,5 +1066,128 @@ mod tests {
 		let best_hash = client.chain_info().best_hash;
 
 		runtime_api.test_witness(best_hash, proof, root).unwrap();
+	}
+
+	pub fn new_test_ext() -> sp_io::TestExternalities {
+		genesismap::GenesisStorageBuilder::new(
+			vec![AccountKeyring::One.public().into(), AccountKeyring::Two.public().into()],
+			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
+			1000 * currency::DOLLARS,
+		)
+		.build_storage()
+		.into()
+	}
+
+	#[test]
+	fn validate_storage_keys() {
+		assert_eq!(
+			genesismap::GenesisStorageBuilder::default()
+				.build_storage()
+				.top
+				.keys()
+				.cloned()
+				.map(hex::encode)
+				.collect::<Vec<_>>(),
+			storage_key_generator::get_expected_keys()
+		);
+	}
+
+	#[test]
+	fn validate_unsigned_works() {
+		sp_tracing::try_init_simple();
+		new_test_ext().execute_with(|| {
+			assert_eq!(
+				<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+					TransactionSource::External,
+					&substrate_test_pallet::Call::bench_call { transfer: Default::default() },
+				),
+				InvalidTransaction::Call.into(),
+			);
+
+			assert_eq!(
+				<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+					TransactionSource::External,
+					&substrate_test_pallet::Call::include_data { data: vec![] },
+				),
+				InvalidTransaction::Call.into(),
+			);
+
+			assert_eq!(
+				<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+					TransactionSource::External,
+					&substrate_test_pallet::Call::fill_block { ratio: Perbill::from_percent(50) },
+				),
+				InvalidTransaction::Call.into(),
+			);
+
+			assert_eq!(
+				<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+					TransactionSource::External,
+					&substrate_test_pallet::Call::deposit_log_digest_item {
+						log: DigestItem::Other(vec![])
+					},
+				),
+				Ok(Default::default()),
+			);
+
+			assert_eq!(
+				<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+					TransactionSource::External,
+					&substrate_test_pallet::Call::storage_change { key: vec![], value: None },
+				),
+				Ok(Default::default()),
+			);
+
+			assert_eq!(
+				<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+					TransactionSource::External,
+					&substrate_test_pallet::Call::read { count: 0 },
+				),
+				Ok(Default::default()),
+			);
+
+			assert_eq!(
+				<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+					TransactionSource::External,
+					&substrate_test_pallet::Call::read_and_panic { count: 0 },
+				),
+				Ok(Default::default()),
+			);
+		});
+	}
+
+	#[test]
+	fn check_substrate_check_signed_extension_works() {
+		sp_tracing::try_init_simple();
+		new_test_ext().execute_with(|| {
+			let x = sp_keyring::AccountKeyring::Alice.into();
+			let info = DispatchInfo::default();
+			let len = 0_usize;
+			assert_eq!(
+				CheckSubstrateCall {}
+					.validate(
+						&x,
+						&ExtrinsicBuilder::new_call_with_priority(16).build().function,
+						&info,
+						len
+					)
+					.unwrap()
+					.priority,
+				16
+			);
+
+			assert_eq!(
+				CheckSubstrateCall {}
+					.validate(
+						&x,
+						&ExtrinsicBuilder::new_call_do_not_propagate().build().function,
+						&info,
+						len
+					)
+					.unwrap()
+					.propagate,
+				false
+			);
+		})
 	}
 }

@@ -22,6 +22,7 @@ use crate::{
 use codec::Encode;
 use frame_system::{CheckNonce, CheckWeight};
 use sp_core::crypto::Pair as TraitPair;
+use sp_keyring::AccountKeyring;
 use sp_runtime::{transaction_validity::TransactionPriority, Perbill};
 use sp_std::prelude::*;
 
@@ -38,6 +39,17 @@ impl Transfer {
 	/// Convert into a signed unchecked extrinsic.
 	pub fn into_unchecked_extrinsic(self) -> Extrinsic {
 		ExtrinsicBuilder::new_transfer(self).build()
+	}
+}
+
+impl Default for TransferData {
+	fn default() -> Self {
+		Self {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 0,
+			nonce: 0,
+		}
 	}
 }
 
@@ -68,11 +80,7 @@ pub struct ExtrinsicBuilder {
 impl ExtrinsicBuilder {
 	/// Create builder for given `RuntimeCall`. By default `Extrinsic` will be signed by `Alice`.
 	pub fn new(function: impl Into<RuntimeCall>) -> Self {
-		Self {
-			function: function.into(),
-			signer: Some(sp_keyring::AccountKeyring::Alice.pair()),
-			nonce: None,
-		}
+		Self { function: function.into(), signer: Some(AccountKeyring::Alice.pair()), nonce: None }
 	}
 
 	/// Create builder for given `RuntimeCall`. `Extrinsic` will be unsigned.
