@@ -60,6 +60,7 @@ impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
 	}
 
 	fn has_good_judgement(who: &AccountId) -> bool {
+		use pallet_identity::Judgement;
 		crate::Identity::identity(who)
 			.map(|registration| registration.judgements)
 			.map_or(false, |judgements| {
