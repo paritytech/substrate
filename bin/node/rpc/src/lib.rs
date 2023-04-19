@@ -88,6 +88,8 @@ pub struct FullDeps<C, P, SC, B> {
 	pub babe: BabeDeps,
 	/// GRANDPA specific dependencies.
 	pub grandpa: GrandpaDeps<B>,
+	/// Shared statement store reference.
+	pub statement_store: Arc<dyn sp_statement_store::StatementStore>,
 }
 
 /// Instantiate all Full RPC extensions.
@@ -120,12 +122,13 @@ where
 	use sc_consensus_grandpa_rpc::{Grandpa, GrandpaApiServer};
 	use sc_rpc::dev::{Dev, DevApiServer};
 	use sc_rpc_spec_v2::chain_spec::{ChainSpec, ChainSpecApiServer};
+	use sc_rpc::statement::StatementApiServer;
 	use sc_sync_state_rpc::{SyncState, SyncStateApiServer};
 	use substrate_frame_rpc_system::{System, SystemApiServer};
 	use substrate_state_trie_migration_rpc::{StateMigration, StateMigrationApiServer};
 
 	let mut io = RpcModule::new(());
-	let FullDeps { client, pool, select_chain, chain_spec, deny_unsafe, babe, grandpa } = deps;
+	let FullDeps { client, pool, select_chain, chain_spec, deny_unsafe, babe, grandpa, statement_store } = deps;
 
 	let BabeDeps { keystore, babe_worker_handle } = babe;
 	let GrandpaDeps {
@@ -169,6 +172,8 @@ where
 
 	io.merge(StateMigration::new(client.clone(), backend, deny_unsafe).into_rpc())?;
 	io.merge(Dev::new(client, deny_unsafe).into_rpc())?;
+	let statement_store = sc_rpc::statement::StatementStore::new(statement_store, deny_unsafe).into_rpc();
+	io.merge(statement_store)?;
 
 	Ok(io)
 }

@@ -85,7 +85,6 @@ pub use sc_network_transactions::config::{TransactionImport, TransactionImportFu
 pub use sc_rpc::{
 	RandomIntegerSubscriptionId, RandomStringSubscriptionId, RpcSubscriptionIdProvider,
 };
-pub use sc_statement_store::Store as StatementStore;
 pub use sc_tracing::TracingReceiver;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, TransactionPool};
@@ -141,8 +140,6 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	pub import_queue: ImportQueue,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TransactionPool>,
-	/// A shared statement store.
-	pub statement_store: Option<Arc<StatementStore>>,
 	/// Everything else that needs to be passed into the main build function.
 	pub other: Other,
 }

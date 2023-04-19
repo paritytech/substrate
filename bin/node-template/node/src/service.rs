@@ -133,7 +133,6 @@ pub fn new_partial(
 		keystore_container,
 		select_chain,
 		transaction_pool,
-		statement_store: None,
 		other: (grandpa_block_import, grandpa_link, telemetry),
 	})
 }
@@ -148,7 +147,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		keystore_container,
 		select_chain,
 		transaction_pool,
-		statement_store,
 		other: (block_import, grandpa_link, mut telemetry),
 	} = new_partial(&config)?;
 
@@ -172,7 +170,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			config: &config,
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
-			statement_store: statement_store.clone(),
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
 			block_announce_validator_builder: None,
@@ -212,7 +209,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		keystore: keystore_container.keystore(),
 		task_manager: &mut task_manager,
 		transaction_pool: transaction_pool.clone(),
-		statement_store: statement_store.clone(),
 		rpc_builder: rpc_extensions_builder,
 		backend,
 		system_rpc_tx,
