@@ -309,9 +309,11 @@ pub mod pallet {
 				);
 			}
 			let item_config = ItemConfig { settings: item_settings };
-			// TODO: Not sure how to check if an item exists
-			// Use Inspect Enumberable
-			// ensure!(T::Nfts::items(&collection_id).find(|id| id == item_id), Error::<T>::NftDoesNotExist);
+
+			ensure!(
+				T::Nfts::items(&collection_id).any(|id| id == item_id),
+				Error::<T>::NftDoesNotExist
+			);
 
 			// Check whether the item has already a royalty, if so do not allow to set it again
 			ensure!(
