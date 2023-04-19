@@ -17,9 +17,8 @@
 
 use super::helper;
 use frame_support_procedural_tools::get_doc_literals;
-use proc_macro2::Span;
 use quote::ToTokens;
-use syn::{spanned::Spanned, Attribute, TraitItem};
+use syn::{spanned::Spanned, token, Ident, Token};
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -28,6 +27,7 @@ mod keyword {
 	syn::custom_keyword!(T);
 	syn::custom_keyword!(I);
 	syn::custom_keyword!(config);
+	syn::custom_keyword!(pallet);
 	syn::custom_keyword!(IsType);
 	syn::custom_keyword!(RuntimeEvent);
 	syn::custom_keyword!(Event);
@@ -130,95 +130,20 @@ impl syn::parse::Parse for DisableFrameSystemSupertraitCheck {
 	}
 }
 
-/// Parse for `#[pallet::constant]`
-pub struct TypeAttrConst {
-	pound_token: syn::Token![#],
-	bracket_token: syn::token::Bracket,
-	pallet_ident: syn::Ident,
-	path_sep_token: syn::token::PathSep,
-	constant_keyword: keyword::constant,
+/// Parsing for `#[pallet::X]`
+#[derive(derive_syn_parse::Parse)]
+pub struct PalletAttr {
+	_pound: Token![#],
+	#[bracket]
+	_bracket: token::Bracket,
+	#[inside(_bracket)]
+	_pallet: keyword::pallet,
+	#[inside(_bracket)]
+	_sep: Token![::],
+	#[inside(_bracket)]
+	ident: Ident,
 }
 
-impl syn::parse::Parse for TypeAttrConst {
-	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-		let pound_token = input.parse::<syn::Token![#]>()?;
-		let content;
-		let bracket_token = syn::bracketed!(content in input);
-		let pallet_ident = content.parse::<syn::Ident>()?;
-		let path_sep_token = content.parse::<syn::Token![::]>()?;
-		let constant_keyword = content.parse::<keyword::constant>()?;
-
-		Ok(Self { pound_token, bracket_token, pallet_ident, path_sep_token, constant_keyword })
-	}
-}
-
-impl ToTokens for TypeAttrConst {
-	fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-		self.pound_token.to_tokens(tokens);
-		self.bracket_token.surround(tokens, |tokens| {
-			self.pallet_ident.to_tokens(tokens);
-			self.path_sep_token.to_tokens(tokens);
-			self.constant_keyword.to_tokens(tokens);
-		})
-	}
-}
-
-/// Parse for `#[pallet::no_default]`.
-pub struct TypeAttrNoDefault(proc_macro2::Span);
-
-impl Spanned for TypeAttrNoDefault {
-	fn span(&self) -> proc_macro2::Span {
-		self.0
-	}
-}
-
-impl syn::parse::Parse for TypeAttrNoDefault {
-	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-		input.parse::<syn::Token![#]>()?;
-		let content;
-		syn::bracketed!(content in input);
-		content.parse::<syn::Ident>()?;
-		content.parse::<syn::Token![::]>()?;
-
-		Ok(TypeAttrNoDefault(content.parse::<keyword::no_default>()?.span()))
-	}
-}
-
-pub enum TypeAttrNoDefaultOrConst {
-	NoDefault(TypeAttrNoDefault),
-	Const(TypeAttrConst),
-}
-
-impl Spanned for TypeAttrNoDefaultOrConst {
-	fn span(&self) -> proc_macro2::Span {
-		match self {
-			Self::Const(i) => i.0,
-			Self::NoDefault(i) => i.0,
-		}
-	}
-}
-
-impl syn::parse::Parse for TypeAttrNoDefaultOrConst {
-	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-		input.parse::<syn::Token![#]>()?;
-		let content;
-		syn::bracketed!(content in input);
-		content.parse::<syn::Ident>()?;
-		content.parse::<syn::Token![::]>()?;
-
-		Ok(if content.peek(keyword::no_default) {
-			TypeAttrNoDefaultOrConst::NoDefault(TypeAttrNoDefault(
-				content.parse::<keyword::no_default>()?.span(),
-			))
-		} else {
-			TypeAttrNoDefaultOrConst::Const(TypeAttrConst(
-				content.parse::<keyword::constant>()?.span(),
-			))
-		})
-	}
-}
-
-/// Parse for `$ident::Config`
 pub struct ConfigBoundParse(syn::Ident);
 
 impl syn::parse::Parse for ConfigBoundParse {
@@ -363,42 +288,6 @@ pub fn replace_self_by_t(input: proc_macro2::TokenStream) -> proc_macro2::TokenS
 		.collect()
 }
 
-/// Returns the number of non-trivial attributes attached to a [`syn::TraitItem`]. Returns `0`
-/// for edge cases such as [`TraitItem::Verbatim`]. Also returns an appropriate span for the
-/// first attribute, if applicable. This function ignores doc comments and `#[cfg(..)]`
-/// directives.
-fn get_num_pallet_trait_item_attrs_with_span(trait_item: &TraitItem) -> syn::Result<(usize, Span)> {
-	let attrs = match trait_item {
-		TraitItem::Const(trait_item_const) => &trait_item_const.attrs,
-		TraitItem::Method(trait_item_method) => &trait_item_method.attrs,
-		TraitItem::Type(trait_item_type) => &trait_item_type.attrs,
-		TraitItem::Macro(trait_item_macro) => &trait_item_macro.attrs,
-		_ => return Ok((0, trait_item.span())),
-	};
-	let mut without_docs: Vec<&Attribute> = Vec::new();
-	for attr in attrs {
-		if let Some(meta_ident) = attr.parse_meta()?.path().get_ident().cloned() {
-			if meta_ident == "doc" || meta_ident == "cfg" {
-				// ignore doc and cfg directives
-				continue
-			}
-		}
-		if let Some(seg) = attr.path.segments.first() {
-			if seg.ident != "pallet" {
-				// ignore attributes not starting with `#[pallet::`
-				continue
-			}
-		}
-		without_docs.push(attr);
-	}
-	let attrs = without_docs;
-	if let Some(attr) = attrs.first() {
-		Ok((attrs.len(), attr.span()))
-	} else {
-		Ok((0, trait_item.span()))
-	}
-}
-
 impl ConfigDef {
 	pub fn try_from(
 		frame_system: &syn::Ident,
@@ -450,42 +339,34 @@ impl ConfigDef {
 			let mut no_default = false;
 			has_event_type = has_event_type || is_event;
 
-			// TODO: lots of extra checking that needs to be done.. this is just POC
-			let mut process_attr = || {
-				let no_default_or_const: Option<TypeAttrNoDefaultOrConst> =
-					helper::take_first_item_pallet_attr(trait_item)?;
-				match no_default_or_const {
-					Some(TypeAttrNoDefaultOrConst::Const(_)) => match trait_item {
-						syn::TraitItem::Type(ref type_) => {
-							let constant = ConstMetadataDef::try_from(type_)?;
-							consts_metadata.push(constant);
-						},
-						_ => {
-							let msg =
-								"Invalid pallet::constant in pallet::config, expected type trait item";
-							return Err(syn::Error::new(trait_item.span(), msg))
-						},
-					},
-					Some(TypeAttrNoDefaultOrConst::NoDefault(_)) => {
-						no_default = true;
-					},
-					None => {},
+			for _ in 0..2 {
+				if let Ok(Some(pallet_attr)) =
+					helper::take_first_item_pallet_attr::<PalletAttr>(trait_item)
+				{
+					if pallet_attr.ident == "constant" {
+						match trait_item {
+							syn::TraitItem::Type(ref typ) => {
+								let constant = ConstMetadataDef::try_from(typ)?;
+								consts_metadata.push(constant);
+							},
+							_ => {
+								let msg =
+									"Invalid pallet::constant in pallet::config, expected type trait item";
+								return Err(syn::Error::new(trait_item.span(), msg))
+							},
+						}
+					} else if pallet_attr.ident == "no_default" {
+						no_default = true
+					} else {
+						return Err(syn::Error::new(
+							pallet_attr.ident.span(),
+							format!(
+								"Unsupported attribute `#[pallet::{}]` attached to a pallet config item",
+								pallet_attr.ident.to_string()
+							),
+						))
+					}
 				}
-				Ok(())
-			};
-
-			// process at most twice.
-			process_attr()?;
-			process_attr()?;
-
-			// ensure there are no more attrs on `trait_item` that haven't been consumed
-			let (num_remaining_attrs, attr_span) =
-				get_num_pallet_trait_item_attrs_with_span(trait_item)?;
-			if num_remaining_attrs > 0 {
-				return Err(syn::Error::new(
-					attr_span,
-					"Invalid attribute in pallet::config, a maximum of two attributes are expected",
-				))
 			}
 
 			if !no_default && !is_event && enable_default {

@@ -30,7 +30,7 @@ use syn::{parse2, parse_quote, Ident, ImplItem, ItemImpl, Path, Result};
 fn impl_item_ident(impl_item: &ImplItem) -> Option<Ident> {
 	match impl_item {
 		ImplItem::Const(item) => Some(item.ident.clone()),
-		ImplItem::Method(item) => Some(item.sig.ident.clone()),
+		ImplItem::Fn(item) => Some(item.sig.ident.clone()),
 		ImplItem::Type(item) => Some(item.ident.clone()),
 		ImplItem::Macro(item) => item.mac.path.get_ident().cloned(),
 		_ => None,

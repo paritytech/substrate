@@ -855,7 +855,7 @@ pub fn register_default_config(attrs: TokenStream, tokens: TokenStream) -> Token
 	syn::parse_macro_input!(trait_tokens as DefaultConfigTraitImpl);
 
 	// internally wrap macro_magic's `#[export_tokens]` macro
-	match macro_magic::mm_core::export_tokens_internal(attrs, tokens) {
+	match macro_magic::mm_core::export_tokens_internal(attrs, tokens, true) {
 		Ok(tokens) => tokens.into(),
 		Err(err) => err.to_compile_error().into(),
 	}
