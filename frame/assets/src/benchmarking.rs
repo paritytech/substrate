@@ -524,7 +524,7 @@ benchmarks_instance_pallet! {
 		assert!(T::Currency::reserved_balance(&new_account).is_zero());
 	}
 
-	refund_other {
+	refund_foreign {
 		let (asset_id, asset_owner, asset_owner_lookup) = create_default_asset::<T, I>(false);
 		let new_account: T::AccountId = account("newaccount", 1, SEED);
 		let new_account_lookup = T::Lookup::unlookup(new_account.clone());

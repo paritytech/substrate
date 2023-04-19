@@ -74,7 +74,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if depositor == who {
 				ExistenceReason::DepositHeld(deposit)
 			} else {
-				ExistenceReason::DepositFrom(depositor.clone(), deposit)
+				ExistenceReason::ForeignDeposit(depositor.clone(), deposit)
 			}
 		} else if d.is_sufficient {
 			frame_system::Pallet::<T>::inc_sufficients(who);
@@ -109,8 +109,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				frame_system::Pallet::<T>::dec_sufficients(who);
 			},
 			DepositRefunded => {},
-			DepositHeld(_) | DepositFrom(..) if !force => return Keep,
-			DepositHeld(_) | DepositFrom(..) => {},
+			DepositHeld(_) | ForeignDeposit(..) if !force => return Keep,
+			DepositHeld(_) | ForeignDeposit(..) => {},
 		}
 		d.accounts = d.accounts.saturating_sub(1);
 		Remove
@@ -138,7 +138,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 		let maybe_balance = Account::<T, I>::get(id, who)
 			.filter(|a| {
-				!(a.balance.is_zero() && matches!(a.reason, ExistenceReason::DepositFrom(..)))
+				!(a.balance.is_zero() && matches!(a.reason, ExistenceReason::ForeignDeposit(..)))
 			})
 			.map(|a| a.balance);
 		if let Some(balance) = maybe_balance {
@@ -339,25 +339,49 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Returns an account's existence reason deposit.
-	/// Destroys zero balance accounts and non-zero if `allow_burn` is true.
-	/// For the non-zero balance accounts with `DepositFrom` existence reason it returns the deposit
-	/// by updating the reason to a system reference.
-	pub(super) fn do_refund(
+	/// Returns a deposit or consumer reference, destroying an asset-account.
+	/// Non-zero balance accounts refunded and destroyed only if `allow_burn` is true.
+	pub(super) fn do_refund(id: T::AssetId, who: T::AccountId, allow_burn: bool) -> DispatchResult {
+		use AssetStatus::*;
+		use ExistenceReason::*;
+		let mut account = Account::<T, I>::get(id, &who).ok_or(Error::<T, I>::NoDeposit)?;
+		ensure!(matches!(account.reason, Consumer | DepositHeld(..)), Error::<T, I>::NoDeposit);
+		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(matches!(details.status, Live | Frozen), Error::<T, I>::IncorrectStatus);
+		ensure!(account.balance.is_zero() || allow_burn, Error::<T, I>::WouldBurn);
+		ensure!(!account.is_frozen, Error::<T, I>::Frozen);
+
+		if let Some(deposit) = account.reason.take_deposit() {
+			T::Currency::unreserve(&who, deposit);
+		}
+
+		if let Remove = Self::dead_account(&who, &mut details, &account.reason, false) {
+			Account::<T, I>::remove(id, &who);
+		} else {
+			debug_assert!(false, "refund did not result in dead account?!");
+			// deposit may have been refunded, need to update `Account`
+			Account::<T, I>::insert(id, &who, account);
+			return Ok(())
+		}
+		Asset::<T, I>::insert(&id, details);
+		// Executing a hook here is safe, since it is not in a `mutate`.
+		T::Freezer::died(id, &who);
+		Ok(())
+	}
+
+	/// Returns a foreign deposit of an account.
+	/// For a non-zero balance account with `ForeignDeposit` existence reason it returns the
+	/// deposit by updating the reason to a system reference.
+	pub(super) fn do_refund_foreign(
 		caller: &T::AccountId,
 		id: T::AssetId,
 		who: &T::AccountId,
-		allow_burn: bool,
 	) -> DispatchResult {
 		let mut account = Account::<T, I>::get(id, &who).ok_or(Error::<T, I>::NoDeposit)?;
 		let (depositor, deposit) =
-			account.reason.take_deposit(&who).ok_or(Error::<T, I>::NoDeposit)?;
+			account.reason.take_foreign_deposit().ok_or(Error::<T, I>::NoDeposit)?;
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-		ensure!(
-			account.balance.is_zero() || allow_burn || &depositor != who,
-			Error::<T, I>::WouldBurn
-		);
 		ensure!(!account.is_frozen, Error::<T, I>::Frozen);
 		ensure!(
 			caller == who || caller == &depositor || caller == &details.admin,
@@ -369,22 +393,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if Self::dead_account(&who, &mut details, &account.reason, false).ne(&Remove) {
 			debug_assert!(true, "refund did not result in dead account?!");
 			Account::<T, I>::insert(id, &who, account);
-			return Ok(());
+			return Ok(())
 		}
-
-		if !account.balance.is_zero() && &depositor != who {
-			// Should not fail as a possibility of a reference increment was checked by
-			// `can_increase`.
+		if !account.balance.is_zero() {
+			// not destroying the account, but updating the existence reason to `Consumer` or
+			// `Sufficient`. should not fail since a reference increment was checked by
+			// `can_increase` before updating balance from zero.
 			account.reason =
 				Self::new_account(who, &mut details, None).map_err(|_| Error::<T, I>::WouldBurn)?;
 			Account::<T, I>::insert(id, &who, account);
-		} else {
-			Account::<T, I>::remove(id, &who);
-			// Executing a hook here is safe, since it is not in a `mutate`.
-			T::Freezer::died(id, &who);
+			return Ok(())
 		}
+		Account::<T, I>::remove(id, &who);
 		Asset::<T, I>::insert(&id, details);
-		Ok(())
+		// Executing a hook here is safe, since it is not in a `mutate`.
+		T::Freezer::died(id, &who);
+		return Ok(())
 	}
 
 	/// Increases the asset `id` balance of `beneficiary` by `amount`.

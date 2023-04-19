@@ -81,7 +81,7 @@ pub trait WeightInfo {
 	fn set_min_balance() -> Weight;
 	fn touch() -> Weight;
 	fn refund() -> Weight;
-	fn refund_other() -> Weight;
+	fn refund_foreign() -> Weight;
 }
 
 /// Weights for pallet_assets using the Substrate node and recommended hardware.
@@ -504,7 +504,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: Assets Account (max_values: None, max_size: Some(135), added: 2610, mode: MaxEncodedLen)
 	/// Storage: Assets Asset (r:1 w:1)
 	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2685, mode: MaxEncodedLen)
-	fn refund_other() -> Weight {
+	fn refund_foreign() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `511`
 		//  Estimated: `7275`
@@ -932,7 +932,7 @@ impl WeightInfo for () {
 	/// Proof: Assets Account (max_values: None, max_size: Some(135), added: 2610, mode: MaxEncodedLen)
 	/// Storage: Assets Asset (r:1 w:1)
 	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2685, mode: MaxEncodedLen)
-	fn refund_other() -> Weight {
+	fn refund_foreign() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `511`
 		//  Estimated: `7275`

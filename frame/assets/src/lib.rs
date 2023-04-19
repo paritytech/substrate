@@ -84,7 +84,7 @@
 //! * `transfer_approved`: Transfer third-party's assets to another account.
 //! * `touch`: Create an asset account for non-provider assets. Caller must place a deposit.
 //! * `refund`: Return the deposit (if any) of the caller's asset account.
-//! * `refund_other`: Return the deposit (if any) of a specified asset account.
+//! * `refund_foreign`: Return the foreign deposit (if any) of a specified asset account.
 //!
 //! ### Permissioned Functions
 //!
@@ -1510,9 +1510,8 @@ pub mod pallet {
 			id: T::AssetIdParameter,
 			allow_burn: bool,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
-			Self::do_refund(&origin, id, &origin, allow_burn)
+			Self::do_refund(id, ensure_signed(origin)?, allow_burn)
 		}
 
 		/// Sets the minimum balance of an asset.
@@ -1598,15 +1597,15 @@ pub mod pallet {
 		///
 		/// Emits `Refunded` event when successful.
 		#[pallet::call_index(30)]
-		#[pallet::weight(T::WeightInfo::refund_other())]
-		pub fn refund_other(
+		#[pallet::weight(T::WeightInfo::refund_foreign())]
+		pub fn refund_foreign(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
 			who: T::AccountId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
-			Self::do_refund(&origin, id, &who, false)
+			Self::do_refund_foreign(&origin, id, &who)
 		}
 	}
 }
