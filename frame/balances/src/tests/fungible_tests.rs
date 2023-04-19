@@ -399,7 +399,7 @@ fn unholding_frees_hold_slot() {
 }
 
 #[test]
-fn poc_double_spending() {
+fn sufficients_work_properly_with_reference_counting() {
 	ExtBuilder::default()
 		.existential_deposit(1)
 		.monied(true)
