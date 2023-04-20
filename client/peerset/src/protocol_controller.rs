@@ -24,7 +24,7 @@
 // TODO: remove this line.
 #![allow(unused)]
 
-use futures::{channel::oneshot, FutureExt, StreamExt};
+use futures::{channel::oneshot, future::Either, FutureExt, StreamExt};
 use libp2p::PeerId;
 use log::{error, info, trace, warn};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
@@ -47,16 +47,23 @@ enum Action {
 	SetReservedPeers(HashSet<PeerId>),
 	SetReservedOnly(bool),
 	DisconnectPeer(PeerId),
+	GetReservedPeers(oneshot::Sender<Vec<PeerId>>),
+}
+
+#[derive(Debug)]
+enum Event {
 	IncomingConnection(PeerId, IncomingIndex),
 	Dropped(PeerId),
-	GetReservedPeers(oneshot::Sender<Vec<PeerId>>),
 }
 
 /// Shared handle to [`ProtocolController`]. Distributed around the code outside of the
 /// protocol implementation.
 #[derive(Debug, Clone)]
 pub struct ProtocolHandle {
-	to_controller: TracingUnboundedSender<Action>,
+	/// Actions from outer API.
+	actions_tx: TracingUnboundedSender<Action>,
+	/// Connection events from `Notifications`. We prioritize them over actions.
+	events_tx: TracingUnboundedSender<Event>,
 }
 
 impl ProtocolHandle {
@@ -68,48 +75,48 @@ impl ProtocolHandle {
 	/// > **Note**: Keep in mind that the networking has to know an address for this node,
 	/// > otherwise it will not be able to connect to it.
 	pub fn add_reserved_peer(&self, peer_id: PeerId) {
-		let _ = self.to_controller.unbounded_send(Action::AddReservedPeer(peer_id));
+		let _ = self.actions_tx.unbounded_send(Action::AddReservedPeer(peer_id));
 	}
 
 	/// Demotes reserved peer to non-reserved. Does not disconnect the peer.
 	///
 	/// Has no effect if the node was not a reserved peer.
 	pub fn remove_reserved_peer(&self, peer_id: PeerId) {
-		let _ = self.to_controller.unbounded_send(Action::RemoveReservedPeer(peer_id));
+		let _ = self.actions_tx.unbounded_send(Action::RemoveReservedPeer(peer_id));
 	}
 
 	/// Set reserved peers to the new set.
 	pub fn set_reserved_peers(&self, peer_ids: HashSet<PeerId>) {
-		let _ = self.to_controller.unbounded_send(Action::SetReservedPeers(peer_ids));
+		let _ = self.actions_tx.unbounded_send(Action::SetReservedPeers(peer_ids));
 	}
 
 	/// Sets whether or not [`ProtocolController`] only has connections with nodes marked
 	/// as reserved for the given set.
 	pub fn set_reserved_only(&self, reserved: bool) {
-		let _ = self.to_controller.unbounded_send(Action::SetReservedOnly(reserved));
+		let _ = self.actions_tx.unbounded_send(Action::SetReservedOnly(reserved));
 	}
 
 	/// Disconnect peer. You should remove the `PeerId` from the `PeerStore` first
 	/// to not connect to the peer again during the next slot allocation.
 	pub fn disconnect_peer(&self, peer_id: PeerId) {
-		let _ = self.to_controller.unbounded_send(Action::DisconnectPeer(peer_id));
+		let _ = self.actions_tx.unbounded_send(Action::DisconnectPeer(peer_id));
+	}
+
+	/// Get the list of reserved peers.
+	pub fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
+		let _ = self.actions_tx.unbounded_send(Action::GetReservedPeers(pending_response));
 	}
 
 	/// Notify about incoming connection. [`ProtocolController`] will either accept or reject it.
 	pub fn incoming_connection(&self, peer_id: PeerId, incoming_index: IncomingIndex) {
 		let _ = self
-			.to_controller
-			.unbounded_send(Action::IncomingConnection(peer_id, incoming_index));
+			.events_tx
+			.unbounded_send(Event::IncomingConnection(peer_id, incoming_index));
 	}
 
 	/// Notify that connection was dropped (either refused or disconnected).
 	pub fn dropped(&self, peer_id: PeerId) {
-		let _ = self.to_controller.unbounded_send(Action::Dropped(peer_id));
-	}
-
-	/// Get the list of reserved peers.
-	pub fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
-		let _ = self.to_controller.unbounded_send(Action::GetReservedPeers(pending_response));
+		let _ = self.events_tx.unbounded_send(Event::Dropped(peer_id));
 	}
 }
 
@@ -149,8 +156,10 @@ pub struct ProtocolController {
 	/// Set id to use when sending connect/drop requests to `Notifications`.
 	// Will likely be replaced by `ProtocolName` in the future.
 	set_id: SetId,
-	/// Receiver for messages from [`ProtocolHandle`].
-	from_handle: TracingUnboundedReceiver<Action>,
+	/// Receiver for outer API messages from [`ProtocolHandle`].
+	actions_rx: TracingUnboundedReceiver<Action>,
+	/// Receiver for connection events from `Notifications` sent via [`ProtocolHandle`].
+	events_rx: TracingUnboundedReceiver<Event>,
 	/// Number of occupied slots for incoming connections (not counting reserved nodes).
 	num_in: u32,
 	/// Number of occupied slots for outgoing connections (not counting reserved nodes).
@@ -182,13 +191,15 @@ impl ProtocolController {
 		to_notifications: TracingUnboundedSender<Message>,
 		peer_store: Box<dyn PeerReputationProvider>,
 	) -> (ProtocolHandle, ProtocolController) {
-		let (to_controller, from_handle) = tracing_unbounded("mpsc_protocol_controller", 10_000);
-		let handle = ProtocolHandle { to_controller };
+		let (actions_tx, actions_rx) = tracing_unbounded("mpsc_api_protocol", 10_000);
+		let (events_tx, events_rx) = tracing_unbounded("mpsc_notifications_protocol", 10_000);
+		let handle = ProtocolHandle { actions_tx, events_tx };
 		let reserved_nodes =
 			config.reserved_nodes.iter().map(|p| (*p, PeerState::NotConnected)).collect();
 		let controller = ProtocolController {
 			set_id,
-			from_handle,
+			actions_rx,
+			events_rx,
 			num_in: 0,
 			num_out: 0,
 			max_in: config.in_peers,
@@ -213,11 +224,23 @@ impl ProtocolController {
 	///
 	/// Intended for tests only. Use `run` for driving [`ProtocolController`].
 	pub async fn next_action(&mut self) -> bool {
-		let action = loop {
+		// Perform tasks prioritizing connection events processing.
+		let either = loop {
+			if let Some(event) = self.events_rx.next().now_or_never() {
+				match event {
+					None => return false,
+					Some(event) => break Either::Left(event),
+				}
+			}
+
 			let mut next_alloc_slots = Delay::new_at(self.next_periodic_alloc_slots).fuse();
 			futures::select! {
-				action = self.from_handle.next() => match action {
-					Some(action) => break action,
+				event = self.events_rx.next() => match event {
+					Some(event) => break Either::Left(event),
+					None => return false,
+				},
+				action = self.actions_rx.next() => match action {
+					Some(action) => break Either::Right(action),
 					None => return false,
 				},
 				_ = next_alloc_slots => {
@@ -227,29 +250,34 @@ impl ProtocolController {
 			}
 		};
 
+		match either {
+			Either::Left(event) => self.process_event(event),
+			Either::Right(action) => self.process_action(action),
+		}
+
+		true
+	}
+
+	/// Process connection event.
+	fn process_event(&mut self, event: Event) {
+		match event {
+			Event::IncomingConnection(peer_id, index) =>
+				self.on_incoming_connection(peer_id, index),
+			Event::Dropped(peer_id) => self.on_peer_dropped(peer_id),
+		}
+	}
+
+	/// Process action command.
+	fn process_action(&mut self, action: Action) {
 		match action {
 			Action::AddReservedPeer(peer_id) => self.on_add_reserved_peer(peer_id),
 			Action::RemoveReservedPeer(peer_id) => self.on_remove_reserved_peer(peer_id),
 			Action::SetReservedPeers(peer_ids) => self.on_set_reserved_peers(peer_ids),
 			Action::SetReservedOnly(reserved_only) => self.on_set_reserved_only(reserved_only),
 			Action::DisconnectPeer(peer_id) => self.on_disconnect_peer(peer_id),
-			Action::IncomingConnection(peer_id, index) =>
-				self.on_incoming_connection(peer_id, index),
-			Action::Dropped(peer_id) => self.on_peer_dropped(peer_id).unwrap_or_else(|peer_id| {
-				// We do not assert here, because due to asynchronous nature of communication
-				// between `ProtocolController` and `Notifications` we can receive `Action::Dropped`
-				// for a peer we already disconnected ourself.
-				warn!(
-					target: LOG_TARGET,
-					"Received `Action::Dropped` for not connected peer {} on {:?}.",
-					peer_id,
-					self.set_id,
-				)
-			}),
 			Action::GetReservedPeers(pending_response) =>
 				self.on_get_reserved_peers(pending_response),
 		}
-		true
 	}
 
 	/// Send "accept" message to `Notifications`.
@@ -490,8 +518,23 @@ impl ProtocolController {
 	}
 
 	/// Indicate that a connection with the peer was dropped.
+	fn on_peer_dropped(&mut self, peer_id: PeerId) {
+		self.on_peer_dropped_inner(peer_id).unwrap_or_else(|peer_id| {
+			// We do not assert here, because due to asynchronous nature of communication
+			// between `ProtocolController` and `Notifications` we can receive `Action::Dropped`
+			// for a peer we already disconnected ourself.
+			warn!(
+				target: LOG_TARGET,
+				"Received `Action::Dropped` for not connected peer {} on {:?}.",
+				peer_id,
+				self.set_id,
+			)
+		});
+	}
+
+	/// Indicate that a connection with the peer was dropped.
 	/// Returns `Err(PeerId)` if the peer wasn't connected or is not known to us.
-	fn on_peer_dropped(&mut self, peer_id: PeerId) -> Result<(), PeerId> {
+	fn on_peer_dropped_inner(&mut self, peer_id: PeerId) -> Result<(), PeerId> {
 		if self.drop_reserved_peer(&peer_id)? || self.drop_regular_peer(&peer_id) {
 			// The peer found and disconnected.
 			self.report_disconnect(peer_id);

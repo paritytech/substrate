@@ -31,14 +31,72 @@ use std::{
 	task::Poll,
 };
 
+/// Peer events as observed by `Notifications` (fuzz test).
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+enum Event {
+	/// Either API requested to disconnect from the peer, or the peer dropped.
+	Disconnected,
+	/// Incoming request.
+	Incoming,
+	/// Answer from PSM: accept.
+	PsmAccept,
+	/// Answer from PSM: reject.
+	PsmReject,
+	/// Command from PSM: connect.
+	PsmConnect,
+	/// Command from PSM: drop connection.
+	PsmDrop,
+}
+
 #[test]
 fn run() {
+	sp_tracing::try_init_simple();
+
 	for _ in 0..50 {
 		test_once();
 	}
 }
 
 fn test_once() {
+	// Allowed bigrams of peer events. Events marked by /*  */ are invalid, but can be safely
+	// dropped.
+	let allowed_events: HashMap<Event, HashSet<Event>> = [
+		(
+			Event::Disconnected,
+			[Event::Incoming, Event::PsmConnect, Event::PsmDrop /* synonymous */].into_iter().collect::<HashSet<_>>(),
+		),
+		(
+			Event::Incoming,
+			[Event::PsmAccept, Event::PsmReject, Event::PsmConnect, Event::PsmDrop /* must be ignored, will be obsoleted by the answer to `Incoming` */]
+				.into_iter()
+				.collect::<HashSet<_>>(),
+		),
+		(
+			Event::PsmAccept,
+			[Event::Disconnected, Event::PsmDrop].into_iter().collect::<HashSet<_>>(),
+		),
+		(
+			Event::PsmReject,
+			[Event::Disconnected, Event::Incoming, Event::PsmConnect]
+				.into_iter()
+				.collect::<HashSet<_>>(),
+		),
+		(
+			Event::PsmConnect,
+			[Event::Disconnected, Event::PsmAccept /* direction switch */, Event::PsmDrop]
+				.into_iter()
+				.collect::<HashSet<_>>(),
+		),
+		(
+			Event::PsmDrop,
+			[Event::Incoming, Event::PsmReject /* synonymous */, Event::PsmConnect]
+				.into_iter()
+				.collect::<HashSet<_>>(),
+		),
+	]
+	.into_iter()
+	.collect();
+
 	// PRNG to use.
 	let mut rng = rand::thread_rng();
 
@@ -49,28 +107,34 @@ fn test_once() {
 
 	let (mut peerset, peerset_handle) = Peerset::from_config(PeersetConfig {
 		sets: vec![SetConfig {
-			bootnodes: (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
-				.map(|_| {
-					let id = PeerId::random();
-					known_nodes.insert(id);
-					id
-				})
-				.collect(),
-			reserved_nodes: {
-				(0..Uniform::new_inclusive(0, 2).sample(&mut rng))
-					.map(|_| {
-						let id = PeerId::random();
-						known_nodes.insert(id);
-						reserved_nodes.insert(id);
-						id
-					})
-					.collect()
-			},
+			// bootnodes: (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
+			// 	.map(|_| {
+			// 		let id = PeerId::random();
+			// 		known_nodes.insert(id);
+			// 		id
+			// 	})
+			// 	.collect(),
+			// reserved_nodes: {
+			// 	(0..Uniform::new_inclusive(0, 2).sample(&mut rng))
+			// 		.map(|_| {
+			// 			let id = PeerId::random();
+			// 			known_nodes.insert(id);
+			// 			reserved_nodes.insert(id);
+			// 			id
+			// 		})
+			// 		.collect()
+			// },
+			bootnodes: Vec::new(),
+			reserved_nodes: HashSet::new(),
 			in_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
 			out_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
 			reserved_only: Uniform::new_inclusive(0, 10).sample(&mut rng) == 0,
 		}],
 	});
+
+	let new_id = PeerId::random();
+	known_nodes.insert(new_id);
+	peerset_handle.add_known_peer(new_id);
 
 	futures::executor::block_on(futures::future::poll_fn(move |cx| {
 		// List of nodes the user of `peerset` assumes it's connected to. Always a subset of
@@ -81,45 +145,71 @@ fn test_once() {
 		let mut incoming_nodes = HashMap::<IncomingIndex, PeerId>::new();
 		// Next id for incoming connections.
 		let mut next_incoming_id = IncomingIndex(0);
+		// Last event with the peer for bigram validation.
+		let mut events = HashMap::<PeerId, Event>::new();
 
 		// Perform a certain number of actions while checking that the state is consistent. If we
 		// reach the end of the loop, the run has succeeded.
-		for _ in 0..2500 {
+		for _ in 0..25000 {
+			// Peer we are working with.
+			let mut current_peer = None;
+			// Current event for event bigrams validation.
+			let mut current_event = None;
+
 			// Each of these weights corresponds to an action that we may perform.
 			let action_weights = [150, 90, 90, 30, 30, 1, 1, 4, 4];
 			match WeightedIndex::new(&action_weights).unwrap().sample(&mut rng) {
 				// If we generate 0, poll the peerset.
-				0 => loop {
-					match Stream::poll_next(Pin::new(&mut peerset), cx) {
-						Poll::Ready(Some(Message::Connect { peer_id, .. })) => {
-							if let Some(id) = incoming_nodes
-								.iter()
-								.find(|(_, v)| **v == peer_id)
-								.map(|(&id, _)| id)
-							{
-								incoming_nodes.remove(&id);
-							}
-							assert!(connected_nodes.insert(peer_id));
-						},
-						Poll::Ready(Some(Message::Drop { peer_id, .. })) => {
-							connected_nodes.remove(&peer_id);
-						},
-						Poll::Ready(Some(Message::Accept(n))) => {
-							assert!(connected_nodes.insert(incoming_nodes.remove(&n).unwrap()))
-						},
-						Poll::Ready(Some(Message::Reject(n))) => {
-							assert!(!connected_nodes.contains(&incoming_nodes.remove(&n).unwrap()))
-						},
-						Poll::Ready(None) => panic!(),
-						Poll::Pending => break,
-					}
+				0 => match Stream::poll_next(Pin::new(&mut peerset), cx) {
+					Poll::Ready(Some(Message::Connect { peer_id, .. })) => {
+						log::info!("PSM: connecting to peer {}", peer_id);
+						if let Some(id) = incoming_nodes
+							.iter()
+							.find(|(_, v)| **v == peer_id)
+							.map(|(&id, _)| id)
+						{
+							// incoming_nodes.remove(&id);
+							// Do not remove the incoming index for subsequent bigram validation.
+						}
+						assert!(connected_nodes.insert(peer_id));
+
+						current_peer = Some(peer_id);
+						current_event = Some(Event::PsmConnect);
+					},
+					Poll::Ready(Some(Message::Drop { peer_id, .. })) => {
+						log::info!("PSM: dropping peer {}", peer_id);
+						connected_nodes.remove(&peer_id);
+
+						current_peer = Some(peer_id);
+						current_event = Some(Event::PsmDrop);
+					},
+					Poll::Ready(Some(Message::Accept(n))) => {
+						log::info!("PSM: accepting index {}", n.0);
+
+						let peer_id = incoming_nodes.remove(&n).unwrap();
+						assert!(connected_nodes.insert(peer_id));
+
+						current_peer = Some(peer_id);
+						current_event = Some(Event::PsmAccept);
+					},
+					Poll::Ready(Some(Message::Reject(n))) => {
+						log::info!("PSM: rejecting index {}", n.0);
+
+						let peer_id = incoming_nodes.remove(&n).unwrap();
+						assert!(!connected_nodes.contains(&peer_id));
+
+						current_peer = Some(peer_id);
+						current_event = Some(Event::PsmReject);
+					},
+					Poll::Ready(None) => panic!(),
+					Poll::Pending => {},
 				},
 
 				// If we generate 1, discover a new node.
 				1 => {
-					let new_id = PeerId::random();
-					known_nodes.insert(new_id);
-					peerset_handle.add_known_peer(new_id);
+					// let new_id = PeerId::random();
+					// known_nodes.insert(new_id);
+					// peerset_handle.add_known_peer(new_id);
 				},
 
 				// If we generate 2, adjust a random reputation.
@@ -132,8 +222,12 @@ fn test_once() {
 				// If we generate 3, disconnect from a random node.
 				3 =>
 					if let Some(id) = connected_nodes.iter().choose(&mut rng).cloned() {
+						log::info!("Disconnected from {}", id);
 						connected_nodes.remove(&id);
 						peerset.dropped(SetId::from(0), id, DropReason::Unknown);
+
+						current_peer = Some(id);
+						current_event = Some(Event::Disconnected);
 					},
 
 				// If we generate 4, connect to a random node.
@@ -146,33 +240,56 @@ fn test_once() {
 						})
 						.choose(&mut rng)
 					{
+						log::info!("Incoming connection from {}, index {}", id, next_incoming_id.0);
 						peerset.incoming(SetId::from(0), *id, next_incoming_id);
 						incoming_nodes.insert(next_incoming_id, *id);
 						next_incoming_id.0 += 1;
+
+						current_peer = Some(*id);
+						current_event = Some(Event::Incoming);
 					}
 				},
 
 				// 5 and 6 are the reserved-only mode.
-				5 => peerset_handle.set_reserved_only(SetId::from(0), true),
-				6 => peerset_handle.set_reserved_only(SetId::from(0), false),
+				5 => {
+					log::info!("Set reserved only");
+					peerset_handle.set_reserved_only(SetId::from(0), true);
+				},
+				6 => {
+					log::info!("Unset reserved only");
+					peerset_handle.set_reserved_only(SetId::from(0), false);
+				},
 
 				// 7 and 8 are about switching a random node in or out of reserved mode.
 				7 => {
 					if let Some(id) =
 						known_nodes.iter().filter(|n| !reserved_nodes.contains(*n)).choose(&mut rng)
 					{
+						log::info!("Add reserved: {}", id);
 						peerset_handle.add_reserved_peer(SetId::from(0), *id);
 						reserved_nodes.insert(*id);
 					}
 				},
 				8 =>
 					if let Some(id) = reserved_nodes.iter().choose(&mut rng).cloned() {
+						log::info!("Remove reserved: {}", id);
 						reserved_nodes.remove(&id);
 						peerset_handle.remove_reserved_peer(SetId::from(0), id);
 					},
 
 				_ => unreachable!(),
 			}
+
+			// Validate event bigrams.
+			if let Some(peer_id) = current_peer {
+				let event = current_event.unwrap();
+				if let Some(last_event) = events.insert(peer_id, event) {
+					if !allowed_events.get(&last_event).unwrap().contains(&event) {
+						panic!("Invalid event bigram: {:?} -> {:?}", last_event, event);
+					}
+				}
+			}
+
 		}
 
 		Poll::Ready(())

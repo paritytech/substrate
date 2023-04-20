@@ -9291,6 +9291,7 @@ dependencies = [
  "sc-utils",
  "serde_json",
  "sp-arithmetic",
+ "sp-tracing",
  "wasm-timer",
 ]
 

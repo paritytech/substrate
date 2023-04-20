@@ -24,5 +24,6 @@ sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-arithmetic = { version = "6.0.0", path = "../../primitives/arithmetic" }
 
 [dev-dependencies]
+sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 mockall = "0.11.3"
 rand = "0.8.5"
