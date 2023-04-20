@@ -32,7 +32,7 @@ pub struct WarpProofRequest<B: BlockT> {
 
 /// The different types of warp syncing.
 pub enum WarpSyncParams<Block: BlockT> {
-	/// Standard warp sync for the relay chain
+	/// Standard warp sync for the chain.
 	WithProvider(Arc<dyn WarpSyncProvider<Block>>),
 	/// Skip downloading proofs and wait for a header of the state that should be downloaded.
 	///
@@ -48,7 +48,7 @@ pub enum VerificationResult<Block: BlockT> {
 	Complete(SetId, AuthorityList, Block::Header),
 }
 
-/// Warp sync backend. Handles retrieveing and verifying warp sync proofs.
+/// Warp sync backend. Handles retrieving and verifying warp sync proofs.
 pub trait WarpSyncProvider<Block: BlockT>: Send + Sync {
 	/// Generate proof starting at given block hash. The proof is accumulated until maximum proof
 	/// size is reached.

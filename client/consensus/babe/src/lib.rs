@@ -86,7 +86,6 @@ use futures::{
 use log::{debug, info, log, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
-use schnorrkel::SignatureError;
 
 use sc_client_api::{
 	backend::AuxStore, AuxDataOperations, Backend as BackendT, FinalityNotification,
@@ -134,7 +133,7 @@ pub use sp_consensus_babe::{
 		PrimaryPreDigest, SecondaryPlainPreDigest,
 	},
 	AuthorityId, AuthorityPair, AuthoritySignature, BabeApi, BabeAuthorityWeight, BabeBlockWeight,
-	BabeConfiguration, BabeEpochConfiguration, ConsensusLog, BABE_ENGINE_ID, VRF_OUTPUT_LENGTH,
+	BabeConfiguration, BabeEpochConfiguration, ConsensusLog, Randomness, BABE_ENGINE_ID,
 };
 
 pub use aux_schema::load_block_weight as block_weight;
@@ -149,6 +148,12 @@ mod tests;
 
 const LOG_TARGET: &str = "babe";
 
+/// VRF context used for slots claiming lottery.
+const AUTHORING_SCORE_VRF_CONTEXT: &[u8] = b"substrate-babe-vrf";
+
+/// VRF output length for slots claiming lottery.
+const AUTHORING_SCORE_LENGTH: usize = 16;
+
 /// BABE epoch information
 #[derive(Decode, Encode, PartialEq, Eq, Clone, Debug, scale_info::TypeInfo)]
 pub struct Epoch {
@@ -161,7 +166,7 @@ pub struct Epoch {
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch.
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	pub randomness: Randomness,
 	/// Configuration of the epoch.
 	pub config: BabeEpochConfiguration,
 }
@@ -308,12 +313,12 @@ pub enum Error<B: BlockT> {
 	/// No secondary author expected.
 	#[error("No secondary author expected.")]
 	NoSecondaryAuthorExpected,
-	/// VRF verification of block by author failed
-	#[error("VRF verification of block by author {0:?} failed: threshold {1} exceeded")]
-	VRFVerificationOfBlockFailed(AuthorityId, u128),
 	/// VRF verification failed
-	#[error("VRF verification failed: {0:?}")]
-	VRFVerificationFailed(SignatureError),
+	#[error("VRF verification failed")]
+	VrfVerificationFailed,
+	/// Primary slot threshold too low
+	#[error("VRF output rejected, threshold {0} exceeded")]
+	VrfThresholdExceeded(u128),
 	/// Could not fetch parent header
 	#[error("Could not fetch parent header: {0}")]
 	FetchParentHeader(sp_blockchain::Error),
