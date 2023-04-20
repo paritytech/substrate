@@ -148,6 +148,7 @@ impl logger::Config for Test {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
+	type WeightInfo = ();
 }
 
 // New types for dispatchable functions.
