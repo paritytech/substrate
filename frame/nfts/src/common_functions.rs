@@ -18,6 +18,7 @@
 //! Various pieces of common functionality.
 
 use crate::*;
+use frame_support::pallet_prelude::*;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Get the owner of the item, if the item exists.
@@ -28,6 +29,30 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Get the owner of the collection, if the collection exists.
 	pub fn collection_owner(collection: T::CollectionId) -> Option<T::AccountId> {
 		Collection::<T, I>::get(collection).map(|i| i.owner)
+	}
+
+	/// Validate the `data` was signed by `signer` and the `signature` is correct.
+	pub fn validate_signature(
+		data: &Vec<u8>,
+		signature: &T::OffchainSignature,
+		signer: &T::AccountId,
+	) -> DispatchResult {
+		if signature.verify(&**data, &signer) {
+			return Ok(())
+		}
+
+		// NOTE: for security reasons modern UIs implicitly wrap the data requested to sign into
+		// <Bytes></Bytes>, that's why we support both wrapped and raw versions.
+		let prefix = b"<Bytes>";
+		let suffix = b"</Bytes>";
+		let mut wrapped: Vec<u8> = Vec::with_capacity(data.len() + prefix.len() + suffix.len());
+		wrapped.extend(prefix);
+		wrapped.extend(data);
+		wrapped.extend(suffix);
+
+		ensure!(signature.verify(&*wrapped, &signer), Error::<T, I>::WrongSignature);
+
+		Ok(())
 	}
 
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
