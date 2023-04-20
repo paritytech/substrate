@@ -23,7 +23,10 @@
 use crate::crypto::Ss58Codec;
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError};
-use bandersnatch_vrfs::{CanonicalSerialize, PublicKey, SecretKey, ThinVrfSignature};
+use bandersnatch_vrfs::{
+	CanonicalDeserialize, CanonicalSerialize, IntoVrfInput, Message, PublicKey, SecretKey,
+	ThinVrfSignature, Transcript, VrfInput,
+};
 #[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
 
@@ -69,12 +72,6 @@ impl UncheckedFrom<[u8; PUBLIC_SERIALIZED_LEN]> for Public {
 	}
 }
 
-// impl AsRef<[u8; PUBLIC_SERIALIZED_LEN]> for Public {
-// 	fn as_ref(&self) -> &[u8; PUBLIC_SERIALIZED_LEN] {
-// 		&self.0
-// 	}
-// }
-
 impl AsRef<[u8]> for Public {
 	fn as_ref(&self) -> &[u8] {
 		&self.0[..]
@@ -87,13 +84,13 @@ impl AsMut<[u8]> for Public {
 	}
 }
 
-impl Deref for Public {
-	type Target = [u8];
+// impl Deref for Public {
+// 	type Target = [u8];
 
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
+// 	fn deref(&self) -> &Self::Target {
+// 		&self.0
+// 	}
+// }
 
 impl TryFrom<&[u8]> for Public {
 	type Error = ();
@@ -192,13 +189,13 @@ impl Derive for Public {}
 /// DAVXY TODO: DOCS
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(Encode, Decode, PartialEq, Eq, PassByInner, MaxEncodedLen, TypeInfo)]
-pub struct Signature(pub [u8; SIGNATURE_SERIALIZED_LEN]);
+pub struct Signature([u8; SIGNATURE_SERIALIZED_LEN]);
 
-// impl AsRef<[u8; 64]> for Signature {
-// 	fn as_ref(&self) -> &[u8; 64] {
-// 		&self.0
-// 	}
-// }
+impl UncheckedFrom<[u8; SIGNATURE_SERIALIZED_LEN]> for Signature {
+	fn unchecked_from(raw: [u8; SIGNATURE_SERIALIZED_LEN]) -> Self {
+		Signature(raw)
+	}
+}
 
 impl AsRef<[u8]> for Signature {
 	fn as_ref(&self) -> &[u8] {
@@ -212,6 +209,23 @@ impl AsMut<[u8]> for Signature {
 	}
 }
 
+impl TryFrom<&[u8]> for Signature {
+	type Error = ();
+
+	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+		if data.len() != SIGNATURE_SERIALIZED_LEN {
+			return Err(())
+		}
+		let mut r = [0u8; SIGNATURE_SERIALIZED_LEN];
+		r.copy_from_slice(data);
+		Ok(Self::unchecked_from(r))
+	}
+}
+
+impl ByteArray for Signature {
+	const LEN: usize = SIGNATURE_SERIALIZED_LEN;
+}
+
 impl CryptoType for Signature {
 	#[cfg(feature = "full_crypto")]
 	type Pair = Pair;
@@ -220,8 +234,6 @@ impl CryptoType for Signature {
 /// The raw secret seed, which can be used to recreate the `Pair`.
 #[cfg(feature = "full_crypto")]
 type Seed = [u8; SEED_SERIALIZED_LEN];
-
-use bandersnatch_vrfs::Transcript;
 
 /// DAVXY TODO: DOCS
 #[cfg(feature = "full_crypto")]
@@ -282,7 +294,8 @@ impl TraitPair for Pair {
 	fn sign(&self, message: &[u8]) -> Signature {
 		let mut t = Transcript::new(b"SigningContext");
 		t.append_slice(message);
-		// // TODO DAVXY: looks like we require to clone to call sign... is this required?
+		// TODO DAVXY: looks like we require to clone the secret to call sign...
+		// Is this required?!?
 		let sign: ThinVrfSignature<0> = self.0.clone().sign_thin_vrf(t, &[]);
 		let mut raw = [0; SIGNATURE_SERIALIZED_LEN];
 		sign.serialize_compressed(raw.as_mut_slice());
@@ -290,25 +303,33 @@ impl TraitPair for Pair {
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
-		// match sig.recover(message) {
-		// 	Some(actual) => actual == *pubkey,
-		// 	None => false,
-		// }
-		// DAVXY TODO
-		false
+	fn verify<M: AsRef<[u8]>>(
+		signature: &Self::Signature,
+		message: M,
+		public: &Self::Public,
+	) -> bool {
+		let Ok(public) = PublicKey::deserialize_compressed(public.as_ref()) else {
+			return false
+		};
+		let Ok(signature) = ThinVrfSignature::<0>::deserialize_compressed(signature.as_ref()) else {
+			return false
+		};
+		let mut t = Transcript::new(b"SigningContext");
+		t.append_slice(message.as_ref());
+
+		let inputs: Vec<Message> = Vec::new();
+		match signature.verify_thin_vrf(t, inputs, &public) {
+			Ok(ios) => true,
+			Err(e) => false,
+		}
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	///
-	/// This doesn't use the type system to ensure that `sig` and `pubkey` are the correct
+	/// This doesn't use the type system to ensure that `sig` and `public` are the correct
 	/// size. Use it only if you're coming from byte buffers and need the speed.
-	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		// match Signature::from_slice(sig).and_then(|sig| sig.recover(message)) {
-		// 	Some(actual) => actual.as_ref() == pubkey.as_ref(),
-		// 	None => false,
-		// }
-		// DAVXY TODO
+	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, public: P) -> bool {
+		// DAVXY TODO : makes sense???
 		false
 	}
 
@@ -325,34 +346,122 @@ impl CryptoType for Pair {
 	type Pair = Pair;
 }
 
-// use ark_serialize::CanonicalSerialize;
+/// VRF related types and operations.
+mod vrf {
+	use super::*;
+	#[cfg(feature = "full_crypto")]
+	use crate::crypto::VrfSigner;
+	use crate::crypto::{VrfCrypto, VrfVerifier};
+
+	/// VRF transcript ready to be used for VRF sign/verify operations.
+	pub struct VrfTranscript(Transcript);
+
+	impl VrfTranscript {
+		/// Build a new transcript ready to be used by a VRF signer/verifier.
+		pub fn new(label: &'static [u8], data: &[&[u8]]) -> Self {
+			let mut transcript = Transcript::new(label);
+			data.iter().for_each(|b| transcript.append_slice(b));
+			VrfTranscript(transcript)
+		}
+	}
+
+	pub type VrfSignature = super::Signature;
+
+	#[cfg(feature = "full_crypto")]
+	impl VrfCrypto for Pair {
+		type VrfSignature = VrfSignature;
+		type VrfInput = VrfTranscript;
+	}
+
+	#[cfg(feature = "full_crypto")]
+	impl VrfSigner for Pair {
+		fn vrf_sign(&self, transcript: &Self::VrfInput) -> Self::VrfSignature {
+			let sign: ThinVrfSignature<0> = self.0.clone().sign_thin_vrf(transcript.0.clone(), &[]);
+			let mut raw = [0; SIGNATURE_SERIALIZED_LEN];
+			sign.serialize_compressed(raw.as_mut_slice());
+			Signature(raw)
+		}
+	}
+
+	impl VrfCrypto for Public {
+		type VrfSignature = VrfSignature;
+		type VrfInput = VrfTranscript;
+	}
+
+	impl VrfVerifier for Public {
+		fn vrf_verify(&self, transcript: &Self::VrfInput, signature: &Self::VrfSignature) -> bool {
+			let Ok(public) = PublicKey::deserialize_compressed(self.as_ref()) else {
+				return false
+			};
+			let Ok(signature) = ThinVrfSignature::<0>::deserialize_compressed(signature.as_ref()) else {
+				return false
+			};
+
+			let inputs: Vec<Message> = Vec::new();
+			match signature.verify_thin_vrf(transcript.0.clone(), inputs, &public) {
+				Ok(ios) => true,
+				Err(e) => false,
+			}
+		}
+	}
+}
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::crypto::DEV_PHRASE;
+	const DEV_SEED: &[u8; SEED_SERIALIZED_LEN] = &[0; SEED_SERIALIZED_LEN];
+
+	fn b2h(bytes: &[u8]) -> String {
+		array_bytes::bytes2hex("", bytes)
+	}
+
+	fn h2b(hex: &str) -> Vec<u8> {
+		array_bytes::hex2bytes_unchecked(hex)
+	}
 
 	#[test]
-	fn assumptions_check() {
-		let pair = SecretKey::from_seed(&[0; SEED_SERIALIZED_LEN]);
+	fn backend_assumptions_check() {
+		let pair = SecretKey::from_seed(DEV_SEED);
 		let public = pair.to_public();
+
 		assert_eq!(public.0.size_of_serialized(), PUBLIC_SERIALIZED_LEN);
 	}
 
 	#[test]
-	fn tmp_construct_public() {
-		let pair = Pair::from_seed(&[0; SEED_SERIALIZED_LEN]);
+	fn verify_known_signature() {
+		let pair = Pair::from_seed(DEV_SEED);
 		let public = pair.public();
-		let raw = public.to_vec();
-		println!("{:?}", raw);
+
+		let signature_raw = h2b("524b0cbc4eb9579e2cd115fe55e2625e8265b3ea599ac903e67b08c2c669780cf43ca9c1e0a8a63c1dba121a606f95d3466cfe1880acc502c2792775125a7fcc");
+		let signature = Signature::from_slice(&signature_raw).unwrap();
+
+		assert!(Pair::verify(&signature, b"hello", &public));
+	}
+
+	#[test]
+	fn derive_hard_known_pair() {
+		let pair = Pair::from_string(&format!("{}//Alice", DEV_PHRASE), None).unwrap();
+		// known address of DEV_PHRASE with 1.1
+		let known = h2b("b0d3648bd5a3542afa16c06fee04cba37cc55c83a8894d36d87897bda0c65eec");
+		assert_eq!(pair.public().as_ref(), known);
+	}
+
+	#[test]
+	fn tmp_construct_public() {
+		let pair = Pair::from_seed(DEV_SEED);
+		let public = pair.public();
+		let raw = public.to_raw_vec();
 	}
 
 	#[test]
 	fn sign_verify() {
-		let pair = Pair::from_seed(&[0; SEED_SERIALIZED_LEN]);
+		let pair = Pair::from_seed(DEV_SEED);
 		let public = pair.public();
+		let msg = b"hello";
 
-		let signature = pair.sign(b"hello");
+		let signature = pair.sign(msg);
 
-		println!("{:?}", signature.0);
+		assert!(Pair::verify(&signature, msg, &public));
 	}
 }

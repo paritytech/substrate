@@ -633,6 +633,7 @@ dependencies = [
  "dleq_vrf",
  "rand_core 0.6.4",
  "sha2 0.10.6",
+ "zeroize",
 ]
 
 [[package]]
