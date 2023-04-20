@@ -1208,8 +1208,8 @@ impl<T: Config> Pallet<T> {
 		Self::try_state_members_approval_stake()
 	}
 
-	// [`Members`] state checks. Invariants:
-	//  - Members are always sorted based on account ID.
+	/// [`Members`] state checks. Invariants:
+	///  - Members are always sorted based on account ID.
 	fn try_state_members() -> Result<(), &'static str> {
 		let mut members = Members::<T>::get().clone();
 		members.sort_by_key(|m| m.who.clone());
@@ -1222,9 +1222,17 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// [`RunnersUp`] state checks. Invariants:
-	//  - Elements are sorted based on rank.
+	//  - Elements are sorted based on weight (worst to best).
 	fn try_state_runners_up() -> Result<(), &'static str> {
-		Ok(())
+		let mut sorted = RunnersUp::<T>::get();
+		// worst stake first
+		sorted.sort_by(|a, b| a.stake.cmp(&b.stake));
+
+		if RunnersUp::<T>::get() == sorted {
+			Ok(())
+		} else {
+			Err("try_state checks: Runners Up must always be sorted by stake (worst to best)")
+		}
 	}
 
 	// [`Candidates`] state checks. Invariants:

@@ -1258,7 +1258,7 @@ pub mod pallet {
 
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	///
-	/// Invariant: Always sorted by score.
+	/// Always sorted by score.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
 	pub type QueuedSolution<T: Config> =
@@ -1589,10 +1589,15 @@ impl<T: Config> Pallet<T> {
 	// - [`DesiredTargets`] exist IFF [`Snapshot`] is present.
 	// - [`SnapshotMetadata`] exist IFF [`Snapshot`] is present.
 	fn try_state_snapshot() -> Result<(), &'static str> {
-		let set = <DesiredTargets<T>>::get().is_some() && <DesiredTargets<T>>::get().is_some();
+		let set = <DesiredTargets<T>>::get().is_some() && <SnapshotMetadata<T>>::get().is_some();
 
-		match <Snapshot<T>>::take().is_some() {
-            true if !set => Err("If the snapshot exists, the desired targets and snapshot metadata must also exist."),
+		match <Snapshot<T>>::take() {
+            Some(_) if !set => Err("If the snapshot exists, the desired targets and snapshot metadata must also exist."),
+            None if set => {
+                println!("desired targets: {:?}", <DesiredTargets<T>>::get());
+                println!("snapshot metadata: {:?}", <SnapshotMetadata<T>>::get());
+                Err("If the snapshot does not exists, the desired targets and snapshot metadata should also not exists")
+            },
             _ => Ok(()),
 		}
 	}
@@ -1722,6 +1727,9 @@ mod feasibility_check {
 				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::SnapshotUnavailable
 			);
+
+			// restore noop snapshot to ensure post-test `try_state` checks pass.
+			<Snapshot<Runtime>>::set(Some(Default::default()));
 		})
 	}
 
