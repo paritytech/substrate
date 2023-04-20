@@ -99,7 +99,7 @@ type BalanceOf<T> = <<T as Config>::OnChargeTransaction as OnChargeTransaction<T
 /// 		t1 = (v * diff)
 /// 		t2 = (v * diff)^2 / 2
 /// 	then:
- /// 	next_multiplier = prev_multiplier * (1 + t1 + t2)
+/// 	next_multiplier = prev_multiplier * (1 + t1 + t2)
 ///
 /// Where `(s', v)` must be given as the `Get` implementation of the `T` generic type. Moreover, `M`
 /// must provide the minimum allowed value for the multiplier. Note that a runtime should ensure
@@ -205,16 +205,18 @@ where
 		let normal_block_weight =
 			current_block_weight.get(DispatchClass::Normal).min(normal_max_weight);
 
-		let (normal_block_weight, normal_max_weight) = if normal_block_weight.ref_time() > normal_block_weight.proof_size() {
-			(normal_block_weight.ref_time(), normal_max_weight.ref_time())
-		} else {
-			(normal_block_weight.proof_size(), normal_max_weight.proof_size())
-		};
+		// take only the scarcer resource into account.
+		let (normal_block_weight, normal_max_weight) =
+			if normal_block_weight.ref_time() > normal_block_weight.proof_size() {
+				(normal_block_weight.ref_time(), normal_max_weight.ref_time())
+			} else {
+				(normal_block_weight.proof_size(), normal_max_weight.proof_size())
+			};
 
-		let s = S::get(); // target, 25% full
-		let v = V::get(); // Adjustment variable, 0.00001
+		let target_block_fullness = S::get();
+		let adjustment_variable = V::get();
 
-		let target_weight = (s * normal_max_weight) as u128;
+		let target_weight = (target_block_fullness * normal_max_weight) as u128;
 		let block_weight = normal_block_weight as u128;
 
 		// determines if the first_term is positive
@@ -226,9 +228,10 @@ where
 		let diff = Multiplier::saturating_from_rational(diff_abs, normal_max_weight.max(1));
 		let diff_squared = diff.saturating_mul(diff);
 
-		let v_squared_2 = v.saturating_mul(v) / Multiplier::saturating_from_integer(2);
+		let v_squared_2 = adjustment_variable.saturating_mul(adjustment_variable) /
+			Multiplier::saturating_from_integer(2);
 
-		let first_term = v.saturating_mul(diff);
+		let first_term = adjustment_variable.saturating_mul(diff);
 		let second_term = v_squared_2.saturating_mul(diff_squared);
 
 		if positive {
@@ -718,11 +721,13 @@ where
 		let max_block_length = *T::BlockLength::get().max.get(info.class) as u64;
 
 		// bounded_weight is used as a divisor later so we keep it non-zero.
-		let bounded_weight = info.weight.max(Weight::from_parts(1,1)).min(max_block_weight);
+		let bounded_weight = info.weight.max(Weight::from_parts(1, 1)).min(max_block_weight);
 		let bounded_length = (len as u64).clamp(1, max_block_length);
 
 		// returns the scarce resource, i.e. the one that is limiting the number of transactions.
-		let max_tx_per_block_weight = max_block_weight.checked_div_per_component(&bounded_weight).unwrap();
+		let max_tx_per_block_weight = max_block_weight
+			.checked_div_per_component(&bounded_weight)
+			.expect("bounded_weight is non-zero; qed");
 		let max_tx_per_block_length = max_block_length / bounded_length;
 		// Given our current knowledge this value is going to be in a reasonable range - i.e.
 		// less than 10^9 (2^30), so multiplying by the `tip` value is unlikely to overflow the
