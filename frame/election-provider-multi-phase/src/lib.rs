@@ -1589,7 +1589,7 @@ impl<T: Config> Pallet<T> {
 	// - [`DesiredTargets`] exist IFF [`Snapshot`] is present.
 	// - [`SnapshotMetadata`] exist IFF [`Snapshot`] is present.
 	fn try_state_snapshot() -> Result<(), &'static str> {
-		let set = <DesiredTargets<T>>::get().is_some() && <DesiredTargets<T>>::get().is_some();
+		let set = <DesiredTargets<T>>::get().is_some() && <SnapshotMetadata<T>>::get().is_some();
 
 		match <Snapshot<T>>::take().is_some() {
             true if !set => Err("If the snapshot exists, the desired targets and snapshot metadata must also exist."),
