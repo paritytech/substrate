@@ -37,17 +37,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		signature: &T::OffchainSignature,
 		signer: &T::AccountId,
 	) -> DispatchResult {
+		if signature.verify(&**data, &signer) {
+			return Ok(())
+		}
+
 		// NOTE: for security reasons modern UIs implicitly wrap the data requested to sign into
 		// <Bytes></Bytes>, that's why we support both wrapped and raw versions.
-		let mut wrapped: Vec<u8> = Vec::new();
-		wrapped.extend(b"<Bytes>");
+		let prefix = b"<Bytes>";
+		let suffix = b"</Bytes>";
+		let mut wrapped: Vec<u8> = Vec::with_capacity(data.len() + prefix.len() + suffix.len());
+		wrapped.extend(prefix);
 		wrapped.extend(data);
-		wrapped.extend(b"</Bytes>");
+		wrapped.extend(suffix);
 
-		ensure!(
-			signature.verify(&**data, &signer) || signature.verify(&*wrapped, &signer),
-			Error::<T, I>::WrongSignature
-		);
+		ensure!(signature.verify(&*wrapped, &signer), Error::<T, I>::WrongSignature);
 
 		Ok(())
 	}
