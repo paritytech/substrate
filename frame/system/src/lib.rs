@@ -1235,8 +1235,7 @@ impl<T: Config> Pallet<T> {
 	/// True if the account has at least one provider reference and fewer consumer references than
 	/// the maximum.
 	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
-		let a = Account::<T>::get(who);
-		a.providers > 0 && a.consumers < T::MaxConsumers::max_consumers()
+		Self::can_accrue_consumers(who, 1)
 	}
 
 	/// Deposits an event into this block's event record.
