@@ -251,20 +251,6 @@ default:
 
 #### stage:                       .pre
 
-skip-if-draft:
-  extends: .kubernetes-env
-  variables:
-    CI_IMAGE: "paritytech/tools:latest"
-  stage: .pre
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ # PRs
-  script:
-    - echo "Commit message is ${CI_COMMIT_MESSAGE}"
-    - echo "Ref is ${CI_COMMIT_REF_NAME}"
-    - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
-    - ./scripts/ci/gitlab/skip_if_draft.sh
-  allow_failure: true
-
 check-crates-publishing-pipeline:
   stage: .pre
   extends:
