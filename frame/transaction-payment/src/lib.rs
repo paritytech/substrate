@@ -717,17 +717,12 @@ where
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let max_block_length = *T::BlockLength::get().max.get(info.class) as u64;
 
-		// Take max of proof size or ref time and use the same dimension for max_block_weight.
-		let (info_weight, max_block_weight) = if info.weight.ref_time() > info.weight.proof_size() {
-			(info.weight.ref_time(), max_block_weight.ref_time())
-		} else {
-			(info.weight.proof_size(), max_block_weight.proof_size())
-		};
-
-		let bounded_weight = info_weight.clamp(1, max_block_weight);
+		// bounded_weight is used as a divisor later so we keep it non-zero.
+		let bounded_weight = info.weight.max(Weight::from_parts(1,1)).min(max_block_weight);
 		let bounded_length = (len as u64).clamp(1, max_block_length);
 
-		let max_tx_per_block_weight = max_block_weight / bounded_weight;
+		// returns the scarce resource, i.e. the one that is limiting the number of transactions.
+		let max_tx_per_block_weight = max_block_weight.checked_div_per_component(&bounded_weight).unwrap();
 		let max_tx_per_block_length = max_block_length / bounded_length;
 		// Given our current knowledge this value is going to be in a reasonable range - i.e.
 		// less than 10^9 (2^30), so multiplying by the `tip` value is unlikely to overflow the
