@@ -321,7 +321,7 @@
 //!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     execute-block live \
-//!     --uri ws://localhost:999
+//!     --uri ws://localhost:9999
 //! ```
 //!
 //! This can still be customized at a given block with `--at`. If you want to use a snapshot, you
@@ -336,11 +336,17 @@
 //!     -lruntime=debug \
 //!     execute-block live \
 //!     --try-state System,Staking \
-//!     --uri ws://localhost:999
+//!		--pallet System,Staking \
+//!     --uri ws://localhost:9999
 //! ```
 //!
-//! Will only run the `try-state` of the two given pallets. See
-//! [`frame_try_runtime::TryStateSelect`] for more information.
+//! Will only run the `try-state` of the two given pallets. When running `try-state` against 
+//! some real chain data it can take a long time for the command to execute since it has to 
+//! query all the key-value pairs. In scenarios like above where we only want to run the 
+//! `try-state` for some specific pallets, we can use the `--pallet` option to specify from 
+//! which pallets we want to query the state. This will greatly decrease the execution time.
+//!
+//! See [`frame_try_runtime::TryStateSelect`] for more information.
 //!
 //! * Follow our live chain's blocks using `follow-chain`, whilst running the try-state of 3 pallets
 //!   in a round robin fashion
