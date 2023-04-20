@@ -684,7 +684,7 @@ where
 
 	/// Get the values corresponding to `child_keys` at the given `prefixed_top_key`.
 	pub(crate) async fn rpc_child_get_storage_paged(
-		client: &Arc<HttpClient>,
+		client: &HttpClient,
 		prefixed_top_key: &StorageKey,
 		child_keys: Vec<StorageKey>,
 		at: B::Hash,
