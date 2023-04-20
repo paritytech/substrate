@@ -80,11 +80,9 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let mut fn_weight = Vec::<TokenStream2>::new();
 	let mut weight_warnings = Vec::new();
-	for method in methods.iter() {
+	for method in &methods {
 		match &method.weight {
-			CallWeightDef::DevModeDefault => {
-				fn_weight.push(syn::parse_quote!(0));
-			},
+			CallWeightDef::DevModeDefault => fn_weight.push(syn::parse_quote!(0)),
 			CallWeightDef::Immediate(e @ syn::Expr::Lit(lit)) if !def.dev_mode => {
 				let warning = proc_macro_warning::Warning::new_deprecated("ConstantWeight")
 					.index(weight_warnings.len())
