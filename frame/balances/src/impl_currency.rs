@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! Implementations for the `Currency` family of traits.
-//! Note that WithdrawReason is intentionally not used for anything in this implementation.
+//! Note that WithdrawReasons are intentionally not used for anything in this implementation.
 
 use super::*;
 use frame_support::{
