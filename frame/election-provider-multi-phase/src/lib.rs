@@ -231,7 +231,7 @@
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
-	bounds::{ElectionBounds, ElectionBoundsBuilder},
+	bounds::{CountBound, ElectionBounds, ElectionBoundsBuilder, SizeBound},
 	BoundedSupportsOf, DataProviderBounds, ElectionDataProvider, ElectionProvider,
 	ElectionProviderBase, InstantElectionProvider, NposSolution,
 };
@@ -1416,31 +1416,26 @@ impl<T: Config> Pallet<T> {
 	fn create_snapshot_external(
 	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
 		let election_bounds = T::ElectionBounds::get();
-		let target_limit = election_bounds
-			.targets
-			.count
-			.unwrap_or(u32::MAX.into())
-			.0
-			.saturated_into::<usize>();
-		let voter_limit = election_bounds
-			.voters
-			.count
-			.unwrap_or(u32::MAX.into())
-			.0
-			.saturated_into::<usize>();
 
 		let targets = T::DataProvider::electable_targets(election_bounds.targets)
+			.and_then(|t| {
+				election_bounds.ensure_targets_limits(
+					CountBound(t.len() as u32),
+					SizeBound(t.encoded_size() as u32),
+				)?;
+				Ok(t)
+			})
 			.map_err(ElectionError::DataProvider)?;
 
 		let voters = T::DataProvider::electing_voters(election_bounds.voters)
+			.and_then(|v| {
+				election_bounds.ensure_voters_limits(
+					CountBound(v.len() as u32),
+					SizeBound(v.encoded_size() as u32),
+				)?;
+				Ok(v)
+			})
 			.map_err(ElectionError::DataProvider)?;
-
-		if targets.len() > target_limit || voters.len() > voter_limit {
-			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
-		}
-		if voters.encoded_size() as u32 > election_bounds.voters.size.unwrap_or(u32::MAX.into()).0 {
-			return Err(ElectionError::DataProvider("Snapshot in MBs too big for submission."))
-		}
 
 		let mut desired_targets = <Pallet<T> as ElectionProviderBase>::desired_targets_checked()
 			.map_err(|e| ElectionError::DataProvider(e))?;

@@ -569,7 +569,7 @@ mod tests {
 
 			assert_noop!(
 				MultiPhase::create_snapshot(),
-				ElectionError::DataProvider("Snapshot too big for submission."),
+				ElectionError::DataProvider("Ensure targets bounds: bounds exceeded."),
 			);
 		})
 	}
@@ -585,7 +585,7 @@ mod tests {
 
 			assert_noop!(
 				MultiPhase::create_snapshot(),
-				ElectionError::DataProvider("Snapshot too big for submission."),
+				ElectionError::DataProvider("Ensure voters bounds: bounds exceeded."),
 			);
 		})
 	}

@@ -178,10 +178,38 @@ impl DataProviderBounds {
 ///
 /// The bounds are defined over two axis: `count` of element of the election (voters or targets) and
 /// the `size` of the SCALE encoded result snapshot.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct ElectionBounds {
 	pub voters: DataProviderBounds,
 	pub targets: DataProviderBounds,
+}
+
+impl ElectionBounds {
+	/// Returns an error if the provided `count` and `size` do not fit in the voter's election
+	/// bounds.
+	pub fn ensure_voters_limits(
+		self,
+		count: CountBound,
+		size: SizeBound,
+	) -> Result<(), &'static str> {
+		match self.voters.exhausted(Some(size), Some(count)) {
+			true => Err("Ensure voters bounds: bounds exceeded."),
+			false => Ok(()),
+		}
+	}
+
+	/// Returns an error if the provided `count` and `size` do not fit in the target's election
+	/// bounds.
+	pub fn ensure_targets_limits(
+		self,
+		count: CountBound,
+		size: SizeBound,
+	) -> Result<(), &'static str> {
+		match self.targets.exhausted(Some(size), Some(count).into()) {
+			true => Err("Ensure targets bounds: bounds exceeded."),
+			false => Ok(()),
+		}
+	}
 }
 
 /// Utility builder for [`ElectionBounds`].
@@ -293,6 +321,8 @@ impl ElectionBoundsBuilder {
 mod test {
 	use super::*;
 
+	use frame_support::{assert_err, assert_ok};
+
 	#[test]
 	fn data_provider_bounds_unbounded() {
 		let bounds = DataProviderBounds::default();
@@ -326,6 +356,38 @@ mod test {
 		// exhausts bounds.
 		assert!(bounds.targets.exhausted(None, CountBound(201).into()));
 		assert!(bounds.targets.exhausted(SizeBound(2_001).into(), None));
+	}
+
+	#[test]
+	fn election_bounds_ensure_limits_works() {
+		let bounds = ElectionBounds {
+			voters: DataProviderBounds { count: Some(CountBound(10)), size: Some(SizeBound(10)) },
+			targets: DataProviderBounds { count: Some(CountBound(10)), size: Some(SizeBound(10)) },
+		};
+
+		assert_ok!(bounds.ensure_voters_limits(CountBound(1), SizeBound(1)));
+		assert_ok!(bounds.ensure_voters_limits(CountBound(1), SizeBound(1)));
+		assert_ok!(bounds.ensure_voters_limits(CountBound(10), SizeBound(10)));
+		assert_err!(
+			bounds.ensure_voters_limits(CountBound(1), SizeBound(11)),
+			"Ensure voters bounds: bounds exceeded."
+		);
+		assert_err!(
+			bounds.ensure_voters_limits(CountBound(11), SizeBound(10)),
+			"Ensure voters bounds: bounds exceeded."
+		);
+
+		assert_ok!(bounds.ensure_targets_limits(CountBound(1), SizeBound(1)));
+		assert_ok!(bounds.ensure_targets_limits(CountBound(1), SizeBound(1)));
+		assert_ok!(bounds.ensure_targets_limits(CountBound(10), SizeBound(10)));
+		assert_err!(
+			bounds.ensure_targets_limits(CountBound(1), SizeBound(11)),
+			"Ensure targets bounds: bounds exceeded."
+		);
+		assert_err!(
+			bounds.ensure_targets_limits(CountBound(11), SizeBound(10)),
+			"Ensure targets bounds: bounds exceeded."
+		);
 	}
 
 	#[test]
