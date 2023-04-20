@@ -801,12 +801,11 @@ where
 
 		let at = self.as_online().at_expected();
 
-		let client = self.as_online().rpc_client();
 		let arc_client = self.as_online().rpc_client_cloned();
 		let mut child_kv = vec![];
 		for prefixed_top_key in child_roots {
 			let child_keys =
-				Self::rpc_child_get_keys(&client, &prefixed_top_key, StorageKey(vec![]), at)
+				Self::rpc_child_get_keys(&*arc_client, &prefixed_top_key, StorageKey(vec![]), at)
 					.await?;
 
 			let child_kv_inner =
