@@ -1208,8 +1208,8 @@ impl<T: Config> Pallet<T> {
 		Self::try_state_members_approval_stake()
 	}
 
-	// [`Members`] state checks. Invariants:
-	//  - Members are always sorted based on account ID.
+	/// [`Members`] state checks. Invariants:
+	///  - Members are always sorted based on account ID.
 	fn try_state_members() -> Result<(), &'static str> {
 		let mut members = Members::<T>::get().clone();
 		members.sort_by_key(|m| m.who.clone());
