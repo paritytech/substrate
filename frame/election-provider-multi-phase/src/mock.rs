@@ -303,10 +303,9 @@ parameter_types! {
 
 	#[derive(Debug)]
 	pub static MaxWinners: u32 = 200;
+	// `ElectionBounds` and `OnChainElectionsBounds` are defined separately to set them independenyly in the tests.
 	pub static ElectionsBounds: ElectionBounds = ElectionBoundsBuilder::default().build();
-	pub static ElectionsBoundsOnChain: ElectionBounds = ElectionBoundsBuilder::default()
-		.targets_count(5_000.into()).voters_count(1_250.into()).build();
-
+	pub static OnChainElectionsBounds: ElectionBounds = ElectionBoundsBuilder::default().build();
 	pub static EpochLength: u64 = 30;
 	pub static OnChainFallback: bool = true;
 }
@@ -318,7 +317,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = StakingMock;
 	type WeightInfo = ();
 	type MaxWinners = MaxWinners;
-	type Bounds = ElectionsBoundsOnChain;
+	type Bounds = OnChainElectionsBounds;
 }
 
 pub struct MockFallback;

@@ -647,7 +647,7 @@ frame_election_provider_support::generate_solution_type!(
 		VoterIndex = u32,
 		TargetIndex = u16,
 		Accuracy = sp_runtime::PerU16,
-		MaxVoters = MaxNominations,
+		MaxVoters = MaxElectingVotersSolution,
 	>(16)
 );
 
@@ -660,6 +660,7 @@ parameter_types! {
 		.voters_count(5_000.into()).targets_count(1_250.into()).build();
 
 	pub MaxNominations: u32 = <NposSolution16 as frame_election_provider_support::NposSolution>::LIMIT as u32;
+	pub MaxElectingVotersSolution: u32 = 40_000;
 	// The maximum winners that can be elected by the Election pallet which is equivalent to the
 	// maximum active validators the staking pallet can have.
 	pub MaxActiveValidators: u32 = 1000;
