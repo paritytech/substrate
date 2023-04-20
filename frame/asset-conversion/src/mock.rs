@@ -176,14 +176,7 @@ impl Config for Test {
 	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	type BenchmarkHelper = U32IdentityConverter;
-}
-
-pub struct U32IdentityConverter;
-impl BenchmarkHelper<u32> for U32IdentityConverter {
-	fn asset_id(asset_id: u32) -> u32 {
-		asset_id
-	}
+	type BenchmarkHelper = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

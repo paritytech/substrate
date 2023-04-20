@@ -53,6 +53,15 @@ pub trait BenchmarkHelper<AssetId> {
 	fn asset_id(asset_id: u32) -> AssetId;
 }
 
+impl<AssetId> BenchmarkHelper<AssetId> for ()
+where
+	AssetId: From<u32>,
+{
+	fn asset_id(asset_id: u32) -> AssetId {
+		asset_id.into()
+	}
+}
+
 /// An implementation of MultiAssetId that chooses between Native and an asset.
 #[derive(Decode, Encode, Default, MaxEncodedLen, TypeInfo, Clone, Copy, Debug)]
 pub enum NativeOrAssetId<AssetId>
