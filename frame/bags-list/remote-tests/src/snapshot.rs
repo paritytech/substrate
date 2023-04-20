@@ -16,17 +16,17 @@
 
 //! Test to execute the snapshot using the voter bag.
 
-use frame_election_provider_support::{bounds::ElectionBounds, SortedListProvider};
+use frame_election_provider_support::{
+	bounds::{CountBound, DataProviderBounds},
+	SortedListProvider,
+};
 use frame_support::traits::PalletInfoAccess;
 use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
 
 /// Execute create a snapshot from pallet-staking.
-pub async fn execute<Runtime, Block>(
-	election_bounds: ElectionBounds,
-	currency_unit: u64,
-	ws_url: String,
-) where
+pub async fn execute<Runtime, Block>(voter_limit: Option<usize>, currency_unit: u64, ws_url: String)
+where
 	Runtime: crate::RuntimeT<pallet_bags_list::Instance1>,
 	Block: BlockT + DeserializeOwned,
 	Block::Header: DeserializeOwned,
@@ -65,10 +65,14 @@ pub async fn execute<Runtime, Block>(
 			<Runtime as pallet_staking::Config>::VoterList::count(),
 		);
 
-		let voters = <pallet_staking::Pallet<Runtime> as ElectionDataProvider>::electing_voters(
-			election_bounds.voters,
-		)
-		.unwrap();
+		let bounds = match voter_limit {
+			None => DataProviderBounds::default(),
+			Some(v) => DataProviderBounds { count: Some(CountBound(v as u32)), size: None },
+		};
+
+		let voters =
+			<pallet_staking::Pallet<Runtime> as ElectionDataProvider>::electing_voters(bounds)
+				.unwrap();
 
 		let mut voters_nominator_only = voters
 			.iter()
@@ -86,8 +90,8 @@ pub async fn execute<Runtime, Block>(
 			.map(|(x, y, _)| (x.clone(), *y as f64 / currency_unit));
 		log::info!(
 			target: crate::LOG_TARGET,
-			"a snapshot with limits {:?} has been created, {} voters are taken. min nominator: {:?}, max: {:?}",
-			election_bounds,
+			"a snapshot with limit {:?} has been created, {} voters are taken. min nominator: {:?}, max: {:?}",
+			voter_limit,
 			voters.len(),
 			min_voter,
 			max_voter
