@@ -21,27 +21,27 @@ find-fail-ci-phrase:
       exit 0;
       fi
 
-cargo-deny:
+cargo-deny-licenses:
   stage: test
   extends:
     - .docker-env
-    - .nightly-pipeline
+    - .test-refs
+  variables:
+    CARGO_DENY_CMD: "cargo deny --all-features check licenses -c ./scripts/ci/deny.toml"
   script:
     - rusty-cachier snapshot create
-    - cargo deny check --hide-inclusion-graph -c ./scripts/ci/deny.toml
+    - $CARGO_DENY_CMD --hide-inclusion-graph
     - rusty-cachier cache upload
   after_script:
     - !reference [.rusty-cachier, after_script]
     - echo "___The complete log is in the artifacts___"
-    - cargo deny check -c ./scripts/ci/deny.toml 2> deny.log
+    - $CARGO_DENY_CMD 2> deny.log
   artifacts:
     name: $CI_COMMIT_SHORT_SHA
     expire_in: 3 days
     when: always
     paths:
       - deny.log
-  # FIXME: Temporarily allow to fail.
-  allow_failure: true
 
 cargo-fmt:
   stage: test
