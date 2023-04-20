@@ -362,6 +362,18 @@ impl Stream for Peerset {
 	type Item = Message;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+		if let Poll::Ready(msg) = self.from_controllers.poll_next_unpin(cx) {
+			if let Some(msg) = msg {
+				return Poll::Ready(Some(msg))
+			} else {
+				debug!(
+					target: LOG_TARGET,
+					"All `ProtocolController`s have terminated, terminating `Peerset`."
+				);
+				return Poll::Ready(None)
+			}
+		}
+
 		while let Poll::Ready(action) = self.from_handle.poll_next_unpin(cx) {
 			if let Some(action) = action {
 				match action {
@@ -383,18 +395,6 @@ impl Stream for Peerset {
 				}
 			} else {
 				debug!(target: LOG_TARGET, "`PeersetHandle` was dropped, terminating `Peerset`.");
-				return Poll::Ready(None)
-			}
-		}
-
-		if let Poll::Ready(msg) = self.from_controllers.poll_next_unpin(cx) {
-			if let Some(msg) = msg {
-				return Poll::Ready(Some(msg))
-			} else {
-				debug!(
-					target: LOG_TARGET,
-					"All `ProtocolController`s have terminated, terminating `Peerset`."
-				);
 				return Poll::Ready(None)
 			}
 		}
