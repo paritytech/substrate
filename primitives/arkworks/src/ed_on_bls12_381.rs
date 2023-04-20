@@ -26,26 +26,32 @@ use crate::utils::{
 use ark_ed_on_bls12_381::JubjubConfig;
 use sp_std::vec::Vec;
 
-pub fn sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+/// Compute a projective scalar multiplication for short_weierstrass through arkworks
+pub fn sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 	mul_projective_generic::<JubjubConfig>(base, scalar)
 }
 
-pub fn sw_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+/// Compute a affine scalar multiplication for short_weierstrass through arkworks
+pub fn sw_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 	mul_affine_generic::<JubjubConfig>(base, scalar)
 }
 
-pub fn te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+/// Compute a projective scalar multiplication for twisted_edwards through arkworks
+pub fn te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 	mul_projective_te_generic::<JubjubConfig>(base, scalar)
 }
 
-pub fn te_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Vec<u8> {
+/// Compute a scalar multiplication for twisted_edwards through arkworks
+pub fn te_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 	mul_affine_te_generic::<JubjubConfig>(base, scalar)
 }
 
-pub fn te_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+/// Compute a multi scalar mulitplication for twisted_edwards through arkworks
+pub fn te_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 	msm_te_generic::<JubjubConfig>(bases, scalars)
 }
 
-pub fn sw_msm(bases: Vec<Vec<u8>>, scalars: Vec<Vec<u8>>) -> Vec<u8> {
+/// Compute a multi scalar multiplication for short_weierstrass through arkworks
+pub fn sw_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 	msm_sw_generic::<JubjubConfig>(bases, scalars)
 }
