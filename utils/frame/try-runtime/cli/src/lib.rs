@@ -336,14 +336,14 @@
 //!     -lruntime=debug \
 //!     execute-block live \
 //!     --try-state System,Staking \
-//!		--pallet System,Staking \
+//! 		--pallet System,Staking \
 //!     --uri ws://localhost:9999
 //! ```
 //!
-//! Will only run the `try-state` of the two given pallets. When running `try-state` against 
-//! some real chain data it can take a long time for the command to execute since it has to 
-//! query all the key-value pairs. In scenarios like above where we only want to run the 
-//! `try-state` for some specific pallets, we can use the `--pallet` option to specify from 
+//! Will only run the `try-state` of the two given pallets. When running `try-state` against
+//! some real chain data it can take a long time for the command to execute since it has to
+//! query all the key-value pairs. In scenarios like above where we only want to run the
+//! `try-state` for some specific pallets, we can use the `--pallet` option to specify from
 //! which pallets we want to query the state. This will greatly decrease the execution time.
 //!
 //! See [`frame_try_runtime::TryStateSelect`] for more information.
