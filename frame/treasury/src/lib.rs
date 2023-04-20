@@ -73,7 +73,7 @@ use sp_runtime::{
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use frame_support::{
-	print,
+	log, print,
 	traits::{
 		tokens::{AssetId, ConversionFromAssetBalance, Pay, PaymentStatus},
 		Currency,
@@ -86,6 +86,8 @@ use frame_support::{
 
 pub use pallet::*;
 pub use weights::WeightInfo;
+
+const LOG_TARGET: &str = "runtime::treasury";
 
 pub type PayBalanceOf<T, I> = <<T as Config<I>>::Paymaster as Pay>::Balance;
 pub type BalanceOf<T, I = ()> =
@@ -696,7 +698,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		r
 	}
 
-	/// Spend some money! returns number of approvals before spend.
+	/// Spend_funds is triggered periodically and uses the `T::Paymaster` to payout all spend
+	/// requests in the `PendingPayments` storage map.
 	pub fn spend_funds() -> Weight {
 		let mut total_weight = Weight::zero();
 		let mut total_spent = BalanceOf::<T, I>::zero();
@@ -708,8 +711,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for key in PendingPayments::<T, I>::iter_keys() {
 			if let Some(mut p) = PendingPayments::<T, I>::get(key) {
 				match p.payment_id {
-					None =>
-						if let Ok(id) = T::Paymaster::pay(&p.beneficiary, p.asset_kind, p.value) {
+					None => match T::Paymaster::pay(&p.beneficiary, p.asset_kind, p.value) {
+						Ok(id) => {
 							total_spent += p.normalized_value;
 							p.payment_id = Some(id);
 							Self::deposit_event(Event::PaymentTriggered {
@@ -718,9 +721,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								amount: p.value,
 							});
 							PendingPayments::<T, I>::set(key, Some(p));
-						} else {
-							missed_proposals = missed_proposals.saturating_add(1);
 						},
+						Err(err) => {
+							log::debug!(target: LOG_TARGET, "Paymaster::pay failed for PendingPayment with index: {:?} and error: {:?}", key, err);
+							missed_proposals = missed_proposals.saturating_add(1);
+							Self::deposit_event(Event::PaymentFailure {
+								payment_index: key,
+								asset_kind: p.asset_kind,
+								amount: p.value,
+							});
+						},
+					},
 					Some(payment_id) => match T::Paymaster::check_payment(payment_id) {
 						PaymentStatus::Failure => {
 							// try again in the next `T::SpendPeriod`.
@@ -746,7 +757,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						// PaymentStatus::InProgress and PaymentStatus::Unknown indicate that the
 						// proposal status is inconclusive, and might still be successful or failed
 						// in the future.
-						_ => {},
+						PaymentStatus::InProgress | PaymentStatus::Unknown => {},
 					},
 				}
 			} else {
