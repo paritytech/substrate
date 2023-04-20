@@ -36,7 +36,7 @@ fn parse_max_runtime_instances(s: &str) -> Result<usize, String> {
 		.map_err(|_err| format!("Illegal `--max-runtime-instances` value: {s}"))?;
 
 	if max_runtime_instances > 256 {
-		Err(format!("Illegal `--max-runtime-instances` value: {max_runtime_instances}"))
+		Err(format!("Illegal `--max-runtime-instances` value: {max_runtime_instances} is more than the allowed maximum of `256` "))
 	} else {
 		Ok(max_runtime_instances)
 	}
