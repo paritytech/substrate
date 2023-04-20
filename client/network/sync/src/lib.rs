@@ -1811,7 +1811,7 @@ where
 				return None
 			}
 
-			// since the request is not a justification, remove it from pending responsees
+			// since the request is not a justification, remove it from pending responses
 			self.pending_responses.remove(&id);
 
 			// handle peers that were in other states.
@@ -2181,8 +2181,8 @@ where
 	fn poll_pending_responses(&mut self, cx: &mut std::task::Context) -> Poll<ImportResult<B>> {
 		let ready_responses = self
 			.pending_responses
-			.iter_mut()
-			.filter_map(|(_, future)| match future.poll_unpin(cx) {
+			.values_mut()
+			.filter_map(|future| match future.poll_unpin(cx) {
 				Poll::Pending => None,
 				Poll::Ready(result) => Some(result),
 			})
