@@ -465,6 +465,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// * All storages are marked as unbounded, meaning you do not need to implement `MaxEncodedLen` on
 ///   storage types. This is equivalent to specifying `#[pallet::unbounded]` on all storage type
 ///   definitions.
+/// * Storage hashers no longer need to be specified and can be replaced by `_`. In dev mode, these
+///   will be replaced by `Blake2_128Concat`.
 ///
 /// Note that the `dev_mode` argument can only be supplied to the `#[pallet]` or
 /// `#[frame_support::pallet]` attribute macro that encloses your pallet module. This argument
