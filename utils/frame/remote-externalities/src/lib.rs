@@ -40,6 +40,7 @@ use sp_core::{
 pub use sp_io::TestExternalities;
 use sp_runtime::{traits::Block as BlockT, StateVersion};
 use std::{
+	cmp::max,
 	fs,
 	num::NonZeroUsize,
 	ops::{Deref, DerefMut},
@@ -137,7 +138,7 @@ impl Transport {
 	}
 
 	// Build an HttpClient from a URI.
-	async fn map_uri(&mut self) -> Result<(), &'static str> {
+	async fn init(&mut self) -> Result<(), &'static str> {
 		if let Self::Uri(uri) = self {
 			log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
 
@@ -146,9 +147,13 @@ impl Transport {
 			// message length exceeds maximum" errors after processing ~10k keys when fetching
 			// from a node running a default configuration.
 			let uri = if uri.starts_with("ws://") {
-				uri.replace("ws://", "http://")
+				let uri = uri.replace("ws://", "http://");
+				log::info!(target: LOG_TARGET, "replacing ws:// in uri with http://: {:?} (ws is currently unstable for fetching remote storage, for more see https://github.com/paritytech/jsonrpsee/issues/1086)", uri);
+				uri
 			} else if uri.starts_with("wss://") {
-				uri.replace("wss://", "https://")
+				let uri = uri.replace("wss://", "https://");
+				log::info!(target: LOG_TARGET, "replacing wss:// in uri with https://: {:?} (ws is currently unstable for fetching remote storage, for more see https://github.com/paritytech/jsonrpsee/issues/1086)", uri);
+				uri
 			} else {
 				uri.clone()
 			};
@@ -327,7 +332,7 @@ where
 	/// Get the number of threads to use.
 	fn threads() -> NonZeroUsize {
 		thread::available_parallelism()
-			.unwrap_or(NonZeroUsize::new(4usize).expect("4 is non-zero; qed"))
+			.unwrap_or(NonZeroUsize::new(1usize).expect("4 is non-zero; qed"))
 	}
 
 	async fn rpc_get_storage(
@@ -473,8 +478,7 @@ where
 		for (method, params) in page.iter() {
 			batch
 				.insert(method, params.clone())
-				.map_err(|_| "Invalid batch params")
-				.unwrap();
+				.map_err(|_| "Invalid batch method and/or params")?
 		}
 		let batch_response = match client.batch_request::<Option<StorageData>>(batch).await {
 			Ok(batch_response) => batch_response,
@@ -492,7 +496,7 @@ where
 				return Self::get_storage_data_dynamic_batch_size(
 					client,
 					payloads,
-					(batch_size as f32 * Self::BATCH_SIZE_DECREASE_FACTOR) as usize,
+					max(1, (batch_size as f32 * Self::BATCH_SIZE_DECREASE_FACTOR) as usize),
 				)
 				.await
 			},
@@ -512,8 +516,7 @@ where
 		let mut rest = Self::get_storage_data_dynamic_batch_size(
 			client,
 			payloads,
-			// + 1 to ensure we always increase by at least 1
-			(batch_size as f32 * Self::BATCH_SIZE_INCREASE_FACTOR) as usize + 1,
+			max(batch_size + 1, (batch_size as f32 * Self::BATCH_SIZE_INCREASE_FACTOR) as usize),
 		)
 		.await?;
 		data.append(&mut rest);
@@ -571,7 +574,7 @@ where
 				// thread to start inserting before all of the data has been queried from the node.
 				// Inserting data takes a very long time, so the earlier it can start the better.
 				let mut thread_key_values = vec![];
-				let chunk_size = thread_keys.len() / 10;
+				let chunk_size = thread_keys.len() / 1;
 				for thread_keys_chunk in thread_keys.chunks(chunk_size) {
 					let mut thread_key_chunk_values = Vec::with_capacity(thread_keys_chunk.len());
 
@@ -891,7 +894,7 @@ where
 	/// initializes the remote client in `transport`, and sets the `at` field, if not specified.
 	async fn init_remote_client(&mut self) -> Result<(), &'static str> {
 		// First, initialize the http client.
-		self.as_online_mut().transport.map_uri().await?;
+		self.as_online_mut().transport.init().await?;
 
 		// Then, if `at` is not set, set it.
 		if self.as_online().at.is_none() {
