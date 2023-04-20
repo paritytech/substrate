@@ -54,6 +54,7 @@ mod tests {
 
 			// Kick off the on-runtime-upgrade process and wait for it to process at least 3 blocks.
 			let mut follow = start_on_runtime_upgrade(&ws_url);
+            printlln!("How can I see this?");
 			let re = Regex::new(r#".*executed block ([3-9]|[1-9]\d+).*"#).unwrap();
 			let matched =
 				common::wait_for_stream_pattern_match(follow.stderr.take().unwrap(), re).await;
