@@ -2191,7 +2191,7 @@ where
 		for (id, request, response) in ready_responses {
 			self.pending_responses
 				.remove(&id)
-				.expect("Peer was just iterated and exist; qed");
+				.expect("Logic error: peer id from pending response is missing in the map.");
 
 			match response {
 				Ok(Ok(resp)) => match request {
