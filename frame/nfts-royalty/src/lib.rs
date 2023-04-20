@@ -51,8 +51,9 @@ pub mod pallet {
 	use super::*;
 	// TODO: Probably a better way to do this than importing from pallet_nfts.
 	use frame_system::pallet_prelude::*;
-	use pallet_nfts::{ItemConfig, ItemSettings, ItemPrice};
+	use pallet_nfts::{ItemConfig, ItemSettings};
 	use sp_std::fmt::Display;
+	
 
 	use frame_support::{
 		pallet_prelude::*,
@@ -60,11 +61,13 @@ pub mod pallet {
 		traits::{
 			tokens::nonfungibles_v2::{
 				Inspect as NonFungiblesInspect, InspectEnumerable as NonFungiblesInspectEnumerable,
-				Mutate as NonFungiblesMutate,
+				Mutate as NonFungiblesMutate, Buy as NonFungiblesBuy
 			},
-			ReservableCurrency,
+			ReservableCurrency, Currency, ExistenceRequirement
 		},
 	};
+	pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
+	pub type ItemPrice<T> = BalanceOf<T>;
 
 	/// The current storage version.
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
@@ -101,15 +104,12 @@ pub mod pallet {
 				Self::AccountId,
 				ItemId = Self::NftItemId,
 				CollectionId = Self::NftCollectionId,
-			> + NonFungiblesTransfer<
+			> 
+			+ NonFungiblesBuy<
 				Self::AccountId,
+				ItemPrice<Self>,
 				ItemId = Self::NftItemId,
 				CollectionId = Self::NftCollectionId,
-			> + NonFungiblesBuy<
-				Self::AccountId,
-				ItemId = Self::NftItemId,
-				CollectionId = Self::NftCollectionId,
-				ItemPrice<T,I>
 			>;
 	}
 
@@ -149,6 +149,13 @@ pub mod pallet {
 			royalty_percentage: Permill,
 			royalty_recipient: T::AccountId,
 		},
+		/// The NFT royalty whas been payed.
+		NftRoyaltyPayed {
+			nft_collection: T::NftCollectionId,
+			nft: T::NftItemId,
+			amount_royalties_paid: BalanceOf<T>,
+			royalty_recipient: T::AccountId,
+		},
 	}
 
 	#[pallet::error]
@@ -161,6 +168,8 @@ pub mod pallet {
 		NftDoesNotExist,
 		/// The NFT already has a royalty.
 		RoyaltyAlreadyExists,
+		/// The NFT is not for sale.
+		NotForSale,
 	}
 
 	#[pallet::call]
@@ -347,6 +356,55 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Allows to buy an item if it's up for sale and pays the royalties associated to it.
+		///
+		/// Origin must be Signed and must not be the owner of the `item`.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item the sender wants to buy.
+		/// - `bid_price`: The price the sender is willing to pay.
+		///
+		/// Emits `RoyaltiesPaid`.
+		///
+		#[pallet::call_index(4)]
+		#[pallet::weight(0)]
+		pub fn buy_item_with_royalty(
+			origin: OriginFor<T>,
+			collection_id: T::NftCollectionId,
+			item_id: T::NftItemId,
+			bid_price: ItemPrice<T>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+
+			// Retrieve price of the item
+			let item_price = T::Nfts::item_price(&collection_id, &item_id).ok_or(Error::<T>::NotForSale)?;
+
+			//Buy the item within NFT pallet
+			T::Nfts::buy_item(&collection_id, &item_id, &origin, &bid_price)?;
+
+			//Pay the royalties to the royalties owner
+			let item_royalties = <NftWithRoyalty<T>>::get((collection_id, item_id))
+				.ok_or(Error::<T>::NoRoyaltyExists)?;
+			
+
+			let royalty_to_pay = item_royalties.royalty_percentage * item_price;
+
+			T::Currency::transfer(
+				&origin,
+				&item_royalties.royalty_recipient,
+				royalty_to_pay,
+				ExistenceRequirement::KeepAlive,
+			)?;
+
+			Self::deposit_event(Event::NftRoyaltyPayed {
+				nft_collection: collection_id,
+				nft: item_id,
+				amount_royalties_paid: royalty_to_pay,
+				royalty_recipient: item_royalties.royalty_recipient,
+			});
+
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
