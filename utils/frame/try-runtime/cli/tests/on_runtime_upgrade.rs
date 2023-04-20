@@ -23,19 +23,20 @@ mod tests {
 	use assert_cmd::cargo::cargo_bin;
 	use regex::Regex;
 	use std::{
-		process::{self},
+		process,
+        str::from_utf8,
 		time::Duration,
 	};
 	use substrate_cli_test_utils as common;
-	use tokio::process::{Child, Command};
+	use tokio::process::Command;
 
 	#[tokio::test]
 	async fn on_runtime_upgrade_works() {
 		// Build substrate so binaries used in the test use the latest code.
 		common::build_substrate(&["--features=try-runtime"]);
 
-		common::run_with_timeout(Duration::from_secs(60), async move {
-			fn start_on_runtime_upgrade(ws_url: &str) -> Child {
+		common::run_with_timeout(Duration::from_secs(20 * 60), async move {
+			let run_on_runtime_upgrade = |ws_url: String| async move {
 				Command::new(cargo_bin("substrate"))
 					.stdout(process::Stdio::piped())
 					.stderr(process::Stdio::piped())
@@ -43,25 +44,22 @@ mod tests {
                     .args(&["on-runtime-upgrade", "--checks=pre-and-post"])
 					.args(&["live", format!("--uri={}", ws_url).as_str()])
 					.kill_on_drop(true)
-					.spawn()
+                    .output()
+					.await
 					.unwrap()
-			}
+			};
 
 			// Start a node and wait for it to begin finalizing blocks
 			let mut node = common::KillChildOnDrop(common::start_node());
 			let ws_url = common::extract_info_from_output(node.stderr.take().unwrap()).0.ws_url;
 			common::wait_n_finalized_blocks(1, &ws_url).await;
 
-			// Kick off the on-runtime-upgrade process and wait for it to process at least 3 blocks.
-			let mut follow = start_on_runtime_upgrade(&ws_url);
-            printlln!("How can I see this?");
-			let re = Regex::new(r#".*executed block ([3-9]|[1-9]\d+).*"#).unwrap();
-			let matched =
-				common::wait_for_stream_pattern_match(follow.stderr.take().unwrap(), re).await;
-
-			// Assert that the on-runtime-upgrade process has followed at least 3 blocks.
-			assert!(matches!(matched, Ok(_)));
-		})
+			// Kick off the on-runtime-upgrade process and wait for the on-runtime-upgrade to succeed.
+			let on_runtime_upgrade = run_on_runtime_upgrade(ws_url).await;
+            let re = Regex::new(r"TryRuntime_on_runtime_upgrade executed without errors").unwrap();
+            assert!(re.clone().is_match(from_utf8(&on_runtime_upgrade.stderr).unwrap()));
+            assert!(on_runtime_upgrade.status.success());
+        })
 		.await;
 	}
 }
