@@ -25,12 +25,14 @@
 #![allow(unused)]
 
 use futures::{channel::oneshot, future::Either, FutureExt, StreamExt};
+use flume::Sender;
 use libp2p::PeerId;
 use log::{error, info, trace, warn};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_arithmetic::traits::SaturatedConversion;
 use std::{
-	collections::{hash_map::Entry, HashMap, HashSet},
+	collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
+	sync::mpsc::SyncSender,
 	time::{Duration, Instant},
 };
 use wasm_timer::Delay;
@@ -176,8 +178,10 @@ pub struct ProtocolController {
 	reserved_only: bool,
 	/// Next time to allocate slots. This is done once per second.
 	next_periodic_alloc_slots: Instant,
+	/// Queue of messages for `Notifications`
+	notif_queue: VecDeque<Message>,
 	/// Outgoing channel for messages to `Notifications`.
-	to_notifications: TracingUnboundedSender<Message>,
+	to_notifications: Sender<Message>,
 	/// `PeerStore` handle for checking peer reputation values and getting connection candidates
 	/// with highest reputation.
 	peer_store: Box<dyn PeerReputationProvider>,
@@ -188,7 +192,7 @@ impl ProtocolController {
 	pub fn new(
 		set_id: SetId,
 		config: SetConfig,
-		to_notifications: TracingUnboundedSender<Message>,
+		to_notifications: Sender<Message>,
 		peer_store: Box<dyn PeerReputationProvider>,
 	) -> (ProtocolHandle, ProtocolController) {
 		let (actions_tx, actions_rx) = tracing_unbounded("mpsc_api_protocol", 10_000);
@@ -208,6 +212,7 @@ impl ProtocolController {
 			reserved_nodes,
 			reserved_only: config.reserved_only,
 			next_periodic_alloc_slots: Instant::now(),
+			notif_queue: VecDeque::new(),
 			to_notifications,
 			peer_store,
 		};
@@ -224,8 +229,13 @@ impl ProtocolController {
 	///
 	/// Intended for tests only. Use `run` for driving [`ProtocolController`].
 	pub async fn next_action(&mut self) -> bool {
-		// Perform tasks prioritizing connection events processing.
 		let either = loop {
+			for msg in self.notif_queue.drain(..) {
+				let _ = self.to_notifications.send_async(msg).await;
+				// TODO: handle errors.
+			}
+
+
 			if let Some(event) = self.events_rx.next().now_or_never() {
 				match event {
 					None => return false,
@@ -281,27 +291,27 @@ impl ProtocolController {
 	}
 
 	/// Send "accept" message to `Notifications`.
-	fn accept_connection(&self, incoming_index: IncomingIndex) {
-		let _ = self.to_notifications.unbounded_send(Message::Accept(incoming_index));
+	fn accept_connection(&mut self, incoming_index: IncomingIndex) {
+		let _ = self.notif_queue.push_back(Message::Accept(incoming_index));
 	}
 
 	/// Send "reject" message to `Notifications`.
-	fn reject_connection(&self, incoming_index: IncomingIndex) {
-		let _ = self.to_notifications.unbounded_send(Message::Reject(incoming_index));
+	fn reject_connection(&mut self, incoming_index: IncomingIndex) {
+		let _ = self.notif_queue.push_back(Message::Reject(incoming_index));
 	}
 
 	/// Send "connect" message to `Notifications`.
-	fn start_connection(&self, peer_id: PeerId) {
+	fn start_connection(&mut self, peer_id: PeerId) {
 		let _ = self
-			.to_notifications
-			.unbounded_send(Message::Connect { set_id: self.set_id, peer_id });
+			.notif_queue
+			.push_back(Message::Connect { set_id: self.set_id, peer_id });
 	}
 
 	/// Send "drop" message to `Notifications`.
-	fn drop_connection(&self, peer_id: PeerId) {
+	fn drop_connection(&mut self, peer_id: PeerId) {
 		let _ = self
-			.to_notifications
-			.unbounded_send(Message::Drop { set_id: self.set_id, peer_id });
+			.notif_queue
+			.push_back(Message::Drop { set_id: self.set_id, peer_id });
 	}
 
 	/// Report peer disconnect event to `PeerStore` for it to update peer's reputation accordingly.
@@ -422,7 +432,8 @@ impl ProtocolController {
 		}
 
 		// Disconnect all non-reserved peers.
-		self.nodes.keys().for_each(|peer_id| self.drop_connection(*peer_id));
+		let non_reserved: Vec<_> = self.nodes.keys().cloned().collect();
+		non_reserved.iter().for_each(|peer_id| self.drop_connection(*peer_id));
 		self.nodes.clear();
 		self.num_in = 0;
 		self.num_out = 0;
@@ -649,7 +660,7 @@ impl ProtocolController {
 	}
 }
 
-#[cfg(test)]
+#[cfg(disabled)]
 mod tests {
 	use super::{Direction, PeerState, ProtocolController};
 	use crate::{

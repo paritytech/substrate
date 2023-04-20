@@ -52,7 +52,7 @@ enum Event {
 fn run() {
 	sp_tracing::try_init_simple();
 
-	for _ in 0..50 {
+	for _ in 0..500 {
 		test_once();
 	}
 }
@@ -63,11 +63,11 @@ fn test_once() {
 	let allowed_events: HashMap<Event, HashSet<Event>> = [
 		(
 			Event::Disconnected,
-			[Event::Incoming, Event::PsmConnect, Event::PsmDrop /* synonymous */].into_iter().collect::<HashSet<_>>(),
+			[Event::Incoming, Event::PsmConnect/*, Event::PsmDrop  synonymous */].into_iter().collect::<HashSet<_>>(),
 		),
 		(
 			Event::Incoming,
-			[Event::PsmAccept, Event::PsmReject, Event::PsmConnect, Event::PsmDrop /* must be ignored, will be obsoleted by the answer to `Incoming` */]
+			[Event::PsmAccept, Event::PsmReject, Event::PsmConnect/*, Event::PsmDrop  must be ignored, will be obsoleted by the answer to `Incoming` */]
 				.into_iter()
 				.collect::<HashSet<_>>(),
 		),
@@ -83,13 +83,13 @@ fn test_once() {
 		),
 		(
 			Event::PsmConnect,
-			[Event::Disconnected, Event::PsmAccept /* direction switch */, Event::PsmDrop]
+			[Event::Disconnected/*, Event::PsmAccept  direction switch */, Event::PsmDrop]
 				.into_iter()
 				.collect::<HashSet<_>>(),
 		),
 		(
 			Event::PsmDrop,
-			[Event::Incoming, Event::PsmReject /* synonymous */, Event::PsmConnect]
+			[Event::Incoming/*, Event::PsmReject  synonymous */, Event::PsmConnect]
 				.into_iter()
 				.collect::<HashSet<_>>(),
 		),
@@ -150,7 +150,7 @@ fn test_once() {
 
 		// Perform a certain number of actions while checking that the state is consistent. If we
 		// reach the end of the loop, the run has succeeded.
-		for _ in 0..25000 {
+		for _ in 0..250000 {
 			// Peer we are working with.
 			let mut current_peer = None;
 			// Current event for event bigrams validation.

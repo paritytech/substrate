@@ -15,6 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 futures = "0.3.21"
+flume = "0.10.14"
 libp2p = "0.50.0"
 log = "0.4.17"
 partial_sort = "0.2.0"
