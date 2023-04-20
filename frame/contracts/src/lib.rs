@@ -1362,18 +1362,6 @@ sp_api::decl_runtime_apis! {
 		/// Perform a call from a specified account to a given contract.
 		///
 		/// See [`crate::Pallet::bare_call`].
-		fn call(
-			origin: AccountId,
-			dest: AccountId,
-			value: Balance,
-			gas_limit: Option<Weight>,
-			storage_deposit_limit: Option<Balance>,
-			input_data: Vec<u8>,
-		) -> ContractExecResult<Balance>;
-
-		/// Perform a call from a specified account to a given contract.
-		///
-		/// See [`crate::Pallet::bare_call`].
 		#[api_version(3)]
 		fn call_v3(
 			origin: AccountId,
@@ -1383,19 +1371,6 @@ sp_api::decl_runtime_apis! {
 			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
 		) -> ContractExecResultWEvents<Balance, EventRecord>;
-
-		/// Instantiate a new contract.
-		///
-		/// See `[crate::Pallet::bare_instantiate]`.
-		fn instantiate(
-			origin: AccountId,
-			value: Balance,
-			gas_limit: Option<Weight>,
-			storage_deposit_limit: Option<Balance>,
-			code: Code<Hash>,
-			data: Vec<u8>,
-			salt: Vec<u8>,
-		) -> ContractInstantiateResult<AccountId, Balance>;
 
 		/// Instantiate a new contract.
 		///
@@ -1411,6 +1386,30 @@ sp_api::decl_runtime_apis! {
 			salt: Vec<u8>,
 		) -> ContractInstantiateResultWEvents<AccountId, Balance, EventRecord>;
 
+		/// Perform a call from a specified account to a given contract.
+		///
+		/// See [`crate::Pallet::bare_call`].
+		fn call(
+			origin: AccountId,
+			dest: AccountId,
+			value: Balance,
+			gas_limit: Option<Weight>,
+			storage_deposit_limit: Option<Balance>,
+			input_data: Vec<u8>,
+		) -> ContractExecResult<Balance>;
+
+		/// Instantiate a new contract.
+		///
+		/// See `[crate::Pallet::bare_instantiate]`.
+		fn instantiate(
+			origin: AccountId,
+			value: Balance,
+			gas_limit: Option<Weight>,
+			storage_deposit_limit: Option<Balance>,
+			code: Code<Hash>,
+			data: Vec<u8>,
+			salt: Vec<u8>,
+		) -> ContractInstantiateResult<AccountId, Balance>;
 
 		/// Upload new code without instantiating a contract from it.
 		///
