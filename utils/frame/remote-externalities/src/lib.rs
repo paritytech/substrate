@@ -804,9 +804,13 @@ where
 		let arc_client = self.as_online().rpc_client_cloned();
 		let mut child_kv = vec![];
 		for prefixed_top_key in child_roots {
-			let child_keys =
-				Self::rpc_child_get_keys(&*arc_client, &prefixed_top_key, StorageKey(vec![]), at)
-					.await?;
+			let child_keys = Self::rpc_child_get_keys(
+				arc_client.as_ref(),
+				&prefixed_top_key,
+				StorageKey(vec![]),
+				at,
+			)
+			.await?;
 
 			let child_kv_inner =
 				Self::rpc_child_get_storage_paged(&arc_client, &prefixed_top_key, child_keys, at)
