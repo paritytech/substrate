@@ -121,8 +121,8 @@ use frame_support::{
 use frame_system::{EventRecord, Pallet as System};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
-	ContractInstantiateResult, ExecReturnValue, GetStorageResult, InstantiateReturnValue,
-	StorageDeposit,
+	ContractExecResultWEvents, ContractInstantiateResult, ContractInstantiateResultWEvents,
+	ExecReturnValue, GetStorageResult, InstantiateReturnValue, StorageDeposit,
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
@@ -1158,7 +1158,7 @@ impl<T: Config> Pallet<T> {
 		debug: DebugInfo,
 		determinism: Determinism,
 		collect_events: CollectEvents,
-	) -> ContractExecResult<BalanceOf<T>, EventRecordOf<T>> {
+	) -> ContractExecResultWEvents<BalanceOf<T>, EventRecordOf<T>> {
 		let mut debug_message = if matches!(debug, DebugInfo::UnsafeDebug) {
 			Some(DebugBufferVec::<T>::default())
 		} else {
@@ -1180,7 +1180,7 @@ impl<T: Config> Pallet<T> {
 			None
 		};
 
-		ContractExecResult {
+		ContractExecResultWEvents {
 			result: output.result.map_err(|r| r.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
 			gas_required: output.gas_meter.gas_required(),
@@ -1214,7 +1214,7 @@ impl<T: Config> Pallet<T> {
 		salt: Vec<u8>,
 		debug: DebugInfo,
 		collect_events: CollectEvents,
-	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>, EventRecordOf<T>> {
+	) -> ContractInstantiateResultWEvents<T::AccountId, BalanceOf<T>, EventRecordOf<T>> {
 		let mut debug_message = if debug == DebugInfo::UnsafeDebug {
 			Some(DebugBufferVec::<T>::default())
 		} else {
@@ -1235,7 +1235,7 @@ impl<T: Config> Pallet<T> {
 		} else {
 			None
 		};
-		ContractInstantiateResult {
+		ContractInstantiateResultWEvents {
 			result: output
 				.result
 				.map(|(account_id, result)| InstantiateReturnValue { result, account_id })
@@ -1369,7 +1369,20 @@ sp_api::decl_runtime_apis! {
 			gas_limit: Option<Weight>,
 			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
-		) -> ContractExecResult<Balance, EventRecord>;
+		) -> ContractExecResult<Balance>;
+
+		/// Perform a call from a specified account to a given contract.
+		///
+		/// See [`crate::Pallet::bare_call`].
+		#[api_version(3)]
+		fn call_v3(
+			origin: AccountId,
+			dest: AccountId,
+			value: Balance,
+			gas_limit: Option<Weight>,
+			storage_deposit_limit: Option<Balance>,
+			input_data: Vec<u8>,
+		) -> ContractExecResultWEvents<Balance, EventRecord>;
 
 		/// Instantiate a new contract.
 		///
@@ -1382,7 +1395,21 @@ sp_api::decl_runtime_apis! {
 			code: Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
-		) -> ContractInstantiateResult<AccountId, Balance, EventRecord>;
+		) -> ContractInstantiateResult<AccountId, Balance>;
+
+		/// Instantiate a new contract.
+		///
+		/// See `[crate::Pallet::bare_instantiate]`.
+		#[api_version(3)]
+		fn instantiate_v3(
+			origin: AccountId,
+			value: Balance,
+			gas_limit: Option<Weight>,
+			storage_deposit_limit: Option<Balance>,
+			code: Code<Hash>,
+			data: Vec<u8>,
+			salt: Vec<u8>,
+		) -> ContractInstantiateResultWEvents<AccountId, Balance, EventRecord>;
 
 
 		/// Upload new code without instantiating a contract from it.

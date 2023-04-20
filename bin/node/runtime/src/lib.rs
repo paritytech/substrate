@@ -52,6 +52,10 @@ use frame_system::{
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
+use pallet_contracts_primitives::{
+	Code, CodeUploadResult, ContractExecResult, ContractExecResultWEvents,
+	ContractInstantiateResult, ContractInstantiateResultWEvents, GetStorageResult,
+};
 use pallet_election_provider_multi_phase::SolutionAccuracyOf;
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use pallet_nfts::PalletFeatures;
@@ -2127,16 +2131,17 @@ impl_runtime_apis! {
 		}
 	}
 
+	#[api_version(3)]
 	impl pallet_contracts::ContractsApi<Block, AccountId, Balance, BlockNumber, Hash, EventRecord> for Runtime
 	{
-		fn call(
+		fn call_v3(
 			origin: AccountId,
 			dest: AccountId,
 			value: Balance,
 			gas_limit: Option<Weight>,
 			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
-		) -> pallet_contracts_primitives::ContractExecResult<Balance, EventRecord> {
+		) -> ContractExecResultWEvents<Balance, EventRecord> {
 			let gas_limit = gas_limit.unwrap_or(RuntimeBlockWeights::get().max_block);
 			Contracts::bare_call(
 				origin,
@@ -2151,15 +2156,15 @@ impl_runtime_apis! {
 			)
 		}
 
-		fn instantiate(
+		fn instantiate_v3(
 			origin: AccountId,
 			value: Balance,
 			gas_limit: Option<Weight>,
 			storage_deposit_limit: Option<Balance>,
-			code: pallet_contracts_primitives::Code<Hash>,
+			code: Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
-		) -> pallet_contracts_primitives::ContractInstantiateResult<AccountId, Balance, EventRecord>
+		) -> ContractInstantiateResultWEvents<AccountId, Balance, EventRecord>
 		{
 			let gas_limit = gas_limit.unwrap_or(RuntimeBlockWeights::get().max_block);
 			Contracts::bare_instantiate(
@@ -2175,12 +2180,74 @@ impl_runtime_apis! {
 			)
 		}
 
+		fn call(
+			origin: AccountId,
+			dest: AccountId,
+			value: Balance,
+			gas_limit: Option<Weight>,
+			storage_deposit_limit: Option<Balance>,
+			input_data: Vec<u8>,
+		) -> ContractExecResult<Balance> {
+			let gas_limit = gas_limit.unwrap_or(RuntimeBlockWeights::get().max_block);
+			let result = Contracts::bare_call(
+				origin,
+				dest,
+				value,
+				gas_limit,
+				storage_deposit_limit,
+				input_data,
+				pallet_contracts::DebugInfo::UnsafeDebug,
+				pallet_contracts::Determinism::Enforced,
+				pallet_contracts::CollectEvents::Skip,
+			);
+			ContractExecResult {
+				gas_consumed: result.gas_consumed,
+				gas_required: result.gas_required,
+				storage_deposit: result.storage_deposit,
+				debug_message: result.debug_message,
+				result: result.result,
+				events: None,
+			}
+		}
+
+		fn instantiate(
+			origin: AccountId,
+			value: Balance,
+			gas_limit: Option<Weight>,
+			storage_deposit_limit: Option<Balance>,
+			code: Code<Hash>,
+			data: Vec<u8>,
+			salt: Vec<u8>,
+		) -> ContractInstantiateResult<AccountId, Balance>
+		{
+			let gas_limit = gas_limit.unwrap_or(RuntimeBlockWeights::get().max_block);
+			let result = Contracts::bare_instantiate(
+				origin,
+				value,
+				gas_limit,
+				storage_deposit_limit,
+				code,
+				data,
+				salt,
+				pallet_contracts::DebugInfo::UnsafeDebug,
+				pallet_contracts::CollectEvents::Skip,
+			);
+			ContractInstantiateResult {
+				gas_consumed: result.gas_consumed,
+				gas_required: result.gas_required,
+				storage_deposit: result.storage_deposit,
+				debug_message: result.debug_message,
+				result: result.result,
+				events: None,
+			}
+		}
+
 		fn upload_code(
 			origin: AccountId,
 			code: Vec<u8>,
 			storage_deposit_limit: Option<Balance>,
 			determinism: pallet_contracts::Determinism,
-		) -> pallet_contracts_primitives::CodeUploadResult<Hash, Balance>
+		) -> CodeUploadResult<Hash, Balance>
 		{
 			Contracts::bare_upload_code(
 				origin,
@@ -2193,7 +2260,7 @@ impl_runtime_apis! {
 		fn get_storage(
 			address: AccountId,
 			key: Vec<u8>,
-		) -> pallet_contracts_primitives::GetStorageResult {
+		) -> GetStorageResult {
 			Contracts::get_storage(
 				address,
 				key
