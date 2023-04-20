@@ -128,6 +128,7 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 			_ => false,
 		}
 	}
+
 }
 
 impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, CollectionConfigFor<T, I>>
@@ -323,6 +324,24 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 		Self::do_transfer(*collection, *item, destination.clone(), |_, _| Ok(()))
 	}
 }
+
+impl<T: Config<I>, I: 'static> Buy<T::AccountId, ItemPrice<T,I>> for Pallet<T, I> {
+	fn buy_item(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		buyer: &T::AccountId,
+		bid_price: &ItemPrice<T,I>,
+	) -> DispatchResult {
+		Self::do_buy_item(*collection, *item, buyer.clone(), *bid_price)
+	}
+	fn item_price(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+	) -> Option<ItemPrice<T, I>> {
+		ItemPriceOf::<T, I>::get(collection, item).map(|a| a.0)
+	}
+}
+
 
 impl<T: Config<I>, I: 'static> InspectEnumerable<T::AccountId> for Pallet<T, I> {
 	type CollectionsIterator = KeyPrefixIterator<<T as Config<I>>::CollectionId>;

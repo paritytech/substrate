@@ -51,7 +51,7 @@ pub mod pallet {
 	use super::*;
 	// TODO: Probably a better way to do this than importing from pallet_nfts.
 	use frame_system::pallet_prelude::*;
-	use pallet_nfts::{ItemConfig, ItemSettings};
+	use pallet_nfts::{ItemConfig, ItemSettings, ItemPrice};
 	use sp_std::fmt::Display;
 
 	use frame_support::{
@@ -101,6 +101,15 @@ pub mod pallet {
 				Self::AccountId,
 				ItemId = Self::NftItemId,
 				CollectionId = Self::NftCollectionId,
+			> + NonFungiblesTransfer<
+				Self::AccountId,
+				ItemId = Self::NftItemId,
+				CollectionId = Self::NftCollectionId,
+			> + NonFungiblesBuy<
+				Self::AccountId,
+				ItemId = Self::NftItemId,
+				CollectionId = Self::NftCollectionId,
+				ItemPrice<T,I>
 			>;
 	}
 
@@ -224,7 +233,6 @@ pub mod pallet {
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?
 				.unwrap();
 
-			// TODO: Decide if throws an error if has not royalties or just burn it
 			<NftWithRoyalty<T>>::take((collection_id, item_id))
 				.ok_or(Error::<T>::NoRoyaltyExists)?;
 
@@ -338,6 +346,7 @@ pub mod pallet {
 
 			Ok(())
 		}
+
 	}
 
 	impl<T: Config> Pallet<T> {

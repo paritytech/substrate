@@ -339,3 +339,17 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		destination: &AccountId,
 	) -> DispatchResult;
 }
+
+/// Trait for buying non-fungible items.
+pub trait Buy<AccountId, ItemPrice>: Inspect<AccountId> {
+	/// Allows `buyer` to buy an `item` of `collection` if it's up for sale with a `bid_price` to pay.
+	fn buy_item(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		buyer: &AccountId,
+		bid_price: &ItemPrice,
+	) -> DispatchResult;
+
+	/// Returns the item price of `item` of `collection`, or `None` if the item is not for sale
+	fn item_price(collection: &Self::CollectionId, item: &Self::ItemId) -> Option<ItemPrice>;
+}
