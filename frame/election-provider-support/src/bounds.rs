@@ -123,7 +123,7 @@ impl Add for SizeBound {
 	}
 }
 
-/// Data bounds for [`DataProvider`].
+/// Data bounds for election data.
 ///
 /// Limits the data returned by `DataProvider` implementors, defined over two axis: `count`,
 /// defining the maximum number of elements returned and `size`, defining the limit in size (bytes)
