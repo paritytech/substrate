@@ -24,10 +24,9 @@ use crate::crypto::Ss58Codec;
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError};
 use bandersnatch_vrfs::{
-	CanonicalDeserialize, CanonicalSerialize, IntoVrfInput, Message, PublicKey, SecretKey,
-	ThinVrfSignature, Transcript, VrfInput,
+	CanonicalDeserialize, CanonicalSerialize, IntoVrfInput, PublicKey, SecretKey, ThinVrfSignature,
+	Transcript, VrfInput,
 };
-#[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
 
 use crate::{
@@ -52,12 +51,12 @@ const SIGNATURE_SERIALIZED_LEN: usize = 64;
 /// XXX.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(
+	Clone,
+	Copy,
 	PartialEq,
 	Eq,
 	PartialOrd,
 	Ord,
-	Clone,
-	Copy,
 	Encode,
 	Decode,
 	PassByInner,
@@ -84,14 +83,6 @@ impl AsMut<[u8]> for Public {
 	}
 }
 
-// impl Deref for Public {
-// 	type Target = [u8];
-
-// 	fn deref(&self) -> &Self::Target {
-// 		&self.0
-// 	}
-// }
-
 impl TryFrom<&[u8]> for Public {
 	type Error = ();
 
@@ -104,74 +95,6 @@ impl TryFrom<&[u8]> for Public {
 		Ok(Self::unchecked_from(r))
 	}
 }
-
-// impl From<Public> for [u8; PUBLIC_SERIALIZED_LEN] {
-// 	fn from(x: Public) -> [u8; PUBLIC_SERIALIZED_LEN] {
-// 		x.0
-// 	}
-// }
-
-// impl From<Public> for H256 {
-// 	fn from(x: Public) -> H256 {
-// 		x.0.into()
-// 	}
-// }
-
-// #[cfg(feature = "std")]
-// impl std::str::FromStr for Public {
-// 	type Err = crate::crypto::PublicError;
-
-// 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-// 		Self::from_ss58check(s)
-// 	}
-// }
-
-// impl UncheckedFrom<H256> for Public {
-// 	fn unchecked_from(x: H256) -> Self {
-// 		Public::from_h256(x)
-// 	}
-// }
-
-// #[cfg(feature = "std")]
-// impl std::fmt::Display for Public {
-// 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-// 		write!(f, "{}", self.to_ss58check())
-// 	}
-// }
-
-// impl sp_std::fmt::Debug for Public {
-// 	#[cfg(feature = "std")]
-// 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-// 		let s = self.to_ss58check();
-// 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
-// 	}
-
-// 	#[cfg(not(feature = "std"))]
-// 	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-// 		Ok(())
-// 	}
-// }
-
-// #[cfg(feature = "std")]
-// impl Serialize for Public {
-// 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-// 	where
-// 		S: Serializer,
-// 	{
-// 		serializer.serialize_str(&self.to_ss58check())
-// 	}
-// }
-
-// #[cfg(feature = "std")]
-// impl<'de> Deserialize<'de> for Public {
-// 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-// 	where
-// 		D: Deserializer<'de>,
-// 	{
-// 		Public::from_ss58check(&String::deserialize(deserializer)?)
-// 			.map_err(|e| de::Error::custom(format!("{:?}", e)))
-// 	}
-// }
 
 impl ByteArray for Public {
 	const LEN: usize = PUBLIC_SERIALIZED_LEN;
@@ -186,9 +109,22 @@ impl CryptoType for Public {
 
 impl Derive for Public {}
 
+impl sp_std::fmt::Debug for Public {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		let s = self.to_ss58check();
+		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		Ok(())
+	}
+}
+
 /// DAVXY TODO: DOCS
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
-#[derive(Encode, Decode, PartialEq, Eq, PassByInner, MaxEncodedLen, TypeInfo)]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo)]
 pub struct Signature([u8; SIGNATURE_SERIALIZED_LEN]);
 
 impl UncheckedFrom<[u8; SIGNATURE_SERIALIZED_LEN]> for Signature {
@@ -229,6 +165,18 @@ impl ByteArray for Signature {
 impl CryptoType for Signature {
 	#[cfg(feature = "full_crypto")]
 	type Pair = Pair;
+}
+
+impl sp_std::fmt::Debug for Signature {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		Ok(())
+	}
 }
 
 /// The raw secret seed, which can be used to recreate the `Pair`.
@@ -314,11 +262,11 @@ impl TraitPair for Pair {
 		let Ok(signature) = ThinVrfSignature::<0>::deserialize_compressed(signature.as_ref()) else {
 			return false
 		};
-		let mut t = Transcript::new(b"SigningContext");
-		t.append_slice(message.as_ref());
+		let mut transcript = Transcript::new(b"SigningContext");
+		transcript.append_slice(message.as_ref());
 
-		let inputs: Vec<Message> = Vec::new();
-		match signature.verify_thin_vrf(t, inputs, &public) {
+		let inputs: Vec<VrfInput> = Vec::new();
+		match signature.verify_thin_vrf(transcript, inputs, &public) {
 			Ok(ios) => true,
 			Err(e) => false,
 		}
@@ -398,7 +346,7 @@ pub mod vrf {
 				return false
 			};
 
-			let inputs: Vec<Message> = Vec::new();
+			let inputs: Vec<VrfInput> = Vec::new();
 			match signature.verify_thin_vrf(transcript.0.clone(), inputs, &public) {
 				Ok(ios) => true,
 				Err(e) => false,
@@ -441,28 +389,20 @@ mod tests {
 	}
 
 	#[test]
+	fn sign_verify() {
+		let pair = Pair::from_seed(DEV_SEED);
+		let public = pair.public();
+		let msg = b"hello";
+		let signature = pair.sign(msg);
+
+		assert!(Pair::verify(&signature, msg, &public));
+	}
+
+	#[test]
 	fn derive_hard_known_pair() {
 		let pair = Pair::from_string(&format!("{}//Alice", DEV_PHRASE), None).unwrap();
 		// known address of DEV_PHRASE with 1.1
 		let known = h2b("b0d3648bd5a3542afa16c06fee04cba37cc55c83a8894d36d87897bda0c65eec");
 		assert_eq!(pair.public().as_ref(), known);
-	}
-
-	#[test]
-	fn tmp_construct_public() {
-		let pair = Pair::from_seed(DEV_SEED);
-		let public = pair.public();
-		let raw = public.to_raw_vec();
-	}
-
-	#[test]
-	fn sign_verify() {
-		let pair = Pair::from_seed(DEV_SEED);
-		let public = pair.public();
-		let msg = b"hello";
-
-		let signature = pair.sign(msg);
-
-		assert!(Pair::verify(&signature, msg, &public));
 	}
 }

@@ -21,10 +21,12 @@ use crate::crypto::KeyTypeId;
 
 /// Key type for generic Ed25519 key.
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
-/// Key type for generic Sr 25519 key.
+/// Key type for generic Sr25519 key.
 pub const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
 /// Key type for generic ECDSA key.
 pub const ECDSA: KeyTypeId = KeyTypeId(*b"ecds");
+/// Key type for generic Bandersnatch key.
+pub const BANDERSNATCH: KeyTypeId = KeyTypeId(*b"bach");
 
 /// Macro for exporting functions from wasm in with the expected signature for using it with the
 /// wasm executor. This is useful for tests where you need to call a function in wasm.
