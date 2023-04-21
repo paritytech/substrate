@@ -31,19 +31,9 @@ pub fn sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> 
 	mul_projective_generic::<JubjubConfig>(base, scalar)
 }
 
-/// Compute a affine scalar multiplication for short_weierstrass through arkworks
-pub fn sw_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-	mul_affine_generic::<JubjubConfig>(base, scalar)
-}
-
 /// Compute a projective scalar multiplication for twisted_edwards through arkworks
 pub fn te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 	mul_projective_te_generic::<JubjubConfig>(base, scalar)
-}
-
-/// Compute a scalar multiplication for twisted_edwards through arkworks
-pub fn te_mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-	mul_affine_te_generic::<JubjubConfig>(base, scalar)
 }
 
 /// Compute a multi scalar mulitplication for twisted_edwards through arkworks

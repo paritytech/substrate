@@ -28,11 +28,6 @@ pub fn mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 	mul_projective_te_generic::<EdwardsConfig>(base, scalar)
 }
 
-/// Compute a scalar multiplication for twisted_edwards through arkworks
-pub fn mul_affine(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-	mul_affine_te_generic::<EdwardsConfig>(base, scalar)
-}
-
 /// Compute a multi scalar mulitplication for twisted_edwards through arkworks
 pub fn msm(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 	msm_te_generic::<EdwardsConfig>(bases, scalars)
