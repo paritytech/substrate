@@ -1400,7 +1400,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Deposits a log and ensures it matches the block's log data.
-	///
 	pub fn deposit_log(item: generic::DigestItem) {
 		<Digest<T>>::append(item);
 	}
