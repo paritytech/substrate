@@ -405,8 +405,6 @@ pub mod pallet {
 
 		/// Set the new runtime code without doing any checks of the given `code`.
 		///
-		/// - `O(C)` where `C` length of `code`
-		/// The weight of this function is dependent on the runtime.
 		#[pallet::call_index(3)]
 		#[pallet::weight((T::SystemWeightInfo::set_code(), DispatchClass::Operational))]
 		pub fn set_code_without_checks(
