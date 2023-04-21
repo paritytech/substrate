@@ -3606,13 +3606,7 @@ fn storage_deposit_callee_works() {
 			0,
 			GAS_LIMIT,
 			None,
-			100u32
-				.to_le_bytes()
-				.as_ref()
-				.iter()
-				.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
-				.cloned()
-				.collect(),
+			(100u32, &addr_callee).encode()
 		));
 
 		let callee = get_contract(&addr_callee);
