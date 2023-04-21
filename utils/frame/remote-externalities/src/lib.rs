@@ -470,7 +470,7 @@ where
 			batch_size,
 		);
 
-		// Payloads to attempt to process this batch
+		// Payloads to attempt to process this batch.
 		let page = payloads.iter().take(batch_size).cloned().collect::<Vec<_>>();
 
 		// Build the batch request
