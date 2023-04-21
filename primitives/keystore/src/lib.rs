@@ -20,6 +20,7 @@
 pub mod testing;
 
 use sp_core::{
+	bandersnatch,
 	crypto::{ByteArray, CryptoTypeId, KeyTypeId},
 	ecdsa, ed25519, sr25519,
 };
@@ -160,6 +161,32 @@ pub trait Keystore: Send + Sync {
 		msg: &[u8; 32],
 	) -> Result<Option<ecdsa::Signature>, Error>;
 
+	/// DAVXY TODO
+	fn bandersnatch_public_keys(&self, key_type: KeyTypeId) -> Vec<bandersnatch::Public>;
+
+	/// DAVXY TODO
+	fn bandersnatch_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bandersnatch::Public, Error>;
+
+	/// DAVXY TODO
+	fn bandersnatch_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		msg: &[u8],
+	) -> Result<Option<bandersnatch::Signature>, Error>;
+
+	/// DAVXY TODO
+	fn bandersnatch_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		transcript: &bandersnatch::vrf::VrfTranscript,
+	) -> Result<Option<bandersnatch::vrf::VrfSignature>, Error>;
+
 	/// Insert a new secret key.
 	fn insert(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()>;
 
@@ -207,6 +234,11 @@ pub trait Keystore: Send + Sync {
 				let public = ecdsa::Public::from_slice(public)
 					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;
 				self.ecdsa_sign(id, &public, msg)?.map(|s| s.encode())
+			},
+			bandersnatch::CRYPTO_ID => {
+				let public = bandersnatch::Public::from_slice(public)
+					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;
+				self.bandersnatch_sign(id, &public, msg)?.map(|s| s.encode())
 			},
 			_ => return Err(Error::KeyNotSupported(id)),
 		};

@@ -20,6 +20,7 @@
 use parking_lot::RwLock;
 use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
 use sp_core::{
+	bandersnatch,
 	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSigner},
 	ecdsa, ed25519, sr25519,
 };
@@ -207,6 +208,36 @@ impl Keystore for LocalKeystore {
 			.key_pair_by_type::<ecdsa::Pair>(public, key_type)?
 			.map(|pair| pair.sign_prehashed(msg));
 		Ok(sig)
+	}
+
+	fn bandersnatch_public_keys(&self, key_type: KeyTypeId) -> Vec<bandersnatch::Public> {
+		self.public_keys::<bandersnatch::Pair>(key_type)
+	}
+
+	fn bandersnatch_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<bandersnatch::Public, TraitError> {
+		self.generate_new::<bandersnatch::Pair>(key_type, seed)
+	}
+
+	fn bandersnatch_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		msg: &[u8],
+	) -> std::result::Result<Option<bandersnatch::Signature>, TraitError> {
+		self.sign::<bandersnatch::Pair>(key_type, public, msg)
+	}
+
+	fn bandersnatch_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		transcript: &bandersnatch::vrf::VrfTranscript,
+	) -> std::result::Result<Option<bandersnatch::vrf::VrfSignature>, TraitError> {
+		self.vrf_sign::<bandersnatch::Pair>(key_type, public, transcript)
 	}
 
 	fn insert(

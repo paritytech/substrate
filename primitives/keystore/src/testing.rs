@@ -20,6 +20,7 @@
 use crate::{Error, Keystore, KeystorePtr};
 
 use sp_core::{
+	bandersnatch,
 	crypto::{ByteArray, KeyTypeId, Pair, VrfSigner},
 	ecdsa, ed25519, sr25519,
 };
@@ -191,6 +192,36 @@ impl Keystore for MemoryKeystore {
 	) -> Result<Option<ecdsa::Signature>, Error> {
 		let sig = self.pair::<ecdsa::Pair>(key_type, public).map(|pair| pair.sign_prehashed(msg));
 		Ok(sig)
+	}
+
+	fn bandersnatch_public_keys(&self, key_type: KeyTypeId) -> Vec<bandersnatch::Public> {
+		self.public_keys::<bandersnatch::Pair>(key_type)
+	}
+
+	fn bandersnatch_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bandersnatch::Public, Error> {
+		self.generate_new::<bandersnatch::Pair>(key_type, seed)
+	}
+
+	fn bandersnatch_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		msg: &[u8],
+	) -> Result<Option<bandersnatch::Signature>, Error> {
+		self.sign::<bandersnatch::Pair>(key_type, public, msg)
+	}
+
+	fn bandersnatch_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		transcript: &bandersnatch::vrf::VrfTranscript,
+	) -> Result<Option<bandersnatch::vrf::VrfSignature>, Error> {
+		self.vrf_sign::<bandersnatch::Pair>(key_type, public, transcript)
 	}
 
 	fn insert(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {

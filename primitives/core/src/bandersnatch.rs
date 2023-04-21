@@ -347,7 +347,7 @@ impl CryptoType for Pair {
 }
 
 /// VRF related types and operations.
-mod vrf {
+pub mod vrf {
 	use super::*;
 	#[cfg(feature = "full_crypto")]
 	use crate::crypto::VrfSigner;
@@ -365,6 +365,7 @@ mod vrf {
 		}
 	}
 
+	/// TODO DAVXY
 	pub type VrfSignature = super::Signature;
 
 	#[cfg(feature = "full_crypto")]
