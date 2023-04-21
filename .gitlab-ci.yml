@@ -215,11 +215,6 @@ default:
 .zombienet-refs:
   extends: .build-refs
 
-.nightly-pipeline:
-  rules:
-    # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
-    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
-
 .crates-publishing-variables:
   variables:
     CRATESIO_CRATES_OWNER: parity-crate-owner
@@ -250,20 +245,6 @@ default:
     CI_DISABLE_TIMESTAMP: 1
 
 #### stage:                       .pre
-
-skip-if-draft:
-  extends: .kubernetes-env
-  variables:
-    CI_IMAGE: "paritytech/tools:latest"
-  stage: .pre
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ # PRs
-  script:
-    - echo "Commit message is ${CI_COMMIT_MESSAGE}"
-    - echo "Ref is ${CI_COMMIT_REF_NAME}"
-    - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
-    - ./scripts/ci/gitlab/skip_if_draft.sh
-  allow_failure: true
 
 check-crates-publishing-pipeline:
   stage: .pre
