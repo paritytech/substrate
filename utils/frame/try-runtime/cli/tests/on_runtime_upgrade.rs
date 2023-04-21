@@ -35,7 +35,7 @@ mod tests {
 		// Build substrate so binaries used in the test use the latest code.
 		common::build_substrate(&["--features=try-runtime"]);
 
-		common::run_with_timeout(Duration::from_secs(3 * 60), async move {
+		common::run_with_timeout(Duration::from_secs(60), async move {
 			let run_on_runtime_upgrade = |ws_url: String| async move {
 				Command::new(cargo_bin("substrate"))
 					.stdout(process::Stdio::piped())
@@ -63,13 +63,13 @@ mod tests {
             if error_re.is_match(stderr_str) {
                 // Output the line where the error matched in the stderr.
                 let stderr_str_lines: Vec<&str> = stderr_str.lines().collect();
-                for (i, line) in stderr_str_lines.iter().enumerate() {
+                for (_, line) in stderr_str_lines.iter().enumerate() {
                     if error_re.is_match(line) {
-                        println!("{}", i + 1, line);
+                        println!("{}", line);
                         break;
                     }
                 }
-                panic!("Error found in stderr_str");
+                panic!("Error found in stderr");
             }
             
             assert!(re.is_match(stderr_str));
