@@ -73,7 +73,19 @@ frame_support::construct_runtime!(
 	}
 );
 
-#[macro_use]
+macro_rules! assert_return_code {
+	( $x:expr , $y:expr $(,)? ) => {{
+		assert_eq!(u32::from_le_bytes($x.data[..].try_into().unwrap()), $y as u32);
+	}};
+}
+
+macro_rules! assert_refcount {
+	( $code_hash:expr , $should:expr $(,)? ) => {{
+		let is = crate::OwnerInfoOf::<Test>::get($code_hash).map(|m| m.refcount()).unwrap();
+		assert_eq!(is, $should);
+	}};
+}
+
 pub mod test_utils {
 	use super::{Balances, Hash, SysConfig, Test};
 	use crate::{
@@ -107,18 +119,6 @@ pub mod test_utils {
 	}
 	pub fn hash<S: Encode>(s: &S) -> <<Test as SysConfig>::Hashing as Hash>::Output {
 		<<Test as SysConfig>::Hashing as Hash>::hash_of(s)
-	}
-	macro_rules! assert_return_code {
-		( $x:expr , $y:expr $(,)? ) => {{
-			assert_eq!(u32::from_le_bytes($x.data[..].try_into().unwrap()), $y as u32);
-		}};
-	}
-
-	macro_rules! assert_refcount {
-		( $code_hash:expr , $should:expr $(,)? ) => {{
-			let is = crate::OwnerInfoOf::<Test>::get($code_hash).map(|m| m.refcount()).unwrap();
-			assert_eq!(is, $should);
-		}};
 	}
 }
 

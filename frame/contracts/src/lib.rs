@@ -83,7 +83,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "runtime-benchmarks", recursion_limit = "1024")]
 
-#[macro_use]
 mod gas;
 mod benchmarking;
 mod exec;
