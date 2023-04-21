@@ -96,6 +96,21 @@ macro_rules! bvec {
 }
 
 #[test]
+fn check_pool_accounts_dont_collide() {
+	use std::collections::HashSet;
+	let mut map = HashSet::new();
+
+	for i in 0..33554431u32 {
+		let account =
+			AssetConversion::get_pool_account((NativeOrAssetId::Native, NativeOrAssetId::Asset(i)));
+		if map.contains(&account) {
+			panic!("Collision at {}", i);
+		}
+		map.insert(account);
+	}
+}
+
+#[test]
 fn check_max_numbers() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(AssetConversion::quote(&3u128, &u128::MAX, &u128::MAX).ok().unwrap(), 3);
