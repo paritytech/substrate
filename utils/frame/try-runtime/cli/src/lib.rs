@@ -260,7 +260,7 @@
 //! # assuming there's `./substrate --dev --tmp --ws-port 9999` or similar running.
 //! ./substrate-try-runtime \
 //!     try-runtime \
-//!     --runtime kitchensink_runtime.wasm \
+//!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     on-runtime-upgrade \
 //!     live --uri ws://localhost:9999
@@ -272,7 +272,7 @@
 //! ```bash
 //! ./substrate-try-runtime \
 //!     try-runtime \
-//!     --runtime kitchensink_runtime.wasm \
+//!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     on-runtime-upgrade \
 //!     live --uri ws://localhost:9999 \
@@ -307,7 +307,7 @@
 //! Then, we can use it to have the same command as before, `on-runtime-upgrade`
 //!
 //! ```bash
-//! try-runtime \
+//! ./substrate-try-runtime try-runtime \
 //!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     on-runtime-upgrade \
@@ -332,12 +332,13 @@
 //!
 //! ```bash
 //! ./substrate-try-runtime try-runtime \
-//!     --runtime runtime-try-runtime.wasm \
-//!     -lruntime=debug \
-//!     execute-block live \
-//!     --try-state System,Staking \
-//! 		--pallet System,Staking \
-//!     --uri ws://localhost:9999
+//!    --runtime runtime-try-runtime.wasm \
+//!    -lruntime=debug \
+//!    execute-block \
+//!    --try-state System,Staking \
+//!    live \
+//!    --uri ws://localhost:9999 \
+//!    --pallet System Staking
 //! ```
 //!
 //! Will only run the `try-state` of the two given pallets. When running `try-state` against
