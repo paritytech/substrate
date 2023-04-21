@@ -23,25 +23,25 @@ use crate::utils::{
 	msm_sw_generic, msm_te_generic, mul_affine_generic, mul_affine_te_generic,
 	mul_projective_generic, mul_projective_te_generic,
 };
-use ark_ed_on_bls12_381::JubjubConfig;
+use ark_ed_on_bls12_381_bandersnatch::BandersnatchConfig;
 use sp_std::vec::Vec;
 
 /// Compute a projective scalar multiplication for short_weierstrass through arkworks
 pub fn sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-	mul_projective_generic::<JubjubConfig>(base, scalar)
+	mul_projective_generic::<BandersnatchConfig>(base, scalar)
 }
 
 /// Compute a projective scalar multiplication for twisted_edwards through arkworks
 pub fn te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-	mul_projective_te_generic::<JubjubConfig>(base, scalar)
+	mul_projective_te_generic::<BandersnatchConfig>(base, scalar)
 }
 
 /// Compute a multi scalar mulitplication for twisted_edwards through arkworks
 pub fn te_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
-	msm_te_generic::<JubjubConfig>(bases, scalars)
+	msm_te_generic::<BandersnatchConfig>(bases, scalars)
 }
 
 /// Compute a multi scalar multiplication for short_weierstrass through arkworks
 pub fn sw_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
-	msm_sw_generic::<JubjubConfig>(bases, scalars)
+	msm_sw_generic::<BandersnatchConfig>(bases, scalars)
 }
