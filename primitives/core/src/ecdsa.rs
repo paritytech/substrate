@@ -407,22 +407,8 @@ impl TraitPair for Pair {
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
-		match sig.recover(message) {
-			Some(actual) => actual == *pubkey,
-			None => false,
-		}
-	}
-
-	/// Verify a signature on a message. Returns true if the signature is good.
-	///
-	/// This doesn't use the type system to ensure that `sig` and `pubkey` are the correct
-	/// size. Use it only if you're coming from byte buffers and need the speed.
-	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		match Signature::from_slice(sig).and_then(|sig| sig.recover(message)) {
-			Some(actual) => actual.as_ref() == pubkey.as_ref(),
-			None => false,
-		}
+	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, public: &Self::Public) -> bool {
+		sig.recover(message).map(|actual| actual == *public).unwrap_or_default()
 	}
 
 	/// Return a vec filled with raw data.
