@@ -23,11 +23,18 @@
 //!
 //! This pallet allows to:
 //!
-//!  - create a liquidity pool for 2 assets
-//!  - provide the liquidity and receive back an LP token
-//!  - exchange the LP token back to assets
-//!  - swap 2 assets if there is a pool created
-//!  - query for an exchange price via a new runtime call endpoint
+//!  - [create a liquidity pool](`Pallet::create_pool()`) for 2 assets
+//!  - [provide the liquidity](`Pallet::add_liquidity()`) and receive back an LP token
+//!  - [exchange the LP token back to assets](`Pallet::remove_liquidity()`)
+//!  - [swap a specific amount of assets for another](`Pallet::swap_exact_tokens_for_tokens()`) if
+//!    there is a pool created, or
+//!  - [swap some assets for a specific amount of
+//!    another](`Pallet::swap_tokens_for_exact_tokens()`).
+//!  - [query for an exchange price](`AssetConversionApi::quote_price_exact_tokens_for_tokens`) via
+//!    a new runtime call endpoint
+//!
+//! (For an example of configuring this pallet to use `MultiLocation` as an asset id, see the
+//! cumulus repo).
 //!
 //! Here is an example `state_call` that asks for a quote of a pool of native versus asset 1:
 //!
@@ -36,6 +43,7 @@
 //! '{"id":1, "jsonrpc":"2.0", "method": "state_call", "params": ["AssetConversionApi_quote_price_tokens_for_exact_tokens", "0x0101000000000000000000000011000000000000000000"]}' \
 //! http://localhost:9933/
 //! ```
+//! (This can be run against the kitchen sync node in the `node` folder of this repo.)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 use frame_support::traits::Incrementable;
@@ -102,12 +110,13 @@ pub mod pallet {
 		type Currency: InspectFungible<Self::AccountId, Balance = Self::Balance>
 			+ MutateFungible<Self::AccountId>;
 
-		/// The `Currency::Balance` type.
+		/// The `Currency::Balance` type of the native currency.
 		type Balance: Balance;
 
 		/// The type used to describe the amount of fractions converted into assets.
 		type AssetBalance: Balance;
 
+		/// A type used for conversions between `Balance` and `AssetBalance`.
 		type HigherPrecisionBalance: IntegerSquareRoot
 			+ One
 			+ Ensure
@@ -118,13 +127,14 @@ pub mod pallet {
 			+ TryInto<Self::AssetBalance>
 			+ TryInto<Self::Balance>;
 
-		/// Identifier for the class of asset.
+		/// Identifier for the class of non-native asset.
+		/// Note: A From<u32> bound here would prevent MultiLocation from being used as an AssetId.
 		type AssetId: AssetId + PartialOrd;
 
-		/// Type that holds both Native currency and token from `Assets`.
+		/// Type that identifies either the native currency or a token class from `Assets`.
 		type MultiAssetId: AssetId + PartialOrd;
 
-		/// Type to convert `AssetId` into `MultiAssetId`.
+		/// Type to convert an `AssetId` into `MultiAssetId`.
 		type MultiAssetIdConverter: MultiAssetIdConverter<Self::MultiAssetId, Self::AssetId>;
 
 		/// Asset id to address the lp tokens by.
@@ -175,6 +185,8 @@ pub mod pallet {
 		type BenchmarkHelper: BenchmarkHelper<Self::AssetId>;
 	}
 
+	/// Map from PoolAssetId to PoolInfo. This establishes if a pool has been officially created
+	/// rather than people sending tokens directly to a pool's public account.
 	#[pallet::storage]
 	pub type Pools<T: Config> =
 		StorageMap<_, Blake2_128Concat, PoolIdOf<T>, PoolInfo<T::PoolAssetId>, OptionQuery>;
@@ -188,11 +200,9 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		PoolCreated {
-			creator: T::AccountId,
-			pool_id: PoolIdOf<T>,
-			lp_token: T::PoolAssetId,
-		},
+		/// A successful call of the `CretaPool` extrinsic will create this event.
+		PoolCreated { creator: T::AccountId, pool_id: PoolIdOf<T>, lp_token: T::PoolAssetId },
+		/// A successful call of the `AddLiquidity` extrinsic will create this event.
 		LiquidityAdded {
 			who: T::AccountId,
 			mint_to: T::AccountId,
@@ -202,6 +212,7 @@ pub mod pallet {
 			lp_token: T::PoolAssetId,
 			lp_token_minted: AssetBalanceOf<T>,
 		},
+		/// A successful call of the `RemoveLiquidity` extrinsic will create this event.
 		LiquidityRemoved {
 			who: T::AccountId,
 			withdraw_to: T::AccountId,
@@ -211,6 +222,8 @@ pub mod pallet {
 			lp_token: T::PoolAssetId,
 			lp_token_burned: AssetBalanceOf<T>,
 		},
+		/// Assets have been converted from one to another. Both `SwapExactTokenForToken`
+		/// and `SwapTokenForExactToken` will generate this event.
 		SwapExecuted {
 			who: T::AccountId,
 			send_to: T::AccountId,
@@ -218,6 +231,7 @@ pub mod pallet {
 			amount_in: AssetBalanceOf<T>,
 			amount_out: AssetBalanceOf<T>,
 		},
+		/// An amount has been transferred from one account to another.
 		Transfer {
 			from: T::AccountId,
 			to: T::AccountId,
@@ -277,8 +291,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T>
-	{
+	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		fn integrity_test() {
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(|| {
@@ -301,11 +314,13 @@ pub mod pallet {
 		}
 	}
 
-	// Pallet's callable functions.
+	/// Pallet's callable functions.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Creates an empty liquidity pool and an associated new `lp_token` asset
 		/// (the id of which is returned in the `Event::PoolCreated` event).
+		///
+		/// Once a pool is created, someone may [`Pallet::add_liquidity`] to it.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::create_pool())]
 		pub fn create_pool(
@@ -356,6 +371,9 @@ pub mod pallet {
 		/// thus it's needed to provide the min amount you're happy to provide.
 		/// Params `amount1_min`/`amount2_min` represent that.
 		/// `mint_to` will be sent the liquidity tokens that represent this share of the pool.
+		///
+		/// Once liquidity is added, someone may successfully call
+		/// [`Pallet::swap_exact_tokens_for_tokens`] successfully.
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::add_liquidity())]
 		pub fn add_liquidity(
@@ -524,6 +542,9 @@ pub mod pallet {
 		/// Swap the exact amount of `asset1` into `asset2`.
 		/// `amount_out_min` param allows to specify the min amount of the `asset2`
 		/// you're happy to receive.
+		///
+		/// [`AssetConversionApi::quote_price_exact_tokens_for_tokens`] runtime call can be called
+		/// for a quote.
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::swap_exact_tokens_for_tokens())]
 		pub fn swap_exact_tokens_for_tokens(
@@ -562,6 +583,9 @@ pub mod pallet {
 		/// Swap any amount of `asset1` to get the exact amount of `asset2`.
 		/// `amount_in_max` param allows to specify the max amount of the `asset1`
 		/// you're happy to provide.
+		///
+		/// [`AssetConversionApi::quote_price_tokens_for_exact_tokens`] runtime call can be called
+		/// for a quote.
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::swap_tokens_for_exact_tokens())]
 		pub fn swap_tokens_for_exact_tokens(
@@ -1026,15 +1050,26 @@ where
 }
 
 sp_api::decl_runtime_apis! {
+	/// This runtime api allows people to query the size of the liquidity pools
+	/// and qoute prices for swaps.
 	pub trait AssetConversionApi<Balance, AssetBalance, AssetId> where
 		Balance: Codec + MaybeDisplay,
 		AssetBalance: frame_support::traits::tokens::Balance,
 		AssetId: Codec
 	{
+		/// Provieds a quote for [`Pallet::swap_tokens_for_exact_tokens`].
+		///
+		/// Note that the price may have changed by the time the transaction is executed.
+		/// (Use `amount_in_max` to control slippage.)
 		fn quote_price_tokens_for_exact_tokens(asset1: AssetId, asset2: AssetId, amount: AssetBalance, include_fee: bool) -> Option<Balance>;
 
+		/// Provieds a quote for [`Pallet::swap_exact_tokens_for_tokens`].
+		///
+		/// Note that the price may have changed by the time the transaction is executed.
+		/// (Use `amount_out_min` to control slippage.)
 		fn quote_price_exact_tokens_for_tokens(asset1: AssetId, asset2: AssetId, amount: AssetBalance, include_fee: bool) -> Option<Balance>;
 
+		/// Returns the size of the liquidity pool for the given asset pair.
 		fn get_reserves(asset1: AssetId, asset2: AssetId) -> Option<(Balance, Balance)>;
 	}
 }

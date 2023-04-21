@@ -27,15 +27,14 @@ pub(super) type AssetBalanceOf<T> =
 	<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 pub(super) type PoolIdOf<T> = (<T as Config>::MultiAssetId, <T as Config>::MultiAssetId);
 
-/// Stores what lp_token a particular pool has.
+/// Stores the lp_token asset id a particular pool has been assigned.
 #[derive(Decode, Encode, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo)]
 pub struct PoolInfo<PoolAssetId> {
 	/// Liquidity pool asset
 	pub lp_token: PoolAssetId,
 }
 
-// At the moment when using PartialEq on AssetId, native
-// is expected to be lowest.
+/// A trait that converts between a MultiAssetId and either the native currency or an AssetId.
 pub trait MultiAssetIdConverter<MultiAssetId, AssetId> {
 	fn get_native() -> MultiAssetId;
 
@@ -63,7 +62,7 @@ where
 	}
 }
 
-/// An implementation of MultiAssetId that chooses between Native and an asset.
+/// An implementation of MultiAssetId that can be either Native or an asset.
 #[derive(Decode, Encode, Default, MaxEncodedLen, TypeInfo, Clone, Copy, Debug)]
 pub enum NativeOrAssetId<AssetId>
 where
@@ -97,6 +96,8 @@ impl<AssetId: Ord> PartialEq for NativeOrAssetId<AssetId> {
 }
 impl<AssetId: Ord> Eq for NativeOrAssetId<AssetId> {}
 
+/// Converts between a MultiAssetId and an AssetId
+/// (or the native currency).
 pub struct NativeOrAssetIdConverter<AssetId> {
 	_phantom: PhantomData<AssetId>,
 }
