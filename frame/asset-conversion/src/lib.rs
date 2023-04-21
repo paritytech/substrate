@@ -1032,7 +1032,7 @@ sp_api::decl_runtime_apis! {
 	pub trait AssetConversionApi<Balance, AssetBalance, AssetId> where
 		Balance: Codec + MaybeDisplay,
 		AssetBalance: frame_support::traits::tokens::Balance,
-		AssetId: Codec + MaybeDisplay
+		AssetId: Codec
 	{
 		fn quote_price_tokens_for_exact_tokens(asset1: AssetId, asset2: AssetId, amount: AssetBalance, include_fee: bool) -> Option<Balance>;
 
