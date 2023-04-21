@@ -53,6 +53,7 @@ pub trait BenchmarkHelper<AssetId> {
 	fn asset_id(asset_id: u32) -> AssetId;
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl<AssetId> BenchmarkHelper<AssetId> for ()
 where
 	AssetId: From<u32>,
