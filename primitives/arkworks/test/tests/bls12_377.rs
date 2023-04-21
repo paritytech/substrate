@@ -20,14 +20,8 @@ impl HostFunctions for Host {
 	fn bls12_377_mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 		sp_io::elliptic_curves::bls12_377_mul_projective_g1(base, scalar)
 	}
-	fn bls12_377_mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-		sp_io::elliptic_curves::bls12_377_mul_affine_g1(base, scalar)
-	}
 	fn bls12_377_mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 		sp_io::elliptic_curves::bls12_377_mul_projective_g2(base, scalar)
-	}
-	fn bls12_377_mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-		sp_io::elliptic_curves::bls12_377_mul_affine_g2(base, scalar)
 	}
 }
 

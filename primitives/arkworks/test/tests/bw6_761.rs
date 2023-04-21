@@ -24,12 +24,6 @@ impl HostFunctions for Host {
 	fn bw6_761_mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 		sp_io::elliptic_curves::bw6_761_mul_projective_g2(base, scalar)
 	}
-	fn bw6_761_mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-		sp_io::elliptic_curves::bw6_761_mul_affine_g1(base, scalar)
-	}
-	fn bw6_761_mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-		sp_io::elliptic_curves::bw6_761_mul_affine_g2(base, scalar)
-	}
 }
 
 test_group!(g1; sp_ark_bw6_761::g1::G1Projective<super::Host>; sw);
