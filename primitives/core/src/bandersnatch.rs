@@ -44,6 +44,8 @@ use sp_runtime_interface::pass_by::PassByInner;
 /// Identifier used to match public keys against bandersnatch-vrf keys.
 pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bs38");
 
+const SIGNING_CTX: &[u8] = b"SigningContext";
+
 const SEED_SERIALIZED_LEN: usize = 32;
 const PUBLIC_SERIALIZED_LEN: usize = 32;
 const SIGNATURE_SERIALIZED_LEN: usize = 64;
@@ -240,17 +242,17 @@ impl TraitPair for Pair {
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Signature {
-		let mut t = Transcript::new(b"SigningContext");
-		t.append_slice(message);
-		// TODO DAVXY: looks like we require to clone the secret to call sign...
-		// Is this required?!?
-		let sign: ThinVrfSignature<0> = self.0.clone().sign_thin_vrf(t, &[]);
+		let mut transcript = Transcript::new(SIGNING_CTX);
+		transcript.append_slice(message);
+		let sign: ThinVrfSignature<0> = self.0.sign_thin_vrf(transcript, &[]);
 		let mut raw = [0; SIGNATURE_SERIALIZED_LEN];
 		sign.serialize_compressed(raw.as_mut_slice());
 		Signature(raw)
 	}
 
-	/// Verify a signature on a message. Returns true if the signature is good.
+	/// Verify a signature on a message.
+	///
+	/// Returns true if the signature is good.
 	fn verify<M: AsRef<[u8]>>(
 		signature: &Self::Signature,
 		message: M,
@@ -262,7 +264,7 @@ impl TraitPair for Pair {
 		let Ok(signature) = ThinVrfSignature::<0>::deserialize_compressed(signature.as_ref()) else {
 			return false
 		};
-		let mut transcript = Transcript::new(b"SigningContext");
+		let mut transcript = Transcript::new(SIGNING_CTX);
 		transcript.append_slice(message.as_ref());
 
 		let inputs: Vec<VrfInput> = Vec::new();
@@ -325,7 +327,7 @@ pub mod vrf {
 	#[cfg(feature = "full_crypto")]
 	impl VrfSigner for Pair {
 		fn vrf_sign(&self, transcript: &Self::VrfInput) -> Self::VrfSignature {
-			let sign: ThinVrfSignature<0> = self.0.clone().sign_thin_vrf(transcript.0.clone(), &[]);
+			let sign: ThinVrfSignature<0> = self.0.sign_thin_vrf(transcript.0.clone(), &[]);
 			let mut raw = [0; SIGNATURE_SERIALIZED_LEN];
 			sign.serialize_compressed(raw.as_mut_slice());
 			Signature(raw)
