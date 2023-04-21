@@ -393,11 +393,6 @@ pub mod pallet {
 
 		/// Set the new runtime code.
 		///
-		/// - `O(C + S)` where `C` length of `code` and `S` complexity of `can_set_code`
-		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is
-		///   expensive).
-		/// The weight of this function is dependent on the runtime, but generally this is very
-		/// expensive.
 		#[pallet::call_index(2)]
 		#[pallet::weight((T::SystemWeightInfo::set_code(), DispatchClass::Operational))]
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
