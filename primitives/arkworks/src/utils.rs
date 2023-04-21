@@ -6,6 +6,7 @@ use ark_ec::{
 	twisted_edwards::TECurveConfig,
 	CurveConfig, VariableBaseMSM,
 };
+use ark_scale::hazmat::ArkScaleProjective;
 use ark_std::vec::Vec;
 use codec::{Decode, Encode};
 
@@ -26,7 +27,7 @@ pub(crate) fn multi_miller_loop_generic<Curve: Pairing>(
 	let result = Curve::multi_miller_loop(g1.0, g2.0).0;
 
 	let result: ArkScale<<Curve as Pairing>::TargetField> = result.into();
-	Ok(<ArkScale<<Curve as Pairing>::TargetField> as Encode>::encode(&result))
+	Ok(result.encode())
 }
 
 pub(crate) fn final_exponentiation_generic<Curve: Pairing>(target: Vec<u8>) -> Result<Vec<u8>, ()> {
@@ -38,7 +39,7 @@ pub(crate) fn final_exponentiation_generic<Curve: Pairing>(target: Vec<u8>) -> R
 	let result = Curve::final_exponentiation(MillerLoopOutput(target.0)).ok_or(())?;
 
 	let result: ArkScale<PairingOutput<Curve>> = result.into();
-	Ok(<ArkScale<PairingOutput<Curve>> as Encode>::encode(&result))
+	Ok(result.encode())
 }
 
 pub(crate) fn msm_sw_generic<Curve: SWCurveConfig>(
@@ -58,8 +59,8 @@ pub(crate) fn msm_sw_generic<Curve: SWCurveConfig>(
 		<short_weierstrass::Projective<Curve> as VariableBaseMSM>::msm(&bases.0, &scalars.0)
 			.map_err(|_| ())?;
 
-	let result: ArkScale<short_weierstrass::Projective<Curve>> = result.into();
-	Ok(<ArkScale<short_weierstrass::Projective<Curve>> as Encode>::encode(&result))
+	let result: ArkScaleProjective<short_weierstrass::Projective<Curve>> = result.into();
+	Ok(result.encode())
 }
 
 pub(crate) fn msm_te_generic<Curve: TECurveConfig>(
@@ -78,15 +79,15 @@ pub(crate) fn msm_te_generic<Curve: TECurveConfig>(
 	let result =
 		<twisted_edwards::Projective<Curve> as VariableBaseMSM>::msm(&bases.0, &scalars.0).unwrap();
 
-	let result: ArkScale<twisted_edwards::Projective<Curve>> = result.into();
-	Ok(<ArkScale<twisted_edwards::Projective<Curve>> as Encode>::encode(&result))
+	let result: ArkScaleProjective<twisted_edwards::Projective<Curve>> = result.into();
+	Ok(result.encode())
 }
 
 pub(crate) fn mul_projective_generic<Group: SWCurveConfig>(
 	base: Vec<u8>,
 	scalar: Vec<u8>,
 ) -> Result<Vec<u8>, ()> {
-	let base = <ArkScale<short_weierstrass::Projective<Group>> as Decode>::decode(
+	let base = <ArkScaleProjective<short_weierstrass::Projective<Group>> as Decode>::decode(
 		&mut base.clone().as_slice(),
 	)
 	.map_err(|_| ())?;
@@ -95,15 +96,15 @@ pub(crate) fn mul_projective_generic<Group: SWCurveConfig>(
 
 	let result = <Group as SWCurveConfig>::mul_projective(&base.0, &scalar.0);
 
-	let result: ArkScale<short_weierstrass::Projective<Group>> = result.into();
-	Ok(<ArkScale<short_weierstrass::Projective<Group>> as Encode>::encode(&result))
+	let result: ArkScaleProjective<short_weierstrass::Projective<Group>> = result.into();
+	Ok(result.encode())
 }
 
 pub(crate) fn mul_projective_te_generic<Group: TECurveConfig>(
 	base: Vec<u8>,
 	scalar: Vec<u8>,
 ) -> Result<Vec<u8>, ()> {
-	let base = <ArkScale<twisted_edwards::Projective<Group>> as Decode>::decode(
+	let base = <ArkScaleProjective<twisted_edwards::Projective<Group>> as Decode>::decode(
 		&mut base.clone().as_slice(),
 	)
 	.map_err(|_| ())?;
@@ -112,8 +113,8 @@ pub(crate) fn mul_projective_te_generic<Group: TECurveConfig>(
 
 	let result = <Group as TECurveConfig>::mul_projective(&base.0, &scalar.0);
 
-	let result: ArkScale<twisted_edwards::Projective<Group>> = result.into();
-	Ok(<ArkScale<twisted_edwards::Projective<Group>> as Encode>::encode(&result))
+	let result: ArkScaleProjective<twisted_edwards::Projective<Group>> = result.into();
+	Ok(result.encode())
 }
 
 pub(crate) fn mul_affine_generic<Group: SWCurveConfig>(
@@ -129,8 +130,8 @@ pub(crate) fn mul_affine_generic<Group: SWCurveConfig>(
 
 	let result = <Group as SWCurveConfig>::mul_affine(&base.0, &scalar.0);
 
-	let result: ArkScale<short_weierstrass::Projective<Group>> = result.into();
-	Ok(<ArkScale<short_weierstrass::Projective<Group>> as Encode>::encode(&result))
+	let result: ArkScaleProjective<short_weierstrass::Projective<Group>> = result.into();
+	Ok(result.encode())
 }
 
 pub(crate) fn mul_affine_te_generic<Group: TECurveConfig>(
@@ -145,6 +146,6 @@ pub(crate) fn mul_affine_te_generic<Group: TECurveConfig>(
 
 	let result = <Group as TECurveConfig>::mul_affine(&base.0, &scalar.0);
 
-	let result: ArkScale<twisted_edwards::Projective<Group>> = result.into();
-	Ok(<ArkScale<twisted_edwards::Projective<Group>> as Encode>::encode(&result))
+	let result: ArkScaleProjective<twisted_edwards::Projective<Group>> = result.into();
+	Ok(result.encode())
 }
