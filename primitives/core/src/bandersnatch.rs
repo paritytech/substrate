@@ -124,7 +124,7 @@ impl sp_std::fmt::Debug for Public {
 	}
 }
 
-/// DAVXY TODO: DOCS
+/// TODO davxy: DOCS
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo)]
 pub struct Signature([u8; SIGNATURE_SERIALIZED_LEN]);
@@ -185,7 +185,7 @@ impl sp_std::fmt::Debug for Signature {
 #[cfg(feature = "full_crypto")]
 type Seed = [u8; SEED_SERIALIZED_LEN];
 
-/// DAVXY TODO: DOCS
+/// TODO davxy: DOCS
 #[cfg(feature = "full_crypto")]
 #[derive(Clone)]
 pub struct Pair(SecretKey);
@@ -217,7 +217,7 @@ impl TraitPair for Pair {
 		path: Iter,
 		_seed: Option<Seed>,
 	) -> Result<(Pair, Option<Seed>), DeriveError> {
-		// TODO DAVXY: is this good?
+		// TODO davxy is this good?
 		let derive_hard_junction = |secret_seed, cc| -> Seed {
 			("bandersnatch-vrf-HDKD", secret_seed, cc).using_encoded(sp_core_hashing::blake2_256)
 		};
@@ -279,15 +279,15 @@ impl TraitPair for Pair {
 	/// This doesn't use the type system to ensure that `sig` and `public` are the correct
 	/// size. Use it only if you're coming from byte buffers and need the speed.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, public: P) -> bool {
-		// DAVXY TODO : makes sense???
+		// TODO davxy : makes sense???
+		unimplemented!()
 		false
 	}
 
 	/// Return a vec filled with seed raw data.
 	fn to_raw_vec(&self) -> Vec<u8> {
-		// DAVXY TODO: should we maintain the seed here?
-		// Can't we extract it from inner secret key somehow? Maybe not...
-		vec![]
+		// TODO davxy: makes sense???
+		unimplemented!()
 	}
 }
 
@@ -315,7 +315,7 @@ pub mod vrf {
 		}
 	}
 
-	/// TODO DAVXY
+	/// TODO davxy: docs
 	pub type VrfSignature = super::Signature;
 
 	#[cfg(feature = "full_crypto")]
