@@ -10611,7 +10611,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#1fb8561e838d652370a9fe176fe5019b45594182"
+source = "git+https://github.com/paritytech/ark-substrate#79b6ce320157bb8fae65743a43bcb03a78d79c96"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
@@ -10627,7 +10627,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#1fb8561e838d652370a9fe176fe5019b45594182"
+source = "git+https://github.com/paritytech/ark-substrate#79b6ce320157bb8fae65743a43bcb03a78d79c96"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -10643,7 +10643,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#1fb8561e838d652370a9fe176fe5019b45594182"
+source = "git+https://github.com/paritytech/ark-substrate#79b6ce320157bb8fae65743a43bcb03a78d79c96"
 dependencies = [
  "ark-bw6-761",
  "ark-ec",
@@ -10659,7 +10659,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#1fb8561e838d652370a9fe176fe5019b45594182"
+source = "git+https://github.com/paritytech/ark-substrate#79b6ce320157bb8fae65743a43bcb03a78d79c96"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
@@ -10674,7 +10674,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#1fb8561e838d652370a9fe176fe5019b45594182"
+source = "git+https://github.com/paritytech/ark-substrate#79b6ce320157bb8fae65743a43bcb03a78d79c96"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
@@ -10706,7 +10706,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-models"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#1fb8561e838d652370a9fe176fe5019b45594182"
+source = "git+https://github.com/paritytech/ark-substrate#79b6ce320157bb8fae65743a43bcb03a78d79c96"
 dependencies = [
  "ark-ec",
  "ark-ff",
