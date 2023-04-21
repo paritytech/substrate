@@ -35,7 +35,7 @@ mod tests {
 		// Build substrate so binaries used in the test use the latest code.
 		common::build_substrate(&["--features=try-runtime"]);
 
-		common::run_with_timeout(Duration::from_secs(20 * 60), async move {
+		common::run_with_timeout(Duration::from_secs(3 * 60), async move {
 			let run_on_runtime_upgrade = |ws_url: String| async move {
 				Command::new(cargo_bin("substrate"))
 					.stdout(process::Stdio::piped())
@@ -57,7 +57,22 @@ mod tests {
 			// Kick off the on-runtime-upgrade process and wait for the on-runtime-upgrade to succeed.
 			let on_runtime_upgrade = run_on_runtime_upgrade(ws_url).await;
             let re = Regex::new(r"TryRuntime_on_runtime_upgrade executed without errors").unwrap();
-            assert!(re.clone().is_match(from_utf8(&on_runtime_upgrade.stderr).unwrap()));
+            let error_re = Regex::new(r"(?i)error").unwrap();
+            let stderr_str = from_utf8(&on_runtime_upgrade.stderr).unwrap();
+            
+            if error_re.is_match(stderr_str) {
+                // Output the line where the error matched in the stderr.
+                let stderr_str_lines: Vec<&str> = stderr_str.lines().collect();
+                for (i, line) in stderr_str_lines.iter().enumerate() {
+                    if error_re.is_match(line) {
+                        println!("{}", i + 1, line);
+                        break;
+                    }
+                }
+                panic!("Error found in stderr_str");
+            }
+            
+            assert!(re.is_match(stderr_str));
             assert!(on_runtime_upgrade.status.success());
         })
 		.await;
