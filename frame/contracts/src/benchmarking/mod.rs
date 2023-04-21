@@ -542,7 +542,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "seal0",
-				name: "seal_caller_is_root",
+				name: "caller_is_root",
 				params: vec![],
 				return_type: Some(ValueType::I32),
 			}],
