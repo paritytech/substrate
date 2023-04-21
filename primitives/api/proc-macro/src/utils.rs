@@ -22,7 +22,7 @@ use syn::{
 	ImplItem, ItemImpl, Pat, Path, PathArguments, Result, ReturnType, Signature, Type, TypePath,
 };
 
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 
 use proc_macro_crate::{crate_name, FoundCrate};
 
@@ -158,7 +158,7 @@ pub fn extract_all_signature_types(items: &[ImplItem]) -> Vec<Type> {
 	items
 		.iter()
 		.filter_map(|i| match i {
-			ImplItem::Method(method) => Some(&method.sig),
+			ImplItem::Fn(method) => Some(&method.sig),
 			_ => None,
 		})
 		.flat_map(|sig| {
@@ -263,18 +263,20 @@ pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
 	attrs
 		.iter()
 		.filter_map(|attr| {
-			let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() else {
+			let syn::Meta::NameValue(meta) = &attr.meta else {
 				return None
 			};
-
-			meta.path.get_ident().filter(|ident| *ident == "doc").map(|_| meta.lit)
+			let Ok(lit) = syn::parse2::<syn::Lit>(meta.value.to_token_stream()) else {
+				unreachable!("non-lit doc attribute values do not exist");
+			};
+			meta.path.get_ident().filter(|ident| *ident == "doc").map(|_| lit)
 		})
 		.collect()
 }
 
 /// Filters all attributes except the cfg ones.
 pub fn filter_cfg_attributes(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
-	attrs.iter().filter(|a| a.path.is_ident("cfg")).cloned().collect()
+	attrs.iter().filter(|a| a.path().is_ident("cfg")).cloned().collect()
 }
 
 #[cfg(test)]

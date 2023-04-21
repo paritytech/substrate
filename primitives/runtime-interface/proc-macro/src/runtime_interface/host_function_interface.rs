@@ -30,7 +30,7 @@ use crate::utils::{
 };
 
 use syn::{
-	spanned::Spanned, Error, Ident, ItemTrait, Pat, Result, ReturnType, Signature, TraitItemMethod,
+	spanned::Spanned, Error, Ident, ItemTrait, Pat, Result, ReturnType, Signature, TraitItemFn,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -78,7 +78,7 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream
 
 /// Generate the extern host function for the given method.
 fn generate_extern_host_function(
-	method: &TraitItemMethod,
+	method: &TraitItemFn,
 	version: u32,
 	trait_name: &Ident,
 ) -> Result<TokenStream> {
@@ -136,7 +136,7 @@ fn generate_extern_host_function(
 }
 
 /// Generate the host exchangeable function for the given method.
-fn generate_exchangeable_host_function(method: &TraitItemMethod) -> Result<TokenStream> {
+fn generate_exchangeable_host_function(method: &TraitItemFn) -> Result<TokenStream> {
 	let crate_ = generate_crate_access();
 	let arg_types = get_function_argument_types(&method.sig);
 	let function = &method.sig.ident;
