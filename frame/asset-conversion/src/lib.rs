@@ -278,8 +278,6 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T>
-	// where
-	// T::AssetId: From<u32>,
 	{
 		fn integrity_test() {
 			sp_std::if_std! {
