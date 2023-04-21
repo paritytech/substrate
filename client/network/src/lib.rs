@@ -260,8 +260,14 @@ pub mod types;
 pub mod utils;
 
 pub use event::{DhtEvent, Event, SyncEvent};
+pub use futures::{AsyncRead, AsyncWrite};
 #[doc(inline)]
-pub use libp2p::{multiaddr, Multiaddr, PeerId};
+pub use libp2p::{
+	core::transport::{ListenerId, Transport, TransportError, TransportEvent},
+	multiaddr,
+	tcp::tokio::Transport as TcpTransport,
+	Multiaddr, PeerId,
+};
 pub use request_responses::{IfDisconnected, RequestFailure, RequestResponseConfig};
 pub use sc_network_common::{
 	role::ObservedRole,

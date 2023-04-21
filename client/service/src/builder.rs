@@ -759,6 +759,50 @@ where
 	TExPool: TransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 	TImpQu: ImportQueue<TBl> + 'static,
 {
+	let transport_builder = std::convert::identity;
+	build_network_with_transport_wrapper(params, transport_builder)
+}
+
+/// Build the network service, the network status sinks and an RPC sender.
+pub fn build_network_with_transport_wrapper<
+	TBl,
+	TExPool,
+	TImpQu,
+	TCl,
+	Transport,
+	TransportBuilder,
+>(
+	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>,
+	transport: TransportBuilder,
+) -> Result<
+	(
+		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
+		sc_network_transactions::TransactionsHandlerController<<TBl as BlockT>::Hash>,
+		NetworkStarter,
+	),
+	Error,
+>
+where
+	TBl: BlockT,
+	TCl: ProvideRuntimeApi<TBl>
+		+ HeaderMetadata<TBl, Error = sp_blockchain::Error>
+		+ Chain<TBl>
+		+ BlockBackend<TBl>
+		+ BlockIdTo<TBl, Error = sp_blockchain::Error>
+		+ ProofProvider<TBl>
+		+ HeaderBackend<TBl>
+		+ BlockchainEvents<TBl>
+		+ 'static,
+	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> + 'static,
+	TImpQu: ImportQueue<TBl> + 'static,
+	TransportBuilder: Fn(sc_network::TcpTransport) -> Transport,
+	Transport: sc_network::Transport + Send + Unpin + 'static,
+	Transport::Output: sc_network::AsyncRead + sc_network::AsyncWrite + Send + Unpin,
+	Transport::Error: Send + Sync,
+	Transport::Dial: Send,
+	Transport::ListenerUpgrade: Send,
+{
 	let BuildNetworkParams {
 		config,
 		client,
@@ -917,7 +961,8 @@ where
 		.insert(0, transactions_handler_proto.set_config());
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-	let network_mut = sc_network::NetworkWorker::new(network_params)?;
+	let network_mut =
+		sc_network::NetworkWorker::new_with_transport_wrapper(network_params, transport)?;
 	let network = network_mut.service().clone();
 
 	let (tx_handler, tx_handler_controller) = transactions_handler_proto.build(

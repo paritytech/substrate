@@ -147,7 +147,27 @@ where
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(mut params: Params<B>) -> Result<Self, Error> {
+	pub fn new(params: Params<B, Client>) -> Result<Self, Error> {
+		Self::new_with_transport_wrapper(params, std::convert::identity)
+	}
+
+	/// Creates the network service using given [`libp2p::Transport`] builder.
+	///
+	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
+	/// for the network processing to advance. From it, you can extract a `NetworkService` using
+	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
+	pub fn new_with_transport_wrapper<T, TBuild>(
+		mut params: Params<B, Client>,
+		transport: TBuild,
+	) -> Result<Self, Error>
+	where
+		TBuild: Fn(crate::TcpTransport) -> T,
+		T: crate::Transport + Send + Unpin + 'static,
+		T::Output: crate::AsyncRead + crate::AsyncWrite + Send + Unpin,
+		T::Error: Send + Sync,
+		T::Dial: Send,
+		T::ListenerUpgrade: Send,
+	{
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
@@ -353,6 +373,7 @@ where
 					config_mem,
 					params.network_config.yamux_window_size,
 					yamux_maximum_buffer_size,
+					transport,
 				)
 			};
 

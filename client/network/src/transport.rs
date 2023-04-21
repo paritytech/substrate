@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::{AsyncRead, AsyncWrite, TcpTransport, Transport};
 use libp2p::{
 	bandwidth,
 	core::{
@@ -25,13 +26,15 @@ use libp2p::{
 		transport::{Boxed, OptionalTransport},
 		upgrade,
 	},
-	dns, identity, mplex, noise, tcp, websocket, PeerId, Transport,
+	dns, identity, mplex, noise, tcp, websocket, PeerId,
 };
 use std::{sync::Arc, time::Duration};
 
 pub use self::bandwidth::BandwidthSinks;
 
 /// Builds the transport that serves as a common ground for all connections.
+///
+/// `transport` is a function allowing to wrap the low-level tcp-transport used by the network.
 ///
 /// If `memory_only` is true, then only communication within the same process are allowed. Only
 /// addresses with the format `/memory/...` are allowed.
@@ -46,18 +49,28 @@ pub use self::bandwidth::BandwidthSinks;
 ///
 /// Returns a `BandwidthSinks` object that allows querying the average bandwidth produced by all
 /// the connections spawned with this transport.
-pub fn build_transport(
+pub fn build_transport<T, TBuild>(
 	keypair: identity::Keypair,
 	memory_only: bool,
 	yamux_window_size: Option<u32>,
 	yamux_maximum_buffer_size: usize,
-) -> (Boxed<(PeerId, StreamMuxerBox)>, Arc<BandwidthSinks>) {
+	transport_builder: TBuild,
+) -> (Boxed<(PeerId, StreamMuxerBox)>, Arc<BandwidthSinks>)
+where
+	TBuild: Fn(TcpTransport) -> T,
+	T: Transport + Send + Unpin + 'static,
+	T::Output: AsyncRead + AsyncWrite + Send + Unpin,
+	T::Error: Send + Sync,
+	T::Dial: Send,
+	T::ListenerUpgrade: Send,
+{
 	// Build the base layer of the transport.
 	let transport = if !memory_only {
 		// Main transport: DNS(TCP)
 		let tcp_config = tcp::Config::new().nodelay(true);
 		let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
-		let dns_init = dns::TokioDnsConfig::system(tcp_trans);
+		let transport = transport_builder(tcp_trans);
+		let dns_init = dns::TokioDnsConfig::system(transport);
 
 		EitherTransport::Left(if let Ok(dns) = dns_init {
 			// WS + WSS transport
@@ -66,14 +79,16 @@ pub fn build_transport(
 			// unresolved addresses (BUT WSS transport itself needs an instance of DNS transport to
 			// resolve and dial addresses).
 			let tcp_trans = tcp::tokio::Transport::new(tcp_config);
-			let dns_for_wss = dns::TokioDnsConfig::system(tcp_trans)
+			let transport = transport_builder(tcp_trans);
+			let dns_for_wss = dns::TokioDnsConfig::system(transport)
 				.expect("same system_conf & resolver to work");
 			EitherTransport::Left(websocket::WsConfig::new(dns_for_wss).or_transport(dns))
 		} else {
 			// In case DNS can't be constructed, fallback to TCP + WS (WSS won't work)
 			let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
-			let desktop_trans = websocket::WsConfig::new(tcp_trans)
-				.or_transport(tcp::tokio::Transport::new(tcp_config));
+			let transport = transport_builder(tcp_trans);
+			let desktop_trans = websocket::WsConfig::new(transport)
+				.or_transport(transport_builder(tcp::tokio::Transport::new(tcp_config)));
 			EitherTransport::Right(desktop_trans)
 		})
 	} else {
