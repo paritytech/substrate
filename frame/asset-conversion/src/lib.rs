@@ -226,7 +226,6 @@ pub mod pallet {
 		},
 	}
 
-	// Your Pallet's error messages.
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Provided assets are equal.
