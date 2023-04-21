@@ -34,7 +34,8 @@ use sc_network_sync::{
 	service::network::{NetworkServiceHandle, NetworkServiceProvider},
 	state_request_handler::StateRequestHandler,
 };
-use sp_runtime::traits::Block as BlockT;
+use sp_blockchain::HeaderBackend;
+use sp_runtime::traits::{Block as BlockT, Zero};
 use substrate_test_runtime_client::{
 	runtime::{Block as TestBlock, Hash as TestHash},
 	TestClientBuilder, TestClientBuilderExt as _,
@@ -176,6 +177,7 @@ impl TestNetworkBuilder {
 
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			self.chain_sync_network.unwrap_or(NetworkServiceProvider::new());
+		let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 
 		let (engine, chain_sync_service, block_announce_config) = SyncingEngine::new(
 			Roles::from(&config::Role::Full),
@@ -191,20 +193,23 @@ impl TestNetworkBuilder {
 			block_request_protocol_config.name.clone(),
 			state_request_protocol_config.name.clone(),
 			None,
+			rx,
 		)
 		.unwrap();
 		let mut link = self.link.unwrap_or(Box::new(chain_sync_service.clone()));
+		let genesis_hash =
+			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
 		let worker = NetworkWorker::<
 			substrate_test_runtime_client::runtime::Block,
 			substrate_test_runtime_client::runtime::Hash,
-		>::new(config::Params {
+		>::new(config::Params::<substrate_test_runtime_client::runtime::Block> {
 			block_announce_config,
 			role: config::Role::Full,
 			executor: Box::new(|f| {
 				tokio::spawn(f);
 			}),
+			genesis_hash,
 			network_config,
-			chain: client.clone(),
 			protocol_id,
 			fork_id,
 			metrics_registry: None,
@@ -214,6 +219,7 @@ impl TestNetworkBuilder {
 				light_client_request_protocol_config,
 			]
 			.to_vec(),
+			tx,
 		})
 		.unwrap();
 
@@ -231,8 +237,7 @@ impl TestNetworkBuilder {
 				tokio::time::sleep(std::time::Duration::from_millis(250)).await;
 			}
 		});
-		let stream = worker.service().event_stream("syncing");
-		tokio::spawn(engine.run(stream));
+		tokio::spawn(engine.run());
 
 		TestNetwork::new(worker)
 	}

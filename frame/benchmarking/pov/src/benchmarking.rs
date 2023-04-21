@@ -192,6 +192,7 @@ frame_benchmarking::benchmarks! {
 
 	// Same as above, but we still expect a mathematical worst case PoV size for the bounded one.
 	storage_value_bounded_and_unbounded_read {
+		(0..1024).for_each(|i| Map1M::<T>::insert(i, i));
 	}: {
 		assert!(UnboundedValue::<T>::get().is_none());
 		assert!(BoundedValue::<T>::get().is_none());

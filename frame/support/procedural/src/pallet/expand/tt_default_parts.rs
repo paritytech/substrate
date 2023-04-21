@@ -15,7 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{pallet::Def, COUNTER};
+use crate::{
+	pallet::{CompositeKeyword, Def},
+	COUNTER,
+};
 use syn::spanned::Spanned;
 
 /// Generate the `tt_default_parts` macro.
@@ -48,6 +51,30 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 	let validate_unsigned_part =
 		def.validate_unsigned.as_ref().map(|_| quote::quote!(ValidateUnsigned,));
 
+	let freeze_reason_part = def
+		.composites
+		.iter()
+		.any(|c| matches!(c.composite_keyword, CompositeKeyword::FreezeReason(_)))
+		.then_some(quote::quote!(FreezeReason,));
+
+	let hold_reason_part = def
+		.composites
+		.iter()
+		.any(|c| matches!(c.composite_keyword, CompositeKeyword::HoldReason(_)))
+		.then_some(quote::quote!(HoldReason,));
+
+	let lock_id_part = def
+		.composites
+		.iter()
+		.any(|c| matches!(c.composite_keyword, CompositeKeyword::LockId(_)))
+		.then_some(quote::quote!(LockId,));
+
+	let slash_reason_part = def
+		.composites
+		.iter()
+		.any(|c| matches!(c.composite_keyword, CompositeKeyword::SlashReason(_)))
+		.then_some(quote::quote!(SlashReason,));
+
 	quote::quote!(
 		// This macro follows the conventions as laid out by the `tt-call` crate. It does not
 		// accept any arguments and simply returns the pallet parts, separated by commas, then
@@ -70,7 +97,8 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 					tokens = [{
 						::{
 							Pallet, #call_part #storage_part #event_part #origin_part #config_part
-							#inherent_part #validate_unsigned_part
+							#inherent_part #validate_unsigned_part #freeze_reason_part
+							#hold_reason_part #lock_id_part #slash_reason_part
 						}
 					}]
 				}

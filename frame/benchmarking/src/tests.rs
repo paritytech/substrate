@@ -29,7 +29,7 @@ use sp_runtime::{
 use sp_std::prelude::*;
 use std::cell::RefCell;
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 mod pallet_test {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;

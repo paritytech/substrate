@@ -87,7 +87,7 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(
 			frame_support::weights::Weight::from_parts(1024, u64::MAX),
 		);
-	pub static ExistentialDeposit: u64 = 0;
+	pub static ExistentialDeposit: u64 = 1;
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;

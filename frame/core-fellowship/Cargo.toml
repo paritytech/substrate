@@ -25,10 +25,6 @@ sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
-[dev-dependencies]
-pallet-ranked-collective = { version = "4.0.0-dev", default-features = false, path = "../ranked-collective" }
-pallet-salary = { version = "4.0.0-dev", default-features = false, path = "../salary" }
-
 [features]
 default = ["std"]
 std = [
@@ -49,7 +45,5 @@ runtime-benchmarks = [
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
-	"pallet-ranked-collective/runtime-benchmarks",
-	"pallet-salary/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]

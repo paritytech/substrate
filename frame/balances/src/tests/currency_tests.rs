@@ -23,7 +23,8 @@ use frame_support::traits::{
 	BalanceStatus::{Free, Reserved},
 	Currency,
 	ExistenceRequirement::{self, AllowDeath},
-	LockIdentifier, LockableCurrency, NamedReservableCurrency, ReservableCurrency, WithdrawReasons,
+	Hooks, LockIdentifier, LockableCurrency, NamedReservableCurrency, ReservableCurrency,
+	WithdrawReasons,
 };
 
 const ID_1: LockIdentifier = *b"1       ";
@@ -754,6 +755,61 @@ fn emit_events_with_reserve_and_unreserve() {
 }
 
 #[test]
+fn emit_events_with_changing_locks() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		let _ = Balances::deposit_creating(&1, 100);
+		System::reset_events();
+
+		// Locks = [] --> [10]
+		Balances::set_lock(*b"LOCK_000", &1, 10, WithdrawReasons::TRANSFER);
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 10 })]);
+
+		// Locks = [10] --> [15]
+		Balances::set_lock(*b"LOCK_000", &1, 15, WithdrawReasons::TRANSFER);
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 5 })]);
+
+		// Locks = [15] --> [15, 20]
+		Balances::set_lock(*b"LOCK_001", &1, 20, WithdrawReasons::TRANSACTION_PAYMENT);
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 5 })]);
+
+		// Locks = [15, 20] --> [17, 20]
+		Balances::set_lock(*b"LOCK_000", &1, 17, WithdrawReasons::TRANSACTION_PAYMENT);
+		for event in events() {
+			match event {
+				RuntimeEvent::Balances(crate::Event::Locked { .. }) => {
+					assert!(false, "unexpected lock event")
+				},
+				RuntimeEvent::Balances(crate::Event::Unlocked { .. }) => {
+					assert!(false, "unexpected unlock event")
+				},
+				_ => continue,
+			}
+		}
+
+		// Locks = [17, 20] --> [17, 15]
+		Balances::set_lock(*b"LOCK_001", &1, 15, WithdrawReasons::TRANSFER);
+		assert_eq!(
+			events(),
+			[RuntimeEvent::Balances(crate::Event::Unlocked { who: 1, amount: 3 })]
+		);
+
+		// Locks = [17, 15] --> [15]
+		Balances::remove_lock(*b"LOCK_000", &1);
+		assert_eq!(
+			events(),
+			[RuntimeEvent::Balances(crate::Event::Unlocked { who: 1, amount: 2 })]
+		);
+
+		// Locks = [15] --> []
+		Balances::remove_lock(*b"LOCK_001", &1);
+		assert_eq!(
+			events(),
+			[RuntimeEvent::Balances(crate::Event::Unlocked { who: 1, amount: 15 })]
+		);
+	});
+}
+
+#[test]
 fn emit_events_with_existential_deposit() {
 	ExtBuilder::default().existential_deposit(100).build_and_execute_with(|| {
 		assert_ok!(Balances::force_set_balance(RawOrigin::Root.into(), 1, 100));
@@ -974,7 +1030,7 @@ fn slash_reserved_on_non_existant_works() {
 fn operations_on_dead_account_should_not_change_state() {
 	// These functions all use `mutate_account` which may introduce a storage change when
 	// the account never existed to begin with, and shouldn't exist in the end.
-	ExtBuilder::default().existential_deposit(0).build_and_execute_with(|| {
+	ExtBuilder::default().existential_deposit(1).build_and_execute_with(|| {
 		assert!(!frame_system::Account::<Test>::contains_key(&1337));
 
 		// Unreserve
@@ -990,6 +1046,16 @@ fn operations_on_dead_account_should_not_change_state() {
 		);
 		// Slash
 		assert_storage_noop!(assert_eq!(Balances::slash(&1337, 42).1, 42));
+	});
+}
+
+#[test]
+#[should_panic = "The existential deposit must be greater than zero!"]
+fn zero_ed_is_prohibited() {
+	// These functions all use `mutate_account` which may introduce a storage change when
+	// the account never existed to begin with, and shouldn't exist in the end.
+	ExtBuilder::default().existential_deposit(0).build_and_execute_with(|| {
+		Balances::integrity_test();
 	});
 }
 

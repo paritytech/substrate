@@ -185,7 +185,7 @@ pub mod generic {
 		pub blocks: Vec<BlockData<Header, Hash, Extrinsic>>,
 	}
 
-	/// Announce a new complete relay chain block on the network.
+	/// Announce a new complete block on the network.
 	#[derive(Debug, PartialEq, Eq, Clone)]
 	pub struct BlockAnnounce<H> {
 		/// New block header.

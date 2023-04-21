@@ -214,19 +214,7 @@ benchmarks! {
 	on_initialize_per_trie_key {
 		let k in 0..1024;
 		let instance = Contract::<T>::with_storage(WasmModule::dummy(), k, T::Schedule::get().limits.payload_len)?;
-		instance.info()?.queue_trie_for_deletion()?;
-	}: {
-		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
-	}
-
-	#[pov_mode = Measured]
-	on_initialize_per_queue_item {
-		let q in 0..1024.min(T::DeletionQueueDepth::get());
-		for i in 0 .. q {
-			let instance = Contract::<T>::with_index(i, WasmModule::dummy(), vec![])?;
-			instance.info()?.queue_trie_for_deletion()?;
-			ContractInfoOf::<T>::remove(instance.account_id);
-		}
+		instance.info()?.queue_trie_for_deletion();
 	}: {
 		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
@@ -2020,9 +2008,114 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	// `n`: Message input length to verify in bytes.
+	#[pov_mode = Measured]
+	seal_sr25519_verify_per_byte {
+		let n in 0 .. T::MaxCodeLen::get() - 255; // need some buffer so the code size does not
+												  // exceed the max code size.
+
+		let message = (0..n).zip((32u8..127u8).cycle()).map(|(_, c)| c).collect::<Vec<_>>();
+		let message_len = message.len() as i32;
+
+		let key_type = sp_core::crypto::KeyTypeId(*b"code");
+		let pub_key = sp_io::crypto::sr25519_generate(key_type, None);
+		let sig = sp_io::crypto::sr25519_sign(key_type, &pub_key, &message).expect("Generates signature");
+		let sig = AsRef::<[u8; 64]>::as_ref(&sig).to_vec();
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "sr25519_verify",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: sig,
+				},
+				DataSegment {
+					offset: 64,
+					value: pub_key.to_vec(),
+				},
+				DataSegment {
+					offset: 96,
+					value: message,
+				},
+			],
+			call_body: Some(body::plain(vec![
+				Instruction::I32Const(0), // signature_ptr
+				Instruction::I32Const(64), // pub_key_ptr
+				Instruction::I32Const(message_len), // message_len
+				Instruction::I32Const(96), // message_ptr
+				Instruction::Call(0),
+				Instruction::Drop,
+				Instruction::End,
+			])),
+			.. Default::default()
+		});
+
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
 	// Only calling the function itself with valid arguments.
 	// It generates different private keys and signatures for the message "Hello world".
-	// This is a slow call: We redeuce the number of runs.
+	// This is a slow call: We reduce the number of runs.
+	#[pov_mode = Measured]
+	seal_sr25519_verify {
+		let r in 0 .. API_BENCHMARK_RUNS / 10;
+
+		let message = b"Hello world".to_vec();
+		let message_len = message.len() as i32;
+		let key_type = sp_core::crypto::KeyTypeId(*b"code");
+		let sig_params = (0..r)
+			.map(|i| {
+				let pub_key = sp_io::crypto::sr25519_generate(key_type, None);
+				let sig = sp_io::crypto::sr25519_sign(key_type, &pub_key, &message).expect("Generates signature");
+				let data: [u8; 96] = [AsRef::<[u8]>::as_ref(&sig), AsRef::<[u8]>::as_ref(&pub_key)].concat().try_into().unwrap();
+				data
+			})
+			.flatten()
+			.collect::<Vec<_>>();
+		let sig_params_len = sig_params.len() as i32;
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "sr25519_verify",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: sig_params
+				},
+				DataSegment {
+					offset: sig_params_len as u32,
+					value: message,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r, vec![
+				Counter(0, 96), // signature_ptr
+				Counter(64, 96), // pub_key_ptr
+				Regular(Instruction::I32Const(message_len)), // message_len
+				Regular(Instruction::I32Const(sig_params_len)), // message_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	// Only calling the function itself with valid arguments.
+	// It generates different private keys and signatures for the message "Hello world".
+	// This is a slow call: We reduce the number of runs.
 	#[pov_mode = Measured]
 	seal_ecdsa_recover {
 		let r in 0 .. API_BENCHMARK_RUNS / 10;
@@ -3020,16 +3113,12 @@ benchmarks! {
 	print_schedule {
 		#[cfg(feature = "std")]
 		{
-			let weight_limit = T::DeletionWeightLimit::get();
-			let max_queue_depth = T::DeletionQueueDepth::get() as usize;
-			let empty_queue_throughput = ContractInfo::<T>::deletion_budget(0, weight_limit);
-			let full_queue_throughput = ContractInfo::<T>::deletion_budget(max_queue_depth, weight_limit);
+			let max_weight = <T as frame_system::Config>::BlockWeights::get().max_block;
+			let (weight_per_key, key_budget) = ContractInfo::<T>::deletion_budget(max_weight);
 			println!("{:#?}", Schedule::<T>::default());
 			println!("###############################################");
-			println!("Lazy deletion weight per key: {}", empty_queue_throughput.0);
-			println!("Lazy deletion throughput per block (empty queue, full queue): {}, {}",
-				empty_queue_throughput.1, full_queue_throughput.1,
-			);
+			println!("Lazy deletion weight per key: {weight_per_key}");
+			println!("Lazy deletion throughput per block: {key_budget}");
 		}
 		#[cfg(not(feature = "std"))]
 		Err("Run this bench with a native runtime in order to see the schedule.")?;

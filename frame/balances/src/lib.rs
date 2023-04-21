@@ -151,6 +151,10 @@
 //! ## Assumptions
 //!
 //! * Total issued balanced of all accounts should be less than `Config::Balance::max_value()`.
+//! * Existential Deposit is set to a value greater than zero.
+//!
+//! Note, you may find the Balances pallet still functions with an ED of zero in some circumstances,
+//! however this is not a configuration which is generally supported, nor will it be.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 mod benchmarking;
@@ -201,7 +205,10 @@ type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::fungible::Credit};
+	use frame_support::{
+		pallet_prelude::*,
+		traits::{fungible::Credit, tokens::Precision},
+	};
 	use frame_system::pallet_prelude::*;
 
 	pub type CreditOf<T, I> = Credit<<T as frame_system::Config>::AccountId, Pallet<T, I>>;
@@ -231,7 +238,14 @@ pub mod pallet {
 		/// Handler for the unbalanced reduction when removing a dust account.
 		type DustRemoval: OnUnbalanced<CreditOf<Self, I>>;
 
-		/// The minimum amount required to keep an account open.
+		/// The minimum amount required to keep an account open. MUST BE GREATER THAN ZERO!
+		///
+		/// If you *really* need it to be zero, you can enable the feature `insecure_zero_ed` for
+		/// this pallet. However, you do so at your own risk: this will open up a major DoS vector.
+		/// In case you have multiple sources of provider references, you may also get unexpected
+		/// behaviour if you set this to zero.
+		///
+		/// Bottom line: Do yourself a favour and make it at least one!
 		#[pallet::constant]
 		type ExistentialDeposit: Get<Self::Balance>;
 
@@ -319,6 +333,10 @@ pub mod pallet {
 		Issued { amount: T::Balance },
 		/// Total issuance was decreased by `amount`, creating a debt to be balanced.
 		Rescinded { amount: T::Balance },
+		/// Some balance was locked.
+		Locked { who: T::AccountId, amount: T::Balance },
+		/// Some balance was unlocked.
+		Unlocked { who: T::AccountId, amount: T::Balance },
 	}
 
 	#[pallet::error]
@@ -445,6 +463,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
 			let total = self.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n);
+
 			<TotalIssuance<T, I>>::put(total);
 
 			for (_, balance) in &self.balances {
@@ -492,6 +511,17 @@ pub mod pallet {
 		}
 	}
 
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
+		#[cfg(not(feature = "insecure_zero_ed"))]
+		fn integrity_test() {
+			assert!(
+				!<T as Config<I>>::ExistentialDeposit::get().is_zero(),
+				"The existential deposit must be greater than zero!"
+			);
+		}
+	}
+
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Transfer some liquid free balance to another account.
@@ -533,7 +563,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
-			let existential_deposit = T::ExistentialDeposit::get();
+			let existential_deposit = Self::ed();
 
 			let wipeout = new_free < existential_deposit;
 			let new_free = if wipeout { Zero::zero() } else { new_free };
@@ -716,7 +746,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
-			let existential_deposit = T::ExistentialDeposit::get();
+			let existential_deposit = Self::ed();
 
 			let wipeout = new_free < existential_deposit;
 			let new_free = if wipeout { Zero::zero() } else { new_free };
@@ -742,6 +772,9 @@ pub mod pallet {
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		fn ed() -> T::Balance {
+			T::ExistentialDeposit::get()
+		}
 		/// Ensure the account `who` is using the new logic.
 		///
 		/// Returns `true` if the account did get upgraded, `false` if it didn't need upgrading.
@@ -752,14 +785,19 @@ pub mod pallet {
 			}
 			a.flags.set_new_logic();
 			if !a.reserved.is_zero() || !a.frozen.is_zero() {
-				if !system::Pallet::<T>::can_inc_consumer(who) {
-					// Gah!! We have a non-zero reserve balance but no provider refs :(
+				if system::Pallet::<T>::providers(who) == 0 {
+					// Gah!! We have no provider refs :(
 					// This shouldn't practically happen, but we need a failsafe anyway: let's give
 					// them enough for an ED.
-					a.free = a.free.min(T::ExistentialDeposit::get());
+					log::warn!(
+						target: LOG_TARGET,
+						"account with a non-zero reserve balance has no provider refs, account_id: '{:?}'.",
+						who
+					);
+					a.free = a.free.max(Self::ed());
 					system::Pallet::<T>::inc_providers(who);
 				}
-				let _ = system::Pallet::<T>::inc_consumers(who).defensive();
+				let _ = system::Pallet::<T>::inc_consumers_without_limit(who).defensive();
 			}
 			// Should never fail - we're only setting a bit.
 			let _ = T::AccountStore::try_mutate_exists(who, |account| -> DispatchResult {
@@ -864,6 +902,20 @@ pub mod pallet {
 			Self::try_mutate_account(who, |a, _| -> Result<R, DispatchError> { Ok(f(a)) })
 		}
 
+		/// Returns `true` when `who` has some providers or `insecure_zero_ed` feature is disnabled.
+		/// Returns `false` otherwise.
+		#[cfg(not(feature = "insecure_zero_ed"))]
+		fn have_providers_or_no_zero_ed(_: &T::AccountId) -> bool {
+			true
+		}
+
+		/// Returns `true` when `who` has some providers or `insecure_zero_ed` feature is disnabled.
+		/// Returns `false` otherwise.
+		#[cfg(feature = "insecure_zero_ed")]
+		fn have_providers_or_no_zero_ed(who: &T::AccountId) -> bool {
+			frame_system::Pallet::<T>::providers(who) > 0
+		}
+
 		/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
 		/// `ExistentialDeposit` law, annulling the account as needed. This will do nothing if the
 		/// result of `f` is an `Err`.
@@ -885,13 +937,14 @@ pub mod pallet {
 			let result = T::AccountStore::try_mutate_exists(who, |maybe_account| {
 				let is_new = maybe_account.is_none();
 				let mut account = maybe_account.take().unwrap_or_default();
-				let did_provide = account.free >= T::ExistentialDeposit::get();
+				let did_provide =
+					account.free >= Self::ed() && Self::have_providers_or_no_zero_ed(who);
 				let did_consume =
 					!is_new && (!account.reserved.is_zero() || !account.frozen.is_zero());
 
 				let result = f(&mut account, is_new)?;
 
-				let does_provide = account.free >= T::ExistentialDeposit::get();
+				let does_provide = account.free >= Self::ed();
 				let does_consume = !account.reserved.is_zero() || !account.frozen.is_zero();
 
 				if !did_provide && does_provide {
@@ -930,7 +983,7 @@ pub mod pallet {
 				//
 				// We should never be dropping if reserved is non-zero. Reserved being non-zero
 				// should imply that we have a consumer ref, so this is economically safe.
-				let ed = T::ExistentialDeposit::get();
+				let ed = Self::ed();
 				let maybe_dust = if account.free < ed && account.reserved.is_zero() {
 					if account.free.is_zero() {
 						None
@@ -975,9 +1028,12 @@ pub mod pallet {
 				);
 			}
 			let freezes = Freezes::<T, I>::get(who);
+			let mut prev_frozen = Zero::zero();
+			let mut after_frozen = Zero::zero();
 			// TODO: Revisit this assumption. We no manipulate consumer/provider refs.
 			// No way this can fail since we do not alter the existential balances.
 			let res = Self::mutate_account(who, |b| {
+				prev_frozen = b.frozen;
 				b.frozen = Zero::zero();
 				for l in locks.iter() {
 					b.frozen = b.frozen.max(l.amount);
@@ -985,6 +1041,7 @@ pub mod pallet {
 				for l in freezes.iter() {
 					b.frozen = b.frozen.max(l.amount);
 				}
+				after_frozen = b.frozen;
 			});
 			debug_assert!(res.is_ok());
 			if let Ok((_, maybe_dust)) = res {
@@ -1012,6 +1069,14 @@ pub mod pallet {
 					);
 				}
 			}
+
+			if prev_frozen > after_frozen {
+				let amount = prev_frozen.saturating_sub(after_frozen);
+				Self::deposit_event(Event::Unlocked { who: who.clone(), amount });
+			} else if after_frozen > prev_frozen {
+				let amount = after_frozen.saturating_sub(prev_frozen);
+				Self::deposit_event(Event::Locked { who: who.clone(), amount });
+			}
 		}
 
 		/// Update the account entry for `who`, given the locks.
@@ -1038,59 +1103,58 @@ pub mod pallet {
 		}
 
 		/// Move the reserved balance of one account into the balance of another, according to
-		/// `status`.
+		/// `status`. This will respect freezes/locks only if `fortitude` is `Polite`.
 		///
-		/// Is a no-op if:
-		/// - the value to be moved is zero; or
-		/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
+		/// Is a no-op if the value to be moved is zero.
 		///
 		/// NOTE: returns actual amount of transferred value in `Ok` case.
 		pub(crate) fn do_transfer_reserved(
 			slashed: &T::AccountId,
 			beneficiary: &T::AccountId,
 			value: T::Balance,
-			best_effort: bool,
+			precision: Precision,
+			fortitude: Fortitude,
 			status: Status,
 		) -> Result<T::Balance, DispatchError> {
 			if value.is_zero() {
 				return Ok(Zero::zero())
 			}
 
+			let max = <Self as fungible::InspectHold<_>>::reducible_total_balance_on_hold(
+				slashed, fortitude,
+			);
+			let actual = match precision {
+				Precision::BestEffort => value.min(max),
+				Precision::Exact => value,
+			};
+			ensure!(actual <= max, TokenError::FundsUnavailable);
 			if slashed == beneficiary {
 				return match status {
-					Status::Free => Ok(value.saturating_sub(Self::unreserve(slashed, value))),
-					Status::Reserved => Ok(value.saturating_sub(Self::reserved_balance(slashed))),
+					Status::Free => Ok(actual.saturating_sub(Self::unreserve(slashed, actual))),
+					Status::Reserved => Ok(actual),
 				}
 			}
 
-			let ((actual, maybe_dust_1), maybe_dust_2) = Self::try_mutate_account(
+			let ((_, maybe_dust_1), maybe_dust_2) = Self::try_mutate_account(
 				beneficiary,
-				|to_account, is_new| -> Result<(T::Balance, Option<T::Balance>), DispatchError> {
+				|to_account, is_new| -> Result<((), Option<T::Balance>), DispatchError> {
 					ensure!(!is_new, Error::<T, I>::DeadAccount);
-					Self::try_mutate_account(
-						slashed,
-						|from_account, _| -> Result<T::Balance, DispatchError> {
-							let actual = cmp::min(from_account.reserved, value);
-							ensure!(
-								best_effort || actual == value,
-								Error::<T, I>::InsufficientBalance
-							);
-							match status {
-								Status::Free =>
-									to_account.free = to_account
-										.free
-										.checked_add(&actual)
-										.ok_or(ArithmeticError::Overflow)?,
-								Status::Reserved =>
-									to_account.reserved = to_account
-										.reserved
-										.checked_add(&actual)
-										.ok_or(ArithmeticError::Overflow)?,
-							}
-							from_account.reserved -= actual;
-							Ok(actual)
-						},
-					)
+					Self::try_mutate_account(slashed, |from_account, _| -> DispatchResult {
+						match status {
+							Status::Free =>
+								to_account.free = to_account
+									.free
+									.checked_add(&actual)
+									.ok_or(ArithmeticError::Overflow)?,
+							Status::Reserved =>
+								to_account.reserved = to_account
+									.reserved
+									.checked_add(&actual)
+									.ok_or(ArithmeticError::Overflow)?,
+						}
+						from_account.reserved.saturating_reduce(actual);
+						Ok(())
+					})
 				},
 			)?;
 
