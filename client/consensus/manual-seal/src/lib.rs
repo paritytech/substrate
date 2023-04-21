@@ -20,8 +20,12 @@
 //! This is suitable for a testing environment.
 
 use futures::prelude::*;
+use futures_timer::Delay;
 use prometheus_endpoint::Registry;
-use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
+use sc_client_api::{
+	backend::{Backend as ClientBackend, Finalizer},
+	client::BlockchainEvents,
+};
 use sc_consensus::{
 	block_import::{BlockImport, BlockImportParams, ForkChoiceStrategy},
 	import_queue::{BasicQueue, BoxBlockImport, Verifier},
@@ -30,7 +34,7 @@ use sp_blockchain::HeaderBackend;
 use sp_consensus::{Environment, Proposer, SelectChain};
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 mod error;
 mod finalize_block;
@@ -134,6 +138,19 @@ pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, TP, SC, 
 
 	/// Something that can create the inherent data providers.
 	pub create_inherent_data_providers: CIDP,
+}
+
+pub struct DelayedFinalizeParams<B: BlockT, C: ProvideRuntimeApi<B>> {
+	/// Block import instance for well. importing blocks.
+	pub client: Arc<C>,
+
+	pub spawn_handle: sc_service::SpawnTaskHandle,
+
+	/// The delay in seconds before a block is finalized.
+	pub delay_sec: u64,
+
+	/// phantom type to pin the Block type
+	pub _phantom: PhantomData<B>,
 }
 
 /// Creates the background authorship task for the manual seal engine.
@@ -301,6 +318,37 @@ pub async fn run_instant_seal_and_finalize<B, BI, CB, E, C, TP, SC, CIDP, P>(
 		create_inherent_data_providers,
 	})
 	.await
+}
+
+pub async fn run_delayed_finalize<B, CB, C>(
+	DelayedFinalizeParams {
+		client,
+		spawn_handle,
+		delay_sec,
+		_phantom: PhantomData,
+	}: DelayedFinalizeParams<B, C>,
+) where
+	B: BlockT + 'static,
+	CB: ClientBackend<B> + 'static,
+	C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + BlockchainEvents<B> + 'static,
+{
+	let mut block_import_stream = client.import_notification_stream();
+
+	while let Some(notification) = block_import_stream.next().await {
+		let delay = Delay::new(Duration::from_secs(delay_sec));
+		let cloned_client = client.clone();
+		spawn_handle.spawn("delayed-finalize", None, async move {
+			delay.await;
+			finalize_block(FinalizeBlockParams {
+				hash: notification.hash,
+				sender: None,
+				justification: None,
+				finalizer: cloned_client,
+				_phantom: PhantomData,
+			})
+			.await
+		});
+	}
 }
 
 #[cfg(test)]
