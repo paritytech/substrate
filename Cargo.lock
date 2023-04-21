@@ -180,6 +180,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aho-corasick"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67fc08ce920c31afb70f013dcce1bfc3a3195de6a228474e45e1f145b36f8d04"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1312,9 +1321,9 @@ dependencies = [
 
 [[package]]
 name = "clap_complete"
-version = "4.2.0"
+version = "4.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01c22dcfb410883764b29953103d9ef7bb8fe21b3fa1158bc99986c2067294bd"
+checksum = "1a19591b2ab0e3c04b588a0e04ddde7b9eaa423646d1b4a8092879216bf47473"
 dependencies = [
  "clap 4.2.4",
 ]
@@ -1430,9 +1439,9 @@ dependencies = [
 
 [[package]]
 name = "cpufeatures"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "280a9f2d8b3a38871a3c8a46fb80db65e5e5ed97da80c4d08bf27fb63e35e181"
+checksum = "3e4c1eaa2012c47becbbad2ab175484c2a84d1185b566fb2cc5b8707343dfe58"
 dependencies = [
  "libc",
 ]
@@ -3193,7 +3202,7 @@ version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "029d74589adefde59de1a0c4f4732695c32805624aec7b68d91503d4dba79afc"
 dependencies = [
- "aho-corasick",
+ "aho-corasick 0.7.20",
  "bstr",
  "fnv",
  "log",
@@ -4036,9 +4045,9 @@ checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
 
 [[package]]
 name = "libc"
-version = "0.2.141"
+version = "0.2.142"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3304a64d199bb964be99741b7a14d26972741915b3649639149b2479bb46f4b5"
+checksum = "6a987beff54b60ffa6d51982e1aa1146bc42f19bd26be28b0586f252fccf5317"
 
 [[package]]
 name = "libgit2-sys"
@@ -4767,9 +4776,9 @@ checksum = "2532096657941c2fea9c289d370a250971c689d4f143798ff67113ec042024a5"
 
 [[package]]
 name = "matrixmultiply"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "add85d4dd35074e6fedc608f8c8f513a3548619a9024b751949ef0e8e45a4d84"
+checksum = "bb99c395ae250e1bf9133673f03ca9f97b7e71b705436bf8f089453445d1e9fe"
 dependencies = [
  "rawpointer",
 ]
@@ -7638,9 +7647,9 @@ dependencies = [
 
 [[package]]
 name = "polling"
-version = "2.7.0"
+version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4be1c66a6add46bff50935c313dae30a5030cf8385c5206e8a95e9e9def974aa"
+checksum = "4b2d323e8ca7996b3e23126511a523f7e62924d93ecd5ae73b333815b0eb3dce"
 dependencies = [
  "autocfg",
  "bitflags",
@@ -8211,13 +8220,13 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.7.3"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b1f693b24f6ac912f4893ef08244d70b6067480d2f1a46e950c9691e6749d1d"
+checksum = "af83e617f331cc6ae2da5443c602dfa5af81e517212d9d611a5b3ba1777b5370"
 dependencies = [
- "aho-corasick",
+ "aho-corasick 1.0.1",
  "memchr",
- "regex-syntax",
+ "regex-syntax 0.7.1",
 ]
 
 [[package]]
@@ -8226,7 +8235,7 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c230d73fb8d8c1b9c0b3135c5142a8acee3a0558fb8db5cf1cb65f8d7862132"
 dependencies = [
- "regex-syntax",
+ "regex-syntax 0.6.29",
 ]
 
 [[package]]
@@ -8234,6 +8243,12 @@ name = "regex-syntax"
 version = "0.6.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f162c6dd7b008981e4d40210aca20b4bd0f9b60ca9271061b07f78537722f2e1"
+
+[[package]]
+name = "regex-syntax"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5996294f19bd3aae0453a862ad728f60e6600695733dd5df01da90c54363a3c"
 
 [[package]]
 name = "region"
@@ -10534,73 +10549,79 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#2af7bb2777869905bb0051bf9e1e70d380ebe4ab"
+source = "git+https://github.com/paritytech/ark-substrate#9b4b012ce1a92fdc079ce85e3f70eef8ee924936"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
  "ark-r1cs-std",
+ "ark-scale",
  "ark-serialize",
  "ark-std",
+ "parity-scale-codec",
  "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
- "sp-ark-utils",
  "sp-arkworks",
 ]
 
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#2af7bb2777869905bb0051bf9e1e70d380ebe4ab"
+source = "git+https://github.com/paritytech/ark-substrate#9b4b012ce1a92fdc079ce85e3f70eef8ee924936"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
  "ark-ff",
+ "ark-scale",
  "ark-serialize",
  "ark-std",
+ "parity-scale-codec",
  "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
- "sp-ark-utils",
  "sp-arkworks",
 ]
 
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#2af7bb2777869905bb0051bf9e1e70d380ebe4ab"
+source = "git+https://github.com/paritytech/ark-substrate#9b4b012ce1a92fdc079ce85e3f70eef8ee924936"
 dependencies = [
  "ark-bw6-761",
+ "ark-ec",
  "ark-ff",
+ "ark-scale",
  "ark-serialize",
  "ark-std",
+ "parity-scale-codec",
  "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
- "sp-ark-utils",
  "sp-arkworks",
 ]
 
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#2af7bb2777869905bb0051bf9e1e70d380ebe4ab"
+source = "git+https://github.com/paritytech/ark-substrate#9b4b012ce1a92fdc079ce85e3f70eef8ee924936"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
  "ark-r1cs-std",
+ "ark-scale",
  "ark-serialize",
  "ark-std",
+ "parity-scale-codec",
  "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
- "sp-ark-utils",
 ]
 
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#2af7bb2777869905bb0051bf9e1e70d380ebe4ab"
+source = "git+https://github.com/paritytech/ark-substrate#9b4b012ce1a92fdc079ce85e3f70eef8ee924936"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
  "ark-r1cs-std",
+ "ark-scale",
  "ark-serialize",
  "ark-std",
+ "parity-scale-codec",
  "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
- "sp-ark-utils",
 ]
 
 [[package]]
@@ -10623,7 +10644,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-models"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#2af7bb2777869905bb0051bf9e1e70d380ebe4ab"
+source = "git+https://github.com/paritytech/ark-substrate#9b4b012ce1a92fdc079ce85e3f70eef8ee924936"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -10634,15 +10655,6 @@ dependencies = [
  "itertools",
  "num-traits",
  "zeroize",
-]
-
-[[package]]
-name = "sp-ark-utils"
-version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#2af7bb2777869905bb0051bf9e1e70d380ebe4ab"
-dependencies = [
- "ark-serialize",
- "ark-std",
 ]
 
 [[package]]
