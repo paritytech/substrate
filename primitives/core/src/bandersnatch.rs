@@ -25,7 +25,7 @@ use crate::crypto::Ss58Codec;
 use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError};
 use bandersnatch_vrfs::{
 	CanonicalDeserialize, CanonicalSerialize, IntoVrfInput, PublicKey, SecretKey, ThinVrfSignature,
-	Transcript, VrfInput,
+	Transcript, VrfInput, VrfPreOut,
 };
 use sp_std::vec::Vec;
 
@@ -355,6 +355,40 @@ pub mod vrf {
 			}
 		}
 	}
+
+	#[cfg(feature = "full_crypto")]
+	impl Pair {
+		/// Generate bytes from the given VRF configuration.
+		pub fn make_bytes<B: Default + AsMut<[u8]>>(
+			&self,
+			_context: &[u8],
+			_transcript: &VrfTranscript,
+		) -> B {
+			// TODO davxy: the following is for schnorrkel
+			// let inout = self.0.vrf_create_hash(transcript.0.clone());
+			// inout.make_bytes::<B>(context)
+			B::default()
+		}
+	}
+
+	impl Public {
+		/// Generate bytes from the given VRF configuration.
+		pub fn make_bytes<B: Default + AsMut<[u8]>>(
+			&self,
+			_context: &[u8],
+			_transcript: &VrfTranscript,
+			_output: &VrfPreOut,
+		) -> Result<B, codec::Error> {
+			// TODO davxy: the following is for schnorrkel
+			// let pubkey = schnorrkel::PublicKey::from_bytes(&self.0).map_err(convert_error)?;
+			// let inout = output
+			// 	.0
+			// 	.attach_input_hash(&pubkey, transcript.0.clone())
+			// 	.map_err(convert_error)?;
+			// Ok(inout.make_bytes::<B>(context))
+			Ok(B::default())
+		}
+	}
 }
 
 #[cfg(test)]
@@ -380,11 +414,21 @@ mod tests {
 	}
 
 	#[test]
+	fn derive_hard_known_pair() {
+		let pair = Pair::from_string(&format!("{}//Alice", DEV_PHRASE), None).unwrap();
+		// known address of DEV_PHRASE with 1.1
+		let known = h2b("b0d3648bd5a3542afa16c06fee04cba37cc55c83a8894d36d87897bda0c65eec");
+		assert_eq!(pair.public().as_ref(), known);
+	}
+
+	#[test]
 	fn verify_known_signature() {
 		let pair = Pair::from_seed(DEV_SEED);
 		let public = pair.public();
 
-		let signature_raw = h2b("524b0cbc4eb9579e2cd115fe55e2625e8265b3ea599ac903e67b08c2c669780cf43ca9c1e0a8a63c1dba121a606f95d3466cfe1880acc502c2792775125a7fcc");
+		let signature_raw =
+	h2b("524b0cbc4eb9579e2cd115fe55e2625e8265b3ea599ac903e67b08c2c669780cf43ca9c1e0a8a63c1dba121a606f95d3466cfe1880acc502c2792775125a7fcc"
+	);
 		let signature = Signature::from_slice(&signature_raw).unwrap();
 
 		assert!(Pair::verify(&signature, b"hello", &public));
@@ -395,16 +439,36 @@ mod tests {
 		let pair = Pair::from_seed(DEV_SEED);
 		let public = pair.public();
 		let msg = b"hello";
-		let signature = pair.sign(msg);
 
+		let signature = pair.sign(msg);
 		assert!(Pair::verify(&signature, msg, &public));
 	}
 
 	#[test]
-	fn derive_hard_known_pair() {
-		let pair = Pair::from_string(&format!("{}//Alice", DEV_PHRASE), None).unwrap();
-		// known address of DEV_PHRASE with 1.1
-		let known = h2b("b0d3648bd5a3542afa16c06fee04cba37cc55c83a8894d36d87897bda0c65eec");
-		assert_eq!(pair.public().as_ref(), known);
+	fn vrf_sign_verify() {
+		use super::vrf::*;
+		use crate::crypto::{VrfSigner, VrfVerifier};
+
+		let pair = Pair::from_seed(DEV_SEED);
+		let public = pair.public();
+		let transcript = VrfTranscript::new(b"test", &[b"foo", b"bar"]);
+
+		let signature = pair.vrf_sign(&transcript);
+
+		println!("{}", b2h(signature.as_ref()));
+
+		assert!(public.vrf_verify(&transcript, &signature));
 	}
+
+	// #[test]
+	// fn vrf_make_bytes_matches() {
+	// 	use super::vrf::*;
+	// 	use crate::crypto::VrfSigner;
+	// 	let pair = Pair::from_seed(DEV_SEED);
+	// 	let public = pair.public();
+	// 	let transcript = VrfTranscript::new(b"test", &[b"foo", b"bar"]);
+
+	// 	let ctx = b"randbytes";
+	// 	let b1 = pair.make_bytes::<[u8; 32]>(ctx, &transcript);
+	// }
 }
