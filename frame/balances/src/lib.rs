@@ -205,7 +205,10 @@ type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::fungible::Credit};
+	use frame_support::{
+		pallet_prelude::*,
+		traits::{fungible::Credit, tokens::Precision},
+	};
 	use frame_system::pallet_prelude::*;
 
 	pub type CreditOf<T, I> = Credit<<T as frame_system::Config>::AccountId, Pallet<T, I>>;
@@ -1100,59 +1103,58 @@ pub mod pallet {
 		}
 
 		/// Move the reserved balance of one account into the balance of another, according to
-		/// `status`.
+		/// `status`. This will respect freezes/locks only if `fortitude` is `Polite`.
 		///
-		/// Is a no-op if:
-		/// - the value to be moved is zero; or
-		/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
+		/// Is a no-op if the value to be moved is zero.
 		///
 		/// NOTE: returns actual amount of transferred value in `Ok` case.
 		pub(crate) fn do_transfer_reserved(
 			slashed: &T::AccountId,
 			beneficiary: &T::AccountId,
 			value: T::Balance,
-			best_effort: bool,
+			precision: Precision,
+			fortitude: Fortitude,
 			status: Status,
 		) -> Result<T::Balance, DispatchError> {
 			if value.is_zero() {
 				return Ok(Zero::zero())
 			}
 
+			let max = <Self as fungible::InspectHold<_>>::reducible_total_balance_on_hold(
+				slashed, fortitude,
+			);
+			let actual = match precision {
+				Precision::BestEffort => value.min(max),
+				Precision::Exact => value,
+			};
+			ensure!(actual <= max, TokenError::FundsUnavailable);
 			if slashed == beneficiary {
 				return match status {
-					Status::Free => Ok(value.saturating_sub(Self::unreserve(slashed, value))),
-					Status::Reserved => Ok(value.saturating_sub(Self::reserved_balance(slashed))),
+					Status::Free => Ok(actual.saturating_sub(Self::unreserve(slashed, actual))),
+					Status::Reserved => Ok(actual),
 				}
 			}
 
-			let ((actual, maybe_dust_1), maybe_dust_2) = Self::try_mutate_account(
+			let ((_, maybe_dust_1), maybe_dust_2) = Self::try_mutate_account(
 				beneficiary,
-				|to_account, is_new| -> Result<(T::Balance, Option<T::Balance>), DispatchError> {
+				|to_account, is_new| -> Result<((), Option<T::Balance>), DispatchError> {
 					ensure!(!is_new, Error::<T, I>::DeadAccount);
-					Self::try_mutate_account(
-						slashed,
-						|from_account, _| -> Result<T::Balance, DispatchError> {
-							let actual = cmp::min(from_account.reserved, value);
-							ensure!(
-								best_effort || actual == value,
-								Error::<T, I>::InsufficientBalance
-							);
-							match status {
-								Status::Free =>
-									to_account.free = to_account
-										.free
-										.checked_add(&actual)
-										.ok_or(ArithmeticError::Overflow)?,
-								Status::Reserved =>
-									to_account.reserved = to_account
-										.reserved
-										.checked_add(&actual)
-										.ok_or(ArithmeticError::Overflow)?,
-							}
-							from_account.reserved -= actual;
-							Ok(actual)
-						},
-					)
+					Self::try_mutate_account(slashed, |from_account, _| -> DispatchResult {
+						match status {
+							Status::Free =>
+								to_account.free = to_account
+									.free
+									.checked_add(&actual)
+									.ok_or(ArithmeticError::Overflow)?,
+							Status::Reserved =>
+								to_account.reserved = to_account
+									.reserved
+									.checked_add(&actual)
+									.ok_or(ArithmeticError::Overflow)?,
+						}
+						from_account.reserved.saturating_reduce(actual);
+						Ok(())
+					})
 				},
 			)?;
 

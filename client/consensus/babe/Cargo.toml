@@ -19,12 +19,10 @@ scale-info = { version = "2.5.0", features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.2.2", features = ["derive"] }
 futures = "0.3.21"
 log = "0.4.17"
-merlin = "2.0"
 num-bigint = "0.4.3"
 num-rational = "0.4.1"
 num-traits = "0.2.8"
 parking_lot = "0.12.1"
-schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"] }
 thiserror = "1.0"
 fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
@@ -41,7 +39,6 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain"
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
-sp-consensus-vrf = { version = "0.10.0-dev", path = "../../../primitives/consensus/vrf" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
