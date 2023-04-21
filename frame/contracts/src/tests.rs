@@ -3602,7 +3602,7 @@ fn storage_deposit_callee_works() {
 
 		assert_ok!(Contracts::call(
 			RuntimeOrigin::signed(ALICE),
-			addr_caller.clone(),
+			addr_caller,
 			0,
 			GAS_LIMIT,
 			None,
