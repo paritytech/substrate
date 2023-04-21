@@ -1235,33 +1235,24 @@ pub trait EllipticCurves {
 		sp_arkworks::bw6_761::msm_g2(bases, bigints)
 	}
 
-	/// Compute twisted edwards projective multiplication on ed_on_bls12_381
-	fn ed_on_bls12_381_bandersnatch_te_mul_projective(
-		base: Vec<u8>,
-		scalar: Vec<u8>,
-	) -> Result<Vec<u8>, ()> {
+	/// Compute twisted edwards projective multiplication on ed_on_bls12_381_bandersnatch
+	fn ed_on_bls12_381_bandersnatch_te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 		sp_arkworks::ed_on_bls12_381_bandersnatch::te_mul_projective(base, scalar)
 	}
 
-	/// Compute short weierstrass projective multiplication on ed_on_bls12_381
-	fn ed_on_bls12_381_bandersnatch_sw_mul_projective(
-		base: Vec<u8>,
-		scalar: Vec<u8>,
-	) -> Result<Vec<u8>, ()> {
+	/// Compute short weierstrass projective multiplication on ed_on_bls12_381_bandersnatch
+	fn ed_on_bls12_381_bandersnatch_sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 		sp_arkworks::ed_on_bls12_381_bandersnatch::sw_mul_projective(base, scalar)
 	}
 
-	/// Compute twisted edwards msm on ed_on_bls12_381
-	fn ed_on_bls12_381_bandersnatch_te_msm(
-		bases: Vec<u8>,
-		scalars: Vec<u8>,
-	) -> Result<Vec<u8>, ()> {
+	/// Compute twisted edwards msm on ed_on_bls12_381_bandersnatch
+	fn ed_on_bls12_381_bandersnatch_te_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 		sp_arkworks::ed_on_bls12_381_bandersnatch::te_msm(bases, scalars)
 	}
 
-	/// Compute short weierstrass msm on ed_on_bls12_381
+	/// Compute short weierstrass msm on ed_on_bls12_381_bandersnatch
 	fn ed_on_bls12_381_sw_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
-		sp_arkworks::ed_on_bls12_381::sw_msm(bases, scalars)
+		sp_arkworks::ed_on_bls12_381_bandersnatch::sw_msm(bases, scalars)
 	}
 
 	/// Compute projective multiplication on ed_on_bls12_377
