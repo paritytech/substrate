@@ -69,6 +69,7 @@ default = [
 std = [
 	"pallet-beefy-mmr/std",
 	"sp-application-crypto/std",
+	"sp-arithmetic/std",
 	"sp-consensus-aura/std",
 	"sp-consensus-babe/std",
 	"sp-consensus-beefy/std",

@@ -22,6 +22,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
 sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/grandpa" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
@@ -53,6 +54,7 @@ std = [
 	"pallet-session/std",
 	"scale-info/std",
 	"sp-application-crypto/std",
+	"sp-arithmetic/std",
 	"sp-core/std",
 	"sp-consensus-grandpa/std",
 	"sp-io/std",

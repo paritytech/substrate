@@ -21,6 +21,7 @@ frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../../fram
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../../client/transaction-pool/api" }
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
+sp-arithmetic = { version = "6.0.0", path = "../../../../primitives/arithmetic" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../../../primitives/block-builder" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
 sp-core = { version = "7.0.0", path = "../../../../primitives/core" }

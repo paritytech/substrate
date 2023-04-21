@@ -30,10 +30,11 @@ use frame_support::{
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_io;
+use sp_arithmetic::traits::Zero;
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	testing::{Header, UintAuthorityId},
-	traits::{IdentityLookup, Zero},
+	traits::IdentityLookup,
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
 

@@ -22,6 +22,7 @@ frame-benchmarking = { default-features = false, optional = true, path = "../ben
 frame-support = { default-features = false, path = "../support" }
 frame-system = { default-features = false, path = "../system" }
 remote-externalities = { optional = true, path = "../../utils/frame/remote-externalities", package = "frame-remote-externalities" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-core = { default-features = false, path = "../../primitives/core" }
 sp-io = { default-features = false, path = "../../primitives/io" }
 sp-runtime = { default-features = false, path = "../../primitives/runtime" }
@@ -43,6 +44,7 @@ std = [
 	"frame-system/std",
 	"log/std",
 	"scale-info/std",
+	"sp-arithmetic/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",

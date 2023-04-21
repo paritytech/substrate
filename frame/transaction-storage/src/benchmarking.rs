@@ -23,7 +23,7 @@ use super::*;
 use frame_benchmarking::v1::{benchmarks, whitelisted_caller};
 use frame_support::traits::{Currency, Get, OnFinalize, OnInitialize};
 use frame_system::{EventRecord, Pallet as System, RawOrigin};
-use sp_runtime::traits::{Bounded, One, Zero};
+use sp_arithmetic::traits::{Bounded, One, Zero};
 use sp_std::*;
 use sp_transaction_storage_proof::TransactionStorageProof;
 

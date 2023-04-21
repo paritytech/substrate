@@ -20,10 +20,8 @@
 use crate::types::Delegations;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{Bounded, CheckedDiv, CheckedMul, Zero},
-	RuntimeDebug,
-};
+use sp_arithmetic::traits::{Bounded, CheckedDiv, CheckedMul, Zero};
+use sp_runtime::RuntimeDebug;
 use sp_std::{prelude::*, result::Result};
 
 /// A value denoting the strength of conviction of a vote.

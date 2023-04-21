@@ -28,10 +28,11 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{Currency, CurrencyToVote, Get, Imbalance},
 };
-use sp_runtime::{
-	traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero},
+use sp_arithmetic::{
+	traits::{Bounded, One, Zero},
 	Perbill, Percent,
 };
+use sp_runtime::traits::{StaticLookup, TrailingZeroInput};
 use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 
@@ -51,7 +52,7 @@ type MaxNominators<T> = <<T as Config>::BenchmarkingConfig as BenchmarkingConfig
 // read and write operations.
 pub fn add_slashing_spans<T: Config>(who: &T::AccountId, spans: u32) {
 	if spans == 0 {
-		return
+		return;
 	}
 
 	// For the first slashing span, we initialize

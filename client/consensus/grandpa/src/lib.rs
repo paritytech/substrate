@@ -73,6 +73,7 @@ use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppCrypto;
+use sp_arithmetic::traits::Zero;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::SelectChain;
 use sp_consensus_grandpa::{
@@ -82,7 +83,7 @@ use sp_core::{crypto::ByteArray, traits::CallContext};
 use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor, Zero},
+	traits::{Block as BlockT, NumberFor},
 };
 
 pub use finality_grandpa::BlockNumberOps;
@@ -1101,11 +1102,11 @@ where
 				// voters don't conclude naturally
 				return Poll::Ready(Err(Error::Safety(
 					"consensus-grandpa inner voter has concluded.".into(),
-				)))
+				)));
 			},
 			Poll::Ready(Err(CommandOrError::Error(e))) => {
 				// return inner observer error
-				return Poll::Ready(Err(e))
+				return Poll::Ready(Err(e));
 			},
 			Poll::Ready(Err(CommandOrError::VoterCommand(command))) => {
 				// some command issued internally
@@ -1118,7 +1119,7 @@ where
 			Poll::Pending => {},
 			Poll::Ready(None) => {
 				// the `voter_commands_rx` stream should never conclude since it's never closed.
-				return Poll::Ready(Err(Error::Safety("`voter_commands_rx` was closed.".into())))
+				return Poll::Ready(Err(Error::Safety("`voter_commands_rx` was closed.".into())));
 			},
 			Poll::Ready(Some(command)) => {
 				// some command issued externally
@@ -1159,7 +1160,7 @@ where
 
 	let revertible = blocks.min(best_number - finalized);
 	if revertible == Zero::zero() {
-		return Ok(())
+		return Ok(());
 	}
 
 	let number = best_number - revertible;

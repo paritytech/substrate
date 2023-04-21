@@ -43,11 +43,12 @@ use frame_support::{
 	WeakBoundedVec,
 };
 use scale_info::TypeInfo;
+use sp_arithmetic::traits::Zero;
 use sp_consensus_grandpa::{
 	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
 	GRANDPA_ENGINE_ID, RUNTIME_LOG_TARGET as LOG_TARGET,
 };
-use sp_runtime::{generic::DigestItem, traits::Zero, DispatchResult};
+use sp_runtime::{generic::DigestItem, DispatchResult};
 use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::{offence::OffenceReportSystem, SessionIndex};
 use sp_std::prelude::*;
@@ -474,7 +475,7 @@ impl<T: Config> Pallet<T> {
 
 			if forced.is_some() {
 				if Self::next_forced().map_or(false, |next| next > scheduled_at) {
-					return Err(Error::<T>::TooSoon.into())
+					return Err(Error::<T>::TooSoon.into());
 				}
 
 				// only allow the next forced change when twice the window has passed since

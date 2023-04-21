@@ -29,11 +29,8 @@ use frame_support::traits::{Currency, Get, ValidatorSet, ValidatorSetWithIdentif
 use frame_system::{Config as SystemConfig, Pallet as System, RawOrigin};
 
 #[cfg(test)]
-use sp_runtime::traits::UniqueSaturatedInto;
-use sp_runtime::{
-	traits::{Convert, Saturating, StaticLookup},
-	Perbill,
-};
+use sp_arithmetic::{traits::Saturating, Perbill};
+use sp_runtime::traits::{Convert, StaticLookup, UniqueSaturatedInto};
 use sp_staking::offence::{Offence, ReportOffence};
 
 use pallet_babe::EquivocationOffence as BabeEquivocationOffence;

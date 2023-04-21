@@ -26,7 +26,7 @@ use pallet_nomination_pools::{
 	PoolState,
 };
 use pallet_staking::{CurrentEra, Event as StakingEvent, Payee, RewardDestination};
-use sp_runtime::traits::Zero;
+use sp_arithmetic::traits::Zero;
 
 #[test]
 fn pool_lifecycle_e2e() {

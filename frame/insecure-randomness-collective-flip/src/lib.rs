@@ -74,7 +74,8 @@ use safe_mix::TripletMix;
 
 use codec::Encode;
 use frame_support::{pallet_prelude::Weight, traits::Randomness};
-use sp_runtime::traits::{Hash, Saturating};
+use sp_arithmetic::traits::Saturating;
+use sp_runtime::traits::Hash;
 
 const RANDOM_MATERIAL_LEN: u32 = 81;
 

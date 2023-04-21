@@ -17,8 +17,8 @@
 
 //! Test crate for pallet-staking-reward-curve. Allows to test for procedural macro.
 //! See tests directory.
-
 mod test_small_falloff {
+	use sp_arithmetic::Perbill;
 	pallet_staking_reward_curve::build! {
 		const REWARD_CURVE: sp_runtime::curve::PiecewiseLinear<'static> = curve!(
 			min_inflation: 0_020_000,
@@ -32,6 +32,7 @@ mod test_small_falloff {
 }
 
 mod test_big_falloff {
+	use sp_arithmetic::Perbill;
 	pallet_staking_reward_curve::build! {
 		const REWARD_CURVE: sp_runtime::curve::PiecewiseLinear<'static> = curve!(
 			min_inflation: 0_100_000,

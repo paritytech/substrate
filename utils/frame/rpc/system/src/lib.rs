@@ -29,6 +29,7 @@ use jsonrpsee::{
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 use sp_api::ApiExt;
+use sp_arithmetic::traits::{AtLeast32Bit, One};
 use sp_block_builder::BlockBuilder;
 use sp_blockchain::HeaderBackend;
 use sp_core::{hexdisplay::HexDisplay, Bytes};
@@ -96,7 +97,7 @@ where
 	P: TransactionPool + 'static,
 	Block: traits::Block,
 	AccountId: Clone + Display + Codec + Send + 'static,
-	Index: Clone + Display + Codec + Send + traits::AtLeast32Bit + 'static,
+	Index: Clone + Display + Codec + Send + AtLeast32Bit + 'static,
 {
 	async fn nonce(&self, account: AccountId) -> RpcResult<Index> {
 		let api = self.client.runtime_api();
@@ -180,7 +181,7 @@ fn adjust_nonce<P, AccountId, Index>(pool: &P, account: AccountId, nonce: Index)
 where
 	P: TransactionPool,
 	AccountId: Clone + std::fmt::Display + Encode,
-	Index: Clone + std::fmt::Display + Encode + traits::AtLeast32Bit + 'static,
+	Index: Clone + std::fmt::Display + Encode + AtLeast32Bit + 'static,
 {
 	log::debug!(target: "rpc", "State nonce for {}: {}", account, nonce);
 	// Now we need to query the transaction pool
@@ -202,7 +203,7 @@ where
 		// since transactions in `ready()` need to be ordered by nonce
 		// it's fine to continue with current iterator.
 		if tx.provides().get(0) == Some(&current_tag) {
-			current_nonce += traits::One::one();
+			current_nonce += One::one();
 			current_tag = (account.clone(), current_nonce.clone()).encode();
 		}
 	}

@@ -22,10 +22,8 @@
 use bitflags::bitflags;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{Saturating, Zero},
-	DispatchError, RuntimeDebug,
-};
+use sp_arithmetic::traits::{Saturating, Zero};
+use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 use sp_weights::Weight;
 
@@ -203,18 +201,20 @@ where
 		match (self, rhs) {
 			(Charge(lhs), Charge(rhs)) => Charge(lhs.saturating_add(*rhs)),
 			(Refund(lhs), Refund(rhs)) => Refund(lhs.saturating_add(*rhs)),
-			(Charge(lhs), Refund(rhs)) =>
+			(Charge(lhs), Refund(rhs)) => {
 				if lhs >= rhs {
 					Charge(lhs.saturating_sub(*rhs))
 				} else {
 					Refund(rhs.saturating_sub(*lhs))
-				},
-			(Refund(lhs), Charge(rhs)) =>
+				}
+			},
+			(Refund(lhs), Charge(rhs)) => {
 				if lhs > rhs {
 					Refund(lhs.saturating_sub(*rhs))
 				} else {
 					Charge(rhs.saturating_sub(*lhs))
-				},
+				}
+			},
 		}
 	}
 
@@ -224,18 +224,20 @@ where
 		match (self, rhs) {
 			(Charge(lhs), Refund(rhs)) => Charge(lhs.saturating_add(*rhs)),
 			(Refund(lhs), Charge(rhs)) => Refund(lhs.saturating_add(*rhs)),
-			(Charge(lhs), Charge(rhs)) =>
+			(Charge(lhs), Charge(rhs)) => {
 				if lhs >= rhs {
 					Charge(lhs.saturating_sub(*rhs))
 				} else {
 					Refund(rhs.saturating_sub(*lhs))
-				},
-			(Refund(lhs), Refund(rhs)) =>
+				}
+			},
+			(Refund(lhs), Refund(rhs)) => {
 				if lhs > rhs {
 					Refund(lhs.saturating_sub(*rhs))
 				} else {
 					Charge(rhs.saturating_sub(*lhs))
-				},
+				}
+			},
 		}
 	}
 

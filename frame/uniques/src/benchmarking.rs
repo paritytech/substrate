@@ -29,7 +29,7 @@ use frame_support::{
 	BoundedVec,
 };
 use frame_system::RawOrigin as SystemOrigin;
-use sp_runtime::traits::Bounded;
+use sp_arithmetic::traits::Bounded;
 use sp_std::prelude::*;
 
 use crate::Pallet as Uniques;

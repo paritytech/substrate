@@ -151,7 +151,7 @@ parameter_types! {
 pub struct OnChainSeqPhragmen;
 impl onchain::Config for OnChainSeqPhragmen {
 	type System = Test;
-	type Solver = SequentialPhragmen<AccountId, sp_runtime::Perbill>;
+	type Solver = SequentialPhragmen<AccountId, sp_arithmetic::Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = ConstU32<100>;

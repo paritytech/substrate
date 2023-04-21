@@ -23,6 +23,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-support-procedural = { version = "4.0.0-dev", default-features = false, path = "../support/procedural" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
@@ -48,6 +49,7 @@ std = [
 	"scale-info/std",
 	"serde",
 	"sp-api/std",
+	"sp-arithmetic/std",
 	"sp-application-crypto/std",
 	"sp-core/std",
 	"sp-io/std",

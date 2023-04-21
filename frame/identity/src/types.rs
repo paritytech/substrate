@@ -26,7 +26,8 @@ use scale_info::{
 	build::{Fields, Variants},
 	meta_type, Path, Type, TypeInfo, TypeParameter,
 };
-use sp_runtime::{traits::Zero, RuntimeDebug};
+use sp_arithmetic::traits::Zero;
+use sp_runtime::RuntimeDebug;
 use sp_std::{fmt::Debug, iter::once, ops::Add, prelude::*};
 
 /// Either underlying data blob if it is at most 32 bytes, or a hash of it. If the data is greater
@@ -396,8 +397,9 @@ impl<
 	> Registration<Balance, MaxJudgements, MaxAdditionalFields>
 {
 	pub(crate) fn total_deposit(&self) -> Balance {
-		self.deposit +
-			self.judgements
+		self.deposit
+			+ self
+				.judgements
 				.iter()
 				.map(|(_, ref j)| if let Judgement::FeePaid(fee) = j { *fee } else { Zero::zero() })
 				.fold(Zero::zero(), |a, i| a + i)

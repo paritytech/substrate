@@ -265,12 +265,13 @@ use rand_chacha::{
 	ChaChaRng,
 };
 use scale_info::TypeInfo;
+use sp_arithmetic::{
+	traits::{CheckedSub, IntegerSquareRoot, Saturating, Zero},
+	Percent,
+};
 use sp_runtime::{
-	traits::{
-		AccountIdConversion, CheckedSub, Hash, IntegerSquareRoot, Saturating, StaticLookup,
-		TrailingZeroInput, Zero,
-	},
-	Percent, RuntimeDebug,
+	traits::{AccountIdConversion, Hash, StaticLookup, TrailingZeroInput},
+	RuntimeDebug,
 };
 use sp_std::prelude::*;
 
@@ -944,7 +945,7 @@ pub mod pallet {
 					} else {
 						<Payouts<T, I>>::insert(&who, payouts);
 					}
-					return Ok(())
+					return Ok(());
 				}
 			}
 			Err(Error::<T, I>::NoPayout.into())
@@ -1112,8 +1113,8 @@ pub mod pallet {
 						// Reduce next pot by payout
 						<Pot<T, I>>::put(pot - value);
 						// Add payout for new candidate
-						let maturity = <frame_system::Pallet<T>>::block_number() +
-							Self::lock_duration(Self::members().len() as u32);
+						let maturity = <frame_system::Pallet<T>>::block_number()
+							+ Self::lock_duration(Self::members().len() as u32);
 						Self::pay_accepted_candidate(&who, value, kind, maturity);
 					},
 					Judgement::Reject => {
@@ -1146,7 +1147,7 @@ pub mod pallet {
 				// Remove suspended candidate
 				<SuspendedCandidates<T, I>>::remove(who);
 			} else {
-				return Err(Error::<T, I>::NotSuspended.into())
+				return Err(Error::<T, I>::NotSuspended.into());
 			}
 			Ok(())
 		}
@@ -1340,8 +1341,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// out of society.
 			members.reserve(candidates.len());
 
-			let maturity = <frame_system::Pallet<T>>::block_number() +
-				Self::lock_duration(members.len() as u32);
+			let maturity = <frame_system::Pallet<T>>::block_number()
+				+ Self::lock_duration(members.len() as u32);
 
 			let mut rewardees = Vec::new();
 			let mut total_approvals = 0;
@@ -1530,7 +1531,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					// whole slash is accounted for.
 					*amount -= rest;
 					rest = Zero::zero();
-					break
+					break;
 				}
 			}
 			<Payouts<T, I>>::insert(who, &payouts[dropped..]);
@@ -1702,7 +1703,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								selected.push(bid.clone());
 								zero_selected = true;
 								count += 1;
-								return false
+								return false;
 							}
 						} else {
 							total_cost += bid.value;
@@ -1710,7 +1711,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							if total_cost <= pot {
 								selected.push(bid.clone());
 								count += 1;
-								return false
+								return false;
 							}
 						}
 					}

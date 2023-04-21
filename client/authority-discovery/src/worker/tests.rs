@@ -40,8 +40,9 @@ use prometheus_endpoint::prometheus::default_registry;
 use sc_client_api::HeaderBackend;
 use sc_network::Signature;
 use sp_api::{ApiRef, ProvideRuntimeApi};
+use sp_arithmetic::traits::Zero;
 use sp_keystore::{testing::MemoryKeystore, Keystore};
-use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use substrate_test_runtime_client::runtime::Block;
 
 use super::*;

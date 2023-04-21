@@ -33,7 +33,8 @@ use frame_support::{
 	dispatch::{Dispatchable, GetDispatchInfo},
 	traits::{Currency, OnUnbalanced, ReservableCurrency},
 };
-use sp_runtime::traits::{BlakeTwo256, Hash, One, Saturating, Zero};
+use sp_arithmetic::traits::{One, Saturating, Zero};
+use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_std::{prelude::*, result};
 use sp_transaction_storage_proof::{
 	encode_index, random_chunk, InherentError, TransactionStorageProof, CHUNK_SIZE,
@@ -210,7 +211,7 @@ pub mod pallet {
 			let mut index = 0;
 			<BlockTransactions<T>>::mutate(|transactions| {
 				if transactions.len() + 1 > T::MaxBlockTransactions::get() as usize {
-					return Err(Error::<T>::TooManyTransactions)
+					return Err(Error::<T>::TooManyTransactions);
 				}
 				let total_chunks = transactions.last().map_or(0, |t| t.block_chunks) + chunk_count;
 				index = transactions.len() as u32;
@@ -254,7 +255,7 @@ pub mod pallet {
 			let mut index = 0;
 			<BlockTransactions<T>>::mutate(|transactions| {
 				if transactions.len() + 1 > T::MaxBlockTransactions::get() as usize {
-					return Err(Error::<T>::TooManyTransactions)
+					return Err(Error::<T>::TooManyTransactions);
 				}
 				let chunks = num_chunks(info.size);
 				let total_chunks = transactions.last().map_or(0, |t| t.block_chunks) + chunks;

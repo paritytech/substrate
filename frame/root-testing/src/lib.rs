@@ -25,7 +25,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::dispatch::DispatchResult;
-use sp_runtime::Perbill;
+use sp_arithmetic::Perbill;
 
 pub use pallet::*;
 

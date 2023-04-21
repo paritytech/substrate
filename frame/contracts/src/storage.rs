@@ -33,11 +33,9 @@ use frame_support::{
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
+use sp_arithmetic::traits::{Saturating, Zero};
 use sp_io::KillStorageResult;
-use sp_runtime::{
-	traits::{Hash, Saturating, Zero},
-	RuntimeDebug,
-};
+use sp_runtime::{traits::Hash, RuntimeDebug};
 use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
 
 /// Information for managing an account and its sub trie abstraction.
@@ -79,7 +77,7 @@ impl<T: Config> ContractInfo<T> {
 		code_hash: CodeHash<T>,
 	) -> Result<Self, DispatchError> {
 		if <ContractInfoOf<T>>::contains_key(account) {
-			return Err(Error::<T>::DuplicateContract.into())
+			return Err(Error::<T>::DuplicateContract.into());
 		}
 
 		let trie_id = {
@@ -170,12 +168,13 @@ impl<T: Config> ContractInfo<T> {
 		if let Some(storage_meter) = storage_meter {
 			let mut diff = meter::Diff::default();
 			match (old_len, new_value.as_ref().map(|v| v.len() as u32)) {
-				(Some(old_len), Some(new_len)) =>
+				(Some(old_len), Some(new_len)) => {
 					if new_len > old_len {
 						diff.bytes_added = new_len - old_len;
 					} else {
 						diff.bytes_removed = old_len - new_len;
-					},
+					}
+				},
 				(None, Some(new_len)) => {
 					diff.bytes_added = new_len;
 					diff.items_added = 1;
@@ -212,8 +211,8 @@ impl<T: Config> ContractInfo<T> {
 	/// of those keys can be deleted from the deletion queue given the supplied weight limit.
 	pub fn deletion_budget(weight_limit: Weight) -> (Weight, u32) {
 		let base_weight = T::WeightInfo::on_process_deletion_queue_batch();
-		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
-			T::WeightInfo::on_initialize_per_trie_key(0);
+		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1)
+			- T::WeightInfo::on_initialize_per_trie_key(0);
 
 		// `weight_per_key` being zero makes no sense and would constitute a failure to
 		// benchmark properly. We opt for not removing any keys at all in this case.
@@ -232,7 +231,7 @@ impl<T: Config> ContractInfo<T> {
 		let mut queue = <DeletionQueueManager<T>>::load();
 
 		if queue.is_empty() {
-			return Weight::zero()
+			return Weight::zero();
 		}
 
 		let (weight_per_key, mut remaining_key_budget) = Self::deletion_budget(weight_limit);
@@ -241,7 +240,7 @@ impl<T: Config> ContractInfo<T> {
 		// proceeding. Too little weight for decoding might happen during runtime upgrades
 		// which consume the whole block before the other `on_initialize` blocks are called.
 		if remaining_key_budget == 0 {
-			return weight_limit
+			return weight_limit;
 		}
 
 		while remaining_key_budget > 0 {
@@ -389,7 +388,7 @@ impl<T: Config> DeletionQueueManager<T> {
 	/// the cost of an extra call to `sp_io::storage::next_key` to lookup the next entry in the map
 	fn next(&mut self) -> Option<DeletionQueueEntry<T>> {
 		if self.is_empty() {
-			return None
+			return None;
 		}
 
 		let entry = <DeletionQueue<T>>::get(self.delete_counter);

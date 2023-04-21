@@ -41,6 +41,7 @@ sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sp-arithmetic = { version = "6.0.0", path = "../../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-database = { version = "4.0.0-dev", path = "../../../primitives/database" }

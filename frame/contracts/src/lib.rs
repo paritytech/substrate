@@ -126,7 +126,8 @@ use pallet_contracts_primitives::{
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
-use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
+use sp_arithmetic::traits::Saturating;
+use sp_runtime::traits::{Convert, Hash, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
@@ -525,7 +526,7 @@ pub mod pallet {
 				let contract = if let Some(contract) = contract {
 					contract
 				} else {
-					return Err(<Error<T>>::ContractNotFound.into())
+					return Err(<Error<T>>::ContractNotFound.into());
 				};
 				<PrefabWasmModule<T>>::add_user(code_hash)?;
 				<PrefabWasmModule<T>>::remove_user(contract.code_hash);
@@ -1007,12 +1008,13 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 		let mut storage_meter =
 			match StorageMeter::new(&common.origin, common.storage_deposit_limit, common.value) {
 				Ok(meter) => meter,
-				Err(err) =>
+				Err(err) => {
 					return InternalOutput {
 						result: Err(err.into()),
 						gas_meter,
 						storage_deposit: Default::default(),
-					},
+					}
+				},
 			};
 		let schedule = T::Schedule::get();
 		let CallInput { dest, determinism } = self;

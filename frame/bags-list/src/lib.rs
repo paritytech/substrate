@@ -56,7 +56,8 @@
 use codec::FullCodec;
 use frame_election_provider_support::{ScoreProvider, SortedListProvider};
 use frame_system::ensure_signed;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded, StaticLookup};
+use sp_arithmetic::traits::{AtLeast32BitUnsigned, Bounded};
+use sp_runtime::traits::StaticLookup;
 use sp_std::prelude::*;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]

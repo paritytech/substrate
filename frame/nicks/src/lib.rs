@@ -40,7 +40,8 @@
 
 use frame_support::traits::{Currency, OnUnbalanced, ReservableCurrency};
 pub use pallet::*;
-use sp_runtime::traits::{StaticLookup, Zero};
+use sp_arithmetic::traits::Zero;
+use sp_runtime::traits::StaticLookup;
 use sp_std::prelude::*;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;

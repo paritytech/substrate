@@ -38,11 +38,11 @@ pub use log;
 #[doc(hidden)]
 pub use paste;
 #[doc(hidden)]
+pub use sp_arithmetic::traits::Zero;
+#[doc(hidden)]
 pub use sp_core::defer;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
-#[doc(hidden)]
-pub use sp_runtime::traits::Zero;
 #[doc(hidden)]
 pub use sp_runtime::StateVersion;
 #[doc(hidden)]

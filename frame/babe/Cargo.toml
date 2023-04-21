@@ -22,8 +22,8 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../timestamp" }
-sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
 sp-consensus-vrf = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/vrf" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
@@ -53,6 +53,7 @@ std = [
 	"pallet-timestamp/std",
 	"scale-info/std",
 	"sp-application-crypto/std",
+	"sp-arithmetic/std",
 	"sp-consensus-babe/std",
 	"sp-consensus-vrf/std",
 	"sp-io/std",

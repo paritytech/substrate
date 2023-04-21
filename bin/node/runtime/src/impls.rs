@@ -114,11 +114,11 @@ impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider
 #[cfg(test)]
 mod multiplier_tests {
 	use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
-	use sp_runtime::{
-		assert_eq_error_rate,
-		traits::{Convert, One, Zero},
+	use sp_arithmetic::{
+		traits::{One, Zero},
 		FixedPointNumber,
 	};
+	use sp_runtime::{assert_eq_error_rate, traits::Convert};
 
 	use crate::{
 		constants::{currency::*, time::*},
@@ -256,7 +256,7 @@ mod multiplier_tests {
 				let next = runtime_multiplier_update(fm);
 				fm = next;
 				if fm == min_multiplier() {
-					break
+					break;
 				}
 				iterations += 1;
 			}
@@ -284,8 +284,8 @@ mod multiplier_tests {
 		// `cargo test congested_chain_simulation -- --nocapture` to get some insight.
 
 		// almost full. The entire quota of normal transactions is taken.
-		let block_weight = BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap() -
-			Weight::from_parts(100, 0);
+		let block_weight = BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap()
+			- Weight::from_parts(100, 0);
 
 		// Default substrate weight.
 		let tx_weight = frame_support::weights::constants::ExtrinsicBaseWeight::get();

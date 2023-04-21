@@ -54,7 +54,7 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 mod test {
 	use super::*;
 	use crate::mock::{new_test_ext, with_on_offence_fractions, Runtime as T};
-	use sp_runtime::Perbill;
+	use sp_arithmetic::Perbill;
 	use sp_staking::offence::OffenceDetails;
 
 	#[test]

@@ -39,6 +39,7 @@ std = [
 	"log/std",
 	"pallet-timestamp/std",
 	"scale-info/std",
+	"sp-arithmetic/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",

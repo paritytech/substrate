@@ -25,8 +25,9 @@ use frame_support::{
 	traits::{Currency, EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
+use sp_arithmetic::traits::Bounded;
 use sp_core::H256;
-use sp_runtime::{traits::Bounded, BoundedVec};
+use sp_runtime::BoundedVec;
 
 use crate::Pallet as Democracy;
 

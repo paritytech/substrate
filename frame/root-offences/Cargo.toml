@@ -21,6 +21,7 @@ pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../.
 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 
@@ -46,5 +47,6 @@ std = [
 	"pallet-session/std",
 	"pallet-staking/std",
 	"scale-info/std",
+	"sp-arithmetic/std",
 	"sp-runtime/std",
 ]

@@ -41,6 +41,7 @@ use sc_consensus::BlockImport;
 use sc_network::{NetworkRequest, ProtocolName};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork, Syncing as GossipSyncing};
 use sp_api::{HeaderT, NumberFor, ProvideRuntimeApi};
+use sp_arithmetic::traits::Zero;
 use sp_blockchain::{
 	Backend as BlockchainBackend, Error as ClientError, HeaderBackend, Result as ClientResult,
 };
@@ -51,7 +52,7 @@ use sp_consensus_beefy::{
 };
 use sp_keystore::KeystorePtr;
 use sp_mmr_primitives::MmrApi;
-use sp_runtime::traits::{Block, Zero};
+use sp_runtime::traits::Block;
 use std::{collections::VecDeque, marker::PhantomData, sync::Arc};
 
 mod aux_schema;
@@ -283,7 +284,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 			Ok(state) => state,
 			Err(e) => {
 				error!(target: LOG_TARGET, "Error: {:?}. Terminating.", e);
-				return
+				return;
 			},
 		};
 	// Update the gossip validator with the right starting round and set id.
@@ -292,7 +293,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 		.map(|f| gossip_validator.update_filter(f))
 	{
 		error!(target: LOG_TARGET, "Error: {:?}. Terminating.", e);
-		return
+		return;
 	}
 
 	let worker_params = worker::WorkerParams {
@@ -394,7 +395,7 @@ where
 			let state =
 				PersistedState::checked_new(best_grandpa, best_beefy, sessions, min_block_delta)
 					.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?;
-			break state
+			break state;
 		}
 
 		if *header.number() == beefy_genesis {
@@ -410,8 +411,13 @@ where
 			);
 
 			sessions.push_front(Rounds::new(beefy_genesis, genesis_set));
-			break PersistedState::checked_new(best_grandpa, Zero::zero(), sessions, min_block_delta)
-				.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?
+			break PersistedState::checked_new(
+				best_grandpa,
+				Zero::zero(),
+				sessions,
+				min_block_delta,
+			)
+			.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?;
 		}
 
 		if let Some(active) = worker::find_authorities_change::<B>(&header) {

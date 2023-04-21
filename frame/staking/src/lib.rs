@@ -306,10 +306,14 @@ use frame_support::{
 	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
+use sp_arithmetic::{
+	traits::{AtLeast32BitUnsigned, Saturating, Zero},
+	Perbill, Perquintill, Rounding,
+};
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	traits::{AtLeast32BitUnsigned, Convert, Saturating, StaticLookup, Zero},
-	Perbill, Perquintill, Rounding, RuntimeDebug,
+	traits::{Convert, StaticLookup},
+	RuntimeDebug,
 };
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
@@ -532,7 +536,7 @@ impl<T: Config> StakingLedger<T> {
 			}
 
 			if unlocking_balance >= value {
-				break
+				break;
 			}
 		}
 
@@ -569,10 +573,10 @@ impl<T: Config> StakingLedger<T> {
 		slash_era: EraIndex,
 	) -> BalanceOf<T> {
 		if slash_amount.is_zero() {
-			return Zero::zero()
+			return Zero::zero();
 		}
 
-		use sp_runtime::PerThing as _;
+		use sp_arithmetic::PerThing as _;
 		use sp_staking::OnStakerSlash as _;
 		let mut remaining_slash = slash_amount;
 		let pre_slash_total = self.total;
@@ -663,7 +667,7 @@ impl<T: Config> StakingLedger<T> {
 		let mut slashed_unlocking = BTreeMap::<_, _>::new();
 		for i in slash_chunks_priority {
 			if remaining_slash.is_zero() {
-				break
+				break;
 			}
 
 			if let Some(chunk) = self.unlocking.get_mut(i).defensive() {
@@ -671,7 +675,7 @@ impl<T: Config> StakingLedger<T> {
 				// write the new slashed value of this chunk to the map.
 				slashed_unlocking.insert(chunk.era, chunk.value);
 			} else {
-				break
+				break;
 			}
 		}
 

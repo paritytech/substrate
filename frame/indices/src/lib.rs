@@ -27,8 +27,9 @@ pub mod weights;
 
 use codec::Codec;
 use frame_support::traits::{BalanceStatus::Reserved, Currency, ReservableCurrency};
+use sp_arithmetic::traits::{AtLeast32Bit, Saturating, Zero};
 use sp_runtime::{
-	traits::{AtLeast32Bit, LookupError, Saturating, StaticLookup, Zero},
+	traits::{LookupError, StaticLookup},
 	MultiAddress,
 };
 use sp_std::prelude::*;

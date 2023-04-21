@@ -37,6 +37,7 @@ use sc_network_gossip::GossipEngine;
 use sc_utils::notification::NotificationReceiver;
 use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
+use sp_arithmetic::traits::{SaturatedConversion, Zero};
 use sp_consensus::SyncOracle;
 use sp_consensus_beefy::{
 	check_equivocation_proof,
@@ -46,8 +47,7 @@ use sp_consensus_beefy::{
 };
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor, Zero},
-	SaturatedConversion,
+	traits::{Block, Header, NumberFor},
 };
 use std::{
 	collections::{BTreeMap, BTreeSet, VecDeque},
@@ -102,24 +102,24 @@ impl<B: Block> VoterOracle<B> {
 		let mut validate = || -> bool {
 			let best_grandpa = *grandpa_header.number();
 			if sessions.is_empty() || best_beefy > best_grandpa {
-				return false
+				return false;
 			}
 			for (idx, session) in sessions.iter().enumerate() {
 				let start = session.session_start();
 				if session.validators().is_empty() {
-					return false
+					return false;
 				}
 				if start > best_grandpa || start <= prev_start {
-					return false
+					return false;
 				}
 				#[cfg(not(test))]
 				if let Some(prev_id) = prev_validator_id {
 					if session.validator_set_id() <= prev_id {
-						return false
+						return false;
 					}
 				}
 				if idx != 0 && session.mandatory_done() {
-					return false
+					return false;
 				}
 				prev_start = session.session_start();
 				prev_validator_id = Some(session.validator_set_id());
@@ -236,7 +236,7 @@ impl<B: Block> VoterOracle<B> {
 			r
 		} else {
 			debug!(target: LOG_TARGET, "🥩 No voting round started");
-			return None
+			return None;
 		};
 		let best_grandpa = *self.best_grandpa_block_header.number();
 		let best_beefy = self.best_beefy_block;
@@ -509,12 +509,13 @@ where
 	) -> Result<(), Error> {
 		let block_num = vote.commitment.block_number;
 		match self.voting_oracle().triage_round(block_num)? {
-			RoundAction::Process =>
+			RoundAction::Process => {
 				if let Some(finality_proof) = self.handle_vote(vote)? {
 					let gossip_proof = GossipMessage::<B>::FinalityProof(finality_proof);
 					let encoded_proof = gossip_proof.encode();
 					self.gossip_engine.gossip_message(proofs_topic::<B>(), encoded_proof, true);
-				},
+				}
+			},
 			RoundAction::Drop => metric_inc!(self, beefy_stale_votes),
 			RoundAction::Enqueue => error!(target: LOG_TARGET, "🥩 unexpected vote: {:?}.", vote),
 		};
@@ -574,7 +575,7 @@ where
 				// New state is persisted after finalization.
 				self.finalize(finality_proof.clone())?;
 				metric_inc!(self, beefy_good_votes_processed);
-				return Ok(Some(finality_proof))
+				return Ok(Some(finality_proof));
 			},
 			VoteImportResult::Ok => {
 				// Persist state after handling mandatory block vote.
@@ -729,7 +730,7 @@ where
 			hash
 		} else {
 			warn!(target: LOG_TARGET, "🥩 No MMR root digest found for: {:?}", target_hash);
-			return Ok(())
+			return Ok(());
 		};
 
 		let rounds = self.persisted_state.voting_oracle.active_rounds_mut()?;
@@ -743,7 +744,7 @@ where
 				target: LOG_TARGET,
 				"🥩 Missing validator id - can't vote for: {:?}", target_hash
 			);
-			return Ok(())
+			return Ok(());
 		};
 
 		let commitment = Commitment { payload, block_number: target_number, validator_set_id };
@@ -753,7 +754,7 @@ where
 			Ok(sig) => sig,
 			Err(err) => {
 				warn!(target: LOG_TARGET, "🥩 Error signing commitment: {:?}", err);
-				return Ok(())
+				return Ok(());
 			},
 		};
 
@@ -937,11 +938,11 @@ where
 
 		if !check_equivocation_proof::<_, _, BeefySignatureHasher>(&proof) {
 			debug!(target: LOG_TARGET, "🥩 Skip report for bad equivocation {:?}", proof);
-			return Ok(())
+			return Ok(());
 		} else if let Some(local_id) = self.key_store.authority_id(validators) {
 			if offender_id == local_id {
 				debug!(target: LOG_TARGET, "🥩 Skip equivocation report for own equivocation");
-				return Ok(())
+				return Ok(());
 			}
 		}
 
@@ -969,7 +970,7 @@ where
 					target: LOG_TARGET,
 					"🥩 Equivocation offender not part of the authority set."
 				);
-				return Ok(())
+				return Ok(());
 			},
 		};
 

@@ -39,6 +39,7 @@ std = [
 	"log/std",
 	"scale-info/std",
 	"serde",
+	"sp-arithmetic/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",

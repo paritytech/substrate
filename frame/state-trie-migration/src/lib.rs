@@ -82,13 +82,11 @@ pub mod pallet {
 		traits::{Currency, Get},
 	};
 	use frame_system::{self, pallet_prelude::*};
+	use sp_arithmetic::traits::{Saturating, Zero};
 	use sp_core::{
 		hexdisplay::HexDisplay, storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX,
 	};
-	use sp_runtime::{
-		self,
-		traits::{Saturating, Zero},
-	};
+	use sp_runtime;
 	use sp_std::{ops::Deref, prelude::*};
 
 	pub(crate) type BalanceOf<T> =
@@ -244,13 +242,13 @@ pub mod pallet {
 			if limits.item.is_zero() || limits.size.is_zero() {
 				// handle this minor edge case, else we would call `migrate_tick` at least once.
 				log!(warn, "limits are zero. stopping");
-				return Ok(())
+				return Ok(());
 			}
 
 			while !self.exhausted(limits) && !self.finished() {
 				if let Err(e) = self.migrate_tick() {
 					log!(error, "migrate_until_exhaustion failed: {:?}", e);
-					return Err(e)
+					return Err(e);
 				}
 			}
 
@@ -327,7 +325,7 @@ pub mod pallet {
 				_ => {
 					// defensive: there must be an ongoing top migration.
 					frame_support::defensive!("cannot migrate child key.");
-					return Ok(())
+					return Ok(());
 				},
 			};
 
@@ -369,7 +367,7 @@ pub mod pallet {
 				Progress::Complete => {
 					// defensive: there must be an ongoing top migration.
 					frame_support::defensive!("cannot migrate top key.");
-					return Ok(())
+					return Ok(());
 				},
 			};
 
@@ -622,7 +620,7 @@ pub mod pallet {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
 				debug_assert!(_remainder.is_zero());
-				return Ok(().into())
+				return Ok(().into());
 			}
 
 			Self::deposit_event(Event::<T>::Migrated {
@@ -894,7 +892,7 @@ pub mod pallet {
 mod benchmarks {
 	use super::{pallet::Pallet as StateTrieMigration, *};
 	use frame_support::traits::{Currency, Get};
-	use sp_runtime::traits::Saturating;
+	use sp_arithmetic::traits::Saturating;
 	use sp_std::prelude::*;
 
 	// The size of the key seemingly makes no difference in the read/write time, so we make it
@@ -1274,7 +1272,8 @@ mod mock {
 mod test {
 	use super::{mock::*, *};
 	use frame_support::{bounded_vec, dispatch::*};
-	use sp_runtime::{traits::Bounded, StateVersion};
+	use sp_arithmetic::traits::Bounded;
+	use sp_runtime::StateVersion;
 
 	#[test]
 	fn fails_if_no_migration() {
@@ -1467,7 +1466,7 @@ mod test {
 			frame_support::assert_err!(
 				StateTrieMigration::continue_migrate(
 					RuntimeOrigin::signed(1),
-					MigrationLimits { item: 5, size: sp_runtime::traits::Bounded::max_value() },
+					MigrationLimits { item: 5, size: sp_arithmetic::traits::Bounded::max_value() },
 					Bounded::max_value(),
 					MigrationProcess::<Test>::get()
 				),
@@ -1621,9 +1620,10 @@ pub(crate) mod remote_tests {
 	};
 	use frame_system::Pallet as System;
 	use remote_externalities::Mode;
+	use sp_arithmetic::traits::{One, Zero};
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{Block as BlockT, HashFor, Header as _, One, Zero},
+		traits::{Block as BlockT, HashFor, Header as _},
 		DeserializeOwned,
 	};
 	use thousands::Separable;
@@ -1695,7 +1695,7 @@ pub(crate) mod remote_tests {
 			let ((finished, weight), proof) = ext.execute_and_prove(|| {
 				let weight = run_to_block::<Runtime>(now + One::one()).1;
 				if StateTrieMigration::<Runtime>::migration_process().finished() {
-					return (true, weight)
+					return (true, weight);
 				}
 				duration += One::one();
 				now += One::one();
@@ -1722,7 +1722,7 @@ pub(crate) mod remote_tests {
 			ext.commit_all().unwrap();
 
 			if finished {
-				break
+				break;
 			}
 		}
 
@@ -1750,7 +1750,7 @@ mod remote_tests_local {
 		*,
 	};
 	use remote_externalities::{Mode, OfflineConfig, OnlineConfig, SnapshotConfig};
-	use sp_runtime::traits::Bounded;
+	use sp_arithmetic::traits::Bounded;
 	use std::env::var as env_var;
 
 	// we only use the hash type from this, so using the mock should be fine.

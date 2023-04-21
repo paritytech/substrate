@@ -35,10 +35,11 @@ use frame_support::{
 		ReservableCurrency, WithdrawReasons,
 	},
 };
-use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Saturating, StaticLookup, Zero},
+use sp_arithmetic::{
+	traits::{AtLeast32BitUnsigned, Saturating, Zero},
 	ArithmeticError, Perbill,
 };
+use sp_runtime::traits::StaticLookup;
 use sp_std::prelude::*;
 
 mod conviction;
@@ -417,7 +418,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						tally.increase(approve, *delegations);
 					}
 				} else {
-					return Err(Error::<T, I>::AlreadyDelegating.into())
+					return Err(Error::<T, I>::AlreadyDelegating.into());
 				}
 				// Extend the lock to `balance` (rather than setting it) since we don't know what
 				// other votes are in place.
@@ -565,8 +566,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					}),
 				);
 				match old {
-					Voting::Delegating(Delegating { .. }) =>
-						return Err(Error::<T, I>::AlreadyDelegating.into()),
+					Voting::Delegating(Delegating { .. }) => {
+						return Err(Error::<T, I>::AlreadyDelegating.into())
+					},
 					Voting::Casting(Casting { votes, delegations, prior }) => {
 						// here we just ensure that we're currently idling with no votes recorded.
 						ensure!(votes.is_empty(), Error::<T, I>::AlreadyVoting);

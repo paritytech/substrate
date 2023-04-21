@@ -26,8 +26,9 @@ use serde::de::DeserializeOwned;
 use sp_core::H256;
 use sp_inherents::{InherentData, InherentDataProvider};
 use sp_io::TestExternalities;
+use sp_arithmetic::traits::One;
 use sp_runtime::{
-	traits::{Header, NumberFor, One},
+	traits::{Header, NumberFor},
 	Digest,
 };
 use std::{fmt::Debug, str::FromStr};

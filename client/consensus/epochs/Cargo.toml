@@ -17,5 +17,6 @@ codec = { package = "parity-scale-codec", version = "3.2.2", features = ["derive
 fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-consensus = { version = "0.10.0-dev", path = "../common" }
+sp-arithmetic = { version = "6.0.0", path = "../../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }

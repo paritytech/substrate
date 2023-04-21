@@ -51,12 +51,12 @@ use frame_support::{
 };
 use pallet_transaction_payment::OnChargeTransaction;
 use scale_info::TypeInfo;
+use sp_arithmetic::{traits::Zero, FixedPointOperand};
 use sp_runtime::{
-	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension, Zero},
+	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension},
 	transaction_validity::{
 		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
-	FixedPointOperand,
 };
 
 #[cfg(test)]

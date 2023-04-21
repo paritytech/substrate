@@ -1,8 +1,8 @@
 /// ! Traits and default implementation for paying transaction fees.
 use crate::Config;
-
+use sp_arithmetic::traits::{Saturating, Zero};
 use sp_runtime::{
-	traits::{DispatchInfoOf, PostDispatchInfoOf, Saturating, Zero},
+	traits::{DispatchInfoOf, PostDispatchInfoOf},
 	transaction_validity::InvalidTransaction,
 };
 use sp_std::marker::PhantomData;
@@ -89,7 +89,7 @@ where
 		tip: Self::Balance,
 	) -> Result<Self::LiquidityInfo, TransactionValidityError> {
 		if fee.is_zero() {
-			return Ok(None)
+			return Ok(None);
 		}
 
 		let withdraw_reason = if tip.is_zero() {

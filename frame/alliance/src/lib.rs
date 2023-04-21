@@ -96,10 +96,8 @@ pub mod weights;
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
-use sp_runtime::{
-	traits::{Saturating, StaticLookup, Zero},
-	RuntimeDebug,
-};
+use sp_arithmetic::traits::{Saturating, Zero};
+use sp_runtime::{traits::StaticLookup, RuntimeDebug};
 use sp_std::{convert::TryInto, prelude::*};
 
 use frame_support::{
@@ -1147,7 +1145,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let res = judgement(who);
 		if res.is_err() {
 			if let Some(parent) = T::IdentityVerifier::super_account_id(who) {
-				return judgement(&parent)
+				return judgement(&parent);
 			}
 		}
 		res

@@ -31,6 +31,7 @@ std = [
 	"codec/std",
 	"log",
 	"scale-info/std",
+	"sp-arithmetic/std",
 	"sp-core",
 	"sp-inherents/std",
 	"sp-runtime/std",

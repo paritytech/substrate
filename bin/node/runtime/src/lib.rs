@@ -62,8 +62,8 @@ use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use scale_info::TypeInfo;
 use sp_api::impl_runtime_apis;
 use sp_arithmetic::{
-	traits::SaturatedConversion, FixedPointNumber, FixedU128, Perbill, Percent, Permill,
-	Perquintill,
+	traits::{Bounded, SaturatedConversion},
+	FixedPointNumber, FixedU128, Perbill, Percent, Permill, Perquintill,
 };
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
@@ -74,8 +74,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	generic, impl_opaque_keys,
 	traits::{
-		self, BlakeTwo256, Block as BlockT, Bounded, ConvertInto, NumberFor, OpaqueKeys,
-		StaticLookup,
+		self, BlakeTwo256, Block as BlockT, ConvertInto, NumberFor, OpaqueKeys, StaticLookup,
 	},
 	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult,
@@ -2430,8 +2429,8 @@ mod tests {
 	use frame_election_provider_support::NposSolution;
 	use frame_support::traits::WhitelistedStorageKeys;
 	use frame_system::offchain::CreateSignedTransaction;
+	use sp_arithmetic::UpperOf;
 	use sp_core::hexdisplay::HexDisplay;
-	use sp_runtime::UpperOf;
 	use std::collections::HashSet;
 
 	#[test]

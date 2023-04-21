@@ -22,7 +22,8 @@
 // from multiple network protocols.
 
 use sc_network::PeerId;
-use sp_runtime::traits::{Block, NumberFor, Zero};
+use sp_arithmetic::traits::Zero;
+use sp_runtime::traits::{Block, NumberFor};
 use std::collections::{HashMap, VecDeque};
 
 struct PeerData<B: Block> {

@@ -25,11 +25,11 @@ use frame_support::traits::{
 	fungible::Inspect as FunInspect, nonfungible::Inspect, EnsureOrigin, Get,
 };
 use frame_system::RawOrigin;
-use sp_arithmetic::Perquintill;
-use sp_runtime::{
+use sp_arithmetic::{
 	traits::{Bounded, One, Zero},
-	DispatchError, PerThing,
+	PerThing, Perquintill,
 };
+use sp_runtime::DispatchError;
 use sp_std::prelude::*;
 
 use crate::Pallet as Nis;

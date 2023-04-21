@@ -21,7 +21,7 @@ use super::*;
 use frame_benchmarking::v1::{account, benchmarks, whitelist_account, BenchmarkError};
 use frame_support::assert_ok;
 use frame_system::RawOrigin;
-use sp_runtime::traits::Bounded;
+use sp_arithmetic::traits::Bounded;
 use sp_std::{prelude::*, vec};
 
 use crate::Pallet as Preimage;

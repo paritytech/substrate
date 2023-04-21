@@ -27,6 +27,7 @@ use frame_support::{
 	BasicExternalities,
 };
 use pallet_session::historical as pallet_session_historical;
+use sp_arithmetic::Perbill;
 use sp_core::{crypto::KeyTypeId, ConstU128, H256};
 use sp_runtime::{
 	app_crypto::ecdsa::Public,
@@ -34,7 +35,6 @@ use sp_runtime::{
 	impl_opaque_keys,
 	testing::{Header, TestXt},
 	traits::{BlakeTwo256, IdentityLookup, OpaqueKeys},
-	Perbill,
 };
 use sp_staking::{EraIndex, SessionIndex};
 

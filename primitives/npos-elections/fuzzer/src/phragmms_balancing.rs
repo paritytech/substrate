@@ -22,11 +22,11 @@ mod common;
 use common::*;
 use honggfuzz::fuzz;
 use rand::{self, SeedableRng};
+use sp_arithmetic::Perbill;
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, phragmms, to_supports, BalancingConfig, ElectionResult,
 	EvaluateSupport, VoteWeight,
 };
-use sp_runtime::Perbill;
 
 fn main() {
 	loop {
@@ -60,7 +60,7 @@ fn main() {
 
 				if score.minimal_stake == 0 {
 					// such cases cannot be improved by balancing.
-					return
+					return;
 				}
 				score
 			};
@@ -85,9 +85,9 @@ fn main() {
 			// The only guarantee of balancing is such that the first and third element of the score
 			// cannot decrease.
 			assert!(
-				balanced_score.minimal_stake >= unbalanced_score.minimal_stake &&
-					balanced_score.sum_stake == unbalanced_score.sum_stake &&
-					balanced_score.sum_stake_squared <= unbalanced_score.sum_stake_squared
+				balanced_score.minimal_stake >= unbalanced_score.minimal_stake
+					&& balanced_score.sum_stake == unbalanced_score.sum_stake
+					&& balanced_score.sum_stake_squared <= unbalanced_score.sum_stake_squared
 			);
 		});
 	}

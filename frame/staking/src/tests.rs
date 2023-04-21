@@ -27,10 +27,11 @@ use frame_support::{
 };
 use mock::*;
 use pallet_balances::Error as BalancesError;
+use sp_arithmetic::{Perbill, Percent, Perquintill, Rounding};
 use sp_runtime::{
 	assert_eq_error_rate,
 	traits::{BadOrigin, Dispatchable},
-	Perbill, Percent, Rounding, TokenError,
+	TokenError,
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
@@ -325,9 +326,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * total_payout_0 * 2 / 3 +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100
+				+ part_for_100_from_10 * total_payout_0 * 2 / 3
+				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -367,9 +368,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1) +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100
+				+ part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1)
+				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -5448,7 +5449,7 @@ fn proportional_ledger_slash_works() {
 	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(4, 0), (5, 0), (6, 0), (7, 0)]));
 
 	// Given
-	use sp_runtime::PerThing as _;
+	use sp_arithmetic::PerThing as _;
 	let slash = u64::MAX as Balance * 2;
 	let value = u64::MAX as Balance * 2;
 	let unit = 100;

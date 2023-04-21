@@ -23,7 +23,7 @@ use frame_support::{
 	weights::Weight,
 	DefaultNoBound,
 };
-use sp_runtime::traits::Zero;
+use sp_arithmetic::traits::Zero;
 use sp_std::marker::PhantomData;
 
 #[cfg(test)]

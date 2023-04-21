@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 # Substrate dependencies
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../../primitives/arithmetic" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../../primitives/core" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../../primitives/io" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
@@ -44,6 +45,7 @@ std = [
 	"scale-info/std",
 	"serde",
 	"codec/std",
+	"sp-arithmetic/std",
 	"sp-std/std",
 	"sp-runtime/std",
 	"frame-support/std",

@@ -61,9 +61,10 @@ use frame_support::{
 };
 use frame_system::{self as system, RawOrigin};
 use scale_info::TypeInfo;
+use sp_arithmetic::traits::Zero;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
-	traits::{Dispatchable, TrailingZeroInput, Zero},
+	traits::{Dispatchable, TrailingZeroInput},
 	DispatchError,
 };
 use sp_std::prelude::*;

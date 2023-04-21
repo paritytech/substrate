@@ -50,10 +50,11 @@ use frame_support::{
 	transactional,
 };
 use frame_system::Config as SystemConfig;
-use sp_runtime::{
-	traits::{Saturating, StaticLookup, Zero},
-	ArithmeticError, RuntimeDebug,
+use sp_arithmetic::{
+	traits::{Saturating, Zero},
+	ArithmeticError,
 };
+use sp_runtime::{traits::StaticLookup, RuntimeDebug};
 use sp_std::prelude::*;
 
 pub use pallet::*;
@@ -697,10 +698,10 @@ pub mod pallet {
 					if T::Currency::reserve(&collection_details.owner, deposit - old).is_err() {
 						// NOTE: No alterations made to collection_details in this iteration so far,
 						// so this is OK to do.
-						continue
+						continue;
 					}
 				} else {
-					continue
+					continue;
 				}
 				collection_details.total_deposit.saturating_accrue(deposit);
 				collection_details.total_deposit.saturating_reduce(old);
@@ -866,7 +867,7 @@ pub mod pallet {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
 				if details.owner == owner {
-					return Ok(())
+					return Ok(());
 				}
 
 				// Move the deposit to the new owner.

@@ -20,7 +20,8 @@ use crate as pallet_transaction_payment;
 
 use codec::Encode;
 
-use sp_runtime::{testing::TestXt, traits::One, transaction_validity::InvalidTransaction};
+use sp_arithmetic::traits::One;
+use sp_runtime::{testing::TestXt, transaction_validity::InvalidTransaction};
 
 use frame_support::{
 	assert_noop, assert_ok,

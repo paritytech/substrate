@@ -27,7 +27,7 @@ use frame_support::{
 	traits::{EnsureOrigin, OnInitialize},
 };
 use frame_system::RawOrigin;
-use sp_runtime::traits::{Bounded, Zero};
+use sp_arithmetic::traits::{Bounded, Zero};
 
 use crate::Pallet as Lottery;
 

@@ -23,7 +23,8 @@
 
 mod mock;
 
-use sp_runtime::traits::{One, StaticLookup, TrailingZeroInput};
+use sp_arithmetic::traits::One;
+use sp_runtime::traits::{StaticLookup, TrailingZeroInput};
 use sp_std::{prelude::*, vec};
 
 use frame_benchmarking::v1::benchmarks;

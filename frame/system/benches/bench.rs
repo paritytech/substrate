@@ -17,11 +17,11 @@
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use frame_support::traits::{ConstU32, ConstU64};
+use sp_arithmetic::Perbill;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	Perbill,
 };
 
 #[frame_support::pallet]

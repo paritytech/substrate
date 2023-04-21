@@ -21,8 +21,8 @@
 #![allow(dead_code)]
 
 use rand::{self, seq::SliceRandom, Rng, RngCore};
+use sp_arithmetic::Perbill;
 use sp_npos_elections::{phragmms, seq_phragmen, BalancingConfig, ElectionResult, VoteWeight};
-use sp_runtime::Perbill;
 use std::collections::{BTreeMap, HashSet};
 
 /// converts x into the range [a, b] in a pseudo-fair way.
@@ -158,10 +158,12 @@ pub fn generate_random_npos_result(
 
 	(
 		match election_type {
-			ElectionType::Phragmen(conf) =>
-				seq_phragmen(to_elect, candidates.clone(), voters.clone(), conf).unwrap(),
-			ElectionType::Phragmms(conf) =>
-				phragmms(to_elect, candidates.clone(), voters.clone(), conf).unwrap(),
+			ElectionType::Phragmen(conf) => {
+				seq_phragmen(to_elect, candidates.clone(), voters.clone(), conf).unwrap()
+			},
+			ElectionType::Phragmms(conf) => {
+				phragmms(to_elect, candidates.clone(), voters.clone(), conf).unwrap()
+			},
 		},
 		candidates,
 		voters,

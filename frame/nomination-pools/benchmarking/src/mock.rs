@@ -18,10 +18,8 @@
 use crate::VoterBagsListInstance;
 use frame_election_provider_support::VoteWeight;
 use frame_support::{pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
-use sp_runtime::{
-	traits::{Convert, IdentityLookup},
-	FixedU128, Perbill,
-};
+use sp_arithmetic::{FixedU128, Perbill};
+use sp_runtime::traits::{Convert, IdentityLookup};
 
 type AccountId = u128;
 type AccountIndex = u32;

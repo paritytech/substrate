@@ -22,7 +22,7 @@
 use super::*;
 use frame_benchmarking::v1::{account, benchmarks};
 use frame_system::RawOrigin;
-use sp_runtime::traits::Bounded;
+use sp_arithmetic::traits::Bounded;
 
 use crate::Pallet as Multisig;
 

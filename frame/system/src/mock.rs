@@ -20,11 +20,12 @@ use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
 };
+use sp_arithmetic::Perbill;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage, Perbill,
+	BuildStorage,
 };
 
 type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;

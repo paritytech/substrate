@@ -105,7 +105,8 @@ use frame_support::{
 	BoundedVec,
 };
 pub use pallet::*;
-use sp_runtime::traits::{AtLeast32Bit, StaticLookup, Zero};
+use sp_arithmetic::traits::{AtLeast32Bit, Zero};
+use sp_runtime::traits::StaticLookup;
 use sp_std::{fmt::Debug, prelude::*};
 
 type BalanceOf<T, I> =
@@ -459,10 +460,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		<Members<T, I>>::put(&new_members_bounded);
 
 		match notify {
-			ChangeReceiver::MembershipInitialized =>
-				T::MembershipInitialized::initialize_members(&new_members_bounded),
-			ChangeReceiver::MembershipChanged =>
-				T::MembershipChanged::set_members_sorted(&new_members_bounded[..], &old_members[..]),
+			ChangeReceiver::MembershipInitialized => {
+				T::MembershipInitialized::initialize_members(&new_members_bounded)
+			},
+			ChangeReceiver::MembershipChanged => {
+				T::MembershipChanged::set_members_sorted(&new_members_bounded[..], &old_members[..])
+			},
 		}
 	}
 

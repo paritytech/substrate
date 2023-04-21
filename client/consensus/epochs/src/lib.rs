@@ -23,8 +23,9 @@ pub mod migration;
 use codec::{Decode, Encode};
 use fork_tree::{FilterAction, ForkTree};
 use sc_client_api::utils::is_descendent_of;
+use sp_arithmetic::traits::{One, Zero};
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
-use sp_runtime::traits::{Block as BlockT, NumberFor, One, Zero};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{
 	borrow::{Borrow, BorrowMut},
 	collections::BTreeMap,
@@ -199,8 +200,9 @@ where
 	pub fn increment(&self, next_descriptor: E::NextEpochDescriptor) -> IncrementedEpoch<E> {
 		let next = self.as_ref().increment(next_descriptor);
 		let to_persist = match *self {
-			ViableEpoch::UnimportedGenesis(ref epoch_0) =>
-				PersistedEpoch::Genesis(epoch_0.clone(), next),
+			ViableEpoch::UnimportedGenesis(ref epoch_0) => {
+				PersistedEpoch::Genesis(epoch_0.clone(), next)
+			},
 			ViableEpoch::Signaled(_) => PersistedEpoch::Regular(next),
 		};
 
@@ -246,8 +248,9 @@ impl<E> PersistedEpoch<E> {
 impl<'a, E: Epoch> From<&'a PersistedEpoch<E>> for PersistedEpochHeader<E> {
 	fn from(epoch: &'a PersistedEpoch<E>) -> Self {
 		match epoch {
-			PersistedEpoch::Genesis(ref epoch_0, ref epoch_1) =>
-				PersistedEpochHeader::Genesis(epoch_0.into(), epoch_1.into()),
+			PersistedEpoch::Genesis(ref epoch_0, ref epoch_1) => {
+				PersistedEpochHeader::Genesis(epoch_0.into(), epoch_1.into())
+			},
 			PersistedEpoch::Regular(ref epoch_n) => PersistedEpochHeader::Regular(epoch_n.into()),
 		}
 	}
@@ -261,8 +264,9 @@ impl<E: Epoch> PersistedEpoch<E> {
 		F: FnMut(&Hash, &Number, E) -> B,
 	{
 		match self {
-			PersistedEpoch::Genesis(epoch_0, epoch_1) =>
-				PersistedEpoch::Genesis(f(h, n, epoch_0), f(h, n, epoch_1)),
+			PersistedEpoch::Genesis(epoch_0, epoch_1) => {
+				PersistedEpoch::Genesis(f(h, n, epoch_0), f(h, n, epoch_1))
+			},
 			PersistedEpoch::Regular(epoch_n) => PersistedEpoch::Regular(f(h, n, epoch_n)),
 		}
 	}
@@ -426,13 +430,19 @@ where
 		self.epochs.get(&(id.hash, id.number)).and_then(|v| match v {
 			PersistedEpoch::Genesis(ref epoch_0, _)
 				if id.position == EpochIdentifierPosition::Genesis0 =>
-				Some(epoch_0),
+			{
+				Some(epoch_0)
+			},
 			PersistedEpoch::Genesis(_, ref epoch_1)
 				if id.position == EpochIdentifierPosition::Genesis1 =>
-				Some(epoch_1),
+			{
+				Some(epoch_1)
+			},
 			PersistedEpoch::Regular(ref epoch_n)
 				if id.position == EpochIdentifierPosition::Regular =>
-				Some(epoch_n),
+			{
+				Some(epoch_n)
+			},
 			_ => None,
 		})
 	}
@@ -447,10 +457,12 @@ where
 		G: FnOnce(E::Slot) -> E,
 	{
 		match descriptor {
-			ViableEpochDescriptor::UnimportedGenesis(slot) =>
-				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot))),
-			ViableEpochDescriptor::Signaled(identifier, _) =>
-				self.epoch(identifier).map(ViableEpoch::Signaled),
+			ViableEpochDescriptor::UnimportedGenesis(slot) => {
+				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot)))
+			},
+			ViableEpochDescriptor::Signaled(identifier, _) => {
+				self.epoch(identifier).map(ViableEpoch::Signaled)
+			},
 		}
 	}
 
@@ -459,13 +471,19 @@ where
 		self.epochs.get_mut(&(id.hash, id.number)).and_then(|v| match v {
 			PersistedEpoch::Genesis(ref mut epoch_0, _)
 				if id.position == EpochIdentifierPosition::Genesis0 =>
-				Some(epoch_0),
+			{
+				Some(epoch_0)
+			},
 			PersistedEpoch::Genesis(_, ref mut epoch_1)
 				if id.position == EpochIdentifierPosition::Genesis1 =>
-				Some(epoch_1),
+			{
+				Some(epoch_1)
+			},
 			PersistedEpoch::Regular(ref mut epoch_n)
 				if id.position == EpochIdentifierPosition::Regular =>
-				Some(epoch_n),
+			{
+				Some(epoch_n)
+			},
 			_ => None,
 		})
 	}
@@ -480,10 +498,12 @@ where
 		G: FnOnce(E::Slot) -> E,
 	{
 		match descriptor {
-			ViableEpochDescriptor::UnimportedGenesis(slot) =>
-				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot))),
-			ViableEpochDescriptor::Signaled(identifier, _) =>
-				self.epoch_mut(identifier).map(ViableEpoch::Signaled),
+			ViableEpochDescriptor::UnimportedGenesis(slot) => {
+				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot)))
+			},
+			ViableEpochDescriptor::Signaled(identifier, _) => {
+				self.epoch_mut(identifier).map(ViableEpoch::Signaled)
+			},
 		}
 	}
 
@@ -546,7 +566,7 @@ where
 	) -> Result<Option<ViableEpochDescriptor<Hash, Number, E>>, fork_tree::Error<D::Error>> {
 		if parent_number == Zero::zero() {
 			// need to insert the genesis epoch.
-			return Ok(Some(ViableEpochDescriptor::UnimportedGenesis(slot)))
+			return Ok(Some(ViableEpochDescriptor::UnimportedGenesis(slot)));
 		}
 
 		// find_node_where will give you the node in the fork-tree which is an ancestor
@@ -589,8 +609,9 @@ where
 									(EpochIdentifierPosition::Genesis0, epoch_0.clone())
 								}
 							},
-							PersistedEpochHeader::Regular(ref epoch_n) =>
-								(EpochIdentifierPosition::Regular, epoch_n.clone()),
+							PersistedEpochHeader::Regular(ref epoch_n) => {
+								(EpochIdentifierPosition::Regular, epoch_n.clone())
+							},
 						},
 						node,
 					)
@@ -665,8 +686,8 @@ where
 		let is_descendent_of = descendent_of_builder.build_is_descendent_of(None);
 
 		let filter = |node_hash: &Hash, node_num: &Number, _: &PersistedEpochHeader<E>| {
-			if number >= *node_num &&
-				(is_descendent_of(node_hash, &hash).unwrap_or_default() || *node_hash == hash)
+			if number >= *node_num
+				&& (is_descendent_of(node_hash, &hash).unwrap_or_default() || *node_hash == hash)
 			{
 				// Continue the search in this subtree.
 				FilterAction::KeepNode
@@ -728,7 +749,7 @@ mod tests {
 				if let Some((ref c_head, ref c_parent)) = current {
 					if head == c_head {
 						if base == c_parent {
-							return Ok(true)
+							return Ok(true);
 						} else {
 							head = c_parent;
 						}
@@ -1063,18 +1084,18 @@ mod tests {
 
 		let is_descendent_of = |base: &Hash, block: &Hash| -> Result<bool, TestError> {
 			match (block, base) {
-				| (b"A", b"0") |
-				(b"B", b"0" | b"A") |
-				(b"C", b"0" | b"A" | b"B") |
-				(b"D", b"0" | b"A" | b"B" | b"C") |
-				(b"E", b"0" | b"A" | b"B" | b"C" | b"D") |
-				(b"F", b"0" | b"A" | b"B" | b"C" | b"D" | b"E") |
-				(b"G", b"0" | b"A" | b"B" | b"C" | b"D" | b"E") |
-				(b"H", b"0" | b"A" | b"B" | b"C" | b"D" | b"E" | b"G") |
-				(b"I", b"0" | b"A" | b"B" | b"C" | b"D" | b"E" | b"G" | b"H") |
-				(b"J", b"0" | b"A" | b"B" | b"C" | b"D" | b"E" | b"G" | b"H" | b"I") |
-				(b"K", b"0" | b"A" | b"B" | b"C" | b"D" | b"E" | b"G" | b"H" | b"I" | b"J") |
-				(
+				| (b"A", b"0")
+				| (b"B", b"0" | b"A")
+				| (b"C", b"0" | b"A" | b"B")
+				| (b"D", b"0" | b"A" | b"B" | b"C")
+				| (b"E", b"0" | b"A" | b"B" | b"C" | b"D")
+				| (b"F", b"0" | b"A" | b"B" | b"C" | b"D" | b"E")
+				| (b"G", b"0" | b"A" | b"B" | b"C" | b"D" | b"E")
+				| (b"H", b"0" | b"A" | b"B" | b"C" | b"D" | b"E" | b"G")
+				| (b"I", b"0" | b"A" | b"B" | b"C" | b"D" | b"E" | b"G" | b"H")
+				| (b"J", b"0" | b"A" | b"B" | b"C" | b"D" | b"E" | b"G" | b"H" | b"I")
+				| (b"K", b"0" | b"A" | b"B" | b"C" | b"D" | b"E" | b"G" | b"H" | b"I" | b"J")
+				| (
 					b"L",
 					b"0" | b"A" | b"B" | b"C" | b"D" | b"E" | b"G" | b"H" | b"I" | b"J" | b"K",
 				) => Ok(true),

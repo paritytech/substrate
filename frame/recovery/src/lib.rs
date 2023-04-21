@@ -156,7 +156,8 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::traits::{CheckedAdd, CheckedMul, Dispatchable, SaturatedConversion, StaticLookup};
+use sp_arithmetic::traits::{CheckedAdd, CheckedMul, SaturatedConversion};
+use sp_runtime::traits::{Dispatchable, StaticLookup};
 use sp_std::prelude::*;
 
 use frame_support::{
@@ -215,7 +216,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::ArithmeticError;
+	use sp_arithmetic::ArithmeticError;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);

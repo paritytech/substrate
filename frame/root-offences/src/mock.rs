@@ -24,11 +24,12 @@ use frame_support::{
 	traits::{ConstU32, ConstU64, GenesisBuild, Hooks, OneSessionHandler},
 };
 use pallet_staking::StakerStatus;
+use sp_arithmetic::traits::Zero;
 use sp_core::H256;
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	testing::{Header, UintAuthorityId},
-	traits::{BlakeTwo256, IdentityLookup, Zero},
+	traits::{BlakeTwo256, IdentityLookup},
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::collections::btree_map::BTreeMap;

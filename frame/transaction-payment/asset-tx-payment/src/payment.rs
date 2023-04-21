@@ -28,8 +28,9 @@ use frame_support::{
 	unsigned::TransactionValidityError,
 };
 use scale_info::TypeInfo;
+use sp_arithmetic::traits::One;
 use sp_runtime::{
-	traits::{DispatchInfoOf, MaybeSerializeDeserialize, One, PostDispatchInfoOf},
+	traits::{DispatchInfoOf, MaybeSerializeDeserialize, PostDispatchInfoOf},
 	transaction_validity::InvalidTransaction,
 };
 use sp_std::{fmt::Debug, marker::PhantomData};
@@ -126,7 +127,7 @@ where
 		let can_withdraw =
 			<T::Fungibles as Inspect<T::AccountId>>::can_withdraw(asset_id, who, converted_fee);
 		if !matches!(can_withdraw, WithdrawConsequence::Success) {
-			return Err(InvalidTransaction::Payment.into())
+			return Err(InvalidTransaction::Payment.into());
 		}
 		<T::Fungibles as Balanced<T::AccountId>>::withdraw(
 			asset_id,

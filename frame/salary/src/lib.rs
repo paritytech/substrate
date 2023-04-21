@@ -22,8 +22,10 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_arithmetic::traits::{Saturating, Zero};
-use sp_runtime::Perbill;
+use sp_arithmetic::{
+	traits::{Saturating, Zero},
+	Perbill,
+};
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{

@@ -36,6 +36,7 @@ std = [
 	"mmr-lib/std",
 	"serde",
 	"sp-api/std",
+	"sp-arithmetic/std",
 	"sp-core/std",
 	"sp-debug-derive/std",
 	"sp-runtime/std",

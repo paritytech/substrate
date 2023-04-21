@@ -30,10 +30,10 @@ use crate::{
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::{
-	traits::{CheckedAdd, CheckedSub, Zero},
+	traits::{CheckedAdd, CheckedSub, Saturating, Zero},
 	ArithmeticError,
 };
-use sp_runtime::{DispatchError, DispatchResult, Saturating, TokenError};
+use sp_runtime::{DispatchError, DispatchResult, TokenError};
 
 use super::*;
 

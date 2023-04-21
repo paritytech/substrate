@@ -29,7 +29,7 @@ mod tests;
 
 use pallet_session::historical::IdentificationTuple;
 use pallet_staking::{BalanceOf, Exposure, ExposureOf, Pallet as Staking};
-use sp_runtime::Perbill;
+use sp_arithmetic::Perbill;
 use sp_staking::offence::{DisableStrategy, OnOffenceHandler};
 
 pub use pallet::*;

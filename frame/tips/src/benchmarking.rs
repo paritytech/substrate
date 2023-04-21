@@ -24,7 +24,7 @@ use frame_benchmarking::v1::{
 };
 use frame_support::ensure;
 use frame_system::RawOrigin;
-use sp_runtime::traits::Saturating;
+use sp_arithmetic::traits::Saturating;
 
 use super::*;
 use crate::Pallet as TipsMod;
@@ -34,9 +34,9 @@ const SEED: u32 = 0;
 // Create the pre-requisite information needed to create a `report_awesome`.
 fn setup_awesome<T: Config<I>, I: 'static>(length: u32) -> (T::AccountId, Vec<u8>, T::AccountId) {
 	let caller = whitelisted_caller();
-	let value = T::TipReportDepositBase::get() +
-		T::DataDepositPerByte::get() * length.into() +
-		T::Currency::minimum_balance();
+	let value = T::TipReportDepositBase::get()
+		+ T::DataDepositPerByte::get() * length.into()
+		+ T::Currency::minimum_balance();
 	let _ = T::Currency::make_free_balance_be(&caller, value);
 	let reason = vec![0; length as usize];
 	let awesome_person = account("awesome", 0, SEED);

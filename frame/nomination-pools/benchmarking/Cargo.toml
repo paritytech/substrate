@@ -27,6 +27,7 @@ pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-nomination-pools = { version = "1.0.0", default-features = false, path = "../" }
 
 # Substrate Primitives
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../../primitives/arithmetic" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime-interface" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
@@ -50,6 +51,7 @@ std = [
 	"pallet-bags-list/std",
 	"pallet-staking/std",
 	"pallet-nomination-pools/std",
+	"sp-arithmetic/std",
 	"sp-runtime/std",
 	"sp-runtime-interface/std",
 	"sp-staking/std",

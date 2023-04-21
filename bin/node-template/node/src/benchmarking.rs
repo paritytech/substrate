@@ -8,7 +8,7 @@ use node_template_runtime as runtime;
 use runtime::{AccountId, Balance, BalancesCall, SystemCall};
 use sc_cli::Result;
 use sc_client_api::BlockBackend;
-use sp_arithmetic::SaturatedConversion;
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_core::{Encode, Pair};
 use sp_inherents::{InherentData, InherentDataProvider};
 use sp_keyring::Sr25519Keyring;

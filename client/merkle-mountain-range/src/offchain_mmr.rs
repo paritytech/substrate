@@ -25,14 +25,12 @@ use crate::{aux_schema, MmrClient, LOG_TARGET};
 use log::{debug, error, info, warn};
 use sc_client_api::{Backend, FinalityNotification};
 use sc_offchain::OffchainDb;
-use sp_arithmeric::traits::[One, Saturating];
+use sp_arithmetic::traits::{One, Saturating};
 use sp_blockchain::{CachedHeaderMetadata, ForkBackend};
 use sp_consensus_beefy::MmrRootHash;
 use sp_core::offchain::{DbExternalities, StorageKind};
 use sp_mmr_primitives::{utils, utils::NodesUtils, MmrApi, NodeIndex};
-use sp_runtime::{
-	traits::{Block, Header, NumberFor},
-};
+use sp_runtime::traits::{Block, Header, NumberFor};
 use std::{collections::VecDeque, sync::Arc};
 
 /// `OffchainMMR` exposes MMR offchain canonicalization and pruning logic.

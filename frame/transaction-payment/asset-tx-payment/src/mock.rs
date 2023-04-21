@@ -28,10 +28,11 @@ use frame_support::{
 use frame_system as system;
 use frame_system::EnsureRoot;
 use pallet_transaction_payment::CurrencyAdapter;
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, ConvertInto, IdentityLookup, SaturatedConversion},
+	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;

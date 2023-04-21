@@ -150,10 +150,11 @@ mod types;
 pub use types::*;
 
 use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero},
-	ArithmeticError, TokenError,
+use sp_arithmetic::{
+	traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, Saturating, Zero},
+	ArithmeticError,
 };
+use sp_runtime::{traits::StaticLookup, TokenError};
 use sp_std::{borrow::Borrow, prelude::*};
 
 use frame_support::{
@@ -1074,7 +1075,7 @@ pub mod pallet {
 				ensure!(details.status == AssetStatus::Live, Error::<T, I>::LiveAsset);
 				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
 				if details.owner == owner {
-					return Ok(())
+					return Ok(());
 				}
 
 				let metadata_deposit = Metadata::<T, I>::get(id).deposit;

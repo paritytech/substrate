@@ -65,10 +65,13 @@ pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-
+use sp_arithmetic::{
+	traits::{CheckedAdd, Saturating, Zero},
+	Permill,
+};
 use sp_runtime::{
-	traits::{AccountIdConversion, CheckedAdd, Saturating, StaticLookup, Zero},
-	Permill, RuntimeDebug,
+	traits::{AccountIdConversion, StaticLookup},
+	RuntimeDebug,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 

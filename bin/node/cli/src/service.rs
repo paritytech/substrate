@@ -37,7 +37,7 @@ use sc_network_sync::SyncingService;
 use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_api::ProvideRuntimeApi;
-use sp_arithmetic::SaturatedConversion;
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_core::crypto::Pair;
 use sp_runtime::{generic, traits::Block as BlockT};
 use std::sync::Arc;

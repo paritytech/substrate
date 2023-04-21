@@ -22,10 +22,8 @@ use frame_support::{
 	traits::VoteTally, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{Saturating, Zero},
-	RuntimeDebug,
-};
+use sp_arithmetic::traits::{Saturating, Zero};
+use sp_runtime::RuntimeDebug;
 use sp_std::{fmt::Debug, marker::PhantomData};
 
 use super::*;

@@ -22,7 +22,7 @@
 use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
 use frame_support::assert_ok;
 use frame_system::{Pallet as System, RawOrigin};
-use sp_runtime::traits::{Bounded, CheckedDiv, CheckedMul};
+use sp_arithmetic::traits::{Bounded, CheckedDiv, CheckedMul};
 
 use super::*;
 use crate::Pallet as Vesting;

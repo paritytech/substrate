@@ -66,7 +66,7 @@ impl sp_std::str::FromStr for Select {
 		match s {
 			"all" | "All" => Ok(Select::All),
 			"none" | "None" => Ok(Select::None),
-			_ =>
+			_ => {
 				if s.starts_with("rr-") {
 					let count = s
 						.split_once('-')
@@ -76,7 +76,8 @@ impl sp_std::str::FromStr for Select {
 				} else {
 					let pallets = s.split(',').map(|x| x.as_bytes().to_vec()).collect::<Vec<_>>();
 					Ok(Select::Only(pallets))
-				},
+				}
+			},
 		}
 	}
 }
@@ -152,7 +153,7 @@ impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<Bl
 					&[for_tuples!(#( Tuple::try_state ),*)];
 				let skip = n.clone() % (functions.len() as u32).into();
 				let skip: u32 =
-					skip.try_into().unwrap_or_else(|_| sp_runtime::traits::Bounded::max_value());
+					skip.try_into().unwrap_or_else(|_| sp_arithmetic::traits::Bounded::max_value());
 				let mut result = Ok(());
 				for try_state_fn in functions.iter().cycle().skip(skip as usize).take(len as usize)
 				{

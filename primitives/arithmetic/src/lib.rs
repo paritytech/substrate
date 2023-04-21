@@ -48,7 +48,7 @@ pub use per_things::{
 pub use rational::{MultiplyRational, Rational128, RationalInfinite};
 
 use sp_std::{cmp::Ordering, fmt::Debug, prelude::*};
-pub use traits::{BaseArithmetic, One, SaturatedConversion, Unsigned, Zero};
+use traits::{BaseArithmetic, One, SaturatedConversion, Unsigned, Zero};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;

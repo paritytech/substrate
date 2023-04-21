@@ -68,11 +68,9 @@ use frame_support::{
 	weights::Weight,
 };
 use scale_info::TypeInfo;
+use sp_arithmetic::traits::{AtLeast32BitUnsigned, Bounded, One, Saturating, Zero};
 use sp_runtime::{
-	traits::{
-		AtLeast32BitUnsigned, Bounded, Convert, MaybeSerializeDeserialize, One, Saturating,
-		StaticLookup, Zero,
-	},
+	traits::{Convert, MaybeSerializeDeserialize, StaticLookup},
 	RuntimeDebug,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
@@ -228,7 +226,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			use sp_runtime::traits::Saturating;
+			use sp_arithmetic::traits::Saturating;
 
 			// Genesis uses the latest storage version.
 			StorageVersion::<T>::put(Releases::V1);
@@ -244,7 +242,7 @@ pub mod pallet {
 				// Total genesis `balance` minus `liquid` equals funds locked for vesting
 				let locked = balance.saturating_sub(liquid);
 				let length_as_balance = T::BlockNumberToBalance::convert(length);
-				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
+				let per_block = locked / length_as_balance.max(sp_arithmetic::traits::One::one());
 				let vesting_info = VestingInfo::new(locked, per_block, begin);
 				if !vesting_info.is_valid() {
 					panic!("Invalid VestingInfo params at genesis")
@@ -416,7 +414,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			if schedule1_index == schedule2_index {
-				return Ok(())
+				return Ok(());
 			};
 			let schedule1_index = schedule1_index as usize;
 			let schedule2_index = schedule2_index as usize;
@@ -494,7 +492,7 @@ impl<T: Config> Pallet<T> {
 		// Validate user inputs.
 		ensure!(schedule.locked() >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
 		if !schedule.is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into())
+			return Err(Error::<T>::InvalidScheduleParams.into());
 		};
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
@@ -642,8 +640,8 @@ impl<T: Config> Pallet<T> {
 		};
 
 		debug_assert!(
-			locked_now > Zero::zero() && schedules.len() > 0 ||
-				locked_now == Zero::zero() && schedules.len() == 0
+			locked_now > Zero::zero() && schedules.len() > 0
+				|| locked_now == Zero::zero() && schedules.len() == 0
 		);
 
 		Ok((schedules, locked_now))
@@ -689,13 +687,13 @@ where
 		starting_block: T::BlockNumber,
 	) -> DispatchResult {
 		if locked.is_zero() {
-			return Ok(())
+			return Ok(());
 		}
 
 		let vesting_schedule = VestingInfo::new(locked, per_block, starting_block);
 		// Check for `per_block` or `locked` of 0.
 		if !vesting_schedule.is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into())
+			return Err(Error::<T>::InvalidScheduleParams.into());
 		};
 
 		let mut schedules = Self::vesting(who).unwrap_or_default();
@@ -723,7 +721,7 @@ where
 	) -> DispatchResult {
 		// Check for `per_block` or `locked` of 0.
 		if !VestingInfo::new(locked, per_block, starting_block).is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into())
+			return Err(Error::<T>::InvalidScheduleParams.into());
 		}
 
 		ensure!(

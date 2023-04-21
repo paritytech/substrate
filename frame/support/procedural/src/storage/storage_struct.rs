@@ -261,7 +261,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 							fn storage_info()
 								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
 							{
-								use #scrate::sp_runtime::SaturatedConversion;
+								use #scrate::sp_arithmetic::traits::SaturatedConversion;
 
 								let max_size = <
 									#value_type as #scrate::codec::MaxEncodedLen
@@ -296,7 +296,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 							fn storage_info()
 								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
 							{
-								use #scrate::sp_runtime::SaturatedConversion;
+								use #scrate::sp_arithmetic::traits::SaturatedConversion;
 								use #scrate::StorageHasher;
 
 								let key_max_size = <
@@ -341,7 +341,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 							fn storage_info()
 								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
 							{
-								use #scrate::sp_runtime::SaturatedConversion;
+								use #scrate::sp_arithmetic::traits::SaturatedConversion;
 								use #scrate::StorageHasher;
 
 								let key1_max_size = <
@@ -390,7 +390,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 							fn storage_info()
 								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
 							{
-								use #scrate::sp_runtime::SaturatedConversion;
+								use #scrate::sp_arithmetic::traits::SaturatedConversion;
 
 								let key_max_size = <
 									#key as #scrate::storage::types::KeyGeneratorMaxEncodedLen

@@ -20,10 +20,10 @@
 use crate::{AccountVote, Conviction, Vote, VoteThreshold};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Saturating, Zero},
-	RuntimeDebug,
+use sp_arithmetic::traits::{
+	Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Saturating, Zero,
 };
+use sp_runtime::RuntimeDebug;
 
 /// A proposal index.
 pub type PropIndex = u32;

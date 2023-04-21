@@ -21,6 +21,7 @@ pallet-nomination-pools = { path = "..", features = ["fuzzing"] }
 frame-system = { path = "../../system" }
 frame-support = { path = "../../support" }
 
+sp-arithmetic = { path = "../../../primitives/arithmetic" }
 sp-runtime = { path = "../../../primitives/runtime" }
 sp-io = { path = "../../../primitives/io" }
 sp-tracing = { path = "../../../primitives/tracing" }

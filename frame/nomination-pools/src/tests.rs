@@ -19,7 +19,8 @@ use super::*;
 use crate::{mock::*, Event};
 use frame_support::{assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_btree_map};
 use pallet_balances::Event as BEvent;
-use sp_runtime::{traits::Dispatchable, FixedU128};
+use sp_arithmetic::FixedU128;
+use sp_runtime::traits::Dispatchable;
 
 macro_rules! unbonding_pools_with_era {
 	($($k:expr => $v:expr),* $(,)?) => {{

@@ -25,7 +25,7 @@ use frame_support::{
 	traits::{Get, OnRuntimeUpgrade},
 	Identity, Twox64Concat,
 };
-use sp_runtime::traits::Saturating;
+use sp_arithmetic::traits::Saturating;
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// Performs all necessary migrations based on `StorageVersion`.
@@ -420,7 +420,7 @@ mod post_checks {
 
 	pub fn post_upgrade<T: Config>(old_version: StorageVersion) -> Result<(), &'static str> {
 		if old_version < 7 {
-			return Ok(())
+			return Ok(());
 		}
 
 		if old_version < 8 {

@@ -22,7 +22,8 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{fungible, tokens::BalanceConversion},
 };
-use sp_runtime::{traits::Convert, FixedPointNumber, FixedPointOperand, FixedU128};
+use sp_arithmetic::{FixedPointNumber, FixedPointOperand, FixedU128};
+use sp_runtime::traits::Convert;
 
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
@@ -102,7 +103,7 @@ pub enum ExistenceReason<Balance> {
 impl<Balance> ExistenceReason<Balance> {
 	pub(crate) fn take_deposit(&mut self) -> Option<Balance> {
 		if !matches!(self, ExistenceReason::DepositHeld(_)) {
-			return None
+			return None;
 		}
 		if let ExistenceReason::DepositHeld(deposit) =
 			sp_std::mem::replace(self, ExistenceReason::DepositRefunded)

@@ -34,7 +34,7 @@ pub mod weights;
 use blake2::{Blake2b512, Digest};
 use frame_support::{pallet_prelude::*, weights::WeightMeter};
 use frame_system::pallet_prelude::*;
-use sp_runtime::{traits::Zero, Perbill};
+use sp_arithmetic::{traits::Zero, Perbill};
 use sp_std::{vec, vec::Vec};
 
 pub use pallet::*;
@@ -121,7 +121,7 @@ pub mod pallet {
 		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut meter = WeightMeter::from_limit(remaining_weight);
 			if !meter.check_accrue(T::WeightInfo::empty_on_idle()) {
-				return T::WeightInfo::empty_on_idle()
+				return T::WeightInfo::empty_on_idle();
 			}
 
 			let proof_size_limit = Storage::<T>::get().mul_floor(meter.remaining().proof_size());
@@ -275,7 +275,7 @@ pub mod pallet {
 			let base = T::WeightInfo::waste_ref_time_iter(0);
 			let slope = T::WeightInfo::waste_ref_time_iter(1).saturating_sub(base);
 			if !slope.proof_size().is_zero() || !base.proof_size().is_zero() {
-				return Err(())
+				return Err(());
 			}
 
 			match meter

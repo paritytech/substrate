@@ -175,7 +175,7 @@
 
 pub mod onchain;
 pub mod traits;
-use sp_runtime::traits::{Bounded, Saturating, Zero};
+use sp_arithmetic::traits::{Bounded, Saturating, Zero};
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export the solution generation macro.

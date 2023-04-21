@@ -17,7 +17,8 @@
 
 //! Alliance pallet benchmarking.
 
-use sp_runtime::traits::{Bounded, Hash, StaticLookup};
+use sp_arithmetic::traits::Bounded;
+use sp_runtime::traits::{Hash, StaticLookup};
 use sp_std::{
 	cmp,
 	convert::{TryFrom, TryInto},

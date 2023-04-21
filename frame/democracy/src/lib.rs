@@ -166,10 +166,11 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::pallet_prelude::OriginFor;
-use sp_runtime::{
-	traits::{Bounded as ArithBounded, One, Saturating, StaticLookup, Zero},
-	ArithmeticError, DispatchError, DispatchResult,
+use sp_arithmetic::{
+	traits::{Bounded as ArithBounded, One, Saturating, Zero},
+	ArithmeticError,
 };
+use sp_runtime::{traits::StaticLookup, DispatchError, DispatchResult};
 use sp_std::prelude::*;
 
 mod conviction;
@@ -838,7 +839,7 @@ pub mod pallet {
 			if let Some((ext_proposal, _)) = NextExternal::<T>::get() {
 				ensure!(proposal_hash == ext_proposal.hash(), Error::<T>::ProposalMissing);
 			} else {
-				return Err(Error::<T>::NoProposal.into())
+				return Err(Error::<T>::NoProposal.into());
 			}
 
 			let mut existing_vetoers =
@@ -1544,7 +1545,7 @@ impl<T: Config> Pallet<T> {
 			Self::transfer_metadata(MetadataOwner::External, MetadataOwner::Referendum(ref_index));
 			Ok(())
 		} else {
-			return Err(Error::<T>::NoneWaiting.into())
+			return Err(Error::<T>::NoneWaiting.into());
 		}
 	}
 
@@ -1577,7 +1578,7 @@ impl<T: Config> Pallet<T> {
 			}
 			Ok(())
 		} else {
-			return Err(Error::<T>::NoneWaiting.into())
+			return Err(Error::<T>::NoneWaiting.into());
 		}
 	}
 
@@ -1661,8 +1662,8 @@ impl<T: Config> Pallet<T> {
 		//   of unbaked referendum is bounded by this number. In case those number have changed in a
 		//   runtime upgrade the formula should be adjusted but the bound should still be sensible.
 		<LowestUnbaked<T>>::mutate(|ref_index| {
-			while *ref_index < last &&
-				Self::referendum_info(*ref_index)
+			while *ref_index < last
+				&& Self::referendum_info(*ref_index)
 					.map_or(true, |info| matches!(info, ReferendumInfo::Finished { .. }))
 			{
 				*ref_index += 1
