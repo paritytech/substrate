@@ -10549,7 +10549,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#9b4b012ce1a92fdc079ce85e3f70eef8ee924936"
+source = "git+https://github.com/paritytech/ark-substrate?branch=remove-affine-host-calls#3660a2686e932e39739f58ad7f90bc7123c08af6"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
@@ -10558,14 +10558,14 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "parity-scale-codec",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=remove-affine-host-calls)",
  "sp-arkworks",
 ]
 
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#9b4b012ce1a92fdc079ce85e3f70eef8ee924936"
+source = "git+https://github.com/paritytech/ark-substrate?branch=remove-affine-host-calls#3660a2686e932e39739f58ad7f90bc7123c08af6"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -10574,14 +10574,14 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "parity-scale-codec",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=remove-affine-host-calls)",
  "sp-arkworks",
 ]
 
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#9b4b012ce1a92fdc079ce85e3f70eef8ee924936"
+source = "git+https://github.com/paritytech/ark-substrate?branch=remove-affine-host-calls#3660a2686e932e39739f58ad7f90bc7123c08af6"
 dependencies = [
  "ark-bw6-761",
  "ark-ec",
@@ -10590,14 +10590,14 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "parity-scale-codec",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=remove-affine-host-calls)",
  "sp-arkworks",
 ]
 
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#9b4b012ce1a92fdc079ce85e3f70eef8ee924936"
+source = "git+https://github.com/paritytech/ark-substrate?branch=remove-affine-host-calls#3660a2686e932e39739f58ad7f90bc7123c08af6"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
@@ -10606,13 +10606,13 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "parity-scale-codec",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=remove-affine-host-calls)",
 ]
 
 [[package]]
 name = "sp-ark-ed-on-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#9b4b012ce1a92fdc079ce85e3f70eef8ee924936"
+source = "git+https://github.com/paritytech/ark-substrate?branch=remove-affine-host-calls#3660a2686e932e39739f58ad7f90bc7123c08af6"
 dependencies = [
  "ark-ed-on-bls12-381",
  "ark-ff",
@@ -10621,7 +10621,7 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "parity-scale-codec",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=remove-affine-host-calls)",
 ]
 
 [[package]]
@@ -10644,7 +10644,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-models"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate#9b4b012ce1a92fdc079ce85e3f70eef8ee924936"
+source = "git+https://github.com/paritytech/ark-substrate?branch=remove-affine-host-calls#3660a2686e932e39739f58ad7f90bc7123c08af6"
 dependencies = [
  "ark-ec",
  "ark-ff",

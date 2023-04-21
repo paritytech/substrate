@@ -55,13 +55,3 @@ pub fn mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> 
 pub fn mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 	mul_projective_generic::<g2::Config>(base, scalar)
 }
-
-/// Compute a affine scalar multiplication for short_weierstrass through arkworks on G1
-pub fn mul_affine_g1(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-	mul_affine_generic::<g1::Config>(base, scalar)
-}
-
-/// Compute a affine scalar multiplication for short_weierstrass through arkworks on G2
-pub fn mul_affine_g2(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-	mul_affine_generic::<g2::Config>(base, scalar)
-}
