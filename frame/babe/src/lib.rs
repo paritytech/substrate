@@ -29,13 +29,13 @@ use frame_support::{
 	weights::Weight,
 	BoundedVec, WeakBoundedVec,
 };
-use sp_application_crypto::ByteArray;
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
 	AllowedSlots, BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
-	EquivocationProof, Slot, BABE_ENGINE_ID,
+	EquivocationProof, Randomness as BabeRandomness, Slot, BABE_ENGINE_ID, RANDOMNESS_LENGTH,
+	RANDOMNESS_VRF_CONTEXT,
 };
-use sp_consensus_vrf::schnorrkel;
+use sp_core::crypto::Wraps;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
@@ -45,7 +45,7 @@ use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::{offence::OffenceReportSystem, SessionIndex};
 use sp_std::prelude::*;
 
-pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
+pub use sp_consensus_babe::AuthorityId;
 
 const LOG_TARGET: &str = "runtime::babe";
 
@@ -218,7 +218,7 @@ pub mod pallet {
 	// variable to its underlying value.
 	#[pallet::storage]
 	#[pallet::getter(fn randomness)]
-	pub type Randomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+	pub type Randomness<T> = StorageValue<_, BabeRandomness, ValueQuery>;
 
 	/// Pending epoch configuration change that will be applied when the next epoch is enacted.
 	#[pallet::storage]
@@ -226,7 +226,7 @@ pub mod pallet {
 
 	/// Next epoch randomness.
 	#[pallet::storage]
-	pub(super) type NextRandomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+	pub(super) type NextRandomness<T> = StorageValue<_, BabeRandomness, ValueQuery>;
 
 	/// Next epoch authorities.
 	#[pallet::storage]
@@ -254,7 +254,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		u32,
-		BoundedVec<schnorrkel::Randomness, ConstU32<UNDER_CONSTRUCTION_SEGMENT_LENGTH>>,
+		BoundedVec<BabeRandomness, ConstU32<UNDER_CONSTRUCTION_SEGMENT_LENGTH>>,
 		ValueQuery,
 	>;
 
@@ -270,8 +270,7 @@ pub mod pallet {
 	/// It is set in `on_finalize`, before it will contain the value from the last block.
 	#[pallet::storage]
 	#[pallet::getter(fn author_vrf_randomness)]
-	pub(super) type AuthorVrfRandomness<T> =
-		StorageValue<_, Option<schnorrkel::Randomness>, ValueQuery>;
+	pub(super) type AuthorVrfRandomness<T> = StorageValue<_, Option<BabeRandomness>, ValueQuery>;
 
 	/// The block numbers when the last and current epoch have started, respectively `N-1` and
 	/// `N`.
@@ -358,31 +357,33 @@ pub mod pallet {
 					);
 				}
 
-				if let Some((vrf_output, vrf_proof)) = pre_digest.vrf() {
-					let randomness: Option<schnorrkel::Randomness> = Authorities::<T>::get()
+				if let Some(vrf_signature) = pre_digest.vrf_signature() {
+					let randomness: Option<BabeRandomness> = Authorities::<T>::get()
 						.get(authority_index as usize)
 						.and_then(|(authority, _)| {
-							schnorrkel::PublicKey::from_bytes(authority.as_slice()).ok()
-						})
-						.and_then(|pubkey| {
-							let current_slot = CurrentSlot::<T>::get();
-
+							let public = authority.as_inner_ref();
 							let transcript = sp_consensus_babe::make_transcript(
 								&Self::randomness(),
-								current_slot,
+								CurrentSlot::<T>::get(),
 								EpochIndex::<T>::get(),
 							);
 
 							// NOTE: this is verified by the client when importing the block, before
-							// execution. we don't run the verification again here to avoid slowing
+							// execution. We don't run the verification again here to avoid slowing
 							// down the runtime.
-							debug_assert!(pubkey
-								.vrf_verify(transcript.clone(), vrf_output, vrf_proof)
-								.is_ok());
+							debug_assert!({
+								use sp_core::crypto::VrfVerifier;
+								public.vrf_verify(&transcript, &vrf_signature)
+							});
 
-							vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
-						})
-						.map(|inout| inout.make_bytes(sp_consensus_babe::BABE_VRF_INOUT_CONTEXT));
+							public
+								.make_bytes(
+									RANDOMNESS_VRF_CONTEXT,
+									&transcript,
+									&vrf_signature.output,
+								)
+								.ok()
+						});
 
 					if let Some(randomness) = pre_digest.is_primary().then(|| randomness).flatten()
 					{
@@ -483,9 +484,6 @@ pub mod pallet {
 		}
 	}
 }
-
-/// A BABE public key
-pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
 
 impl<T: Config> FindAuthor<u32> for Pallet<T> {
 	fn find_author<'a, I>(digests: I) -> Option<u32>
@@ -737,7 +735,7 @@ impl<T: Config> Pallet<T> {
 		<frame_system::Pallet<T>>::deposit_log(log)
 	}
 
-	fn deposit_randomness(randomness: &schnorrkel::Randomness) {
+	fn deposit_randomness(randomness: &BabeRandomness) {
 		let segment_idx = SegmentIndex::<T>::get();
 		let mut segment = UnderConstruction::<T>::get(&segment_idx);
 		if segment.try_push(*randomness).is_ok() {
@@ -831,7 +829,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Call this function exactly once when an epoch changes, to update the
 	/// randomness. Returns the new randomness.
-	fn randomness_change_epoch(next_epoch_index: u64) -> schnorrkel::Randomness {
+	fn randomness_change_epoch(next_epoch_index: u64) -> BabeRandomness {
 		let this_randomness = NextRandomness::<T>::get();
 		let segment_idx: u32 = SegmentIndex::<T>::mutate(|s| sp_std::mem::replace(s, 0));
 
@@ -990,12 +988,12 @@ where
 //
 // an optional size hint as to how many VRF outputs there were may be provided.
 fn compute_randomness(
-	last_epoch_randomness: schnorrkel::Randomness,
+	last_epoch_randomness: BabeRandomness,
 	epoch_index: u64,
-	rho: impl Iterator<Item = schnorrkel::Randomness>,
+	rho: impl Iterator<Item = BabeRandomness>,
 	rho_size_hint: Option<usize>,
-) -> schnorrkel::Randomness {
-	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * VRF_OUTPUT_LENGTH);
+) -> BabeRandomness {
+	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * RANDOMNESS_LENGTH);
 	s.extend_from_slice(&last_epoch_randomness);
 	s.extend_from_slice(&epoch_index.to_le_bytes());
 

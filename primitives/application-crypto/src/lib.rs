@@ -154,13 +154,6 @@ macro_rules! app_crypto_pair {
 			) -> bool {
 				<$pair>::verify(&sig.0, message, pubkey.as_ref())
 			}
-			fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
-				sig: &[u8],
-				message: M,
-				pubkey: P,
-			) -> bool {
-				<$pair>::verify_weak(sig, message, pubkey)
-			}
 			fn public(&self) -> Self::Public {
 				Public(self.0.public())
 			}
