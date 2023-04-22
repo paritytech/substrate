@@ -123,17 +123,3 @@ pub(crate) fn mul_affine_generic<Group: SWCurveConfig>(
 	let result: ArkScaleProjective<short_weierstrass::Projective<Group>> = result.into();
 	Ok(result.encode())
 }
-
-pub(crate) fn mul_affine_te_generic<Group: TECurveConfig>(
-	base: Vec<u8>,
-	scalar: Vec<u8>,
-) -> Result<Vec<u8>, ()> {
-	let base = <ArkScale<twisted_edwards::Affine<Group>> as Decode>::decode(&mut base.as_slice())
-		.map_err(|_| ())?;
-	let scalar = <ArkScale<Vec<u64>> as Decode>::decode(&mut scalar.as_slice()).map_err(|_| ())?;
-
-	let result = <Group as TECurveConfig>::mul_affine(&base.0, &scalar.0);
-
-	let result: ArkScaleProjective<twisted_edwards::Projective<Group>> = result.into();
-	Ok(result.encode())
-}
