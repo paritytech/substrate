@@ -18,7 +18,7 @@ ark-std = { version = "0.4.0", default-features = false }
 ark-bls12-377 = { version = "0.4.0", features = ["curve"], default-features = false }
 ark-bls12-381 = { version = "0.4.0", features = ["curve"], default-features = false }
 ark-bw6-761 = { version = "0.4.0", default-features = false }
-ark-ed-on-bls12-381 = { version = "0.4.0", default-features = false }
+ark-ed-on-bls12-381-bandersnatch = { version = "0.4.0", default-features = false }
 ark-ed-on-bls12-377 = { version = "0.4.0", default-features = false }
 sp-std = { version = "5.0.0", path = "../std", default-features = false }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
@@ -34,7 +34,7 @@ std = [
 	"ark-bls12-377/std",
 	"ark-bls12-381/std",
 	"ark-bw6-761/std",
-	"ark-ed-on-bls12-381/std",
+	"ark-ed-on-bls12-381-bandersnatch/std",
 	"ark-ed-on-bls12-377/std",
 	"sp-std/std",
 	"codec/std",

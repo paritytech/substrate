@@ -25,7 +25,7 @@ sp-ark-bls12-377 = { version = "0.4.0", git = "https://github.com/paritytech/ark
 sp-ark-bls12-381 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", defult-features = false }
 sp-ark-bw6-761 = { version = "0.4.0",git = "https://github.com/paritytech/ark-substrate", default-features = false }
 sp-ark-ed-on-bls12-377 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", default-features = false }
-sp-ark-ed-on-bls12-381 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-ed-on-bls12-381-bandersnatch = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", default-features = false }
 
 [features]
 default = [ "std" ]
@@ -41,7 +41,7 @@ std = [
 	"sp-ark-bls12-381/std",
     "sp-ark-bw6-761/std",
     "sp-ark-ed-on-bls12-377/std",
-    "sp-ark-ed-on-bls12-381/std",
+    "sp-ark-ed-on-bls12-381-bandersnatch/std",
     "sp-arkworks/std"
 ]
 curve = [ "scalar_field", "base_field" ]
