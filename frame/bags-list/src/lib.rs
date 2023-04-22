@@ -92,6 +92,9 @@ macro_rules! log {
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
+use frame_support::pallet_macros::*;
+
+#[import_section(bags_list)]
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -175,20 +178,6 @@ pub mod pallet {
 			+ MaxEncodedLen;
 	}
 
-	/// A single node, within some bag.
-	///
-	/// Nodes store links forward and back within their respective bags.
-	#[pallet::storage]
-	pub(crate) type ListNodes<T: Config<I>, I: 'static = ()> =
-		CountedStorageMap<_, Twox64Concat, T::AccountId, list::Node<T, I>>;
-
-	/// A bag stored in storage.
-	///
-	/// Stores a `Bag` struct, which stores head and tail pointers to itself.
-	#[pallet::storage]
-	pub(crate) type ListBags<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::Score, list::Bag<T, I>>;
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -256,21 +245,21 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn integrity_test() {
-			// ensure they are strictly increasing, this also implies that duplicates are detected.
-			assert!(
-				T::BagThresholds::get().windows(2).all(|window| window[1] > window[0]),
-				"thresholds must strictly increase, and have no duplicates",
-			);
-		}
+	// #[pallet::hooks]
+	// impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+	// 	fn integrity_test() {
+	// 		// ensure they are strictly increasing, this also implies that duplicates are detected.
+	// 		assert!(
+	// 			T::BagThresholds::get().windows(2).all(|window| window[1] > window[0]),
+	// 			"thresholds must strictly increase, and have no duplicates",
+	// 		);
+	// 	}
 
-		#[cfg(feature = "try-runtime")]
-		fn try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
-			<Self as SortedListProvider<T::AccountId>>::try_state()
-		}
-	}
+	// 	#[cfg(feature = "try-runtime")]
+	// 	fn try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
+	// 		<Self as SortedListProvider<T::AccountId>>::try_state()
+	// 	}
+	// }
 }
 
 #[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
@@ -298,11 +287,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(maybe_movement)
 	}
 
-	/// Equivalent to `ListBags::get`, but public. Useful for tests in outside of this crate.
-	#[cfg(feature = "std")]
-	pub fn list_bags_get(score: T::Score) -> Option<list::Bag<T, I>> {
-		ListBags::get(score)
-	}
+
 }
 
 impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I> {

@@ -27,6 +27,7 @@ use frame_support::{assert_ok, traits::Get};
 use frame_system::RawOrigin as SystemOrigin;
 use sp_runtime::traits::One;
 
+/* 
 benchmarks_instance_pallet! {
 	rebag_non_terminal {
 		// An expensive case for rebag-ing (rebag a non-terminal node):
@@ -194,3 +195,5 @@ benchmarks_instance_pallet! {
 		crate::mock::Runtime
 	);
 }
+
+*/

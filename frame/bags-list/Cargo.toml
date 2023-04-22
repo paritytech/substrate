@@ -27,6 +27,7 @@ frame-election-provider-support = { version = "4.0.0-dev", default-features = fa
 
 # third party
 log = { version = "0.4.17", default-features = false }
+macro_magic = "0.3.1"
 
 # Optional imports for benchmarking
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking", optional = true, default-features = false }

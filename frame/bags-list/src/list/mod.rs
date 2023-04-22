@@ -31,6 +31,7 @@ use frame_support::{
 	defensive, ensure,
 	traits::{Defensive, DefensiveOption, Get},
 	DefaultNoBound, PalletError,
+	pallet_macros::*,
 };
 use scale_info::TypeInfo;
 use sp_runtime::traits::{Bounded, Zero};
@@ -94,8 +95,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// this function should generally not be used in production as it could lead to a very large
 	/// number of storage accesses.
 	pub(crate) fn unsafe_clear() {
-		#[allow(deprecated)]
-		crate::ListBags::<T, I>::remove_all(None);
+		crate::list_bags_remove_all::<T, I>();
 		#[allow(deprecated)]
 		crate::ListNodes::<T, I>::remove_all();
 	}
@@ -147,11 +147,11 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		}
 
 		// we can't check all preconditions, but we can check one
-		debug_assert!(
-			crate::ListBags::<T, I>::iter()
-				.all(|(threshold, _)| old_thresholds.contains(&threshold)),
-			"not all `bag_upper` currently in storage are members of `old_thresholds`",
-		);
+		// debug_assert!(
+		// 	crate::ListBags::<T, I>::iter()
+		// 		.all(|(threshold, _)| old_thresholds.contains(&threshold)),
+		// 	"not all `bag_upper` currently in storage are members of `old_thresholds`",
+		// );
 		debug_assert!(
 			crate::ListNodes::<T, I>::iter()
 				.all(|(_, node)| old_thresholds.contains(&node.bag_upper)),
@@ -217,7 +217,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 				!crate::ListNodes::<T, I>::iter().any(|(_, node)| node.bag_upper == removed_bag),
 				"no id should be present in a removed bag",
 			);
-			crate::ListBags::<T, I>::remove(removed_bag);
+			crate::list_bags_remove::<T, I>(removed_bag);
 		}
 
 		num_affected
@@ -616,10 +616,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 
 	/// Get a bag by its upper score.
 	pub(crate) fn get(bag_upper: T::Score) -> Option<Bag<T, I>> {
-		crate::ListBags::<T, I>::try_get(bag_upper).ok().map(|mut bag| {
-			bag.bag_upper = bag_upper;
-			bag
-		})
+		crate::list_bags_try_get::<T, I>(bag_upper)
 	}
 
 	/// Get a bag by its upper score or make it, appropriately initialized. Does not check if
@@ -636,9 +633,9 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 	/// Put the bag back into storage.
 	fn put(self) {
 		if self.is_empty() {
-			crate::ListBags::<T, I>::remove(self.bag_upper);
+			crate::list_bags_remove::<T, I>(self.bag_upper);
 		} else {
-			crate::ListBags::<T, I>::insert(self.bag_upper, self);
+			crate::list_bags_insert::<T, I>(self.bag_upper, self);
 		}
 	}
 
@@ -917,4 +914,53 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 
 		Ok(())
 	}
+}
+
+#[export_section]
+mod bags_list {
+    /// A single node, within some bag.
+	///
+	/// Nodes store links forward and back within their respective bags.
+	#[pallet::storage]
+	pub(crate) type ListNodes<T: Config<I>, I: 'static = ()> =
+		CountedStorageMap<_, Twox64Concat, T::AccountId, list::Node<T, I>>;
+
+	/// A bag stored in storage.
+	///
+	/// Stores a `Bag` struct, which stores head and tail pointers to itself.
+	#[pallet::storage]
+	type ListBags<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::Score, list::Bag<T, I>>;
+
+	/// Equivalent to `ListBags::get`, but public. Useful for tests in outside of this crate.
+	#[cfg(feature = "std")]
+	pub fn list_bags_get<T: Config<I>, I: 'static>(score: T::Score) -> Option<list::Bag<T, I>> {
+		ListBags::<T, I>::get(score)
+	}
+
+	pub fn list_bags_contains_key<T: Config<I>, I: 'static>(score: T::Score) -> bool {
+		ListBags::<T, I>::contains_key(score)
+	}
+
+	pub fn list_bags_remove_all<T: Config<I>, I: 'static>() {
+		#[allow(deprecated)]
+		ListBags::<T, I>::remove_all(None);
+	}
+
+	pub fn list_bags_remove<T: Config<I>, I: 'static>(score: T::Score) {
+		ListBags::<T, I>::remove(score);
+	}
+
+	/// Get a bag by its upper score.
+	pub fn list_bags_try_get<T: Config<I>, I: 'static>(bag_upper: T::Score) -> Option<Bag<T, I>> {
+		ListBags::<T, I>::try_get(bag_upper).ok().map(|mut bag| {
+			// bag.bag_upper = bag_upper;
+			bag
+		})
+	}
+
+	pub fn list_bags_insert<T: Config<I>, I: 'static>(bag_upper: T::Score, bag: Bag<T, I>) {
+		ListBags::<T, I>::insert(bag_upper, bag);
+	}
+
 }

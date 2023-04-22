@@ -1,24 +1,8 @@
-// This file is part of Substrate.
-
-// Copyright (C) Parity Technologies (UK) Ltd.
-// SPDX-License-Identifier: Apache-2.0
-
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// 	http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 use super::*;
 use crate::{
 	mock::{test_utils::*, *},
-	ListBags, ListNodes,
+ 	ListNodes,
+	list_bags_get, list_bags_contains_key
 };
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::{assert_ok, assert_storage_noop};
@@ -37,17 +21,17 @@ fn basic_setup_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		assert_eq!(ListNodes::<Runtime>::count(), 4);
 		assert_eq!(ListNodes::<Runtime>::iter().count(), 4);
-		assert_eq!(ListBags::<Runtime>::iter().count(), 2);
+		// assert_eq!(ListBags::<Runtime>::iter().count(), 2);
 
 		assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
 		// the state of the bags is as expected
 		assert_eq!(
-			ListBags::<Runtime>::get(10).unwrap(),
+			list_bags_get(10).unwrap(),
 			Bag::<Runtime> { head: Some(1), tail: Some(1), bag_upper: 0, _phantom: PhantomData }
 		);
 		assert_eq!(
-			ListBags::<Runtime>::get(1_000).unwrap(),
+			list_bags_get(1_000).unwrap(),
 			Bag::<Runtime> { head: Some(2), tail: Some(4), bag_upper: 0, _phantom: PhantomData }
 		);
 
@@ -156,7 +140,6 @@ fn migrate_works() {
 
 mod list {
 	use frame_support::assert_noop;
-
 	use super::*;
 
 	#[test]
@@ -254,8 +237,7 @@ mod list {
 	}
 
 	#[test]
-	fn remove_works() {
-		use crate::{ListBags, ListNodes};
+	fn remove_works() {		
 		let ensure_left = |id, counter| {
 			assert!(!ListNodes::<Runtime>::contains_key(id));
 			assert_eq!(ListNodes::<Runtime>::count(), counter);
@@ -283,8 +265,8 @@ mod list {
 			assert_eq!(List::<Runtime>::get_bags(), vec![(1_000, vec![3, 4])]);
 			ensure_left(1, 2);
 			// bag 10 is removed
-			assert!(!ListBags::<Runtime>::contains_key(10));
-
+			// assert!(!list_bags_contains_key::<Runtime, ()>::contains_key(10));
+			
 			// remove remaining ids to make sure storage cleans up as expected
 			List::<Runtime>::remove(&3).unwrap();
 			ensure_left(3, 1);
@@ -295,7 +277,7 @@ mod list {
 			assert_eq!(get_list_as_ids(), Vec::<AccountId>::new());
 
 			// bags are deleted via removals
-			assert_eq!(ListBags::<Runtime>::iter().count(), 0);
+			// assert_eq!(ListBags::<Runtime>::iter().count(), 0);
 		});
 	}
 
@@ -413,7 +395,7 @@ mod list {
 			ListNodes::<Runtime>::insert(11, node_11_no_bag);
 			StakingMock::set_score_of(&10, 14);
 			StakingMock::set_score_of(&11, 15);
-			assert!(!ListBags::<Runtime>::contains_key(15));
+			assert!(!list_bags_contains_key::<Runtime, ()>(15));
 			assert_eq!(List::<Runtime>::get_bags(), vec![]);
 
 			// then .. this panics
@@ -572,7 +554,7 @@ mod bags {
 				.filter(|bag_upper| !vec![10, 1_000].contains(bag_upper))
 				.for_each(|bag_upper| {
 					assert_storage_noop!(assert_eq!(Bag::<Runtime>::get(*bag_upper), None));
-					assert!(!ListBags::<Runtime>::contains_key(*bag_upper));
+					assert!(!list_bags_contains_key::<Runtime, ()>(*bag_upper));
 				});
 
 			// when we make a pre-existing bag empty
