@@ -20,8 +20,7 @@
 #![warn(missing_docs)]
 
 use crate::utils::{
-	msm_sw_generic, msm_te_generic, mul_affine_generic, mul_affine_te_generic,
-	mul_projective_generic, mul_projective_te_generic,
+	msm_sw_generic, msm_te_generic, mul_projective_generic, mul_projective_te_generic,
 };
 use ark_ed_on_bls12_381_bandersnatch::BandersnatchConfig;
 use sp_std::vec::Vec;

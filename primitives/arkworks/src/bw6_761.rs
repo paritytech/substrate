@@ -20,8 +20,7 @@
 #![warn(missing_docs)]
 
 use crate::utils::{
-	final_exponentiation_generic, msm_sw_generic, mul_affine_generic, mul_projective_generic,
-	multi_miller_loop_generic,
+	final_exponentiation_generic, msm_sw_generic, mul_projective_generic, multi_miller_loop_generic,
 };
 use ark_bw6_761::{g1, g2, BW6_761};
 use sp_std::vec::Vec;

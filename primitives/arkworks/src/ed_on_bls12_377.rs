@@ -19,7 +19,7 @@
 
 #![warn(missing_docs)]
 
-use crate::utils::{msm_te_generic, mul_affine_te_generic, mul_projective_te_generic};
+use crate::utils::{msm_te_generic, mul_projective_te_generic};
 use ark_ed_on_bls12_377::EdwardsConfig;
 use sp_std::vec::Vec;
 
