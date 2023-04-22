@@ -44,8 +44,7 @@ pub mod v1 {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			let onchain = Pallet::<T>::on_chain_storage_version();
-
-			ensure!(onchain < 1, "this migration can be deleted");
+			ensure!(onchain < 1, "pallet_offences::MigrateToV1 migration can be deleted");
 
 			log::info!(target: LOG_TARGET,  "Number of reports to refund and delete: {}", ReportsByKindIndex::<T>::iter().count());
 
@@ -57,7 +56,7 @@ pub mod v1 {
 			let onchain = Pallet::<T>::on_chain_storage_version();
 
 			if onchain > 0 {
-				log::info!("MigrateToV1 should be removed");
+				log::info!(target: LOG_TARGET, "pallet_offences::MigrateToV1 should be removed");
 				return T::DbWeight::get().reads(1)
 			}
 
@@ -72,8 +71,7 @@ pub mod v1 {
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
 			let onchain = Pallet::<T>::on_chain_storage_version();
-			ensure!(onchain < 2, "this migration needs to be removed");
-			ensure!(onchain == 1, "this migration needs to be run");
+			ensure!(onchain == 1, "pallet_offences::MigrateToV1 needs to be run");
 			ensure!(
 				ReportsByKindIndex::<T>::iter().count() == 0,
 				"there are some dangling reports that need to be destroyed and refunded"
