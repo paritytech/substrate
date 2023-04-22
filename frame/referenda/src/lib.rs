@@ -1036,7 +1036,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - If it's ready to be decided, start deciding;
 	/// - If it's not ready to be decided and non-deciding timeout has passed, fail;
 	/// - If it's ongoing and passing, ensure confirming; if at end of confirmation period, pass.
-	/// - If it's ongoing and not passing, stop confirning; if it has reached end time, fail.
+	/// - If it's ongoing and not passing, stop confirming; if it has reached end time, fail.
 	///
 	/// Weight will be a bit different depending on what it does, but it's designed so as not to
 	/// differ dramatically, especially if `MaxQueue` is kept small. In particular _there are no
@@ -1095,6 +1095,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					branch = if status.decision_deposit.is_some() {
 						let prepare_end = status.submitted.saturating_add(track.prepare_period);
 						if now >= prepare_end {
+							println!("CAOCAO 👋");
 							let (maybe_alarm, branch) =
 								Self::ready_for_deciding(now, track, index, &mut status);
 							if let Some(set_alarm) = maybe_alarm {
@@ -1291,10 +1292,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// Looking at referenda info:
 	///
+	/// - Data regarding ongoing phase:
+	///
 	/// * The submission deposit cannot be less than `T::SubmissionDeposit`.
 	/// * There must exist track info for the track of the referendum.
 	/// * The decision deposit if provided cannot be less than the decision deposit of the track.
 	/// * The deciding stage has to begin before confirmation period.
+	/// * The proposal must get in queue before the `T::UndecidingTimeout` passes.
+	///
+	/// - Data in `ReferendumInfo::Approved`, `ReferendumInfo::Rejected`,
+	///   `ReferendumInfo::Cancelled` and `ReferendumInfo::TimedOut`:
+	///
+	/// * The submission deposit cannot be less than `T::SubmissionDeposit`.
+	///
+	/// Looking at tracks:
+	/// * The TrackQueue should be empty if `DecidingCount` is less than `TrackInfo::max_deciding`.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn do_try_state() -> DispatchResult {
 		use sp_runtime::traits::Bounded;
@@ -1307,43 +1319,76 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)
 		);
 
-		ReferendumInfoFor::<T, I>::iter().try_for_each(
-			|(_, referendum)| -> Result<(), DispatchError> {
-				match referendum {
-					ReferendumInfo::Ongoing(status) => {
+		ReferendumInfoFor::<T, I>::iter().try_for_each(|(_, referendum)| -> DispatchResult {
+			match referendum {
+				ReferendumInfo::Ongoing(status) => {
+					ensure!(
+						status.submission_deposit.amount >= T::SubmissionDeposit::get(),
+						DispatchError::Other("Submission deposit too small.")
+					);
+
+					ensure!(
+						Self::track(status.track).is_some(),
+						DispatchError::Other("No track info for the track of the referendum.")
+					);
+
+					if let Some(decision_deposit) = status.decision_deposit {
 						ensure!(
-							status.submission_deposit.amount >= T::SubmissionDeposit::get(),
+							decision_deposit.amount >=
+								Self::track(status.track).unwrap().decision_deposit,
+							DispatchError::Other("Decision deposit too small.")
+						)
+					}
+
+					if let Some(deciding) = status.deciding {
+						ensure!(
+							deciding.since <
+								deciding.confirming.unwrap_or(T::BlockNumber::max_value()),
+							DispatchError::Other(
+								"Deciding status cannot begin before confirming stage."
+							)
+						)
+					}
+					/*
+					let now = frame_system::Pallet::<T>::block_number();
+					let timeout = status.clone().submitted.saturating_add(T::UndecidingTimeout::get());
+
+					if status.deciding.is_none() && timeout > now {
+						ensure!(status.in_queue == true, DispatchError::Other("The submission must be in queue by now."));
+					}
+					*/
+				},
+				ReferendumInfo::Approved(_, maybe_submission_deposit, _) |
+				ReferendumInfo::Rejected(_, maybe_submission_deposit, _) |
+				ReferendumInfo::Cancelled(_, maybe_submission_deposit, _) |
+				ReferendumInfo::TimedOut(_, maybe_submission_deposit, _) => {
+					if let Some(submission_deposit) = maybe_submission_deposit {
+						ensure!(
+							submission_deposit.amount >= T::SubmissionDeposit::get(),
 							DispatchError::Other("Submission deposit too small.")
 						);
+					}
+				},
+				_ => {},
+			}
+			Ok(())
+		})?;
 
-						ensure!(
-							Self::track(status.track).is_some(),
-							DispatchError::Other("No track info for the track of the referendum.")
-						);
+		T::Tracks::tracks().iter().try_for_each(|track| -> DispatchResult {
+			if DecidingCount::<T, I>::get(track.0) < track.1.max_deciding {
+				let timed_out = TrackQueue::<T, I>::get(track.0).iter().filter(|(i, _)| match ReferendumInfoFor::<T, I>::get(i).unwrap() {
+					ReferendumInfo::TimedOut(..) => true,
+					_ => false
+				}).count();
 
-						if let Some(decision_deposit) = status.decision_deposit {
-							ensure!(
-								decision_deposit.amount >=
-									Self::track(status.track).unwrap().decision_deposit,
-								DispatchError::Other("Decision deposit too small.")
-							)
-						}
-
-						if let Some(deciding) = status.deciding {
-							ensure!(
-								deciding.since <
-									deciding.confirming.unwrap_or(T::BlockNumber::max_value()),
-								DispatchError::Other(
-									"Deciding status cannot begin before confirming stage."
-								)
-							)
-						}
-					},
-					_ => {},
-				}
-				Ok(())
-			},
-		)?;
+				// Timed out proposals cannot be in the deciding phase.
+				ensure!(
+					(TrackQueue::<T, I>::get(track.0).iter().count()).saturating_sub(timed_out) == 0,
+					DispatchError::Other("`TrackQueue` should be empty when `DecidingCount` is less than `TrackInfo::max_decidin`.")
+				);
+			}
+			Ok(())
+		})?;
 
 		Ok(())
 	}
