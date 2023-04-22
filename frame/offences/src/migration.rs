@@ -15,10 +15,73 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{Config, OffenceDetails, Perbill, SessionIndex};
-use frame_support::{pallet_prelude::ValueQuery, storage_alias, traits::Get, weights::Weight};
+use super::{LOG_TARGET, Pallet, Config, Kind, OffenceDetails, Perbill, SessionIndex};
+use frame_support::{Twox64Concat, dispatch::GetStorageVersion, traits::OnRuntimeUpgrade, pallet_prelude::ValueQuery, storage_alias, traits::Get, weights::Weight};
 use sp_staking::offence::{DisableStrategy, OnOffenceHandler};
 use sp_std::vec::Vec;
+
+#[cfg(feature = "try-runtime")]
+use frame_support::ensure;
+
+mod v0 {
+	use super::*;
+
+	#[storage_alias]
+	pub type ReportsByKindIndex<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		Kind,
+		Vec<u8>, // (O::TimeSlot, ReportIdOf<T>)
+		ValueQuery,
+	>;
+}
+
+pub mod v1 {
+	use super::*;
+
+	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
+			ensure!(onchain < 1, "this migration can be deleted");
+
+			log::info!(target: LOG_TARGET,  "Number of reports to refund and delete: {}", ReportsByKindIndex::<T>::iter().count());
+
+			Ok(Vec::new())
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			let current = Pallet::<T>::current_storage_version();
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
+			if onchain > 0 {
+				log::info!("MigrateToV1 should be removed");
+				return T::DbWeight::get().reads(1)
+			}
+
+			let status = v0::ReportsByKindIndex::<T>::drain().collect::<Vec<_>>();
+			let weight = T::DbWeight::get().reads(status.len() as u64);
+
+			current.put::<Pallet<T>>();
+
+			weight
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+			let onchain = Pallet::<T>::on_chain_storage_version();
+			ensure!(onchain < 2, "this migration needs to be removed");
+			ensure!(onchain == 1, "this migration needs to be run");
+			ensure!(
+				ReportsByKindIndex::<T>::iter().count() == 0,
+				"there are some dangling reports that need to be destroyed and refunded"
+			);
+			Ok(())
+		}
+	}
+}
 
 /// Type of data stored as a deferred offence
 type DeferredOffenceOf<T> = (
@@ -36,7 +99,7 @@ type DeferredOffences<T: Config> =
 pub fn remove_deferred_storage<T: Config>() -> Weight {
 	let mut weight = T::DbWeight::get().reads_writes(1, 1);
 	let deferred = <DeferredOffences<T>>::take();
-	log::info!(target: "runtime::offences", "have {} deferred offences, applying.", deferred.len());
+	log::info!(target: LOG_TARGET, "have {} deferred offences, applying.", deferred.len());
 	for (offences, perbill, session) in deferred.iter() {
 		let consumed = T::OnOffenceHandler::on_offence(
 			offences,
@@ -53,9 +116,25 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::mock::{new_test_ext, with_on_offence_fractions, Runtime as T};
+	use crate::mock::{new_test_ext, with_on_offence_fractions, Runtime as T, KIND};
 	use sp_runtime::Perbill;
 	use sp_staking::offence::OffenceDetails;
+	use codec::Encode;
+
+	#[test]
+	fn migration_to_v1_works() {
+		new_test_ext().execute_with(|| {
+			<v0::ReportsByKindIndex<T>>::insert(KIND, 2u32.encode());
+			assert!(<v0::ReportsByKindIndex<T>>::iter_values().count() > 0);
+
+			assert_eq!(
+				v1::MigrateToV1::<T>::on_runtime_upgrade(),
+				<T as frame_system::Config>::DbWeight::get().reads(1),
+			);
+
+			assert!(<v0::ReportsByKindIndex<T>>::iter_values().count() == 0);
+		})
+	}
 
 	#[test]
 	fn should_resubmit_deferred_offences() {

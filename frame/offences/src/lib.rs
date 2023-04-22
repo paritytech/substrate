@@ -45,12 +45,17 @@ type OpaqueTimeSlot = Vec<u8>;
 /// A type alias for a report identifier.
 type ReportIdOf<T> = <T as frame_system::Config>::Hash;
 
+const LOG_TARGET: &str = "runtime::offences";
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
