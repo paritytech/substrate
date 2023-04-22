@@ -410,8 +410,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
 }
 
-/// The pallet struct placeholder `#[pallet::pallet]` is mandatory and allows you to specify
-/// pallet information.
+/// The pallet struct placeholder `#[pallet::pallet]` is mandatory and allows you to specify pallet
+/// information.
 ///
 /// The struct must be defined as follows:
 /// ```ignore
@@ -425,10 +425,10 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// The macro adds this attribute to the struct definition:
 /// ```ignore
 /// #[derive(
-/// 	frame_support::CloneNoBound,
-/// 	frame_support::EqNoBound,
-/// 	frame_support::PartialEqNoBound,
-/// 	frame_support::RuntimeDebugNoBound,
+///     frame_support::CloneNoBound,
+///     frame_support::EqNoBound,
+///     frame_support::PartialEqNoBound,
+///     frame_support::RuntimeDebugNoBound,
 /// )]
 /// ```
 /// and replaces the type `_` with `PhantomData<T>`. It also implements on the pallet:
@@ -444,20 +444,20 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 ///
 /// It implements `StorageInfoTrait` on `Pallet` which give information about all storages.
 ///
-/// If the attribute `generate_store` is set then the macro creates the trait `Store` and
-/// implements it on `Pallet`.
+/// If the attribute `generate_store` is set then the macro creates the trait `Store` and implements
+/// it on `Pallet`.
 ///
-/// If the attribute `set_storage_max_encoded_len` is set then the macro calls
-/// `StorageInfoTrait` for each storage in the implementation of `StorageInfoTrait` for the
-/// pallet. Otherwise it implements `StorageInfoTrait` for the pallet using the
-/// `PartialStorageInfoTrait` implementation of storages.
+/// If the attribute `set_storage_max_encoded_len` is set then the macro calls `StorageInfoTrait`
+/// for each storage in the implementation of `StorageInfoTrait` for the pallet. Otherwise it
+/// implements `StorageInfoTrait` for the pallet using the `PartialStorageInfoTrait` implementation
+/// of storages.
 ///
 /// ## Dev Mode (`#[pallet(dev_mode)]`)
 ///
-/// Specifying the argument `dev_mode` will allow you to enable dev mode for a pallet. The aim
-/// of dev mode is to loosen some of the restrictions and requirements placed on production
-/// pallets for easy tinkering and development. Dev mode pallets should not be used in
-/// production. Enabling dev mode has the following effects:
+/// Specifying the argument `dev_mode` will allow you to enable dev mode for a pallet. The aim of
+/// dev mode is to loosen some of the restrictions and requirements placed on production pallets for
+/// easy tinkering and development. Dev mode pallets should not be used in production. Enabling dev
+/// mode has the following effects:
 ///
 /// * Weights no longer need to be specified on every `#[pallet::call]` declaration. By default, dev
 ///   mode pallets will assume a weight of zero (`0`) if a weight is not specified. This is
@@ -507,8 +507,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 ///
 /// ### `doc` attribute
 ///
-/// The value of the `doc` attribute is included in the runtime metadata, as well as
-/// expanded on the pallet module. The previous example is expanded to:
+/// The value of the `doc` attribute is included in the runtime metadata, as well as expanded on the
+/// pallet module. The previous example is expanded to:
 ///
 /// ```ignore
 /// /// Documentation for pallet 1
@@ -518,16 +518,16 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// If you want to specify the file from which the documentation is loaded, you can use the
-/// `include_str` macro. However, if you only want the documentation to be included in the
-/// runtime metadata, use the `pallet_doc` attribute.
+/// `include_str` macro. However, if you only want the documentation to be included in the runtime
+/// metadata, use the `pallet_doc` attribute.
 ///
 /// ### `pallet_doc` attribute
 ///
-/// Unlike the `doc` attribute, the documentation provided to the `pallet_doc` attribute is
-/// not inserted on the module.
+/// Unlike the `doc` attribute, the documentation provided to the `pallet_doc` attribute is not
+/// inserted on the module.
 ///
-/// The `pallet_doc` attribute can only be provided with one argument,
-/// which is the file path that holds the documentation to be added to the metadata.
+/// The `pallet_doc` attribute can only be provided with one argument, which is the file path that
+/// holds the documentation to be added to the metadata.
 ///
 /// This approach is beneficial when you use the `include_str` macro at the beginning of the file
 /// and want that documentation to extend to the runtime metadata, without reiterating the

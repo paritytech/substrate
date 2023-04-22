@@ -477,7 +477,6 @@ pub mod pallet {
 		///
 		/// For more info see
 		/// <https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/>
-
 		#[pallet::constant]
 		type MaxKeyLen: Get<u32>;
 

@@ -14,10 +14,109 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 pub mod pallet {
-	use frame_support::pallet_prelude::*;
+	use codec::Codec;
+	use frame_support::{
+		dispatch::{Dispatchable, GetDispatchInfo},
+		pallet_prelude::*,
+		traits::{OnRuntimeUpgrade, UnfilteredDispatchable},
+	};
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::traits::Zero;
+
+	/// How a task is being scheduled.
+	enum Scheduling {
+		/// Schedule to execute `on_idle`, while consuming at most `Weight`.
+		OnIdle(Weight),
+		/// Schedule to execute `on_initialize`, while consuming at most `Weight`.
+		OnInitialize(Weight),
+		/// Schedule to execute on `poll`, while consuming at most `Weight`.
+		Poll(Weight),
+		/// Scheduled to execute dispatching.
+		///
+		/// This could be through an extrinsic provided by a substrate offchain worker, or a normal
+		/// bot running outside of the chian.
+		Dispatch,
+	}
+
+	impl Scheduling {
+		fn max_weight(&self) {
+			match self {
+				Scheduling::OnIdle(w) => w,
+				Scheduling::OnInitialize(w) => w,
+				Scheduling::Poll(w) => w,
+				Scheduling::Dispatch => frame_support::traits::Bounded::max_value(),
+			}
+		}
+
+		fn can_run(&self, requested_weight: Weight) -> bool {
+			let allowed_weight = self.max_weight();
+			requested_weight <= allowed_weight
+		}
+	}
+
+	/// A task that is stored onchain.
+	trait Task: Codec {
+		/// Run the task, consuming self.
+		///
+		/// Returns the final consumed weight, and optionally the task itself, if it is not "over".
+		/// Returning `None` implies the task is "over".
+		fn run(self, scheduling: Scheduling) -> (Weight, Option<Self>);
+	}
+
+	pub trait RegisterTask<Task> {
+		fn register_task(task: Task);
+	}
+
+	#[derive(Encode, Decode)]
+	struct LazilyRemovePrefix {
+		prefix: Vec<u8>,
+	}
+
+	impl Task for LazilyRemovePrefix {
+		fn run(self, remaining_weight: Weight) -> (Weight, Option<Self>) {
+			todo!()
+		}
+	}
+
+	// Anything that is a runtime upgrade is also a monolithic task.
+	impl<T: OnRuntimeUpgrade> Task for T {
+		fn run(self, scheduling: Scheduling) -> (Weight, Option<Self>) {
+			match scheduling {
+				Scheduling::Dispatch => (T::on_runtime_upgrade(), None),
+				_ => {
+					// This type of task cannot be scheduled on other ways because its weight cannot
+					// be known in advance. Do nothing, and kill the task.
+					(Zero::zero(), None)
+				},
+			}
+		}
+	}
+
+	/// Anything that is a call is also a monotone task.
+	#[derive(Encode, Decode)]
+	struct DispatchableTask<Call, Origin> {
+		call: Call,
+		origin: Origin,
+	}
+
+	impl<Call: GetDispatchInfo + Dispatchable + Encode + Decode, Origin: Encode + Decode> Task
+		for DispatchableTask<Call, Origin>
+	{
+		fn run(self, scheduling: Scheduling) -> (Weight, Option<Self>) {
+			let DispatchableTask { call, origin } = self;
+			let weight = self.call.get_dispatch_info();
+
+			if scheduling.can_run(weight) {
+				let result = call.dispatch(origin);
+				(weight, None)
+			} else {
+				// we couldn't execute, but we might in the future, so let's retry.
+				(Zero::zero(), Some(self))
+			}
+		}
+	}
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -25,79 +124,103 @@ pub mod pallet {
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		/// Type of the tasks.
+		///
+		/// This type should always remain backwards compatible; use an enum.
+		type Task: Task;
 	}
 
-	// The pallet's runtime storage items.
-	// https://docs.substrate.io/main-docs/build/runtime-storage/
+	trait Queue<T> {
+		fn queue_pop() -> Option<T>;
+		fn queue_get(i: usize) -> Option<T>;
+		fn queue_insert(t: T);
+	}
+
+	// -------------------------------- SHOULD CHANGE --------------------------------
 	#[pallet::storage]
-	#[pallet::getter(fn something)]
-	// Learn more about declaring storage items:
-	// https://docs.substrate.io/main-docs/build/runtime-storage/#declaring-storage-items
-	pub type Something<T> = StorageValue<_, u32>;
+	pub type OffchainWorkerAgenda<T: Config> = StorageValue<_, Vec<T::Task>, ValueQuery>;
 
-	// Pallets use events to inform users when important changes are made.
-	// https://docs.substrate.io/main-docs/build/events-errors/
-	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
-		/// Event documentation should end with an array that provides descriptive names for event
-		/// parameters. [something, who]
-		SomethingStored { something: u32, who: T::AccountId },
+	#[pallet::storage]
+	pub type OnIdleAgenda<T: Config> = StorageValue<_, Vec<T::Task>, ValueQuery>;
+
+	#[pallet::storage]
+	pub type OnInitializeAgenda<T: Config> = StorageValue<_, Vec<T::Task>, ValueQuery>;
+
+	#[pallet::storage]
+	pub type DispatchAgenda<T: Config> = StorageValue<_, Vec<T::Task>, ValueQuery>;
+	// -------------------------------- SHOULD CHANGE --------------------------------
+
+	impl<T: Config> Queue<T::Task> for OffchainWorkerAgenda<T> {
+		fn queue_insert(t: T::Task) {
+			OffchainWorkerAgenda::<T>::mutate(|v| v.push(t))
+		}
+
+		fn queue_pop() -> Option<T::Task> {
+			OffchainWorkerAgenda::<T>::try_mutate(
+				|v| if v.is_empty() { Err(()) } else { v.remove(0) },
+			)
+		}
+
+		fn queue_get(i: usize) -> Option<T::Task> {
+			OffchainWorkerAgenda::<T>::get().get(i)
+		}
 	}
 
-	// Errors inform users that something went wrong.
-	#[pallet::error]
-	pub enum Error<T> {
-		/// Error names should be descriptive.
-		NoneValue,
-		/// Errors should have helpful documentation associated with them.
-		StorageOverflow,
-	}
-
-	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
-	// These functions materialize as "extrinsics", which are often compared to transactions.
-	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// An example dispatchable that takes a singles value as a parameter, writes the value to
-		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
-		#[pallet::call_index(0)]
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
-		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
-			// Check that the extrinsic was signed and get the signer.
-			// This function will return an error if the extrinsic is not signed.
-			// https://docs.substrate.io/main-docs/build/origins/
-			let who = ensure_signed(origin)?;
+		#[pallet::weight(provided_weight)]
+		pub fn execute_task(origin: OriginFor<T>, provided_weight: Weight) -> DispatchResult {
+			let task: T::Task = DispatchAgenda::<T>::queue_pop().unwrap();
+			let scheduling = Scheduling::Dispatch;
 
-			// Update storage.
-			<Something<T>>::put(something);
+			let (actual_weight, maybe_leftover) = task.run(scheduling);
+			assert_eq!(actual_weight, provided_weight);
 
-			// Emit an event.
-			Self::deposit_event(Event::SomethingStored { something, who });
-			// Return a successful DispatchResultWithPostInfo
 			Ok(())
 		}
 
-		/// An example dispatchable that may throw a custom error.
-		#[pallet::call_index(1)]
-		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
-		pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
-			let _who = ensure_signed(origin)?;
+		pub fn register_task(origin: OriginFor<T>, task: T::Task) -> DispatchResult {
+			ensure_root(origin);
+			todo!();
+		}
+	}
 
-			// Read a value from storage.
-			match <Something<T>>::get() {
-				// Return an error if the value has not been set.
-				None => return Err(Error::<T>::NoneValue.into()),
-				Some(old) => {
-					// Increment the value read from storage; will error in the event of overflow.
-					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-					// Update the value in storage with the incremented result.
-					<Something<T>>::put(new);
-					Ok(())
-				},
+	#[pallet::hooks]
+	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
+		fn offchain_worker(_n: T::BlockNumber) {
+			// here we have the freedom to do whatever, so let's submit our entire agenda. Then we
+			// record in our offchain storage that we have submitted these and are waiting for them
+			// to be serviced.
+
+			let mut agenda = Vec::<T::Task>::new();
+			while let Some(next) = DispatchAgenda::<T>::queue_pop() {
+				agenda.push(next);
 			}
+
+			let calls = agenda
+				.into_iter()
+				.map(|t| {
+					// dry-run the task to see how much weight it would consume, in the current
+					// state.
+					let (weight, _) = t.clone().run(Scheduling::Dispatch);
+					let call = Call::execute_task(weight);
+					call
+				})
+				.collect::<Vec<_>>();
+		}
+
+		fn on_idle(_: T::BlockNumber, mut remaining_weight: Weight) -> Weight {
+			// service exactly one message per round, for now. This is super dead simple, but good
+			// enough to start with.
+			if let Some(task) = OnIdleAgenda::<T>::queue_pop() {
+				let (used_weight, next_task) = task.run(remaining_weight);
+				remaining_weight -= used_weight;
+				if let Some(next) = next_task {
+					OnIdleAgenda::<T>::queue_insert(next);
+				}
+			}
+
+			remaining_weight
 		}
 	}
 }
