@@ -274,19 +274,10 @@ impl TraitPair for Pair {
 		}
 	}
 
-	/// Verify a signature on a message. Returns true if the signature is good.
-	///
-	/// This doesn't use the type system to ensure that `sig` and `public` are the correct
-	/// size. Use it only if you're coming from byte buffers and need the speed.
-	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, public: P) -> bool {
-		// TODO davxy : makes sense???
-		unimplemented!()
-		false
-	}
-
 	/// Return a vec filled with seed raw data.
 	fn to_raw_vec(&self) -> Vec<u8> {
-		// TODO davxy: makes sense???
+		// TODO davxy: makes sense??? Should we returne the seed or serialized secret key?
+		// If we return the serialized secret there is no method to reconstruct if ...
 		unimplemented!()
 	}
 }
