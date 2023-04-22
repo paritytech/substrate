@@ -778,6 +778,102 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 		.into()
 }
 
+/// This attribtue can be used to derive a test pallet `Config` based on an existing pallet
+/// `Config` that has been marked with [`#[pallet::default_config]`](`macro@default_config`).
+///
+/// The attribute should be attached to an `impl` block that implements a compatible `Config`
+/// such as `frame_system::Config` for a test/mock runtime, and should receive as its only
+/// argument the path to a `DefaultConfig` impl that has been registered via
+/// [`#[register_default_config]`](`macro@register_default_config`).
+///
+/// Consider the following taken from the basic example pallet:
+///
+/// ```ignore
+/// #[derive_impl(TestDefaultConfig)]
+/// impl frame_system::Config for Test {
+/// 	// These are all defined by system as mandatory.
+/// 	type BaseCallFilter = frame_support::traits::Everything;
+/// 	type RuntimeEvent = RuntimeEvent;
+/// 	type RuntimeCall = RuntimeCall;
+/// 	type RuntimeOrigin = RuntimeOrigin;
+/// 	type OnSetCode = ();
+/// 	type PalletInfo = PalletInfo;
+/// 	type Header = Header;
+/// 	// We decide to override this one.
+/// 	type AccountData = pallet_balances::AccountData<u64>;
+/// }
+/// ```
+///
+/// where `TestDefaultConfig` was defined and registered as
+/// follows:
+///
+/// ```ignore
+/// pub struct TestDefaultConfig {}
+///
+/// #[register_default_config(TestDefaultConfig)]
+/// impl DefaultConfig for TestDefaultConfig {
+/// 	type Version = ();
+/// 	type BlockWeights = ();
+/// 	type BlockLength = ();
+/// 	type DbWeight = ();
+/// 	type Index = u64;
+/// 	type BlockNumber = u64;
+/// 	type Hash = sp_core::hash::H256;
+/// 	type Hashing = sp_runtime::traits::BlakeTwo256;
+/// 	type AccountId = AccountId;
+/// 	type Lookup = IdentityLookup<AccountId>;
+/// 	type BlockHashCount = frame_support::traits::ConstU64<10>;
+/// 	type AccountData = u32;
+/// 	type OnNewAccount = ();
+/// 	type OnKilledAccount = ();
+/// 	type SystemWeightInfo = ();
+/// 	type SS58Prefix = ();
+/// 	type MaxConsumers = frame_support::traits::ConstU32<16>;
+/// }
+/// ```
+///
+/// The above call to `derive_impl` would expand to roughly the following:
+///
+/// ```ignore
+/// impl frame_system::Config for Test {
+/// 	use frame_system::preludes::testing::TestDefaultConfig;
+/// 	use frame_system::pallet::DefaultConfig;
+///
+/// 	type BaseCallFilter = frame_support::traits::Everything;
+/// 	type RuntimeEvent = RuntimeEvent;
+/// 	type RuntimeCall = RuntimeCall;
+/// 	type RuntimeOrigin = RuntimeOrigin;
+/// 	type OnSetCode = ();
+/// 	type PalletInfo = PalletInfo;
+/// 	type Header = Header;
+/// 	type AccountData = pallet_balances::AccountData<u64>;
+/// 	type Version = <TestDefaultConfig as DefaultConfig>::Version;
+/// 	type BlockWeights = <TestDefaultConfig as DefaultConfig>::BlockWeights;
+/// 	type BlockLength = <TestDefaultConfig as DefaultConfig>::BlockLength;
+/// 	type DbWeight = <TestDefaultConfig as DefaultConfig>::DbWeight;
+/// 	type Index = <TestDefaultConfig as DefaultConfig>::Index;
+/// 	type BlockNumber = <TestDefaultConfig as DefaultConfig>::BlockNumber;
+/// 	type Hash = <TestDefaultConfig as DefaultConfig>::Hash;
+/// 	type Hashing = <TestDefaultConfig as DefaultConfig>::Hashing;
+/// 	type AccountId = <TestDefaultConfig as DefaultConfig>::AccountId;
+/// 	type Lookup = <TestDefaultConfig as DefaultConfig>::Lookup;
+/// 	type BlockHashCount = <TestDefaultConfig as DefaultConfig>::BlockHashCount;
+/// 	type OnNewAccount = <TestDefaultConfig as DefaultConfig>::OnNewAccount;
+/// 	type OnKilledAccount = <TestDefaultConfig as DefaultConfig>::OnKilledAccount;
+/// 	type SystemWeightInfo = <TestDefaultConfig as DefaultConfig>::SystemWeightInfo;
+/// 	type SS58Prefix = <TestDefaultConfig as DefaultConfig>::SS58Prefix;
+/// 	type MaxConsumers = <TestDefaultConfig as DefaultConfig>::MaxConsumers;
+/// }
+/// ```
+///
+/// You can then use the resulting `Test` config in test scenarios.
+///
+/// Note that items that are _not_ present in our local
+/// [`#[pallet::default_config]`](`macro@default_config`) are automatically copied from the
+/// foreign trait (in this case `TestDefaultConfig`) into the local trait impl (in this case
+/// `Test`), unless the trait item in the local trait impl is marked with
+/// [`#[pallet::no_default]`], in which case it cannot be overridden, and any attempts to do so
+/// will result in a compiler error.
 #[import_tokens_attr(frame_support::macro_magic)]
 #[proc_macro_attribute]
 pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
@@ -786,13 +882,40 @@ pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
 		.into()
 }
 
+/// The optional attribute `#[pallet::default_config]` can be attached to a `Config` trait
+/// within your pallet to mark it as auto-derivable under test conditions via
+/// [`[#[derive_impl(..)]`](`macro@derive_impl`).
+///
+/// You may use [`#[pallet::no_default]`](`macro@no_default`) and
+/// [`#[pallet::constant]`](`macro@constant`) on individual trait items within your `Config`
+/// trait.
+///
+/// The [`#[pallet::no_default]`](`macro@no_default`) attribute allows you to specify that a
+/// particular trait item _cannot_ be used as a default when a test `Config` is derived using
+/// the [`#[derive_impl(..)]`](`macro@derive_impl`) attribute macro.
+#[proc_macro_attribute]
+pub fn default_config(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The optional attribute `#[pallet::no_default]` can be attached to trait items within a
+/// `Config` trait impl that has [`#[pallet::default_config]`](`macro@default_config`) attached
+/// to it.
+///
+/// Attaching this attribute to a trait item ensures that that trait item will not be used as a
+/// default with the [`#[derive_impl(..)]`](`macro@derive_impl`) attribute macro.
+#[proc_macro_attribute]
+pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// Attach this attribute to an impl statement that implements the auto-generated
 /// `DefaultConfig` trait for a default config that needs to be registered for use with the
-/// [`derive_impl`] attribute macro.
+/// [`macro@derive_impl`] attribute macro.
 ///
 /// You must also specify an ident as the only argument to the attribute. This ident will be
 /// used as the export name for this default config impl, and is the name you must provide to
-/// [`derive_impl`] when you import this impl.
+/// [`macro@derive_impl`] when you import this impl.
 ///
 /// The ident you provide is exported at the root of the crate where it is defined, so the
 /// ident must be unique at the crate level so as not to collide with other items. This is

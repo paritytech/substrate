@@ -98,6 +98,14 @@ fn combine_impls(local_impl: ItemImpl, foreign_impl: ItemImpl, foreign_path: Pat
 	final_impl
 }
 
+/// Internal implementation behind [`#[derive_impl(..)]`](`macro@crate::derive_impl`).
+///
+/// `foreign_path`: the module path of the external `impl` statement whose tokens we are
+///	                importing via `macro_magic`
+///
+/// `foreign_tokens`: the tokens for the external `impl` statement
+///
+/// `local_tokens`: the tokens for the local `impl` statement this attribute is attached to
 pub fn derive_impl(
 	foreign_path: TokenStream2,
 	foreign_tokens: TokenStream2,
