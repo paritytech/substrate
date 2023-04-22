@@ -6292,6 +6292,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
+ "macro_magic",
  "parity-scale-codec",
  "rand 0.8.5",
  "rand_distr",
