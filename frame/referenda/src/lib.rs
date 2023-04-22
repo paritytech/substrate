@@ -1285,9 +1285,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// The following assertions must always apply.
 	///
-	/// Looking at referenda:
+	/// General assertions:
 	///
 	/// * `ReferendumCount` must always be equal to the number of referenda in `ReferendumInfoFor`.
+	/// * Referendum indices must be sorted in the `ReferendumInfoOf` storage map.
+	/// * Referendum indices in `MetadataOf` must also be stored in `ReferendumInfoOf`.
 	///
 	/// Looking at referenda info:
 	///
@@ -1297,7 +1299,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// * There must exist track info for the track of the referendum.
 	/// * The decision deposit if provided cannot be less than the decision deposit of the track.
 	/// * The deciding stage has to begin before confirmation period.
-	/// * The proposal must get in queue before the `T::UndecidingTimeout` passes.
 	///
 	/// - Data in `ReferendumInfo::Approved`, `ReferendumInfo::Rejected`,
 	///   `ReferendumInfo::Cancelled` and `ReferendumInfo::TimedOut`:
@@ -1305,7 +1306,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// * The submission deposit cannot be less than `T::SubmissionDeposit`.
 	///
 	/// Looking at tracks:
-	/// * The TrackQueue should be empty if `DecidingCount` is less than `TrackInfo::max_deciding`.
+	/// * The `TrackQueue` should be empty if `DecidingCount` is less than
+	///   `TrackInfo::max_deciding`.
+	/// * The referendum indices stored in TrackQueue` must exist as keys in the `ReferendumInfoFor`
+	///  storage map.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn do_try_state() -> DispatchResult {
 		use sp_runtime::traits::Bounded;
@@ -1317,6 +1321,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				"Number of referenda in `ReferendumInfoFor` is greater than `ReferendumCount`"
 			)
 		);
+
+		// The order of indices when running `queueing_works` is: 0, 4, 2, 1, 3 🤔 
+		/*
+		ensure!(
+			ReferendumInfoFor::<T, I>::iter_keys()
+				.collect::<Vec<_>>()
+				.windows(2)
+				.all(|w| w[0] < w[1]),
+			DispatchError::Other(
+				"Referenda indices must be sorted in `ReferendumInfoFor` storage map"
+			)
+		);
+		*/
+
+		MetadataOf::<T, I>::iter_keys().try_for_each(|referendum_index| -> DispatchResult {
+			ensure!(
+				ReferendumInfoFor::<T, I>::contains_key(referendum_index), 
+				DispatchError::Other("Referendum indices in `MetadataOf` must also be stored in `ReferendumInfoOf`")
+			);
+			Ok(())
+		})?;
 
 		ReferendumInfoFor::<T, I>::iter().try_for_each(|(_, referendum)| -> DispatchResult {
 			match referendum {
@@ -1348,14 +1373,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							)
 						)
 					}
-					/*
-					let now = frame_system::Pallet::<T>::block_number();
-					let timeout = status.clone().submitted.saturating_add(T::UndecidingTimeout::get());
-
-					if status.deciding.is_none() && timeout > now {
-						ensure!(status.in_queue == true, DispatchError::Other("The submission must be in queue by now."));
-					}
-					*/
 				},
 				ReferendumInfo::Approved(_, maybe_submission_deposit, _) |
 				ReferendumInfo::Rejected(_, maybe_submission_deposit, _) |
@@ -1386,6 +1403,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					DispatchError::Other("`TrackQueue` should be empty when `DecidingCount` is less than `TrackInfo::max_decidin`.")
 				);
 			}
+
+			TrackQueue::<T, I>::get(track.0).iter().try_for_each(|(referendum_index, _)| -> DispatchResult {
+				ensure!(
+					ReferendumInfoFor::<T, I>::contains_key(referendum_index), 
+					DispatchError::Other("`ReferendumIndex` inside the `TrackQueue` should be a key in `ReferendumInfoFor`")
+				);
+				Ok(())
+			})?;
 			Ok(())
 		})?;
 
