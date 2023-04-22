@@ -53,7 +53,7 @@ mod keywords {
 #[derive(Clone)]
 struct ParamDef {
 	name: String,
-	typ: Type,
+	_typ: Type,
 	start: syn::GenericArgument,
 	end: syn::GenericArgument,
 }
@@ -229,7 +229,7 @@ fn parse_params(item_fn: &ItemFn) -> Result<Vec<ParamDef>> {
 		let args = segment.arguments.to_token_stream().into();
 		let Ok(args) = syn::parse::<RangeArgs>(args) else { return invalid_param(typ.span()) };
 
-		params.push(ParamDef { name, typ: typ.clone(), start: args.start, end: args.end });
+		params.push(ParamDef { name, _typ: typ.clone(), start: args.start, end: args.end });
 	}
 	Ok(params)
 }
@@ -681,7 +681,6 @@ pub fn benchmarks(
 struct UnrolledParams {
 	param_ranges: Vec<TokenStream2>,
 	param_names: Vec<TokenStream2>,
-	param_types: Vec<TokenStream2>,
 }
 
 impl UnrolledParams {
@@ -703,14 +702,7 @@ impl UnrolledParams {
 				quote!(#name)
 			})
 			.collect();
-		let param_types: Vec<TokenStream2> = params
-			.iter()
-			.map(|p| {
-				let typ = &p.typ;
-				quote!(#typ)
-			})
-			.collect();
-		UnrolledParams { param_ranges, param_names, param_types }
+		UnrolledParams { param_ranges, param_names }
 	}
 }
 
@@ -726,7 +718,6 @@ fn expand_benchmark(
 		Ok(ident) => ident,
 		Err(err) => return err.to_compile_error().into(),
 	};
-	let home = quote!(#krate::v2);
 	let codec = quote!(#krate::frame_support::codec);
 	let traits = quote!(#krate::frame_support::traits);
 	let setup_stmts = benchmark_def.setup_stmts;
@@ -738,7 +729,6 @@ fn expand_benchmark(
 	let unrolled = UnrolledParams::from(&benchmark_def.params);
 	let param_names = unrolled.param_names;
 	let param_ranges = unrolled.param_ranges;
-	let param_types = unrolled.param_types;
 
 	let type_use_generics = match is_instance {
 		false => quote!(T),
@@ -888,11 +878,6 @@ fn expand_benchmark(
 	let res = quote! {
 		// benchmark function definition
 		#fn_def
-
-		// compile-time assertions that each referenced param type implements ParamRange
-		#(
-			#home::assert_impl_all!(#param_types: #home::ParamRange);
-		)*
 
 		#[allow(non_camel_case_types)]
 		#(

@@ -2,4 +2,4 @@ error: Single-item extrinsic calls must specify their origin as the first argume
   --> tests/benchmark_ui/missing_origin.rs:12:3
    |
 12 |         thing();
-   |         ^^^^^
+   |         ^^^^^^^

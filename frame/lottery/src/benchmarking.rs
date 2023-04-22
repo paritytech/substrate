@@ -28,7 +28,6 @@ use frame_benchmarking::{
 	v2::*,
 };
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
 	storage::bounded_vec::BoundedVec,
 	traits::{EnsureOrigin, OnInitialize},
 };
