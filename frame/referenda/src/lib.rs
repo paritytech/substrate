@@ -1095,7 +1095,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					branch = if status.decision_deposit.is_some() {
 						let prepare_end = status.submitted.saturating_add(track.prepare_period);
 						if now >= prepare_end {
-							println!("CAOCAO 👋");
 							let (maybe_alarm, branch) =
 								Self::ready_for_deciding(now, track, index, &mut status);
 							if let Some(set_alarm) = maybe_alarm {
