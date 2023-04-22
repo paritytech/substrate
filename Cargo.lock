@@ -10611,55 +10611,51 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate?branch=bandersnatch#67741b4067c170215525c5075b7e602feca59721"
+source = "git+https://github.com/paritytech/ark-substrate#e723741a6bbdd9b16989bad4b645e308d34afb53"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
  "ark-r1cs-std",
  "ark-scale",
- "ark-serialize",
  "ark-std",
  "parity-scale-codec",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=bandersnatch)",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
  "sp-arkworks",
 ]
 
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate?branch=bandersnatch#67741b4067c170215525c5075b7e602feca59721"
+source = "git+https://github.com/paritytech/ark-substrate#e723741a6bbdd9b16989bad4b645e308d34afb53"
 dependencies = [
  "ark-bls12-381",
- "ark-ec",
  "ark-ff",
  "ark-scale",
  "ark-serialize",
  "ark-std",
  "parity-scale-codec",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=bandersnatch)",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
  "sp-arkworks",
 ]
 
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate?branch=bandersnatch#67741b4067c170215525c5075b7e602feca59721"
+source = "git+https://github.com/paritytech/ark-substrate#e723741a6bbdd9b16989bad4b645e308d34afb53"
 dependencies = [
  "ark-bw6-761",
- "ark-ec",
  "ark-ff",
  "ark-scale",
- "ark-serialize",
  "ark-std",
  "parity-scale-codec",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=bandersnatch)",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
  "sp-arkworks",
 ]
 
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate?branch=bandersnatch#67741b4067c170215525c5075b7e602feca59721"
+source = "git+https://github.com/paritytech/ark-substrate#e723741a6bbdd9b16989bad4b645e308d34afb53"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
@@ -10668,21 +10664,21 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "parity-scale-codec",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=bandersnatch)",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
 ]
 
 [[package]]
 name = "sp-ark-ed-on-bls12-381-bandersnatch"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate?branch=bandersnatch#67741b4067c170215525c5075b7e602feca59721"
+source = "git+https://github.com/paritytech/ark-substrate#e723741a6bbdd9b16989bad4b645e308d34afb53"
 dependencies = [
- "ark-ec",
+ "ark-ed-on-bls12-381-bandersnatch",
  "ark-ff",
  "ark-scale",
  "ark-std",
  "parity-scale-codec",
  "sp-ark-bls12-381",
- "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate?branch=bandersnatch)",
+ "sp-ark-models 0.4.0 (git+https://github.com/paritytech/ark-substrate)",
 ]
 
 [[package]]
@@ -10705,7 +10701,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-models"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/ark-substrate?branch=bandersnatch#67741b4067c170215525c5075b7e602feca59721"
+source = "git+https://github.com/paritytech/ark-substrate#e723741a6bbdd9b16989bad4b645e308d34afb53"
 dependencies = [
  "ark-ec",
  "ark-ff",
