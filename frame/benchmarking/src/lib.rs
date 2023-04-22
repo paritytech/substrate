@@ -160,7 +160,8 @@ pub use v1::*;
 /// The underscore will be substituted with the name of the benchmark  (i.e. the name of the
 /// function in the benchmark function definition).
 ///
-/// In case of a `force_origin`, this is the general syntax:
+/// In case of a `force_origin` where you want to elevate the privileges of the provided origin, 
+/// this is the general syntax:
 /// ```ignore
 /// #[extrinsic_call]
 /// _(force_origin as T::RuntimeOrigin, 0u32.into(), 0);
