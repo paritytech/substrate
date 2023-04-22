@@ -106,6 +106,7 @@ members = [
 	"frame/election-provider-support/solution-type/fuzzer",
 	"frame/examples/basic",
 	"frame/examples/offchain-worker",
+	"frame/examples/dev-mode",
 	"frame/executive",
 	"frame/nis",
 	"frame/grandpa",
