@@ -188,7 +188,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		.map(|c| &mut def.item.content.as_mut().expect("Checked by def parser").1[c.index])
 	{
 		item_impl.items.iter_mut().for_each(|i| {
-			if let syn::ImplItem::Method(method) = i {
+			if let syn::ImplItem::Fn(method) = i {
 				let block = &method.block;
 				method.block = syn::parse_quote! {{
 					// We execute all dispatchable in a new storage layer, allowing them
@@ -206,13 +206,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			method
 				.attrs
 				.iter()
-				.find(|attr| {
-					if let Ok(syn::Meta::List(syn::MetaList { path, .. })) = attr.parse_meta() {
-						path.segments.last().map(|seg| seg.ident == "allow").unwrap_or(false)
-					} else {
-						false
-					}
-				})
+				.find(|attr| attr.path().is_ident("allow"))
 				.map_or(proc_macro2::TokenStream::new(), |attr| attr.to_token_stream())
 		})
 		.collect::<Vec<_>>();

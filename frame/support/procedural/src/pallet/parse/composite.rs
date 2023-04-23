@@ -32,14 +32,14 @@ pub mod keyword {
 		SlashReason(SlashReason),
 	}
 
-	impl Spanned for CompositeKeyword {
-		fn span(&self) -> proc_macro2::Span {
+	impl ToTokens for CompositeKeyword {
+		fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
 			use CompositeKeyword::*;
 			match self {
-				FreezeReason(inner) => inner.span(),
-				HoldReason(inner) => inner.span(),
-				LockId(inner) => inner.span(),
-				SlashReason(inner) => inner.span(),
+				FreezeReason(inner) => inner.to_tokens(tokens),
+				HoldReason(inner) => inner.to_tokens(tokens),
+				LockId(inner) => inner.to_tokens(tokens),
+				SlashReason(inner) => inner.to_tokens(tokens),
 			}
 		}
 	}
@@ -109,14 +109,11 @@ impl CompositeDef {
 		}
 
 		let has_derive_attr = item.attrs.iter().any(|attr| {
-			attr.parse_meta()
-				.ok()
-				.map(|meta| match meta {
-					syn::Meta::List(syn::MetaList { path, .. }) =>
-						path.get_ident().map(|ident| ident == "derive").unwrap_or(false),
-					_ => false,
-				})
-				.unwrap_or(false)
+			if let syn::Meta::List(syn::MetaList { path, .. }) = &attr.meta {
+				path.get_ident().map(|ident| ident == "derive").unwrap_or(false)
+			} else {
+				false
+			}
 		});
 
 		if !has_derive_attr {

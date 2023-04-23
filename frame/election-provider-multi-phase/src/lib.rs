@@ -502,10 +502,10 @@ where
 	fn eq(&self, other: &Self) -> bool {
 		use ElectionError::*;
 		match (self, other) {
-			(&Feasibility(ref x), &Feasibility(ref y)) if x == y => true,
-			(&Miner(ref x), &Miner(ref y)) if x == y => true,
-			(&DataProvider(ref x), &DataProvider(ref y)) if x == y => true,
-			(&Fallback(ref x), &Fallback(ref y)) if x == y => true,
+			(Feasibility(x), Feasibility(y)) if x == y => true,
+			(Miner(x), Miner(y)) if x == y => true,
+			(DataProvider(x), DataProvider(y)) if x == y => true,
+			(Fallback(x), Fallback(y)) if x == y => true,
 			_ => false,
 		}
 	}
