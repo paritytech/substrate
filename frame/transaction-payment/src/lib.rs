@@ -205,19 +205,24 @@ where
 		let normal_block_weight =
 			current_block_weight.get(DispatchClass::Normal).min(normal_max_weight);
 
-		// take only the scarcer resource into account.
-		let (normal_block_weight, normal_max_weight) =
-			if normal_block_weight.ref_time() > normal_block_weight.proof_size() {
-				(normal_block_weight.ref_time(), normal_max_weight.ref_time())
-			} else {
-				(normal_block_weight.proof_size(), normal_max_weight.proof_size())
-			};
+		// normalize dimensions so they can be compared.
+		let normalized_weight = Weight::from_parts(
+			normal_block_weight.ref_time() / normal_max_weight.ref_time().min(1),
+			normal_block_weight.proof_size() / normal_max_weight.proof_size().min(1),
+		);
+
+		// Take the limiting dimension into account.
+		let (limiting_dimension_normal_weight, limiting_dimension_max_weight) = if normalized_weight.ref_time() > normalized_weight.proof_size() {
+			(normal_block_weight.ref_time(), normal_max_weight.ref_time())
+		} else {
+			(normal_block_weight.proof_size(), normal_max_weight.proof_size())
+		};
 
 		let target_block_fullness = S::get();
 		let adjustment_variable = V::get();
 
-		let target_weight = (target_block_fullness * normal_max_weight) as u128;
-		let block_weight = normal_block_weight as u128;
+		let target_weight = (target_block_fullness * limiting_dimension_max_weight) as u128;
+		let block_weight = limiting_dimension_normal_weight as u128;
 
 		// determines if the first_term is positive
 		let positive = block_weight >= target_weight;
@@ -225,7 +230,7 @@ where
 
 		// defensive only, a test case assures that the maximum weight diff can fit in Multiplier
 		// without any saturation.
-		let diff = Multiplier::saturating_from_rational(diff_abs, normal_max_weight.max(1));
+		let diff = Multiplier::saturating_from_rational(diff_abs, limiting_dimension_max_weight.max(1));
 		let diff_squared = diff.saturating_mul(diff);
 
 		let v_squared_2 = adjustment_variable.saturating_mul(adjustment_variable) /
