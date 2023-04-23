@@ -785,7 +785,6 @@ impl<T: Config> Pallet<T> {
 			let voter_weight = weight_of(&voter);
 			// if voter weight is zero, do not consider this voter for the snapshot.
 			if voter_weight.is_zero() {
-				voters_seen.saturating_dec();
 				log!(warn, "voter's active balance is 0. skip this voter.");
 				continue
 			}
