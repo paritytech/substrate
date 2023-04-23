@@ -205,7 +205,7 @@ where
 		let normal_block_weight =
 			current_block_weight.get(DispatchClass::Normal).min(normal_max_weight);
 
-		// Normalize dimensions so they can be compared. Defensively ensure max weight is non-zero.
+		// Normalize dimensions so they can be compared. Ensure (defensive) max weight is non-zero.
 		let normalized_ref_time = Permill::from_rational(
 			normal_block_weight.ref_time(),
 			normal_max_weight.ref_time().max(1),
@@ -215,7 +215,8 @@ where
 			normal_max_weight.proof_size().max(1),
 		);
 
-		// Take the limiting dimension into account.
+		// Pick the limiting dimension. If the proof size is the limiting dimension, then the
+		// multiplier is adjusted by the proof size. Otherwise, it is adjusted by the ref time.
 		let (normal_limiting_dimension, max_limiting_dimension) =
 			if normalized_ref_time < normalized_proof_size {
 				(normal_block_weight.proof_size(), normal_max_weight.proof_size())
