@@ -218,12 +218,21 @@ mod multiplier_tests {
 	#[test]
 	fn multiplier_can_grow_from_zero() {
 		// if the min is too small, then this will not change, and we are doomed forever.
-		// the weight is 1/100th bigger than target.
+		// the block ref time is 1/100th bigger than target.
 		run_with_system_weight(
-			target().set_ref_time(target().ref_time() * 101 / 100).set_proof_size(0),
+			target().set_ref_time(target().ref_time() * 101 / 100),
 			|| {
 				let next = runtime_multiplier_update(min_multiplier());
-				assert!(next > min_multiplier(), "{:?} !>= {:?}", next, min_multiplier());
+				assert!(next > min_multiplier(), "{:?} !> {:?}", next, min_multiplier());
+			},
+		);
+
+		// the block proof size is 1/100th bigger than target.
+		run_with_system_weight(
+			target().set_proof_size((target().proof_size() / 100) * 101),
+			|| {
+				let next = runtime_multiplier_update(min_multiplier());
+				assert!(next > min_multiplier(), "{:?} !> {:?}", next, min_multiplier());
 			},
 		)
 	}
