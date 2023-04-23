@@ -23,7 +23,7 @@ use crate::{
 	SolutionOf, SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Decode, Encode, HasCompact};
-use frame_election_provider_support::NposSolution;
+use frame_election_provider_support::{traits::DepositBase, NposSolution};
 use frame_support::traits::{
 	defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency,
 };
@@ -528,7 +528,7 @@ impl<T: Config> Pallet<T> {
 		let weight_deposit = T::SignedDepositWeight::get()
 			.saturating_mul(feasibility_weight.ref_time().saturated_into());
 
-		T::SignedDepositBase::get()
+		T::SignedDepositBase::calculate(Self::signed_submissions().len())
 			.saturating_add(len_deposit)
 			.saturating_add(weight_deposit)
 	}
@@ -767,6 +767,34 @@ mod tests {
 				MultiPhase::submit(RuntimeOrigin::signed(99), Box::new(solution)),
 				Error::<Runtime>::SignedQueueFull,
 			);
+		})
+	}
+
+	#[test]
+	fn variable_deposit_base_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to_signed();
+			assert!(MultiPhase::current_phase().is_signed());
+			assert_eq!(QueueLenghtDoubleDeposit::get(), 7);
+			SignedMaxSubmissions::set(10);
+
+			for s in 0..SignedMaxSubmissions::get() {
+				let account = 99 + s as u64;
+				Balances::make_free_balance_be(&account, 100);
+				// score is always decreasing
+				let mut solution = raw_solution();
+				solution.score.minimal_stake -= s as u128;
+
+				assert_ok!(MultiPhase::submit(RuntimeOrigin::signed(account), Box::new(solution)));
+
+				// checlk if the deposit base is being calculated according to the `DepositBase`
+				// implementation.
+				if MultiPhase::signed_submissions().len() <= QueueLenghtDoubleDeposit::get() {
+					assert_eq!(balances(&account), (95, 5));
+				} else {
+					assert_eq!(balances(&account), (90, 10));
+				}
+			}
 		})
 	}
 

@@ -564,7 +564,9 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_election_provider_support::{InstantElectionProvider, NposSolver};
+	use frame_election_provider_support::{
+		traits::DepositBase, InstantElectionProvider, NposSolver,
+	};
 	use frame_support::{pallet_prelude::*, traits::EstimateCallFee};
 	use frame_system::pallet_prelude::*;
 
@@ -645,8 +647,7 @@ pub mod pallet {
 		type SignedRewardBase: Get<BalanceOf<Self>>;
 
 		/// Base deposit for a signed solution.
-		#[pallet::constant]
-		type SignedDepositBase: Get<BalanceOf<Self>>;
+		type SignedDepositBase: DepositBase<BalanceOf<Self>>;
 
 		/// Per-byte deposit for a signed solution.
 		#[pallet::constant]

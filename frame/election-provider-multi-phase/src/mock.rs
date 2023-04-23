@@ -20,6 +20,7 @@ use crate::{self as multi_phase, unsigned::MinerConfig};
 use frame_election_provider_support::{
 	data_provider,
 	onchain::{self},
+	traits::DepositBase,
 	ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
@@ -287,6 +288,8 @@ parameter_types! {
 	pub static UnsignedPhase: BlockNumber = 5;
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedMaxRefunds: u32 = 1;
+	// when the solution queue has more than 7 submissions, the base deposit is 2 * `SignedDepositBase`.
+	pub static QueueLenghtDoubleDeposit: usize = 7;
 	pub static SignedDepositBase: Balance = 5;
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
@@ -393,7 +396,7 @@ impl crate::Config for Runtime {
 	type OffchainRepeat = OffchainRepeat;
 	type MinerTxPriority = MinerTxPriority;
 	type SignedRewardBase = SignedRewardBase;
-	type SignedDepositBase = SignedDepositBase;
+	type SignedDepositBase = Self;
 	type SignedDepositByte = ();
 	type SignedDepositWeight = ();
 	type SignedMaxWeight = SignedMaxWeight;
@@ -413,6 +416,16 @@ impl crate::Config for Runtime {
 	type MaxWinners = MaxWinners;
 	type MinerConfig = Self;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
+}
+
+impl DepositBase<Balance> for Runtime {
+	fn calculate(queue_len: usize) -> Balance {
+		if queue_len < QueueLenghtDoubleDeposit::get() {
+			SignedDepositBase::get()
+		} else {
+			SignedDepositBase::get() * 2
+		}
+	}
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime

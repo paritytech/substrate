@@ -123,3 +123,9 @@ where
 		target_at: impl Fn(Self::TargetIndex) -> Option<A>,
 	) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
 }
+
+/// A type that calculates the deposit base for signed election submissions.
+pub trait DepositBase<Balance> {
+	/// Returns the value of the deposit base given a number of queued signed solutions.
+	fn calculate(queue_len: usize) -> Balance;
+}
