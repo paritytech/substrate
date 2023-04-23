@@ -829,7 +829,7 @@ impl<T: Config> Pallet<T> {
 
 		Self::register_weight(T::WeightInfo::get_npos_voters(validators_taken, nominators_taken));
 
-		let min_active_stake: T::CurrencyBalance = if all_voters.len() == 0 {
+		let min_active_stake: T::CurrencyBalance = if all_voters.is_empty() {
 			MinNominatorBond::<T>::get().into()
 		} else {
 			min_active_stake.into()
