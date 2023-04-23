@@ -27,7 +27,7 @@ pub use sc_client_api::{
 	BadBlocks, ForkBlocks,
 };
 pub use sc_client_db::{self, Backend, BlocksPruning};
-pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod};
+pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod, WasmExecutor};
 pub use sc_service::{client, RpcHandlers};
 pub use sp_consensus;
 pub use sp_keyring::{
@@ -286,7 +286,7 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 		Backend: sc_client_api::backend::Backend<Block> + 'static,
 	{
 		let executor = executor.into().unwrap_or_else(|| {
-			NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
+			NativeElseWasmExecutor::new_with_wasm_executor(WasmExecutor::builder().build())
 		});
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),

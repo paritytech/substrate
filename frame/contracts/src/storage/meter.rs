@@ -293,8 +293,8 @@ where
 			.total_deposit
 			.saturating_add(&absorbed.total_deposit)
 			.saturating_add(&own_deposit);
+		self.charges.extend_from_slice(&absorbed.charges);
 		if !own_deposit.is_zero() {
-			self.charges.extend_from_slice(&absorbed.charges);
 			self.charges.push(Charge {
 				deposit_account,
 				amount: own_deposit,

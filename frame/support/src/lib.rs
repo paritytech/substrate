@@ -50,6 +50,7 @@ pub use paste;
 pub use scale_info;
 #[cfg(feature = "std")]
 pub use serde;
+pub use sp_api::metadata_ir;
 pub use sp_core::{OpaqueMetadata, Void};
 #[doc(hidden)]
 pub use sp_core_hashing_proc_macro;
@@ -80,7 +81,6 @@ pub mod error;
 pub mod crypto;
 pub mod dispatch_context;
 pub mod instances;
-pub mod metadata_ir;
 pub mod migrations;
 pub mod traits;
 pub mod weights;

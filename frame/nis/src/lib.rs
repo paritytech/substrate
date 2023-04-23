@@ -1139,9 +1139,8 @@ pub mod pallet {
 			// Now to activate the bid...
 			let n = amount;
 			let d = issuance.effective;
-			let proportion =
-				Perquintill::from_rational_with_rounding(n, d, Rounding::NearestPrefDown)
-					.defensive_unwrap_or_default();
+			let proportion = Perquintill::from_rational_with_rounding(n, d, Rounding::Down)
+				.defensive_unwrap_or_default();
 			let who = bid.who;
 			let index = summary.index;
 			summary.proportion_owed.defensive_saturating_accrue(proportion);

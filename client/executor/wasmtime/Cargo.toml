@@ -48,4 +48,4 @@ sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 tempfile = "3.3.0"
 paste = "1.0"
 codec = { package = "parity-scale-codec", version = "3.2.2" }
-cargo_metadata = "0.15.2"
+cargo_metadata = "0.15.4"

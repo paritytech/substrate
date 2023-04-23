@@ -453,8 +453,8 @@ mod tests {
 	#[test]
 	fn digest_item_type_info() {
 		let type_info = DigestItem::type_info();
-		let variants = if let scale_info::TypeDef::Variant(variant) = type_info.type_def() {
-			variant.variants()
+		let variants = if let scale_info::TypeDef::Variant(variant) = type_info.type_def {
+			variant.variants
 		} else {
 			panic!("Should be a TypeDef::TypeDefVariant")
 		};
@@ -475,10 +475,10 @@ mod tests {
 			let encoded = digest_item.encode();
 			let variant = variants
 				.iter()
-				.find(|v| v.name() == &variant_name)
+				.find(|v| v.name == variant_name)
 				.expect(&format!("Variant {} not found", variant_name));
 
-			assert_eq!(encoded[0], variant.index())
+			assert_eq!(encoded[0], variant.index)
 		};
 
 		check(DigestItemType::Other);
