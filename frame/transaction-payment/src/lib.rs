@@ -67,7 +67,7 @@ use sp_runtime::{
 	transaction_validity::{
 		TransactionPriority, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
-	FixedPointNumber, FixedPointOperand, FixedU128, Perbill, Permill, Perquintill, RuntimeDebug,
+	FixedPointNumber, FixedPointOperand, FixedU128, Perbill, Perquintill, RuntimeDebug,
 };
 use sp_std::prelude::*;
 pub use types::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
@@ -206,11 +206,11 @@ where
 			current_block_weight.get(DispatchClass::Normal).min(normal_max_weight);
 
 		// Normalize dimensions so they can be compared. Ensure (defensive) max weight is non-zero.
-		let normalized_ref_time = Permill::from_rational(
+		let normalized_ref_time = Perbill::from_rational(
 			normal_block_weight.ref_time(),
 			normal_max_weight.ref_time().max(1),
 		);
-		let normalized_proof_size = Permill::from_rational(
+		let normalized_proof_size = Perbill::from_rational(
 			normal_block_weight.proof_size(),
 			normal_max_weight.proof_size().max(1),
 		);
