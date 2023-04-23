@@ -397,3 +397,49 @@ fn unholding_frees_hold_slot() {
 			assert_ok!(Balances::hold(&TestId::Baz, &1, 10));
 		});
 }
+
+#[test]
+fn emit_events_with_changing_freezes() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		let _ = Balances::set_balance(&1, 100);
+		System::reset_events();
+
+		// Freeze = [] --> [10]
+		assert_ok!(Balances::set_freeze(&TestId::Foo, &1, 10));
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Frozen { who: 1, amount: 10 })]);
+
+		// Freeze = [10] --> [15]
+		assert_ok!(Balances::set_freeze(&TestId::Foo, &1, 15));
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Frozen { who: 1, amount: 5 })]);
+
+		// Freeze = [15] --> [15, 20]
+		assert_ok!(Balances::set_freeze(&TestId::Bar, &1, 20));
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Frozen { who: 1, amount: 5 })]);
+
+		// Freeze = [15, 20] --> [17, 20]
+		assert_ok!(Balances::set_freeze(&TestId::Foo, &1, 17));
+		for event in events() {
+			match event {
+				RuntimeEvent::Balances(crate::Event::Frozen { .. }) => {
+					assert!(false, "unexpected freeze event")
+				},
+				RuntimeEvent::Balances(crate::Event::Thawed { .. }) => {
+					assert!(false, "unexpected thaw event")
+				},
+				_ => continue,
+			}
+		}
+
+		// Freeze = [17, 20] --> [17, 15]
+		assert_ok!(Balances::set_freeze(&TestId::Bar, &1, 15));
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Thawed { who: 1, amount: 3 })]);
+
+		// Freeze = [17, 15] --> [15]
+		assert_ok!(Balances::thaw(&TestId::Foo, &1));
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Thawed { who: 1, amount: 2 })]);
+
+		// Freeze = [15] --> []
+		assert_ok!(Balances::thaw(&TestId::Bar, &1));
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Thawed { who: 1, amount: 15 })]);
+	});
+}
