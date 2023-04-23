@@ -419,8 +419,9 @@ mod multiplier_tests {
 
 	#[test]
 	fn weight_to_fee_should_not_overflow_on_large_weights() {
-		let kb = Weight::from_parts(1024, 0);
-		let mb = 1024u64 * kb;
+		let kb_time = Weight::from_parts(1024, 1);
+		let kb_size = Weight::from_parts(1, 1024);
+		let mb_time = 1024u64 * kb_time;
 		let max_fm = Multiplier::saturating_from_integer(i128::MAX);
 
 		// check that for all values it can compute, correctly.
@@ -429,17 +430,17 @@ mod multiplier_tests {
 			Weight::from_parts(1, 0),
 			Weight::from_parts(10, 0),
 			Weight::from_parts(1000, 0),
-			kb,
-			10u64 * kb,
-			100u64 * kb,
-			mb,
-			10u64 * mb,
+			kb_time,
+			10u64 * kb_time,
+			100u64 * kb_time,
+			mb_time,
+			10u64 * mb_time,
 			Weight::from_parts(2147483647, 0),
 			Weight::from_parts(4294967295, 0),
-			BlockWeights::get().max_block.set_proof_size(0) / 2,
-			BlockWeights::get().max_block.set_proof_size(0),
-			Weight::MAX.set_proof_size(0) / 2,
-			Weight::MAX.set_proof_size(0),
+			BlockWeights::get().max_block / 2,
+			BlockWeights::get().max_block,
+			Weight::MAX / 2,
+			Weight::MAX,
 		]
 		.into_iter()
 		.for_each(|i| {
