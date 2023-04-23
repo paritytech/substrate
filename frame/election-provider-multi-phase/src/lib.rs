@@ -1593,11 +1593,7 @@ impl<T: Config> Pallet<T> {
 
 		match <Snapshot<T>>::take() {
             Some(_) if !set => Err("If the snapshot exists, the desired targets and snapshot metadata must also exist."),
-            None if set => {
-                println!("desired targets: {:?}", <DesiredTargets<T>>::get());
-                println!("snapshot metadata: {:?}", <SnapshotMetadata<T>>::get());
-                Err("If the snapshot does not exists, the desired targets and snapshot metadata should also not exists")
-            },
+            None if set => Err("If the snapshot does not exists, the desired targets and snapshot metadata should also not exists"),
             _ => Ok(()),
 		}
 	}
