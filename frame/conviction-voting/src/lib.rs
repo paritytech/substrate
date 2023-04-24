@@ -643,7 +643,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			CONVICTION_VOTING_ID,
 			who,
 			amount,
-			WithdrawReasons::TRANSFER | WithdrawReasons::TIP,
+			WithdrawReasons::except(WithdrawReasons::RESERVE),
 		);
 	}
 
@@ -674,7 +674,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				CONVICTION_VOTING_ID,
 				who,
 				lock_needed,
-				WithdrawReasons::TRANSFER | WithdrawReasons::TIP,
+				WithdrawReasons::except(WithdrawReasons::RESERVE),
 			);
 		}
 	}

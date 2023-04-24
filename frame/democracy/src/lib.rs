@@ -1312,7 +1312,7 @@ impl<T: Config> Pallet<T> {
 			DEMOCRACY_ID,
 			who,
 			vote.balance(),
-			WithdrawReasons::TRANSFER | WithdrawReasons::TIP,
+			WithdrawReasons::except(WithdrawReasons::RESERVE),
 		);
 		ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
 		Ok(())
@@ -1508,7 +1508,7 @@ impl<T: Config> Pallet<T> {
 				DEMOCRACY_ID,
 				who,
 				lock_needed,
-				WithdrawReasons::TRANSFER | WithdrawReasons::TIP,
+				WithdrawReasons::except(WithdrawReasons::RESERVE),
 			);
 		}
 	}
