@@ -92,7 +92,6 @@ pub async fn start_http<M: Send + Sync + 'static>(
 ) -> Result<ServerHandle, Box<dyn StdError + Send + Sync>> {
 	let max_payload_in = payload_size_or_default(max_payload_in_mb) as u32;
 	let max_payload_out = payload_size_or_default(max_payload_out_mb) as u32;
-	log::info!("max_payload_out: {}, max_payload_in: {}", max_payload_out, max_payload_in);
 
 	let host_filter = hosts_filter(cors.is_some(), &addrs);
 
