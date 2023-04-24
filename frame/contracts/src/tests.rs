@@ -3022,14 +3022,13 @@ fn test_failed_charge_should_roll_back_call() {
 		// Give caller proxy access to caller
 		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(ALICE), addr_caller.clone(), (), 0));
 
-		// create a Proxy call that will create a transfer onbehalf of Alice
-		let value = pallet_balances::Pallet::<Test>::free_balance(&ALICE) -
-			<Test as Config>::Currency::minimum_balance();
-
+		// create a Proxy call that will attempt to transfer away's Alice balance, so we can test a
+		// failed charge
+		let min_balance = <Test as Config>::Currency::minimum_balance();
 		let transfer_call =
 			Box::new(RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 				dest: CHARLIE,
-				value,
+				value: pallet_balances::Pallet::<Test>::free_balance(&ALICE) - min_balance,
 			}));
 
 		// wrap the transfer call in a proxy call
@@ -3039,14 +3038,15 @@ fn test_failed_charge_should_roll_back_call() {
 			call: transfer_call,
 		});
 
-		// encode inputs data
+		// inputs data
 		let data = (
-			30u32, // storage length
+			100u32, // storage length
 			addr_callee.clone(),
 			transfer_proxy_call,
 		);
 
-		DEPOSIT_PER_BYTE.with(|c| *c.borrow_mut() = 1_000);
+		// bump the deposit per byte to a high value to trigger a FundsUnavailable error
+		DEPOSIT_PER_BYTE.with(|c| *c.borrow_mut() = 100);
 
 		// dispatch the call
 		let result = <Pallet<Test>>::call(
@@ -3054,7 +3054,7 @@ fn test_failed_charge_should_roll_back_call() {
 			addr_caller.clone(),
 			0,
 			GAS_LIMIT,
-			None, //Some(5_000),
+			None,
 			data.encode(),
 		);
 
