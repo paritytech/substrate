@@ -33,24 +33,40 @@ use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use sp_runtime::SaturatedConversion;
 use sp_std::prelude::*;
 
-/// A type that allow to store values for an arbitrary number of keys in the form of
-/// `(Key<Hasher1, key1>, Key<Hasher2, key2>, ..., Key<HasherN, keyN>)`.
+/// Type representing a "NMap" in storage. An "NMap" is a mapping of a set of arbitrary number of
+/// keys to a value of a given type stored onchain.
 ///
-/// Each value is stored at:
-/// ```nocompile
-/// Twox128(Prefix::pallet_prefix())
-/// 		++ Twox128(Prefix::STORAGE_PREFIX)
-/// 		++ Hasher1(encode(key1))
-/// 		++ Hasher2(encode(key2))
-/// 	++ ...
-/// 	++ HasherN(encode(keyN))
+/// This is superset of [`crate::storage::StorageDoubleMap`].
+///
+/// For common information about the `#[pallet::storage]` attribute, see
+/// [`crate::pallet_macros::storage`].
+///
+/// # Example
+///
 /// ```
-///
-/// # Warning
-///
-/// If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher`
-/// such as `blake2_128_concat` must be used for the key hashers. Otherwise, other values
-/// in storage can be compromised.
+/// #[frame_support::pallet]
+/// mod pallet {
+///     # use frame_support::pallet_prelude::*;
+///     # #[pallet::config]
+///     # pub trait Config: frame_system::Config {}
+///     # #[pallet::pallet]
+///     # pub struct Pallet<T>(_);
+/// 	/// A kitchen-sink storage map, with all possible additional attributes.
+///     #[pallet::storage]
+/// 	#[pallet::getter(fn foo)]
+/// 	#[pallet::storage_prefix = "OtherFoo"]
+/// 	#[pallet::unbounded]
+///     pub type Foo<T> = StorageNMap<
+/// 		Key = (
+/// 			NMapKey<Blake2_128Concat, u8>,
+/// 			NMapKey<Identity, u16>,
+/// 			NMapKey<Twox64Concat, u32>
+/// 		),
+/// 		Value = u64,
+/// 		QueryKind = ValueQuery,
+/// 	>;
+/// }
+/// ```
 pub struct StorageNMap<
 	Prefix,
 	Key,

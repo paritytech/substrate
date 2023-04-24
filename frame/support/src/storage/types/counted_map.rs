@@ -35,8 +35,8 @@ use sp_io::MultiRemovalResults;
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
-/// A wrapper around a `StorageMap` and a `StorageValue<Value=u32>` to keep track of how many items
-/// are in a map, without needing to iterate all the values.
+/// A wrapper around a [`StorageMap`] and a [`StorageValue`] (with the value being `u32`) to keep
+/// track of how many items are in a map, without needing to iterate all the values.
 ///
 /// This storage item has additional storage read and write overhead when manipulating values
 /// compared to a regular storage map.
@@ -47,6 +47,33 @@ use sp_std::prelude::*;
 ///
 /// Whenever the counter needs to be updated, an additional read and write occurs to update that
 /// counter.
+///
+/// For common information about the `#[pallet::storage]` attribute, see
+/// [`crate::pallet_macros::storage`].
+///
+/// # Example
+///
+/// ```
+/// #[frame_support::pallet]
+/// mod pallet {
+///     # use frame_support::pallet_prelude::*;
+///     # #[pallet::config]
+///     # pub trait Config: frame_system::Config {}
+///     # #[pallet::pallet]
+///     # pub struct Pallet<T>(_);
+/// 	/// A kitchen-sink counted storage map, with all possible additional attributes.
+///     #[pallet::storage]
+/// 	#[pallet::getter(fn foo)]
+/// 	#[pallet::storage_prefix = "OtherFoo"]
+/// 	#[pallet::unbounded]
+///     pub type Foo<T> = CountedStorageMap<
+/// 		Hasher = Blake2_128Concat,
+/// 		Key = u32,
+/// 		Value = u32,
+/// 		QueryKind = ValueQuery
+/// 	>;
+/// }
+/// ```
 pub struct CountedStorageMap<
 	Prefix,
 	Hasher,

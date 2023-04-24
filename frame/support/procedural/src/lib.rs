@@ -1122,60 +1122,159 @@ pub fn generate_deposit(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
-/// The `#[pallet::storage]` attribute lets you define some abstract storage inside of runtime
-/// storage and also set its metadata. This attribute can be used multiple times.
+/// Declares a type alias as a storage item. Storage items are pointers to data stored onchain (the
+/// *blockchain state*), under a specific key. The exact key is dependant on the type of the
+/// storage.
 ///
-/// Item should be defined as:
+/// > Hypothetically, one can directly manipulate the state via [`sp_io::storage`]. However, this is
+/// > an advance usage and is not recommended.
 ///
-/// ```ignore
-/// #[pallet::storage]
-/// #[pallet::getter(fn $getter_name)] // optional
-/// $vis type $StorageName<$some_generic> $optional_where_clause
-/// 	= $StorageType<$generic_name = $some_generics, $other_name = $some_other, ...>;
+/// ## Storage Types
+///
+/// The following storage types are supported by the FRAME macros.
+///
+/// * `StorageValue`.
+/// * `StorageMap`.
+/// * `CountedStorageMap`.
+/// * `StorageDoubleMap`.
+/// * `StorageNMap`.
+///
+/// TODO: properly link to `frame_support::storage` types.
+///
+/// The FRAME macros always generate a type alias to either of these types, as indicated by the eg.
+/// `type Foo = StorageValue<..>` syntax. For specific information about each storage type, see each
+/// respective type's documentation.
+///
+/// ### Example:
+///
+/// ```
+/// #[frame_support::pallet]
+/// mod pallet {
+///     # use frame_support::pallet_prelude::*;
+///     # #[pallet::config]
+///     # pub trait Config: frame_system::Config {}
+///     # #[pallet::pallet]
+///     # pub struct Pallet<T>(_);
+/// 	#[pallet::storage]
+/// 	type Foo<T> = StorageValue<_, u32>;
+///
+/// 	#[pallet::storage]
+/// 	type Bar<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
+///
+/// 	#[pallet::storage]
+/// 	type Bar<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
+///
+/// 	#[pallet::storage]
+/// 	type Bar<T> = CountedStorageMap<_, Blake2_128Concat, u32, u32>;
+/// }
 /// ```
 ///
-/// or with unnamed generic:
+/// ## Related Macros
 ///
-/// ```ignore
-/// #[pallet::storage]
-/// #[pallet::getter(fn $getter_name)] // optional
-/// $vis type $StorageName<$some_generic> $optional_where_clause
-/// 	= $StorageType<_, $some_generics, ...>;
+/// The following macros are related to the storage macro and can be used in combination of it.
+///
+/// * [`macro@getter`]: creates a custom getter function.
+/// * [`macro@storage_prefix`]: overrides the default prefix of the storage item.
+/// * [`macro@unbounded`]: declares the storage item as unbounded.
+///
+/// ## Common Details to All Storage Types.
+///
+/// The following details are relevant to all of the aforementioned storage types.
+///
+/// ### Syntax
+///
+/// Two general syntaxes are supported, as illuminated below:
+///
+/// 1. Named generics, eg. `type Foo<T> = StorageValue<Value = u32>`.
+/// 2. Unnamed generics, eg. `type Foo<T> = StorageValue<_, u32>`.
+///
+/// In both cases, declaring `<T>` is mandatory, and it can be optionally `<T: Config>`. In the code
+/// generated, it is always `<T: Config>`.
+///
+/// #### Example:
+///
+/// ```
+/// #[frame_support::pallet]
+/// mod pallet {
+///     # use frame_support::pallet_prelude::*;
+///     # #[pallet::config]
+///     # pub trait Config: frame_system::Config {}
+///     # #[pallet::pallet]
+///     # pub struct Pallet<T>(_);
+/// 	/// Unnamed syntax, without bounding `T`.
+///     #[pallet::storage]
+///     pub type Foo<T> = StorageValue<_, u32>;
+///
+/// 	/// Unnamed syntax, with bounding `T`.
+///     #[pallet::storage]
+///     pub type Bar<T: Config> = StorageValue<_, u32>;
+///
+/// 	/// Named syntax.
+///     #[pallet::storage]
+///     pub type Baz<T> = StorageMap<_, Hasher = Blake2_128Concat, Key = u32, Value = u32>;
+/// }
 /// ```
 ///
-/// I.e. it must be a type alias, with generics: `T` or `T: Config`. The aliased type must be
-/// one of `StorageValue`, `StorageMap` or `StorageDoubleMap`. The generic arguments of the
-/// storage type can be given in two manners: named and unnamed. For named generic arguments,
-/// the name for each argument should match the name defined for it on the storage struct:
-/// * `StorageValue` expects `Value` and optionally `QueryKind` and `OnEmpty`,
-/// * `StorageMap` expects `Hasher`, `Key`, `Value` and optionally `QueryKind` and `OnEmpty`,
-/// * `CountedStorageMap` expects `Hasher`, `Key`, `Value` and optionally `QueryKind` and `OnEmpty`,
-/// * `StorageDoubleMap` expects `Hasher1`, `Key1`, `Hasher2`, `Key2`, `Value` and optionally
-///   `QueryKind` and `OnEmpty`.
+/// ### Query Type
 ///
-/// For unnamed generic arguments: Their first generic must be `_` as it is replaced by the
-/// macro and other generic must declared as a normal generic type declaration.
+/// All storage types defined above have one generic type that specifies the type of "query". This
+/// refers to the type of value that is returned when _querying_ the storage, for example via a
+/// `::get()` method.
 ///
-/// The `Prefix` generic written by the macro is generated using
-/// `PalletInfo::name::<Pallet<..>>()` and the name of the storage type. E.g. if runtime names
-/// the pallet "MyExample" then the storage `type Foo<T> = ...` should use the prefix:
-/// `Twox128(b"MyExample") ++ Twox128(b"Foo")`.
+/// 3 types of queries can be used:
 ///
-/// For the `CountedStorageMap` variant, the `Prefix` also implements
-/// `CountedStorageMapInstance`. It also associates a `CounterPrefix`, which is implemented the
-/// same as above, but the storage prefix is prepend with `"CounterFor"`. E.g. if runtime names
-/// the pallet "MyExample" then the storage `type Foo<T> = CountedStorageaMap<...>` will store
-/// its counter at the prefix: `Twox128(b"MyExample") ++ Twox128(b"CounterForFoo")`.
+/// 1. `OptionQuery`: This is the default query type. It returns `Some(_)` if the value is present,
+/// `None` otherwise. 1. `ValueQuery`: It returns `T`, where `T` is the type
+/// 2. `DefaultQuery`: it returns the value itself if the value is present, `Default::default`
+/// otherwise.
+/// 3. `ResultQuery`: it returns `Ok(_)` if the value is present, `Err(_)` otherwise.
 ///
-/// E.g:
+/// TODO: check the documentation of each these.
 ///
-/// ```ignore
-/// #[pallet::storage]
-/// pub(super) type MyStorage<T> = StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
-/// ```
+/// ### Appending
 ///
-/// In this case the final prefix used by the map is `Twox128(b"MyExample") ++
-/// Twox128(b"OtherName")`.
+/// TODO
+///
+/// ### Optimized Length Decoding.
+///
+/// TODO
+///
+/// ### Hashers
+///
+/// For all storage types, except `StorageValue`, a set of hashers need to be specified. The choice
+/// of hashers is not something to be taken lightly, particularly in production chains. The point of
+/// storage hashers in maps is to ensure the keys of an map are uniformly distributed, as an
+/// unbalanced map/trie would lead to inefficient performance.
+///
+/// In general, hashers are either cryptographically secure or not. The former is slower than the
+/// latter. `Blake2` and `Twox` are examples of each respectively.
+///
+/// As a rule of thumb:
+///
+/// 1. If the map keys are not controlled by end users, or are cryptographically secure by
+/// definition (eg. `AccountId`), then use of cryptographically secure hashers are NOT required.
+/// 2. If the map keys are controllable by the end users, cryptographically secure hashers should
+/// be used.
+///
+/// see [`frame_support::hash`] for more information, namely the types that implement
+/// [`frame_support::hash::StorageHasher`].
+///
+/// Lastly, usage of hashers with "concat" are suggested to have reversible hashes. See
+/// [`hash::ReversibleStorageHasher`] implementors.
+///
+/// ### Prefixes
+///
+/// Under the hood, all storage types generate a "prefix". This prefix is used as the first part of
+/// the key that is used to store value in the onchain state (ie final key used in
+/// `sp_io::storage`). For all storage types, the following rule holds:
+///
+/// The storage prefix starts with `twox128(pallet_prefix) ++ twox128(storage_prefix)`, where
+/// `pallet_prefix` is the chosen name of the instance of the pallet in
+/// [`frame_support::construct_runtime`], and `storage_prefix` is the name of the `type` aliased to
+/// a storage type, for example `Foo` in `type Foo<T> = StorageValue<..>`.
+///
+/// For [`frame_support::storage::StorageValue`], no further key is needed. For all maps types the
+/// aforementioned key is appended by one or more keys defined by the map.
 #[proc_macro_attribute]
 pub fn storage(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()

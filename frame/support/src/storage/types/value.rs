@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Storage value type. Implements StorageValue trait and its method directly.
+//! Storage value type. See [`StorageValue`] for more information.
 
 use crate::{
 	metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR},
@@ -30,12 +30,31 @@ use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;
 
-/// A type that allow to store a value.
+/// Type representing a "value" in storage. A "storage value" is a single value of a given type
+/// stored onchain.
 ///
-/// Each value is stored at:
-/// ```nocompile
-/// Twox128(Prefix::pallet_prefix()) ++ Twox128(Prefix::STORAGE_PREFIX)
+/// For common information about the `#[pallet::storage]` attribute, see
+/// [`crate::pallet_macros::storage`].
+///
+/// # Example
+///
 /// ```
+/// #[frame_support::pallet]
+/// mod pallet {
+///     # use frame_support::pallet_prelude::*;
+///     # #[pallet::config]
+///     # pub trait Config: frame_system::Config {}
+///     # #[pallet::pallet]
+///     # pub struct Pallet<T>(_);
+/// 	/// A kitchen-sink storage value, with all possible additional attributes.
+///     #[pallet::storage]
+/// 	#[pallet::getter(fn foo)]
+/// 	#[pallet::storage_prefix = "OtherFoo"]
+/// 	#[pallet::unbounded]
+///     pub type Foo<T> = StorageValue<_, u32, ValueQuery>;
+/// }
+/// ```
+
 pub struct StorageValue<Prefix, Value, QueryKind = OptionQuery, OnEmpty = GetDefault>(
 	core::marker::PhantomData<(Prefix, Value, QueryKind, OnEmpty)>,
 );
