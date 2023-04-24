@@ -500,164 +500,164 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 				notifications_sink,
 				negotiated_fallback,
 			} => {
-				// Set number 0 is hardcoded the default set of peers we sync from.
-				if set_id == HARDCODED_PEERSETS_SYNC {
-					// `received_handshake` can be either a `Status` message if received from the
-					// legacy substream ,or a `BlockAnnouncesHandshake` if received from the block
-					// announces substream.
-					match <Message<B> as DecodeAll>::decode_all(&mut &received_handshake[..]) {
-						Ok(GenericMessage::Status(handshake)) => {
-							let roles = handshake.roles;
-							let handshake = BlockAnnouncesHandshake::<B> {
-								roles: handshake.roles,
-								best_number: handshake.best_number,
-								best_hash: handshake.best_hash,
-								genesis_hash: handshake.genesis_hash,
-							};
+				// // Set number 0 is hardcoded the default set of peers we sync from.
+				// if set_id == HARDCODED_PEERSETS_SYNC {
+				// 	// `received_handshake` can be either a `Status` message if received from the
+				// 	// legacy substream ,or a `BlockAnnouncesHandshake` if received from the block
+				// 	// announces substream.
+				// 	match <Message<B> as DecodeAll>::decode_all(&mut &received_handshake[..]) {
+				// 		Ok(GenericMessage::Status(handshake)) => {
+				// 			let roles = handshake.roles;
+				// 			let handshake = BlockAnnouncesHandshake::<B> {
+				// 				roles: handshake.roles,
+				// 				best_number: handshake.best_number,
+				// 				best_hash: handshake.best_hash,
+				// 				genesis_hash: handshake.genesis_hash,
+				// 			};
 
-							let (tx, rx) = oneshot::channel();
-							let _ = self.tx.unbounded_send(
-								crate::SyncEvent::NotificationStreamOpened {
-									remote: peer_id,
-									received_handshake: handshake,
-									sink: notifications_sink,
-									tx,
-								},
-							);
-							self.sync_substream_validations.push(Box::pin(async move {
-								match rx.await {
-									Ok(accepted) =>
-										if accepted {
-											Ok((peer_id, roles))
-										} else {
-											Err(peer_id)
-										},
-									Err(_) => Err(peer_id),
-								}
-							}));
+				// 			let (tx, rx) = oneshot::channel();
+				// 			let _ = self.tx.unbounded_send(
+				// 				crate::SyncEvent::NotificationStreamOpened {
+				// 					remote: peer_id,
+				// 					received_handshake: handshake,
+				// 					sink: notifications_sink,
+				// 					tx,
+				// 				},
+				// 			);
+				// 			self.sync_substream_validations.push(Box::pin(async move {
+				// 				match rx.await {
+				// 					Ok(accepted) => {
+				// 						if accepted {
+				// 							Ok((peer_id, roles))
+				// 						} else {
+				// 							Err(peer_id)
+				// 						}
+				// 					},
+				// 					Err(_) => Err(peer_id),
+				// 				}
+				// 			}));
 
-							CustomMessageOutcome::None
-						},
-						Ok(msg) => {
-							debug!(
-								target: "sync",
-								"Expected Status message from {}, but got {:?}",
-								peer_id,
-								msg,
-							);
-							self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
-							CustomMessageOutcome::None
-						},
-						Err(err) => {
-							match <BlockAnnouncesHandshake<B> as DecodeAll>::decode_all(
-								&mut &received_handshake[..],
-							) {
-								Ok(handshake) => {
-									let roles = handshake.roles;
+				// 			CustomMessageOutcome::None
+				// 		},
+				// 		Ok(msg) => {
+				// 			debug!(
+				// 				target: "sync",
+				// 				"Expected Status message from {}, but got {:?}",
+				// 				peer_id,
+				// 				msg,
+				// 			);
+				// 			self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
+				// 			CustomMessageOutcome::None
+				// 		},
+				// 		Err(err) => {
+				// 			match <BlockAnnouncesHandshake<B> as DecodeAll>::decode_all(
+				// 				&mut &received_handshake[..],
+				// 			) {
+				// 				Ok(handshake) => {
+				// 					let roles = handshake.roles;
 
-									let (tx, rx) = oneshot::channel();
-									let _ = self.tx.unbounded_send(
-										crate::SyncEvent::NotificationStreamOpened {
-											remote: peer_id,
-											received_handshake: handshake,
-											sink: notifications_sink,
-											tx,
-										},
-									);
-									self.sync_substream_validations.push(Box::pin(async move {
-										match rx.await {
-											Ok(accepted) =>
-												if accepted {
-													Ok((peer_id, roles))
-												} else {
-													Err(peer_id)
-												},
-											Err(_) => Err(peer_id),
-										}
-									}));
-									CustomMessageOutcome::None
-								},
-								Err(err2) => {
-									log::debug!(
-										target: "sync",
-										"Couldn't decode handshake sent by {}: {:?}: {} & {}",
-										peer_id,
-										received_handshake,
-										err,
-										err2,
-									);
-									self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
-									CustomMessageOutcome::None
-								},
-							}
-						},
-					}
-				} else {
-					match (
-						Roles::decode_all(&mut &received_handshake[..]),
-						self.peers.get(&peer_id),
-					) {
-						(Ok(roles), _) => CustomMessageOutcome::NotificationStreamOpened {
+				// 					let (tx, rx) = oneshot::channel();
+				// 					let _ = self.tx.unbounded_send(
+				// 						crate::SyncEvent::NotificationStreamOpened {
+				// 							remote: peer_id,
+				// 							received_handshake: handshake,
+				// 							sink: notifications_sink,
+				// 							tx,
+				// 						},
+				// 					);
+				// 					self.sync_substream_validations.push(Box::pin(async move {
+				// 						match rx.await {
+				// 							Ok(accepted) => {
+				// 								if accepted {
+				// 									Ok((peer_id, roles))
+				// 								} else {
+				// 									Err(peer_id)
+				// 								}
+				// 							},
+				// 							Err(_) => Err(peer_id),
+				// 						}
+				// 					}));
+				// 					CustomMessageOutcome::None
+				// 				},
+				// 				Err(err2) => {
+				// 					log::debug!(
+				// 						target: "sync",
+				// 						"Couldn't decode handshake sent by {}: {:?}: {} & {}",
+				// 						peer_id,
+				// 						received_handshake,
+				// 						err,
+				// 						err2,
+				// 					);
+				// 					self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
+				// 					CustomMessageOutcome::None
+				// 				},
+				// 			}
+				// 		},
+				// 	}
+				// } else {
+				match (Roles::decode_all(&mut &received_handshake[..]), self.peers.get(&peer_id)) {
+					(Ok(roles), _) => CustomMessageOutcome::NotificationStreamOpened {
+						remote: peer_id,
+						protocol: self.notification_protocols[usize::from(set_id)].clone(),
+						negotiated_fallback,
+						roles,
+						received_handshake,
+						notifications_sink,
+					},
+					(Err(_), Some(roles)) if received_handshake.is_empty() => {
+						// As a convenience, we allow opening substreams for "external"
+						// notification protocols with an empty handshake. This fetches the
+						// roles from the locally-known roles.
+						// TODO: remove this after https://github.com/paritytech/substrate/issues/5685
+						CustomMessageOutcome::NotificationStreamOpened {
 							remote: peer_id,
 							protocol: self.notification_protocols[usize::from(set_id)].clone(),
 							negotiated_fallback,
-							roles,
+							roles: *roles,
 							received_handshake,
 							notifications_sink,
-						},
-						(Err(_), Some(roles)) if received_handshake.is_empty() => {
-							// As a convenience, we allow opening substreams for "external"
-							// notification protocols with an empty handshake. This fetches the
-							// roles from the locally-known roles.
-							// TODO: remove this after https://github.com/paritytech/substrate/issues/5685
-							CustomMessageOutcome::NotificationStreamOpened {
-								remote: peer_id,
-								protocol: self.notification_protocols[usize::from(set_id)].clone(),
-								negotiated_fallback,
-								roles: *roles,
-								received_handshake,
-								notifications_sink,
-							}
-						},
-						(Err(err), _) => {
-							debug!(target: "sync", "Failed to parse remote handshake: {}", err);
-							self.bad_handshake_substreams.insert((peer_id, set_id));
-							self.behaviour.disconnect_peer(&peer_id, set_id);
-							self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
-							self.peers.remove(&peer_id);
-							CustomMessageOutcome::None
-						},
-					}
+						}
+					},
+					(Err(err), _) => {
+						debug!(target: "sync", "Failed to parse remote handshake: {}", err);
+						self.bad_handshake_substreams.insert((peer_id, set_id));
+						self.behaviour.disconnect_peer(&peer_id, set_id);
+						self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
+						self.peers.remove(&peer_id);
+						CustomMessageOutcome::None
+					},
 				}
+				// }
 			},
-			NotificationsOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } =>
+			NotificationsOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } => {
 				if self.bad_handshake_substreams.contains(&(peer_id, set_id)) {
 					CustomMessageOutcome::None
-				} else if set_id == HARDCODED_PEERSETS_SYNC {
-					let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationSinkReplaced {
-						remote: peer_id,
-						sink: notifications_sink,
-					});
-					CustomMessageOutcome::None
+				// } else if set_id == HARDCODED_PEERSETS_SYNC {
+				// 	let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationSinkReplaced {
+				// 		remote: peer_id,
+				// 		sink: notifications_sink,
+				// 	});
+				// 	CustomMessageOutcome::None
 				} else {
 					CustomMessageOutcome::NotificationStreamReplaced {
 						remote: peer_id,
 						protocol: self.notification_protocols[usize::from(set_id)].clone(),
 						notifications_sink,
 					}
-				},
+				}
+			},
 			NotificationsOut::CustomProtocolClosed { peer_id, set_id } => {
 				if self.bad_handshake_substreams.remove(&(peer_id, set_id)) {
 					// The substream that has just been closed had been opened with a bad
 					// handshake. The outer layers have never received an opening event about this
 					// substream, and consequently shouldn't receive a closing event either.
 					CustomMessageOutcome::None
-				} else if set_id == HARDCODED_PEERSETS_SYNC {
-					let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationStreamClosed {
-						remote: peer_id,
-					});
-					self.peers.remove(&peer_id);
-					CustomMessageOutcome::None
+				// } else if set_id == HARDCODED_PEERSETS_SYNC {
+				// 	let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationStreamClosed {
+				// 		remote: peer_id,
+				// 	});
+				// 	self.peers.remove(&peer_id);
+				// 	CustomMessageOutcome::None
 				} else {
 					CustomMessageOutcome::NotificationStreamClosed {
 						remote: peer_id,
@@ -668,12 +668,12 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 			NotificationsOut::Notification { peer_id, set_id, message } => {
 				if self.bad_handshake_substreams.contains(&(peer_id, set_id)) {
 					CustomMessageOutcome::None
-				} else if set_id == HARDCODED_PEERSETS_SYNC {
-					let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationsReceived {
-						remote: peer_id,
-						messages: vec![message.freeze()],
-					});
-					CustomMessageOutcome::None
+				// } else if set_id == HARDCODED_PEERSETS_SYNC {
+				// 	let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationsReceived {
+				// 		remote: peer_id,
+				// 		messages: vec![message.freeze()],
+				// 	});
+				// 	CustomMessageOutcome::None
 				} else {
 					let protocol_name = self.notification_protocols[usize::from(set_id)].clone();
 					CustomMessageOutcome::NotificationsReceived {

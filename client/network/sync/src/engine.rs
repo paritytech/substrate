@@ -24,7 +24,7 @@ use crate::{
 	ChainSync, ClientError, SyncingService,
 };
 
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeAll, Encode};
 use futures::{FutureExt, StreamExt};
 use futures_timer::Delay;
 use libp2p::PeerId;
@@ -39,9 +39,10 @@ use sc_network::{
 	config::{
 		FullNetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
 	},
+	service::traits::{NotificationEvent, ValidationResult},
 	types::ProtocolName,
 	utils::LruHashSet,
-	NotificationService, NotificationsSink,
+	NotificationService,
 };
 use sc_network_common::{
 	role::Roles,
@@ -76,6 +77,9 @@ const TICK_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1100)
 
 /// Maximum number of known block hashes to keep for a peer.
 const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
+
+/// Logging target for the file.
+const LOG_TARGET: &str = "sync";
 
 /// If the block announces stream to peer has been inactive for two minutes meaning local node
 /// has not sent or received block announcements to/from the peer, report the node for inactivity,
@@ -167,8 +171,6 @@ pub struct Peer<B: BlockT> {
 	pub info: ExtendedPeerInfo<B>,
 	/// Holds a set of blocks known to this peer.
 	pub known_blocks: LruHashSet<B::Hash>,
-	/// Notification sink.
-	sink: NotificationsSink,
 	/// Instant when the last notification was sent to peer.
 	last_notification_sent: Instant,
 	/// Instant when the last notification was received from peer.
@@ -246,7 +248,13 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	metrics: Option<Metrics>,
 
 	/// Handle that is used to communicate with `sc_network::Notifications`.
-	_notification_handle: Box<dyn NotificationService>,
+	notification_handle: Box<dyn NotificationService>,
+
+	/// Peers that are on probation, waiting for the inbound substream to be accepted
+	///
+	/// These peers have been validated by `SyncingEngine` and are considered "accepted"
+	/// and they have a slot reserved for them. TODO: finish this comment
+	probation: HashMap<PeerId, BlockAnnouncesHandshake<B>>,
 }
 
 impl<B: BlockT, Client> SyncingEngine<B, Client>
@@ -342,7 +350,7 @@ where
 			total.saturating_sub(net_config.network_config.default_peers_set_num_full) as usize
 		};
 
-		let (chain_sync, block_announce_config, _notification_handle) = ChainSync::new(
+		let (chain_sync, block_announce_config, notification_handle) = ChainSync::new(
 			mode,
 			client.clone(),
 			protocol_id,
@@ -392,8 +400,9 @@ where
 				default_peers_set_num_full,
 				default_peers_set_num_light,
 				event_streams: Vec::new(),
-				_notification_handle,
+				notification_handle,
 				tick_timeout: Delay::new(TICK_TIMEOUT),
+				probation: HashMap::new(),
 				metrics: if let Some(r) = metrics_registry {
 					match Metrics::register(r, is_major_syncing.clone()) {
 						Ok(metrics) => Some(metrics),
@@ -594,7 +603,7 @@ where
 				};
 
 				peer.last_notification_sent = Instant::now();
-				peer.sink.send_sync_notification(message.encode());
+				let _ = self.notification_handle.send_sync_notification(who, message.encode());
 			}
 		}
 	}
@@ -729,63 +738,69 @@ where
 			}
 		}
 
-		while let Poll::Ready(Some(event)) = self.rx.poll_next_unpin(cx) {
-			match event {
-				sc_network::SyncEvent::NotificationStreamOpened {
-					remote,
-					received_handshake,
-					sink,
-					tx,
-				} => match self.on_sync_peer_connected(remote, &received_handshake, sink) {
-					Ok(()) => {
-						let _ = tx.send(true);
-					},
-					Err(()) => {
-						log::debug!(
-							target: "sync",
-							"Failed to register peer {remote:?}: {received_handshake:?}",
-						);
-						let _ = tx.send(false);
-					},
-				},
-				sc_network::SyncEvent::NotificationStreamClosed { remote } => {
-					self.evicted.remove(&remote);
-					if self.on_sync_peer_disconnected(remote).is_err() {
-						log::trace!(
-							target: "sync",
-							"Disconnected peer which had earlier been refused by on_sync_peer_connected {}",
-							remote
-						);
-					}
-				},
-				sc_network::SyncEvent::NotificationsReceived { remote, messages } => {
-					for message in messages {
-						if self.peers.contains_key(&remote) {
-							if let Ok(announce) = BlockAnnounce::decode(&mut message.as_ref()) {
-								self.push_block_announce_validation(remote, announce);
+		loop {
+			let Poll::Ready(Some(event)) = self.notification_handle.next_event().poll_unpin(cx) else {
+				break;
+			};
 
-								// Make sure that the newly added block announce validation future
-								// was polled once to be registered in the task.
-								if let Poll::Ready(res) =
-									self.chain_sync.poll_block_announce_validation(cx)
-								{
-									self.process_block_announce_validation_result(res)
-								}
-							} else {
-								log::warn!(target: "sub-libp2p", "Failed to decode block announce");
-							}
-						} else {
-							log::trace!(
-								target: "sync",
-								"Received sync for peer earlier refused by sync layer: {}",
-								remote
-							);
-						}
+			match event {
+				NotificationEvent::ValidateInboundSubstream { peer, handshake, result_tx } => {
+					let validation_result = self.validate_handshake(&peer, handshake).map_or(
+						ValidationResult::Reject,
+						|handshake| {
+							// TODO: reserve slot for the peer
+							// TODO: save `Instant::now()` to `probation` and define a constant that
+							// tells how long       the peer is kept on probation before it's
+							// evicted. TODO: when `ValidateInboundSubstream` is received for a new
+							// peer and all slots       are full, check if a peer can be evicted
+							// from `probation` TODO: save peer role to `PeerStore`
+							self.probation.insert(peer, handshake);
+							ValidationResult::Accept
+						},
+					);
+					let _ = result_tx.send(validation_result);
+				},
+				NotificationEvent::NotificationStreamOpened { peer, .. } => {
+					let Some(handshake) = self.probation.remove(&peer) else {
+						log::debug!(
+							target: LOG_TARGET,
+							"{peer} has not been validated by `SyncingEngine` or it took too long to open a substream"
+						);
+						continue
+					};
+
+					match self.on_sync_peer_connected(peer, &handshake) {
+						Ok(_) => {
+							// TODO: remove slot reservation and mark the slot as occupied
+						},
+						Err(_) => {
+							// TODO: remove slot reservation and mark the slot as free
+						},
 					}
 				},
-				sc_network::SyncEvent::NotificationSinkReplaced { remote, sink } => {
-					if let Some(peer) = self.peers.get_mut(&remote) {
-						peer.sink = sink;
+				NotificationEvent::NotificationStreamClosed { peer } => {
+					self.on_sync_peer_disconnected(peer);
+				},
+				NotificationEvent::NotificationReceived { peer, notification } => {
+					if !self.peers.contains_key(&peer) {
+						log::trace!(
+							target: LOG_TARGET,
+							"seceived notification from {peer} who had been earlier refused by `SyncingEngine`",
+						);
+						continue
+					}
+
+					let Ok(announce) = BlockAnnounce::decode(&mut notification.as_ref()) else {
+						log::warn!(target: LOG_TARGET, "failed to decode block announce");
+						continue
+					};
+
+					// push the block announcement for validation and make sure it's polled
+					// once to register it in the task.
+					self.push_block_announce_validation(peer, announce);
+
+					if let Poll::Ready(res) = self.chain_sync.poll_block_announce_validation(cx) {
+						self.process_block_announce_validation_result(res)
 					}
 				},
 			}
@@ -804,22 +819,98 @@ where
 	/// Called by peer when it is disconnecting.
 	///
 	/// Returns a result if the handshake of this peer was indeed accepted.
-	pub fn on_sync_peer_disconnected(&mut self, peer: PeerId) -> Result<(), ()> {
-		if self.peers.remove(&peer).is_some() {
+	pub fn on_sync_peer_disconnected(&mut self, peer: PeerId) {
+		if !self.peers.remove(&peer).is_some() {
+			log::debug!(target: LOG_TARGET, "{peer} does not exist in `SyncingEngine`");
+			return
+		}
+
+		if self.important_peers.contains(&peer) {
+			log::warn!(target: "sync", "Reserved peer {} disconnected", peer);
+		} else {
+			log::debug!(target: "sync", "{} disconnected", peer);
+		}
+
+		self.chain_sync.peer_disconnected(&peer);
+		// TODO: remove this bookkeeping when `ProtocolController` is ready
+		self.default_peers_set_no_slot_connected_peers.remove(&peer);
+		self.event_streams
+			.retain(|stream| stream.unbounded_send(SyncEvent::PeerDisconnected(peer)).is_ok());
+	}
+
+	fn validate_handshake(
+		&mut self,
+		peer: &PeerId,
+		handshake: Vec<u8>,
+	) -> Result<BlockAnnouncesHandshake<B>, ()> {
+		log::trace!(target: LOG_TARGET, "New peer {peer} {handshake:?}");
+
+		let handshake = <BlockAnnouncesHandshake<B> as DecodeAll>::decode_all(&mut &handshake[..])
+			.map_err(|error| {
+				log::debug!(target: LOG_TARGET, "failed to decode handshake for {peer}: {error:?}");
+			})?;
+
+		if self.peers.contains_key(&peer) {
+			log::error!(
+				target: LOG_TARGET,
+				"Called on_sync_peer_connected with already connected peer {peer}",
+			);
+			debug_assert!(false);
+			return Err(())
+		}
+
+		if handshake.genesis_hash != self.genesis_hash {
+			// TODO: report peer but verify that `PeerStore` doesn't try to disconnect it
+			// self.network_service.report_peer(peer, rep::GENESIS_MISMATCH);
+
 			if self.important_peers.contains(&peer) {
-				log::warn!(target: "sync", "Reserved peer {} disconnected", peer);
+				log::error!(
+					target: LOG_TARGET,
+					"Reserved peer id `{peer}` is on a different chain (our genesis: {} theirs: {})",
+					self.genesis_hash,
+					handshake.genesis_hash,
+				);
+			} else if self.boot_node_ids.contains(&peer) {
+				log::error!(
+					target: LOG_TARGET,
+					"Bootnode with peer id `{peer}` is on a different chain (our genesis: {} theirs: {})",
+					self.genesis_hash,
+					handshake.genesis_hash,
+				);
 			} else {
-				log::debug!(target: "sync", "{} disconnected", peer);
+				log::debug!(
+					target: LOG_TARGET,
+					"Peer is on different chain (our genesis: {} theirs: {})",
+					self.genesis_hash,
+					handshake.genesis_hash
+				);
 			}
 
-			self.chain_sync.peer_disconnected(&peer);
-			self.default_peers_set_no_slot_connected_peers.remove(&peer);
-			self.event_streams
-				.retain(|stream| stream.unbounded_send(SyncEvent::PeerDisconnected(peer)).is_ok());
-			Ok(())
-		} else {
-			Err(())
+			return Err(())
 		}
+
+		let no_slot_peer = self.default_peers_set_no_slot_peers.contains(&peer);
+		let this_peer_reserved_slot: usize = if no_slot_peer { 1 } else { 0 };
+
+		if handshake.roles.is_full() &&
+			self.chain_sync.num_peers() >=
+				self.default_peers_set_num_full +
+					self.default_peers_set_no_slot_connected_peers.len() +
+					this_peer_reserved_slot
+		{
+			log::debug!(target: LOG_TARGET, "Too many full nodes, rejecting {peer}");
+			return Err(())
+		}
+
+		if handshake.roles.is_light() &&
+			(self.peers.len() - self.chain_sync.num_peers()) >= self.default_peers_set_num_light
+		{
+			// Make sure that not all slots are occupied by light clients.
+			log::debug!(target: LOG_TARGET, "Too many light nodes, rejecting {peer}");
+			return Err(())
+		}
+
+		Ok(handshake)
 	}
 
 	/// Called on the first connection between two peers on the default set, after their exchange
@@ -831,67 +922,7 @@ where
 		&mut self,
 		who: PeerId,
 		status: &BlockAnnouncesHandshake<B>,
-		sink: NotificationsSink,
 	) -> Result<(), ()> {
-		log::trace!(target: "sync", "New peer {} {:?}", who, status);
-
-		if self.peers.contains_key(&who) {
-			log::error!(target: "sync", "Called on_sync_peer_connected with already connected peer {}", who);
-			debug_assert!(false);
-			return Err(())
-		}
-
-		if status.genesis_hash != self.genesis_hash {
-			self.network_service.report_peer(who, rep::GENESIS_MISMATCH);
-
-			if self.important_peers.contains(&who) {
-				log::error!(
-					target: "sync",
-					"Reserved peer id `{}` is on a different chain (our genesis: {} theirs: {})",
-					who,
-					self.genesis_hash,
-					status.genesis_hash,
-				);
-			} else if self.boot_node_ids.contains(&who) {
-				log::error!(
-					target: "sync",
-					"Bootnode with peer id `{}` is on a different chain (our genesis: {} theirs: {})",
-					who,
-					self.genesis_hash,
-					status.genesis_hash,
-				);
-			} else {
-				log::debug!(
-					target: "sync",
-					"Peer is on different chain (our genesis: {} theirs: {})",
-					self.genesis_hash, status.genesis_hash
-				);
-			}
-
-			return Err(())
-		}
-
-		let no_slot_peer = self.default_peers_set_no_slot_peers.contains(&who);
-		let this_peer_reserved_slot: usize = if no_slot_peer { 1 } else { 0 };
-
-		if status.roles.is_full() &&
-			self.chain_sync.num_peers() >=
-				self.default_peers_set_num_full +
-					self.default_peers_set_no_slot_connected_peers.len() +
-					this_peer_reserved_slot
-		{
-			log::debug!(target: "sync", "Too many full nodes, rejecting {}", who);
-			return Err(())
-		}
-
-		if status.roles.is_light() &&
-			(self.peers.len() - self.chain_sync.num_peers()) >= self.default_peers_set_num_light
-		{
-			// Make sure that not all slots are occupied by light clients.
-			log::debug!(target: "sync", "Too many light nodes, rejecting {}", who);
-			return Err(())
-		}
-
 		let peer = Peer {
 			info: ExtendedPeerInfo {
 				roles: status.roles,
@@ -901,7 +932,6 @@ where
 			known_blocks: LruHashSet::new(
 				NonZeroUsize::new(MAX_KNOWN_BLOCKS).expect("Constant is nonzero"),
 			),
-			sink,
 			last_notification_sent: Instant::now(),
 			last_notification_received: Instant::now(),
 		};
@@ -918,10 +948,11 @@ where
 			None
 		};
 
-		log::debug!(target: "sync", "Connected {}", who);
+		log::debug!(target: LOG_TARGET, "connected {}", who);
 
 		self.peers.insert(who, peer);
-		if no_slot_peer {
+		// TODO: remove these bookkeepings once `ProtocolController` is ready
+		if self.default_peers_set_no_slot_peers.contains(&who) {
 			self.default_peers_set_no_slot_connected_peers.insert(who);
 		}
 
