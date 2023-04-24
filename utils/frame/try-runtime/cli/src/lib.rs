@@ -141,7 +141,7 @@
 //!
 //! ```ignore
 //! #[cfg(feature = "try-runtime")]
-//! fn try_state(_: BlockNumber) -> Result<(), &'static str> {}
+//! fn try_state(_: BlockNumber) -> DispatchResult {}
 //! ```
 //!
 //! which is called on numerous code paths in the try-runtime tool. These checks should ensure that

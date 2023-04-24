@@ -2095,7 +2095,7 @@ macro_rules! decl_module {
 			fn try_state(
 				_: <$trait_instance as $system::Config>::BlockNumber,
 				_: $crate::traits::TryStateSelect,
-			) -> Result<(), &'static str> {
+			) -> DispatchResult {
 				let pallet_name = <<
 					$trait_instance
 					as

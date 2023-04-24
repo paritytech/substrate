@@ -215,7 +215,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			fn try_state(
 				n: <T as #frame_system::Config>::BlockNumber,
 				_s: #frame_support::traits::TryStateSelect
-			) -> Result<(), &'static str> {
+			) -> DispatchResult {
 				#log_try_state
 				<
 					Self as #frame_support::traits::Hooks<

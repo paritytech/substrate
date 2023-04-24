@@ -129,7 +129,7 @@ impl core::str::FromStr for UpgradeCheckSelect {
 /// This hook should not alter any storage.
 pub trait TryState<BlockNumber> {
 	/// Execute the state checks.
-	fn try_state(_: BlockNumber, _: Select) -> Result<(), &'static str>;
+	fn try_state(_: BlockNumber, _: Select) -> DispatchResult;
 }
 
 #[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
@@ -139,7 +139,7 @@ impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<Bl
 	for Tuple
 {
 	for_tuples!( where #( Tuple: crate::traits::PalletInfoAccess )* );
-	fn try_state(n: BlockNumber, targets: Select) -> Result<(), &'static str> {
+	fn try_state(n: BlockNumber, targets: Select) -> DispatchResult {
 		match targets {
 			Select::None => Ok(()),
 			Select::All => {

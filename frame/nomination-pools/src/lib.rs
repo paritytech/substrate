@@ -3107,7 +3107,7 @@ impl<T: Config> Pallet<T> {
 			let bonded_pool = BondedPools::<T>::get(d.pool_id).unwrap();
 			ensure!(
 				!d.total_points().is_zero(),
-				DispatchError::Other("No member should have zero points: {d:?}")
+				DispatchError::Other("No member should have zero points")
 			);
 			*pools_members.entry(d.pool_id).or_default() += 1;
 			all_members += 1;
