@@ -169,7 +169,6 @@ mod multiplier_tests {
 			block_weight.proof_size() as f64 / max_normal.proof_size() as f64,
 		);
 
-
 		let (normal, max, target) =
 			if normalized_weight_dimensions.0 < normalized_weight_dimensions.1 {
 				(block_weight.proof_size(), max_normal.proof_size(), target_weight.proof_size())
