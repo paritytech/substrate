@@ -599,7 +599,7 @@ pub struct Bag<T: Config<I>, I: 'static = ()> {
 	tail: Option<T::AccountId>,
 
 	#[codec(skip)]
-	bag_upper: T::Score,
+	pub(super) bag_upper: T::Score,
 	#[codec(skip)]
 	_phantom: PhantomData<I>,
 }
@@ -932,8 +932,6 @@ mod bags_list {
 	type ListBags<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::Score, list::Bag<T, I>>;
 
-	/// Equivalent to `ListBags::get`, but public. Useful for tests in outside of this crate.
-	#[cfg(feature = "std")]
 	pub fn list_bags_get<T: Config<I>, I: 'static>(score: T::Score) -> Option<list::Bag<T, I>> {
 		ListBags::<T, I>::get(score)
 	}
@@ -942,24 +940,24 @@ mod bags_list {
 		ListBags::<T, I>::contains_key(score)
 	}
 
-	pub fn list_bags_remove_all<T: Config<I>, I: 'static>() {
+	pub(super) fn list_bags_remove_all<T: Config<I>, I: 'static>() {
 		#[allow(deprecated)]
 		ListBags::<T, I>::remove_all(None);
 	}
 
-	pub fn list_bags_remove<T: Config<I>, I: 'static>(score: T::Score) {
+	pub(super) fn list_bags_remove<T: Config<I>, I: 'static>(score: T::Score) {
 		ListBags::<T, I>::remove(score);
 	}
 
 	/// Get a bag by its upper score.
-	pub fn list_bags_try_get<T: Config<I>, I: 'static>(bag_upper: T::Score) -> Option<Bag<T, I>> {
+	pub(super) fn list_bags_try_get<T: Config<I>, I: 'static>(bag_upper: T::Score) -> Option<Bag<T, I>> {
 		ListBags::<T, I>::try_get(bag_upper).ok().map(|mut bag| {
-			// bag.bag_upper = bag_upper;
+			bag.bag_upper = bag_upper;
 			bag
 		})
 	}
 
-	pub fn list_bags_insert<T: Config<I>, I: 'static>(bag_upper: T::Score, bag: Bag<T, I>) {
+	pub(super) fn list_bags_insert<T: Config<I>, I: 'static>(bag_upper: T::Score, bag: Bag<T, I>) {
 		ListBags::<T, I>::insert(bag_upper, bag);
 	}
 
