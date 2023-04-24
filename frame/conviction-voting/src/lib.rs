@@ -639,7 +639,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			}
 		});
-		T::Currency::extend_lock(CONVICTION_VOTING_ID, who, amount, WithdrawReasons::TRANSFER);
+		T::Currency::extend_lock(
+			CONVICTION_VOTING_ID,
+			who,
+			amount,
+			WithdrawReasons::except(WithdrawReasons::RESERVE),
+		);
 	}
 
 	/// Rejig the lock on an account. It will never get more stringent (since that would indicate
@@ -669,7 +674,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				CONVICTION_VOTING_ID,
 				who,
 				lock_needed,
-				WithdrawReasons::TRANSFER,
+				WithdrawReasons::except(WithdrawReasons::RESERVE),
 			);
 		}
 	}
