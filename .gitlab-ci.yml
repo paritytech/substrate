@@ -53,10 +53,13 @@ variables:
   RELENG_SCRIPTS_BRANCH: "master"
   RUSTY_CACHIER_SINGLE_BRANCH: master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
+  RUSTY_CACHIER_MINIO_ALIAS: rustycachier_gcs
   RUSTY_CACHIER_COMPRESSION_METHOD: zstd
   NEXTEST_FAILURE_OUTPUT: immediate-final
   NEXTEST_SUCCESS_OUTPUT: final
   ZOMBIENET_IMAGE: "docker.io/paritytech/zombienet:v1.3.43"
+
+  RUSTY_CACHIER_FORCE_UPLOAD: "true"
 
 default:
   retry:
@@ -140,7 +143,7 @@ default:
   after_script:
     - !reference [.rusty-cachier, after_script]
   tags:
-    - linux-docker
+    - linux-docker-vm-c2
 
 # rusty-cachier's hidden job. Parts of this job are used to instrument the pipeline's other real jobs with rusty-cachier
 # Description of the commands is available here - https://gitlab.parity.io/parity/infrastructure/ci_cd/rusty-cachier/client#description
