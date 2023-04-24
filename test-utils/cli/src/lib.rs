@@ -30,10 +30,13 @@ use std::{
 	io::{BufRead, BufReader, Read},
 	ops::{Deref, DerefMut},
 	path::{Path, PathBuf},
-	process::{self, Child, Command},
+	process,
 	time::Duration,
 };
-use tokio::io::{AsyncBufReadExt, AsyncRead};
+use tokio::{
+	io::{AsyncBufReadExt, AsyncRead},
+	process::{Child, Command},
+};
 
 /// Starts a new Substrate node in development mode with a temporary chain.
 ///
@@ -54,19 +57,28 @@ use tokio::io::{AsyncBufReadExt, AsyncRead};
 /// ```ignore
 /// use my_crate::start_node;
 ///
-/// let child = start_node();
+/// let (mut child, ws_url) = start_node();
 /// // Interact with the Substrate node using the WebSocket port 45789.
 /// // When done, the node will be killed when the `child` is dropped.
 /// ```
 ///
-/// [`Child`]: std::process::Child
-pub fn start_node() -> Child {
-	Command::new(cargo_bin("substrate"))
+/// [`Child`]: tokio::process::Child
+pub fn start_node() -> (Child, String) {
+	let port = 45789;
+
+	let child = Command::new(cargo_bin("substrate"))
 		.stdout(process::Stdio::piped())
 		.stderr(process::Stdio::piped())
-		.args(&["--dev", "--tmp", "--ws-port=45789", "--no-hardware-benchmarks"])
+		.args(&[
+			"--dev",
+			"--tmp",
+			format!("--ws-port={}", port).as_str(),
+			"--no-hardware-benchmarks",
+		])
+		.kill_on_drop(true)
 		.spawn()
-		.unwrap()
+		.unwrap();
+	(child, format!("ws://localhost:{}", port))
 }
 
 /// Builds the Substrate project using the provided arguments.
@@ -103,7 +115,7 @@ pub fn build_substrate(args: &[&str]) {
 	let root_dir = std::path::Path::new(&manifest_dir)
 		.parent()
 		.expect("Failed to find root workspace directory");
-	let output = Command::new("cargo")
+	let output = std::process::Command::new("cargo")
 		.arg("build")
 		.args(args)
 		.current_dir(root_dir)
@@ -167,18 +179,83 @@ where
 	Err(String::from("Stream closed without any lines matching the regex."))
 }
 
+/// Asynchronously reads lines from a given stream and prints them to the standard output.
+/// It stops reading when the stream is closed or an error occurs while reading the stream.
+///
+/// This function is useful for debugging purposes.
+///
+/// When used in combination with tokio::spawn, it can be non-blocking.
+///
+/// # Arguments
+///
+/// * `stream` - A type implementing `AsyncRead` and `Unpin` traits, from which the lines will be
+///   read.
+///
+/// # Returns
+///
+/// * `Result<(), String>` - A `Result` indicating success (Ok) or an error (Err) while reading from
+///   the stream. In case of an error, a formatted error message is returned as a `String`.
+///
+/// # Examples
+///
+/// ```ignore
+/// #[tokio::test]
+/// async fn some_test() {
+/// 	let (mut node, ws_url) = common::start_node();
+/// 	let node_stderr = node.stderr.take().unwrap();
+/// 	tokio::spawn(common::print_stream(node_stderr));
+/// 	// perform some action while the node output is printed to the console
+/// }
+/// ```
+pub async fn print_stream<R>(stream: R) -> Result<(), String>
+where
+	R: AsyncRead + Unpin,
+{
+	let mut stdio_reader = tokio::io::BufReader::new(stream).lines();
+	loop {
+		let res = stdio_reader.next_line().await;
+		match res {
+			Ok(Some(line)) => println!("{}", line),
+			Ok(None) => return Ok(()), // Stream closed
+			Err(e) => return Err(format!("Error reading line from stream: {}", e)),
+		}
+	}
+}
+
 /// Run the given `future` and panic if the `timeout` is hit.
 pub async fn run_with_timeout(timeout: Duration, future: impl futures::Future<Output = ()>) {
 	tokio::time::timeout(timeout, future).await.expect("Hit timeout");
 }
 
+const RPC_CONNECT_MAX_TRIES: u8 = 30;
+
 /// Wait for at least n blocks to be finalized from a specified node
-pub async fn wait_n_finalized_blocks(n: usize, url: &str) {
+/// If the RPC can't connect to the node, it will retry a RPC_CONNECT_MAX_TRIES times
+/// with a 1 second interval each time.
+pub async fn wait_n_finalized_blocks(n: usize, url: &str) -> Result<(), String> {
 	use substrate_rpc_client::{ws_client, ChainApi};
 
 	let mut built_blocks = std::collections::HashSet::new();
 	let mut interval = tokio::time::interval(Duration::from_secs(2));
-	let rpc = ws_client(url).await.unwrap();
+
+	// Try to connect to the node a few times, allowing this function to be called immediately after
+	// a node is spawned, at which time it may not be ready to accept a WS connection yet.
+	let mut tries = 0;
+	let rpc = loop {
+		match ws_client(url).await {
+			Ok(rpc) => break rpc,
+			Err(_) => {
+				tries += 1;
+				if tries >= RPC_CONNECT_MAX_TRIES {
+					return Err(format!(
+						"Could not create rpc client after {} seconds",
+						RPC_CONNECT_MAX_TRIES
+					))
+				}
+				tokio::time::sleep(Duration::from_secs(1)).await;
+			},
+		}
+	};
 
 	loop {
 		if let Ok(block) = ChainApi::<(), Hash, Header, ()>::finalized_head(&rpc).await {
@@ -189,12 +266,14 @@ pub async fn wait_n_finalized_blocks(n: usize, url: &str) {
 		};
 		interval.tick().await;
 	}
+
+	Ok(())
 }
 
 /// Run the node for a while (3 blocks)
 pub async fn run_node_for_a_while(base_path: &Path, args: &[&str]) {
 	run_with_timeout(Duration::from_secs(60 * 10), async move {
-		let mut cmd = Command::new(cargo_bin("substrate"))
+		let mut cmd = std::process::Command::new(cargo_bin("substrate"))
 			.stdout(process::Stdio::piped())
 			.stderr(process::Stdio::piped())
 			.args(args)
@@ -210,7 +289,7 @@ pub async fn run_node_for_a_while(base_path: &Path, args: &[&str]) {
 		let ws_url = extract_info_from_output(stderr).0.ws_url;
 
 		// Let it produce some blocks.
-		wait_n_finalized_blocks(3, &ws_url).await;
+		wait_n_finalized_blocks(3, &ws_url).await.unwrap();
 
 		child.assert_still_running();
 
@@ -220,7 +299,7 @@ pub async fn run_node_for_a_while(base_path: &Path, args: &[&str]) {
 	.await
 }
 
-pub struct KillChildOnDrop(pub Child);
+pub struct KillChildOnDrop(pub std::process::Child);
 
 impl KillChildOnDrop {
 	/// Stop the child and wait until it is finished.
@@ -249,7 +328,7 @@ impl Drop for KillChildOnDrop {
 }
 
 impl Deref for KillChildOnDrop {
-	type Target = Child;
+	type Target = std::process::Child;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0

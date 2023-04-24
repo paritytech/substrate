@@ -44,7 +44,7 @@ async fn temp_base_path_works() {
 		let node_info = common::extract_info_from_output(&mut stderr).0;
 
 		// Let it produce some blocks.
-		common::wait_n_finalized_blocks(3, &node_info.ws_url).await;
+		common::wait_n_finalized_blocks(3, &node_info.ws_url).await.unwrap();
 
 		// Ensure the db path exists while the node is running
 		assert!(node_info.db_path.exists());
