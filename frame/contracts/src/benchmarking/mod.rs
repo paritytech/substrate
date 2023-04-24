@@ -553,17 +553,8 @@ benchmarks! {
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
-		let origins = vec![
-			RawOrigin::Signed(instance.caller.clone()),
-			RawOrigin::Root,
-		];
-		let limits = vec![
-			None,
-			Some(BalanceOf::<T>::max_value().into()),
-		];
-		let o = r % 2;
-		let origin = origins[o as usize].clone();
-		let limit = limits[o as usize].clone();
+		let origin = RawOrigin::Root;
+		let limit = Some(BalanceOf::<T>::max_value().into());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, limit, vec![])
 
 	#[pov_mode = Measured]
