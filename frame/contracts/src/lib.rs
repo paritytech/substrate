@@ -76,18 +76,17 @@
 //! The Contract module is a work in progress. The following examples show how this Contract module
 //! can be used to instantiate and call contracts.
 //!
-//! * [`ink`](https://github.com/paritytech/ink) is
+//! * [`ink!`](https://use.ink) is
 //! an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
 //! WebAssembly based smart contracts in the Rust programming language.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "runtime-benchmarks", recursion_limit = "1024")]
 
-#[macro_use]
-mod gas;
 mod address;
 mod benchmarking;
 mod exec;
+mod gas;
 mod migration;
 mod schedule;
 mod storage;

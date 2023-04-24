@@ -18,17 +18,19 @@
 
 //! BABE authority selection and slot claiming.
 
-use super::Epoch;
+use super::{Epoch, AUTHORING_SCORE_LENGTH, AUTHORING_SCORE_VRF_CONTEXT};
 use codec::Encode;
 use sc_consensus_epochs::Epoch as EpochT;
-use schnorrkel::{keys::PublicKey, vrf::VRFInOut};
 use sp_application_crypto::AppCrypto;
 use sp_consensus_babe::{
 	digests::{PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest},
-	make_transcript, make_transcript_data, AuthorityId, BabeAuthorityWeight, Slot, BABE_VRF_PREFIX,
+	make_transcript, AuthorityId, BabeAuthorityWeight, Randomness, Slot,
 };
-use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
-use sp_core::{blake2_256, crypto::ByteArray, U256};
+use sp_core::{
+	blake2_256,
+	crypto::{ByteArray, Wraps},
+	U256,
+};
 use sp_keystore::KeystorePtr;
 
 /// Calculates the primary selection threshold for a given authority, taking
@@ -95,19 +97,13 @@ pub(super) fn calculate_primary_threshold(
 	)
 }
 
-/// Returns true if the given VRF output is lower than the given threshold,
-/// false otherwise.
-pub(super) fn check_primary_threshold(inout: &VRFInOut, threshold: u128) -> bool {
-	u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(BABE_VRF_PREFIX)) < threshold
-}
-
 /// Get the expected secondary author for the given slot and with given
 /// authorities. This should always assign the slot to some authority unless the
 /// authorities list is empty.
 pub(super) fn secondary_slot_author(
 	slot: Slot,
 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
-	randomness: [u8; 32],
+	randomness: Randomness,
 ) -> Option<&AuthorityId> {
 	if authorities.is_empty() {
 		return None
@@ -152,18 +148,14 @@ fn claim_secondary_slot(
 	for (authority_id, authority_index) in keys {
 		if authority_id == expected_author {
 			let pre_digest = if author_secondary_vrf {
-				let transcript_data = make_transcript_data(randomness, slot, epoch_index);
-				let result = keystore.sr25519_vrf_sign(
-					AuthorityId::ID,
-					authority_id.as_ref(),
-					transcript_data,
-				);
-				if let Ok(Some(signature)) = result {
+				let transcript = make_transcript(randomness, slot, epoch_index);
+				let result =
+					keystore.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &transcript);
+				if let Ok(Some(vrf_signature)) = result {
 					Some(PreDigest::SecondaryVRF(SecondaryVRFPreDigest {
 						slot,
-						vrf_output: VRFOutput(signature.output),
-						vrf_proof: VRFProof(signature.proof),
 						authority_index: *authority_index as u32,
+						vrf_signature,
 					}))
 				} else {
 					None
@@ -247,25 +239,28 @@ fn claim_primary_slot(
 		epoch_index = epoch.clone_for_slot(slot).epoch_index;
 	}
 
-	for (authority_id, authority_index) in keys {
-		let transcript = make_transcript(randomness, slot, epoch_index);
-		let transcript_data = make_transcript_data(randomness, slot, epoch_index);
-		let result =
-			keystore.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), transcript_data);
-		if let Ok(Some(signature)) = result {
-			let public = PublicKey::from_bytes(&authority_id.to_raw_vec()).ok()?;
-			let inout = match signature.output.attach_input_hash(&public, transcript) {
-				Ok(inout) => inout,
-				Err(_) => continue,
-			};
+	let transcript = make_transcript(randomness, slot, epoch_index);
 
+	for (authority_id, authority_index) in keys {
+		let result = keystore.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &transcript);
+		if let Ok(Some(vrf_signature)) = result {
 			let threshold = calculate_primary_threshold(c, authorities, *authority_index);
-			if check_primary_threshold(&inout, threshold) {
+
+			let can_claim = authority_id
+				.as_inner_ref()
+				.make_bytes::<[u8; AUTHORING_SCORE_LENGTH]>(
+					AUTHORING_SCORE_VRF_CONTEXT,
+					&transcript,
+					&vrf_signature.output,
+				)
+				.map(|bytes| u128::from_le_bytes(bytes) < threshold)
+				.unwrap_or_default();
+
+			if can_claim {
 				let pre_digest = PreDigest::Primary(PrimaryPreDigest {
 					slot,
-					vrf_output: VRFOutput(signature.output),
-					vrf_proof: VRFProof(signature.proof),
 					authority_index: *authority_index as u32,
+					vrf_signature,
 				});
 
 				return Some((pre_digest, authority_id.clone()))

@@ -35,6 +35,7 @@ pub fn expand_outer_freeze_reason(pallet_decls: &[Pallet], scrate: &TokenStream)
 	}
 
 	quote! {
+		/// A reason for placing a freeze on funds.
 		#[derive(
 			Copy, Clone, Eq, PartialEq, Ord, PartialOrd,
 			#scrate::codec::Encode, #scrate::codec::Decode, #scrate::codec::MaxEncodedLen,

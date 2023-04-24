@@ -163,12 +163,7 @@ pub fn new_partial(
 		})
 		.transpose()?;
 
-	let executor = NativeElseWasmExecutor::<ExecutorDispatch>::new(
-		config.wasm_method,
-		config.default_heap_pages,
-		config.max_runtime_instances,
-		config.runtime_cache_size,
-	);
+	let executor = sc_service::new_native_or_wasm_executor(&config);
 
 	let (client, backend, keystore_container, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, _>(
@@ -208,7 +203,7 @@ pub fn new_partial(
 	)?;
 
 	let slot_duration = babe_link.config().slot_duration();
-	let import_queue = sc_consensus_babe::import_queue(
+	let (import_queue, babe_worker_handle) = sc_consensus_babe::import_queue(
 		babe_link.clone(),
 		block_import.clone(),
 		Some(Box::new(justification_import)),
@@ -233,7 +228,7 @@ pub fn new_partial(
 	let import_setup = (block_import, grandpa_link, babe_link);
 
 	let (rpc_extensions_builder, rpc_setup) = {
-		let (_, grandpa_link, babe_link) = &import_setup;
+		let (_, grandpa_link, _) = &import_setup;
 
 		let justification_stream = grandpa_link.justification_stream();
 		let shared_authority_set = grandpa_link.shared_authority_set().clone();
@@ -244,9 +239,6 @@ pub fn new_partial(
 			backend.clone(),
 			Some(shared_authority_set.clone()),
 		);
-
-		let babe_config = babe_link.config().clone();
-		let shared_epoch_changes = babe_link.epoch_changes().clone();
 
 		let client = client.clone();
 		let pool = transaction_pool.clone();
@@ -263,9 +255,8 @@ pub fn new_partial(
 				chain_spec: chain_spec.cloned_box(),
 				deny_unsafe,
 				babe: node_rpc::BabeDeps {
-					babe_config: babe_config.clone(),
-					shared_epoch_changes: shared_epoch_changes.clone(),
 					keystore: keystore.clone(),
+					babe_worker_handle: babe_worker_handle.clone(),
 				},
 				grandpa: node_rpc::GrandpaDeps {
 					shared_voter_state: shared_voter_state.clone(),

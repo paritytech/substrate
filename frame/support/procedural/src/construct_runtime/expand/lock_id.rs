@@ -35,6 +35,7 @@ pub fn expand_outer_lock_id(pallet_decls: &[Pallet], scrate: &TokenStream) -> To
 	}
 
 	quote! {
+		/// An identifier for each lock placed on funds.
 		#[derive(
 			Copy, Clone, Eq, PartialEq, Ord, PartialOrd,
 			#scrate::codec::Encode, #scrate::codec::Decode, #scrate::codec::MaxEncodedLen,

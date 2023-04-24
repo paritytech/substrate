@@ -589,7 +589,7 @@ fn assert_runtime_updated_digest(num: usize) {
 
 #[test]
 fn set_code_with_real_wasm_blob() {
-	let executor = substrate_test_runtime_client::new_native_executor();
+	let executor = substrate_test_runtime_client::new_native_or_wasm_executor();
 	let mut ext = new_test_ext();
 	ext.register_extension(sp_core::traits::ReadRuntimeVersionExt::new(executor));
 	ext.execute_with(|| {
@@ -613,7 +613,7 @@ fn set_code_with_real_wasm_blob() {
 
 #[test]
 fn runtime_upgraded_with_set_storage() {
-	let executor = substrate_test_runtime_client::new_native_executor();
+	let executor = substrate_test_runtime_client::new_native_or_wasm_executor();
 	let mut ext = new_test_ext();
 	ext.register_extension(sp_core::traits::ReadRuntimeVersionExt::new(executor));
 	ext.execute_with(|| {

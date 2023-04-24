@@ -1230,7 +1230,7 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 }
 
 /// Add reward points to block authors:
-/// * 20 points to the block producer for producing a (non-uncle) block in the relay chain,
+/// * 20 points to the block producer for producing a (non-uncle) block,
 impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Pallet<T>
 where
 	T: Config + pallet_authorship::Config + pallet_session::Config,
@@ -1299,8 +1299,8 @@ where
 			add_db_reads_writes(1, 0);
 
 			// Reverse because it's more likely to find reports from recent eras.
-			match eras.iter().rev().find(|&&(_, ref sesh)| sesh <= &slash_session) {
-				Some(&(ref slash_era, _)) => *slash_era,
+			match eras.iter().rev().find(|&(_, sesh)| sesh <= &slash_session) {
+				Some((slash_era, _)) => *slash_era,
 				// Before bonding period. defensive - should be filtered out.
 				None => return consumed_weight,
 			}
@@ -1611,7 +1611,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
 		Self::bonded(who)
 			.and_then(|c| Self::ledger(c))
-			.map(|l| Stake { stash: l.stash, total: l.total, active: l.active })
+			.map(|l| Stake { total: l.total, active: l.active })
 			.ok_or(Error::<T>::NotStash.into())
 	}
 

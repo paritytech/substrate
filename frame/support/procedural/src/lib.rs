@@ -465,6 +465,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// * All storages are marked as unbounded, meaning you do not need to implement `MaxEncodedLen` on
 ///   storage types. This is equivalent to specifying `#[pallet::unbounded]` on all storage type
 ///   definitions.
+/// * Storage hashers no longer need to be specified and can be replaced by `_`. In dev mode, these
+///   will be replaced by `Blake2_128Concat`.
 ///
 /// Note that the `dev_mode` argument can only be supplied to the `#[pallet]` or
 /// `#[frame_support::pallet]` attribute macro that encloses your pallet module. This argument
@@ -1412,7 +1414,7 @@ pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
-/// The `#[pallet::composable_enum]` attribute allows you to define an enum that gets composed as an
+/// The `#[pallet::composite_enum]` attribute allows you to define an enum that gets composed as an
 /// aggregate enum by `construct_runtime`. This is similar in principle with `#[pallet::event]` and
 /// `#[pallet::error]`.
 ///
@@ -1431,10 +1433,10 @@ pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
 /// ```
 ///
 /// For ease of usage, when no `#[derive]` attributes are found for the enum under
-/// `#[pallet::composable_enum]`, the aforementioned traits are automatically derived for it. The
+/// `#[pallet::composite_enum]`, the aforementioned traits are automatically derived for it. The
 /// inverse is also true: if there are any `#[derive]` attributes found for the enum, then no traits
 /// will automatically be derived for it.
 #[proc_macro_attribute]
-pub fn composable_enum(_: TokenStream, _: TokenStream) -> TokenStream {
+pub fn composite_enum(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }

@@ -78,6 +78,8 @@ pub use hash_db::Hasher;
 #[doc(hidden)]
 pub use sp_core::offchain;
 #[doc(hidden)]
+pub use scale_info;
+#[doc(hidden)]
 #[cfg(not(feature = "std"))]
 pub use sp_core::to_substrate_wasm_fn_return_value;
 #[doc(hidden)]
@@ -87,6 +89,8 @@ use sp_core::OpaqueMetadata;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_externalities::{Extension, Extensions};
+#[doc(hidden)]
+pub use sp_metadata_ir::{self as metadata_ir, frame_metadata as metadata};
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_runtime::StateVersion;
@@ -107,7 +111,7 @@ pub use sp_state_machine::{
 	StorageProof, TrieBackend, TrieBackendBuilder,
 };
 #[doc(hidden)]
-pub use sp_std::{mem, slice};
+pub use sp_std::{mem, slice, vec};
 #[doc(hidden)]
 pub use sp_version::{create_apis_vec, ApiId, ApisVec, RuntimeVersion};
 #[cfg(feature = "std")]

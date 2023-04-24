@@ -991,6 +991,8 @@ fn validate_unsigned_expand() {
 
 #[test]
 fn composite_expand() {
+	use codec::Encode;
+
 	let hold_reason: RuntimeHoldReason = pallet::HoldReason::Staking.into();
 	let hold_reason2: RuntimeHoldReason = pallet2::HoldReason::Governance.into();
 	let slash_reason: RuntimeSlashReason = pallet2::SlashReason::Equivocation.into();
@@ -998,6 +1000,10 @@ fn composite_expand() {
 	assert_eq!(hold_reason, RuntimeHoldReason::Example(pallet::HoldReason::Staking));
 	assert_eq!(hold_reason2, RuntimeHoldReason::Example2(pallet2::HoldReason::Governance));
 	assert_eq!(slash_reason, RuntimeSlashReason::Example2(pallet2::SlashReason::Equivocation));
+
+	assert_eq!(hold_reason.encode(), [1, 0]);
+	assert_eq!(hold_reason2.encode(), [2, 0]);
+	assert_eq!(slash_reason.encode(), [2, 0]);
 }
 
 #[test]
@@ -1610,9 +1616,9 @@ fn metadata() {
 		},
 	];
 
-	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs().is_empty() &&
-		pallets[0].error.as_ref().unwrap().ty.type_info().docs().is_empty() &&
-		pallets[0].calls.as_ref().unwrap().ty.type_info().docs().is_empty();
+	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs.is_empty() &&
+		pallets[0].error.as_ref().unwrap().ty.type_info().docs.is_empty() &&
+		pallets[0].calls.as_ref().unwrap().ty.type_info().docs.is_empty();
 
 	if cfg!(feature = "no-metadata-docs") {
 		assert!(empty_doc)
@@ -1665,7 +1671,7 @@ fn metadata_at_version() {
 
 #[test]
 fn metadata_versions() {
-	assert_eq!(vec![LATEST_METADATA_VERSION], Runtime::metadata_versions());
+	assert_eq!(vec![LATEST_METADATA_VERSION, u32::MAX], Runtime::metadata_versions());
 }
 
 #[test]

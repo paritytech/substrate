@@ -1308,7 +1308,12 @@ impl<T: Config> Pallet<T> {
 		})?;
 		// Extend the lock to `balance` (rather than setting it) since we don't know what other
 		// votes are in place.
-		T::Currency::extend_lock(DEMOCRACY_ID, who, vote.balance(), WithdrawReasons::TRANSFER);
+		T::Currency::extend_lock(
+			DEMOCRACY_ID,
+			who,
+			vote.balance(),
+			WithdrawReasons::except(WithdrawReasons::RESERVE),
+		);
 		ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
 		Ok(())
 	}
@@ -1454,7 +1459,12 @@ impl<T: Config> Pallet<T> {
 			let votes = Self::increase_upstream_delegation(&target, conviction.votes(balance));
 			// Extend the lock to `balance` (rather than setting it) since we don't know what other
 			// votes are in place.
-			T::Currency::extend_lock(DEMOCRACY_ID, &who, balance, WithdrawReasons::TRANSFER);
+			T::Currency::extend_lock(
+				DEMOCRACY_ID,
+				&who,
+				balance,
+				WithdrawReasons::except(WithdrawReasons::RESERVE),
+			);
 			Ok(votes)
 		})?;
 		Self::deposit_event(Event::<T>::Delegated { who, target });
@@ -1499,7 +1509,12 @@ impl<T: Config> Pallet<T> {
 		if lock_needed.is_zero() {
 			T::Currency::remove_lock(DEMOCRACY_ID, who);
 		} else {
-			T::Currency::set_lock(DEMOCRACY_ID, who, lock_needed, WithdrawReasons::TRANSFER);
+			T::Currency::set_lock(
+				DEMOCRACY_ID,
+				who,
+				lock_needed,
+				WithdrawReasons::except(WithdrawReasons::RESERVE),
+			);
 		}
 	}
 

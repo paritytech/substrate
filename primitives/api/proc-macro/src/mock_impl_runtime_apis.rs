@@ -173,7 +173,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 fn has_advanced_attribute(attributes: &mut Vec<Attribute>) -> bool {
 	let mut found = false;
 	attributes.retain(|attr| {
-		if attr.path.is_ident(ADVANCED_ATTRIBUTE) {
+		if attr.path().is_ident(ADVANCED_ATTRIBUTE) {
 			found = true;
 			false
 		} else {
@@ -257,7 +257,7 @@ impl<'a> FoldRuntimeApiImpl<'a> {
 }
 
 impl<'a> Fold for FoldRuntimeApiImpl<'a> {
-	fn fold_impl_item_method(&mut self, mut input: syn::ImplItemMethod) -> syn::ImplItemMethod {
+	fn fold_impl_item_fn(&mut self, mut input: syn::ImplItemFn) -> syn::ImplItemFn {
 		let block = {
 			let crate_ = generate_crate_access();
 			let is_advanced = has_advanced_attribute(&mut input.attrs);
@@ -344,7 +344,7 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 			)
 		};
 
-		let mut input = fold::fold_impl_item_method(self, input);
+		let mut input = fold::fold_impl_item_fn(self, input);
 		// We need to set the block, after we modified the rest of the ast, otherwise we would
 		// modify our generated block as well.
 		input.block = block;

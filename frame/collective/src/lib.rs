@@ -50,8 +50,8 @@ use sp_std::{marker::PhantomData, prelude::*, result};
 use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{
-		DispatchError, DispatchResultWithPostInfo, Dispatchable, GetDispatchInfo, Pays,
-		PostDispatchInfo,
+		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, GetDispatchInfo,
+		Pays, PostDispatchInfo,
 	},
 	ensure,
 	traits::{
@@ -217,6 +217,10 @@ pub mod pallet {
 
 		/// Origin allowed to set collective members
 		type SetMembersOrigin: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
+
+		/// The maximum weight of a dispatch call that can be proposed and executed.
+		#[pallet::constant]
+		type MaxProposalWeight: Get<Weight>;
 	}
 
 	#[pallet::genesis_config]
@@ -339,6 +343,15 @@ pub mod pallet {
 		WrongProposalWeight,
 		/// The given length bound for the proposal was too low.
 		WrongProposalLength,
+	}
+
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			Self::do_try_state()?;
+			Ok(())
+		}
 	}
 
 	// Note that councillor operations are assigned to the operational class.
@@ -658,6 +671,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<(u32, DispatchResultWithPostInfo), DispatchError> {
 		let proposal_len = proposal.encoded_size();
 		ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		ensure!(
+			proposal_weight.all_lte(T::MaxProposalWeight::get()),
+			Error::<T, I>::WrongProposalWeight
+		);
 
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
@@ -680,6 +698,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<(u32, u32), DispatchError> {
 		let proposal_len = proposal.encoded_size();
 		ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		ensure!(
+			proposal_weight.all_lte(T::MaxProposalWeight::get()),
+			Error::<T, I>::WrongProposalWeight
+		);
 
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
@@ -915,6 +938,111 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			proposals.len() + 1 // calculate weight based on original length
 		});
 		num_proposals as u32
+	}
+
+	/// Ensure the correctness of the state of this pallet.
+	///
+	/// The following expectation must always apply.
+	///
+	/// ## Expectations:
+	///
+	/// Looking at proposals:
+	///
+	/// * Each hash of a proposal that is stored inside `Proposals` must have a
+	/// call mapped to it inside the `ProposalOf` storage map.
+	/// * `ProposalCount` must always be more or equal to the number of
+	/// proposals inside the `Proposals` storage value. The reason why
+	/// `ProposalCount` can be more is because when a proposal is removed the
+	/// count is not deducted.
+	/// * Count of `ProposalOf` should match the count of `Proposals`
+	///
+	/// Looking at votes:
+	/// * The sum of aye and nay votes for a proposal can never exceed
+	///  `MaxMembers`.
+	/// * The proposal index inside the `Voting` storage map must be unique.
+	/// * All proposal hashes inside `Voting` must exist in `Proposals`.
+	///
+	/// Looking at members:
+	/// * The members count must never exceed `MaxMembers`.
+	/// * All the members must be sorted by value.
+	///
+	/// Looking at prime account:
+	/// * The prime account must be a member of the collective.
+	#[cfg(any(feature = "try-runtime", test))]
+	fn do_try_state() -> DispatchResult {
+		Self::proposals().into_iter().try_for_each(|proposal| -> DispatchResult {
+			ensure!(
+				Self::proposal_of(proposal).is_some(),
+				DispatchError::Other(
+					"Proposal hash from `Proposals` is not found inside the `ProposalOf` mapping."
+				)
+			);
+			Ok(())
+		})?;
+
+		ensure!(
+			Self::proposals().into_iter().count() <= Self::proposal_count() as usize,
+			DispatchError::Other("The actual number of proposals is greater than `ProposalCount`")
+		);
+		ensure!(
+			Self::proposals().into_iter().count() == <ProposalOf<T, I>>::iter_keys().count(),
+			DispatchError::Other("Proposal count inside `Proposals` is not equal to the proposal count in `ProposalOf`")
+		);
+
+		Self::proposals().into_iter().try_for_each(|proposal| -> DispatchResult {
+			if let Some(votes) = Self::voting(proposal) {
+				let ayes = votes.ayes.len();
+				let nays = votes.nays.len();
+
+				ensure!(
+					ayes.saturating_add(nays) <= T::MaxMembers::get() as usize,
+					DispatchError::Other("The sum of ayes and nays is greater than `MaxMembers`")
+				);
+			}
+			Ok(())
+		})?;
+
+		let mut proposal_indices = vec![];
+		Self::proposals().into_iter().try_for_each(|proposal| -> DispatchResult {
+			if let Some(votes) = Self::voting(proposal) {
+				let proposal_index = votes.index;
+				ensure!(
+					!proposal_indices.contains(&proposal_index),
+					DispatchError::Other("The proposal index is not unique.")
+				);
+				proposal_indices.push(proposal_index);
+			}
+			Ok(())
+		})?;
+
+		<Voting<T, I>>::iter_keys().try_for_each(|proposal_hash| -> DispatchResult {
+			ensure!(
+				Self::proposals().contains(&proposal_hash),
+				DispatchError::Other(
+					"`Proposals` doesn't contain the proposal hash from the `Voting` storage map."
+				)
+			);
+			Ok(())
+		})?;
+
+		ensure!(
+			Self::members().len() <= T::MaxMembers::get() as usize,
+			DispatchError::Other("The member count is greater than `MaxMembers`.")
+		);
+
+		ensure!(
+			Self::members().windows(2).all(|members| members[0] <= members[1]),
+			DispatchError::Other("The members are not sorted by value.")
+		);
+
+		if let Some(prime) = Self::prime() {
+			ensure!(
+				Self::members().contains(&prime),
+				DispatchError::Other("Prime account is not a member.")
+			);
+		}
+
+		Ok(())
 	}
 }
 

@@ -105,7 +105,9 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 		read_runtime_version: Arc<dyn ReadRuntimeVersion>,
 	) -> Self {
 		Self {
-			extensions_factory: RwLock::new(extensions_factory.unwrap_or_else(|| Box::new(()))),
+			extensions_factory: extensions_factory
+				.map(|f| RwLock::new(f))
+				.unwrap_or_else(|| RwLock::new(Box::new(()))),
 			read_runtime_version,
 		}
 	}
@@ -124,6 +126,8 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 	) -> Extensions {
 		let mut extensions =
 			self.extensions_factory.read().extensions_for(block_hash, block_number);
+
+		extensions.register(ReadRuntimeVersionExt::new(self.read_runtime_version.clone()));
 
 		extensions.register(ReadRuntimeVersionExt::new(self.read_runtime_version.clone()));
 
