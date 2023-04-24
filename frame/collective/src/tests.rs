@@ -86,6 +86,7 @@ mod mock_democracy {
 }
 
 pub type MaxMembers = ConstU32<100>;
+type AccountId = u64;
 
 parameter_types! {
 	pub const MotionDuration: u64 = 3;
@@ -105,7 +106,7 @@ impl frame_system::Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
@@ -161,19 +162,26 @@ impl Config for Test {
 	type MaxProposalWeight = MaxProposalWeight;
 }
 
-pub struct ExtBuilder {}
+pub struct ExtBuilder {
+	collective_members: Vec<AccountId>,
+}
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self {}
+		Self { collective_members: vec![1, 2, 3] }
 	}
 }
 
 impl ExtBuilder {
+	fn set_collective_members(mut self, collective_members: Vec<AccountId>) -> Self {
+		self.collective_members = collective_members;
+		self
+	}
+
 	pub fn build(self) -> sp_io::TestExternalities {
 		let mut ext: sp_io::TestExternalities = GenesisConfig {
 			collective: pallet_collective::GenesisConfig {
-				members: vec![1, 2, 3],
+				members: self.collective_members,
 				phantom: Default::default(),
 			},
 			collective_majority: pallet_collective::GenesisConfig {
@@ -217,6 +225,17 @@ fn motions_basic_environment_works() {
 		assert_eq!(Collective::members(), vec![1, 2, 3]);
 		assert_eq!(*Collective::proposals(), Vec::<H256>::new());
 	});
+}
+
+#[test]
+fn initialize_members_sorts_members() {
+	let unsorted_accounts = vec![3, 2, 4, 1];
+	let expected_accounts = vec![1, 2, 3, 4];
+	ExtBuilder::default()
+		.set_collective_members(unsorted_accounts)
+		.build_and_execute(|| {
+			assert_eq!(Collective::members(), expected_accounts);
+		});
 }
 
 #[test]

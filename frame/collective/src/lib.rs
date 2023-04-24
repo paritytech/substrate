@@ -1107,6 +1107,8 @@ impl<T: Config<I>, I: 'static> InitializeMembers<T::AccountId> for Pallet<T, I> 
 	fn initialize_members(members: &[T::AccountId]) {
 		if !members.is_empty() {
 			assert!(<Members<T, I>>::get().is_empty(), "Members are already initialized!");
+			let mut members = members.to_vec();
+			members.sort();
 			<Members<T, I>>::put(members);
 		}
 	}
