@@ -6909,7 +6909,6 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "macro_magic",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
