@@ -161,7 +161,7 @@ impl ExtBuilder {
 #[cfg(test)]
 pub(crate) mod test_utils {
 	use super::*;
-	use list::Bag;
+	use crate::Bag;
 
 	/// Returns the ordered ids within the given bag.
 	pub(crate) fn bag_as_ids(bag: &Bag<Runtime>) -> Vec<AccountId> {

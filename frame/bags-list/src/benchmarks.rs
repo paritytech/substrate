@@ -18,7 +18,7 @@
 //! Benchmarks for the bags list pallet.
 
 use super::*;
-use crate::list::List;
+use crate::List;
 use frame_benchmarking::v1::{
 	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
 };
@@ -27,7 +27,6 @@ use frame_support::{assert_ok, traits::Get};
 use frame_system::RawOrigin as SystemOrigin;
 use sp_runtime::traits::One;
 
-/* 
 benchmarks_instance_pallet! {
 	rebag_non_terminal {
 		// An expensive case for rebag-ing (rebag a non-terminal node):
@@ -195,5 +194,3 @@ benchmarks_instance_pallet! {
 		crate::mock::Runtime
 	);
 }
-
-*/

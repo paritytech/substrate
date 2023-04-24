@@ -17,12 +17,16 @@
 
 use super::*;
 use crate::{
+	Config,
 	mock::{test_utils::*, *},
- 	ListNodes,
+	List, Bag, Node, ListError,
+ 	ListNodes, notional_bag_for,
 	list_bags_get, list_bags_contains_key
 };
-use frame_election_provider_support::{SortedListProvider, VoteWeight};
+use core::marker::PhantomData;
+use frame_election_provider_support::{SortedListProvider, ScoreProvider, VoteWeight};
 use frame_support::{assert_ok, assert_storage_noop};
+use std::iter;
 
 fn node(
 	id: AccountId,

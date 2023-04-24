@@ -19,7 +19,7 @@ use frame_support::{assert_noop, assert_ok, assert_storage_noop, traits::Integri
 
 use super::*;
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
-use list::Bag;
+use crate::{Bag, Node};
 use mock::{test_utils::*, *};
 
 mod pallet {
@@ -153,7 +153,7 @@ mod pallet {
 	#[test]
 	fn wrong_rebag_errs() {
 		ExtBuilder::default().build_and_execute(|| {
-			let node_3 = list::Node::<Runtime>::get(&3).unwrap();
+			let node_3 = Node::<Runtime>::get(&3).unwrap();
 			// when account 3 is _not_ misplaced with score 500
 			NextVoteWeight::set(500);
 			assert!(!node_3.is_misplaced(500));

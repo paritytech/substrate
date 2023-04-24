@@ -70,7 +70,6 @@ pub mod mock;
 mod tests;
 pub mod weights;
 
-pub use list::{notional_bag_for, Bag, List, ListError, Node};
 pub use pallet::*;
 pub use weights::WeightInfo;
 
@@ -278,7 +277,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		new_score: T::Score,
 	) -> Result<Option<(T::Score, T::Score)>, ListError> {
 		// If no voter at that node, don't do anything. the caller just wasted the fee to call this.
-		let node = list::Node::<T, I>::get(&account).ok_or(ListError::NodeNotFound)?;
+		let node = Node::<T, I>::get(&account).ok_or(ListError::NodeNotFound)?;
 		let maybe_movement = List::update_position_for(node, new_score);
 		if let Some((from, to)) = maybe_movement {
 			Self::deposit_event(Event::<T, I>::Rebagged { who: account.clone(), from, to });
@@ -355,7 +354,7 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		fn score_update_worst_case(who: &T::AccountId, is_increase: bool) -> Self::Score {
 			use frame_support::traits::Get as _;
 			let thresholds = T::BagThresholds::get();
-			let node = list::Node::<T, I>::get(who).unwrap();
+			let node = Node::<T, I>::get(who).unwrap();
 			let current_bag_idx = thresholds
 				.iter()
 				.chain(sp_std::iter::once(&T::Score::max_value()))
