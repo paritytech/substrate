@@ -103,7 +103,7 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 		for (_key, node) in old::ListNodes::<T, I>::iter() {
 			let score = T::ScoreProvider::score(&node.id);
 
-			let new_node = crate::Node {
+			let new_node = crate::Node::<T, I> {
 				id: node.id.clone(),
 				prev: node.prev,
 				next: node.next,
@@ -112,7 +112,7 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 				_phantom: node._phantom,
 			};
 
-			crate::ListNodes::<T, I>::insert(node.id, new_node);
+			new_node.put();
 		}
 
 		return frame_support::weights::Weight::MAX

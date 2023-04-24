@@ -56,7 +56,7 @@
 use codec::FullCodec;
 use frame_election_provider_support::{ScoreProvider, SortedListProvider};
 use frame_system::ensure_signed;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded, StaticLookup};
+use sp_runtime::traits::{AtLeast32BitUnsigned, StaticLookup};
 use sp_std::prelude::*;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
@@ -305,7 +305,7 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 	}
 
 	fn count() -> u32 {
-		ListNodes::<T, I>::count()
+		List::<T, I>::count()
 	}
 
 	fn contains(id: &T::AccountId) -> bool {

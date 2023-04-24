@@ -45,7 +45,6 @@ mod bags_list {
 		collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 		iter,
 		marker::PhantomData,
-		prelude::*,
 	};
 
 	#[derive(Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, PalletError)]
@@ -100,7 +99,7 @@ mod bags_list {
 			#[allow(deprecated)]
 			ListBags::<T, I>::remove_all(None);
 			#[allow(deprecated)]
-			crate::ListNodes::<T, I>::remove_all();
+			ListNodes::<T, I>::remove_all();
 		}
 
 		/// Regenerate all of the data from the given ids.
@@ -156,7 +155,7 @@ mod bags_list {
 				"not all `bag_upper` currently in storage are members of `old_thresholds`",
 			);
 			debug_assert!(
-				crate::ListNodes::<T, I>::iter()
+				ListNodes::<T, I>::iter()
 					.all(|(_, node)| old_thresholds.contains(&node.bag_upper)),
 				"not all `node.bag_upper` currently in storage are members of `old_thresholds`",
 			);
@@ -217,7 +216,7 @@ mod bags_list {
 			// lookups.
 			for removed_bag in removed_bags {
 				debug_assert!(
-					!crate::ListNodes::<T, I>::iter().any(|(_, node)| node.bag_upper == removed_bag),
+					!ListNodes::<T, I>::iter().any(|(_, node)| node.bag_upper == removed_bag),
 					"no id should be present in a removed bag",
 				);
 				ListBags::<T, I>::remove(removed_bag);
@@ -228,7 +227,7 @@ mod bags_list {
 
 		/// Returns `true` if the list contains `id`, otherwise returns `false`.
 		pub(crate) fn contains(id: &T::AccountId) -> bool {
-			crate::ListNodes::<T, I>::contains_key(id)
+			ListNodes::<T, I>::contains_key(id)
 		}
 
 		/// Get the score of the given node,
@@ -330,7 +329,7 @@ mod bags_list {
 				id,
 				score,
 				bag_score,
-				crate::ListNodes::<T, I>::count(),
+				ListNodes::<T, I>::count(),
 			);
 
 			Ok(())
@@ -523,8 +522,8 @@ mod bags_list {
 			);
 
 			let iter_count = Self::iter().count() as u32;
-			let stored_count = crate::ListNodes::<T, I>::count();
-			let nodes_count = crate::ListNodes::<T, I>::iter().count() as u32;
+			let stored_count = ListNodes::<T, I>::count();
+			let nodes_count = ListNodes::<T, I>::iter().count() as u32;
 			ensure!(iter_count == stored_count, "iter_count != stored_count");
 			ensure!(stored_count == nodes_count, "stored_count != nodes_count");
 
@@ -553,7 +552,7 @@ mod bags_list {
 
 			// check that all nodes are sane. We check the `ListNodes` storage item directly in case we
 			// have some "stale" nodes that are not in a bag.
-			for (_id, node) in crate::ListNodes::<T, I>::iter() {
+			for (_id, node) in ListNodes::<T, I>::iter() {
 				node.do_try_state()?
 			}
 
@@ -584,6 +583,10 @@ mod bags_list {
 			})
 			.collect::<Vec<_>>()
 		}
+
+		pub fn count() -> u32 {
+			ListNodes::<T, I>::count()
+		}
 	}
 
 	/// A Node is the fundamental element comprising the doubly-linked list described by `Bag`.
@@ -604,12 +607,12 @@ mod bags_list {
 	impl<T: Config<I>, I: 'static> Node<T, I> {
 		/// Get a node by id.
 		pub fn get(id: &T::AccountId) -> Option<Node<T, I>> {
-			crate::ListNodes::<T, I>::try_get(id).ok()
+			ListNodes::<T, I>::try_get(id).ok()
 		}
 
 		/// Put the node back into storage.
-		fn put(self) {
-			crate::ListNodes::<T, I>::insert(self.id.clone(), self);
+		pub fn put(self) {
+			ListNodes::<T, I>::insert(self.id.clone(), self);
 		}
 
 		/// Update neighboring nodes to point to reach other.
@@ -633,7 +636,7 @@ mod bags_list {
 		///
 		/// It is naive because it does not check if the node has first been removed from its bag.
 		fn remove_from_storage_unchecked(&self) {
-			crate::ListNodes::<T, I>::remove(&self.id)
+			ListNodes::<T, I>::remove(&self.id)
 		}
 
 		/// Get the previous node in the bag.
@@ -715,7 +718,7 @@ mod bags_list {
 	///
 	/// Nodes store links forward and back within their respective bags.
 	#[pallet::storage]
-	pub(crate) type ListNodes<T: Config<I>, I: 'static = ()> =
+	type ListNodes<T: Config<I>, I: 'static = ()> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, Node<T, I>>;
 
 	/// A bag stored in storage.
