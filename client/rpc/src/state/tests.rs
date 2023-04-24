@@ -21,10 +21,7 @@ use super::*;
 use crate::testing::{test_executor, timeout_secs};
 use assert_matches::assert_matches;
 use futures::executor;
-use jsonrpsee::{
-	core::{EmptyServerParams as EmptyParams, Error as RpcError},
-	types::error::CallError as RpcCallError,
-};
+use jsonrpsee::core::{EmptyServerParams as EmptyParams, Error as RpcError};
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
 use sp_consensus::BlockOrigin;
@@ -495,7 +492,7 @@ async fn wildcard_storage_subscriptions_are_rpc_unsafe() {
 
 	let api_rpc = api.into_rpc();
 	let err = api_rpc.subscribe_unbounded("state_subscribeStorage", EmptyParams::new()).await;
-	assert_matches!(err, Err(RpcError::Call(RpcCallError::Custom(e))) if e.message() == "RPC call is unsafe to be called externally");
+	assert_matches!(err, Err(RpcError::Call(e)) if e.message() == "RPC call is unsafe to be called externally");
 }
 
 #[tokio::test]

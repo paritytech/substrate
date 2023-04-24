@@ -28,8 +28,6 @@ use jsonrpsee::{
 	proc_macros::rpc,
 };
 
-pub type RpcResult<T> = std::result::Result<T, error::Error>;
-
 mod error;
 mod finality;
 mod notification;
@@ -45,6 +43,9 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 use finality::{EncodedFinalityProof, RpcFinalityProofProvider};
 use notification::JustificationNotification;
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
+
+/// RPC result type alias.
+pub type RpcResult<T> = std::result::Result<T, error::Error>;
 
 /// Provides RPC methods for interacting with GRANDPA.
 #[rpc(client, server)]
