@@ -13,19 +13,19 @@
 	)
 
 	(func (export "call")
-	    ;; store available input size at offset 0
+	    ;; Store available input size at offset 0.
         (i32.store (i32.const 0) (i32.const 512))
 
 		;; read input data
         (call $seal_input (i32.const 4) (i32.const 0))
 
-		;; input data layout
+		;; Input data layout.
 		;; [0..4) - size of the call
 		;; [4..8) - storage length
 		;; [8..40) - hash code of the callee
 		;; [40..n) - encoded runtime call
 
-		;; invoke call_runtime with the encoded call passed to this contract
+		;; Invoke call_runtime with the encoded call passed to this contract.
 		(call $assert (i32.eqz
 			(call $call_runtime
 				(i32.const 40)                ;; Pointer where the call is stored
