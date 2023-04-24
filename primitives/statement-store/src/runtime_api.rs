@@ -69,7 +69,7 @@ impl StatementSource {
 	/// expiration date.
 	pub fn can_be_resubmitted(&self) -> bool {
 		match self {
-			StatementSource::Chain | StatementSource::Rpc => true,
+			StatementSource::Chain | StatementSource::Local => true,
 			StatementSource::Network => false,
 		}
 	}
@@ -143,9 +143,9 @@ pub trait StatementStore {
 	}
 
 	/// Return all statements.
-	fn dump(&mut self) -> Vec<(Hash, Statement)> {
+	fn statements(&mut self) -> Vec<(Hash, Statement)> {
 		if let Some(StatementStoreExt(store)) = self.extension::<StatementStoreExt>() {
-			store.dump().unwrap_or_default()
+			store.statements().unwrap_or_default()
 		} else {
 			Vec::default()
 		}

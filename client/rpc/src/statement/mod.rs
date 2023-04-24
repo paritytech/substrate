@@ -48,7 +48,7 @@ impl StatementApiServer for StatementStore {
 	fn dump(&self) -> RpcResult<Vec<Bytes>> {
 		self.deny_unsafe.check_if_safe()?;
 
-		let statements = self.store.dump().map_err(|e| Error::StatementStore(e.to_string()))?;
+		let statements = self.store.statements().map_err(|e| Error::StatementStore(e.to_string()))?;
 		Ok(statements.into_iter().map(|(_, s)| s.encode().into()).collect())
 	}
 
@@ -87,7 +87,7 @@ impl StatementApiServer for StatementStore {
 	}
 
 	fn submit(&self, encoded: Bytes) -> RpcResult<()> {
-		match self.store.submit_encoded(&encoded, StatementSource::Rpc) {
+		match self.store.submit_encoded(&encoded, StatementSource::Local) {
 			SubmitResult::New(_) | SubmitResult::Known => Ok(()),
 			// `KnownExpired` should not happen. Expired statements submitted with
 			// `StatementSource::Rpc` should be renewed.

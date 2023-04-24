@@ -348,7 +348,6 @@ pub fn new_full_base(
 	);
 
 	let statement_handler_proto = sc_network_statement::StatementHandlerPrototype::new(
-		config.protocol_id().clone(),
 		client
 			.block_hash(0u32.into())
 			.ok()

@@ -162,7 +162,7 @@ where
 			// Validate against the finalized state.
 			self.client.info().finalized_hash
 		});
-		api.validate_statement(block, source, statement).map_err(|_| InvalidStatement::InternalError)
+		api.validate_statement(block, source, statement).map_err(|_| InvalidStatement::InternalError)?
 	}
 }
 
@@ -718,7 +718,7 @@ impl Store {
 
 impl StatementStore for Store {
 	/// Return all statements.
-	fn dump(&self) -> Result<Vec<(Hash, Statement)>> {
+	fn statements(&self) -> Result<Vec<(Hash, Statement)>> {
 		let index = self.index.read();
 		let mut result = Vec::with_capacity(index.entries.len());
 		for h in self.index.read().entries.keys() {
@@ -1125,7 +1125,7 @@ mod tests {
 			store.submit(statement2.clone(), StatementSource::Network),
 			SubmitResult::New(NetworkPriority::High)
 		);
-		assert_eq!(store.dump().unwrap().len(), 3);
+		assert_eq!(store.statements().unwrap().len(), 3);
 		assert_eq!(store.broadcasts(&[]).unwrap().len(), 3);
 		assert_eq!(store.statement(&statement1.hash()).unwrap(), Some(statement1.clone()));
 		drop(store);
@@ -1134,7 +1134,7 @@ mod tests {
 		let mut path: std::path::PathBuf = temp.path().into();
 		path.push("db");
 		let store = Store::new(&path, client, None).unwrap();
-		assert_eq!(store.dump().unwrap().len(), 3);
+		assert_eq!(store.statements().unwrap().len(), 3);
 		assert_eq!(store.broadcasts(&[]).unwrap().len(), 3);
 		assert_eq!(store.statement(&statement1.hash()).unwrap(), Some(statement1));
 	}
@@ -1244,7 +1244,7 @@ mod tests {
 		];
 		expected_statements.sort();
 		let mut statements: Vec<_> =
-			store.dump().unwrap().into_iter().map(|(hash, _)| hash).collect();
+			store.statements().unwrap().into_iter().map(|(hash, _)| hash).collect();
 		statements.sort();
 		assert_eq!(expected_statements, statements);
 	}
@@ -1271,7 +1271,7 @@ mod tests {
 		let mut path: std::path::PathBuf = temp.path().into();
 		path.push("db");
 		let store = Store::new(&path, client, None).unwrap();
-		assert_eq!(store.dump().unwrap().len(), 0);
+		assert_eq!(store.statements().unwrap().len(), 0);
 		assert_eq!(store.index.read().expired.len(), 0);
 	}
 }

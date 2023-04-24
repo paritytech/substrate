@@ -574,7 +574,7 @@ mod test {
 		statement.set_proof(Proof::Sr25519 { signature: [0u8; 64], signer: [0u8; 32] });
 		assert_eq!(statement.verify_signature(), SignatureVerificationResult::Invalid);
 
-		statement.strip_proof();
+		statement.remove_proof();
 		assert_eq!(statement.verify_signature(), SignatureVerificationResult::NoSignature);
 	}
 }

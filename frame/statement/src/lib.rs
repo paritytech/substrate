@@ -139,7 +139,7 @@ where
 				let account: T::AccountId = (*who).into();
 				match frame_system::Pallet::<T>::event_no_consensus(*event_index as usize) {
 					Some(e) => {
-						statement.strip_proof();
+						statement.remove_proof();
 						if let Ok(Event::NewStatement { account: a, statement: s }) = e.try_into() {
 							if a != account || s != statement {
 								log::debug!(target: LOG_TARGET, "Event data mismatch");

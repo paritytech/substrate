@@ -32,7 +32,7 @@ use futures::{channel::oneshot, prelude::*, stream::FuturesUnordered, FutureExt}
 use libp2p::{multiaddr, PeerId};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network::{
-	config::{NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, SetConfig},
+	config::{NonDefaultSetConfig, NonReservedPeerMode, SetConfig},
 	error,
 	event::Event,
 	types::ProtocolName,
@@ -53,7 +53,6 @@ use std::{
 	num::NonZeroUsize,
 	pin::Pin,
 	sync::Arc,
-	task::Poll,
 };
 
 pub mod config;
@@ -111,7 +110,6 @@ pub struct StatementHandlerPrototype {
 impl StatementHandlerPrototype {
 	/// Create a new instance.
 	pub fn new<Hash: AsRef<[u8]>>(
-		protocol_id: ProtocolId,
 		genesis_hash: Hash,
 		fork_id: Option<&str>,
 	) -> Self {
@@ -156,7 +154,7 @@ impl StatementHandlerPrototype {
 		sync: S,
 		statement_store: Arc<dyn StatementStore>,
 		metrics_registry: Option<&Registry>,
-		executor: impl sp_core::traits::SpawnNamed,
+		executor: impl Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send,
 	) -> error::Result<StatementHandler<N, S>> {
 		let net_event_stream = network.event_stream("statement-handler-net");
 		let sync_event_stream = sync.event_stream("statement-handler-sync");
@@ -220,7 +218,7 @@ pub struct StatementHandler<
 	/// Interval at which we call `propagate_statements`.
 	propagate_timeout: stream::Fuse<Pin<Box<dyn Stream<Item = ()> + Send>>>,
 	/// Pending statements verification tasks.
-	pending_statements: FuturesUnordered<Box<dyn Future<Output = (Hash, Option<SubmitResult>)> + Send>>,
+	pending_statements: FuturesUnordered<Pin<Box<dyn Future<Output = (Hash, Option<SubmitResult>)> + Send>>>,
 	/// As multiple peers can send us the same statement, we group
 	/// these peers using the statement hash while the statement is
 	/// imported. This prevents that we import the same statement
@@ -469,7 +467,7 @@ where
 		}
 
 		log::debug!(target: LOG_TARGET, "Propagating statements");
-		if let Ok(statements) = self.statement_store.dump() {
+		if let Ok(statements) = self.statement_store.statements() {
 			self.do_propagate_statements(&statements);
 		}
 	}
