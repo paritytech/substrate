@@ -2,7 +2,7 @@
 use ark_algebra_test_templates::*;
 use ark_ff::{fields::Field, One, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
-use ark_std::{rand::Rng, test_rng, vec, vec::Vec, UniformRand};
+use ark_std::{rand::Rng, test_rng, vec, vec::Vec, UniformRand, Zero};
 use sp_ark_models::{pairing::PairingOutput, AffineRepr, CurveGroup, Group};
 
 use sp_ark_bls12_381::{
@@ -34,15 +34,16 @@ impl HostFunctions for Host {
 	}
 }
 
-test_group!(g1; sp_ark_bls12_381::G1Projective<super::Host>; sw);
-test_group!(g2; sp_ark_bls12_381::G2Projective<super::Host>; sw);
-test_group!(pairing_output; PairingOutput<sp_ark_bls12_381::Bls12_381<super::Host>>; msm);
-test_pairing!(ark_pairing; sp_ark_bls12_381::Bls12_381<super::Host>);
-
 type G1Projective = G1Projective_Host<Host>;
 type G1Affine = G1Affine_Host<Host>;
 type G2Projective = G2Projective_Host<Host>;
 type G2Affine = G2Affine_Host<Host>;
+type Bls12_381 = sp_ark_bls12_381::Bls12_381<Host>;
+
+test_group!(g1; G1Projective; sw);
+test_group!(g2; G2Projective; sw);
+test_group!(pairing_output; PairingOutput<Bls12_381>; msm);
+test_pairing!(ark_pairing; super::Bls12_381);
 
 #[test]
 fn test_g1_endomorphism_beta() {
@@ -64,10 +65,10 @@ fn test_g1_subgroup_non_membership_via_endomorphism() {
 		let greatest = rng.gen();
 
 		if let Some(p) = G1Affine::get_point_from_x_unchecked(x, greatest) {
-			if !<sp_ark_models::short_weierstrass::Projective<sp_ark_bls12_381::g1::Config<Host>> as ark_std::Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
-                assert!(!p.is_in_correct_subgroup_assuming_on_curve());
-                return;
-            }
+			if !<G1Projective as ark_std::Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
+				assert!(!p.is_in_correct_subgroup_assuming_on_curve());
+				return
+			}
 		}
 	}
 }
@@ -87,10 +88,10 @@ fn test_g2_subgroup_non_membership_via_endomorphism() {
 		let greatest = rng.gen();
 
 		if let Some(p) = G2Affine::get_point_from_x_unchecked(x, greatest) {
-			if !<sp_ark_models::short_weierstrass::Projective<sp_ark_bls12_381::g2::Config::<Host>> as ark_std::Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
-                assert!(!p.is_in_correct_subgroup_assuming_on_curve());
-                return;
-            }
+			if !<G2Projective as Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
+				assert!(!p.is_in_correct_subgroup_assuming_on_curve());
+				return
+			}
 		}
 	}
 }
