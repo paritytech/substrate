@@ -3019,7 +3019,7 @@ fn test_failed_charge_should_roll_back_call() {
 		.unwrap()
 		.account_id;
 
-		// Give caller proxy access to caller
+		// Give caller proxy access to Alice
 		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(ALICE), addr_caller.clone(), (), 0));
 
 		// create a Proxy call that will attempt to transfer away's Alice balance, so we can test a
