@@ -1591,7 +1591,7 @@ impl<T: Config> Pallet<T> {
 	fn try_state_snapshot() -> Result<(), &'static str> {
 		let set = <DesiredTargets<T>>::get().is_some() && <SnapshotMetadata<T>>::get().is_some();
 
-		match <Snapshot<T>>::take() {
+		match <Snapshot<T>>::get() {
             Some(_) if !set => Err("If the snapshot exists, the desired targets and snapshot metadata must also exist."),
             None if set => Err("If the snapshot does not exists, the desired targets and snapshot metadata should also not exists"),
             _ => Ok(()),
@@ -1642,7 +1642,7 @@ impl<T: Config> Pallet<T> {
 		match Self::current_phase().is_off() {
 			false => Ok(()),
 			true =>
-				if <Snapshot<T>>::take().is_some() {
+				if <Snapshot<T>>::get().is_some() {
 					Err("Snapshot must be none when in Phase::Off")
 				} else {
 					Ok(())
