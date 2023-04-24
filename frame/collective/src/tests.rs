@@ -229,12 +229,12 @@ fn motions_basic_environment_works() {
 
 #[test]
 fn initialize_members_sorts_members() {
-	let unsorted_accounts = vec![3, 2, 4, 1];
-	let expected_accounts = vec![1, 2, 3, 4];
+	let unsorted_members = vec![3, 2, 4, 1];
+	let expected_members = vec![1, 2, 3, 4];
 	ExtBuilder::default()
-		.set_collective_members(unsorted_accounts)
+		.set_collective_members(unsorted_members)
 		.build_and_execute(|| {
-			assert_eq!(Collective::members(), expected_accounts);
+			assert_eq!(Collective::members(), expected_members);
 		});
 }
 
