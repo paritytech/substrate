@@ -782,7 +782,6 @@ pub(crate) fn set_minimum_election_score(
 	.map_err(|_| ())
 }
 
-// TODO(gpestana): refactor to macro for all pallets.
 pub(crate) fn staking_events() -> Vec<pallet_staking::Event<Runtime>> {
 	System::events()
 		.into_iter()
