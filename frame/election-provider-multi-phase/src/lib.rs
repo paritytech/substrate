@@ -1586,8 +1586,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// [`Snapshot`] state check. Invariants:
-	// - [`DesiredTargets`] exist IFF [`Snapshot`] is present.
-	// - [`SnapshotMetadata`] exist IFF [`Snapshot`] is present.
+	// - [`DesiredTargets`] exists if and only if [`Snapshot`] is present.
+	// - [`SnapshotMetadata`] exist if and only if [`Snapshot`] is present.
 	fn try_state_snapshot() -> Result<(), &'static str> {
 		let set = <DesiredTargets<T>>::get().is_some() && <SnapshotMetadata<T>>::get().is_some();
 
@@ -1603,7 +1603,7 @@ impl<T: Config> Pallet<T> {
 	// - [`SignedSubmissionNextIndex`] is not present in [`SignedSubmissionsMap`];
 	// - [`SignedSubmissionIndices`] is sorted by election score.
 	fn try_state_signed_submissions_map() -> Result<(), &'static str> {
-		let mut best_score: ElectionScore = Default::default();
+		let mut last_score: ElectionScore = Default::default();
 		let indices = <SignedSubmissionIndices<T>>::get();
 
 		for (i, indice) in indices.iter().enumerate() {
@@ -1613,11 +1613,12 @@ impl<T: Config> Pallet<T> {
 			}
 
 			if i == 0 {
-				best_score = indice.0
+				last_score = indice.0
 			} else {
-				if best_score.strict_threshold_better(indice.0, Perbill::zero()) {
+				if last_score.strict_threshold_better(indice.0, Perbill::zero()) {
 					return Err("Signed submission indices vector must be ordered by election score")
 				}
+				last_score = indice.0;
 			}
 		}
 
@@ -1628,10 +1629,12 @@ impl<T: Config> Pallet<T> {
 		match <SignedSubmissionNextIndex<T>>::get() {
 			0 => Ok(()),
 			next =>
-				if <SignedSubmissionsMap<T>>::get(next).is_none() {
-					Ok(())
+				if <SignedSubmissionsMap<T>>::get(next).is_some() {
+					return Err(
+						"The next submissions index should not be in the submissions maps already",
+					)
 				} else {
-					Err("The next submissions index should not be in the submissions maps already")
+					Ok(())
 				},
 		}
 	}
@@ -1724,8 +1727,10 @@ mod feasibility_check {
 				FeasibilityError::SnapshotUnavailable
 			);
 
-			// restore noop snapshot to ensure post-test `try_state` checks pass.
-			<Snapshot<Runtime>>::set(Some(Default::default()));
+			// kill also `SnapshotMetadata` and `DesiredTargets` for the storage state to be
+			// consistent for the try_state checks to pass.
+			<SnapshotMetadata<Runtime>>::kill();
+			<DesiredTargets<Runtime>>::kill();
 		})
 	}
 
