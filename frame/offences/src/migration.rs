@@ -121,13 +121,19 @@ mod test {
 
 	#[test]
 	fn migration_to_v1_works() {
-		new_test_ext().execute_with(|| {
+		let mut ext = new_test_ext();
+
+		ext.execute_with(|| {
 			<v0::ReportsByKindIndex<T>>::insert(KIND, 2u32.encode());
 			assert!(<v0::ReportsByKindIndex<T>>::iter_values().count() > 0);
+		});
 
+		ext.commit_all().unwrap();
+
+		ext.execute_with(|| {
 			assert_eq!(
 				v1::MigrateToV1::<T>::on_runtime_upgrade(),
-				<T as frame_system::Config>::DbWeight::get().reads(1),
+				<T as frame_system::Config>::DbWeight::get().writes(1),
 			);
 
 			assert!(<v0::ReportsByKindIndex<T>>::iter_values().count() == 0);
