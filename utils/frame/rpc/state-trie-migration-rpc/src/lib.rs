@@ -20,7 +20,7 @@
 use jsonrpsee::{
 	proc_macros::rpc,
 	types::{
-		error::{CallError, ErrorCode, ErrorObject},
+		error::{ErrorCode, ErrorObject},
 		ErrorObjectOwned,
 	},
 };
@@ -191,11 +191,5 @@ impl From<Error> for ErrorObjectOwned {
 			),
 			Error::UnsafeRpcCalled(e) => e.into(),
 		}
-	}
-}
-
-impl From<CallError> for Error {
-	fn from(err: CallError) -> Self {
-		err.into()
 	}
 }

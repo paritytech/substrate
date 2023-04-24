@@ -302,7 +302,7 @@ async fn get_header() {
 		.await
 		.unwrap_err();
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+		Error::Call(e) if err.code() == 2001 && err.message() == "Invalid block hash"
 	);
 
 	// Obtain the valid header.

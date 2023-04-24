@@ -28,7 +28,7 @@ use sp_core::Bytes;
 
 /// Substrate authoring RPC API
 #[rpc(client, server)]
-pub trait AuthorApi<Hash, BlockHash> {
+pub trait AuthorApi<Hash: 'static, BlockHash: 'static> {
 	/// Submit hex-encoded extrinsic for inclusion in block.
 	#[method(name = "author_submitExtrinsic")]
 	async fn submit_extrinsic(&self, extrinsic: Bytes) -> Result<Hash, Error>;

@@ -20,7 +20,7 @@
 
 use crate::system::helpers::Health;
 use jsonrpsee::types::{
-	error::{CallError, ErrorCode, ErrorObject},
+	error::{ErrorCode, ErrorObject},
 	ErrorObjectOwned,
 };
 
@@ -52,7 +52,7 @@ const NOT_HEALTHY_ERROR: i32 = BASE_ERROR + 1;
 const MALFORMATTED_PEER_ARG_ERROR: i32 = BASE_ERROR + 2;
 
 impl From<Error> for ErrorObjectOwned {
-	fn from(e: Error) -> Self {
+	fn from(e: Error) -> ErrorObjectOwned {
 		match e {
 			Error::NotHealthy(ref h) =>
 				ErrorObject::owned(NOT_HEALTHY_ERROR, e.to_string(), Some(h)),
@@ -62,11 +62,5 @@ impl From<Error> for ErrorObjectOwned {
 			Error::Internal(e) =>
 				ErrorObjectOwned::owned(ErrorCode::InternalError.code(), e, None::<()>),
 		}
-	}
-}
-
-impl From<CallError> for Error {
-	fn from(err: CallError) -> Self {
-		err.into()
 	}
 }

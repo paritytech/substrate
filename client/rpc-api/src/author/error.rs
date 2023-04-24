@@ -18,7 +18,7 @@
 
 //! Authoring RPC module errors.
 
-use jsonrpsee::types::error::{CallError, ErrorObject, ErrorObjectOwned};
+use jsonrpsee::types::error::{ErrorObject, ErrorObjectOwned};
 use sp_runtime::transaction_validity::InvalidTransaction;
 
 /// Author RPC Result type.
@@ -87,7 +87,7 @@ const POOL_FUTURE_TX: i32 = POOL_INVALID_TX + 11;
 const OTHER_ERR: i32 = BASE_ERROR + 40;
 
 impl From<Error> for ErrorObjectOwned {
-	fn from(e: Error) -> Self {
+	fn from(e: Error) -> ErrorObjectOwned {
 		use sc_transaction_pool_api::error::Error as PoolError;
 
 		match e {
@@ -182,18 +182,5 @@ impl From<Error> for ErrorObjectOwned {
 				None::<()>,
 			)
 		}
-	}
-}
-
-/*impl From<Error> for CallError {
-	fn from(err: Error) -> Self {
-		let err_obj = err.into();
-		CallError::Custom(err_obj)
-	}
-}*/
-
-impl From<CallError> for Error {
-	fn from(err: CallError) -> Self {
-		err.into()
 	}
 }

@@ -24,9 +24,11 @@ use log::warn;
 use std::sync::Arc;
 
 use jsonrpsee::{
-	core::{async_trait, server::PendingSubscriptionSink, RpcResult},
+	core::{async_trait, server::PendingSubscriptionSink},
 	proc_macros::rpc,
 };
+
+pub type RpcResult<T> = std::result::Result<T, error::Error>;
 
 mod error;
 mod finality;
@@ -107,7 +109,7 @@ where
 	ProofProvider: RpcFinalityProofProvider<Block> + Send + Sync + 'static,
 {
 	async fn round_state(&self) -> RpcResult<ReportedRoundStates> {
-		ReportedRoundStates::from(&self.authority_set, &self.voter_state).map_err(Into::into)
+		ReportedRoundStates::from(&self.authority_set, &self.voter_state)
 	}
 
 	async fn subscribe_justifications(&self, pending: PendingSubscriptionSink) {
@@ -124,13 +126,10 @@ where
 		&self,
 		block: NumberFor<Block>,
 	) -> RpcResult<Option<EncodedFinalityProof>> {
-		self.finality_proof_provider
-			.rpc_prove_finality(block)
-			.map_err(|e| {
-				warn!("Error proving finality: {}", e);
-				error::Error::ProveFinalityFailed(e)
-			})
-			.map_err(Into::into)
+		self.finality_proof_provider.rpc_prove_finality(block).map_err(|e| {
+			warn!("Error proving finality: {}", e);
+			error::Error::ProveFinalityFailed(e)
+		})
 	}
 }
 

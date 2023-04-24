@@ -18,7 +18,7 @@
 
 //! Offchain RPC errors.
 
-use jsonrpsee::types::error::{CallError, ErrorObject, ErrorObjectOwned};
+use jsonrpsee::types::error::{ErrorObject, ErrorObjectOwned};
 
 /// Offchain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -47,11 +47,5 @@ impl From<Error> for ErrorObjectOwned {
 			),
 			Error::UnsafeRpcCalled(e) => e.into(),
 		}
-	}
-}
-
-impl From<CallError> for Error {
-	fn from(err: CallError) -> Self {
-		err.into()
 	}
 }

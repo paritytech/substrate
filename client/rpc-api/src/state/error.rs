@@ -18,7 +18,7 @@
 
 //! State RPC errors.
 
-use jsonrpsee::types::error::{CallError, ErrorObject, ErrorObjectOwned};
+use jsonrpsee::types::error::{ErrorObject, ErrorObjectOwned};
 
 /// State RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -56,7 +56,7 @@ pub enum Error {
 const BASE_ERROR: i32 = 4000;
 
 impl From<Error> for ErrorObjectOwned {
-	fn from(e: Error) -> Self {
+	fn from(e: Error) -> ErrorObjectOwned {
 		match e {
 			Error::InvalidBlockRange { .. } =>
 				ErrorObject::owned(BASE_ERROR + 1, e.to_string(), None::<()>),
@@ -64,11 +64,5 @@ impl From<Error> for ErrorObjectOwned {
 				ErrorObject::owned(BASE_ERROR + 2, e.to_string(), None::<()>),
 			e => ErrorObject::owned(BASE_ERROR + 3, e.to_string(), None::<()>),
 		}
-	}
-}
-
-impl From<CallError> for Error {
-	fn from(err: CallError) -> Self {
-		err.into()
 	}
 }

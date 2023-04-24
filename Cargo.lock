@@ -3463,9 +3463,7 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32e7d80c64759234b8f4f134be632f8257ddcbfbba62bb35b43294a2a9773c54"
+version = "0.18.0"
 dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-proc-macros",
@@ -3477,9 +3475,7 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-client-transport"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b7f2bdccbd8c52cffd11950cdcee3a55ce9c1ecea991f9f766245c2ba115e1"
+version = "0.18.0"
 dependencies = [
  "futures-util",
  "http",
@@ -3496,9 +3492,7 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-core"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "900104d998256fd50af009da7a496d630588f615435880b1e5da19caf8627164"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -3523,9 +3517,7 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-proc-macros"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d5972c84d14d6280f46dca3abc4ca8487e080a533f8a9f286c4443bed28f9fe"
+version = "0.18.0"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -3536,9 +3528,7 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-server"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "175b4db179fff94e56e314d6521158e9fbe1c714786dc7a237c7692bbebbc68c"
+version = "0.18.0"
 dependencies = [
  "futures-util",
  "hyper",
@@ -3556,9 +3546,7 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-types"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c79398a1b916c20ea911eb8fb86488709e6c078b64dbf2d1a9cec14c1677605"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "beef",
@@ -3570,9 +3558,7 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-client"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49d07b75527195638cad8942923241bbb375c68307eb3ef287e60db289f87824"
+version = "0.18.0"
 dependencies = [
  "http",
  "jsonrpsee-client-transport",
@@ -4659,7 +4645,6 @@ dependencies = [
 name = "mmr-rpc"
 version = "4.0.0-dev"
 dependencies = [
- "anyhow",
  "jsonrpsee",
  "parity-scale-codec",
  "serde",
@@ -12179,7 +12164,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
  "digest 0.10.6",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

@@ -18,10 +18,13 @@
 
 //! Substrate blockchain API.
 
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use jsonrpsee::proc_macros::rpc;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 
 pub mod error;
+
+/// RPC result.
+pub type RpcResult<T> = std::result::Result<T, error::Error>;
 
 #[rpc(client, server)]
 pub trait ChainApi<Number, Hash, Header, SignedBlock> {

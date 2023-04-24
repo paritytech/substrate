@@ -23,16 +23,15 @@ use futures::{
 	channel::{mpsc, oneshot},
 	SinkExt,
 };
-use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
-	proc_macros::rpc,
-};
+use jsonrpsee::{core::async_trait, proc_macros::rpc};
 use sc_consensus::ImportedAux;
 use serde::{Deserialize, Serialize};
 use sp_runtime::EncodedJustification;
 
 /// Sender passed to the authorship task to report errors or successes.
 pub type Sender<T> = Option<oneshot::Sender<std::result::Result<T, Error>>>;
+/// Rpc result.
+pub type RpcResult<T> = Result<T, crate::error::Error>;
 
 /// Message sent to the background authorship task, usually by RPC.
 pub enum EngineCommand<Hash> {
@@ -124,12 +123,12 @@ impl<Hash: Send + 'static> ManualSealApiServer<Hash> for ManualSeal<Hash> {
 			sender: Some(sender),
 		};
 
-		sink.send(command).await.unwrap();
+		sink.send(command).await?;
 
 		match receiver.await {
 			Ok(Ok(rx)) => Ok(rx),
 			Ok(Err(e)) => Err(e.into()),
-			Err(e) => Err(JsonRpseeError::to_call_error(e)),
+			Err(e) => Err(e.into()),
 		}
 	}
 
@@ -141,8 +140,8 @@ impl<Hash: Send + 'static> ManualSealApiServer<Hash> for ManualSeal<Hash> {
 		let mut sink = self.import_block_channel.clone();
 		let (sender, receiver) = oneshot::channel();
 		let command = EngineCommand::FinalizeBlock { hash, sender: Some(sender), justification };
-		sink.send(command).await.unwrap();
-		receiver.await.map(|_| true).map_err(|e| JsonRpseeError::to_call_error(e))
+		sink.send(command).await?;
+		receiver.await.map(|_| true).map_err(Into::into)
 	}
 }
 

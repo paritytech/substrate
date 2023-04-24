@@ -20,11 +20,7 @@
 use std::{fmt::Display, sync::Arc};
 
 use codec::{self, Codec, Decode, Encode};
-use jsonrpsee::{
-	core::async_trait,
-	proc_macros::rpc,
-	types::error::{CallError, ErrorObjectOwned},
-};
+use jsonrpsee::{core::async_trait, proc_macros::rpc, types::error::ErrorObjectOwned};
 
 use sc_rpc_api::{DenyUnsafe, UnsafeRpcError};
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
@@ -75,12 +71,6 @@ impl From<Error> for ErrorObjectOwned {
 				ErrorObjectOwned::owned(2, "Unable to dry run extrinsic", Some(e)),
 			Error::UnsafeRpcCalled(e) => e.into(),
 		}
-	}
-}
-
-impl From<CallError> for Error {
-	fn from(err: CallError) -> Self {
-		err.into()
 	}
 }
 
