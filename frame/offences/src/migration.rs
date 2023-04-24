@@ -60,8 +60,8 @@ pub mod v1 {
 				return T::DbWeight::get().reads(1)
 			}
 
-			let status = v0::ReportsByKindIndex::<T>::drain().collect::<Vec<_>>();
-			let weight = T::DbWeight::get().reads(status.len() as u64);
+			let keys_removed = v0::ReportsByKindIndex::<T>::clear(u32::MAX, None).backend as u64;
+			let weight = T::DbWeight::get().writes(keys_removed);
 
 			current.put::<Pallet<T>>();
 
