@@ -1103,7 +1103,9 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 				debug_message,
 			);
 
-			storage_deposit = storage_meter.try_into_deposit(&origin)?;
+			storage_deposit = storage_meter
+				.try_into_deposit(&origin)?
+				.saturating_add(&StorageDeposit::Charge(extra_deposit));
 			result
 		};
 		InternalOutput { result: try_exec(), gas_meter, storage_deposit }
