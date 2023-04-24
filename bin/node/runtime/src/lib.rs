@@ -210,6 +210,7 @@ parameter_types! {
 		})
 		.avg_block_initialization(AVERAGE_ON_INITIALIZE_RATIO)
 		.build_or_panic();
+	pub MaxCollectivesProposalWeight: Weight = Perbill::from_percent(50) * RuntimeBlockWeights::get().max_block;
 }
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
@@ -1012,6 +1013,7 @@ impl pallet_collective::Config<CouncilCollective> for Runtime {
 	type DefaultVote = pallet_collective::PrimeDefaultVote;
 	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
 	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
+	type MaxProposalWeight = MaxCollectivesProposalWeight;
 }
 
 parameter_types! {
@@ -1072,6 +1074,7 @@ impl pallet_collective::Config<TechnicalCollective> for Runtime {
 	type DefaultVote = pallet_collective::PrimeDefaultVote;
 	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
 	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
+	type MaxProposalWeight = MaxCollectivesProposalWeight;
 }
 
 type EnsureRootOrHalfCouncil = EitherOfDiverse<
@@ -1700,6 +1703,7 @@ impl pallet_collective::Config<AllianceCollective> for Runtime {
 	type DefaultVote = pallet_collective::PrimeDefaultVote;
 	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
 	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
+	type MaxProposalWeight = MaxCollectivesProposalWeight;
 }
 
 parameter_types! {
