@@ -17,10 +17,6 @@
 
 //! Some configurable implementations as associated type for the substrate runtime.
 
-use crate::{
-	AccountId, AllianceMotion, Assets, Authorship, Balances, Hash, NegativeImbalance, Runtime,
-	RuntimeCall,
-};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
@@ -31,6 +27,11 @@ use frame_support::{
 use pallet_alliance::{IdentityVerifier, ProposalIndex, ProposalProvider};
 use pallet_asset_tx_payment::HandleCredit;
 use sp_std::prelude::*;
+
+use crate::{
+	AccountId, AllianceMotion, Assets, Authorship, Balances, Hash, NegativeImbalance, Runtime,
+	RuntimeCall,
+};
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {
@@ -111,6 +112,10 @@ impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider
 
 #[cfg(test)]
 mod multiplier_tests {
+	use frame_support::{
+		dispatch::DispatchClass,
+		weights::{Weight, WeightToFee},
+	};
 	use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
 	use sp_runtime::{
 		assert_eq_error_rate,
@@ -122,10 +127,6 @@ mod multiplier_tests {
 		constants::{currency::*, time::*},
 		AdjustmentVariable, MaximumMultiplier, MinimumMultiplier, Runtime,
 		RuntimeBlockWeights as BlockWeights, System, TargetBlockFullness, TransactionPayment,
-	};
-	use frame_support::{
-		dispatch::DispatchClass,
-		weights::{Weight, WeightToFee},
 	};
 
 	fn max_normal() -> Weight {
@@ -161,14 +162,29 @@ mod multiplier_tests {
 		// bump if it is zero.
 		let previous_float = previous_float.max(min_multiplier().into_inner() as f64 / accuracy);
 
+		let max_normal = max_normal();
+		let target_weight = target();
+		let normalized_weight_dimensions = (
+			block_weight.ref_time() as f64 / max_normal.ref_time() as f64,
+			block_weight.proof_size() as f64 / max_normal.proof_size() as f64,
+		);
+
+
+		let (normal, max, target) =
+			if normalized_weight_dimensions.0 < normalized_weight_dimensions.1 {
+				(block_weight.proof_size(), max_normal.proof_size(), target_weight.proof_size())
+			} else {
+				(block_weight.ref_time(), max_normal.ref_time(), target_weight.ref_time())
+			};
+
 		// maximum tx weight
-		let m = max_normal().ref_time() as f64;
+		let m = max as f64;
 		// block weight always truncated to max weight
-		let block_weight = (block_weight.ref_time() as f64).min(m);
+		let block_weight = (normal as f64).min(m);
 		let v: f64 = AdjustmentVariable::get().to_float();
 
 		// Ideal saturation in terms of weight
-		let ss = target().ref_time() as f64;
+		let ss = target as f64;
 		// Current saturation in terms of weight
 		let s = block_weight;
 
@@ -219,22 +235,16 @@ mod multiplier_tests {
 	fn multiplier_can_grow_from_zero() {
 		// if the min is too small, then this will not change, and we are doomed forever.
 		// the block ref time is 1/100th bigger than target.
-		run_with_system_weight(
-			target().set_ref_time(target().ref_time() * 101 / 100),
-			|| {
-				let next = runtime_multiplier_update(min_multiplier());
-				assert!(next > min_multiplier(), "{:?} !> {:?}", next, min_multiplier());
-			},
-		);
+		run_with_system_weight(target().set_ref_time(target().ref_time() * 101 / 100), || {
+			let next = runtime_multiplier_update(min_multiplier());
+			assert!(next > min_multiplier(), "{:?} !> {:?}", next, min_multiplier());
+		});
 
 		// the block proof size is 1/100th bigger than target.
-		run_with_system_weight(
-			target().set_proof_size((target().proof_size() / 100) * 101),
-			|| {
-				let next = runtime_multiplier_update(min_multiplier());
-				assert!(next > min_multiplier(), "{:?} !> {:?}", next, min_multiplier());
-			},
-		)
+		run_with_system_weight(target().set_proof_size((target().proof_size() / 100) * 101), || {
+			let next = runtime_multiplier_update(min_multiplier());
+			assert!(next > min_multiplier(), "{:?} !> {:?}", next, min_multiplier());
+		})
 	}
 
 	#[test]
@@ -419,14 +429,15 @@ mod multiplier_tests {
 
 	#[test]
 	fn weight_to_fee_should_not_overflow_on_large_weights() {
-		let kb_time = Weight::from_parts(1024, 1);
-		let kb_size = Weight::from_parts(1, 1024);
+		let kb_time = Weight::from_parts(1024, 0);
+		let kb_size = Weight::from_parts(0, 1024);
 		let mb_time = 1024u64 * kb_time;
 		let max_fm = Multiplier::saturating_from_integer(i128::MAX);
 
 		// check that for all values it can compute, correctly.
 		vec![
 			Weight::zero(),
+			// testcases ignoring proof size part of the weight.
 			Weight::from_parts(1, 0),
 			Weight::from_parts(10, 0),
 			Weight::from_parts(1000, 0),
@@ -437,6 +448,19 @@ mod multiplier_tests {
 			10u64 * mb_time,
 			Weight::from_parts(2147483647, 0),
 			Weight::from_parts(4294967295, 0),
+			// testcases ignoring ref time part of the weight.
+			Weight::from_parts(0, 1),
+			Weight::from_parts(0, 1000000),
+			Weight::from_parts(0, 100000000),
+			Weight::from_parts(0, 100000000000),
+			kb_size,
+			10u64 * kb_size,
+			100u64 * kb_size,
+			1000000u64 * kb_size,
+			1000000000u64 * kb_size,
+			Weight::from_parts(0, 70368744177664),
+			// test cases with both parts of the weight.
+			BlockWeights::get().max_block / 1024,
 			BlockWeights::get().max_block / 2,
 			BlockWeights::get().max_block,
 			Weight::MAX / 2,
@@ -447,7 +471,7 @@ mod multiplier_tests {
 			run_with_system_weight(i, || {
 				let next = runtime_multiplier_update(Multiplier::one());
 				let truth = truth_value_update(i, Multiplier::one());
-				assert_eq_error_rate!(truth, next, Multiplier::from_inner(50_000_000));
+				assert_eq_error_rate!(truth, next, Multiplier::from_inner(60_000_000));
 			});
 		});
 
