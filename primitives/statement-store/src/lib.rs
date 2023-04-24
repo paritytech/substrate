@@ -283,6 +283,10 @@ impl Statement {
 	/// Returns `true` if signing worked (private key present etc).
 	///
 	/// NOTE: This can only be called from the runtime.
+	///
+	/// Returns `true` if signing worked (private key present etc).
+	///
+	/// NOTE: This can only be called from the runtime.
 	pub fn sign_ecdsa_public(&mut self, key: &ecdsa::Public) -> bool {
 		let to_sign = self.signature_material();
 		if let Some(signature) = key.sign(&to_sign) {
