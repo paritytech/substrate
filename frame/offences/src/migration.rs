@@ -61,7 +61,7 @@ pub mod v1 {
 			}
 
 			let keys_removed = v0::ReportsByKindIndex::<T>::clear(u32::MAX, None).unique as u64;
-			let weight = T::DbWeight::get().writes(keys_removed);
+			let weight = T::DbWeight::get().reads_writes(keys_removed, keys_removed);
 
 			current.put::<Pallet<T>>();
 
@@ -133,7 +133,7 @@ mod test {
 		ext.execute_with(|| {
 			assert_eq!(
 				v1::MigrateToV1::<T>::on_runtime_upgrade(),
-				<T as frame_system::Config>::DbWeight::get().writes(1),
+				<T as frame_system::Config>::DbWeight::get().reads_writes(1, 1),
 			);
 
 			assert!(<v0::ReportsByKindIndex<T>>::iter_values().count() == 0);
