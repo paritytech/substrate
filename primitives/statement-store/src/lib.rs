@@ -223,6 +223,10 @@ impl Statement {
 	}
 
 	/// Sign with a key that matches given public key in the keystore.
+	///
+	/// Returns `true` if signing worked (private key present etc).
+	///
+	/// NOTE: This can only be called from the runtime.
 	pub fn sign_sr25519_public(&mut self, key: &sr25519::Public) -> bool {
 		let to_sign = self.signature_material();
 		if let Some(signature) = key.sign(&to_sign) {
@@ -247,6 +251,10 @@ impl Statement {
 	}
 
 	/// Sign with a key that matches given public key in the keystore.
+	///
+	/// Returns `true` if signing worked (private key present etc).
+	///
+	/// NOTE: This can only be called from the runtime.
 	pub fn sign_ed25519_public(&mut self, key: &ed25519::Public) -> bool {
 		let to_sign = self.signature_material();
 		if let Some(signature) = key.sign(&to_sign) {
@@ -271,6 +279,10 @@ impl Statement {
 	}
 
 	/// Sign with a key that matches given public key in the keystore.
+	///
+	/// Returns `true` if signing worked (private key present etc).
+	///
+	/// NOTE: This can only be called from the runtime.
 	pub fn sign_ecdsa_public(&mut self, key: &ecdsa::Public) -> bool {
 		let to_sign = self.signature_material();
 		if let Some(signature) = key.sign(&to_sign) {
@@ -395,8 +407,8 @@ impl Statement {
 		self.encoded(true)
 	}
 
-	/// Return a copy of this statement with proof removed
-	pub fn strip_proof(&mut self) {
+	/// Remove the proof of this statement.
+	pub fn remove_proof(&mut self) {
 		self.proof = None;
 	}
 

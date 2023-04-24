@@ -162,10 +162,7 @@ where
 			// Validate against the finalized state.
 			self.client.info().finalized_hash
 		});
-		match api.validate_statement(block, source, statement) {
-			Ok(r) => r,
-			Err(_) => Err(InvalidStatement::InternalError),
-		}
+		api.validate_statement(block, source, statement).map_err(|_| InvalidStatement::InternalError)
 	}
 }
 
@@ -274,14 +271,14 @@ impl Index {
 			return Ok(())
 		}
 		let key_set = self.by_dec_key.get(&key);
-		if key_set.map(|s| s.len()).unwrap_or(0) == 0 {
+		if key_set.map_or(0, |s| s.len()) == 0 {
 			// Key does not exist in the index.
 			return Ok(())
 		}
 		sets[0] = key_set.expect("Function returns if key_set is None");
 		for (i, t) in match_all_topics.iter().enumerate() {
 			let set = self.by_topic.get(t);
-			if set.map(|s| s.len()).unwrap_or(0) == 0 {
+			if set.map_or(0, |s| s.len()) == 0 {
 				// At least one of the match_all_topics does not exist in the index.
 				return Ok(())
 			}
@@ -513,7 +510,7 @@ impl Store {
 		// Perform periodic statement store maintenance
 		let worker_store = store.clone();
 		task_spawner.spawn(
-			"statement-store-notifications",
+			"statement-store-maintenance",
 			Some("statement-store"),
 			Box::pin(async move {
 				let mut interval = tokio::time::interval(MAINTENANCE_PERIOD);

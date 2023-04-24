@@ -28,7 +28,7 @@
 
 use crate::config::*;
 use codec::{Decode, Encode};
-use futures::{channel::oneshot, prelude::*, stream::FuturesUnordered};
+use futures::{channel::oneshot, prelude::*, stream::FuturesUnordered, FutureExt};
 use libp2p::{multiaddr, PeerId};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network::{
@@ -102,31 +102,10 @@ impl Metrics {
 	}
 }
 
-#[pin_project::pin_project]
-struct PendingStatement {
-	#[pin]
-	validation: StatementImportFuture,
-	hash: Hash,
-}
-
-impl Future for PendingStatement {
-	type Output = (Hash, Option<SubmitResult>);
-
-	fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-		let mut this = self.project();
-
-		if let Poll::Ready(import_result) = Pin::new(&mut this.validation).poll_unpin(cx) {
-			return Poll::Ready((*this.hash, import_result.ok()))
-		}
-
-		Poll::Pending
-	}
-}
 
 /// Prototype for a [`StatementHandler`].
 pub struct StatementHandlerPrototype {
 	protocol_name: ProtocolName,
-	fallback_protocol_names: Vec<ProtocolName>,
 }
 
 impl StatementHandlerPrototype {
@@ -142,11 +121,9 @@ impl StatementHandlerPrototype {
 		} else {
 			format!("/{}/statement/1", array_bytes::bytes2hex("", genesis_hash))
 		};
-		let legacy_protocol_name = format!("/{}/statement/1", protocol_id.as_ref());
 
 		Self {
 			protocol_name: protocol_name.into(),
-			fallback_protocol_names: iter::once(legacy_protocol_name.into()).collect(),
 		}
 	}
 
@@ -154,7 +131,7 @@ impl StatementHandlerPrototype {
 	pub fn set_config(&self) -> NonDefaultSetConfig {
 		NonDefaultSetConfig {
 			notifications_protocol: self.protocol_name.clone(),
-			fallback_names: self.fallback_protocol_names.clone(),
+			fallback_names: Vec::new(),
 			max_notification_size: MAX_STATEMENT_SIZE,
 			handshake: None,
 			set_config: SetConfig {
@@ -179,7 +156,7 @@ impl StatementHandlerPrototype {
 		sync: S,
 		statement_store: Arc<dyn StatementStore>,
 		metrics_registry: Option<&Registry>,
-		executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
+		executor: impl sp_core::traits::SpawnNamed,
 	) -> error::Result<StatementHandler<N, S>> {
 		let net_event_stream = network.event_stream("statement-handler-net");
 		let sync_event_stream = sync.event_stream("statement-handler-sync");
@@ -196,7 +173,7 @@ impl StatementHandlerPrototype {
 						None => return,
 						Some((statement, completion)) => {
 							let result = store.submit(statement, StatementSource::Network);
-							if let Err(_) = completion.send(result) {
+							if completion.send(result).is_err() {
 								log::debug!(
 									target: LOG_TARGET,
 									"Error sending validation completion"
@@ -243,7 +220,7 @@ pub struct StatementHandler<
 	/// Interval at which we call `propagate_statements`.
 	propagate_timeout: stream::Fuse<Pin<Box<dyn Stream<Item = ()> + Send>>>,
 	/// Pending statements verification tasks.
-	pending_statements: FuturesUnordered<PendingStatement>,
+	pending_statements: FuturesUnordered<Box<dyn Future<Output = (Hash, Option<SubmitResult>)> + Send>>,
 	/// As multiple peers can send us the same statement, we group
 	/// these peers using the statement hash while the statement is
 	/// imported. This prevents that we import the same statement
@@ -367,7 +344,7 @@ where
 						continue
 					}
 					// Accept statements only when node is not major syncing
-					if self.sync.is_major_syncing() || self.sync.is_offline() {
+					if self.sync.is_major_syncing() {
 						log::trace!(
 							target: LOG_TARGET,
 							"{remote}: Ignoring statements while major syncing or offline"
@@ -412,16 +389,14 @@ where
 				match self.pending_statements_peers.entry(hash) {
 					Entry::Vacant(entry) => {
 						let (completion_sender, completion_receiver) = oneshot::channel();
-						if let Ok(()) = self.queue_sender.unbounded_send((s, completion_sender)) {
+						if self.queue_sender.unbounded_send((s, completion_sender)).is_ok() {
 							self.pending_statements
-								.push(PendingStatement { validation: completion_receiver, hash });
-							let mut set = HashSet::new();
-							set.insert(who);
-							entry.insert(set);
+								.push(async move { let res = completion_receiver.await; (hash, res.ok()) }.boxed());
+							entry.insert(HashSet::from_iter([who]));
 						}
 					},
 					Entry::Occupied(mut entry) => {
-						if !(entry.get_mut().insert(who)) {
+						if !entry.get_mut().insert(who) {
 							// Already received this from the same peer.
 							self.network.report_peer(who, rep::DUPLICATE_STATEMENT);
 						}
@@ -462,18 +437,17 @@ where
 		let mut propagated_statements = 0;
 
 		for (who, peer) in self.peers.iter_mut() {
-			// never send statements to the light node
+			// never send statements to light nodes
 			if matches!(peer.role, ObservedRole::Light) {
 				continue
 			}
 
-			let (hashes, to_send): (Vec<_>, Vec<_>) = statements
+			let to_send = statements
 				.iter()
-				.filter(|(hash, _)| peer.known_statements.insert(*hash))
-				.cloned()
-				.unzip();
+				.filter_map(|(hash, stmt)| peer.known_statements.insert(*hash).then(|| stmt))
+				.collect::<Vec<_>>();
 
-			propagated_statements += hashes.len();
+			propagated_statements += to_send.len();
 
 			if !to_send.is_empty() {
 				log::trace!(target: LOG_TARGET, "Sending {} statements to {}", to_send.len(), who);

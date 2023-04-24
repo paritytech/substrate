@@ -564,7 +564,7 @@ pub fn new_full_base(
 
 	// Spawn statement protocol worker
 	let statement_protocol_executor = {
-		let spawn_handle = Clone::clone(&task_manager.spawn_handle());
+		let spawn_handle = task_manager.spawn_handle();
 		Box::new(move |fut| {
 			spawn_handle.spawn("network-statement-validator", Some("networking"), fut);
 		})

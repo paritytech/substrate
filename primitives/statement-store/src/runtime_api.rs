@@ -60,8 +60,8 @@ pub enum StatementSource {
 	Chain,
 	/// Statement has been received from the gossip network.
 	Network,
-	/// Statement has been submitted over the RPC api.
-	Rpc,
+	/// Statement has been submitted over the local api.
+	Local,
 }
 
 impl StatementSource {

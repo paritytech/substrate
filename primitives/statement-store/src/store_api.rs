@@ -64,7 +64,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Statement store API.
 pub trait StatementStore: Send + Sync {
 	/// Return all statements.
-	fn dump(&self) -> Result<Vec<(Hash, Statement)>>;
+	fn statements(&self) -> Result<Vec<(Hash, Statement)>>;
 
 	/// Get statement by hash.
 	fn statement(&self, hash: &Hash) -> Result<Option<Statement>>;
