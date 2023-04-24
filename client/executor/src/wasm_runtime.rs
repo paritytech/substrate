@@ -312,7 +312,6 @@ where
 				H::host_functions(),
 				allow_missing_func_imports,
 			)
-			.map(|runtime| -> Box<dyn WasmModule> { Box::new(runtime) })
 		},
 		WasmExecutionMethod::Compiled { instantiation_strategy } =>
 			sc_executor_wasmtime::create_runtime::<H>(

@@ -18,17 +18,36 @@
 
 //! Rust executor possible errors.
 
-use wasmi;
+#[cfg(feature = "wasmi")]
+use sp_wasm_interface::wasmi;
 
 /// Result type alias.
 pub type Result<T> = std::result::Result<T, Error>;
+
+#[cfg(feature = "wasmi")]
+use wasmi::Error as WasmiError;
+
+/// Mock for wasmi error type.
+#[cfg(not(feature = "wasmi"))]
+#[derive(Clone, Debug)]
+pub struct WasmiError;
+
+#[cfg(not(feature = "wasmi"))]
+impl std::fmt::Display for WasmiError {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("WasmiError")
+	}
+}
+
+#[cfg(not(feature = "wasmi"))]
+impl std::error::Error for WasmiError {}
 
 /// Error type.
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum Error {
 	#[error(transparent)]
-	Wasmi(#[from] wasmi::Error),
+	Wasmi(#[from] WasmiError),
 
 	#[error("Error calling api function: {0}")]
 	ApiError(Box<dyn std::error::Error + Send + Sync>),
@@ -109,6 +128,7 @@ pub enum Error {
 	OutputExceedsBounds,
 }
 
+#[cfg(feature = "wasmi")]
 impl wasmi::HostError for Error {}
 
 impl From<&'static str> for Error {
