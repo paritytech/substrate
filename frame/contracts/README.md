@@ -106,14 +106,14 @@ Look for the `define_env!` macro invocation.
 
 This module executes WebAssembly smart contracts. These can potentially be written in any language
 that compiles to web assembly. However, using a language that specifically targets this module
-will make things a lot easier. One such language is [`ink`](https://github.com/paritytech/ink)
+will make things a lot easier. One such language is [`ink!`](https://use.ink)
 which is an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables
 writing WebAssembly based smart contracts in the Rust programming language.
 
 ## Debugging
 
 Contracts can emit messages to the client when called as RPC through the `seal_debug_message`
-API. This is exposed in ink! via
+API. This is exposed in [ink!](https://use.ink) via
 [`ink_env::debug_message()`](https://paritytech.github.io/ink/ink_env/fn.debug_message.html).
 
 Those messages are gathered into an internal buffer and send to the RPC client.

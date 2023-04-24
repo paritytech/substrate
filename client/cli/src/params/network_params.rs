@@ -132,11 +132,6 @@ pub struct NetworkParams {
 	pub ipfs_server: bool,
 
 	/// Blockchain syncing mode.
-	///
-	/// - `full`: Download and validate full blockchain history.
-	/// - `fast`: Download blocks and the latest state only.
-	/// - `fast-unsafe`: Same as `fast`, but skip downloading state proofs.
-	/// - `warp`: Download the latest state and proof.
 	#[arg(
 		long,
 		value_enum,
@@ -146,6 +141,13 @@ pub struct NetworkParams {
 		verbatim_doc_comment
 	)]
 	pub sync: SyncMode,
+
+	/// Maximum number of blocks per request.
+	///
+	/// Try reducing this number from the default value if you have a slow network connection
+	/// and observe block requests timing out.
+	#[arg(long, value_name = "COUNT", default_value_t = 64)]
+	pub max_blocks_per_request: u32,
 }
 
 impl NetworkParams {
@@ -235,6 +237,7 @@ impl NetworkParams {
 				allow_private_ip,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
+			max_blocks_per_request: self.max_blocks_per_request,
 			enable_dht_random_walk: !self.reserved_only,
 			allow_non_globals_in_dht,
 			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,

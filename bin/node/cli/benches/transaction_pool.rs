@@ -27,7 +27,7 @@ use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
 		BlocksPruning, DatabaseSource, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
-		PruningMode, TransactionPoolOptions, WasmExecutionMethod,
+		PruningMode, TransactionPoolOptions,
 	},
 	BasePath, Configuration, Role,
 };
@@ -69,7 +69,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		state_pruning: Some(PruningMode::ArchiveAll),
 		blocks_pruning: BlocksPruning::KeepAll,
 		chain_spec: spec,
-		wasm_method: WasmExecutionMethod::Interpreted,
+		wasm_method: Default::default(),
 		// NOTE: we enforce the use of the native runtime to make the errors more debuggable
 		execution_strategies: ExecutionStrategies {
 			syncing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
