@@ -564,7 +564,7 @@ pub trait SortedListProvider<AccountId> {
 
 	/// Check internal state of the list. Only meant for debugging.
 	#[cfg(feature = "try-runtime")]
-	fn try_state() -> Result<(), &'static str>;
+	fn try_state() -> DispatchResult;
 
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.

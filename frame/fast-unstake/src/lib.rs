@@ -228,12 +228,12 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
+		fn try_state(_n: T::BlockNumber) -> DispatchResult {
 			// ensure that the value of `ErasToCheckPerBlock` is less than
 			// `T::MaxErasToCheckPerBlock`.
-			assert!(
+			ensure!(
 				ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
-				"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
+				DispatchError::Other("the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`"),
 			);
 
 			Ok(())

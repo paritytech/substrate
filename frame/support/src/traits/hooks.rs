@@ -277,7 +277,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// This hook should not alter any storage.
 	#[cfg(feature = "try-runtime")]
-	fn try_state(_n: BlockNumber) -> Result<(), &'static str> {
+	fn try_state(_n: BlockNumber) -> DispatchResult {
 		Ok(())
 	}
 
