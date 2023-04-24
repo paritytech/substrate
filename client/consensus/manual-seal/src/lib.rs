@@ -30,6 +30,7 @@ use sc_consensus::{
 	block_import::{BlockImport, BlockImportParams, ForkChoiceStrategy},
 	import_queue::{BasicQueue, BoxBlockImport, Verifier},
 };
+use sc_service::SpawnTaskHandle;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::{Environment, Proposer, SelectChain};
 use sp_inherents::CreateInherentDataProviders;
@@ -144,7 +145,7 @@ pub struct DelayedFinalizeParams<B: BlockT, C: ProvideRuntimeApi<B>> {
 	/// Block import instance for well. importing blocks.
 	pub client: Arc<C>,
 
-	pub spawn_handle: sc_service::SpawnTaskHandle,
+	pub spawn_handle: SpawnTaskHandle,
 
 	/// The delay in seconds before a block is finalized.
 	pub delay_sec: u64,
