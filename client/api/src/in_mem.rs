@@ -805,8 +805,7 @@ where
 
 	fn pin_block(&self, hash: <Block as BlockT>::Hash) -> blockchain::Result<()> {
 		let mut blocks = self.pinned_blocks.write();
-		blocks.entry(hash).and_modify(|counter| *counter += 1).or_insert(1);
-
+		*blocks.entry(hash).or_default() += 1;
 		Ok(())
 	}
 

@@ -225,7 +225,7 @@ impl<Block: BlockT> SubscriptionState<Block> {
 	///
 	/// Returns:
 	/// - true if the block can be unpinned.
-	/// - false if the subscription does not contain the block.
+	/// - false if the subscription does not contain the block or it was unpinned.
 	fn unregister_block(&mut self, hash: Block::Hash) -> bool {
 		match self.blocks.entry(hash) {
 			Entry::Occupied(mut occupied) => {
@@ -264,7 +264,11 @@ impl<Block: BlockT> SubscriptionState<Block> {
 	}
 
 	/// Get the timestamp of the oldest inserted block.
-	fn oldest_block_timestamp(&self) -> Instant {
+	///
+	/// # Note
+	///
+	/// This iterates over all the blocks of the subscription.
+	fn find_oldest_block_timestamp(&self) -> Instant {
 		let mut timestamp = Instant::now();
 		for (_, state) in self.blocks.iter() {
 			timestamp = std::cmp::min(timestamp, state.timestamp);
@@ -407,7 +411,7 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionsInner<Block, BE> 
 			.subs
 			.iter_mut()
 			.filter_map(|(sub_id, sub)| {
-				let sub_time = sub.oldest_block_timestamp();
+				let sub_time = sub.find_oldest_block_timestamp();
 				// Subscriptions older than the specified pin duration should be removed.
 				let should_remove = match now.checked_duration_since(sub_time) {
 					Some(duration) => duration > self.local_max_pin_duration,
