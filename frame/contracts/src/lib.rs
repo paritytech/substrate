@@ -1033,7 +1033,15 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 			debug_message,
 			*determinism,
 		);
-		InternalOutput { gas_meter, storage_deposit: storage_meter.into_deposit(&origin), result }
+
+		match storage_meter.try_into_deposit(&origin) {
+			Ok(storage_deposit) => InternalOutput { gas_meter, result, storage_deposit },
+			Err(err) => InternalOutput {
+				result: Err(err.into()),
+				gas_meter,
+				storage_deposit: Default::default(),
+			},
+		}
 	}
 }
 
@@ -1094,9 +1102,8 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 				&salt,
 				debug_message,
 			);
-			storage_deposit = storage_meter
-				.into_deposit(&origin)
-				.saturating_add(&StorageDeposit::Charge(extra_deposit));
+
+			storage_deposit = storage_meter.try_into_deposit(&origin)?;
 			result
 		};
 		InternalOutput { result: try_exec(), gas_meter, storage_deposit }

@@ -82,7 +82,7 @@ pub trait Ext<T: Config> {
 		deposit_account: &DepositAccount<T>,
 		amount: &DepositOf<T>,
 		terminated: bool,
-	);
+	) -> Result<(), DispatchError>;
 }
 
 /// This [`Ext`] is used for actual on-chain execution when balance needs to be charged.
@@ -343,14 +343,14 @@ where
 	///
 	/// This drops the root meter in order to make sure it is only called when the whole
 	/// execution did finish.
-	pub fn into_deposit(self, origin: &T::AccountId) -> DepositOf<T> {
+	pub fn try_into_deposit(self, origin: &T::AccountId) -> Result<DepositOf<T>, DispatchError> {
 		for charge in self.charges.iter().filter(|c| matches!(c.amount, Deposit::Refund(_))) {
-			E::charge(origin, &charge.deposit_account, &charge.amount, charge.terminated);
+			E::charge(origin, &charge.deposit_account, &charge.amount, charge.terminated)?;
 		}
 		for charge in self.charges.iter().filter(|c| matches!(c.amount, Deposit::Charge(_))) {
-			E::charge(origin, &charge.deposit_account, &charge.amount, charge.terminated);
+			E::charge(origin, &charge.deposit_account, &charge.amount, charge.terminated)?;
 		}
-		self.total_deposit
+		Ok(self.total_deposit)
 	}
 }
 
@@ -405,7 +405,8 @@ where
 			info.deposit_account(),
 			&deposit.saturating_sub(&Deposit::Charge(ed)),
 			false,
-		);
+		)?;
+
 		System::<T>::inc_consumers(info.deposit_account())?;
 
 		// We also need to make sure that the contract's account itself exists.
@@ -476,41 +477,14 @@ impl<T: Config> Ext<T> for ReservingExt {
 		deposit_account: &DepositAccount<T>,
 		amount: &DepositOf<T>,
 		terminated: bool,
-	) {
-		// There is nothing we can do when this fails as this constitutes a bug in the runtime.
-		// We need to settle for emitting an error log in this case.
-		//
-		// # Note
-		//
-		// This is infallible because it is called in a part of the execution where we cannot
-		// simply roll back. It might make sense to do some refactoring to move the deposit
-		// collection to the fallible part of execution.
+	) -> Result<(), DispatchError> {
 		match amount {
-			Deposit::Charge(amount) => {
-				// This will never fail because a deposit account is required to exist
-				// at all times. The pallet enforces this invariant by holding a consumer reference
-				// on the deposit account as long as the contract exists.
-				//
-				// The sender always has enough balance because we checked that it had enough
-				// balance when instantiating the storage meter. There is no way for the sender
-				// which is a plain account to send away this balance in the meantime.
-				let result = T::Currency::transfer(
-					origin,
-					deposit_account,
-					*amount,
-					ExistenceRequirement::KeepAlive,
-				);
-				if let Err(err) = result {
-					log::error!(
-						target: "runtime::contracts",
-						"Failed to transfer storage deposit {:?} from origin {:?} to deposit account {:?}: {:?}",
-						amount, origin, deposit_account, err,
-					);
-					if cfg!(debug_assertions) {
-						panic!("Unable to collect storage deposit. This is a bug.");
-					}
-				}
-			},
+			Deposit::Charge(amount) => T::Currency::transfer(
+				origin,
+				deposit_account,
+				*amount,
+				ExistenceRequirement::KeepAlive,
+			),
 			// The receiver always exists because the initial value transfer from the
 			// origin to the contract has a keep alive existence requirement. When taking a deposit
 			// we make sure to leave at least the ed in the free balance.
@@ -539,8 +513,9 @@ impl<T: Config> Ext<T> for ReservingExt {
 						panic!("Unable to refund storage deposit. This is a bug.");
 					}
 				}
+				Ok(())
 			},
-		};
+		}
 	}
 }
 
@@ -613,7 +588,7 @@ mod tests {
 			contract: &DepositAccount<Test>,
 			amount: &DepositOf<Test>,
 			terminated: bool,
-		) {
+		) -> Result<(), DispatchError> {
 			TestExtTestValue::mutate(|ext| {
 				ext.charges.push(Charge {
 					origin: origin.clone(),
@@ -622,6 +597,7 @@ mod tests {
 					terminated,
 				})
 			});
+			Ok(())
 		}
 	}
 
@@ -719,7 +695,7 @@ mod tests {
 		nested0.enforce_limit(Some(&mut nested0_info)).unwrap();
 		meter.absorb(nested0, DepositAccount(BOB), Some(&mut nested0_info));
 
-		meter.into_deposit(&ALICE);
+		meter.try_into_deposit(&ALICE).unwrap();
 
 		assert_eq!(nested0_info.extra_deposit(), 112);
 		assert_eq!(nested1_info.extra_deposit(), 110);
@@ -779,7 +755,7 @@ mod tests {
 		nested0.absorb(nested1, DepositAccount(CHARLIE), None);
 
 		meter.absorb(nested0, DepositAccount(BOB), None);
-		meter.into_deposit(&ALICE);
+		meter.try_into_deposit(&ALICE).unwrap();
 
 		assert_eq!(
 			TestExtTestValue::get(),

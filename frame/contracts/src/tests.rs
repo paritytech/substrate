@@ -70,6 +70,7 @@ frame_support::construct_runtime!(
 		Randomness: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
 		Utility: pallet_utility::{Pallet, Call, Storage, Event},
 		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>},
+		Proxy: pallet_proxy::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -337,6 +338,22 @@ impl pallet_utility::Config for Test {
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 }
+
+impl pallet_proxy::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type Currency = Balances;
+	type ProxyType = ();
+	type ProxyDepositBase = ConstU64<1>;
+	type ProxyDepositFactor = ConstU64<1>;
+	type MaxProxies = ConstU32<32>;
+	type WeightInfo = ();
+	type MaxPending = ConstU32<32>;
+	type CallHasher = BlakeTwo256;
+	type AnnouncementDepositBase = ConstU64<1>;
+	type AnnouncementDepositFactor = ConstU64<1>;
+}
+
 parameter_types! {
 	pub MySchedule: Schedule<Test> = {
 		let mut schedule = <Schedule<Test>>::default();
@@ -2963,6 +2980,85 @@ fn sr25519_verify() {
 
 		// verification should fail for other messages
 		assert_return_code!(call_with(&b"hello worlD"), RuntimeReturnCode::Sr25519VerifyFailed);
+	})
+}
+
+#[test]
+fn test_failed_charge_should_roll_back_call() {
+	let (wasm_caller, _) = compile_module::<Test>("call_runtime_and_call").unwrap();
+	let (wasm_callee, _) = compile_module::<Test>("store").unwrap();
+
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Instantiate both contracts.
+		let addr_caller = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm_caller),
+			vec![],
+			vec![],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+		let addr_callee = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm_callee),
+			vec![],
+			vec![],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		// Give caller proxy access to caller
+		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(ALICE), addr_caller.clone(), (), 0));
+
+		// create a Proxy call that will create a transfer onbehalf of Alice
+		let value = pallet_balances::Pallet::<Test>::free_balance(&ALICE) -
+			<Test as Config>::Currency::minimum_balance();
+
+		let transfer_call =
+			Box::new(RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
+				dest: CHARLIE,
+				value,
+			}));
+
+		// wrap the transfer call in a proxy call
+		let transfer_proxy_call = RuntimeCall::Proxy(pallet_proxy::Call::proxy {
+			real: ALICE,
+			force_proxy_type: Some(()),
+			call: transfer_call,
+		});
+
+		// encode inputs data
+		let data = (
+			30u32, // storage length
+			addr_callee.clone(),
+			transfer_proxy_call,
+		);
+
+		DEPOSIT_PER_BYTE.with(|c| *c.borrow_mut() = 1_000);
+
+		// dispatch the call
+		let result = <Pallet<Test>>::call(
+			RuntimeOrigin::signed(ALICE),
+			addr_caller.clone(),
+			0,
+			GAS_LIMIT,
+			None, //Some(5_000),
+			data.encode(),
+		);
+
+		assert_err_ignore_postinfo!(result, TokenError::FundsUnavailable);
 	})
 }
 
