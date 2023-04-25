@@ -780,6 +780,7 @@ pub fn build_network_with_transport_wrapper<
 		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 		sc_network_transactions::TransactionsHandlerController<<TBl as BlockT>::Hash>,
 		NetworkStarter,
+		Arc<SyncingService<TBl>>,
 	),
 	Error,
 >
@@ -794,7 +795,7 @@ where
 		+ HeaderBackend<TBl>
 		+ BlockchainEvents<TBl>
 		+ 'static,
-	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> + 'static,
+	TExPool: TransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 	TImpQu: ImportQueue<TBl> + 'static,
 	TransportBuilder: Fn(sc_network::TcpTransport) -> Transport,
 	Transport: sc_network::Transport + Send + Unpin + 'static,
