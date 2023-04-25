@@ -69,7 +69,10 @@ use frame_system::{ensure_signed, pallet_prelude::OriginFor};
 pub use pallet::*;
 use sp_arithmetic::traits::Unsigned;
 use sp_runtime::{
-	traits::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Ensure, MaybeDisplay, Zero},
+	traits::{
+		CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Ensure, MaybeDisplay, TrailingZeroInput,
+		Zero,
+	},
 	DispatchError,
 };
 use sp_std::vec;
@@ -93,7 +96,7 @@ pub mod pallet {
 		PalletId,
 	};
 	use sp_runtime::{
-		traits::{AccountIdConversion, IntegerSquareRoot, One, Zero},
+		traits::{IntegerSquareRoot, One, Zero},
 		Saturating,
 	};
 	use sp_std::prelude::*;
@@ -770,9 +773,10 @@ pub mod pallet {
 		/// This actually does computation. If you need to keep using it, then make sure you cache
 		/// the value and only call this once.
 		pub fn get_pool_account(pool_id: PoolIdOf<T>) -> T::AccountId {
-			T::PalletId::get().into_sub_account_truncating(pool_id)
-			// let sub = sp_io::hashing::blake2_256(&Encode::encode(&pool_id)[..]);
-			// T::PalletId::get().into_sub_account_truncating(sub)
+			let encoded_pool_id = sp_io::hashing::blake2_256(&Encode::encode(&pool_id)[..]);
+			
+			Decode::decode(&mut TrailingZeroInput::new(encoded_pool_id.as_ref()))
+				.expect("infinite length input; no invalid inputs for type; qed")
 		}
 
 		fn get_balance(

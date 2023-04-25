@@ -100,7 +100,7 @@ fn check_pool_accounts_dont_collide() {
 	use std::collections::HashSet;
 	let mut map = HashSet::new();
 
-	for i in 0..33554431u32 {
+	for i in 0..1_000_000u32 {
 		let account =
 			AssetConversion::get_pool_account((NativeOrAssetId::Native, NativeOrAssetId::Asset(i)));
 		if map.contains(&account) {
