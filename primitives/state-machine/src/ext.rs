@@ -824,13 +824,13 @@ impl<'a> StorageAppend<'a> {
 	}
 
 	/// Extract current length if defined.
-	pub fn extract_length_data(&self) -> Option<u32> {
+	pub fn extract_nb_appends(&self) -> Option<u32> {
 		let len = u32::from(Compact::<u32>::decode(&mut &self.0[..]).ok()?);
 		Some(len)
 	}
 
 	/// Replace current length if defined.
-	pub fn replace_length_data(&mut self, old_length: u32, new_length: u32) {
+	pub fn replace_nb_appends(&mut self, old_length: u32, new_length: u32) {
 		let encoded_len = Compact::<u32>::compact_len(&old_length);
 		let encoded_new = Compact::<u32>(new_length).encode();
 		if encoded_len > encoded_new.len() {

@@ -113,8 +113,7 @@ pub enum StorageEntry {
 		//
 		// This value is only define on the last state of a transaction, iff `data`
 		// has been sent forward to next transaction (and thus `data` is empty).
-		// TODO rename to imply data is not here.
-		size: Option<usize>,
+		moved_size: Option<usize>,
 		// Current number of appended elements.
 		nb_append: u32,
 		/*
@@ -279,8 +278,8 @@ impl OverlayedEntry<StorageEntry> {
 					**at = value;
 					None
 				},
-				StorageEntry::Append { data, size, nb_append } => {
-					debug_assert!(size.is_none());
+				StorageEntry::Append { data, moved_size, nb_append } => {
+					debug_assert!(moved_size.is_none());
 					let result = core::mem::take(data);
 					Some((value, result, *nb_append))
 				},
@@ -290,15 +289,15 @@ impl OverlayedEntry<StorageEntry> {
 				let nb_transactions = self.transactions.len();
 				if let Some(parent) = self.transactions.get_mut(nb_transactions - 2) {
 					match &mut parent.value {
-						StorageEntry::Append { data: parent_data, size, nb_append } => {
+						StorageEntry::Append { data: parent_data, moved_size, nb_append } => {
 							debug_assert!(parent_data.is_empty());
 							let mut append = StorageAppend::new(&mut data);
 							let current =
-								append.extract_length_data().expect("append is always valid; qed");
+								append.extract_nb_appends().expect("append is always valid; qed");
 							debug_assert!(current_nb_append == current);
-							append.replace_length_data(current, *nb_append);
+							append.replace_nb_appends(current, *nb_append);
 							data.truncate(
-								size.expect("append in new layer store size in previous; qed"),
+								moved_size.expect("append in new layer store size in previous; qed"),
 							);
 							*parent_data = data;
 						},
@@ -328,7 +327,7 @@ impl OverlayedEntry<StorageEntry> {
 			let mut data = Vec::new();
 			StorageAppend::new(&mut data).append(value);
 			self.transactions.push(InnerValue {
-				value: StorageEntry::Append { data, size: None, nb_append: 1 },
+				value: StorageEntry::Append { data, moved_size: None, nb_append: 1 },
 				extrinsics: Default::default(),
 			});
 		} else if first_write_in_tx {
@@ -346,18 +345,18 @@ impl OverlayedEntry<StorageEntry> {
 					let mut append = StorageAppend::new(&mut data);
 					append.append(value);
 					let nb_append =
-						append.extract_length_data().expect("append is always valid; qed");
+						append.extract_nb_appends().expect("append is always valid; qed");
 					(data, nb_append)
 				},
-				StorageEntry::Append { data, size, nb_append } => {
-					assert!(size.is_none());
-					*size = Some(data.len());
+				StorageEntry::Append { data, moved_size, nb_append } => {
+					assert!(moved_size.is_none());
+					*moved_size = Some(data.len());
 					StorageAppend::new(data).append(value);
 					(core::mem::take(data), *nb_append + 1)
 				},
 			};
 			self.transactions.push(InnerValue {
-				value: StorageEntry::Append { data, size: None, nb_append },
+				value: StorageEntry::Append { data, moved_size: None, nb_append },
 				extrinsics: Default::default(),
 			});
 		} else {
@@ -373,8 +372,8 @@ impl OverlayedEntry<StorageEntry> {
 					// encoding.
 					let mut append = StorageAppend::new(data);
 					append.append(value);
-					let size = append.extract_length_data().expect("append is always valid; qed");
-					Some((core::mem::take(data), size))
+					let nb_append = append.extract_nb_appends().expect("append is always valid; qed");
+					Some((core::mem::take(data), nb_append))
 				},
 				StorageEntry::Append { data, nb_append, .. } => {
 					assert!(StorageAppend::new(data).append(value));
@@ -383,7 +382,7 @@ impl OverlayedEntry<StorageEntry> {
 				},
 			};
 			if let Some((data, nb_append)) = replace {
-				*old_value = StorageEntry::Append { data, size: None, nb_append };
+				*old_value = StorageEntry::Append { data, moved_size: None, nb_append };
 			}
 		}
 
@@ -627,23 +626,23 @@ impl OverlayedChangeSet {
 				match overlayed.pop_transaction().value {
 					StorageEntry::Append {
 						mut data,
-						size: size_current,
+						moved_size: size_current,
 						nb_append: nb_append_current,
 					} => {
 						debug_assert!(size_current.is_none());
 						if !overlayed.transactions.is_empty() {
 							match overlayed.value_mut() {
-								StorageEntry::Append { data: empty_data, size, nb_append } => {
+								StorageEntry::Append { data: empty_data, moved_size, nb_append } => {
 									debug_assert!(empty_data.is_empty());
-									debug_assert!(size.is_some());
+									debug_assert!(moved_size.is_some());
 									// restore move of data
 									let mut append = StorageAppend::new(&mut data);
 									let current = append
-										.extract_length_data()
+										.extract_nb_appends()
 										.expect("append is always valid; qed");
 									debug_assert!(nb_append_current == current);
-									append.replace_length_data(current, *nb_append);
-									let size = size
+									append.replace_nb_appends(current, *nb_append);
+									let size = moved_size
 										.take()
 										.expect("append in new layer store size in previous; qed");
 									data.truncate(size);
