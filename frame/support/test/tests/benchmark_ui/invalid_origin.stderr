@@ -2,7 +2,10 @@ error[E0599]: no variant or associated item named `new_call_variant_thing` found
  --> tests/benchmark_ui/invalid_origin.rs:6:1
   |
 6 | #[benchmarks]
-  | ^^^^^^^^^^^^^ variant or associated item not found in `Call<T>`
+  | ^^^^^^^^^^^^^
+  | |
+  | variant or associated item not found in `Call<T>`
+  | help: there is an associated function with a similar name: `new_call_variant_noop`
   |
   = note: this error originates in the attribute macro `benchmarks` (in Nightly builds, run with -Z macro-backtrace for more info)
 
