@@ -100,10 +100,7 @@ pub trait State: private::Sealed {}
 
 /// State parameter that constitutes a meter that is in its root state.
 #[derive(Default, Debug)]
-pub enum Root {
-	#[default]
-	Unit,
-}
+pub struct Root;
 
 /// State parameter that constitutes a meter that is in its nested state.
 /// Its value indicates whether the nested meter has its own limit.
