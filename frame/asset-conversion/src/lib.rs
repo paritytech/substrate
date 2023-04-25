@@ -44,7 +44,7 @@
 //! http://localhost:9933/
 //! ```
 //! (This can be run against the kitchen sync node in the `node` folder of this repo.)
-
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 use frame_support::traits::Incrementable;
 
@@ -202,41 +202,76 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A successful call of the `CretaPool` extrinsic will create this event.
-		PoolCreated { creator: T::AccountId, pool_id: PoolIdOf<T>, lp_token: T::PoolAssetId },
+		PoolCreated {
+			/// The account that created the pool.
+			creator: T::AccountId,
+			/// The pool id associated with the pool. Note that the order of the assets may not be
+			/// the same as the order specified in the create pool extrinsic.
+			pool_id: PoolIdOf<T>,
+			/// The id of the liquidity tokens that will be minted when assets are added to this
+			/// pool.
+			lp_token: T::PoolAssetId,
+		},
+
 		/// A successful call of the `AddLiquidity` extrinsic will create this event.
 		LiquidityAdded {
+			/// The account that the liquidity was taken from.
 			who: T::AccountId,
+			/// The account that the liquidity tokens were minted to.
 			mint_to: T::AccountId,
+			/// The pool id of the pool that the liquidity was added to.
 			pool_id: PoolIdOf<T>,
+			/// The amount of the first asset that was added to the pool.
 			amount1_provided: AssetBalanceOf<T>,
+			/// The amount of the second asset that was added to the pool.
 			amount2_provided: AssetBalanceOf<T>,
+			/// The id of the lp token that was minted.
 			lp_token: T::PoolAssetId,
+			/// The amount of lp tokens that were minted of that id.
 			lp_token_minted: AssetBalanceOf<T>,
 		},
+
 		/// A successful call of the `RemoveLiquidity` extrinsic will create this event.
 		LiquidityRemoved {
+			/// The account that the liquidity tokens were burned from.
 			who: T::AccountId,
+			/// The account that the assets were transferred to.
 			withdraw_to: T::AccountId,
+			/// The pool id that the liquidity was removed from.
 			pool_id: PoolIdOf<T>,
+			/// The amount of the first asset that was removed from the pool.
 			amount1: AssetBalanceOf<T>,
+			/// The amount of the second asset that was removed from the pool.
 			amount2: AssetBalanceOf<T>,
+			/// The id of the lp token that was burned.
 			lp_token: T::PoolAssetId,
+			/// The amount of lp tokens that were burned of that id.
 			lp_token_burned: AssetBalanceOf<T>,
 		},
 		/// Assets have been converted from one to another. Both `SwapExactTokenForToken`
 		/// and `SwapTokenForExactToken` will generate this event.
 		SwapExecuted {
+			/// Which account was the instigator of the swap.
 			who: T::AccountId,
+			/// The account that the assets were transferred to.
 			send_to: T::AccountId,
+			/// The route of asset ids that the swap went through.
+			/// E.g. A -> Dot -> B
 			path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
+			/// The amount of the first asset that was swapped.
 			amount_in: AssetBalanceOf<T>,
+			/// The amount of the second asset that was received.
 			amount_out: AssetBalanceOf<T>,
 		},
 		/// An amount has been transferred from one account to another.
 		Transfer {
+			/// The account that the assets were transferred from.
 			from: T::AccountId,
+			/// The account that the assets were transferred to.
 			to: T::AccountId,
+			/// The asset that was transferred.
 			asset: T::MultiAssetId,
+			/// The amount of the asset that was transferred.
 			amount: AssetBalanceOf<T>,
 		},
 	}
@@ -769,6 +804,8 @@ pub mod pallet {
 			}
 		}
 
+		/// Returns the balance of each asset in the pool.
+		/// Tuple is in the order requested (not necessarily the same as pool order).
 		pub fn get_reserves(
 			asset1: T::MultiAssetId,
 			asset2: T::MultiAssetId,
@@ -1015,6 +1052,7 @@ pub mod pallet {
 		}
 
 		#[cfg(any(test, feature = "runtime-benchmarks"))]
+		/// Returns the next pool asset id for benchmark purposes only.
 		pub fn get_next_pool_asset_id() -> T::PoolAssetId {
 			NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value())
 		}

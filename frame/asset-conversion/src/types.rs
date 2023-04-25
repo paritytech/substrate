@@ -36,12 +36,16 @@ pub struct PoolInfo<PoolAssetId> {
 
 /// A trait that converts between a MultiAssetId and either the native currency or an AssetId.
 pub trait MultiAssetIdConverter<MultiAssetId, AssetId> {
+	/// Returns the MultiAssetId reperesenting the native currency of the chain.
 	fn get_native() -> MultiAssetId;
 
+	/// Returns true if the given MultiAssetId is the native currency.
 	fn is_native(asset: MultiAssetId) -> bool;
 
+	/// If it's not native, returns the AssetId for the given MultiAssetId.
 	fn try_convert(asset: MultiAssetId) -> Result<AssetId, ()>;
 
+	/// Wrapps an AssetId as a MultiAssetId.
 	fn into_multiasset_id(asset: AssetId) -> MultiAssetId;
 }
 
@@ -71,6 +75,7 @@ where
 	/// Native asset. For example, on statemint this would be dot.
 	#[default]
 	Native,
+	/// A non-native asset id.
 	Asset(AssetId),
 }
 
