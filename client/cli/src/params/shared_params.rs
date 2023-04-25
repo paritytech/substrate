@@ -22,7 +22,7 @@ use sc_service::config::BasePath;
 use std::path::PathBuf;
 
 /// Shared parameters used by all `CoreParams`.
-#[derive(Debug, Clone, PartialEq, Args)]
+#[derive(Debug, Clone, Args)]
 pub struct SharedParams {
 	/// Specify the chain specification.
 	///
