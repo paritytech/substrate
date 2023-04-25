@@ -128,7 +128,8 @@ pub mod pallet {
 			+ TryInto<Self::Balance>;
 
 		/// Identifier for the class of non-native asset.
-		/// Note: A `From<u32>` bound here would prevent MultiLocation from being used as an AssetId.
+		/// Note: A `From<u32>` bound here would prevent MultiLocation from being used as an
+		/// AssetId.
 		type AssetId: AssetId + PartialOrd;
 
 		/// Type that identifies either the native currency or a token class from `Assets`.
