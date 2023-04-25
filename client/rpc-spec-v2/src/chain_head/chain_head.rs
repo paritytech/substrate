@@ -143,7 +143,7 @@ async fn parse_hex_param(
 	match array_bytes::hex2bytes(&param) {
 		Ok(bytes) => Ok(bytes),
 		Err(_) => {
-			let _ = pending.reject(ChainHeadRpcError::InvalidParam(param)).await;
+			pending.reject(ChainHeadRpcError::InvalidParam(param)).await;
 			Err(PendingSubscriptionAcceptError)
 		},
 	}
@@ -168,7 +168,7 @@ where
 		&self,
 		pending: PendingSubscriptionSink,
 		runtime_updates: bool,
-	) -> SubscriptionResponse<FollowEvent<String>> {
+	) -> SubscriptionResponse<FollowEvent<Block::Hash>> {
 		let Ok((sink, sub_id)) = self.accept_subscription(pending).await else {
 			return SubscriptionResponse::Closed;
 		};
@@ -189,12 +189,12 @@ where
 		let mut chain_head_follow =
 			ChainHeadFollower::new(client, backend, sub_handle, runtime_updates, sub_id.clone());
 
-		chain_head_follow.generate_events(sink, rx_stop).await;
+		let res = chain_head_follow.generate_events(sink, rx_stop).await;
 
 		subscriptions.remove_subscription(&sub_id);
 		debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription removed", sub_id);
 
-		SubscriptionResponse::Closed
+		res
 	}
 
 	async fn chain_head_unstable_body(
@@ -215,7 +215,7 @@ where
 
 		// Block is not part of the subscription.
 		if !handle.contains_block(&hash) {
-			let _ = pending.reject(ChainHeadRpcError::InvalidBlock).await;
+			pending.reject(ChainHeadRpcError::InvalidBlock).await;
 			return SubscriptionResponse::Closed
 		}
 
@@ -299,7 +299,7 @@ where
 
 		// Block is not part of the subscription.
 		if !handle.contains_block(&hash) {
-			let _ = pending.reject(ChainHeadRpcError::InvalidBlock);
+			pending.reject(ChainHeadRpcError::InvalidBlock).await;
 			return SubscriptionResponse::Closed
 		}
 
@@ -365,6 +365,7 @@ where
 		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResponse<ChainHeadEvent<String>> {
 		let mut pending = MaybePendingSubscription::new(pending);
+
 		let Ok(bytes) = parse_hex_param(&mut pending, call_parameters).await else {
 			return SubscriptionResponse::Closed;
 		};
@@ -379,15 +380,17 @@ where
 
 		// Block is not part of the subscription.
 		if !handle.contains_block(&hash) {
-			let _ = pending.reject(ChainHeadRpcError::InvalidBlock);
+			pending.reject(ChainHeadRpcError::InvalidBlock).await;
 			return SubscriptionResponse::Closed
 		}
 
 		// Reject subscription if runtime_updates is false.
 		if !handle.has_runtime_updates() {
-			let _ = pending.reject(ChainHeadRpcError::InvalidParam(
-				"The runtime updates flag must be set".into(),
-			));
+			pending
+				.reject(ChainHeadRpcError::InvalidParam(
+					"The runtime updates flag must be set".into(),
+				))
+				.await;
 			return SubscriptionResponse::Closed
 		}
 

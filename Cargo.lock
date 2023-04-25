@@ -3492,8 +3492,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60cf663ba643d13021a17add780468091acfe968d70385e3f3edf0175ed00e8b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
 dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-http-client",
@@ -3507,8 +3506,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-client-transport"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "831fcac9c366bb42a29316f3acb5e4647c79421c365b0d51858cc23bed5e45ff"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
 dependencies = [
  "futures-util",
  "http",
@@ -3526,8 +3524,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-core"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eff51260f9ba35587abb042bff2dd52abec8fa720c7539bf6c9dacf1689694fd"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -3553,8 +3550,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-client"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee7addd7e03321eef75ace5fc1264c28dd65855a2cf43a3c77abbab87ecc6919"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
 dependencies = [
  "async-trait",
  "hyper",
@@ -3572,8 +3568,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06bd8bf3f6e607804d150ef523498748ed9044310b5dc5fcf12e940000aafc6a"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -3585,8 +3580,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-server"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9dd5941a9f9ede9cebe4dd940c953469d5ed66717af3b3e6110f28e57e512e68"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
 dependencies = [
  "futures-util",
  "hyper",
@@ -3605,8 +3599,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a88d44a6e9ced3fa614df1f8dcfb5ebd01145ec9f53dc5695227fd972cd0f54"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
 dependencies = [
  "anyhow",
  "beef",
@@ -3619,8 +3612,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5763897a1983625e24a7e9913cb8465603bf9ceb9c976d44bbd3dc600bd3e54c"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
 dependencies = [
  "http",
  "jsonrpsee-client-transport",
@@ -9488,6 +9480,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tracing-subscriber 0.3.16",
 ]
 
 [[package]]

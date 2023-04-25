@@ -38,7 +38,7 @@ pub trait ChainHeadApi<Hash> {
 	async fn chain_head_unstable_follow(
 		&self,
 		runtime_updates: bool,
-	) -> SubscriptionResponse<FollowEvent<String>>;
+	) -> SubscriptionResponse<FollowEvent<Hash>>;
 
 	/// Retrieves the body (list of transactions) of a pinned block.
 	///
