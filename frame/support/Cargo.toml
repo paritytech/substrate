@@ -80,5 +80,5 @@ no-metadata-docs = ["frame-support-procedural/no-metadata-docs", "sp-api/no-meta
 full-metadata-docs = ["scale-info/docs"]
 # Generate impl-trait for tuples with the given number of tuples. Will be needed as the number of
 # pallets in a runtime grows. Does increase the compile time!
-tuples-96 = []
-tuples-128 = []
+tuples-96 = ["frame-support-procedural/tuples-96"]
+tuples-128 = ["frame-support-procedural/tuples-128"]
