@@ -217,12 +217,7 @@ impl Index {
 		Index { options, ..Default::default() }
 	}
 
-	fn insert_new(
-		&mut self,
-		hash: Hash,
-		account: AccountId,
-		statement: &Statement,
-	) {
+	fn insert_new(&mut self, hash: Hash, account: AccountId, statement: &Statement) {
 		let mut all_topics = [None; MAX_TOPICS];
 		let mut nt = 0;
 		while let Some(t) = statement.topic(nt) {
@@ -452,8 +447,7 @@ impl Index {
 		}
 		// Now check global constraints as well.
 		if !((self.total_size - would_free_size + statement_len <= self.options.max_total_size) &&
-			self.entries.len() + 1 - evicted.len() <=
-				self.options.max_total_statements)
+			self.entries.len() + 1 - evicted.len() <= self.options.max_total_statements)
 		{
 			log::debug!(
 				target: LOG_TARGET,
@@ -583,8 +577,7 @@ impl Store {
 			self.db
 				.iter_column_while(col::STATEMENTS, |item| {
 					let statement = item.value;
-					if let Ok(statement) = Statement::decode(&mut statement.as_slice())
-					{
+					if let Ok(statement) = Statement::decode(&mut statement.as_slice()) {
 						let hash = statement.hash();
 						log::trace!(
 							target: LOG_TARGET,
@@ -592,11 +585,7 @@ impl Store {
 							HexDisplay::from(&hash)
 						);
 						if let Some(account_id) = statement.account_id() {
-							index.insert_new(
-								hash,
-								account_id,
-								&statement,
-							);
+							index.insert_new(hash, account_id, &statement);
 						} else {
 							log::debug!(
 								target: LOG_TARGET,
@@ -737,7 +726,7 @@ impl StatementStore for Store {
 					);
 					Some(
 						Statement::decode(&mut entry.as_slice())
-							.map_err(|e| Error::Decode(e.to_string()))?
+							.map_err(|e| Error::Decode(e.to_string()))?,
 					)
 				},
 				None => {
@@ -832,16 +821,11 @@ impl StatementStore for Store {
 		{
 			let mut index = self.index.write();
 
-			let evicted = match index.insert(
-				hash,
-				&statement,
-				&account_id,
-				&validation,
-				current_time,
-			) {
-				MaybeInserted::Ignored => return SubmitResult::Ignored,
-				MaybeInserted::Inserted(evicted) => evicted,
-			};
+			let evicted =
+				match index.insert(hash, &statement, &account_id, &validation, current_time) {
+					MaybeInserted::Ignored => return SubmitResult::Ignored,
+					MaybeInserted::Inserted(evicted) => evicted,
+				};
 
 			commit.push((col::STATEMENTS, hash.to_vec(), Some(statement.encode())));
 			for hash in evicted {

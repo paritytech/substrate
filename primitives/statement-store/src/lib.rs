@@ -156,6 +156,14 @@ pub enum Field {
 	Data(Vec<u8>) = 8,
 }
 
+impl Field {
+	fn discriminant(&self) -> u8 {
+		// This is safe for repr(u8)
+		// see https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
+		unsafe { *(self as *const Self as *const u8) }
+	}
+}
+
 /// Statement structure.
 #[derive(TypeInfo, sp_core::RuntimeDebug, PassByCodec, Clone, PartialEq, Eq, Default)]
 pub struct Statement {
@@ -173,9 +181,14 @@ impl Decode for Statement {
 		// Encoding matches that of Vec<Field>. Basically this just means accepting that there
 		// will be a prefix of vector length.
 		let num_fields: codec::Compact<u32> = Decode::decode(input)?;
+		let mut tag = 0;
 		let mut statement = Statement::new();
-		for _ in 0..num_fields.into() {
+		for i in 0..num_fields.into() {
 			let field: Field = Decode::decode(input)?;
+			if i > 0 && field.discriminant() <= tag {
+				return Err("Invalid field order or duplicate fields".into())
+			}
+			tag = field.discriminant();
 			match field {
 				Field::AuthenticityProof(p) => statement.set_proof(p),
 				Field::DecryptionKey(key) => statement.set_decryption_key(key),
@@ -539,6 +552,28 @@ mod test {
 
 		let decoded = Statement::decode(&mut encoded.as_slice()).unwrap();
 		assert_eq!(decoded, statement);
+	}
+
+	#[test]
+	fn decode_checks_fields() {
+		let topic1 = [0x01; 32];
+		let topic2 = [0x02; 32];
+		let priority = 999;
+
+		let fields = vec![
+			Field::Priority(priority),
+			Field::Topic1(topic1),
+			Field::Topic1(topic1),
+			Field::Topic2(topic2),
+		]
+		.encode();
+
+		assert!(Statement::decode(&mut fields.as_slice()).is_err());
+
+		let fields =
+			vec![Field::Topic1(topic1), Field::Priority(priority), Field::Topic2(topic2)].encode();
+
+		assert!(Statement::decode(&mut fields.as_slice()).is_err());
 	}
 
 	#[test]

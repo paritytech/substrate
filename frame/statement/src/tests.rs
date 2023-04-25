@@ -36,10 +36,7 @@ fn sign_and_validate_no_balance() {
 		statement.sign_sr25519_private(&pair);
 		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
 		assert_eq!(
-			Ok(ValidStatement {
-				max_count: MIN_ALLOWED_STATEMENTS,
-				max_size: MIN_ALLOWED_BYTES
-			}),
+			Ok(ValidStatement { max_count: MIN_ALLOWED_STATEMENTS, max_size: MIN_ALLOWED_BYTES }),
 			result
 		);
 
@@ -48,10 +45,7 @@ fn sign_and_validate_no_balance() {
 		statement.sign_ed25519_private(&pair);
 		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
 		assert_eq!(
-			Ok(ValidStatement {
-				max_count: MIN_ALLOWED_STATEMENTS,
-				max_size: MIN_ALLOWED_BYTES
-			}),
+			Ok(ValidStatement { max_count: MIN_ALLOWED_STATEMENTS, max_size: MIN_ALLOWED_BYTES }),
 			result
 		);
 
@@ -60,10 +54,7 @@ fn sign_and_validate_no_balance() {
 		statement.sign_ecdsa_private(&pair);
 		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
 		assert_eq!(
-			Ok(ValidStatement {
-				max_count: MIN_ALLOWED_STATEMENTS,
-				max_size: MIN_ALLOWED_BYTES
-			}),
+			Ok(ValidStatement { max_count: MIN_ALLOWED_STATEMENTS, max_size: MIN_ALLOWED_BYTES }),
 			result
 		);
 	});
@@ -83,10 +74,7 @@ fn validate_with_balance() {
 		statement.sign_sr25519_private(&pair);
 		let result = Pallet::<Test>::validate_statement(StatementSource::Chain, statement);
 		assert_eq!(
-			Ok(ValidStatement {
-				max_count: MAX_ALLOWED_STATEMENTS,
-				max_size: MAX_ALLOWED_BYTES
-			}),
+			Ok(ValidStatement { max_count: MAX_ALLOWED_STATEMENTS, max_size: MAX_ALLOWED_BYTES }),
 			result
 		);
 	});
