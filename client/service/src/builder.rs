@@ -675,6 +675,7 @@ where
 	// This number is large enough to consider immediate blocks.
 	// Note: This should never exceed the `PINNING_CACHE_SIZE` from client/db.
 	const MAX_PINNED_BLOCKS: usize = 512;
+
 	// Maximum number of seconds that a block can be pinned before the
 	// subscription can be terminated.
 	// Note: This should be enough for immediate blocks.
