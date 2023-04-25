@@ -829,85 +829,159 @@ pub mod tests {
 		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
 		StorageEntryTypeIR, StorageHasherIR,
 	};
-	use codec::{Codec, EncodeLike};
-	use frame_support::traits::CrateVersion;
 	use sp_io::{MultiRemovalResults, TestExternalities};
+	use sp_runtime::{generic, traits::BlakeTwo256, BuildStorage};
 	use sp_std::result;
 
-	/// A PalletInfo implementation which just panics.
-	pub struct PanicPalletInfo;
+	pub use self::frame_system::{Config, Pallet};
 
-	impl crate::traits::PalletInfo for PanicPalletInfo {
-		fn index<P: 'static>() -> Option<usize> {
-			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+	#[pallet]
+	pub mod frame_system {
+		#[allow(unused)]
+		use super::{frame_system, frame_system::pallet_prelude::*};
+		pub use crate::dispatch::RawOrigin;
+		use crate::pallet_prelude::*;
+
+		#[pallet::pallet]
+		pub struct Pallet<T>(PhantomData<T>);
+
+		#[pallet::config]
+		#[pallet::disable_frame_system_supertrait_check]
+		pub trait Config: 'static {
+			type BlockNumber: Parameter + Default + MaxEncodedLen;
+			type AccountId;
+			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
+			type RuntimeOrigin;
+			type RuntimeCall;
+			type PalletInfo: crate::traits::PalletInfo;
+			type DbWeight: Get<crate::weights::RuntimeDbWeight>;
 		}
-		fn name<P: 'static>() -> Option<&'static str> {
-			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+
+		#[pallet::error]
+		pub enum Error<T> {
+			/// Required by construct_runtime
+			CallFiltered,
 		}
-		fn module_name<P: 'static>() -> Option<&'static str> {
-			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+
+		#[pallet::origin]
+		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
+
+		#[pallet::call]
+		impl<T: Config> Pallet<T> {}
+
+		#[pallet::storage]
+		pub type Data<T> = StorageMap<_, Twox64Concat, u32, u64, ValueQuery>;
+
+		#[pallet::storage]
+		pub type OptionLinkedMap<T> = StorageMap<_, Blake2_128Concat, u32, u32, OptionQuery>;
+
+		#[pallet::storage]
+		#[pallet::getter(fn generic_data)]
+		pub type GenericData<T: Config> =
+			StorageMap<_, Identity, T::BlockNumber, T::BlockNumber, ValueQuery>;
+
+		#[pallet::storage]
+		#[pallet::getter(fn generic_data2)]
+		pub type GenericData2<T: Config> =
+			StorageMap<_, Blake2_128Concat, T::BlockNumber, T::BlockNumber, OptionQuery>;
+
+		#[pallet::storage]
+		pub type DataDM<T> =
+			StorageDoubleMap<_, Twox64Concat, u32, Blake2_128Concat, u32, u64, ValueQuery>;
+
+		#[pallet::storage]
+		pub type GenericDataDM<T: Config> = StorageDoubleMap<
+			_,
+			Blake2_128Concat,
+			T::BlockNumber,
+			Identity,
+			T::BlockNumber,
+			T::BlockNumber,
+			ValueQuery,
+		>;
+
+		#[pallet::storage]
+		pub type GenericData2DM<T: Config> = StorageDoubleMap<
+			_,
+			Blake2_128Concat,
+			T::BlockNumber,
+			Twox64Concat,
+			T::BlockNumber,
+			T::BlockNumber,
+			OptionQuery,
+		>;
+
+		#[pallet::storage]
+		#[pallet::unbounded]
+		pub type AppendableDM<T: Config> = StorageDoubleMap<
+			_,
+			Blake2_128Concat,
+			u32,
+			Blake2_128Concat,
+			T::BlockNumber,
+			Vec<u32>,
+			ValueQuery,
+		>;
+
+		#[pallet::genesis_config]
+		pub struct GenesisConfig {
+			pub data: Vec<(u32, u64)>,
+			pub test_config: Vec<(u32, u32, u64)>,
 		}
-		fn crate_version<P: 'static>() -> Option<CrateVersion> {
-			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+
+		impl Default for GenesisConfig {
+			fn default() -> Self {
+				Self { data: vec![(15u32, 42u64)], test_config: vec![(15u32, 16u32, 42u64)] }
+			}
+		}
+
+		#[pallet::genesis_build]
+		impl<T: Config> GenesisBuild<T> for GenesisConfig {
+			fn build(&self) {
+				for (k, v) in &self.data {
+					<Data<T>>::insert(k, v);
+				}
+				for (k1, k2, v) in &self.test_config {
+					<DataDM<T>>::insert(k1, k2, v);
+				}
+			}
+		}
+
+		pub mod pallet_prelude {
+			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
 		}
 	}
 
-	pub trait Config: 'static {
-		type BlockNumber: Codec + EncodeLike + Default + TypeInfo;
-		type RuntimeOrigin;
-		type PalletInfo: crate::traits::PalletInfo;
-		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
-	}
+	type BlockNumber = u32;
+	type AccountId = u32;
+	type Header = generic::Header<BlockNumber, BlakeTwo256>;
+	type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
+	type Block = generic::Block<Header, UncheckedExtrinsic>;
 
-	mod module {
-		#![allow(dead_code)]
-
-		use super::Config;
-
-		decl_module! {
-			pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self  {}
+	crate::construct_runtime!(
+		pub enum Runtime
+		where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: self::frame_system,
 		}
-	}
+	);
 
-	use self::module::Module;
-
-	decl_storage! {
-		trait Store for Module<T: Config> as Test {
-			pub Value get(fn value): u64;
-			pub Data get(fn data) build(|_| vec![(15u32, 42u64)]):
-				map hasher(twox_64_concat) u32 => u64;
-			pub OptionLinkedMap: map hasher(blake2_128_concat) u32 => Option<u32>;
-			pub GenericData get(fn generic_data):
-				map hasher(identity) T::BlockNumber => T::BlockNumber;
-			pub GenericData2 get(fn generic_data2):
-				map hasher(blake2_128_concat) T::BlockNumber => Option<T::BlockNumber>;
-			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
-				double_map hasher(twox_64_concat) u32, hasher(blake2_128_concat) u32 => u64;
-			pub GenericDataDM:
-				double_map hasher(blake2_128_concat) T::BlockNumber, hasher(identity) T::BlockNumber
-				=> T::BlockNumber;
-			pub GenericData2DM:
-				double_map hasher(blake2_128_concat) T::BlockNumber, hasher(twox_64_concat) T::BlockNumber
-				=> Option<T::BlockNumber>;
-			pub AppendableDM:
-				double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) T::BlockNumber => Vec<u32>;
-		}
-	}
-
-	struct Test;
-
-	impl Config for Test {
-		type BlockNumber = u32;
-		type RuntimeOrigin = u32;
-		type PalletInfo = PanicPalletInfo;
+	impl Config for Runtime {
+		type BlockNumber = BlockNumber;
+		type AccountId = AccountId;
+		type BaseCallFilter = crate::traits::Everything;
+		type RuntimeOrigin = RuntimeOrigin;
+		type RuntimeCall = RuntimeCall;
+		type PalletInfo = PalletInfo;
 		type DbWeight = ();
 	}
 
 	fn new_test_ext() -> TestExternalities {
 		GenesisConfig::default().build_storage().unwrap().into()
 	}
-
-	type Map = Data;
 
 	trait Sorted {
 		fn sorted(self) -> Self;
@@ -925,15 +999,15 @@ pub mod tests {
 		new_test_ext().execute_with(|| {
 			#[crate::storage_alias]
 			type GenericData2<T> = StorageMap<
-				Test,
+				System,
 				Blake2_128Concat,
 				<T as Config>::BlockNumber,
 				<T as Config>::BlockNumber,
 			>;
 
-			assert_eq!(Module::<Test>::generic_data2(5), None);
-			GenericData2::<Test>::insert(5, 5);
-			assert_eq!(Module::<Test>::generic_data2(5), Some(5));
+			assert_eq!(Pallet::<Runtime>::generic_data2(5), None);
+			GenericData2::<Runtime>::insert(5, 5);
+			assert_eq!(Pallet::<Runtime>::generic_data2(5), Some(5));
 
 			/// Some random docs that ensure that docs are accepted
 			#[crate::storage_alias]
@@ -1004,6 +1078,8 @@ pub mod tests {
 	#[test]
 	fn map_issue_3318() {
 		new_test_ext().execute_with(|| {
+			type OptionLinkedMap = self::frame_system::OptionLinkedMap<Runtime>;
+
 			OptionLinkedMap::insert(1, 1);
 			assert_eq!(OptionLinkedMap::get(1), Some(1));
 			OptionLinkedMap::insert(1, 2);
@@ -1014,6 +1090,8 @@ pub mod tests {
 	#[test]
 	fn map_swap_works() {
 		new_test_ext().execute_with(|| {
+			type OptionLinkedMap = self::frame_system::OptionLinkedMap<Runtime>;
+
 			OptionLinkedMap::insert(0, 0);
 			OptionLinkedMap::insert(1, 1);
 			OptionLinkedMap::insert(2, 2);
@@ -1043,6 +1121,8 @@ pub mod tests {
 	#[test]
 	fn double_map_swap_works() {
 		new_test_ext().execute_with(|| {
+			type DataDM = self::frame_system::DataDM<Runtime>;
+
 			DataDM::insert(0, 1, 1);
 			DataDM::insert(1, 0, 2);
 			DataDM::insert(1, 1, 3);
@@ -1075,6 +1155,8 @@ pub mod tests {
 	#[test]
 	fn map_basic_insert_remove_should_work() {
 		new_test_ext().execute_with(|| {
+			type Map = self::frame_system::Data<Runtime>;
+
 			// initialized during genesis
 			assert_eq!(Map::get(&15u32), 42u64);
 
@@ -1101,6 +1183,8 @@ pub mod tests {
 	#[test]
 	fn map_iteration_should_work() {
 		new_test_ext().execute_with(|| {
+			type Map = self::frame_system::Data<Runtime>;
+
 			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(15, 42)]);
 			// insert / remove
 			let key = 17u32;
@@ -1154,7 +1238,7 @@ pub mod tests {
 	fn double_map_basic_insert_remove_remove_prefix_with_commit_should_work() {
 		let key1 = 17u32;
 		let key2 = 18u32;
-		type DoubleMap = DataDM;
+		type DoubleMap = self::frame_system::DataDM<Runtime>;
 		let mut e = new_test_ext();
 		e.execute_with(|| {
 			// initialized during genesis
@@ -1199,7 +1283,7 @@ pub mod tests {
 		new_test_ext().execute_with(|| {
 			let key1 = 17u32;
 			let key2 = 18u32;
-			type DoubleMap = DataDM;
+			type DoubleMap = self::frame_system::DataDM<Runtime>;
 
 			// initialized during genesis
 			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
@@ -1247,7 +1331,7 @@ pub mod tests {
 	#[test]
 	fn double_map_append_should_work() {
 		new_test_ext().execute_with(|| {
-			type DoubleMap = AppendableDM<Test>;
+			type DoubleMap = self::frame_system::AppendableDM<Runtime>;
 
 			let key1 = 17u32;
 			let key2 = 18u32;
@@ -1261,7 +1345,7 @@ pub mod tests {
 	#[test]
 	fn double_map_mutate_exists_should_work() {
 		new_test_ext().execute_with(|| {
-			type DoubleMap = DataDM;
+			type DoubleMap = self::frame_system::DataDM<Runtime>;
 
 			let (key1, key2) = (11, 13);
 
@@ -1278,8 +1362,8 @@ pub mod tests {
 	#[test]
 	fn double_map_try_mutate_exists_should_work() {
 		new_test_ext().execute_with(|| {
-			type DoubleMap = DataDM;
-			type TestResult = result::Result<(), &'static str>;
+			type DoubleMap = self::frame_system::DataDM<Runtime>;
+			type TestResult = Result<(), &'static str>;
 
 			let (key1, key2) = (11, 13);
 
@@ -1310,15 +1394,8 @@ pub mod tests {
 
 	fn expected_metadata() -> PalletStorageMetadataIR {
 		PalletStorageMetadataIR {
-			prefix: "Test",
+			prefix: "System",
 			entries: vec![
-				StorageEntryMetadataIR {
-					name: "Value",
-					modifier: StorageEntryModifierIR::Default,
-					ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u64>()),
-					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![],
-				},
 				StorageEntryMetadataIR {
 					name: "Data",
 					modifier: StorageEntryModifierIR::Default,
@@ -1422,7 +1499,7 @@ pub mod tests {
 
 	#[test]
 	fn store_metadata() {
-		let metadata = Module::<Test>::storage_metadata();
+		let metadata = Pallet::<Runtime>::storage_metadata();
 		pretty_assertions::assert_eq!(expected_metadata(), metadata);
 	}
 
@@ -1440,12 +1517,6 @@ pub mod tests {
 			StorageParameter::set(&300);
 			assert_eq!(300, StorageParameter::get());
 		})
-	}
-
-	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-		pub static Members: Vec<u64> = vec![];
-		pub const Foo: Option<u64> = None;
 	}
 }
 
