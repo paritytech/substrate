@@ -361,6 +361,8 @@ impl<AId> SessionHandler<AId> for TestSessionHandler {
 	fn on_disabled(_: u32) {}
 }
 
+const LOG_TARGET: &str = "runtime::session";
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -368,7 +370,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
