@@ -1,4 +1,4 @@
-;; This calls another contract as passed as its account id. It also creates some storage.
+;; This calls another contract as passed as its account id.
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal1" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32) (result i32)))
@@ -16,13 +16,13 @@
     (func (export "deploy"))
 
     (func (export "call")
-    	;; store length of input buffer
+    	;; Store length of input buffer.
         (i32.store (i32.const 0) (i32.const 512))
 
-        ;; copy input at address 4
+        ;; Copy input at address 4.
         (call $seal_input (i32.const 4) (i32.const 0))
 
-		;; call passed contract
+		;; Call passed contract.
 		(call $assert (i32.eqz
 			(call $seal_call
 				(i32.const 0) ;; No flags
