@@ -19,10 +19,7 @@
 //! Blockchain API backend for full nodes.
 
 use super::{client_err, ChainBackend, Error};
-use crate::{
-	utils::{pipe_from_stream, SubscriptionResponse},
-	SubscriptionTaskExecutor,
-};
+use crate::{utils::pipe_from_stream, SubscriptionTaskExecutor};
 use std::{marker::PhantomData, sync::Arc};
 
 use futures::{
