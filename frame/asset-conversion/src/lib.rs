@@ -133,7 +133,7 @@ pub mod pallet {
 		type AssetId: AssetId + PartialOrd;
 
 		/// Type that identifies either the native currency or a token class from `Assets`.
-		type MultiAssetId: AssetId + PartialOrd;
+		type MultiAssetId: AssetId + Ord;
 
 		/// Type to convert an `AssetId` into `MultiAssetId`.
 		type MultiAssetIdConverter: MultiAssetIdConverter<Self::MultiAssetId, Self::AssetId>;
@@ -289,6 +289,8 @@ pub mod pallet {
 		InvalidPath,
 		/// It was not possible to calculate path data.
 		PathError,
+		/// The provided path must consists of unique assets.
+		NonUniquePath,
 	}
 
 	#[pallet::hooks]
@@ -580,7 +582,7 @@ pub mod pallet {
 				amount_in > Zero::zero() && amount_out_min > Zero::zero(),
 				Error::<T>::ZeroAmount
 			);
-			ensure!(path.len() >= 2, Error::<T>::InvalidPath);
+			Self::validate_swap_path(&path)?;
 
 			let amounts = Self::get_amounts_out(&amount_in, &path)?;
 			let amount_out = *amounts.last().expect("Has always more than 1 element");
@@ -621,7 +623,7 @@ pub mod pallet {
 				amount_out > Zero::zero() && amount_in_max > Zero::zero(),
 				Error::<T>::ZeroAmount
 			);
-			ensure!(path.len() >= 2, Error::<T>::InvalidPath);
+			Self::validate_swap_path(&path)?;
 
 			let amounts = Self::get_amounts_in(&amount_out, &path)?;
 			let amount_in = *amounts.first().expect("Always has more than one element");
@@ -1011,6 +1013,21 @@ pub mod pallet {
 			asset: T::MultiAssetId,
 		) -> Result<(), ()> {
 			ensure!(!Self::less_than_minimal_amount(value, asset).map_err(|_| ())?, ());
+			Ok(())
+		}
+
+		fn validate_swap_path(
+			path: &BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
+		) -> Result<(), DispatchError> {
+			ensure!(path.len() >= 2, Error::<T>::InvalidPath);
+
+			// validate all the elements are unique
+			let mut sorted_path = path.clone();
+			sorted_path.sort();
+			let mut unique: Vec<_> = sorted_path.into();
+			unique.dedup();
+
+			ensure!(path.len() == unique.len(), Error::<T>::NonUniquePath);
 			Ok(())
 		}
 
