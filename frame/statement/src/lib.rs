@@ -55,11 +55,6 @@ pub use pallet::*;
 
 const LOG_TARGET: &str = "runtime::statement";
 
-const MIN_ALLOWED_STATEMENTS: u32 = 4;
-const MAX_ALLOWED_STATEMENTS: u32 = 10;
-const MIN_ALLOWED_BYTES: u32 = 1024;
-const MAX_ALLOWED_BYTES: u32 = 4096;
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -81,8 +76,21 @@ pub mod pallet {
 		/// Min balance for priority statements.
 		#[pallet::constant]
 		type StatementCost: Get<BalanceOf<Self>>;
+		/// Cost of data byte used for priority calculation.
 		#[pallet::constant]
 		type ByteCost: Get<BalanceOf<Self>>;
+		/// Minimum number of statements allowed per account.
+		#[pallet::constant]
+		type MinAllowedStatements: Get<u32>;
+		/// Maximum number of statements allowed per account.
+		#[pallet::constant]
+		type MaxAllowedStatements: Get<u32>;
+		/// Minimum data bytes allowed per account.
+		#[pallet::constant]
+		type MinAllowedBytes: Get<u32>;
+		/// Maximum data bytes allowed per account.
+		#[pallet::constant]
+		type MaxAllowedBytes: Get<u32>;
 	}
 
 	#[pallet::pallet]
@@ -173,18 +181,22 @@ where
 		let byte_cost = T::ByteCost::get();
 		let priority_cost = statement_cost;
 		let balance = <T::Currency as Inspect<AccountIdOf<T>>>::balance(&account);
+		let min_allowed_statements = T::MinAllowedStatements::get();
+		let max_allowed_statements = T::MaxAllowedStatements::get();
+		let min_allowed_bytes = T::MinAllowedBytes::get();
+		let max_allowed_bytes = T::MaxAllowedBytes::get();
 		let global_priority =
 			balance.checked_div(&priority_cost).unwrap_or_default().saturated_into();
 		let max_count = balance
 			.checked_div(&statement_cost)
 			.unwrap_or_default()
 			.saturated_into::<u32>()
-			.clamp(MIN_ALLOWED_STATEMENTS, MAX_ALLOWED_STATEMENTS);
+			.clamp(min_allowed_statements, max_allowed_statements);
 		let max_size = balance
 			.checked_div(&byte_cost)
 			.unwrap_or_default()
 			.saturated_into::<u32>()
-			.clamp(MIN_ALLOWED_BYTES, MAX_ALLOWED_BYTES);
+			.clamp(min_allowed_bytes, max_allowed_bytes);
 
 		Ok(ValidStatement { global_priority, max_count, max_size })
 	}

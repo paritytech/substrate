@@ -35,6 +35,11 @@ use sp_runtime::{
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
+pub const MIN_ALLOWED_STATEMENTS: u32 = 4;
+pub const MAX_ALLOWED_STATEMENTS: u32 = 10;
+pub const MIN_ALLOWED_BYTES: u32 = 1024;
+pub const MAX_ALLOWED_BYTES: u32 = 4096;
+
 frame_support::construct_runtime!(
 	pub enum Test where
 		Block = Block,
@@ -99,6 +104,10 @@ impl Config for Test {
 	type Currency = Balances;
 	type StatementCost = ConstU64<1000>;
 	type ByteCost = ConstU64<2>;
+	type MinAllowedStatements = ConstU32<MIN_ALLOWED_STATEMENTS>;
+	type MaxAllowedStatements = ConstU32<MAX_ALLOWED_STATEMENTS>;
+	type MinAllowedBytes = ConstU32<MIN_ALLOWED_BYTES>;
+	type MaxAllowedBytes = ConstU32<MAX_ALLOWED_BYTES>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
