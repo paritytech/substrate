@@ -37,7 +37,7 @@ pub trait Currency {}
 // Test for:
 // * No default instance
 // * Origin, Inherent, Event
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 mod module1 {
 	use self::frame_system::pallet_prelude::*;
 	use super::*;
@@ -45,7 +45,6 @@ mod module1 {
 	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -154,7 +153,6 @@ mod module2 {
 	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -257,7 +255,6 @@ mod module3 {
 	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -449,7 +446,7 @@ fn storage_with_instance_basic_operation() {
 
 fn expected_metadata() -> PalletStorageMetadataIR {
 	PalletStorageMetadataIR {
-		prefix: "Instance2Module2",
+		prefix: "Module2_2",
 		entries: vec![
 			StorageEntryMetadataIR {
 				name: "Value",

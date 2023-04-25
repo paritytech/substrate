@@ -23,14 +23,13 @@ use frame_support::traits::{Contains, OriginTrait};
 use sp_runtime::{generic, traits::BlakeTwo256};
 
 mod nested {
-	#[frame_support::pallet]
+	#[frame_support::pallet(dev_mode)]
 	pub mod module {
 		use self::frame_system::pallet_prelude::*;
 		use frame_support::pallet_prelude::*;
 		use frame_support_test as frame_system;
 
 		#[pallet::pallet]
-		#[pallet::generate_store(pub(super) trait Store)]
 		pub struct Pallet<T>(PhantomData<T>);
 
 		#[pallet::config]
@@ -72,14 +71,13 @@ mod nested {
 	}
 }
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 pub mod module {
 	use self::frame_system::pallet_prelude::*;
 	use frame_support::pallet_prelude::*;
 	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]

@@ -24,7 +24,7 @@
 use codec::MaxEncodedLen;
 use frame_support::{parameter_types, traits::PalletInfo as _};
 use scale_info::TypeInfo;
-use sp_core::{sr25519, H256};
+use sp_core::sr25519;
 use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, Verify},
@@ -35,14 +35,13 @@ parameter_types! {
 	pub static IntegrityTestExec: u32 = 0;
 }
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 mod module1 {
 	use self::frame_system::pallet_prelude::*;
 	use frame_support::pallet_prelude::*;
 	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -75,7 +74,7 @@ mod module1 {
 	}
 }
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 mod module2 {
 	use self::frame_system::pallet_prelude::*;
 	use super::*;
@@ -83,7 +82,6 @@ mod module2 {
 	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]
@@ -124,7 +122,7 @@ mod module2 {
 mod nested {
 	use super::*;
 
-	#[frame_support::pallet]
+	#[frame_support::pallet(dev_mode)]
 	pub mod module3 {
 		use self::frame_system::pallet_prelude::*;
 		use super::*;
@@ -132,7 +130,6 @@ mod nested {
 		use frame_support_test as frame_system;
 
 		#[pallet::pallet]
-		#[pallet::generate_store(pub(super) trait Store)]
 		pub struct Pallet<T>(PhantomData<T>);
 
 		#[pallet::config]
@@ -181,7 +178,7 @@ mod nested {
 	}
 }
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 pub mod module3 {
 	use self::frame_system::pallet_prelude::*;
 	use super::*;
@@ -189,7 +186,6 @@ pub mod module3 {
 	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]
