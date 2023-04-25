@@ -37,7 +37,7 @@ pub trait BlockServer<Block: BlockT>: Send {
 #[async_trait::async_trait]
 pub trait BlockDownloader<Block: BlockT>: Send + Sync {
 	/// Performs the protocol specific sequence to fetch the block from the peer.
-	/// Output: if the download succeeds, the response is a Vec<u8> which is
+	/// Output: if the download succeeds, the response is a `Vec<u8>` which is
 	/// in a format specific to the protocol implementation. The block data
 	/// can be extracted from this response using block_response_into_blocks().
 	async fn download_block(
