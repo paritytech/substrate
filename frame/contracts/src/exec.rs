@@ -19,7 +19,7 @@ use crate::{
 	gas::GasMeter,
 	storage::{self, DepositAccount, WriteOutcome},
 	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, DebugBufferVec, Determinism, Error,
-	Event, Nonce, Pallet as Contracts, Schedule, System,
+	Event, Nonce, Pallet as Contracts, Schedule, System, LOG_TARGET,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -1002,7 +1002,7 @@ where
 		} else {
 			if let Some((msg, false)) = self.debug_message.as_ref().map(|m| (m, m.is_empty())) {
 				log::debug!(
-					target: "runtime::contracts",
+					target: LOG_TARGET,
 					"Execution finished with debug buffer: {}",
 					core::str::from_utf8(msg).unwrap_or("<Invalid UTF8>"),
 				);
@@ -1331,7 +1331,7 @@ where
 				.try_extend(&mut msg.bytes())
 				.map_err(|_| {
 					log::debug!(
-						target: "runtime::contracts",
+						target: LOG_TARGET,
 						"Debug buffer (of {} bytes) exhausted!",
 						DebugBufferVec::<T>::bound(),
 					)

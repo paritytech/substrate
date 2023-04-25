@@ -487,21 +487,13 @@ impl TraitPair for Pair {
 	}
 
 	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
-		Self::verify_weak(&sig.0[..], message, pubkey)
-	}
-
-	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		let signature = match schnorrkel::Signature::from_bytes(sig) {
-			Ok(signature) => signature,
-			Err(_) => return false,
+		let Ok(signature) = schnorrkel::Signature::from_bytes(sig.as_ref()) else {
+			return false
 		};
-
-		let pub_key = match PublicKey::from_bytes(pubkey.as_ref()) {
-			Ok(pub_key) => pub_key,
-			Err(_) => return false,
+		let Ok(public) = PublicKey::from_bytes(pubkey.as_ref()) else {
+			return false
 		};
-
-		pub_key.verify_simple(SIGNING_CTX, message.as_ref(), &signature).is_ok()
+		public.verify_simple(SIGNING_CTX, message.as_ref(), &signature).is_ok()
 	}
 
 	fn to_raw_vec(&self) -> Vec<u8> {
