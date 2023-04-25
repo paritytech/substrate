@@ -42,6 +42,7 @@ use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
+use syn::ItemImpl;
 
 thread_local! {
 	/// A global counter, can be used to generate a relatively unique identifier.
@@ -784,7 +785,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// The attribute should be attached to an `impl` block that implements a compatible `Config`
 /// such as `frame_system::Config` for a test/mock runtime, and should receive as its only
 /// argument the path to a `DefaultConfig` impl that has been registered via
-/// [`#[register_default_config]`](`macro@register_default_config`).
+/// [`#[register_default_impl]`](`macro@register_default_impl`).
 ///
 /// Consider the following taken from the basic example pallet:
 ///
@@ -810,7 +811,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// ```ignore
 /// pub struct TestDefaultConfig {}
 ///
-/// #[register_default_config(TestDefaultConfig)]
+/// #[register_default_impl(TestDefaultConfig)]
 /// impl DefaultConfig for TestDefaultConfig {
 /// 	type Version = ();
 /// 	type BlockWeights = ();
@@ -909,8 +910,7 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
-/// Attach this attribute to an impl statement that implements the auto-generated
-/// `DefaultConfig` trait for a default config that needs to be registered for use with the
+/// Attach this attribute to an impl statement that needs to be registered for use with the
 /// [`macro@derive_impl`] attribute macro.
 ///
 /// You must also specify an ident as the only argument to the attribute. This ident will be
@@ -927,7 +927,7 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 /// ```ignore
 /// pub struct ExampleTestDefaultConfig {}
 ///
-/// #[register_default_config(ExampleTestDefaultConfig)]
+/// #[register_default_impl(ExampleTestDefaultConfig)]
 /// impl DefaultConfig for ExampleTestDefaultConfig {
 /// 	type Version = ();
 /// 	type BlockWeights = ();
@@ -941,44 +941,12 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 /// This macro acts as a thin wrapper around macro_magic's `#[export_tokens]`. See the docs
 /// [here](https://docs.rs/macro_magic/latest/macro_magic/attr.export_tokens.html) for more info.
 #[proc_macro_attribute]
-pub fn register_default_config(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
-	// ensure this is an impl DefaultConfig for X impl
-	use syn::{
-		parse::{Parse, ParseStream},
-		token::Brace,
-		Attribute, Path, Token, TraitItem,
-	};
-	syn::custom_keyword!(DefaultConfig);
-	struct TraitContents {
-		_contents: Vec<TraitItem>,
-	}
-	impl Parse for TraitContents {
-		fn parse(input: ParseStream) -> syn::Result<Self> {
-			let mut items = Vec::new();
-			while !input.is_empty() {
-				items.push(input.parse()?);
-			}
-			Ok(TraitContents { _contents: items })
-		}
-	}
-	#[derive(derive_syn_parse::Parse)]
-	struct DefaultConfigTraitImpl {
-		#[call(Attribute::parse_outer)]
-		_attrs: Vec<Attribute>,
-		_impl: Token![impl],
-		_default_config: DefaultConfig,
-		_for: Token![for],
-		_path: Path,
-		#[brace]
-		_brace: Brace,
-		#[inside(_brace)]
-		_contents: TraitContents,
-	}
-	let trait_tokens = tokens.clone();
-	syn::parse_macro_input!(trait_tokens as DefaultConfigTraitImpl);
+pub fn register_default_impl(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
+	// ensure this is a impl statement
+	let item_impl = syn::parse_macro_input!(tokens as ItemImpl);
 
 	// internally wrap macro_magic's `#[export_tokens]` macro
-	match macro_magic::mm_core::export_tokens_internal(attrs, tokens, true) {
+	match macro_magic::mm_core::export_tokens_internal(attrs, item_impl.to_token_stream(), true) {
 		Ok(tokens) => tokens.into(),
 		Err(err) => err.to_compile_error().into(),
 	}

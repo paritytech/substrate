@@ -1485,7 +1485,7 @@ pub mod pallet_prelude {
 	};
 	pub use codec::{Decode, Encode, MaxEncodedLen};
 	pub use frame_support::pallet_macros::*;
-	pub use frame_support_procedural::register_default_config;
+	pub use frame_support_procedural::register_default_impl;
 	pub use scale_info::TypeInfo;
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
@@ -2848,7 +2848,7 @@ pub mod pallet_macros {
 }
 
 #[doc(inline)]
-pub use frame_support_procedural::register_default_config;
+pub use frame_support_procedural::register_default_impl;
 
 // Generate a macro that will enable/disable code based on `std` feature being active.
 sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);

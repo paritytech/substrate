@@ -209,7 +209,7 @@ pub mod pallet {
 
 			pub struct TestDefaultConfig {}
 
-			#[register_default_config(TestDefaultConfig)]
+			#[register_default_impl(TestDefaultConfig)]
 			impl DefaultConfig for TestDefaultConfig {
 				type Version = ();
 				type BlockWeights = ();
