@@ -104,7 +104,28 @@ pub enum StorageEntry {
 	/// append info on commit or rollback by truncating to previous offset.
 	/// If a `set` operation occurs, store these to parent: overite on commit and restored on
 	/// rollback.
-	Append(StorageValue, u32, usize),
+	Append {
+		// current buffer of appended data.
+		data: StorageValue,
+		// Size at start of transaction.
+		// This does not include the size of
+		// compact u32 when data is materialized.
+		prev_offset: usize,
+		// Number of appended element at the start of the transaction.
+		prev_size: u32,
+		/*
+		// Current size of appended data.
+		// (only set on new append transaction: only needed to revert).
+		size: Option<usize>,
+		// Current number of appended elements.
+		nb_append: u32,
+		// If define, it contains a given
+		// number of element as prefix.
+		// This number is updated on access only,
+		// it may be different from the actual `nb_append`.
+		materialized: Option<u32>,
+		*/
+	},
 }
 
 impl Default for StorageEntry {
@@ -116,7 +137,7 @@ impl Default for StorageEntry {
 impl StorageEntry {
 	pub(super) fn to_option(self) -> Option<StorageValue> {
 		match self {
-			StorageEntry::Some(v) | StorageEntry::Append(v, ..) => Some(v),
+			StorageEntry::Some(data) | StorageEntry::Append { data, .. } => Some(data),
 			StorageEntry::None => None,
 		}
 	}
@@ -259,13 +280,13 @@ impl OverlayedEntry<StorageEntry> {
 					**at = value;
 					None
 				},
-				StorageEntry::Append(base, prev_size, prev_offset) => {
-					let mut append = StorageAppend::new(base);
+				StorageEntry::Append { data, prev_size, prev_offset } => {
+					let mut append = StorageAppend::new(data);
 					let current =
 						append.extract_length_data().expect("append is always valid; qed");
 					append.replace_length_data(current, *prev_size);
-					base.truncate(*prev_offset);
-					let result = core::mem::take(base);
+					data.truncate(*prev_offset);
+					let result = core::mem::take(data);
 					Some((value, result))
 				},
 			};
@@ -278,8 +299,8 @@ impl OverlayedEntry<StorageEntry> {
 					.get_mut(nb_transactions - 2)
 					.expect("append always on top of a parent; qed");
 				match &mut parent.value {
-					StorageEntry::Append(base, ..) => {
-						*base = restore;
+					StorageEntry::Append { data, .. } => {
+						*data = restore;
 					},
 					at @ _ => {
 						*at = StorageEntry::Some(restore);
@@ -334,21 +355,21 @@ impl OverlayedEntry<StorageEntry> {
 						None
 					}
 				},
-				StorageEntry::Append(prev, ..) => {
+				StorageEntry::Append { data: prev, .. } => {
 					let offset = prev.len();
 					let mut appendable = StorageAppend::new(prev);
 					if let Some(old_size) = appendable.extract_length_data() {
 						assert!(appendable.append(value));
-						let value = core::mem::take(prev);
-						Some((value, old_size, offset))
+						let data = core::mem::take(prev);
+						Some((data, old_size, offset))
 					} else {
 						unreachable!();
 					}
 				},
 			};
-			if let Some((base, prev_size, offset)) = append {
+			if let Some((data, prev_size, prev_offset)) = append {
 				self.transactions.push(InnerValue {
-					value: StorageEntry::Append(base, prev_size, offset),
+					value: StorageEntry::Append { data, prev_size, prev_offset },
 					extrinsics: Default::default(),
 				});
 			}
@@ -359,12 +380,12 @@ impl OverlayedEntry<StorageEntry> {
 					StorageAppend::new(&mut buffer).append(value);
 					Some(buffer)
 				},
-				StorageEntry::Some(base) => {
-					StorageAppend::new(base).append(value);
+				StorageEntry::Some(data) => {
+					StorageAppend::new(data).append(value);
 					None
 				},
-				StorageEntry::Append(base, ..) => {
-					assert!(StorageAppend::new(base).append(value));
+				StorageEntry::Append { data, .. } => {
+					assert!(StorageAppend::new(data).append(value));
 					None
 				},
 			};
@@ -381,7 +402,7 @@ impl OverlayedEntry<StorageEntry> {
 	/// The value as seen by the current transaction.
 	pub fn value(&self) -> Option<&StorageValue> {
 		match self.value_ref() {
-			StorageEntry::Some(v) | StorageEntry::Append(v, ..) => Some(v),
+			StorageEntry::Some(data) | StorageEntry::Append { data, .. } => Some(data),
 			StorageEntry::None => None,
 		}
 	}
@@ -611,18 +632,18 @@ impl OverlayedChangeSet {
 
 			if rollback {
 				match overlayed.pop_transaction().value {
-					StorageEntry::Append(mut base, prev_size, prev_offset) => {
-						let mut append = StorageAppend::new(&mut base);
+					StorageEntry::Append { mut data, prev_size, prev_offset } => {
+						let mut append = StorageAppend::new(&mut data);
 						let current =
 							append.extract_length_data().expect("append is always valid; qed");
 						append.replace_length_data(current, prev_size);
-						base.truncate(prev_offset);
+						data.truncate(prev_offset);
 						match overlayed.value_mut() {
-							StorageEntry::Append(empty, ..) => {
-								*empty = base;
+							StorageEntry::Append { data: empty, .. } => {
+								*empty = data;
 							},
 							at @ _ => {
-								*at = StorageEntry::Some(base);
+								*at = StorageEntry::Some(data);
 							},
 						}
 					},
@@ -650,18 +671,18 @@ impl OverlayedChangeSet {
 				if has_predecessor {
 					let dropped_tx = overlayed.pop_transaction();
 					let set_parent = match dropped_tx.value {
-						StorageEntry::Append(base, ..) => {
+						StorageEntry::Append { data, .. } => {
 							match overlayed.value_mut() {
-								StorageEntry::Append(empty, ..) => {
-									*empty = base;
+								StorageEntry::Append { data: empty, .. } => {
+									*empty = data;
 								},
 								at @ _ => {
-									*at = StorageEntry::Some(base);
+									*at = StorageEntry::Some(data);
 								},
 							}
 							None
 						},
-						StorageEntry::Some(base) => Some(Some(base)),
+						StorageEntry::Some(data) => Some(Some(data)),
 						StorageEntry::None => Some(None),
 					};
 					if let Some(overwrite) = set_parent {
@@ -746,7 +767,7 @@ impl OverlayedChangeSet {
 		let mut count = 0;
 		for (key, val) in self.changes.iter_mut().filter(|(k, v)| predicate(k, v)) {
 			match val.value_ref() {
-				StorageEntry::Some(..) | StorageEntry::Append(..) => count += 1,
+				StorageEntry::Some(..) | StorageEntry::Append { .. } => count += 1,
 				StorageEntry::None => (),
 			}
 			val.set(None, insert_dirty(&mut self.dirty_keys, key.clone()), at_extrinsic);
