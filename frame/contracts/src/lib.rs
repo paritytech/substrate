@@ -1035,11 +1035,11 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 		);
 
 		match storage_meter.try_into_deposit(&origin) {
-			Ok(storage_deposit) => InternalOutput { gas_meter, result, storage_deposit },
+			Ok(storage_deposit) => InternalOutput { gas_meter, storage_deposit, result },
 			Err(err) => InternalOutput {
-				result: Err(err.into()),
 				gas_meter,
 				storage_deposit: Default::default(),
+				result: Err(err.into()),
 			},
 		}
 	}
