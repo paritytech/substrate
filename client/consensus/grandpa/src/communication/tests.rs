@@ -473,6 +473,7 @@ fn good_commit_leads_to_relay() {
 						peer: sender_id,
 						role: ObservedRole::Full,
 						negotiated_fallback: None,
+						handshake: vec![1, 3, 3, 7],
 					},
 				);
 				let _ = tester.notification_tx.unbounded_send(
@@ -489,6 +490,7 @@ fn good_commit_leads_to_relay() {
 						peer: receiver_id,
 						role: ObservedRole::Full,
 						negotiated_fallback: None,
+						handshake: vec![1, 3, 3, 7],
 					},
 				);
 
@@ -622,6 +624,7 @@ fn bad_commit_leads_to_report() {
 						peer: sender_id,
 						role: ObservedRole::Full,
 						negotiated_fallback: None,
+						handshake: vec![1, 3, 3, 7],
 					},
 				);
 				let _ = tester.notification_tx.unbounded_send(

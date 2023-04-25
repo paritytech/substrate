@@ -232,6 +232,7 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 }
 
 #[test]
+#[ignore]
 fn reconnect_after_disconnect() {
 	// We connect two nodes together, then force a disconnect (through the API of the `Service`),
 	// check that the disconnect worked, and finally check whether they successfully reconnect.

@@ -299,6 +299,8 @@ pub enum NotifsHandlerOut {
 	OpenDesiredByRemote {
 		/// Index of the protocol in the list of protocols passed at initialization.
 		protocol_index: usize,
+		/// Received handshake.
+		handshake: Vec<u8>,
 	},
 
 	/// The remote would like the substreams to be closed. Send a [`NotifsHandlerIn::Close`] in
@@ -495,7 +497,10 @@ impl ConnectionHandler for NotifsHandler {
 				match protocol_info.state {
 					State::Closed { pending_opening } => {
 						self.events_queue.push_back(ConnectionHandlerEvent::Custom(
-							NotifsHandlerOut::OpenDesiredByRemote { protocol_index },
+							NotifsHandlerOut::OpenDesiredByRemote {
+								protocol_index,
+								handshake: in_substream_open.handshake,
+							},
 						));
 
 						protocol_info.state = State::OpenDesiredByRemote {
@@ -1610,18 +1615,25 @@ pub mod tests {
 		drop(io2);
 
 		futures::future::poll_fn(|cx| {
-			assert!(std::matches!(
-				handler.poll(cx),
-				Poll::Ready(ConnectionHandlerEvent::Custom(
-					NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
-				))
-			));
-			assert!(std::matches!(
-				handler.poll(cx),
-				Poll::Ready(ConnectionHandlerEvent::Custom(NotifsHandlerOut::CloseDesired {
-					protocol_index: 0
-				},))
-			));
+			if let Poll::Ready(ConnectionHandlerEvent::Custom(
+				NotifsHandlerOut::OpenDesiredByRemote { protocol_index, handshake },
+			)) = handler.poll(cx)
+			{
+				assert_eq!(protocol_index, 0);
+				assert_eq!(handshake, b"hello, world");
+			} else {
+				panic!("invalid event received");
+			}
+
+			if let Poll::Ready(ConnectionHandlerEvent::Custom(NotifsHandlerOut::CloseDesired {
+				protocol_index,
+			})) = handler.poll(cx)
+			{
+				assert_eq!(protocol_index, 0);
+			} else {
+				panic!("invalid event received");
+			}
+
 			Poll::Ready(())
 		})
 		.await;

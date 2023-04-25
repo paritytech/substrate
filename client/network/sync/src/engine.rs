@@ -197,9 +197,6 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	/// Channel for receiving service commands
 	service_rx: TracingUnboundedReceiver<ToServiceCommand<B>>,
 
-	/// Channel for receiving inbound connections from `Protocol`.
-	rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent<B>>,
-
 	/// Assigned roles.
 	roles: Roles,
 
@@ -249,12 +246,6 @@ pub struct SyncingEngine<B: BlockT, Client> {
 
 	/// Handle that is used to communicate with `sc_network::Notifications`.
 	notification_handle: Box<dyn NotificationService>,
-
-	/// Peers that are on probation, waiting for the inbound substream to be accepted
-	///
-	/// These peers have been validated by `SyncingEngine` and are considered "accepted"
-	/// and they have a slot reserved for them. TODO: finish this comment
-	probation: HashMap<PeerId, BlockAnnouncesHandshake<B>>,
 }
 
 impl<B: BlockT, Client> SyncingEngine<B, Client>
@@ -282,7 +273,7 @@ where
 		block_request_protocol_name: ProtocolName,
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
-		rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent<B>>,
+		_rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent<B>>,
 	) -> Result<(Self, SyncingService<B>, NonDefaultSetConfig), ClientError> {
 		let mode = match net_config.network_config.sync_mode {
 			SyncOperationMode::Full => SyncMode::Full,
@@ -391,7 +382,6 @@ where
 				num_connected: num_connected.clone(),
 				is_major_syncing: is_major_syncing.clone(),
 				service_rx,
-				rx,
 				genesis_hash,
 				important_peers,
 				default_peers_set_no_slot_connected_peers: HashSet::new(),
@@ -402,7 +392,6 @@ where
 				event_streams: Vec::new(),
 				notification_handle,
 				tick_timeout: Delay::new(TICK_TIMEOUT),
-				probation: HashMap::new(),
 				metrics: if let Some(r) = metrics_registry {
 					match Metrics::register(r, is_major_syncing.clone()) {
 						Ok(metrics) => Some(metrics),
@@ -745,36 +734,33 @@ where
 
 			match event {
 				NotificationEvent::ValidateInboundSubstream { peer, handshake, result_tx } => {
-					let validation_result = self.validate_handshake(&peer, handshake).map_or(
-						ValidationResult::Reject,
-						|handshake| {
-							// TODO: reserve slot for the peer
-							// TODO: save `Instant::now()` to `probation` and define a constant that
-							// tells how long       the peer is kept on probation before it's
-							// evicted. TODO: when `ValidateInboundSubstream` is received for a new
-							// peer and all slots       are full, check if a peer can be evicted
-							// from `probation` TODO: save peer role to `PeerStore`
-							self.probation.insert(peer, handshake);
-							ValidationResult::Accept
-						},
-					);
+					// TODO(aaro): put peer on probation and wait to receive
+					// `NotificationStreamOpened` from them
+					let validation_result = self
+						.validate_handshake(&peer, handshake)
+						.map_or(ValidationResult::Reject, |_| ValidationResult::Accept);
+
 					let _ = result_tx.send(validation_result);
 				},
-				NotificationEvent::NotificationStreamOpened { peer, .. } => {
-					let Some(handshake) = self.probation.remove(&peer) else {
-						log::debug!(
-							target: LOG_TARGET,
-							"{peer} has not been validated by `SyncingEngine` or it took too long to open a substream"
-						);
-						continue
-					};
+				NotificationEvent::NotificationStreamOpened { peer, handshake, .. } => {
+					log::debug!(
+						target: LOG_TARGET,
+						"substream opened for {peer}, handshake {handshake:?}"
+					);
 
-					match self.on_sync_peer_connected(peer, &handshake) {
-						Ok(_) => {
-							// TODO: remove slot reservation and mark the slot as occupied
-						},
-						Err(_) => {
-							// TODO: remove slot reservation and mark the slot as free
+					match self.validate_handshake(&peer, handshake) {
+						Ok(handshake) =>
+							if self.on_sync_peer_connected(peer, &handshake).is_err() {
+								log::debug!(target: LOG_TARGET, "failed to register peer");
+								self.network_service.disconnect_peer(
+									peer,
+									self.block_announce_protocol_name.clone(),
+								);
+							},
+						Err(err) => {
+							log::debug!(target: LOG_TARGET, "failed to decode handshake: {err:?}");
+							self.network_service
+								.disconnect_peer(peer, self.block_announce_protocol_name.clone());
 						},
 					}
 				},
@@ -832,7 +818,7 @@ where
 		}
 
 		self.chain_sync.peer_disconnected(&peer);
-		// TODO: remove this bookkeeping when `ProtocolController` is ready
+		// TODO(aaro): remove this bookkeeping when `ProtocolController` is ready
 		self.default_peers_set_no_slot_connected_peers.remove(&peer);
 		self.event_streams
 			.retain(|stream| stream.unbounded_send(SyncEvent::PeerDisconnected(peer)).is_ok());
@@ -860,7 +846,7 @@ where
 		}
 
 		if handshake.genesis_hash != self.genesis_hash {
-			// TODO: report peer but verify that `PeerStore` doesn't try to disconnect it
+			// TODO(aaro): report peer but verify that `PeerStore` doesn't try to disconnect it
 			// self.network_service.report_peer(peer, rep::GENESIS_MISMATCH);
 
 			if self.important_peers.contains(&peer) {
@@ -951,7 +937,7 @@ where
 		log::debug!(target: LOG_TARGET, "connected {}", who);
 
 		self.peers.insert(who, peer);
-		// TODO: remove these bookkeepings once `ProtocolController` is ready
+		// TODO(aaro): remove these bookkeepings once `ProtocolController` is ready
 		if self.default_peers_set_no_slot_peers.contains(&who) {
 			self.default_peers_set_no_slot_connected_peers.insert(who);
 		}

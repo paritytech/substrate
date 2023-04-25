@@ -37,7 +37,7 @@ use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network::{
 	config::{NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, SetConfig},
 	error,
-	service::traits::{NotificationEvent, NotificationService},
+	service::traits::{NotificationEvent, NotificationService, ValidationResult},
 	types::ProtocolName,
 	utils::{interval, LruHashSet},
 	NetworkEventStream, NetworkNotification, NetworkPeers,
@@ -323,6 +323,9 @@ where
 
 	fn handle_notification_event(&mut self, event: NotificationEvent) {
 		match event {
+			NotificationEvent::ValidateInboundSubstream { result_tx, .. } => {
+				let _ = result_tx.send(ValidationResult::Accept);
+			},
 			NotificationEvent::NotificationStreamOpened { peer, role, .. } => {
 				let _was_in = self.peers.insert(
 					peer,
@@ -348,7 +351,6 @@ where
 					warn!(target: "sub-libp2p", "Failed to decode transactions list");
 				}
 			},
-			event => log::debug!(target: "sync", "ignoring {event:?}"),
 		}
 	}
 

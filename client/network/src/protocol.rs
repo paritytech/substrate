@@ -24,7 +24,7 @@ use crate::{
 
 use bytes::Bytes;
 use codec::{DecodeAll, Encode};
-use futures::{channel::oneshot, stream::FuturesUnordered, StreamExt};
+use futures::{stream::FuturesUnordered, StreamExt};
 use libp2p::{
 	core::Endpoint,
 	swarm::{
@@ -35,7 +35,7 @@ use libp2p::{
 };
 use log::{debug, error, warn};
 
-use sc_network_common::{role::Roles, sync::message::BlockAnnouncesHandshake};
+use sc_network_common::role::Roles;
 use sc_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::Block as BlockT;
 
@@ -47,7 +47,6 @@ use std::{
 	task::Poll,
 };
 
-use message::{generic::Message as GenericMessage, Message};
 use notifications::{Notifications, NotificationsOut};
 
 pub use notifications::{
@@ -95,7 +94,6 @@ pub struct Protocol<B: BlockT> {
 	/// Connected peers.
 	peers: HashMap<PeerId, Roles>,
 	sync_substream_validations: FuturesUnordered<PendingSyncSubstreamValidation>,
-	tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
 	_marker: std::marker::PhantomData<B>,
 }
 
@@ -106,7 +104,7 @@ impl<B: BlockT> Protocol<B> {
 		network_config: &config::NetworkConfiguration,
 		notification_protocols: Vec<config::NonDefaultSetConfig>,
 		mut block_announces_protocol: config::NonDefaultSetConfig,
-		tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
+		_tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
 	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let mut known_addresses = Vec::new();
 
@@ -213,7 +211,6 @@ impl<B: BlockT> Protocol<B> {
 			bad_handshake_substreams: Default::default(),
 			peers: HashMap::new(),
 			sync_substream_validations: FuturesUnordered::new(),
-			tx,
 			// TODO: remove when `BlockAnnouncesHandshake` is moved away from `Protocol`
 			_marker: Default::default(),
 		};
@@ -249,7 +246,7 @@ impl<B: BlockT> Protocol<B> {
 
 	/// Returns the number of peers we're connected to.
 	pub fn num_connected_peers(&self) -> usize {
-		self.peers.len()
+		self.behaviour.num_connected_peers(HARDCODED_PEERSETS_SYNC)
 	}
 
 	/// Adjusts the reputation of a node.
@@ -500,144 +497,55 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 				notifications_sink,
 				negotiated_fallback,
 			} => {
-				// // Set number 0 is hardcoded the default set of peers we sync from.
-				// if set_id == HARDCODED_PEERSETS_SYNC {
-				// 	// `received_handshake` can be either a `Status` message if received from the
-				// 	// legacy substream ,or a `BlockAnnouncesHandshake` if received from the block
-				// 	// announces substream.
-				// 	match <Message<B> as DecodeAll>::decode_all(&mut &received_handshake[..]) {
-				// 		Ok(GenericMessage::Status(handshake)) => {
-				// 			let roles = handshake.roles;
-				// 			let handshake = BlockAnnouncesHandshake::<B> {
-				// 				roles: handshake.roles,
-				// 				best_number: handshake.best_number,
-				// 				best_hash: handshake.best_hash,
-				// 				genesis_hash: handshake.genesis_hash,
-				// 			};
-
-				// 			let (tx, rx) = oneshot::channel();
-				// 			let _ = self.tx.unbounded_send(
-				// 				crate::SyncEvent::NotificationStreamOpened {
-				// 					remote: peer_id,
-				// 					received_handshake: handshake,
-				// 					sink: notifications_sink,
-				// 					tx,
-				// 				},
-				// 			);
-				// 			self.sync_substream_validations.push(Box::pin(async move {
-				// 				match rx.await {
-				// 					Ok(accepted) => {
-				// 						if accepted {
-				// 							Ok((peer_id, roles))
-				// 						} else {
-				// 							Err(peer_id)
-				// 						}
-				// 					},
-				// 					Err(_) => Err(peer_id),
-				// 				}
-				// 			}));
-
-				// 			CustomMessageOutcome::None
-				// 		},
-				// 		Ok(msg) => {
-				// 			debug!(
-				// 				target: "sync",
-				// 				"Expected Status message from {}, but got {:?}",
-				// 				peer_id,
-				// 				msg,
-				// 			);
-				// 			self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
-				// 			CustomMessageOutcome::None
-				// 		},
-				// 		Err(err) => {
-				// 			match <BlockAnnouncesHandshake<B> as DecodeAll>::decode_all(
-				// 				&mut &received_handshake[..],
-				// 			) {
-				// 				Ok(handshake) => {
-				// 					let roles = handshake.roles;
-
-				// 					let (tx, rx) = oneshot::channel();
-				// 					let _ = self.tx.unbounded_send(
-				// 						crate::SyncEvent::NotificationStreamOpened {
-				// 							remote: peer_id,
-				// 							received_handshake: handshake,
-				// 							sink: notifications_sink,
-				// 							tx,
-				// 						},
-				// 					);
-				// 					self.sync_substream_validations.push(Box::pin(async move {
-				// 						match rx.await {
-				// 							Ok(accepted) => {
-				// 								if accepted {
-				// 									Ok((peer_id, roles))
-				// 								} else {
-				// 									Err(peer_id)
-				// 								}
-				// 							},
-				// 							Err(_) => Err(peer_id),
-				// 						}
-				// 					}));
-				// 					CustomMessageOutcome::None
-				// 				},
-				// 				Err(err2) => {
-				// 					log::debug!(
-				// 						target: "sync",
-				// 						"Couldn't decode handshake sent by {}: {:?}: {} & {}",
-				// 						peer_id,
-				// 						received_handshake,
-				// 						err,
-				// 						err2,
-				// 					);
-				// 					self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
-				// 					CustomMessageOutcome::None
-				// 				},
-				// 			}
-				// 		},
-				// 	}
-				// } else {
-				match (Roles::decode_all(&mut &received_handshake[..]), self.peers.get(&peer_id)) {
-					(Ok(roles), _) => CustomMessageOutcome::NotificationStreamOpened {
-						remote: peer_id,
-						protocol: self.notification_protocols[usize::from(set_id)].clone(),
-						negotiated_fallback,
-						roles,
-						received_handshake,
-						notifications_sink,
-					},
-					(Err(_), Some(roles)) if received_handshake.is_empty() => {
-						// As a convenience, we allow opening substreams for "external"
-						// notification protocols with an empty handshake. This fetches the
-						// roles from the locally-known roles.
-						// TODO: remove this after https://github.com/paritytech/substrate/issues/5685
-						CustomMessageOutcome::NotificationStreamOpened {
+				if set_id != HARDCODED_PEERSETS_SYNC {
+					match (
+						Roles::decode_all(&mut &received_handshake[..]),
+						self.peers.get(&peer_id),
+					) {
+						(Ok(roles), _) => CustomMessageOutcome::NotificationStreamOpened {
 							remote: peer_id,
 							protocol: self.notification_protocols[usize::from(set_id)].clone(),
 							negotiated_fallback,
-							roles: *roles,
+							roles,
 							received_handshake,
 							notifications_sink,
-						}
-					},
-					(Err(err), _) => {
-						debug!(target: "sync", "Failed to parse remote handshake: {}", err);
-						self.bad_handshake_substreams.insert((peer_id, set_id));
-						self.behaviour.disconnect_peer(&peer_id, set_id);
-						self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
-						self.peers.remove(&peer_id);
-						CustomMessageOutcome::None
-					},
+						},
+						(Err(_), Some(roles)) if received_handshake.is_empty() => {
+							// As a convenience, we allow opening substreams for "external"
+							// notification protocols with an empty handshake. This fetches the
+							// roles from the locally-known roles.
+							// TODO: remove this after https://github.com/paritytech/substrate/issues/5685
+							CustomMessageOutcome::NotificationStreamOpened {
+								remote: peer_id,
+								protocol: self.notification_protocols[usize::from(set_id)].clone(),
+								negotiated_fallback,
+								roles: *roles,
+								received_handshake,
+								notifications_sink,
+							}
+						},
+						(Err(err), _) => {
+							debug!(target: "sync", "Failed to parse remote handshake: {}", err);
+							self.bad_handshake_substreams.insert((peer_id, set_id));
+							self.behaviour.disconnect_peer(&peer_id, set_id);
+							self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
+							self.peers.remove(&peer_id);
+							CustomMessageOutcome::None
+						},
+					}
+				} else {
+					CustomMessageOutcome::None
 				}
-				// }
 			},
 			NotificationsOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } => {
 				if self.bad_handshake_substreams.contains(&(peer_id, set_id)) {
 					CustomMessageOutcome::None
-				// } else if set_id == HARDCODED_PEERSETS_SYNC {
-				// 	let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationSinkReplaced {
-				// 		remote: peer_id,
-				// 		sink: notifications_sink,
-				// 	});
-				// 	CustomMessageOutcome::None
+				} else if set_id == HARDCODED_PEERSETS_SYNC {
+					// 	let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationSinkReplaced {
+					// 		remote: peer_id,
+					// 		sink: notifications_sink,
+					// 	});
+					CustomMessageOutcome::None
 				} else {
 					CustomMessageOutcome::NotificationStreamReplaced {
 						remote: peer_id,
@@ -652,12 +560,12 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 					// handshake. The outer layers have never received an opening event about this
 					// substream, and consequently shouldn't receive a closing event either.
 					CustomMessageOutcome::None
-				// } else if set_id == HARDCODED_PEERSETS_SYNC {
-				// 	let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationStreamClosed {
-				// 		remote: peer_id,
-				// 	});
-				// 	self.peers.remove(&peer_id);
-				// 	CustomMessageOutcome::None
+				} else if set_id == HARDCODED_PEERSETS_SYNC {
+					// 	let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationStreamClosed {
+					// 		remote: peer_id,
+					// 	});
+					// 	self.peers.remove(&peer_id);
+					CustomMessageOutcome::None
 				} else {
 					CustomMessageOutcome::NotificationStreamClosed {
 						remote: peer_id,
@@ -668,12 +576,12 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 			NotificationsOut::Notification { peer_id, set_id, message } => {
 				if self.bad_handshake_substreams.contains(&(peer_id, set_id)) {
 					CustomMessageOutcome::None
-				// } else if set_id == HARDCODED_PEERSETS_SYNC {
-				// 	let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationsReceived {
-				// 		remote: peer_id,
-				// 		messages: vec![message.freeze()],
-				// 	});
-				// 	CustomMessageOutcome::None
+				} else if set_id == HARDCODED_PEERSETS_SYNC {
+					// 	let _ = self.tx.unbounded_send(crate::SyncEvent::NotificationsReceived {
+					// 		remote: peer_id,
+					// 		messages: vec![message.freeze()],
+					// 	});
+					CustomMessageOutcome::None
 				} else {
 					let protocol_name = self.notification_protocols[usize::from(set_id)].clone();
 					CustomMessageOutcome::NotificationsReceived {

@@ -625,6 +625,7 @@ mod tests {
 			peer: remote_peer,
 			role: ObservedRole::Authority,
 			negotiated_fallback: None,
+			handshake: vec![1, 3, 3, 7],
 		})
 		.await
 		.unwrap();
@@ -787,6 +788,7 @@ mod tests {
 				peer: remote_peer,
 				role: ObservedRole::Authority,
 				negotiated_fallback: None,
+				handshake: vec![1, 3, 3, 7],
 			})
 			.unwrap();
 

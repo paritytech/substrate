@@ -668,6 +668,9 @@ pub enum NotificationEvent {
 		/// Peer ID.
 		peer: PeerId,
 
+		/// Received handshake.
+		handshake: Vec<u8>,
+
 		/// Role of the peer.
 		role: ObservedRole,
 
@@ -764,4 +767,7 @@ pub trait NotificationService: Debug + Send {
 	/// Make a copy of the object so it can be shared between protocol components
 	/// who wish to have access to the same underlying notification protocol.
 	fn clone(&mut self) -> Result<Box<dyn NotificationService>, ()>;
+
+	/// Get protocol name of the `NotificationService`.
+	fn protocol(&self) -> &ProtocolName;
 }

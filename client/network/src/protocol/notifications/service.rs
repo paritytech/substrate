@@ -70,6 +70,9 @@ enum InnerNotificationEvent {
 		/// Peer ID.
 		peer: PeerId,
 
+		/// Received handshake.
+		handshake: Vec<u8>,
+
 		/// Role of the peer.
 		role: ObservedRole,
 
@@ -202,6 +205,7 @@ impl NotificationService for NotificationHandle {
 				Some(NotificationEvent::ValidateInboundSubstream { peer, handshake, result_tx }),
 			InnerNotificationEvent::NotificationStreamOpened {
 				peer,
+				handshake,
 				role,
 				negotiated_fallback,
 				sink,
@@ -209,6 +213,7 @@ impl NotificationService for NotificationHandle {
 				self.peers.insert(peer, sink);
 				Some(NotificationEvent::NotificationStreamOpened {
 					peer,
+					handshake,
 					role,
 					negotiated_fallback,
 				})
@@ -235,6 +240,10 @@ impl NotificationService for NotificationHandle {
 			peers: self.peers.clone(),
 			subscribers: self.subscribers.clone(),
 		}))
+	}
+
+	fn protocol(&self) -> &ProtocolName {
+		&self.protocol
 	}
 }
 
@@ -282,11 +291,14 @@ pub struct ProtocolHandle {
 
 	/// Subscribers of the notification protocol.
 	subscribers: Subscribers,
+
+	/// Number of connected peers.
+	num_peers: usize,
 }
 
 impl ProtocolHandle {
 	fn new(protocol: ProtocolName, subscribers: Subscribers) -> Self {
-		Self { protocol, subscribers }
+		Self { protocol, subscribers, num_peers: 0usize }
 	}
 
 	/// Report to the protocol that a substream has been opened and it must be validated by the
@@ -358,8 +370,9 @@ impl ProtocolHandle {
 	/// Report to the protocol that a substream has been opened and that it can now use the handle
 	/// to send notifications to the remote peer.
 	pub fn report_substream_opened(
-		&self,
+		&mut self,
 		peer: PeerId,
+		handshake: Vec<u8>,
 		role: ObservedRole,
 		negotiated_fallback: Option<ProtocolName>,
 		sink: NotificationsSink,
@@ -372,12 +385,14 @@ impl ProtocolHandle {
 			subscriber
 				.unbounded_send(InnerNotificationEvent::NotificationStreamOpened {
 					peer,
+					handshake: handshake.clone(),
 					role: role.clone(),
 					negotiated_fallback: negotiated_fallback.clone(),
 					sink: sink.clone(),
 				})
 				.is_ok()
 		});
+		self.num_peers += 1;
 
 		Ok(())
 	}
@@ -393,6 +408,7 @@ impl ProtocolHandle {
 				.unbounded_send(InnerNotificationEvent::NotificationStreamClosed { peer })
 				.is_ok()
 		});
+		self.num_peers -= 1;
 
 		Ok(())
 	}
@@ -417,6 +433,11 @@ impl ProtocolHandle {
 		});
 
 		Ok(())
+	}
+
+	/// Get the number of connected peers.
+	pub fn num_peers(&self) -> usize {
+		self.num_peers
 	}
 }
 
@@ -468,20 +489,24 @@ mod tests {
 	async fn substream_opened() {
 		let (proto, mut notif) = notification_service("/proto/1".into());
 		let (sink, _, _) = NotificationsSink::new(PeerId::random());
-		let (handle, _stream) = proto.split();
+		let (mut handle, _stream) = proto.split();
 
 		let peer_id = PeerId::random();
-		handle.report_substream_opened(peer_id, ObservedRole::Full, None, sink).unwrap();
+		handle
+			.report_substream_opened(peer_id, vec![1, 3, 3, 7], ObservedRole::Full, None, sink)
+			.unwrap();
 
 		if let Some(NotificationEvent::NotificationStreamOpened {
 			peer,
 			role,
 			negotiated_fallback,
+			handshake,
 		}) = notif.next_event().await
 		{
 			assert_eq!(peer_id, peer);
 			assert_eq!(negotiated_fallback, None);
 			assert_eq!(role, ObservedRole::Full);
+			assert_eq!(handshake, vec![1, 3, 3, 7]);
 		} else {
 			panic!("invalid event received");
 		}
@@ -491,7 +516,7 @@ mod tests {
 	async fn send_sync_notification() {
 		let (proto, mut notif) = notification_service("/proto/1".into());
 		let (sink, _, mut sync_rx) = NotificationsSink::new(PeerId::random());
-		let (handle, _stream) = proto.split();
+		let (mut handle, _stream) = proto.split();
 		let peer_id = PeerId::random();
 
 		// validate inbound substream
@@ -509,17 +534,21 @@ mod tests {
 		assert_eq!(result_rx.await.unwrap(), ValidationResult::Accept);
 
 		// report that a substream has been opened
-		handle.report_substream_opened(peer_id, ObservedRole::Full, None, sink).unwrap();
+		handle
+			.report_substream_opened(peer_id, vec![1, 3, 3, 7], ObservedRole::Full, None, sink)
+			.unwrap();
 
 		if let Some(NotificationEvent::NotificationStreamOpened {
 			peer,
 			role,
 			negotiated_fallback,
+			handshake,
 		}) = notif.next_event().await
 		{
 			assert_eq!(peer_id, peer);
 			assert_eq!(negotiated_fallback, None);
 			assert_eq!(role, ObservedRole::Full);
+			assert_eq!(handshake, vec![1, 3, 3, 7]);
 		} else {
 			panic!("invalid event received");
 		}
@@ -535,7 +564,7 @@ mod tests {
 	async fn send_async_notification() {
 		let (proto, mut notif) = notification_service("/proto/1".into());
 		let (sink, mut async_rx, _) = NotificationsSink::new(PeerId::random());
-		let (handle, _stream) = proto.split();
+		let (mut handle, _stream) = proto.split();
 		let peer_id = PeerId::random();
 
 		// validate inbound substream
@@ -553,17 +582,21 @@ mod tests {
 		assert_eq!(result_rx.await.unwrap(), ValidationResult::Accept);
 
 		// report that a substream has been opened
-		handle.report_substream_opened(peer_id, ObservedRole::Full, None, sink).unwrap();
+		handle
+			.report_substream_opened(peer_id, vec![1, 3, 3, 7], ObservedRole::Full, None, sink)
+			.unwrap();
 
 		if let Some(NotificationEvent::NotificationStreamOpened {
 			peer,
 			role,
 			negotiated_fallback,
+			handshake,
 		}) = notif.next_event().await
 		{
 			assert_eq!(peer_id, peer);
 			assert_eq!(negotiated_fallback, None);
 			assert_eq!(role, ObservedRole::Full);
+			assert_eq!(handshake, vec![1, 3, 3, 7]);
 		} else {
 			panic!("invalid event received");
 		}
@@ -629,17 +662,21 @@ mod tests {
 		assert_eq!(result_rx.await.unwrap(), ValidationResult::Accept);
 
 		// report that a substream has been opened
-		handle.report_substream_opened(peer_id, ObservedRole::Full, None, sink).unwrap();
+		handle
+			.report_substream_opened(peer_id, vec![1, 3, 3, 7], ObservedRole::Full, None, sink)
+			.unwrap();
 
 		if let Some(NotificationEvent::NotificationStreamOpened {
 			peer,
 			role,
 			negotiated_fallback,
+			handshake,
 		}) = notif.next_event().await
 		{
 			assert_eq!(peer_id, peer);
 			assert_eq!(negotiated_fallback, None);
 			assert_eq!(role, ObservedRole::Full);
+			assert_eq!(handshake, vec![1, 3, 3, 7]);
 		} else {
 			panic!("invalid event received");
 		}
@@ -661,7 +698,7 @@ mod tests {
 	async fn backpressure_works() {
 		let (proto, mut notif) = notification_service("/proto/1".into());
 		let (sink, mut async_rx, _) = NotificationsSink::new(PeerId::random());
-		let (handle, _stream) = proto.split();
+		let (mut handle, _stream) = proto.split();
 		let peer_id = PeerId::random();
 
 		// validate inbound substream
@@ -679,17 +716,21 @@ mod tests {
 		assert_eq!(result_rx.await.unwrap(), ValidationResult::Accept);
 
 		// report that a substream has been opened
-		handle.report_substream_opened(peer_id, ObservedRole::Full, None, sink).unwrap();
+		handle
+			.report_substream_opened(peer_id, vec![1, 3, 3, 7], ObservedRole::Full, None, sink)
+			.unwrap();
 
 		if let Some(NotificationEvent::NotificationStreamOpened {
 			peer,
 			role,
 			negotiated_fallback,
+			handshake,
 		}) = notif.next_event().await
 		{
 			assert_eq!(peer_id, peer);
 			assert_eq!(negotiated_fallback, None);
 			assert_eq!(role, ObservedRole::Full);
+			assert_eq!(handshake, vec![1, 3, 3, 7]);
 		} else {
 			panic!("invalid event received");
 		}
@@ -741,17 +782,21 @@ mod tests {
 		assert_eq!(result_rx.await.unwrap(), ValidationResult::Accept);
 
 		// report that a substream has been opened
-		handle.report_substream_opened(peer_id, ObservedRole::Full, None, sink).unwrap();
+		handle
+			.report_substream_opened(peer_id, vec![1, 3, 3, 7], ObservedRole::Full, None, sink)
+			.unwrap();
 
 		if let Some(NotificationEvent::NotificationStreamOpened {
 			peer,
 			role,
 			negotiated_fallback,
+			handshake,
 		}) = notif.next_event().await
 		{
 			assert_eq!(peer_id, peer);
 			assert_eq!(negotiated_fallback, None);
 			assert_eq!(role, ObservedRole::Full);
+			assert_eq!(handshake, vec![1, 3, 3, 7]);
 		} else {
 			panic!("invalid event received");
 		}
@@ -787,17 +832,21 @@ mod tests {
 		assert_eq!(result_rx.await.unwrap(), ValidationResult::Accept);
 
 		// report that a substream has been opened
-		handle.report_substream_opened(peer_id, ObservedRole::Full, None, sink).unwrap();
+		handle
+			.report_substream_opened(peer_id, vec![1, 3, 3, 7], ObservedRole::Full, None, sink)
+			.unwrap();
 
 		if let Some(NotificationEvent::NotificationStreamOpened {
 			peer,
 			role,
 			negotiated_fallback,
+			handshake,
 		}) = notif.next_event().await
 		{
 			assert_eq!(peer_id, peer);
 			assert_eq!(negotiated_fallback, None);
 			assert_eq!(role, ObservedRole::Full);
+			assert_eq!(handshake, vec![1, 3, 3, 7]);
 		} else {
 			panic!("invalid event received");
 		}
@@ -928,18 +977,22 @@ mod tests {
 		assert_eq!(result_rx.await.unwrap(), ValidationResult::Accept);
 
 		// report that then notification stream has been opened
-		handle.report_substream_opened(peer_id, ObservedRole::Full, None, sink).unwrap();
+		handle
+			.report_substream_opened(peer_id, vec![1, 3, 3, 7], ObservedRole::Full, None, sink)
+			.unwrap();
 
 		for notif in vec![&mut notif1, &mut notif2, &mut notif3] {
 			if let Some(NotificationEvent::NotificationStreamOpened {
 				peer,
 				role,
 				negotiated_fallback,
+				handshake,
 			}) = notif.next_event().await
 			{
 				assert_eq!(peer_id, peer);
 				assert_eq!(negotiated_fallback, None);
 				assert_eq!(role, ObservedRole::Full);
+				assert_eq!(handshake, vec![1, 3, 3, 7]);
 			} else {
 				panic!("invalid event received");
 			}
