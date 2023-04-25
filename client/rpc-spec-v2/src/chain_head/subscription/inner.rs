@@ -16,12 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Subscription management for tracking subscription IDs to pinned blocks.
-
 use futures::channel::oneshot;
-use parking_lot::RwLock;
 use sc_client_api::Backend;
-use sp_blockchain::Error;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{hash_map::Entry, HashMap},
@@ -29,52 +25,7 @@ use std::{
 	time::{Duration, Instant},
 };
 
-/// Subscription management error.
-#[derive(Debug, thiserror::Error)]
-pub enum SubscriptionManagementError {
-	/// The block cannot be pinned into memory because
-	/// the subscription has exceeded the maximum number
-	/// of blocks pinned.
-	#[error("Exceeded pinning limits")]
-	ExceededLimits,
-	/// Error originated from the blockchain (client or backend).
-	#[error("Blockchain error {0}")]
-	Blockchain(Error),
-	/// The database does not contain a block hash.
-	#[error("Block hash is absent")]
-	BlockHashAbsent,
-	/// The database does not contain a block header.
-	#[error("Block header is absent")]
-	BlockHeaderAbsent,
-	/// The specified subscription ID is not present.
-	#[error("Subscription is absent")]
-	SubscriptionAbsent,
-	/// Custom error.
-	#[error("Subscription error {0}")]
-	Custom(String),
-}
-
-// Blockchain error does not implement `PartialEq` needed for testing.
-impl PartialEq for SubscriptionManagementError {
-	fn eq(&self, other: &SubscriptionManagementError) -> bool {
-		match (self, other) {
-			(Self::ExceededLimits, Self::ExceededLimits) |
-			// Not needed for testing.
-			(Self::Blockchain(_), Self::Blockchain(_)) |
-			(Self::BlockHashAbsent, Self::BlockHashAbsent) |
-			(Self::BlockHeaderAbsent, Self::BlockHeaderAbsent) |
-			(Self::SubscriptionAbsent, Self::SubscriptionAbsent) => true,
-			(Self::Custom(lhs), Self::Custom(rhs)) => lhs == rhs,
-			_ => false,
-		}
-	}
-}
-
-impl From<Error> for SubscriptionManagementError {
-	fn from(err: Error) -> Self {
-		SubscriptionManagementError::Blockchain(err)
-	}
-}
+use crate::chain_head::subscription::SubscriptionManagementError;
 
 /// The state machine of a block of a single subscription ID.
 ///
@@ -321,7 +272,7 @@ impl<Block: BlockT, BE: Backend<Block>> Drop for BlockGuard<Block, BE> {
 	}
 }
 
-struct SubscriptionsInner<Block: BlockT, BE: Backend<Block>> {
+pub struct SubscriptionsInner<Block: BlockT, BE: Backend<Block>> {
 	/// Reference count the block hashes across all subscriptions.
 	///
 	/// The pinned blocks cannot exceed the [`Self::global_limit`] limit.
@@ -341,7 +292,7 @@ struct SubscriptionsInner<Block: BlockT, BE: Backend<Block>> {
 
 impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 	/// Construct a new [`SubscriptionsInner`] from the specified limits.
-	fn new(
+	pub fn new(
 		global_max_pinned_blocks: usize,
 		local_max_pin_duration: Duration,
 		backend: Arc<BE>,
@@ -356,7 +307,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 	}
 
 	/// Insert a new subscription ID.
-	fn insert_subscription(
+	pub fn insert_subscription(
 		&mut self,
 		sub_id: String,
 		runtime_updates: bool,
@@ -376,7 +327,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 	}
 
 	/// Remove the subscription ID with associated pinned blocks.
-	fn remove_subscription(&mut self, sub_id: &str) {
+	pub fn remove_subscription(&mut self, sub_id: &str) {
 		let Some(mut sub) = self.subs.remove(sub_id) else {
 			return
 		};
@@ -450,7 +401,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 		return is_terminated
 	}
 
-	fn pin_block(
+	pub fn pin_block(
 		&mut self,
 		sub_id: &str,
 		hash: Block::Hash,
@@ -506,7 +457,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 		}
 	}
 
-	fn unpin_block(
+	pub fn unpin_block(
 		&mut self,
 		sub_id: &str,
 		hash: Block::Hash,
@@ -525,7 +476,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 		Ok(())
 	}
 
-	fn lock_block(
+	pub fn lock_block(
 		&mut self,
 		sub_id: &str,
 		hash: Block::Hash,
@@ -539,101 +490,6 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 		}
 
 		BlockGuard::new(hash, sub.runtime_updates, self.backend.clone())
-	}
-}
-
-/// Manage block pinning / unpinning for subscription IDs.
-pub struct SubscriptionManagement<Block: BlockT, BE: Backend<Block>> {
-	/// Manage subscription by mapping the subscription ID
-	/// to a set of block hashes.
-	inner: RwLock<SubscriptionsInner<Block, BE>>,
-}
-
-impl<Block: BlockT, BE: Backend<Block>> SubscriptionManagement<Block, BE> {
-	/// Construct a new [`SubscriptionManagement`].
-	pub fn new(
-		global_max_pinned_blocks: usize,
-		local_max_pin_duration: Duration,
-		backend: Arc<BE>,
-	) -> Self {
-		SubscriptionManagement {
-			inner: RwLock::new(SubscriptionsInner::new(
-				global_max_pinned_blocks,
-				local_max_pin_duration,
-				backend,
-			)),
-		}
-	}
-
-	/// Insert a new subscription ID.
-	///
-	/// If the subscription was not previously inserted, returns the receiver that is
-	/// triggered upon the "Stop" event. Otherwise, if the subscription ID was already
-	/// inserted returns none.
-	pub fn insert_subscription(
-		&self,
-		sub_id: String,
-		runtime_updates: bool,
-	) -> Option<oneshot::Receiver<()>> {
-		let mut inner = self.inner.write();
-		inner.insert_subscription(sub_id, runtime_updates)
-	}
-
-	/// Remove the subscription ID with associated pinned blocks.
-	pub fn remove_subscription(&self, sub_id: &str) {
-		let mut inner = self.inner.write();
-		inner.remove_subscription(sub_id)
-	}
-
-	/// The block is pinned in the backend only once when the block's hash is first encountered.
-	///
-	/// Each subscription is expected to call this method twice:
-	/// - once from the `NewBlock` import
-	/// - once from the `Finalized` import
-	///
-	/// Returns
-	/// - Ok(true) if the subscription did not previously contain this block
-	/// - Ok(false) if the subscription already contained this this
-	/// - Error if the backend failed to pin the block or the subscription ID is invalid
-	pub fn pin_block(
-		&self,
-		sub_id: &str,
-		hash: Block::Hash,
-	) -> Result<bool, SubscriptionManagementError> {
-		let mut inner = self.inner.write();
-		inner.pin_block(sub_id, hash)
-	}
-
-	/// Unpin the block from the subscription.
-	///
-	/// The last subscription that unpins the block is also unpinning the block
-	/// from the backend.
-	///
-	/// This method is called only once per subscription.
-	///
-	/// Returns an error if the block is not pinned for the subscription or
-	/// the subscription ID is invalid.
-	pub fn unpin_block(
-		&self,
-		sub_id: &str,
-		hash: Block::Hash,
-	) -> Result<(), SubscriptionManagementError> {
-		let mut inner = self.inner.write();
-		inner.unpin_block(sub_id, hash)
-	}
-
-	/// Ensure the block remains pinned until the return object is dropped.
-	///
-	/// Returns a [`BlockGuard`] that pins and unpins the block hash in RAII manner.
-	/// Returns an error if the block hash is not pinned for the subscription or
-	/// the subscription ID is invalid.
-	pub fn lock_block(
-		&self,
-		sub_id: &str,
-		hash: Block::Hash,
-	) -> Result<BlockGuard<Block, BE>, SubscriptionManagementError> {
-		let mut inner = self.inner.write();
-		inner.lock_block(sub_id, hash)
 	}
 }
 
