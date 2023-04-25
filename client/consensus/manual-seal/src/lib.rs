@@ -30,9 +30,9 @@ use sc_consensus::{
 	block_import::{BlockImport, BlockImportParams, ForkChoiceStrategy},
 	import_queue::{BasicQueue, BoxBlockImport, Verifier},
 };
-use sp_core::traits::SpawnNamed;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::{Environment, Proposer, SelectChain};
+use sp_core::traits::SpawnNamed;
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::{marker::PhantomData, sync::Arc, time::Duration};
@@ -339,17 +339,21 @@ pub async fn run_delayed_finalize<B, CB, C, S>(
 	while let Some(notification) = block_import_stream.next().await {
 		let delay = Delay::new(Duration::from_secs(delay_sec));
 		let cloned_client = client.clone();
-		spawn_handle.spawn("delayed-finalize", None, Box::pin(async move {
-			delay.await;
-			finalize_block(FinalizeBlockParams {
-				hash: notification.hash,
-				sender: None,
-				justification: None,
-				finalizer: cloned_client,
-				_phantom: PhantomData,
-			})
-			.await
-		}));
+		spawn_handle.spawn(
+			"delayed-finalize",
+			None,
+			Box::pin(async move {
+				delay.await;
+				finalize_block(FinalizeBlockParams {
+					hash: notification.hash,
+					sender: None,
+					justification: None,
+					finalizer: cloned_client,
+					_phantom: PhantomData,
+				})
+				.await
+			}),
+		);
 	}
 }
 
@@ -568,7 +572,7 @@ mod tests {
 		assert_eq!(client.header(created_block.hash).unwrap().unwrap().number, 1);
 
 		assert_eq!(client.info().finalized_hash, client.info().genesis_hash);
-		// Ensuring run_delayed_finalize's Future is always processed before checking finalized hash 
+		// Ensuring run_delayed_finalize's Future is always processed before checking finalized hash
 		// By adding 1 sec
 		Delay::new(Duration::from_secs(delay_sec + 1)).await;
 		assert_eq!(client.info().finalized_hash, created_block.hash);
