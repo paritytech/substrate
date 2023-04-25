@@ -1559,6 +1559,8 @@ impl pallet_asset_conversion::Config for Runtime {
 	type MaxSwapPathLength = ConstU32<4>;
 	type MintMinLiquidity = MintMinLiquidity;
 	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 parameter_types! {
