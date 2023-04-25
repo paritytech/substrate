@@ -981,12 +981,13 @@ pub mod pallet {
 		fn less_than_minimal_amount(
 			value: T::AssetBalance,
 			asset: T::MultiAssetId,
-		) -> Result<bool, ()> {
+		) -> Result<bool, DispatchError> {
 			if T::MultiAssetIdConverter::is_native(asset) {
 				let ed = T::Currency::minimum_balance();
 				Ok(T::HigherPrecisionBalance::from(value) < T::HigherPrecisionBalance::from(ed))
 			} else {
-				let asset_id = T::MultiAssetIdConverter::try_convert(asset).map_err(|_| ())?;
+				let asset_id = T::MultiAssetIdConverter::try_convert(asset)
+					.map_err(|_| Error::<T>::Overflow)?;
 				let minimal = T::Assets::minimum_balance(asset_id);
 				Ok(value < minimal)
 			}
@@ -996,7 +997,7 @@ pub mod pallet {
 			value: T::AssetBalance,
 			asset: T::MultiAssetId,
 		) -> Result<(), ()> {
-			ensure!(!Self::less_than_minimal_amount(value, asset)?, ());
+			ensure!(!Self::less_than_minimal_amount(value, asset).map_err(|_| ())?, ());
 			Ok(())
 		}
 
