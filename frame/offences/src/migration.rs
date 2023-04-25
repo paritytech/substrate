@@ -15,8 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{LOG_TARGET, Pallet, Config, Kind, OffenceDetails, Perbill, SessionIndex};
-use frame_support::{Twox64Concat, dispatch::GetStorageVersion, traits::OnRuntimeUpgrade, pallet_prelude::ValueQuery, storage_alias, traits::Get, weights::Weight};
+use super::{Config, Kind, OffenceDetails, Pallet, Perbill, SessionIndex, LOG_TARGET};
+use frame_support::{
+	dispatch::GetStorageVersion,
+	pallet_prelude::ValueQuery,
+	storage_alias,
+	traits::{Get, OnRuntimeUpgrade},
+	weights::Weight,
+	Twox64Concat,
+};
 use sp_staking::offence::{DisableStrategy, OnOffenceHandler};
 use sp_std::vec::Vec;
 
@@ -46,7 +53,11 @@ pub mod v1 {
 			let onchain = Pallet::<T>::on_chain_storage_version();
 			ensure!(onchain < 1, "pallet_offences::MigrateToV1 migration can be deleted");
 
-			log::info!(target: LOG_TARGET,  "Number of reports to refund and delete: {}", ReportsByKindIndex::<T>::iter().count());
+			log::info!(
+				target: LOG_TARGET,
+				"Number of reports to refund and delete: {}",
+				ReportsByKindIndex::<T>::iter().count()
+			);
 
 			Ok(Vec::new())
 		}
@@ -115,9 +126,9 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 mod test {
 	use super::*;
 	use crate::mock::{new_test_ext, with_on_offence_fractions, Runtime as T, KIND};
+	use codec::Encode;
 	use sp_runtime::Perbill;
 	use sp_staking::offence::OffenceDetails;
-	use codec::Encode;
 
 	#[test]
 	fn migration_to_v1_works() {
