@@ -21,8 +21,8 @@
 
 use super::*;
 use crate::mock::{
-	new_test_ext, offence_reports, with_on_offence_fractions, Offence, Offences,
-	RuntimeEvent, System, KIND,
+	new_test_ext, offence_reports, with_on_offence_fractions, Offence, Offences, RuntimeEvent,
+	System, KIND,
 };
 use frame_system::{EventRecord, Phase};
 use sp_runtime::Perbill;
