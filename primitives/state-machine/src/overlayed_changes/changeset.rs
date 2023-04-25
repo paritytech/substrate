@@ -107,18 +107,17 @@ pub enum StorageEntry {
 	Append {
 		// current buffer of appended data.
 		data: StorageValue,
-		// Size at start of transaction.
-		// This does not include the size of
-		// compact u32 when data is materialized.
-		prev_offset: usize,
-		// Number of appended element at the start of the transaction.
-		prev_size: u32,
-		/*
-		// Current size of appended data.
-		// (only set on new append transaction: only needed to revert).
+		// Total size in bytes of appended data.
+		//
+		// This does not include the size of the compact 32 encoded number of appends.
+		//
+		// This value is only define on the last state of a transaction, iff `data`
+		// has been sent forward to next transaction (and thus `data` is empty).
+		// TODO rename to imply data is not here.
 		size: Option<usize>,
 		// Current number of appended elements.
 		nb_append: u32,
+		/*
 		// If define, it contains a given
 		// number of element as prefix.
 		// This number is updated on access only,
@@ -280,31 +279,35 @@ impl OverlayedEntry<StorageEntry> {
 					**at = value;
 					None
 				},
-				StorageEntry::Append { data, prev_size, prev_offset } => {
-					let mut append = StorageAppend::new(data);
-					let current =
-						append.extract_length_data().expect("append is always valid; qed");
-					append.replace_length_data(current, *prev_size);
-					data.truncate(*prev_offset);
+				StorageEntry::Append { data, size, nb_append } => {
+					debug_assert!(size.is_none());
 					let result = core::mem::take(data);
-					Some((value, result))
+					Some((value, result, *nb_append))
 				},
 			};
-			if let Some((value, restore)) = set_prev {
-				*old_value = value;
+			if let Some((new_value, mut data, current_nb_append)) = set_prev {
+				*old_value = new_value;
 				let nb_transactions = self.transactions.len();
-
-				let parent = self
-					.transactions
-					.get_mut(nb_transactions - 2)
-					.expect("append always on top of a parent; qed");
-				match &mut parent.value {
-					StorageEntry::Append { data, .. } => {
-						*data = restore;
-					},
-					at @ _ => {
-						*at = StorageEntry::Some(restore);
-					},
+				if let Some(parent) = self.transactions.get_mut(nb_transactions - 2) {
+					match &mut parent.value {
+						StorageEntry::Append { data: parent_data, size, nb_append } => {
+							debug_assert!(parent_data.is_empty());
+							let mut append = StorageAppend::new(&mut data);
+							let current =
+								append.extract_length_data().expect("append is always valid; qed");
+							debug_assert!(current_nb_append == current);
+							append.replace_length_data(current, *nb_append);
+							data.truncate(
+								size.expect("append in new layer store size in previous; qed"),
+							);
+							*parent_data = data;
+						},
+						_ => {
+							// No value or a simple value, no need to restore
+						},
+					}
+				} else {
+					// append over nothing no need to restore data
 				}
 			}
 		}
@@ -322,75 +325,65 @@ impl OverlayedEntry<StorageEntry> {
 	fn append(&mut self, value: StorageValue, first_write_in_tx: bool, at_extrinsic: Option<u32>) {
 		let mut buffer = Vec::new();
 		if self.transactions.is_empty() {
-			StorageAppend::new(&mut buffer).append(value);
+			let mut data = Vec::new();
+			StorageAppend::new(&mut data).append(value);
 			self.transactions.push(InnerValue {
-				value: StorageEntry::Some(buffer),
+				value: StorageEntry::Append { data, size: None, nb_append: 1 },
 				extrinsics: Default::default(),
 			});
 		} else if first_write_in_tx {
 			let parent = self.value_mut();
-			let append = match parent {
+			let (data, nb_append) = match parent {
 				StorageEntry::None => {
-					StorageAppend::new(&mut buffer).append(value);
-					self.transactions.push(InnerValue {
-						value: StorageEntry::Some(buffer),
-						extrinsics: Default::default(),
-					});
-					None
+					let mut data = Vec::new();
+					StorageAppend::new(&mut data).append(value);
+					(data, 1)
 				},
 				StorageEntry::Some(prev) => {
-					let offset = prev.len();
-					let mut appendable = StorageAppend::new(prev);
-					if let Some(old_size) = appendable.extract_length_data() {
-						assert!(appendable.append(value));
-						let value = core::mem::take(prev);
-						Some((value, old_size, offset))
-					} else {
-						let mut buffer = prev.clone();
-						assert!(!StorageAppend::new(&mut buffer).append(value));
-						self.transactions.push(InnerValue {
-							value: StorageEntry::Some(buffer),
-							extrinsics: Default::default(),
-						});
-						None
-					}
+					// append on to of a simple storage should be avoided by any sane runtime,
+					// allowing a clone here.
+					let mut data = prev.clone();
+					let mut append = StorageAppend::new(&mut data);
+					append.append(value);
+					let nb_append =
+						append.extract_length_data().expect("append is always valid; qed");
+					(data, nb_append)
 				},
-				StorageEntry::Append { data: prev, .. } => {
-					let offset = prev.len();
-					let mut appendable = StorageAppend::new(prev);
-					if let Some(old_size) = appendable.extract_length_data() {
-						assert!(appendable.append(value));
-						let data = core::mem::take(prev);
-						Some((data, old_size, offset))
-					} else {
-						unreachable!();
-					}
+				StorageEntry::Append { data, size, nb_append } => {
+					assert!(size.is_none());
+					*size = Some(data.len());
+					StorageAppend::new(data).append(value);
+					(core::mem::take(data), *nb_append + 1)
 				},
 			};
-			if let Some((data, prev_size, prev_offset)) = append {
-				self.transactions.push(InnerValue {
-					value: StorageEntry::Append { data, prev_size, prev_offset },
-					extrinsics: Default::default(),
-				});
-			}
+			self.transactions.push(InnerValue {
+				value: StorageEntry::Append { data, size: None, nb_append },
+				extrinsics: Default::default(),
+			});
 		} else {
 			let old_value = self.value_mut();
 			let replace = match old_value {
 				StorageEntry::None => {
 					StorageAppend::new(&mut buffer).append(value);
-					Some(buffer)
+					Some((buffer, 1))
 				},
 				StorageEntry::Some(data) => {
-					StorageAppend::new(data).append(value);
-					None
+					// Note that this code path is very unsafe (depending on the initial
+					// value if it start with a compact u32 we can have totally broken
+					// encoding.
+					let mut append = StorageAppend::new(data);
+					append.append(value);
+					let size = append.extract_length_data().expect("append is always valid; qed");
+					Some((core::mem::take(data), size))
 				},
-				StorageEntry::Append { data, .. } => {
+				StorageEntry::Append { data, nb_append, .. } => {
 					assert!(StorageAppend::new(data).append(value));
+					*nb_append += 1;
 					None
 				},
 			};
-			if let Some(new_value) = replace {
-				*old_value = StorageEntry::Some(new_value);
+			if let Some((data, nb_append)) = replace {
+				*old_value = StorageEntry::Append { data, size: None, nb_append };
 			}
 		}
 
@@ -632,19 +625,34 @@ impl OverlayedChangeSet {
 
 			if rollback {
 				match overlayed.pop_transaction().value {
-					StorageEntry::Append { mut data, prev_size, prev_offset } => {
-						let mut append = StorageAppend::new(&mut data);
-						let current =
-							append.extract_length_data().expect("append is always valid; qed");
-						append.replace_length_data(current, prev_size);
-						data.truncate(prev_offset);
-						match overlayed.value_mut() {
-							StorageEntry::Append { data: empty, .. } => {
-								*empty = data;
-							},
-							at @ _ => {
-								*at = StorageEntry::Some(data);
-							},
+					StorageEntry::Append {
+						mut data,
+						size: size_current,
+						nb_append: nb_append_current,
+					} => {
+						debug_assert!(size_current.is_none());
+						if !overlayed.transactions.is_empty() {
+							match overlayed.value_mut() {
+								StorageEntry::Append { data: empty_data, size, nb_append } => {
+									debug_assert!(empty_data.is_empty());
+									debug_assert!(size.is_some());
+									// restore move of data
+									let mut append = StorageAppend::new(&mut data);
+									let current = append
+										.extract_length_data()
+										.expect("append is always valid; qed");
+									debug_assert!(nb_append_current == current);
+									append.replace_length_data(current, *nb_append);
+									let size = size
+										.take()
+										.expect("append in new layer store size in previous; qed");
+									data.truncate(size);
+									*empty_data = data;
+								},
+								_ => {
+									// No move of data, just drop the initial append
+								},
+							}
 						}
 					},
 					_ => (),
@@ -670,24 +678,7 @@ impl OverlayedChangeSet {
 				// the previous transaction or a value committed without any open transaction.
 				if has_predecessor {
 					let dropped_tx = overlayed.pop_transaction();
-					let set_parent = match dropped_tx.value {
-						StorageEntry::Append { data, .. } => {
-							match overlayed.value_mut() {
-								StorageEntry::Append { data: empty, .. } => {
-									*empty = data;
-								},
-								at @ _ => {
-									*at = StorageEntry::Some(data);
-								},
-							}
-							None
-						},
-						StorageEntry::Some(data) => Some(Some(data)),
-						StorageEntry::None => Some(None),
-					};
-					if let Some(overwrite) = set_parent {
-						overlayed.set(overwrite, false, None);
-					}
+					*overlayed.value_mut() = dropped_tx.value;
 					overlayed.transaction_extrinsics_mut().extend(dropped_tx.extrinsics);
 				}
 			}
