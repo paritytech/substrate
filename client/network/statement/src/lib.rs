@@ -43,7 +43,6 @@ use sc_network_common::{
 	role::ObservedRole,
 	sync::{SyncEvent, SyncEventStream},
 };
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_statement_store::{
 	Hash, NetworkPriority, Statement, StatementSource, StatementStore, SubmitResult,
 };
@@ -152,8 +151,7 @@ impl StatementHandlerPrototype {
 	) -> error::Result<StatementHandler<N, S>> {
 		let net_event_stream = network.event_stream("statement-handler-net");
 		let sync_event_stream = sync.event_stream("statement-handler-sync");
-		let (queue_sender, mut queue_receiver) =
-			tracing_unbounded("mpsc_statement_validator", 100_000);
+		let (queue_sender, mut queue_receiver) = async_channel::bounded(100_000);
 
 		let store = statement_store.clone();
 		executor(
@@ -230,7 +228,7 @@ pub struct StatementHandler<
 	// All connected peers
 	peers: HashMap<PeerId, Peer>,
 	statement_store: Arc<dyn StatementStore>,
-	queue_sender: TracingUnboundedSender<(Statement, oneshot::Sender<SubmitResult>)>,
+	queue_sender: async_channel::Sender<(Statement, oneshot::Sender<SubmitResult>)>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
 }
@@ -382,15 +380,29 @@ where
 				match self.pending_statements_peers.entry(hash) {
 					Entry::Vacant(entry) => {
 						let (completion_sender, completion_receiver) = oneshot::channel();
-						if self.queue_sender.unbounded_send((s, completion_sender)).is_ok() {
-							self.pending_statements.push(
-								async move {
-									let res = completion_receiver.await;
-									(hash, res.ok())
-								}
-								.boxed(),
-							);
-							entry.insert(HashSet::from_iter([who]));
+						match self.queue_sender.try_send((s, completion_sender)) {
+							Ok(()) => {
+								self.pending_statements.push(
+									async move {
+										let res = completion_receiver.await;
+										(hash, res.ok())
+									}
+									.boxed(),
+								);
+								entry.insert(HashSet::from_iter([who]));
+							},
+							Err(async_channel::TrySendError::Full(_)) => {
+								log::debug!(
+									target: LOG_TARGET,
+									"Dropped statement because validation channel is full",
+								);
+							},
+							Err(async_channel::TrySendError::Closed(_)) => {
+								log::trace!(
+									target: LOG_TARGET,
+									"Dropped statement because validation channel is closed",
+								);
+							},
 						}
 					},
 					Entry::Occupied(mut entry) => {

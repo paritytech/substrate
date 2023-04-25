@@ -9237,6 +9237,7 @@ name = "sc-network-statement"
 version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
+ "async-channel",
  "futures",
  "libp2p",
  "log",
@@ -9245,7 +9246,6 @@ dependencies = [
  "sc-network",
  "sc-network-common",
  "sc-peerset",
- "sc-utils",
  "sp-consensus",
  "sp-runtime",
  "sp-statement-store",
