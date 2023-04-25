@@ -101,7 +101,6 @@ impl Metrics {
 	}
 }
 
-
 /// Prototype for a [`StatementHandler`].
 pub struct StatementHandlerPrototype {
 	protocol_name: ProtocolName,
@@ -109,10 +108,7 @@ pub struct StatementHandlerPrototype {
 
 impl StatementHandlerPrototype {
 	/// Create a new instance.
-	pub fn new<Hash: AsRef<[u8]>>(
-		genesis_hash: Hash,
-		fork_id: Option<&str>,
-	) -> Self {
+	pub fn new<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> Self {
 		let genesis_hash = genesis_hash.as_ref();
 		let protocol_name = if let Some(fork_id) = fork_id {
 			format!("/{}/{}/statement/1", array_bytes::bytes2hex("", genesis_hash), fork_id)
@@ -120,9 +116,7 @@ impl StatementHandlerPrototype {
 			format!("/{}/statement/1", array_bytes::bytes2hex("", genesis_hash))
 		};
 
-		Self {
-			protocol_name: protocol_name.into(),
-		}
+		Self { protocol_name: protocol_name.into() }
 	}
 
 	/// Returns the configuration of the set to put in the network configuration.
@@ -218,7 +212,8 @@ pub struct StatementHandler<
 	/// Interval at which we call `propagate_statements`.
 	propagate_timeout: stream::Fuse<Pin<Box<dyn Stream<Item = ()> + Send>>>,
 	/// Pending statements verification tasks.
-	pending_statements: FuturesUnordered<Pin<Box<dyn Future<Output = (Hash, Option<SubmitResult>)> + Send>>>,
+	pending_statements:
+		FuturesUnordered<Pin<Box<dyn Future<Output = (Hash, Option<SubmitResult>)> + Send>>>,
 	/// As multiple peers can send us the same statement, we group
 	/// these peers using the statement hash while the statement is
 	/// imported. This prevents that we import the same statement
@@ -388,8 +383,13 @@ where
 					Entry::Vacant(entry) => {
 						let (completion_sender, completion_receiver) = oneshot::channel();
 						if self.queue_sender.unbounded_send((s, completion_sender)).is_ok() {
-							self.pending_statements
-								.push(async move { let res = completion_receiver.await; (hash, res.ok()) }.boxed());
+							self.pending_statements.push(
+								async move {
+									let res = completion_receiver.await;
+									(hash, res.ok())
+								}
+								.boxed(),
+							);
 							entry.insert(HashSet::from_iter([who]));
 						}
 					},

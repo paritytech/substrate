@@ -162,7 +162,8 @@ where
 			// Validate against the finalized state.
 			self.client.info().finalized_hash
 		});
-		api.validate_statement(block, source, statement).map_err(|_| InvalidStatement::InternalError)?
+		api.validate_statement(block, source, statement)
+			.map_err(|_| InvalidStatement::InternalError)?
 	}
 }
 

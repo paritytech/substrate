@@ -48,7 +48,8 @@ impl StatementApiServer for StatementStore {
 	fn dump(&self) -> RpcResult<Vec<Bytes>> {
 		self.deny_unsafe.check_if_safe()?;
 
-		let statements = self.store.statements().map_err(|e| Error::StatementStore(e.to_string()))?;
+		let statements =
+			self.store.statements().map_err(|e| Error::StatementStore(e.to_string()))?;
 		Ok(statements.into_iter().map(|(_, s)| s.encode().into()).collect())
 	}
 
