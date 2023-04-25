@@ -19,8 +19,9 @@
 
 use parking_lot::RwLock;
 use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
+#[cfg(feature = "bls_non_production")]
+use sp_core::bls381;
 use sp_core::{
-	bls381,
 	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSigner},
 	ecdsa, ed25519, sr25519,
 };
@@ -210,10 +211,12 @@ impl Keystore for LocalKeystore {
 		Ok(sig)
 	}
 
+	#[cfg(feature = "bls_non_production")]
 	fn bls381_public_keys(&self, key_type: KeyTypeId) -> Vec<bls381::Public> {
 		self.public_keys::<bls381::Pair>(key_type)
 	}
 
+	#[cfg(feature = "bls_non_production")]
 	/// Generate a new pair compatible with the 'bls381' signature scheme.
 	///
 	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
@@ -225,6 +228,7 @@ impl Keystore for LocalKeystore {
 		self.generate_new::<bls381::Pair>(key_type, seed)
 	}
 
+	#[cfg(feature = "bls_non_production")]
 	fn bls381_sign(
 		&self,
 		key_type: KeyTypeId,

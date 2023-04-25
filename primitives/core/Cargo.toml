@@ -49,10 +49,11 @@ libsecp256k1 = { version = "0.7", default-features = false, features = ["static-
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false }
 merlin = { version = "2.0", default-features = false }
 secp256k1 = { version = "0.24.0", default-features = false, features = ["recovery", "alloc"], optional = true }
-w3f-bls = { version = "0.1.2", default-features = false}
 ss58-registry = { version = "1.34.0", default-features = false }
 sp-core-hashing = { version = "5.0.0", path = "./hashing", default-features = false, optional = true }
 sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../runtime-interface" }
+# bls crypto
+w3f-bls = { version = "0.1.2", default-features = false, optional = true}
 
 [dev-dependencies]
 sp-serializer = { version = "4.0.0-dev", path = "../serializer" }
@@ -127,3 +128,7 @@ full_crypto = [
 	"sp-core-hashing",
 	"sp-runtime-interface/disable_target_static_assertions",
 ]
+
+# This feature adds BLS crypto primitives. It should not be used in production since
+# the BLS implementation and interface may still be subject to significant change.
+bls_non_production = ["w3f-bls"]

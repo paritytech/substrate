@@ -41,6 +41,7 @@ pub use serde;
 #[doc(hidden)]
 pub use sp_std::{ops::Deref, vec::Vec};
 
+#[cfg(feature = "bls_non_production")]
 pub mod bls381;
 pub mod ecdsa;
 pub mod ed25519;

@@ -19,8 +19,9 @@
 
 pub mod testing;
 
+#[cfg(feature = "bls_non_production")]
+use sp_core::bls381;
 use sp_core::{
-	bls381,
 	crypto::{ByteArray, CryptoTypeId, KeyTypeId},
 	ecdsa, ed25519, sr25519,
 };
@@ -162,9 +163,11 @@ pub trait Keystore: Send + Sync {
 		msg: &[u8; 32],
 	) -> Result<Option<ecdsa::Signature>, Error>;
 
+	#[cfg(feature = "bls_non_production")]
 	/// Returns all bls public keys for the given key type.
 	fn bls381_public_keys(&self, id: KeyTypeId) -> Vec<bls381::Public>;
 
+	#[cfg(feature = "bls_non_production")]
 	/// Generate a new bls381 key pair for the given key type and an optional seed.
 	///
 	/// Returns an `bls381::Public` key of the generated key pair or an `Err` if
@@ -175,6 +178,7 @@ pub trait Keystore: Send + Sync {
 		seed: Option<&str>,
 	) -> Result<bls381::Public, Error>;
 
+	#[cfg(feature = "bls_non_production")]
 	/// Generate a bls381 signature for a given message.
 	///
 	/// Receives [`KeyTypeId`] and a [`bls381::Public`] key to be able to map
@@ -243,6 +247,7 @@ pub trait Keystore: Send + Sync {
 					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;
 				self.ecdsa_sign(id, &public, msg)?.map(|s| s.encode())
 			},
+			#[cfg(feature = "bls_non_production")]
 			bls381::CRYPTO_ID => {
 				let public = bls381::Public::from_slice(public)
 					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;

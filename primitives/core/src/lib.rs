@@ -55,6 +55,7 @@ pub mod crypto;
 pub mod hexdisplay;
 pub use paste;
 
+#[cfg(feature = "bls_non_production")]
 pub mod bls;
 pub mod defer;
 pub mod ecdsa;
@@ -69,6 +70,7 @@ pub mod testing;
 pub mod traits;
 pub mod uint;
 
+#[cfg(feature = "bls_non_production")]
 pub use bls::{bls377, bls381};
 
 pub use self::{

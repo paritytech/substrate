@@ -19,8 +19,9 @@
 
 use crate::{Error, Keystore, KeystorePtr};
 
+#[cfg(feature = "bls_non_production")]
+use sp_core::bls12_381;
 use sp_core::{
-	bls381,
 	crypto::{ByteArray, KeyTypeId, Pair, VrfSigner},
 	ecdsa, ed25519, sr25519,
 };
@@ -194,10 +195,12 @@ impl Keystore for MemoryKeystore {
 		Ok(sig)
 	}
 
+	#[cfg(feature = "bls_non_production")]
 	fn bls381_public_keys(&self, key_type: KeyTypeId) -> Vec<bls381::Public> {
 		self.public_keys::<bls381::Pair>(key_type)
 	}
 
+	#[cfg(feature = "bls_non_production")]
 	fn bls381_generate_new(
 		&self,
 		key_type: KeyTypeId,
@@ -206,6 +209,7 @@ impl Keystore for MemoryKeystore {
 		self.generate_new::<bls381::Pair>(key_type, seed)
 	}
 
+	#[cfg(feature = "bls_non_production")]
 	fn bls381_sign(
 		&self,
 		key_type: KeyTypeId,
