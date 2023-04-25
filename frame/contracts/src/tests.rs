@@ -3022,7 +3022,7 @@ fn failed_deposit_charge_should_roll_back_call() {
 		// Give caller proxy access to Alice.
 		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(ALICE), addr_caller.clone(), (), 0));
 
-		// Create a Proxy call that will attempt to transfer away's Alice balance, so we can test a
+		// Create a Proxy call that will attempt to transfer away Alice's balance, so we can test a
 		// failed charge.
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 		let transfer_call =
