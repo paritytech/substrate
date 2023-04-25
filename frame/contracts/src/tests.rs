@@ -3038,7 +3038,7 @@ fn test_failed_charge_should_roll_back_call() {
 			call: transfer_call,
 		});
 
-		// bump the deposit per byte to a high value to trigger a FundsUnavailable error.
+		// Bump the deposit per byte to a high value to trigger a FundsUnavailable error.
 		DEPOSIT_PER_BYTE.with(|c| *c.borrow_mut() = 100);
 
 		let data = (
