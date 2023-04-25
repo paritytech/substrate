@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -157,7 +157,7 @@ fn import_block_to_queue<TBl, TImpQu>(
 	let (header, extrinsics) = signed_block.block.deconstruct();
 	let hash = header.hash();
 	// import queue handles verification and importing it into the client.
-	queue.import_blocks(
+	queue.service_ref().import_blocks(
 		BlockOrigin::File,
 		vec![IncomingBlock::<TBl> {
 			hash,

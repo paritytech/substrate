@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +34,7 @@ use sp_core::RuntimeDebug;
 
 /// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, Default)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, parity_util_mem::MallocSizeOf))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Digest {
 	/// A list of logs in the digest.
 	pub logs: Vec<DigestItem>,
@@ -70,7 +70,6 @@ impl Digest {
 /// Digest item that is able to encode/decode 'system' digest items and
 /// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(parity_util_mem::MallocSizeOf))]
 pub enum DigestItem {
 	/// A pre-runtime digest.
 	///
@@ -454,8 +453,8 @@ mod tests {
 	#[test]
 	fn digest_item_type_info() {
 		let type_info = DigestItem::type_info();
-		let variants = if let scale_info::TypeDef::Variant(variant) = type_info.type_def() {
-			variant.variants()
+		let variants = if let scale_info::TypeDef::Variant(variant) = type_info.type_def {
+			variant.variants
 		} else {
 			panic!("Should be a TypeDef::TypeDefVariant")
 		};
@@ -476,10 +475,10 @@ mod tests {
 			let encoded = digest_item.encode();
 			let variant = variants
 				.iter()
-				.find(|v| v.name() == &variant_name)
+				.find(|v| v.name == variant_name)
 				.expect(&format!("Variant {} not found", variant_name));
 
-			assert_eq!(encoded[0], variant.index())
+			assert_eq!(encoded[0], variant.index)
 		};
 
 		check(DigestItemType::Other);

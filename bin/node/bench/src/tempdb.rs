@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,7 +29,6 @@ pub enum DatabaseType {
 pub struct TempDatabase(tempfile::TempDir);
 
 struct ParityDbWrapper(parity_db::Db);
-parity_util_mem::malloc_size_of_is_0!(ParityDbWrapper);
 
 impl KeyValueDB for ParityDbWrapper {
 	/// Get a value by key.

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -75,10 +75,18 @@ pub mod v1 {
 					Some(old_value.migrate_to_v1())
 				});
 				current_version.put::<Pallet<T>>();
-				log::info!(target: "runtime::assets", "Upgraded {} pools, storage to version {:?}", translated, current_version);
+				log::info!(
+					target: LOG_TARGET,
+					"Upgraded {} pools, storage to version {:?}",
+					translated,
+					current_version
+				);
 				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
 			} else {
-				log::info!(target: "runtime::assets",  "Migration did not execute. This probably should be removed");
+				log::info!(
+					target: LOG_TARGET,
+					"Migration did not execute. This probably should be removed"
+				);
 				T::DbWeight::get().reads(1)
 			}
 		}

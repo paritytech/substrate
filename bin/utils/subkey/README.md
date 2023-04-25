@@ -255,7 +255,7 @@ Secret Key URI `0x8c9a73097f235b84021a446bc2826a00c690ea0be3e0d81a84931cb4146d66
   SS58 Address:     1bobYxBPjZWRPbVo35aSwci1u5Zmq8P6J2jpa4kkudBZMqE
 ```
 
-`Bob` now got a nice address starting with his name: 1**bob**YxBPjZWRPbVo35aSwci1u5Zmq8P6J2jpa4kkudBZMqE.
+`Bob` now got a nice address starting with their name: 1**bob**YxBPjZWRPbVo35aSwci1u5Zmq8P6J2jpa4kkudBZMqE.
 
 **Note**: While `Bob`, having a short name (3 chars), got a result rather quickly, it will take much longer for `Alice` who has a much longer name, thus the chances to generate a random address that contains the chain `alice` will be much smaller.
 

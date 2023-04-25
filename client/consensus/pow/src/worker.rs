@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -32,7 +32,6 @@ use sp_runtime::{
 	DigestItem,
 };
 use std::{
-	collections::HashMap,
 	pin::Pin,
 	sync::{
 		atomic::{AtomicUsize, Ordering},
@@ -41,7 +40,7 @@ use std::{
 	time::Duration,
 };
 
-use crate::{PowAlgorithm, PowIntermediate, Seal, INTERMEDIATE_KEY, POW_ENGINE_ID};
+use crate::{PowAlgorithm, PowIntermediate, Seal, INTERMEDIATE_KEY, LOG_TARGET, POW_ENGINE_ID};
 
 /// Mining metadata. This is the information needed to start an actual mining loop.
 #[derive(Clone, Eq, PartialEq)]
@@ -159,26 +158,16 @@ where
 			) {
 				Ok(true) => (),
 				Ok(false) => {
-					warn!(
-						target: "pow",
-						"Unable to import mined block: seal is invalid",
-					);
+					warn!(target: LOG_TARGET, "Unable to import mined block: seal is invalid",);
 					return false
 				},
 				Err(err) => {
-					warn!(
-						target: "pow",
-						"Unable to import mined block: {}",
-						err,
-					);
+					warn!(target: LOG_TARGET, "Unable to import mined block: {}", err,);
 					return false
 				},
 			}
 		} else {
-			warn!(
-				target: "pow",
-				"Unable to import mined block: metadata does not exist",
-			);
+			warn!(target: LOG_TARGET, "Unable to import mined block: metadata does not exist",);
 			return false
 		}
 
@@ -192,10 +181,7 @@ where
 		} {
 			build
 		} else {
-			warn!(
-				target: "pow",
-				"Unable to import mined block: build does not exist",
-			);
+			warn!(target: LOG_TARGET, "Unable to import mined block: build does not exist",);
 			return false
 		};
 
@@ -216,7 +202,7 @@ where
 		let header = import_block.post_header();
 		let mut block_import = self.block_import.lock();
 
-		match block_import.import_block(import_block, HashMap::default()).await {
+		match block_import.import_block(import_block).await {
 			Ok(res) => {
 				res.handle_justification(
 					&header.hash(),
@@ -225,18 +211,13 @@ where
 				);
 
 				info!(
-					target: "pow",
-					"✅ Successfully mined block on top of: {}",
-					build.metadata.best_hash
+					target: LOG_TARGET,
+					"✅ Successfully mined block on top of: {}", build.metadata.best_hash
 				);
 				true
 			},
 			Err(err) => {
-				warn!(
-					target: "pow",
-					"Unable to import mined block: {}",
-					err,
-				);
+				warn!(target: LOG_TARGET, "Unable to import mined block: {}", err,);
 				false
 			},
 		}

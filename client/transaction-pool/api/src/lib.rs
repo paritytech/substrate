@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,6 +29,8 @@ use sp_runtime::{
 	traits::{Block as BlockT, Member, NumberFor},
 };
 use std::{collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
+
+const LOG_TARGET: &str = "txpool::api";
 
 pub use sp_runtime::transaction_validity::{
 	TransactionLongevity, TransactionPriority, TransactionSource, TransactionTag,
@@ -353,7 +355,7 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 		extrinsic: <TPool::Block as BlockT>::Extrinsic,
 	) -> Result<(), ()> {
 		log::debug!(
-			target: "txpool",
+			target: LOG_TARGET,
 			"(offchain call) Submitting a transaction to the pool: {:?}",
 			extrinsic
 		);
@@ -362,7 +364,7 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 
 		result.map(|_| ()).map_err(|e| {
 			log::warn!(
-				target: "txpool",
+				target: LOG_TARGET,
 				"(offchain call) Error submitting a transaction to the pool: {}",
 				e
 			)

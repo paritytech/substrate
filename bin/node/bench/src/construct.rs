@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -120,7 +120,7 @@ impl core::Benchmark for ConstructionBenchmark {
 
 		let _ = context
 			.client
-			.runtime_version_at(&BlockId::Number(0))
+			.runtime_version_at(context.client.chain_info().genesis_hash)
 			.expect("Failed to get runtime version")
 			.spec_version;
 
@@ -143,15 +143,17 @@ impl core::Benchmark for ConstructionBenchmark {
 			proposer_factory.init(
 				&context
 					.client
-					.header(&BlockId::number(0))
+					.header(context.client.chain_info().genesis_hash)
 					.expect("Database error querying block #0")
 					.expect("Block #0 should exist"),
 			),
 		)
 		.expect("Proposer initialization failed");
 
+		let inherent_data = futures::executor::block_on(timestamp_provider.create_inherent_data())
+			.expect("Create inherent data failed");
 		let _block = futures::executor::block_on(proposer.propose(
-			timestamp_provider.create_inherent_data().expect("Create inherent data failed"),
+			inherent_data,
 			Default::default(),
 			std::time::Duration::from_secs(20),
 			None,

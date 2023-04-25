@@ -1,16 +1,8 @@
 // Schema definition for light client messages.
 
-syntax = "proto3";
+syntax = "proto2";
 
 package api.v1.light;
-
-// A pair of arbitrary bytes.
-message Pair {
-	// The first element of the pair.
-	bytes fst = 1;
-	// The second element of the pair.
-	bytes snd = 2;
-}
 
 // Enumerate all possible light client request messages.
 message Request {
@@ -34,40 +26,42 @@ message Response {
 // Remote call request.
 message RemoteCallRequest {
 	// Block at which to perform call.
-	bytes block = 2;
+	required bytes block = 2;
 	// Method name.
-	string method = 3;
+	required string method = 3;
 	// Call data.
-	bytes data = 4;
+	required bytes data = 4;
 }
 
 // Remote call response.
 message RemoteCallResponse {
-	// Execution proof.
-	bytes proof = 2;
+	// Execution proof. If missing, indicates that the remote couldn't answer, for example because
+	// the block is pruned.
+	optional bytes proof = 2;
 }
 
 // Remote storage read request.
 message RemoteReadRequest {
 	// Block at which to perform call.
-	bytes block = 2;
+	required bytes block = 2;
 	// Storage keys.
 	repeated bytes keys = 3;
 }
 
 // Remote read response.
 message RemoteReadResponse {
-	// Read proof.
-	bytes proof = 2;
+	// Read proof. If missing, indicates that the remote couldn't answer, for example because
+	// the block is pruned.
+	optional bytes proof = 2;
 }
 
 // Remote storage read child request.
 message RemoteReadChildRequest {
 	// Block at which to perform call.
-	bytes block = 2;
+	required bytes block = 2;
 	// Child Storage key, this is relative
 	// to the child type storage location.
-	bytes storage_key = 3;
+	required bytes storage_key = 3;
 	// Storage keys.
 	repeated bytes keys = 6;
 }

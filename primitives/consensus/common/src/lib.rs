@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,9 +38,6 @@ pub use self::error::Error;
 pub use select_chain::SelectChain;
 pub use sp_inherents::InherentData;
 pub use sp_state_machine::Backend as StateBackend;
-
-/// Type of keys in the blockchain cache that consensus module could use for its needs.
-pub type CacheKeyId = [u8; 4];
 
 /// Block status.
 #[derive(Debug, PartialEq, Eq)]

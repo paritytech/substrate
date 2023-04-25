@@ -22,5 +22,4 @@ mod pallet {
 	type Foo<T> = StorageValue<_, u8>;
 }
 
-fn main() {
-}
+fn main() {}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,12 +18,12 @@
 use crate::{
 	mmr::{
 		storage::{OffchainStorage, RuntimeStorage, Storage},
-		utils::NodesUtils,
 		Hasher, Node, NodeOf,
 	},
 	primitives::{self, Error, NodeIndex},
 	Config, HashingOf,
 };
+use sp_mmr_primitives::{mmr_lib, utils::NodesUtils};
 use sp_std::prelude::*;
 
 /// Stateless verification of the proof for a batch of leaves.

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,11 +30,13 @@ use crate::{
 use impl_trait_for_tuples::impl_for_tuples;
 #[cfg(feature = "std")]
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use sp_application_crypto::AppKey;
+use sp_application_crypto::AppCrypto;
 pub use sp_arithmetic::traits::{
-	AtLeast32Bit, AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedShl,
-	CheckedShr, CheckedSub, IntegerSquareRoot, One, SaturatedConversion, Saturating,
-	UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
+	checked_pow, ensure_pow, AtLeast32Bit, AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedDiv,
+	CheckedMul, CheckedShl, CheckedShr, CheckedSub, Ensure, EnsureAdd, EnsureAddAssign, EnsureDiv,
+	EnsureDivAssign, EnsureFixedPointNumber, EnsureFrom, EnsureInto, EnsureMul, EnsureMulAssign,
+	EnsureOp, EnsureOpAssign, EnsureSub, EnsureSubAssign, IntegerSquareRoot, One,
+	SaturatedConversion, Saturating, UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
 use sp_core::{self, storage::StateVersion, Hasher, RuntimeDebug, TypeId};
 #[doc(hidden)]
@@ -146,10 +148,10 @@ pub trait AppVerify {
 }
 
 impl<
-		S: Verify<Signer = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic>
+		S: Verify<Signer = <<T as AppCrypto>::Public as sp_application_crypto::AppPublic>::Generic>
 			+ From<T>,
 		T: sp_application_crypto::Wraps<Inner = S>
-			+ sp_application_crypto::AppKey
+			+ sp_application_crypto::AppCrypto
 			+ sp_application_crypto::AppSignature
 			+ AsRef<S>
 			+ AsMut<S>
@@ -157,16 +159,18 @@ impl<
 	> AppVerify for T
 where
 	<S as Verify>::Signer: IdentifyAccount<AccountId = <S as Verify>::Signer>,
-	<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic: IdentifyAccount<
-		AccountId = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic,
+	<<T as AppCrypto>::Public as sp_application_crypto::AppPublic>::Generic: IdentifyAccount<
+		AccountId = <<T as AppCrypto>::Public as sp_application_crypto::AppPublic>::Generic,
 	>,
 {
-	type AccountId = <T as AppKey>::Public;
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<T as AppKey>::Public) -> bool {
+	type AccountId = <T as AppCrypto>::Public;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<T as AppCrypto>::Public) -> bool {
 		use sp_application_crypto::IsWrappedBy;
 		let inner: &S = self.as_ref();
 		let inner_pubkey =
-			<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(signer);
+			<<T as AppCrypto>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(
+				signer,
+			);
 		Verify::verify(inner, msg, inner_pubkey)
 	}
 }
@@ -314,6 +318,24 @@ impl<T> TryMorph<T> for Identity {
 	type Outcome = T;
 	fn try_morph(a: T) -> Result<T, ()> {
 		Ok(a)
+	}
+}
+
+/// Implementation of `Morph` which converts between types using `Into`.
+pub struct MorphInto<T>(sp_std::marker::PhantomData<T>);
+impl<T, A: Into<T>> Morph<A> for MorphInto<T> {
+	type Outcome = T;
+	fn morph(a: A) -> T {
+		a.into()
+	}
+}
+
+/// Implementation of `TryMorph` which attmepts to convert between types using `TryInto`.
+pub struct TryMorphInto<T>(sp_std::marker::PhantomData<T>);
+impl<T, A: TryInto<T>> TryMorph<A> for TryMorphInto<T> {
+	type Outcome = T;
+	fn try_morph(a: A) -> Result<T, ()> {
+		a.try_into().map_err(|_| ())
 	}
 }
 
@@ -515,6 +537,11 @@ impl<T> Convert<T, T> for Identity {
 		a
 	}
 }
+impl<T> ConvertBack<T, T> for Identity {
+	fn convert_back(a: T) -> T {
+		a
+	}
+}
 
 /// A structure that performs standard conversion using the standard Rust conversion traits.
 pub struct ConvertInto;
@@ -522,6 +549,12 @@ impl<A, B: From<A>> Convert<A, B> for ConvertInto {
 	fn convert(a: A) -> B {
 		a.into()
 	}
+}
+
+/// Extensible conversion trait. Generic over both source and destination types.
+pub trait ConvertBack<A, B>: Convert<A, B> {
+	/// Make conversion back.
+	fn convert_back(b: B) -> A;
 }
 
 /// Convenience type to work around the highly unergonomic syntax needed
@@ -797,9 +830,6 @@ sp_core::impl_maybe_marker!(
 
 	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
 	trait MaybeSerializeDeserialize: DeserializeOwned, Serialize;
-
-	/// A type that implements MallocSizeOf.
-	trait MaybeMallocSizeOf: parity_util_mem::MallocSizeOf;
 );
 
 /// A type that can be used in runtime structures.
@@ -817,9 +847,7 @@ pub trait IsMember<MemberId> {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header:
-	Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + MaybeMallocSizeOf + 'static
-{
+pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Header number.
 	type Number: Member
 		+ MaybeSerializeDeserialize
@@ -829,8 +857,7 @@ pub trait Header:
 		+ MaybeDisplay
 		+ AtLeast32BitUnsigned
 		+ Codec
-		+ sp_std::str::FromStr
-		+ MaybeMallocSizeOf;
+		+ sp_std::str::FromStr;
 	/// Header hash type
 	type Hash: Member
 		+ MaybeSerializeDeserialize
@@ -844,7 +871,6 @@ pub trait Header:
 		+ Codec
 		+ AsRef<[u8]>
 		+ AsMut<[u8]>
-		+ MaybeMallocSizeOf
 		+ TypeInfo;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
@@ -893,13 +919,11 @@ pub trait Header:
 /// `Extrinsic` pieces of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block:
-	Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + MaybeMallocSizeOf + 'static
-{
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Type for extrinsics.
-	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize + MaybeMallocSizeOf;
+	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.
-	type Header: Header<Hash = Self::Hash> + MaybeMallocSizeOf;
+	type Header: Header<Hash = Self::Hash>;
 	/// Block hash type.
 	type Hash: Member
 		+ MaybeSerializeDeserialize
@@ -913,7 +937,6 @@ pub trait Block:
 		+ Codec
 		+ AsRef<[u8]>
 		+ AsMut<[u8]>
-		+ MaybeMallocSizeOf
 		+ TypeInfo;
 
 	/// Returns a reference to the header.
@@ -934,7 +957,7 @@ pub trait Block:
 }
 
 /// Something that acts like an `Extrinsic`.
-pub trait Extrinsic: Sized + MaybeMallocSizeOf {
+pub trait Extrinsic: Sized {
 	/// The function call.
 	type Call;
 
@@ -989,6 +1012,20 @@ pub trait Checkable<Context>: Sized {
 
 	/// Check self, given an instance of Context.
 	fn check(self, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
+
+	/// Blindly check self.
+	///
+	/// ## WARNING
+	///
+	/// DO NOT USE IN PRODUCTION. This is only meant to be used in testing environments. A runtime
+	/// compiled with `try-runtime` should never be in production. Moreover, the name of this
+	/// function is deliberately chosen to prevent developers from ever calling it in consensus
+	/// code-paths.
+	#[cfg(feature = "try-runtime")]
+	fn unchecked_into_checked_i_know_what_i_am_doing(
+		self,
+		c: &Context,
+	) -> Result<Self::Checked, TransactionValidityError>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -1009,6 +1046,14 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 
 	fn check(self, _c: &Context) -> Result<Self::Checked, TransactionValidityError> {
 		BlindCheckable::check(self)
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn unchecked_into_checked_i_know_what_i_am_doing(
+		self,
+		_: &Context,
+	) -> Result<Self::Checked, TransactionValidityError> {
+		unreachable!();
 	}
 }
 
@@ -1334,12 +1379,13 @@ pub trait GetNodeBlockType {
 	type NodeBlock: self::Block;
 }
 
-/// Something that can validate unsigned extrinsics for the transaction pool.
+/// Provide validation for unsigned extrinsics.
 ///
-/// Note that any checks done here are only used for determining the validity of
-/// the transaction for the transaction pool.
-/// During block execution phase one need to perform the same checks anyway,
-/// since this function is not being called.
+/// This trait provides two functions [`pre_dispatch`](Self::pre_dispatch) and
+/// [`validate_unsigned`](Self::validate_unsigned). The [`pre_dispatch`](Self::pre_dispatch)
+/// function is called right before dispatching the call wrapped by an unsigned extrinsic. The
+/// [`validate_unsigned`](Self::validate_unsigned) function is mainly being used in the context of
+/// the transaction pool to check the validity of the call wrapped by an unsigned extrinsic.
 pub trait ValidateUnsigned {
 	/// The call to validate
 	type Call;
@@ -1347,13 +1393,15 @@ pub trait ValidateUnsigned {
 	/// Validate the call right before dispatch.
 	///
 	/// This method should be used to prevent transactions already in the pool
-	/// (i.e. passing `validate_unsigned`) from being included in blocks
-	/// in case we know they now became invalid.
+	/// (i.e. passing [`validate_unsigned`](Self::validate_unsigned)) from being included in blocks
+	/// in case they became invalid since being added to the pool.
 	///
-	/// By default it's a good idea to call `validate_unsigned` from within
-	/// this function again to make sure we never include an invalid transaction.
+	/// By default it's a good idea to call [`validate_unsigned`](Self::validate_unsigned) from
+	/// within this function again to make sure we never include an invalid transaction. Otherwise
+	/// the implementation of the call or this method will need to provide proper validation to
+	/// ensure that the transaction is valid.
 	///
-	/// Changes made to storage WILL be persisted if the call returns `Ok`.
+	/// Changes made to storage *WILL* be persisted if the call returns `Ok`.
 	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 		Self::validate_unsigned(TransactionSource::InBlock, call)
 			.map(|_| ())
@@ -1362,8 +1410,14 @@ pub trait ValidateUnsigned {
 
 	/// Return the validity of the call
 	///
-	/// This doesn't execute any side-effects; it merely checks
-	/// whether the transaction would panic if it were included or not.
+	/// This method has no side-effects. It merely checks whether the call would be rejected
+	/// by the runtime in an unsigned extrinsic.
+	///
+	/// The validity checks should be as lightweight as possible because every node will execute
+	/// this code before the unsigned extrinsic enters the transaction pool and also periodically
+	/// afterwards to ensure the validity. To prevent dos-ing a network with unsigned
+	/// extrinsics, these validity checks should include some checks around uniqueness, for example,
+	/// like checking that the unsigned extrinsic was send by an authority in the active set.
 	///
 	/// Changes made to storage should be discarded by caller.
 	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity;

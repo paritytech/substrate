@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,8 +34,6 @@ use sp_core::{
 		well_known_keys::{is_child_storage_key, CODE},
 		StateVersion, Storage,
 	},
-	testing::TaskExecutor,
-	traits::TaskExecutorExt,
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
 use sp_trie::StorageProof;
@@ -105,9 +103,6 @@ where
 
 		storage.top.insert(CODE.to_vec(), code.to_vec());
 
-		let mut extensions = Extensions::default();
-		extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
-
 		let offchain_db = TestPersistentOffchainDB::new();
 
 		let backend = (storage, state_version).into();
@@ -115,7 +110,7 @@ where
 		TestExternalities {
 			overlay: OverlayedChanges::default(),
 			offchain_db,
-			extensions,
+			extensions: Default::default(),
 			backend,
 			storage_transaction_cache: Default::default(),
 			state_version,
@@ -241,7 +236,12 @@ where
 	H::Out: Ord + codec::Codec,
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, self.backend.pairs())
+		let pairs: Vec<_> = self
+			.backend
+			.pairs(Default::default())
+			.expect("creating an iterator over all of the pairs doesn't fail in tests")
+			.collect();
+		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, pairs)
 	}
 }
 

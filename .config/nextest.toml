@@ -1,0 +1,124 @@
+# This is the default config used by nextest. It is embedded in the binary at
+# build time. It may be used as a template for .config/nextest.toml.
+
+[store]
+# The directory under the workspace root at which nextest-related files are
+# written. Profile-specific storage is currently written to dir/<profile-name>.
+dir = "target/nextest"
+
+# This section defines the default nextest profile. Custom profiles are layered
+# on top of the default profile.
+[profile.default]
+# "retries" defines the number of times a test should be retried. If set to a
+# non-zero value, tests that succeed on a subsequent attempt will be marked as
+# non-flaky. Can be overridden through the `--retries` option.
+# Examples
+# * retries = 3
+# * retries = { backoff = "fixed", count = 2, delay = "1s" }
+# * retries = { backoff = "exponential", count = 10, delay = "1s", jitter = true, max-delay = "10s" }
+retries = 0
+
+# The number of threads to run tests with. Supported values are either an integer or
+# the string "num-cpus". Can be overridden through the `--test-threads` option.
+test-threads = "num-cpus"
+
+# The number of threads required for each test. This is generally used in overrides to
+# mark certain tests as heavier than others. However, it can also be set as a global parameter.
+threads-required = 1
+
+# Show these test statuses in the output.
+#
+# The possible values this can take are:
+# * none: no output
+# * fail: show failed (including exec-failed) tests
+# * retry: show flaky and retried tests
+# * slow: show slow tests
+# * pass: show passed tests
+# * skip: show skipped tests (most useful for CI)
+# * all: all of the above
+#
+# Each value includes all the values above it; for example, "slow" includes
+# failed and retried tests.
+#
+# Can be overridden through the `--status-level` flag.
+status-level = "pass"
+
+# Similar to status-level, show these test statuses at the end of the run.
+final-status-level = "flaky"
+
+# "failure-output" defines when standard output and standard error for failing tests are produced.
+# Accepted values are
+# * "immediate": output failures as soon as they happen
+# * "final": output failures at the end of the test run
+# * "immediate-final": output failures as soon as they happen and at the end of
+#   the test run; combination of "immediate" and "final"
+# * "never": don't output failures at all
+#
+# For large test suites and CI it is generally useful to use "immediate-final".
+#
+# Can be overridden through the `--failure-output` option.
+failure-output = "immediate"
+
+# "success-output" controls production of standard output and standard error on success. This should
+# generally be set to "never".
+success-output = "never"
+
+# Cancel the test run on the first failure. For CI runs, consider setting this
+# to false.
+fail-fast = true
+
+# Treat a test that takes longer than the configured 'period' as slow, and print a message.
+# See <https://nexte.st/book/slow-tests> for more information.
+#
+# Optional: specify the parameter 'terminate-after' with a non-zero integer,
+# which will cause slow tests to be terminated after the specified number of
+# periods have passed.
+# Example: slow-timeout = { period = "60s", terminate-after = 2 }
+slow-timeout = { period = "60s" }
+
+# Treat a test as leaky if after the process is shut down, standard output and standard error
+# aren't closed within this duration.
+#
+# This usually happens in case of a test that creates a child process and lets it inherit those
+# handles, but doesn't clean the child process up (especially when it fails).
+#
+# See <https://nexte.st/book/leaky-tests> for more information.
+leak-timeout = "100ms"
+
+[profile.default.junit]
+# Output a JUnit report into the given file inside 'store.dir/<profile-name>'.
+# If unspecified, JUnit is not written out.
+
+# path = "junit.xml"
+
+# The name of the top-level "report" element in JUnit report. If aggregating
+# reports across different test runs, it may be useful to provide separate names
+# for each report.
+report-name = "nextest-run"
+
+# Whether standard output and standard error for passing tests should be stored in the JUnit report.
+# Output is stored in the <system-out> and <system-err> elements of the <testcase> element.
+store-success-output = false
+
+# Whether standard output and standard error for failing tests should be stored in the JUnit report.
+# Output is stored in the <system-out> and <system-err> elements of the <testcase> element.
+#
+# Note that if a description can be extracted from the output, it is always stored in the
+# <description> element.
+store-failure-output = true
+
+# This profile is activated if MIRI_SYSROOT is set.
+[profile.default-miri]
+# Miri tests take up a lot of memory, so only run 1 test at a time by default.
+test-threads = 1
+
+# Mutual exclusion of tests with `cargo build` invocation as a lock to avoid multiple
+# simultaneous invocations clobbering each other.
+[test-groups]
+serial-integration = { max-threads = 1 }
+
+# Running UI tests sequentially
+# More info can be found here: https://github.com/paritytech/ci_cd/issues/754
+[[profile.default.overrides]]
+filter = 'test(/(^ui$|_ui|ui_)/)'
+test-group = 'serial-integration'

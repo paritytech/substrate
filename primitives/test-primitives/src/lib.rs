@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,8 +28,7 @@ pub use sp_core::{hash::H256, RuntimeDebug};
 use sp_runtime::traits::{BlakeTwo256, Extrinsic as ExtrinsicT, Verify};
 
 /// Extrinsic for test-runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(parity_util_mem::MallocSizeOf))]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub enum Extrinsic {
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),

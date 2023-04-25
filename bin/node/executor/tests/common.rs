@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 use codec::{Decode, Encode};
 use frame_support::Hashable;
 use frame_system::offchain::AppCrypto;
-use sc_executor::{error::Result, NativeElseWasmExecutor, WasmExecutionMethod};
+use sc_executor::{error::Result, NativeElseWasmExecutor, WasmExecutor};
 use sp_consensus_babe::{
 	digests::{PreDigest, SecondaryPlainPreDigest},
 	Slot, BABE_ENGINE_ID,
@@ -26,7 +26,7 @@ use sp_consensus_babe::{
 use sp_core::{
 	crypto::KeyTypeId,
 	sr25519::Signature,
-	traits::{CodeExecutor, RuntimeCode},
+	traits::{CallContext, CodeExecutor, RuntimeCode},
 };
 use sp_runtime::{
 	traits::{BlakeTwo256, Header as HeaderT},
@@ -87,7 +87,10 @@ pub fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 }
 
 pub fn default_transfer_call() -> pallet_balances::Call<Runtime> {
-	pallet_balances::Call::<Runtime>::transfer { dest: bob().into(), value: 69 * DOLLARS }
+	pallet_balances::Call::<Runtime>::transfer_allow_death {
+		dest: bob().into(),
+		value: 69 * DOLLARS,
+	}
 }
 
 pub fn from_block_number(n: u32) -> Header {
@@ -95,7 +98,7 @@ pub fn from_block_number(n: u32) -> Header {
 }
 
 pub fn executor() -> NativeElseWasmExecutor<ExecutorDispatch> {
-	NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
+	NativeElseWasmExecutor::new_with_wasm_executor(WasmExecutor::builder().build())
 }
 
 pub fn executor_call(
@@ -114,7 +117,7 @@ pub fn executor_call(
 		heap_pages: heap_pages.and_then(|hp| Decode::decode(&mut &hp[..]).ok()),
 	};
 	sp_tracing::try_init_simple();
-	executor().call(&mut t, &runtime_code, method, data, use_native)
+	executor().call(&mut t, &runtime_code, method, data, use_native, CallContext::Onchain)
 }
 
 pub fn new_test_ext(code: &[u8]) -> TestExternalities<BlakeTwo256> {

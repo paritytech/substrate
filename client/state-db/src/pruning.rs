@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@
 
 use crate::{
 	noncanonical::LAST_CANONICAL, to_meta_key, CommitSet, Error, Hash, MetaDb, StateDbError,
-	DEFAULT_MAX_BLOCK_CONSTRAINT,
+	DEFAULT_MAX_BLOCK_CONSTRAINT, LOG_TARGET,
 };
 use codec::{Decode, Encode};
 use log::trace;
@@ -36,7 +36,6 @@ pub(crate) const LAST_PRUNED: &[u8] = b"last_pruned";
 const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
 
 /// See module documentation.
-#[derive(parity_util_mem_derive::MallocSizeOf)]
 pub struct RefWindow<BlockHash: Hash, Key: Hash, D: MetaDb> {
 	/// A queue of blocks keep tracking keys that should be deleted for each block in the
 	/// pruning window.
@@ -50,7 +49,6 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash, D: MetaDb> {
 /// 	blocks in memory, and keep track of re-inserted keys to not delete them when pruning
 /// - `DbBacked`, used when the backend database supports reference counting, only keep
 /// 	a few number of blocks in memory and load more blocks on demand
-#[derive(parity_util_mem_derive::MallocSizeOf)]
 enum DeathRowQueue<BlockHash: Hash, Key: Hash, D: MetaDb> {
 	Mem {
 		/// A queue of keys that should be deleted for each block in the pruning window.
@@ -60,7 +58,6 @@ enum DeathRowQueue<BlockHash: Hash, Key: Hash, D: MetaDb> {
 	},
 	DbBacked {
 		// The backend database
-		#[ignore_malloc_size_of = "Shared data"]
 		db: D,
 		/// A queue of keys that should be deleted for each block in the pruning window.
 		/// Only caching the first few blocks of the pruning window, blocks inside are
@@ -82,14 +79,24 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 			death_index: HashMap::new(),
 		};
 		// read the journal
-		trace!(target: "state-db", "Reading pruning journal for the memory queue. Pending #{}", base);
+		trace!(
+			target: LOG_TARGET,
+			"Reading pruning journal for the memory queue. Pending #{}",
+			base,
+		);
 		loop {
 			let journal_key = to_journal_key(block);
 			match db.get_meta(&journal_key).map_err(Error::Db)? {
 				Some(record) => {
 					let record: JournalRecord<BlockHash, Key> =
 						Decode::decode(&mut record.as_slice())?;
-					trace!(target: "state-db", "Pruning journal entry {} ({} inserted, {} deleted)", block, record.inserted.len(), record.deleted.len());
+					trace!(
+						target: LOG_TARGET,
+						"Pruning journal entry {} ({} inserted, {} deleted)",
+						block,
+						record.inserted.len(),
+						record.deleted.len(),
+					);
 					queue.import(base, block, record);
 				},
 				None => break,
@@ -110,7 +117,11 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		// limit the cache capacity from 1 to `DEFAULT_MAX_BLOCK_CONSTRAINT`
 		let cache_capacity = window_size.clamp(1, DEFAULT_MAX_BLOCK_CONSTRAINT) as usize;
 		let mut cache = VecDeque::with_capacity(cache_capacity);
-		trace!(target: "state-db", "Reading pruning journal for the database-backed queue. Pending #{}", base);
+		trace!(
+			target: LOG_TARGET,
+			"Reading pruning journal for the database-backed queue. Pending #{}",
+			base
+		);
 		DeathRowQueue::load_batch_from_db(&db, &mut cache, base, cache_capacity)?;
 		Ok(DeathRowQueue::DbBacked { db, cache, cache_capacity, last })
 	}
@@ -118,13 +129,13 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 	/// import a new block to the back of the queue
 	fn import(&mut self, base: u64, num: u64, journal_record: JournalRecord<BlockHash, Key>) {
 		let JournalRecord { hash, inserted, deleted } = journal_record;
-		trace!(target: "state-db", "Importing {}, base={}", num, base);
+		trace!(target: LOG_TARGET, "Importing {}, base={}", num, base);
 		match self {
 			DeathRowQueue::DbBacked { cache, cache_capacity, last, .. } => {
 				// If the new block continues cached range and there is space, load it directly into
 				// cache.
 				if num == base + cache.len() as u64 && cache.len() < *cache_capacity {
-					trace!(target: "state-db", "Adding to DB backed cache {:?} (#{})", hash, num);
+					trace!(target: LOG_TARGET, "Adding to DB backed cache {:?} (#{})", hash, num);
 					cache.push_back(DeathRow { hash, deleted: deleted.into_iter().collect() });
 				}
 				*last = Some(num);
@@ -251,7 +262,7 @@ fn load_death_row_from_db<BlockHash: Hash, Key: Hash, D: MetaDb>(
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, parity_util_mem_derive::MallocSizeOf)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct DeathRow<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	deleted: HashSet<Key>,
@@ -309,6 +320,18 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 			};
 
 		let queue = if count_insertions {
+			// Highly scientific crafted number for deciding when to print the warning!
+			//
+			// Rocksdb doesn't support refcounting and requires that we load the entire pruning
+			// window into the memory.
+			if window_size > 1000 {
+				log::warn!(
+					target: LOG_TARGET,
+					"Large pruning window of {window_size} detected! THIS CAN LEAD TO HIGH MEMORY USAGE AND CRASHES. \
+					Reduce the pruning window or switch your database to paritydb."
+				);
+			}
+
 			DeathRowQueue::new_mem(&db, base)?
 		} else {
 			let last = match last_canonicalized_number {
@@ -343,10 +366,6 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 			DeathRowQueue::Mem { death_rows, .. } => death_rows.front().map(|r| r.hash.clone()),
 		};
 		Ok(res)
-	}
-
-	pub fn mem_used(&self) -> usize {
-		0
 	}
 
 	fn is_empty(&self) -> bool {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -42,7 +42,13 @@ use sp_consensus::{Proposal, Proposer, SelectChain, SyncOracle};
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
-use std::{fmt::Debug, ops::Deref, time::Duration};
+use std::{
+	fmt::Debug,
+	ops::Deref,
+	time::{Duration, Instant},
+};
+
+const LOG_TARGET: &str = "slots";
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
@@ -144,7 +150,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		body: Vec<B::Extrinsic>,
 		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 		public: Self::Claim,
-		epoch: Self::AuxData,
+		aux_data: Self::AuxData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		sp_consensus::Error,
@@ -184,7 +190,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		proposer: Self::Proposer,
 		claim: &Self::Claim,
 		slot_info: SlotInfo<B>,
-		proposing_remaining: Delay,
+		end_proposing_at: Instant,
 	) -> Option<
 		Proposal<
 			B,
@@ -194,8 +200,13 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	> {
 		let slot = slot_info.slot;
 		let telemetry = self.telemetry();
-		let logging_target = self.logging_target();
-		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
+		let log_target = self.logging_target();
+
+		let inherent_data =
+			Self::create_inherent_data(&slot_info, &log_target, end_proposing_at).await?;
+
+		let proposing_remaining_duration =
+			end_proposing_at.saturating_duration_since(Instant::now());
 		let logs = self.pre_digest_data(slot, claim);
 
 		// deadline our production to 98% of the total time left for proposing. As we deadline
@@ -203,29 +214,34 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		// the result to be returned.
 		let proposing = proposer
 			.propose(
-				slot_info.inherent_data,
+				inherent_data,
 				sp_runtime::generic::Digest { logs },
 				proposing_remaining_duration.mul_f32(0.98),
-				None,
+				slot_info.block_size_limit,
 			)
 			.map_err(|e| sp_consensus::Error::ClientImport(e.to_string()));
 
-		let proposal = match futures::future::select(proposing, proposing_remaining).await {
+		let proposal = match futures::future::select(
+			proposing,
+			Delay::new(proposing_remaining_duration),
+		)
+		.await
+		{
 			Either::Left((Ok(p), _)) => p,
 			Either::Left((Err(err), _)) => {
-				warn!(target: logging_target, "Proposing failed: {}", err);
+				warn!(target: log_target, "Proposing failed: {}", err);
 
 				return None
 			},
 			Either::Right(_) => {
 				info!(
-					target: logging_target,
+					target: log_target,
 					"⌛️ Discarding proposal for slot {}; block production took too long", slot,
 				);
 				// If the node was compiled with debug, tell the user to use release optimizations.
 				#[cfg(build_type = "debug")]
 				info!(
-					target: logging_target,
+					target: log_target,
 					"👉 Recompile your node in `--release` mode to mitigate this problem.",
 				);
 				telemetry!(
@@ -242,6 +258,42 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		Some(proposal)
 	}
 
+	/// Calls `create_inherent_data` and handles errors.
+	async fn create_inherent_data(
+		slot_info: &SlotInfo<B>,
+		logging_target: &str,
+		end_proposing_at: Instant,
+	) -> Option<sp_inherents::InherentData> {
+		let remaining_duration = end_proposing_at.saturating_duration_since(Instant::now());
+		let delay = Delay::new(remaining_duration);
+		let cid = slot_info.create_inherent_data.create_inherent_data();
+		let inherent_data = match futures::future::select(delay, cid).await {
+			Either::Right((Ok(data), _)) => data,
+			Either::Right((Err(err), _)) => {
+				warn!(
+					target: logging_target,
+					"Unable to create inherent data for block {:?}: {}",
+					slot_info.chain_head.hash(),
+					err,
+				);
+
+				return None
+			},
+			Either::Left(_) => {
+				warn!(
+					target: logging_target,
+					"Creating inherent data took more time than we had left for slot {} for block {:?}.",
+					slot_info.slot,
+					slot_info.chain_head.hash(),
+				);
+
+				return None
+			},
+		};
+
+		Some(inherent_data)
+	}
+
 	/// Implements [`SlotWorker::on_slot`].
 	async fn on_slot(
 		&mut self,
@@ -256,7 +308,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
 
-		let proposing_remaining = if proposing_remaining_duration == Duration::default() {
+		let end_proposing_at = if proposing_remaining_duration == Duration::default() {
 			debug!(
 				target: logging_target,
 				"Skipping proposal slot {} since there's no time left to propose", slot,
@@ -264,7 +316,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 			return None
 		} else {
-			Delay::new(proposing_remaining_duration)
+			Instant::now() + proposing_remaining_duration
 		};
 
 		let aux_data = match self.aux_data(&slot_info.chain_head, slot) {
@@ -335,7 +387,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			},
 		};
 
-		let proposal = self.propose(proposer, &claim, slot_info, proposing_remaining).await?;
+		let proposal = self.propose(proposer, &claim, slot_info, end_proposing_at).await?;
 
 		let (block, storage_proof) = (proposal.block, proposal.proof);
 		let (header, body) = block.deconstruct();
@@ -380,7 +432,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		);
 
 		let header = block_import_params.post_header();
-		match self.block_import().import_block(block_import_params, Default::default()).await {
+		match self.block_import().import_block(block_import_params).await {
 			Ok(res) => {
 				res.handle_justification(
 					&header.hash(),
@@ -474,22 +526,16 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, Proof>(
 	C: SelectChain<B>,
 	W: SlotWorker<B, Proof>,
 	SO: SyncOracle + Send,
-	CIDP: CreateInherentDataProviders<B, ()> + Send,
+	CIDP: CreateInherentDataProviders<B, ()> + Send + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 {
 	let mut slots = Slots::new(slot_duration.as_duration(), create_inherent_data_providers, client);
 
 	loop {
-		let slot_info = match slots.next_slot().await {
-			Ok(r) => r,
-			Err(e) => {
-				warn!(target: "slots", "Error while polling for next slot: {}", e);
-				return
-			},
-		};
+		let slot_info = slots.next_slot().await;
 
 		if sync_oracle.is_major_syncing() {
-			debug!(target: "slots", "Skipping proposal slot due to sync.");
+			debug!(target: LOG_TARGET, "Skipping proposal slot due to sync.");
 			continue
 		}
 
@@ -786,7 +832,7 @@ mod test {
 		super::slots::SlotInfo {
 			slot: slot.into(),
 			duration: SLOT_DURATION,
-			inherent_data: Default::default(),
+			create_inherent_data: Box::new(()),
 			ends_at: Instant::now() + SLOT_DURATION,
 			chain_head: Header::new(
 				1,

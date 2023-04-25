@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 use super::*;
 use crate::testing::{test_executor, timeout_secs};
 use assert_matches::assert_matches;
-use jsonrpsee::types::EmptyParams;
+use jsonrpsee::types::EmptyServerParams as EmptyParams;
 use sc_block_builder::BlockBuilderProvider;
 use sp_consensus::BlockOrigin;
 use sp_rpc::list::ListOrValue;

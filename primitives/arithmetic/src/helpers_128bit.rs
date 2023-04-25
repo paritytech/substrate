@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // Some code is based upon Derek Dreery's IntegerSquareRoot impl, used under license.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -182,8 +182,8 @@ mod double128 {
 	}
 }
 
-/// Returns `a * b / c` and `(a * b) % c` (wrapping to 128 bits) or `None` in the case of
-/// overflow and c = 0.
+/// Returns `a * b / c` (wrapping to 128 bits) or `None` in the case of
+/// overflow.
 pub const fn multiply_by_rational_with_rounding(
 	a: u128,
 	b: u128,

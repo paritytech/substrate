@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ pub trait Size {
 /// Map with size tracking.
 ///
 /// Size reported might be slightly off and only approximately true.
-#[derive(Debug, parity_util_mem::MallocSizeOf)]
+#[derive(Debug)]
 pub struct TrackedMap<K, V> {
 	index: Arc<RwLock<HashMap<K, V>>>,
 	bytes: AtomicIsize,

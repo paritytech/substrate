@@ -30,26 +30,23 @@ A Pull Request (PR) needs to be reviewed and approved by project maintainers unl
 
 - `A-*` Pull request status. ONE REQUIRED.
 - `B-*` Changelog and/or Runtime-upgrade post composition markers. ONE REQUIRED. (used by automation)
-- `C-*` Release notes release-priority markers. EXACTLY ONE REQUIRED. (used by automation)
-- `D-*` More general tags on the PR denoting various implications and requirements.
+- `C-*` Release notes release-criticality markers. EXACTLY ONE REQUIRED. (used by automation)
+- `D-*` Audit tags denoting auditing requirements on the PR.
 
 *Process:*
 
 . Please tag each PR with exactly one `A`, `B`, `C` and `D` label at the minimum.
-. Once a PR is ready for review please add the https://github.com/paritytech/substrate/pulls?q=is%3Apr+is%3Aopen+label%3AA0-pleasereview[`A0-pleasereview`] label. Generally PRs should sit with this label for 48 hours in order to garner feedback. It may be merged before if all relevant parties had a look at it.
-. If the first review is not an approval, swap `A0-pleasereview` to any label `[A3, A7]` to indicate that the PR has received some feedback, but needs further work. For example. https://github.com/paritytech/substrate/labels/A3-inprogress[`A3-inprogress`] is a general indicator that the PR is work in progress and https://github.com/paritytech/substrate/labels/A4-gotissues[`A4-gotissues`] means that it has significant problems that need fixing. Once the work is done, change the label back to `A0-pleasereview`. You might end up swapping a few times back and forth to climb up the A label group. Once a PR is https://github.com/paritytech/substrate/labels/A8-mergeoncegreen[`A8-mergeoncegreen`], it is ready to merge.
-. PRs must be tagged with their release notes requirements via the `B1-B9` labels.
-. PRs must be tagged with their release importance via the `C1-C9` labels.
+. Once a PR is ready for review please add the https://github.com/paritytech/substrate/pulls?q=is%3Apr+is%3Aopen+label%3AA0-please_review+[`A0-please_review`] label. Generally PRs should sit with this label for 48 hours in order to garner feedback. It may be merged before if all relevant parties had a look at it.
+. If the first review is not an approval, swap `A0-please_review` to any label `[A3, A5]` to indicate that the PR has received some feedback, but needs further work. For example. https://github.com/paritytech/substrate/labels/A3-in_progress[`A3-in_progress`] is a general indicator that the PR is work in progress.
+. PRs must be tagged with their release notes requirements via the `B*` labels. If a PR should be mentioned in the release notes, use `B1` and add either: `T0-node`, `T1-runtime`or `T2-API` - this defines in which section of the release notes the PR will be shown.
+. PRs must be tagged with their release importance via the `C1-C7` labels.
 . PRs must be tagged with their audit requirements via the `D1-D9` labels.
-. PRs that must be backported to a stable branch must be tagged with https://github.com/paritytech/substrate/labels/E1-runtimemigration[`E0-patchthis`].
-. PRs that introduce runtime migrations must be tagged with https://github.com/paritytech/substrate/labels/E1-runtimemigration[`E1-runtimemigration`]. See the https://github.com/paritytech/substrate/blob/master/utils/frame/try-runtime/cli/src/lib.rs#L18[Migration Best Practices here] for more info about how to test runtime migrations.
-. PRs that introduce irreversible database migrations must be tagged with https://github.com/paritytech/substrate/labels/E2-databasemigration[`E2-databasemigration`].
-. PRs that add host functions must be tagged with with https://github.com/paritytech/substrate/labels/E4-newhostfunctions[`E4-newhostfunctions`].
-. PRs that break the external API must be tagged with https://github.com/paritytech/substrate/labels/E5-breaksapi[`E5-breaksapi`].
-. PRs that materially change the FRAME/runtime semantics must be tagged with https://github.com/paritytech/substrate/labels/E6-transactionversion[`E6-transactionversion`].
-. PRs that change the mechanism for block authoring in a backwards-incompatible way must be tagged with https://github.com/paritytech/substrate/labels/E7-breaksauthoring[`E7-breaksauthoring`].
-. PRs that "break everything" must be tagged with https://github.com/paritytech/substrate/labels/E8-breakseverything[`E8-breakseverything`].
-. PRs that block a new release must be tagged with https://github.com/paritytech/substrate/labels/E9-blocker%20%E2%9B%94%EF%B8%8F[`E9-blocker`].
+. PRs that introduce runtime migrations must be tagged with https://github.com/paritytech/substrate/labels/E0-runtime_migration[`E0-runtime_migration`]. See the https://github.com/paritytech/substrate/blob/master/utils/frame/try-runtime/cli/src/lib.rs#L18[Migration Best Practices here] for more info about how to test runtime migrations.
+. PRs that introduce irreversible database migrations must be tagged with https://github.com/paritytech/substrate/labels/E1-database_migration[`E1-database_migration`].
+. PRs that add host functions must be tagged with with https://github.com/paritytech/substrate/labels/E3-host_functions[`E3-host_functions`].
+. PRs that break the external API must be tagged with https://github.com/paritytech/substrate/labels/F3-breaks_API[`F3-breaks_API`].
+. PRs that change the mechanism for block authoring in a backwards-incompatible way must be tagged with https://github.com/paritytech/substrate/labels/F1-breaks_authoring[`F1-breaks_authoring`].
+. PRs that "break everything" must be tagged with https://github.com/paritytech/substrate/labels/F0-breaks_everything[`F0-breaks_everything`].
 . PRs should be categorized into projects.
 . No PR should be merged until all reviews' comments are addressed and CI is successful.
 
@@ -91,21 +88,20 @@ To create a Polkadot companion PR:
     Note: The merge-bot currently doesn't work with forks on org accounts, only individual accounts.
 	(Hint: it's recommended to use `bot merge` to merge all substrate PRs, not just ones with a polkadot companion.)
 
-If your PR is reviewed well, but a Polkadot PR is missing, signal it with https://github.com/paritytech/substrate/labels/A7-needspolkadotpr[`A7-needspolkadotpr`] to prevent it from getting automatically merged.
+If your PR is reviewed well, but a Polkadot PR is missing, signal it with https://github.com/paritytech/substrate/labels/E6-needs_polkadot_pr[`E6-needs_polkadot_pr`] to prevent it from getting automatically merged. In most cases the CI will add this label automatically.
 
 As there might be multiple pending PRs that might conflict with one another, a) you should not merge the substrate PR until the Polkadot PR has also been reviewed and b) both should be merged pretty quickly after another to not block others.
 
 == Helping out
 
-We use https://github.com/paritytech/substrate/labels[labels] to manage PRs and issues and communicate state of a PR. Please familiarize yourself with them. Furthermore we are organizing issues in https://github.com/paritytech/substrate/milestones[milestones]. Best way to get started is to a pick a ticket from the current milestone tagged https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AQ2-easy[`easy`] or https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AQ3-medium[`medium`] and get going or https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AX1-mentor[`mentor`] and get in contact with the mentor offering their support on that larger task.
+We use https://paritytech.github.io/labels/doc_substrate.html[labels] to manage PRs and issues and communicate state of a PR. Please familiarize yourself with them. Best way to get started is to a pick a ticket tagged https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AZ1-easy[`easy`] or https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AZ2-medium[`medium`] and get going or https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AZ6-mentor[`mentor`] and get in contact with the mentor offering their support on that larger task.
 
 == Issues
 Please label issues with the following labels:
 
-. `I-*` Issue severity and type. EXACTLY ONE REQUIRED.
-. `P-*` Issue priority. AT MOST ONE ALLOWED.
-. `Q-*` Issue difficulty. AT MOST ONE ALLOWED.
-. `Z-*` More general tags on the issue, denoting context and resolution.
+. `I-*` or `J-*` Issue severity and type. EXACTLY ONE REQUIRED.
+. `U-*` Issue urgency, suggesting in what time manner does this issue need to be resolved. AT MOST ONE ALLOWED.
+. `Z-*` Issue difficulty. AT MOST ONE ALLOWED.
 
 == Releases
 

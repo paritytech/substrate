@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,12 +20,19 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
+pub use mmr_lib;
+
 use scale_info::TypeInfo;
 use sp_debug_derive::RuntimeDebug;
 use sp_runtime::traits;
 use sp_std::fmt;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
+
+pub mod utils;
+
+/// Prefix for elements stored in the Off-chain DB via Indexing API.
+pub const INDEXING_PREFIX: &'static [u8] = b"mmr";
 
 /// A type to describe node position in the MMR (node index).
 pub type NodeIndex = u64;
@@ -135,7 +142,7 @@ impl FullLeaf for OpaqueLeaf {
 ///
 /// It is different from [`OpaqueLeaf`], because it does implement `Codec`
 /// and the encoding has to match raw `Vec<u8>` encoding.
-#[derive(codec::Encode, codec::Decode, RuntimeDebug, PartialEq, Eq)]
+#[derive(codec::Encode, codec::Decode, RuntimeDebug, PartialEq, Eq, TypeInfo)]
 pub struct EncodableOpaqueLeaf(pub Vec<u8>);
 
 impl EncodableOpaqueLeaf {
@@ -354,11 +361,11 @@ pub struct Proof<Hash> {
 
 /// Merkle Mountain Range operation error.
 #[cfg_attr(feature = "std", derive(thiserror::Error))]
-#[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
+#[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq, TypeInfo)]
 pub enum Error {
 	/// Error during translation of a block number into a leaf index.
-	#[cfg_attr(feature = "std", error("Error translation block number into leaf index"))]
-	BlockNumToLeafIndex,
+	#[cfg_attr(feature = "std", error("Error performing numeric op"))]
+	InvalidNumericOp,
 	/// Error while pushing new node.
 	#[cfg_attr(feature = "std", error("Error pushing new node"))]
 	Push,
@@ -415,9 +422,13 @@ impl Error {
 
 sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
+	#[api_version(2)]
 	pub trait MmrApi<Hash: codec::Codec, BlockNumber: codec::Codec> {
 		/// Return the on-chain MMR root hash.
 		fn mmr_root() -> Result<Hash, Error>;
+
+		/// Return the number of MMR blocks in the chain.
+		fn mmr_leaf_count() -> Result<LeafIndex, Error>;
 
 		/// Generate MMR proof for a series of block numbers. If `best_known_block_number = Some(n)`,
 		/// use historical MMR state at given block height `n`. Else, use current MMR state.

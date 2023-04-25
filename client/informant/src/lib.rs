@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,10 +22,9 @@ use ansi_term::Colour;
 use futures::prelude::*;
 use futures_timer::Delay;
 use log::{debug, info, trace};
-use parity_util_mem::MallocSizeOf;
 use sc_client_api::{BlockchainEvents, UsageProvider};
-use sc_network_common::service::NetworkStatusProvider;
-use sc_transaction_pool_api::TransactionPool;
+use sc_network::NetworkStatusProvider;
+use sc_network_common::sync::SyncStatusProvider;
 use sp_blockchain::HeaderMetadata;
 use sp_runtime::traits::{Block as BlockT, Header};
 use std::{collections::VecDeque, fmt::Display, sync::Arc, time::Duration};
@@ -53,16 +52,12 @@ impl Default for OutputFormat {
 }
 
 /// Builds the informant and returns a `Future` that drives the informant.
-pub async fn build<B: BlockT, C, N, P>(
-	client: Arc<C>,
-	network: N,
-	pool: Arc<P>,
-	format: OutputFormat,
-) where
-	N: NetworkStatusProvider<B>,
+pub async fn build<B: BlockT, C, N, S>(client: Arc<C>, network: N, syncing: S, format: OutputFormat)
+where
+	N: NetworkStatusProvider,
+	S: SyncStatusProvider<B>,
 	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
 	<C as HeaderMetadata<B>>::Error: Display,
-	P: TransactionPool + MallocSizeOf,
 {
 	let mut display = display::InformantDisplay::new(format.clone());
 
@@ -70,10 +65,15 @@ pub async fn build<B: BlockT, C, N, P>(
 
 	let display_notifications = interval(Duration::from_millis(5000))
 		.filter_map(|_| async {
-			let status = network.status().await;
-			status.ok()
+			let net_status = network.status().await;
+			let sync_status = syncing.status().await;
+
+			match (net_status.ok(), sync_status.ok()) {
+				(Some(net), Some(sync)) => Some((net, sync)),
+				_ => None,
+			}
 		})
-		.for_each(move |net_status| {
+		.for_each(move |(net_status, sync_status)| {
 			let info = client_1.usage_info();
 			if let Some(ref usage) = info.usage {
 				trace!(target: "usage", "Usage statistics: {}", usage);
@@ -83,12 +83,7 @@ pub async fn build<B: BlockT, C, N, P>(
 					"Usage statistics not displayed as backend does not provide it",
 				)
 			}
-			trace!(
-				target: "usage",
-				"Subsystems memory [txpool: {} kB]",
-				parity_util_mem::malloc_size(&*pool) / 1024,
-			);
-			display.display(&info, net_status);
+			display.display(&info, net_status, sync_status);
 			future::ready(())
 		});
 

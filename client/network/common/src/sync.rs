@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,16 +22,21 @@ pub mod message;
 pub mod metrics;
 pub mod warp;
 
+use crate::role::Roles;
+use futures::Stream;
+
 use libp2p::PeerId;
+
 use message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse};
-use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
+use sc_consensus::{import_queue::RuntimeOrigin, IncomingBlock};
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
-use std::{any::Any, fmt, fmt::Formatter, task::Poll};
-use warp::{EncodedProof, WarpProofRequest, WarpSyncProgress};
+use warp::WarpSyncProgress;
+
+use std::{any::Any, fmt, fmt::Formatter, pin::Pin, sync::Arc, task::Poll};
 
 /// The sync status of a peer we are trying to sync with
 #[derive(Debug)]
@@ -40,6 +45,17 @@ pub struct PeerInfo<Block: BlockT> {
 	pub best_hash: Block::Hash,
 	/// Their best block number.
 	pub best_number: NumberFor<Block>,
+}
+
+/// Info about a peer's known state (both full and light).
+#[derive(Clone, Debug)]
+pub struct ExtendedPeerInfo<B: BlockT> {
+	/// Roles
+	pub roles: Roles,
+	/// Peer best block hash
+	pub best_hash: B::Hash,
+	/// Peer best block number
+	pub best_number: NumberFor<B>,
 }
 
 /// Reported sync state.
@@ -70,7 +86,7 @@ pub struct StateDownloadProgress {
 }
 
 /// Syncing status and statistics.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SyncStatus<Block: BlockT> {
 	/// Current global sync state.
 	pub state: SyncState<NumberFor<Block>>,
@@ -78,6 +94,8 @@ pub struct SyncStatus<Block: BlockT> {
 	pub best_seen_block: Option<NumberFor<Block>>,
 	/// Number of peers participating in syncing.
 	pub num_peers: u32,
+	/// Number of peers known to `SyncingEngine` (both full and light).
+	pub num_connected_peers: u32,
 	/// Number of blocks queued for import
 	pub queued_blocks: u32,
 	/// State sync status in progress, if any.
@@ -123,13 +141,27 @@ pub enum OnBlockJustification<Block: BlockT> {
 	},
 }
 
-/// Result of [`ChainSync::on_state_data`].
+/// Result of `ChainSync::on_state_data`.
 #[derive(Debug)]
 pub enum OnStateData<Block: BlockT> {
 	/// The block and state that should be imported.
 	Import(BlockOrigin, IncomingBlock<Block>),
 	/// A new state request needs to be made to the given peer.
 	Continue,
+}
+
+/// Block or justification request polled from `ChainSync`
+#[derive(Debug)]
+pub enum ImportResult<B: BlockT> {
+	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
+	JustificationImport(RuntimeOrigin, B::Hash, NumberFor<B>, Justifications),
+}
+
+/// Value polled from `ChainSync`
+#[derive(Debug)]
+pub enum PollResult<B: BlockT> {
+	Import(ImportResult<B>),
+	Announce(PollBlockAnnounceValidation<B::Header>),
 }
 
 /// Result of [`ChainSync::poll_block_announce_validation`].
@@ -186,6 +218,13 @@ pub struct Metrics {
 	pub justifications: metrics::Metrics,
 }
 
+#[derive(Debug)]
+pub enum PeerRequest<B: BlockT> {
+	Block(BlockRequest<B>),
+	State,
+	WarpProof,
+}
+
 /// Wrapper for implementation-specific state request.
 ///
 /// NOTE: Implementation must be able to encode and decode it for network purposes.
@@ -230,6 +269,49 @@ impl fmt::Debug for OpaqueBlockResponse {
 	}
 }
 
+/// Provides high-level status of syncing.
+#[async_trait::async_trait]
+pub trait SyncStatusProvider<Block: BlockT>: Send + Sync {
+	/// Get high-level view of the syncing status.
+	async fn status(&self) -> Result<SyncStatus<Block>, ()>;
+}
+
+#[async_trait::async_trait]
+impl<T, Block> SyncStatusProvider<Block> for Arc<T>
+where
+	T: ?Sized,
+	T: SyncStatusProvider<Block>,
+	Block: BlockT,
+{
+	async fn status(&self) -> Result<SyncStatus<Block>, ()> {
+		T::status(self).await
+	}
+}
+
+/// Syncing-related events that other protocols can subscribe to.
+pub enum SyncEvent {
+	/// Peer that the syncing implementation is tracking connected.
+	PeerConnected(PeerId),
+
+	/// Peer that the syncing implementation was tracking disconnected.
+	PeerDisconnected(PeerId),
+}
+
+pub trait SyncEventStream: Send + Sync {
+	/// Subscribe to syncing-related events.
+	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = SyncEvent> + Send>>;
+}
+
+impl<T> SyncEventStream for Arc<T>
+where
+	T: ?Sized,
+	T: SyncEventStream,
+{
+	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = SyncEvent> + Send>> {
+		T::event_stream(self, name)
+	}
+}
+
 /// Something that represents the syncing strategy to download past and future blocks of the chain.
 pub trait ChainSync<Block: BlockT>: Send {
 	/// Returns the state of the sync of the given peer.
@@ -249,6 +331,9 @@ pub trait ChainSync<Block: BlockT>: Send {
 
 	/// Returns the current number of peers stored within this state machine.
 	fn num_peers(&self) -> usize;
+
+	/// Returns the number of peers we're connected to and that are being queried.
+	fn num_active_peers(&self) -> usize;
 
 	/// Handle a new connected peer.
 	///
@@ -277,22 +362,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 		number: NumberFor<Block>,
 	);
 
-	/// Get an iterator over all scheduled justification requests.
-	fn justification_requests<'a>(
-		&'a mut self,
-	) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<Block>)> + 'a>;
-
-	/// Get an iterator over all block requests of all peers.
-	fn block_requests<'a>(
-		&'a mut self,
-	) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<Block>)> + 'a>;
-
-	/// Get a state request, if any.
-	fn state_request(&mut self) -> Option<(PeerId, OpaqueStateRequest)>;
-
-	/// Get a warp sync request, if any.
-	fn warp_sync_request(&mut self) -> Option<(PeerId, WarpProofRequest<Block>)>;
-
 	/// Handle a response from the remote to a block request that we made.
 	///
 	/// `request` must be the original request that triggered `response`.
@@ -307,15 +376,11 @@ pub trait ChainSync<Block: BlockT>: Send {
 		response: BlockResponse<Block>,
 	) -> Result<OnBlockData<Block>, BadPeer>;
 
-	/// Handle a response from the remote to a state request that we made.
-	fn on_state_data(
+	/// Procss received block data.
+	fn process_block_response_data(
 		&mut self,
-		who: &PeerId,
-		response: OpaqueStateResponse,
-	) -> Result<OnStateData<Block>, BadPeer>;
-
-	/// Handle a response from the remote to a warp proof request that we made.
-	fn on_warp_sync_data(&mut self, who: &PeerId, response: EncodedProof) -> Result<(), BadPeer>;
+		blocks_to_import: Result<OnBlockData<Block>, BadPeer>,
+	);
 
 	/// Handle a response from the remote to a justification request that we made.
 	///
@@ -325,17 +390,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 		who: PeerId,
 		response: BlockResponse<Block>,
 	) -> Result<OnBlockJustification<Block>, BadPeer>;
-
-	/// A batch of blocks have been processed, with or without errors.
-	///
-	/// Call this when a batch of blocks have been processed by the import
-	/// queue, with or without errors.
-	fn on_blocks_processed(
-		&mut self,
-		imported: usize,
-		count: usize,
-		results: Vec<(Result<BlockImportStatus<NumberFor<Block>>, BlockImportError>, Block::Hash)>,
-	) -> Box<dyn Iterator<Item = Result<(PeerId, BlockRequest<Block>), BadPeer>>>;
 
 	/// Call this when a justification has been processed by the import queue,
 	/// with or without errors.
@@ -370,27 +424,18 @@ pub trait ChainSync<Block: BlockT>: Send {
 	///
 	/// If [`PollBlockAnnounceValidation::ImportHeader`] is returned, then the caller MUST try to
 	/// import passed header (call `on_block_data`). The network request isn't sent in this case.
-	fn poll_block_announce_validation<'a>(
+	fn poll_block_announce_validation(
 		&mut self,
-		cx: &mut std::task::Context<'a>,
+		cx: &mut std::task::Context<'_>,
 	) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
 
 	/// Call when a peer has disconnected.
 	/// Canceled obsolete block request may result in some blocks being ready for
 	/// import, so this functions checks for such blocks and returns them.
-	fn peer_disconnected(&mut self, who: &PeerId) -> Option<OnBlockData<Block>>;
+	fn peer_disconnected(&mut self, who: &PeerId);
 
 	/// Return some key metrics.
 	fn metrics(&self) -> Metrics;
-
-	/// Create implementation-specific block request.
-	fn create_opaque_block_request(&self, request: &BlockRequest<Block>) -> OpaqueBlockRequest;
-
-	/// Encode implementation-specific block request.
-	fn encode_block_request(&self, request: &OpaqueBlockRequest) -> Result<Vec<u8>, String>;
-
-	/// Decode implementation-specific block response.
-	fn decode_block_response(&self, response: &[u8]) -> Result<OpaqueBlockResponse, String>;
 
 	/// Access blocks from implementation-specific block response.
 	fn block_response_into_blocks(
@@ -398,12 +443,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 		request: &BlockRequest<Block>,
 		response: OpaqueBlockResponse,
 	) -> Result<Vec<BlockData<Block>>, String>;
-
-	/// Encode implementation-specific state request.
-	fn encode_state_request(&self, request: &OpaqueStateRequest) -> Result<Vec<u8>, String>;
-
-	/// Decode implementation-specific state response.
-	fn decode_state_response(&self, response: &[u8]) -> Result<OpaqueStateResponse, String>;
 
 	/// Advance the state of `ChainSync`
 	///
@@ -414,4 +453,7 @@ pub trait ChainSync<Block: BlockT>: Send {
 		&mut self,
 		cx: &mut std::task::Context,
 	) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
+
+	/// Send block request to peer
+	fn send_block_request(&mut self, who: PeerId, request: BlockRequest<Block>);
 }

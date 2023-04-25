@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -76,7 +76,6 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	/// Configuration trait.
@@ -172,15 +171,15 @@ pub mod pallet {
 		/// If origin is root then the calls are dispatched without checking origin filter. (This
 		/// includes bypassing `frame_system::Config::BaseCallFilter`).
 		///
-		/// # <weight>
-		/// - Complexity: O(C) where C is the number of calls to be batched.
-		/// # </weight>
+		/// ## Complexity
+		/// - O(C) where C is the number of calls to be batched.
 		///
 		/// This will return `Ok` in all circumstances. To determine the success of the batch, an
 		/// event is deposited. If a call failed and the batch was interrupted, then the
 		/// `BatchInterrupted` event is deposited, along with the number of successful calls made
 		/// and the error of the failed call. If all were successful, then the `BatchCompleted`
 		/// event is deposited.
+		#[pallet::call_index(0)]
 		#[pallet::weight({
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
@@ -254,6 +253,7 @@ pub mod pallet {
 		/// NOTE: Prior to version *12, this was called `as_limited_sub`.
 		///
 		/// The dispatch origin for this call must be _Signed_.
+		#[pallet::call_index(1)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
@@ -299,9 +299,9 @@ pub mod pallet {
 		/// If origin is root then the calls are dispatched without checking origin filter. (This
 		/// includes bypassing `frame_system::Config::BaseCallFilter`).
 		///
-		/// # <weight>
-		/// - Complexity: O(C) where C is the number of calls to be batched.
-		/// # </weight>
+		/// ## Complexity
+		/// - O(C) where C is the number of calls to be batched.
+		#[pallet::call_index(2)]
 		#[pallet::weight({
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
@@ -371,12 +371,9 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Root_.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB write (event).
-		/// - Weight of derivative `call` execution + T::WeightInfo::dispatch_as().
-		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
@@ -411,9 +408,9 @@ pub mod pallet {
 		/// If origin is root then the calls are dispatch without checking origin filter. (This
 		/// includes bypassing `frame_system::Config::BaseCallFilter`).
 		///
-		/// # <weight>
-		/// - Complexity: O(C) where C is the number of calls to be batched.
-		/// # </weight>
+		/// ## Complexity
+		/// - O(C) where C is the number of calls to be batched.
+		#[pallet::call_index(4)]
 		#[pallet::weight({
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
@@ -473,6 +470,24 @@ pub mod pallet {
 			}
 			let base_weight = T::WeightInfo::batch(calls_len as u32);
 			Ok(Some(base_weight.saturating_add(weight)).into())
+		}
+
+		/// Dispatch a function call with a specified weight.
+		///
+		/// This function does not check the weight of the call, and instead allows the
+		/// Root origin to specify the weight of the call.
+		///
+		/// The dispatch origin for this call must be _Root_.
+		#[pallet::call_index(5)]
+		#[pallet::weight((*_weight, call.get_dispatch_info().class))]
+		pub fn with_weight(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::RuntimeCall>,
+			_weight: Weight,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
+			res.map(|_| ()).map_err(|e| e.error)
 		}
 	}
 }

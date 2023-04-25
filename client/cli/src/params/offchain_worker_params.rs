@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -40,7 +40,7 @@ pub struct OffchainWorkerParams {
 		value_name = "ENABLED",
 		value_enum,
 		ignore_case = true,
-		default_value_t = OffchainWorkerEnabled::WhenValidating
+		default_value_t = OffchainWorkerEnabled::WhenAuthority
 	)]
 	pub enabled: OffchainWorkerEnabled,
 
@@ -56,10 +56,10 @@ impl OffchainWorkerParams {
 	/// Load spec to `Configuration` from `OffchainWorkerParams` and spec factory.
 	pub fn offchain_worker(&self, role: &Role) -> error::Result<OffchainWorkerConfig> {
 		let enabled = match (&self.enabled, role) {
-			(OffchainWorkerEnabled::WhenValidating, Role::Authority { .. }) => true,
+			(OffchainWorkerEnabled::WhenAuthority, Role::Authority { .. }) => true,
 			(OffchainWorkerEnabled::Always, _) => true,
 			(OffchainWorkerEnabled::Never, _) => false,
-			(OffchainWorkerEnabled::WhenValidating, _) => false,
+			(OffchainWorkerEnabled::WhenAuthority, _) => false,
 		};
 
 		let indexing_enabled = self.indexing_enabled;

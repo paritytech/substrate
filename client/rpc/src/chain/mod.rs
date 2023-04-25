@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -31,8 +31,8 @@ use jsonrpsee::{core::RpcResult, types::SubscriptionResult, SubscriptionSink};
 use sc_client_api::BlockchainEvents;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
-	generic::{BlockId, SignedBlock},
-	traits::{Block as BlockT, Header, NumberFor},
+	generic::SignedBlock,
+	traits::{Block as BlockT, NumberFor},
 };
 
 use self::error::Error;
@@ -59,10 +59,10 @@ where
 		}
 	}
 
-	/// Get header of a relay chain block.
+	/// Get header of a block.
 	fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error>;
 
-	/// Get header and body of a relay chain block.
+	/// Get header and body of a block.
 	fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error>;
 
 	/// Get hash of the n-th block in the canon chain.
@@ -80,11 +80,7 @@ where
 					))
 				})?;
 				let block_num = <NumberFor<Block>>::from(block_num);
-				Ok(self
-					.client()
-					.header(BlockId::number(block_num))
-					.map_err(client_err)?
-					.map(|h| h.hash()))
+				self.client().hash(block_num).map_err(client_err)
 			},
 		}
 	}

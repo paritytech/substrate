@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,10 +21,7 @@ use sc_client_db::{DbHash, DbState, DbStateBuilder};
 use sp_api::StateBackend;
 use sp_blockchain::HeaderBackend;
 use sp_database::{ColumnId, Transaction};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, HashFor, Header as HeaderT},
-};
+use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
 use sp_trie::PrefixedMemoryDB;
 
 use log::{info, trace};
@@ -58,13 +55,13 @@ impl StorageCmd {
 		let mut record = BenchRecord::default();
 
 		let best_hash = client.usage_info().chain.best_hash;
-		let header = client.header(BlockId::Hash(best_hash))?.ok_or("Header not found")?;
+		let header = client.header(best_hash)?.ok_or("Header not found")?;
 		let original_root = *header.state_root();
 		let trie = DbStateBuilder::<Block>::new(storage.clone(), original_root).build();
 
 		info!("Preparing keys from block {}", best_hash);
 		// Load all KV pairs and randomly shuffle them.
-		let mut kvs = trie.pairs();
+		let mut kvs: Vec<_> = trie.pairs(Default::default())?.collect();
 		let (mut rng, _) = new_rng(None);
 		kvs.shuffle(&mut rng);
 		info!("Writing {} keys", kvs.len());
@@ -73,11 +70,12 @@ impl StorageCmd {
 
 		// Generate all random values first; Make sure there are no collisions with existing
 		// db entries, so we can rollback all additions without corrupting existing entries.
-		for (k, original_v) in kvs {
+		for key_value in kvs {
+			let (k, original_v) = key_value?;
 			match (self.params.include_child_trees, self.is_child_key(k.to_vec())) {
 				(true, Some(info)) => {
 					let child_keys =
-						client.child_storage_keys_iter(best_hash, info.clone(), None, None)?;
+						client.child_storage_keys(best_hash, info.clone(), None, None)?;
 					for ck in child_keys {
 						child_nodes.push((ck.clone(), info.clone()));
 					}

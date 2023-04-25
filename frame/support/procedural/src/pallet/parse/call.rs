@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,7 +45,7 @@ pub struct CallDef {
 	/// The span of the pallet::call attribute.
 	pub attr_span: proc_macro2::Span,
 	/// Docs, specified on the impl Block.
-	pub docs: Vec<syn::Lit>,
+	pub docs: Vec<syn::Expr>,
 }
 
 /// Definition of dispatchable typically: `#[weight...] fn foo(origin .., param1: ...) -> ..`
@@ -59,8 +59,10 @@ pub struct CallVariantDef {
 	pub weight: syn::Expr,
 	/// Call index of the dispatchable.
 	pub call_index: u8,
+	/// Whether an explicit call index was specified.
+	pub explicit_call_index: bool,
 	/// Docs, used for metadata.
-	pub docs: Vec<syn::Lit>,
+	pub docs: Vec<syn::Expr>,
 	/// Attributes annotated at the top of the dispatchable function.
 	pub attrs: Vec<syn::Attribute>,
 }
@@ -91,6 +93,10 @@ impl syn::parse::Parse for FunctionAttr {
 			let call_index_content;
 			syn::parenthesized!(call_index_content in content);
 			let index = call_index_content.parse::<syn::LitInt>()?;
+			if !index.suffix().is_empty() {
+				let msg = "Number literal must not have a suffix";
+				return Err(syn::Error::new(index.span(), msg))
+			}
 			Ok(FunctionAttr::CallIndex(index.base10_parse()?))
 		} else {
 			Err(lookahead.error())
@@ -167,7 +173,7 @@ impl CallDef {
 		let mut indices = HashMap::new();
 		let mut last_index: Option<u8> = None;
 		for item in &mut item_impl.items {
-			if let syn::ImplItem::Method(method) = item {
+			if let syn::ImplItem::Fn(method) = item {
 				if !matches!(method.vis, syn::Visibility::Public(_)) {
 					let msg = "Invalid pallet::call, dispatchable function must be public: \
 						`pub fn`";
@@ -243,6 +249,7 @@ impl CallDef {
 					FunctionAttr::CallIndex(idx) => idx,
 					_ => unreachable!("checked during creation of the let binding"),
 				});
+				let explicit_call_index = call_index.is_some();
 
 				let final_index = match call_index {
 					Some(i) => i,
@@ -296,6 +303,7 @@ impl CallDef {
 					name: method.sig.ident.clone(),
 					weight,
 					call_index: final_index,
+					explicit_call_index,
 					args,
 					docs,
 					attrs: method.attrs.clone(),

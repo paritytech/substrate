@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, whitelisted_caller};
+use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller, BenchmarkError};
 use frame_system::RawOrigin;
 
 use crate::Pallet as ChildBounties;
@@ -63,9 +63,12 @@ fn setup_bounty<T: Config>(
 	let fee = value / 2u32.into();
 	let deposit = T::BountyDepositBase::get() +
 		T::DataDepositPerByte::get() * T::MaximumReasonLength::get().into();
-	let _ = T::Currency::make_free_balance_be(&caller, deposit);
+	let _ = T::Currency::make_free_balance_be(&caller, deposit + T::Currency::minimum_balance());
 	let curator = account("curator", user, SEED);
-	let _ = T::Currency::make_free_balance_be(&curator, fee / 2u32.into());
+	let _ = T::Currency::make_free_balance_be(
+		&curator,
+		fee / 2u32.into() + T::Currency::minimum_balance(),
+	);
 	let reason = vec![0; description as usize];
 	(caller, curator, fee, value, reason)
 }
@@ -73,7 +76,10 @@ fn setup_bounty<T: Config>(
 fn setup_child_bounty<T: Config>(user: u32, description: u32) -> BenchmarkChildBounty<T> {
 	let (caller, curator, fee, value, reason) = setup_bounty::<T>(user, description);
 	let child_curator = account("child-curator", user, SEED);
-	let _ = T::Currency::make_free_balance_be(&child_curator, fee / 2u32.into());
+	let _ = T::Currency::make_free_balance_be(
+		&child_curator,
+		fee / 2u32.into() + T::Currency::minimum_balance(),
+	);
 	let child_bounty_value = (value - fee) / 4u32.into();
 	let child_bounty_fee = child_bounty_value / 2u32.into();
 
@@ -94,7 +100,7 @@ fn setup_child_bounty<T: Config>(user: u32, description: u32) -> BenchmarkChildB
 fn activate_bounty<T: Config>(
 	user: u32,
 	description: u32,
-) -> Result<BenchmarkChildBounty<T>, &'static str> {
+) -> Result<BenchmarkChildBounty<T>, BenchmarkError> {
 	let mut child_bounty_setup = setup_child_bounty::<T>(user, description);
 	let curator_lookup = T::Lookup::unlookup(child_bounty_setup.curator.clone());
 	Bounties::<T>::propose_bounty(
@@ -105,7 +111,9 @@ fn activate_bounty<T: Config>(
 
 	child_bounty_setup.bounty_id = Bounties::<T>::bounty_count() - 1;
 
-	Bounties::<T>::approve_bounty(RawOrigin::Root.into(), child_bounty_setup.bounty_id)?;
+	let approve_origin =
+		T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+	Bounties::<T>::approve_bounty(approve_origin, child_bounty_setup.bounty_id)?;
 	Treasury::<T>::on_initialize(T::BlockNumber::zero());
 	Bounties::<T>::propose_curator(
 		RawOrigin::Root.into(),
@@ -124,7 +132,7 @@ fn activate_bounty<T: Config>(
 fn activate_child_bounty<T: Config>(
 	user: u32,
 	description: u32,
-) -> Result<BenchmarkChildBounty<T>, &'static str> {
+) -> Result<BenchmarkChildBounty<T>, BenchmarkError> {
 	let mut bounty_setup = activate_bounty::<T>(user, description)?;
 	let child_curator_lookup = T::Lookup::unlookup(bounty_setup.child_curator.clone());
 

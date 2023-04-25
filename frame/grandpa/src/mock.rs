@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,8 +30,8 @@ use frame_support::{
 	},
 };
 use pallet_session::historical as pallet_session_historical;
+use sp_consensus_grandpa::{RoundNumber, SetId, GRANDPA_ENGINE_ID};
 use sp_core::{crypto::KeyTypeId, H256};
-use sp_finality_grandpa::{RoundNumber, SetId, GRANDPA_ENGINE_ID};
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::{
 	curve::PiecewiseLinear,
@@ -51,15 +51,15 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
-		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event, ValidateUnsigned},
-		Offences: pallet_offences::{Pallet, Storage, Event},
-		Historical: pallet_session_historical::{Pallet},
+		System: frame_system,
+		Authorship: pallet_authorship,
+		Timestamp: pallet_timestamp,
+		Balances: pallet_balances,
+		Staking: pallet_staking,
+		Session: pallet_session,
+		Grandpa: pallet_grandpa,
+		Offences: pallet_offences,
+		Historical: pallet_session_historical,
 	}
 );
 
@@ -67,11 +67,6 @@ impl_opaque_keys! {
 	pub struct TestSessionKeys {
 		pub grandpa_authority: super::Pallet<Test>,
 	}
-}
-
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
 
 impl frame_system::Config for Test {
@@ -134,8 +129,6 @@ impl pallet_session::historical::Config for Test {
 
 impl pallet_authorship::Config for Test {
 	type FindAuthor = ();
-	type UncleGenerations = ConstU64<0>;
-	type FilterUncle = ();
 	type EventHandler = ();
 }
 
@@ -149,6 +142,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU128<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 impl pallet_timestamp::Config for Test {
@@ -199,7 +196,7 @@ impl pallet_staking::Config for Test {
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SlashDeferDuration = ();
-	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type SessionInterface = Self;
 	type UnixTime = pallet_timestamp::Pallet<Test>;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
@@ -226,26 +223,17 @@ impl pallet_offences::Config for Test {
 parameter_types! {
 	pub const ReportLongevity: u64 =
 		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * Period::get();
+	pub const MaxSetIdSessionEntries: u32 = BondingDuration::get() * SessionsPerEra::get();
 }
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-
-	type KeyOwnerProofSystem = Historical;
-
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
-
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		AuthorityId,
-	)>>::IdentificationTuple;
-
-	type HandleEquivocation =
-		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
-
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<100>;
+	type MaxSetIdSessionEntries = MaxSetIdSessionEntries;
+	type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
+	type EquivocationReportSystem =
+		super::EquivocationReportSystem<Self, Offences, Historical, ReportLongevity>;
 }
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem {
@@ -359,12 +347,12 @@ pub fn generate_equivocation_proof(
 	set_id: SetId,
 	vote1: (RoundNumber, H256, u64, &Ed25519Keyring),
 	vote2: (RoundNumber, H256, u64, &Ed25519Keyring),
-) -> sp_finality_grandpa::EquivocationProof<H256, u64> {
+) -> sp_consensus_grandpa::EquivocationProof<H256, u64> {
 	let signed_prevote = |round, hash, number, keyring: &Ed25519Keyring| {
 		let prevote = finality_grandpa::Prevote { target_hash: hash, target_number: number };
 
 		let prevote_msg = finality_grandpa::Message::Prevote(prevote.clone());
-		let payload = sp_finality_grandpa::localized_payload(round, set_id, &prevote_msg);
+		let payload = sp_consensus_grandpa::localized_payload(round, set_id, &prevote_msg);
 		let signed = keyring.sign(&payload).into();
 		(prevote, signed)
 	};
@@ -372,9 +360,9 @@ pub fn generate_equivocation_proof(
 	let (prevote1, signed1) = signed_prevote(vote1.0, vote1.1, vote1.2, vote1.3);
 	let (prevote2, signed2) = signed_prevote(vote2.0, vote2.1, vote2.2, vote2.3);
 
-	sp_finality_grandpa::EquivocationProof::new(
+	sp_consensus_grandpa::EquivocationProof::new(
 		set_id,
-		sp_finality_grandpa::Equivocation::Prevote(finality_grandpa::Equivocation {
+		sp_consensus_grandpa::Equivocation::Prevote(finality_grandpa::Equivocation {
 			round_number: vote1.0,
 			identity: vote1.3.public().into(),
 			first: (prevote1, signed1),

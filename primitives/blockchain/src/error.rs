@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,6 +58,9 @@ pub enum Error {
 
 	#[error("UnknownBlock: {0}")]
 	UnknownBlock(String),
+
+	#[error("UnknownBlocks: {0}")]
+	UnknownBlocks(String),
 
 	#[error(transparent)]
 	ApplyExtrinsicFailed(#[from] ApplyExtrinsicFailed),
@@ -188,6 +191,7 @@ impl From<Box<dyn sp_state_machine::Error>> for Error {
 impl From<Error> for ApiError {
 	fn from(err: Error) -> ApiError {
 		match err {
+			Error::UnknownBlock(msg) => ApiError::UnknownBlock(msg),
 			Error::RuntimeApiError(err) => err,
 			e => ApiError::Application(Box::new(e)),
 		}

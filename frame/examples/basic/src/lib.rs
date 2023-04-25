@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -329,7 +329,7 @@ impl<T: pallet_balances::Config> WeighData<(&BalanceOf<T>,)> for WeightForSetDum
 		let multiplier = self.0;
 		// *target.0 is the amount passed into the extrinsic
 		let cents = *target.0 / <BalanceOf<T>>::from(MILLICENTS);
-		Weight::from_ref_time((cents * multiplier).saturated_into::<u64>())
+		Weight::from_parts((cents * multiplier).saturated_into::<u64>(), 0)
 	}
 }
 
@@ -379,7 +379,6 @@ pub mod pallet {
 	// Simple declaration of the `Pallet` type. It is placeholder we use to implement traits and
 	// method.
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	// Pallet implements [`Hooks`] trait to define some logic to execute in some context.
@@ -497,6 +496,7 @@ pub mod pallet {
 		//
 		// The weight for this extrinsic we rely on the auto-generated `WeightInfo` from the
 		// benchmark toolchain.
+		#[pallet::call_index(0)]
 		#[pallet::weight(
 			<T as pallet::Config>::WeightInfo::accumulate_dummy()
 		)]
@@ -541,6 +541,7 @@ pub mod pallet {
 		//
 		// The weight for this extrinsic we use our own weight object `WeightForSetDummy` to
 		// determine its weight
+		#[pallet::call_index(1)]
 		#[pallet::weight(WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32)))]
 		pub fn set_dummy(
 			origin: OriginFor<T>,

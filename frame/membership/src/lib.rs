@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,6 +36,8 @@ pub mod weights;
 pub use pallet::*;
 pub use weights::WeightInfo;
 
+const LOG_TARGET: &str = "runtime::membership";
+
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
@@ -48,7 +50,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
@@ -166,7 +167,8 @@ pub mod pallet {
 		/// Add a member `who` to the set.
 		///
 		/// May only be called from `T::AddOrigin`.
-		#[pallet::weight(50_000_000)]
+		#[pallet::call_index(0)]
+		#[pallet::weight({50_000_000})]
 		pub fn add_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::AddOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -188,7 +190,8 @@ pub mod pallet {
 		/// Remove a member `who` from the set.
 		///
 		/// May only be called from `T::RemoveOrigin`.
-		#[pallet::weight(50_000_000)]
+		#[pallet::call_index(1)]
+		#[pallet::weight({50_000_000})]
 		pub fn remove_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::RemoveOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -211,7 +214,8 @@ pub mod pallet {
 		/// May only be called from `T::SwapOrigin`.
 		///
 		/// Prime membership is *not* passed from `remove` to `add`, if extant.
-		#[pallet::weight(50_000_000)]
+		#[pallet::call_index(2)]
+		#[pallet::weight({50_000_000})]
 		pub fn swap_member(
 			origin: OriginFor<T>,
 			remove: AccountIdLookupOf<T>,
@@ -244,7 +248,8 @@ pub mod pallet {
 		/// pass `members` pre-sorted.
 		///
 		/// May only be called from `T::ResetOrigin`.
-		#[pallet::weight(50_000_000)]
+		#[pallet::call_index(3)]
+		#[pallet::weight({50_000_000})]
 		pub fn reset_members(origin: OriginFor<T>, members: Vec<T::AccountId>) -> DispatchResult {
 			T::ResetOrigin::ensure_origin(origin)?;
 
@@ -266,7 +271,8 @@ pub mod pallet {
 		/// May only be called from `Signed` origin of a current member.
 		///
 		/// Prime membership is passed from the origin account to `new`, if extant.
-		#[pallet::weight(50_000_000)]
+		#[pallet::call_index(4)]
+		#[pallet::weight({50_000_000})]
 		pub fn change_key(origin: OriginFor<T>, new: AccountIdLookupOf<T>) -> DispatchResult {
 			let remove = ensure_signed(origin)?;
 			let new = T::Lookup::lookup(new)?;
@@ -300,7 +306,8 @@ pub mod pallet {
 		/// Set the prime member. Must be a current member.
 		///
 		/// May only be called from `T::PrimeOrigin`.
-		#[pallet::weight(50_000_000)]
+		#[pallet::call_index(5)]
+		#[pallet::weight({50_000_000})]
 		pub fn set_prime(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::PrimeOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -313,7 +320,8 @@ pub mod pallet {
 		/// Remove the prime member if it exists.
 		///
 		/// May only be called from `T::PrimeOrigin`.
-		#[pallet::weight(50_000_000)]
+		#[pallet::call_index(6)]
+		#[pallet::weight({50_000_000})]
 		pub fn clear_prime(origin: OriginFor<T>) -> DispatchResult {
 			T::PrimeOrigin::ensure_origin(origin)?;
 			Prime::<T, I>::kill();
@@ -353,15 +361,17 @@ impl<T: Config<I>, I: 'static> SortedMembers<T::AccountId> for Pallet<T, I> {
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmark {
 	use super::{Pallet as Membership, *};
-	use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist};
+	use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelist, BenchmarkError};
 	use frame_support::{assert_ok, traits::EnsureOrigin};
 	use frame_system::RawOrigin;
 
 	const SEED: u32 = 0;
 
 	fn set_members<T: Config<I>, I: 'static>(members: Vec<T::AccountId>, prime: Option<usize>) {
-		let reset_origin = T::ResetOrigin::successful_origin();
-		let prime_origin = T::PrimeOrigin::successful_origin();
+		let reset_origin = T::ResetOrigin::try_successful_origin()
+			.expect("ResetOrigin has no successful origin required for the benchmark");
+		let prime_origin = T::PrimeOrigin::try_successful_origin()
+			.expect("PrimeOrigin has no successful origin required for the benchmark");
 
 		assert_ok!(<Membership<T, I>>::reset_members(reset_origin, members.clone()));
 		if let Some(prime) = prime.map(|i| members[i].clone()) {
@@ -381,9 +391,11 @@ mod benchmark {
 			let new_member = account::<T::AccountId>("add", m, SEED);
 			let new_member_lookup = T::Lookup::unlookup(new_member.clone());
 		}: {
-			assert_ok!(<Membership<T, I>>::add_member(T::AddOrigin::successful_origin(), new_member_lookup));
-		}
-		verify {
+			assert_ok!(<Membership<T, I>>::add_member(
+				T::AddOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+				new_member_lookup,
+			));
+		} verify {
 			assert!(<Members<T, I>>::get().contains(&new_member));
 			#[cfg(test)] crate::tests::clean();
 		}
@@ -399,7 +411,10 @@ mod benchmark {
 			let to_remove = members.first().cloned().unwrap();
 			let to_remove_lookup = T::Lookup::unlookup(to_remove.clone());
 		}: {
-			assert_ok!(<Membership<T, I>>::remove_member(T::RemoveOrigin::successful_origin(), to_remove_lookup));
+			assert_ok!(<Membership<T, I>>::remove_member(
+				T::RemoveOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+				to_remove_lookup,
+			));
 		} verify {
 			assert!(!<Members<T, I>>::get().contains(&to_remove));
 			// prime is rejigged
@@ -419,7 +434,7 @@ mod benchmark {
 			let remove_lookup = T::Lookup::unlookup(remove.clone());
 		}: {
 			assert_ok!(<Membership<T, I>>::swap_member(
-				T::SwapOrigin::successful_origin(),
+				T::SwapOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
 				remove_lookup,
 				add_lookup,
 			));
@@ -439,7 +454,10 @@ mod benchmark {
 			set_members::<T, I>(members.clone(), Some(members.len() - 1));
 			let mut new_members = (m..2*m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
 		}: {
-			assert_ok!(<Membership<T, I>>::reset_members(T::ResetOrigin::successful_origin(), new_members.clone()));
+			assert_ok!(<Membership<T, I>>::reset_members(
+				T::ResetOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+				new_members.clone(),
+			));
 		} verify {
 			new_members.sort();
 			assert_eq!(<Members<T, I>>::get(), new_members);
@@ -476,7 +494,10 @@ mod benchmark {
 			let prime_lookup = T::Lookup::unlookup(prime.clone());
 			set_members::<T, I>(members, None);
 		}: {
-			assert_ok!(<Membership<T, I>>::set_prime(T::PrimeOrigin::successful_origin(), prime_lookup));
+			assert_ok!(<Membership<T, I>>::set_prime(
+				T::PrimeOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+				prime_lookup,
+			));
 		} verify {
 			assert!(<Prime<T, I>>::get().is_some());
 			assert!(<T::MembershipChanged>::get_prime().is_some());
@@ -489,7 +510,9 @@ mod benchmark {
 			let prime = members.last().cloned().unwrap();
 			set_members::<T, I>(members, None);
 		}: {
-			assert_ok!(<Membership<T, I>>::clear_prime(T::PrimeOrigin::successful_origin()));
+			assert_ok!(<Membership<T, I>>::clear_prime(
+				T::PrimeOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?,
+			));
 		} verify {
 			assert!(<Prime<T, I>>::get().is_none());
 			assert!(<T::MembershipChanged>::get_prime().is_none());
@@ -532,8 +555,6 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 		pub static Members: Vec<u64> = vec![];
 		pub static Prime: Option<u64> = None;
 	}

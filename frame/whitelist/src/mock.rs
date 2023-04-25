@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@
 use crate as pallet_whitelist;
 
 use frame_support::{
-	construct_runtime, parameter_types,
+	construct_runtime,
 	traits::{ConstU32, ConstU64, Nothing},
 };
 use frame_system::EnsureRoot;
@@ -49,10 +49,6 @@ construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = Nothing;
 	type BlockWeights = ();
@@ -90,6 +86,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 impl pallet_preimage::Config for Test {
@@ -106,7 +106,7 @@ impl pallet_whitelist::Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type WhitelistOrigin = EnsureRoot<Self::AccountId>;
 	type DispatchWhitelistedOrigin = EnsureRoot<Self::AccountId>;
-	type PreimageProvider = Preimage;
+	type Preimages = Preimage;
 	type WeightInfo = ();
 }
 

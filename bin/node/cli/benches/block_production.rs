@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -37,7 +37,6 @@ use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed}
 use sp_consensus::BlockOrigin;
 use sp_keyring::Sr25519Keyring;
 use sp_runtime::{
-	generic::BlockId,
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	AccountId32, MultiAddress, OpaqueExtrinsic,
 };
@@ -70,7 +69,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::InMemory,
-		keystore_remote: Default::default(),
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
 		trie_cache_maximum_size: Some(64 * 1024 * 1024),
 		state_pruning: Some(PruningMode::ArchiveAll),
@@ -138,7 +136,7 @@ fn import_block(
 	params.state_action =
 		StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(built.storage_changes));
 	params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-	futures::executor::block_on(client.import_block(params, Default::default()))
+	futures::executor::block_on(client.import_block(params))
 		.expect("importing a block doesn't fail");
 }
 
@@ -163,7 +161,7 @@ fn prepare_benchmark(client: &FullClient) -> (usize, Vec<OpaqueExtrinsic>) {
 		let extrinsic: OpaqueExtrinsic = create_extrinsic(
 			client,
 			src.clone(),
-			BalancesCall::transfer { dest: dst.clone(), value: 1 * DOLLARS },
+			BalancesCall::transfer_allow_death { dest: dst.clone(), value: 1 * DOLLARS },
 			Some(nonce),
 		)
 		.into();
@@ -206,14 +204,14 @@ fn block_production(c: &mut Criterion) {
 	group.sample_size(10);
 	group.throughput(Throughput::Elements(max_transfer_count as u64));
 
-	let block_id = BlockId::Hash(client.chain_info().best_hash);
+	let best_hash = client.chain_info().best_hash;
 
 	group.bench_function(format!("{} transfers (no proof)", max_transfer_count), |b| {
 		b.iter_batched(
 			|| extrinsics.clone(),
 			|extrinsics| {
 				let mut block_builder =
-					client.new_block_at(&block_id, Default::default(), RecordProof::No).unwrap();
+					client.new_block_at(best_hash, Default::default(), RecordProof::No).unwrap();
 				for extrinsic in extrinsics {
 					block_builder.push(extrinsic).unwrap();
 				}
@@ -228,7 +226,7 @@ fn block_production(c: &mut Criterion) {
 			|| extrinsics.clone(),
 			|extrinsics| {
 				let mut block_builder =
-					client.new_block_at(&block_id, Default::default(), RecordProof::Yes).unwrap();
+					client.new_block_at(best_hash, Default::default(), RecordProof::Yes).unwrap();
 				for extrinsic in extrinsics {
 					block_builder.push(extrinsic).unwrap();
 				}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,8 +23,8 @@
 //! While both BEEFY and Merkle Mountain Range (MMR) can be used separately,
 //! these tools were designed to work together in unison.
 //!
-//! The pallet provides a standardized MMR Leaf format that is can be used
-//! to bridge BEEFY+MMR-based networks (both standalone and polkadot-like).
+//! The pallet provides a standardized MMR Leaf format that can be used
+//! to bridge BEEFY+MMR-based networks (both standalone and Polkadot-like).
 //!
 //! The MMR leaf contains:
 //! 1. Block number and parent block hash.
@@ -36,11 +36,11 @@
 use sp_runtime::traits::{Convert, Member};
 use sp_std::prelude::*;
 
-use beefy_primitives::{
+use pallet_mmr::{LeafDataProvider, ParentNumberAndHash};
+use sp_consensus_beefy::{
 	mmr::{BeefyAuthoritySet, BeefyDataProvider, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion},
 	ValidatorSet as BeefyValidatorSet,
 };
-use pallet_mmr::{LeafDataProvider, ParentNumberAndHash};
 
 use frame_support::{crypto::ecdsa::ECDSAExt, traits::Get};
 
@@ -54,15 +54,15 @@ mod tests;
 /// A BEEFY consensus digest item with MMR root hash.
 pub struct DepositBeefyDigest<T>(sp_std::marker::PhantomData<T>);
 
-impl<T> pallet_mmr::primitives::OnNewRoot<beefy_primitives::MmrRootHash> for DepositBeefyDigest<T>
+impl<T> pallet_mmr::primitives::OnNewRoot<sp_consensus_beefy::MmrRootHash> for DepositBeefyDigest<T>
 where
-	T: pallet_mmr::Config<Hash = beefy_primitives::MmrRootHash>,
+	T: pallet_mmr::Config<Hash = sp_consensus_beefy::MmrRootHash>,
 	T: pallet_beefy::Config,
 {
 	fn on_new_root(root: &<T as pallet_mmr::Config>::Hash) {
 		let digest = sp_runtime::generic::DigestItem::Consensus(
-			beefy_primitives::BEEFY_ENGINE_ID,
-			codec::Encode::encode(&beefy_primitives::ConsensusLog::<
+			sp_consensus_beefy::BEEFY_ENGINE_ID,
+			codec::Encode::encode(&sp_consensus_beefy::ConsensusLog::<
 				<T as pallet_beefy::Config>::BeefyId,
 			>::MmrRoot(*root)),
 		);
@@ -72,8 +72,8 @@ where
 
 /// Convert BEEFY secp256k1 public keys into Ethereum addresses
 pub struct BeefyEcdsaToEthereum;
-impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {
-	fn convert(beefy_id: beefy_primitives::crypto::AuthorityId) -> Vec<u8> {
+impl Convert<sp_consensus_beefy::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {
+	fn convert(beefy_id: sp_consensus_beefy::crypto::AuthorityId) -> Vec<u8> {
 		sp_core::ecdsa::Public::from(beefy_id)
 			.to_eth_address()
 			.map(|v| v.to_vec())
@@ -95,7 +95,6 @@ pub mod pallet {
 
 	/// BEEFY-MMR pallet.
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	/// The module's configuration trait.
@@ -156,7 +155,7 @@ impl<T: Config> LeafDataProvider for Pallet<T> {
 	}
 }
 
-impl<T> beefy_primitives::OnNewValidatorSet<<T as pallet_beefy::Config>::BeefyId> for Pallet<T>
+impl<T> sp_consensus_beefy::OnNewValidatorSet<<T as pallet_beefy::Config>::BeefyId> for Pallet<T>
 where
 	T: pallet::Config,
 {
@@ -200,10 +199,24 @@ impl<T: Config> Pallet<T> {
 			.map(T::BeefyAuthorityToMerkleLeaf::convert)
 			.collect::<Vec<_>>();
 		let len = beefy_addresses.len() as u32;
-		let root = beefy_merkle_tree::merkle_root::<<T as pallet_mmr::Config>::Hashing, _>(
+		let root = binary_merkle_tree::merkle_root::<<T as pallet_mmr::Config>::Hashing, _>(
 			beefy_addresses,
 		)
 		.into();
 		BeefyAuthoritySet { id, len, root }
+	}
+}
+
+sp_api::decl_runtime_apis! {
+	/// API useful for BEEFY light clients.
+	pub trait BeefyMmrApi<H>
+	where
+		BeefyAuthoritySet<H>: sp_api::Decode,
+	{
+		/// Return the currently active BEEFY authority set proof.
+		fn authority_set_proof() -> BeefyAuthoritySet<H>;
+
+		/// Return the next/queued BEEFY authority set proof.
+		fn next_authority_set_proof() -> BeefyNextAuthoritySet<H>;
 	}
 }

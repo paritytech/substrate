@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::{benchmarks, whitelisted_caller};
+use frame_benchmarking::v1::{benchmarks, whitelisted_caller};
 use frame_support::traits::{Currency, Get, OnFinalize, OnInitialize};
 use frame_system::{EventRecord, Pallet as System, RawOrigin};
 use sp_runtime::traits::{Bounded, One, Zero};

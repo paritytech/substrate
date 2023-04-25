@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc_error_handler))]
+#![cfg_attr(enable_alloc_error_handler, feature(alloc_error_handler))]
 #![cfg_attr(
 	feature = "std",
 	doc = "Substrate runtime standard library as compiled when linked with Rust's standard library."
@@ -40,10 +40,9 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 	offchain::{OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
 	storage::ChildInfo,
-	traits::TaskExecutorExt,
 };
 #[cfg(feature = "std")]
-use sp_keystore::{KeystoreExt, SyncCryptoStore};
+use sp_keystore::KeystoreExt;
 
 use sp_core::{
 	crypto::KeyTypeId,
@@ -74,12 +73,6 @@ use secp256k1::{
 
 #[cfg(feature = "std")]
 use sp_externalities::{Externalities, ExternalitiesExt};
-
-#[cfg(feature = "std")]
-mod batch_verifier;
-
-#[cfg(feature = "std")]
-use batch_verifier::BatchVerifier;
 
 pub use sp_externalities::MultiRemovalResults;
 
@@ -698,15 +691,42 @@ pub trait Misc {
 	}
 }
 
+#[cfg(feature = "std")]
+sp_externalities::decl_extension! {
+	/// Extension to signal to [`crypt::ed25519_verify`] to use the dalek crate.
+	///
+	/// The switch from `ed25519-dalek` to `ed25519-zebra` was a breaking change.
+	/// `ed25519-zebra` is more permissive when it comes to the verification of signatures.
+	/// This means that some chains may fail to sync from genesis when using `ed25519-zebra`.
+	/// So, this extension can be registered to the runtime execution environment to signal
+	/// that `ed25519-dalek` should be used for verification. The extension can be registered
+	/// in the following way:
+	///
+	/// ```nocompile
+	/// client.execution_extensions().set_extensions_factory(
+	/// 	// Let the `UseDalekExt` extension being registered for each runtime invocation
+	/// 	// until the execution happens in the context of block `1000`.
+	/// 	sc_client_api::execution_extensions::ExtensionBeforeBlock::<Block, UseDalekExt>::new(1000)
+	/// );
+	/// ```
+	pub struct UseDalekExt;
+}
+
+#[cfg(feature = "std")]
+impl Default for UseDalekExt {
+	fn default() -> Self {
+		Self
+	}
+}
+
 /// Interfaces for working with crypto related types from within the runtime.
 #[runtime_interface]
 pub trait Crypto {
 	/// Returns all `ed25519` public keys for the given key id from the keystore.
 	fn ed25519_public_keys(&mut self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		let keystore = &***self
-			.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::ed25519_public_keys(keystore, id)
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.ed25519_public_keys(id)
 	}
 
 	/// Generate an `ed22519` key for the given key type using an optional `seed` and
@@ -717,10 +737,9 @@ pub trait Crypto {
 	/// Returns the public key.
 	fn ed25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ed25519::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
-		let keystore = &***self
-			.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::ed25519_generate_new(keystore, id, seed)
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.ed25519_generate_new(id, seed)
 			.expect("`ed25519_generate` failed")
 	}
 
@@ -734,39 +753,66 @@ pub trait Crypto {
 		pub_key: &ed25519::Public,
 		msg: &[u8],
 	) -> Option<ed25519::Signature> {
-		let keystore = &***self
-			.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.ed25519_sign(id, pub_key, msg)
 			.ok()
 			.flatten()
-			.and_then(|sig| ed25519::Signature::from_slice(&sig))
 	}
 
 	/// Verify `ed25519` signature.
 	///
 	/// Returns `true` when the verification was successful.
 	fn ed25519_verify(sig: &ed25519::Signature, msg: &[u8], pub_key: &ed25519::Public) -> bool {
-		ed25519::Pair::verify(sig, msg, pub_key)
+		// We don't want to force everyone needing to call the function in an externalities context.
+		// So, we assume that we should not use dalek when we are not in externalities context.
+		// Otherwise, we check if the extension is present.
+		if sp_externalities::with_externalities(|mut e| e.extension::<UseDalekExt>().is_some())
+			.unwrap_or_default()
+		{
+			use ed25519_dalek::Verifier;
+
+			let Ok(public_key) = ed25519_dalek::PublicKey::from_bytes(&pub_key.0) else {
+				return false
+			};
+
+			let Ok(sig) = ed25519_dalek::Signature::from_bytes(&sig.0) else {
+				return false
+			};
+
+			public_key.verify(msg, &sig).is_ok()
+		} else {
+			ed25519::Pair::verify(sig, msg, pub_key)
+		}
 	}
 
 	/// Register a `ed25519` signature for batch verification.
 	///
 	/// Batch verification must be enabled by calling [`start_batch_verify`].
-	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// If batch verification is not enabled, the signature will be verified immediately.
 	/// To get the result of the batch verification, [`finish_batch_verify`]
 	/// needs to be called.
 	///
 	/// Returns `true` when the verification is either successful or batched.
+	///
+	/// NOTE: Is tagged with `register_only` to keep the functions around for backwards
+	/// compatibility with old runtimes, but it should not be used anymore by new runtimes.
+	/// The implementation emulates the old behavior, but isn't doing any batch verification
+	/// anymore.
+	#[version(1, register_only)]
 	fn ed25519_batch_verify(
 		&mut self,
 		sig: &ed25519::Signature,
 		msg: &[u8],
 		pub_key: &ed25519::Public,
 	) -> bool {
-		self.extension::<VerificationExt>()
-			.map(|extension| extension.push_ed25519(sig.clone(), *pub_key, msg.to_vec()))
-			.unwrap_or_else(|| ed25519_verify(sig, msg, pub_key))
+		let res = ed25519_verify(sig, msg, pub_key);
+
+		if let Some(ext) = self.extension::<VerificationExtDeprecated>() {
+			ext.0 &= res;
+		}
+
+		res
 	}
 
 	/// Verify `sr25519` signature.
@@ -780,30 +826,41 @@ pub trait Crypto {
 	/// Register a `sr25519` signature for batch verification.
 	///
 	/// Batch verification must be enabled by calling [`start_batch_verify`].
-	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// If batch verification is not enabled, the signature will be verified immediately.
 	/// To get the result of the batch verification, [`finish_batch_verify`]
 	/// needs to be called.
 	///
 	/// Returns `true` when the verification is either successful or batched.
+	///
+	/// NOTE: Is tagged with `register_only` to keep the functions around for backwards
+	/// compatibility with old runtimes, but it should not be used anymore by new runtimes.
+	/// The implementation emulates the old behavior, but isn't doing any batch verification
+	/// anymore.
+	#[version(1, register_only)]
 	fn sr25519_batch_verify(
 		&mut self,
 		sig: &sr25519::Signature,
 		msg: &[u8],
 		pub_key: &sr25519::Public,
 	) -> bool {
-		self.extension::<VerificationExt>()
-			.map(|extension| extension.push_sr25519(sig.clone(), *pub_key, msg.to_vec()))
-			.unwrap_or_else(|| sr25519_verify(sig, msg, pub_key))
+		let res = sr25519_verify(sig, msg, pub_key);
+
+		if let Some(ext) = self.extension::<VerificationExtDeprecated>() {
+			ext.0 &= res;
+		}
+
+		res
 	}
 
 	/// Start verification extension.
+	///
+	/// NOTE: Is tagged with `register_only` to keep the functions around for backwards
+	/// compatibility with old runtimes, but it should not be used anymore by new runtimes.
+	/// The implementation emulates the old behavior, but isn't doing any batch verification
+	/// anymore.
+	#[version(1, register_only)]
 	fn start_batch_verify(&mut self) {
-		let scheduler = self
-			.extension::<TaskExecutorExt>()
-			.expect("No task executor associated with the current context!")
-			.clone();
-
-		self.register_extension(VerificationExt(BatchVerifier::new(scheduler)))
+		self.register_extension(VerificationExtDeprecated(true))
 			.expect("Failed to register required extension: `VerificationExt`");
 	}
 
@@ -813,13 +870,19 @@ pub trait Crypto {
 	/// deferred by `sr25519_verify`/`ed25519_verify`.
 	///
 	/// Will panic if no `VerificationExt` is registered (`start_batch_verify` was not called).
+	///
+	/// NOTE: Is tagged with `register_only` to keep the functions around for backwards
+	/// compatibility with old runtimes, but it should not be used anymore by new runtimes.
+	/// The implementation emulates the old behavior, but isn't doing any batch verification
+	/// anymore.
+	#[version(1, register_only)]
 	fn finish_batch_verify(&mut self) -> bool {
 		let result = self
-			.extension::<VerificationExt>()
+			.extension::<VerificationExtDeprecated>()
 			.expect("`finish_batch_verify` should only be called after `start_batch_verify`")
-			.verify_and_clear();
+			.0;
 
-		self.deregister_extension::<VerificationExt>()
+		self.deregister_extension::<VerificationExtDeprecated>()
 			.expect("No verification extension in current context!");
 
 		result
@@ -827,10 +890,9 @@ pub trait Crypto {
 
 	/// Returns all `sr25519` public keys for the given key id from the keystore.
 	fn sr25519_public_keys(&mut self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		let keystore = &***self
-			.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::sr25519_public_keys(keystore, id)
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.sr25519_public_keys(id)
 	}
 
 	/// Generate an `sr22519` key for the given key type using an optional seed and
@@ -841,10 +903,9 @@ pub trait Crypto {
 	/// Returns the public key.
 	fn sr25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> sr25519::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
-		let keystore = &***self
-			.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::sr25519_generate_new(keystore, id, seed)
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.sr25519_generate_new(id, seed)
 			.expect("`sr25519_generate` failed")
 	}
 
@@ -858,13 +919,11 @@ pub trait Crypto {
 		pub_key: &sr25519::Public,
 		msg: &[u8],
 	) -> Option<sr25519::Signature> {
-		let keystore = &***self
-			.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.sr25519_sign(id, pub_key, msg)
 			.ok()
 			.flatten()
-			.and_then(|sig| sr25519::Signature::from_slice(&sig))
 	}
 
 	/// Verify an `sr25519` signature.
@@ -877,10 +936,9 @@ pub trait Crypto {
 
 	/// Returns all `ecdsa` public keys for the given key id from the keystore.
 	fn ecdsa_public_keys(&mut self, id: KeyTypeId) -> Vec<ecdsa::Public> {
-		let keystore = &***self
-			.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::ecdsa_public_keys(keystore, id)
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.ecdsa_public_keys(id)
 	}
 
 	/// Generate an `ecdsa` key for the given key type using an optional `seed` and
@@ -891,10 +949,10 @@ pub trait Crypto {
 	/// Returns the public key.
 	fn ecdsa_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ecdsa::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
-		let keystore = &***self
-			.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::ecdsa_generate_new(keystore, id, seed).expect("`ecdsa_generate` failed")
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.ecdsa_generate_new(id, seed)
+			.expect("`ecdsa_generate` failed")
 	}
 
 	/// Sign the given `msg` with the `ecdsa` key that corresponds to the given public key and
@@ -907,13 +965,11 @@ pub trait Crypto {
 		pub_key: &ecdsa::Public,
 		msg: &[u8],
 	) -> Option<ecdsa::Signature> {
-		let keystore = &***self
-			.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.ecdsa_sign(id, pub_key, msg)
 			.ok()
 			.flatten()
-			.and_then(|sig| ecdsa::Signature::from_slice(&sig))
 	}
 
 	/// Sign the given a pre-hashed `msg` with the `ecdsa` key that corresponds to the given public
@@ -926,10 +982,11 @@ pub trait Crypto {
 		pub_key: &ecdsa::Public,
 		msg: &[u8; 32],
 	) -> Option<ecdsa::Signature> {
-		let keystore = &***self
-			.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!");
-		SyncCryptoStore::ecdsa_sign_prehashed(keystore, id, pub_key, msg).ok().flatten()
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.ecdsa_sign_prehashed(id, pub_key, msg)
+			.ok()
+			.flatten()
 	}
 
 	/// Verify `ecdsa` signature.
@@ -968,15 +1025,25 @@ pub trait Crypto {
 	/// needs to be called.
 	///
 	/// Returns `true` when the verification is either successful or batched.
+	///
+	/// NOTE: Is tagged with `register_only` to keep the functions around for backwards
+	/// compatibility with old runtimes, but it should not be used anymore by new runtimes.
+	/// The implementation emulates the old behavior, but isn't doing any batch verification
+	/// anymore.
+	#[version(1, register_only)]
 	fn ecdsa_batch_verify(
 		&mut self,
 		sig: &ecdsa::Signature,
 		msg: &[u8],
 		pub_key: &ecdsa::Public,
 	) -> bool {
-		self.extension::<VerificationExt>()
-			.map(|extension| extension.push_ecdsa(sig.clone(), *pub_key, msg.to_vec()))
-			.unwrap_or_else(|| ecdsa_verify(sig, msg, pub_key))
+		let res = ecdsa_verify(sig, msg, pub_key);
+
+		if let Some(ext) = self.extension::<VerificationExtDeprecated>() {
+			ext.0 &= res;
+		}
+
+		res
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.
@@ -1149,8 +1216,10 @@ pub trait OffchainIndex {
 
 #[cfg(feature = "std")]
 sp_externalities::decl_extension! {
-	/// Batch verification extension to register/retrieve from the externalities.
-	pub struct VerificationExt(BatchVerifier);
+	/// Deprecated verification context.
+	///
+	/// Stores the combined result of all verifications that are done in the same context.
+	struct VerificationExtDeprecated(bool);
 }
 
 /// Interface that provides functions to access the offchain functionality.
@@ -1339,7 +1408,7 @@ pub trait Offchain {
 	/// Read all response headers.
 	///
 	/// Returns a vector of pairs `(HeaderKey, HeaderValue)`.
-	/// NOTE response headers have to be read before response body.
+	/// NOTE: response headers have to be read before response body.
 	fn http_response_headers(&mut self, request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.extension::<OffchainWorkerExt>()
 			.expect("http_response_headers can be called only in the offchain worker context")
@@ -1352,7 +1421,7 @@ pub trait Offchain {
 	/// is reached or server closed the connection.
 	/// If `0` is returned it means that the response has been fully consumed
 	/// and the `request_id` is now invalid.
-	/// NOTE this implies that response headers must be read before draining the body.
+	/// NOTE: this implies that response headers must be read before draining the body.
 	/// Passing `None` as a deadline blocks forever.
 	fn http_response_read_body(
 		&mut self,
@@ -1564,99 +1633,6 @@ mod tracing_setup {
 
 pub use tracing_setup::init_tracing;
 
-/// Wasm-only interface that provides functions for interacting with the sandbox.
-#[runtime_interface(wasm_only)]
-pub trait Sandbox {
-	/// Instantiate a new sandbox instance with the given `wasm_code`.
-	fn instantiate(
-		&mut self,
-		dispatch_thunk: u32,
-		wasm_code: &[u8],
-		env_def: &[u8],
-		state_ptr: Pointer<u8>,
-	) -> u32 {
-		self.sandbox()
-			.instance_new(dispatch_thunk, wasm_code, env_def, state_ptr.into())
-			.expect("Failed to instantiate a new sandbox")
-	}
-
-	/// Invoke `function` in the sandbox with `sandbox_idx`.
-	fn invoke(
-		&mut self,
-		instance_idx: u32,
-		function: &str,
-		args: &[u8],
-		return_val_ptr: Pointer<u8>,
-		return_val_len: u32,
-		state_ptr: Pointer<u8>,
-	) -> u32 {
-		self.sandbox()
-			.invoke(instance_idx, function, args, return_val_ptr, return_val_len, state_ptr.into())
-			.expect("Failed to invoke function with sandbox")
-	}
-
-	/// Create a new memory instance with the given `initial` and `maximum` size.
-	fn memory_new(&mut self, initial: u32, maximum: u32) -> u32 {
-		self.sandbox()
-			.memory_new(initial, maximum)
-			.expect("Failed to create new memory with sandbox")
-	}
-
-	/// Get the memory starting at `offset` from the instance with `memory_idx` into the buffer.
-	fn memory_get(
-		&mut self,
-		memory_idx: u32,
-		offset: u32,
-		buf_ptr: Pointer<u8>,
-		buf_len: u32,
-	) -> u32 {
-		self.sandbox()
-			.memory_get(memory_idx, offset, buf_ptr, buf_len)
-			.expect("Failed to get memory with sandbox")
-	}
-
-	/// Set the memory in the given `memory_idx` to the given value at `offset`.
-	fn memory_set(
-		&mut self,
-		memory_idx: u32,
-		offset: u32,
-		val_ptr: Pointer<u8>,
-		val_len: u32,
-	) -> u32 {
-		self.sandbox()
-			.memory_set(memory_idx, offset, val_ptr, val_len)
-			.expect("Failed to set memory with sandbox")
-	}
-
-	/// Teardown the memory instance with the given `memory_idx`.
-	fn memory_teardown(&mut self, memory_idx: u32) {
-		self.sandbox()
-			.memory_teardown(memory_idx)
-			.expect("Failed to teardown memory with sandbox")
-	}
-
-	/// Teardown the sandbox instance with the given `instance_idx`.
-	fn instance_teardown(&mut self, instance_idx: u32) {
-		self.sandbox()
-			.instance_teardown(instance_idx)
-			.expect("Failed to teardown sandbox instance")
-	}
-
-	/// Get the value from a global with the given `name`. The sandbox is determined by the given
-	/// `instance_idx`.
-	///
-	/// Returns `Some(_)` when the requested global variable could be found.
-	fn get_global_val(
-		&mut self,
-		instance_idx: u32,
-		name: &str,
-	) -> Option<sp_wasm_interface::Value> {
-		self.sandbox()
-			.get_global_val(instance_idx, name)
-			.expect("Failed to get global from sandbox")
-	}
-}
-
 /// Allocator used by Substrate when executing the Wasm runtime.
 #[cfg(all(target_arch = "wasm32", not(feature = "std")))]
 struct WasmAllocator;
@@ -1699,7 +1675,7 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 /// A default OOM handler for WASM environment.
-#[cfg(all(not(feature = "disable_oom"), not(feature = "std")))]
+#[cfg(all(not(feature = "disable_oom"), enable_alloc_error_handler))]
 #[alloc_error_handler]
 pub fn oom(_: core::alloc::Layout) -> ! {
 	#[cfg(feature = "improved_panic_error_reporting")]
@@ -1732,7 +1708,6 @@ pub type SubstrateHostFunctions = (
 	allocator::HostFunctions,
 	panic_handler::HostFunctions,
 	logging::HostFunctions,
-	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
 	offchain_index::HostFunctions,
 	transaction_index::HostFunctions,
@@ -1741,12 +1716,8 @@ pub type SubstrateHostFunctions = (
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::{
-		crypto::UncheckedInto, map, storage::Storage, testing::TaskExecutor,
-		traits::TaskExecutorExt,
-	};
+	use sp_core::{crypto::UncheckedInto, map, storage::Storage};
 	use sp_state_machine::BasicExternalities;
-	use std::any::TypeId;
 
 	#[test]
 	fn storage_works() {
@@ -1838,54 +1809,6 @@ mod tests {
 		});
 	}
 
-	#[test]
-	fn batch_verify_start_finish_works() {
-		let mut ext = BasicExternalities::default();
-		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
-
-		ext.execute_with(|| {
-			crypto::start_batch_verify();
-		});
-
-		assert!(ext.extensions().get_mut(TypeId::of::<VerificationExt>()).is_some());
-
-		ext.execute_with(|| {
-			assert!(crypto::finish_batch_verify());
-		});
-
-		assert!(ext.extensions().get_mut(TypeId::of::<VerificationExt>()).is_none());
-	}
-
-	#[test]
-	fn long_sr25519_batching() {
-		let mut ext = BasicExternalities::default();
-		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
-		ext.execute_with(|| {
-			let pair = sr25519::Pair::generate_with_phrase(None).0;
-			let pair_unused = sr25519::Pair::generate_with_phrase(None).0;
-			crypto::start_batch_verify();
-			for it in 0..70 {
-				let msg = format!("Schnorrkel {}!", it);
-				let signature = pair.sign(msg.as_bytes());
-				crypto::sr25519_batch_verify(&signature, msg.as_bytes(), &pair.public());
-			}
-
-			// push invalid
-			let msg = b"asdf!";
-			let signature = pair.sign(msg);
-			crypto::sr25519_batch_verify(&signature, msg, &pair_unused.public());
-			assert!(!crypto::finish_batch_verify());
-
-			crypto::start_batch_verify();
-			for it in 0..70 {
-				let msg = format!("Schnorrkel {}!", it);
-				let signature = pair.sign(msg.as_bytes());
-				crypto::sr25519_batch_verify(&signature, msg.as_bytes(), &pair.public());
-			}
-			assert!(crypto::finish_batch_verify());
-		});
-	}
-
 	fn zero_ed_pub() -> ed25519::Public {
 		[0u8; 32].unchecked_into()
 	}
@@ -1894,87 +1817,37 @@ mod tests {
 		ed25519::Signature::from_raw([0u8; 64])
 	}
 
-	fn zero_sr_pub() -> sr25519::Public {
-		[0u8; 32].unchecked_into()
-	}
+	#[test]
+	fn use_dalek_ext_works() {
+		let mut ext = BasicExternalities::default();
+		ext.register_extension(UseDalekExt::default());
 
-	fn zero_sr_sig() -> sr25519::Signature {
-		sr25519::Signature::from_raw([0u8; 64])
+		// With dalek the zero signature should fail to verify.
+		ext.execute_with(|| {
+			assert!(!crypto::ed25519_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub()));
+		});
+
+		// But with zebra it should work.
+		BasicExternalities::default().execute_with(|| {
+			assert!(crypto::ed25519_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub()));
+		})
 	}
 
 	#[test]
-	fn batching_works() {
+	fn dalek_should_not_panic_on_invalid_signature() {
 		let mut ext = BasicExternalities::default();
-		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
+		ext.register_extension(UseDalekExt::default());
 
 		ext.execute_with(|| {
-			// valid ed25519 signature
-			crypto::start_batch_verify();
-			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
-			assert!(crypto::finish_batch_verify());
+			let mut bytes = [0u8; 64];
+			// Make it invalid
+			bytes[63] = 0b1110_0000;
 
-			// 2 valid ed25519 signatures
-			crypto::start_batch_verify();
-
-			let pair = ed25519::Pair::generate_with_phrase(None).0;
-			let msg = b"Important message";
-			let signature = pair.sign(msg);
-			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
-
-			let pair = ed25519::Pair::generate_with_phrase(None).0;
-			let msg = b"Even more important message";
-			let signature = pair.sign(msg);
-			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
-
-			assert!(crypto::finish_batch_verify());
-
-			// 1 valid, 1 invalid ed25519 signature
-			crypto::start_batch_verify();
-
-			let pair1 = ed25519::Pair::generate_with_phrase(None).0;
-			let pair2 = ed25519::Pair::generate_with_phrase(None).0;
-			let msg = b"Important message";
-			let signature = pair1.sign(msg);
-
-			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
-			crypto::ed25519_batch_verify(&signature, msg, &pair1.public());
-			crypto::ed25519_batch_verify(&signature, msg, &pair2.public());
-
-			assert!(!crypto::finish_batch_verify());
-
-			// 1 valid ed25519, 2 valid sr25519
-			crypto::start_batch_verify();
-
-			let pair = ed25519::Pair::generate_with_phrase(None).0;
-			let msg = b"Ed25519 batching";
-			let signature = pair.sign(msg);
-			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
-
-			let pair = sr25519::Pair::generate_with_phrase(None).0;
-			let msg = b"Schnorrkel rules";
-			let signature = pair.sign(msg);
-			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
-
-			let pair = sr25519::Pair::generate_with_phrase(None).0;
-			let msg = b"Schnorrkel batches!";
-			let signature = pair.sign(msg);
-			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
-
-			assert!(crypto::finish_batch_verify());
-
-			// 1 valid sr25519, 1 invalid sr25519
-			crypto::start_batch_verify();
-
-			let pair1 = sr25519::Pair::generate_with_phrase(None).0;
-			let pair2 = sr25519::Pair::generate_with_phrase(None).0;
-			let msg = b"Schnorrkcel!";
-			let signature = pair1.sign(msg);
-
-			crypto::sr25519_batch_verify(&signature, msg, &pair1.public());
-			crypto::sr25519_batch_verify(&signature, msg, &pair2.public());
-			crypto::sr25519_batch_verify(&zero_sr_sig(), &Vec::new(), &zero_sr_pub());
-
-			assert!(!crypto::finish_batch_verify());
+			assert!(!crypto::ed25519_verify(
+				&ed25519::Signature::from_raw(bytes),
+				&Vec::new(),
+				&zero_ed_pub()
+			));
 		});
 	}
 }

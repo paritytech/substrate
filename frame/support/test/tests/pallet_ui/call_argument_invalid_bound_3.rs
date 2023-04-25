@@ -19,7 +19,8 @@ mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(0)]
-		pub fn foo(origin: OriginFor<T>, bar: Bar) -> DispatchResultWithPostInfo {
+		#[pallet::call_index(0)]
+		pub fn foo(origin: OriginFor<T>, _bar: Bar) -> DispatchResultWithPostInfo {
 			Ok(().into())
 		}
 	}

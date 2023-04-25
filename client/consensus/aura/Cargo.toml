@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 async-trait = "0.1.57"
-codec = { package = "parity-scale-codec", version = "3.0.0" }
+codec = { package = "parity-scale-codec", version = "3.2.2" }
 futures = "0.3.21"
 log = "0.4.17"
 thiserror = "1.0"
@@ -46,3 +46,4 @@ sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
+tokio = { version = "1.22.0" }

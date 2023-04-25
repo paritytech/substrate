@@ -8,9 +8,12 @@ error[E0412]: cannot find type `RuntimeCall` in this scope
   --> tests/construct_runtime_ui/both_use_and_excluded_parts.rs:18:64
    |
 18 | pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
-   |                            -                                   ^^^^^^^^^^^ not found in this scope
-   |                            |
-   |                            help: you might be missing a type parameter: `<RuntimeCall>`
+   |                                                                ^^^^^^^^^^^ not found in this scope
+   |
+help: you might be missing a type parameter
+   |
+18 | pub type UncheckedExtrinsic<RuntimeCall> = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+   |                            +++++++++++++
 
 error[E0412]: cannot find type `Runtime` in this scope
   --> tests/construct_runtime_ui/both_use_and_excluded_parts.rs:20:25

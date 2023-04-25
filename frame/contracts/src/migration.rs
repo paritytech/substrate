@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -69,7 +69,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 		let version = <Pallet<T>>::on_chain_storage_version();
 
-		if version == 8 {
+		if version == 7 {
 			v8::pre_upgrade::<T>()?;
 		}
 
@@ -394,7 +394,7 @@ mod v9 {
 				initial: old.initial,
 				maximum: old.maximum,
 				code: old.code,
-				determinism: Determinism::Deterministic,
+				determinism: Determinism::Enforced,
 			})
 		});
 	}
@@ -464,7 +464,7 @@ mod post_checks {
 	fn v9<T: Config>() -> Result<(), &'static str> {
 		for value in CodeStorage::<T>::iter_values() {
 			ensure!(
-				value.determinism == Determinism::Deterministic,
+				value.determinism == Determinism::Enforced,
 				"All pre-existing codes need to be deterministic."
 			);
 		}
