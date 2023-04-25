@@ -139,7 +139,7 @@ impl Limits {
 /// Describes the weight for all categories of supported wasm instructions.
 ///
 /// There there is one field for each wasm instruction that describes the weight to
-/// execute one instruction of that name. There are a few execptions:
+/// execute one instruction of that name. There are a few exceptions:
 ///
 /// 1. If there is a i64 and a i32 variant of an instruction we use the weight
 ///    of the former for both.
@@ -409,6 +409,12 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_ecdsa_to_eth_address`.
 	pub ecdsa_to_eth_address: Weight,
 
+	/// Weight of calling `sr25519_verify`.
+	pub sr25519_verify: Weight,
+
+	/// Weight per byte of calling `sr25519_verify`.
+	pub sr25519_verify_per_byte: Weight,
+
 	/// Weight of calling `reentrance_count`.
 	pub reentrance_count: Weight,
 
@@ -616,6 +622,8 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_128: cost!(seal_hash_blake2_128),
 			hash_blake2_128_per_byte: cost!(seal_hash_blake2_128_per_byte),
 			ecdsa_recover: cost!(seal_ecdsa_recover),
+			sr25519_verify: cost!(seal_sr25519_verify),
+			sr25519_verify_per_byte: cost!(seal_sr25519_verify_per_byte),
 			ecdsa_to_eth_address: cost!(seal_ecdsa_to_eth_address),
 			reentrance_count: cost!(seal_reentrance_count),
 			account_reentrance_count: cost!(seal_account_reentrance_count),
