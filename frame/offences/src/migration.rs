@@ -46,7 +46,7 @@ mod v0 {
 pub mod v1 {
 	use frame_support::traits::StorageVersion;
 
-use super::*;
+	use super::*;
 
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
