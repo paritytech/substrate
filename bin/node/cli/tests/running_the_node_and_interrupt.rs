@@ -48,7 +48,7 @@ async fn running_the_node_works_and_can_be_interrupted() {
 
 			let ws_url = common::extract_info_from_output(stderr).0.ws_url;
 
-			common::wait_n_finalized_blocks(3, &ws_url).await;
+			common::wait_n_finalized_blocks(3, &ws_url).await.unwrap();
 
 			cmd.assert_still_running();
 
@@ -71,19 +71,13 @@ async fn running_the_node_works_and_can_be_interrupted() {
 #[tokio::test]
 async fn running_two_nodes_with_the_same_ws_port_should_work() {
 	common::run_with_timeout(Duration::from_secs(60 * 10), async move {
-		let mut first_node = common::KillChildOnDrop(common::start_node());
-		let mut second_node = common::KillChildOnDrop(common::start_node());
+		let (mut first_node, ws_url) = common::start_node();
+		let (mut second_node, _) = common::start_node();
 
-		let stderr = first_node.stderr.take().unwrap();
-		let ws_url = common::extract_info_from_output(stderr).0.ws_url;
+		common::wait_n_finalized_blocks(3, &ws_url).await.unwrap();
 
-		common::wait_n_finalized_blocks(3, &ws_url).await;
-
-		first_node.assert_still_running();
-		second_node.assert_still_running();
-
-		first_node.stop();
-		second_node.stop();
+		assert!(first_node.try_wait().unwrap().is_none());
+		assert!(second_node.try_wait().unwrap().is_none());
 	})
 	.await;
 }

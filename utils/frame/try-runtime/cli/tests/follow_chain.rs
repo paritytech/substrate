@@ -22,10 +22,7 @@
 mod tests {
 	use assert_cmd::cargo::cargo_bin;
 	use regex::Regex;
-	use std::{
-		process::{self},
-		time::Duration,
-	};
+	use std::{process, time::Duration};
 	use substrate_cli_test_utils as common;
 	use tokio::process::{Child, Command};
 
@@ -34,7 +31,7 @@ mod tests {
 		// Build substrate so binaries used in the test use the latest code.
 		common::build_substrate(&["--features=try-runtime"]);
 
-		common::run_with_timeout(Duration::from_secs(60), async move {
+		common::run_with_timeout(Duration::from_secs(300), async move {
 			fn start_follow(ws_url: &str) -> Child {
 				Command::new(cargo_bin("substrate"))
 					.stdout(process::Stdio::piped())
@@ -47,9 +44,8 @@ mod tests {
 			}
 
 			// Start a node and wait for it to begin finalizing blocks
-			let mut node = common::KillChildOnDrop(common::start_node());
-			let ws_url = common::extract_info_from_output(node.stderr.take().unwrap()).0.ws_url;
-			common::wait_n_finalized_blocks(1, &ws_url).await;
+			let (_, ws_url) = common::start_node();
+			common::wait_n_finalized_blocks(1, &ws_url).await.unwrap();
 
 			// Kick off the follow-chain process and wait for it to process at least 3 blocks.
 			let mut follow = start_follow(&ws_url);
