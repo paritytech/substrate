@@ -141,7 +141,7 @@ pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, TP, SC, 
 	pub create_inherent_data_providers: CIDP,
 }
 
-pub struct DelayedFinalizeParams<B: BlockT, C: ProvideRuntimeApi<B>, S: SpawnNamed> {
+pub struct DelayedFinalizeParams<C, S> {
 	/// Block import instance for well. importing blocks.
 	pub client: Arc<C>,
 
@@ -149,9 +149,6 @@ pub struct DelayedFinalizeParams<B: BlockT, C: ProvideRuntimeApi<B>, S: SpawnNam
 
 	/// The delay in seconds before a block is finalized.
 	pub delay_sec: u64,
-
-	/// phantom type to pin the Block type
-	pub _phantom: PhantomData<B>,
 }
 
 /// Creates the background authorship task for the manual seal engine.
@@ -321,13 +318,15 @@ pub async fn run_instant_seal_and_finalize<B, BI, CB, E, C, TP, SC, CIDP, P>(
 	.await
 }
 
+/// Runs the background finalization task for the manual/instant seal engines.
+/// delayed-finalize finalizes blocks configured seconds after blocks are imported.
+///
+/// This task is intended to be ran along with a block sealing task, but expects blocks are not
+/// finalized when they're sealed. Specifically, `finalize` in `SealNewBlock` command should be set
+/// to `false` when it is sent to `commands_stream`. That is, `run_delayed_finalize` is incompatible
+/// with `run_instant_seal_and_finalize` due to re-finalize attemption.
 pub async fn run_delayed_finalize<B, CB, C, S>(
-	DelayedFinalizeParams {
-		client,
-		spawn_handle,
-		delay_sec,
-		_phantom: PhantomData,
-	}: DelayedFinalizeParams<B, C, S>,
+	DelayedFinalizeParams { client, spawn_handle, delay_sec }: DelayedFinalizeParams<C, S>,
 ) where
 	B: BlockT + 'static,
 	CB: ClientBackend<B> + 'static,
@@ -540,7 +539,6 @@ mod tests {
 			client: client.clone(),
 			delay_sec,
 			spawn_handle: spawner,
-			_phantom: PhantomData::default(),
 		});
 		std::thread::spawn(|| {
 			let rt = tokio::runtime::Runtime::new().unwrap();
