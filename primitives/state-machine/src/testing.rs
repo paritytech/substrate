@@ -132,6 +132,14 @@ where
 		self.offchain_db.clone()
 	}
 
+	/// Batch insert key/values into backend
+	pub fn batch_insert(&mut self, kvs: Vec<(StorageKey, StorageValue)>) {
+		self.backend.insert(
+			vec![(None, kvs.iter().map(|(k, v)| (k.clone(), Some(v.clone()))).collect())],
+			self.state_version,
+		);
+	}
+
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
 		self.backend.insert(vec![(None, vec![(k, Some(v))])], self.state_version);
