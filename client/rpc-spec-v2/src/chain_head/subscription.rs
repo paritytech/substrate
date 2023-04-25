@@ -277,6 +277,9 @@ impl<Block: BlockT> SubscriptionState<Block> {
 	}
 }
 
+/// Keeps a specific block pinned while the handle is alive.
+/// This object ensures that the block is not unpinned while
+/// executing an RPC method call.
 pub struct BlockGuard<Block: BlockT, BE: Backend<Block>> {
 	hash: Block::Hash,
 	runtime_updates: bool,
