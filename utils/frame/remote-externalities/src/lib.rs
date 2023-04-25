@@ -331,8 +331,7 @@ where
 
 	/// Get the number of threads to use.
 	fn threads() -> NonZeroUsize {
-		thread::available_parallelism()
-			.unwrap_or(NonZeroUsize::new(1usize).expect("4 is non-zero; qed"))
+		NonZeroUsize::new(1usize).expect("1 is non-zero; qed")
 	}
 
 	async fn rpc_get_storage(
