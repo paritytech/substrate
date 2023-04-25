@@ -1008,10 +1008,7 @@ where
 		info!(target: LOG_TARGET, "injecting a total of {} top keys", top.len());
 		let top = top
 			.into_iter()
-			.filter(|(k, _)| {
-				// skip writing the child root data.
-				!is_default_child_storage_key(k.as_ref())
-			})
+			.filter(|(k, _)| !is_default_child_storage_key(k.as_ref()))
 			.map(|(k, v)| (k.0, v.0))
 			.collect::<Vec<_>>();
 		inner_ext.batch_insert(top);
