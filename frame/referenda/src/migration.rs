@@ -82,10 +82,6 @@ pub mod v0 {
 	#[storage_alias]
 	pub type ReferendumInfoFor<T: Config<I>, I: 'static> =
 		StorageMap<Pallet<T, I>, Blake2_128Concat, ReferendumIndex, ReferendumInfoOf<T, I>>;
-
-	#[storage_alias]
-	pub type ReferendumCount<T: Config<I>, I: 'static> =
-		StorageValue<Pallet<T, I>, ReferendumIndex, ValueQuery>;
 }
 
 pub mod v1 {

@@ -1295,20 +1295,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// - Data regarding ongoing phase:
 	///
-	/// * The submission deposit cannot be less than `T::SubmissionDeposit`.
 	/// * There must exist track info for the track of the referendum.
-	/// * The decision deposit if provided cannot be less than the decision deposit of the track.
 	/// * The deciding stage has to begin before confirmation period.
-	///
-	/// - Data in `ReferendumInfo::Approved`, `ReferendumInfo::Rejected`,
-	///   `ReferendumInfo::Cancelled` and `ReferendumInfo::TimedOut`:
-	///
-	/// * The submission deposit cannot be less than `T::SubmissionDeposit`.
 	///
 	/// Looking at tracks:
 	/// * The `TrackQueue` should be empty if `DecidingCount` is less than
 	///   `TrackInfo::max_deciding`.
-	/// * The referendum indices stored in `TrackQueue` must exist as keys in the `ReferendumInfoFor`
+	/// * The referendum indices stored in `TrackQueue` must exist as keys in the
+	///   `ReferendumInfoFor`
 	///  storage map.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn do_try_state() -> DispatchResult {
@@ -1322,23 +1316,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)
 		);
 
-		// The order of indices when running `queueing_works` is: 0, 4, 2, 1, 3 🤔 
-		/*
-		ensure!(
-			ReferendumInfoFor::<T, I>::iter_keys()
-				.collect::<Vec<_>>()
-				.windows(2)
-				.all(|w| w[0] < w[1]),
-			DispatchError::Other(
-				"Referenda indices must be sorted in `ReferendumInfoFor` storage map"
-			)
-		);
-		*/
-
 		MetadataOf::<T, I>::iter_keys().try_for_each(|referendum_index| -> DispatchResult {
 			ensure!(
-				ReferendumInfoFor::<T, I>::contains_key(referendum_index), 
-				DispatchError::Other("Referendum indices in `MetadataOf` must also be stored in `ReferendumInfoOf`")
+				ReferendumInfoFor::<T, I>::contains_key(referendum_index),
+				DispatchError::Other(
+					"Referendum indices in `MetadataOf` must also be stored in `ReferendumInfoOf`"
+				)
 			);
 			Ok(())
 		})?;
@@ -1347,22 +1330,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			match referendum {
 				ReferendumInfo::Ongoing(status) => {
 					ensure!(
-						status.submission_deposit.amount >= T::SubmissionDeposit::get(),
-						DispatchError::Other("Submission deposit too small.")
-					);
-
-					ensure!(
 						Self::track(status.track).is_some(),
 						DispatchError::Other("No track info for the track of the referendum.")
 					);
-
-					if let Some(decision_deposit) = status.decision_deposit {
-						ensure!(
-							decision_deposit.amount >=
-								Self::track(status.track).unwrap().decision_deposit,
-							DispatchError::Other("Decision deposit too small.")
-						)
-					}
 
 					if let Some(deciding) = status.deciding {
 						ensure!(
@@ -1372,17 +1342,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								"Deciding status cannot begin before confirming stage."
 							)
 						)
-					}
-				},
-				ReferendumInfo::Approved(_, maybe_submission_deposit, _) |
-				ReferendumInfo::Rejected(_, maybe_submission_deposit, _) |
-				ReferendumInfo::Cancelled(_, maybe_submission_deposit, _) |
-				ReferendumInfo::TimedOut(_, maybe_submission_deposit, _) => {
-					if let Some(submission_deposit) = maybe_submission_deposit {
-						ensure!(
-							submission_deposit.amount >= T::SubmissionDeposit::get(),
-							DispatchError::Other("Submission deposit too small.")
-						);
 					}
 				},
 				_ => {},
