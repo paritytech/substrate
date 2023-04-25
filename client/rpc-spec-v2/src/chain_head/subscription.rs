@@ -62,6 +62,7 @@ impl PartialEq for SubscriptionManagementError {
 			// Not needed for testing.
 			(Self::Blockchain(_), Self::Blockchain(_)) |
 			(Self::BlockHashAbsent, Self::BlockHashAbsent) |
+			(Self::BlockHeaderAbsent, Self::BlockHeaderAbsent) |
 			(Self::SubscriptionAbsent, Self::SubscriptionAbsent) => true,
 			(Self::Custom(lhs), Self::Custom(rhs)) => lhs == rhs,
 			_ => false,
