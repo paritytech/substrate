@@ -35,47 +35,123 @@ pub use nmap::StorageNMap;
 pub use value::StorageValue;
 
 #[cfg(test)]
-#[allow(dead_code)]
 mod tests {
-	use crate::{
-		assert_noop, assert_ok,
-		storage::{generator::StorageValue, unhashed, IterableStorageMap},
-	};
 	use codec::Encode;
 	use sp_io::TestExternalities;
+	use sp_runtime::{generic, traits::BlakeTwo256, BuildStorage};
 
-	struct Runtime;
+	use crate::{
+		assert_noop, assert_ok,
+		storage::{generator::StorageValue, unhashed},
+	};
 
-	pub trait Config: 'static {
-		type RuntimeOrigin;
-		type BlockNumber;
-		type PalletInfo: crate::traits::PalletInfo;
-		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
+	#[crate::pallet]
+	pub mod frame_system {
+		#[allow(unused)]
+		use super::{frame_system, frame_system::pallet_prelude::*};
+		pub use crate::dispatch::RawOrigin;
+		use crate::pallet_prelude::*;
+
+		#[pallet::pallet]
+		pub struct Pallet<T>(PhantomData<T>);
+
+		#[pallet::config]
+		#[pallet::disable_frame_system_supertrait_check]
+		pub trait Config: 'static {
+			type BlockNumber;
+			type AccountId;
+			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
+			type RuntimeOrigin;
+			type RuntimeCall;
+			type PalletInfo: crate::traits::PalletInfo;
+			type DbWeight: Get<crate::weights::RuntimeDbWeight>;
+		}
+
+		#[pallet::origin]
+		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
+
+		#[pallet::error]
+		pub enum Error<T> {
+			/// Required by construct_runtime
+			CallFiltered,
+		}
+
+		#[pallet::call]
+		impl<T: Config> Pallet<T> {}
+
+		#[pallet::storage]
+		pub type Value<T> = StorageValue<_, (u64, u64), ValueQuery>;
+
+		#[pallet::storage]
+		pub type Map<T> = StorageMap<_, Blake2_128Concat, u16, u64, ValueQuery>;
+
+		#[pallet::storage]
+		pub type NumberMap<T> = StorageMap<_, Identity, u32, u64, ValueQuery>;
+
+		#[pallet::storage]
+		pub type DoubleMap<T> =
+			StorageDoubleMap<_, Blake2_128Concat, u16, Twox64Concat, u32, u64, ValueQuery>;
+
+		#[pallet::storage]
+		pub type NMap<T> = StorageNMap<
+			_,
+			(storage::Key<Blake2_128Concat, u16>, storage::Key<Twox64Concat, u32>),
+			u64,
+			ValueQuery,
+		>;
+
+		pub mod pallet_prelude {
+			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
+		}
 	}
 
-	impl Config for Runtime {
-		type RuntimeOrigin = u32;
-		type BlockNumber = u32;
-		type PalletInfo = crate::tests::PanicPalletInfo;
+	type BlockNumber = u32;
+	type AccountId = u32;
+	type Header = generic::Header<BlockNumber, BlakeTwo256>;
+	type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
+	type Block = generic::Block<Header, UncheckedExtrinsic>;
+
+	crate::construct_runtime!(
+		pub enum Runtime
+		where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: self::frame_system,
+		}
+	);
+
+	impl self::frame_system::Config for Runtime {
+		type BlockNumber = BlockNumber;
+		type AccountId = AccountId;
+		type BaseCallFilter = crate::traits::Everything;
+		type RuntimeOrigin = RuntimeOrigin;
+		type RuntimeCall = RuntimeCall;
+		type PalletInfo = PalletInfo;
 		type DbWeight = ();
 	}
 
-	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {}
+	pub fn key_before_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
+		let last = prefix.iter_mut().last().unwrap();
+		assert_ne!(*last, 0, "mock function not implemented for this prefix");
+		*last -= 1;
+		prefix
 	}
 
-	crate::decl_storage! {
-		trait Store for Module<T: Config> as Runtime {
-			Value get(fn value) config(): (u64, u64);
-			NumberMap: map hasher(identity) u32 => u64;
-			DoubleMap: double_map hasher(identity) u32, hasher(identity) u32 => u64;
-		}
+	pub fn key_after_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
+		let last = prefix.iter_mut().last().unwrap();
+		assert_ne!(*last, 255, "mock function not implemented for this prefix");
+		*last += 1;
+		prefix
 	}
 
 	#[test]
 	fn value_translate_works() {
 		let t = GenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
+			type Value = self::frame_system::Value<Runtime>;
+
 			// put the old value `1111u32` in the storage.
 			let key = Value::storage_value_final_key();
 			unhashed::put_raw(&key, &1111u32.encode());
@@ -96,7 +172,9 @@ mod tests {
 	fn map_translate_works() {
 		let t = GenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
-			// start with a map of u32 -> u32.
+			type NumberMap = self::frame_system::NumberMap<Runtime>;
+
+			// start with a map of u32 -> u64.
 			for i in 0u32..100u32 {
 				unhashed::put(&NumberMap::hashed_key_for(&i), &(i as u64));
 			}
@@ -125,6 +203,10 @@ mod tests {
 	fn try_mutate_works() {
 		let t = GenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
+			type Value = self::frame_system::Value<Runtime>;
+			type NumberMap = self::frame_system::NumberMap<Runtime>;
+			type DoubleMap = self::frame_system::DoubleMap<Runtime>;
+
 			assert_eq!(Value::get(), (0, 0));
 			assert_eq!(NumberMap::get(0), 0);
 			assert_eq!(DoubleMap::get(0, 0), 0);

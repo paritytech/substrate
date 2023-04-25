@@ -19,7 +19,7 @@
 
 use crate::{
 	storage::{ContractInfo, DepositAccount},
-	BalanceOf, Config, Error, Inspect, Pallet, System,
+	BalanceOf, Config, Error, Inspect, Pallet, System, LOG_TARGET,
 };
 use codec::Encode;
 use frame_support::{
@@ -293,8 +293,8 @@ where
 			.total_deposit
 			.saturating_add(&absorbed.total_deposit)
 			.saturating_add(&own_deposit);
+		self.charges.extend_from_slice(&absorbed.charges);
 		if !own_deposit.is_zero() {
-			self.charges.extend_from_slice(&absorbed.charges);
 			self.charges.push(Charge {
 				deposit_account,
 				amount: own_deposit,
@@ -502,7 +502,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 				);
 				if let Err(err) = result {
 					log::error!(
-						target: "runtime::contracts",
+						target: LOG_TARGET,
 						"Failed to transfer storage deposit {:?} from origin {:?} to deposit account {:?}: {:?}",
 						amount, origin, deposit_account, err,
 					);
@@ -531,7 +531,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 				);
 				if matches!(result, Err(_)) {
 					log::error!(
-						target: "runtime::contracts",
+						target: LOG_TARGET,
 						"Failed to refund storage deposit {:?} from deposit account {:?} to origin {:?}: {:?}",
 						amount, deposit_account, origin, result,
 					);
