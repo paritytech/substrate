@@ -10668,6 +10668,7 @@ name = "sp-core"
 version = "7.0.0"
 dependencies = [
  "array-bytes",
+ "arrayvec 0.7.2",
  "bandersnatch_vrfs",
  "bitflags",
  "blake2",
