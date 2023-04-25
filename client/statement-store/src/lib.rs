@@ -16,30 +16,34 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// Constraint management.
-//
-// Each time a new statement is inserted into the store, it is first validated with the runtime
-// Validation function computes `global_priority`, 'max_count' and `max_size` for a statement.
-// The following constraints are then checked:
-// * For a given account id, there may be at most `max_count` statements with `max_size` total data
-//   size. To satisfy this, statements for this account ID are removed from the store starting with
-//   the lowest priority until a constraint is satisfied.
-// * There may not be more than `MAX_TOTAL_STATEMENTS` total statements with `MAX_TOTAL_SIZE` size.
-//   To satisfy this, statements are removed from the store starting with the lowest
-//   `global_priority` until a constraint is satisfied.
-//
-// When a new statement is inserted that would not satisfy constraints in the first place, no
-// statements are deleted and `Ignored` result is returned.
-// The order in which statements with the same priority are deleted is unspecified.
-//
-// Statement expiration.
-//
-// Each time a statement is removed from the store (Either evicted by higher priority statement or
-// explicitly with the `remove` function) the statement is marked as expired. Expired statements
-// can't be added to the store for `Options::purge_after_sec` seconds. This is to prevent old
-// statements from being propagated on the network.
-
 //! Disk-backed statement store.
+//!
+//! This module contains an implementation of `sp_statement_store::StatementStore` which is backed
+//! by a database.
+//!
+//! Constraint management.
+//!
+//! Each time a new statement is inserted into the store, it is first validated with the runtime
+//! Validation function computes `global_priority`, 'max_count' and `max_size` for a statement.
+//! The following constraints are then checked:
+//! * For a given account id, there may be at most `max_count` statements with `max_size` total data
+//!   size. To satisfy this, statements for this account ID are removed from the store starting with
+//!   the lowest priority until a constraint is satisfied.
+//! * There may not be more than `MAX_TOTAL_STATEMENTS` total statements with `MAX_TOTAL_SIZE` size.
+//!   To satisfy this, statements are removed from the store starting with the lowest
+//!   `global_priority` until a constraint is satisfied.
+//!
+//! When a new statement is inserted that would not satisfy constraints in the first place, no
+//! statements are deleted and `Ignored` result is returned.
+//! The order in which statements with the same priority are deleted is unspecified.
+//!
+//! Statement expiration.
+//!
+//! Each time a statement is removed from the store (Either evicted by higher priority statement or
+//! explicitly with the `remove` function) the statement is marked as expired. Expired statements
+//! can't be added to the store for `Options::purge_after_sec` seconds. This is to prevent old
+//! statements from being propagated on the network.
+
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
