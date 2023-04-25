@@ -163,8 +163,8 @@ pub fn send_result<T: std::fmt::Debug>(
 		// Sealing/Finalization with no RPC sender such as instant seal or delayed finalize doesn't
 		// report errors over rpc, simply log them.
 		match result {
-			Ok(r) => log::info!("Instant Seal Consensus success: {:?}", r),
-			Err(e) => log::error!("Instant Seal Consensus encountered an error: {}", e),
+			Ok(r) => log::info!("Consensus with no RPC sender success: {:?}", r),
+			Err(e) => log::error!("Consensus with no RPC sender encountered an error: {}", e),
 		}
 	}
 }
