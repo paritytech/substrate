@@ -3531,7 +3531,7 @@ mod tests {
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod weight_tests {
-	use super::*;
+	use super::{tests::*, *};
 	use sp_core::parameter_types;
 	use sp_runtime::{generic, traits::BlakeTwo256};
 	use sp_weights::RuntimeDbWeight;
