@@ -46,7 +46,7 @@ pub mod v1 {
 			let onchain = Pallet::<T>::on_chain_storage_version();
 			ensure!(onchain < 1, "pallet_offences::MigrateToV1 migration can be deleted");
 
-			log::info!(target: LOG_TARGET,  "Number of reports to refund and delete: {}", ReportsByKindIndex::<T>::iter().count());
+			log::info!(target: LOG_TARGET,  "Number of reports to refund and delete: {}", v0::ReportsByKindIndex::<T>::iter().count());
 
 			Ok(Vec::new())
 		}
@@ -73,7 +73,7 @@ pub mod v1 {
 			let onchain = Pallet::<T>::on_chain_storage_version();
 			ensure!(onchain == 1, "pallet_offences::MigrateToV1 needs to be run");
 			ensure!(
-				ReportsByKindIndex::<T>::iter().count() == 0,
+				v0::ReportsByKindIndex::<T>::iter().count() == 0,
 				"there are some dangling reports that need to be destroyed and refunded"
 			);
 			Ok(())
