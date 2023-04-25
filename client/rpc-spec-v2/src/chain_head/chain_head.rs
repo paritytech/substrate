@@ -203,27 +203,28 @@ where
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
 
-		let fut = async move {
-			let _block_guard = match subscriptions.lock_block(&follow_subscription, hash) {
-				Ok(block) => block,
-				Err(SubscriptionManagementError::SubscriptionAbsent) => {
-					// Invalid invalid subscription ID.
-					let _ = sink.send(&ChainHeadEvent::<String>::Disjoint);
-					return
-				},
-				Err(SubscriptionManagementError::BlockHashAbsent) => {
-					// Block is not part of the subscription.
-					let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
-					return
-				},
-				Err(error) => {
-					let _ = sink.send(&ChainHeadEvent::<String>::Error(ErrorEvent {
-						error: error.to_string(),
-					}));
-					return
-				},
-			};
+		let block_guard = match subscriptions.lock_block(&follow_subscription, hash) {
+			Ok(block) => block,
+			Err(SubscriptionManagementError::SubscriptionAbsent) => {
+				// Invalid invalid subscription ID.
+				let _ = sink.send(&ChainHeadEvent::<String>::Disjoint);
+				return Ok(())
+			},
+			Err(SubscriptionManagementError::BlockHashAbsent) => {
+				// Block is not part of the subscription.
+				let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
+				return Ok(())
+			},
+			Err(error) => {
+				let _ = sink.send(&ChainHeadEvent::<String>::Error(ErrorEvent {
+					error: error.to_string(),
+				}));
+				return Ok(())
+			},
+		};
 
+		let fut = async move {
+			let _block_guard = block_guard;
 			let event = match client.block(hash) {
 				Ok(Some(signed_block)) => {
 					let extrinsics = signed_block.block.extrinsics();
@@ -298,27 +299,28 @@ where
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
 
-		let fut = async move {
-			let _block_guard = match subscriptions.lock_block(&follow_subscription, hash) {
-				Ok(block) => block,
-				Err(SubscriptionManagementError::SubscriptionAbsent) => {
-					// Invalid invalid subscription ID.
-					let _ = sink.send(&ChainHeadEvent::<String>::Disjoint);
-					return
-				},
-				Err(SubscriptionManagementError::BlockHashAbsent) => {
-					// Block is not part of the subscription.
-					let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
-					return
-				},
-				Err(error) => {
-					let _ = sink.send(&ChainHeadEvent::<String>::Error(ErrorEvent {
-						error: error.to_string(),
-					}));
-					return
-				},
-			};
+		let block_guard = match subscriptions.lock_block(&follow_subscription, hash) {
+			Ok(block) => block,
+			Err(SubscriptionManagementError::SubscriptionAbsent) => {
+				// Invalid invalid subscription ID.
+				let _ = sink.send(&ChainHeadEvent::<String>::Disjoint);
+				return Ok(())
+			},
+			Err(SubscriptionManagementError::BlockHashAbsent) => {
+				// Block is not part of the subscription.
+				let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
+				return Ok(())
+			},
+			Err(error) => {
+				let _ = sink.send(&ChainHeadEvent::<String>::Error(ErrorEvent {
+					error: error.to_string(),
+				}));
+				return Ok(())
+			},
+		};
 
+		let fut = async move {
+			let _block_guard = block_guard;
 			// The child key is provided, use the key to query the child trie.
 			if let Some(child_key) = child_key {
 				// The child key must not be prefixed with ":child_storage:" nor
@@ -387,27 +389,27 @@ where
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
 
-		let fut = async move {
-			let block_guard = match subscriptions.lock_block(&follow_subscription, hash) {
-				Ok(block) => block,
-				Err(SubscriptionManagementError::SubscriptionAbsent) => {
-					// Invalid invalid subscription ID.
-					let _ = sink.send(&ChainHeadEvent::<String>::Disjoint);
-					return
-				},
-				Err(SubscriptionManagementError::BlockHashAbsent) => {
-					// Block is not part of the subscription.
-					let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
-					return
-				},
-				Err(error) => {
-					let _ = sink.send(&ChainHeadEvent::<String>::Error(ErrorEvent {
-						error: error.to_string(),
-					}));
-					return
-				},
-			};
+		let block_guard = match subscriptions.lock_block(&follow_subscription, hash) {
+			Ok(block) => block,
+			Err(SubscriptionManagementError::SubscriptionAbsent) => {
+				// Invalid invalid subscription ID.
+				let _ = sink.send(&ChainHeadEvent::<String>::Disjoint);
+				return Ok(())
+			},
+			Err(SubscriptionManagementError::BlockHashAbsent) => {
+				// Block is not part of the subscription.
+				let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
+				return Ok(())
+			},
+			Err(error) => {
+				let _ = sink.send(&ChainHeadEvent::<String>::Error(ErrorEvent {
+					error: error.to_string(),
+				}));
+				return Ok(())
+			},
+		};
 
+		let fut = async move {
 			// Reject subscription if runtime_updates is false.
 			if !block_guard.has_runtime_updates() {
 				let _ = sink.reject(ChainHeadRpcError::InvalidParam(
