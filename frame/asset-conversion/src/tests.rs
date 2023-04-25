@@ -250,15 +250,18 @@ fn can_add_liquidity() {
 		let user = 1;
 		let token_1 = NativeOrAssetId::Native;
 		let token_2 = NativeOrAssetId::Asset(2);
-		let pool_id = (token_1, token_2);
+		let token_3 = NativeOrAssetId::Asset(3);
 
-		create_tokens(user, vec![token_2]);
-		let lp_token = AssetConversion::get_next_pool_asset_id();
+		create_tokens(user, vec![token_2, token_3]);
+		let lp_token1 = AssetConversion::get_next_pool_asset_id();
 		assert_ok!(AssetConversion::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
+		let lp_token2 = AssetConversion::get_next_pool_asset_id();
+		assert_ok!(AssetConversion::create_pool(RuntimeOrigin::signed(user), token_1, token_3));
 
 		let ed = get_ed();
-		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user, 10000 + ed));
+		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user, 10000 * 2 + ed));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 3, user, 1000));
 
 		assert_ok!(AssetConversion::add_liquidity(
 			RuntimeOrigin::signed(user),
@@ -271,22 +274,51 @@ fn can_add_liquidity() {
 			user,
 		));
 
+		let pool_id = (token_1, token_2);
 		assert!(events().contains(&Event::<Test>::LiquidityAdded {
 			who: user,
 			mint_to: user,
 			pool_id,
 			amount1_provided: 10000,
 			amount2_provided: 10,
-			lp_token,
+			lp_token: lp_token1,
 			lp_token_minted: 216,
 		}));
-
 		let pallet_account = AssetConversion::get_pool_account(pool_id);
 		assert_eq!(balance(pallet_account, token_1), 10000);
 		assert_eq!(balance(pallet_account, token_2), 10);
-		assert_eq!(balance(user, token_1), ed);
+		assert_eq!(balance(user, token_1), 10000 + ed);
 		assert_eq!(balance(user, token_2), 1000 - 10);
-		assert_eq!(pool_balance(user, lp_token), 216);
+		assert_eq!(pool_balance(user, lp_token1), 216);
+
+		// try to pass the non-native - native assets, the result should be the same
+		assert_ok!(AssetConversion::add_liquidity(
+			RuntimeOrigin::signed(user),
+			token_3,
+			token_1,
+			10,
+			10000,
+			10,
+			10000,
+			user,
+		));
+
+		let pool_id = (token_1, token_3);
+		assert!(events().contains(&Event::<Test>::LiquidityAdded {
+			who: user,
+			mint_to: user,
+			pool_id,
+			amount1_provided: 10000,
+			amount2_provided: 10,
+			lp_token: lp_token2,
+			lp_token_minted: 216,
+		}));
+		let pallet_account = AssetConversion::get_pool_account(pool_id);
+		assert_eq!(balance(pallet_account, token_1), 10000);
+		assert_eq!(balance(pallet_account, token_3), 10);
+		assert_eq!(balance(user, token_1), ed);
+		assert_eq!(balance(user, token_3), 1000 - 10);
+		assert_eq!(pool_balance(user, lp_token2), 216);
 	});
 }
 

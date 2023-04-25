@@ -390,6 +390,13 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			let pool_id = Self::get_pool_id(asset1, asset2);
+			// swap params if needed
+			let (amount1_desired, amount2_desired, amount1_min, amount2_min) =
+				if pool_id.0 == asset1 {
+					(amount1_desired, amount2_desired, amount1_min, amount2_min)
+				} else {
+					(amount2_desired, amount1_desired, amount2_min, amount1_min)
+				};
 			let (asset1, asset2) = pool_id;
 
 			ensure!(
@@ -496,6 +503,12 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			let pool_id = Self::get_pool_id(asset1, asset2);
+			// swap params if needed
+			let (amount1_min_receive, amount2_min_receive) = if pool_id.0 == asset1 {
+				(amount1_min_receive, amount2_min_receive)
+			} else {
+				(amount2_min_receive, amount1_min_receive)
+			};
 			let (asset1, asset2) = pool_id;
 
 			ensure!(lp_token_burn > Zero::zero(), Error::<T>::ZeroLiquidity);
