@@ -679,6 +679,7 @@ where
 	// subscription can be terminated.
 	// Note: This should be enough for immediate blocks.
 	const MAX_PINNED_SECONDS: u64 = 60;
+
 	let chain_head_v2 = sc_rpc_spec_v2::chain_head::ChainHead::new(
 		client.clone(),
 		backend.clone(),
