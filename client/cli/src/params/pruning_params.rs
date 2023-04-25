@@ -21,7 +21,7 @@ use clap::Args;
 use sc_service::{BlocksPruning, PruningMode};
 
 /// Parameters to define the pruning mode
-#[derive(Debug, Clone, PartialEq, Args)]
+#[derive(Debug, Clone, Args)]
 pub struct PruningParams {
 	/// Specify the state pruning mode.
 	///

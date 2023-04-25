@@ -163,6 +163,13 @@ type OldWeight = u64;
 /// that this value makes sense for a memory location or length.
 const SENTINEL: u32 = u32::MAX;
 
+/// The target that is used for the log output emitted by this crate.
+///
+/// Hence you can use this target to selectively increase the log level for this crate.
+///
+/// Example: `RUST_LOG=runtime::contracts=debug my_code --dev`
+const LOG_TARGET: &str = "runtime::contracts";
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
