@@ -26,7 +26,7 @@ pub use frame_support::dispatch::RawOrigin;
 
 pub use self::pallet::*;
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
 	use crate::{self as frame_system, pallet_prelude::*};
@@ -64,7 +64,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// A noop call.
-		#[pallet::weight(0)]
 		pub fn noop(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
 		}

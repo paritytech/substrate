@@ -174,10 +174,11 @@ impl frame_support_test::Config for Runtime {
 impl module::Config for Runtime {}
 
 frame_support::construct_runtime!(
-	pub struct Runtime where
+	pub struct Runtime
+	where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_support_test,
 		Module: module,
