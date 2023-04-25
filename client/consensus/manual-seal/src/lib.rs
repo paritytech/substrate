@@ -572,8 +572,8 @@ mod tests {
 		assert_eq!(client.header(created_block.hash).unwrap().unwrap().number, 1);
 
 		assert_eq!(client.info().finalized_hash, client.info().genesis_hash);
-		// Ensuring run_delayed_finalize's Future is always processed before checking finalized hash
-		// By adding 1 sec
+		// ensuring run_delayed_finalize's Future is always processed before checking finalized hash
+		// by adding 1 sec
 		Delay::new(Duration::from_secs(delay_sec + 1)).await;
 		assert_eq!(client.info().finalized_hash, created_block.hash);
 	}
