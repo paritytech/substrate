@@ -44,7 +44,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use std::{collections::HashSet, sync::Arc};
 
 /// Generates the events of the `chainHead_follow` method.
-pub struct ChainHeadFollower<BE: Backend<Block> + 'static, Block: BlockT, Client> {
+pub struct ChainHeadFollower<BE: Backend<Block>, Block: BlockT, Client> {
 	/// Substrate client.
 	client: Arc<Client>,
 	/// Backend of the chain.
@@ -59,7 +59,7 @@ pub struct ChainHeadFollower<BE: Backend<Block> + 'static, Block: BlockT, Client
 	best_block_cache: Option<Block::Hash>,
 }
 
-impl<BE: Backend<Block> + 'static, Block: BlockT, Client> ChainHeadFollower<BE, Block, Client> {
+impl<BE: Backend<Block>, Block: BlockT, Client> ChainHeadFollower<BE, Block, Client> {
 	/// Create a new [`ChainHeadFollower`].
 	pub fn new(
 		client: Arc<Client>,
