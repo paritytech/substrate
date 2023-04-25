@@ -15,14 +15,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 async-trait = { version = "0.1.57", optional = true }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
-merlin = { version = "2.0", default-features = false }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", features = ["derive"], optional = true }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../api" }
 sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../application-crypto" }
 sp-consensus = { version = "0.10.0-dev", optional = true, path = "../common" }
 sp-consensus-slots = { version = "0.10.0-dev", default-features = false, path = "../slots" }
-sp-consensus-vrf = { version = "0.10.0-dev", default-features = false, path = "../vrf" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../core" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../inherents" }
 sp-keystore = { version = "0.13.0", default-features = false, optional = true, path = "../../keystore" }
@@ -35,14 +33,12 @@ default = ["std"]
 std = [
 	"async-trait",
 	"codec/std",
-	"merlin/std",
 	"scale-info/std",
 	"serde",
 	"sp-api/std",
 	"sp-application-crypto/std",
 	"sp-consensus",
 	"sp-consensus-slots/std",
-	"sp-consensus-vrf/std",
 	"sp-core/std",
 	"sp-inherents/std",
 	"sp-keystore",

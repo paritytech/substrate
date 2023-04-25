@@ -83,11 +83,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "runtime-benchmarks", recursion_limit = "1024")]
 
-#[macro_use]
-mod gas;
 mod address;
 mod benchmarking;
 mod exec;
+mod gas;
 mod migration;
 mod schedule;
 mod storage;
@@ -163,6 +162,13 @@ type OldWeight = u64;
 /// sentinel because contracts are never allowed to use such a large amount of resources
 /// that this value makes sense for a memory location or length.
 const SENTINEL: u32 = u32::MAX;
+
+/// The target that is used for the log output emitted by this crate.
+///
+/// Hence you can use this target to selectively increase the log level for this crate.
+///
+/// Example: `RUST_LOG=runtime::contracts=debug my_code --dev`
+const LOG_TARGET: &str = "runtime::contracts";
 
 #[frame_support::pallet]
 pub mod pallet {
