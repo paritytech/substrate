@@ -147,7 +147,7 @@ where
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(params: Params<B, Client>) -> Result<Self, Error> {
+	pub fn new(params: Params<B>) -> Result<Self, Error> {
 		Self::new_with_transport_wrapper(params, std::convert::identity)
 	}
 
@@ -157,7 +157,7 @@ where
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new_with_transport_wrapper<T, TBuild>(
-		mut params: Params<B, Client>,
+		mut params: Params<B>,
 		transport: TBuild,
 	) -> Result<Self, Error>
 	where
