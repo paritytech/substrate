@@ -85,9 +85,6 @@ pub trait StatementStore: Send + Sync {
 	/// Submit a statement.
 	fn submit(&self, statement: Statement, source: StatementSource) -> SubmitResult;
 
-	/// Submit a SCALE-encoded statement.
-	fn submit_encoded(&self, statement: &[u8], source: StatementSource) -> SubmitResult;
-
 	/// Remove a statement from the store.
 	fn remove(&self, hash: &Hash) -> Result<()>;
 }

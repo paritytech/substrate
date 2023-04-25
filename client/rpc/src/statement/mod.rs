@@ -18,7 +18,7 @@
 
 //! Substrate statement store API.
 
-use codec::Encode;
+use codec::{Decode, Encode};
 use jsonrpsee::core::{async_trait, RpcResult};
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::statement::{error::Error, StatementApiServer};
@@ -88,7 +88,9 @@ impl StatementApiServer for StatementStore {
 	}
 
 	fn submit(&self, encoded: Bytes) -> RpcResult<()> {
-		match self.store.submit_encoded(&encoded, StatementSource::Local) {
+		let statement = Decode::decode(&mut &*encoded)
+			.map_err(|e| Error::StatementStore(format!("Eror decoding statement: {:?}", e)))?;
+		match self.store.submit(statement, StatementSource::Local) {
 			SubmitResult::New(_) | SubmitResult::Known => Ok(()),
 			// `KnownExpired` should not happen. Expired statements submitted with
 			// `StatementSource::Rpc` should be renewed.

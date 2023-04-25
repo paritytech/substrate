@@ -44,7 +44,6 @@
 //! can't be added to the store for `Options::purge_after_sec` seconds. This is to prevent old
 //! statements from being propagated on the network.
 
-
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
@@ -473,6 +472,7 @@ impl Index {
 
 impl Store {
 	/// Create a new shared store instance. There should only be one per process.
+	/// `path` will be used to open a statement database or create a new one if it does not exist.
 	pub fn new_shared<Block, Client>(
 		path: &std::path::Path,
 		options: Options,
@@ -512,6 +512,7 @@ impl Store {
 	}
 
 	/// Create a new instance.
+	/// `path` will be used to open a statement database or create a new one if it does not exist.
 	fn new<Block, Client>(
 		path: &std::path::Path,
 		options: Options,
@@ -850,21 +851,6 @@ impl StatementStore for Store {
 		let network_priority = NetworkPriority::High;
 		log::trace!(target: LOG_TARGET, "Statement submitted: {:?}", HexDisplay::from(&hash));
 		SubmitResult::New(network_priority)
-	}
-
-	/// Submit a SCALE-encoded statement.
-	fn submit_encoded(&self, mut statement: &[u8], source: StatementSource) -> SubmitResult {
-		match Statement::decode(&mut statement) {
-			Ok(decoded) => self.submit(decoded, source),
-			Err(e) => {
-				log::debug!(
-					target: LOG_TARGET,
-					"Error decoding submitted statement. Failed with: {}",
-					e
-				);
-				SubmitResult::Bad("Bad SCALE encoding")
-			},
-		}
 	}
 
 	/// Remove a statement by hash.

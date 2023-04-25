@@ -444,7 +444,7 @@ impl Statement {
 		self.channel = Some(channel)
 	}
 
-	/// Set topic by index.
+	/// Set topic by index. Does noting if index is over `MAX_TOPICS`.
 	pub fn set_topic(&mut self, index: usize, topic: Topic) {
 		if index < MAX_TOPICS {
 			self.topics[index] = topic;
@@ -473,6 +473,9 @@ impl Statement {
 			self.num_topics as u32;
 
 		let mut output = Vec::new();
+		// When encoding signature payload, the length prefix is omitted.
+		// This is so that the signature for encoded statement can potentially be derived without
+		// needing to re-encode the statement.
 		if !for_signing {
 			let compact_len = codec::Compact::<u32>(num_fields);
 			compact_len.encode_to(&mut output);

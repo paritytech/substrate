@@ -10,7 +10,7 @@ Each field is effectively a key/value pair. Fields must be sorted and the same f
 
 Formally, `Statement` is equivalent to the type `Vec<Field>` and `Field` is the SCALE-encoded enumeration:
 - 0: `AuthenticityProof(Proof)`: The signature of the message. For cryptography where the public key cannot be derived from the signature together with the message data, then this will also include the signer's public key. The message data is all fields of the messages fields except the signature concatenated together *without the length prefix that a `Vec` would usually imply*. This is so that the signature can be derived without needing to re-encode the statement.
-- 1: `DecryptionKey([u8; 32])`: The decryption key identifier which should be used to decrypt the statement's data.
+- 1: `DecryptionKey([u8; 32])`: The decryption key identifier which should be used to decrypt the statement's data. In the absense of this field `Data` should be treated as not encrypted.
 - 2: `Priority(u32)`: Priority specifier. Higher priority statements should be kept around at the cost of lower priority statements if multiple statements from the same sender are competing for persistence or transport. Nodes should disregard when considering unsigned statements.
 - 3: `Channel([u8; 32])`: The channel identifier. Only one message of a given channel should be retained at once (the one of highest priority). Nodes should disregard when considering unsigned statements.
 - 4: `Topic1([u8; 32]))`: First topic identifier.
