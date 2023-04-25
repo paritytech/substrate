@@ -35,7 +35,7 @@ pub struct WasmiError;
 #[cfg(not(feature = "wasmi"))]
 impl std::fmt::Display for WasmiError {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("WasmiError")
+		f.write_str("WasmiError")
 	}
 }
 

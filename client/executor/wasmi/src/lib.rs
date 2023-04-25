@@ -21,7 +21,7 @@
 use sc_executor_common::{
 	error::WasmError,
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{HeapAllocStrategy, WasmModule}
+	wasm_runtime::{HeapAllocStrategy, WasmModule},
 };
 use sp_wasm_interface::Function;
 use std::boxed::Box;
@@ -33,7 +33,7 @@ pub fn create_runtime(
 	_host_functions: Vec<&'static dyn Function>,
 	_allow_missing_func_imports: bool,
 ) -> Result<Box<dyn WasmModule>, WasmError> {
-    Err(WasmError::Other("Execution of wasm runtime with an interpreter disabled. Please recompile the node with enabled 'interpreted-wasm' feature if necessary.".into()))
+	Err(WasmError::Other("Execution of wasm runtime with an interpreter disabled. Please recompile the node with enabled 'interpreted-wasm' feature if necessary.".into()))
 }
 
 #[cfg(feature = "enabled")]

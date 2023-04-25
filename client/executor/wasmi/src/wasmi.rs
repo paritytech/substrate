@@ -18,7 +18,6 @@
 
 //! This crate provides an implementation of `WasmModule` that is baked by wasmi.
 
-use std::{cell::RefCell, str};
 use super::*;
 use log::{error, trace};
 use sp_wasm_interface::wasmi::{
@@ -28,11 +27,12 @@ use sp_wasm_interface::wasmi::{
 	RuntimeValue::{self, I32, I64},
 	TableRef,
 };
+use std::{cell::RefCell, str};
 
 use sc_allocator::{AllocationStats, FreeingBumpHeapAllocator};
 use sc_executor_common::{
 	error::{Error, MessageWithBacktrace},
-	runtime_blob::{DataSegmentsSnapshot},
+	runtime_blob::DataSegmentsSnapshot,
 	wasm_runtime::{InvokeMethod, WasmInstance},
 };
 use sp_runtime_interface::unpack_ptr_and_len;
