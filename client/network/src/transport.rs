@@ -149,7 +149,7 @@ pub fn build_transport(
 		OptionalTransport::none()
 	};
 
-	let transport = OrTransport::new(quic_transport, tcp_transport)
+	let transport = OrTransport::new(tcp_transport, quic_transport)
 		.map(|either_output, _| match either_output {
 			EitherOutput::First((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
 			EitherOutput::Second((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
