@@ -135,7 +135,7 @@ where
 	/// Batch insert key/values into backend
 	pub fn batch_insert(&mut self, kvs: Vec<(StorageKey, StorageValue)>) {
 		self.backend.insert(
-			vec![(None, kvs.iter().map(|(k, v)| (k.clone(), Some(v.clone()))).collect())],
+			vec![(None, kvs.into_iter().map(|(k, v)| (k, Some(v))).collect())],
 			self.state_version,
 		);
 	}
