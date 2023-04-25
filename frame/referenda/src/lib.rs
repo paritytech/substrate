@@ -1308,7 +1308,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Looking at tracks:
 	/// * The `TrackQueue` should be empty if `DecidingCount` is less than
 	///   `TrackInfo::max_deciding`.
-	/// * The referendum indices stored in TrackQueue` must exist as keys in the `ReferendumInfoFor`
+	/// * The referendum indices stored in `TrackQueue` must exist as keys in the `ReferendumInfoFor`
 	///  storage map.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn do_try_state() -> DispatchResult {
