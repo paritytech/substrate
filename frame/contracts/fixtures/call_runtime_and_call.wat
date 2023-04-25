@@ -22,7 +22,7 @@
 		;; Input data layout.
 		;; [0..4) - size of the call
 		;; [4..8) - how many bytes to add to storage
-		;; [8..40) - hash code of the callee
+		;; [8..40) - address of the callee
 		;; [40..n) - encoded runtime call
 
 		;; Invoke call_runtime with the encoded call passed to this contract.
@@ -31,7 +31,7 @@
 				(i32.const 40)                ;; Pointer where the call is stored
 				(i32.sub
 					(i32.load (i32.const 0))  ;; Size of the call
-					(i32.const 36)            ;; Size of the call without the call_runtime
+					(i32.const 36)            ;; Subtract size of the subcall-related part: 4 bytes for storage length to add + 32 bytes of the callee address 
 				)
 			)
 		))
