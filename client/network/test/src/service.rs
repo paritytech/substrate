@@ -154,12 +154,11 @@ impl TestNetworkBuilder {
 		let protocol_id = ProtocolId::from("test-protocol-name");
 		let fork_id = Some(String::from("test-fork-id"));
 
-		let block_request_protocol_config = {
-			let (handler, protocol_config) =
-				BlockRequestHandler::new(&protocol_id, None, client.clone(), 50);
-			tokio::spawn(handler.run().boxed());
-			protocol_config
-		};
+		let mut block_relay_params =
+			BlockRequestHandler::new(&protocol_id, None, client.clone(), 50);
+		tokio::spawn(Box::pin(async move {
+			block_relay_params.server.run().await;
+		}));
 
 		let state_request_protocol_config = {
 			let (handler, protocol_config) =
@@ -190,7 +189,7 @@ impl TestNetworkBuilder {
 			None,
 			chain_sync_network_handle,
 			import_queue.service(),
-			block_request_protocol_config.name.clone(),
+			block_relay_params.downloader,
 			state_request_protocol_config.name.clone(),
 			None,
 			rx,
@@ -214,7 +213,7 @@ impl TestNetworkBuilder {
 			fork_id,
 			metrics_registry: None,
 			request_response_protocol_configs: [
-				block_request_protocol_config,
+				block_relay_params.request_response_config,
 				state_request_protocol_config,
 				light_client_request_protocol_config,
 			]

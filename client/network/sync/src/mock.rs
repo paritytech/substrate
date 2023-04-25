@@ -16,13 +16,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Contains a mock implementation of `ChainSync` that can be used
-//! for testing calls made to `ChainSync`.
+//! Contains mock implementations of `ChainSync` and 'BlockDownloader'
 
-use futures::task::Poll;
+use crate::{
+	block_relay_protocol::{BlockDownloader as BlockDownloaderT, BlockResponseErr},
+	service::network::NetworkServiceHandle,
+};
+
+use futures::{channel::oneshot, task::Poll};
 use libp2p::PeerId;
+use sc_network::RequestFailure;
 use sc_network_common::sync::{
-	message::{BlockAnnounce, BlockRequest, BlockResponse},
+	message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse},
 	BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification, PeerInfo,
 	PollBlockAnnounceValidation, SyncStatus,
 };
@@ -94,5 +99,24 @@ mockall::mock! {
 			who: PeerId,
 			request: BlockRequest<Block>,
 		);
+	}
+}
+
+mockall::mock! {
+	pub BlockDownloader<Block: BlockT> {}
+
+	#[async_trait::async_trait]
+	impl<Block: BlockT> BlockDownloaderT<Block> for BlockDownloader<Block> {
+		async fn download_block(
+			&self,
+			who: PeerId,
+			request: BlockRequest<Block>,
+			network: NetworkServiceHandle,
+		) -> Result<Result<Vec<u8>, RequestFailure>, oneshot::Canceled>;
+		fn block_response_into_blocks(
+			&self,
+			request: &BlockRequest<Block>,
+			response: Vec<u8>,
+		) -> Result<Vec<BlockData<Block>>, BlockResponseErr>;
 	}
 }

@@ -602,10 +602,10 @@ impl<B: BlockT> BlockDownloader<B> for FullBlockDownloader {
 	) -> Result<Vec<BlockData<B>>, BlockResponseErr> {
 		// Decode the response protobuf
 		let response_schema = BlockResponseSchema::decode(response.as_slice())
-			.map_err(|error| BlockResponseErr::DecodeFailed(format!("{error}")))?;
+			.map_err(|error| BlockResponseErr::DecodeFailed(error.to_string()))?;
 
 		// Extract the block data from the protobuf
 		self.blocks_from_schema::<B>(request, response_schema)
-			.map_err(|error| BlockResponseErr::ExtractionFailed(format!("{error}")))
+			.map_err(|error| BlockResponseErr::ExtractionFailed(error.to_string()))
 	}
 }

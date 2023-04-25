@@ -3081,7 +3081,7 @@ fn validate_blocks<Block: BlockT>(
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::service::network::NetworkServiceProvider;
+	use crate::{mock::MockBlockDownloader, service::network::NetworkServiceProvider};
 	use futures::{executor::block_on, future::poll_fn};
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_network_common::{
@@ -3122,7 +3122,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -3189,7 +3189,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -3371,7 +3371,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -3498,7 +3498,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -3656,7 +3656,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -3799,7 +3799,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -3944,7 +3944,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -3990,7 +3990,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
@@ -4044,7 +4044,7 @@ mod test {
 			None,
 			chain_sync_network_handle,
 			import_queue,
-			ProtocolName::from("block-request"),
+			Arc::new(MockBlockDownloader::new()),
 			ProtocolName::from("state-request"),
 			None,
 		)
