@@ -471,20 +471,17 @@ impl<T: BlsBound> TraitPair for Pair<T> {
 	}
 
 	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
-		Self::verify_weak(&sig.inner[..], message.as_ref(), pubkey)
-	}
-
-	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		let pubkey_array: [u8; PUBLIC_KEY_SERIALIZED_SIZE] = match pubkey.as_ref().try_into() {
-			Ok(pk) => pk,
-			Err(_) => return false,
-		};
+		let pubkey_array: [u8; PUBLIC_KEY_SERIALIZED_SIZE] =
+			match <[u8; PUBLIC_KEY_SERIALIZED_SIZE]>::try_from(pubkey.as_ref()) {
+				Ok(pk) => pk,
+				Err(_) => return false,
+			};
 		let public_key = match w3f_bls::double::DoublePublicKey::<T>::from_bytes(&pubkey_array) {
 			Ok(pk) => pk,
 			Err(_) => return false,
 		};
 
-		let sig_array = match sig.try_into() {
+		let sig_array = match sig.inner[..].try_into() {
 			Ok(s) => s,
 			Err(_) => return false,
 		};
