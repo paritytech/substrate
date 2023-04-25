@@ -217,7 +217,7 @@ struct TriageOutcome<T: Config> {
 struct ReportIndexStorage<T: Config, O: Offence<T::IdentificationTuple>> {
 	opaque_time_slot: OpaqueTimeSlot,
 	concurrent_reports: Vec<ReportIdOf<T>>,
-	_offence: PhantomData<O>,
+	_phantom: PhantomData<O>,
 }
 
 impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
@@ -227,7 +227,7 @@ impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 
 		let concurrent_reports = <ConcurrentReportsIndex<T>>::get(&O::ID, &opaque_time_slot);
 
-		Self { opaque_time_slot, concurrent_reports, _offence: Default::default() }
+		Self { opaque_time_slot, concurrent_reports, _phantom: Default::default() }
 	}
 
 	/// Insert a new report to the index.

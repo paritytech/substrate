@@ -44,7 +44,9 @@ mod v0 {
 }
 
 pub mod v1 {
-	use super::*;
+	use frame_support::traits::StorageVersion;
+
+use super::*;
 
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
@@ -56,14 +58,13 @@ pub mod v1 {
 			log::info!(
 				target: LOG_TARGET,
 				"Number of reports to refund and delete: {}",
-				v0::ReportsByKindIndex::<T>::iter().count()
+				v0::ReportsByKindIndex::<T>::iter_key().count()
 			);
 
 			Ok(Vec::new())
 		}
 
 		fn on_runtime_upgrade() -> Weight {
-			let current = Pallet::<T>::current_storage_version();
 			let onchain = Pallet::<T>::on_chain_storage_version();
 
 			if onchain > 0 {
@@ -74,7 +75,7 @@ pub mod v1 {
 			let keys_removed = v0::ReportsByKindIndex::<T>::clear(u32::MAX, None).unique as u64;
 			let weight = T::DbWeight::get().reads_writes(keys_removed, keys_removed);
 
-			current.put::<Pallet<T>>();
+			StorageVersion::new(1).put::<Pallet<T>>();
 
 			weight
 		}
@@ -84,7 +85,7 @@ pub mod v1 {
 			let onchain = Pallet::<T>::on_chain_storage_version();
 			ensure!(onchain == 1, "pallet_offences::MigrateToV1 needs to be run");
 			ensure!(
-				v0::ReportsByKindIndex::<T>::iter().count() == 0,
+				v0::ReportsByKindIndex::<T>::iter_key().count() == 0,
 				"there are some dangling reports that need to be destroyed and refunded"
 			);
 			Ok(())
