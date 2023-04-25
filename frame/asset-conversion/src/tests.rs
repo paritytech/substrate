@@ -100,9 +100,10 @@ fn check_pool_accounts_dont_collide() {
 	use std::collections::HashSet;
 	let mut map = HashSet::new();
 
-	for i in 0..33554431u32 {
+	for i in 0..3_554_431u32 {
 		let account =
-			AssetConversion::get_pool_account((NativeOrAssetId::Native, NativeOrAssetId::Asset(i)));
+			AssetConversion::get_pool_account((NativeOrAssetId::Native, NativeOrAssetId::Asset(i)))
+				.unwrap();
 		if map.contains(&account) {
 			panic!("Collision at {}", i);
 		}
@@ -284,7 +285,7 @@ fn can_add_liquidity() {
 			lp_token: lp_token1,
 			lp_token_minted: 216,
 		}));
-		let pallet_account = AssetConversion::get_pool_account(pool_id);
+		let pallet_account = AssetConversion::get_pool_account(pool_id).unwrap();
 		assert_eq!(balance(pallet_account, token_1), 10000);
 		assert_eq!(balance(pallet_account, token_2), 10);
 		assert_eq!(balance(user, token_1), 10000 + ed);
@@ -313,7 +314,7 @@ fn can_add_liquidity() {
 			lp_token: lp_token2,
 			lp_token_minted: 216,
 		}));
-		let pallet_account = AssetConversion::get_pool_account(pool_id);
+		let pallet_account = AssetConversion::get_pool_account(pool_id).unwrap();
 		assert_eq!(balance(pallet_account, token_1), 10000);
 		assert_eq!(balance(pallet_account, token_3), 10);
 		assert_eq!(balance(user, token_1), ed);
@@ -383,7 +384,7 @@ fn add_tiny_liquidity_directly_to_pool_address() {
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 3, user, 1000));
 
 		// check we're still able to add the liquidity even when the pool already has some token_1
-		let pallet_account = AssetConversion::get_pool_account((token_1, token_2));
+		let pallet_account = AssetConversion::get_pool_account((token_1, token_2)).unwrap();
 		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), pallet_account, 1000));
 
 		assert_ok!(AssetConversion::add_liquidity(
@@ -398,7 +399,7 @@ fn add_tiny_liquidity_directly_to_pool_address() {
 		));
 
 		// check the same but for token_3 (non-native token)
-		let pallet_account = AssetConversion::get_pool_account((token_1, token_3));
+		let pallet_account = AssetConversion::get_pool_account((token_1, token_3)).unwrap();
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, pallet_account, 1));
 		assert_ok!(AssetConversion::add_liquidity(
 			RuntimeOrigin::signed(user),
@@ -460,7 +461,7 @@ fn can_remove_liquidity() {
 			lp_token_burned: total_lp_received,
 		}));
 
-		let pallet_account = AssetConversion::get_pool_account(pool_id);
+		let pallet_account = AssetConversion::get_pool_account(pool_id).unwrap();
 		assert_eq!(balance(pallet_account, token_1), 10000);
 		assert_eq!(balance(pallet_account, token_2), 1);
 		assert_eq!(pool_balance(pallet_account, lp_token), 100);
@@ -616,7 +617,7 @@ fn can_swap_with_native() {
 			false,
 		));
 
-		let pallet_account = AssetConversion::get_pool_account(pool_id);
+		let pallet_account = AssetConversion::get_pool_account(pool_id).unwrap();
 		assert_eq!(balance(user, token_1), expect_receive + ed);
 		assert_eq!(balance(user, token_2), 1000 - liquidity2 - input_amount);
 		assert_eq!(balance(pallet_account, token_1), liquidity1 - expect_receive);
@@ -738,7 +739,7 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
 			lp_token_minted,
 		}));
 
-		let pallet_account = AssetConversion::get_pool_account(pool_id);
+		let pallet_account = AssetConversion::get_pool_account(pool_id).unwrap();
 		assert_eq!(balance(pallet_account, token_1), liquidity1);
 		assert_eq!(balance(pallet_account, token_2), liquidity2);
 
@@ -876,7 +877,7 @@ fn can_swap_tokens_for_exact_tokens() {
 		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user, 20000 + ed));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
 
-		let pallet_account = AssetConversion::get_pool_account(pool_id);
+		let pallet_account = AssetConversion::get_pool_account(pool_id).unwrap();
 		let before1 = balance(pallet_account, token_1) + balance(user, token_1);
 		let before2 = balance(pallet_account, token_2) + balance(user, token_2);
 
@@ -941,7 +942,7 @@ fn can_swap_tokens_for_exact_tokens_when_not_liquidity_provider() {
 		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user2, base1 + ed));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user2), 2, user2, base2));
 
-		let pallet_account = AssetConversion::get_pool_account(pool_id);
+		let pallet_account = AssetConversion::get_pool_account(pool_id).unwrap();
 		let before1 =
 			balance(pallet_account, token_1) + balance(user, token_1) + balance(user2, token_1);
 		let before2 =
@@ -1169,8 +1170,8 @@ fn swap_exact_tokens_for_tokens_in_multi_hops() {
 
 		let pool_id1 = (token_1, token_2);
 		let pool_id2 = (token_2, token_3);
-		let pallet_account1 = AssetConversion::get_pool_account(pool_id1);
-		let pallet_account2 = AssetConversion::get_pool_account(pool_id2);
+		let pallet_account1 = AssetConversion::get_pool_account(pool_id1).unwrap();
+		let pallet_account2 = AssetConversion::get_pool_account(pool_id2).unwrap();
 
 		assert_eq!(balance(user, token_1), base1 + ed - input_amount);
 		assert_eq!(balance(pallet_account1, token_1), liquidity1 + input_amount);
@@ -1244,8 +1245,8 @@ fn swap_tokens_for_exact_tokens_in_multi_hops() {
 
 		let pool_id1 = (token_1, token_2);
 		let pool_id2 = (token_2, token_3);
-		let pallet_account1 = AssetConversion::get_pool_account(pool_id1);
-		let pallet_account2 = AssetConversion::get_pool_account(pool_id2);
+		let pallet_account1 = AssetConversion::get_pool_account(pool_id1).unwrap();
+		let pallet_account2 = AssetConversion::get_pool_account(pool_id2).unwrap();
 
 		assert_eq!(balance(user, token_1), base1 + ed - expect_in1);
 		assert_eq!(balance(pallet_account1, token_1), liquidity1 + expect_in1);

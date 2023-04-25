@@ -338,8 +338,8 @@ pub mod pallet {
 					let asset_1 = T::MultiAssetIdConverter::into_multiasset_id(T::AssetId::decode(&mut vec![0u8, 0, 0, 1].as_slice()).unwrap());
 					let asset_2 = T::MultiAssetIdConverter::into_multiasset_id(T::AssetId::decode(&mut vec![255u8, 255, 255, 255].as_slice()).unwrap());
 					assert!(asset_1 != asset_2, "unfortunatly decoded to be the same asset.");
-					let pool_account_1 = Self::get_pool_account((native, asset_1));
-					let pool_account_2 = Self::get_pool_account((native, asset_2));
+					let pool_account_1 = Self::get_pool_account((native, asset_1)).unwrap();
+					let pool_account_2 = Self::get_pool_account((native, asset_2)).unwrap();
 					assert!(sp_std::mem::size_of::<T::AccountId>() >= sp_std::mem::size_of::<u128>());
 					assert!(
 						pool_account_1 != pool_account_2,
@@ -376,7 +376,7 @@ pub mod pallet {
 
 			ensure!(!Pools::<T>::contains_key(&pool_id), Error::<T>::PoolExists);
 
-			let pool_account = Self::get_pool_account(pool_id);
+			let pool_account = Self::get_pool_account(pool_id)?;
 			frame_system::Pallet::<T>::inc_providers(&pool_account);
 
 			// pay the setup fee
@@ -445,7 +445,7 @@ pub mod pallet {
 			let amount1: AssetBalanceOf<T>;
 			let amount2: AssetBalanceOf<T>;
 
-			let pool_account = Self::get_pool_account(pool_id);
+			let pool_account = Self::get_pool_account(pool_id)?;
 			let reserve1 = Self::get_balance(&pool_account, asset1)?;
 			let reserve2 = Self::get_balance(&pool_account, asset2)?;
 
@@ -551,7 +551,7 @@ pub mod pallet {
 			let maybe_pool = Pools::<T>::get(pool_id);
 			let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
 
-			let pool_account = Self::get_pool_account(pool_id);
+			let pool_account = Self::get_pool_account(pool_id)?;
 			let reserve1 = Self::get_balance(&pool_account, asset1)?;
 			let reserve2 = Self::get_balance(&pool_account, asset2)?;
 
@@ -730,7 +730,7 @@ pub mod pallet {
 		) -> Result<(), DispatchError> {
 			if let Some(&[asset1, asset2]) = path.get(0..2) {
 				let pool_id = Self::get_pool_id(asset1, asset2);
-				let pool_account = Self::get_pool_account(pool_id);
+				let pool_account = Self::get_pool_account(pool_id)?;
 				let first_amount = amounts.first().expect("Always has more than one element");
 
 				Self::transfer(asset1, sender, &pool_account, *first_amount, keep_alive)?;
@@ -740,14 +740,14 @@ pub mod pallet {
 				for assets_pair in path.windows(2) {
 					if let &[asset1, asset2] = assets_pair {
 						let pool_id = Self::get_pool_id(asset1, asset2);
-						let pool_account = Self::get_pool_account(pool_id);
+						let pool_account = Self::get_pool_account(pool_id)?;
 
 						let amount_out =
 							amounts.get((i + 1) as usize).ok_or(Error::<T>::PathError)?;
 
 						let to = if i < path_len - 2 {
 							let asset3 = path.get((i + 2) as usize).ok_or(Error::<T>::PathError)?;
-							Self::get_pool_account(Self::get_pool_id(asset2, *asset3))
+							Self::get_pool_account(Self::get_pool_id(asset2, *asset3))?
 						} else {
 							send_to.clone()
 						};
@@ -769,10 +769,12 @@ pub mod pallet {
 		///
 		/// This actually does computation. If you need to keep using it, then make sure you cache
 		/// the value and only call this once.
-		pub fn get_pool_account(pool_id: PoolIdOf<T>) -> T::AccountId {
-			T::PalletId::get().into_sub_account_truncating(pool_id)
-			// let sub = sp_io::hashing::blake2_256(&Encode::encode(&pool_id)[..]);
-			// T::PalletId::get().into_sub_account_truncating(sub)
+		///
+		/// If to decode a T::AccountId needs more than 32 bytes this will fail.
+		/// (in that case double the length of the hash).
+		pub fn get_pool_account(pool_id: PoolIdOf<T>) -> Result<T::AccountId, Error<T>> {
+			let account = sp_io::hashing::blake2_256(&Encode::encode(&pool_id)[..]);
+			T::AccountId::decode(&mut &account[..]).map_err(|_| Error::<T>::PoolNotFound)
 		}
 
 		fn get_balance(
@@ -811,7 +813,7 @@ pub mod pallet {
 			asset2: T::MultiAssetId,
 		) -> Result<(AssetBalanceOf<T>, AssetBalanceOf<T>), Error<T>> {
 			let pool_id = Self::get_pool_id(asset1, asset2);
-			let pool_account = Self::get_pool_account(pool_id);
+			let pool_account = Self::get_pool_account(pool_id)?;
 
 			let balance1 = Self::get_balance(&pool_account, asset1)?;
 			let balance2 = Self::get_balance(&pool_account, asset2)?;
@@ -868,7 +870,7 @@ pub mod pallet {
 			include_fee: bool,
 		) -> Option<AssetBalanceOf<T>> {
 			let pool_id = Self::get_pool_id(asset1, asset2);
-			let pool_account = Self::get_pool_account(pool_id);
+			let pool_account = Self::get_pool_account(pool_id).ok()?;
 
 			let balance1 = Self::get_balance(&pool_account, asset1).ok()?;
 			let balance2 = Self::get_balance(&pool_account, asset2).ok()?;
@@ -891,7 +893,7 @@ pub mod pallet {
 			include_fee: bool,
 		) -> Option<AssetBalanceOf<T>> {
 			let pool_id = Self::get_pool_id(asset1, asset2);
-			let pool_account = Self::get_pool_account(pool_id);
+			let pool_account = Self::get_pool_account(pool_id).ok()?;
 
 			let balance1 = Self::get_balance(&pool_account, asset1).ok()?;
 			let balance2 = Self::get_balance(&pool_account, asset2).ok()?;
