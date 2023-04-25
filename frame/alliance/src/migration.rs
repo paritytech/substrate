@@ -162,18 +162,18 @@ pub(crate) mod v1_to_v2 {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{mock::*, MemberRole};
+	use crate::{mock::*, MemberRole, Members};
 
 	#[test]
 	fn migration_v1_to_v2_works() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Alliance::join_alliance(RuntimeOrigin::signed(4)));
-			assert_eq!(Alliance::members(MemberRole::Ally), vec![4]);
-			assert_eq!(Alliance::members(MemberRole::Fellow), vec![1, 2, 3]);
+			assert_eq!(Members::<Test>::get(MemberRole::Ally), vec![4]);
+			assert_eq!(Members::<Test>::get(MemberRole::Fellow), vec![1, 2, 3]);
 			v1_to_v2::migrate::<Test, ()>();
-			assert_eq!(Alliance::members(MemberRole::Fellow), vec![1, 2, 3, 4]);
-			assert_eq!(Alliance::members(MemberRole::Ally), vec![]);
-			assert_eq!(Alliance::members(MemberRole::Retiring), vec![]);
+			assert_eq!(Members::<Test>::get(MemberRole::Fellow), vec![1, 2, 3, 4]);
+			assert_eq!(Members::<Test>::get(MemberRole::Ally), vec![]);
+			assert_eq!(Members::<Test>::get(MemberRole::Retiring), vec![]);
 		});
 	}
 }

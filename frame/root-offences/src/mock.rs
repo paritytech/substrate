@@ -327,10 +327,10 @@ pub(crate) fn start_session(session_index: SessionIndex) {
 	run_to_block(end);
 	// session must have progressed properly.
 	assert_eq!(
-		Session::current_index(),
+		pallet_session::CurrentIndex::<Test>::get(),
 		session_index,
 		"current session index = {}, expected = {}",
-		Session::current_index(),
+		pallet_session::CurrentIndex::<Test>::get(),
 		session_index,
 	);
 }
@@ -354,5 +354,5 @@ pub(crate) fn run_to_block(n: BlockNumber) {
 }
 
 pub(crate) fn active_era() -> EraIndex {
-	Staking::active_era().unwrap().index
+	pallet_staking::ActiveEra::<Test>::get().unwrap().index
 }

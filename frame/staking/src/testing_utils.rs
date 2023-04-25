@@ -227,5 +227,5 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 
 /// get the current era.
 pub fn current_era<T: Config>() -> EraIndex {
-	<Pallet<T>>::current_era().unwrap_or(0)
+	CurrentEra::<T>::get().unwrap_or(0)
 }

@@ -92,10 +92,8 @@
 //! set.
 //!
 //! ```
-//! use pallet_session as session;
-//!
 //! fn validators<T: pallet_session::Config>() -> Vec<<T as pallet_session::Config>::ValidatorId> {
-//! 	<pallet_session::Pallet<T>>::validators()
+//! 	pallet_session::Validators::<T>::get()
 //! }
 //! # fn main(){}
 //! ```
@@ -729,7 +727,7 @@ impl<T: Config> Pallet<T> {
 	/// Returns `false` either if the validator could not be found or it was already
 	/// disabled.
 	pub fn disable(c: &T::ValidatorId) -> bool {
-		Self::validators()
+		Validators::<T>::get()
 			.iter()
 			.position(|i| i == c)
 			.map(|i| Self::disable_index(i as u32))
@@ -899,11 +897,11 @@ impl<T: Config> ValidatorSet<T::AccountId> for Pallet<T> {
 	type ValidatorIdOf = T::ValidatorIdOf;
 
 	fn session_index() -> sp_staking::SessionIndex {
-		Pallet::<T>::current_index()
+		CurrentIndex::<T>::get()
 	}
 
 	fn validators() -> Vec<Self::ValidatorId> {
-		Pallet::<T>::validators()
+		Validators::<T>::get()
 	}
 }
 
@@ -921,7 +919,7 @@ impl<T: Config> EstimateNextNewSession<T::BlockNumber> for Pallet<T> {
 
 impl<T: Config> frame_support::traits::DisabledValidators for Pallet<T> {
 	fn is_disabled(index: u32) -> bool {
-		<Pallet<T>>::disabled_validators().binary_search(&index).is_ok()
+		DisabledValidators::<T>::get().binary_search(&index).is_ok()
 	}
 }
 
@@ -939,7 +937,7 @@ impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 	{
 		let i = Inner::find_author(digests)?;
 
-		let validators = <Pallet<T>>::validators();
+		let validators = Validators::<T>::get();
 		validators.get(i as usize).cloned()
 	}
 }

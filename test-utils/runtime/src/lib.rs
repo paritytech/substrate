@@ -25,10 +25,9 @@ pub mod system;
 
 use codec::{Decode, Encode, Error, Input, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_std::{marker::PhantomData, prelude::*};
-
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
 use sp_core::{OpaqueMetadata, RuntimeDebug};
+use sp_std::{marker::PhantomData, prelude::*};
 use sp_trie::{
 	trie_types::{TrieDBBuilder, TrieDBMutBuilderV1},
 	PrefixedMemoryDB, StorageProof,
@@ -898,7 +897,7 @@ cfg_if! {
 						c: (3, 10),
 						authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
+						randomness: <pallet_babe::Randomness<Runtime>>::get(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
@@ -1202,7 +1201,7 @@ cfg_if! {
 						c: (3, 10),
 						authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
+						randomness: <pallet_babe::Randomness<Runtime>>::get(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}

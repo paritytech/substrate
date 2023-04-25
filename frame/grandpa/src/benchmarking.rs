@@ -17,7 +17,7 @@
 
 //! Benchmarks for the GRANDPA pallet.
 
-use super::{Pallet as Grandpa, *};
+use super::*;
 use frame_benchmarking::v1::benchmarks;
 use frame_system::RawOrigin;
 use sp_core::H256;
@@ -66,7 +66,7 @@ benchmarks! {
 
 	}: _(RawOrigin::Root, delay, best_finalized_block_number)
 	verify {
-		assert!(Grandpa::<T>::stalled().is_some());
+		assert!(Stalled::<T>::get().is_some());
 	}
 
 	impl_benchmark_test_suite!(

@@ -163,11 +163,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 /// Fetch an entity from the pool, if existent.
 pub fn fetch_from_pool(who: u64) -> Option<(u64, Option<u64>)> {
-	<Pallet<Test>>::pool().into_iter().find(|item| item.0 == who)
+	<Pool<Test>>::get().into_iter().find(|item| item.0 == who)
 }
 
 /// Find an entity in the pool.
 /// Returns its position in the `Pool` vec, if existent.
 pub fn find_in_pool(who: u64) -> Option<usize> {
-	<Pallet<Test>>::pool().into_iter().position(|item| item.0 == who)
+	<Pool<Test>>::get().into_iter().position(|item| item.0 == who)
 }

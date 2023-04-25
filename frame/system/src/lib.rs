@@ -544,7 +544,6 @@ pub mod pallet {
 	/// The current weight for the block.
 	#[pallet::storage]
 	#[pallet::whitelist_storage]
-	#[pallet::getter(fn block_weight)]
 	pub(super) type BlockWeight<T: Config> = StorageValue<_, ConsumedWeight, ValueQuery>;
 
 	/// Total length (in bytes) for all extrinsics put together, for the current block.
@@ -559,7 +558,6 @@ pub mod pallet {
 
 	/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 	#[pallet::storage]
-	#[pallet::getter(fn extrinsic_data)]
 	#[pallet::unbounded]
 	pub(super) type ExtrinsicData<T: Config> =
 		StorageMap<_, Twox64Concat, u32, Vec<u8>, ValueQuery>;
@@ -567,18 +565,15 @@ pub mod pallet {
 	/// The current block number being processed. Set by `execute_block`.
 	#[pallet::storage]
 	#[pallet::whitelist_storage]
-	#[pallet::getter(fn block_number)]
 	pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// Hash of the previous block.
 	#[pallet::storage]
-	#[pallet::getter(fn parent_hash)]
 	pub(super) type ParentHash<T: Config> = StorageValue<_, T::Hash, ValueQuery>;
 
 	/// Digest of the current block, also part of the block header.
 	#[pallet::storage]
 	#[pallet::unbounded]
-	#[pallet::getter(fn digest)]
 	pub(super) type Digest<T: Config> = StorageValue<_, generic::Digest, ValueQuery>;
 
 	/// Events deposited for the current block.
@@ -597,7 +592,6 @@ pub mod pallet {
 	/// The number of events in the `Events<T>` list.
 	#[pallet::storage]
 	#[pallet::whitelist_storage]
-	#[pallet::getter(fn event_count)]
 	pub(super) type EventCount<T: Config> = StorageValue<_, EventIndex, ValueQuery>;
 
 	/// Mapping between a topic (represented by T::Hash) and a vector of indexes
@@ -612,7 +606,6 @@ pub mod pallet {
 	/// no notification will be triggered thus the event might be lost.
 	#[pallet::storage]
 	#[pallet::unbounded]
-	#[pallet::getter(fn event_topics)]
 	pub(super) type EventTopics<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::Hash, Vec<(T::BlockNumber, EventIndex)>, ValueQuery>;
 
@@ -996,6 +989,42 @@ pub enum DecRefStatus {
 impl<T: Config> Pallet<T> {
 	pub fn account_exists(who: &T::AccountId) -> bool {
 		Account::<T>::contains_key(who)
+	}
+
+	/// The current weight for the block.
+	pub fn block_weight() -> ConsumedWeight {
+		BlockWeight::<T>::get()
+	}
+
+	/// Extrinsics data for the current block (maps an extrinsic's index to its data).
+	pub fn extrinsic_data(i: u32) -> Vec<u8> {
+		ExtrinsicData::<T>::get(i)
+	}
+
+	/// The current block number being processed. Set by `execute_block`.
+	pub fn block_number() -> T::BlockNumber {
+		Number::<T>::get()
+	}
+
+	/// Hash of the previous block.
+	pub fn parent_hash() -> T::Hash {
+		ParentHash::<T>::get()
+	}
+
+	/// Digest of the current block, also part of the block header.
+	pub fn digest() -> generic::Digest {
+		Digest::<T>::get()
+	}
+
+	/// The number of events in the `Events<T>` list.
+	pub fn event_count() -> EventIndex {
+		EventCount::<T>::get()
+	}
+
+	/// Mapping between a topic (represented by T::Hash) and a vector of indexes
+	/// of events in the `<Events<T>>` list.
+	pub fn event_topics(topic: &T::Hash) -> Vec<(T::BlockNumber, EventIndex)> {
+		EventTopics::<T>::get(topic)
 	}
 
 	/// Write code to the storage and emit related events and digest items.

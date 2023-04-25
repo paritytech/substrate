@@ -388,7 +388,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let account = T::Lookup::lookup(account)?;
 			// Check `who` is allowed to make a call on behalf of `account`
-			let target = Self::proxy(&who).ok_or(Error::<T>::NotAllowed)?;
+			let target = Proxy::<T>::get(&who).ok_or(Error::<T>::NotAllowed)?;
 			ensure!(target == account, Error::<T>::NotAllowed);
 			call.dispatch(frame_system::RawOrigin::Signed(account).into())
 				.map(|_| ())
@@ -546,10 +546,10 @@ pub mod pallet {
 			let lost = T::Lookup::lookup(lost)?;
 			let rescuer = T::Lookup::lookup(rescuer)?;
 			// Get the recovery configuration for the lost account.
-			let recovery_config = Self::recovery_config(&lost).ok_or(Error::<T>::NotRecoverable)?;
+			let recovery_config = Recoverable::<T>::get(&lost).ok_or(Error::<T>::NotRecoverable)?;
 			// Get the active recovery process for the rescuer.
 			let mut active_recovery =
-				Self::active_recovery(&lost, &rescuer).ok_or(Error::<T>::NotStarted)?;
+				ActiveRecoveries::<T>::get(&lost, &rescuer).ok_or(Error::<T>::NotStarted)?;
 			// Make sure the voter is a friend
 			ensure!(Self::is_friend(&recovery_config.friends, &who), Error::<T>::NotFriend);
 			// Either insert the vouch, or return an error that the user already vouched.
@@ -589,10 +589,10 @@ pub mod pallet {
 			let account = T::Lookup::lookup(account)?;
 			// Get the recovery configuration for the lost account
 			let recovery_config =
-				Self::recovery_config(&account).ok_or(Error::<T>::NotRecoverable)?;
+				Recoverable::<T>::get(&account).ok_or(Error::<T>::NotRecoverable)?;
 			// Get the active recovery process for the rescuer
 			let active_recovery =
-				Self::active_recovery(&account, &who).ok_or(Error::<T>::NotStarted)?;
+				ActiveRecoveries::<T>::get(&account, &who).ok_or(Error::<T>::NotStarted)?;
 			ensure!(!Proxy::<T>::contains_key(&who), Error::<T>::AlreadyProxy);
 			// Make sure the delay period has passed
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
@@ -697,7 +697,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let account = T::Lookup::lookup(account)?;
 			// Check `who` is allowed to make a call on behalf of `account`
-			ensure!(Self::proxy(&who) == Some(account), Error::<T>::NotAllowed);
+			ensure!(Proxy::<T>::get(&who) == Some(account), Error::<T>::NotAllowed);
 			Proxy::<T>::remove(&who);
 
 			frame_system::Pallet::<T>::dec_consumers(&who);

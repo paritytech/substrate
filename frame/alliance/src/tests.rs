@@ -115,7 +115,7 @@ fn disband_works() {
 		// join alliance and reserve funds
 		assert_eq!(Balances::free_balance(9), 40);
 		assert_ok!(Alliance::join_alliance(RuntimeOrigin::signed(9)));
-		assert_eq!(Alliance::deposit_of(9), Some(25));
+		assert_eq!(DepositOf::<Test>::get(9), Some(25));
 		assert_eq!(Balances::free_balance(9), 15);
 		assert!(Alliance::is_member_of(&9, MemberRole::Ally));
 
@@ -184,8 +184,8 @@ fn propose_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_eq!(*AllianceMotion::proposals(), vec![hash]);
-		assert_eq!(AllianceMotion::proposal_of(&hash), Some(proposal));
+		assert_eq!(*pallet_collective::Proposals::<Test, Instance1>::get(), vec![hash]);
+		assert_eq!(pallet_collective::ProposalOf::<Test, Instance1>::get(&hash), Some(proposal));
 		assert_eq!(
 			System::events(),
 			vec![EventRecord {
@@ -311,7 +311,7 @@ fn set_rule_works() {
 	new_test_ext().execute_with(|| {
 		let cid = test_cid();
 		assert_ok!(Alliance::set_rule(RuntimeOrigin::signed(1), cid.clone()));
-		assert_eq!(Alliance::rule(), Some(cid.clone()));
+		assert_eq!(Rule::<Test>::get(), Some(cid.clone()));
 
 		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::NewRuleSet {
 			rule: cid,
@@ -327,7 +327,7 @@ fn announce_works() {
 		assert_noop!(Alliance::announce(RuntimeOrigin::signed(2), cid.clone()), BadOrigin);
 
 		assert_ok!(Alliance::announce(RuntimeOrigin::signed(3), cid.clone()));
-		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
+		assert_eq!(Announcements::<Test>::get(), vec![cid.clone()]);
 
 		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::Announced {
 			announcement: cid,
@@ -340,7 +340,7 @@ fn remove_announcement_works() {
 	new_test_ext().execute_with(|| {
 		let cid = test_cid();
 		assert_ok!(Alliance::announce(RuntimeOrigin::signed(3), cid.clone()));
-		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
+		assert_eq!(Announcements::<Test>::get(), vec![cid.clone()]);
 		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::Announced {
 			announcement: cid.clone(),
 		}));
@@ -348,7 +348,7 @@ fn remove_announcement_works() {
 		System::set_block_number(2);
 
 		assert_ok!(Alliance::remove_announcement(RuntimeOrigin::signed(3), cid.clone()));
-		assert_eq!(Alliance::announcements(), vec![]);
+		assert_eq!(Announcements::<Test>::get(), vec![]);
 		System::assert_last_event(mock::RuntimeEvent::Alliance(
 			crate::Event::AnnouncementRemoved { announcement: cid },
 		));
@@ -386,8 +386,8 @@ fn join_alliance_works() {
 
 		// success to submit
 		assert_ok!(Alliance::join_alliance(RuntimeOrigin::signed(4)));
-		assert_eq!(Alliance::deposit_of(4), Some(25));
-		assert_eq!(Alliance::members(MemberRole::Ally), vec![4]);
+		assert_eq!(DepositOf::<Test>::get(4), Some(25));
+		assert_eq!(Members::<Test>::get(MemberRole::Ally), vec![4]);
 
 		// check already member
 		assert_noop!(
@@ -441,8 +441,8 @@ fn nominate_ally_works() {
 
 		// success to nominate
 		assert_ok!(Alliance::nominate_ally(RuntimeOrigin::signed(1), 4));
-		assert_eq!(Alliance::deposit_of(4), None);
-		assert_eq!(Alliance::members(MemberRole::Ally), vec![4]);
+		assert_eq!(DepositOf::<Test>::get(4), None);
+		assert_eq!(Members::<Test>::get(MemberRole::Ally), vec![4]);
 
 		// check already member
 		assert_noop!(
@@ -474,12 +474,12 @@ fn elevate_ally_works() {
 		);
 
 		assert_ok!(Alliance::join_alliance(RuntimeOrigin::signed(4)));
-		assert_eq!(Alliance::members(MemberRole::Ally), vec![4]);
-		assert_eq!(Alliance::members(MemberRole::Fellow), vec![1, 2, 3]);
+		assert_eq!(Members::<Test>::get(MemberRole::Ally), vec![4]);
+		assert_eq!(Members::<Test>::get(MemberRole::Fellow), vec![1, 2, 3]);
 
 		assert_ok!(Alliance::elevate_ally(RuntimeOrigin::signed(2), 4));
-		assert_eq!(Alliance::members(MemberRole::Ally), Vec::<u64>::new());
-		assert_eq!(Alliance::members(MemberRole::Fellow), vec![1, 2, 3, 4]);
+		assert_eq!(Members::<Test>::get(MemberRole::Ally), Vec::<u64>::new());
+		assert_eq!(Members::<Test>::get(MemberRole::Fellow), vec![1, 2, 3, 4]);
 	});
 }
 
@@ -491,10 +491,10 @@ fn give_retirement_notice_work() {
 			Error::<Test, ()>::NotMember
 		);
 
-		assert_eq!(Alliance::members(MemberRole::Fellow), vec![1, 2, 3]);
+		assert_eq!(Members::<Test>::get(MemberRole::Fellow), vec![1, 2, 3]);
 		assert_ok!(Alliance::give_retirement_notice(RuntimeOrigin::signed(3)));
-		assert_eq!(Alliance::members(MemberRole::Fellow), vec![1, 2]);
-		assert_eq!(Alliance::members(MemberRole::Retiring), vec![3]);
+		assert_eq!(Members::<Test>::get(MemberRole::Fellow), vec![1, 2]);
+		assert_eq!(Members::<Test>::get(MemberRole::Retiring), vec![3]);
 		System::assert_last_event(mock::RuntimeEvent::Alliance(
 			crate::Event::MemberRetirementPeriodStarted { member: (3) },
 		));
@@ -519,7 +519,7 @@ fn retire_works() {
 			Error::<Test, ()>::RetirementNoticeNotGiven
 		);
 
-		assert_eq!(Alliance::members(MemberRole::Fellow), vec![1, 2, 3]);
+		assert_eq!(Members::<Test>::get(MemberRole::Fellow), vec![1, 2, 3]);
 		assert_ok!(Alliance::give_retirement_notice(RuntimeOrigin::signed(3)));
 		assert_noop!(
 			Alliance::retire(RuntimeOrigin::signed(3)),
@@ -527,7 +527,7 @@ fn retire_works() {
 		);
 		System::set_block_number(System::block_number() + RetirementPeriod::get());
 		assert_ok!(Alliance::retire(RuntimeOrigin::signed(3)));
-		assert_eq!(Alliance::members(MemberRole::Fellow), vec![1, 2]);
+		assert_eq!(Members::<Test>::get(MemberRole::Fellow), vec![1, 2]);
 		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::MemberRetired {
 			member: (3),
 			unreserved: None,
@@ -543,7 +543,7 @@ fn retire_works() {
 #[test]
 fn abdicate_works() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Alliance::members(MemberRole::Fellow), vec![1, 2, 3]);
+		assert_eq!(Members::<Test>::get(MemberRole::Fellow), vec![1, 2, 3]);
 		assert_ok!(Alliance::abdicate_fellow_status(RuntimeOrigin::signed(3)));
 
 		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::FellowAbdicated {
@@ -565,9 +565,9 @@ fn kick_member_works() {
 		);
 
 		<DepositOf<Test, ()>>::insert(2, 25);
-		assert_eq!(Alliance::members(MemberRole::Fellow), vec![1, 2, 3]);
+		assert_eq!(Members::<Test>::get(MemberRole::Fellow), vec![1, 2, 3]);
 		assert_ok!(Alliance::kick_member(RuntimeOrigin::signed(2), 2));
-		assert_eq!(Alliance::members(MemberRole::Fellow), vec![1, 3]);
+		assert_eq!(Members::<Test>::get(MemberRole::Fellow), vec![1, 3]);
 		assert_eq!(<DepositOf<Test, ()>>::get(2), None);
 		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::MemberKicked {
 			member: (2),
@@ -588,8 +588,11 @@ fn add_unscrupulous_items_works() {
 				UnscrupulousItem::Website("abc".as_bytes().to_vec().try_into().unwrap())
 			]
 		));
-		assert_eq!(Alliance::unscrupulous_accounts().into_inner(), vec![3]);
-		assert_eq!(Alliance::unscrupulous_websites().into_inner(), vec!["abc".as_bytes().to_vec()]);
+		assert_eq!(UnscrupulousAccounts::<Test>::get().into_inner(), vec![3]);
+		assert_eq!(
+			UnscrupulousWebsites::<Test>::get().into_inner(),
+			vec!["abc".as_bytes().to_vec()]
+		);
 
 		assert_noop!(
 			Alliance::add_unscrupulous_items(
@@ -621,11 +624,11 @@ fn remove_unscrupulous_items_works() {
 			RuntimeOrigin::signed(3),
 			vec![UnscrupulousItem::AccountId(3)]
 		));
-		assert_eq!(Alliance::unscrupulous_accounts(), vec![3]);
+		assert_eq!(UnscrupulousAccounts::<Test>::get(), vec![3]);
 		assert_ok!(Alliance::remove_unscrupulous_items(
 			RuntimeOrigin::signed(3),
 			vec![UnscrupulousItem::AccountId(3)]
 		));
-		assert_eq!(Alliance::unscrupulous_accounts(), Vec::<u64>::new());
+		assert_eq!(UnscrupulousAccounts::<Test>::get(), Vec::<u64>::new());
 	});
 }

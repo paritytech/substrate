@@ -303,7 +303,7 @@ benchmarks! {
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
 
 		let (offenders, raw_offenders) = make_offenders_im_online::<T>(o, n)?;
-		let keys =  ImOnline::<T>::keys();
+		let keys = ImOnline::<T>::keys();
 		let validator_set_count = keys.len() as u32;
 		let offenders_count = offenders.len() as u32;
 		let offence = UnresponsivenessOffence {
@@ -453,7 +453,7 @@ benchmarks! {
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
 
 		let (mut offenders, raw_offenders) = make_offenders::<T>(1, n)?;
-		let keys =  ImOnline::<T>::keys();
+		let keys = ImOnline::<T>::keys();
 
 		let offence = BabeEquivocationOffence {
 			slot: 0u64.into(),

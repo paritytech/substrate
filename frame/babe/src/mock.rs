@@ -259,7 +259,7 @@ pub fn go_to_block(n: u64, s: u64) {
 
 /// Slots will grow accordingly to blocks
 pub fn progress_to_block(n: u64) {
-	let mut slot = u64::from(Babe::current_slot()) + 1;
+	let mut slot = u64::from(CurrentSlot::<Test>::get()) + 1;
 	for i in System::block_number() + 1..=n {
 		go_to_block(i, slot);
 		slot += 1;
@@ -268,15 +268,15 @@ pub fn progress_to_block(n: u64) {
 
 /// Progress to the first block at the given session
 pub fn start_session(session_index: SessionIndex) {
-	let missing = (session_index - Session::current_index()) * 3;
+	let missing = (session_index - pallet_session::CurrentIndex::<Test>::get()) * 3;
 	progress_to_block(System::block_number() + missing as u64 + 1);
-	assert_eq!(Session::current_index(), session_index);
+	assert_eq!(pallet_session::CurrentIndex::<Test>::get(), session_index);
 }
 
 /// Progress to the first block at the given era
 pub fn start_era(era_index: EraIndex) {
 	start_session((era_index * 3).into());
-	assert_eq!(Staking::current_era(), Some(era_index));
+	assert_eq!(pallet_staking::CurrentEra::<Test>::get(), Some(era_index));
 }
 
 pub fn make_primary_pre_digest(
@@ -318,7 +318,8 @@ pub fn make_vrf_output(
 	slot: Slot,
 	pair: &sp_consensus_babe::AuthorityPair,
 ) -> (VrfSignature, Randomness) {
-	let transcript = sp_consensus_babe::make_transcript(&Babe::randomness(), slot, 0);
+	let transcript =
+		sp_consensus_babe::make_transcript(&pallet_babe::Randomness::<Test>::get(), slot, 0);
 
 	let signature = pair.as_ref().vrf_sign(&transcript);
 

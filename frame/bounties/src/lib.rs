@@ -828,7 +828,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			description.try_into().map_err(|_| Error::<T, I>::ReasonTooBig)?;
 		ensure!(value >= T::BountyValueMinimum::get(), Error::<T, I>::InvalidValue);
 
-		let index = Self::bounty_count();
+		let index = BountyCount::<T, I>::get();
 
 		// reserve deposit for new bounty
 		let bond = T::BountyDepositBase::get() +

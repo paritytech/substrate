@@ -20,7 +20,7 @@
 #![cfg(test)]
 
 use super::*;
-use crate as pallet_bounties;
+use crate::{self as pallet_bounties, Bounties as BountiesStorage};
 
 use frame_support::{
 	assert_noop, assert_ok,
@@ -459,7 +459,7 @@ fn propose_bounty_works() {
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
 
 		assert_eq!(
-			Bounties::bounties(0).unwrap(),
+			BountiesStorage::<Test>::get(0).unwrap(),
 			Bounty {
 				proposer: 0,
 				fee: 0,
@@ -470,9 +470,9 @@ fn propose_bounty_works() {
 			}
 		);
 
-		assert_eq!(Bounties::bounty_descriptions(0).unwrap(), b"1234567890".to_vec());
+		assert_eq!(BountyDescriptions::<Test>::get(0).unwrap(), b"1234567890".to_vec());
 
-		assert_eq!(Bounties::bounty_count(), 1);
+		assert_eq!(BountyCount::<Test>::get(), 1);
 	});
 }
 
@@ -523,10 +523,10 @@ fn close_bounty_works() {
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
 
-		assert_eq!(Bounties::bounties(0), None);
+		assert_eq!(BountiesStorage::<Test>::get(0), None);
 		assert!(!pallet_treasury::Proposals::<Test>::contains_key(0));
 
-		assert_eq!(Bounties::bounty_descriptions(0), None);
+		assert_eq!(BountyDescriptions::<Test>::get(0), None);
 	});
 }
 
@@ -547,7 +547,7 @@ fn approve_bounty_works() {
 		let deposit: u64 = 80 + 5;
 
 		assert_eq!(
-			Bounties::bounties(0).unwrap(),
+			BountiesStorage::<Test>::get(0).unwrap(),
 			Bounty {
 				proposer: 0,
 				fee: 0,
@@ -557,7 +557,7 @@ fn approve_bounty_works() {
 				status: BountyStatus::Approved,
 			}
 		);
-		assert_eq!(Bounties::bounty_approvals(), vec![0]);
+		assert_eq!(BountyApprovals::<Test>::get(), vec![0]);
 
 		assert_noop!(
 			Bounties::close_bounty(RuntimeOrigin::root(), 0),
@@ -575,7 +575,7 @@ fn approve_bounty_works() {
 		assert_eq!(Balances::free_balance(0), 100);
 
 		assert_eq!(
-			Bounties::bounties(0).unwrap(),
+			BountiesStorage::<Test>::get(0).unwrap(),
 			Bounty {
 				proposer: 0,
 				fee: 0,
@@ -618,7 +618,7 @@ fn assign_curator_works() {
 		assert_ok!(Bounties::propose_curator(RuntimeOrigin::root(), 0, 4, fee));
 
 		assert_eq!(
-			Bounties::bounties(0).unwrap(),
+			BountiesStorage::<Test>::get(0).unwrap(),
 			Bounty {
 				proposer: 0,
 				fee,
@@ -645,7 +645,7 @@ fn assign_curator_works() {
 		let expected_deposit = Bounties::calculate_curator_deposit(&fee);
 
 		assert_eq!(
-			Bounties::bounties(0).unwrap(),
+			BountiesStorage::<Test>::get(0).unwrap(),
 			Bounty {
 				proposer: 0,
 				fee,
@@ -680,7 +680,7 @@ fn unassign_curator_works() {
 		assert_ok!(Bounties::unassign_curator(RuntimeOrigin::signed(4), 0));
 
 		assert_eq!(
-			Bounties::bounties(0).unwrap(),
+			BountiesStorage::<Test>::get(0).unwrap(),
 			Bounty {
 				proposer: 0,
 				fee,
@@ -698,7 +698,7 @@ fn unassign_curator_works() {
 		assert_ok!(Bounties::unassign_curator(RuntimeOrigin::root(), 0));
 
 		assert_eq!(
-			Bounties::bounties(0).unwrap(),
+			BountiesStorage::<Test>::get(0).unwrap(),
 			Bounty {
 				proposer: 0,
 				fee,
@@ -742,7 +742,7 @@ fn award_and_claim_bounty_works() {
 		assert_ok!(Bounties::award_bounty(RuntimeOrigin::signed(4), 0, 3));
 
 		assert_eq!(
-			Bounties::bounties(0).unwrap(),
+			BountiesStorage::<Test>::get(0).unwrap(),
 			Bounty {
 				proposer: 0,
 				fee,
@@ -776,8 +776,8 @@ fn award_and_claim_bounty_works() {
 		assert_eq!(Balances::free_balance(3), 56);
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 0);
 
-		assert_eq!(Bounties::bounties(0), None);
-		assert_eq!(Bounties::bounty_descriptions(0), None);
+		assert_eq!(BountiesStorage::<Test>::get(0), None);
+		assert_eq!(BountyDescriptions::<Test>::get(0), None);
 	});
 }
 
@@ -817,8 +817,8 @@ fn claim_handles_high_fee() {
 		assert_eq!(Balances::free_balance(3), 0);
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 0);
 
-		assert_eq!(Bounties::bounties(0), None);
-		assert_eq!(Bounties::bounty_descriptions(0), None);
+		assert_eq!(BountiesStorage::<Test>::get(0), None);
+		assert_eq!(BountyDescriptions::<Test>::get(0), None);
 	});
 }
 
@@ -843,7 +843,7 @@ fn cancel_and_refund() {
 		));
 
 		assert_eq!(
-			Bounties::bounties(0).unwrap(),
+			BountiesStorage::<Test>::get(0).unwrap(),
 			Bounty {
 				proposer: 0,
 				fee: 0,
@@ -903,8 +903,8 @@ fn award_and_cancel() {
 		assert_eq!(Balances::free_balance(0), 95);
 		assert_eq!(Balances::reserved_balance(0), 0);
 
-		assert_eq!(Bounties::bounties(0), None);
-		assert_eq!(Bounties::bounty_descriptions(0), None);
+		assert_eq!(BountiesStorage::<Test>::get(0), None);
+		assert_eq!(BountyDescriptions::<Test>::get(0), None);
 	});
 }
 
@@ -940,7 +940,7 @@ fn expire_and_unassign() {
 		assert_ok!(Bounties::unassign_curator(RuntimeOrigin::signed(0), 0));
 
 		assert_eq!(
-			Bounties::bounties(0).unwrap(),
+			BountiesStorage::<Test>::get(0).unwrap(),
 			Bounty {
 				proposer: 0,
 				fee: 10,
@@ -990,7 +990,7 @@ fn extend_expiry() {
 		assert_ok!(Bounties::extend_bounty_expiry(RuntimeOrigin::signed(4), 0, Vec::new()));
 
 		assert_eq!(
-			Bounties::bounties(0).unwrap(),
+			BountiesStorage::<Test>::get(0).unwrap(),
 			Bounty {
 				proposer: 0,
 				fee: 10,
@@ -1004,7 +1004,7 @@ fn extend_expiry() {
 		assert_ok!(Bounties::extend_bounty_expiry(RuntimeOrigin::signed(4), 0, Vec::new()));
 
 		assert_eq!(
-			Bounties::bounties(0).unwrap(),
+			BountiesStorage::<Test>::get(0).unwrap(),
 			Bounty {
 				proposer: 0,
 				fee: 10,
@@ -1113,7 +1113,7 @@ fn unassign_curator_self() {
 		assert_ok!(Bounties::unassign_curator(RuntimeOrigin::signed(1), 0));
 
 		assert_eq!(
-			Bounties::bounties(0).unwrap(),
+			BountiesStorage::<Test>::get(0).unwrap(),
 			Bounty {
 				proposer: 0,
 				fee: 10,

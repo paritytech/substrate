@@ -55,7 +55,7 @@ fn split_vote_cancellation_should_work() {
 		assert_ok!(Democracy::remove_vote(RuntimeOrigin::signed(5), r));
 		assert_eq!(tally(r), Tally { ayes: 0, nays: 0, turnout: 0 });
 		assert_ok!(Democracy::unlock(RuntimeOrigin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![]);
+		assert_eq!(pallet_balances::Locks::<Test>::get(5), vec![]);
 	});
 }
 
@@ -65,13 +65,13 @@ fn single_proposal_should_work() {
 		System::set_block_number(0);
 		assert_ok!(propose_set_balance(1, 2, 1));
 		let r = 0;
-		assert!(Democracy::referendum_info(r).is_none());
+		assert!(ReferendumInfoOf::<Test>::get(r).is_none());
 
 		// start of 2 => next referendum scheduled.
 		fast_forward_to(2);
 		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), r, aye(1)));
 
-		assert_eq!(Democracy::referendum_count(), 1);
+		assert_eq!(ReferendumCount::<Test>::get(), 1);
 		assert_eq!(
 			Democracy::referendum_status(0),
 			Ok(ReferendumStatus {

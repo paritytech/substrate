@@ -73,13 +73,14 @@ impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
 }
 
 pub fn is_disabled(controller: AccountId) -> bool {
-	let stash = Staking::ledger(&controller).unwrap().stash;
-	let validator_index = match Session::validators().iter().position(|v| *v == stash) {
-		Some(index) => index as u32,
-		None => return false,
-	};
+	let stash = Ledger::<Test>::get(&controller).unwrap().stash;
+	let validator_index =
+		match pallet_session::Validators::<Test>::get().iter().position(|v| *v == stash) {
+			Some(index) => index as u32,
+			None => return false,
+		};
 
-	Session::disabled_validators().contains(&validator_index)
+	pallet_session::DisabledValidators::<Test>::get().contains(&validator_index)
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -556,11 +557,11 @@ impl ExtBuilder {
 }
 
 pub(crate) fn active_era() -> EraIndex {
-	Staking::active_era().unwrap().index
+	ActiveEra::<Test>::get().unwrap().index
 }
 
 pub(crate) fn current_era() -> EraIndex {
-	Staking::current_era().unwrap()
+	CurrentEra::<Test>::get().unwrap()
 }
 
 pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
@@ -622,17 +623,17 @@ pub(crate) fn start_session(session_index: SessionIndex) {
 	run_to_block(end);
 	// session must have progressed properly.
 	assert_eq!(
-		Session::current_index(),
+		pallet_session::CurrentIndex::<Test>::get(),
 		session_index,
 		"current session index = {}, expected = {}",
-		Session::current_index(),
+		pallet_session::CurrentIndex::<Test>::get(),
 		session_index,
 	);
 }
 
 /// Go one session forward.
 pub(crate) fn advance_session() {
-	let current_index = Session::current_index();
+	let current_index = pallet_session::CurrentIndex::<Test>::get();
 	start_session(current_index + 1);
 }
 
@@ -647,7 +648,7 @@ pub(crate) fn start_active_era(era_index: EraIndex) {
 
 pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
 	let (payout, _rest) = <Test as Config>::EraPayout::era_payout(
-		Staking::eras_total_stake(active_era()),
+		ErasTotalStake::<Test>::get(active_era()),
 		Balances::total_issuance(),
 		duration,
 	);
@@ -657,7 +658,7 @@ pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
 
 pub(crate) fn maximum_payout_for_duration(duration: u64) -> Balance {
 	let (payout, rest) = <Test as Config>::EraPayout::era_payout(
-		Staking::eras_total_stake(active_era()),
+		ErasTotalStake::<Test>::get(active_era()),
 		Balances::total_issuance(),
 		duration,
 	);
@@ -692,9 +693,9 @@ pub(crate) fn reward_all_elected() {
 }
 
 pub(crate) fn validator_controllers() -> Vec<AccountId> {
-	Session::validators()
+	pallet_session::Validators::<Test>::get()
 		.into_iter()
-		.map(|s| Staking::bonded(&s).expect("no controller for validator"))
+		.map(|s| Bonded::<Test>::get(&s).expect("no controller for validator"))
 		.collect()
 }
 
@@ -717,11 +718,11 @@ pub(crate) fn on_offence_in_era(
 		}
 	}
 
-	if Staking::active_era().unwrap().index == era {
+	if ActiveEra::<Test>::get().unwrap().index == era {
 		let _ = Staking::on_offence(
 			offenders,
 			slash_fraction,
-			Staking::eras_start_session_index(era).unwrap(),
+			ErasStartSessionIndex::<Test>::get(era).unwrap(),
 			disable_strategy,
 		);
 	} else {
@@ -736,14 +737,14 @@ pub(crate) fn on_offence_now(
 	>],
 	slash_fraction: &[Perbill],
 ) {
-	let now = Staking::active_era().unwrap().index;
+	let now = ActiveEra::<Test>::get().unwrap().index;
 	on_offence_in_era(offenders, slash_fraction, now, DisableStrategy::WhenSlashed)
 }
 
 pub(crate) fn add_slash(who: &AccountId) {
 	on_offence_now(
 		&[OffenceDetails {
-			offender: (*who, Staking::eras_stakers(active_era(), *who)),
+			offender: (*who, ErasStakers::<Test>::get(active_era(), *who)),
 			reporters: vec![],
 		}],
 		&[Perbill::from_percent(10)],
@@ -759,7 +760,7 @@ pub(crate) fn make_all_reward_payment(era: EraIndex) {
 		.collect::<Vec<_>>();
 
 	// reward validators
-	for validator_controller in validators_with_reward.iter().filter_map(Staking::bonded) {
+	for validator_controller in validators_with_reward.iter().filter_map(Bonded::<Test>::get) {
 		let ledger = <Ledger<Test>>::get(&validator_controller).unwrap();
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), ledger.stash, era));
 	}
@@ -769,17 +770,17 @@ pub(crate) fn make_all_reward_payment(era: EraIndex) {
 macro_rules! assert_session_era {
 	($session:expr, $era:expr) => {
 		assert_eq!(
-			Session::current_index(),
+			pallet_session::CurrentIndex::<Test>::get(),
 			$session,
 			"wrong session {} != {}",
-			Session::current_index(),
+			pallet_session::CurrentIndex::<Test>::get(),
 			$session,
 		);
 		assert_eq!(
-			Staking::current_era().unwrap(),
+			CurrentEra::<Test>::get().unwrap(),
 			$era,
 			"wrong current era {} != {}",
-			Staking::current_era().unwrap(),
+			CurrentEra::<Test>::get().unwrap(),
 			$era,
 		);
 	};

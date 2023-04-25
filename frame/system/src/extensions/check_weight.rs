@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{limits::BlockWeights, Config, Pallet};
+use crate::{limits::BlockWeights, BlockWeight, Config, Pallet};
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchInfo, PostDispatchInfo},
@@ -63,7 +63,7 @@ where
 		info: &DispatchInfoOf<T::RuntimeCall>,
 	) -> Result<crate::ConsumedWeight, TransactionValidityError> {
 		let maximum_weight = T::BlockWeights::get();
-		let all_weight = Pallet::<T>::block_weight();
+		let all_weight = BlockWeight::<T>::get();
 		calculate_consumed_weight::<T::RuntimeCall>(maximum_weight, all_weight, info)
 	}
 

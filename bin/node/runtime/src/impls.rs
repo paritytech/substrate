@@ -121,7 +121,7 @@ mod multiplier_tests {
 	use crate::{
 		constants::{currency::*, time::*},
 		AdjustmentVariable, MaximumMultiplier, MinimumMultiplier, Runtime,
-		RuntimeBlockWeights as BlockWeights, System, TargetBlockFullness, TransactionPayment,
+		RuntimeBlockWeights as BlockWeights, System, TargetBlockFullness,
 	};
 	use frame_support::{
 		dispatch::DispatchClass,
@@ -291,7 +291,7 @@ mod multiplier_tests {
 		run_with_system_weight(block_weight, || {
 			// initial value configured on module
 			let mut fm = Multiplier::one();
-			assert_eq!(fm, TransactionPayment::next_fee_multiplier());
+			assert_eq!(fm, pallet_transaction_payment::NextFeeMultiplier::<Runtime>::get());
 
 			let mut iterations: u64 = 0;
 			loop {

@@ -208,7 +208,6 @@ pub mod pallet {
 
 	/// Number of proposals that have been made.
 	#[pallet::storage]
-	#[pallet::getter(fn proposal_count)]
 	pub(crate) type ProposalCount<T, I = ()> = StorageValue<_, ProposalIndex, ValueQuery>;
 
 	/// Proposals that have been made.
@@ -365,7 +364,7 @@ pub mod pallet {
 			T::Currency::reserve(&proposer, bond)
 				.map_err(|_| Error::<T, I>::InsufficientProposersBalance)?;
 
-			let c = Self::proposal_count();
+			let c = ProposalCount::<T, I>::get();
 			<ProposalCount<T, I>>::put(c + 1);
 			<Proposals<T, I>>::insert(c, Proposal { proposer, value, beneficiary, bond });
 
@@ -460,7 +459,7 @@ pub mod pallet {
 			.unwrap_or(Ok(()))?;
 
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
-			let proposal_index = Self::proposal_count();
+			let proposal_index = ProposalCount::<T, I>::get();
 			Approvals::<T, I>::try_append(proposal_index)
 				.map_err(|_| Error::<T, I>::TooManyApprovals)?;
 			let proposal = Proposal {
@@ -514,6 +513,11 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// Add public immutables and private mutables.
 
+	/// Number of proposals that have been made.
+	pub fn proposal_count() -> ProposalIndex {
+		ProposalCount::<T, I>::get()
+	}
+
 	/// The account ID of the treasury pot.
 	///
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
@@ -545,7 +549,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let proposals_approvals_len = v.len() as u32;
 			v.retain(|&index| {
 				// Should always be true, but shouldn't panic if false or we're screwed.
-				if let Some(p) = Self::proposals(index) {
+				if let Some(p) = Proposals::<T, I>::get(index) {
 					if p.value <= budget_remaining {
 						budget_remaining -= p.value;
 						<Proposals<T, I>>::remove(index);

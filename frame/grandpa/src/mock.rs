@@ -306,7 +306,7 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 }
 
 pub fn start_session(session_index: SessionIndex) {
-	for i in Session::current_index()..session_index {
+	for i in pallet_session::CurrentIndex::<Test>::get()..session_index {
 		System::on_finalize(System::block_number());
 		Session::on_finalize(System::block_number());
 		Staking::on_finalize(System::block_number());
@@ -330,12 +330,12 @@ pub fn start_session(session_index: SessionIndex) {
 		Grandpa::on_initialize(System::block_number());
 	}
 
-	assert_eq!(Session::current_index(), session_index);
+	assert_eq!(pallet_session::CurrentIndex::<Test>::get(), session_index);
 }
 
 pub fn start_era(era_index: EraIndex) {
 	start_session((era_index * 3).into());
-	assert_eq!(Staking::current_era(), Some(era_index));
+	assert_eq!(pallet_staking::CurrentEra::<Test>::get(), Some(era_index));
 }
 
 pub fn initialize_block(number: u64, parent_hash: H256) {

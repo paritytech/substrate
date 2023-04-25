@@ -48,7 +48,7 @@ mod benchmarks {
 		set_dummy(RawOrigin::Root, value); // The execution phase is just running `set_dummy` extrinsic call
 
 		// This is the optional benchmark verification phase, asserting certain states.
-		assert_eq!(Pallet::<T>::dummy(), Some(value))
+		assert_eq!(Dummy::<T>::get(), Some(value))
 	}
 
 	// An example method that returns a Result that can be called within a benchmark

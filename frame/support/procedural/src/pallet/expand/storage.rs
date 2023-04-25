@@ -395,6 +395,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						#(#cfg_attrs)*
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
 							#( #docs )*
+							#[deprecated = "#[pallet::getter] is deprecated and will be unavailable in future versions.\nFor more information, see https://github.com/paritytech/substrate/pull/13365"]
 							pub fn #getter() -> #query {
 								<
 									#full_ident as #frame_support::storage::StorageValue<#value>
