@@ -448,16 +448,11 @@ mod multiplier_tests {
 			Weight::from_parts(2147483647, 0),
 			Weight::from_parts(4294967295, 0),
 			// testcases ignoring ref time part of the weight.
-			Weight::from_parts(0, 1),
-			Weight::from_parts(0, 1000000),
-			Weight::from_parts(0, 100000000),
 			Weight::from_parts(0, 100000000000),
-			kb_size,
-			10u64 * kb_size,
-			100u64 * kb_size,
 			1000000u64 * kb_size,
 			1000000000u64 * kb_size,
-			Weight::from_parts(0, 70368744177664),
+			Weight::from_parts(0, 18014398509481983),
+			Weight::from_parts(0, 9223372036854775807),
 			// test cases with both parts of the weight.
 			BlockWeights::get().max_block / 1024,
 			BlockWeights::get().max_block / 2,
@@ -476,7 +471,14 @@ mod multiplier_tests {
 
 		// Some values that are all above the target and will cause an increase.
 		let t = target();
-		vec![t + Weight::from_parts(100, 0), t * 2, t * 4].into_iter().for_each(|i| {
+		vec![
+			t + Weight::from_parts(100, 0),
+			t + Weight::from_parts(0, t.proof_size() * 2),
+			t * 2,
+			t * 4,
+		]
+		.into_iter()
+		.for_each(|i| {
 			run_with_system_weight(i, || {
 				let fm = runtime_multiplier_update(max_fm);
 				// won't grow. The convert saturates everything.
