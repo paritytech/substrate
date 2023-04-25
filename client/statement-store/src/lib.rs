@@ -36,8 +36,8 @@
 //
 // Each time a statement is removed from the store (Either evicted by higher priority statement or
 // explicitly with the `remove` function) the statement is marked as expired. Expired statements
-// can't be added to the store for `PURGE_AFTER` seconds. This is to prevent old statements from
-// being propagated on the network.
+// can't be added to the store for `Options::purge_after_sec` seconds. This is to prevent old
+// statements from being propagated on the network.
 
 //! Disk-backed statement store.
 
@@ -70,9 +70,9 @@ const CURRENT_VERSION: u32 = 1;
 
 const LOG_TARGET: &str = "statement-store";
 
-const PURGE_AFTER: u64 = 2 * 24 * 60 * 60; //48h
-const MAX_TOTAL_STATEMENTS: usize = 8192;
-const MAX_TOTAL_SIZE: usize = 64 * 1024 * 1024;
+const DEFAULT_PURGE_AFTER_SEC: u64 = 2 * 24 * 60 * 60; //48h
+const DEFAULT_MAX_TOTAL_STATEMENTS: usize = 8192;
+const DEFAULT_MAX_TOTAL_SIZE: usize = 64 * 1024 * 1024;
 
 const MAINTENANCE_PERIOD: std::time::Duration = std::time::Duration::from_secs(30);
 
@@ -123,6 +123,28 @@ struct StatementsForAccount {
 	data_size: usize,
 }
 
+/// Store configuration
+pub struct Options {
+	/// Maximum statement allowed in the store. Once this limit is reached lower-priority
+	/// statements may be evicted.
+	max_total_statements: usize,
+	/// Maximum total data size allowed in the store. Once this limit is reached lower-priority
+	/// statements may be evicted.
+	max_total_size: usize,
+	/// Number of seconds for which removed statements won't be allowed to be added back in.
+	purge_after_sec: u64,
+}
+
+impl Default for Options {
+	fn default() -> Self {
+		Options {
+			max_total_statements: DEFAULT_MAX_TOTAL_STATEMENTS,
+			max_total_size: DEFAULT_MAX_TOTAL_SIZE,
+			purge_after_sec: DEFAULT_PURGE_AFTER_SEC,
+		}
+	}
+}
+
 #[derive(Default)]
 struct Index {
 	by_topic: HashMap<Topic, HashSet<Hash>>,
@@ -134,8 +156,7 @@ struct Index {
 	expired: HashMap<Hash, u64>, // Value is expiration timestamp.
 	accounts: HashMap<AccountId, StatementsForAccount>,
 	by_global_priority: BTreeMap<PriorityKey<GlobalPriority>, usize>,
-	max_entries: usize,
-	max_size: usize,
+	options: Options,
 	total_size: usize,
 }
 
@@ -208,8 +229,8 @@ enum MaybeInserted {
 }
 
 impl Index {
-	fn new() -> Index {
-		Index { max_entries: MAX_TOTAL_STATEMENTS, max_size: MAX_TOTAL_SIZE, ..Default::default() }
+	fn new(options: Options) -> Index {
+		Index { options, ..Default::default() }
 	}
 
 	fn insert_new(
@@ -305,7 +326,7 @@ impl Index {
 		// Purge previously expired messages.
 		let mut purged = Vec::new();
 		self.expired.retain(|hash, timestamp| {
-			if *timestamp + PURGE_AFTER <= current_time {
+			if *timestamp + self.options.purge_after_sec <= current_time {
 				purged.push(*hash);
 				log::trace!(target: LOG_TARGET, "Purged statement {:?}", HexDisplay::from(hash));
 				false
@@ -453,8 +474,9 @@ impl Index {
 		let global_priority = GlobalPriority(validation.global_priority);
 		// Now check global constraints as well.
 		for (entry, len) in self.by_global_priority.iter() {
-			if (self.total_size - would_free_size + statement_len <= self.max_size) &&
-				self.by_global_priority.len() + 1 - evicted.len() <= self.max_entries
+			if (self.total_size - would_free_size + statement_len <= self.options.max_total_size) &&
+				self.by_global_priority.len() + 1 - evicted.len() <=
+					self.options.max_total_statements
 			{
 				// Satisfied
 				break
@@ -490,6 +512,7 @@ impl Store {
 	/// Create a new shared store instance. There should only be one per process.
 	pub fn new_shared<Block, Client>(
 		path: &std::path::Path,
+		options: Options,
 		client: Arc<Client>,
 		prometheus: Option<&PrometheusRegistry>,
 		task_spawner: &dyn SpawnNamed,
@@ -505,7 +528,7 @@ impl Store {
 			+ 'static,
 		Client::Api: ValidateStatement<Block>,
 	{
-		let store = Arc::new(Self::new(path, client.clone(), prometheus)?);
+		let store = Arc::new(Self::new(path, options, client.clone(), prometheus)?);
 		client.execution_extensions().register_statement_store(store.clone());
 
 		// Perform periodic statement store maintenance
@@ -528,6 +551,7 @@ impl Store {
 	/// Create a new instance.
 	fn new<Block, Client>(
 		path: &std::path::Path,
+		options: Options,
 		client: Arc<Client>,
 		prometheus: Option<&PrometheusRegistry>,
 	) -> Result<Store>
@@ -575,7 +599,7 @@ impl Store {
 
 		let store = Store {
 			db,
-			index: RwLock::new(Index::new()),
+			index: RwLock::new(Index::new(options)),
 			validate_fn,
 			time_override: None,
 			metrics: PrometheusMetrics::new(prometheus),
@@ -1026,7 +1050,7 @@ mod tests {
 		let client = std::sync::Arc::new(TestClient);
 		let mut path: std::path::PathBuf = temp_dir.path().into();
 		path.push("db");
-		let store = Store::new(&path, client, None).unwrap();
+		let store = Store::new(&path, Default::default(), client, None).unwrap();
 		(store, temp_dir) // return order is important. Store must be dropped before TempDir
 	}
 
@@ -1134,7 +1158,7 @@ mod tests {
 		let client = std::sync::Arc::new(TestClient);
 		let mut path: std::path::PathBuf = temp.path().into();
 		path.push("db");
-		let store = Store::new(&path, client, None).unwrap();
+		let store = Store::new(&path, Default::default(), client, None).unwrap();
 		assert_eq!(store.statements().unwrap().len(), 3);
 		assert_eq!(store.broadcasts(&[]).unwrap().len(), 3);
 		assert_eq!(store.statement(&statement1.hash()).unwrap(), Some(statement1));
@@ -1187,7 +1211,7 @@ mod tests {
 	fn constraints() {
 		let (store, _temp) = test_store();
 
-		store.index.write().max_size = 3000;
+		store.index.write().options.max_total_size = 3000;
 		let source = StatementSource::Network;
 		let ok = SubmitResult::New(NetworkPriority::High);
 		let ignored = SubmitResult::Ignored;
@@ -1231,7 +1255,7 @@ mod tests {
 		// Should be over the global size limit
 		assert_eq!(store.submit(statement(1, 1, None, 700), source), ignored);
 		// Should be over the global count limit
-		store.index.write().max_entries = 4;
+		store.index.write().options.max_total_statements = 4;
 		assert_eq!(store.submit(statement(1, 1, None, 100), source), ignored);
 		// Should evict statement from account 1
 		assert_eq!(store.submit(statement(4, 6, None, 100), source), ok);
@@ -1252,7 +1276,7 @@ mod tests {
 
 	#[test]
 	fn expired_statements_are_purged() {
-		use super::PURGE_AFTER;
+		use super::DEFAULT_PURGE_AFTER_SEC;
 		let (mut store, temp) = test_store();
 		let mut statement = statement(1, 1, Some(3), 100);
 		store.set_time(0);
@@ -1263,7 +1287,7 @@ mod tests {
 		assert_eq!(store.index.read().entries.len(), 0);
 		assert_eq!(store.index.read().by_global_priority.len(), 0);
 		assert_eq!(store.index.read().accounts.len(), 0);
-		store.set_time(PURGE_AFTER + 1);
+		store.set_time(DEFAULT_PURGE_AFTER_SEC + 1);
 		store.maintain();
 		assert_eq!(store.index.read().expired.len(), 0);
 		drop(store);
@@ -1271,7 +1295,7 @@ mod tests {
 		let client = std::sync::Arc::new(TestClient);
 		let mut path: std::path::PathBuf = temp.path().into();
 		path.push("db");
-		let store = Store::new(&path, client, None).unwrap();
+		let store = Store::new(&path, Default::default(), client, None).unwrap();
 		assert_eq!(store.statements().unwrap().len(), 0);
 		assert_eq!(store.index.read().expired.len(), 0);
 	}
