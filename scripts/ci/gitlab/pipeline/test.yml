@@ -29,7 +29,6 @@ cargo-deny-licenses:
   variables:
     CARGO_DENY_CMD: "cargo deny --all-features check licenses -c ./scripts/ci/deny.toml"
   script:
-    - exit 1
     - rusty-cachier snapshot create
     - $CARGO_DENY_CMD --hide-inclusion-graph
     - rusty-cachier cache upload
