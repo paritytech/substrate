@@ -23,7 +23,7 @@ use crate::{
 		ImportParams, KeystoreParams, NetworkParams, OffchainWorkerParams, SharedParams,
 		TransactionPoolParams,
 	},
-	CliConfiguration,
+	CliConfiguration, PrometheusParams, RuntimeParams, TelemetryParams,
 };
 use clap::Parser;
 use regex::Regex;
@@ -116,12 +116,6 @@ pub struct RunCmd {
 	#[arg(long)]
 	pub rpc_max_subscriptions_per_connection: Option<usize>,
 
-	/// Expose Prometheus exporter on all interfaces.
-	///
-	/// Default is local.
-	#[arg(long)]
-	pub prometheus_external: bool,
-
 	/// DEPRECATED, IPC support has been removed.
 	#[arg(long, value_name = "PATH")]
 	pub ipc_path: Option<String>,
@@ -151,36 +145,23 @@ pub struct RunCmd {
 	#[arg(long, value_name = "ORIGINS", value_parser = parse_cors)]
 	pub rpc_cors: Option<Cors>,
 
-	/// Specify Prometheus exporter TCP Port.
-	#[arg(long, value_name = "PORT")]
-	pub prometheus_port: Option<u16>,
-
-	/// Do not expose a Prometheus exporter endpoint.
-	///
-	/// Prometheus metric endpoint is enabled by default.
-	#[arg(long)]
-	pub no_prometheus: bool,
-
 	/// The human-readable name for this node.
 	///
-	/// The node name will be reported to the telemetry server, if enabled.
+	/// It's used as network node name.
 	#[arg(long, value_name = "NAME")]
 	pub name: Option<String>,
 
-	/// Disable connecting to the Substrate telemetry server.
-	///
-	/// Telemetry is on by default on global chains.
-	#[arg(long)]
-	pub no_telemetry: bool,
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub telemetry_params: TelemetryParams,
 
-	/// The URL of the telemetry server to connect to.
-	///
-	/// This flag can be passed multiple times as a means to specify multiple
-	/// telemetry endpoints. Verbosity levels range from 0-9, with 0 denoting
-	/// the least verbosity.
-	/// Expected format is 'URL VERBOSITY', e.g. `--telemetry-url 'wss://foo/bar 0'`.
-	#[arg(long = "telemetry-url", value_name = "URL VERBOSITY", value_parser = parse_telemetry_endpoints)]
-	pub telemetry_endpoints: Vec<(String, u8)>,
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub prometheus_params: PrometheusParams,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub runtime_params: RuntimeParams,
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
@@ -201,6 +182,10 @@ pub struct RunCmd {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub pool_config: TransactionPoolParams,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub keystore_params: KeystoreParams,
 
 	/// Shortcut for `--name Alice --validator` with session keys for `Alice` added to keystore.
 	#[arg(long, conflicts_with_all = &["bob", "charlie", "dave", "eve", "ferdie", "one", "two"])]
@@ -238,20 +223,6 @@ pub struct RunCmd {
 	/// Enable authoring even when offline.
 	#[arg(long)]
 	pub force_authoring: bool,
-
-	#[allow(missing_docs)]
-	#[clap(flatten)]
-	pub keystore_params: KeystoreParams,
-
-	/// The size of the instances cache for each runtime.
-	///
-	/// The default value is 8 and the values higher than 256 are ignored.
-	#[arg(long)]
-	pub max_runtime_instances: Option<usize>,
-
-	/// Maximum number of different runtimes that can be cached.
-	#[arg(long, default_value_t = 2)]
-	pub runtime_cache_size: u8,
 
 	/// Run a temporary node.
 	///
@@ -345,11 +316,12 @@ impl CliConfiguration for RunCmd {
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> Result<Option<TelemetryEndpoints>> {
-		Ok(if self.no_telemetry {
+		let params = &self.telemetry_params;
+		Ok(if params.no_telemetry {
 			None
-		} else if !self.telemetry_endpoints.is_empty() {
+		} else if !params.telemetry_endpoints.is_empty() {
 			Some(
-				TelemetryEndpoints::new(self.telemetry_endpoints.clone())
+				TelemetryEndpoints::new(params.telemetry_endpoints.clone())
 					.map_err(|e| e.to_string())?,
 			)
 		} else {
@@ -361,7 +333,7 @@ impl CliConfiguration for RunCmd {
 		let keyring = self.get_keyring();
 		let is_authority = self.validator || is_dev || keyring.is_some();
 
-		Ok(if is_authority { sc_service::Role::Authority } else { sc_service::Role::Full })
+		Ok(if is_authority { Role::Authority } else { Role::Full })
 	}
 
 	fn force_authoring(&self) -> Result<bool> {
@@ -374,20 +346,9 @@ impl CliConfiguration for RunCmd {
 		default_listen_port: u16,
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> Result<Option<PrometheusConfig>> {
-		Ok(if self.no_prometheus {
-			None
-		} else {
-			let interface =
-				if self.prometheus_external { Ipv4Addr::UNSPECIFIED } else { Ipv4Addr::LOCALHOST };
-
-			Some(PrometheusConfig::new_with_default_registry(
-				SocketAddr::new(
-					interface.into(),
-					self.prometheus_port.unwrap_or(default_listen_port),
-				),
-				chain_spec.id().into(),
-			))
-		})
+		Ok(self
+			.prometheus_params
+			.prometheus_config(default_listen_port, chain_spec.id().to_string()))
 	}
 
 	fn disable_grandpa(&self) -> Result<bool> {
@@ -474,11 +435,11 @@ impl CliConfiguration for RunCmd {
 	}
 
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
-		Ok(self.max_runtime_instances.map(|x| x.min(256)))
+		Ok(Some(self.runtime_params.max_runtime_instances))
 	}
 
 	fn runtime_cache_size(&self) -> Result<u8> {
-		Ok(self.runtime_cache_size)
+		Ok(self.runtime_params.runtime_cache_size)
 	}
 
 	fn base_path(&self) -> Result<Option<BasePath>> {
@@ -543,36 +504,6 @@ fn rpc_interface(
 		Ok(Ipv4Addr::UNSPECIFIED.into())
 	} else {
 		Ok(Ipv4Addr::LOCALHOST.into())
-	}
-}
-
-#[derive(Debug)]
-enum TelemetryParsingError {
-	MissingVerbosity,
-	VerbosityParsingError(std::num::ParseIntError),
-}
-
-impl std::error::Error for TelemetryParsingError {}
-
-impl std::fmt::Display for TelemetryParsingError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			TelemetryParsingError::MissingVerbosity => write!(f, "Verbosity level missing"),
-			TelemetryParsingError::VerbosityParsingError(e) => write!(f, "{}", e),
-		}
-	}
-}
-
-fn parse_telemetry_endpoints(s: &str) -> std::result::Result<(String, u8), TelemetryParsingError> {
-	let pos = s.find(' ');
-	match pos {
-		None => Err(TelemetryParsingError::MissingVerbosity),
-		Some(pos_) => {
-			let url = s[..pos_].to_string();
-			let verbosity =
-				s[pos_ + 1..].parse().map_err(TelemetryParsingError::VerbosityParsingError)?;
-			Ok((url, verbosity))
-		},
 	}
 }
 
