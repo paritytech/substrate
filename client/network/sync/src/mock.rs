@@ -22,9 +22,9 @@
 use futures::task::Poll;
 use libp2p::PeerId;
 use sc_network_common::sync::{
-	message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse},
-	BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification,
-	OpaqueBlockResponse, PeerInfo, PollBlockAnnounceValidation, SyncStatus,
+	message::{BlockAnnounce, BlockRequest, BlockResponse},
+	BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification, PeerInfo,
+	PollBlockAnnounceValidation, SyncStatus,
 };
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
@@ -85,11 +85,6 @@ mockall::mock! {
 		) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
 		fn peer_disconnected(&mut self, who: &PeerId);
 		fn metrics(&self) -> Metrics;
-		fn block_response_into_blocks(
-			&self,
-			request: &BlockRequest<Block>,
-			response: OpaqueBlockResponse,
-		) -> Result<Vec<BlockData<Block>>, String>;
 		fn poll<'a>(
 			&mut self,
 			cx: &mut std::task::Context<'a>,

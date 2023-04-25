@@ -18,11 +18,16 @@
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
 use crate::{
-	schema::v1::{block_request::FromBlock, BlockResponse, Direction},
+	block_relay_protocol::{BlockDownloader, BlockRelayParams, BlockResponseErr, BlockServer},
+	schema::v1::{
+		block_request::FromBlock as FromBlockSchema, BlockRequest as BlockRequestSchema,
+		BlockResponse as BlockResponseSchema, BlockResponse, Direction,
+	},
+	service::network::NetworkServiceHandle,
 	MAX_BLOCKS_IN_RESPONSE,
 };
 
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeAll, Encode};
 use futures::{
 	channel::{mpsc, oneshot},
 	stream::StreamExt,
@@ -31,19 +36,20 @@ use libp2p::PeerId;
 use log::debug;
 use lru::LruCache;
 use prost::Message;
-
 use sc_client_api::BlockBackend;
 use sc_network::{
 	config::ProtocolId,
-	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+	request_responses::{
+		IfDisconnected, IncomingRequest, OutgoingResponse, ProtocolConfig, RequestFailure,
+	},
+	types::ProtocolName,
 };
-use sc_network_common::sync::message::BlockAttributes;
+use sc_network_common::sync::message::{BlockAttributes, BlockData, BlockRequest, FromBlock};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, One, Zero},
 };
-
 use std::{
 	cmp::min,
 	hash::{Hash, Hasher},
@@ -154,7 +160,7 @@ where
 		fork_id: Option<&str>,
 		client: Arc<Client>,
 		num_peer_hint: usize,
-	) -> (Self, ProtocolConfig) {
+	) -> BlockRelayParams<B> {
 		// Reserve enough request slots for one request per peer when we are at the maximum
 		// number of peers.
 		let (tx, request_receiver) = mpsc::channel(num_peer_hint);
@@ -174,11 +180,15 @@ where
 			NonZeroUsize::new(num_peer_hint.max(1) * 2).expect("cache capacity is not zero");
 		let seen_requests = LruCache::new(capacity);
 
-		(Self { client, request_receiver, seen_requests }, protocol_config)
+		BlockRelayParams {
+			server: Box::new(Self { client, request_receiver, seen_requests }),
+			downloader: Arc::new(FullBlockDownloader::new(protocol_config.name.clone())),
+			request_response_config: protocol_config,
+		}
 	}
 
 	/// Run [`BlockRequestHandler`].
-	pub async fn run(mut self) {
+	async fn process_requests(&mut self) {
 		while let Some(request) = self.request_receiver.next().await {
 			let IncomingRequest { peer, payload, pending_response } = request;
 
@@ -201,11 +211,11 @@ where
 		let request = crate::schema::v1::BlockRequest::decode(&payload[..])?;
 
 		let from_block_id = match request.from_block.ok_or(HandleRequestError::MissingFromField)? {
-			FromBlock::Hash(ref h) => {
+			FromBlockSchema::Hash(ref h) => {
 				let h = Decode::decode(&mut h.as_ref())?;
 				BlockId::<B>::Hash(h)
 			},
-			FromBlock::Number(ref n) => {
+			FromBlockSchema::Number(ref n) => {
 				let n = Decode::decode(&mut n.as_ref())?;
 				BlockId::<B>::Number(n)
 			},
@@ -452,6 +462,17 @@ where
 	}
 }
 
+#[async_trait::async_trait]
+impl<B, Client> BlockServer<B> for BlockRequestHandler<B, Client>
+where
+	B: BlockT,
+	Client: HeaderBackend<B> + BlockBackend<B> + Send + Sync + 'static,
+{
+	async fn run(&mut self) {
+		self.process_requests().await;
+	}
+}
+
 #[derive(Debug, thiserror::Error)]
 enum HandleRequestError {
 	#[error("Failed to decode request: {0}.")]
@@ -468,4 +489,123 @@ enum HandleRequestError {
 	Client(#[from] sp_blockchain::Error),
 	#[error("Failed to send response.")]
 	SendResponse,
+}
+
+pub struct FullBlockDownloader {
+	protocol_name: ProtocolName,
+}
+
+impl FullBlockDownloader {
+	fn new(protocol_name: ProtocolName) -> Self {
+		Self { protocol_name }
+	}
+
+	/// Extracts the blocks from the response schema.
+	fn blocks_from_schema<B: BlockT>(
+		&self,
+		request: &BlockRequest<B>,
+		response: BlockResponseSchema,
+	) -> Result<Vec<BlockData<B>>, String> {
+		response
+			.blocks
+			.into_iter()
+			.map(|block_data| {
+				Ok(BlockData::<B> {
+					hash: Decode::decode(&mut block_data.hash.as_ref())?,
+					header: if !block_data.header.is_empty() {
+						Some(Decode::decode(&mut block_data.header.as_ref())?)
+					} else {
+						None
+					},
+					body: if request.fields.contains(BlockAttributes::BODY) {
+						Some(
+							block_data
+								.body
+								.iter()
+								.map(|body| Decode::decode(&mut body.as_ref()))
+								.collect::<Result<Vec<_>, _>>()?,
+						)
+					} else {
+						None
+					},
+					indexed_body: if request.fields.contains(BlockAttributes::INDEXED_BODY) {
+						Some(block_data.indexed_body)
+					} else {
+						None
+					},
+					receipt: if !block_data.receipt.is_empty() {
+						Some(block_data.receipt)
+					} else {
+						None
+					},
+					message_queue: if !block_data.message_queue.is_empty() {
+						Some(block_data.message_queue)
+					} else {
+						None
+					},
+					justification: if !block_data.justification.is_empty() {
+						Some(block_data.justification)
+					} else if block_data.is_empty_justification {
+						Some(Vec::new())
+					} else {
+						None
+					},
+					justifications: if !block_data.justifications.is_empty() {
+						Some(DecodeAll::decode_all(&mut block_data.justifications.as_ref())?)
+					} else {
+						None
+					},
+				})
+			})
+			.collect::<Result<_, _>>()
+			.map_err(|error: codec::Error| error.to_string())
+	}
+}
+
+/// The full block download implementation.
+#[async_trait::async_trait]
+impl<B: BlockT> BlockDownloader<B> for FullBlockDownloader {
+	async fn download_block(
+		&self,
+		who: PeerId,
+		request: BlockRequest<B>,
+		network: NetworkServiceHandle,
+	) -> Result<Result<Vec<u8>, RequestFailure>, oneshot::Canceled> {
+		// Build the request protobuf.
+		let bytes = BlockRequestSchema {
+			fields: request.fields.to_be_u32(),
+			from_block: match request.from {
+				FromBlock::Hash(h) => Some(FromBlockSchema::Hash(h.encode())),
+				FromBlock::Number(n) => Some(FromBlockSchema::Number(n.encode())),
+			},
+			direction: request.direction as i32,
+			max_blocks: request.max.unwrap_or(0),
+			support_multiple_justifications: true,
+		}
+		.encode_to_vec();
+
+		let (tx, rx) = oneshot::channel();
+		network.start_request(
+			who,
+			self.protocol_name.clone(),
+			bytes,
+			tx,
+			IfDisconnected::ImmediateError,
+		);
+		rx.await
+	}
+
+	fn block_response_into_blocks(
+		&self,
+		request: &BlockRequest<B>,
+		response: Vec<u8>,
+	) -> Result<Vec<BlockData<B>>, BlockResponseErr> {
+		// Decode the response protobuf
+		let response_schema = BlockResponseSchema::decode(response.as_slice())
+			.map_err(|error| BlockResponseErr::DecodeFailed(format!("{error}")))?;
+
+		// Extract the block data from the protobuf
+		self.blocks_from_schema::<B>(request, response_schema)
+			.map_err(|error| BlockResponseErr::ExtractionFailed(format!("{error}")))
+	}
 }
