@@ -407,7 +407,9 @@ pub mod pallet {
 			let reserve1 = Self::get_balance(&pool_account, asset1)?;
 			let reserve2 = Self::get_balance(&pool_account, asset2)?;
 
-			if reserve1.is_zero() && reserve2.is_zero() {
+			if Self::less_than_minimal_amount(reserve1, asset1)? ||
+				Self::less_than_minimal_amount(reserve2, asset2)?
+			{
 				Self::validate_minimal_amount(amount1_desired, asset1)
 					.map_err(|_| Error::<T>::AmountLessThanMinimal)?;
 				Self::validate_minimal_amount(amount2_desired, asset2)
@@ -446,7 +448,10 @@ pub mod pallet {
 
 			let lp_token_amount: AssetBalanceOf<T>;
 			if total_supply.is_zero() {
-				lp_token_amount = Self::calc_lp_amount_for_zero_supply(&amount1, &amount2)?;
+				lp_token_amount = Self::calc_lp_amount_for_zero_supply(
+					&amount1.saturating_add(reserve1),
+					&amount2.saturating_add(reserve2),
+				)?;
 				T::PoolAssets::mint_into(pool.lp_token, &pool_account, T::MintMinLiquidity::get())?;
 			} else {
 				let side1 = Self::mul_div(&amount1, &total_supply, &reserve1)?;
@@ -973,21 +978,25 @@ pub mod pallet {
 			result.try_into().map_err(|_| Error::<T>::Overflow)
 		}
 
+		fn less_than_minimal_amount(
+			value: T::AssetBalance,
+			asset: T::MultiAssetId,
+		) -> Result<bool, ()> {
+			if T::MultiAssetIdConverter::is_native(asset) {
+				let ed = T::Currency::minimum_balance();
+				Ok(T::HigherPrecisionBalance::from(value) < T::HigherPrecisionBalance::from(ed))
+			} else {
+				let asset_id = T::MultiAssetIdConverter::try_convert(asset).map_err(|_| ())?;
+				let minimal = T::Assets::minimum_balance(asset_id);
+				Ok(value < minimal)
+			}
+		}
+
 		fn validate_minimal_amount(
 			value: T::AssetBalance,
 			asset: T::MultiAssetId,
 		) -> Result<(), ()> {
-			if T::MultiAssetIdConverter::is_native(asset) {
-				let ed = T::Currency::minimum_balance();
-				ensure!(
-					T::HigherPrecisionBalance::from(value) >= T::HigherPrecisionBalance::from(ed),
-					()
-				);
-			} else {
-				let asset_id = T::MultiAssetIdConverter::try_convert(asset).map_err(|_| ())?;
-				let minimal = T::Assets::minimum_balance(asset_id);
-				ensure!(value >= minimal, ());
-			}
+			ensure!(!Self::less_than_minimal_amount(value, asset)?, ());
 			Ok(())
 		}
 

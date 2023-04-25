@@ -334,6 +334,54 @@ fn add_tiny_liquidity_leads_to_insufficient_liquidity_minted_error() {
 }
 
 #[test]
+fn add_tiny_liquidity_directly_to_pool_address() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
+		let token_3 = NativeOrAssetId::Asset(3);
+
+		create_tokens(user, vec![token_2, token_3]);
+		assert_ok!(AssetConversion::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
+		assert_ok!(AssetConversion::create_pool(RuntimeOrigin::signed(user), token_1, token_3));
+
+		let ed = get_ed();
+		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user, 10000 * 2 + ed));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 3, user, 1000));
+
+		// check we're still able to add the liquidity even when the pool already has some token_1
+		let pallet_account = AssetConversion::get_pool_account((token_1, token_2));
+		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), pallet_account, 1000));
+
+		assert_ok!(AssetConversion::add_liquidity(
+			RuntimeOrigin::signed(user),
+			token_1,
+			token_2,
+			10000,
+			10,
+			10000,
+			10,
+			user,
+		));
+
+		// check the same but for token_3 (non-native token)
+		let pallet_account = AssetConversion::get_pool_account((token_1, token_3));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, pallet_account, 1));
+		assert_ok!(AssetConversion::add_liquidity(
+			RuntimeOrigin::signed(user),
+			token_1,
+			token_3,
+			10000,
+			10,
+			10000,
+			10,
+			user,
+		));
+	});
+}
+
+#[test]
 fn can_remove_liquidity() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
