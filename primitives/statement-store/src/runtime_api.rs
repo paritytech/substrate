@@ -34,10 +34,6 @@ pub struct ValidStatement {
 	pub max_count: u32,
 	/// Max total data size for this account, as calculated by the runtime.
 	pub max_size: u32,
-	/// Global priority value. This is used to prioritize statements on the global scale.
-	/// If the global limit of messages is reached, the statement with the lowest priority will be
-	/// removed first.
-	pub global_priority: u32,
 }
 
 /// An reason for an invalid statement.

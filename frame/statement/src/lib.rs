@@ -27,8 +27,6 @@
 //! statement author balance:
 //! `max_count`: Maximum number of statements allowed for the author (signer) of this statement.
 //! `max_size`: Maximum total size of statements allowed for the author (signer) of this statement.
-//! `global_priority`: A numerical value that defines the order in which statements are evicted when
-//! the statement store hits global constraints. This is simply balance divided by `StatementCost`.
 //!
 //! This pallet also contains an offchain worker that turns on-chain statement events into
 //! statements. These statements are placed in the store and propagated over the network.
@@ -179,14 +177,11 @@ where
 		};
 		let statement_cost = T::StatementCost::get();
 		let byte_cost = T::ByteCost::get();
-		let priority_cost = statement_cost;
 		let balance = <T::Currency as Inspect<AccountIdOf<T>>>::balance(&account);
 		let min_allowed_statements = T::MinAllowedStatements::get();
 		let max_allowed_statements = T::MaxAllowedStatements::get();
 		let min_allowed_bytes = T::MinAllowedBytes::get();
 		let max_allowed_bytes = T::MaxAllowedBytes::get();
-		let global_priority =
-			balance.checked_div(&priority_cost).unwrap_or_default().saturated_into();
 		let max_count = balance
 			.checked_div(&statement_cost)
 			.unwrap_or_default()
@@ -198,7 +193,7 @@ where
 			.saturated_into::<u32>()
 			.clamp(min_allowed_bytes, max_allowed_bytes);
 
-		Ok(ValidStatement { global_priority, max_count, max_size })
+		Ok(ValidStatement { max_count, max_size })
 	}
 
 	/// Submit a statement event. The statement will be picked up by the offchain worker and

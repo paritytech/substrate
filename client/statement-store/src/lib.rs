@@ -86,22 +86,20 @@ mod col {
 
 #[derive(Eq, PartialEq, Debug, Ord, PartialOrd, Clone, Copy)]
 struct Priority(u32);
-#[derive(Eq, PartialEq, Debug, Ord, PartialOrd, Clone, Copy, Encode, Decode)]
-struct GlobalPriority(u32);
 
 #[derive(PartialEq, Eq)]
-struct PriorityKey<P> {
+struct PriorityKey {
 	hash: Hash,
-	priority: P,
+	priority: Priority,
 }
 
-impl<P: Ord> PartialOrd for PriorityKey<P> {
+impl PartialOrd for PriorityKey {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
 		Some(self.cmp(other))
 	}
 }
 
-impl<P: Ord> Ord for PriorityKey<P> {
+impl Ord for PriorityKey {
 	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
 		self.priority.cmp(&other.priority).then_with(|| self.hash.cmp(&other.hash))
 	}
@@ -116,7 +114,7 @@ struct ChannelEntry {
 #[derive(Default)]
 struct StatementsForAccount {
 	// Statements ordered by priority.
-	by_priority: BTreeMap<PriorityKey<Priority>, (Option<Channel>, usize)>,
+	by_priority: BTreeMap<PriorityKey, (Option<Channel>, usize)>,
 	// Channel to statement map. Only one statement per channel is allowed.
 	channels: HashMap<Channel, ChannelEntry>,
 	// Sum of all `Data` field sizes.
@@ -150,12 +148,9 @@ struct Index {
 	by_topic: HashMap<Topic, HashSet<Hash>>,
 	by_dec_key: HashMap<Option<DecryptionKey>, HashSet<Hash>>,
 	topics_and_keys: HashMap<Hash, ([Option<Topic>; MAX_TOPICS], Option<DecryptionKey>)>,
-	entries: HashMap<Hash, (AccountId, GlobalPriority, Priority)>, /* Statement hash -> (Account
-	                                                                * id,
-	                                                                * global_priority, priority) */
+	entries: HashMap<Hash, (AccountId, Priority, usize)>,
 	expired: HashMap<Hash, u64>, // Value is expiration timestamp.
 	accounts: HashMap<AccountId, StatementsForAccount>,
-	by_global_priority: BTreeMap<PriorityKey<GlobalPriority>, usize>,
 	options: Options,
 	total_size: usize,
 }
@@ -206,17 +201,6 @@ pub struct Store {
 	metrics: PrometheusMetrics,
 }
 
-#[derive(Encode, Decode, Clone)]
-struct StatementMeta {
-	global_priority: GlobalPriority,
-}
-
-#[derive(Encode, Decode)]
-struct StatementWithMeta {
-	meta: StatementMeta,
-	statement: Statement,
-}
-
 enum IndexQuery {
 	Unknown,
 	Exists,
@@ -237,7 +221,6 @@ impl Index {
 		&mut self,
 		hash: Hash,
 		account: AccountId,
-		global_priority: GlobalPriority,
 		statement: &Statement,
 	) {
 		let mut all_topics = [None; MAX_TOPICS];
@@ -253,9 +236,7 @@ impl Index {
 			self.topics_and_keys.insert(hash, (all_topics, key));
 		}
 		let priority = Priority(statement.priority().unwrap_or(0));
-		self.entries.insert(hash, (account, global_priority, priority));
-		self.by_global_priority
-			.insert(PriorityKey { hash, priority: global_priority }, statement.data_len());
+		self.entries.insert(hash, (account, priority, statement.data_len()));
 		self.total_size += statement.data_len();
 		let mut account_info = self.accounts.entry(account).or_default();
 		account_info.data_size += statement.data_len();
@@ -338,9 +319,7 @@ impl Index {
 	}
 
 	fn make_expired(&mut self, hash: &Hash, current_time: u64) -> bool {
-		if let Some((account, global_priority, priority)) = self.entries.remove(hash) {
-			let key = PriorityKey { hash: *hash, priority: global_priority };
-			let len = self.by_global_priority.remove(&key).unwrap_or(0);
+		if let Some((account, priority, len)) = self.entries.remove(hash) {
 			self.total_size -= len;
 			if let Some((topics, key)) = self.topics_and_keys.remove(hash) {
 				for t in topics.into_iter().flatten() {
@@ -471,39 +450,25 @@ impl Index {
 				would_free_size += len;
 			}
 		}
-		let global_priority = GlobalPriority(validation.global_priority);
 		// Now check global constraints as well.
-		for (entry, len) in self.by_global_priority.iter() {
-			if (self.total_size - would_free_size + statement_len <= self.options.max_total_size) &&
-				self.by_global_priority.len() + 1 - evicted.len() <=
-					self.options.max_total_statements
-			{
-				// Satisfied
-				break
-			}
-			if evicted.contains(&entry.hash) {
-				// Already accounted for above
-				continue
-			}
-
-			if entry.priority >= global_priority {
-				log::debug!(
-					target: LOG_TARGET,
-					"Ignored message due to global constraints {:?} {:?} < {:?}",
-					HexDisplay::from(&hash),
-					priority,
-					entry.priority,
-				);
-				return MaybeInserted::Ignored
-			}
-			evicted.insert(entry.hash);
-			would_free_size += len;
+		if !((self.total_size - would_free_size + statement_len <= self.options.max_total_size) &&
+			self.entries.len() + 1 - evicted.len() <=
+				self.options.max_total_statements)
+		{
+			log::debug!(
+				target: LOG_TARGET,
+				"Ignored statement {} because the store is full (size={}, count={})",
+				HexDisplay::from(&hash),
+				self.total_size,
+				self.entries.len(),
+			);
+			return MaybeInserted::Ignored
 		}
 
 		for h in &evicted {
 			self.make_expired(h, current_time);
 		}
-		self.insert_new(hash, *account, global_priority, statement);
+		self.insert_new(hash, *account, statement);
 		MaybeInserted::Inserted(evicted)
 	}
 }
@@ -618,21 +583,19 @@ impl Store {
 			self.db
 				.iter_column_while(col::STATEMENTS, |item| {
 					let statement = item.value;
-					if let Ok(statement_with_meta) =
-						StatementWithMeta::decode(&mut statement.as_slice())
+					if let Ok(statement) = Statement::decode(&mut statement.as_slice())
 					{
-						let hash = statement_with_meta.statement.hash();
+						let hash = statement.hash();
 						log::trace!(
 							target: LOG_TARGET,
 							"Statement loaded {:?}",
 							HexDisplay::from(&hash)
 						);
-						if let Some(account_id) = statement_with_meta.statement.account_id() {
+						if let Some(account_id) = statement.account_id() {
 							index.insert_new(
 								hash,
 								account_id,
-								statement_with_meta.meta.global_priority,
-								&statement_with_meta.statement,
+								&statement,
 							);
 						} else {
 							log::debug!(
@@ -678,8 +641,8 @@ impl Store {
 		index.iterate_with(key, match_all_topics, |hash| {
 			match self.db.get(col::STATEMENTS, hash).map_err(|e| Error::Db(e.to_string()))? {
 				Some(entry) => {
-					if let Ok(statement) = StatementWithMeta::decode(&mut entry.as_slice()) {
-						if let Some(data) = f(statement.statement) {
+					if let Ok(statement) = Statement::decode(&mut entry.as_slice()) {
+						if let Some(data) = f(statement) {
 							result.push(data);
 						}
 					} else {
@@ -749,9 +712,9 @@ impl StatementStore for Store {
 		for h in self.index.read().entries.keys() {
 			let encoded = self.db.get(col::STATEMENTS, h).map_err(|e| Error::Db(e.to_string()))?;
 			if let Some(encoded) = encoded {
-				if let Ok(entry) = StatementWithMeta::decode(&mut encoded.as_slice()) {
-					let hash = entry.statement.hash();
-					result.push((hash, entry.statement));
+				if let Ok(statement) = Statement::decode(&mut encoded.as_slice()) {
+					let hash = statement.hash();
+					result.push((hash, statement));
 				}
 			}
 		}
@@ -773,9 +736,8 @@ impl StatementStore for Store {
 						HexDisplay::from(hash)
 					);
 					Some(
-						StatementWithMeta::decode(&mut entry.as_slice())
+						Statement::decode(&mut entry.as_slice())
 							.map_err(|e| Error::Decode(e.to_string()))?
-							.statement,
 					)
 				},
 				None => {
@@ -865,11 +827,6 @@ impl StatementStore for Store {
 				return SubmitResult::InternalError(Error::Runtime),
 		};
 
-		let statement_with_meta = StatementWithMeta {
-			meta: StatementMeta { global_priority: GlobalPriority(validation.global_priority) },
-			statement,
-		};
-
 		let current_time = self.timestamp();
 		let mut commit = Vec::new();
 		{
@@ -877,7 +834,7 @@ impl StatementStore for Store {
 
 			let evicted = match index.insert(
 				hash,
-				&statement_with_meta.statement,
+				&statement,
 				&account_id,
 				&validation,
 				current_time,
@@ -886,7 +843,7 @@ impl StatementStore for Store {
 				MaybeInserted::Inserted(evicted) => evicted,
 			};
 
-			commit.push((col::STATEMENTS, hash.to_vec(), Some(statement_with_meta.encode())));
+			commit.push((col::STATEMENTS, hash.to_vec(), Some(statement.encode())));
 			for hash in evicted {
 				commit.push((col::STATEMENTS, hash.to_vec(), None));
 				commit.push((col::EXPIRED, hash.to_vec(), Some((hash, current_time).encode())));
@@ -896,17 +853,13 @@ impl StatementStore for Store {
 					target: LOG_TARGET,
 					"Statement validation failed: database error {}, {:?}",
 					e,
-					statement_with_meta.statement
+					statement
 				);
 				return SubmitResult::InternalError(Error::Db(e.to_string()))
 			}
 		} // Release index lock
 		self.metrics.report(|metrics| metrics.submitted_statements.inc());
-		let network_priority = if validation.global_priority > 0 {
-			NetworkPriority::High
-		} else {
-			NetworkPriority::Low
-		};
+		let network_priority = NetworkPriority::High;
 		log::trace!(target: LOG_TARGET, "Statement submitted: {:?}", HexDisplay::from(&hash));
 		SubmitResult::New(network_priority)
 	}
@@ -991,19 +944,19 @@ mod tests {
 			) -> std::result::Result<ValidStatement, InvalidStatement> {
 				use crate::tests::account;
 				match statement.verify_signature() {
-					SignatureVerificationResult::Valid(_) => Ok(ValidStatement{global_priority: 10, max_count: 100, max_size: 1000}),
+					SignatureVerificationResult::Valid(_) => Ok(ValidStatement{max_count: 100, max_size: 1000}),
 					SignatureVerificationResult::Invalid => Err(InvalidStatement::BadProof),
 					SignatureVerificationResult::NoSignature => {
 						if let Some(Proof::OnChain { block_hash, .. }) = statement.proof() {
 							if block_hash == &CORRECT_BLOCK_HASH {
-								let (global_priority, max_count, max_size) = match statement.account_id() {
-									Some(a) if a == account(1) => (10, 1, 1000),
-									Some(a) if a == account(2) => (20, 2, 1000),
-									Some(a) if a == account(3) => (30, 3, 1000),
-									Some(a) if a == account(4) => (40, 4, 1000),
-									_ => (0, 2, 2000),
+								let (max_count, max_size) = match statement.account_id() {
+									Some(a) if a == account(1) => (1, 1000),
+									Some(a) if a == account(2) => (2, 1000),
+									Some(a) if a == account(3) => (3, 1000),
+									Some(a) if a == account(4) => (4, 1000),
+									_ => (2, 2000),
 								};
-								Ok(ValidStatement{ global_priority, max_count, max_size })
+								Ok(ValidStatement{ max_count, max_size })
 							} else {
 								Err(InvalidStatement::BadProof)
 							}
@@ -1128,7 +1081,7 @@ mod tests {
 		let unsigned = statement(0, 1, None, 0);
 		assert_eq!(
 			store.submit(unsigned, StatementSource::Network),
-			SubmitResult::New(NetworkPriority::Low)
+			SubmitResult::New(NetworkPriority::High)
 		);
 	}
 
@@ -1257,15 +1210,13 @@ mod tests {
 		// Should be over the global count limit
 		store.index.write().options.max_total_statements = 4;
 		assert_eq!(store.submit(statement(1, 1, None, 100), source), ignored);
-		// Should evict statement from account 1
-		assert_eq!(store.submit(statement(4, 6, None, 100), source), ok);
-		assert_eq!(store.index.read().expired.len(), 7);
 
 		let mut expected_statements = vec![
+			statement(1, 2, Some(1), 600).hash(),
 			statement(2, 4, None, 1000).hash(),
 			statement(3, 4, Some(3), 300).hash(),
 			statement(3, 5, None, 500).hash(),
-			statement(4, 6, None, 100).hash(),
+			//statement(4, 6, None, 100).hash(),
 		];
 		expected_statements.sort();
 		let mut statements: Vec<_> =
@@ -1285,7 +1236,6 @@ mod tests {
 		assert_eq!(store.index.read().entries.len(), 1);
 		store.remove(&statement.hash()).unwrap();
 		assert_eq!(store.index.read().entries.len(), 0);
-		assert_eq!(store.index.read().by_global_priority.len(), 0);
 		assert_eq!(store.index.read().accounts.len(), 0);
 		store.set_time(DEFAULT_PURGE_AFTER_SEC + 1);
 		store.maintain();
