@@ -1589,8 +1589,7 @@ benchmarks! {
 		// Set an own limit every 2nd call
 		let own_limit = (u32::MAX - 100).into();
 		let deposits = (0..r)
-			.enumerate()
-			.map(|(i,x)| if i % 2 == 0 { 0u32.into() } else { own_limit } )
+			.map(|i| if i % 2 == 0 { 0u32.into() } else { own_limit } )
 			.collect::<Vec<BalanceOf<T>>>();
 		let deposits_bytes: Vec<u8> = deposits.iter().flat_map(|i| i.encode()).collect();
 		let deposits_len = deposits_bytes.len() as u32;
