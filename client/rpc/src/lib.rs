@@ -72,6 +72,9 @@ pub mod utils {
 	/// Feed items to the subscription from the underlying stream
 	/// if the subscription can't keep up with the underlying stream
 	/// it's dropped
+	///
+	/// This is simply a way to keep previous behaviour with unbounded streams
+	/// and should be replaced by specific RPC endpoint behaviour.
 	pub async fn pipe_from_stream<S, T, R>(
 		sink: SubscriptionSink,
 		mut stream: S,
@@ -91,9 +94,8 @@ pub mod utils {
 						Some(item) => item,
 						None => break SubscriptionResponse::Closed,
 					};
-					let msg = SubscriptionMessage::from_json(&item).expect("Serialize must be infallible; qed");
 
-					match sink.send_timeout(msg, std::time::Duration::from_secs(60)).await {
+					match sink.send_timeout(crate::utils::to_sub_message(&item), std::time::Duration::from_secs(60)).await {
 						Ok(_) => (),
 						Err(SendTimeoutError::Closed(_)) | Err(SendTimeoutError::Timeout(_)) => break SubscriptionResponse::Closed,
 					}
@@ -114,12 +116,17 @@ pub mod utils {
 		fn into_response(self) -> SubscriptionCloseResponse {
 			match self {
 				Self::Closed => SubscriptionCloseResponse::None,
-				Self::Event(ev) => {
-					let msg = SubscriptionMessage::from_json(&ev)
-						.expect("JSON serialization infallible; qed");
-					SubscriptionCloseResponse::Notif(msg)
-				},
+				Self::Event(ev) => SubscriptionCloseResponse::Notif(to_sub_message(&ev)),
 			}
 		}
+	}
+
+	/// Build a subscription message.
+	///
+	/// # Panics
+	///
+	/// This function panics if the `Serialize` fails and is treated a bug.
+	pub fn to_sub_message(val: &impl Serialize) -> SubscriptionMessage {
+		SubscriptionMessage::from_json(val).expect("JSON serialization infallible; qed")
 	}
 }

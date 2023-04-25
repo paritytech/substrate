@@ -31,7 +31,7 @@ use futures::{
 	stream::{self, Stream, StreamExt},
 };
 use futures_util::future::Either;
-use jsonrpsee::{SendTimeoutError, SubscriptionMessage, SubscriptionSink};
+use jsonrpsee::{SendTimeoutError, SubscriptionSink};
 use log::{debug, error};
 use sc_client_api::{
 	Backend, BlockBackend, BlockImportNotification, BlockchainEvents, FinalityNotification,
@@ -535,9 +535,10 @@ where
 			};
 
 			for event in events {
-				let msg = SubscriptionMessage::from_json(&event).expect("serialization infallible");
-
-				match sink.send_timeout(msg, Duration::from_secs(60)).await {
+				match sink
+					.send_timeout(sc_rpc::utils::to_sub_message(&event), Duration::from_secs(60))
+					.await
+				{
 					Ok(_) => (),
 					Err(SendTimeoutError::Closed(_)) => return SubscriptionResponse::Closed,
 					Err(SendTimeoutError::Timeout(_)) =>
