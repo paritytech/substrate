@@ -146,5 +146,5 @@ async fn subscribe_headers<Block, Client, F, G, S>(
 	// duplicates at the beginning of the stream though.
 	let stream = stream::iter(maybe_header).chain(stream());
 
-	let _: SubscriptionResponse<()> = pipe_from_stream(sink, stream).await;
+	pipe_from_stream::<_, _, ()>(sink, stream).await;
 }
