@@ -21,7 +21,7 @@
 
 		;; Input data layout.
 		;; [0..4) - size of the call
-		;; [4..8) - storage length
+		;; [4..8) - how many bytes to add to storage
 		;; [8..40) - hash code of the callee
 		;; [40..n) - encoded runtime call
 
