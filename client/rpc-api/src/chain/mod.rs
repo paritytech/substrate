@@ -30,7 +30,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[method(name = "chain_getHeader", blocking)]
 	fn header(&self, hash: Option<Hash>) -> Result<Option<Header>, Error>;
 
-	/// Get header and body of a relay chain block.
+	/// Get header and body of a block.
 	#[method(name = "chain_getBlock", blocking)]
 	fn block(&self, hash: Option<Hash>) -> Result<Option<SignedBlock>, Error>;
 
