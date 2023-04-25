@@ -4115,18 +4115,10 @@ fn deposit_limit_in_nested_calls() {
 				0,
 				GAS_LIMIT,
 				Some(codec::Compact(13)),
-				100u32
-					.to_le_bytes()
-					.as_ref()
-					.iter()
-					.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
-					.chain(0u64.to_le_bytes().as_ref())
-					.cloned()
-					.collect(),
+				(100u32, &addr_callee, 0u64).encode(),
 			),
 			<Error<Test>>::StorageDepositLimitExhausted,
 		);
-
 		// Now we specify the parent's limit high enough to cover the caller's storage additions.
 		// However, we use a single byte more in the callee, hence the storage deposit should be 15
 		// Balance.
@@ -4140,14 +4132,7 @@ fn deposit_limit_in_nested_calls() {
 				0,
 				GAS_LIMIT,
 				Some(codec::Compact(14)),
-				101u32
-					.to_le_bytes()
-					.as_ref()
-					.iter()
-					.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
-					.chain(0u64.to_le_bytes().as_ref())
-					.cloned()
-					.collect(),
+				(101u32, &addr_callee, 0u64).encode(),
 			),
 			<Error<Test>>::StorageDepositLimitExhausted,
 		);
@@ -4164,14 +4149,7 @@ fn deposit_limit_in_nested_calls() {
 				0,
 				GAS_LIMIT,
 				Some(codec::Compact(16)),
-				102u32
-					.to_le_bytes()
-					.as_ref()
-					.iter()
-					.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
-					.chain(&[1u8])
-					.cloned()
-					.collect(),
+				(102u32, &addr_callee, 1u64).encode(),
 			),
 			<Error<Test>>::StorageDepositLimitExhausted,
 		);
@@ -4186,14 +4164,7 @@ fn deposit_limit_in_nested_calls() {
 				0,
 				GAS_LIMIT,
 				Some(codec::Compact(0)),
-				87u32
-					.to_le_bytes()
-					.as_ref()
-					.iter()
-					.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
-					.chain(0u64.to_le_bytes().as_ref())
-					.cloned()
-					.collect(),
+				(87u32, &addr_callee, 0u64).encode(),
 			),
 			<Error<Test>>::StorageDepositLimitExhausted,
 		);
@@ -4209,14 +4180,7 @@ fn deposit_limit_in_nested_calls() {
 				0,
 				GAS_LIMIT,
 				None,
-				1_200u32
-					.to_le_bytes()
-					.as_ref()
-					.iter()
-					.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
-					.chain(0u64.to_le_bytes().as_ref())
-					.cloned()
-					.collect(),
+				(1200u32, &addr_callee, 1u64).encode(),
 			),
 			<Error<Test>>::StorageDepositLimitExhausted,
 		);
@@ -4230,14 +4194,7 @@ fn deposit_limit_in_nested_calls() {
 			0,
 			GAS_LIMIT,
 			Some(codec::Compact(1)),
-			87u32
-				.to_le_bytes()
-				.as_ref()
-				.iter()
-				.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
-				.chain(&[1u8])
-				.cloned()
-				.collect(),
+			(87u32, &addr_callee, 1u64).encode(),
 		));
 	});
 }
@@ -4300,13 +4257,7 @@ fn deposit_limit_in_nested_instantiate() {
 				0,
 				GAS_LIMIT,
 				Some(codec::Compact(callee_info_len + 2 + ED + 1)),
-				0u32.to_le_bytes()
-					.as_ref()
-					.iter()
-					.chain(code_hash_callee.as_ref())
-					.chain(0u64.to_le_bytes().as_ref())
-					.cloned()
-					.collect(),
+				(0u32, &code_hash_callee, 0u64).encode(),
 			),
 			<Error<Test>>::StorageDepositLimitExhausted,
 		);
@@ -4323,13 +4274,7 @@ fn deposit_limit_in_nested_instantiate() {
 				0,
 				GAS_LIMIT,
 				Some(codec::Compact(callee_info_len + 2 + ED + 2)),
-				1u32.to_le_bytes()
-					.as_ref()
-					.iter()
-					.chain(code_hash_callee.as_ref())
-					.chain(0u64.to_le_bytes().as_ref())
-					.cloned()
-					.collect(),
+				(1u32, &code_hash_callee, 0u64).encode(),
 			),
 			<Error<Test>>::StorageDepositLimitExhausted,
 		);
@@ -4346,13 +4291,7 @@ fn deposit_limit_in_nested_instantiate() {
 				0,
 				GAS_LIMIT,
 				Some(codec::Compact(callee_info_len + 2 + ED + 2)),
-				0u32.to_le_bytes()
-					.as_ref()
-					.iter()
-					.chain(code_hash_callee.as_ref())
-					.chain((callee_info_len + 2 + ED + 1).to_le_bytes().as_ref())
-					.cloned()
-					.collect(),
+				(0u32, &code_hash_callee, callee_info_len + 2 + ED + 1).encode(),
 			),
 			<Error<Test>>::StorageDepositLimitExhausted,
 		);
@@ -4370,13 +4309,7 @@ fn deposit_limit_in_nested_instantiate() {
 				0,
 				GAS_LIMIT,
 				Some(codec::Compact(callee_info_len + 2 + ED + 3)), // enough parent limit
-				1u32.to_le_bytes()
-					.as_ref()
-					.iter()
-					.chain(code_hash_callee.as_ref())
-					.chain((callee_info_len + 2 + ED + 2).to_le_bytes().as_ref()) // not enough child limit
-					.cloned()
-					.collect(),
+				(1u32, &code_hash_callee, callee_info_len + 2 + ED + 2).encode(),
 			),
 			<Error<Test>>::StorageDepositLimitExhausted,
 		);
@@ -4390,13 +4323,7 @@ fn deposit_limit_in_nested_instantiate() {
 			0,
 			GAS_LIMIT,
 			Some(codec::Compact(callee_info_len + 2 + ED + 4).into()),
-			1u32.to_le_bytes()
-				.as_ref()
-				.iter()
-				.chain(code_hash_callee.as_ref())
-				.chain((callee_info_len + 2 + ED + 3).to_le_bytes().as_ref()) // child limit is tougher but is still enough
-				.cloned()
-				.collect(),
+			(1u32, &code_hash_callee, callee_info_len + 2 + ED + 3).encode(),
 			false,
 			Determinism::Enforced,
 		);
