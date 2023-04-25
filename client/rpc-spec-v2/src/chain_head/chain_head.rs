@@ -49,7 +49,7 @@ use std::{marker::PhantomData, sync::Arc, time::Duration};
 pub(crate) const LOG_TARGET: &str = "rpc-spec-v2";
 
 /// An API for chain head RPC calls.
-pub struct ChainHead<BE: Backend<Block> + 'static, Block: BlockT, Client> {
+pub struct ChainHead<BE: Backend<Block>, Block: BlockT, Client> {
 	/// Substrate client.
 	client: Arc<Client>,
 	/// Backend of the chain.
@@ -64,7 +64,7 @@ pub struct ChainHead<BE: Backend<Block> + 'static, Block: BlockT, Client> {
 	_phantom: PhantomData<Block>,
 }
 
-impl<BE: Backend<Block> + 'static, Block: BlockT, Client> ChainHead<BE, Block, Client> {
+impl<BE: Backend<Block>, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 	/// Create a new [`ChainHead`].
 	pub fn new<GenesisHash: AsRef<[u8]>>(
 		client: Arc<Client>,

@@ -277,7 +277,7 @@ impl<Block: BlockT> SubscriptionState<Block> {
 	}
 }
 
-pub struct BlockGuard<Block: BlockT, BE: Backend<Block> + 'static> {
+pub struct BlockGuard<Block: BlockT, BE: Backend<Block>> {
 	hash: Block::Hash,
 	runtime_updates: bool,
 	backend: Arc<BE>,
@@ -285,13 +285,13 @@ pub struct BlockGuard<Block: BlockT, BE: Backend<Block> + 'static> {
 
 // Custom implementation of Debug to avoid bounds on `backend: Debug` for `unwrap_err()` needed for
 // testing.
-impl<Block: BlockT, BE: Backend<Block> + 'static> std::fmt::Debug for BlockGuard<Block, BE> {
+impl<Block: BlockT, BE: Backend<Block>> std::fmt::Debug for BlockGuard<Block, BE> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "BlockGuard hash {:?} runtime_updates {:?}", self.hash, self.runtime_updates)
 	}
 }
 
-impl<Block: BlockT, BE: Backend<Block> + 'static> BlockGuard<Block, BE> {
+impl<Block: BlockT, BE: Backend<Block>> BlockGuard<Block, BE> {
 	/// Construct a new [`BlockGuard`] .
 	fn new(
 		hash: Block::Hash,
@@ -311,13 +311,13 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> BlockGuard<Block, BE> {
 	}
 }
 
-impl<Block: BlockT, BE: Backend<Block> + 'static> Drop for BlockGuard<Block, BE> {
+impl<Block: BlockT, BE: Backend<Block>> Drop for BlockGuard<Block, BE> {
 	fn drop(&mut self) {
 		self.backend.unpin_block(self.hash);
 	}
 }
 
-struct SubscriptionsInner<Block: BlockT, BE: Backend<Block> + 'static> {
+struct SubscriptionsInner<Block: BlockT, BE: Backend<Block>> {
 	/// Reference count the block hashes across all subscriptions.
 	///
 	/// The pinned blocks cannot exceed the [`Self::global_limit`] limit.
@@ -335,7 +335,7 @@ struct SubscriptionsInner<Block: BlockT, BE: Backend<Block> + 'static> {
 	backend: Arc<BE>,
 }
 
-impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionsInner<Block, BE> {
+impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 	/// Construct a new [`SubscriptionsInner`] from the specified limits.
 	fn new(
 		global_max_pinned_blocks: usize,
@@ -539,13 +539,13 @@ impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionsInner<Block, BE> 
 }
 
 /// Manage block pinning / unpinning for subscription IDs.
-pub struct SubscriptionManagement<Block: BlockT, BE: Backend<Block> + 'static> {
+pub struct SubscriptionManagement<Block: BlockT, BE: Backend<Block>> {
 	/// Manage subscription by mapping the subscription ID
 	/// to a set of block hashes.
 	inner: RwLock<SubscriptionsInner<Block, BE>>,
 }
 
-impl<Block: BlockT, BE: Backend<Block> + 'static> SubscriptionManagement<Block, BE> {
+impl<Block: BlockT, BE: Backend<Block>> SubscriptionManagement<Block, BE> {
 	/// Construct a new [`SubscriptionManagement`].
 	pub fn new(
 		global_max_pinned_blocks: usize,
