@@ -1158,6 +1158,30 @@ fn swap_exact_tokens_for_tokens_in_multi_hops() {
 			.ok()
 			.unwrap();
 
+		assert_noop!(
+			AssetConversion::swap_exact_tokens_for_tokens(
+				RuntimeOrigin::signed(user),
+				bvec![token_1],
+				input_amount,
+				80,
+				user,
+				true,
+			),
+			Error::<Test>::InvalidPath
+		);
+
+		assert_noop!(
+			AssetConversion::swap_exact_tokens_for_tokens(
+				RuntimeOrigin::signed(user),
+				bvec![token_1, token_2, token_3, token_2],
+				input_amount,
+				80,
+				user,
+				true,
+			),
+			Error::<Test>::NonUniquePath
+		);
+
 		assert_ok!(AssetConversion::swap_exact_tokens_for_tokens(
 			RuntimeOrigin::signed(user),
 			bvec![token_1, token_2, token_3],
