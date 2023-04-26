@@ -19,7 +19,7 @@
 
 use crate::{
 	storage::{ContractInfo, DepositAccount},
-	BalanceOf, Config, Error, Inspect, Pallet, System,
+	BalanceOf, Config, Error, Inspect, Pallet, System, LOG_TARGET,
 };
 use codec::Encode;
 use frame_support::{
@@ -505,7 +505,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 				);
 				if matches!(result, Err(_)) {
 					log::error!(
-						target: "runtime::contracts",
+						target: LOG_TARGET,
 						"Failed to refund storage deposit {:?} from deposit account {:?} to origin {:?}: {:?}",
 						amount, deposit_account, origin, result,
 					);
