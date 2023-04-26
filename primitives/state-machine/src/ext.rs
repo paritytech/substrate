@@ -830,8 +830,8 @@ impl<'a> StorageAppend<'a> {
 	}
 
 	/// Replace current length if defined.
-	pub fn replace_nb_appends(&mut self, old_length: u32, new_length: u32) {
-		let encoded_len = Compact::<u32>::compact_len(&old_length);
+	pub fn replace_nb_appends(&mut self, old_length: Option<u32>, new_length: u32) {
+		let encoded_len = old_length.map(|l| Compact::<u32>::compact_len(&l)).unwrap_or(0);
 		let encoded_new = Compact::<u32>(new_length).encode();
 		if encoded_len > encoded_new.len() {
 			let diff = encoded_len - encoded_new.len();
@@ -849,6 +849,7 @@ impl<'a> StorageAppend<'a> {
 	/// Append the given `value` to the storage item.
 	///
 	/// If appending fails, `[value]` is stored in the storage item and we return false.
+	/// TODO is it still used
 	pub fn append(&mut self, value: Vec<u8>) -> bool {
 		let mut result = true;
 		let value = vec![EncodeOpaqueValue(value)];
@@ -867,6 +868,19 @@ impl<'a> StorageAppend<'a> {
 			},
 		};
 		result
+	}
+
+	/// Append to current buffer.
+	pub fn append_raw(&mut self, mut value: Vec<u8>) {
+		self.0.append(&mut value)
+	}
+
+	/// Compare two size, return difference of encoding length.
+	/// Assert second size is bigger than first.
+	pub fn diff_materialized(previous: Option<u32>, new: Option<u32>) -> usize {
+		let prev = previous.map(|l| Compact::<u32>::compact_len(&l)).unwrap_or(0);
+		let new = new.map(|l| Compact::<u32>::compact_len(&l)).unwrap_or(0);
+		new - prev
 	}
 }
 
