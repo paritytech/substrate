@@ -82,9 +82,9 @@
 //! * `approve_transfer`: Create or increase an delegated transfer.
 //! * `cancel_approval`: Rescind a previous approval.
 //! * `transfer_approved`: Transfer third-party's assets to another account.
-//! * `touch`: Create an asset account for non-provider assets. Caller must place a deposit.
-//! * `refund`: Return the deposit (if any) of the caller's asset account.
-//! * `refund_foreign`: Return the foreign deposit (if any) of a specified asset account.
+//! * `touch`: Create or keep an asset account for non-provider assets. Caller must place a deposit.
+//! * `refund`: Return the deposit or system reference of the caller's asset account.
+//! * `refund_foreign`: Return the foreign deposit or system reference of a specified asset account.
 //!
 //! ### Permissioned Functions
 //!
@@ -107,8 +107,8 @@
 //!   Owner.
 //! * `set_metadata`: Set the metadata of an asset class; called by the asset class's Owner.
 //! * `clear_metadata`: Remove the metadata of an asset class; called by the asset class's Owner.
-//! * `freeze_creating`: Same as `freeze`, but creates the account if necessary; called by the asset
-//!   class's Freezer.
+//! * `touch_foreign`: Create or keep an a specified asset account for non-provider assets. Caller
+//!   must place a deposit. Caller must be the asset class's Admin or Freezer.
 //!
 //! Please refer to the [`Call`] enum and its associated variants for documentation on each
 //! function.
@@ -925,11 +925,10 @@ pub mod pallet {
 			Self::do_transfer(id, &source, &dest, amount, Some(origin), f).map(|_| ())
 		}
 
-		/// Disallow further unprivileged transfers of an asset `id` from an account `who`. `who`
-		/// must already exist as an entry in `Account`s of the asset. If you want to freeze an
-		/// account that does not have an entry, use `freeze_creating` instead.
+		/// Disallow further unprivileged transfers from an account.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
+		/// The asset account to be frozen must have a deposit or the asset must be sufficient.
 		///
 		/// - `id`: The identifier of the asset to be frozen.
 		/// - `who`: The account to be frozen.
@@ -945,10 +944,28 @@ pub mod pallet {
 			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let who = T::Lookup::lookup(who)?;
 			let id: T::AssetId = id.into();
 
-			Self::do_freeze(origin, id, who, false)
+			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(
+				d.status == AssetStatus::Live || d.status == AssetStatus::Frozen,
+				Error::<T, I>::AssetNotLive
+			);
+			ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
+			let who = T::Lookup::lookup(who)?;
+
+			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
+				let mut account = maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?;
+				ensure!(
+					!matches!(account.reason, ExistenceReason::Consumer),
+					Error::<T, I>::NoDeposit
+				);
+				account.is_frozen = true;
+				Ok(())
+			})?;
+
+			Self::deposit_event(Event::<T, I>::Frozen { asset_id: id, who });
+			Ok(())
 		}
 
 		/// Allow unprivileged transfers from an account again.
@@ -1477,7 +1494,7 @@ pub mod pallet {
 			Self::do_transfer_approved(id, &owner, &delegate, &destination, amount)
 		}
 
-		/// Create an asset account for non-provider assets.
+		/// Create or keep an asset account with an deposit.
 		///
 		/// A deposit will be taken from the signer account.
 		///
@@ -1494,9 +1511,9 @@ pub mod pallet {
 			Self::do_touch(id, &who, &who)
 		}
 
-		/// Return the deposit (if any) of an asset account.
+		/// Return the deposit (if any) of an asset account and destroy it.
 		///
-		/// The origin must be Signed.
+		/// The origin must be Signed by the account holder.
 		///
 		/// - `id`: The identifier of the asset for which the caller would like the deposit
 		///   refunded.
@@ -1510,8 +1527,9 @@ pub mod pallet {
 			id: T::AssetIdParameter,
 			allow_burn: bool,
 		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
-			Self::do_refund(id, ensure_signed(origin)?, allow_burn)
+			Self::do_refund(id, &origin, &origin, allow_burn)
 		}
 
 		/// Sets the minimum balance of an asset.
@@ -1561,51 +1579,54 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Disallow further unprivileged transfers from an account. Creates the account and takes a
-		/// deposit if it does not already exist in `Account`.
+		/// Create or keep an asset account with a deposit.
 		///
-		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
+		/// A deposit will be taken from the signer account.
 		///
-		/// - `id`: The identifier of the asset to be frozen.
-		/// - `who`: The account to be frozen.
+		/// - `origin`: Must be signed by admin or freezer; the signer account must have sufficient
+		///   funds for a deposit to be taken.
+		/// - `id`: The identifier of the asset for the account to be created or kept with a
+		///   deposit.
+		/// - `who`: The account to be created or kept with a deposit.
 		///
-		/// Emits `Frozen`.
+		/// Emits `Touched` event when successful. // TODO introduce event
 		///
 		/// Weight: `O(1)`
 		#[pallet::call_index(29)]
-		#[pallet::weight(T::WeightInfo::freeze_creating())]
-		pub fn freeze_creating(
+		#[pallet::weight(T::WeightInfo::touch())] // TODO update weight function
+		pub fn touch_foreign(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
 			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let who = T::Lookup::lookup(who)?;
 			let id: T::AssetId = id.into();
-
-			Self::do_freeze(origin, id, who, true)
+			let who = T::Lookup::lookup(who)?;
+			Self::do_touch(id, &who, &origin)
 		}
 
 		/// Return the deposit (if any) of a target asset account. Useful if you are the depositor.
 		///
-		/// The origin must be Signed and either the account owner, depositor, or asset `Admin`. In
-		/// order to burn a non-zero balance of the asset, the caller must be the account and should
-		/// use `refund`.
+		/// The origin must be Signed by the depositor, or asset `Admin`. In order to burn a
+		/// non-zero balance of the asset, the caller must be the account and should use `refund`.
 		///
+		/// - `origin`: Must be Signed; the signer account must have sufficient funds for a deposit
+		///   to be taken.
 		/// - `id`: The identifier of the asset for the account holding a deposit.
 		/// - `who`: The account to refund.
 		///
-		/// Emits `Refunded` event when successful.
+		/// Weight: O(1)
 		#[pallet::call_index(30)]
-		#[pallet::weight(T::WeightInfo::refund_foreign())]
+		#[pallet::weight(T::WeightInfo::refund())] // TODO update weight function
 		pub fn refund_foreign(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
-			who: T::AccountId,
+			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
-			Self::do_refund_foreign(&origin, id, &who)
+			let who = T::Lookup::lookup(who)?;
+			Self::do_refund(id, &who, &origin, false)
 		}
 	}
 }

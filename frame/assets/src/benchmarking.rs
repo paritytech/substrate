@@ -277,18 +277,6 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::Frozen { asset_id: asset_id.into(), who: caller }.into());
 	}
 
-	freeze_creating {
-		let (asset_id, asset_owner, _asset_owner_lookup) = create_default_minted_asset::<T, I>(true, 100u32.into());
-		let target: T::AccountId = account("target", 1, SEED);
-		let target_lookup = T::Lookup::unlookup(target.clone());
-		assert_ne!(asset_owner, target);
-		T::Currency::make_free_balance_be(&asset_owner, DepositBalanceOf::<T, I>::max_value());
-		assert!(!Account::<T, I>::contains_key(asset_id.into(), &target));
-	}: _(SystemOrigin::Signed(asset_owner.clone()), asset_id, target_lookup)
-	verify {
-		assert_last_event::<T, I>(Event::Frozen { asset_id: asset_id.into(), who: target }.into());
-	}
-
 	thaw {
 		let (asset_id, caller, caller_lookup) = create_default_minted_asset::<T, I>(true, 100u32.into());
 		Assets::<T, I>::freeze(
@@ -522,32 +510,6 @@ benchmarks_instance_pallet! {
 	verify {
 		// `refund`ing should of course repatriate the reserve
 		assert!(T::Currency::reserved_balance(&new_account).is_zero());
-	}
-
-	refund_foreign {
-		let (asset_id, asset_owner, asset_owner_lookup) = create_default_asset::<T, I>(false);
-		let new_account: T::AccountId = account("newaccount", 1, SEED);
-		let new_account_lookup = T::Lookup::unlookup(new_account.clone());
-		T::Currency::make_free_balance_be(&asset_owner, DepositBalanceOf::<T, I>::max_value());
-		assert_ne!(asset_owner, new_account);
-		assert!(Assets::<T, I>::freeze_creating(
-			SystemOrigin::Signed(asset_owner.clone()).into(),
-			asset_id,
-			new_account_lookup.clone()
-		).is_ok());
-		// `freeze_creating` should reserve balance of the freezer
-		assert!(!T::Currency::reserved_balance(&asset_owner).is_zero());
-		assert!(Assets::<T, I>::thaw(
-			SystemOrigin::Signed(asset_owner.clone()).into(),
-			asset_id,
-			new_account_lookup.clone()
-		).is_ok());
-		// the account should still exist, just not be frozen
-		assert!(Account::<T, I>::contains_key(asset_id.into(), &new_account));
-	}: _(SystemOrigin::Signed(asset_owner.clone()), asset_id, new_account.clone())
-	verify {
-		// this should repatriate the reserved balance of the freezer
-		assert!(T::Currency::reserved_balance(&asset_owner).is_zero());
 	}
 
 	impl_benchmark_test_suite!(Assets, crate::mock::new_test_ext(), crate::mock::Test)

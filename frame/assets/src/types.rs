@@ -118,29 +118,17 @@ impl<Balance, AccountId> ExistenceReason<Balance, AccountId>
 where
 	AccountId: Clone,
 {
-	pub(crate) fn take_deposit(&mut self) -> Option<Balance> {
-		if !matches!(self, ExistenceReason::DepositHeld(_)) {
+	/// Take the deposit if any.
+	/// `who` is the account holder and the depositor of `DepositHeld` variant.
+	pub(crate) fn take_deposit(&mut self, who: &AccountId) -> Option<(AccountId, Balance)> {
+		use ExistenceReason::*;
+		if !matches!(self, DepositHeld(_) | ForeignDeposit(..)) {
 			return None
 		}
-		if let ExistenceReason::DepositHeld(deposit) =
-			sp_std::mem::replace(self, ExistenceReason::DepositRefunded)
-		{
-			Some(deposit)
-		} else {
-			None
-		}
-	}
-
-	pub(crate) fn take_foreign_deposit(&mut self) -> Option<(AccountId, Balance)> {
-		if !matches!(self, ExistenceReason::ForeignDeposit(..)) {
-			return None
-		}
-		if let ExistenceReason::ForeignDeposit(depositor, deposit) =
-			sp_std::mem::replace(self, ExistenceReason::DepositRefunded)
-		{
-			Some((depositor, deposit))
-		} else {
-			None
+		match sp_std::mem::replace(self, DepositRefunded) {
+			DepositHeld(deposit) => Some((who.clone(), deposit)),
+			ForeignDeposit(depositor, deposit) => Some((depositor, deposit)),
+			_ => None,
 		}
 	}
 }

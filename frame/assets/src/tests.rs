@@ -746,35 +746,6 @@ fn touching_and_freezing_account_with_zero_asset_balance_should_work() {
 }
 
 #[test]
-fn freeze_creating_works() {
-	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&1, 100);
-		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		assert_eq!(Assets::balance(0, 1), 100);
-		assert_eq!(Assets::balance(0, 2), 0);
-		// cannot freeze an account that doesn't have an `Assets` entry
-		assert_noop!(Assets::freeze(RuntimeOrigin::signed(1), 0, 2), Error::<Test>::NoAccount);
-		// can freeze the account by placing a deposit
-		assert_ok!(Assets::freeze_creating(RuntimeOrigin::signed(1), 0, 2));
-		// `1` had to reserve `AssetAccountDeposit` to create `Account(id, 2)`
-		assert_eq!(Balances::reserved_balance(&1), 10);
-		// can transfer to `2` even though it's frozen
-		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50));
-		// cannot transfer from `2`
-		assert_noop!(Assets::transfer(RuntimeOrigin::signed(2), 0, 1, 25), Error::<Test>::Frozen);
-		// asset balances unchanged
-		assert_eq!(Assets::balance(0, 1), 50);
-		assert_eq!(Assets::balance(0, 2), 50);
-		assert_ok!(Assets::thaw(RuntimeOrigin::signed(1), 0, 2));
-		// refunds and changes the existence reason.
-		assert_ok!(Assets::refund_foreign(RuntimeOrigin::signed(1), 0, 2));
-		assert_eq!(Balances::reserved_balance(&1), 0);
-		// TODO more tests
-	});
-}
-
-#[test]
 fn cannot_refund_foreign_account_with_balance() {
 	new_test_ext().execute_with(|| {
 		// 1 will be the asset admin
@@ -793,21 +764,22 @@ fn cannot_refund_foreign_account_with_balance() {
 		assert_eq!(Balances::reserved_balance(&2), 10);
 		assert!(Account::<Test>::contains_key(0, &2));
 		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50));
+		// cannot refund if balance not zero
+		assert_noop!(
+			Assets::refund_foreign(RuntimeOrigin::signed(1), 0, 2),
+			Error::<Test>::WouldBurn
+		);
 		assert_ok!(Assets::transfer(RuntimeOrigin::signed(2), 0, 1, 50));
 		assert_eq!(Assets::balance(0, 2), 0);
 		assert!(Account::<Test>::contains_key(0, &2));
-		// no foreign deposit
-		assert_noop!(
-			Assets::refund_foreign(RuntimeOrigin::signed(4), 0, 2),
-			Error::<Test>::NoDeposit
-		);
 		// but 1 is the asset admin, ok.
 		assert_ok!(Assets::refund(RuntimeOrigin::signed(2), 0, false));
 		assert_eq!(Balances::reserved_balance(&2), 0);
 		// ensure the account has actually died
 		assert!(!Account::<Test>::contains_key(0, &2));
 
-		assert_ok!(Assets::freeze_creating(RuntimeOrigin::signed(1), 0, 3));
+		assert_ok!(Assets::touch_foreign(RuntimeOrigin::signed(1), 0, 3));
+		assert_ok!(Assets::freeze(RuntimeOrigin::signed(1), 0, 3));
 		assert_eq!(Assets::balance(0, 3), 0);
 		assert!(Account::<Test>::contains_key(0, &3));
 		assert_noop!(Assets::refund_foreign(RuntimeOrigin::signed(1), 0, 3), Error::<Test>::Frozen);
