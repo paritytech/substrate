@@ -57,6 +57,7 @@ std = [
 	"sp-io/std",
 	"codec/std",
 	"scale-info/std",
+	"sp-state-machine/std",
 	"sp-std/std",
 	"sp-runtime/std",
 	"sp-tracing/std",

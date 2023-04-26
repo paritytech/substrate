@@ -149,6 +149,7 @@ where
 	}
 }
 
+#[cfg(feature = "std")]
 impl<H: Hasher, KF> From<(Storage, StateVersion)> for TrieBackend<GenericMemoryDB<H, KF>, H>
 where
 	H::Out: Codec + Ord,

@@ -1679,7 +1679,7 @@ mod tests {
 		}
 		overlay.rollback_transaction().unwrap();
 		{
-			let ext = Ext::new(&mut overlay, &mut cache, backend, None);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 			assert_eq!(ext.storage(key.as_slice()), Some(vec![reference_data[0].clone()].encode()));
 		}
 	}
@@ -1739,7 +1739,7 @@ mod tests {
 
 		// Then only initlaization item and second (committed) item should persist.
 		{
-			let ext = Ext::new(&mut overlay, &mut cache, backend, None);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 			assert_eq!(
 				ext.storage(key.as_slice()),
 				Some(vec![Item::InitializationItem, Item::CommitedItem].encode()),
