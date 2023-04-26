@@ -3060,7 +3060,6 @@ fn failed_deposit_charge_should_roll_back_call() {
 
 	// Bump the deposit per byte to a high value to trigger a FundsUnavailable error.
 	DEPOSIT_PER_BYTE.with(|c| *c.borrow_mut() = ED);
-
 	assert_err_with_weight!(execute(), TokenError::FundsUnavailable, result.actual_weight);
 }
 
