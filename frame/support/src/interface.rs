@@ -19,7 +19,7 @@ use crate::{
 	dispatch::{CallMetadata, DispatchInfo, DispatchResultWithPostInfo, PostDispatchInfo},
 	traits::{EnqueueMessage, GetCallMetadata, UnfilteredDispatchable},
 };
-use codec::{Decode, Encode};
+use codec::{Codec, Decode, Encode};
 use frame_support::dispatch::DispatchErrorWithPostInfo;
 use sp_core::H256;
 use sp_runtime::{
@@ -182,8 +182,89 @@ impl<T> Select<T> {
 }
 
 mod tests {
+	use crate::interface::{CallResult, Core, Select, SelectorResult, ViewResult, ViewableViewFor};
+	use sp_core::H256;
+
+	#[derive(Clone, PartialOrd, PartialEq, Eq, Ord)]
+	pub struct Runtime;
+
+	impl Core for Runtime {
+		type RuntimeOrigin = ();
+	}
+
+	impl int_123::Pip20 for Runtime {
+		type AccountId = ();
+		type Currency = ();
+		type Balance = ();
+
+		fn select_currency(selectable: H256) -> SelectorResult<Self::Currency> {
+			todo!()
+		}
+
+		fn select_restricted_currency(selectable: H256) -> SelectorResult<Self::Currency> {
+			todo!()
+		}
+
+		fn select_account(selectable: H256) -> SelectorResult<Self::AccountId> {
+			todo!()
+		}
+
+		fn select_origin(selectable: H256) -> SelectorResult<<Self as Core>::RuntimeOrigin> {
+			todo!()
+		}
+
+		fn free_balance(
+			currency: Select<Self::Currency>,
+			who: Self::AccountId,
+		) -> ViewResult<Self::Currency> {
+			todo!()
+		}
+
+		fn balances(who: Self::AccountId) -> ViewResult<Vec<(Self::Currency, Self::Balance)>> {
+			todo!()
+		}
+
+		fn transfer(
+			origin: Self::RuntimeOrigin,
+			currency: Select<Self::Currency>,
+			recv: Self::AccountId,
+			amount: Self::Balance,
+		) -> CallResult {
+			todo!()
+		}
+
+		fn burn(
+			origin: Self::RuntimeOrigin,
+			from: Self::AccountId,
+			amount: Self::Balance,
+		) -> CallResult {
+			todo!()
+		}
+
+		fn approve(
+			origin: Self::RuntimeOrigin,
+			currency: Select<Self::Currency>,
+			recv: Self::AccountId,
+			amount: Self::Balance,
+		) -> CallResult {
+			todo!()
+		}
+	}
+
+	#[frame_support::call_entry]
+	pub enum Call {
+		#[call_entry::index(20)]
+		Pip20(int_123::Call<Runtime>),
+	}
+
+	#[frame_support::view_entry]
+	pub enum View {
+		#[call_entry::index(20)]
+		Pip20(int_123::View<Runtime>),
+	}
+
 	#[frame_support::interface]
-	mod int_123 {
+	pub mod int_123 {
 		use crate::interface::{CallResult, ViewResult};
 		use frame_support::{
 			dispatch::DispatchResult,

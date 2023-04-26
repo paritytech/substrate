@@ -58,6 +58,52 @@ where
 	Ok(pallet_attrs)
 }
 
+/// Take the first interface attribute (e.g. attribute like `#[call_entry..]`) and decode it to
+/// `Attr`
+pub fn take_first_item_call_entry_attr<Attr>(
+	item: &mut impl MutItemAttrs,
+) -> syn::Result<Option<Attr>>
+where
+	Attr: syn::parse::Parse,
+{
+	let attrs = if let Some(attrs) = item.mut_item_attrs() { attrs } else { return Ok(None) };
+
+	if let Some(index) = attrs.iter().position(|attr| {
+		attr.path
+			.segments
+			.first()
+			.map_or(false, |segment| segment.ident == "call_entry")
+	}) {
+		let interface_attr = attrs.remove(index);
+		Ok(Some(syn::parse2(interface_attr.into_token_stream())?))
+	} else {
+		Ok(None)
+	}
+}
+
+/// Take the first interface attribute (e.g. attribute like `#[view_entry..]`) and decode it to
+/// `Attr`
+pub fn take_first_item_view_entry_attr<Attr>(
+	item: &mut impl MutItemAttrs,
+) -> syn::Result<Option<Attr>>
+where
+	Attr: syn::parse::Parse,
+{
+	let attrs = if let Some(attrs) = item.mut_item_attrs() { attrs } else { return Ok(None) };
+
+	if let Some(index) = attrs.iter().position(|attr| {
+		attr.path
+			.segments
+			.first()
+			.map_or(false, |segment| segment.ident == "call_entry")
+	}) {
+		let interface_attr = attrs.remove(index);
+		Ok(Some(syn::parse2(interface_attr.into_token_stream())?))
+	} else {
+		Ok(None)
+	}
+}
+
 impl MutItemAttrs for syn::Item {
 	fn mut_item_attrs(&mut self) -> Option<&mut Vec<syn::Attribute>> {
 		match self {

@@ -19,12 +19,12 @@ use quote::ToTokens;
 use syn::parse_quote::ParseQuote;
 
 pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
-	let generic = def.runtime;
 	let indices = def.variants.iter().map(|var| var.index).collect::<Vec<_>>();
 	let name = def.variants.iter().map(|var| var.name.clone()).collect::<Vec<_>>();
 	let inner_types = def.variants.iter().map(|var| var.inner.clone()).collect::<Vec<_>>();
 	let frame_support = def.frame_support;
 	let sp_core = def.sp_core;
+	let enum_name = def.item.ident.clone();
 
 	def.item
 		.variants
@@ -32,14 +32,20 @@ pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 		.zip(indices)
 		.for_each(|(var, index)| var.attrs.push(syn::parse_quote!(#[codec(index = #index)])));
 
+	def.item.attrs.push(
+		syn::parse_quote!(#[derive(#frame_support::codec::Decode, #frame_support::codec::Encode)]),
+	);
+
 	let impl_item = quote::quote_spanned!(def.span =>
-		impl<#generic> #frame_support::dispatch::GetDispatchInfo for CallInterface<#generic>{
-			fn get_dispatch_info(&self) -> DispatchInfo {
+
+		impl  #frame_support::dispatch::GetDispatchInfo for #enum_name {
+			fn get_dispatch_info(&self) -> #frame_support::dispatch::DispatchInfo {
 				todo!()
 			}
 		}
 
-		impl<#generic> #frame_support::interface::Call for CallInterface<#generic>{
+
+		impl #frame_support::interface::Call for #enum_name {
 			type RuntimeOrigin = <#generic as #frame_support::interface::Core>::RuntimeOrigin;
 
 			fn call(self, origin: Self::RuntimeOrigin, selectable: #sp_core::H256) -> #frame_support::interface::CallResult {
@@ -47,16 +53,17 @@ pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 			}
 		}
 
-		impl<#generic> #frame_support::traits::metadata::GetCallMetadata for CallInterface<#generic>{
-			/// Return all module names.
+		/*
+
+		impl #frame_support::traits::metadata::GetCallMetadata for #enum_name {
 			fn get_module_names() -> &'static [&'static str] {
 				todo!()
 			}
-			/// Return all function names for the given `module`.
+
 			fn get_call_names(module: &str) -> &'static [&'static str] {
 				todo!()
 			}
-			/// Return a [`CallMetadata`], containing function and pallet name of the Call.
+
 			fn get_call_metadata(&self) -> CallMetadata {
 				todo!()
 			}
@@ -67,6 +74,7 @@ pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 		const _: () {
 
 		}
+		 */
 	);
 
 	let enum_item = def.item.into_token_stream();

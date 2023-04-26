@@ -23,7 +23,6 @@ pub struct Def {
 	pub item: syn::ItemEnum,
 	pub span: proc_macro2::Span,
 	pub variants: Vec<VariantDef>,
-	pub runtime: syn::Ident,
 	pub frame_support: syn::Ident,
 	pub sp_core: syn::Ident,
 }
@@ -38,45 +37,12 @@ impl Def {
 		// TODO: Maybe check if derive of Codec and error out as we automatically wanna do that. Bad
 		//       style?
 
-		let runtime = match item.generics.params.len().cmp(&1) {
-			Ordering::Equal => {
-				let param = item.generics.params.first().expect("Is one. Qed.").clone();
-				match param {
-					syn::GenericParam::Type(ty) => ty.ident,
-					syn::GenericParam::Const(_) | syn::GenericParam::Lifetime(_) => {
-						let msg = format!(
-							"Invalid call_entry enum. Expected type generic. \
-					  			Try using the following: pub {}<Runtime>",
-							item.ident.clone()
-						);
-						return Err(syn::Error::new(item_span, msg))
-					},
-				}
-			},
-			Ordering::Greater => {
-				let msg = format!(
-					"Invalid call_entry enum. Expected one generic. Got more. \
-					  Try using the following: pub {}<Runtime>",
-					item.ident.clone()
-				);
-				return Err(syn::Error::new(item_span, msg))
-			},
-			Ordering::Less => {
-				let msg = format!(
-					"Invalid call_entry enum. Expected one generic. Got none.. \
-					  Try using the following: pub {}<Runtime>",
-					item.ident.clone()
-				);
-				return Err(syn::Error::new(item_span, msg))
-			},
-		};
-
 		let mut indices = HashMap::new();
 		let mut variants = Vec::new();
 
 		for variant in &mut item.variants {
 			let call_idx_attr: Option<CallEntryAttr> =
-				crate::interface::helper::take_item_interface_attrs(&mut variant.attrs)?
+				crate::interface::helper::take_first_item_call_entry_attr(&mut variant.attrs)?
 					.into_iter()
 					.try_fold(None, |mut call_idx_attr, attr| {
 						match attr {
@@ -116,9 +82,7 @@ impl Def {
 					},
 			};
 
-			indices
-				.insert(variant.ident.clone(), call_idx)
-				.expect("Variants have unique identifieres. Qed");
+			assert!(indices.insert(variant.ident.clone(), call_idx).is_none());
 
 			let inner = match &variant.fields {
 				syn::Fields::Unit | syn::Fields::Named(..) => {
@@ -146,7 +110,7 @@ impl Def {
 			})
 		}
 
-		Ok(Def { item, span: item_span, variants, runtime, frame_support, sp_core })
+		Ok(Def { item, span: item_span, variants, frame_support, sp_core })
 	}
 }
 

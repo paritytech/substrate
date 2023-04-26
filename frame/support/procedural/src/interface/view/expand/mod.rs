@@ -19,12 +19,12 @@ use quote::ToTokens;
 use syn::parse_quote::ParseQuote;
 
 pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
-	let generic = def.runtime;
 	let indices = def.variants.iter().map(|var| var.index).collect::<Vec<_>>();
 	let name = def.variants.iter().map(|var| var.name.clone()).collect::<Vec<_>>();
 	let inner_types = def.variants.iter().map(|var| var.inner.clone()).collect::<Vec<_>>();
 	let frame_support = def.frame_support;
 	let sp_core = def.sp_core;
+	let enum_name = def.item.ident.clone();
 
 	def.item
 		.variants
@@ -33,7 +33,7 @@ pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 		.for_each(|(var, index)| var.attrs.push(syn::parse_quote!(#[codec(index = #index)])));
 
 	let impl_item = quote::quote_spanned!(def.span =>
-		impl<#generic> #frame_support::interface::View for CallInterface<#generic>{
+		impl #frame_support::interface::View for #enum_name {
 			fn view(self, selectable: #sp_core::H256) -> #frame_support::interface::ViewResult {
 				todo!()
 			}
