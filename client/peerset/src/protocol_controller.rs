@@ -474,9 +474,11 @@ impl ProtocolController {
 	/// Note that this mechanism is orthogonal to `Connect`/`Drop`. Accepting an incoming
 	/// connection implicitly means `Connect`, but incoming connections aren't cancelled by
 	/// `dropped`.
-	// Implementation note: because of concurrency issues, it is possible that we push a `Connect`
-	// message to the output channel with a `PeerId`, and that `incoming` gets called with the same
-	// `PeerId` before that message has been read by the user. In this situation we must not answer.
+	// Implementation note: because of concurrency issues, `ProtocolController` has an imperfect view
+	// of the peers' states, and may issue commands for a peer after `Notifications` received an
+	// incoming request for that peer. In this case, `Notifications` ignores all the commands until
+	// it receives a response for the incoming request to `ProtocolController`, so we must ensure we
+	// handle this incoming request correctly.
 	fn on_incoming_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
 		trace!(target: LOG_TARGET, "Incoming connection from peer {peer_id} ({incoming_index:?}).",);
 
@@ -489,7 +491,7 @@ impl ProtocolController {
 		if let Some(state) = self.reserved_nodes.get_mut(&peer_id) {
 			match state {
 				PeerState::Connected(mut direction) => {
-					// We are accepting an incoming connection, so switch the direction to inbound.
+					// We are accepting an incoming connection, so ensure the direction is inbound.
 					// (See the note above.)
 					direction = Direction::Inbound;
 					self.accept_connection(incoming_index);
