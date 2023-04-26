@@ -729,7 +729,15 @@ impl OverlayedChangeSet {
 				// We only need to merge if there is an pre-existing value. It may be a value from
 				// the previous transaction or a value committed without any open transaction.
 				if has_predecessor {
-					let dropped_tx = overlayed.pop_transaction();
+					let mut dropped_tx = overlayed.pop_transaction();
+					// consecutive appends need to keep past `from_parent` value.
+					if let StorageEntry::Append { from_parent, .. } = &mut dropped_tx.value {
+						if let StorageEntry::Append { from_parent: keep_me, .. } =
+							overlayed.value_mut()
+						{
+							*from_parent = *keep_me;
+						}
+					}
 					*overlayed.value_mut() = dropped_tx.value;
 					overlayed.transaction_extrinsics_mut().extend(dropped_tx.extrinsics);
 				}
