@@ -165,7 +165,7 @@ impl BeefyTestNet {
 		// push genesis to make indexing human readable (index equals to block number)
 		all_hashes.push(self.peer(0).client().info().genesis_hash);
 
-		let mut block_num: NumberFor<Block> = 0;
+		let mut block_num: NumberFor<Block> = self.peer(0).client().info().best_number;
 		let built_hashes = self.peer(0).generate_blocks(count, BlockOrigin::File, |mut builder| {
 			block_num = block_num.saturating_add(1).try_into().unwrap();
 			if include_mmr_digest {
