@@ -17,10 +17,37 @@
 
 //! Implementation of the `derive_impl` attribute macro.
 
+use derive_syn_parse::Parse;
+use macro_magic::mm_core::ForeignPath;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{quote, ToTokens};
 use std::collections::HashSet;
-use syn::{parse2, parse_quote, Ident, ImplItem, ItemImpl, Path, Result};
+use syn::{
+	parse2, parse_quote, spanned::Spanned, token::Comma, Ident, ImplItem, ItemImpl, Path, Result,
+};
+
+#[derive(Parse)]
+pub struct DeriveImplAttrArgs {
+	pub foreign_path: Path,
+	_comma: Comma,
+	pub disambiguation_path: Path,
+	_comma2: Option<Comma>,
+}
+
+impl ForeignPath for DeriveImplAttrArgs {
+	fn foreign_path(&self) -> &Path {
+		&self.foreign_path
+	}
+}
+
+impl ToTokens for DeriveImplAttrArgs {
+	fn to_tokens(&self, tokens: &mut TokenStream2) {
+		tokens.extend(self.foreign_path.to_token_stream());
+		tokens.extend(self._comma.to_token_stream());
+		tokens.extend(self.disambiguation_path.to_token_stream());
+		tokens.extend(self._comma2.to_token_stream());
+	}
+}
 
 /// Gets the [`Ident`] representation of the given [`ImplItem`], if one exists. Otherwise
 /// returns [`None`].
@@ -45,11 +72,16 @@ fn impl_item_ident(impl_item: &ImplItem) -> Option<Ident> {
 /// This process has the following caveats:
 /// * Colliding items that have an ident are not copied into `local_impl`
 /// * Uncolliding items that have an ident are copied into `local_impl` but are qualified as `type
-///   #ident = <#foreign_path as #source_crate_path::pallet::DefaultConfig>::#ident;`
+///   #ident = <#foreign_path as #disambiguation_path>::#ident;`
 /// * Items that lack an ident are de-duplicated so only unique items that lack an ident are copied
 ///   into `local_impl`. Items that lack an ident and also exist verbatim in `local_impl` are not
 ///   copied over.
-fn combine_impls(local_impl: ItemImpl, foreign_impl: ItemImpl, foreign_path: Path) -> ItemImpl {
+fn combine_impls(
+	local_impl: ItemImpl,
+	foreign_impl: ItemImpl,
+	foreign_path: Path,
+	disambiguation_path: Path,
+) -> ItemImpl {
 	let existing_local_keys: HashSet<Ident> = local_impl
 		.items
 		.iter()
@@ -61,7 +93,6 @@ fn combine_impls(local_impl: ItemImpl, foreign_impl: ItemImpl, foreign_path: Pat
 		.filter(|impl_item| impl_item_ident(impl_item).is_none())
 		.cloned()
 		.collect();
-	let source_crate_path = foreign_path.segments.first().unwrap().ident.clone();
 	let mut final_impl = local_impl;
 	let extended_items = foreign_impl
 		.items
@@ -75,7 +106,7 @@ fn combine_impls(local_impl: ItemImpl, foreign_impl: ItemImpl, foreign_path: Pat
 					if matches!(item, ImplItem::Type(_)) {
 						// modify and insert uncolliding type items
 						let modified_item: ImplItem = parse_quote! {
-							type #ident = <#foreign_path as #source_crate_path::pallet::DefaultConfig>::#ident;
+							type #ident = <#foreign_path as #disambiguation_path>::#ident;
 						};
 						Some(modified_item)
 					} else {
@@ -106,16 +137,29 @@ fn combine_impls(local_impl: ItemImpl, foreign_impl: ItemImpl, foreign_path: Pat
 /// `foreign_tokens`: the tokens for the external `impl` statement
 ///
 /// `local_tokens`: the tokens for the local `impl` statement this attribute is attached to
+///
+/// `disambiguation_path`: the module path of the external trait we will use to qualify
+///                        defaults imported from the external `impl` statement
 pub fn derive_impl(
 	foreign_path: TokenStream2,
 	foreign_tokens: TokenStream2,
 	local_tokens: TokenStream2,
+	disambiguation_path: Path,
 ) -> Result<TokenStream2> {
 	let local_impl = parse2::<ItemImpl>(local_tokens)?;
 	let foreign_impl = parse2::<ItemImpl>(foreign_tokens)?;
 	let foreign_path = parse2::<Path>(foreign_path)?;
+	let mut disambiguation_path = disambiguation_path;
 
-	let combined_impl = combine_impls(local_impl, foreign_impl, foreign_path);
+	let Some(source_crate_path) = foreign_path.segments.first() else {
+		return Err(syn::Error::new(foreign_path.span(), "foreign_path must have at least one segment"));
+	};
+	let source_crate_path = source_crate_path.ident.clone();
+	if disambiguation_path.segments.len() == 1 {
+		disambiguation_path = parse_quote!(#source_crate_path::pallet::);
+	}
+
+	let combined_impl = combine_impls(local_impl, foreign_impl, foreign_path, disambiguation_path);
 
 	Ok(quote!(#combined_impl))
 }

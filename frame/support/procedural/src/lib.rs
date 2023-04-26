@@ -42,7 +42,7 @@ use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
-use syn::ItemImpl;
+use syn::{parse_macro_input, ItemImpl};
 
 thread_local! {
 	/// A global counter, can be used to generate a relatively unique identifier.
@@ -779,7 +779,28 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 		.into()
 }
 
-/// This attribtue can be used to derive a test pallet `Config` based on an existing pallet
+/// This attribute can be used to derive a full implementation of a trait based on a local
+/// partial impl and an external impl containing defaults that can be overriden in the local
+/// impl.
+///
+/// ## Usage
+///
+/// The attribute should be attached to an impl block (in `syn` parlance, an [`ItemImpl`]).
+/// This is the impl block that we are injecting with defaults in the event of missing trait
+/// items. The sole argument to the attribute should be a path to a valid
+/// [`#[register_default_impl]`](`macro@register_default_impl`) call that is attached to an
+/// impl containing defaults.
+///
+/// ## Expansion
+///
+/// The macro will expand to the local impl, with any extra items from the foreign impl that
+/// aren't present in the local impl also included.
+///
+/// ## Use-Case: Auto-Derive Test Pallet Config Traits
+///
+/// Though the machinery behind is general enough to use on any set of traits, a ma
+///
+/// This attribute can be used to derive a test pallet `Config` based on an existing pallet
 /// `Config` that has been marked with [`#[pallet::default_config]`](`macro@default_config`).
 ///
 /// The attribute should be attached to an `impl` block that implements a compatible `Config`
@@ -790,7 +811,10 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// Consider the following taken from the basic example pallet:
 ///
 /// ```ignore
-/// #[derive_impl(TestDefaultConfig)]
+/// #[derive_impl(
+/// 	frame_system::preludes::testing::TestDefaultConfig,
+/// 	frame_system::pallet::DefaultConfig
+/// )]
 /// impl frame_system::Config for Test {
 /// 	// These are all defined by system as mandatory.
 /// 	type BaseCallFilter = frame_support::traits::Everything;
@@ -876,11 +900,18 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// [`#[pallet::no_default]`], in which case it cannot be overridden, and any attempts to do so
 /// will result in a compiler error.
 #[import_tokens_attr(frame_support::macro_magic)]
+#[with_custom_parsing(derive_impl::DeriveImplAttrArgs)]
 #[proc_macro_attribute]
 pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
-	derive_impl::derive_impl(__source_path.into(), attrs.into(), input.into())
-		.unwrap_or_else(|r| r.into_compile_error())
-		.into()
+	let custom_attrs = parse_macro_input!(__custom_tokens as derive_impl::DeriveImplAttrArgs);
+	derive_impl::derive_impl(
+		__source_path.into(),
+		attrs.into(),
+		input.into(),
+		custom_attrs.disambiguation_path,
+	)
+	.unwrap_or_else(|r| r.into_compile_error())
+	.into()
 }
 
 /// The optional attribute `#[pallet::default_config]` can be attached to a `Config` trait
