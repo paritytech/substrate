@@ -834,8 +834,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	// Overhead of calling the function without any topic.
-	// We benchmark for the worst case (largest event).
+	// Overhead of calling the function without any topic and with no payload.
 	#[pov_mode = Measured]
 	seal_deposit_event {
 		let r in 0 .. API_BENCHMARK_RUNS;
@@ -866,7 +865,9 @@ benchmarks! {
 	#[pov_mode = Measured]
 	seal_deposit_event_per_topic_and_byte {
 		let t in 0 .. T::Schedule::get().limits.event_topics;
-		let n in 0 .. T::Schedule::get().limits.payload_len;
+		// Less bytes here leads to cheaper byte in emitted event.
+		// Hence we lower the upper bound to increase the resulting per byte component.
+		let n in 0 .. Perbill::from_percent(10).mul_ceil(T::Schedule::get().limits.payload_len);
 		let topics = (0..t).map(|i| T::Hashing::hash_of(&i)).collect::<Vec<_>>().encode();
 		let topics_len = topics.len();
 		let code = WasmModule::<T>::from(ModuleDefinition {
