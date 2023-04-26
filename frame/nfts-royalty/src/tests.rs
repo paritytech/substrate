@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for the NFT Royalties pallet.
+//! Tests for the NFTs Royalty pallet.
 
 use crate::{mock::*, Error, NftWithRoyalty};
 use frame_support::{
@@ -142,6 +142,13 @@ fn nft_burn_with_royalties_should_work() {
 		assert_eq!(items, vec![]);
 		// Read royalties pallet storage to see if the royalties has been deleted.
 		assert_eq!(NftWithRoyalty::<Test>::get((0, 42)), None);
+		assert_eq!(
+			last_event(),
+			NftsRoyaltyEvent::Burned { 
+				nft_collection: 0, 
+				nft: 42, 
+			}
+		);
 	});
 }
 #[test]
@@ -250,6 +257,14 @@ fn set_item_with_royalty_should_work() {
         let nft_with_royalty = NftWithRoyalty::<Test>::get((0, 43)).unwrap();
         assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
         assert_eq!(nft_with_royalty.royalty_recipient, account(1));
+		assert_eq!(
+			last_event(),
+			NftsRoyaltyEvent::RoyaltySet { 
+				nft_collection: 0, 
+				nft: 43, 
+				royalty_percentage: Permill::from_percent(5), 
+				royalty_recipient: account(1) }
+		);
     });
 }
 
@@ -291,6 +306,15 @@ fn buy_should_work() {
 		assert_eq!(Balances::total_balance(&account(1)), initial_balance + 50 + 5);
 		// Check the balances of buyer -> initial balance - price item - royalties.
 		assert_eq!(Balances::total_balance(&account(2)), initial_balance - 50 - 5);
+		assert_eq!(
+			last_event(),
+			NftsRoyaltyEvent::RoyaltyPaid { 
+				nft_collection: 0, 
+				nft: 42,
+				royalty_amount_paid: 5,
+				royalty_recipient: account(1) 
+			}
+		);
     });
 }
 

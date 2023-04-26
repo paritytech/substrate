@@ -127,7 +127,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// An NFT royalty was successfully minted.
+		/// An NFT with royalty has been successfully minted.
 		Minted {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftItemId,
@@ -136,7 +136,7 @@ pub mod pallet {
 		},
 		/// An NFT item was destroyed.
 		Burned { nft_collection: T::NftCollectionId, nft: T::NftItemId },
-		/// The NFT royalty recipient has changed.
+		/// The royalty recipient of an NFT item has changed.
 		RecipientChanged {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftItemId,
@@ -149,11 +149,11 @@ pub mod pallet {
 			royalty_percentage: Permill,
 			royalty_recipient: T::AccountId,
 		},
-		/// The royalty has been paid.
-		Paid {
+		/// The royalty for an NFT item has been paid.
+		RoyaltyPaid {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftItemId,
-			amount_royalties_paid: BalanceOf<T>,
+			royalty_amount_paid: BalanceOf<T>,
 			royalty_recipient: T::AccountId,
 		},
 	}
@@ -362,7 +362,7 @@ pub mod pallet {
 		/// - `item`: The item the sender wants to buy.
 		/// - `bid_price`: The price the sender is willing to pay.
 		///
-		/// Emits `RoyaltiesPaid`.
+		/// Emits `RoyaltyPaid`.
 		///
 		#[pallet::call_index(4)]
 		#[pallet::weight(0)]
@@ -377,28 +377,27 @@ pub mod pallet {
 			// Retrieve price of the item
 			let item_price = T::Nfts::item_price(&collection_id, &item_id).ok_or(Error::<T>::NotForSale)?;
 
-			//Buy the item within NFT pallet
+			// Buy the item within NFT pallet
 			T::Nfts::buy_item(&collection_id, &item_id, &origin, &bid_price)?;
 
-			//Pay the royalties to the royalties owner
-			let item_royalties = <NftWithRoyalty<T>>::get((collection_id, item_id))
+			// Pay the royalty to the royalty owner
+			let item_royalty = <NftWithRoyalty<T>>::get((collection_id, item_id))
 				.ok_or(Error::<T>::NoRoyaltyExists)?;
-			
 
-			let royalty_to_pay = item_royalties.royalty_percentage * item_price;
+			let royalty_amount_to_pay = item_royalty.royalty_percentage * item_price;
 
 			T::Currency::transfer(
 				&origin,
-				&item_royalties.royalty_recipient,
-				royalty_to_pay,
+				&item_royalty.royalty_recipient,
+				royalty_amount_to_pay,
 				ExistenceRequirement::KeepAlive,
 			)?;
 
-			Self::deposit_event(Event::Paid {
+			Self::deposit_event(Event::RoyaltyPaid {
 				nft_collection: collection_id,
 				nft: item_id,
-				amount_royalties_paid: royalty_to_pay,
-				royalty_recipient: item_royalties.royalty_recipient,
+				royalty_amount_paid: royalty_amount_to_pay,
+				royalty_recipient: item_royalty.royalty_recipient,
 			});
 
 			Ok(())
