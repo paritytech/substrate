@@ -52,7 +52,6 @@ pub struct PalletStructDef {
 /// * `#[pallet::generate_store($vis trait Store)]`
 /// * `#[pallet::without_storage_info]`
 /// * `#[pallet::storage_version(STORAGE_VERSION)]`
-/// * `#[pallet::call_weight($weight_trait)]`
 pub enum PalletStructAttr {
 	GenerateStore { span: proc_macro2::Span, vis: syn::Visibility, keyword: keyword::Store },
 	WithoutStorageInfoTrait(proc_macro2::Span),
