@@ -337,7 +337,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 
 		for (hash, state) in sub.blocks.iter() {
 			if !state.state_machine.was_unpinned() {
-				self.global_unpin_block(*hash);
+				self.global_unregister_block(*hash);
 			}
 		}
 	}
@@ -424,11 +424,18 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 			}
 		}
 
-		self.global_pin_block(hash)?;
+		self.global_register_block(hash)?;
 		Ok(true)
 	}
 
-	fn global_pin_block(&mut self, hash: Block::Hash) -> Result<(), SubscriptionManagementError> {
+	/// Register the block internally.
+	///
+	/// If the block is present the reference counter is increased.
+	/// If this is a new block, the block is pinned in the backend.
+	fn global_register_block(
+		&mut self,
+		hash: Block::Hash,
+	) -> Result<(), SubscriptionManagementError> {
 		match self.global_blocks.entry(hash) {
 			Entry::Occupied(mut occupied) => {
 				*occupied.get_mut() += 1;
@@ -444,7 +451,12 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 		Ok(())
 	}
 
-	fn global_unpin_block(&mut self, hash: Block::Hash) {
+	/// Unregister the block internally.
+	///
+	/// If the block is present the reference counter is decreased.
+	/// If this is the last reference of the block, the block
+	/// is unpinned from the backend and removed from internal tracking.
+	fn global_unregister_block(&mut self, hash: Block::Hash) {
 		if let Entry::Occupied(mut occupied) = self.global_blocks.entry(hash) {
 			let counter = occupied.get_mut();
 			if *counter == 1 {
@@ -472,7 +484,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 			return Err(SubscriptionManagementError::BlockHashAbsent)
 		}
 
-		self.global_unpin_block(hash);
+		self.global_unregister_block(hash);
 		Ok(())
 	}
 
