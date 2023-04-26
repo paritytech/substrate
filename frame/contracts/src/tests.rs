@@ -3024,7 +3024,7 @@ fn failed_deposit_charge_should_roll_back_call() {
 			// Give caller proxy access to Alice.
 			assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(ALICE), addr_caller.clone(), (), 0));
 
-			// Create a Proxy call that will attempt to transfer away Alice's balance
+			// Create a Proxy call that will attempt to transfer away Alice's balance.
 			let transfer_call =
 				Box::new(RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 					dest: CHARLIE,
