@@ -318,13 +318,10 @@ pub async fn run_instant_seal_and_finalize<B, BI, CB, E, C, TP, SC, CIDP, P>(
 	.await
 }
 
-/// Runs the background finalization task for the manual/instant seal engines.
-/// delayed-finalize finalizes blocks configured seconds after blocks are imported.
+/// Creates a future for delayed finalization of manual sealed blocks.
 ///
-/// This task is intended to be ran along with a block sealing task, but expects blocks are not
-/// finalized when they're sealed. Specifically, `finalize` in `SealNewBlock` command should be set
-/// to `false` when it is sent to `commands_stream`. That is, `run_delayed_finalize` is incompatible
-/// with `run_instant_seal_and_finalize` due to re-finalize attemption.
+/// The future needs to be spawned in the background alongside the [`run_manual_seal`]/[`run_instant_seal`] future. 
+/// It is required that [`EngineCommand::SealNewBlock`] is send with `finalize = false` to not finalize blocks directly after building them. This also means that delayed finality can not be used with [`run_instant_seal_and_finalize`].
 pub async fn run_delayed_finalize<B, CB, C, S>(
 	DelayedFinalizeParams { client, spawn_handle, delay_sec }: DelayedFinalizeParams<C, S>,
 ) where
