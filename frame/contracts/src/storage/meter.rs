@@ -358,16 +358,10 @@ where
 	) -> Result<Self, DispatchError> {
 		// Check the limit only if the origin is not root.
 		return match origin {
-			Origin::Root => {
-				match limit {
-					// We don't have a way to check the root's limit as there isn't an account
-					// associated with it. Therefore, whatever the specified limit is, that will be
-					// the root's limit. Following this criteria, when the caller is root we need
-					// the limit parameter to be specified.
-					Some(l) => Ok(Self { limit: l, ..Default::default() }),
-					None => Err(<Error<T>>::StorageDepositLimitRequired.into()),
-				}
-			},
+			Origin::Root => Ok(Self {
+				limit: limit.unwrap_or(T::DefaultDepositLimit::get()),
+				..Default::default()
+			}),
 			Origin::Signed(o) => {
 				let limit = E::check_limit(o, limit, min_leftover)?;
 				Ok(Self { limit, ..Default::default() })

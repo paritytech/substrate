@@ -554,8 +554,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Root;
-		let limit = Some(BalanceOf::<T>::max_value().into());
-	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, limit, vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[pov_mode = Measured]
 	seal_address {
