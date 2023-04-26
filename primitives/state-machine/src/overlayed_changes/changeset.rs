@@ -286,25 +286,22 @@ impl OverlayedEntry<StorageEntry> {
 			self.transactions.push(InnerValue { value, extrinsics: Default::default() });
 		} else {
 			let mut old_value = self.value_mut();
-			let set_prev = match &mut old_value {
-				at @ StorageEntry::None | at @ StorageEntry::Some(_) => {
-					**at = value;
-					None
-				},
-				StorageEntry::Append {
-					data,
-					moved_size,
-					nb_append: _,
-					materialized,
-					from_parent,
-				} => {
-					debug_assert!(moved_size.is_none());
-					let result = core::mem::take(data);
-					from_parent.then(|| (value, result, *materialized))
-				},
+			let set_prev = if let StorageEntry::Append {
+				data,
+				moved_size,
+				nb_append: _,
+				materialized,
+				from_parent,
+			} = &mut old_value
+			{
+				debug_assert!(moved_size.is_none());
+				let result = core::mem::take(data);
+				from_parent.then(|| (result, *materialized))
+			} else {
+				None
 			};
-			if let Some((new_value, mut data, current_materialized)) = set_prev {
-				*old_value = new_value;
+			*old_value = value;
+			if let Some((mut data, current_materialized)) = set_prev {
 				let transactions = self.transactions.len();
 
 				let parent = self.transactions.get_mut(transactions - 2).expect("from parent true");
