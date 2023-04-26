@@ -24,8 +24,8 @@
 // TODO: remove this line.
 #![allow(unused)]
 
-use futures::{channel::oneshot, future::Either, FutureExt, StreamExt};
 use flume::Sender;
+use futures::{channel::oneshot, future::Either, FutureExt, StreamExt};
 use libp2p::PeerId;
 use log::{error, info, trace, warn};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
@@ -235,7 +235,6 @@ impl ProtocolController {
 				// TODO: handle errors.
 			}
 
-
 			if let Some(event) = self.events_rx.next().now_or_never() {
 				match event {
 					None => return false,
@@ -302,16 +301,12 @@ impl ProtocolController {
 
 	/// Send "connect" message to `Notifications`.
 	fn start_connection(&mut self, peer_id: PeerId) {
-		let _ = self
-			.notif_queue
-			.push_back(Message::Connect { set_id: self.set_id, peer_id });
+		let _ = self.notif_queue.push_back(Message::Connect { set_id: self.set_id, peer_id });
 	}
 
 	/// Send "drop" message to `Notifications`.
 	fn drop_connection(&mut self, peer_id: PeerId) {
-		let _ = self
-			.notif_queue
-			.push_back(Message::Drop { set_id: self.set_id, peer_id });
+		let _ = self.notif_queue.push_back(Message::Drop { set_id: self.set_id, peer_id });
 	}
 
 	/// Report peer disconnect event to `PeerStore` for it to update peer's reputation accordingly.
@@ -493,8 +488,12 @@ impl ProtocolController {
 		// Check if the node is reserved first.
 		if let Some(state) = self.reserved_nodes.get_mut(&peer_id) {
 			match state {
-				// If we're already connected, don't answer, as the docs mention.
-				PeerState::Connected(_) => {},
+				PeerState::Connected(mut direction) => {
+					// We are accepting an incoming connection, so switch the direction to inbound.
+					// (See the note above.)
+					direction = Direction::Inbound;
+					self.accept_connection(incoming_index);
+				},
 				PeerState::NotConnected => {
 					// FIXME: unable to call `self.is_banned()` because of borrowed `self`.
 					if self.peer_store.is_banned(&peer_id) {
@@ -508,9 +507,19 @@ impl ProtocolController {
 			return
 		}
 
-		// If we're already connected, don't answer, as the docs mention.
-		if self.nodes.contains_key(&peer_id) {
-			return
+		// If we're already connected, pretend we are not connected and decide on the node again.
+		// (See the note above.)
+		if let Some(direction) = self.nodes.remove(&peer_id) {
+			trace!(
+				target: LOG_TARGET,
+				"Handling incoming connection from peer {} we think we already connected as {:?}.",
+				peer_id,
+				direction,
+			);
+			match direction {
+				Direction::Inbound => self.num_in -= 1,
+				Direction::Outbound => self.num_out -= 1,
+			}
 		}
 
 		if self.num_in >= self.max_in {

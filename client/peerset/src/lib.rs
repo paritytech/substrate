@@ -38,13 +38,13 @@ mod protocol_controller;
 use peer_store::{PeerReputationProvider, PeerStore, PeerStoreHandle};
 use protocol_controller::{ProtocolController, ProtocolHandle};
 
+use flume::{bounded, Receiver, TryRecvError};
 use futures::{
 	channel::oneshot,
 	future::{join_all, BoxFuture, JoinAll},
 	prelude::*,
 	stream::Stream,
 };
-use flume::{bounded, Receiver, TryRecvError};
 use log::{debug, error, trace};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use serde_json::json;
