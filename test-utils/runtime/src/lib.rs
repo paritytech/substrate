@@ -831,7 +831,7 @@ pub mod storage_key_generator {
 
 	/// Generate the hashed storage keys from the raw literals. These keys are expected to be be in
 	/// storage with given substrate-test runtime.
-	fn generate_expected_storage_hashed_keys() -> Vec<String> {
+	pub fn generate_expected_storage_hashed_keys() -> Vec<String> {
 		let literals: Vec<&[u8]> = vec![b":code", b":extrinsic_index", b":heappages"];
 
 		let keys: Vec<Vec<&[u8]>> = vec![
