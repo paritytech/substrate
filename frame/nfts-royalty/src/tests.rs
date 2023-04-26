@@ -24,16 +24,29 @@ use frame_support::{
 		Currency,
 	},
 };
+use super::Event as NftsRoyaltyEvent;
+
 use pallet_nfts::{
 	Account, CollectionAccount, CollectionConfig, CollectionSetting, CollectionSettings,
 	Error as NftErrors, ItemSettings, MintSettings, ItemConfig
 };
+
 pub use sp_runtime::{DispatchError, ModuleError, Permill};
 
 type AccountIdOf<Test> = <Test as frame_system::Config>::AccountId;
 fn account(id: u8) -> AccountIdOf<Test> {
 	[id; 32].into()
 }
+
+fn last_event() -> NftsRoyaltyEvent<Test> {
+	System::events()
+	.into_iter()
+	.map(|r| r.event)
+	.filter_map(|e| if let RuntimeEvent::NftsRoyalty(inner) = e { Some(inner) } else { None })
+	.last()
+	.unwrap()
+}
+
 // Create a collection calling directly the NFT pallet
 fn create_collection() {
 	assert_ok!(Nfts::force_create(
@@ -61,7 +74,7 @@ fn set_up_balances(initial_balance: u64){
 fn nft_minting_with_royalties_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
-		assert_ok!(NftsRoyalty::mint_item_with_royalty(
+		assert_ok!(NftsRoyalty::mint(
 			RuntimeOrigin::signed(account(1)),
 			0,
 			42,
@@ -78,6 +91,15 @@ fn nft_minting_with_royalties_should_work() {
 		let nft_with_royalty = NftWithRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
+		// Check the event was emitted
+		assert_eq!(
+			last_event(),
+			NftsRoyaltyEvent::Minted { 
+				nft_collection: 0, 
+				nft: 42, 
+				royalty_percentage: Permill::from_percent(5), 
+				royalty_recipient: account(1) }
+		);
 	});
 }
 
@@ -85,7 +107,7 @@ fn nft_minting_with_royalties_should_work() {
 fn nft_minting_with_royalties_fail_collection_not_exist() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			NftsRoyalty::mint_item_with_royalty(
+			NftsRoyalty::mint(
 				RuntimeOrigin::signed(account(1)),
 				0,
 				42,
@@ -103,7 +125,7 @@ fn nft_burn_with_royalties_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		// Mint the item we are going to burn
-		assert_ok!(NftsRoyalty::mint_item_with_royalty(
+		assert_ok!(NftsRoyalty::mint(
 			RuntimeOrigin::signed(account(1)),
 			0,
 			42,
@@ -113,7 +135,7 @@ fn nft_burn_with_royalties_should_work() {
 			account(1)
 		));
 		// Burn the item
-		assert_ok!(NftsRoyalty::burn_item_with_royalty(RuntimeOrigin::signed(account(1)), 0, 42));
+		assert_ok!(NftsRoyalty::burn(RuntimeOrigin::signed(account(1)), 0, 42));
 		// Get the items directly from the NFT pallet, to see if has been burned there
 		let mut items: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
 		items.sort();
@@ -127,7 +149,7 @@ fn nft_burn_error_nft_has_no_royalties() {
 	new_test_ext().execute_with(|| {
 		// Try to burn the item doesn't have royalties
 		assert_noop!(
-			NftsRoyalty::burn_item_with_royalty(RuntimeOrigin::signed(account(1)), 0, 42),
+			NftsRoyalty::burn(RuntimeOrigin::signed(account(1)), 0, 42),
 			Error::<Test>::NoRoyaltyExists
 		);
 	});
@@ -137,7 +159,7 @@ fn nft_burn_error_nft_has_no_royalties() {
 fn transfer_royalties_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
-		assert_ok!(NftsRoyalty::mint_item_with_royalty(
+		assert_ok!(NftsRoyalty::mint(
 			RuntimeOrigin::signed(account(1)),
 			0,
 			42,
@@ -161,6 +183,12 @@ fn transfer_royalties_should_work() {
 		let nft_with_royalty = NftWithRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(2));
+		// Check if the event has been emitted.
+		assert_eq!(last_event(), NftsRoyaltyEvent::RecipientChanged {
+			nft_collection: 0,
+			nft: 42,
+			new_royalty_recipient: account(2),
+		});
 	});
 }
 
@@ -168,7 +196,7 @@ fn transfer_royalties_should_work() {
 fn transfer_royalties_should_fail_if_not_royalties_recipient() {
 	new_test_ext().execute_with(|| {
 		create_collection();
-		assert_ok!(NftsRoyalty::mint_item_with_royalty(
+		assert_ok!(NftsRoyalty::mint(
 			RuntimeOrigin::signed(account(1)),
 			0,
 			42,
@@ -211,11 +239,10 @@ fn set_item_with_royalty_should_work() {
         ));
         // Make sure the item does not already exist in royalties pallet storage.
         assert_eq!(NftWithRoyalty::<Test>::get((0, 43)), None);
-        assert_ok!(NftsRoyalty::set_item_with_royalty(
+        assert_ok!(NftsRoyalty::set_royalty(
             RuntimeOrigin::signed(account(1)),
             0,
             43,
-            ItemSettings::all_enabled(),
             Permill::from_percent(5),
             account(1)
         ));
@@ -227,13 +254,13 @@ fn set_item_with_royalty_should_work() {
 }
 
 #[test]
-fn buy_item_with_royalty_should_work() {
+fn buy_should_work() {
     new_test_ext().execute_with(|| {
         create_collection();
 		let initial_balance = 100;
 		set_up_balances(initial_balance);
 
-		assert_ok!(NftsRoyalty::mint_item_with_royalty(
+		assert_ok!(NftsRoyalty::mint(
 			RuntimeOrigin::signed(account(1)),
 			0,
 			42,
@@ -250,7 +277,7 @@ fn buy_item_with_royalty_should_work() {
 			None,
 		));
 
-		assert_ok!(NftsRoyalty::buy_item_with_royalty(
+		assert_ok!(NftsRoyalty::buy(
 			RuntimeOrigin::signed(account(2)),
 			0,
 			42,
@@ -291,7 +318,7 @@ fn error_if_no_royalties_on_item_to_buy() {
 		));
 
 		assert_noop!(
-			NftsRoyalty::buy_item_with_royalty(
+			NftsRoyalty::buy(
 				RuntimeOrigin::signed(account(2)),
 				0,
 				42,
@@ -310,7 +337,7 @@ fn error_if_buy_item_not_on_sale() {
 		set_up_balances(initial_balance);
 		
 
-		assert_ok!(NftsRoyalty::mint_item_with_royalty(
+		assert_ok!(NftsRoyalty::mint(
 			RuntimeOrigin::signed(account(1)),
 			0,
 			42,
@@ -321,7 +348,7 @@ fn error_if_buy_item_not_on_sale() {
 		));
 
 		assert_noop!(
-			NftsRoyalty::buy_item_with_royalty(
+			NftsRoyalty::buy(
 				RuntimeOrigin::signed(account(2)),
 				0,
 				42,

@@ -127,30 +127,30 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// An NFT royalty was successfully created.
-		NftRoyaltyCreated {
+		/// An NFT royalty was successfully minted.
+		Minted {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftItemId,
 			royalty_percentage: Permill,
 			royalty_recipient: T::AccountId,
 		},
-		/// An NFT royalty was destroyed.
-		NftRoyaltyBurned { nft_collection: T::NftCollectionId, nft: T::NftItemId },
-		/// The NFT royalty whas been transfered.
-		NftRoyaltyTransfered {
+		/// An NFT item was destroyed.
+		Burned { nft_collection: T::NftCollectionId, nft: T::NftItemId },
+		/// The NFT royalty recipient has changed.
+		RecipientChanged {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftItemId,
 			new_royalty_recipient: T::AccountId,
 		},
-		/// The NFT royalty percentage of an existing NFT item was set.
-		NftRoyaltySet {
+		/// The royalty percentage and recipient of an already existing NFT item has been set.
+		RoyaltySet {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftItemId,
 			royalty_percentage: Permill,
 			royalty_recipient: T::AccountId,
 		},
-		/// The NFT royalty whas been payed.
-		NftRoyaltyPayed {
+		/// The royalty has been paid.
+		Paid {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftItemId,
 			amount_royalties_paid: BalanceOf<T>,
@@ -184,10 +184,10 @@ pub mod pallet {
 		/// - `item_settings`: The item's settings.
 		///
 		///
-		/// Emits `NftRoyaltyCreated` event when successful.
+		/// Emits `Minted` event when successful.
 		#[pallet::call_index(0)]
 		#[pallet::weight(0)]
-		pub fn mint_item_with_royalty(
+		pub fn mint(
 			origin: OriginFor<T>,
 			collection_id: T::NftCollectionId,
 			item_id: T::NftItemId,
@@ -210,7 +210,7 @@ pub mod pallet {
 				},
 			);
 
-			Self::deposit_event(Event::NftRoyaltyCreated {
+			Self::deposit_event(Event::Minted {
 				nft_collection: collection_id,
 				nft: item_id,
 				royalty_percentage,
@@ -232,7 +232,7 @@ pub mod pallet {
 		///
 		#[pallet::call_index(1)]
 		#[pallet::weight(0)]
-		pub fn burn_item_with_royalty(
+		pub fn burn(
 			origin: OriginFor<T>,
 			collection_id: T::NftCollectionId,
 			item_id: T::NftItemId,
@@ -247,7 +247,7 @@ pub mod pallet {
 
 			T::Nfts::burn(&collection_id, &item_id, Some(&maybe_check_origin))?;
 
-			Self::deposit_event(Event::NftRoyaltyBurned {
+			Self::deposit_event(Event::Burned {
 				nft_collection: collection_id,
 				nft: item_id,
 			});
@@ -262,7 +262,7 @@ pub mod pallet {
 		/// - `item`: The item to be burned.
 		/// - `new_royalty_recipient`: Account into which the item royalties will be transfered.
 		///
-		/// Emits `NftRoyaltyTransfered`.
+		/// Emits `RecipientChanged`.
 		///
 		#[pallet::call_index(2)]
 		#[pallet::weight(0)]
@@ -285,7 +285,7 @@ pub mod pallet {
 					royalty_recipient: new_royalty_recipient.clone(),
 				},
 			);
-			Self::deposit_event(Event::NftRoyaltyTransfered {
+			Self::deposit_event(Event::RecipientChanged {
 				nft_collection: collection_id,
 				nft: item_id,
 				new_royalty_recipient,
@@ -303,15 +303,14 @@ pub mod pallet {
 		/// - `royalty_percentage`: Royalty percentage to be set.
 		/// - `royalty_recipient`: Account into which the item royalties will be transfered.
 		///
-		/// Emits `NftRoyaltyTransfered`.
+		/// Emits `RoyaltySet`.
 		///
 		#[pallet::call_index(3)]
 		#[pallet::weight(0)]
-		pub fn set_item_with_royalty(
+		pub fn set_royalty(
 			origin: OriginFor<T>,
 			collection_id: T::NftCollectionId,
 			item_id: T::NftItemId,
-			item_settings: ItemSettings,
 			royalty_percentage: Permill,
 			royalty_recipient: T::AccountId,
 		) -> DispatchResult {
@@ -325,7 +324,6 @@ pub mod pallet {
 					Error::<T>::NoPermission
 				);
 			}
-			let item_config = ItemConfig { settings: item_settings };
 
 			ensure!(
 				T::Nfts::items(&collection_id).any(|id| id == item_id),
@@ -346,7 +344,7 @@ pub mod pallet {
 				},
 			);
 
-			Self::deposit_event(Event::NftRoyaltySet {
+			Self::deposit_event(Event::RoyaltySet {
 				nft_collection: collection_id,
 				nft: item_id,
 				royalty_percentage,
@@ -368,7 +366,7 @@ pub mod pallet {
 		///
 		#[pallet::call_index(4)]
 		#[pallet::weight(0)]
-		pub fn buy_item_with_royalty(
+		pub fn buy(
 			origin: OriginFor<T>,
 			collection_id: T::NftCollectionId,
 			item_id: T::NftItemId,
@@ -396,7 +394,7 @@ pub mod pallet {
 				ExistenceRequirement::KeepAlive,
 			)?;
 
-			Self::deposit_event(Event::NftRoyaltyPayed {
+			Self::deposit_event(Event::Paid {
 				nft_collection: collection_id,
 				nft: item_id,
 				amount_royalties_paid: royalty_to_pay,
