@@ -736,6 +736,8 @@ impl OverlayedChangeSet {
 							overlayed.value_mut()
 						{
 							*from_parent = *keep_me;
+						} else {
+							debug_assert!(!*from_parent);
 						}
 					}
 					*overlayed.value_mut() = dropped_tx.value;
