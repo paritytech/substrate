@@ -211,84 +211,38 @@ pub trait ProofOfStakeRewardsApi<AccountId> {
 		+ From<TokenId>
 		+ Into<TokenId>;
 
-	fn claim_rewards_v2(
-		sender: AccountId,
-		liquidity_token_id: Self::CurrencyId,
-		amount: Self::Balance,
-	) -> DispatchResult;
+	fn enable(liquidity_token_id: Self::CurrencyId, weight: u8);
 
-	fn claim_rewards_all_v2(
+	fn disable(liquidity_token_id: Self::CurrencyId);
+
+	fn is_enabled(
+		liquidity_token_id: Self::CurrencyId,
+	) -> bool;
+
+	fn claim_rewards_all(
 		sender: AccountId,
 		liquidity_token_id: Self::CurrencyId,
 	) -> Result<Self::Balance, DispatchError>;
 
-	fn update_pool_promotion(
-		liquidity_token_id: TokenId,
-		liquidity_mining_issuance_weight: Option<u8>,
-	) -> DispatchResult;
-
-	fn activate_liquidity_v2(
+	// Activation & deactivation should happen in PoS
+	fn activate_liquidity(
 		sender: AccountId,
 		liquidity_token_id: Self::CurrencyId,
 		amount: Self::Balance,
 		use_balance_from: Option<ActivateKind>,
 	) -> DispatchResult;
 
-	fn deactivate_liquidity_v2(
+	// Activation & deactivation should happen in PoS
+	fn deactivate_liquidity(
 		sender: AccountId,
 		liquidity_token_id: Self::CurrencyId,
 		amount: Self::Balance,
 	) -> DispatchResult;
 
-	fn current_rewards_time() -> Option<u32>;
-
-	fn calculate_rewards_amount_v2(
+	fn calculate_rewards_amount(
 		user: AccountId,
 		liquidity_asset_id: Self::CurrencyId,
 	) -> Result<Balance, DispatchError>;
-
-	fn set_liquidity_minting_checkpoint_v2(
-		user: AccountId,
-		liquidity_asset_id: Self::CurrencyId,
-		liquidity_assets_added: Self::Balance,
-		use_balance_from: Option<ActivateKind>,
-	) -> DispatchResult;
-
-	fn set_liquidity_burning_checkpoint_v2(
-		user: AccountId,
-		liquidity_asset_id: Self::CurrencyId,
-		liquidity_assets_burned: Self::Balance,
-	) -> DispatchResult;
-}
-
-pub trait CumulativeWorkRewardsApi {
-	type AccountId: Parameter
-		+ Member
-		+ MaybeSerializeDeserialize
-		+ Debug
-		+ MaybeDisplay
-		+ Ord
-		+ MaxEncodedLen;
-
-	fn get_pool_rewards_v2(liquidity_asset_id: TokenId) -> Option<U256>;
-
-	fn claim_rewards_all_v2(
-		user: Self::AccountId,
-		liquidity_asset_id: TokenId,
-	) -> Result<Balance, DispatchError>;
-
-	fn set_liquidity_minting_checkpoint_v2(
-		user: Self::AccountId,
-		liquidity_asset_id: TokenId,
-		liquidity_assets_added: Balance,
-		use_balance_from: Option<ActivateKind>,
-	) -> DispatchResult;
-
-	fn set_liquidity_burning_checkpoint_v2(
-		user: Self::AccountId,
-		liquidity_asset_id: TokenId,
-		liquidity_assets_burned: Balance,
-	) -> DispatchResult;
 }
 
 pub trait PreValidateSwaps {
@@ -474,30 +428,8 @@ pub trait PoolCreateApi {
 	) -> Option<(TokenId, Balance)>;
 }
 
-pub trait RewardsApi {
-	type AccountId: Parameter
-		+ Member
-		+ MaybeSerializeDeserialize
-		+ Debug
-		+ MaybeDisplay
-		+ Ord
-		+ MaxEncodedLen;
-
-	/// checks whether given pool is promoted and tokens
-	/// can be activated
-	fn can_activate(liquidity_asset_id: TokenId) -> bool;
-
-	/// Activates liquidity tokens for rewards minting
-	fn activate_liquidity_tokens(
-		user: &Self::AccountId,
-		liquidity_asset_id: TokenId,
-		amount: Balance,
-	) -> DispatchResult;
-
-	fn update_pool_promotion(
-		liquidity_token_id: TokenId,
-		liquidity_mining_issuance_weight: Option<u8>,
-	);
+pub trait LiquidityMiningApi {
+	fn distribute_rewards(liquidity_mining_rewards: Balance);
 }
 
 pub trait AssetRegistryApi {
