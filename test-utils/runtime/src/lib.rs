@@ -253,7 +253,7 @@ impl sp_runtime::traits::SignedExtension for CheckSubstrateCall {
 	type AccountId = AccountId;
 	type Call = RuntimeCall;
 	type AdditionalSigned = ();
-	type Pre = CheckSubstrateCall;
+	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckSubstrateCall";
 
 	fn additional_signed(
@@ -284,7 +284,7 @@ impl sp_runtime::traits::SignedExtension for CheckSubstrateCall {
 		info: &sp_runtime::traits::DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
-		self.validate(who, call, info, len).map(|_| CheckSubstrateCall {})
+		self.validate(who, call, info, len).map(drop)
 	}
 }
 

@@ -136,7 +136,6 @@ fn block1(genesis_hash: Hash, backend: &InMemoryBackend<BlakeTwo256>) -> (Vec<u8
 		genesis_hash,
 		array_bytes::hex_n_into_unchecked(
 			"25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c",
-			// "eaf7fd7b6bb375b2a28d9bdb199fbb66f0dcd00ae6e1e7edbfa97989dbd81a99",
 		),
 		vec![Transfer {
 			from: AccountKeyring::Alice.into(),
