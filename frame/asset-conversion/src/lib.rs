@@ -93,7 +93,7 @@ pub mod pallet {
 				Preservation::{Expendable, Preserve},
 			},
 		},
-		PalletId,
+		BoundedBTreeSet, PalletId,
 	};
 	use sp_runtime::{
 		traits::{IntegerSquareRoot, One, Zero},
@@ -776,7 +776,7 @@ pub mod pallet {
 		/// the value and only call this once.
 		pub fn get_pool_account(pool_id: PoolIdOf<T>) -> T::AccountId {
 			let encoded_pool_id = sp_io::hashing::blake2_256(&Encode::encode(&pool_id)[..]);
-			
+
 			Decode::decode(&mut TrailingZeroInput::new(encoded_pool_id.as_ref()))
 				.expect("infinite length input; no invalid inputs for type; qed")
 		}
@@ -1062,13 +1062,17 @@ pub mod pallet {
 		) -> Result<(), DispatchError> {
 			ensure!(path.len() >= 2, Error::<T>::InvalidPath);
 
-			// validate all the elements are unique
-			let mut sorted_path = path.clone();
-			sorted_path.sort();
-			let mut unique: Vec<_> = sorted_path.into();
-			unique.dedup();
-
-			ensure!(path.len() == unique.len(), Error::<T>::NonUniquePath);
+			// validate all the pools in the path are unique
+			let mut pools = BoundedBTreeSet::<PoolIdOf<T>, T::MaxSwapPathLength>::new();
+			for assets_pair in path.windows(2) {
+				if let &[asset1, asset2] = assets_pair {
+					let pool_id = Self::get_pool_id(asset1, asset2);
+					let new_element = pools.try_insert(pool_id).expect("can't get here");
+					if !new_element {
+						return Err(Error::<T>::NonUniquePath.into())
+					}
+				}
+			}
 			Ok(())
 		}
 
@@ -1134,19 +1138,19 @@ where
 
 sp_api::decl_runtime_apis! {
 	/// This runtime api allows people to query the size of the liquidity pools
-	/// and qoute prices for swaps.
+	/// and quote prices for swaps.
 	pub trait AssetConversionApi<Balance, AssetBalance, AssetId> where
 		Balance: Codec + MaybeDisplay,
 		AssetBalance: frame_support::traits::tokens::Balance,
 		AssetId: Codec
 	{
-		/// Provieds a quote for [`Pallet::swap_tokens_for_exact_tokens`].
+		/// Provides a quote for [`Pallet::swap_tokens_for_exact_tokens`].
 		///
 		/// Note that the price may have changed by the time the transaction is executed.
 		/// (Use `amount_in_max` to control slippage.)
 		fn quote_price_tokens_for_exact_tokens(asset1: AssetId, asset2: AssetId, amount: AssetBalance, include_fee: bool) -> Option<Balance>;
 
-		/// Provieds a quote for [`Pallet::swap_exact_tokens_for_tokens`].
+		/// Provides a quote for [`Pallet::swap_exact_tokens_for_tokens`].
 		///
 		/// Note that the price may have changed by the time the transaction is executed.
 		/// (Use `amount_out_min` to control slippage.)
