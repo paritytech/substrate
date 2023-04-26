@@ -224,7 +224,7 @@ fn construct_runtime_final_expansion(
 	let system_pallet =
 		pallets.iter().find(|decl| decl.name == SYSTEM_PALLET_NAME).ok_or_else(|| {
 			syn::Error::new(
-				pallets_token.span,
+				pallets_token.span.join(),
 				"`System` pallet declaration is missing. \
 			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
 			)

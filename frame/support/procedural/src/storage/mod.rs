@@ -332,8 +332,8 @@ impl StorageLineDefExt {
 		let doc_attrs = storage_def
 			.attrs
 			.iter()
-			.filter_map(|a| a.parse_meta().ok())
-			.filter(|m| m.path().is_ident("doc"))
+			.filter(|a| a.meta.path().is_ident("doc"))
+			.map(|a| a.meta.clone())
 			.collect();
 
 		Self {

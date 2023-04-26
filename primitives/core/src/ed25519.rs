@@ -406,27 +406,17 @@ impl TraitPair for Pair {
 		Signature::from_raw(self.secret.sign(message).into())
 	}
 
-	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
-		Self::verify_weak(&sig.0[..], message.as_ref(), pubkey)
-	}
-
-	/// Verify a signature on a message. Returns true if the signature is good.
+	/// Verify a signature on a message.
 	///
-	/// This doesn't use the type system to ensure that `sig` and `pubkey` are the correct
-	/// size. Use it only if you're coming from byte buffers and need the speed.
-	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		let public_key = match VerificationKey::try_from(pubkey.as_ref()) {
-			Ok(pk) => pk,
-			Err(_) => return false,
+	/// Returns true if the signature is good.
+	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, public: &Self::Public) -> bool {
+		let Ok(public) = VerificationKey::try_from(public.as_slice()) else {
+			return false
 		};
-
-		let sig = match ed25519_zebra::Signature::try_from(sig) {
-			Ok(s) => s,
-			Err(_) => return false,
+		let Ok(signature) = ed25519_zebra::Signature::try_from(sig.as_ref()) else {
+			return false
 		};
-
-		public_key.verify(&sig, message.as_ref()).is_ok()
+		public.verify(&signature, message.as_ref()).is_ok()
 	}
 
 	/// Return a vec filled with raw data.

@@ -88,13 +88,13 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait) -> TokenStream2 {
 	let mut where_clause = Vec::new();
 	for item in &decl.items {
 		// Collect metadata for methods only.
-		let syn::TraitItem::Method(method) = item else {
+		let syn::TraitItem::Fn(method) = item else {
 			continue
 		};
 
 		// Collect metadata only for the latest methods.
 		let is_changed_in =
-			method.attrs.iter().any(|attr| attr.path.is_ident(CHANGED_IN_ATTRIBUTE));
+			method.attrs.iter().any(|attr| attr.path().is_ident(CHANGED_IN_ATTRIBUTE));
 		if is_changed_in {
 			continue
 		}
