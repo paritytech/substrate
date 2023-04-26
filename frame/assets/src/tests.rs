@@ -21,7 +21,7 @@ use super::*;
 use crate::{mock::*, Error};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{fungibles::InspectEnumerable, Currency},
+	traits::{fungibles::InspectEnumerable, tokens::Preservation::Protect, Currency},
 };
 use pallet_balances::Error as BalancesError;
 use sp_io::storage;
@@ -31,6 +31,25 @@ fn asset_ids() -> Vec<u32> {
 	let mut s: Vec<_> = Assets::asset_ids().collect();
 	s.sort();
 	s
+}
+
+#[test]
+fn transfer_should_never_burn() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, false, 1));
+		Balances::make_free_balance_be(&1, 100);
+		Balances::make_free_balance_be(&2, 100);
+
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
+		assert_eq!(Assets::balance(0, 1), 100);
+
+		while System::inc_consumers(&2).is_ok() {}
+		let _ = System::dec_consumers(&2);
+		// Exactly one consumer ref remaining.
+
+		let _ = <Assets as fungibles::Mutate<_>>::transfer(0, &1, &2, 50, Protect);
+		assert_eq!(Assets::balance(0, 1) + Assets::balance(0, 2), 100);
+	});
 }
 
 #[test]
@@ -57,10 +76,7 @@ fn minting_too_many_insufficient_assets_fails() {
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 1, 1, 100));
-		assert_noop!(
-			Assets::mint(RuntimeOrigin::signed(1), 2, 1, 100),
-			Error::<Test>::UnavailableConsumer
-		);
+		assert_noop!(Assets::mint(RuntimeOrigin::signed(1), 2, 1, 100), TokenError::CannotCreate);
 
 		Balances::make_free_balance_be(&2, 1);
 		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 100));
@@ -78,10 +94,7 @@ fn minting_insufficient_asset_with_deposit_should_work_when_consumers_exhausted(
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 1, 1, 100));
-		assert_noop!(
-			Assets::mint(RuntimeOrigin::signed(1), 2, 1, 100),
-			Error::<Test>::UnavailableConsumer
-		);
+		assert_noop!(Assets::mint(RuntimeOrigin::signed(1), 2, 1, 100), TokenError::CannotCreate);
 
 		assert_ok!(Assets::touch(RuntimeOrigin::signed(1), 2));
 		assert_eq!(Balances::reserved_balance(&1), 10);
@@ -1320,5 +1333,25 @@ fn asset_create_and_destroy_is_reverted_if_callback_fails() {
 			Assets::finish_destroy(RuntimeOrigin::signed(1), 0),
 			Error::<Test>::CallbackFailed
 		);
+	});
+}
+
+#[test]
+fn multiple_transfer_alls_work_ok() {
+	new_test_ext().execute_with(|| {
+		// Only run PoC when the system pallet is enabled, since the underlying bug is in the
+		// system pallet it won't work with BalancesAccountStore
+		// Start with a balance of 100
+		Balances::force_set_balance(RuntimeOrigin::root(), 1, 100).unwrap();
+		// Emulate a sufficient, in reality this could be reached by transferring a sufficient
+		// asset to the account
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
+		// Spend the same balance multiple times
+		assert_ok!(Balances::transfer_all(RuntimeOrigin::signed(1), 1337, false));
+		assert_ok!(Balances::transfer_all(RuntimeOrigin::signed(1), 1337, false));
+
+		assert_eq!(Balances::free_balance(&1), 0);
+		assert_eq!(Balances::free_balance(&1337), 100);
 	});
 }
