@@ -1,6 +1,6 @@
-# Contract Module
+# Contracts Module
 
-The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
+The Contracts module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 
 - [`Call`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Call.html)
 - [`Config`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/trait.Config.html)
@@ -63,9 +63,9 @@ directly. This makes sure that by default `pallet-contracts` does not expose any
 When setting up the `Schedule` for your runtime make sure to set `InstructionWeights::fallback`
 to a non zero value. The default is `0` and prevents the upload of any non deterministic code.
 
-An indeterministic code can be deployed on-chain by passing `Determinism::AllowIndeterministic`
+An indeterministic code can be deployed on-chain by passing `Determinism::Relaxed`
 to `upload_code`. A deterministic contract can then delegate call into it if and only if it
-is ran by using `bare_call` and passing `Determinism::AllowIndeterministic` to it. **Never use
+is ran by using `bare_call` and passing `Determinism::Relaxed` to it. **Never use
 this argument when the contract is called from an on-chain transaction.**
 
 ## Interface
