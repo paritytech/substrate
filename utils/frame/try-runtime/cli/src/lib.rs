@@ -125,7 +125,7 @@
 //! fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {}
 //!
 //! #[cfg(feature = "try-runtime")]
-//! fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {}
+//! fn post_upgrade(state: Vec<u8>) -> DispatchResult {}
 //! ```
 //!
 //! (The pallet macro syntax will support this simply as a part of `#[pallet::hooks]`).

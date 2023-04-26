@@ -171,7 +171,7 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> DispatchResult {
 		let hashed_prefix = twox_128(P::get().as_bytes());
 		match contains_prefixed_key(&hashed_prefix) {
 			true => {

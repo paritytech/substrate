@@ -169,7 +169,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade(state: #frame_support::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			fn post_upgrade(state: #frame_support::sp_std::vec::Vec<u8>) -> DispatchResult {
 				<
 					Self
 					as

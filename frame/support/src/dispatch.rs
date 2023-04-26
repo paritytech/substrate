@@ -2147,7 +2147,7 @@ macro_rules! decl_module {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> DispatchResult {
 				Ok(())
 			}
 		}
@@ -2185,7 +2185,7 @@ macro_rules! decl_module {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> DispatchResult {
 				Ok(())
 			}
 		}

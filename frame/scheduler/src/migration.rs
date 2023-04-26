@@ -98,7 +98,10 @@ pub mod v3 {
 	impl<T: Config<Hash = PreimageHash>> OnRuntimeUpgrade for MigrateToV4<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-			ensure!(StorageVersion::get::<Pallet<T>>() == 3, DispatchError::Other("Can only upgrade from version 3"));
+			ensure!(
+				StorageVersion::get::<Pallet<T>>() == 3,
+				DispatchError::Other("Can only upgrade from version 3")
+			);
 
 			let agendas = Agenda::<T>::iter_keys().count() as u32;
 			let decodable_agendas = Agenda::<T>::iter_values().count() as u32;
@@ -169,12 +172,15 @@ pub mod v3 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-			assert_eq!(StorageVersion::get::<Pallet<T>>(), 4, "Must upgrade");
+		fn post_upgrade(state: Vec<u8>) -> DispatchResult {
+			ensure!(StorageVersion::get::<Pallet<T>>() == 4, DispatchError::Other("Must upgrade"));
 
 			// Check that everything decoded fine.
 			for k in crate::Agenda::<T>::iter_keys() {
-				assert!(crate::Agenda::<T>::try_get(k).is_ok(), "Cannot decode V4 Agenda");
+				ensure!(
+					crate::Agenda::<T>::try_get(k).is_ok(),
+					DispatchError::Other("Cannot decode V4 Agenda")
+				);
 			}
 
 			let old_agendas: u32 =
@@ -285,8 +291,11 @@ pub mod v4 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-			assert_eq!(StorageVersion::get::<Pallet<T>>(), 4, "Version must not change");
+		fn post_upgrade(state: Vec<u8>) -> DispatchResult {
+			ensure!(
+				StorageVersion::get::<Pallet<T>>() == 4,
+				DispatchError::Other("Version must not change")
+			);
 
 			let (old_agendas, non_empty_agendas): (u32, u32) =
 				Decode::decode(&mut state.as_ref()).expect("Must decode pre_upgrade state");
@@ -305,7 +314,10 @@ pub mod v4 {
 					old_agendas, new_agendas
 				),
 			}
-			assert_eq!(new_agendas, non_empty_agendas, "Expected to keep all non-empty agendas");
+			ensure!(
+				new_agendas == non_empty_agendas,
+				DispatchError::Other("Expected to keep all non-empty agendas")
+			);
 
 			Ok(())
 		}

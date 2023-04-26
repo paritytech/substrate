@@ -182,7 +182,7 @@ pub trait OnRuntimeUpgrade {
 	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
 	/// inaccurate.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> DispatchResult {
 		Ok(())
 	}
 }
@@ -301,7 +301,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> DispatchResult {
 		Ok(())
 	}
 
@@ -389,7 +389,7 @@ mod tests {
 					}
 
 					#[cfg(feature = "try-runtime")]
-					fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+					fn post_upgrade(_: Vec<u8>) -> DispatchResult {
 						Post::mutate(|s| s.push(stringify!($name)));
 						Ok(())
 					}

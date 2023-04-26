@@ -100,9 +100,12 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(_: Vec<u8>) -> DispatchResult {
 			// new version must be set.
-			assert_eq!(Pallet::<T>::on_chain_storage_version(), 1);
+			ensure!(
+				Pallet::<T>::on_chain_storage_version() == 1,
+				DispatchError::Other("The onchain version must be updated after the migration.")
+			);
 			Pallet::<T>::try_state(frame_system::Pallet::<T>::block_number())?;
 			Ok(())
 		}
@@ -366,23 +369,33 @@ pub mod v2 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(_: Vec<u8>) -> DispatchResult {
 			// new version must be set.
-			assert_eq!(Pallet::<T>::on_chain_storage_version(), 2);
+			ensure!(
+				Pallet::<T>::on_chain_storage_version() == 2,
+				DispatchError::Other("The onchain version must be updated after the migration.")
+			);
 
 			// no reward or bonded pool has been skipped.
-			assert_eq!(RewardPools::<T>::iter().count() as u32, RewardPools::<T>::count());
-			assert_eq!(BondedPools::<T>::iter().count() as u32, BondedPools::<T>::count());
+			ensure!(
+				RewardPools::<T>::iter().count() as u32 == RewardPools::<T>::count(),
+				DispatchError::Other(
+					"The count of reward pools must remain the same after the migration."
+				)
+			);
+			ensure!(
+				BondedPools::<T>::iter().count() as u32 == BondedPools::<T>::count(),
+				DispatchError::Other(
+					"The count of reward pools must remain the same after the migration."
+				)
+			);
 
 			// all reward pools must have exactly ED in them. This means no reward can be claimed,
 			// and that setting reward counters all over the board to zero will work henceforth.
 			RewardPools::<T>::iter().for_each(|(id, _)| {
-				assert_eq!(
-					RewardPool::<T>::current_balance(id),
-					Zero::zero(),
-					"reward pool({}) balance is {:?}",
-					id,
-					RewardPool::<T>::current_balance(id)
+				ensure!(
+					RewardPool::<T>::current_balance(id) == Zero::zero(),
+					DispatchError::Other("Reward pool balance must be zero."),
 				);
 			});
 
@@ -445,12 +458,15 @@ pub mod v3 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(_: Vec<u8>) -> DispatchResult {
 			ensure!(
 				Metadata::<T>::iter_keys().all(|id| BondedPools::<T>::contains_key(&id)),
-				"not all of the stale metadata has been removed"
+				DispatchError::Other("not all of the stale metadata has been removed")
 			);
-			ensure!(Pallet::<T>::on_chain_storage_version() == 3, "wrong storage version");
+			ensure!(
+				Pallet::<T>::on_chain_storage_version() == 3,
+				DispatchError::Other("wrong storage version")
+			);
 			Ok(())
 		}
 	}
@@ -545,20 +561,23 @@ pub mod v4 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(_: Vec<u8>) -> DispatchResult {
 			// ensure all BondedPools items now contain an `inner.commission: Commission` field.
 			ensure!(
 				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.current.is_none() &&
 					inner.commission.max.is_none() &&
 					inner.commission.change_rate.is_none() &&
 					inner.commission.throttle_from.is_none()),
-				"a commission value has been incorrectly set"
+				DispatchError::Other("a commission value has been incorrectly set")
 			);
 			ensure!(
 				GlobalMaxCommission::<T>::get() == Some(U::get()),
-				"global maximum commission error"
+				DispatchError::Other("global maximum commission error")
 			);
-			ensure!(Pallet::<T>::on_chain_storage_version() == 4, "wrong storage version");
+			ensure!(
+				Pallet::<T>::on_chain_storage_version() == 4,
+				DispatchError::Other("wrong storage version")
+			);
 			Ok(())
 		}
 	}
@@ -655,13 +674,13 @@ pub mod v5 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(data: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(data: Vec<u8>) -> DispatchResult {
 			let old_rpool_values: u64 = Decode::decode(&mut &data[..]).unwrap();
 			let rpool_keys = RewardPools::<T>::iter_keys().count() as u64;
 			let rpool_values = RewardPools::<T>::iter_values().count() as u64;
 			ensure!(
 				rpool_keys == rpool_values,
-				"There are STILL undecodable RewardPools - migration failed"
+				DispatchError::Other("There are STILL undecodable RewardPools - migration failed")
 			);
 
 			if old_rpool_values != rpool_values {
@@ -680,27 +699,30 @@ pub mod v5 {
 					.is_zero() && reward_pool
 					.total_commission_claimed
 					.is_zero()),
-				"a commission value has been incorrectly set"
+				DispatchError::Other("a commission value has been incorrectly set")
 			);
-			ensure!(Pallet::<T>::on_chain_storage_version() == 5, "wrong storage version");
+			ensure!(
+				Pallet::<T>::on_chain_storage_version() == 5,
+				DispatchError::Other("wrong storage version")
+			);
 
 			// These should not have been touched - just in case.
 			ensure!(
 				PoolMembers::<T>::iter_keys().count() == PoolMembers::<T>::iter_values().count(),
-				"There are undecodable PoolMembers in storage."
+				DispatchError::Other("There are undecodable PoolMembers in storage.")
 			);
 			ensure!(
 				BondedPools::<T>::iter_keys().count() == BondedPools::<T>::iter_values().count(),
-				"There are undecodable BondedPools in storage."
+				DispatchError::Other("There are undecodable BondedPools in storage.")
 			);
 			ensure!(
 				SubPoolsStorage::<T>::iter_keys().count() ==
 					SubPoolsStorage::<T>::iter_values().count(),
-				"There are undecodable SubPools in storage."
+				DispatchError::Other("There are undecodable SubPools in storage.")
 			);
 			ensure!(
 				Metadata::<T>::iter_keys().count() == Metadata::<T>::iter_values().count(),
-				"There are undecodable Metadata in storage."
+				DispatchError::Other("There are undecodable Metadata in storage.")
 			);
 
 			Ok(())

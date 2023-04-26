@@ -77,7 +77,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(state: Vec<u8>) -> DispatchResult {
 		let version = Decode::decode(&mut state.as_ref()).map_err(|_| "Cannot decode version")?;
 		post_checks::post_upgrade::<T>(version)
 	}
@@ -359,7 +359,10 @@ mod v8 {
 		use frame_support::traits::ReservableCurrency;
 		for (key, value) in ContractInfoOf::<T, OldContractInfo<T>>::iter() {
 			let reserved = T::Currency::reserved_balance(&key);
-			ensure!(reserved >= value.storage_deposit, DispatchError::Other("Reserved balance out of sync."));
+			ensure!(
+				reserved >= value.storage_deposit,
+				DispatchError::Other("Reserved balance out of sync.")
+			);
 		}
 		Ok(())
 	}
@@ -418,7 +421,7 @@ mod post_checks {
 	type ContractInfoOf<T: Config, V> =
 		StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, V>;
 
-	pub fn post_upgrade<T: Config>(old_version: StorageVersion) -> Result<(), &'static str> {
+	pub fn post_upgrade<T: Config>(old_version: StorageVersion) -> DispatchResult {
 		if old_version < 7 {
 			return Ok(())
 		}
@@ -434,7 +437,7 @@ mod post_checks {
 		Ok(())
 	}
 
-	fn v8<T: Config>() -> Result<(), &'static str> {
+	fn v8<T: Config>() -> DispatchResult {
 		use frame_support::traits::ReservableCurrency;
 		for (key, value) in ContractInfoOf::<T, ContractInfo<T>>::iter() {
 			let reserved = T::Currency::reserved_balance(&key);
@@ -442,7 +445,7 @@ mod post_checks {
 				.storage_base_deposit
 				.saturating_add(value.storage_byte_deposit)
 				.saturating_add(value.storage_item_deposit);
-			ensure!(reserved >= stored, "Reserved balance out of sync.");
+			ensure!(reserved >= stored, DispatchError::Other("Reserved balance out of sync."));
 
 			let mut storage_bytes = 0u32;
 			let mut storage_items = 0u32;
@@ -455,17 +458,23 @@ mod post_checks {
 				storage_bytes.saturating_accrue(len);
 				storage_items.saturating_accrue(1);
 			}
-			ensure!(storage_bytes == value.storage_bytes, "Storage bytes do not match.",);
-			ensure!(storage_items == value.storage_items, "Storage items do not match.",);
+			ensure!(
+				storage_bytes == value.storage_bytes,
+				DispatchError::Other("Storage bytes do not match.")
+			);
+			ensure!(
+				storage_items == value.storage_items,
+				DispatchError::Other("Storage items do not match.")
+			);
 		}
 		Ok(())
 	}
 
-	fn v9<T: Config>() -> Result<(), &'static str> {
+	fn v9<T: Config>() -> DispatchResult {
 		for value in CodeStorage::<T>::iter_values() {
 			ensure!(
 				value.determinism == Determinism::Enforced,
-				"All pre-existing codes need to be deterministic."
+				DispatchError::Other("All pre-existing codes need to be deterministic.")
 			);
 		}
 		Ok(())
