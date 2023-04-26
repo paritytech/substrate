@@ -53,6 +53,7 @@ pub mod hashing;
 pub use hashing::{blake2_128, blake2_256, keccak_256, twox_128, twox_256, twox_64};
 pub mod crypto;
 pub mod hexdisplay;
+pub use paste;
 
 pub mod defer;
 pub mod ecdsa;
@@ -403,38 +404,62 @@ pub const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
 #[rustfmt::skip]
 macro_rules! generate_feature_enabled_macro {
 	( $macro_name:ident, $feature_name:meta, $d:tt ) => {
-		/// Enable/disable the given code depending on
-		#[doc = concat!("`", stringify!($feature_name), "`")]
-		/// being enabled for the crate or not.
-		///
-		/// # Example
-		///
-		/// ```nocompile
-		/// // Will add the code depending on the feature being enabled or not.
-		#[doc = concat!(stringify!($macro_name), "!( println!(\"Hello\") )")]
-		/// ```
-		#[cfg($feature_name)]
-		#[macro_export]
-		macro_rules! $macro_name {
-			( $d ( $d input:tt )* ) => {
-				$d ( $d input )*
+		$crate::paste::paste!{
+			/// Enable/disable the given code depending on
+			#[doc = concat!("`", stringify!($feature_name), "`")]
+			/// being enabled for the crate or not.
+			///
+			/// # Example
+			///
+			/// ```nocompile
+			/// // Will add the code depending on the feature being enabled or not.
+			#[doc = concat!(stringify!($macro_name), "!( println!(\"Hello\") )")]
+			/// ```
+			#[cfg($feature_name)]
+			#[macro_export]
+			macro_rules! [<_ $macro_name>] {
+				( $d ( $d input:tt )* ) => {
+					$d ( $d input )*
+				}
 			}
-		}
 
-		/// Enable/disable the given code depending on
-		#[doc = concat!("`", stringify!($feature_name), "`")]
-		/// being enabled for the crate or not.
-		///
-		/// # Example
-		///
-		/// ```nocompile
-		/// // Will add the code depending on the feature being enabled or not.
-		#[doc = concat!(stringify!($macro_name), "!( println!(\"Hello\") )")]
-		/// ```
-		#[cfg(not($feature_name))]
-		#[macro_export]
-		macro_rules! $macro_name {
-			( $d ( $d input:tt )* ) => {};
+			/// Enable/disable the given code depending on
+			#[doc = concat!("`", stringify!($feature_name), "`")]
+			/// being enabled for the crate or not.
+			///
+			/// # Example
+			///
+			/// ```nocompile
+			/// // Will add the code depending on the feature being enabled or not.
+			#[doc = concat!(stringify!($macro_name), "!( println!(\"Hello\") )")]
+			/// ```
+			#[cfg(not($feature_name))]
+			#[macro_export]
+			macro_rules! [<_ $macro_name>] {
+				( $d ( $d input:tt )* ) => {};
+			}
+
+			// Work around for: <https://github.com/rust-lang/rust/pull/52234>
+			#[doc(hidden)] 
+			pub use [<_ $macro_name>] as $macro_name;
 		}
 	};
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	#[should_panic]
+	fn generate_feature_enabled_macro_panics() {
+		generate_feature_enabled_macro!(if_test, test, $);
+		if_test!(panic!("This should panic"));
+	}
+
+	#[test]
+	fn generate_feature_enabled_macro_works() {
+		generate_feature_enabled_macro!(if_not_test, not(test), $);
+		if_not_test!(panic!("This should not panic"));
+	}
 }
