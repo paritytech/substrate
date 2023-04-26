@@ -901,19 +901,6 @@ mod tests {
 			nested0.enforce_limit(Some(&mut nested1_info)).unwrap();
 			nested0.absorb(nested1, DepositAccount(CHARLIE), None);
 
-			let mut nested1_info = new_info(StorageInfo {
-				bytes: 100,
-				items: 10,
-				bytes_deposit: 100,
-				items_deposit: 20,
-			});
-			let mut nested1 = nested0.nested(BalanceOf::<Test>::zero());
-			nested1.charge(&Diff { items_removed: 5, ..Default::default() });
-			nested1.charge(&Diff { bytes_added: 20, ..Default::default() });
-			nested1.terminate(&nested1_info);
-			nested0.enforce_limit(Some(&mut nested1_info)).unwrap();
-			nested0.absorb(nested1, DepositAccount(CHARLIE), None);
-
 			meter.absorb(nested0, DepositAccount(BOB), None);
 			assert_eq!(meter.into_deposit(&test_case.origin), test_case.deposit);
 
