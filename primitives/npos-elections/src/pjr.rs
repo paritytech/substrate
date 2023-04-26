@@ -618,7 +618,6 @@ mod tests {
 				unexpected_failures.push(t);
 			}
 		}
-		dbg!(&unexpected_successes, &unexpected_failures);
 		assert!(unexpected_failures.is_empty() && unexpected_successes.is_empty());
 
 		high_bound

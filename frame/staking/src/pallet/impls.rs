@@ -22,6 +22,7 @@ use frame_election_provider_support::{
 	SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
+	defensive,
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
@@ -38,7 +39,7 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, OnStakingUpdate, SessionIndex, Stake, StakingInterface,
+	EraIndex, OnStakingUpdate, SessionIndex, Stake, StakerStatus, StakingInterface,
 };
 use sp_std::prelude::*;
 
@@ -653,11 +654,11 @@ impl<T: Config> Pallet<T> {
 
 		slashing::clear_stash_metadata::<T>(stash, num_slashing_spans)?;
 
-		<Bonded<T>>::remove(stash);
-		<Payee<T>>::remove(stash);
 		Self::do_remove_validator(stash);
 		Self::do_remove_nominator(stash);
 
+		<Bonded<T>>::remove(stash);
+		<Payee<T>>::remove(stash);
 		StakingLedger::<T>::get_storage(&controller).map(|l| l.remove());
 
 		frame_system::Pallet::<T>::dec_consumers(stash);
@@ -879,12 +880,15 @@ impl<T: Config> Pallet<T> {
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
 		let nominator_exists = Nominators::<T>::contains_key(who);
 		// Get previous nominations before the nominator is updated.
-		let prev_nominations = Self::nominations(who);
+		let prev_targets = Self::nominations(who);
+		let new_targets = nominations.targets.clone().into_inner();
 
 		Nominators::<T>::insert(who, nominations);
 
 		if nominator_exists {
-			T::EventListeners::on_nominator_update(who, prev_nominations.unwrap_or_default());
+			if prev_targets != Some(new_targets) {
+				T::EventListeners::on_nominator_update(who, prev_targets.unwrap_or_default());
+			}
 		} else {
 			T::EventListeners::on_nominator_add(who);
 		}
@@ -916,10 +920,13 @@ impl<T: Config> Pallet<T> {
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
 		let validator_exists = Validators::<T>::contains_key(who);
 
-		Validators::<T>::insert(who, prefs);
+		let prev_prefs = Validators::<T>::get(who);
+		Validators::<T>::insert(who, prefs.clone());
 
 		if validator_exists {
-			T::EventListeners::on_validator_update(who);
+			if prev_prefs != prefs {
+				T::EventListeners::on_validator_update(who);
+			}
 		} else {
 			T::EventListeners::on_validator_add(who);
 		}
@@ -1625,12 +1632,28 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::nominate(RawOrigin::Signed(ctrl).into(), targets)
 	}
 
-	fn is_validator(who: &Self::AccountId) -> bool {
-		Validators::<T>::contains_key(who)
-	}
+	fn status(who: &Self::AccountId) -> Option<sp_staking::StakerStatus<Self::AccountId>> {
+		// This pesky or-statement is to prevent edge cases where this is being called while an
+		// account is being partially deleted. This should be refactored as well.
+		let is_bonded = Self::bonded(who).is_some() || Self::ledger(who).is_some();
+		if !is_bonded {
+			return None
+		}
 
-	fn nominations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
-		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
+		let is_validator = Validators::<T>::contains_key(&who);
+		let is_nominator = Nominators::<T>::get(&who);
+
+		match (is_validator, is_nominator.is_some()) {
+			(false, false) => Some(StakerStatus::Idle),
+			(true, false) => Some(StakerStatus::Validator),
+			(false, true) => Some(StakerStatus::Nominator(
+				is_nominator.expect("is checked above; qed").targets.into_inner(),
+			)),
+			(true, true) => {
+				defensive!("cannot be both validators and nominator");
+				None
+			},
+		}
 	}
 
 	sp_staking::runtime_benchmarks_enabled! {

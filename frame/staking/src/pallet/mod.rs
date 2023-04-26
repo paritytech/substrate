@@ -965,8 +965,8 @@ pub mod pallet {
 		/// See also [`Call::withdraw_unbonded`].
 		#[pallet::call_index(2)]
 		#[pallet::weight(
-            T::WeightInfo::withdraw_unbonded_kill(SPECULATIVE_NUM_SPANS).saturating_add(T::WeightInfo::unbond()))
-        ]
+			T::WeightInfo::withdraw_unbonded_kill(SPECULATIVE_NUM_SPANS).saturating_add(T::WeightInfo::unbond()))
+		]
 		pub fn unbond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,

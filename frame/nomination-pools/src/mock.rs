@@ -108,17 +108,15 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
-	fn nominations(_: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
-		Nominations::get()
+	fn status(_: &Self::AccountId) -> Option<sp_staking::StakerStatus<Self::AccountId>> {
+		Nominations::get().map(|noms| sp_staking::StakerStatus::Nominator(noms))
 	}
 
 	fn stash_by_ctrl(_controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
 		unimplemented!("method currently not used in testing")
 	}
 
-	fn stake(
-		who: &Self::AccountId,
-	) -> Result<Stake<Self::AccountId, Self::Balance>, DispatchError> {
+	fn stake(who: &Self::AccountId) -> Result<Stake<Self::Balance>, DispatchError> {
 		match (
 			UnbondingBalanceMap::get().get(who).copied(),
 			BondedBalanceMap::get().get(who).copied(),
@@ -153,10 +151,6 @@ impl sp_staking::StakingInterface for StakingMock {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_current_era(_era: EraIndex) {
-		unimplemented!("method currently not used in testing")
-	}
-
-	fn is_validator(_: &Self::AccountId) -> bool {
 		unimplemented!("method currently not used in testing")
 	}
 }

@@ -45,7 +45,7 @@ use frame_support::{
 	traits::{Currency, CurrencyToVote, Defensive},
 };
 pub use pallet::*;
-use sp_staking::{OnStakingUpdate, Stake, StakingInterface};
+use sp_staking::{OnStakingUpdate, Stake, StakerStatus, StakingInterface};
 
 use sp_std::{boxed::Box, vec::Vec};
 
@@ -100,19 +100,20 @@ impl<T: Config> OnStakingUpdate<T::Staking> for Pallet<T> {
 		if let Ok(current_stake) = T::Staking::stake(who) {
 			let current_active = current_stake.active;
 
-			// If this is a nominator, update their position in the `VoterList`.
-			if let Some(_) = T::Staking::nominations(who) {
-				let _ = T::VoterList::on_update(who, Self::to_vote(current_active))
-					.defensive_proof("Nominator's position in VoterList updated; qed");
-			}
-
-			// If this is a validator, update their position in the `VoterList`.
-			if T::Staking::is_validator(who) {
-				let _ = T::VoterList::on_update(who, Self::to_vote(current_active))
-					.defensive_proof("Validator's position in VoterList updated; qed");
+			match T::Staking::status(who).defensive_unwrap_or(StakerStatus::Idle) {
+				StakerStatus::Nominator(_) => {
+					let _ = T::VoterList::on_update(who, Self::to_vote(current_active))
+						.defensive_proof("Nominator's position in VoterList updated; qed");
+				},
+				StakerStatus::Validator => {
+					let _ = T::VoterList::on_update(who, Self::to_vote(current_active))
+						.defensive_proof("Validator's position in VoterList updated; qed");
+				},
+				StakerStatus::Idle => {
+					// nada.
+				},
 			}
 		}
-		// else, this staker must have been in "chilled" state.
 	}
 
 	fn on_nominator_add(who: &T::AccountId) {

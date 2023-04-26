@@ -203,15 +203,13 @@ impl StakingInterface for StakingMock {
 		unreachable!();
 	}
 
-	fn stake(
-		who: &Self::AccountId,
-	) -> Result<Stake<Self::AccountId, Self::Balance>, DispatchError> {
+	fn stake(who: &Self::AccountId) -> Result<Stake<Self::Balance>, DispatchError> {
 		let stake = TestNominators::get()
 			.get(who)
 			.cloned()
 			.or_else(|| TestValidators::get().get(who).cloned())
 			.ok_or(DispatchError::Other("not bonded"))?;
-		Ok(Stake { stash: *who, active: stake, total: stake })
+		Ok(Stake { active: stake, total: stake })
 	}
 
 	fn bond(_: &Self::AccountId, _: Self::Balance, _: &Self::AccountId) -> DispatchResult {
@@ -254,13 +252,11 @@ impl StakingInterface for StakingMock {
 		unreachable!();
 	}
 
-	fn is_validator(who: &Self::AccountId) -> bool {
-		TestValidators::get().contains_key(who)
-	}
-
-	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
+	fn status(who: &Self::AccountId) -> Option<pallet_staking::StakerStatus<Self::AccountId>> {
 		if TestNominators::get().contains_key(who) {
-			Some(Vec::new())
+			Some(pallet_staking::StakerStatus::Nominator(Default::default()))
+		} else if TestValidators::get().contains_key(who) {
+			Some(pallet_staking::StakerStatus::Validator)
 		} else {
 			None
 		}
@@ -311,6 +307,12 @@ impl ExtBuilder {
 		sp_tracing::try_init_simple();
 		let mut ext = self.build();
 		ext.execute_with(test);
-		// TODO: call try_state of `AllPallets`.
+
+		#[cfg(feature = "try-runtime")]
+		<AllPallets as frame_support::traits::TryState>::try_state(
+			System::block_number(),
+			Default::default(),
+		)
+		.unwrap();
 	}
 }

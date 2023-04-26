@@ -135,7 +135,6 @@ impl<T: Config> StakingLedger<T> {
 		let stash = self.stash.clone();
 		let prev_ledger = Self::get_storage(&self.controller());
 		Ledger::<T>::insert(self.controller(), &self);
-		dbg!(&prev_ledger, &self);
 		if prev_ledger != Some(self) {
 			T::EventListeners::on_stake_update(&stash, prev_ledger.map(Into::into));
 		}

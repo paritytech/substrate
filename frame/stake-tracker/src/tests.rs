@@ -56,11 +56,12 @@ mod on_stake_update {
 	use super::*;
 
 	#[test]
-	#[should_panic(
-		expected = "Defensive failure has been triggered!: \"received update for a staker who is not a staker\""
-	)]
-	fn not_bonded() {
-		ExtBuilder::default().build_and_execute(|| StakeTracker::on_stake_update(&42, None));
+	fn not_bonded_noop() {
+		ExtBuilder::default().build_and_execute(|| {
+			// it means someone bonded just to be chill.
+			assert_storage_noop!(ExtBuilder::default()
+				.build_and_execute(|| StakeTracker::on_stake_update(&42, None)));
+		});
 	}
 
 	#[test]
@@ -229,7 +230,9 @@ mod on_validator_remove {
 	}
 
 	#[test]
-	#[should_panic(expected = "non-existent validator would be removed; qed")]
+	#[should_panic(
+		expected = "Defensive failure has been triggered!: NodeNotFound: \"non-existent validator would not be removed; qed\""
+	)]
 	fn defensive_when_not_in_list() {
 		ExtBuilder::default().build_and_execute(|| {
 			StakeTracker::on_validator_remove(&42);
@@ -261,7 +264,9 @@ mod on_nominator_remove {
 	}
 
 	#[test]
-	#[should_panic(expected = "non-existent nominator would bot be removed; qed")]
+	#[should_panic(
+		expected = "Defensive failure has been triggered!: NodeNotFound: \"non-existent nominator would not be removed; qed\""
+	)]
 	fn defensive_when_not_in_list() {
 		ExtBuilder::default().build_and_execute(|| {
 			StakeTracker::on_nominator_remove(&42, vec![]);
@@ -298,10 +303,19 @@ mod on_unstake {
 	}
 
 	#[test]
-	#[should_panic(expected = "existent voter cannot be unstaked; qed")]
-	fn defensive_when_in_list() {
+	fn removed_when_in_list() {
 		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(backend(), vec![30, 25, 20, 15, 10, 5]);
+
+			// when an existing node unstakes
 			StakeTracker::on_unstake(&10);
+
+			// then
+			assert_eq!(backend(), vec![30, 25, 20, 15, 5]);
+
+			// when a non-existent node leaves, it means they were already chilled.
+			assert_storage_noop!(StakeTracker::on_unstake(&42));
 		});
 	}
 }

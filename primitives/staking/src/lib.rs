@@ -37,8 +37,21 @@ pub type SessionIndex = u32;
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
 
+/// Indicates the initial status of the staker.
+#[derive(RuntimeDebug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Clone))]
+pub enum StakerStatus<AccountId> {
+	/// Chilling.
+	Idle,
+	/// Declared desire in validating or already participating in it.
+	Validator,
+	/// Nominating for a group of other stakers.
+	Nominator(Vec<AccountId>),
+}
+
 /// Trait describing something that implements a hook for any operations to perform when a staker is
 /// slashed.
+#[deprecated]
 pub trait OnStakerSlash<AccountId, Balance> {
 	/// A hook for any operations to perform when a staker is slashed.
 	///
@@ -145,7 +158,7 @@ pub trait StakingInterface {
 		+ Saturating;
 
 	/// AccountId type used by the staking system.
-	type AccountId: Clone;
+	type AccountId: Clone + sp_std::fmt::Debug;
 
 	/// Means of converting Currency to VoteWeight.
 	type CurrencyToVote: CurrencyToVote<Self::Balance>;
@@ -240,11 +253,21 @@ pub trait StakingInterface {
 	/// Checks whether an account `staker` has been exposed in an era.
 	fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool;
 
+	/// Return the status of the given staker, `None` if not staked at all.
+	fn status(who: &Self::AccountId) -> Option<StakerStatus<Self::AccountId>>;
+
 	/// Checks whether or not this is a validator account.
-	fn is_validator(who: &Self::AccountId) -> bool;
+	fn is_validator(who: &Self::AccountId) -> bool {
+		Self::status(who).map(|s| matches!(s, StakerStatus::Validator)).unwrap_or(false)
+	}
 
 	/// Get the nominations of a stash, if they are a nominator, `None` otherwise.
-	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>>;
+	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
+		match Self::status(who) {
+			Some(StakerStatus::Nominator(t)) => Some(t),
+			_ => None,
+		}
+	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_era_stakers(

@@ -10890,6 +10890,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
  "scale-info",
+ "serde",
  "sp-core",
  "sp-runtime",
  "sp-std",

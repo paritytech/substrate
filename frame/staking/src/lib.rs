@@ -321,6 +321,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};
+pub use sp_staking::StakerStatus;
 
 pub(crate) const LOG_TARGET: &str = "runtime::staking";
 
@@ -381,18 +382,6 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 	fn default() -> Self {
 		EraRewardPoints { total: Default::default(), individual: BTreeMap::new() }
 	}
-}
-
-/// Indicates the initial status of the staker.
-#[derive(RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Clone))]
-pub enum StakerStatus<AccountId> {
-	/// Chilling.
-	Idle,
-	/// Declared desire in validating or already participating in it.
-	Validator,
-	/// Nominating for a group of other stakers.
-	Nominator(Vec<AccountId>),
 }
 
 /// A destination account for payment.
