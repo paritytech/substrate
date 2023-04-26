@@ -5823,8 +5823,6 @@ mod on_staking_update {
 	//! validator
 	//! nominator
 	//!
-	//! TODO: make a PR or issue for others about a clean update-leger.
-	//!
 	//! functions:
 	//!
 	//! bond
@@ -5835,7 +5833,7 @@ mod on_staking_update {
 	//! withdraw_unbonded
 	//! ```
 	use frame_election_provider_support::ElectionDataProvider;
-use sp_staking::StakingInterface;
+	use sp_staking::StakingInterface;
 
 	use super::*;
 	use crate::mock::StakingEvent::*;
@@ -5924,7 +5922,9 @@ use sp_staking::StakingInterface;
 	}
 
 	#[test]
-	fn non_staker_withdraw_unbonded() {}
+	fn non_staker_withdraw_unbonded() {
+		// TODO CI-FAIL
+	}
 
 	#[test]
 	fn chilled_account() {
@@ -5984,35 +5984,116 @@ use sp_staking::StakingInterface;
 	#[test]
 	fn chilled_update_bonded_amount() {
 		ExtBuilder::default().build_and_execute(|| {
-			// given `fn chilled_account`
+			// given `fn chilled_account`, and
+			assert_eq!(
+				<Staking as StakingInterface>::stake(&41).unwrap(),
+				Stake { active: 1000, total: 1000 }
+			);
 
 			// when updating bonded amount (which should be done by the stash)
-			// assert_eq!(<Staking as StakingInterface>::stake(&41), Some(Stake { active: 100, total: 100, stash: 41 }));
-			assert_ok!(
-				Staking::bond_extra(RuntimeOrigin::signed(41), Default::default())
-			);
+			assert_ok!(Staking::bond_extra(RuntimeOrigin::signed(41), 10));
 
-			// then:
-			// assert_eq!(EmittedEvents::take(), vec![StakingEvent::StakeUpdate(41, Some(Stake { }))]);
+			// then note the pre-ledger is given as an argument.
+			assert_eq!(
+				EmittedEvents::take(),
+				vec![StakingEvent::StakeUpdate(41, Some(Stake { active: 1000, total: 1000 }))]
+			);
+			assert_eq!(
+				<Staking as StakingInterface>::stake(&41).unwrap(),
+				Stake { active: 1010, total: 1010 }
+			);
 
 			// when:
-			assert_noop!(
-				Staking::unbond(RuntimeOrigin::signed(41), Default::default()),
-				Error::<T>::NotController
-			);
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(40), 5));
 
 			// then:
-			assert_eq!(EmittedEvents::take(), vec![]);
+			assert_eq!(
+				EmittedEvents::take(),
+				vec![StakingEvent::StakeUpdate(41, Some(Stake { active: 1010, total: 1010 }))]
+			);
+			assert_eq!(
+				<Staking as StakingInterface>::stake(&41).unwrap(),
+				Stake { active: 1005, total: 1010 }
+			);
 
 			// when:
-			assert_noop!(
-				Staking::rebond(RuntimeOrigin::signed(41), Default::default()),
-				Error::<T>::NotController
-			);
+			assert_ok!(Staking::rebond(RuntimeOrigin::signed(40), 2));
 
 			// then:
-			assert_eq!(EmittedEvents::take(), vec![]);
+			assert_eq!(
+				EmittedEvents::take(),
+				vec![StakingEvent::StakeUpdate(41, Some(Stake { active: 1005, total: 1010 }))]
+			);
+			assert_eq!(
+				<Staking as StakingInterface>::stake(&41).unwrap(),
+				Stake { active: 1007, total: 1010 }
+			);
 		})
+	}
+
+	#[test]
+	fn chilled_withdraw_unbonded() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given `fn chilled_account`, and
+			assert_eq!(
+				<Staking as StakingInterface>::stake(&41).unwrap(),
+				Stake { active: 1000, total: 1000 }
+			);
+			assert_eq!(current_era(), 0);
+
+			// when:
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(40), 5));
+
+			// then:
+			assert_eq!(
+				EmittedEvents::take(),
+				vec![StakingEvent::StakeUpdate(41, Some(Stake { active: 1000, total: 1000 }))]
+			);
+			assert_eq!(
+				<Staking as StakingInterface>::stake(&41).unwrap(),
+				Stake { active: 995, total: 1000 }
+			);
+
+			// when:
+			assert_storage_noop!(assert_ok!(Staking::withdraw_unbonded(
+				RuntimeOrigin::signed(40),
+				0
+			)));
+
+			// then:
+			assert_eq!(EmittedEvents::take(), vec![]);
+			assert_eq!(
+				<Staking as StakingInterface>::stake(&41).unwrap(),
+				Stake { active: 995, total: 1000 }
+			);
+
+			// when:
+			start_active_era(BondingDuration::get() - 1);
+			assert_storage_noop!(assert_ok!(Staking::withdraw_unbonded(
+				RuntimeOrigin::signed(40),
+				0
+			)));
+
+			// then:
+			assert_eq!(EmittedEvents::take(), vec![]);
+			assert_eq!(
+				<Staking as StakingInterface>::stake(&41).unwrap(),
+				Stake { active: 995, total: 1000 }
+			);
+
+			// when:
+			start_active_era(BondingDuration::get());
+			assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(40), 0));
+
+			// then:
+			assert_eq!(
+				EmittedEvents::take(),
+				vec![StakeUpdate(41, Some(Stake { total: 1000, active: 995 }))]
+			);
+			assert_eq!(
+				<Staking as StakingInterface>::stake(&41).unwrap(),
+				Stake { active: 995, total: 995 }
+			);
 		})
 	}
 }

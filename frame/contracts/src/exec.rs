@@ -19,7 +19,7 @@ use crate::{
 	gas::GasMeter,
 	storage::{self, DepositAccount, WriteOutcome},
 	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, DebugBufferVec, Determinism, Error,
-	Event, Nonce, Pallet as Contracts, Schedule, System,
+	Event, Nonce, Pallet as Contracts, Schedule, System, LOG_TARGET,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -35,7 +35,10 @@ use frame_support::{
 use frame_system::RawOrigin;
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
-use sp_core::ecdsa::Public as ECDSAPublic;
+use sp_core::{
+	ecdsa::Public as ECDSAPublic,
+	sr25519::{Public as SR25519Public, Signature as SR25519Signature},
+};
 use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
 use sp_runtime::traits::{Convert, Hash};
 use sp_std::{marker::PhantomData, mem, prelude::*, vec::Vec};
@@ -271,6 +274,9 @@ pub trait Ext: sealing::Sealed {
 
 	/// Recovers ECDSA compressed public key based on signature and message hash.
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
+
+	/// Verify a sr25519 signature.
+	fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool;
 
 	/// Returns Ethereum address from the ECDSA compressed public key.
 	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()>;
@@ -996,7 +1002,7 @@ where
 		} else {
 			if let Some((msg, false)) = self.debug_message.as_ref().map(|m| (m, m.is_empty())) {
 				log::debug!(
-					target: "runtime::contracts",
+					target: LOG_TARGET,
 					"Execution finished with debug buffer: {}",
 					core::str::from_utf8(msg).unwrap_or("<Invalid UTF8>"),
 				);
@@ -1204,7 +1210,7 @@ where
 			T::Currency::reducible_balance(&frame.account_id, Expendable, Polite),
 			ExistenceRequirement::AllowDeath,
 		)?;
-		info.queue_trie_for_deletion()?;
+		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::remove_user(info.code_hash);
 		Contracts::<T>::deposit_event(
@@ -1325,7 +1331,7 @@ where
 				.try_extend(&mut msg.bytes())
 				.map_err(|_| {
 					log::debug!(
-						target: "runtime::contracts",
+						target: LOG_TARGET,
 						"Debug buffer (of {} bytes) exhausted!",
 						DebugBufferVec::<T>::bound(),
 					)
@@ -1345,6 +1351,14 @@ where
 
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()> {
 		secp256k1_ecdsa_recover_compressed(signature, message_hash).map_err(|_| ())
+	}
+
+	fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool {
+		sp_io::crypto::sr25519_verify(
+			&SR25519Signature(*signature),
+			message,
+			&SR25519Public(*pub_key),
+		)
 	}
 
 	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()> {

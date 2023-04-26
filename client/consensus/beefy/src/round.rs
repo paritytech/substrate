@@ -21,7 +21,7 @@ use crate::LOG_TARGET;
 use codec::{Decode, Encode};
 use log::debug;
 use sp_consensus_beefy::{
-	crypto::{AuthorityId, Public, Signature},
+	crypto::{AuthorityId, Signature},
 	Commitment, EquivocationProof, SignedCommitment, ValidatorSet, ValidatorSetId, VoteMessage,
 };
 use sp_runtime::traits::{Block, NumberFor};
@@ -33,11 +33,11 @@ use std::collections::BTreeMap;
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
 #[derive(Debug, Decode, Default, Encode, PartialEq)]
 pub(crate) struct RoundTracker {
-	votes: BTreeMap<Public, Signature>,
+	votes: BTreeMap<AuthorityId, Signature>,
 }
 
 impl RoundTracker {
-	fn add_vote(&mut self, vote: (Public, Signature)) -> bool {
+	fn add_vote(&mut self, vote: (AuthorityId, Signature)) -> bool {
 		if self.votes.contains_key(&vote.0) {
 			return false
 		}
@@ -61,7 +61,7 @@ pub fn threshold(authorities: usize) -> usize {
 pub enum VoteImportResult<B: Block> {
 	Ok,
 	RoundConcluded(SignedCommitment<NumberFor<B>, Signature>),
-	Equivocation(EquivocationProof<NumberFor<B>, Public, Signature>),
+	Equivocation(EquivocationProof<NumberFor<B>, AuthorityId, Signature>),
 	Invalid,
 	Stale,
 }
@@ -73,9 +73,10 @@ pub enum VoteImportResult<B: Block> {
 #[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct Rounds<B: Block> {
 	rounds: BTreeMap<Commitment<NumberFor<B>>, RoundTracker>,
-	previous_votes: BTreeMap<(Public, NumberFor<B>), VoteMessage<NumberFor<B>, Public, Signature>>,
+	previous_votes:
+		BTreeMap<(AuthorityId, NumberFor<B>), VoteMessage<NumberFor<B>, AuthorityId, Signature>>,
 	session_start: NumberFor<B>,
-	validator_set: ValidatorSet<Public>,
+	validator_set: ValidatorSet<AuthorityId>,
 	mandatory_done: bool,
 	best_done: Option<NumberFor<B>>,
 }
@@ -84,7 +85,10 @@ impl<B> Rounds<B>
 where
 	B: Block,
 {
-	pub(crate) fn new(session_start: NumberFor<B>, validator_set: ValidatorSet<Public>) -> Self {
+	pub(crate) fn new(
+		session_start: NumberFor<B>,
+		validator_set: ValidatorSet<AuthorityId>,
+	) -> Self {
 		Rounds {
 			rounds: BTreeMap::new(),
 			previous_votes: BTreeMap::new(),
@@ -95,7 +99,7 @@ where
 		}
 	}
 
-	pub(crate) fn validator_set(&self) -> &ValidatorSet<Public> {
+	pub(crate) fn validator_set(&self) -> &ValidatorSet<AuthorityId> {
 		&self.validator_set
 	}
 
@@ -103,7 +107,7 @@ where
 		self.validator_set.id()
 	}
 
-	pub(crate) fn validators(&self) -> &[Public] {
+	pub(crate) fn validators(&self) -> &[AuthorityId] {
 		self.validator_set.validators()
 	}
 
@@ -199,11 +203,11 @@ mod tests {
 	use sc_network_test::Block;
 
 	use sp_consensus_beefy::{
-		crypto::Public, known_payloads::MMR_ROOT_ID, Commitment, EquivocationProof, Keyring,
-		Payload, SignedCommitment, ValidatorSet, VoteMessage,
+		known_payloads::MMR_ROOT_ID, Commitment, EquivocationProof, Keyring, Payload,
+		SignedCommitment, ValidatorSet, VoteMessage,
 	};
 
-	use super::{threshold, Block as BlockT, RoundTracker, Rounds};
+	use super::{threshold, AuthorityId, Block as BlockT, RoundTracker, Rounds};
 	use crate::round::VoteImportResult;
 
 	impl<B> Rounds<B>
@@ -251,7 +255,7 @@ mod tests {
 	fn new_rounds() {
 		sp_tracing::try_init_simple();
 
-		let validators = ValidatorSet::<Public>::new(
+		let validators = ValidatorSet::<AuthorityId>::new(
 			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
 			42,
 		)
@@ -272,7 +276,7 @@ mod tests {
 	fn add_and_conclude_votes() {
 		sp_tracing::try_init_simple();
 
-		let validators = ValidatorSet::<Public>::new(
+		let validators = ValidatorSet::<AuthorityId>::new(
 			vec![
 				Keyring::Alice.public(),
 				Keyring::Bob.public(),
@@ -338,7 +342,7 @@ mod tests {
 	fn old_rounds_not_accepted() {
 		sp_tracing::try_init_simple();
 
-		let validators = ValidatorSet::<Public>::new(
+		let validators = ValidatorSet::<AuthorityId>::new(
 			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
 			42,
 		)
@@ -384,7 +388,7 @@ mod tests {
 	fn multiple_rounds() {
 		sp_tracing::try_init_simple();
 
-		let validators = ValidatorSet::<Public>::new(
+		let validators = ValidatorSet::<AuthorityId>::new(
 			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
 			Default::default(),
 		)
@@ -459,7 +463,7 @@ mod tests {
 	fn should_provide_equivocation_proof() {
 		sp_tracing::try_init_simple();
 
-		let validators = ValidatorSet::<Public>::new(
+		let validators = ValidatorSet::<AuthorityId>::new(
 			vec![Keyring::Alice.public(), Keyring::Bob.public()],
 			Default::default(),
 		)

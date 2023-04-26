@@ -480,9 +480,14 @@ pub mod pallet {
 		AlreadyCommunal,
 		/// The receipt is already private.
 		AlreadyPrivate,
-		Release1,
-		Release2,
-		Tah,
+	}
+
+	/// A reason for the NIS pallet placing a hold on funds.
+	#[pallet::composite_enum]
+	pub enum HoldReason {
+		/// The NIS Pallet has reserved it for a non-fungible receipt.
+		#[codec(index = 0)]
+		NftReceipt,
 	}
 
 	pub(crate) struct WeightCounter {
@@ -724,8 +729,7 @@ pub mod pallet {
 			let dropped = receipt.proportion.is_zero();
 
 			if amount > on_hold {
-				T::Currency::release(&T::HoldReason::get(), &who, on_hold, Exact)
-					.map_err(|_| Error::<T>::Release1)?;
+				T::Currency::release(&T::HoldReason::get(), &who, on_hold, Exact)?;
 				let deficit = amount - on_hold;
 				// Try to transfer deficit from pot to receipt owner.
 				summary.receipts_on_hold.saturating_reduce(on_hold);
@@ -756,8 +760,7 @@ pub mod pallet {
 					)?;
 					summary.receipts_on_hold.saturating_reduce(on_hold);
 				}
-				T::Currency::release(&T::HoldReason::get(), &who, amount, Exact)
-					.map_err(|_| Error::<T>::Release2)?;
+				T::Currency::release(&T::HoldReason::get(), &who, amount, Exact)?;
 			}
 
 			if dropped {
@@ -1136,9 +1139,8 @@ pub mod pallet {
 			// Now to activate the bid...
 			let n = amount;
 			let d = issuance.effective;
-			let proportion =
-				Perquintill::from_rational_with_rounding(n, d, Rounding::NearestPrefDown)
-					.defensive_unwrap_or_default();
+			let proportion = Perquintill::from_rational_with_rounding(n, d, Rounding::Down)
+				.defensive_unwrap_or_default();
 			let who = bid.who;
 			let index = summary.index;
 			summary.proportion_owed.defensive_saturating_accrue(proportion);

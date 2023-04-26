@@ -54,30 +54,47 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		.map(|fn_name| format!("Create a call with the variant `{}`.", fn_name))
 		.collect::<Vec<_>>();
 
-	let mut warning_structs = Vec::new();
-	let mut warning_names = Vec::new();
+	let mut call_index_warnings = Vec::new();
 	// Emit a warning for each call that is missing `call_index` when not in dev-mode.
 	for method in &methods {
 		if method.explicit_call_index || def.dev_mode {
 			continue
 		}
 
-		let name = syn::Ident::new(&format!("{}", method.name), method.name.span());
-		let warning: syn::ItemStruct = syn::parse_quote!(
-			#[deprecated(note = r"
-			Implicit call indices are deprecated in favour of explicit ones.
-			Please ensure that all calls have the `pallet::call_index` attribute or that the
-			`dev-mode` of the pallet is enabled. For more info see:
-			<https://github.com/paritytech/substrate/pull/12891> and
-			<https://github.com/paritytech/substrate/pull/11381>.")]
-			#[allow(non_camel_case_types)]
-			struct #name;
-		);
-		warning_names.push(name);
-		warning_structs.push(warning);
+		let warning = proc_macro_warning::Warning::new_deprecated("ImplicitCallIndex")
+			.index(call_index_warnings.len())
+			.old("use implicit call indices")
+			.new("ensure that all calls have a `pallet::call_index` attribute or put the pallet into `dev` mode")
+			.help_links(&[
+				"https://github.com/paritytech/substrate/pull/12891",
+				"https://github.com/paritytech/substrate/pull/11381"
+			])
+			.span(method.name.span())
+			.build();
+		call_index_warnings.push(warning);
 	}
 
 	let fn_weight = methods.iter().map(|method| &method.weight);
+	let mut weight_warnings = Vec::new();
+	for weight in fn_weight.clone() {
+		if def.dev_mode {
+			continue
+		}
+
+		match weight {
+			syn::Expr::Lit(lit) => {
+				let warning = proc_macro_warning::Warning::new_deprecated("ConstantWeight")
+					.index(weight_warnings.len())
+					.old("use hard-coded constant as call weight")
+					.new("benchmark all calls or put the pallet into `dev` mode")
+					.help_link("https://github.com/paritytech/substrate/pull/13798")
+					.span(lit.span())
+					.build();
+				weight_warnings.push(warning);
+			},
+			_ => {},
+		}
+	}
 
 	let fn_doc = methods.iter().map(|method| &method.docs).collect::<Vec<_>>();
 
@@ -171,7 +188,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		.map(|c| &mut def.item.content.as_mut().expect("Checked by def parser").1[c.index])
 	{
 		item_impl.items.iter_mut().for_each(|i| {
-			if let syn::ImplItem::Method(method) = i {
+			if let syn::ImplItem::Fn(method) = i {
 				let block = &method.block;
 				method.block = syn::parse_quote! {{
 					// We execute all dispatchable in a new storage layer, allowing them
@@ -189,13 +206,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			method
 				.attrs
 				.iter()
-				.find(|attr| {
-					if let Ok(syn::Meta::List(syn::MetaList { path, .. })) = attr.parse_meta() {
-						path.segments.last().map(|seg| seg.ident == "allow").unwrap_or(false)
-					} else {
-						false
-					}
-				})
+				.find(|attr| attr.path().is_ident("allow"))
 				.map_or(proc_macro2::TokenStream::new(), |attr| attr.to_token_stream())
 		})
 		.collect::<Vec<_>>();
@@ -203,9 +214,10 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	quote::quote_spanned!(span =>
 		mod warnings {
 			#(
-				#warning_structs
-				// This triggers each deprecated warning once.
-				const _: Option<#warning_names> = None;
+				#call_index_warnings
+			)*
+			#(
+				#weight_warnings
 			)*
 		}
 

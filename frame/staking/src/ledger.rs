@@ -76,9 +76,9 @@ impl<T: Config> PartialEq<StakingLedgerInspect<T>> for StakingLedger<T> {
 
 impl<T: Config> codec::EncodeLike<StakingLedger<T>> for StakingLedgerInspect<T> {}
 
-impl<T: Config> Into<sp_staking::Stake<T::AccountId, BalanceOf<T>>> for StakingLedger<T> {
-	fn into(self) -> sp_staking::Stake<T::AccountId, BalanceOf<T>> {
-		sp_staking::Stake { stash: self.stash, total: self.total, active: self.active }
+impl<T: Config> Into<sp_staking::Stake<BalanceOf<T>>> for StakingLedger<T> {
+	fn into(self) -> sp_staking::Stake<BalanceOf<T>> {
+		sp_staking::Stake { total: self.total, active: self.active }
 	}
 }
 
@@ -133,9 +133,12 @@ impl<T: Config> StakingLedger<T> {
 	pub fn put_storage(self) {
 		T::Currency::set_lock(STAKING_ID, &self.stash, self.total, WithdrawReasons::all());
 		let stash = self.stash.clone();
-		let prev_ledger = Ledger::<T>::get(&self.controller());
-		Ledger::<T>::insert(self.controller(), self);
-		T::EventListeners::on_stake_update(&stash, prev_ledger.map(Into::into));
+		let prev_ledger = Self::get_storage(&self.controller());
+		Ledger::<T>::insert(self.controller(), &self);
+		dbg!(&prev_ledger, &self);
+		if prev_ledger != Some(self) {
+			T::EventListeners::on_stake_update(&stash, prev_ledger.map(Into::into));
+		}
 	}
 
 	/// Initializes the default object using the given `validator`.

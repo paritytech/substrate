@@ -45,7 +45,7 @@ pub struct CallDef {
 	/// The span of the pallet::call attribute.
 	pub attr_span: proc_macro2::Span,
 	/// Docs, specified on the impl Block.
-	pub docs: Vec<syn::Lit>,
+	pub docs: Vec<syn::Expr>,
 }
 
 /// Definition of dispatchable typically: `#[weight...] fn foo(origin .., param1: ...) -> ..`
@@ -62,7 +62,7 @@ pub struct CallVariantDef {
 	/// Whether an explicit call index was specified.
 	pub explicit_call_index: bool,
 	/// Docs, used for metadata.
-	pub docs: Vec<syn::Lit>,
+	pub docs: Vec<syn::Expr>,
 	/// Attributes annotated at the top of the dispatchable function.
 	pub attrs: Vec<syn::Attribute>,
 }
@@ -173,7 +173,7 @@ impl CallDef {
 		let mut indices = HashMap::new();
 		let mut last_index: Option<u8> = None;
 		for item in &mut item_impl.items {
-			if let syn::ImplItem::Method(method) = item {
+			if let syn::ImplItem::Fn(method) = item {
 				if !matches!(method.vis, syn::Visibility::Public(_)) {
 					let msg = "Invalid pallet::call, dispatchable function must be public: \
 						`pub fn`";

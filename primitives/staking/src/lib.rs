@@ -23,6 +23,7 @@
 use crate::currency_to_vote::CurrencyToVote;
 use codec::{FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
+use sp_core::RuntimeDebug;
 use sp_runtime::{DispatchError, DispatchResult, Saturating};
 use sp_std::{collections::btree_map::BTreeMap, ops::Sub, vec::Vec};
 
@@ -62,10 +63,8 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 
 /// A struct that reflects stake that an account has in the staking system. Provides a set of
 /// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
-#[derive(Default, Clone, Debug, Eq, PartialEq)]
-pub struct Stake<AccountId, Balance> {
-	/// The stash account whose balance is actually locked and at stake.
-	pub stash: AccountId,
+#[derive(RuntimeDebug, Clone, Copy, Eq, PartialEq, Default)]
+pub struct Stake<Balance> {
 	/// The total stake that `stash` has in the staking system. This includes the
 	/// `active` stake, and any funds currently in the process of unbonding via
 	/// [`StakingInterface::unbond`].
@@ -87,46 +86,46 @@ pub struct Stake<AccountId, Balance> {
 /// pre-action data that is needed needs to be passed to interface methods. The rest of the data can
 /// be retrieved by using `StakingInterface`.
 #[impl_trait_for_tuples::impl_for_tuples(10)]
-pub trait OnStakingUpdate<AccountId, Balance> {
+pub trait OnStakingUpdate<I: StakingInterface> {
 	/// Fired when the stake amount of someone updates.
 	///
 	/// This is effectively any changes to the bond amount, such as bonding more funds, and
 	/// unbonding.
-	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>);
+	fn on_stake_update(who: &I::AccountId, prev_stake: Option<Stake<I::Balance>>);
 
 	/// Fired when someone sets their intention to nominate.
 	///
 	/// This should never be fired for for existing nominators.
-	fn on_nominator_add(who: &AccountId);
+	fn on_nominator_add(who: &I::AccountId);
 
 	/// Fired when an existing nominator updates their nominations.
 	///
 	/// Note that this is not fired when a nominator changes their stake. For that,
 	/// `on_stake_update` should be used, followed by querying whether `who` was a validator or a
 	/// nominator.
-	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>);
+	fn on_nominator_update(who: &I::AccountId, prev_nominations: Vec<I::AccountId>);
 
 	/// Fired when someone removes their intention to nominate, either due to chill or validating.
 	///
 	/// The set of nominations at the time of removal is provided as it can no longer be fetched in
 	/// any way.
-	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>);
+	fn on_nominator_remove(who: &I::AccountId, nominations: Vec<I::AccountId>);
 
 	/// Fired when someone sets their intention to validate.
 	///
 	/// Note validator preference changes are not communicated, but could be added if needed.
-	fn on_validator_add(who: &AccountId);
+	fn on_validator_add(who: &I::AccountId);
 
 	/// Fired when an existing validator updates their preferences.
 	///
 	/// Note validator preference changes are not communicated, but could be added if needed.
-	fn on_validator_update(who: &AccountId);
+	fn on_validator_update(who: &I::AccountId);
 
 	/// Fired when someone removes their intention to validate, either due to chill or nominating.
-	fn on_validator_remove(who: &AccountId); // only fire this event when this is an actual Validator
+	fn on_validator_remove(who: &I::AccountId); // only fire this event when this is an actual Validator
 
 	/// fired when someone is fully unstaked.
-	fn on_unstake(who: &AccountId); // -> basically `kill_stash`
+	fn on_unstake(who: &I::AccountId); // -> basically `kill_stash`
 }
 
 /// A generic representation of a staking implementation.
@@ -177,8 +176,7 @@ pub trait StakingInterface {
 	fn current_era() -> EraIndex;
 
 	/// Returns the stake of `who`.
-	fn stake(who: &Self::AccountId)
-		-> Result<Stake<Self::AccountId, Self::Balance>, DispatchError>;
+	fn stake(who: &Self::AccountId) -> Result<Stake<Self::Balance>, DispatchError>;
 
 	fn total_stake(who: &Self::AccountId) -> Result<Self::Balance, DispatchError> {
 		Self::stake(who).map(|s| s.total)
