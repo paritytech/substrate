@@ -543,6 +543,7 @@ mod tests {
 			rt.block_on(future_delayed_finalize);
 		});
 
+		let mut finality_stream = client.finality_notification_stream();
 		// submit a transaction to pool.
 		let result = pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Alice, 0)).await;
 		// assert that it was successfully imported
@@ -567,10 +568,9 @@ mod tests {
 		assert_eq!(client.header(created_block.hash).unwrap().unwrap().number, 1);
 
 		assert_eq!(client.info().finalized_hash, client.info().genesis_hash);
-		// ensuring run_delayed_finalize's Future is always processed before checking finalized hash
-		// by adding 1 sec
-		Delay::new(Duration::from_secs(delay_sec + 1)).await;
-		assert_eq!(client.info().finalized_hash, created_block.hash);
+
+		let finalized = finality_stream.select_next_some().await;
+		assert_eq!(finalized.hash, created_block.hash);
 	}
 
 	#[tokio::test]
