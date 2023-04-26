@@ -21,6 +21,7 @@ mod mock;
 pub(crate) const LOG_TARGET: &str = "tests::e2e-epm";
 
 use mock::*;
+use pallet_election_provider_multi_phase::Phase;
 use sp_core::Get;
 use sp_npos_elections::{to_supports, StakedAssignment};
 use sp_runtime::Perbill;
@@ -203,4 +204,63 @@ fn continous_slashes_below_offending_threshold() {
 				);
 			}
 		});
+}
+
+#[test]
+/// During an ongoing incident we may want to alter the phase in EPM.
+///
+/// This test will simulate a case where for some reason we want a new set of
+/// validators to be elected but we are still in an off phase. Since we want to
+/// speed things up and already start preparing a new solution, we will force
+/// enter the signed phase.
+fn transition_to_signed_phase_from_off_phase() {
+	ExtBuilder::default().build_and_execute(|| {
+		assert_eq!(active_era(), 0);
+		assert_eq!(Session::current_index(), 0);
+		assert!(ElectionProviderMultiPhase::current_phase().is_off());
+
+		assert!(ElectionProviderMultiPhase::force_start_phase(
+			RuntimeOrigin::root(),
+			Phase::Signed
+		)
+		.is_ok());
+
+		roll_to(System::block_number() + 1, false);
+
+		assert!(ElectionProviderMultiPhase::current_phase().is_signed());
+		// We are still in the same era, only the phase changed.
+		assert_eq!(active_era(), 0);
+	});
+}
+
+#[test]
+/// During an ongoing incident we may want to alter the phase in EPM.
+///
+/// This test will simulate a case where we are coming to an end of the unsigned
+/// phase but no signed or unsigned solution was submitted. Since we don't want
+/// to get into the fallback strategy which can result in transitioning to an
+/// emergency phase if fallback is not set, we will force transition to a signed
+/// phase so that election happens one more time in hope of getting a solution.
+fn transition_to_signed_phase_from_unsigned() {
+	ExtBuilder::default().build_and_execute(|| {
+		assert_eq!(active_era(), 0);
+		assert_eq!(Session::current_index(), 0);
+		assert!(ElectionProviderMultiPhase::current_phase().is_off());
+
+		roll_to_epm_unsigned();
+		assert_eq!(Session::current_index(), 0);
+		assert!(ElectionProviderMultiPhase::current_phase().is_unsigned());
+
+		assert!(ElectionProviderMultiPhase::force_start_phase(
+			RuntimeOrigin::root(),
+			Phase::Signed
+		)
+		.is_ok());
+
+		roll_to(System::block_number() + 1, false);
+		assert!(ElectionProviderMultiPhase::current_phase().is_signed());
+
+		// Now solutions can be submitted again in a hope to finding a good enought
+		// solution this time.
+	});
 }
