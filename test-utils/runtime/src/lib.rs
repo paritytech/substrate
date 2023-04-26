@@ -1091,7 +1091,7 @@ mod tests {
 				.cloned()
 				.map(hex::encode)
 				.collect::<Vec<_>>(),
-			storage_key_generator::get_expected_keys()
+			storage_key_generator::get_expected_storage_hashed_keys()
 		);
 	}
 
