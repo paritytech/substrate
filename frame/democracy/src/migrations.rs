@@ -61,12 +61,12 @@ pub mod v1 {
 
 	impl<T: Config + frame_system::Config<Hash = H256>> OnRuntimeUpgrade for Migration<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			assert_eq!(StorageVersion::get::<Pallet<T>>(), 0, "can only upgrade from version 0");
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+			ensure!(StorageVersion::get::<Pallet<T>>() == 0, DispatchError::Other("can only upgrade from version 0"));
 
 			let props_count = v0::PublicProps::<T>::get().len();
 			log::info!(target: TARGET, "{} public proposals will be migrated.", props_count,);
-			ensure!(props_count <= T::MaxProposals::get() as usize, "too many proposals");
+			ensure!(props_count <= T::MaxProposals::get() as usize, DispatchError::Other("too many proposals"));
 
 			let referenda_count = v0::ReferendumInfoOf::<T>::iter().count();
 			log::info!(target: TARGET, "{} referenda will be migrated.", referenda_count);

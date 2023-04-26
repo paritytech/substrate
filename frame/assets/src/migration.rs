@@ -92,10 +92,10 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			frame_support::ensure!(
 				Pallet::<T>::on_chain_storage_version() == 0,
-				"must upgrade linearly"
+				DispatchError::Other("must upgrade linearly")
 			);
 			let prev_count = Asset::<T>::iter().count();
 			Ok((prev_count as u32).encode())

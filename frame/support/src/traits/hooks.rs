@@ -167,7 +167,7 @@ pub trait OnRuntimeUpgrade {
 	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
 	/// inaccurate.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		Ok(Vec::new())
 	}
 
@@ -289,7 +289,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		Ok(Vec::new())
 	}
 
@@ -383,7 +383,7 @@ mod tests {
 					}
 
 					#[cfg(feature = "try-runtime")]
-					fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+					fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 						Pre::mutate(|s| s.push(stringify!($name)));
 						Ok(Vec::new())
 					}

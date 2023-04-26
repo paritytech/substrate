@@ -97,8 +97,8 @@ pub mod v3 {
 
 	impl<T: Config<Hash = PreimageHash>> OnRuntimeUpgrade for MigrateToV4<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			assert_eq!(StorageVersion::get::<Pallet<T>>(), 3, "Can only upgrade from version 3");
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+			ensure!(StorageVersion::get::<Pallet<T>>() == 3, DispatchError::Other("Can only upgrade from version 3"));
 
 			let agendas = Agenda::<T>::iter_keys().count() as u32;
 			let decodable_agendas = Agenda::<T>::iter_values().count() as u32;
@@ -210,7 +210,7 @@ pub mod v4 {
 
 	impl<T: Config> OnRuntimeUpgrade for CleanupAgendas<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			assert_eq!(
 				StorageVersion::get::<Pallet<T>>(),
 				4,

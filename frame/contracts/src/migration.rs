@@ -66,7 +66,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		let version = <Pallet<T>>::on_chain_storage_version();
 
 		if version == 7 {
@@ -355,11 +355,11 @@ mod v8 {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	pub fn pre_upgrade<T: Config>() -> Result<(), &'static str> {
+	pub fn pre_upgrade<T: Config>() -> Result<(), DispatchError> {
 		use frame_support::traits::ReservableCurrency;
 		for (key, value) in ContractInfoOf::<T, OldContractInfo<T>>::iter() {
 			let reserved = T::Currency::reserved_balance(&key);
-			ensure!(reserved >= value.storage_deposit, "Reserved balance out of sync.");
+			ensure!(reserved >= value.storage_deposit, DispatchError::Other("Reserved balance out of sync."));
 		}
 		Ok(())
 	}

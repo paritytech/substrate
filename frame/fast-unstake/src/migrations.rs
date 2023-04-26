@@ -65,8 +65,8 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			assert_eq!(Pallet::<T>::on_chain_storage_version(), 0);
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+			ensure!(Pallet::<T>::on_chain_storage_version() == 0, DispatchError::Other("The onchain storage version must be zero for the migration to execute."));
 			Ok(Default::default())
 		}
 

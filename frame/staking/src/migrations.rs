@@ -58,10 +58,10 @@ pub mod v13 {
 	pub struct MigrateToV13<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV13<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == ObsoleteReleases::V12_0_0,
-				"Required v12 before upgrading to v13"
+				DispatchError::Other("Required v12 before upgrading to v13")
 			);
 
 			Ok(Default::default())
@@ -114,16 +114,16 @@ pub mod v12 {
 	pub struct MigrateToV12<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV12<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == ObsoleteReleases::V11_0_0,
-				"Expected v11 before upgrading to v12"
+				DispatchError::Other("Expected v11 before upgrading to v12")
 			);
 
 			if HistoryDepth::<T>::exists() {
 				frame_support::ensure!(
 					T::HistoryDepth::get() == HistoryDepth::<T>::get(),
-					"Provided value of HistoryDepth should be same as the existing storage value"
+					DispatchError::Other("Provided value of HistoryDepth should be same as the existing storage value")
 				);
 			} else {
 				log::info!("No HistoryDepth in storage; nothing to remove");
@@ -170,16 +170,16 @@ pub mod v11 {
 		for MigrateToV11<T, P, N>
 	{
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == ObsoleteReleases::V10_0_0,
-				"must upgrade linearly"
+				DispatchError::Other("must upgrade linearly")
 			);
 			let old_pallet_prefix = twox_128(N::get().as_bytes());
 
 			frame_support::ensure!(
 				sp_io::storage::next_key(&old_pallet_prefix).is_some(),
-				"no data for the old pallet name has been detected"
+				DispatchError::Other("no data for the old pallet name has been detected")
 			);
 
 			Ok(Default::default())
@@ -332,10 +332,10 @@ pub mod v9 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == ObsoleteReleases::V8_0_0,
-				"must upgrade linearly"
+				DispatchError::Other("must upgrade linearly")
 			);
 
 			let prev_count = T::VoterList::count();

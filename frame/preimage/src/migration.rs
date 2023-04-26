@@ -78,8 +78,8 @@ pub mod v1 {
 
 	impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			assert_eq!(StorageVersion::get::<Pallet<T>>(), 0, "can only upgrade from version 0");
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+			ensure!(StorageVersion::get::<Pallet<T>>() == 0, DispatchError::Other("can only upgrade from version 0"));
 
 			let images = v0::image_count::<T>().expect("v0 storage corrupted");
 			log::info!(target: TARGET, "Migrating {} images", &images);

@@ -43,10 +43,10 @@ pub mod v1 {
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			let onchain = Pallet::<T>::on_chain_storage_version();
 
-			ensure!(onchain < 1, "this migration can be deleted");
+			ensure!(onchain < 1, DispatchError::Other("this migration can be deleted"));
 
 			log!(info, "Number of calls to refund and delete: {}", Calls::<T>::iter().count());
 
