@@ -4341,12 +4341,9 @@ fn deposit_limit_in_nested_instantiate() {
 		//  - callee instantiation deposit = (callee_info_len + 2)
 		//  - callee account ED
 		//  - for writing an item of 1 byte to storage = 3 Balance
-		//
-		//  Still, the latter is to be charged at the end of the call stack, hence
-		//  only (callee_info_len + 2 + ED) is charged so far
 		assert_eq!(
 			<Test as Config>::Currency::free_balance(&BOB),
-			1_000_000 - (callee_info_len + 2 + ED)
+			1_000_000 - (callee_info_len + 2 + ED + 3)
 		);
 		// Check that deposit due to be charged still includes these 3 Balance
 		assert_eq!(result.storage_deposit.charge_or_zero(), (callee_info_len + 2 + ED + 3),)
