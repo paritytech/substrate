@@ -239,7 +239,7 @@ impl PalletCmd {
 			&executor,
 			"Benchmark_benchmark_metadata",
 			&(self.extra).encode(),
-			extensions(),
+			&mut extensions(),
 			&sp_state_machine::backend::BackendRuntimeCode::new(state).runtime_code()?,
 			CallContext::Offchain,
 		)
@@ -375,7 +375,7 @@ impl PalletCmd {
 							1,    // no need to do internal repeats
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						CallContext::Offchain,
@@ -415,7 +415,7 @@ impl PalletCmd {
 							self.repeat,
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						CallContext::Offchain,
@@ -447,7 +447,7 @@ impl PalletCmd {
 							self.repeat,
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						CallContext::Offchain,

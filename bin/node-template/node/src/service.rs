@@ -184,7 +184,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			sc_offchain::OffchainWorkers::new(sc_offchain::OffchainWorkerOptions {
 				runtime_api_provider: client.clone(),
 				is_validator: config.role.is_authority(),
-				keystore: Some(keystore_container.sync_keystore()),
+				keystore: Some(keystore_container.keystore()),
 				offchain_db: backend.offchain_storage(),
 				transaction_pool: Some(transaction_pool.clone()),
 				network_provider: network.clone(),

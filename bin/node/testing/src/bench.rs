@@ -40,6 +40,7 @@ use kitchensink_runtime::{
 };
 use node_primitives::Block;
 use sc_block_builder::BlockBuilderProvider;
+use sc_client_api::execution_extensions::ExecutionExtensions;
 use sc_client_db::PruningMode;
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult, ImportedAux};
 use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod, WasmtimeInstantiationStrategy};
@@ -410,10 +411,7 @@ impl BenchDb {
 			genesis_block_builder,
 			None,
 			None,
-			ExecutionExtensions::new(
-				None,
-				Arc::new(executor),
-			),
+			ExecutionExtensions::new(None, Arc::new(executor)),
 			Box::new(task_executor.clone()),
 			None,
 			None,

@@ -87,7 +87,7 @@ fn construct_block(
 		&new_native_or_wasm_executor(),
 		"Core_initialize_block",
 		&header.encode(),
-		Default::default(),
+		&mut Default::default(),
 		&runtime_code,
 		CallContext::Onchain,
 	)
@@ -101,7 +101,7 @@ fn construct_block(
 			&new_native_or_wasm_executor(),
 			"BlockBuilder_apply_extrinsic",
 			&tx.encode(),
-			Default::default(),
+			&mut Default::default(),
 			&runtime_code,
 			CallContext::Onchain,
 		)
@@ -115,7 +115,7 @@ fn construct_block(
 		&new_native_or_wasm_executor(),
 		"BlockBuilder_finalize_block",
 		&[],
-		Default::default(),
+		&mut Default::default(),
 		&runtime_code,
 		CallContext::Onchain,
 	)
@@ -188,7 +188,7 @@ fn construct_genesis_should_work_with_native() {
 		&new_native_or_wasm_executor(),
 		"Core_execute_block",
 		&b1data,
-		Default::default(),
+		&mut Default::default(),
 		&runtime_code,
 		CallContext::Onchain,
 	)
@@ -221,7 +221,7 @@ fn construct_genesis_should_work_with_wasm() {
 		&new_native_or_wasm_executor(),
 		"Core_execute_block",
 		&b1data,
-		Default::default(),
+		&mut Default::default(),
 		&runtime_code,
 		CallContext::Onchain,
 	)
@@ -254,7 +254,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 		&new_native_or_wasm_executor(),
 		"Core_execute_block",
 		&b1data,
-		Default::default(),
+		&mut Default::default(),
 		&runtime_code,
 		CallContext::Onchain,
 	)

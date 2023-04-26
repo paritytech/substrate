@@ -1174,6 +1174,7 @@ mod tests {
 		let backend = trie_backend::tests::test_trie(state_version, None, None);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
+		let mut execution_extensions = &mut Default::default();
 
 		let mut state_machine = StateMachine::new(
 			&backend,
@@ -1185,7 +1186,7 @@ mod tests {
 			},
 			"test",
 			&[],
-			Default::default(),
+			&mut execution_extensions,
 			&wasm_code,
 			CallContext::Offchain,
 		);
@@ -1202,6 +1203,7 @@ mod tests {
 		let backend = trie_backend::tests::test_trie(state_version, None, None);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
+		let mut execution_extensions = &mut Default::default();
 
 		let mut state_machine = StateMachine::new(
 			&backend,
@@ -1213,7 +1215,7 @@ mod tests {
 			},
 			"test",
 			&[],
-			Default::default(),
+			&mut execution_extensions,
 			&wasm_code,
 			CallContext::Offchain,
 		);
