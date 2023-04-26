@@ -785,30 +785,66 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// ## Usage
 ///
-/// The attribute should be attached to an impl block (in `syn` parlance, an [`ItemImpl`]).
-/// This is the impl block that we are injecting with defaults in the event of missing trait
-/// items. The sole argument to the attribute should be a path to a valid
-/// [`#[register_default_impl]`](`macro@register_default_impl`) call that is attached to an
-/// impl containing defaults.
+/// The attribute should be attached to an impl block (strictly speaking a `syn::ItemImpl`) for
+/// which we want to inject defaults in the event of missing trait items in the block.
+///
+/// The attribute takes two arguments separated by a comma (and an optional trailing comma
+/// after the second argument), with the general form:
+///
+/// ```ignore
+/// #[derive_impl(foreign_path, disambiguation_path)]
+/// impl SomeTrait for SomeStruct {
+/// 	...
+/// }
+/// ```
+///
+/// The first argument, called the `foreign_path`, should be the path to an impl registered via
+/// [`#[register_default_impl]`](`macro@register_default_impl`) that contains the default trait
+/// items we want to potentially inject.
+///
+/// The second argument, called the `disambiguation_path`, should be the path to a trait that
+/// will be used to qualify all default entries that are injected into the local impl. For
+/// example if your `foreign_path` is `some::path::TestTrait` and your `disambiguation_path` is
+/// `another::path::DefaultTrait`, any items injected into the local impl will be qualified as
+/// `<some::path::TestTrait as another::path::DefaultTrait>::specific_trait_item`. You can also
+/// provide just an ident as the `disambiguation_path`, in which case your
+/// `disambiguation_path` will be assumed to be
+/// `#your_pallet_crate::pallet::#IdentYouSpecified`. Thus if you want your
+/// `disambiguation_path` to be `balances::pallet::DefaultConfig`, you can just specify
+/// `DefaultConfig` and the macro will automatically fill in the leading path items.
+///
+/// You can also make use of `#[pallet::no_default]` on specific items in your foreign trait
+/// that you want to ensure will not be copied over but that you nonetheless want to use
+/// locally in the context of the foreign trait and the pallet (or context) in which it is
+/// defined
 ///
 /// ## Expansion
 ///
 /// The macro will expand to the local impl, with any extra items from the foreign impl that
-/// aren't present in the local impl also included.
+/// aren't present in the local impl also included. In the case of a colliding item, the
+/// version of the item that exists in the local impl will be retained.
+///
+/// ## Handling of Unnamed Trait Items
+///
+/// Items that lack a `syn::Ident` for whatever reason are first checked to see if they
+/// exist, verbatim, in the local/destination trait before they are copied over, so you should
+/// not need to worry about collisions between identical unnamed items.
 ///
 /// ## Use-Case: Auto-Derive Test Pallet Config Traits
 ///
-/// Though the machinery behind is general enough to use on any set of traits, a ma
+/// The `#[derive_imp(..)]` attribute can be used to derive a test pallet `Config` based on an
+/// existing pallet `Config` that has been marked with
+/// [`#[pallet::default_config]`](`macro@default_config`) (which under the hood, generates a
+/// `DefaultConfig` trait in the pallet in which the macro was invoked).
 ///
-/// This attribute can be used to derive a test pallet `Config` based on an existing pallet
-/// `Config` that has been marked with [`#[pallet::default_config]`](`macro@default_config`).
+/// In this case, the `#[derive_impl(..)]` attribute should be attached to an `impl` block that
+/// implements a compatible `Config` such as `frame_system::Config` for a test/mock runtime, and
+/// should receive as its first argument the path to a `DefaultConfig` impl that has been registered
+/// via [`#[register_default_impl]`](`macro@register_default_impl`), and as its second argument,
+/// the path to the auto-generated `DefaultConfig` for the existing pallet `Config` we want to
+/// base our test config off of.
 ///
-/// The attribute should be attached to an `impl` block that implements a compatible `Config`
-/// such as `frame_system::Config` for a test/mock runtime, and should receive as its only
-/// argument the path to a `DefaultConfig` impl that has been registered via
-/// [`#[register_default_impl]`](`macro@register_default_impl`).
-///
-/// Consider the following taken from the basic example pallet:
+/// Consider the following taken from the `basic` example pallet:
 ///
 /// ```ignore
 /// #[derive_impl(
@@ -829,8 +865,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// }
 /// ```
 ///
-/// where `TestDefaultConfig` was defined and registered as
-/// follows:
+/// where `TestDefaultConfig` was defined and registered as follows:
 ///
 /// ```ignore
 /// pub struct TestDefaultConfig {}
@@ -897,8 +932,8 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// [`#[pallet::default_config]`](`macro@default_config`) are automatically copied from the
 /// foreign trait (in this case `TestDefaultConfig`) into the local trait impl (in this case
 /// `Test`), unless the trait item in the local trait impl is marked with
-/// [`#[pallet::no_default]`], in which case it cannot be overridden, and any attempts to do so
-/// will result in a compiler error.
+/// [`#[pallet::no_default]`](`macro@default_config`), in which case it cannot be overridden,
+/// and any attempts to do so will result in a compiler error.
 #[import_tokens_attr(frame_support::macro_magic)]
 #[with_custom_parsing(derive_impl::DeriveImplAttrArgs)]
 #[proc_macro_attribute]
