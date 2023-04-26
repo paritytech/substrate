@@ -95,7 +95,7 @@ where
 		attr.path
 			.segments
 			.first()
-			.map_or(false, |segment| segment.ident == "call_entry")
+			.map_or(false, |segment| segment.ident == "view_entry")
 	}) {
 		let interface_attr = attrs.remove(index);
 		Ok(Some(syn::parse2(interface_attr.into_token_stream())?))

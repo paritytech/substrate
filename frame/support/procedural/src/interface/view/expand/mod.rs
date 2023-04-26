@@ -32,18 +32,22 @@ pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 		.zip(indices)
 		.for_each(|(var, index)| var.attrs.push(syn::parse_quote!(#[codec(index = #index)])));
 
+	def.item.attrs.push(
+		syn::parse_quote!(#[derive(#frame_support::codec::Decode, #frame_support::codec::Encode, Clone, PartialEq, Eq)]),
+	);
+
 	let impl_item = quote::quote_spanned!(def.span =>
 		impl #frame_support::interface::View for #enum_name {
-			fn view(self, selectable: #sp_core::H256) -> #frame_support::interface::ViewResult {
+			fn view(self, selectable: #sp_core::H256) -> #frame_support::interface::ViewResult<Vec<u8>> {
 				todo!()
 			}
 		}
 
 		// Evaluate if the given index actually matches the standard defined index and trigger
 		// a warning otherwise.
-		const _: () {
+		const _: () = {
 
-		}
+		};
 	);
 
 	let enum_item = def.item.into_token_stream();

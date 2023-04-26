@@ -182,7 +182,7 @@ impl<T> Select<T> {
 }
 
 mod tests {
-	use crate::interface::{CallResult, Core, Select, SelectorResult, ViewResult, ViewableViewFor};
+	use crate::interface::{CallResult, Core, Select, SelectorResult, ViewResult};
 	use sp_core::H256;
 
 	#[derive(Clone, PartialOrd, PartialEq, Eq, Ord)]
@@ -251,7 +251,7 @@ mod tests {
 		}
 	}
 
-	#[frame_support::call_entry]
+	#[frame_support::call_entry(Runtime)]
 	pub enum Call {
 		#[call_entry::index(20)]
 		Pip20(int_123::Call<Runtime>),
@@ -259,7 +259,7 @@ mod tests {
 
 	#[frame_support::view_entry]
 	pub enum View {
-		#[call_entry::index(20)]
+		#[view_entry::index(20)]
 		Pip20(int_123::View<Runtime>),
 	}
 

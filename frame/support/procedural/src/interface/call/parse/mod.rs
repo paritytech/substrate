@@ -24,10 +24,11 @@ pub struct Def {
 	pub span: proc_macro2::Span,
 	pub variants: Vec<VariantDef>,
 	pub frame_support: syn::Ident,
+	pub runtime: syn::Ident,
 	pub sp_core: syn::Ident,
 }
 impl Def {
-	pub fn try_from(mut item: syn::ItemEnum) -> syn::Result<Self> {
+	pub fn try_from(mut item: syn::ItemEnum, runtime: syn::Ident) -> syn::Result<Self> {
 		let item_span = item.span();
 		let frame_support = generate_crate_access_2018("frame-support")?;
 		let sp_core = generate_crate_access_2018("sp-core")?;
@@ -110,7 +111,7 @@ impl Def {
 			})
 		}
 
-		Ok(Def { item, span: item_span, variants, frame_support, sp_core })
+		Ok(Def { item, span: item_span, variants, frame_support, sp_core, runtime })
 	}
 }
 

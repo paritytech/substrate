@@ -25,6 +25,7 @@ pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 	let frame_support = def.frame_support;
 	let sp_core = def.sp_core;
 	let enum_name = def.item.ident.clone();
+	let runtime = def.runtime.clone();
 
 	def.item
 		.variants
@@ -33,7 +34,7 @@ pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 		.for_each(|(var, index)| var.attrs.push(syn::parse_quote!(#[codec(index = #index)])));
 
 	def.item.attrs.push(
-		syn::parse_quote!(#[derive(#frame_support::codec::Decode, #frame_support::codec::Encode)]),
+		syn::parse_quote!(#[derive(#frame_support::codec::Decode, #frame_support::codec::Encode, Clone, PartialEq, Eq)]),
 	);
 
 	let impl_item = quote::quote_spanned!(def.span =>
@@ -46,16 +47,20 @@ pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 
 
 		impl #frame_support::interface::Call for #enum_name {
-			type RuntimeOrigin = <#generic as #frame_support::interface::Core>::RuntimeOrigin;
+			type RuntimeOrigin = <#runtime as #frame_support::interface::Core>::RuntimeOrigin;
 
 			fn call(self, origin: Self::RuntimeOrigin, selectable: #sp_core::H256) -> #frame_support::interface::CallResult {
 				todo!()
 			}
 		}
 
-		/*
+		impl #frame_support::interface::Core for #enum_name {
+			type RuntimeOrigin = <#runtime as #frame_support::interface::Core>::RuntimeOrigin;
+		}
 
-		impl #frame_support::traits::metadata::GetCallMetadata for #enum_name {
+
+
+		impl #frame_support::traits::GetCallMetadata for #enum_name {
 			fn get_module_names() -> &'static [&'static str] {
 				todo!()
 			}
@@ -64,17 +69,17 @@ pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 				todo!()
 			}
 
-			fn get_call_metadata(&self) -> CallMetadata {
+			fn get_call_metadata(&self) -> #frame_support::traits::CallMetadata {
 				todo!()
 			}
 		}
 
+
 		// Evaluate if the given index actually matches the standard defined index and trigger
 		// a warning otherwise.
-		const _: () {
+		const _: () = {
 
-		}
-		 */
+		};
 	);
 
 	let enum_item = def.item.into_token_stream();

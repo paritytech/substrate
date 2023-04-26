@@ -24,7 +24,6 @@ pub fn view_entry(
 	attr: proc_macro::TokenStream,
 	item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-	/*
 	if !attr.is_empty() {
 		let msg = "Invalid interface macro call: unexpected attribute. Macro call must be \
 				bare, such as `#[frame_support::view_entry]` or `#[view_entry]`.";
@@ -37,7 +36,4 @@ pub fn view_entry(
 		Ok(def) => expand::expand(def).into(),
 		Err(e) => e.to_compile_error().into(),
 	}
-	 */
-
-	quote::quote!().into()
 }
