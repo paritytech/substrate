@@ -3492,7 +3492,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.18.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8fee8c27c6fde0e9d384afac891bf45d97dbff3a"
 dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-http-client",
@@ -3506,7 +3506,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-client-transport"
 version = "0.18.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8fee8c27c6fde0e9d384afac891bf45d97dbff3a"
 dependencies = [
  "futures-util",
  "http",
@@ -3524,7 +3524,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-core"
 version = "0.18.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8fee8c27c6fde0e9d384afac891bf45d97dbff3a"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -3550,7 +3550,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-client"
 version = "0.18.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8fee8c27c6fde0e9d384afac891bf45d97dbff3a"
 dependencies = [
  "async-trait",
  "hyper",
@@ -3568,7 +3568,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.18.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8fee8c27c6fde0e9d384afac891bf45d97dbff3a"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -3580,7 +3580,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-server"
 version = "0.18.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8fee8c27c6fde0e9d384afac891bf45d97dbff3a"
 dependencies = [
  "futures-util",
  "hyper",
@@ -3599,7 +3599,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.18.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8fee8c27c6fde0e9d384afac891bf45d97dbff3a"
 dependencies = [
  "anyhow",
  "beef",
@@ -3612,7 +3612,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.18.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-rpc-module-close-race#c27f0cee306f88fdfc29eb10bd9a571133a4c1d8"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8fee8c27c6fde0e9d384afac891bf45d97dbff3a"
 dependencies = [
  "http",
  "jsonrpsee-client-transport",
@@ -12235,7 +12235,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
  "digest 0.10.6",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
