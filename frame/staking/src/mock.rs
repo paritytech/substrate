@@ -55,6 +55,7 @@ pub(crate) type AccountId = u64;
 pub(crate) type AccountIndex = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u128;
+pub(crate) type T = Test;
 
 /// Another session handler struct to test on_disabled.
 pub struct OtherSessionHandler;
@@ -522,6 +523,7 @@ impl ExtBuilder {
 				(100, self.balance_factor * 2000),
 				(101, self.balance_factor * 2000),
 				// aux accounts
+				(66, self.balance_factor * 1000),
 				(60, self.balance_factor),
 				(61, self.balance_factor * 2000),
 				(70, self.balance_factor),

@@ -146,19 +146,17 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn on_validator_remove(who: &T::AccountId) {
 		// defensive based on the contract that staking would not call insert/updates mistakenly.
 		let _ = T::VoterList::on_remove(who)
-			.defensive_proof("non-existent validator would be removed; qed");
+			.defensive_proof("non-existent validator would not be removed; qed");
 	}
 
 	fn on_nominator_remove(who: &T::AccountId, _nominations: Vec<T::AccountId>) {
 		// defensive based on the contract that staking would not call insert/updates mistakenly.
 		let _ = T::VoterList::on_remove(who)
-			.defensive_proof("non-existent nominator would bot be removed; qed");
+			.defensive_proof("non-existent nominator would not be removed; qed");
 	}
 
 	fn on_unstake(who: &T::AccountId) {
-		if T::VoterList::contains(who) {
-			defensive!("existent voter cannot be unstaked; qed");
-		}
+		let _ = T::VoterList::on_remove(who);
 	}
 }
 
