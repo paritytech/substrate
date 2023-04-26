@@ -387,12 +387,10 @@ mod tests {
 
 		// then
 		assert_eq!(pool.0.status().ready, 1);
-		assert!(
-			matches!(
-				pool.0.ready().next().unwrap().data().function,
-				RuntimeCall::SubstrateTest(PalletCall::storage_change { .. })
-			)
-		);
+		assert!(matches!(
+			pool.0.ready().next().unwrap().data().function,
+			RuntimeCall::SubstrateTest(PalletCall::storage_change { .. })
+		));
 	}
 
 	#[test]

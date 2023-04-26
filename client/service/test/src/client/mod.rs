@@ -1737,7 +1737,8 @@ fn storage_keys_prefix_and_start_key_works() {
 fn storage_keys_works() {
 	sp_tracing::try_init_simple();
 
-	let expected_keys = substrate_test_runtime::storage_key_generator::get_expected_keys();
+	let expected_keys =
+		substrate_test_runtime::storage_key_generator::get_expected_storage_hashed_keys();
 
 	let client = substrate_test_runtime_client::new();
 	let block_hash = client.info().best_hash;

@@ -17,6 +17,9 @@
 
 use crate::AuthorityId;
 use frame_support::{pallet_prelude::*, storage};
+use sp_runtime::transaction_validity::{
+	InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
+};
 use sp_std::prelude::*;
 
 pub use self::pallet::*;
@@ -222,10 +225,6 @@ pub mod pallet {
 		}
 	}
 }
-
-use sp_runtime::transaction_validity::{
-	InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
-};
 
 pub fn validate_runtime_call<T: pallet::Config>(call: &pallet::Call<T>) -> TransactionValidity {
 	log::trace!(target: LOG_TARGET, "validate_runtime_call {call:?}");
