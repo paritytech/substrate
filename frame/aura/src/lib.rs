@@ -139,8 +139,8 @@ pub mod pallet {
 	/// If this is `false`, the pallet will require that subsequent blocks always have higher slots
 	/// than previous ones.
 	///
-	/// Regardless of the setting of this storage value, the pallet will always enforce the invariant
-	/// that slots don't move backwards as the chain progresses.
+	/// Regardless of the setting of this storage value, the pallet will always enforce the
+	/// invariant that slots don't move backwards as the chain progresses.
 	///
 	/// The typical value for this should be 'false' unless this pallet is being augmented by
 	/// another pallet which enforces some limitation on the number of blocks authors can create

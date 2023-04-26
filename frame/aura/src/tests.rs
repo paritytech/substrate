@@ -56,9 +56,7 @@ fn disabled_validators_cannot_author_blocks() {
 }
 
 #[test]
-#[should_panic(
-	expected = "Slot must increase"
-)]
+#[should_panic(expected = "Slot must increase")]
 fn pallet_requires_slot_to_increase_unless_allowed() {
 	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
 		let slot = Slot::from(1);
@@ -93,9 +91,7 @@ fn pallet_can_allow_unchanged_slot() {
 }
 
 #[test]
-#[should_panic(
-	expected = "Slot must not decrease"
-)]
+#[should_panic(expected = "Slot must not decrease")]
 fn pallet_always_rejects_decreasing_slot() {
 	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
 		let slot = Slot::from(2);
