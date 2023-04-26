@@ -30,7 +30,7 @@ use crate::{
 	DeletionQueueCounter, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
-use codec::Encode;
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	assert_err, assert_err_ignore_postinfo, assert_noop, assert_ok,
 	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
@@ -44,6 +44,7 @@ use frame_support::{
 };
 use frame_system::{EventRecord, Phase};
 use pretty_assertions::{assert_eq, assert_ne};
+use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
@@ -321,7 +322,7 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
+	type HoldIdentifier = HoldIdentifier;
 	type MaxHolds = ();
 }
 
@@ -367,6 +368,13 @@ impl Default for Filters {
 	}
 }
 
+#[derive(
+	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, Debug, TypeInfo,
+)]
+pub enum HoldIdentifier {
+	StorageDepositReserve,
+}
+
 parameter_types! {
 	static CallFilter: Filters = Default::default();
 }
@@ -385,6 +393,7 @@ impl Contains<RuntimeCall> for TestFilter {
 
 parameter_types! {
 	pub static UnstableInterface: bool = true;
+	pub const HoldReason: HoldIdentifier = HoldIdentifier::StorageDepositReserve;
 }
 
 impl Config for Test {
@@ -407,6 +416,7 @@ impl Config for Test {
 	type MaxStorageKeyLen = ConstU32<128>;
 	type UnsafeUnstableInterface = UnstableInterface;
 	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
+	type HoldReason = HoldReason;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);

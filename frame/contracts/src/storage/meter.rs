@@ -28,7 +28,7 @@ use frame_support::{
 	traits::{
 		fungible::Mutate,
 		tokens::{Fortitude::Polite, Preservation, WithdrawConsequence},
-		Currency, ExistenceRequirement, Get,
+		Get,
 	},
 	DefaultNoBound, RuntimeDebugNoBound,
 };

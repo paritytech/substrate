@@ -112,8 +112,8 @@ use frame_support::{
 	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
 	ensure,
 	traits::{
-		fungible::{Inspect, Mutate, MutateHold},
-		ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, Time,
+		fungible::{Inspect, InspectHold, Mutate, MutateHold},
+		ConstU32, Contains, Get, Randomness, Time,
 	},
 	weights::Weight,
 	BoundedVec, WeakBoundedVec,
@@ -300,6 +300,10 @@ pub mod pallet {
 		/// The maximum length of the debug buffer in bytes.
 		#[pallet::constant]
 		type MaxDebugBufferLen: Get<u32>;
+
+		/// The identifier of the hold reason.
+		#[pallet::constant]
+		type HoldReason: Get<<Self::Currency as InspectHold<Self::AccountId>>::Reason>;
 	}
 
 	#[pallet::hooks]
@@ -854,6 +858,14 @@ pub mod pallet {
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
+	}
+
+	/// A reason for the pallet contracts placing a hold on funds.
+	#[pallet::composite_enum]
+	pub enum HoldReason {
+		/// The Pallet has reserved it for storage deposit.
+		#[codec(index = 0)]
+		StorageDepositReserve,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
