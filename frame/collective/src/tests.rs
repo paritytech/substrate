@@ -90,10 +90,13 @@ pub type MaxMembers = ConstU32<100>;
 parameter_types! {
 	pub const MotionDuration: u64 = 3;
 	pub const MaxProposals: u32 = 257;
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(Weight::MAX);
+	pub static MaxProposalWeight: Weight = default_max_proposal_weight();
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type BlockWeights = ();
+	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
@@ -127,6 +130,7 @@ impl Config<Instance1> for Test {
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
 	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
+	type MaxProposalWeight = MaxProposalWeight;
 }
 impl Config<Instance2> for Test {
 	type RuntimeOrigin = RuntimeOrigin;
@@ -138,6 +142,7 @@ impl Config<Instance2> for Test {
 	type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
 	type WeightInfo = ();
 	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
+	type MaxProposalWeight = MaxProposalWeight;
 }
 impl mock_democracy::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -153,6 +158,7 @@ impl Config for Test {
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
 	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
+	type MaxProposalWeight = MaxProposalWeight;
 }
 
 pub struct ExtBuilder {}
@@ -201,11 +207,45 @@ fn record(event: RuntimeEvent) -> EventRecord<RuntimeEvent, H256> {
 	EventRecord { phase: Phase::Initialization, event, topics: vec![] }
 }
 
+fn default_max_proposal_weight() -> Weight {
+	sp_runtime::Perbill::from_percent(80) * BlockWeights::get().max_block
+}
+
 #[test]
 fn motions_basic_environment_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		assert_eq!(Collective::members(), vec![1, 2, 3]);
 		assert_eq!(*Collective::proposals(), Vec::<H256>::new());
+	});
+}
+
+#[test]
+fn proposal_weight_limit_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		let proposal = make_proposal(42);
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+
+		assert_ok!(Collective::propose(
+			RuntimeOrigin::signed(1),
+			2,
+			Box::new(proposal.clone()),
+			proposal_len
+		));
+
+		// set a small limit for max proposal weight.
+		MaxProposalWeight::set(Weight::from_parts(1, 1));
+		assert_noop!(
+			Collective::propose(
+				RuntimeOrigin::signed(1),
+				2,
+				Box::new(proposal.clone()),
+				proposal_len
+			),
+			Error::<Test, Instance1>::WrongProposalWeight
+		);
+
+		// reset the max weight to default.
+		MaxProposalWeight::set(default_max_proposal_weight());
 	});
 }
 

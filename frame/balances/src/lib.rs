@@ -337,6 +337,10 @@ pub mod pallet {
 		Locked { who: T::AccountId, amount: T::Balance },
 		/// Some balance was unlocked.
 		Unlocked { who: T::AccountId, amount: T::Balance },
+		/// Some balance was frozen.
+		Frozen { who: T::AccountId, amount: T::Balance },
+		/// Some balance was thawed.
+		Thawed { who: T::AccountId, amount: T::Balance },
 	}
 
 	#[pallet::error]
@@ -1084,7 +1088,10 @@ pub mod pallet {
 			who: &T::AccountId,
 			freezes: BoundedSlice<IdAmount<T::FreezeIdentifier, T::Balance>, T::MaxFreezes>,
 		) -> DispatchResult {
+			let mut prev_frozen = Zero::zero();
+			let mut after_frozen = Zero::zero();
 			let (_, maybe_dust) = Self::mutate_account(who, |b| {
+				prev_frozen = b.frozen;
 				b.frozen = Zero::zero();
 				for l in Locks::<T, I>::get(who).iter() {
 					b.frozen = b.frozen.max(l.amount);
@@ -1092,12 +1099,20 @@ pub mod pallet {
 				for l in freezes.iter() {
 					b.frozen = b.frozen.max(l.amount);
 				}
+				after_frozen = b.frozen;
 			})?;
 			debug_assert!(maybe_dust.is_none(), "Not altering main balance; qed");
 			if freezes.is_empty() {
 				Freezes::<T, I>::remove(who);
 			} else {
 				Freezes::<T, I>::insert(who, freezes);
+			}
+			if prev_frozen > after_frozen {
+				let amount = prev_frozen.saturating_sub(after_frozen);
+				Self::deposit_event(Event::Thawed { who: who.clone(), amount });
+			} else if after_frozen > prev_frozen {
+				let amount = after_frozen.saturating_sub(prev_frozen);
+				Self::deposit_event(Event::Frozen { who: who.clone(), amount });
 			}
 			Ok(())
 		}

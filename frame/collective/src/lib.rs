@@ -217,6 +217,10 @@ pub mod pallet {
 
 		/// Origin allowed to set collective members
 		type SetMembersOrigin: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
+
+		/// The maximum weight of a dispatch call that can be proposed and executed.
+		#[pallet::constant]
+		type MaxProposalWeight: Get<Weight>;
 	}
 
 	#[pallet::genesis_config]
@@ -667,6 +671,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<(u32, DispatchResultWithPostInfo), DispatchError> {
 		let proposal_len = proposal.encoded_size();
 		ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		ensure!(
+			proposal_weight.all_lte(T::MaxProposalWeight::get()),
+			Error::<T, I>::WrongProposalWeight
+		);
 
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
@@ -689,6 +698,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<(u32, u32), DispatchError> {
 		let proposal_len = proposal.encoded_size();
 		ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		ensure!(
+			proposal_weight.all_lte(T::MaxProposalWeight::get()),
+			Error::<T, I>::WrongProposalWeight
+		);
 
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);

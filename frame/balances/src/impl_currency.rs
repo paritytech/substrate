@@ -16,6 +16,9 @@
 // limitations under the License.
 
 //! Implementations for the `Currency` family of traits.
+//!
+//! Note that `WithdrawReasons` are intentionally not used for anything in this implementation and
+//! are expected to be removed in the near future, once migration to `fungible::*` traits is done.
 
 use super::*;
 use frame_support::{
