@@ -315,7 +315,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Create or keep an account for `who` of asset `id` with a deposit taken from `depositor` as
 	/// an existence reason.
-	/// Refunds any existence reason if an account for `who` already exist.
+	/// Prior taking a new deposit for an existing account, refunds the current existence reason.
 	/// The `caller` must be an account holder `who`, the asset class's Freezer or Admin.
 	pub(super) fn do_touch(
 		id: T::AssetId,
@@ -328,28 +328,30 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			depositor == who || depositor == &details.freezer || depositor == &details.admin,
 			Error::<T, I>::NoPermission
 		);
-		let mut account = if let Some(mut account) = Account::<T, I>::get(id, who) {
-			// drop any possible existence reason.
-			if let Some((old_depositor, deposit)) = account.reason.take_deposit(who) {
-				T::Currency::unreserve(&old_depositor, deposit);
+		let deposit = T::AssetAccountDeposit::get();
+		let account = if let Some(mut account) = Account::<T, I>::get(id, who) {
+			// drop any possible existence reason and take a deposit as a new existence reason.
+			if let Some((old_depositor, old_deposit)) = account.reason.take_deposit(who) {
+				T::Currency::unreserve(&old_depositor, old_deposit);
 			}
-			// should never fail.
+			// should never fail since we took a deposit.
 			ensure!(
 				Remove.eq(&Self::dead_account(who, &mut details, &account.reason, false)),
 				Error::<T, I>::AlreadyExists
 			);
+			T::Currency::reserve(depositor, deposit)?;
+			account.reason = Self::new_account(who, &mut details, Some((depositor, deposit)))?;
 			account
 		} else {
+			// create an account with a deposit.
+			T::Currency::reserve(depositor, deposit)?;
 			AssetAccountOf::<T, I> {
 				balance: Zero::zero(),
 				is_frozen: false,
-				reason: ExistenceReason::DepositRefunded,
+				reason: Self::new_account(who, &mut details, Some((depositor, deposit)))?,
 				extra: T::Extra::default(),
 			}
 		};
-		let deposit = T::AssetAccountDeposit::get();
-		account.reason = Self::new_account(who, &mut details, Some((depositor, deposit)))?;
-		T::Currency::reserve(depositor, deposit)?;
 		Asset::<T, I>::insert(&id, details);
 		Account::<T, I>::insert(id, who, account);
 		Ok(())
