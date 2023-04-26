@@ -125,7 +125,7 @@ where
 }
 
 /// A type that calculates the deposit base for signed election submissions.
-pub trait DepositBase<Balance> {
+pub trait SignedDepositBase<Balance> {
 	/// Returns the value of the deposit base given a number of queued signed solutions.
 	fn calculate(queue_len: usize) -> Balance;
 }

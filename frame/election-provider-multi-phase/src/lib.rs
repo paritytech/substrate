@@ -253,7 +253,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchError, ModuleError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
+	DispatchError, ModuleError, PerThing, Perbill, Percent, RuntimeDebug, SaturatedConversion,
 };
 use sp_std::prelude::*;
 
@@ -565,7 +565,7 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 	use frame_election_provider_support::{
-		traits::DepositBase, InstantElectionProvider, NposSolver,
+		traits::SignedDepositBase, InstantElectionProvider, NposSolver,
 	};
 	use frame_support::{pallet_prelude::*, traits::EstimateCallFee};
 	use frame_system::pallet_prelude::*;
@@ -646,8 +646,16 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedRewardBase: Get<BalanceOf<Self>>;
 
-		/// Base deposit for a signed solution.
-		type SignedDepositBase: DepositBase<BalanceOf<Self>>;
+		/// Fixed base deposit for a signed solution.
+		#[pallet::constant]
+		type SignedFixedDepositBase: Get<BalanceOf<Self>>;
+
+		/// Increase factor of the geometric increase of the base deposit.
+		///
+		/// If 0, then signed base deposit remains constans regardless of the submissions queue size
+		/// (and equal to `SignedFixedDepositBase`).
+		#[pallet::constant]
+		type SignedDepositBaseIncreaseFactor: Get<Percent>;
 
 		/// Per-byte deposit for a signed solution.
 		#[pallet::constant]
@@ -673,6 +681,9 @@ pub mod pallet {
 		/// Note: This must always be greater or equal to `T::DataProvider::desired_targets()`.
 		#[pallet::constant]
 		type MaxWinners: Get<u32>;
+
+		/// Type that calculates the signed deposit base.
+		type SignedDepositBase: SignedDepositBase<BalanceOf<Self>>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;

@@ -20,7 +20,7 @@ use crate::{self as multi_phase, unsigned::MinerConfig};
 use frame_election_provider_support::{
 	data_provider,
 	onchain::{self},
-	traits::DepositBase,
+	traits::SignedDepositBase,
 	ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
@@ -289,8 +289,9 @@ parameter_types! {
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedMaxRefunds: u32 = 1;
 	// when the solution queue has more than 7 submissions, the base deposit is 2 * `SignedDepositBase`.
-	pub static QueueLenghtDoubleDeposit: usize = 7;
-	pub static SignedDepositBase: Balance = 5;
+	pub static QueueLenghtVariableDeposit: usize = 7;
+	pub static SignedFixedDepositBase: Balance = 5;
+	pub static SignedDepositBaseIncreaseFactor: Percent = Percent::from_percent(10);
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
 	pub static SignedRewardBase: Balance = 7;
@@ -397,6 +398,8 @@ impl crate::Config for Runtime {
 	type MinerTxPriority = MinerTxPriority;
 	type SignedRewardBase = SignedRewardBase;
 	type SignedDepositBase = Self;
+	type SignedFixedDepositBase = SignedFixedDepositBase;
+	type SignedDepositBaseIncreaseFactor = SignedDepositBaseIncreaseFactor;
 	type SignedDepositByte = ();
 	type SignedDepositWeight = ();
 	type SignedMaxWeight = SignedMaxWeight;
@@ -418,12 +421,12 @@ impl crate::Config for Runtime {
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }
 
-impl DepositBase<Balance> for Runtime {
+impl SignedDepositBase<BalanceOf<Runtime>> for Runtime {
 	fn calculate(queue_len: usize) -> Balance {
-		if queue_len < QueueLenghtDoubleDeposit::get() {
-			SignedDepositBase::get()
+		if queue_len < QueueLenghtVariableDeposit::get() {
+			SignedFixedDepositBase::get()
 		} else {
-			SignedDepositBase::get() * 2
+			<MultiPhase as SignedDepositBase<BalanceOf<Runtime>>>::calculate(queue_len)
 		}
 	}
 }
@@ -574,8 +577,14 @@ impl ExtBuilder {
 		<SignedMaxSubmissions>::set(count);
 		self
 	}
+	pub fn signed_base_deposit(self, base: u64, queue_len: usize, increase: Percent) -> Self {
+		<QueueLenghtVariableDeposit>::set(queue_len);
+		<SignedFixedDepositBase>::set(base);
+		<SignedDepositBaseIncreaseFactor>::set(increase);
+		self
+	}
 	pub fn signed_deposit(self, base: u64, byte: u64, weight: u64) -> Self {
-		<SignedDepositBase>::set(base);
+		<SignedFixedDepositBase>::set(base);
 		<SignedDepositByte>::set(byte);
 		<SignedDepositWeight>::set(weight);
 		self

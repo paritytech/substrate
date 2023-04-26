@@ -23,7 +23,7 @@ use crate::{
 	SolutionOf, SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Decode, Encode, HasCompact};
-use frame_election_provider_support::{traits::DepositBase, NposSolution};
+use frame_election_provider_support::{traits::SignedDepositBase, NposSolution};
 use frame_support::traits::{
 	defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency,
 };
@@ -32,7 +32,7 @@ use sp_core::bounded::BoundedVec;
 use sp_npos_elections::ElectionScore;
 use sp_runtime::{
 	traits::{Saturating, Zero},
-	RuntimeDebug,
+	FixedPointNumber, FixedU128, Percent, RuntimeDebug,
 };
 use sp_std::{
 	cmp::Ordering,
@@ -349,6 +349,23 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 }
 
+impl<T: Config> SignedDepositBase<BalanceOf<T>> for Pallet<T> {
+	/// Increase the base deposit as a geometric series // todo: finish
+	///
+	/// base value * (1 + increase percentage)^number of iterations
+	fn calculate(queue_len: usize) -> BalanceOf<T> {
+		// increase_factor: (0.x + 1)
+		let increase_factor: FixedU128 =
+			<Percent as Into<FixedU128>>::into(T::SignedDepositBaseIncreaseFactor::get()) +
+				sp_runtime::traits::One::one();
+
+		// fixed * (1 + percent_increase)^queue_len
+		increase_factor
+			.saturating_pow(queue_len)
+			.saturating_mul_int(T::SignedFixedDepositBase::get())
+	}
+}
+
 impl<T: Config> Pallet<T> {
 	/// `Self` accessor for `SignedSubmission<T>`.
 	pub fn signed_submissions() -> SignedSubmissions<T> {
@@ -539,6 +556,7 @@ mod tests {
 	use super::*;
 	use crate::{mock::*, ElectionCompute, ElectionError, Error, Event, Perbill, Phase};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
+	use sp_runtime::Percent;
 
 	#[test]
 	fn cannot_submit_too_early() {
@@ -771,31 +789,75 @@ mod tests {
 	}
 
 	#[test]
-	fn variable_deposit_base_works() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to_signed();
-			assert!(MultiPhase::current_phase().is_signed());
-			assert_eq!(QueueLenghtDoubleDeposit::get(), 7);
-			SignedMaxSubmissions::set(10);
+	fn geometric_deposit_base_works() {
+		let progression_10 = vec![1000, 1100, 1210, 1331, 1464, 1610, 1771, 1948, 2143, 2357];
+		let progression_40 = vec![1000, 1400, 1960, 2744, 3841, 5378, 7529, 10541, 14757, 20661];
 
-			for s in 0..SignedMaxSubmissions::get() {
-				let account = 99 + s as u64;
-				Balances::make_free_balance_be(&account, 100);
-				// score is always decreasing
-				let mut solution = raw_solution();
-				solution.score.minimal_stake -= s as u128;
+		ExtBuilder::default()
+			.signed_max_submission(10)
+			.signed_base_deposit(1000, 0, Percent::from_percent(0))
+			.build_and_execute(|| {
+				roll_to_signed();
+				assert!(MultiPhase::current_phase().is_signed());
 
-				assert_ok!(MultiPhase::submit(RuntimeOrigin::signed(account), Box::new(solution)));
+				for s in 0..SignedMaxSubmissions::get() {
+					let account = 99 + s as u64;
+					Balances::make_free_balance_be(&account, 10000000);
+					let mut solution = raw_solution();
+					solution.score.minimal_stake -= s as u128;
 
-				// checlk if the deposit base is being calculated according to the `DepositBase`
-				// implementation.
-				if MultiPhase::signed_submissions().len() <= QueueLenghtDoubleDeposit::get() {
-					assert_eq!(balances(&account), (95, 5));
-				} else {
-					assert_eq!(balances(&account), (90, 10));
+					assert_ok!(MultiPhase::submit(
+						RuntimeOrigin::signed(account),
+						Box::new(solution)
+					));
+
+					// if increase factor is 0, base deposit is constant with the number of
+					// submissions.
+					assert_eq!(balances(&account).1, SignedFixedDepositBase::get())
 				}
-			}
-		})
+			});
+
+		ExtBuilder::default()
+			.signed_max_submission(10)
+			.signed_base_deposit(1000, 0, Percent::from_percent(10))
+			.build_and_execute(|| {
+				roll_to_signed();
+				assert!(MultiPhase::current_phase().is_signed());
+
+				for s in 0..SignedMaxSubmissions::get() {
+					let account = 99 + s as u64;
+					Balances::make_free_balance_be(&account, 10000000);
+					let mut solution = raw_solution();
+					solution.score.minimal_stake -= s as u128;
+
+					assert_ok!(MultiPhase::submit(
+						RuntimeOrigin::signed(account),
+						Box::new(solution)
+					));
+					assert_eq!(balances(&account).1, progression_10[s as usize])
+				}
+			});
+
+		ExtBuilder::default()
+			.signed_max_submission(10)
+			.signed_base_deposit(1000, 0, Percent::from_percent(40))
+			.build_and_execute(|| {
+				roll_to_signed();
+				assert!(MultiPhase::current_phase().is_signed());
+
+				for s in 0..SignedMaxSubmissions::get() {
+					let account = 99 + s as u64;
+					Balances::make_free_balance_be(&account, 10000000);
+					let mut solution = raw_solution();
+					solution.score.minimal_stake -= s as u128;
+
+					assert_ok!(MultiPhase::submit(
+						RuntimeOrigin::signed(account),
+						Box::new(solution)
+					));
+					assert_eq!(balances(&account).1, progression_40[s as usize])
+				}
+			});
 	}
 
 	#[test]
