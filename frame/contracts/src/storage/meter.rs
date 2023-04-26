@@ -26,7 +26,8 @@ use frame_support::{
 	dispatch::DispatchError,
 	ensure,
 	traits::{
-		tokens::{Fortitude::Polite, Preservation::Protect, WithdrawConsequence},
+		fungible::Mutate,
+		tokens::{Fortitude::Polite, Preservation, WithdrawConsequence},
 		Currency, ExistenceRequirement, Get,
 	},
 	DefaultNoBound, RuntimeDebugNoBound,
@@ -409,7 +410,7 @@ where
 		System::<T>::inc_consumers(info.deposit_account())?;
 
 		// We also need to make sure that the contract's account itself exists.
-		T::Currency::transfer(origin, contract, ed, ExistenceRequirement::KeepAlive)?;
+		T::Currency::transfer(origin, contract, ed, Preservation::Protect)?;
 		System::<T>::inc_consumers(contract)?;
 
 		Ok(deposit)
@@ -459,7 +460,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 		// We are sending the `min_leftover` and the `min_balance` from the origin
 		// account as part of a contract call. Hence origin needs to have those left over
 		// as free balance after accounting for all deposits.
-		let max = T::Currency::reducible_balance(origin, Protect, Polite)
+		let max = T::Currency::reducible_balance(origin, Preservation::Protect, Polite)
 			.saturating_sub(min_leftover)
 			.saturating_sub(Pallet::<T>::min_balance());
 		let limit = limit.unwrap_or(max);
@@ -494,12 +495,8 @@ impl<T: Config> Ext<T> for ReservingExt {
 				// The sender always has enough balance because we checked that it had enough
 				// balance when instantiating the storage meter. There is no way for the sender
 				// which is a plain account to send away this balance in the meantime.
-				let result = T::Currency::transfer(
-					origin,
-					deposit_account,
-					*amount,
-					ExistenceRequirement::KeepAlive,
-				);
+				let result =
+					T::Currency::transfer(origin, deposit_account, *amount, Preservation::Protect);
 				if let Err(err) = result {
 					log::error!(
 						target: "runtime::contracts",
@@ -527,7 +524,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 					origin,
 					*amount,
 					// We can safely use `AllowDeath` because our own consumer prevents an removal.
-					ExistenceRequirement::AllowDeath,
+					Preservation::Expendable,
 				);
 				if matches!(result, Err(_)) {
 					log::error!(

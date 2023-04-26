@@ -112,8 +112,8 @@ use frame_support::{
 	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
 	ensure,
 	traits::{
-		tokens::fungible::Inspect, ConstU32, Contains, Currency, Get, Randomness,
-		ReservableCurrency, Time,
+		fungible::{Inspect, Mutate, MutateHold},
+		ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, Time,
 	},
 	weights::Weight,
 	BoundedVec, WeakBoundedVec,
@@ -144,7 +144,7 @@ pub use crate::wasm::api_doc;
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;
 type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+	<<T as Config>::Currency as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
 type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
@@ -193,8 +193,9 @@ pub mod pallet {
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 		/// The currency in which fees are paid and contract balances are held.
-		type Currency: ReservableCurrency<Self::AccountId> // TODO: Move to fungible traits
-			+ Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
+		type Currency: Inspect<Self::AccountId>
+			+ Mutate<Self::AccountId>
+			+ MutateHold<Self::AccountId>;
 
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;

@@ -38,7 +38,7 @@ use crate::{
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
-	traits::{Get, ReservableCurrency},
+	traits::{fungible::MutateHold, Get},
 	WeakBoundedVec,
 };
 use sp_runtime::traits::BadOrigin;
@@ -95,7 +95,7 @@ pub fn store<T: Config>(mut module: PrefabWasmModule<T>, instantiated: bool) -> 
 				);
 				// This `None` case happens only in freshly uploaded modules. This means that
 				// the `owner` is always the origin of the current transaction.
-				T::Currency::reserve(&new_owner_info.owner, new_owner_info.deposit)
+				T::Currency::hold(&new_owner_info.owner, new_owner_info.deposit)
 					.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
 				new_owner_info.refcount = if instantiated { 1 } else { 0 };
 				<PristineCode<T>>::insert(&code_hash, orig_code);

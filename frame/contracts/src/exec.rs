@@ -26,7 +26,11 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	storage::{with_transaction, TransactionOutcome},
 	traits::{
-		tokens::{Fortitude::Polite, Preservation::Expendable},
+		fungible::{Inspect, Mutate},
+		tokens::{
+			Fortitude::Polite,
+			Preservation::{self, Expendable},
+		},
 		Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time,
 	},
 	weights::Weight,
@@ -1026,12 +1030,12 @@ where
 
 	/// Transfer some funds from `from` to `to`.
 	fn transfer(
-		existence_requirement: ExistenceRequirement,
+		preservation: Preservation,
 		from: &T::AccountId,
 		to: &T::AccountId,
 		value: BalanceOf<T>,
 	) -> DispatchResult {
-		T::Currency::transfer(from, to, value, existence_requirement)
+		T::Currency::transfer(from, to, value, preservation)
 			.map_err(|_| Error::<T>::TransferFailed)?;
 		Ok(())
 	}
@@ -1047,7 +1051,7 @@ where
 		}
 
 		let value = frame.value_transferred;
-		Self::transfer(ExistenceRequirement::KeepAlive, self.caller(), &frame.account_id, value)
+		Self::transfer(Preservation::Protect, self.caller(), &frame.account_id, value)
 	}
 
 	/// Reference to the current (top) frame.
@@ -1202,7 +1206,7 @@ where
 			&frame.account_id,
 			beneficiary,
 			T::Currency::reducible_balance(&frame.account_id, Expendable, Polite),
-			ExistenceRequirement::AllowDeath,
+			Preservation::Expendable,
 		)?;
 		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
@@ -1218,7 +1222,7 @@ where
 	}
 
 	fn transfer(&mut self, to: &T::AccountId, value: BalanceOf<T>) -> DispatchResult {
-		Self::transfer(ExistenceRequirement::KeepAlive, &self.top_frame().account_id, to, value)
+		Self::transfer(Preservation::Protect, &self.top_frame().account_id, to, value)
 	}
 
 	fn get_storage(&mut self, key: &Key<T>) -> Option<Vec<u8>> {
@@ -1273,7 +1277,7 @@ where
 	}
 
 	fn balance(&self) -> BalanceOf<T> {
-		T::Currency::free_balance(&self.top_frame().account_id)
+		T::Currency::balance(&self.top_frame().account_id)
 	}
 
 	fn value_transferred(&self) -> BalanceOf<T> {
