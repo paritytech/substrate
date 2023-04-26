@@ -132,10 +132,22 @@ impl Default for StorageEntry {
 }
 
 impl StorageEntry {
-	pub(super) fn to_option(self) -> Option<StorageValue> {
+	pub(super) fn to_option(mut self) -> Option<StorageValue> {
+		self.render_append();
 		match self {
-			StorageEntry::Some(data) | StorageEntry::Append { data, .. } => Some(data),
+			StorageEntry::Append { data, .. } | StorageEntry::Some(data) => Some(data),
 			StorageEntry::None => None,
+		}
+	}
+
+	fn render_append(&mut self) {
+		if let StorageEntry::Append { data, materialized, nb_append, .. } = self {
+			let nb_append = *nb_append;
+			if &Some(nb_append) == materialized {
+				return
+			}
+			StorageAppend::new(data).replace_nb_appends(*materialized, nb_append);
+			*materialized = Some(nb_append);
 		}
 	}
 }
@@ -343,16 +355,13 @@ impl OverlayedEntry<StorageEntry> {
 			let (data, nb_append, materialized, from_parent) = match parent {
 				StorageEntry::None => (value, 1, None, false),
 				StorageEntry::Some(prev) => {
-					let mut append = StorageAppend::new(prev);
 					// For compatibility: append if there is a encoded length, overwrite
 					// with value otherwhise.
-					if let Some(nb_append) = append.extract_nb_appends() {
+					if let Some(nb_append) = StorageAppend::new(prev).extract_nb_appends() {
 						// append on to of a simple storage should be avoided by any sane runtime,
 						// allowing a clone here.
 						let mut data = prev.clone();
-						let mut append = StorageAppend::new(&mut data);
-						let mut appendable = StorageAppend::new(&mut data);
-						appendable.append(value);
+						StorageAppend::new(&mut data).append_raw(value);
 						(data, nb_append + 1, Some(nb_append), false)
 					} else {
 						(value, 1, None, false)
@@ -367,7 +376,7 @@ impl OverlayedEntry<StorageEntry> {
 				} => {
 					assert!(moved_size.is_none());
 					*moved_size = Some(data.len());
-					StorageAppend::new(data).append(value);
+					StorageAppend::new(data).append_raw(value);
 					(core::mem::take(data), *nb_append + 1, *materialized, true)
 				},
 			};
@@ -393,14 +402,14 @@ impl OverlayedEntry<StorageEntry> {
 					// For compatibility: append if there is a encoded length, overwrite
 					// with value otherwhise.
 					if let Some(nb_append) = append.extract_nb_appends() {
-						append.append(value);
+						append.append_raw(value);
 						Some((core::mem::take(data), nb_append + 1, Some(nb_append), false))
 					} else {
 						Some((value, 1, None, false))
 					}
 				},
 				StorageEntry::Append { data, nb_append, .. } => {
-					assert!(StorageAppend::new(data).append(value));
+					StorageAppend::new(data).append_raw(value);
 					*nb_append += 1;
 					None
 				},
@@ -423,7 +432,10 @@ impl OverlayedEntry<StorageEntry> {
 
 	/// The value as seen by the current transaction.
 	pub fn value(&self) -> Option<&StorageValue> {
-		match self.value_ref() {
+		// TODO		let value = self.value_mut();
+		// TODO		value.render_append();
+		let value = self.value_ref();
+		match value {
 			StorageEntry::Some(data) | StorageEntry::Append { data, .. } => Some(data),
 			StorageEntry::None => None,
 		}
@@ -674,7 +686,6 @@ impl OverlayedChangeSet {
 								debug_assert!(empty_data.is_empty());
 								debug_assert!(moved_size.is_some());
 								// restore move of data
-								let mut append = StorageAppend::new(&mut data);
 								let moved_size = moved_size
 									.take()
 									.expect("append in new layer store size in previous; qed");
@@ -682,9 +693,7 @@ impl OverlayedChangeSet {
 									*materialized,
 									materialized_current,
 								);
-								data.truncate(
-									delta + moved_size
-								);
+								data.truncate(delta + moved_size);
 
 								*empty_data = data;
 								*materialized = materialized_current;

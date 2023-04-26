@@ -849,7 +849,7 @@ impl<'a> StorageAppend<'a> {
 	/// Append the given `value` to the storage item.
 	///
 	/// If appending fails, `[value]` is stored in the storage item and we return false.
-	/// TODO is it still used
+	#[cfg(test)]
 	pub fn append(&mut self, value: Vec<u8>) -> bool {
 		let mut result = true;
 		let value = vec![EncodeOpaqueValue(value)];
