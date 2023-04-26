@@ -403,7 +403,6 @@ mod keyword {
 	syn::custom_keyword!(origin);
 	syn::custom_keyword!(call);
 	syn::custom_keyword!(weight);
-	syn::custom_keyword!(prefix);
 	syn::custom_keyword!(event);
 	syn::custom_keyword!(config);
 	syn::custom_keyword!(hooks);
