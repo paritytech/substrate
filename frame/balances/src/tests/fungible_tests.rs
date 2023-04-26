@@ -399,6 +399,31 @@ fn unholding_frees_hold_slot() {
 }
 
 #[test]
+fn sufficients_work_properly_with_reference_counting() {
+	ExtBuilder::default()
+		.existential_deposit(1)
+		.monied(true)
+		.build_and_execute_with(|| {
+			// Only run PoC when the system pallet is enabled, since the underlying bug is in the
+			// system pallet it won't work with BalancesAccountStore
+			if UseSystem::get() {
+				// Start with a balance of 100
+				<Balances as fungible::Mutate<_>>::set_balance(&1, 100);
+				// Emulate a sufficient, in reality this could be reached by transferring a
+				// sufficient asset to the account
+				System::inc_sufficients(&1);
+				// Spend the same balance multiple times
+				assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &1337, 100, Expendable));
+				assert_eq!(Balances::free_balance(&1), 0);
+				assert_noop!(
+					<Balances as fungible::Mutate<_>>::transfer(&1, &1337, 100, Expendable),
+					TokenError::FundsUnavailable
+				);
+			}
+		});
+}
+
+#[test]
 fn emit_events_with_changing_freezes() {
 	ExtBuilder::default().build_and_execute_with(|| {
 		let _ = Balances::set_balance(&1, 100);
