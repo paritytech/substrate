@@ -191,7 +191,7 @@ pub enum RuntimeCosts {
 	OwnCodeHash,
 	/// Weight of calling `seal_caller_is_origin`.
 	CallerIsOrigin,
-	/// Weight of calling `seal_caller_is_root`.
+	/// Weight of calling `caller_is_root`.
 	CallerIsRoot,
 	/// Weight of calling `seal_address`.
 	Address,

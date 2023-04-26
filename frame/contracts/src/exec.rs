@@ -372,13 +372,14 @@ pub trait Executable<T: Config>: Sized {
 /// This type implements `Ext` and by that exposes the business logic of contract execution to
 /// the runtime module which interfaces with the contract (the wasm blob) itself.
 pub struct Stack<'a, T: Config, E> {
-	/// The account id of a plain account that initiated the call stack.
+	/// The origin that initiated the call stack. It could either be a Signed plain account that
+	/// holds an account id or Root.
 	///
 	/// # Note
 	///
-	/// Please note that it is possible that the id belongs to a contract rather than a plain
-	/// account when being called through one of the contract RPCs where the client can freely
-	/// choose the origin. This usually makes no sense but is still possible.
+	/// Please note that it is possible that the id of a Signed origin belongs to a contract rather
+	/// than a plain account when being called through one of the contract RPCs where the
+	/// client can freely choose the origin. This usually makes no sense but is still possible.
 	origin: Origin<T>,
 	/// The cost schedule used when charging from the gas meter.
 	schedule: &'a Schedule<T>,
@@ -1059,7 +1060,7 @@ where
 
 		let value = frame.value_transferred;
 
-		// Get the account id from the Caller.
+		// Get the account id from the caller.
 		// If the caller is root there is no account to transfer from, and therefore we can't take
 		// any `value` other than 0.
 		let caller = match self.caller() {
