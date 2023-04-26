@@ -43,7 +43,7 @@ use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
 	AccountIdOf, BalanceOf, CodeHash, CodeVec, Config, Error, OwnerInfoOf, RelaxedCodeVec,
-	Schedule,
+	Schedule, LOG_TARGET,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::dispatch::{DispatchError, DispatchResult};
@@ -326,7 +326,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 			},
 		)
 		.map_err(|msg| {
-			log::debug!(target: "runtime::contracts", "failed to instantiate code: {}", msg);
+			log::debug!(target: LOG_TARGET, "failed to instantiate code: {}", msg);
 			Error::<T>::CodeRejected
 		})?;
 		store.data_mut().set_memory(memory);
@@ -335,7 +335,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 			.get_export(&store, function.identifier())
 			.and_then(|export| export.into_func())
 			.ok_or_else(|| {
-				log::error!(target: "runtime::contracts", "failed to find entry point");
+				log::error!(target: LOG_TARGET, "failed to find entry point");
 				Error::<T>::CodeRejected
 			})?;
 
