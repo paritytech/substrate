@@ -136,7 +136,7 @@ pub trait OnRuntimeUpgrade {
 	/// Same as `on_runtime_upgrade`, but perform the optional `pre_upgrade` and `post_upgrade` as
 	/// well.
 	#[cfg(feature = "try-runtime")]
-	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
+	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, DispatchError> {
 		let maybe_state = if checks {
 			let _guard = frame_support::StorageNoopGuard::default();
 			let state = Self::pre_upgrade()?;
@@ -201,7 +201,7 @@ impl OnRuntimeUpgrade for Tuple {
 	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
 	/// hooks for tuples are a noop.
 	#[cfg(feature = "try-runtime")]
-	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
+	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, DispatchError> {
 		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::try_on_runtime_upgrade(checks)?); )* );
 		Ok(weight)
