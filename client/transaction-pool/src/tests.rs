@@ -197,7 +197,6 @@ impl ChainApi for TestApi {
 }
 
 pub(crate) fn uxt(transfer: Transfer) -> Extrinsic {
-	//todo: empty signature removed...
 	ExtrinsicBuilder::new_transfer(transfer).build()
 }
 
