@@ -3569,7 +3569,8 @@ fn storage_deposit_works() {
 fn storage_deposit_callee_works() {
 	let (wasm_caller, _code_hash_caller) = compile_module::<Test>("call").unwrap();
 	let (wasm_callee, _code_hash_callee) = compile_module::<Test>("store").unwrap();
-	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+	const ED: u64 = 200;
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
 		// Create both contracts: Constructors do nothing.
@@ -3610,8 +3611,10 @@ fn storage_deposit_callee_works() {
 		));
 
 		let callee = get_contract(&addr_callee);
-		assert_eq!(test_utils::get_balance(callee.deposit_account()), 302);
-		assert_eq!(callee.total_deposit(), 302);
+		let deposit = ED + DepositPerByte::get() * 100 + DepositPerItem::get() * 1;
+
+		assert_eq!(test_utils::get_balance(callee.deposit_account()), deposit);
+		assert_eq!(callee.total_deposit(), deposit);
 	});
 }
 
