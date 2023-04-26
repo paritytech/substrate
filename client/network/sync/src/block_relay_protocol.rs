@@ -16,7 +16,6 @@
 
 //! Block relay protocol related definitions.
 
-use crate::service::network::NetworkServiceHandle;
 use futures::channel::oneshot;
 use libp2p::PeerId;
 use sc_network::request_responses::{ProtocolConfig, RequestFailure};
@@ -25,7 +24,7 @@ use sp_runtime::traits::Block as BlockT;
 use std::sync::Arc;
 
 /// The serving side of the block relay protocol. It runs a single instance
-/// of the server task  that processes the incoming protocol messages.
+/// of the server task that processes the incoming protocol messages.
 #[async_trait::async_trait]
 pub trait BlockServer<Block: BlockT>: Send {
 	/// Starts the protocol processing.
@@ -39,12 +38,11 @@ pub trait BlockDownloader<Block: BlockT>: Send + Sync {
 	/// Performs the protocol specific sequence to fetch the block from the peer.
 	/// Output: if the download succeeds, the response is a `Vec<u8>` which is
 	/// in a format specific to the protocol implementation. The block data
-	/// can be extracted from this response using block_response_into_blocks().
+	/// can be extracted from this response using `BlockDownloader::block_response_into_blocks()`.
 	async fn download_block(
 		&self,
 		who: PeerId,
 		request: BlockRequest<Block>,
-		network: NetworkServiceHandle,
 	) -> Result<Result<Vec<u8>, RequestFailure>, oneshot::Canceled>;
 
 	/// Parses the protocol specific response to retrieve the block data.
@@ -52,11 +50,11 @@ pub trait BlockDownloader<Block: BlockT>: Send + Sync {
 		&self,
 		request: &BlockRequest<Block>,
 		response: Vec<u8>,
-	) -> Result<Vec<BlockData<Block>>, BlockResponseErr>;
+	) -> Result<Vec<BlockData<Block>>, BlockResponseError>;
 }
 
 #[derive(Debug)]
-pub enum BlockResponseErr {
+pub enum BlockResponseError {
 	/// Failed to decode the response bytes.
 	DecodeFailed(String),
 

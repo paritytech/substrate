@@ -843,8 +843,15 @@ where
 
 		let fork_id = Some(String::from("test-fork-id"));
 
-		let mut block_relay_params =
-			BlockRequestHandler::new(&protocol_id, None, client.clone(), 50);
+		let (chain_sync_network_provider, chain_sync_network_handle) =
+			NetworkServiceProvider::new();
+		let mut block_relay_params = BlockRequestHandler::new(
+			chain_sync_network_handle.clone(),
+			&protocol_id,
+			None,
+			client.clone(),
+			50,
+		);
 		self.spawn_task(Box::pin(async move {
 			block_relay_params.server.run().await;
 		}));
@@ -892,8 +899,6 @@ where
 		let block_announce_validator = config
 			.block_announce_validator
 			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
-		let (chain_sync_network_provider, chain_sync_network_handle) =
-			NetworkServiceProvider::new();
 
 		let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 		let (engine, sync_service, block_announce_config) =

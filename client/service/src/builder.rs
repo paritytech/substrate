@@ -796,11 +796,13 @@ where
 		Box::new(DefaultBlockAnnounceValidator)
 	};
 
+	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (mut block_server, block_downloader, block_request_protocol_config) = match block_relay {
 		Some(params) => (params.server, params.downloader, params.request_response_config),
 		None => {
 			// Custom protocol was not specified, use the default block handler.
 			let params = BlockRequestHandler::new(
+				chain_sync_network_handle.clone(),
 				&protocol_id,
 				config.chain_spec.fork_id(),
 				client.clone(),
@@ -857,7 +859,6 @@ where
 	};
 
 	let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
-	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (engine, sync_service, block_announce_config) = SyncingEngine::new(
 		Roles::from(&config.role),
 		client.clone(),

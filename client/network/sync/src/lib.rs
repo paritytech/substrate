@@ -29,7 +29,7 @@
 //! order to update it.
 
 use crate::{
-	block_relay_protocol::{BlockDownloader, BlockResponseErr},
+	block_relay_protocol::{BlockDownloader, BlockResponseError},
 	blocks::BlockCollection,
 	schema::v1::{StateRequest, StateResponse},
 	state::StateSync,
@@ -1292,7 +1292,6 @@ where
 
 	fn send_block_request(&mut self, who: PeerId, request: BlockRequest<B>) {
 		if self.peers.contains_key(&who) {
-			let network = self.network_service.clone();
 			let downloader = self.block_downloader.clone();
 			self.pending_responses.insert(
 				who,
@@ -1300,7 +1299,7 @@ where
 					(
 						who,
 						PeerRequest::Block(request.clone()),
-						downloader.download_block(who, request, network).await,
+						downloader.download_block(who, request).await,
 					)
 				}),
 			);
@@ -2109,7 +2108,7 @@ where
 									return Poll::Ready(import)
 								}
 							},
-							Err(BlockResponseErr::DecodeFailed(e)) => {
+							Err(BlockResponseError::DecodeFailed(e)) => {
 								debug!(
 									target: "sync",
 									"Failed to decode block response from peer {:?}: {:?}.",
@@ -2121,7 +2120,7 @@ where
 									.disconnect_peer(id, self.block_announce_protocol_name.clone());
 								continue
 							},
-							Err(BlockResponseErr::ExtractionFailed(e)) => {
+							Err(BlockResponseError::ExtractionFailed(e)) => {
 								debug!(
 									target: "sync",
 									"Failed to extract blocks from peer response {:?}: {:?}.",

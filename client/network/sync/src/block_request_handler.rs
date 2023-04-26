@@ -18,7 +18,7 @@
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
 use crate::{
-	block_relay_protocol::{BlockDownloader, BlockRelayParams, BlockResponseErr, BlockServer},
+	block_relay_protocol::{BlockDownloader, BlockRelayParams, BlockResponseError, BlockServer},
 	schema::v1::{
 		block_request::FromBlock as FromBlockSchema, BlockRequest as BlockRequestSchema,
 		BlockResponse as BlockResponseSchema, BlockResponse, Direction,
@@ -156,6 +156,7 @@ where
 {
 	/// Create a new [`BlockRequestHandler`].
 	pub fn new(
+		network: NetworkServiceHandle,
 		protocol_id: &ProtocolId,
 		fork_id: Option<&str>,
 		client: Arc<Client>,
@@ -182,7 +183,7 @@ where
 
 		BlockRelayParams {
 			server: Box::new(Self { client, request_receiver, seen_requests }),
-			downloader: Arc::new(FullBlockDownloader::new(protocol_config.name.clone())),
+			downloader: Arc::new(FullBlockDownloader::new(protocol_config.name.clone(), network)),
 			request_response_config: protocol_config,
 		}
 	}
@@ -493,11 +494,12 @@ enum HandleRequestError {
 
 pub struct FullBlockDownloader {
 	protocol_name: ProtocolName,
+	network: NetworkServiceHandle,
 }
 
 impl FullBlockDownloader {
-	fn new(protocol_name: ProtocolName) -> Self {
-		Self { protocol_name }
+	fn new(protocol_name: ProtocolName, network: NetworkServiceHandle) -> Self {
+		Self { protocol_name, network }
 	}
 
 	/// Extracts the blocks from the response schema.
@@ -512,37 +514,22 @@ impl FullBlockDownloader {
 			.map(|block_data| {
 				Ok(BlockData::<B> {
 					hash: Decode::decode(&mut block_data.hash.as_ref())?,
-					header: if !block_data.header.is_empty() {
-						Some(Decode::decode(&mut block_data.header.as_ref())?)
-					} else {
-						None
-					},
-					body: if request.fields.contains(BlockAttributes::BODY) {
-						Some(
-							block_data
-								.body
-								.iter()
-								.map(|body| Decode::decode(&mut body.as_ref()))
-								.collect::<Result<Vec<_>, _>>()?,
-						)
-					} else {
-						None
-					},
-					indexed_body: if request.fields.contains(BlockAttributes::INDEXED_BODY) {
-						Some(block_data.indexed_body)
-					} else {
-						None
-					},
-					receipt: if !block_data.receipt.is_empty() {
-						Some(block_data.receipt)
-					} else {
-						None
-					},
-					message_queue: if !block_data.message_queue.is_empty() {
-						Some(block_data.message_queue)
-					} else {
-						None
-					},
+					header: (block_data.header.len() > 0)
+						.then_some(Decode::decode(&mut block_data.header.as_ref())?),
+					body: request.fields.contains(BlockAttributes::BODY).then_some(
+						block_data
+							.body
+							.iter()
+							.map(|body| Decode::decode(&mut body.as_ref()))
+							.collect::<Result<Vec<_>, _>>()?,
+					),
+					indexed_body: request
+						.fields
+						.contains(BlockAttributes::INDEXED_BODY)
+						.then_some(block_data.indexed_body),
+					receipt: (block_data.receipt.len() > 0).then_some(block_data.receipt),
+					message_queue: (block_data.message_queue.len() > 0)
+						.then_some(block_data.message_queue),
 					justification: if !block_data.justification.is_empty() {
 						Some(block_data.justification)
 					} else if block_data.is_empty_justification {
@@ -550,11 +537,8 @@ impl FullBlockDownloader {
 					} else {
 						None
 					},
-					justifications: if !block_data.justifications.is_empty() {
-						Some(DecodeAll::decode_all(&mut block_data.justifications.as_ref())?)
-					} else {
-						None
-					},
+					justifications: (block_data.justifications.len() > 0)
+						.then_some(DecodeAll::decode_all(&mut block_data.justifications.as_ref())?),
 				})
 			})
 			.collect::<Result<_, _>>()
@@ -569,7 +553,6 @@ impl<B: BlockT> BlockDownloader<B> for FullBlockDownloader {
 		&self,
 		who: PeerId,
 		request: BlockRequest<B>,
-		network: NetworkServiceHandle,
 	) -> Result<Result<Vec<u8>, RequestFailure>, oneshot::Canceled> {
 		// Build the request protobuf.
 		let bytes = BlockRequestSchema {
@@ -585,7 +568,7 @@ impl<B: BlockT> BlockDownloader<B> for FullBlockDownloader {
 		.encode_to_vec();
 
 		let (tx, rx) = oneshot::channel();
-		network.start_request(
+		self.network.start_request(
 			who,
 			self.protocol_name.clone(),
 			bytes,
@@ -599,13 +582,13 @@ impl<B: BlockT> BlockDownloader<B> for FullBlockDownloader {
 		&self,
 		request: &BlockRequest<B>,
 		response: Vec<u8>,
-	) -> Result<Vec<BlockData<B>>, BlockResponseErr> {
+	) -> Result<Vec<BlockData<B>>, BlockResponseError> {
 		// Decode the response protobuf
 		let response_schema = BlockResponseSchema::decode(response.as_slice())
-			.map_err(|error| BlockResponseErr::DecodeFailed(error.to_string()))?;
+			.map_err(|error| BlockResponseError::DecodeFailed(error.to_string()))?;
 
 		// Extract the block data from the protobuf
 		self.blocks_from_schema::<B>(request, response_schema)
-			.map_err(|error| BlockResponseErr::ExtractionFailed(error.to_string()))
+			.map_err(|error| BlockResponseError::ExtractionFailed(error.to_string()))
 	}
 }

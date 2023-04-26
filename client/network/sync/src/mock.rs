@@ -18,10 +18,7 @@
 
 //! Contains mock implementations of `ChainSync` and 'BlockDownloader'
 
-use crate::{
-	block_relay_protocol::{BlockDownloader as BlockDownloaderT, BlockResponseErr},
-	service::network::NetworkServiceHandle,
-};
+use crate::block_relay_protocol::{BlockDownloader as BlockDownloaderT, BlockResponseError};
 
 use futures::{channel::oneshot, task::Poll};
 use libp2p::PeerId;
@@ -111,12 +108,11 @@ mockall::mock! {
 			&self,
 			who: PeerId,
 			request: BlockRequest<Block>,
-			network: NetworkServiceHandle,
 		) -> Result<Result<Vec<u8>, RequestFailure>, oneshot::Canceled>;
 		fn block_response_into_blocks(
 			&self,
 			request: &BlockRequest<Block>,
 			response: Vec<u8>,
-		) -> Result<Vec<BlockData<Block>>, BlockResponseErr>;
+		) -> Result<Vec<BlockData<Block>>, BlockResponseError>;
 	}
 }
