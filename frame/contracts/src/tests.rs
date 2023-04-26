@@ -32,7 +32,7 @@ use crate::{
 use assert_matches::assert_matches;
 use codec::Encode;
 use frame_support::{
-	assert_err, assert_err_ignore_postinfo, assert_noop, assert_ok,
+	assert_err, assert_err_ignore_postinfo, assert_err_with_weight, assert_noop, assert_ok,
 	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 	parameter_types,
 	storage::child,
@@ -2987,77 +2987,81 @@ fn sr25519_verify() {
 fn failed_deposit_charge_should_roll_back_call() {
 	let (wasm_caller, _) = compile_module::<Test>("call_runtime_and_call").unwrap();
 	let (wasm_callee, _) = compile_module::<Test>("store").unwrap();
+	const ED: u64 = 200;
 
-	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+	let execute = || {
+		ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
-		// Instantiate both contracts.
-		let addr_caller = Contracts::bare_instantiate(
-			ALICE,
-			0,
-			GAS_LIMIT,
-			None,
-			Code::Upload(wasm_caller),
-			vec![],
-			vec![],
-			false,
-		)
-		.result
-		.unwrap()
-		.account_id;
-		let addr_callee = Contracts::bare_instantiate(
-			ALICE,
-			0,
-			GAS_LIMIT,
-			None,
-			Code::Upload(wasm_callee),
-			vec![],
-			vec![],
-			false,
-		)
-		.result
-		.unwrap()
-		.account_id;
+			// Instantiate both contracts.
+			let addr_caller = Contracts::bare_instantiate(
+				ALICE,
+				0,
+				GAS_LIMIT,
+				None,
+				Code::Upload(wasm_caller.clone()),
+				vec![],
+				vec![],
+				false,
+			)
+			.result
+			.unwrap()
+			.account_id;
+			let addr_callee = Contracts::bare_instantiate(
+				ALICE,
+				0,
+				GAS_LIMIT,
+				None,
+				Code::Upload(wasm_callee.clone()),
+				vec![],
+				vec![],
+				false,
+			)
+			.result
+			.unwrap()
+			.account_id;
 
-		// Give caller proxy access to Alice.
-		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(ALICE), addr_caller.clone(), (), 0));
+			// Give caller proxy access to Alice.
+			assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(ALICE), addr_caller.clone(), (), 0));
 
-		// Create a Proxy call that will attempt to transfer away Alice's balance, so we can test a
-		// failed charge.
-		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let transfer_call =
-			Box::new(RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
-				dest: CHARLIE,
-				value: pallet_balances::Pallet::<Test>::free_balance(&ALICE) - min_balance,
-			}));
+			// Create a Proxy call that will attempt to transfer away Alice's balance
+			let transfer_call =
+				Box::new(RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
+					dest: CHARLIE,
+					value: pallet_balances::Pallet::<Test>::free_balance(&ALICE) - 2 * ED,
+				}));
 
-		// Wrap the transfer call in a proxy call.
-		let transfer_proxy_call = RuntimeCall::Proxy(pallet_proxy::Call::proxy {
-			real: ALICE,
-			force_proxy_type: Some(()),
-			call: transfer_call,
-		});
+			// Wrap the transfer call in a proxy call.
+			let transfer_proxy_call = RuntimeCall::Proxy(pallet_proxy::Call::proxy {
+				real: ALICE,
+				force_proxy_type: Some(()),
+				call: transfer_call,
+			});
 
-		// Bump the deposit per byte to a high value to trigger a FundsUnavailable error.
-		DEPOSIT_PER_BYTE.with(|c| *c.borrow_mut() = 100);
+			let data = (
+				(ED - DepositPerItem::get()) as u32, // storage length
+				addr_callee,
+				transfer_proxy_call,
+			);
 
-		let data = (
-			100u32, // storage length
-			addr_callee,
-			transfer_proxy_call,
-		);
+			<Pallet<Test>>::call(
+				RuntimeOrigin::signed(ALICE),
+				addr_caller.clone(),
+				0,
+				GAS_LIMIT,
+				None,
+				data.encode(),
+			)
+		})
+	};
 
-		let result = <Pallet<Test>>::call(
-			RuntimeOrigin::signed(ALICE),
-			addr_caller.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			data.encode(),
-		);
+	// With a low enough deposit per byte, the call should succeed.
+	let result = execute().unwrap();
 
-		assert_err_ignore_postinfo!(result, TokenError::FundsUnavailable);
-	})
+	// Bump the deposit per byte to a high value to trigger a FundsUnavailable error.
+	DEPOSIT_PER_BYTE.with(|c| *c.borrow_mut() = ED);
+
+	assert_err_with_weight!(execute(), TokenError::FundsUnavailable, result.actual_weight);
 }
 
 #[test]
