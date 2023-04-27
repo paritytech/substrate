@@ -24,48 +24,26 @@ use sc_service::{BlocksPruning, PruningMode};
 #[derive(Debug, Clone, Args)]
 pub struct PruningParams {
 	/// Specify the state pruning mode.
-	///
 	/// This mode specifies when the block's state (ie, storage)
 	/// should be pruned (ie, removed) from the database.
-	///
 	/// This setting can only be set on the first creation of the database. Every subsequent run
 	/// will load the pruning mode from the database and will error if the stored mode doesn't
 	/// match this CLI value. It is fine to drop this CLI flag for subsequent runs.
-	///
 	/// Possible values:
-	///
-	///  - archive:
-	///
-	///    Keep the state of all blocks.
-	///
-	///  - 'archive-canonical'
-	///
-	///    Keep only the state of finalized blocks.
-	///
-	///  - number
-	///
-	///    Keep the state of the last number of finalized blocks.
-	///
+	///  - archive: Keep the state of all blocks.
+	///  - 'archive-canonical' Keep only the state of finalized blocks.
+	///  - number Keep the state of the last number of finalized blocks.
 	/// [default: 256]
 	#[arg(alias = "pruning", long, value_name = "PRUNING_MODE")]
 	pub state_pruning: Option<DatabasePruningMode>,
 
 	/// Specify the blocks pruning mode.
-	///
 	/// This mode specifies when the block's body (including justifications)
 	/// should be pruned (ie, removed) from the database.
-	///
 	/// Possible values:
-	///  - 'archive'
-	///
-	///    Keep all blocks.
-	///
-	///  - 'archive-canonical'
-	///
-	///    Keep only finalized blocks.
-	///
+	///  - 'archive' Keep all blocks.
+	///  - 'archive-canonical' Keep only finalized blocks.
 	///  - number
-	///
 	///  Keep the last `number` of finalized blocks.
 	#[arg(
 		alias = "keep-blocks",
