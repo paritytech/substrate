@@ -199,7 +199,7 @@ pub trait StakingInterface {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
 		match Self::status(who) {
-			Some(StakerStatus::Nominator(t)) => Some(t),
+			Ok(StakerStatus::Nominator(t)) => Some(t),
 			_ => None,
 		}
 	}
