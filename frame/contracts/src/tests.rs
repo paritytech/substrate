@@ -3003,7 +3003,7 @@ fn sr25519_verify() {
 #[test]
 fn failed_deposit_charge_should_roll_back_call() {
 	let (wasm_caller, _) = compile_module::<Test>("call_runtime_and_call").unwrap();
-	let (wasm_callee, _) = compile_module::<Test>("store").unwrap();
+	let (wasm_callee, _) = compile_module::<Test>("call_store").unwrap();
 	const ED: u64 = 200;
 
 	let execute = || {
