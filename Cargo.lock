@@ -5317,6 +5317,7 @@ dependencies = [
  "sp-timestamp",
  "substrate-test-client",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -10525,6 +10526,7 @@ dependencies = [
  "substrate-bip39",
  "thiserror",
  "tiny-bip39",
+ "tokio",
  "zeroize",
 ]
 

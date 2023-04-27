@@ -132,14 +132,18 @@ macro_rules! wasm_export_functions {
 /// should ensure that we have enough threads in tests for spawning blocking futures.
 #[cfg(feature = "std")]
 #[derive(Clone)]
-pub struct TaskExecutor(futures::executor::ThreadPool);
+pub struct TaskExecutor(std::sync::Arc<tokio::runtime::Runtime>);
 
 #[cfg(feature = "std")]
 impl TaskExecutor {
 	/// Create a new instance of `Self`.
 	pub fn new() -> Self {
-		let mut builder = futures::executor::ThreadPoolBuilder::new();
-		Self(builder.pool_size(8).create().expect("Failed to create thread pool"))
+		let rt = tokio::runtime::Builder::new_multi_thread()
+			.worker_threads(8)
+			.enable_all()
+			.build()
+			.expect("Failed to create tokio runtime");
+		Self(std::sync::Arc::new(rt))
 	}
 }
 
@@ -157,16 +161,19 @@ impl crate::traits::SpawnNamed for TaskExecutor {
 		_name: &'static str,
 		_group: Option<&'static str>,
 		future: futures::future::BoxFuture<'static, ()>,
-	) {
-		self.0.spawn_ok(future);
+	) -> crate::traits::SpawnHandle {
+		let handle = self.0.clone();
+		self.0.spawn_blocking(move || {
+			handle.block_on(future);
+		})
 	}
 	fn spawn(
 		&self,
 		_name: &'static str,
 		_group: Option<&'static str>,
 		future: futures::future::BoxFuture<'static, ()>,
-	) {
-		self.0.spawn_ok(future);
+	) -> crate::traits::SpawnHandle {
+		self.0.spawn(future)
 	}
 }
 
@@ -177,15 +184,18 @@ impl crate::traits::SpawnEssentialNamed for TaskExecutor {
 		_: &'static str,
 		_: Option<&'static str>,
 		future: futures::future::BoxFuture<'static, ()>,
-	) {
-		self.0.spawn_ok(future);
+	) -> crate::traits::SpawnHandle {
+		let handle = self.0.clone();
+		self.0.spawn_blocking(move || {
+			handle.block_on(future);
+		})
 	}
 	fn spawn_essential(
 		&self,
 		_: &'static str,
 		_: Option<&'static str>,
 		future: futures::future::BoxFuture<'static, ()>,
-	) {
-		self.0.spawn_ok(future);
+	) -> crate::traits::SpawnHandle {
+		self.0.spawn(future)
 	}
 }

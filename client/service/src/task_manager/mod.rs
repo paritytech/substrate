@@ -97,7 +97,7 @@ impl SpawnTaskHandle {
 		name: &'static str,
 		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
-	) {
+	) -> tokio::task::JoinHandle<()> {
 		self.spawn_inner(name, group, task, TaskType::Async)
 	}
 
@@ -107,7 +107,7 @@ impl SpawnTaskHandle {
 		name: &'static str,
 		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
-	) {
+	) -> tokio::task::JoinHandle<()> {
 		self.spawn_inner(name, group, task, TaskType::Blocking)
 	}
 
@@ -118,7 +118,7 @@ impl SpawnTaskHandle {
 		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
-	) {
+	) -> tokio::task::JoinHandle<()> {
 		let on_exit = self.on_exit.clone();
 		let metrics = self.metrics.clone();
 		let registry = self.task_registry.clone();
@@ -195,14 +195,12 @@ impl SpawnTaskHandle {
 		.in_current_span();
 
 		match task_type {
-			TaskType::Async => {
-				self.tokio_handle.spawn(future);
-			},
+			TaskType::Async => self.tokio_handle.spawn(future),
 			TaskType::Blocking => {
 				let handle = self.tokio_handle.clone();
 				self.tokio_handle.spawn_blocking(move || {
 					handle.block_on(future);
-				});
+				})
 			},
 		}
 	}
@@ -214,7 +212,7 @@ impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 		name: &'static str,
 		group: Option<&'static str>,
 		future: BoxFuture<'static, ()>,
-	) {
+	) -> sp_core::traits::SpawnHandle {
 		self.spawn_inner(name, group, future, TaskType::Blocking)
 	}
 
@@ -223,7 +221,7 @@ impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 		name: &'static str,
 		group: Option<&'static str>,
 		future: BoxFuture<'static, ()>,
-	) {
+	) -> sp_core::traits::SpawnHandle {
 		self.spawn_inner(name, group, future, TaskType::Async)
 	}
 }
@@ -255,7 +253,7 @@ impl SpawnEssentialTaskHandle {
 		name: &'static str,
 		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
-	) {
+	) -> tokio::task::JoinHandle<()> {
 		self.spawn_inner(name, group, task, TaskType::Async)
 	}
 
@@ -267,7 +265,7 @@ impl SpawnEssentialTaskHandle {
 		name: &'static str,
 		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
-	) {
+	) -> tokio::task::JoinHandle<()> {
 		self.spawn_inner(name, group, task, TaskType::Blocking)
 	}
 
@@ -277,14 +275,14 @@ impl SpawnEssentialTaskHandle {
 		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
-	) {
+	) -> tokio::task::JoinHandle<()> {
 		let essential_failed = self.essential_failed_tx.clone();
 		let essential_task = std::panic::AssertUnwindSafe(task).catch_unwind().map(move |_| {
 			log::error!("Essential task `{}` failed. Shutting down service.", name);
 			let _ = essential_failed.close();
 		});
 
-		let _ = self.inner.spawn_inner(name, group, essential_task, task_type);
+		self.inner.spawn_inner(name, group, essential_task, task_type)
 	}
 }
 
@@ -294,8 +292,8 @@ impl sp_core::traits::SpawnEssentialNamed for SpawnEssentialTaskHandle {
 		name: &'static str,
 		group: Option<&'static str>,
 		future: BoxFuture<'static, ()>,
-	) {
-		self.spawn_blocking(name, group, future);
+	) -> sp_core::traits::SpawnHandle {
+		self.spawn_blocking(name, group, future)
 	}
 
 	fn spawn_essential(
@@ -303,8 +301,8 @@ impl sp_core::traits::SpawnEssentialNamed for SpawnEssentialTaskHandle {
 		name: &'static str,
 		group: Option<&'static str>,
 		future: BoxFuture<'static, ()>,
-	) {
-		self.spawn(name, group, future);
+	) -> sp_core::traits::SpawnHandle {
+		self.spawn(name, group, future)
 	}
 }
 

@@ -33,7 +33,6 @@ use crate::{
 	keyring::*,
 };
 use codec::{Decode, Encode};
-use futures::executor;
 use kitchensink_runtime::{
 	constants::currency::DOLLARS, AccountId, BalancesCall, CheckedExtrinsic, MinimumPeriod,
 	RuntimeCall, Signature, SystemCall, UncheckedExtrinsic,
@@ -50,7 +49,11 @@ use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod, WasmtimeInstantia
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_consensus::BlockOrigin;
-use sp_core::{blake2_256, ed25519, sr25519, traits::SpawnNamed, ExecutionContext, Pair, Public};
+use sp_core::{
+	blake2_256, ed25519, sr25519,
+	traits::{SpawnHandle, SpawnNamed},
+	ExecutionContext, Pair, Public,
+};
 use sp_inherents::InherentData;
 use sp_runtime::{
 	traits::{Block as BlockT, IdentifyAccount, Verify},
@@ -232,12 +235,14 @@ impl DatabaseType {
 /// Uses multiple threads as the regular executable.
 #[derive(Debug, Clone)]
 pub struct TaskExecutor {
-	pool: executor::ThreadPool,
+	rt: Arc<tokio::runtime::Runtime>,
 }
 
 impl TaskExecutor {
 	fn new() -> Self {
-		Self { pool: executor::ThreadPool::new().expect("Failed to create task executor") }
+		Self {
+			rt: Arc::new(tokio::runtime::Runtime::new().expect("Failed to create task executor")),
+		}
 	}
 }
 
@@ -247,8 +252,8 @@ impl SpawnNamed for TaskExecutor {
 		_: &'static str,
 		_: Option<&'static str>,
 		future: futures::future::BoxFuture<'static, ()>,
-	) {
-		self.pool.spawn_ok(future);
+	) -> SpawnHandle {
+		self.rt.spawn(future)
 	}
 
 	fn spawn_blocking(
@@ -256,8 +261,11 @@ impl SpawnNamed for TaskExecutor {
 		_: &'static str,
 		_: Option<&'static str>,
 		future: futures::future::BoxFuture<'static, ()>,
-	) {
-		self.pool.spawn_ok(future);
+	) -> SpawnHandle {
+		let handle = self.rt.clone();
+		self.rt.spawn_blocking(move || {
+			handle.block_on(future);
+		})
 	}
 }
 
