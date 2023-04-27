@@ -29,7 +29,7 @@ use syn::{
 #[derive(Parse)]
 pub struct DeriveImplAttrArgs {
 	pub foreign_path: Path,
-	_comma: Comma,
+	_comma1: Comma,
 	pub disambiguation_path: Path,
 	_comma2: Option<Comma>,
 }
@@ -43,10 +43,24 @@ impl ForeignPath for DeriveImplAttrArgs {
 impl ToTokens for DeriveImplAttrArgs {
 	fn to_tokens(&self, tokens: &mut TokenStream2) {
 		tokens.extend(self.foreign_path.to_token_stream());
-		tokens.extend(self._comma.to_token_stream());
+		tokens.extend(self._comma1.to_token_stream());
 		tokens.extend(self.disambiguation_path.to_token_stream());
 		tokens.extend(self._comma2.to_token_stream());
 	}
+}
+
+#[test]
+fn test_derive_impl_attr_args_parsing() {
+	parse2::<DeriveImplAttrArgs>(quote!(some::path::TestDefaultConfig, some::path::DefaultConfig))
+		.unwrap();
+	parse2::<DeriveImplAttrArgs>(quote!(
+		frame_system::preludes::testing::TestDefaultConfig,
+		DefaultConfig
+	))
+	.unwrap();
+	parse2::<DeriveImplAttrArgs>(quote!(Something, some::path::DefaultConfig)).unwrap();
+	parse2::<DeriveImplAttrArgs>(quote!(Something, DefaultConfig)).unwrap();
+	assert!(parse2::<DeriveImplAttrArgs>(quote!(DefaultConfig)).is_err());
 }
 
 /// Gets the [`Ident`] representation of the given [`ImplItem`], if one exists. Otherwise
@@ -156,7 +170,7 @@ pub fn derive_impl(
 	};
 	let source_crate_path = source_crate_path.ident.clone();
 	if disambiguation_path.segments.len() == 1 {
-		disambiguation_path = parse_quote!(#source_crate_path::pallet::);
+		disambiguation_path = parse_quote!(#source_crate_path::pallet::#disambiguation_path);
 	}
 
 	let combined_impl = combine_impls(local_impl, foreign_impl, foreign_path, disambiguation_path);

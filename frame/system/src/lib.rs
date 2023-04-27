@@ -246,7 +246,6 @@ pub mod pallet {
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
 		#[pallet::no_default]
-		// enum Everything is a reasonable default, but it is not possible.
 		type BaseCallFilter: Contains<Self::RuntimeCall>;
 
 		/// Block & extrinsics weights: base values and limits.
