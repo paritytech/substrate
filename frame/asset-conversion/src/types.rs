@@ -129,9 +129,3 @@ impl<AssetId: Ord> MultiAssetIdConverter<NativeOrAssetId<AssetId>, AssetId>
 		NativeOrAssetId::Asset(asset)
 	}
 }
-
-impl<AssetId: Ord> Display for NativeOrAssetId<AssetId> {
-	fn fmt(&self, _: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-		todo!()
-	}
-}
