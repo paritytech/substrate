@@ -22,6 +22,7 @@ use frame_election_provider_support::{
 	SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
+	defensive,
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
@@ -1608,7 +1609,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::current_era().unwrap_or(Zero::zero())
 	}
 
-	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
+	fn stake(who: &Self::AccountId) -> Result<Stake<BalanceOf<T>>, DispatchError> {
 		Self::bonded(who)
 			.and_then(|c| Self::ledger(c))
 			.map(|l| Stake { total: l.total, active: l.active })
@@ -1662,8 +1663,33 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::nominate(RawOrigin::Signed(ctrl).into(), targets)
 	}
 
+	fn status(
+		who: &Self::AccountId,
+	) -> Result<sp_staking::StakerStatus<Self::AccountId>, DispatchError> {
+		let is_bonded = Self::bonded(who).is_some();
+		if !is_bonded {
+			return Err(Error::<T>::NotStash.into())
+		}
+
+		let is_validator = Validators::<T>::contains_key(&who);
+		let is_nominator = Nominators::<T>::get(&who);
+
+		use sp_staking::StakerStatus;
+		match (is_validator, is_nominator.is_some()) {
+			(false, false) => Ok(StakerStatus::Idle),
+			(true, false) => Ok(StakerStatus::Validator),
+			(false, true) => Ok(StakerStatus::Nominator(
+				is_nominator.expect("is checked above; qed").targets.into_inner(),
+			)),
+			(true, true) => {
+				defensive!("cannot be both validators and nominator");
+				Err(Error::<T>::BadState.into())
+			},
+		}
+	}
+
 	sp_staking::runtime_benchmarks_enabled! {
-		fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
+		fn nominations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
 			Nominators::<T>::get(who).map(|n| n.targets.into_inner())
 		}
 
