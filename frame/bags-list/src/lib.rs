@@ -55,6 +55,7 @@
 
 use codec::FullCodec;
 use frame_election_provider_support::{ScoreProvider, SortedListProvider};
+use frame_support::dispatch::{DispatchError, DispatchResult};
 use frame_system::ensure_signed;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded, StaticLookup};
 use sp_std::prelude::*;

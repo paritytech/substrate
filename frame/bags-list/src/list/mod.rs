@@ -28,7 +28,9 @@ use crate::Config;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::ScoreProvider;
 use frame_support::{
-	defensive, ensure,
+	defensive,
+	dispatch::{DispatchError, DispatchResult},
+	ensure,
 	traits::{Defensive, DefensiveOption, Get},
 	DefaultNoBound, PalletError,
 };
