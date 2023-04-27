@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use futures::{channel::mpsc, stream::StreamExt};
 use jsonrpsee::{
 	core::params::ArrayParams,
-	http_client::{transport::HttpBackend, HttpClientBuilder},
+	http_client::{HttpClient, HttpClientBuilder},
 };
 use log::*;
 use serde::de::DeserializeOwned;
@@ -53,7 +53,6 @@ use substrate_rpc_client::{rpc_params, BatchRequestBuilder, ChainApi, ClientT, S
 type KeyValue = (StorageKey, StorageData);
 type TopKeyValues = Vec<KeyValue>;
 type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
-type HttpClient = jsonrpsee::http_client::HttpClient<HttpBackend>;
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_HTTP_ENDPOINT: &str = "https://rpc.polkadot.io:443";
