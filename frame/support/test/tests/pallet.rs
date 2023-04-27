@@ -40,7 +40,7 @@ use sp_runtime::{DispatchError, ModuleError};
 
 parameter_types! {
 	/// Used to control if the storage version should be updated.
-	static UpdateStorageVersion: bool = false;
+	storage UpdateStorageVersion: bool = false;
 }
 
 /// Latest stable metadata version used for testing.
@@ -2057,7 +2057,7 @@ fn test_storage_alias() {
 
 #[cfg(feature = "try-runtime")]
 #[test]
-fn post_runtime_upgrade_detects_missing_storage_version_change() {
+fn post_runtime_upgrade_detects_storage_version_issues() {
 	use frame_support::traits::UpgradeCheckSelect;
 
 	struct CustomUpgrade;
@@ -2065,6 +2065,16 @@ fn post_runtime_upgrade_detects_missing_storage_version_change() {
 	impl OnRuntimeUpgrade for CustomUpgrade {
 		fn on_runtime_upgrade() -> Weight {
 			Example2::current_storage_version().put::<Example2>();
+
+			Default::default()
+		}
+	}
+
+	struct CustomUpgradePallet4;
+
+	impl OnRuntimeUpgrade for CustomUpgradePallet4 {
+		fn on_runtime_upgrade() -> Weight {
+			StorageVersion::new(100).put::<Example4>();
 
 			Default::default()
 		}
@@ -2087,6 +2097,15 @@ fn post_runtime_upgrade_detects_missing_storage_version_change() {
 		CustomUpgrade,
 	>;
 
+	type ExecutiveWithUpgradePallet4 = frame_executive::Executive<
+		Runtime,
+		Block,
+		frame_system::ChainContext<Runtime>,
+		Runtime,
+		AllPalletsWithSystem,
+		CustomUpgradePallet4,
+	>;
+
 	TestExternalities::default().execute_with(|| {
 		// Call `on_genesis` to put the storage version of `Example` into the storage.
 		Example::on_genesis();
@@ -2100,9 +2119,8 @@ fn post_runtime_upgrade_detects_missing_storage_version_change() {
 		// Call `on_genesis` to put the storage version of `Example` into the storage.
 		Example::on_genesis();
 		// We set the new storage version in the pallet and that should be detected.
-		UpdateStorageVersion::set(true);
+		UpdateStorageVersion::set(&true);
 		Executive::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost).unwrap();
-		UpdateStorageVersion::set(false);
 	});
 
 	TestExternalities::default().execute_with(|| {
@@ -2110,6 +2128,19 @@ fn post_runtime_upgrade_detects_missing_storage_version_change() {
 		Example::on_genesis();
 		// We set the new storage version in the custom upgrade and that should be detected.
 		ExecutiveWithUpgrade::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost).unwrap();
+	});
+
+	TestExternalities::default().execute_with(|| {
+		// Call `on_genesis` to put the storage version of `Example` into the storage.
+		Example::on_genesis();
+		// We need to set the correct storage version for `Example2`
+		UpdateStorageVersion::set(&true);
+
+		// `CustomUpgradePallet4` will set a storage version for `Example4` while this doesn't has
+		// any storage version "enabled".
+		assert!(ExecutiveWithUpgradePallet4::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost)
+			.unwrap_err()
+			.contains("On chain storage version set, while pallet doesn't"));
 	});
 }
 

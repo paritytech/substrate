@@ -109,7 +109,26 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		}
 	} else {
-		quote::quote! {}
+		quote::quote! {
+			let on_chain_version = <Self as #frame_support::traits::GetStorageVersion>::on_chain_storage_version();
+
+			if on_chain_version != #frame_support::traits::StorageVersion::new(0) {
+				let pallet_name = <
+					<T as #frame_system::Config>::PalletInfo
+					as
+					#frame_support::traits::PalletInfo
+				>::name::<Self>().unwrap_or("<unknown pallet name>");
+
+				#frame_support::log::error!(
+					target: #frame_support::LOG_TARGET,
+					"{pallet_name}: On chain storage version {on_chain_version:?} is set to non zero,\
+					 while the pallet is missing the `#[pallet::storage_version(VERSION)]` attribute.",
+				);
+
+				return Err("On chain storage version set, while pallet doesn't \
+							has the `#[pallet::storage_version(VERSION)]` attribute.");
+			}
+		}
 	};
 
 	quote::quote_spanned!(span =>
