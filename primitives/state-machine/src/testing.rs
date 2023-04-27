@@ -133,9 +133,12 @@ where
 	}
 
 	/// Batch insert key/values into backend
-	pub fn batch_insert(&mut self, kvs: Vec<(StorageKey, StorageValue)>) {
+	pub fn batch_insert<I>(&mut self, kvs: I)
+	where
+		I: IntoIterator<Item = (StorageKey, StorageValue)>,
+	{
 		self.backend.insert(
-			vec![(None, kvs.into_iter().map(|(k, v)| (k, Some(v))).collect())],
+			Some((None, kvs.into_iter().map(|(k, v)| (k, Some(v))).collect())),
 			self.state_version,
 		);
 	}

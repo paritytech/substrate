@@ -1047,7 +1047,7 @@ where
 				"extending externalities with {} manually injected key-values",
 				self.hashed_key_values.len()
 			);
-			ext.batch_insert(self.hashed_key_values.into_iter().map(|(k, v)| (k.0, v.0)).collect());
+			ext.batch_insert(self.hashed_key_values.into_iter().map(|(k, v)| (k.0, v.0)));
 		}
 
 		// exclude manual key values.
