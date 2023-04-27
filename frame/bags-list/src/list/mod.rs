@@ -28,9 +28,7 @@ use crate::Config;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::ScoreProvider;
 use frame_support::{
-	defensive,
-	dispatch::{DispatchError, DispatchResult},
-	ensure,
+	defensive, ensure,
 	traits::{Defensive, DefensiveOption, Get},
 	DefaultNoBound, PalletError,
 };
@@ -43,6 +41,9 @@ use sp_std::{
 	marker::PhantomData,
 	prelude::*,
 };
+
+#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
+use frame_support::dispatch::{DispatchError, DispatchResult};
 
 #[derive(Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, PalletError)]
 pub enum ListError {
