@@ -514,43 +514,12 @@ where
 mod test_iterators {
 	use crate::{
 		hash::StorageHasher,
-		storage::{generator::StorageDoubleMap, unhashed, IterableStorageDoubleMap},
+		storage::{
+			generator::{tests::*, StorageDoubleMap},
+			unhashed,
+		},
 	};
-	use codec::{Decode, Encode};
-
-	pub trait Config: 'static {
-		type RuntimeOrigin;
-		type BlockNumber;
-		type PalletInfo: crate::traits::PalletInfo;
-		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
-	}
-
-	crate::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {}
-	}
-
-	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-	struct NoDef(u32);
-
-	crate::decl_storage! {
-		trait Store for Module<T: Config> as Test {
-			DoubleMap: double_map hasher(blake2_128_concat) u16, hasher(twox_64_concat) u32 => u64;
-		}
-	}
-
-	fn key_before_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
-		let last = prefix.iter_mut().last().unwrap();
-		assert!(*last != 0, "mock function not implemented for this prefix");
-		*last -= 1;
-		prefix
-	}
-
-	fn key_after_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
-		let last = prefix.iter_mut().last().unwrap();
-		assert!(*last != 255, "mock function not implemented for this prefix");
-		*last += 1;
-		prefix
-	}
+	use codec::Encode;
 
 	#[test]
 	fn double_map_iter_from() {
@@ -589,6 +558,8 @@ mod test_iterators {
 	#[test]
 	fn double_map_reversible_reversible_iteration() {
 		sp_io::TestExternalities::default().execute_with(|| {
+			type DoubleMap = self::frame_system::DoubleMap<Runtime>;
+
 			// All map iterator
 			let prefix = DoubleMap::prefix_hash();
 

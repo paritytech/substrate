@@ -397,3 +397,74 @@ fn unholding_frees_hold_slot() {
 			assert_ok!(Balances::hold(&TestId::Baz, &1, 10));
 		});
 }
+
+#[test]
+fn sufficients_work_properly_with_reference_counting() {
+	ExtBuilder::default()
+		.existential_deposit(1)
+		.monied(true)
+		.build_and_execute_with(|| {
+			// Only run PoC when the system pallet is enabled, since the underlying bug is in the
+			// system pallet it won't work with BalancesAccountStore
+			if UseSystem::get() {
+				// Start with a balance of 100
+				<Balances as fungible::Mutate<_>>::set_balance(&1, 100);
+				// Emulate a sufficient, in reality this could be reached by transferring a
+				// sufficient asset to the account
+				System::inc_sufficients(&1);
+				// Spend the same balance multiple times
+				assert_ok!(<Balances as fungible::Mutate<_>>::transfer(&1, &1337, 100, Expendable));
+				assert_eq!(Balances::free_balance(&1), 0);
+				assert_noop!(
+					<Balances as fungible::Mutate<_>>::transfer(&1, &1337, 100, Expendable),
+					TokenError::FundsUnavailable
+				);
+			}
+		});
+}
+
+#[test]
+fn emit_events_with_changing_freezes() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		let _ = Balances::set_balance(&1, 100);
+		System::reset_events();
+
+		// Freeze = [] --> [10]
+		assert_ok!(Balances::set_freeze(&TestId::Foo, &1, 10));
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Frozen { who: 1, amount: 10 })]);
+
+		// Freeze = [10] --> [15]
+		assert_ok!(Balances::set_freeze(&TestId::Foo, &1, 15));
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Frozen { who: 1, amount: 5 })]);
+
+		// Freeze = [15] --> [15, 20]
+		assert_ok!(Balances::set_freeze(&TestId::Bar, &1, 20));
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Frozen { who: 1, amount: 5 })]);
+
+		// Freeze = [15, 20] --> [17, 20]
+		assert_ok!(Balances::set_freeze(&TestId::Foo, &1, 17));
+		for event in events() {
+			match event {
+				RuntimeEvent::Balances(crate::Event::Frozen { .. }) => {
+					assert!(false, "unexpected freeze event")
+				},
+				RuntimeEvent::Balances(crate::Event::Thawed { .. }) => {
+					assert!(false, "unexpected thaw event")
+				},
+				_ => continue,
+			}
+		}
+
+		// Freeze = [17, 20] --> [17, 15]
+		assert_ok!(Balances::set_freeze(&TestId::Bar, &1, 15));
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Thawed { who: 1, amount: 3 })]);
+
+		// Freeze = [17, 15] --> [15]
+		assert_ok!(Balances::thaw(&TestId::Foo, &1));
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Thawed { who: 1, amount: 2 })]);
+
+		// Freeze = [15] --> []
+		assert_ok!(Balances::thaw(&TestId::Bar, &1));
+		assert_eq!(events(), [RuntimeEvent::Balances(crate::Event::Thawed { who: 1, amount: 15 })]);
+	});
+}
