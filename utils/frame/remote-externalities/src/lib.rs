@@ -872,7 +872,7 @@ where
 			);
 			match self.rpc_get_storage(key.clone(), Some(at)).await? {
 				Some(value) => {
-					pending_ext.batch_insert(vec![(key.clone().0, value.clone().0)]);
+					pending_ext.insert(key.clone().0, value.clone().0);
 					keys_and_values.push((key, value));
 				},
 				None => {
