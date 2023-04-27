@@ -514,22 +514,37 @@ impl FullBlockDownloader {
 			.map(|block_data| {
 				Ok(BlockData::<B> {
 					hash: Decode::decode(&mut block_data.hash.as_ref())?,
-					header: (block_data.header.len() > 0)
-						.then_some(Decode::decode(&mut block_data.header.as_ref())?),
-					body: request.fields.contains(BlockAttributes::BODY).then_some(
-						block_data
-							.body
-							.iter()
-							.map(|body| Decode::decode(&mut body.as_ref()))
-							.collect::<Result<Vec<_>, _>>()?,
-					),
-					indexed_body: request
-						.fields
-						.contains(BlockAttributes::INDEXED_BODY)
-						.then_some(block_data.indexed_body),
-					receipt: (block_data.receipt.len() > 0).then_some(block_data.receipt),
-					message_queue: (block_data.message_queue.len() > 0)
-						.then_some(block_data.message_queue),
+					header: if !block_data.header.is_empty() {
+						Some(Decode::decode(&mut block_data.header.as_ref())?)
+					} else {
+						None
+					},
+					body: if request.fields.contains(BlockAttributes::BODY) {
+						Some(
+							block_data
+								.body
+								.iter()
+								.map(|body| Decode::decode(&mut body.as_ref()))
+								.collect::<Result<Vec<_>, _>>()?,
+						)
+					} else {
+						None
+					},
+					indexed_body: if request.fields.contains(BlockAttributes::INDEXED_BODY) {
+						Some(block_data.indexed_body)
+					} else {
+						None
+					},
+					receipt: if !block_data.receipt.is_empty() {
+						Some(block_data.receipt)
+					} else {
+						None
+					},
+					message_queue: if !block_data.message_queue.is_empty() {
+						Some(block_data.message_queue)
+					} else {
+						None
+					},
 					justification: if !block_data.justification.is_empty() {
 						Some(block_data.justification)
 					} else if block_data.is_empty_justification {
@@ -537,8 +552,11 @@ impl FullBlockDownloader {
 					} else {
 						None
 					},
-					justifications: (block_data.justifications.len() > 0)
-						.then_some(DecodeAll::decode_all(&mut block_data.justifications.as_ref())?),
+					justifications: if !block_data.justifications.is_empty() {
+						Some(DecodeAll::decode_all(&mut block_data.justifications.as_ref())?)
+					} else {
+						None
+					},
 				})
 			})
 			.collect::<Result<_, _>>()
