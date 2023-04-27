@@ -1443,6 +1443,19 @@ fn disapprove_proposal_works() {
 	})
 }
 
+#[should_panic(expected = "Members length cannot exceed MaxMembers.")]
+#[test]
+fn genesis_build_panics_with_too_many_members() {
+	let max_members: u32 = MaxMembers::get();
+	let too_many_members = (1..=max_members as u64 + 1).collect::<Vec<AccountId>>();
+	pallet_collective::GenesisConfig::<Test> {
+		members: too_many_members,
+		phantom: Default::default(),
+	}
+	.build_storage()
+	.unwrap();
+}
+
 #[test]
 #[should_panic(expected = "Members cannot contain duplicate accounts.")]
 fn genesis_build_panics_with_duplicate_members() {

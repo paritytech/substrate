@@ -246,6 +246,10 @@ pub mod pallet {
 				self.members.len(),
 				"Members cannot contain duplicate accounts."
 			);
+			assert!(
+				self.members.len() <= T::MaxMembers::get() as usize,
+				"Members length cannot exceed MaxMembers.",
+			);
 
 			Pallet::<T, I>::initialize_members(&self.members)
 		}
