@@ -1094,17 +1094,25 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 
 /// Trait grouping types shared by a VRF signer and verifiers.
 pub trait VrfCrypto {
+	/// VRF input data.
+	type VrfInput;
+	/// VRF pre-output generated from input data.
+	type VrfPreOutput;
 	/// Associated signature type.
 	type VrfSignature;
-
-	/// Vrf input data. Generally some form of transcript.
-	type VrfInput;
 }
 
 /// VRF Signer.
 pub trait VrfSigner: VrfCrypto {
-	/// Sign input data.
-	fn vrf_sign(&self, data: &Self::VrfInput) -> Self::VrfSignature;
+	/// Get VRF pre-output.
+	fn vrf_preout(&self, data: &Self::VrfInput) -> Self::VrfPreOutput;
+
+	/// Sign input data with optional pre-computed pre-output.
+	fn vrf_sign(
+		&self,
+		input: &Self::VrfInput,
+		preout: Option<Self::VrfPreOutput>,
+	) -> Self::VrfSignature;
 }
 
 /// VRF Verifier.
