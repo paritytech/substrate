@@ -94,7 +94,7 @@ pub type BabeAuthorityWeight = u64;
 /// of 0 (regardless of whether they are plain or vrf secondary blocks).
 pub type BabeBlockWeight = u32;
 
-/// Make a VRF transcript data container
+/// Make VRF input suitable for BABE's randomness generation.
 pub fn make_vrf_input(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfInput {
 	VrfInput::new(
 		&BABE_ENGINE_ID,

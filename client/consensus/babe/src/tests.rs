@@ -629,9 +629,9 @@ fn claim_vrf_check() {
 		PreDigest::Primary(d) => d,
 		v => panic!("Unexpected pre-digest variant {:?}", v),
 	};
-	let transcript = make_vrf_input(&epoch.randomness.clone(), 0.into(), epoch.epoch_index);
+	let vrf_input = make_vrf_input(&epoch.randomness.clone(), 0.into(), epoch.epoch_index);
 	let sign = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, &public, &transcript)
+		.sr25519_vrf_sign(AuthorityId::ID, &public, &vrf_input)
 		.unwrap()
 		.unwrap();
 	assert_eq!(pre_digest.vrf_signature.preout, sign.preout);
@@ -641,9 +641,9 @@ fn claim_vrf_check() {
 		PreDigest::SecondaryVRF(d) => d,
 		v => panic!("Unexpected pre-digest variant {:?}", v),
 	};
-	let transcript = make_vrf_input(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
+	let vrf_input = make_vrf_input(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
 	let sign = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, &public, &transcript)
+		.sr25519_vrf_sign(AuthorityId::ID, &public, &vrf_input)
 		.unwrap()
 		.unwrap();
 	assert_eq!(pre_digest.vrf_signature.preout, sign.preout);
@@ -655,9 +655,9 @@ fn claim_vrf_check() {
 		v => panic!("Unexpected claim variant {:?}", v),
 	};
 	let fixed_epoch = epoch.clone_for_slot(slot);
-	let transcript = make_vrf_input(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
+	let vrf_input = make_vrf_input(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
 	let sign = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, &public, &transcript)
+		.sr25519_vrf_sign(AuthorityId::ID, &public, &vrf_input)
 		.unwrap()
 		.unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);
@@ -670,9 +670,9 @@ fn claim_vrf_check() {
 		v => panic!("Unexpected claim variant {:?}", v),
 	};
 	let fixed_epoch = epoch.clone_for_slot(slot);
-	let transcript = make_vrf_input(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
+	let vrf_input = make_vrf_input(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
 	let sign = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, &public, &transcript)
+		.sr25519_vrf_sign(AuthorityId::ID, &public, &vrf_input)
 		.unwrap()
 		.unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);
