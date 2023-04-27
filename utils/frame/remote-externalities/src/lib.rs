@@ -518,14 +518,12 @@ where
 		let mut batch_failed = false;
 		loop {
 			match rx.next().await.unwrap() {
-				Message::Batch(kv) => {
-					for (k, v) in kv {
-						// skip writing the child root data.
-						if is_default_child_storage_key(k.as_ref()) {
-							continue
-						}
-						pending_ext.insert(k, v);
-					}
+				Message::Batch(kvs) => {
+					let kvs = kvs
+						.into_iter()
+						.filter(|(k, _)| !is_default_child_storage_key(k))
+						.collect::<Vec<_>>();
+					pending_ext.batch_insert(kvs);
 				},
 				Message::BatchFailed(error) => {
 					log::error!(target: LOG_TARGET, "Batch processing failed: {:?}", error);
@@ -955,13 +953,12 @@ where
 		);
 
 		info!(target: LOG_TARGET, "injecting a total of {} top keys", top.len());
-		for (k, v) in top {
-			// skip writing the child root data.
-			if is_default_child_storage_key(k.as_ref()) {
-				continue
-			}
-			inner_ext.insert(k.0, v.0);
-		}
+		let top = top
+			.into_iter()
+			.filter(|(k, _)| !is_default_child_storage_key(k.as_ref()))
+			.map(|(k, v)| (k.0, v.0))
+			.collect::<Vec<_>>();
+		inner_ext.batch_insert(top);
 
 		info!(
 			target: LOG_TARGET,
@@ -997,9 +994,7 @@ where
 				"extending externalities with {} manually injected key-values",
 				self.hashed_key_values.len()
 			);
-			for (k, v) in self.hashed_key_values {
-				ext.insert(k.0, v.0);
-			}
+			ext.batch_insert(self.hashed_key_values.into_iter().map(|(k, v)| (k.0, v.0)));
 		}
 
 		// exclude manual key values.
