@@ -426,16 +426,20 @@ enum PalletAttr {
 	Config(proc_macro2::Span),
 	Pallet(proc_macro2::Span),
 	Hooks(proc_macro2::Span),
-	/// A `#[pallet::call]` with optional attribute.
+	/// A `#[pallet::call]` with optional attributes to specialize the behaviour.
 	///
 	/// # Attributes
 	///
-	/// All attributes can be assigned by calling or assigning to them.
+	/// Each attribute `attr` can take the form of `#[pallet::call(attr = …)]` or
+	/// `#[pallet::call(attr(…))]`. The possible attributes are:
 	///
 	/// ## `weight`
 	///
-	/// Can be used to reduce the repetitive weight annotation in the trivial case. Instead of
-	/// writing:
+	/// Can be used to reduce the repetitive weight annotation in the trivial case. It accepts one
+	/// argument that is expected to be an implementation of the `WeightInfo` or something that
+	/// behaves syntactically equivalent. This allows to annotate a `WeightInfo` for all the calls.
+	/// Now each call does not need to specify its own `#[pallet::weight]` but can instead use the
+	/// one from the `#[pallet::call]` definition. So instead of having to write it on each call:
 	///
 	/// ```ignore
 	/// #[pallet::call]
@@ -443,7 +447,7 @@ enum PalletAttr {
 	///     #[pallet::weight(T::WeightInfo::create())]
 	///     pub fn create(
 	/// ```
-	/// you can now do:
+	/// you can now omit it on the call itself, if the name of the weigh function matches the call:
 	///
 	/// ```ignore
 	/// #[pallet::call(weight = <T as crate::Config>::WeightInfo)]
@@ -451,10 +455,14 @@ enum PalletAttr {
 	///     pub fn create(
 	/// ```
 	///
-	/// Both code snippets are equivalent. The passed type will be prepended to the name of the
-	/// call - if there is no `weight` attribute set on the call. This works together with
-	/// instanced pallets by using `Config<I>`. This attribute takes precedence over the default
-	/// weight if the pallet is in dev-mode.
+	/// It is possible to use this syntax together with instantiated pallets by using `Config<I>`
+	/// instead.
+	///
+	/// ### Dev Mode
+	///
+	/// Normally the `dev_mode` sets all weights of calls without a `#[pallet::weight]` annotation
+	/// to zero. Now when there is a `weight` attribute on the `#[pallet::call]`, then that is used
+	/// instead of the zero weight. So to say: it works together with `dev_mode`.
 	RuntimeCall(Option<InheritedCallWeightAttr>, proc_macro2::Span),
 	Error(proc_macro2::Span),
 	RuntimeEvent(proc_macro2::Span),
