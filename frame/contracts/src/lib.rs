@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Contract Pallet
+//! # Contracts Pallet
 //!
-//! The Contract module provides functionality for the runtime to deploy and execute WebAssembly
+//! The Contracts module provides functionality for the runtime to deploy and execute WebAssembly
 //! smart-contracts.
 //!
 //! - [`Config`]
@@ -73,7 +73,7 @@
 //!
 //! ## Usage
 //!
-//! The Contract module is a work in progress. The following examples show how this Contract module
+//! The Contracts module is a work in progress. The following examples show how this module
 //! can be used to instantiate and call contracts.
 //!
 //! * [`ink!`](https://use.ink) is
@@ -265,6 +265,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type DepositPerByte: Get<BalanceOf<Self>>;
 
+		/// Fallback value to limit the storage deposit if it's not being set by the caller.
+		#[pallet::constant]
+		type DefaultDepositLimit: Get<BalanceOf<Self>>;
+
 		/// The amount of balance a caller has to pay for each storage item.
 		///
 		/// # Note
@@ -315,8 +319,8 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
-			// Total runtime memory is expected to have 128Mb upper limit
-			const MAX_RUNTIME_MEM: u32 = 1024 * 1024 * 128;
+			// Total runtime memory limit
+			let max_runtime_mem: u32 = T::Schedule::get().limits.runtime_memory;
 			// Memory limits for a single contract:
 			// Value stack size: 1Mb per contract, default defined in wasmi
 			const MAX_STACK_SIZE: u32 = 1024 * 1024;
@@ -350,10 +354,10 @@ pub mod pallet {
 			// This gives us the following formula:
 			//
 			// `(MaxCodeLen * 18 * 4 + MAX_STACK_SIZE + max_heap_size) * max_call_depth <
-			// MAX_RUNTIME_MEM/2`
+			// max_runtime_mem/2`
 			//
 			// Hence the upper limit for the `MaxCodeLen` can be defined as follows:
-			let code_len_limit = MAX_RUNTIME_MEM
+			let code_len_limit = max_runtime_mem
 				.saturating_div(2)
 				.saturating_div(max_call_depth)
 				.saturating_sub(max_heap_size)
