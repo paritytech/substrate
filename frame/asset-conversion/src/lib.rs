@@ -908,7 +908,7 @@ pub mod pallet {
 				if include_fee {
 					Self::get_amount_in(&amount, &balance1, &balance2).ok()
 				} else {
-					Self::quote(&amount, &balance1, &balance2).ok()
+					Self::quote(&amount, &balance2, &balance1).ok()
 				}
 			} else {
 				None
