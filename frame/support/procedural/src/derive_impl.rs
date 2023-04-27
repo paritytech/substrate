@@ -22,9 +22,7 @@ use macro_magic::mm_core::ForeignPath;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use std::collections::HashSet;
-use syn::{
-	parse2, parse_quote, spanned::Spanned, token::Comma, Ident, ImplItem, ItemImpl, Path, Result,
-};
+use syn::{parse2, parse_quote, token::Comma, Ident, ImplItem, ItemImpl, Path, Result};
 
 #[derive(Parse)]
 pub struct DeriveImplAttrArgs {
@@ -163,15 +161,7 @@ pub fn derive_impl(
 	let local_impl = parse2::<ItemImpl>(local_tokens)?;
 	let foreign_impl = parse2::<ItemImpl>(foreign_tokens)?;
 	let foreign_path = parse2::<Path>(foreign_path)?;
-	let mut disambiguation_path = disambiguation_path;
-
-	let Some(source_crate_path) = foreign_path.segments.first() else {
-		return Err(syn::Error::new(foreign_path.span(), "foreign_path must have at least one segment"));
-	};
-	let source_crate_path = source_crate_path.ident.clone();
-	if disambiguation_path.segments.len() == 1 {
-		disambiguation_path = parse_quote!(#source_crate_path::pallet::#disambiguation_path);
-	}
+	let disambiguation_path = disambiguation_path;
 
 	let combined_impl = combine_impls(local_impl, foreign_impl, foreign_path, disambiguation_path);
 

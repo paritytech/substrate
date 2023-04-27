@@ -806,12 +806,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// will be used to qualify all default entries that are injected into the local impl. For
 /// example if your `foreign_path` is `some::path::TestTrait` and your `disambiguation_path` is
 /// `another::path::DefaultTrait`, any items injected into the local impl will be qualified as
-/// `<some::path::TestTrait as another::path::DefaultTrait>::specific_trait_item`. You can also
-/// provide just an ident as the `disambiguation_path`, in which case your
-/// `disambiguation_path` will be assumed to be
-/// `#your_pallet_crate::pallet::#IdentYouSpecified`. Thus if you want your
-/// `disambiguation_path` to be `balances::pallet::DefaultConfig`, you can just specify
-/// `DefaultConfig` and the macro will automatically fill in the leading path items.
+/// `<some::path::TestTrait as another::path::DefaultTrait>::specific_trait_item`.
 ///
 /// You can also make use of `#[pallet::no_default]` on specific items in your foreign trait
 /// that you want to ensure will not be copied over but that you nonetheless want to use
