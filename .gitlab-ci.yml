@@ -49,7 +49,8 @@ variables:
   DOCKER_OS: "debian:stretch"
   ARCH: "x86_64"
   CI_IMAGE: "paritytech/ci-linux:production"
-  BUILDAH_IMAGE: "quay.io/buildah/stable:v1.27"
+  BUILDAH_IMAGE: "quay.io/buildah/stable:v1.29"
+  BUILDAH_COMMAND: "buildah --storage-driver overlay2"
   RELENG_SCRIPTS_BRANCH: "master"
   RUSTY_CACHIER_SINGLE_BRANCH: master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
