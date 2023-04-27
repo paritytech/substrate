@@ -108,6 +108,16 @@ impl MemoryKeystore {
 		let sig = self.pair::<T>(key_type, public).map(|pair| pair.vrf_sign(input, None));
 		Ok(sig)
 	}
+
+	fn vrf_preout<T: Pair + VrfSecret>(
+		&self,
+		key_type: KeyTypeId,
+		public: &T::Public,
+		input: &T::VrfInput,
+	) -> Result<Option<T::VrfPreOutput>, Error> {
+		let preout = self.pair::<T>(key_type, public).map(|pair| pair.vrf_preout(input));
+		Ok(preout)
+	}
 }
 
 impl Keystore for MemoryKeystore {
@@ -139,6 +149,15 @@ impl Keystore for MemoryKeystore {
 		input: &sr25519::vrf::VrfInput,
 	) -> Result<Option<sr25519::vrf::VrfSignature>, Error> {
 		self.vrf_sign::<sr25519::Pair>(key_type, public, input)
+	}
+
+	fn sr25519_vrf_preout(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		input: &sr25519::vrf::VrfInput,
+	) -> Result<Option<sr25519::vrf::VrfPreOutput>, Error> {
+		self.vrf_preout::<sr25519::Pair>(key_type, public, input)
 	}
 
 	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {
@@ -286,6 +305,35 @@ mod tests {
 		let result = store.sr25519_vrf_sign(SR25519, &key_pair.public(), &input);
 
 		assert!(result.unwrap().is_some());
+	}
+
+	#[test]
+	fn vrf_preout() {
+		let store = MemoryKeystore::new();
+
+		let secret_uri = "//Alice";
+		let pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
+
+		let input = sr25519::vrf::VrfInput::new(
+			b"Test",
+			&[
+				(b"one", &1_u64.to_le_bytes()),
+				(b"two", &2_u64.to_le_bytes()),
+				(b"three", "test".as_bytes()),
+			],
+		);
+
+		let result = store.sr25519_vrf_preout(SR25519, &pair.public(), &input);
+		assert!(result.unwrap().is_none());
+
+		store
+			.insert(SR25519, secret_uri, pair.public().as_ref())
+			.expect("Inserts unknown key");
+
+		let preout = store.sr25519_vrf_preout(SR25519, &pair.public(), &input).unwrap().unwrap();
+
+		let result = preout.output_bytes::<[u8; 32]>(b"rand", &input, &pair.public());
+		assert!(result.is_ok());
 	}
 
 	#[test]

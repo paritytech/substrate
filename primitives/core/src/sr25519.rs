@@ -574,9 +574,9 @@ pub mod vrf {
 	/// VRF signature data
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 	pub struct VrfSignature {
-		/// Initial pre-output configuration.
+		/// VRF pre-output.
 		pub preout: VrfPreOutput,
-		/// Calculated proof.
+		/// VRF input proof.
 		pub proof: VrfProof,
 	}
 
