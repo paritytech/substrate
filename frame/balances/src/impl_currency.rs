@@ -490,7 +490,9 @@ where
 			return true
 		}
 		Self::account(who).free.checked_sub(&value).map_or(false, |new_balance| {
-			Self::ensure_can_withdraw(who, value, WithdrawReasons::RESERVE, new_balance).is_ok()
+			new_balance >= T::ExistentialDeposit::get() &&
+				Self::ensure_can_withdraw(who, value, WithdrawReasons::RESERVE, new_balance)
+					.is_ok()
 		})
 	}
 
