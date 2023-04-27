@@ -17,7 +17,10 @@
 
 //! Traits for hooking tasks to events in a blockchain's lifecycle.
 
-use crate::weights::Weight;
+use crate::{
+	dispatch::{DispatchError, DispatchResult},
+	weights::Weight,
+};
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;

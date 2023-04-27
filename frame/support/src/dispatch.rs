@@ -2095,7 +2095,7 @@ macro_rules! decl_module {
 			fn try_state(
 				_: <$trait_instance as $system::Config>::BlockNumber,
 				_: $crate::traits::TryStateSelect,
-			) -> DispatchResult {
+			) -> crate::dispatch::DispatchResult {
 				let pallet_name = <<
 					$trait_instance
 					as
@@ -2142,7 +2142,7 @@ macro_rules! decl_module {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, &'static str> {
+			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, DispatchError> {
 				Ok($crate::sp_std::vec::Vec::new())
 			}
 
@@ -2180,12 +2180,12 @@ macro_rules! decl_module {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, &'static str> {
+			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, crate::dispatch::DispatchError> {
 				Ok($crate::sp_std::vec::Vec::new())
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> DispatchResult {
+			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> crate::dispatch::DispatchResult {
 				Ok(())
 			}
 		}

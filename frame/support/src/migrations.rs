@@ -18,6 +18,7 @@
 #[cfg(feature = "try-runtime")]
 use crate::storage::unhashed::contains_prefixed_key;
 use crate::{
+	dispatch::{DispatchError, DispatchResult},
 	traits::{GetStorageVersion, PalletInfoAccess},
 	weights::{RuntimeDbWeight, Weight},
 };
@@ -176,7 +177,9 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 		match contains_prefixed_key(&hashed_prefix) {
 			true => {
 				log::error!("{} has keys remaining post-removal ❗", P::get());
-				return Err("Keys remaining post-removal, this should never happen 🚨")
+				return Err(DispatchError::Other(
+					"Keys remaining post-removal, this should never happen 🚨",
+				))
 			},
 			false => log::info!("No {} keys found post-removal 🎉", P::get()),
 		};

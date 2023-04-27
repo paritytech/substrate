@@ -17,6 +17,7 @@
 
 //! Try-runtime specific traits and types.
 
+use crate::dispatch::DispatchResult;
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
@@ -148,7 +149,7 @@ impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<Bl
 				result
 			},
 			Select::RoundRobin(len) => {
-				let functions: &[fn(BlockNumber, Select) -> Result<(), &'static str>] =
+				let functions: &[fn(BlockNumber, Select) -> DispatchResult] =
 					&[for_tuples!(#( Tuple::try_state ),*)];
 				let skip = n.clone() % (functions.len() as u32).into();
 				let skip: u32 =
@@ -161,12 +162,10 @@ impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<Bl
 				result
 			},
 			Select::Only(ref pallet_names) => {
-				let try_state_fns: &[(
-					&'static str,
-					fn(BlockNumber, Select) -> Result<(), &'static str>,
-				)] = &[for_tuples!(
-					#( (<Tuple as crate::traits::PalletInfoAccess>::name(), Tuple::try_state) ),*
-				)];
+				let try_state_fns: &[(&'static str, fn(BlockNumber, Select) -> DispatchResult)] =
+					&[for_tuples!(
+						#( (<Tuple as crate::traits::PalletInfoAccess>::name(), Tuple::try_state) ),*
+					)];
 				let mut result = Ok(());
 				pallet_names.iter().for_each(|pallet_name| {
 					if let Some((name, try_state_fn)) =
