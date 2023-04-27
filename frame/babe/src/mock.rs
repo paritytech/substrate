@@ -320,7 +320,7 @@ pub fn make_vrf_signature_and_output(
 ) -> (VrfSignature, Randomness) {
 	let vrf_input = sp_consensus_babe::make_vrf_input(&Babe::randomness(), slot, 0);
 
-	let signature = pair.as_ref().vrf_sign(&vrf_input, None);
+	let signature = pair.as_ref().vrf_sign(&vrf_input);
 
 	let randomness = pair
 		.as_ref()
