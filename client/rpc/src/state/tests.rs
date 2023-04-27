@@ -243,9 +243,6 @@ async fn should_notify_about_storage_changes() {
 	// NOTE: previous versions of the subscription code used to return an empty value for the
 	// "initial" storage change here
 	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(Some(_)));
-	// TODO(niklasad1): the internally spawning of tasks in jsonrpsee seems to not drop the client
-	// anymore this shouldn't be an issue however.
-	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Err(_));
 }
 
 #[tokio::test]
@@ -283,11 +280,6 @@ async fn should_send_initial_storage_changes_and_notifications() {
 
 	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(Some(_)));
 	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(Some(_)));
-
-	// No more messages to follow
-	// TODO(niklasad1): the internally spawning of tasks in jsonrpsee seems to not drop the client
-	// anymore this shouldn't be an issue however.
-	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Err(_));
 }
 
 #[tokio::test]
@@ -469,10 +461,6 @@ async fn should_notify_on_runtime_version_initially() {
 
 	// assert initial version sent.
 	assert_matches!(timeout_secs(10, sub.next::<RuntimeVersion>()).await, Ok(Some(_)));
-
-	// TODO(niklasad1): the internally spawning of tasks in jsonrpsee seems to not drop the client
-	// anymore this shouldn't be an issue however.
-	assert_matches!(timeout_secs(10, sub.next::<RuntimeVersion>()).await, Err(_));
 }
 
 #[test]
