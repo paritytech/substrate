@@ -1,4 +1,4 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
+// Copyright Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,11 @@
 //! Helper for handling (i.e. answering) block requests from a remote peer via the
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
-use crate::schema::v1::{block_request::FromBlock, BlockResponse, Direction};
+use crate::{
+	schema::v1::{block_request::FromBlock, BlockResponse, Direction},
+	MAX_BLOCKS_IN_RESPONSE,
+};
+
 use codec::{Decode, Encode};
 use futures::{
 	channel::{mpsc, oneshot},
@@ -27,17 +31,19 @@ use libp2p::PeerId;
 use log::debug;
 use lru::LruCache;
 use prost::Message;
+
 use sc_client_api::BlockBackend;
-use sc_network_common::{
+use sc_network::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
-	sync::message::BlockAttributes,
 };
+use sc_network_common::sync::message::BlockAttributes;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, One, Zero},
 };
+
 use std::{
 	cmp::min,
 	hash::{Hash, Hasher},
@@ -47,7 +53,6 @@ use std::{
 };
 
 const LOG_TARGET: &str = "sync";
-const MAX_BLOCKS_IN_RESPONSE: usize = 128;
 const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 const MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER: usize = 2;
 

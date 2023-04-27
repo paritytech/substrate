@@ -4,7 +4,7 @@ error[E0053]: method `test` has an incompatible type for trait
 19 |         fn test(data: String) {}
    |                       ^^^^^^
    |                       |
-   |                       expected `u64`, found struct `std::string::String`
+   |                       expected `u64`, found struct `String`
    |                       help: change the parameter type to match the trait: `u64`
    |
 note: type in trait
@@ -12,8 +12,8 @@ note: type in trait
    |
 13 |         fn test(data: u64);
    |                       ^^^
-   = note: expected fn pointer `fn(u64)`
-              found fn pointer `fn(std::string::String)`
+   = note: expected signature `fn(u64)`
+              found signature `fn(std::string::String)`
 
 error[E0308]: mismatched types
   --> tests/ui/impl_incorrect_method_signature.rs:19:11
@@ -21,7 +21,7 @@ error[E0308]: mismatched types
 17 | / sp_api::impl_runtime_apis! {
 18 | |     impl self::Api<Block> for Runtime {
 19 | |         fn test(data: String) {}
-   | |                 ^^^^ expected `u64`, found struct `std::string::String`
+   | |                 ^^^^ expected `u64`, found struct `String`
 20 | |     }
 ...  |
 32 | |     }

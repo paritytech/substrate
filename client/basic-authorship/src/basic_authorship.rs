@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -38,7 +38,6 @@ use sp_consensus::{DisableProofRecording, EnableProofRecording, ProofRecording, 
 use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
-	generic::BlockId,
 	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
 	Digest, Percent, SaturatedConversion,
 };
@@ -196,14 +195,12 @@ where
 	) -> Proposer<B, Block, C, A, PR> {
 		let parent_hash = parent_header.hash();
 
-		let id = BlockId::hash(parent_hash);
-
 		info!("🙌 Starting consensus session on top of parent {:?}", parent_hash);
 
 		let proposer = Proposer::<_, _, _, _, PR> {
 			spawn_handle: self.spawn_handle.clone(),
 			client: self.client.clone(),
-			parent_id: id,
+			parent_hash,
 			parent_number: *parent_header.number(),
 			transaction_pool: self.transaction_pool.clone(),
 			now,
@@ -247,7 +244,7 @@ where
 pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
 	client: Arc<C>,
-	parent_id: BlockId<Block>,
+	parent_hash: Block::Hash,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
@@ -344,7 +341,7 @@ where
 	{
 		let propose_with_start = time::Instant::now();
 		let mut block_builder =
-			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
+			self.client.new_block_at(self.parent_hash, inherent_digests, PR::ENABLED)?;
 
 		let create_inherents_start = time::Instant::now();
 		let inherents = block_builder.create_inherents(inherent_data)?;
@@ -477,14 +474,6 @@ where
 						break EndProposingReason::HitBlockWeightLimit
 					}
 				},
-				Err(e) if skipped > 0 => {
-					pending_iterator.report_invalid(&pending_tx);
-					trace!(
-						"[{:?}] Ignoring invalid transaction when skipping: {}",
-						pending_tx_hash,
-						e
-					);
-				},
 				Err(e) => {
 					pending_iterator.report_invalid(&pending_tx);
 					debug!("[{:?}] Invalid transaction: {}", pending_tx_hash, e);
@@ -559,7 +548,7 @@ mod tests {
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::{BlockOrigin, Environment, Proposer};
 	use sp_core::Pair;
-	use sp_runtime::traits::NumberFor;
+	use sp_runtime::{generic::BlockId, traits::NumberFor};
 	use substrate_test_runtime_client::{
 		prelude::*,
 		runtime::{Extrinsic, Transfer},
@@ -731,7 +720,7 @@ mod tests {
 		assert_eq!(proposal.block.extrinsics().len(), 1);
 
 		let api = client.runtime_api();
-		api.execute_block(&BlockId::Hash(genesis_hash), proposal.block).unwrap();
+		api.execute_block(genesis_hash, proposal.block).unwrap();
 
 		let state = backend.state_at(genesis_hash).unwrap();
 
@@ -743,8 +732,11 @@ mod tests {
 		);
 	}
 
+	// This test ensures that if one transaction of a user was rejected, because for example
+	// the weight limit was hit, we don't mark the other transactions of the user as invalid because
+	// the nonce is not matching.
 	#[test]
-	fn should_not_remove_invalid_transactions_when_skipping() {
+	fn should_not_remove_invalid_transactions_from_the_same_sender_after_one_was_invalid() {
 		// given
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();

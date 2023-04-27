@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,23 +19,31 @@ use crate::{
 	gas::GasMeter,
 	storage::{self, DepositAccount, WriteOutcome},
 	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, DebugBufferVec, Determinism, Error,
-	Event, Nonce, Pallet as Contracts, Schedule, System,
+	Event, Nonce, Pallet as Contracts, Schedule, System, LOG_TARGET,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
-	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
+	dispatch::{
+		fmt::Debug, DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable,
+	},
 	storage::{with_transaction, TransactionOutcome},
-	traits::{Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time},
+	traits::{
+		tokens::{Fortitude::Polite, Preservation::Expendable},
+		Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time,
+	},
 	weights::Weight,
 	Blake2_128Concat, BoundedVec, StorageHasher,
 };
 use frame_system::RawOrigin;
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
-use sp_core::ecdsa::Public as ECDSAPublic;
+use sp_core::{
+	ecdsa::Public as ECDSAPublic,
+	sr25519::{Public as SR25519Public, Signature as SR25519Signature},
+};
 use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
-use sp_runtime::traits::{Convert, Hash};
-use sp_std::{marker::PhantomData, mem, prelude::*};
+use sp_runtime::traits::{Convert, Hash, Zero};
+use sp_std::{marker::PhantomData, mem, prelude::*, vec::Vec};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type MomentOf<T> = <<T as Config>::Time as Time>::Moment;
@@ -46,32 +54,39 @@ pub type ExecResult = Result<ExecReturnValue, ExecError>;
 /// A type that represents a topic of an event. At the moment a hash is used.
 pub type TopicOf<T> = <T as frame_system::Config>::Hash;
 
-/// Type for fix sized storage key.
-pub type FixSizedKey = [u8; 32];
-
 /// Type for variable sized storage key. Used for transparent hashing.
-pub type VarSizedKey<T> = BoundedVec<u8, <T as Config>::MaxStorageKeyLen>;
+type VarSizedKey<T> = BoundedVec<u8, <T as Config>::MaxStorageKeyLen>;
 
-/// Trait for hashing storage keys.
-pub trait StorageKey<T>
-where
-	T: Config,
-{
-	fn hash(&self) -> Vec<u8>;
+/// Combined key type for both fixed and variable sized storage keys.
+pub enum Key<T: Config> {
+	/// Variant for fixed sized keys.
+	Fix([u8; 32]),
+	/// Variant for variable sized keys.
+	Var(VarSizedKey<T>),
 }
 
-impl<T: Config> StorageKey<T> for FixSizedKey {
-	fn hash(&self) -> Vec<u8> {
-		blake2_256(self.as_slice()).to_vec()
+impl<T: Config> Key<T> {
+	/// Copies self into a new vec.
+	pub fn to_vec(&self) -> Vec<u8> {
+		match self {
+			Key::Fix(v) => v.to_vec(),
+			Key::Var(v) => v.to_vec(),
+		}
 	}
-}
 
-impl<T> StorageKey<T> for VarSizedKey<T>
-where
-	T: Config,
-{
-	fn hash(&self) -> Vec<u8> {
-		Blake2_128Concat::hash(self.as_slice())
+	pub fn hash(&self) -> Vec<u8> {
+		match self {
+			Key::Fix(v) => blake2_256(v.as_slice()).to_vec(),
+			Key::Var(v) => Blake2_128Concat::hash(v.as_slice()),
+		}
+	}
+
+	pub fn try_from_fix(v: Vec<u8>) -> Result<Self, Vec<u8>> {
+		<[u8; 32]>::try_from(v).map(Self::Fix)
+	}
+
+	pub fn try_from_var(v: Vec<u8>) -> Result<Self, Vec<u8>> {
+		VarSizedKey::<T>::try_from(v).map(Self::Var)
 	}
 }
 
@@ -84,14 +99,14 @@ where
 pub enum ErrorOrigin {
 	/// Caller error origin.
 	///
-	/// The error happened in the current exeuction context rather than in the one
+	/// The error happened in the current execution context rather than in the one
 	/// of the contract that is called into.
 	Caller,
 	/// The error happened during execution of the called contract.
 	Callee,
 }
 
-/// Error returned by contract exection.
+/// Error returned by contract execution.
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct ExecError {
 	/// The reason why the execution failed.
@@ -124,6 +139,7 @@ pub trait Ext: sealing::Sealed {
 	fn call(
 		&mut self,
 		gas_limit: Weight,
+		deposit_limit: BalanceOf<Self::T>,
 		to: AccountIdOf<Self::T>,
 		value: BalanceOf<Self::T>,
 		input_data: Vec<u8>,
@@ -147,6 +163,7 @@ pub trait Ext: sealing::Sealed {
 	fn instantiate(
 		&mut self,
 		gas_limit: Weight,
+		deposit_limit: BalanceOf<Self::T>,
 		code: CodeHash<Self::T>,
 		value: BalanceOf<Self::T>,
 		input_data: Vec<u8>,
@@ -169,44 +186,19 @@ pub trait Ext: sealing::Sealed {
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	fn get_storage(&mut self, key: &FixSizedKey) -> Option<Vec<u8>>;
-
-	/// This is a variation of `get_storage()` to be used with transparent hashing.
-	/// These two will be merged into a single function after some refactoring is done.
-	/// Returns the storage entry of the executing account by the given `key`.
-	///
-	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
-	/// was deleted.
-	fn get_storage_transparent(&mut self, key: &VarSizedKey<Self::T>) -> Option<Vec<u8>>;
+	fn get_storage(&mut self, key: &Key<Self::T>) -> Option<Vec<u8>>;
 
 	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	fn get_storage_size(&mut self, key: &FixSizedKey) -> Option<u32>;
-
-	/// This is the variation of `get_storage_size()` to be used with transparent hashing.
-	/// These two will be merged into a single function after some refactoring is done.
-	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
-	///
-	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
-	/// was deleted.
-	fn get_storage_size_transparent(&mut self, key: &VarSizedKey<Self::T>) -> Option<u32>;
+	fn get_storage_size(&mut self, key: &Key<Self::T>) -> Option<u32>;
 
 	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
 	/// the storage entry is deleted.
 	fn set_storage(
 		&mut self,
-		key: &FixSizedKey,
-		value: Option<Vec<u8>>,
-		take_old: bool,
-	) -> Result<WriteOutcome, DispatchError>;
-
-	/// This is the variation of `set_storage()` to be used with transparent hashing.
-	/// These two will be merged into a single function after some refactoring is done.
-	fn set_storage_transparent(
-		&mut self,
-		key: &VarSizedKey<Self::T>,
+		key: &Key<Self::T>,
 		value: Option<Vec<u8>>,
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError>;
@@ -286,6 +278,9 @@ pub trait Ext: sealing::Sealed {
 
 	/// Recovers ECDSA compressed public key based on signature and message hash.
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
+
+	/// Verify a sr25519 signature.
+	fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool;
 
 	/// Returns Ethereum address from the ECDSA compressed public key.
 	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()>;
@@ -680,7 +675,7 @@ where
 			schedule,
 			value,
 			debug_message,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)?;
 		let account_id = stack.top_frame().account_id.clone();
 		stack.run(executable, input_data).map(|ret| (account_id, ret))
@@ -701,8 +696,9 @@ where
 			args,
 			value,
 			gas_meter,
-			storage_meter,
 			Weight::zero(),
+			storage_meter,
+			BalanceOf::<T>::zero(),
 			schedule,
 			determinism,
 		)?;
@@ -728,12 +724,13 @@ where
 	///
 	/// This does not take `self` because when constructing the first frame `self` is
 	/// not initialized, yet.
-	fn new_frame<S: storage::meter::State>(
+	fn new_frame<S: storage::meter::State + Default + Debug>(
 		frame_args: FrameArgs<T, E>,
 		value_transferred: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
-		storage_meter: &mut storage::meter::GenericMeter<T, S>,
 		gas_limit: Weight,
+		storage_meter: &mut storage::meter::GenericMeter<T, S>,
+		deposit_limit: BalanceOf<T>,
 		schedule: &Schedule<T>,
 		determinism: Determinism,
 	) -> Result<(Frame<T>, E, Option<u64>), ExecError> {
@@ -774,10 +771,10 @@ where
 				},
 			};
 
-		// `AllowIndeterminism` will only be ever set in case of off-chain execution.
+		// `Relaxed` will only be ever set in case of off-chain execution.
 		// Instantiations are never allowed even when executing off-chain.
 		if !(executable.is_deterministic() ||
-			(matches!(determinism, Determinism::AllowIndeterminism) &&
+			(matches!(determinism, Determinism::Relaxed) &&
 				matches!(entry_point, ExportedFunction::Call)))
 		{
 			return Err(Error::<T>::Indeterministic.into())
@@ -790,7 +787,7 @@ where
 			account_id,
 			entry_point,
 			nested_gas: gas_meter.nested(gas_limit)?,
-			nested_storage: storage_meter.nested(),
+			nested_storage: storage_meter.nested(deposit_limit),
 			allows_reentry: true,
 		};
 
@@ -803,6 +800,7 @@ where
 		frame_args: FrameArgs<T, E>,
 		value_transferred: BalanceOf<T>,
 		gas_limit: Weight,
+		deposit_limit: BalanceOf<T>,
 	) -> Result<E, ExecError> {
 		if self.frames.len() == T::CallStack::size() {
 			return Err(Error::<T>::MaxCallDepthReached.into())
@@ -826,8 +824,9 @@ where
 			frame_args,
 			value_transferred,
 			nested_gas,
-			nested_storage,
 			gas_limit,
+			nested_storage,
+			deposit_limit,
 			self.schedule,
 			self.determinism,
 		)?;
@@ -868,8 +867,10 @@ where
 				return Ok(output)
 			}
 
-			// Storage limit is enforced as late as possible (when the last frame returns) so that
-			// the ordering of storage accesses does not matter.
+			// Storage limit is normally enforced as late as possible (when the last frame returns)
+			// so that the ordering of storage accesses does not matter.
+			// (However, if a special limit was set for a sub-call, it should be enforced right
+			// after the sub-call returned. See below for this case of enforcement).
 			if self.frames.is_empty() {
 				let frame = &mut self.first_frame;
 				frame.contract_info.load(&frame.account_id);
@@ -878,13 +879,20 @@ where
 			}
 
 			let frame = self.top_frame();
-			let account_id = &frame.account_id;
+			let account_id = &frame.account_id.clone();
 			match (entry_point, delegated_code_hash) {
 				(ExportedFunction::Constructor, _) => {
 					// It is not allowed to terminate a contract inside its constructor.
 					if matches!(frame.contract_info, CachedContract::Terminated(_)) {
 						return Err(Error::<T>::TerminatedInConstructor.into())
 					}
+
+					// If a special limit was set for the sub-call, we enforce it here.
+					// This is needed because contract constructor might write to storage.
+					// The sub-call will be rolled back in case the limit is exhausted.
+					let frame = self.top_frame_mut();
+					let contract = frame.contract_info.as_contract();
+					frame.nested_storage.enforce_subcall_limit(contract)?;
 
 					// Deposit an instantiation event.
 					Contracts::<T>::deposit_event(
@@ -902,9 +910,15 @@ where
 					);
 				},
 				(ExportedFunction::Call, None) => {
+					// If a special limit was set for the sub-call, we enforce it here.
+					// The sub-call will be rolled back in case the limit is exhausted.
+					let frame = self.top_frame_mut();
+					let contract = frame.contract_info.as_contract();
+					frame.nested_storage.enforce_subcall_limit(contract)?;
+
 					let caller = self.caller();
 					Contracts::<T>::deposit_event(
-						vec![T::Hashing::hash_of(caller), T::Hashing::hash_of(account_id)],
+						vec![T::Hashing::hash_of(caller), T::Hashing::hash_of(&account_id)],
 						Event::Called { caller: caller.clone(), contract: account_id.clone() },
 					);
 				},
@@ -1011,7 +1025,7 @@ where
 		} else {
 			if let Some((msg, false)) = self.debug_message.as_ref().map(|m| (m, m.is_empty())) {
 				log::debug!(
-					target: "runtime::contracts",
+					target: LOG_TARGET,
 					"Execution finished with debug buffer: {}",
 					core::str::from_utf8(msg).unwrap_or("<Invalid UTF8>"),
 				);
@@ -1116,6 +1130,7 @@ where
 	fn call(
 		&mut self,
 		gas_limit: Weight,
+		deposit_limit: BalanceOf<T>,
 		to: T::AccountId,
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
@@ -1144,6 +1159,7 @@ where
 				FrameArgs::Call { dest: to, cached_info, delegated_call: None },
 				value,
 				gas_limit,
+				deposit_limit,
 			)?;
 			self.run(executable, input_data)
 		};
@@ -1175,6 +1191,7 @@ where
 			},
 			value,
 			Weight::zero(),
+			BalanceOf::<T>::zero(),
 		)?;
 		self.run(executable, input_data)
 	}
@@ -1182,6 +1199,7 @@ where
 	fn instantiate(
 		&mut self,
 		gas_limit: Weight,
+		deposit_limit: BalanceOf<Self::T>,
 		code_hash: CodeHash<T>,
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
@@ -1199,6 +1217,7 @@ where
 			},
 			value,
 			gas_limit,
+			deposit_limit,
 		)?;
 		let account_id = self.top_frame().account_id.clone();
 		self.run(executable, input_data).map(|ret| (account_id, ret))
@@ -1216,10 +1235,10 @@ where
 		T::Currency::transfer(
 			&frame.account_id,
 			beneficiary,
-			T::Currency::reducible_balance(&frame.account_id, false),
+			T::Currency::reducible_balance(&frame.account_id, Expendable, Polite),
 			ExistenceRequirement::AllowDeath,
 		)?;
-		info.queue_trie_for_deletion()?;
+		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::remove_user(info.code_hash);
 		Contracts::<T>::deposit_event(
@@ -1236,46 +1255,23 @@ where
 		Self::transfer(ExistenceRequirement::KeepAlive, &self.top_frame().account_id, to, value)
 	}
 
-	fn get_storage(&mut self, key: &FixSizedKey) -> Option<Vec<u8>> {
+	fn get_storage(&mut self, key: &Key<T>) -> Option<Vec<u8>> {
 		self.top_frame_mut().contract_info().read(key)
 	}
 
-	fn get_storage_transparent(&mut self, key: &VarSizedKey<T>) -> Option<Vec<u8>> {
-		self.top_frame_mut().contract_info().read(key)
-	}
-
-	fn get_storage_size(&mut self, key: &FixSizedKey) -> Option<u32> {
-		self.top_frame_mut().contract_info().size(key)
-	}
-
-	fn get_storage_size_transparent(&mut self, key: &VarSizedKey<T>) -> Option<u32> {
-		self.top_frame_mut().contract_info().size(key)
+	fn get_storage_size(&mut self, key: &Key<T>) -> Option<u32> {
+		self.top_frame_mut().contract_info().size(key.into())
 	}
 
 	fn set_storage(
 		&mut self,
-		key: &FixSizedKey,
+		key: &Key<T>,
 		value: Option<Vec<u8>>,
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError> {
 		let frame = self.top_frame_mut();
 		frame.contract_info.get(&frame.account_id).write(
-			key,
-			value,
-			Some(&mut frame.nested_storage),
-			take_old,
-		)
-	}
-
-	fn set_storage_transparent(
-		&mut self,
-		key: &VarSizedKey<T>,
-		value: Option<Vec<u8>>,
-		take_old: bool,
-	) -> Result<WriteOutcome, DispatchError> {
-		let frame = self.top_frame_mut();
-		frame.contract_info.get(&frame.account_id).write(
-			key,
+			key.into(),
 			value,
 			Some(&mut frame.nested_storage),
 			take_old,
@@ -1363,7 +1359,7 @@ where
 				.try_extend(&mut msg.bytes())
 				.map_err(|_| {
 					log::debug!(
-						target: "runtime::contracts",
+						target: LOG_TARGET,
 						"Debug buffer (of {} bytes) exhausted!",
 						DebugBufferVec::<T>::bound(),
 					)
@@ -1383,6 +1379,14 @@ where
 
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()> {
 		secp256k1_ecdsa_recover_compressed(signature, message_hash).map_err(|_| ())
+	}
+
+	fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool {
+		sp_io::crypto::sr25519_verify(
+			&SR25519Signature(*signature),
+			message,
+			&SR25519Public(*pub_key),
+		)
 	}
 
 	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()> {
@@ -1645,7 +1649,7 @@ mod tests {
 					value,
 					vec![],
 					None,
-					Determinism::Deterministic,
+					Determinism::Enforced,
 				),
 				Ok(_)
 			);
@@ -1688,7 +1692,7 @@ mod tests {
 			place_contract(&dest, success_ch);
 			set_balance(&origin, 100);
 			let balance = get_balance(&dest);
-			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 55).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), value).unwrap();
 
 			let _ = MockStack::run_call(
 				origin.clone(),
@@ -1699,7 +1703,7 @@ mod tests {
 				value,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -1741,7 +1745,7 @@ mod tests {
 				value,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -1777,7 +1781,7 @@ mod tests {
 				55,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -1829,7 +1833,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			let output = result.unwrap();
@@ -1862,7 +1866,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			let output = result.unwrap();
@@ -1893,7 +1897,7 @@ mod tests {
 				0,
 				vec![1, 2, 3, 4],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -1941,7 +1945,7 @@ mod tests {
 		let value = Default::default();
 		let recurse_ch = MockLoader::insert(Call, |ctx, _| {
 			// Try to call into yourself.
-			let r = ctx.ext.call(Weight::zero(), BOB, 0, vec![], true);
+			let r = ctx.ext.call(Weight::zero(), BalanceOf::<Test>::zero(), BOB, 0, vec![], true);
 
 			ReachedBottom::mutate(|reached_bottom| {
 				if !*reached_bottom {
@@ -1973,7 +1977,7 @@ mod tests {
 				value,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			assert_matches!(result, Ok(_));
@@ -1995,7 +1999,11 @@ mod tests {
 			WitnessedCallerBob::mutate(|caller| *caller = Some(ctx.ext.caller().clone()));
 
 			// Call into CHARLIE contract.
-			assert_matches!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), Ok(_));
+			assert_matches!(
+				ctx.ext
+					.call(Weight::zero(), BalanceOf::<Test>::zero(), CHARLIE, 0, vec![], true),
+				Ok(_)
+			);
 			exec_success()
 		});
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
@@ -2019,7 +2027,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			assert_matches!(result, Ok(_));
@@ -2053,7 +2061,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2083,7 +2091,7 @@ mod tests {
 				0,
 				vec![0],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2111,7 +2119,7 @@ mod tests {
 				0,
 				vec![0],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2129,7 +2137,8 @@ mod tests {
 			// ALICE is the origin of the call stack
 			assert!(ctx.ext.caller_is_origin());
 			// BOB calls CHARLIE
-			ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true)
+			ctx.ext
+				.call(Weight::zero(), BalanceOf::<Test>::zero(), CHARLIE, 0, vec![], true)
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -2147,7 +2156,7 @@ mod tests {
 				0,
 				vec![0],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2160,7 +2169,11 @@ mod tests {
 			assert_eq!(*ctx.ext.address(), BOB);
 
 			// Call into charlie contract.
-			assert_matches!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), Ok(_));
+			assert_matches!(
+				ctx.ext
+					.call(Weight::zero(), BalanceOf::<Test>::zero(), CHARLIE, 0, vec![], true),
+				Ok(_)
+			);
 			exec_success()
 		});
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
@@ -2183,7 +2196,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			assert_matches!(result, Ok(_));
@@ -2311,6 +2324,7 @@ mod tests {
 					.ext
 					.instantiate(
 						Weight::zero(),
+						BalanceOf::<Test>::zero(),
 						dummy_ch,
 						<Test as Config>::Currency::minimum_balance(),
 						vec![],
@@ -2342,7 +2356,7 @@ mod tests {
 					min_balance * 10,
 					vec![],
 					None,
-					Determinism::Deterministic,
+					Determinism::Enforced,
 				),
 				Ok(_)
 			);
@@ -2375,6 +2389,7 @@ mod tests {
 				assert_matches!(
 					ctx.ext.instantiate(
 						Weight::zero(),
+						BalanceOf::<Test>::zero(),
 						dummy_ch,
 						<Test as Config>::Currency::minimum_balance(),
 						vec![],
@@ -2407,7 +2422,7 @@ mod tests {
 					0,
 					vec![],
 					None,
-					Determinism::Deterministic,
+					Determinism::Enforced,
 				),
 				Ok(_)
 			);
@@ -2455,7 +2470,7 @@ mod tests {
 	#[test]
 	fn in_memory_changes_not_discarded() {
 		// Call stack: BOB -> CHARLIE (trap) -> BOB' (success)
-		// This tests verfies some edge case of the contract info cache:
+		// This tests verifies some edge case of the contract info cache:
 		// We change some value in our contract info before calling into a contract
 		// that calls into ourself. This triggers a case where BOBs contract info
 		// is written to storage and invalidated by the successful execution of BOB'.
@@ -2467,13 +2482,26 @@ mod tests {
 				let info = ctx.ext.contract_info();
 				assert_eq!(info.storage_byte_deposit, 0);
 				info.storage_byte_deposit = 42;
-				assert_eq!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), exec_trapped());
+				assert_eq!(
+					ctx.ext.call(
+						Weight::zero(),
+						BalanceOf::<Test>::zero(),
+						CHARLIE,
+						0,
+						vec![],
+						true
+					),
+					exec_trapped()
+				);
 				assert_eq!(ctx.ext.contract_info().storage_byte_deposit, 42);
 			}
 			exec_success()
 		});
 		let code_charlie = MockLoader::insert(Call, |ctx, _| {
-			assert!(ctx.ext.call(Weight::zero(), BOB, 0, vec![99], true).is_ok());
+			assert!(ctx
+				.ext
+				.call(Weight::zero(), BalanceOf::<Test>::zero(), BOB, 0, vec![99], true)
+				.is_ok());
 			exec_trapped()
 		});
 
@@ -2493,7 +2521,7 @@ mod tests {
 				0,
 				vec![0],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2503,7 +2531,7 @@ mod tests {
 	fn recursive_call_during_constructor_fails() {
 		let code = MockLoader::insert(Constructor, |ctx, _| {
 			assert_matches!(
-				ctx.ext.call(Weight::zero(), ctx.ext.address().clone(), 0, vec![], true),
+				ctx.ext.call(Weight::zero(), BalanceOf::<Test>::zero(), ctx.ext.address().clone(), 0, vec![], true),
 				Err(ExecError{error, ..}) if error == <Error<Test>>::ContractNotFound.into()
 			);
 			exec_success()
@@ -2559,7 +2587,7 @@ mod tests {
 				0,
 				vec![],
 				Some(&mut debug_buffer),
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 		});
@@ -2593,7 +2621,7 @@ mod tests {
 				0,
 				vec![],
 				Some(&mut debug_buffer),
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert!(result.is_err());
 		});
@@ -2630,7 +2658,7 @@ mod tests {
 				0,
 				vec![],
 				Some(&mut debug_buf_after),
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 			assert_eq!(debug_buf_before, debug_buf_after);
@@ -2642,7 +2670,7 @@ mod tests {
 		// call the contract passed as input with disabled reentry
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			let dest = Decode::decode(&mut ctx.input_data.as_ref()).unwrap();
-			ctx.ext.call(Weight::zero(), dest, 0, vec![], false)
+			ctx.ext.call(Weight::zero(), BalanceOf::<Test>::zero(), dest, 0, vec![], false)
 		});
 
 		let code_charlie = MockLoader::insert(Call, |_, _| exec_success());
@@ -2663,7 +2691,7 @@ mod tests {
 				0,
 				CHARLIE.encode(),
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 
 			// Calling into oneself fails
@@ -2677,7 +2705,7 @@ mod tests {
 					0,
 					BOB.encode(),
 					None,
-					Determinism::Deterministic
+					Determinism::Enforced
 				)
 				.map_err(|e| e.error),
 				<Error<Test>>::ReentranceDenied,
@@ -2689,15 +2717,17 @@ mod tests {
 	fn call_deny_reentry() {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			if ctx.input_data[0] == 0 {
-				ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], false)
+				ctx.ext
+					.call(Weight::zero(), BalanceOf::<Test>::zero(), CHARLIE, 0, vec![], false)
 			} else {
 				exec_success()
 			}
 		});
 
 		// call BOB with input set to '1'
-		let code_charlie =
-			MockLoader::insert(Call, |ctx, _| ctx.ext.call(Weight::zero(), BOB, 0, vec![1], true));
+		let code_charlie = MockLoader::insert(Call, |ctx, _| {
+			ctx.ext.call(Weight::zero(), BalanceOf::<Test>::zero(), BOB, 0, vec![1], true)
+		});
 
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
@@ -2716,7 +2746,7 @@ mod tests {
 					0,
 					vec![0],
 					None,
-					Determinism::Deterministic
+					Determinism::Enforced
 				)
 				.map_err(|e| e.error),
 				<Error<Test>>::ReentranceDenied,
@@ -2751,7 +2781,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -2792,8 +2822,10 @@ mod tests {
 				RuntimeCall::System(SysCall::remark_with_event { remark: b"Hello".to_vec() });
 
 			// transfers are disallowed by the `TestFiler` (see below)
-			let forbidden_call =
-				RuntimeCall::Balances(BalanceCall::transfer { dest: CHARLIE, value: 22 });
+			let forbidden_call = RuntimeCall::Balances(BalanceCall::transfer_allow_death {
+				dest: CHARLIE,
+				value: 22,
+			});
 
 			// simple cases: direct call
 			assert_err!(
@@ -2813,7 +2845,7 @@ mod tests {
 		});
 
 		TestFilter::set_filter(|call| match call {
-			RuntimeCall::Balances(pallet_balances::Call::transfer { .. }) => false,
+			RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death { .. }) => false,
 			_ => true,
 		});
 
@@ -2834,7 +2866,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -2884,6 +2916,7 @@ mod tests {
 			ctx.ext
 				.instantiate(
 					Weight::zero(),
+					BalanceOf::<Test>::zero(),
 					fail_code,
 					ctx.ext.minimum_balance() * 100,
 					vec![],
@@ -2897,6 +2930,7 @@ mod tests {
 				.ext
 				.instantiate(
 					Weight::zero(),
+					BalanceOf::<Test>::zero(),
 					success_code,
 					ctx.ext.minimum_balance() * 100,
 					vec![],
@@ -2905,7 +2939,9 @@ mod tests {
 				.unwrap();
 
 			// a plain call should not influence the account counter
-			ctx.ext.call(Weight::zero(), account_id, 0, vec![], false).unwrap();
+			ctx.ext
+				.call(Weight::zero(), BalanceOf::<Test>::zero(), account_id, 0, vec![], false)
+				.unwrap();
 
 			exec_success()
 		});
@@ -2986,35 +3022,41 @@ mod tests {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			// Write
 			assert_eq!(
-				ctx.ext.set_storage(&[1; 32], Some(vec![1, 2, 3]), false),
+				ctx.ext.set_storage(&Key::Fix([1; 32]), Some(vec![1, 2, 3]), false),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage(&[2; 32], Some(vec![4, 5, 6]), true),
+				ctx.ext.set_storage(&Key::Fix([2; 32]), Some(vec![4, 5, 6]), true),
 				Ok(WriteOutcome::New)
 			);
-			assert_eq!(ctx.ext.set_storage(&[3; 32], None, false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.set_storage(&[4; 32], None, true), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.set_storage(&[5; 32], Some(vec![]), false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.set_storage(&[6; 32], Some(vec![]), true), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&Key::Fix([3; 32]), None, false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&Key::Fix([4; 32]), None, true), Ok(WriteOutcome::New));
+			assert_eq!(
+				ctx.ext.set_storage(&Key::Fix([5; 32]), Some(vec![]), false),
+				Ok(WriteOutcome::New)
+			);
+			assert_eq!(
+				ctx.ext.set_storage(&Key::Fix([6; 32]), Some(vec![]), true),
+				Ok(WriteOutcome::New)
+			);
 
 			// Overwrite
 			assert_eq!(
-				ctx.ext.set_storage(&[1; 32], Some(vec![42]), false),
+				ctx.ext.set_storage(&Key::Fix([1; 32]), Some(vec![42]), false),
 				Ok(WriteOutcome::Overwritten(3))
 			);
 			assert_eq!(
-				ctx.ext.set_storage(&[2; 32], Some(vec![48]), true),
+				ctx.ext.set_storage(&Key::Fix([2; 32]), Some(vec![48]), true),
 				Ok(WriteOutcome::Taken(vec![4, 5, 6]))
 			);
-			assert_eq!(ctx.ext.set_storage(&[3; 32], None, false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.set_storage(&[4; 32], None, true), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&Key::Fix([3; 32]), None, false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&Key::Fix([4; 32]), None, true), Ok(WriteOutcome::New));
 			assert_eq!(
-				ctx.ext.set_storage(&[5; 32], Some(vec![]), false),
+				ctx.ext.set_storage(&Key::Fix([5; 32]), Some(vec![]), false),
 				Ok(WriteOutcome::Overwritten(0))
 			);
 			assert_eq!(
-				ctx.ext.set_storage(&[6; 32], Some(vec![]), true),
+				ctx.ext.set_storage(&Key::Fix([6; 32]), Some(vec![]), true),
 				Ok(WriteOutcome::Taken(vec![]))
 			);
 
@@ -3037,58 +3079,58 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
 
 	#[test]
-	fn set_storage_transparent_works() {
+	fn set_storage_varsized_key_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			// Write
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([1; 64].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([1; 64].to_vec()).unwrap(),
 					Some(vec![1, 2, 3]),
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([2; 19].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([2; 19].to_vec()).unwrap(),
 					Some(vec![4, 5, 6]),
 					true
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([3; 19].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([3; 19].to_vec()).unwrap(),
 					None,
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([4; 64].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([4; 64].to_vec()).unwrap(),
 					None,
 					true
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([5; 30].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([5; 30].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([6; 128].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([6; 128].to_vec()).unwrap(),
 					Some(vec![]),
 					true
 				),
@@ -3097,48 +3139,48 @@ mod tests {
 
 			// Overwrite
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([1; 64].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([1; 64].to_vec()).unwrap(),
 					Some(vec![42, 43, 44]),
 					false
 				),
 				Ok(WriteOutcome::Overwritten(3))
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([2; 19].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([2; 19].to_vec()).unwrap(),
 					Some(vec![48]),
 					true
 				),
 				Ok(WriteOutcome::Taken(vec![4, 5, 6]))
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([3; 19].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([3; 19].to_vec()).unwrap(),
 					None,
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([4; 64].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([4; 64].to_vec()).unwrap(),
 					None,
 					true
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([5; 30].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([5; 30].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
 				Ok(WriteOutcome::Overwritten(0))
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([6; 128].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([6; 128].to_vec()).unwrap(),
 					Some(vec![]),
 					true
 				),
@@ -3164,7 +3206,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3173,13 +3215,16 @@ mod tests {
 	fn get_storage_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
-				ctx.ext.set_storage(&[1; 32], Some(vec![1, 2, 3]), false),
+				ctx.ext.set_storage(&Key::Fix([1; 32]), Some(vec![1, 2, 3]), false),
 				Ok(WriteOutcome::New)
 			);
-			assert_eq!(ctx.ext.set_storage(&[2; 32], Some(vec![]), false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.get_storage(&[1; 32]), Some(vec![1, 2, 3]));
-			assert_eq!(ctx.ext.get_storage(&[2; 32]), Some(vec![]));
-			assert_eq!(ctx.ext.get_storage(&[3; 32]), None);
+			assert_eq!(
+				ctx.ext.set_storage(&Key::Fix([2; 32]), Some(vec![]), false),
+				Ok(WriteOutcome::New)
+			);
+			assert_eq!(ctx.ext.get_storage(&Key::Fix([1; 32])), Some(vec![1, 2, 3]));
+			assert_eq!(ctx.ext.get_storage(&Key::Fix([2; 32])), Some(vec![]));
+			assert_eq!(ctx.ext.get_storage(&Key::Fix([3; 32])), None);
 
 			exec_success()
 		});
@@ -3200,7 +3245,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3209,13 +3254,16 @@ mod tests {
 	fn get_storage_size_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
-				ctx.ext.set_storage(&[1; 32], Some(vec![1, 2, 3]), false),
+				ctx.ext.set_storage(&Key::Fix([1; 32]), Some(vec![1, 2, 3]), false),
 				Ok(WriteOutcome::New)
 			);
-			assert_eq!(ctx.ext.set_storage(&[2; 32], Some(vec![]), false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.get_storage_size(&[1; 32]), Some(3));
-			assert_eq!(ctx.ext.get_storage_size(&[2; 32]), Some(0));
-			assert_eq!(ctx.ext.get_storage_size(&[3; 32]), None);
+			assert_eq!(
+				ctx.ext.set_storage(&Key::Fix([2; 32]), Some(vec![]), false),
+				Ok(WriteOutcome::New)
+			);
+			assert_eq!(ctx.ext.get_storage_size(&Key::Fix([1; 32])), Some(3));
+			assert_eq!(ctx.ext.get_storage_size(&Key::Fix([2; 32])), Some(0));
+			assert_eq!(ctx.ext.get_storage_size(&Key::Fix([3; 32])), None);
 
 			exec_success()
 		});
@@ -3236,46 +3284,40 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
 
 	#[test]
-	fn get_storage_transparent_works() {
+	fn get_storage_varsized_key_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([1; 19].to_vec()).unwrap(),
 					Some(vec![1, 2, 3]),
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([2; 16].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.get_storage_transparent(
-					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap()
-				),
+				ctx.ext.get_storage(&Key::<Test>::try_from_var([1; 19].to_vec()).unwrap()),
 				Some(vec![1, 2, 3])
 			);
 			assert_eq!(
-				ctx.ext.get_storage_transparent(
-					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap()
-				),
+				ctx.ext.get_storage(&Key::<Test>::try_from_var([2; 16].to_vec()).unwrap()),
 				Some(vec![])
 			);
 			assert_eq!(
-				ctx.ext.get_storage_transparent(
-					&VarSizedKey::<Test>::try_from([3; 8].to_vec()).unwrap()
-				),
+				ctx.ext.get_storage(&Key::<Test>::try_from_var([3; 8].to_vec()).unwrap()),
 				None
 			);
 
@@ -3298,46 +3340,40 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
 
 	#[test]
-	fn get_storage_size_transparent_works() {
+	fn get_storage_size_varsized_key_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([1; 19].to_vec()).unwrap(),
 					Some(vec![1, 2, 3]),
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([2; 16].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.get_storage_size_transparent(
-					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap()
-				),
+				ctx.ext.get_storage_size(&Key::<Test>::try_from_var([1; 19].to_vec()).unwrap()),
 				Some(3)
 			);
 			assert_eq!(
-				ctx.ext.get_storage_size_transparent(
-					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap()
-				),
+				ctx.ext.get_storage_size(&Key::<Test>::try_from_var([2; 16].to_vec()).unwrap()),
 				Some(0)
 			);
 			assert_eq!(
-				ctx.ext.get_storage_size_transparent(
-					&VarSizedKey::<Test>::try_from([3; 8].to_vec()).unwrap()
-				),
+				ctx.ext.get_storage_size(&Key::<Test>::try_from_var([3; 8].to_vec()).unwrap()),
 				None
 			);
 
@@ -3360,7 +3396,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3392,7 +3428,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -3405,19 +3441,35 @@ mod tests {
 		let code_hash = MockLoader::insert(Call, move |ctx, _| {
 			// It is set to one when this contract was instantiated by `place_contract`
 			assert_eq!(ctx.ext.nonce(), 1);
-			// Should not change without any instantation in-between
+			// Should not change without any instantiation in-between
 			assert_eq!(ctx.ext.nonce(), 1);
 			// Should not change with a failed instantiation
 			assert_err!(
-				ctx.ext.instantiate(Weight::zero(), fail_code, 0, vec![], &[],),
+				ctx.ext.instantiate(
+					Weight::zero(),
+					BalanceOf::<Test>::zero(),
+					fail_code,
+					0,
+					vec![],
+					&[],
+				),
 				ExecError {
 					error: <Error<Test>>::ContractTrapped.into(),
 					origin: ErrorOrigin::Callee
 				}
 			);
 			assert_eq!(ctx.ext.nonce(), 1);
-			// Successful instantation increments
-			ctx.ext.instantiate(Weight::zero(), success_code, 0, vec![], &[]).unwrap();
+			// Successful instantiation increments
+			ctx.ext
+				.instantiate(
+					Weight::zero(),
+					BalanceOf::<Test>::zero(),
+					success_code,
+					0,
+					vec![],
+					&[],
+				)
+				.unwrap();
 			assert_eq!(ctx.ext.nonce(), 2);
 			exec_success()
 		});
@@ -3438,7 +3490,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3468,7 +3520,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});

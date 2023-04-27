@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,8 @@ use super::*;
 use crate::{mock::*, Error};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{fungibles::InspectEnumerable, Currency},
+	dispatch::GetDispatchInfo,
+	traits::{fungibles::InspectEnumerable, tokens::Preservation::Protect, Currency},
 };
 use pallet_balances::Error as BalancesError;
 use sp_io::storage;
@@ -34,14 +35,36 @@ fn asset_ids() -> Vec<u32> {
 }
 
 #[test]
+fn transfer_should_never_burn() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, false, 1));
+		Balances::make_free_balance_be(&1, 100);
+		Balances::make_free_balance_be(&2, 100);
+
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
+		assert_eq!(Assets::balance(0, 1), 100);
+
+		while System::inc_consumers(&2).is_ok() {}
+		let _ = System::dec_consumers(&2);
+		// Exactly one consumer ref remaining.
+
+		let _ = <Assets as fungibles::Mutate<_>>::transfer(0, &1, &2, 50, Protect);
+		assert_eq!(Assets::balance(0, 1) + Assets::balance(0, 2), 100);
+	});
+}
+
+#[test]
 fn basic_minting_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 1, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 2, 100));
 		assert_eq!(Assets::balance(0, 2), 100);
-		assert_eq!(asset_ids(), vec![0, 999]);
+		assert_eq!(asset_ids(), vec![0, 1, 999]);
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 1, 1, 100));
+		assert_eq!(Assets::account_balances(1), vec![(0, 100), (999, 100), (1, 100)]);
 	});
 }
 
@@ -90,7 +113,7 @@ fn minting_insufficient_assets_with_deposit_without_consumer_should_work() {
 		assert_ok!(Assets::touch(RuntimeOrigin::signed(1), 0));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
 		assert_eq!(Balances::reserved_balance(&1), 10);
-		assert_eq!(System::consumers(&1), 0);
+		assert_eq!(System::consumers(&1), 1);
 	});
 }
 
@@ -164,7 +187,7 @@ fn approval_lifecycle_works() {
 		// so we create it :)
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		assert_eq!(Balances::reserved_balance(&1), 1);
@@ -190,7 +213,7 @@ fn transfer_approved_all_funds() {
 		// so we create it :)
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		assert_eq!(Balances::reserved_balance(&1), 1);
@@ -212,7 +235,7 @@ fn approval_deposits_work() {
 		let e = BalancesError::<Test>::InsufficientBalance;
 		assert_noop!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50), e);
 
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		assert_eq!(Balances::reserved_balance(&1), 1);
 
@@ -230,7 +253,7 @@ fn cannot_transfer_more_than_approved() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		let e = Error::<Test>::Unapproved;
 		assert_noop!(Assets::transfer_approved(RuntimeOrigin::signed(2), 0, 1, 3, 51), e);
@@ -242,7 +265,7 @@ fn cannot_transfer_more_than_exists() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 101));
 		let e = Error::<Test>::BalanceLow;
 		assert_noop!(Assets::transfer_approved(RuntimeOrigin::signed(2), 0, 1, 3, 101), e);
@@ -254,7 +277,7 @@ fn cancel_approval_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		assert_noop!(
@@ -284,7 +307,7 @@ fn force_cancel_approval_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		let e = Error::<Test>::NoPermission;
@@ -513,7 +536,7 @@ fn min_balance_should_work() {
 
 		// Death by `transfer_approved`.
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 100));
 		assert_ok!(Assets::transfer_approved(RuntimeOrigin::signed(2), 0, 1, 3, 91));
 		assert_eq!(take_hooks(), vec![Hook::Died(0, 1)]);
@@ -1092,9 +1115,68 @@ fn force_asset_status_should_work() {
 }
 
 #[test]
+fn set_min_balance_should_work() {
+	new_test_ext().execute_with(|| {
+		let id = 42;
+		Balances::make_free_balance_be(&1, 10);
+		assert_ok!(Assets::create(RuntimeOrigin::signed(1), id, 1, 30));
+
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), id, 1, 100));
+		// Won't execute because there is an asset holder.
+		assert_noop!(
+			Assets::set_min_balance(RuntimeOrigin::signed(1), id, 50),
+			Error::<Test>::NoPermission
+		);
+
+		// Force asset status to make this a sufficient asset.
+		assert_ok!(Assets::force_asset_status(
+			RuntimeOrigin::root(),
+			id,
+			1,
+			1,
+			1,
+			1,
+			30,
+			true,
+			false
+		));
+
+		// Won't execute because there is an account holding the asset and the asset is marked as
+		// sufficient.
+		assert_noop!(
+			Assets::set_min_balance(RuntimeOrigin::signed(1), id, 10),
+			Error::<Test>::NoPermission
+		);
+
+		// Make the asset not sufficient.
+		assert_ok!(Assets::force_asset_status(
+			RuntimeOrigin::root(),
+			id,
+			1,
+			1,
+			1,
+			1,
+			60,
+			false,
+			false
+		));
+
+		// Will execute because the new value of min_balance is less than the
+		// old value. 10 < 30
+		assert_ok!(Assets::set_min_balance(RuntimeOrigin::signed(1), id, 10));
+		assert_eq!(Asset::<Test>::get(id).unwrap().min_balance, 10);
+
+		assert_ok!(Assets::burn(RuntimeOrigin::signed(1), id, 1, 100));
+
+		assert_ok!(Assets::set_min_balance(RuntimeOrigin::signed(1), id, 50));
+		assert_eq!(Asset::<Test>::get(id).unwrap().min_balance, 50);
+	});
+}
+
+#[test]
 fn balance_conversion_should_work() {
 	new_test_ext().execute_with(|| {
-		use frame_support::traits::tokens::BalanceConversion;
+		use frame_support::traits::tokens::ConversionToAssetBalance;
 
 		let id = 42;
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), id, 1, true, 10));
@@ -1155,7 +1237,7 @@ fn querying_allowance_should_work() {
 		use frame_support::traits::tokens::fungibles::approvals::{Inspect, Mutate};
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 1);
+		Balances::make_free_balance_be(&1, 2);
 		assert_ok!(Assets::approve(0, &1, &2, 50));
 		assert_eq!(Assets::allowance(0, &1, &2), 50);
 		// Transfer asset 0, from owner 1 and delegate 2 to destination 3
@@ -1199,28 +1281,87 @@ fn querying_roles_should_work() {
 #[test]
 fn normal_asset_create_and_destroy_callbacks_should_work() {
 	new_test_ext().execute_with(|| {
-		assert!(storage::get(b"asset_created").is_none());
-		assert!(storage::get(b"asset_destroyed").is_none());
+		assert!(storage::get(AssetsCallbackHandle::CREATED.as_bytes()).is_none());
+		assert!(storage::get(AssetsCallbackHandle::DESTROYED.as_bytes()).is_none());
 
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Assets::create(RuntimeOrigin::signed(1), 0, 1, 1));
-		assert!(storage::get(b"asset_created").is_some());
-		assert!(storage::get(b"asset_destroyed").is_none());
+		assert!(storage::get(AssetsCallbackHandle::CREATED.as_bytes()).is_some());
+		assert!(storage::get(AssetsCallbackHandle::DESTROYED.as_bytes()).is_none());
 
 		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(1), 0));
 		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(1), 0));
 		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(1), 0));
+		// Callback still hasn't been invoked
+		assert!(storage::get(AssetsCallbackHandle::DESTROYED.as_bytes()).is_none());
+
 		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(1), 0));
-		assert!(storage::get(b"asset_destroyed").is_some());
+		assert!(storage::get(AssetsCallbackHandle::DESTROYED.as_bytes()).is_some());
 	});
 }
 
 #[test]
 fn root_asset_create_should_work() {
 	new_test_ext().execute_with(|| {
-		assert!(storage::get(b"asset_created").is_none());
+		assert!(storage::get(AssetsCallbackHandle::CREATED.as_bytes()).is_none());
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
-		assert!(storage::get(b"asset_created").is_some());
-		assert!(storage::get(b"asset_destroyed").is_none());
+		assert!(storage::get(AssetsCallbackHandle::CREATED.as_bytes()).is_some());
+		assert!(storage::get(AssetsCallbackHandle::DESTROYED.as_bytes()).is_none());
 	});
+}
+
+#[test]
+fn asset_create_and_destroy_is_reverted_if_callback_fails() {
+	new_test_ext().execute_with(|| {
+		// Asset creation fails due to callback failure
+		AssetsCallbackHandle::set_return_error();
+		Balances::make_free_balance_be(&1, 100);
+		assert_noop!(
+			Assets::create(RuntimeOrigin::signed(1), 0, 1, 1),
+			Error::<Test>::CallbackFailed
+		);
+
+		// Callback succeeds, so asset creation succeeds
+		AssetsCallbackHandle::set_return_ok();
+		assert_ok!(Assets::create(RuntimeOrigin::signed(1), 0, 1, 1));
+
+		// Asset destroy should fail due to callback failure
+		AssetsCallbackHandle::set_return_error();
+		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(1), 0));
+		assert_noop!(
+			Assets::finish_destroy(RuntimeOrigin::signed(1), 0),
+			Error::<Test>::CallbackFailed
+		);
+	});
+}
+
+#[test]
+fn multiple_transfer_alls_work_ok() {
+	new_test_ext().execute_with(|| {
+		// Only run PoC when the system pallet is enabled, since the underlying bug is in the
+		// system pallet it won't work with BalancesAccountStore
+		// Start with a balance of 100
+		Balances::force_set_balance(RuntimeOrigin::root(), 1, 100).unwrap();
+		// Emulate a sufficient, in reality this could be reached by transferring a sufficient
+		// asset to the account
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
+		// Spend the same balance multiple times
+		assert_ok!(Balances::transfer_all(RuntimeOrigin::signed(1), 1337, false));
+		assert_ok!(Balances::transfer_all(RuntimeOrigin::signed(1), 1337, false));
+
+		assert_eq!(Balances::free_balance(&1), 0);
+		assert_eq!(Balances::free_balance(&1337), 100);
+	});
+}
+
+#[test]
+fn weights_sane() {
+	let info = crate::Call::<Test>::create { id: 10, admin: 4, min_balance: 3 }.get_dispatch_info();
+	assert_eq!(<() as crate::WeightInfo>::create(), info.weight);
+
+	let info = crate::Call::<Test>::finish_destroy { id: 10 }.get_dispatch_info();
+	assert_eq!(<() as crate::WeightInfo>::finish_destroy(), info.weight);
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This file is part of Substrate.
-# Copyright (C) 2022 Parity Technologies (UK) Ltd.
+# Copyright (C) Parity Technologies (UK) Ltd.
 # SPDX-License-Identifier: Apache-2.0
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ done
 if [ "$skip_build" != true ]
 then
   echo "[+] Compiling Substrate benchmarks..."
-  cargo build --profile=production --locked --features=runtime-benchmarks
+  cargo build --profile=production --locked --features=runtime-benchmarks --bin substrate
 fi
 
 # The executable to use.

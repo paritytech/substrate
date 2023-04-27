@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,13 +35,11 @@ use std::{
 )]
 pub struct GenerateNodeKeyCmd {
 	/// Name of file to save secret key to.
-	///
 	/// If not given, the secret key is printed to stdout.
 	#[arg(long)]
 	file: Option<PathBuf>,
 
 	/// The output is in raw binary format.
-	///
 	/// If not given, the output is written as an hex encoded string.
 	#[arg(long)]
 	bin: bool,

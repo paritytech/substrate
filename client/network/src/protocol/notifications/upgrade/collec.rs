@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -103,8 +103,8 @@ impl<T: Future<Output = Result<O, E>>, O, E> Future for FutWithUsize<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::types::ProtocolName as ProtoName;
 	use libp2p::core::upgrade::{ProtocolName, UpgradeInfo};
-	use sc_network_common::protocol::ProtocolName as ProtoName;
 
 	// TODO: move to mocks
 	mockall::mock! {

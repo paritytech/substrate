@@ -20,6 +20,7 @@ array-bytes = "4.1"
 async-trait = "0.1.58"
 codec = { package = "parity-scale-codec", version = "3.2.2", features = ["derive"] }
 futures = "0.3.21"
+futures-timer = "3.0.2"
 libp2p = "0.50.0"
 log = "0.4.17"
 lru = "0.8.1"
@@ -31,6 +32,7 @@ fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
+sc-network = { version = "0.10.0-dev", path = "../" }
 sc-network-common = { version = "0.10.0-dev", path = "../common" }
 sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }
 sc-utils = { version = "4.0.0-dev", path = "../../utils" }
@@ -38,7 +40,7 @@ sp-arithmetic = { version = "6.0.0", path = "../../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
+sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/grandpa" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]

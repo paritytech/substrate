@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,8 +34,6 @@ use sp_core::{
 		well_known_keys::{is_child_storage_key, CODE},
 		StateVersion, Storage,
 	},
-	testing::TaskExecutor,
-	traits::TaskExecutorExt,
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
 use sp_trie::StorageProof;
@@ -105,9 +103,6 @@ where
 
 		storage.top.insert(CODE.to_vec(), code.to_vec());
 
-		let mut extensions = Extensions::default();
-		extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
-
 		let offchain_db = TestPersistentOffchainDB::new();
 
 		let backend = (storage, state_version).into();
@@ -115,7 +110,7 @@ where
 		TestExternalities {
 			overlay: OverlayedChanges::default(),
 			offchain_db,
-			extensions,
+			extensions: Default::default(),
 			backend,
 			storage_transaction_cache: Default::default(),
 			state_version,
@@ -135,6 +130,17 @@ where
 	/// A shared reference type around the offchain worker storage.
 	pub fn offchain_db(&self) -> TestPersistentOffchainDB {
 		self.offchain_db.clone()
+	}
+
+	/// Batch insert key/values into backend
+	pub fn batch_insert<I>(&mut self, kvs: I)
+	where
+		I: IntoIterator<Item = (StorageKey, StorageValue)>,
+	{
+		self.backend.insert(
+			Some((None, kvs.into_iter().map(|(k, v)| (k, Some(v))).collect())),
+			self.state_version,
+		);
 	}
 
 	/// Insert key/value into backend
@@ -241,7 +247,12 @@ where
 	H::Out: Ord + codec::Codec,
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, self.backend.pairs())
+		let pairs: Vec<_> = self
+			.backend
+			.pairs(Default::default())
+			.expect("creating an iterator over all of the pairs doesn't fail in tests")
+			.collect();
+		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, pairs)
 	}
 }
 

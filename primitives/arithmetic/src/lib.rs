@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,7 +45,7 @@ pub use per_things::{
 	InnerOf, MultiplyArg, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, RationalArg,
 	ReciprocalArg, Rounding, SignedRounding, UpperOf,
 };
-pub use rational::{Rational128, RationalInfinite};
+pub use rational::{MultiplyRational, Rational128, RationalInfinite};
 
 use sp_std::{cmp::Ordering, fmt::Debug, prelude::*};
 use traits::{BaseArithmetic, One, SaturatedConversion, Unsigned, Zero};

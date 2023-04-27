@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -169,7 +169,6 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
 	executor: SubscriptionTaskExecutor,
 	deny_unsafe: DenyUnsafe,
-	rpc_max_payload: Option<usize>,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 where
 	Block: BlockT + 'static,
@@ -189,12 +188,9 @@ where
 		+ 'static,
 	Client::Api: Metadata<Block>,
 {
-	let child_backend = Box::new(self::state_full::FullState::new(
-		client.clone(),
-		executor.clone(),
-		rpc_max_payload,
-	));
-	let backend = Box::new(self::state_full::FullState::new(client, executor, rpc_max_payload));
+	let child_backend =
+		Box::new(self::state_full::FullState::new(client.clone(), executor.clone()));
+	let backend = Box::new(self::state_full::FullState::new(client, executor));
 	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 

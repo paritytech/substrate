@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,12 +18,12 @@
 
 //! Helpers for outgoing and incoming light client requests.
 
-/// For incoming light client requests.
-pub mod handler;
-
-use sc_network_common::{config::ProtocolId, request_responses::ProtocolConfig};
+use sc_network::{config::ProtocolId, request_responses::ProtocolConfig};
 
 use std::time::Duration;
+
+/// For incoming light client requests.
+pub mod handler;
 
 /// Generate the light client protocol name from the genesis hash and fork id.
 fn generate_protocol_name<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> String {

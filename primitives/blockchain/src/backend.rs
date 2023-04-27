@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -287,19 +287,4 @@ pub enum BlockStatus {
 	InChain,
 	/// Not in the queue or the blockchain.
 	Unknown,
-}
-
-/// A list of all well known keys in the blockchain cache.
-pub mod well_known_cache_keys {
-	/// The type representing cache keys.
-	pub type Id = sp_consensus::CacheKeyId;
-
-	/// A list of authorities.
-	pub const AUTHORITIES: Id = *b"auth";
-
-	/// Current Epoch data.
-	pub const EPOCH: Id = *b"epch";
-
-	/// Changes trie configuration.
-	pub const CHANGES_TRIE_CONFIG: Id = *b"chtr";
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -438,8 +438,8 @@ enum ValueCache<'a, H: Hasher> {
 
 impl<H: Hasher> ValueCache<'_, H> {
 	/// Get the value for the given `key`.
-	fn get<'a>(
-		&'a mut self,
+	fn get(
+		&mut self,
 		key: &[u8],
 		shared_cache: &SharedTrieCache<H>,
 		stats: &HitStats,
