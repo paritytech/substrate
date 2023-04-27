@@ -584,13 +584,13 @@ pub mod pallet {
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			let gas_limit: Weight = gas_limit.into();
 			// Ensure that the origin is either a signed extrinsic or root.
 			let origin = match ensure_signed_or_root(origin)? {
 				Some(t) => Origin::Signed(t),
 				None => Origin::Root,
 			};
 			let dest = T::Lookup::lookup(dest)?;
+			let gas_limit: Weight = gas_limit.into();
 			let common = CommonInput {
 				origin,
 				value,
