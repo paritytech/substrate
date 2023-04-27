@@ -824,7 +824,7 @@ mod tests {
 
 		ExtBuilder::default()
 			.signed_max_submission(10)
-			.signed_base_deposit(1000, 0, Percent::from_percent(0))
+			.signed_base_deposit(1000, true, Percent::from_percent(0))
 			.build_and_execute(|| {
 				roll_to_signed();
 				assert!(MultiPhase::current_phase().is_signed());
@@ -834,7 +834,7 @@ mod tests {
 
 		ExtBuilder::default()
 			.signed_max_submission(10)
-			.signed_base_deposit(1000, 0, Percent::from_percent(10))
+			.signed_base_deposit(1000, true, Percent::from_percent(10))
 			.build_and_execute(|| {
 				roll_to_signed();
 				assert!(MultiPhase::current_phase().is_signed());
@@ -844,7 +844,7 @@ mod tests {
 
 		ExtBuilder::default()
 			.signed_max_submission(10)
-			.signed_base_deposit(1000, 0, Percent::from_percent(40))
+			.signed_base_deposit(1000, true, Percent::from_percent(40))
 			.build_and_execute(|| {
 				roll_to_signed();
 				assert!(MultiPhase::current_phase().is_signed());

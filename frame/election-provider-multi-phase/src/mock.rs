@@ -288,8 +288,9 @@ parameter_types! {
 	pub static UnsignedPhase: BlockNumber = 5;
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedMaxRefunds: u32 = 1;
-	// when the solution queue has more than 7 submissions, the base deposit is 2 * `SignedDepositBase`.
-	pub static QueueLenghtVariableDeposit: usize = 7;
+	// for tests only. if `EnableVariableDepositBase` is true, the deposit base will be calculated
+	// by `Multiphase::DepositBase`. Otherwise the deposit base is `SignedFixedDepositBase`.
+	pub static EnableVariableDepositBase: bool = false;
 	pub static SignedFixedDepositBase: Balance = 5;
 	pub static SignedDepositBaseIncreaseFactor: Percent = Percent::from_percent(10);
 	pub static SignedDepositByte: Balance = 0;
@@ -425,7 +426,7 @@ impl SignedDepositBase<BalanceOf<Runtime>> for Runtime {
 	type IncreaseFactor = SignedDepositBaseIncreaseFactor;
 
 	fn calculate(queue_len: usize) -> Balance {
-		if queue_len < QueueLenghtVariableDeposit::get() {
+		if !EnableVariableDepositBase::get() {
 			SignedFixedDepositBase::get()
 		} else {
 			GeometricDepositBase::<Runtime>::calculate(queue_len)
@@ -579,8 +580,8 @@ impl ExtBuilder {
 		<SignedMaxSubmissions>::set(count);
 		self
 	}
-	pub fn signed_base_deposit(self, base: u64, queue_len: usize, increase: Percent) -> Self {
-		<QueueLenghtVariableDeposit>::set(queue_len);
+	pub fn signed_base_deposit(self, base: u64, variable: bool, increase: Percent) -> Self {
+		<EnableVariableDepositBase>::set(variable);
 		<SignedFixedDepositBase>::set(base);
 		<SignedDepositBaseIncreaseFactor>::set(increase);
 		self

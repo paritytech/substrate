@@ -675,12 +675,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxWinners: Get<u32>;
 
-		/// Type that calculates the signed deposit base.
+		/// Something that calculates the signed deposit base based on the signed submissions queue
+		/// size.
 		type SignedDepositBase: SignedDepositBase<BalanceOf<Self>>;
 
-		/// Increase factor of the geometric increase of the base deposit.
+		/// Increase factor of the geometric series for the base deposit computation.
 		///
-		/// If 0, then signed base deposit remains constans regardless of the submissions queue size
+		/// If 0, then signed base deposit remains constant regardless of the submissions queue size
 		/// (and equal to [`SignedFixedDepositBase`]).
 		type SignedDepositBaseIncreaseFactor: Get<Percent>;
 
