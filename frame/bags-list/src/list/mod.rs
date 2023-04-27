@@ -753,7 +753,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 	/// * Ensures tail has no next.
 	/// * Ensures there are no loops, traversal from head to tail is correct.
 	#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
-	fn do_try_state(&self) -> Result<(), &'static str> {
+	fn do_try_state(&self) -> DispatchResult {
 		frame_support::ensure!(
 			self.head()
 				.map(|head| head.prev().is_none())

@@ -275,7 +275,7 @@ pub mod pallet {
 
 #[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn do_try_state() -> Result<(), &'static str> {
+	pub fn do_try_state() -> DispatchResult {
 		List::<T, I>::do_try_state()
 	}
 }
