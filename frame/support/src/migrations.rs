@@ -16,9 +16,10 @@
 // limitations under the License.
 
 #[cfg(feature = "try-runtime")]
+use crate::dispatch::{DispatchError, DispatchResult};
+#[cfg(feature = "try-runtime")]
 use crate::storage::unhashed::contains_prefixed_key;
 use crate::{
-	dispatch::{DispatchError, DispatchResult},
 	traits::{GetStorageVersion, PalletInfoAccess},
 	weights::{RuntimeDbWeight, Weight},
 };
