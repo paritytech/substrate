@@ -332,7 +332,7 @@ mod tests {
 
 		let preout = store.sr25519_vrf_preout(SR25519, &pair.public(), &input).unwrap().unwrap();
 
-		let result = preout.output_bytes::<[u8; 32]>(b"rand", &input, &pair.public());
+		let result = preout.output_bytes::<32>(b"rand", &input, &pair.public());
 		assert!(result.is_ok());
 	}
 

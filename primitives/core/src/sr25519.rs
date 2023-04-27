@@ -735,39 +735,44 @@ pub mod vrf {
 	#[cfg(feature = "full_crypto")]
 	impl Pair {
 		/// Generate bytes from the given VRF configuration.
-		pub fn output_bytes<B: Default + AsMut<[u8]>>(
-			&self,
-			context: &[u8],
-			input: &VrfInput,
-		) -> B {
+		pub fn output_bytes<const N: usize>(&self, context: &[u8], input: &VrfInput) -> [u8; N]
+		where
+			[u8; N]: Default,
+		{
 			let inout = self.0.vrf_create_hash(input.data.clone());
-			inout.make_bytes::<B>(context)
+			inout.make_bytes::<[u8; N]>(context)
 		}
 	}
 
 	impl Public {
 		/// Generate bytes from the given VRF configuration.
-		pub fn output_bytes<B: Default + AsMut<[u8]>>(
+		pub fn output_bytes<const N: usize>(
 			&self,
 			context: &[u8],
 			input: &VrfInput,
 			preout: &VrfPreOutput,
-		) -> Result<B, codec::Error> {
+		) -> Result<[u8; N], codec::Error>
+		where
+			[u8; N]: Default,
+		{
 			let pubkey = schnorrkel::PublicKey::from_bytes(&self.0).map_err(convert_error)?;
 			let inout =
 				preout.0.attach_input_hash(&pubkey, input.data.clone()).map_err(convert_error)?;
-			Ok(inout.make_bytes::<B>(context))
+			Ok(inout.make_bytes::<[u8; N]>(context))
 		}
 	}
 
 	impl VrfPreOutput {
 		/// Generate bytes from the given VRF configuration.
-		pub fn output_bytes<B: Default + AsMut<[u8]>>(
+		pub fn output_bytes<const N: usize>(
 			&self,
 			context: &[u8],
 			input: &VrfInput,
 			public: &Public,
-		) -> Result<B, codec::Error> {
+		) -> Result<[u8; N], codec::Error>
+		where
+			[u8; N]: Default,
+		{
 			public.output_bytes(context, input, self)
 		}
 	}
@@ -1041,8 +1046,8 @@ mod tests {
 
 		let preout = pair.vrf_preout(&input);
 
-		let out1 = pair.output_bytes::<[u8; 32]>(ctx, &input);
-		let out2 = preout.output_bytes::<[u8; 32]>(ctx, &input, &public).unwrap();
+		let out1 = pair.output_bytes::<32>(ctx, &input);
+		let out2 = preout.output_bytes::<32>(ctx, &input, &public).unwrap();
 		assert_eq!(out1, out2);
 
 		let input = input.with_preout(preout);
@@ -1060,8 +1065,8 @@ mod tests {
 
 		let signature = pair.vrf_sign(&input);
 
-		let b1 = pair.output_bytes::<[u8; 32]>(ctx, &input);
-		let b2 = public.output_bytes::<[u8; 32]>(ctx, &input, &signature.preout).unwrap();
+		let b1 = pair.output_bytes::<32>(ctx, &input);
+		let b2 = public.output_bytes::<32>(ctx, &input, &signature.preout).unwrap();
 		assert_eq!(b1, b2);
 	}
 
@@ -1076,8 +1081,8 @@ mod tests {
 		let signature = pair.vrf_sign(&input);
 		assert!(public.vrf_verify(&input, &signature));
 
-		let out1 = pair.output_bytes::<[u8; 32]>(ctx, &input);
-		let out2 = public.output_bytes::<[u8; 32]>(ctx, &input, &signature.preout).unwrap();
+		let out1 = pair.output_bytes::<32>(ctx, &input);
+		let out2 = public.output_bytes::<32>(ctx, &input, &signature.preout).unwrap();
 		assert_eq!(out1, out2);
 
 		// Direct call to backend version of sign after check with extra params

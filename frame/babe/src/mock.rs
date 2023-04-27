@@ -324,7 +324,7 @@ pub fn make_vrf_signature_and_output(
 
 	let randomness = pair
 		.as_ref()
-		.output_bytes::<Randomness>(sp_consensus_babe::RANDOMNESS_VRF_CONTEXT, &vrf_input);
+		.output_bytes(sp_consensus_babe::RANDOMNESS_VRF_CONTEXT, &vrf_input);
 
 	(signature, randomness)
 }

@@ -248,7 +248,7 @@ fn claim_primary_slot(
 
 			let can_claim = authority_id
 				.as_inner_ref()
-				.output_bytes::<[u8; AUTHORING_SCORE_LENGTH]>(
+				.output_bytes::<AUTHORING_SCORE_LENGTH>(
 					AUTHORING_SCORE_VRF_CONTEXT,
 					&vrf_input,
 					&vrf_signature.preout,
