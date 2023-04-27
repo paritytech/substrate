@@ -684,12 +684,12 @@ frame_benchmarking::benchmarks! {
 			.collect();
 
 		assert_ok!(T::Staking::nominate(&pool_account, validators));
-		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_some());
+		assert!(T::Staking::nominations(&Pools::<T>::create_bonded_account(1)).is_some());
 
 		whitelist_account!(depositor);
 	}:_(RuntimeOrigin::Signed(depositor.clone()), 1)
 	verify {
-		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_none());
+		assert!(T::Staking::nominations(&Pools::<T>::create_bonded_account(1)).is_none());
 	}
 
 	set_commission {
