@@ -336,7 +336,7 @@ where
 
 	/// Get the number of threads to use.
 	/// Cap the number of threads, because performance improvement beyond a small number of threads
-	/// is marginal, and too many threads can create issues with the HttpClient.
+	/// is negligible, and too many threads can create issues with the HttpClient.
 	fn threads() -> NonZeroUsize {
 		let avaliable = thread::available_parallelism()
 			.unwrap_or(NonZeroUsize::new(1usize).expect("1 is non-zero; qed"))
