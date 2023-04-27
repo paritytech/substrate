@@ -274,8 +274,8 @@ use unsigned::VoterOf;
 pub use weights::WeightInfo;
 
 pub use signed::{
-	BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf, SignedSubmission, SignedSubmissionOf,
-	SignedSubmissions, SubmissionIndicesOf,
+	BalanceOf, GeometricDepositBase, NegativeImbalanceOf, PositiveImbalanceOf, SignedSubmission,
+	SignedSubmissionOf, SignedSubmissions, SubmissionIndicesOf,
 };
 pub use unsigned::{Miner, MinerConfig};
 
@@ -650,13 +650,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedFixedDepositBase: Get<BalanceOf<Self>>;
 
-		/// Increase factor of the geometric increase of the base deposit.
-		///
-		/// If 0, then signed base deposit remains constans regardless of the submissions queue size
-		/// (and equal to `SignedFixedDepositBase`).
-		#[pallet::constant]
-		type SignedDepositBaseIncreaseFactor: Get<Percent>;
-
 		/// Per-byte deposit for a signed solution.
 		#[pallet::constant]
 		type SignedDepositByte: Get<BalanceOf<Self>>;
@@ -684,6 +677,12 @@ pub mod pallet {
 
 		/// Type that calculates the signed deposit base.
 		type SignedDepositBase: SignedDepositBase<BalanceOf<Self>>;
+
+		/// Increase factor of the geometric increase of the base deposit.
+		///
+		/// If 0, then signed base deposit remains constans regardless of the submissions queue size
+		/// (and equal to [`SignedFixedDepositBase`]).
+		type SignedDepositBaseIncreaseFactor: Get<Percent>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;

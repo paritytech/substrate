@@ -17,6 +17,8 @@
 
 //! The signed phase implementation.
 
+use core::marker::PhantomData;
+
 use crate::{
 	unsigned::MinerConfig, Config, ElectionCompute, Pallet, QueuedSolution, RawSolution,
 	ReadySolution, SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap,
@@ -349,17 +351,30 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 }
 
-impl<T: Config> SignedDepositBase<BalanceOf<T>> for Pallet<T> {
-	/// Increase the base deposit as a geometric series // todo: finish
+/// Type that can be used to calculate the deposit base for signed submissions.
+///
+/// The deposit base is calculated as a geometric progression based on the number of signed
+/// submissions in the queue. The size of the queue represents the progression term.
+pub struct GeometricDepositBase<T> {
+	_marker: PhantomData<T>,
+}
+
+impl<T: Config> SignedDepositBase<BalanceOf<T>> for GeometricDepositBase<T> {
+	/// Increase factor of the geometric progression, as a percentage.
 	///
-	/// base value * (1 + increase percentage)^number of iterations
+	/// The nth progression term will be `IncreaseFactor`% larger than the nth-1 term.
+	type IncreaseFactor = T::SignedDepositBaseIncreaseFactor;
+
+	/// Increase the base deposit as a geometric progression based on the number of signed
+	/// submissions.
+	///
+	/// The nth term is obtained by calculating `base * (1 + increase_factor)^nth`. Example: factor
+	/// 5, with initial deposit of 1000 and 10% of increase factor is 1000 * (1 + 1.1)^5.
 	fn calculate(queue_len: usize) -> BalanceOf<T> {
-		// increase_factor: (0.x + 1)
 		let increase_factor: FixedU128 =
-			<Percent as Into<FixedU128>>::into(T::SignedDepositBaseIncreaseFactor::get()) +
+			<Percent as Into<FixedU128>>::into(Self::IncreaseFactor::get()) +
 				sp_runtime::traits::One::one();
 
-		// fixed * (1 + percent_increase)^queue_len
 		increase_factor
 			.saturating_pow(queue_len)
 			.saturating_mul_int(T::SignedFixedDepositBase::get())
@@ -789,9 +804,23 @@ mod tests {
 	}
 
 	#[test]
-	fn geometric_deposit_base_works() {
+	fn geometric_deposit_queue_size_works() {
+		let constant = vec![1000; 10];
+		// geometric progression with 10% increase in each iteration for 10 terms.
 		let progression_10 = vec![1000, 1100, 1210, 1331, 1464, 1610, 1771, 1948, 2143, 2357];
 		let progression_40 = vec![1000, 1400, 1960, 2744, 3841, 5378, 7529, 10541, 14757, 20661];
+
+		let check_progressive_base_fee = |expected: &Vec<u64>| {
+			for s in 0..SignedMaxSubmissions::get() {
+				let account = 99 + s as u64;
+				Balances::make_free_balance_be(&account, 10000000);
+				let mut solution = raw_solution();
+				solution.score.minimal_stake -= s as u128;
+
+				assert_ok!(MultiPhase::submit(RuntimeOrigin::signed(account), Box::new(solution)));
+				assert_eq!(balances(&account).1, expected[s as usize])
+			}
+		};
 
 		ExtBuilder::default()
 			.signed_max_submission(10)
@@ -800,21 +829,7 @@ mod tests {
 				roll_to_signed();
 				assert!(MultiPhase::current_phase().is_signed());
 
-				for s in 0..SignedMaxSubmissions::get() {
-					let account = 99 + s as u64;
-					Balances::make_free_balance_be(&account, 10000000);
-					let mut solution = raw_solution();
-					solution.score.minimal_stake -= s as u128;
-
-					assert_ok!(MultiPhase::submit(
-						RuntimeOrigin::signed(account),
-						Box::new(solution)
-					));
-
-					// if increase factor is 0, base deposit is constant with the number of
-					// submissions.
-					assert_eq!(balances(&account).1, SignedFixedDepositBase::get())
-				}
+				check_progressive_base_fee(&constant);
 			});
 
 		ExtBuilder::default()
@@ -824,18 +839,7 @@ mod tests {
 				roll_to_signed();
 				assert!(MultiPhase::current_phase().is_signed());
 
-				for s in 0..SignedMaxSubmissions::get() {
-					let account = 99 + s as u64;
-					Balances::make_free_balance_be(&account, 10000000);
-					let mut solution = raw_solution();
-					solution.score.minimal_stake -= s as u128;
-
-					assert_ok!(MultiPhase::submit(
-						RuntimeOrigin::signed(account),
-						Box::new(solution)
-					));
-					assert_eq!(balances(&account).1, progression_10[s as usize])
-				}
+				check_progressive_base_fee(&progression_10);
 			});
 
 		ExtBuilder::default()
@@ -845,18 +849,7 @@ mod tests {
 				roll_to_signed();
 				assert!(MultiPhase::current_phase().is_signed());
 
-				for s in 0..SignedMaxSubmissions::get() {
-					let account = 99 + s as u64;
-					Balances::make_free_balance_be(&account, 10000000);
-					let mut solution = raw_solution();
-					solution.score.minimal_stake -= s as u128;
-
-					assert_ok!(MultiPhase::submit(
-						RuntimeOrigin::signed(account),
-						Box::new(solution)
-					));
-					assert_eq!(balances(&account).1, progression_40[s as usize])
-				}
+				check_progressive_base_fee(&progression_40);
 			});
 	}
 

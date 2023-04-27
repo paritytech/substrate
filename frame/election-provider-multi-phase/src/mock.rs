@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use super::*;
-use crate::{self as multi_phase, unsigned::MinerConfig};
+use crate::{self as multi_phase, signed::GeometricDepositBase, unsigned::MinerConfig};
 use frame_election_provider_support::{
 	data_provider,
 	onchain::{self},
@@ -422,11 +422,13 @@ impl crate::Config for Runtime {
 }
 
 impl SignedDepositBase<BalanceOf<Runtime>> for Runtime {
+	type IncreaseFactor = SignedDepositBaseIncreaseFactor;
+
 	fn calculate(queue_len: usize) -> Balance {
 		if queue_len < QueueLenghtVariableDeposit::get() {
 			SignedFixedDepositBase::get()
 		} else {
-			<MultiPhase as SignedDepositBase<BalanceOf<Runtime>>>::calculate(queue_len)
+			GeometricDepositBase::<Runtime>::calculate(queue_len)
 		}
 	}
 }
