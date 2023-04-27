@@ -35,10 +35,10 @@
 //!  - [query the size of a liquidity pool](`AssetConversionApi::get_reserves`) via a runtime api
 //!    endpoint.
 //!
-//! The `quote_price_exact_tokens_for_tokens` and `quote_price_tokens_for_exact_tokens` functions both take a path
-//! parameter of the route to take. If you want to swap from native asset to non-native asset 1, you
-//! would pass in a path of `[DOT, 1]` or `[1, DOT]`. If you want to swap from non-native asset 1 to
-//! non-native asset 2, you would pass in a path of `[1, DOT, 2]`.
+//! The `quote_price_exact_tokens_for_tokens` and `quote_price_tokens_for_exact_tokens` functions
+//! both take a path parameter of the route to take. If you want to swap from native asset to
+//! non-native asset 1, you would pass in a path of `[DOT, 1]` or `[1, DOT]`. If you want to swap
+//! from non-native asset 1 to non-native asset 2, you would pass in a path of `[1, DOT, 2]`.
 //!
 //! (For an example of configuring this pallet to use `MultiLocation` as an asset id, see the
 //! cumulus repo).
