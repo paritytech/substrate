@@ -44,7 +44,7 @@ mod tests {
 			}
 
 			// Start a node and wait for it to begin finalizing blocks
-			let (_, ws_url) = common::start_node();
+			let (_child, ws_url) = common::start_node();
 			common::wait_n_finalized_blocks(1, &ws_url).await.unwrap();
 
 			// Kick off the follow-chain process and wait for it to process at least 3 blocks.
