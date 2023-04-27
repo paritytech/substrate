@@ -367,15 +367,19 @@ pub mod vrf {
 			let ios: Vec<_> =
 				input.messages.iter().map(|i| self.0.clone().0.vrf_inout(i.clone())).collect();
 
-			let sign: ThinVrfSignature<N> =
+			let signature: ThinVrfSignature<N> =
 				self.0.sign_thin_vrf(input.transcript.clone(), ios.as_slice());
 
 			let mut sign_bytes = [0; SIGNATURE_SERIALIZED_LEN];
 			// TODO davxy: use ark-scale???
-			sign.signature
+			signature
+				.signature
 				.serialize_compressed(sign_bytes.as_mut_slice())
 				.expect("serialization can't fail");
-			VrfSignature { signature: Signature(sign_bytes), preouts: Box::new(sign.preoutputs) }
+			VrfSignature {
+				signature: Signature(sign_bytes),
+				preouts: Box::new(signature.preoutputs),
+			}
 		}
 
 		/// Generate output bytes from the given VRF input.
