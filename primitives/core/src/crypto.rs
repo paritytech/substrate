@@ -1108,11 +1108,7 @@ pub trait VrfSecret: VrfCrypto {
 	fn vrf_preout(&self, data: &Self::VrfInput) -> Self::VrfPreOutput;
 
 	/// Sign input data with optional pre-computed pre-output.
-	fn vrf_sign(
-		&self,
-		input: &Self::VrfInput,
-		preout: Option<Self::VrfPreOutput>,
-	) -> Self::VrfSignature;
+	fn vrf_sign(&self, input: &Self::VrfInput) -> Self::VrfSignature;
 }
 
 /// VRF Public Key.

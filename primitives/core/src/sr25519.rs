@@ -546,11 +546,14 @@ pub mod vrf {
 	};
 
 	/// VRF input ready to be used for VRF sign and verify operations.
+	// Note: here we may potentially add a closure to check-before-sign...
 	pub struct VrfInput {
 		/// VRF input data.
 		pub data: merlin::Transcript,
 		/// Extra data to be signed by the VRF.
 		pub extra: Option<merlin::Transcript>,
+		/// Optional pre-computed pre-output
+		pub preout: Option<VrfPreOutput>,
 	}
 
 	impl VrfInput {
@@ -558,15 +561,21 @@ pub mod vrf {
 		pub fn new(label: &'static [u8], data: &[(&'static [u8], &[u8])]) -> Self {
 			let mut transcript = merlin::Transcript::new(label);
 			data.iter().for_each(|(l, b)| transcript.append_message(l, b));
-			VrfInput { data: transcript, extra: None }
+			VrfInput { data: transcript, extra: None, preout: None }
 		}
 
 		/// Add extra non-input data to be signed by the VRF.
 		/// Extra data doesn't contribute to the VRF output.
-		pub fn extra(mut self, label: &'static [u8], data: &[(&'static [u8], &[u8])]) -> Self {
+		pub fn with_extra(mut self, label: &'static [u8], data: &[(&'static [u8], &[u8])]) -> Self {
 			let mut transcript = merlin::Transcript::new(label);
 			data.iter().for_each(|(l, b)| transcript.append_message(l, b));
 			self.extra = Some(transcript);
+			self
+		}
+
+		/// Add pre-output corresponding to `data` to be used during `sign` operation.
+		pub fn with_preout(mut self, preout: VrfPreOutput) -> Self {
+			self.preout = Some(preout);
 			self
 		}
 	}
@@ -651,17 +660,13 @@ pub mod vrf {
 
 	#[cfg(feature = "full_crypto")]
 	impl VrfSecret for Pair {
-		fn vrf_sign(
-			&self,
-			input: &Self::VrfInput,
-			preout: Option<Self::VrfPreOutput>,
-		) -> Self::VrfSignature {
+		fn vrf_sign(&self, input: &Self::VrfInput) -> Self::VrfSignature {
 			let transcript = input.data.clone();
 			let (inout, proof, _) = match input.extra {
 				Some(ref extra) => self.0.vrf_sign_extra(transcript, extra.clone()),
 				None => self.0.vrf_sign(transcript),
 			};
-			let preout = preout.unwrap_or_else(|| VrfPreOutput(inout.to_output()));
+			let preout = input.preout.clone().unwrap_or_else(|| VrfPreOutput(inout.to_output()));
 			VrfSignature { preout, proof: VrfProof(proof) }
 		}
 
@@ -1005,9 +1010,9 @@ mod tests {
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 
-		let input = VrfInput::new(b"label", &[(b"dom1", b"dat1")]);
+		let input = VrfInput::new(b"label", &[(b"domain1", b"data1")]);
 
-		let signature = pair.vrf_sign(&input, None);
+		let signature = pair.vrf_sign(&input);
 
 		assert!(public.vrf_verify(&input, &signature));
 	}
@@ -1017,10 +1022,10 @@ mod tests {
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 
-		let input =
-			VrfInput::new(b"data", &[(b"dom1", b"dat1")]).extra(b"extra", &[(b"dom2", b"dat2")]);
+		let input = VrfInput::new(b"label", &[(b"domain1", b"data1")])
+			.with_extra(b"extra", &[(b"domain2", b"data2")]);
 
-		let signature = pair.vrf_sign(&input, None);
+		let signature = pair.vrf_sign(&input);
 
 		assert!(public.vrf_verify(&input, &signature));
 	}
@@ -1031,8 +1036,8 @@ mod tests {
 		let public = pair.public();
 		let ctx = b"vrfbytes";
 
-		let input =
-			VrfInput::new(b"data", &[(b"dom1", b"dat1")]).extra(b"extra", &[(b"dom2", b"dat2")]);
+		let input = VrfInput::new(b"label", &[(b"domain1", b"data1")])
+			.with_extra(b"extra", &[(b"domain2", b"data2")]);
 
 		let preout = pair.vrf_preout(&input);
 
@@ -1040,7 +1045,8 @@ mod tests {
 		let out2 = preout.output_bytes::<[u8; 32]>(ctx, &input, &public).unwrap();
 		assert_eq!(out1, out2);
 
-		let signature = pair.vrf_sign(&input, Some(preout));
+		let input = input.with_preout(preout);
+		let signature = pair.vrf_sign(&input);
 
 		assert!(public.vrf_verify(&input, &signature));
 	}
@@ -1049,10 +1055,10 @@ mod tests {
 	fn vrf_make_bytes_matches() {
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
-		let input = VrfInput::new(b"test", &[(b"foo", b"bar")]);
+		let input = VrfInput::new(b"label", &[(b"domain", b"data")]);
 		let ctx = b"vrfbytes";
 
-		let signature = pair.vrf_sign(&input, None);
+		let signature = pair.vrf_sign(&input);
 
 		let b1 = pair.output_bytes::<[u8; 32]>(ctx, &input);
 		let b2 = public.output_bytes::<[u8; 32]>(ctx, &input, &signature.preout).unwrap();
@@ -1063,11 +1069,11 @@ mod tests {
 	fn vrf_backend_compat() {
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
-		let input =
-			VrfInput::new(b"data", &[(b"dom1", b"dat1")]).extra(b"extra", &[(b"dom2", b"dat2")]);
+		let input = VrfInput::new(b"label", &[(b"domain1", b"data1")])
+			.with_extra(b"extra", &[(b"domain2", b"data2")]);
 		let ctx = b"vrfbytes";
 
-		let signature = pair.vrf_sign(&input, None);
+		let signature = pair.vrf_sign(&input);
 		assert!(public.vrf_verify(&input, &signature));
 
 		let out1 = pair.output_bytes::<[u8; 32]>(ctx, &input);

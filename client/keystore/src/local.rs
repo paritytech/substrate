@@ -108,7 +108,7 @@ impl LocalKeystore {
 			.0
 			.read()
 			.key_pair_by_type::<T>(public, key_type)?
-			.map(|pair| pair.vrf_sign(input, None));
+			.map(|pair| pair.vrf_sign(input));
 		Ok(sig)
 	}
 

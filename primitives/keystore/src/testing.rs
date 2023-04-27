@@ -105,7 +105,7 @@ impl MemoryKeystore {
 		public: &T::Public,
 		input: &T::VrfInput,
 	) -> Result<Option<T::VrfSignature>, Error> {
-		let sig = self.pair::<T>(key_type, public).map(|pair| pair.vrf_sign(input, None));
+		let sig = self.pair::<T>(key_type, public).map(|pair| pair.vrf_sign(input));
 		Ok(sig)
 	}
 
