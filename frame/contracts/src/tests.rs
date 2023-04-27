@@ -3585,7 +3585,7 @@ fn storage_deposit_works() {
 #[test]
 fn storage_deposit_callee_works() {
 	let (wasm_caller, _code_hash_caller) = compile_module::<Test>("call").unwrap();
-	let (wasm_callee, _code_hash_callee) = compile_module::<Test>("store").unwrap();
+	let (wasm_callee, _code_hash_callee) = compile_module::<Test>("store_call").unwrap();
 	const ED: u64 = 200;
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
