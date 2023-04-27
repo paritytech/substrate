@@ -21,10 +21,7 @@ use crate::{
 	ListBags, ListNodes,
 };
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
-use frame_support::{
-	assert_ok, assert_storage_noop,
-	dispatch::{DispatchError, DispatchResult},
-};
+use frame_support::{assert_ok, assert_storage_noop, dispatch::DispatchError};
 
 fn node(
 	id: AccountId,
@@ -362,7 +359,10 @@ mod list {
 		// make sure there are no duplicates.
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			Bag::<Runtime>::get(10).unwrap().insert_unchecked(2, 10);
-			assert_eq!(List::<Runtime>::do_try_state(), ListError::Duplicate);
+			assert_eq!(
+				List::<Runtime>::do_try_state(),
+				DispatchError::Other("duplicate identified").into()
+			);
 		});
 
 		// ensure count is in sync with `ListNodes::count()`.
@@ -378,7 +378,7 @@ mod list {
 
 			assert_eq!(
 				List::<Runtime>::do_try_state(),
-				DispatchError::Other("iter_count != stored_count")
+				DispatchError::Other("iter_count != stored_count").into()
 			);
 		});
 	}

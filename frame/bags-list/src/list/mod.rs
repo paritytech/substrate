@@ -28,7 +28,9 @@ use crate::Config;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::ScoreProvider;
 use frame_support::{
-	defensive, ensure,
+	defensive,
+	dispatch::{DispatchError, DispatchResult},
+	ensure,
 	traits::{Defensive, DefensiveOption, Get},
 	DefaultNoBound, PalletError,
 };
@@ -516,7 +518,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
 			Self::iter().map(|node| node.id).all(|id| seen_in_list.insert(id)),
-			ListError::Duplicate,
+			DispatchError::Other("duplicate identified")
 		);
 
 		let iter_count = Self::iter().count() as u32;
@@ -778,7 +780,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 				.map(|node| node.id)
 				// each voter is only seen once, thus there is no cycle within a bag
 				.all(|voter| seen_in_bag.insert(voter)),
-			ListError::Duplicate
+			DispatchError::Other("duplicate found in bag")
 		);
 
 		Ok(())
@@ -903,7 +905,10 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 
 		let id = self.id();
 
-		frame_support::ensure!(expected_bag.contains(id), ListError::NodeNotFound);
+		frame_support::ensure!(
+			expected_bag.contains(id),
+			DispatchError::Other("node does not exist in the bag")
+		);
 
 		let non_terminal_check = !self.is_terminal() &&
 			expected_bag.head.as_ref() != Some(id) &&

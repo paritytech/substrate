@@ -268,7 +268,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
+		fn try_state(_: BlockNumberFor<T>) -> DispatchResult {
 			<Self as SortedListProvider<T::AccountId>>::try_state()
 		}
 	}
