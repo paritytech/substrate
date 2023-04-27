@@ -36,6 +36,9 @@ cargo-deny-licenses:
     - !reference [.rusty-cachier, after_script]
     - echo "___The complete log is in the artifacts___"
     - $CARGO_DENY_CMD 2> deny.log
+    - if [ $CI_JOB_STATUS != 'success' ]; then
+        echo 'Please check license of your crate or add an exception to scripts/ci/deny.toml';
+      fi
   artifacts:
     name: $CI_COMMIT_SHORT_SHA
     expire_in: 3 days
