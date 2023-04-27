@@ -549,7 +549,7 @@ pub mod vrf {
 	pub struct VrfInput {
 		/// VRF input data.
 		pub data: merlin::Transcript,
-		/// Extra non-input data signed by the VRF. Doesn't contribute to VRF output.
+		/// Extra data to be signed by the VRF.
 		pub extra: Option<merlin::Transcript>,
 	}
 
@@ -561,6 +561,8 @@ pub mod vrf {
 			VrfInput { data: transcript, extra: None }
 		}
 
+		/// Add extra non-input data to be signed by the VRF.
+		/// Extra data doesn't contribute to the VRF output.
 		pub fn extra(mut self, label: &'static [u8], data: &[(&'static [u8], &[u8])]) -> Self {
 			let mut transcript = merlin::Transcript::new(label);
 			data.iter().for_each(|(l, b)| transcript.append_message(l, b));

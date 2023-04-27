@@ -362,7 +362,7 @@ pub mod pallet {
 						.get(authority_index as usize)
 						.and_then(|(authority, _)| {
 							let public = authority.as_inner_ref();
-							let transcript = sp_consensus_babe::make_transcript(
+							let vrf_input = sp_consensus_babe::make_vrf_input(
 								&Self::randomness(),
 								CurrentSlot::<T>::get(),
 								EpochIndex::<T>::get(),
@@ -373,14 +373,14 @@ pub mod pallet {
 							// down the runtime.
 							debug_assert!({
 								use sp_core::crypto::VrfVerifier;
-								public.vrf_verify(&transcript, &vrf_signature)
+								public.vrf_verify(&vrf_input, &vrf_signature)
 							});
 
 							public
-								.make_bytes(
+								.output_bytes(
 									RANDOMNESS_VRF_CONTEXT,
-									&transcript,
-									&vrf_signature.output,
+									&vrf_input,
+									&vrf_signature.preout,
 								)
 								.ok()
 						});

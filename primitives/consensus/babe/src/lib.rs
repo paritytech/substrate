@@ -32,7 +32,7 @@ use sp_std::vec::Vec;
 
 use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
 
-pub use sp_core::sr25519::vrf::{VrfOutput, VrfProof, VrfSignature, VrfTranscript};
+pub use sp_core::sr25519::vrf::{VrfInput, VrfPreOutput, VrfProof, VrfSignature};
 
 /// Key type for BABE module.
 pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::BABE;
@@ -95,8 +95,8 @@ pub type BabeAuthorityWeight = u64;
 pub type BabeBlockWeight = u32;
 
 /// Make a VRF transcript data container
-pub fn make_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfTranscript {
-	VrfTranscript::new(
+pub fn make_vrf_input(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfInput {
+	VrfInput::new(
 		&BABE_ENGINE_ID,
 		&[
 			(b"slot number", &slot.to_le_bytes()),

@@ -72,7 +72,7 @@ pub trait Keystore: Send + Sync {
 		msg: &[u8],
 	) -> Result<Option<sr25519::Signature>, Error>;
 
-	/// Generate an sr25519 VRF signature for a given transcript data.
+	/// Generate an sr25519 VRF signature for a given input data.
 	///
 	/// Receives [`KeyTypeId`] and an [`sr25519::Public`] key to be able to map
 	/// them to a private key that exists in the keystore.
@@ -86,7 +86,7 @@ pub trait Keystore: Send + Sync {
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript: &sr25519::vrf::VrfTranscript,
+		input: &sr25519::vrf::VrfInput,
 	) -> Result<Option<sr25519::vrf::VrfSignature>, Error>;
 
 	/// Returns all ed25519 public keys for the given key type.

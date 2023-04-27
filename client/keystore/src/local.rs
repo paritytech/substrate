@@ -102,13 +102,13 @@ impl LocalKeystore {
 		&self,
 		key_type: KeyTypeId,
 		public: &T::Public,
-		transcript: &T::VrfInput,
+		input: &T::VrfInput,
 	) -> std::result::Result<Option<T::VrfSignature>, TraitError> {
 		let sig = self
 			.0
 			.read()
 			.key_pair_by_type::<T>(public, key_type)?
-			.map(|pair| pair.vrf_sign(transcript));
+			.map(|pair| pair.vrf_sign(input, None));
 		Ok(sig)
 	}
 }
@@ -142,9 +142,9 @@ impl Keystore for LocalKeystore {
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript: &sr25519::vrf::VrfTranscript,
+		input: &sr25519::vrf::VrfInput,
 	) -> std::result::Result<Option<sr25519::vrf::VrfSignature>, TraitError> {
-		self.vrf_sign::<sr25519::Pair>(key_type, public, transcript)
+		self.vrf_sign::<sr25519::Pair>(key_type, public, input)
 	}
 
 	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {
