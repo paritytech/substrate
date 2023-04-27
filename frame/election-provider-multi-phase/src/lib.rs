@@ -1577,7 +1577,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-#[cfg(any(feature = "try-runtime", test))]
+#[cfg(feature = "try-runtime")]
 impl<T: Config> Pallet<T> {
 	fn do_try_state() -> Result<(), &'static str> {
 		Self::try_state_snapshot()?;
@@ -1589,12 +1589,18 @@ impl<T: Config> Pallet<T> {
 	// - [`DesiredTargets`] exists if and only if [`Snapshot`] is present.
 	// - [`SnapshotMetadata`] exist if and only if [`Snapshot`] is present.
 	fn try_state_snapshot() -> Result<(), &'static str> {
-		let set = <DesiredTargets<T>>::get().is_some() && <SnapshotMetadata<T>>::get().is_some();
-
-		match <Snapshot<T>>::get() {
-            Some(_) if !set => Err("If the snapshot exists, the desired targets and snapshot metadata must also exist."),
-            None if set => Err("If the snapshot does not exists, the desired targets and snapshot metadata should also not exists"),
-            _ => Ok(()),
+		if <Snapshot<T>>::exists() &&
+			<SnapshotMetadata<T>>::exists() &&
+			<DesiredTargets<T>>::exists()
+		{
+			Ok(())
+		} else if !<Snapshot<T>>::exists() &&
+			!<SnapshotMetadata<T>>::exists() &&
+			!<DesiredTargets<T>>::exists()
+		{
+			Ok(())
+		} else {
+			Err("If snapshot exists, metadata and desired targets should be set too. Otherwise, none should be set.")
 		}
 	}
 

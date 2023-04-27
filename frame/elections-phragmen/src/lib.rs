@@ -1522,13 +1522,6 @@ mod tests {
 			ext.execute_with(pre_conditions);
 			ext.execute_with(test);
 
-			// run `try-runtime` post conditions logic at the end of each test, even if
-			// `try-runtime` feature is disabled.
-			#[cfg(not(feature = "try-runtime"))]
-			ext.execute_with(|| {
-				assert_ok!(Elections::do_try_state());
-			});
-
 			#[cfg(feature = "try-runtime")]
 			ext.execute_with(|| {
 				assert_ok!(<Elections as frame_support::traits::Hooks<u64>>::try_state(
@@ -1597,10 +1590,7 @@ mod tests {
 
 	fn pre_conditions() {
 		System::set_block_number(1);
-		Elections::try_state_members().unwrap();
-		Elections::try_state_members_approval_stake().unwrap();
-		Elections::try_state_candidates().unwrap();
-		Elections::try_state_candidates_runners_up_disjoint().unwrap();
+		Elections::do_try_state().unwrap();
 	}
 
 	fn submit_candidacy(origin: RuntimeOrigin) -> sp_runtime::DispatchResult {

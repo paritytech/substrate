@@ -620,13 +620,6 @@ impl ExtBuilder {
 		let mut ext = self.build();
 		ext.execute_with(test);
 
-		// run `try-runtime` post conditions logic at the end of each test, even if
-		// `try-runtime` feature is disabled.
-		#[cfg(not(feature = "try-runtime"))]
-		ext.execute_with(|| {
-			assert_ok!(MultiPhase::do_try_state());
-		});
-
 		#[cfg(feature = "try-runtime")]
 		ext.execute_with(|| {
 			assert_ok!(<MultiPhase as frame_support::traits::Hooks<u64>>::try_state(
