@@ -3583,6 +3583,59 @@ fn storage_deposit_works() {
 }
 
 #[test]
+fn storage_deposit_callee_works() {
+	let (wasm_caller, _code_hash_caller) = compile_module::<Test>("call").unwrap();
+	let (wasm_callee, _code_hash_callee) = compile_module::<Test>("store").unwrap();
+	const ED: u64 = 200;
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Create both contracts: Constructors do nothing.
+		let addr_caller = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm_caller),
+			vec![],
+			vec![],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+		let addr_callee = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm_callee),
+			vec![],
+			vec![],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		assert_ok!(Contracts::call(
+			RuntimeOrigin::signed(ALICE),
+			addr_caller,
+			0,
+			GAS_LIMIT,
+			None,
+			(100u32, &addr_callee).encode()
+		));
+
+		let callee = get_contract(&addr_callee);
+		let deposit = ED + DepositPerByte::get() * 100 + DepositPerItem::get() * 1;
+
+		assert_eq!(test_utils::get_balance(callee.deposit_account()), deposit);
+		assert_eq!(callee.total_deposit(), deposit);
+	});
+}
+
+#[test]
 fn set_code_extrinsic() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 	let (new_wasm, new_code_hash) = compile_module::<Test>("crypto_hashes").unwrap();
