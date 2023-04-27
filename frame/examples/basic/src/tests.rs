@@ -50,10 +50,7 @@ frame_support::construct_runtime!(
 	}
 );
 
-#[derive_impl(
-	frame_system::preludes::testing::TestDefaultConfig,
-	frame_system::pallet::DefaultConfig
-)]
+#[derive_impl(frame_system::preludes::testing::TestDefaultConfig as frame_system::pallet::DefaultConfig)]
 impl frame_system::Config for Test {
 	// These are all defined by system as mandatory.
 	type BaseCallFilter = frame_support::traits::Everything;

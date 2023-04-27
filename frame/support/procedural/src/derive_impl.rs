@@ -22,14 +22,14 @@ use macro_magic::mm_core::ForeignPath;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use std::collections::HashSet;
-use syn::{parse2, parse_quote, token::Comma, Ident, ImplItem, ItemImpl, Path, Result};
+use syn::{parse2, parse_quote, spanned::Spanned, Ident, ImplItem, ItemImpl, Path, Result, Token};
 
 #[derive(Parse)]
 pub struct DeriveImplAttrArgs {
 	pub foreign_path: Path,
-	_comma1: Comma,
-	pub disambiguation_path: Path,
-	_comma2: Option<Comma>,
+	_as: Option<Token![as]>,
+	#[parse_if(_as.is_some())]
+	pub disambiguation_path: Option<Path>,
 }
 
 impl ForeignPath for DeriveImplAttrArgs {
@@ -41,9 +41,8 @@ impl ForeignPath for DeriveImplAttrArgs {
 impl ToTokens for DeriveImplAttrArgs {
 	fn to_tokens(&self, tokens: &mut TokenStream2) {
 		tokens.extend(self.foreign_path.to_token_stream());
-		tokens.extend(self._comma1.to_token_stream());
+		tokens.extend(self._as.to_token_stream());
 		tokens.extend(self.disambiguation_path.to_token_stream());
-		tokens.extend(self._comma2.to_token_stream());
 	}
 }
 
@@ -156,13 +155,28 @@ pub fn derive_impl(
 	foreign_path: TokenStream2,
 	foreign_tokens: TokenStream2,
 	local_tokens: TokenStream2,
-	disambiguation_path: Path,
+	disambiguation_path: Option<Path>,
 ) -> Result<TokenStream2> {
 	let local_impl = parse2::<ItemImpl>(local_tokens)?;
 	let foreign_impl = parse2::<ItemImpl>(foreign_tokens)?;
 	let foreign_path = parse2::<Path>(foreign_path)?;
-	let disambiguation_path = disambiguation_path;
 
+	// have disambiguation_path default to the item being impl'd in the foreign impl if we
+	// don't specify an `as [disambiguation_path]` in the macro attr
+	let disambiguation_path = match disambiguation_path {
+		Some(disambiguation_path) => disambiguation_path,
+		None => {
+			let Some((_, foreign_impl_path, _)) = foreign_impl.clone().trait_ else {
+				return Err(
+					syn::Error::new(foreign_impl.span(),
+					"Impl statement must have a defined type being implemented for a defined type such as `impl A for B`")
+				);
+			};
+			foreign_impl_path
+		},
+	};
+
+	// generate the combined impl
 	let combined_impl = combine_impls(local_impl, foreign_impl, foreign_path, disambiguation_path);
 
 	Ok(quote!(#combined_impl))

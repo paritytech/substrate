@@ -788,25 +788,31 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// The attribute should be attached to an impl block (strictly speaking a `syn::ItemImpl`) for
 /// which we want to inject defaults in the event of missing trait items in the block.
 ///
-/// The attribute takes two arguments separated by a comma (and an optional trailing comma
-/// after the second argument), with the general form:
+/// The attribute takes two arguments separated by an `as` with the general form:
 ///
 /// ```ignore
-/// #[derive_impl(foreign_path, disambiguation_path)]
+/// #[derive_impl(foreign_path as disambiguation_path)]
 /// impl SomeTrait for SomeStruct {
 /// 	...
 /// }
 /// ```
 ///
-/// The first argument, called the `foreign_path`, should be the path to an impl registered via
+/// The `foreign_path` should be the path to an impl registered via
 /// [`#[register_default_impl]`](`macro@register_default_impl`) that contains the default trait
 /// items we want to potentially inject.
 ///
-/// The second argument, called the `disambiguation_path`, should be the path to a trait that
-/// will be used to qualify all default entries that are injected into the local impl. For
-/// example if your `foreign_path` is `some::path::TestTrait` and your `disambiguation_path` is
-/// `another::path::DefaultTrait`, any items injected into the local impl will be qualified as
-/// `<some::path::TestTrait as another::path::DefaultTrait>::specific_trait_item`.
+/// The `disambiguation_path` should be the path to a trait that will be used to qualify all
+/// default entries that are injected into the local impl. For example if your `foreign_path`
+/// is `some::path::TestTrait` and your `disambiguation_path` is `another::path::DefaultTrait`,
+/// any items injected into the local impl will be qualified as `<some::path::TestTrait as
+/// another::path::DefaultTrait>::specific_trait_item`.
+///
+/// Optionally, you may omit the `as disambiguation_path` portion, in which case the
+/// `disambiguation_path` will internally default to `A` from the `impl A for B` part of the
+/// foreign impl. This is useful for scenarios where all of the relevant types are already in
+/// scope.
+///
+/// Conversely, the `foreign_path` argument is required and cannot be omitted.
 ///
 /// You can also make use of `#[pallet::no_default]` on specific items in your foreign trait
 /// that you want to ensure will not be copied over but that you nonetheless want to use
@@ -842,10 +848,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// Consider the following taken from the `basic` example pallet:
 ///
 /// ```ignore
-/// #[derive_impl(
-/// 	frame_system::preludes::testing::TestDefaultConfig,
-/// 	frame_system::pallet::DefaultConfig
-/// )]
+/// #[derive_impl(frame_system::preludes::testing::TestDefaultConfig as frame_system::pallet::DefaultConfig)]
 /// impl frame_system::Config for Test {
 /// 	// These are all defined by system as mandatory.
 /// 	type BaseCallFilter = frame_support::traits::Everything;
