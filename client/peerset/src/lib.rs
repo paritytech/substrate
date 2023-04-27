@@ -38,14 +38,13 @@ mod protocol_controller;
 use peer_store::{PeerReputationProvider, PeerStore, PeerStoreHandle};
 use protocol_controller::{ProtocolController, ProtocolHandle};
 
-use flume::{bounded, Receiver, TryRecvError};
 use futures::{
 	channel::oneshot,
 	future::{join_all, BoxFuture, JoinAll},
 	prelude::*,
 	stream::Stream,
 };
-use log::{debug, error, trace};
+use log::debug;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use serde_json::json;
 use std::{
@@ -258,7 +257,7 @@ pub struct Peerset {
 	protocol_controller_futures: JoinAll<BoxFuture<'static, ()>>,
 	/// Commands sent from protocol controllers to `Notifications`. The size of this vector never
 	/// changes.
-	from_controllers: Receiver<Message>,
+	from_controllers: TracingUnboundedReceiver<Message>,
 	/// Receiver for messages from the `PeersetHandle` and from `to_self`.
 	from_handle: TracingUnboundedReceiver<Action>,
 	/// Sending side of `from_handle`.
@@ -271,10 +270,8 @@ impl Peerset {
 		let default_set_config = &config.sets[0];
 		let peer_store = PeerStore::new(default_set_config.bootnodes.clone());
 
-		//let (to_notifications, from_controllers) =
-		//	tracing_unbounded("mpsc_protocol_controllers_to_notifications", 10_000);
-
-		let (to_notifications, from_controllers) = bounded(0);
+		let (to_notifications, from_controllers) =
+			tracing_unbounded("mpsc_protocol_controllers_to_notifications", 10_000);
 
 		let controllers = config
 			.sets
@@ -363,28 +360,16 @@ impl Stream for Peerset {
 	type Item = Message;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		// if let Poll::Ready(msg) = self.from_controllers.poll_next_unpin(cx) {
-		// 	if let Some(msg) = msg {
-		// 		return Poll::Ready(Some(msg))
-		// 	} else {
-		// 		debug!(
-		// 			target: LOG_TARGET,
-		// 			"All `ProtocolController`s have terminated, terminating `Peerset`."
-		// 		);
-		// 		return Poll::Ready(None)
-		// 	}
-		// }
-
-		match self.from_controllers.try_recv() {
-			Ok(msg) => return Poll::Ready(Some(msg)),
-			Err(TryRecvError::Disconnected) => {
+		if let Poll::Ready(msg) = self.from_controllers.poll_next_unpin(cx) {
+			if let Some(msg) = msg {
+				return Poll::Ready(Some(msg))
+			} else {
 				debug!(
 					target: LOG_TARGET,
 					"All `ProtocolController`s have terminated, terminating `Peerset`."
 				);
 				return Poll::Ready(None)
-			},
-			Err(TryRecvError::Empty) => (),
+			}
 		}
 
 		while let Poll::Ready(action) = self.from_handle.poll_next_unpin(cx) {

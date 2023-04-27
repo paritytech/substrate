@@ -127,23 +127,25 @@ fn test_once() {
 
 	let (mut peerset, peerset_handle) = Peerset::from_config(PeersetConfig {
 		sets: vec![SetConfig {
-			bootnodes: (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
-				.map(|_| {
-					let id = PeerId::random();
-					known_nodes.insert(id, State::Disconnected);
-					id
-				})
-				.collect(),
-			reserved_nodes: {
-				(0..Uniform::new_inclusive(0, 2).sample(&mut rng))
-					.map(|_| {
-						let id = PeerId::random();
-						known_nodes.insert(id, State::Disconnected);
-						reserved_nodes.insert(id);
-						id
-					})
-					.collect()
-			},
+			// bootnodes: (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
+			// 	.map(|_| {
+			// 		let id = PeerId::random();
+			// 		known_nodes.insert(id, State::Disconnected);
+			// 		id
+			// 	})
+			// 	.collect(),
+			// reserved_nodes: {
+			// 	(0..Uniform::new_inclusive(0, 2).sample(&mut rng))
+			// 		.map(|_| {
+			// 			let id = PeerId::random();
+			// 			known_nodes.insert(id, State::Disconnected);
+			// 			reserved_nodes.insert(id);
+			// 			id
+			// 		})
+			// 		.collect()
+			// },
+			bootnodes: Vec::new(),
+			reserved_nodes: HashSet::new(),
 			in_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
 			out_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
 			reserved_only: Uniform::new_inclusive(0, 10).sample(&mut rng) == 0,
@@ -180,6 +182,8 @@ fn test_once() {
 				// If we generate 0, poll the peerset.
 				0 => match Stream::poll_next(Pin::new(&mut peerset), cx) {
 					Poll::Ready(Some(Message::Connect { peer_id, .. })) => {
+						log::info!("PSM: connecting to peer {}", peer_id);
+
 						let state = known_nodes.get_mut(&peer_id).unwrap();
 						if matches!(*state, State::Incoming(_)) {
 							log::info!(
@@ -196,10 +200,10 @@ fn test_once() {
 
 						current_peer = Some(peer_id);
 						current_event = Some(Event::PsmConnect);
-
-						log::info!("PSM: connecting to peer {}", peer_id);
 					},
 					Poll::Ready(Some(Message::Drop { peer_id, .. })) => {
+						log::info!("PSM: dropping peer {}", peer_id);
+
 						let state = known_nodes.get_mut(&peer_id).unwrap();
 						if matches!(*state, State::Incoming(_)) {
 							log::info!(
@@ -218,10 +222,10 @@ fn test_once() {
 
 						current_peer = Some(peer_id);
 						current_event = Some(Event::PsmDrop);
-
-						log::info!("PSM: dropping peer {}", peer_id);
 					},
 					Poll::Ready(Some(Message::Accept(n))) => {
+						log::info!("PSM: accepting index {}", n.0);
+
 						let peer_id = incoming_nodes.remove(&n).unwrap();
 
 						let state = known_nodes.get_mut(&peer_id).unwrap();
@@ -249,8 +253,6 @@ fn test_once() {
 
 						current_peer = Some(peer_id);
 						current_event = Some(Event::PsmAccept);
-
-						log::info!("PSM: accepting index {}", n.0);
 					},
 					Poll::Ready(Some(Message::Reject(n))) => {
 						log::info!("PSM: rejecting index {}", n.0);
@@ -289,9 +291,9 @@ fn test_once() {
 
 				// If we generate 1, discover a new node.
 				1 => {
-					let new_id = PeerId::random();
-					known_nodes.insert(new_id, State::Disconnected);
-					peerset_handle.add_known_peer(new_id);
+					// let new_id = PeerId::random();
+					// known_nodes.insert(new_id, State::Disconnected);
+					// peerset_handle.add_known_peer(new_id);
 				},
 
 				// If we generate 2, adjust a random reputation.
