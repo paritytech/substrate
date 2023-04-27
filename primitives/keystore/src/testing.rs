@@ -20,7 +20,7 @@
 use crate::{Error, Keystore, KeystorePtr};
 
 use sp_core::{
-	crypto::{ByteArray, KeyTypeId, Pair, VrfSigner},
+	crypto::{ByteArray, KeyTypeId, Pair, VrfSecret},
 	ecdsa, ed25519, sr25519,
 };
 
@@ -99,7 +99,7 @@ impl MemoryKeystore {
 		Ok(sig)
 	}
 
-	fn vrf_sign<T: Pair + VrfSigner>(
+	fn vrf_sign<T: Pair + VrfSecret>(
 		&self,
 		key_type: KeyTypeId,
 		public: &T::Public,

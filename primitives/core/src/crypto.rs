@@ -1102,8 +1102,8 @@ pub trait VrfCrypto {
 	type VrfSignature;
 }
 
-/// VRF Signer.
-pub trait VrfSigner: VrfCrypto {
+/// VRF Secret Key.
+pub trait VrfSecret: VrfCrypto {
 	/// Get VRF pre-output.
 	fn vrf_preout(&self, data: &Self::VrfInput) -> Self::VrfPreOutput;
 
@@ -1115,8 +1115,8 @@ pub trait VrfSigner: VrfCrypto {
 	) -> Self::VrfSignature;
 }
 
-/// VRF Verifier.
-pub trait VrfVerifier: VrfCrypto {
+/// VRF Public Key.
+pub trait VrfPublic: VrfCrypto {
 	/// Verify input data signature.
 	fn vrf_verify(&self, data: &Self::VrfInput, signature: &Self::VrfSignature) -> bool;
 }

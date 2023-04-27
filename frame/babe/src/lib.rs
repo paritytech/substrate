@@ -372,7 +372,7 @@ pub mod pallet {
 							// execution. We don't run the verification again here to avoid slowing
 							// down the runtime.
 							debug_assert!({
-								use sp_core::crypto::VrfVerifier;
+								use sp_core::crypto::VrfPublic;
 								public.vrf_verify(&vrf_input, &vrf_signature)
 							});
 

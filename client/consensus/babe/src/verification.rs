@@ -34,7 +34,7 @@ use sp_consensus_babe::{
 };
 use sp_consensus_slots::Slot;
 use sp_core::{
-	crypto::{VrfVerifier, Wraps},
+	crypto::{VrfPublic, Wraps},
 	Pair,
 };
 use sp_runtime::{traits::Header, DigestItem};

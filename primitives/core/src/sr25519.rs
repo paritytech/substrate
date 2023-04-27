@@ -537,8 +537,8 @@ impl CryptoType for Pair {
 pub mod vrf {
 	use super::*;
 	#[cfg(feature = "full_crypto")]
-	use crate::crypto::VrfSigner;
-	use crate::crypto::{VrfCrypto, VrfVerifier};
+	use crate::crypto::VrfSecret;
+	use crate::crypto::{VrfCrypto, VrfPublic};
 	use schnorrkel::{
 		errors::MultiSignatureStage,
 		vrf::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
@@ -650,7 +650,7 @@ pub mod vrf {
 	}
 
 	#[cfg(feature = "full_crypto")]
-	impl VrfSigner for Pair {
+	impl VrfSecret for Pair {
 		fn vrf_sign(
 			&self,
 			input: &Self::VrfInput,
@@ -677,7 +677,7 @@ pub mod vrf {
 		type VrfSignature = VrfSignature;
 	}
 
-	impl VrfVerifier for Public {
+	impl VrfPublic for Public {
 		fn vrf_verify(&self, input: &Self::VrfInput, signature: &Self::VrfSignature) -> bool {
 			schnorrkel::PublicKey::from_bytes(self)
 				.and_then(|public| {
@@ -771,7 +771,7 @@ pub mod vrf {
 #[cfg(test)]
 mod tests {
 	use super::{vrf::*, *};
-	use crate::crypto::{Ss58Codec, VrfSigner, VrfVerifier, DEV_ADDRESS, DEV_PHRASE};
+	use crate::crypto::{Ss58Codec, VrfPublic, VrfSecret, DEV_ADDRESS, DEV_PHRASE};
 	use serde_json;
 
 	#[test]
