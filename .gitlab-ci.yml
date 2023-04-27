@@ -49,7 +49,8 @@ variables:
   DOCKER_OS: "debian:stretch"
   ARCH: "x86_64"
   CI_IMAGE: "paritytech/ci-linux:production"
-  BUILDAH_IMAGE: "quay.io/buildah/stable:v1.27"
+  BUILDAH_IMAGE: "quay.io/buildah/stable:v1.29"
+  BUILDAH_COMMAND: "buildah --storage-driver overlay2"
   RELENG_SCRIPTS_BRANCH: "master"
   RUSTY_CACHIER_SINGLE_BRANCH: master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
@@ -58,7 +59,7 @@ variables:
   NEXTEST_SUCCESS_OUTPUT: final
   ZOMBIENET_IMAGE: "docker.io/paritytech/zombienet:v1.3.43"
 
-.shared-default: &shared-default
+default:
   retry:
     max: 2
     when:
@@ -66,21 +67,7 @@ variables:
       - unknown_failure
       - api_failure
   cache: {}
-
-.default-pipeline-definitions:
-  default:
-    <<: *shared-default
-    interruptible: true
-
-.crate-publishing-pipeline-definitions:
-  default:
-    <<: *shared-default
-    # The crate-publishing pipeline defaults to `interruptible: false` so that we'll be able to
-    # reach and run the publishing jobs despite the "Auto-cancel redundant pipelines" CI setting.
-    # The setting is relevant because the crate-publishing pipeline runs on `master`, thus future
-    # pipelines on `master` (e.g. created for new commits or other schedules) might unintendedly
-    # cancel the publishing jobs or its dependencies before we get to actually publish the crates.
-    interruptible: false
+  interruptible: true
 
 .collect-artifacts:
   artifacts:
@@ -179,7 +166,7 @@ variables:
 # exclude cargo-check-benches from such runs
 .test-refs-check-benches:
   rules:
-    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "parent_pipeline"  && $CI_IMAGE =~ /staging$/
+    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "pipeline"  && $CI_IMAGE =~ /staging$/
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -229,11 +216,6 @@ variables:
 .zombienet-refs:
   extends: .build-refs
 
-.nightly-pipeline:
-  rules:
-    # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
-    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
-
 .crates-publishing-variables:
   variables:
     CRATESIO_CRATES_OWNER: parity-crate-owner
@@ -259,22 +241,11 @@ variables:
       - artifacts/
   variables:
     SPUB_TMP: artifacts
+    # disable timestamping for the crate publishing jobs, they leave stray child processes behind
+    # which don't interact well with the timestamping script
+    CI_DISABLE_TIMESTAMP: 1
 
 #### stage:                       .pre
-
-skip-if-draft:
-  extends: .kubernetes-env
-  variables:
-    CI_IMAGE: "paritytech/tools:latest"
-  stage: .pre
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ # PRs
-  script:
-    - echo "Commit message is ${CI_COMMIT_MESSAGE}"
-    - echo "Ref is ${CI_COMMIT_REF_NAME}"
-    - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
-    - ./scripts/ci/gitlab/skip_if_draft.sh
-  allow_failure: true
 
 check-crates-publishing-pipeline:
   stage: .pre
@@ -287,6 +258,23 @@ check-crates-publishing-pipeline:
       --branch "$RELENG_SCRIPTS_BRANCH"
       https://github.com/paritytech/releng-scripts.git
     - ONLY_CHECK_PIPELINE=true ./releng-scripts/publish-crates
+
+# By default our pipelines are interruptible, but some special pipelines shouldn't be interrupted:
+# * multi-project pipelines such as the ones triggered by the scripts repo
+# * the scheduled automatic-crate-publishing pipeline
+#
+# In those cases, we add an uninterruptible .pre job; once that one has started,
+# the entire pipeline becomes uninterruptible
+uninterruptible-pipeline:
+  extends: .kubernetes-env
+  variables:
+    CI_IMAGE: "paritytech/tools:latest"
+  stage: .pre
+  interruptible: false
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "automatic-crate-publishing"
+  script: "true"
 
 include:
   # check jobs
@@ -308,13 +296,6 @@ include:
   # pipeline is made uninterruptible to ensure that test jobs also get a chance to run to
   # completion, because the publishing jobs depends on them AS INTENDED: crates should not be
   # published before their source code is checked.
-  - local: scripts/ci/gitlab/crate-publishing-pipeline.yml
-    rules:
-      - if: $PIPELINE == "automatic-crate-publishing"
-  # For normal pipelines: run it with defaults + `interruptible: true`
-  - local: scripts/ci/gitlab/default-pipeline.yml
-    rules:
-      - if: $PIPELINE != "automatic-crate-publishing"
   - project: parity/infrastructure/ci_cd/shared
     ref: v0.2
     file: /common/timestamp.yml

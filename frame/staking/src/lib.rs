@@ -315,6 +315,7 @@ use sp_runtime::{
 	traits::{Convert, StaticLookup},
 	RuntimeDebug,
 };
+pub use sp_staking::StakerStatus;
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
 	EraIndex, SessionIndex,
@@ -383,18 +384,6 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 	fn default() -> Self {
 		EraRewardPoints { total: Default::default(), individual: BTreeMap::new() }
 	}
-}
-
-/// Indicates the initial status of the staker.
-#[derive(RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Clone))]
-pub enum StakerStatus<AccountId> {
-	/// Chilling.
-	Idle,
-	/// Declared desire in validating or already participating in it.
-	Validator,
-	/// Nominating for a group of other stakers.
-	Nominator(Vec<AccountId>),
 }
 
 /// A destination account for payment.

@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Contract Pallet
+//! # Contracts Pallet
 //!
-//! The Contract module provides functionality for the runtime to deploy and execute WebAssembly
+//! The Contracts module provides functionality for the runtime to deploy and execute WebAssembly
 //! smart-contracts.
 //!
 //! - [`Config`]
@@ -73,21 +73,20 @@
 //!
 //! ## Usage
 //!
-//! The Contract module is a work in progress. The following examples show how this Contract module
+//! The Contracts module is a work in progress. The following examples show how this module
 //! can be used to instantiate and call contracts.
 //!
-//! * [`ink`](https://github.com/paritytech/ink) is
+//! * [`ink!`](https://use.ink) is
 //! an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
 //! WebAssembly based smart contracts in the Rust programming language.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "runtime-benchmarks", recursion_limit = "1024")]
 
-#[macro_use]
-mod gas;
 mod address;
 mod benchmarking;
 mod exec;
+mod gas;
 mod migration;
 mod schedule;
 mod storage;
@@ -115,7 +114,7 @@ use frame_support::{
 		tokens::fungible::Inspect, ConstU32, Contains, Currency, Get, Randomness,
 		ReservableCurrency, Time,
 	},
-	weights::{OldWeight, Weight},
+	weights::Weight,
 	BoundedVec, WeakBoundedVec,
 };
 use frame_system::Pallet as System;
@@ -151,6 +150,12 @@ type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 
+/// The old weight type.
+///
+/// This is a copy of the [`frame_support::weights::OldWeight`] type since the contracts pallet
+/// needs to support it indefinitely.
+type OldWeight = u64;
+
 /// Used as a sentinel value when reading and writing contract memory.
 ///
 /// It is usually used to signal `None` to a contract when only a primitive is allowed
@@ -158,6 +163,13 @@ type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 /// sentinel because contracts are never allowed to use such a large amount of resources
 /// that this value makes sense for a memory location or length.
 const SENTINEL: u32 = u32::MAX;
+
+/// The target that is used for the log output emitted by this crate.
+///
+/// Hence you can use this target to selectively increase the log level for this crate.
+///
+/// Example: `RUST_LOG=runtime::contracts=debug my_code --dev`
+const LOG_TARGET: &str = "runtime::contracts";
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -254,6 +266,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type DepositPerByte: Get<BalanceOf<Self>>;
 
+		/// Fallback value to limit the storage deposit if it's not being set by the caller.
+		#[pallet::constant]
+		type DefaultDepositLimit: Get<BalanceOf<Self>>;
+
 		/// The amount of balance a caller has to pay for each storage item.
 		///
 		/// # Note
@@ -304,8 +320,8 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
-			// Total runtime memory is expected to have 128Mb upper limit
-			const MAX_RUNTIME_MEM: u32 = 1024 * 1024 * 128;
+			// Total runtime memory limit
+			let max_runtime_mem: u32 = T::Schedule::get().limits.runtime_memory;
 			// Memory limits for a single contract:
 			// Value stack size: 1Mb per contract, default defined in wasmi
 			const MAX_STACK_SIZE: u32 = 1024 * 1024;
@@ -339,10 +355,10 @@ pub mod pallet {
 			// This gives us the following formula:
 			//
 			// `(MaxCodeLen * 18 * 4 + MAX_STACK_SIZE + max_heap_size) * max_call_depth <
-			// MAX_RUNTIME_MEM/2`
+			// max_runtime_mem/2`
 			//
 			// Hence the upper limit for the `MaxCodeLen` can be defined as follows:
-			let code_len_limit = MAX_RUNTIME_MEM
+			let code_len_limit = max_runtime_mem
 				.saturating_div(2)
 				.saturating_div(max_call_depth)
 				.saturating_sub(max_heap_size)
@@ -1282,7 +1298,7 @@ impl<T: Config> Pallet<T> {
 	/// Used by backwards compatible extrinsics. We cannot just set the proof_size weight limit to
 	/// zero or an old `Call` will just fail with OutOfGas.
 	fn compat_weight_limit(gas_limit: OldWeight) -> Weight {
-		Weight::from_parts(gas_limit.0, u64::from(T::MaxCodeLen::get()) * 2)
+		Weight::from_parts(gas_limit, u64::from(T::MaxCodeLen::get()) * 2)
 	}
 }
 

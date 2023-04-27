@@ -41,7 +41,7 @@ use sp_runtime::{
 type BlockNumber = u64;
 
 // example module to test behaviors.
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 pub mod example {
 	use frame_support::{dispatch::WithPostDispatchInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
@@ -91,7 +91,7 @@ pub mod example {
 
 mod mock_democracy {
 	pub use pallet::*;
-	#[frame_support::pallet]
+	#[frame_support::pallet(dev_mode)]
 	pub mod pallet {
 		use frame_support::pallet_prelude::*;
 		use frame_system::pallet_prelude::*;
@@ -209,6 +209,7 @@ parameter_types! {
 	pub const MotionDuration: BlockNumber = MOTION_DURATION_IN_BLOCKS;
 	pub const MaxProposals: u32 = 100;
 	pub const MaxMembers: u32 = 100;
+	pub MaxProposalWeight: Weight = sp_runtime::Perbill::from_percent(50) * BlockWeights::get().max_block;
 }
 
 type CouncilCollective = pallet_collective::Instance1;
@@ -222,6 +223,7 @@ impl pallet_collective::Config<CouncilCollective> for Test {
 	type DefaultVote = pallet_collective::PrimeDefaultVote;
 	type WeightInfo = ();
 	type SetMembersOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type MaxProposalWeight = MaxProposalWeight;
 }
 
 impl example::Config for Test {}

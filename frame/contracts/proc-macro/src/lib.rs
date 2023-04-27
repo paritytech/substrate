@@ -209,13 +209,13 @@ impl HostFn {
 			"only #[version(<u8>)], #[unstable], #[prefixed_alias] and #[deprecated] attributes are allowed.";
 		let span = item.span();
 		let mut attrs = item.attrs.clone();
-		attrs.retain(|a| !a.path.is_ident("doc"));
+		attrs.retain(|a| !a.path().is_ident("doc"));
 		let mut maybe_version = None;
 		let mut is_stable = true;
 		let mut alias_to = None;
 		let mut not_deprecated = true;
 		while let Some(attr) = attrs.pop() {
-			let ident = attr.path.get_ident().ok_or(err(span, msg))?.to_string();
+			let ident = attr.path().get_ident().ok_or(err(span, msg))?.to_string();
 			match ident.as_str() {
 				"version" => {
 					if maybe_version.is_some() {
@@ -377,7 +377,7 @@ impl EnvDef {
 			_ => None,
 		};
 
-		let selector = |a: &syn::Attribute| a.path.is_ident("prefixed_alias");
+		let selector = |a: &syn::Attribute| a.path().is_ident("prefixed_alias");
 
 		let aliases = items
 			.iter()
@@ -401,7 +401,7 @@ impl EnvDef {
 }
 
 fn is_valid_special_arg(idx: usize, arg: &FnArg) -> bool {
-	let pat = if let FnArg::Typed(pat) = arg { pat } else { return false };
+	let FnArg::Typed(pat) = arg else { return false };
 	let ident = if let syn::Pat::Ident(ref ident) = *pat.pat { &ident.ident } else { return false };
 	let name_ok = match idx {
 		0 => ident == "ctx" || ident == "_ctx",
@@ -434,7 +434,7 @@ fn expand_func_doc(func: &HostFn) -> TokenStream2 {
 			);
 			quote! { #[doc = #alias_doc] }
 		} else {
-			let docs = func.item.attrs.iter().filter(|a| a.path.is_ident("doc")).map(|d| {
+			let docs = func.item.attrs.iter().filter(|a| a.path().is_ident("doc")).map(|d| {
 				let docs = d.to_token_stream();
 				quote! { #docs }
 			});

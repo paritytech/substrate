@@ -278,6 +278,7 @@ fn get_benchmark_data(
 				used_recorded_proof_size.push(ComponentSlope { name: name.clone(), slope, error });
 			}
 		});
+	used_recorded_proof_size.sort_by(|a, b| a.name.cmp(&b.name));
 
 	// We add additional comments showing which storage items were touched.
 	// We find the worst case proof size, and use that as the final proof size result.
@@ -315,12 +316,12 @@ fn get_benchmark_data(
 	let mut base_calculated_proof_size = 0;
 	// Sum up the proof sizes per component
 	for (_, slope, base) in proof_size_per_components.iter() {
-		base_calculated_proof_size += base;
+		base_calculated_proof_size = base_calculated_proof_size.max(*base);
 		for component in slope.iter() {
 			let mut found = false;
 			for used_component in used_calculated_proof_size.iter_mut() {
 				if used_component.name == component.name {
-					used_component.slope += component.slope;
+					used_component.slope = used_component.slope.max(component.slope);
 					found = true;
 					break
 				}
@@ -337,6 +338,7 @@ fn get_benchmark_data(
 			}
 		}
 	}
+	used_calculated_proof_size.sort_by(|a, b| a.name.cmp(&b.name));
 
 	// This puts a marker on any component which is entirely unused in the weight formula.
 	let components = batch.time_results[0]
@@ -626,7 +628,7 @@ pub(crate) fn process_storage_results(
 				},
 			};
 			// Add the additional trie layer overhead for every new prefix.
-			if *reads > 0 {
+			if *reads > 0 && !is_all_ignored {
 				prefix_result.proof_size += 15 * 33 * additional_trie_layers as u32;
 			}
 			storage_per_prefix.entry(prefix.clone()).or_default().push(prefix_result);

@@ -615,7 +615,17 @@ impl ExtBuilder {
 	}
 
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
-		self.build().execute_with(test)
+		sp_tracing::try_init_simple();
+
+		let mut ext = self.build();
+		ext.execute_with(test);
+
+		#[cfg(feature = "try-runtime")]
+		ext.execute_with(|| {
+			assert_ok!(<MultiPhase as frame_support::traits::Hooks<u64>>::try_state(
+				System::block_number()
+			));
+		});
 	}
 }
 

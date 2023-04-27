@@ -104,7 +104,7 @@ async fn dry_run<T: Decode, Block: BlockT, HostFns: HostFunctions>(
 		executor,
 		method,
 		data,
-		full_extensions(),
+		full_extensions(executor.clone()),
 	)?;
 
 	Ok(<T>::decode(&mut &*result)?)
@@ -122,7 +122,7 @@ async fn run<Block: BlockT, HostFns: HostFunctions>(
 		executor,
 		method,
 		data,
-		full_extensions(),
+		full_extensions(executor.clone()),
 	)?;
 
 	let storage_changes = changes.drain_storage_changes(
