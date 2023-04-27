@@ -335,8 +335,8 @@ where
 	const DEFAULT_KEY_DOWNLOAD_PAGE: u32 = 1000;
 
 	/// Get the number of threads to use.
-	/// Cap the number of threads, because performance improvement beyond a small number of threads
-	/// is negligible, and too many threads can create issues with the HttpClient.
+	/// Cap the number of threads. Performance improvement beyond a small number of threads is
+	/// negligible, and too many threads can create issues with the HttpClient.
 	fn threads() -> NonZeroUsize {
 		let avaliable = thread::available_parallelism()
 			.unwrap_or(NonZeroUsize::new(1usize).expect("1 is non-zero; qed"))
