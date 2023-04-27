@@ -480,10 +480,10 @@ impl ProtocolController {
 		// Check if the node is reserved first.
 		if let Some(state) = self.reserved_nodes.get_mut(&peer_id) {
 			match state {
-				PeerState::Connected(mut direction) => {
+				PeerState::Connected(ref mut direction) => {
 					// We are accepting an incoming connection, so ensure the direction is inbound.
 					// (See the note above.)
-					direction = Direction::Inbound;
+					*direction = Direction::Inbound;
 					self.accept_connection(incoming_index);
 				},
 				PeerState::NotConnected => {
