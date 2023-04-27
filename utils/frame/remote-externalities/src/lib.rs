@@ -46,6 +46,7 @@ use std::{
 	ops::{Deref, DerefMut},
 	path::{Path, PathBuf},
 	sync::Arc,
+	thread,
 };
 use substrate_rpc_client::{rpc_params, BatchRequestBuilder, ChainApi, ClientT, StateApi};
 
@@ -337,13 +338,18 @@ where
 	/// Cap the number of threads. Performance improvement beyond a small number of threads is
 	/// negligible, and too many threads can create issues with the HttpClient.
 	fn threads() -> NonZeroUsize {
-		let threads: usize = match std::env::var("TRY_RUNTIME_MAX_THREADS") {
+		let avaliable = thread::available_parallelism()
+			.unwrap_or(NonZeroUsize::new(1usize).expect("1 is non-zero; qed"))
+			.get();
+		assert!(avaliable > 0, "avaliable parallelism must be greater than 0");
+
+		let requested: usize = match std::env::var("TRY_RUNTIME_MAX_THREADS") {
 			Ok(n) => n.parse::<usize>().expect("TRY_RUNTIME_MAX_THREADS must be a number"),
 			Err(_) => Self::DEFAULT_PARALLELISM,
 		};
-		assert!(threads > 0, "TRY_RUNTIME_MAX_THREADS must be greater than 0");
-		dbg!(threads);
-		return NonZeroUsize::new(threads).expect("threads is non-zero; qed")
+		assert!(requested > 0, "TRY_RUNTIME_MAX_THREADS must be greater than 0");
+		return NonZeroUsize::new(max(requested, avaliable))
+			.expect("requested and avaliable are non-zero; qed")
 	}
 
 	async fn rpc_get_storage(
