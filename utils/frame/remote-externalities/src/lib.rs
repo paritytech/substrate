@@ -116,7 +116,7 @@ pub struct OfflineConfig {
 /// Description of the transport protocol (for online execution).
 #[derive(Debug, Clone)]
 pub enum Transport {
-	/// Use the `URI` to open a new WebSocket connection.
+	/// Use the `URI` to open a new WebSocket connection
 	Uri(String),
 	/// Use HTTP connection.
 	RemoteClient(Arc<HttpClient>),
