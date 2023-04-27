@@ -441,7 +441,7 @@ pub mod pallet {
 	// against them as the first thing you do in your function. There are three convenience calls
 	// in system that do the matching for you and return a convenient result: `ensure_signed`,
 	// `ensure_root` and `ensure_none`.
-	#[pallet::call]
+	#[pallet::call(weight(<T as Config>::WeightInfo))]
 	impl<T: Config> Pallet<T> {
 		/// This is your public interface. Be extremely careful.
 		/// This is just a simple example of how to interact with the pallet from the external
@@ -497,9 +497,6 @@ pub mod pallet {
 		// The weight for this extrinsic we rely on the auto-generated `WeightInfo` from the
 		// benchmark toolchain.
 		#[pallet::call_index(0)]
-		#[pallet::weight(
-			<T as pallet::Config>::WeightInfo::accumulate_dummy()
-		)]
 		pub fn accumulate_dummy(origin: OriginFor<T>, increase_by: T::Balance) -> DispatchResult {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
