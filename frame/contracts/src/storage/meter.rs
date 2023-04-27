@@ -23,7 +23,7 @@ use crate::{
 };
 use codec::Encode;
 use frame_support::{
-	dispatch::DispatchError,
+	dispatch::{fmt::Debug, DispatchError},
 	ensure,
 	traits::{
 		tokens::{Fortitude::Polite, Preservation::Protect, WithdrawConsequence},
@@ -32,7 +32,10 @@ use frame_support::{
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use pallet_contracts_primitives::StorageDeposit as Deposit;
-use sp_runtime::{traits::Saturating, FixedPointNumber, FixedU128};
+use sp_runtime::{
+	traits::{Saturating, Zero},
+	FixedPointNumber, FixedU128,
+};
 use sp_std::{marker::PhantomData, vec::Vec};
 
 /// Deposit that uses the native currency's balance type.
@@ -96,17 +99,24 @@ pub enum ReservingExt {}
 pub trait State: private::Sealed {}
 
 /// State parameter that constitutes a meter that is in its root state.
-pub enum Root {}
+#[derive(Default, Debug)]
+pub struct Root;
 
 /// State parameter that constitutes a meter that is in its nested state.
-pub enum Nested {}
+/// Its value indicates whether the nested meter has its own limit.
+#[derive(DefaultNoBound, RuntimeDebugNoBound)]
+pub enum Nested {
+	#[default]
+	DerivedLimit,
+	OwnLimit,
+}
 
 impl State for Root {}
 impl State for Nested {}
 
 /// A type that allows the metering of consumed or freed storage of a single contract call stack.
 #[derive(DefaultNoBound, RuntimeDebugNoBound)]
-pub struct RawMeter<T: Config, E, S: State> {
+pub struct RawMeter<T: Config, E, S: State + Default + Debug> {
 	/// The limit of how much balance this meter is allowed to consume.
 	limit: BalanceOf<T>,
 	/// The amount of balance that was used in this meter and all of its already absorbed children.
@@ -118,8 +128,10 @@ pub struct RawMeter<T: Config, E, S: State> {
 	/// We only have one charge per contract hence the size of this vector is
 	/// limited by the maximum call depth.
 	charges: Vec<Charge<T>>,
-	/// Type parameters are only used in impls.
-	_phantom: PhantomData<(E, S)>,
+	/// We store the nested state to determine if it has a special limit for sub-call.
+	nested: S,
+	/// Type parameter only used in impls.
+	_phantom: PhantomData<E>,
 }
 
 /// This type is used to describe a storage change when charging from the meter.
@@ -214,6 +226,9 @@ impl Diff {
 /// this we can do all the refunds before doing any charge. This way a plain account can use
 /// more deposit than it has balance as along as it is covered by a refund. This
 /// essentially makes the order of storage changes irrelevant with regard to the deposit system.
+/// The only exception is when a special (tougher) deposit limit is specified for a cross-contract
+/// call. In that case the limit is enforced once the call is returned, rolling it back if
+/// exhausted.
 #[derive(RuntimeDebugNoBound, Clone)]
 struct Charge<T: Config> {
 	deposit_account: DepositAccount<T>,
@@ -255,16 +270,24 @@ impl<T, E, S> RawMeter<T, E, S>
 where
 	T: Config,
 	E: Ext<T>,
-	S: State,
+	S: State + Default + Debug,
 {
-	/// Create a new child that has its `limit` set to whatever is remaining of it.
+	/// Create a new child that has its `limit`.
+	/// Passing `0` as the limit is interpreted as to take whatever is remaining from its parent.
 	///
 	/// This is called whenever a new subcall is initiated in order to track the storage
 	/// usage for this sub call separately. This is necessary because we want to exchange balance
 	/// with the current contract we are interacting with.
-	pub fn nested(&self) -> RawMeter<T, E, Nested> {
+	pub fn nested(&self, limit: BalanceOf<T>) -> RawMeter<T, E, Nested> {
 		debug_assert!(self.is_alive());
-		RawMeter { limit: self.available(), ..Default::default() }
+		// If a special limit is specified higher than it is available,
+		// we want to enforce the lesser limit to the nested meter, to fail in the sub-call.
+		let limit = self.available().min(limit);
+		if limit.is_zero() {
+			RawMeter { limit: self.available(), ..Default::default() }
+		} else {
+			RawMeter { limit, nested: Nested::OwnLimit, ..Default::default() }
+		}
 	}
 
 	/// Absorb a child that was spawned to handle a sub call.
@@ -397,7 +420,7 @@ where
 		self.total_deposit = deposit.clone();
 		info.storage_base_deposit = deposit.charge_or_zero();
 
-		// Usually, deposit charges are deferred to be able to coalesce them with refunds.
+		// Normally, deposit charges are deferred to be able to coalesce them with refunds.
 		// However, we need to charge immediately so that the account is created before
 		// charges possibly below the ed are collected and fail.
 		E::charge(
@@ -429,8 +452,10 @@ where
 	///
 	/// # Note
 	///
-	/// We only need to call this **once** for every call stack and not for every cross contract
-	/// call. Hence this is only called when the last call frame returns.
+	/// We normally need to call this **once** for every call stack and not for every cross contract
+	/// call. However, if a dedicated limit is specified for a sub-call, this needs to be called
+	/// once the sub-call has returned. For this, the [`Self::enforce_subcall_limit`] wrapper is
+	/// used.
 	pub fn enforce_limit(
 		&mut self,
 		info: Option<&mut ContractInfo<T>>,
@@ -448,6 +473,18 @@ where
 		}
 		Ok(())
 	}
+
+	/// This is a wrapper around [`Self::enforce_limit`] to use on the exit from a sub-call to
+	/// enforce its special limit if needed.
+	pub fn enforce_subcall_limit(
+		&mut self,
+		info: Option<&mut ContractInfo<T>>,
+	) -> Result<(), DispatchError> {
+		match self.nested {
+			Nested::OwnLimit => self.enforce_limit(info),
+			Nested::DerivedLimit => Ok(()),
+		}
+	}
 }
 
 impl<T: Config> Ext<T> for ReservingExt {
@@ -462,7 +499,8 @@ impl<T: Config> Ext<T> for ReservingExt {
 		let max = T::Currency::reducible_balance(origin, Protect, Polite)
 			.saturating_sub(min_leftover)
 			.saturating_sub(Pallet::<T>::min_balance());
-		let limit = limit.unwrap_or(max);
+		let default = max.min(T::DefaultDepositLimit::get());
+		let limit = limit.unwrap_or(default);
 		ensure!(
 			limit <= max &&
 				matches!(T::Currency::can_withdraw(origin, limit), WithdrawConsequence::Success),
@@ -673,7 +711,7 @@ mod tests {
 		assert_eq!(meter.available(), 1_000);
 
 		// an empty charge does not create a `Charge` entry
-		let mut nested0 = meter.nested();
+		let mut nested0 = meter.nested(BalanceOf::<Test>::zero());
 		nested0.charge(&Default::default());
 		meter.absorb(nested0, DepositAccount(BOB), None);
 
@@ -695,7 +733,7 @@ mod tests {
 
 		let mut nested0_info =
 			new_info(StorageInfo { bytes: 100, items: 5, bytes_deposit: 100, items_deposit: 10 });
-		let mut nested0 = meter.nested();
+		let mut nested0 = meter.nested(BalanceOf::<Test>::zero());
 		nested0.charge(&Diff {
 			bytes_added: 108,
 			bytes_removed: 5,
@@ -706,13 +744,13 @@ mod tests {
 
 		let mut nested1_info =
 			new_info(StorageInfo { bytes: 100, items: 10, bytes_deposit: 100, items_deposit: 20 });
-		let mut nested1 = nested0.nested();
+		let mut nested1 = nested0.nested(BalanceOf::<Test>::zero());
 		nested1.charge(&Diff { items_removed: 5, ..Default::default() });
 		nested0.absorb(nested1, DepositAccount(CHARLIE), Some(&mut nested1_info));
 
 		let mut nested2_info =
 			new_info(StorageInfo { bytes: 100, items: 7, bytes_deposit: 100, items_deposit: 20 });
-		let mut nested2 = nested0.nested();
+		let mut nested2 = nested0.nested(BalanceOf::<Test>::zero());
 		nested2.charge(&Diff { items_removed: 7, ..Default::default() });
 		nested0.absorb(nested2, DepositAccount(CHARLIE), Some(&mut nested2_info));
 
@@ -760,7 +798,7 @@ mod tests {
 		let mut meter = TestMeter::new(&ALICE, Some(1_000), 0).unwrap();
 		assert_eq!(meter.available(), 1_000);
 
-		let mut nested0 = meter.nested();
+		let mut nested0 = meter.nested(BalanceOf::<Test>::zero());
 		nested0.charge(&Diff {
 			bytes_added: 5,
 			bytes_removed: 1,
@@ -771,7 +809,7 @@ mod tests {
 
 		let mut nested1_info =
 			new_info(StorageInfo { bytes: 100, items: 10, bytes_deposit: 100, items_deposit: 20 });
-		let mut nested1 = nested0.nested();
+		let mut nested1 = nested0.nested(BalanceOf::<Test>::zero());
 		nested1.charge(&Diff { items_removed: 5, ..Default::default() });
 		nested1.charge(&Diff { bytes_added: 20, ..Default::default() });
 		nested1.terminate(&nested1_info);

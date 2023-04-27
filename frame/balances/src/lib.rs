@@ -788,7 +788,7 @@ pub mod pallet {
 				return false
 			}
 			a.flags.set_new_logic();
-			if !a.reserved.is_zero() || !a.frozen.is_zero() {
+			if !a.reserved.is_zero() && a.frozen.is_zero() {
 				if system::Pallet::<T>::providers(who) == 0 {
 					// Gah!! We have no provider refs :(
 					// This shouldn't practically happen, but we need a failsafe anyway: let's give
