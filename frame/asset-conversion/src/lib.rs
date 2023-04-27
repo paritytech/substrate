@@ -31,7 +31,14 @@
 //!  - [swap some assets for a specific amount of
 //!    another](`Pallet::swap_tokens_for_exact_tokens()`).
 //!  - [query for an exchange price](`AssetConversionApi::quote_price_exact_tokens_for_tokens`) via
-//!    a new runtime call endpoint
+//!    a runtime call endpoint
+//!  - [query the size of a liquidity pool](`AssetConversionApi::get_reserves`) via a runtime api
+//!    endpoint.
+//!
+//! The `quote_price_exact_tokens_for_tokens` and `quote_price_tokens_for_exact_tokens` functions both take a path
+//! parameter of the route to take. If you want to swap from native asset to non-native asset 1, you
+//! would pass in a path of `[DOT, 1]` or `[1, DOT]`. If you want to swap from non-native asset 1 to
+//! non-native asset 2, you would pass in a path of `[1, DOT, 2]`.
 //!
 //! (For an example of configuring this pallet to use `MultiLocation` as an asset id, see the
 //! cumulus repo).
@@ -523,7 +530,7 @@ pub mod pallet {
 		}
 
 		/// Allows to remove the liquidity by providing an lp token.
-		/// With the usage of `amount1_min`/`amount2_min` it's possible to control
+		/// With the usage of `amount1_min_receive`/`amount2_min_receive` it's possible to control
 		/// the min amount of returned tokens you're happy with.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::remove_liquidity())]
@@ -807,7 +814,7 @@ pub mod pallet {
 		}
 
 		/// Returns the balance of each asset in the pool.
-		/// Tuple is in the order requested (not necessarily the same as pool order).
+		/// The tuple result is in the order requested (not necessarily the same as pool order).
 		pub fn get_reserves(
 			asset1: T::MultiAssetId,
 			asset2: T::MultiAssetId,
