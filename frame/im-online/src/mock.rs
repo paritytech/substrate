@@ -25,11 +25,11 @@ use frame_support::{
 	weights::Weight,
 };
 use pallet_session::historical as pallet_session_historical;
+use sp_arithmetic::Permill;
 use sp_core::H256;
 use sp_runtime::{
 	testing::{Header, TestXt, UintAuthorityId},
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
-	Permill,
 };
 use sp_staking::{
 	offence::{OffenceError, ReportOffence},

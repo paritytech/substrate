@@ -284,7 +284,7 @@ where
 					e,
 					err,
 				);
-				break;
+				break
 			}
 		}
 
@@ -458,9 +458,9 @@ where
 		// Check that `parent_hash` is correct.
 		let n = *header.number();
 		assert!(
-			n > System::BlockNumber::zero()
-				&& <frame_system::Pallet<System>>::block_hash(n - System::BlockNumber::one())
-					== *header.parent_hash(),
+			n > System::BlockNumber::zero() &&
+				<frame_system::Pallet<System>>::block_hash(n - System::BlockNumber::one()) ==
+					*header.parent_hash(),
 			"Parent hash should be valid.",
 		);
 
@@ -574,7 +574,7 @@ where
 		// The entire block should be discarded if an inherent fails to apply. Otherwise
 		// it may open an attack vector.
 		if r.is_err() && dispatch_info.class == DispatchClass::Mandatory {
-			return Err(InvalidTransaction::BadMandatory.into());
+			return Err(InvalidTransaction::BadMandatory.into())
 		}
 
 		<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);
@@ -644,7 +644,7 @@ where
 		};
 
 		if dispatch_info.class == DispatchClass::Mandatory {
-			return Err(InvalidTransaction::MandatoryValidation.into());
+			return Err(InvalidTransaction::MandatoryValidation.into())
 		}
 
 		within_span! {
@@ -986,8 +986,8 @@ mod tests {
 			.assimilate_storage(&mut t)
 			.unwrap();
 		let xt = TestXt::new(call_transfer(2, 69), sign_extra(1, 0, 0));
-		let weight = xt.get_dispatch_info().weight
-			+ <Runtime as frame_system::Config>::BlockWeights::get()
+		let weight = xt.get_dispatch_info().weight +
+			<Runtime as frame_system::Config>::BlockWeights::get()
 				.get(DispatchClass::Normal)
 				.base_extrinsic;
 		let fee: Balance =
@@ -1186,8 +1186,8 @@ mod tests {
 		let mut t = new_test_ext(1);
 		t.execute_with(|| {
 			// Block execution weight + on_initialize weight from custom module
-			let base_block_weight = Weight::from_parts(175, 0)
-				+ <Runtime as frame_system::Config>::BlockWeights::get().base_block;
+			let base_block_weight = Weight::from_parts(175, 0) +
+				<Runtime as frame_system::Config>::BlockWeights::get().base_block;
 
 			Executive::initialize_block(&Header::new(
 				1,
@@ -1205,8 +1205,8 @@ mod tests {
 			assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
 
 			// default weight for `TestXt` == encoded length.
-			let extrinsic_weight = Weight::from_parts(len as u64, 0)
-				+ <Runtime as frame_system::Config>::BlockWeights::get()
+			let extrinsic_weight = Weight::from_parts(len as u64, 0) +
+				<Runtime as frame_system::Config>::BlockWeights::get()
 					.get(DispatchClass::Normal)
 					.base_extrinsic;
 			assert_eq!(
@@ -1502,10 +1502,9 @@ mod tests {
 			// Weights are recorded correctly
 			assert_eq!(
 				frame_system::Pallet::<Runtime>::block_weight().total(),
-				custom_runtime_upgrade_weight
-					+ runtime_upgrade_weight
-					+ on_initialize_weight
-					+ base_block_weight,
+				custom_runtime_upgrade_weight +
+					runtime_upgrade_weight +
+					on_initialize_weight + base_block_weight,
 			);
 		});
 	}

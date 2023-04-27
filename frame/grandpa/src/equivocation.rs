@@ -190,7 +190,7 @@ where
 
 		// Validate equivocation proof (check votes are different and signatures are valid).
 		if !sp_consensus_grandpa::check_equivocation_proof(equivocation_proof) {
-			return Err(Error::<T>::InvalidEquivocationProof.into());
+			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 
 		// Validate the key ownership proof extracting the id of the offender.
@@ -212,12 +212,12 @@ where
 
 		// Check that the session id for the membership proof is within the
 		// bounds of the set id reported in the equivocation.
-		if session_index > set_id_session_index
-			|| previous_set_id_session_index
+		if session_index > set_id_session_index ||
+			previous_set_id_session_index
 				.map(|previous_index| session_index <= previous_index)
 				.unwrap_or(false)
 		{
-			return Err(Error::<T>::InvalidEquivocationProof.into());
+			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 
 		let offence = EquivocationOffence {
@@ -250,7 +250,7 @@ impl<T: Config> Pallet<T> {
 						"rejecting unsigned report equivocation transaction because it is not local/in-block."
 					);
 
-					return InvalidTransaction::Call.into();
+					return InvalidTransaction::Call.into()
 				},
 			}
 

@@ -35,12 +35,13 @@ use frame_support::{
 use frame_system::{self as system, RawOrigin};
 use pallet_transaction_payment::{ChargeTransactionPayment, CurrencyAdapter, Multiplier};
 use scale_info::TypeInfo;
+use sp_arithmetic::{traits::Zero, ArithmeticError, FixedPointNumber};
 use sp_core::H256;
 use sp_io;
 use sp_runtime::{
 	testing::Header,
-	traits::{BadOrigin, IdentityLookup, SignedExtension, Zero},
-	ArithmeticError, DispatchError, DispatchResult, FixedPointNumber, TokenError,
+	traits::{BadOrigin, IdentityLookup, SignedExtension},
+	DispatchError, DispatchResult, TokenError,
 };
 
 mod currency_tests;

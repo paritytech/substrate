@@ -18,6 +18,7 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../benchmarking" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = ".." }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../../primitives/arithmetic" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
 
@@ -28,6 +29,7 @@ std = [
 	"frame-benchmarking?/std",
 	"frame-election-provider-support/std",
 	"frame-system/std",
+	"sp-arithmetic/std",
 	"sp-npos-elections/std",
 	"sp-runtime/std",
 ]

@@ -495,7 +495,7 @@ impl<T: Config> FindAuthor<u32> for Pallet<T> {
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
 				let pre_digest: PreDigest = PreDigest::decode(&mut data).ok()?;
-				return Some(pre_digest.authority_index());
+				return Some(pre_digest.authority_index())
 			}
 		}
 
@@ -588,7 +588,7 @@ impl<T: Config> Pallet<T> {
 		if authorities.is_empty() {
 			log::warn!(target: LOG_TARGET, "Ignoring empty epoch change.");
 
-			return;
+			return
 		}
 
 		// Update epoch index.
@@ -619,7 +619,7 @@ impl<T: Config> Pallet<T> {
 							session_index,
 						);
 
-						return;
+						return
 					}
 
 					if skipped_epochs.is_full() {
@@ -787,7 +787,7 @@ impl<T: Config> Pallet<T> {
 		// let's ensure that we only do the initialization once per block
 		let initialized = Self::initialized().is_some();
 		if initialized {
-			return;
+			return
 		}
 
 		let pre_digest =

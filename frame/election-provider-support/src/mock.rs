@@ -32,7 +32,7 @@ pub type AccountId = u64;
 /// for which this bit is set are candidates, and without it, are voters.
 pub const CANDIDATE_MASK: AccountId = 1 << ((std::mem::size_of::<AccountId>() * 8) - 1);
 
-pub type TestAccuracy = sp_runtime::Perbill;
+pub type TestAccuracy = sp_arithmetic::Perbill;
 
 pub fn p(p: u8) -> TestAccuracy {
 	TestAccuracy::from_percent(p.into())

@@ -29,7 +29,7 @@ use frame_support::{
 		Currency, Get,
 	},
 };
-use sp_runtime::traits::Bounded;
+use sp_arithmetic::traits::Bounded;
 use sp_std::collections::btree_map::BTreeMap;
 
 use crate::Pallet as ConvictionVoting;

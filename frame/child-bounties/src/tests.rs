@@ -31,11 +31,12 @@ use frame_support::{
 	PalletId,
 };
 
+use sp_arithmetic::{Perbill, Permill};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
-	Perbill, Permill, TokenError,
+	TokenError,
 };
 
 use super::Event as ChildBountiesEvent;

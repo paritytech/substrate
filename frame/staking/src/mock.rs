@@ -28,9 +28,9 @@ use frame_support::{
 	weights::constants::RocksDbWeight,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
+use sp_arithmetic::traits::Zero;
 use sp_core::H256;
 use sp_io;
-use sp_arithmetic::traits::Zero;
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	testing::{Header, UintAuthorityId},

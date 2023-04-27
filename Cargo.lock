@@ -2353,6 +2353,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-npos-elections",
+ "sp-runtime",
  "sp-std",
 ]
 
@@ -5625,6 +5626,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "sp-application-crypto",
+ "sp-arithmetic",
  "sp-authority-discovery",
  "sp-core",
  "sp-io",
@@ -5843,6 +5845,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
+ "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -6002,6 +6005,7 @@ dependencies = [
  "frame-election-provider-support",
  "frame-system",
  "parity-scale-codec",
+ "sp-arithmetic",
  "sp-npos-elections",
  "sp-runtime",
 ]
@@ -7055,6 +7059,7 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
+ "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",

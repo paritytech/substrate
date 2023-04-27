@@ -25,7 +25,7 @@ use frame_benchmarking::v1::{
 use frame_election_provider_support::ScoreProvider;
 use frame_support::{assert_ok, traits::Get};
 use frame_system::RawOrigin as SystemOrigin;
-use sp_runtime::traits::One;
+use sp_arithmetic::traits::One;
 
 benchmarks_instance_pallet! {
 	rebag_non_terminal {

@@ -30,11 +30,12 @@ use frame_support::{
 	PalletId,
 };
 
+use sp_arithmetic::Perbill;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
-	BuildStorage, Perbill, Storage,
+	BuildStorage, Storage,
 };
 
 use super::Event as BountiesEvent;

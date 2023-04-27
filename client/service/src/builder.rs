@@ -91,9 +91,8 @@ impl KeystoreContainer {
 	/// Construct KeystoreContainer
 	pub fn new(config: &KeystoreConfig) -> Result<Self, Error> {
 		let keystore = Arc::new(match config {
-			KeystoreConfig::Path { path, password } => {
-				LocalKeystore::open(path.clone(), password.clone())?
-			},
+			KeystoreConfig::Path { path, password } =>
+				LocalKeystore::open(path.clone(), password.clone())?,
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
 
@@ -751,7 +750,7 @@ where
 	let mut request_response_protocol_configs = Vec::new();
 
 	if warp_sync_params.is_none() && config.network.sync_mode.is_warp() {
-		return Err("Warp sync enabled, but no warp sync provider configured.".into());
+		return Err("Warp sync enabled, but no warp sync provider configured.".into())
 	}
 
 	if client.requires_full_sync() {
@@ -776,8 +775,8 @@ where
 			&protocol_id,
 			config.chain_spec.fork_id(),
 			client.clone(),
-			config.network.default_peers_set.in_peers as usize
-				+ config.network.default_peers_set.out_peers as usize,
+			config.network.default_peers_set.in_peers as usize +
+				config.network.default_peers_set.out_peers as usize,
 		);
 		spawn_handle.spawn("block-request-handler", Some("networking"), handler.run());
 		protocol_config
@@ -962,7 +961,7 @@ where
 			);
 			// This `return` might seem unnecessary, but we don't want to make it look like
 			// everything is working as normal even though the user is clearly misusing the API.
-			return;
+			return
 		}
 
 		future.await

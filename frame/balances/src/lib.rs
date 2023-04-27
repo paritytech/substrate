@@ -696,7 +696,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			if who.is_empty() {
-				return Ok(Pays::Yes.into());
+				return Ok(Pays::Yes.into())
 			}
 			let mut upgrade_count = 0;
 			for i in &who {
@@ -779,7 +779,7 @@ pub mod pallet {
 		pub fn ensure_upgraded(who: &T::AccountId) -> bool {
 			let mut a = T::AccountStore::get(who);
 			if a.flags.is_new_logic() {
-				return false;
+				return false
 			}
 			a.flags.set_new_logic();
 			if !a.reserved.is_zero() || !a.frozen.is_zero() {
@@ -798,7 +798,7 @@ pub mod pallet {
 				Ok(())
 			});
 			Self::deposit_event(Event::Upgraded { who: who.clone() });
-			return true;
+			return true
 		}
 
 		/// Get the free balance of an account.
@@ -1111,14 +1111,14 @@ pub mod pallet {
 			status: Status,
 		) -> Result<T::Balance, DispatchError> {
 			if value.is_zero() {
-				return Ok(Zero::zero());
+				return Ok(Zero::zero())
 			}
 
 			if slashed == beneficiary {
 				return match status {
 					Status::Free => Ok(value.saturating_sub(Self::unreserve(slashed, value))),
 					Status::Reserved => Ok(value.saturating_sub(Self::reserved_balance(slashed))),
-				};
+				}
 			}
 
 			let ((actual, maybe_dust_1), maybe_dust_2) = Self::try_mutate_account(
@@ -1134,18 +1134,16 @@ pub mod pallet {
 								Error::<T, I>::InsufficientBalance
 							);
 							match status {
-								Status::Free => {
+								Status::Free =>
 									to_account.free = to_account
 										.free
 										.checked_add(&actual)
-										.ok_or(ArithmeticError::Overflow)?
-								},
-								Status::Reserved => {
+										.ok_or(ArithmeticError::Overflow)?,
+								Status::Reserved =>
 									to_account.reserved = to_account
 										.reserved
 										.checked_add(&actual)
-										.ok_or(ArithmeticError::Overflow)?
-								},
+										.ok_or(ArithmeticError::Overflow)?,
 							}
 							from_account.reserved -= actual;
 							Ok(actual)

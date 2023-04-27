@@ -22,7 +22,7 @@ The Balances module provides functions for:
 ### Terminology
 
 - **Existential Deposit:** The minimum balance required to create or keep an account open. This prevents
-"dust accounts" from filling storage. When the free plus the reserved balance (i.e. the total balance)
+  "dust accounts" from filling storage. When the free plus the reserved balance (i.e. the total balance)
   fall below this, then the account is said to be dead; and it loses its functionality as well as any
   prior history and all information on it is removed from the chain's state.
   No account should ever have a total balance that is strictly between 0 and the existential
@@ -32,7 +32,7 @@ The Balances module provides functions for:
 - **Total Issuance:** The total number of units in existence in a system.
 
 - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after its
-total balance has become zero (or, strictly speaking, less than the Existential Deposit).
+  total balance has become zero (or, strictly speaking, less than the Existential Deposit).
 
 - **Free Balance:** The portion of a balance that is not reserved. The free balance is the only
   balance that matters for most operations.
@@ -41,12 +41,12 @@ total balance has become zero (or, strictly speaking, less than the Existential 
   Reserved balance can still be slashed, but only after all the free balance has been slashed.
 
 - **Imbalance:** A condition when some funds were credited or debited without equal and opposite accounting
-(i.e. a difference between total issuance and account balances). Functions that result in an imbalance will
-return an object of the `Imbalance` trait that can be managed within your runtime logic. (If an imbalance is
-simply dropped, it should automatically maintain any book-keeping such as total issuance.)
+  (i.e. a difference between total issuance and account balances). Functions that result in an imbalance will
+  return an object of the `Imbalance` trait that can be managed within your runtime logic. (If an imbalance is
+  simply dropped, it should automatically maintain any book-keeping such as total issuance.)
 
 - **Lock:** A freeze on a specified amount of an account's free balance until a specified block number. Multiple
-locks always operate over the same funds, so they "overlay" rather than "stack".
+  locks always operate over the same funds, so they "overlay" rather than "stack".
 
 ### Implementations
 
@@ -54,16 +54,16 @@ The Balances module provides implementations for the following traits. If these 
 that you need, then you can avoid coupling with the Balances module.
 
 - [`Currency`](https://docs.rs/frame-support/latest/frame_support/traits/trait.Currency.html): Functions for dealing with a
-fungible assets system.
+  fungible assets system.
 - [`ReservableCurrency`](https://docs.rs/frame-support/latest/frame_support/traits/trait.ReservableCurrency.html):
-Functions for dealing with assets that can be reserved from an account.
+  Functions for dealing with assets that can be reserved from an account.
 - [`LockableCurrency`](https://docs.rs/frame-support/latest/frame_support/traits/trait.LockableCurrency.html): Functions for
-dealing with accounts that allow liquidity restrictions.
+  dealing with accounts that allow liquidity restrictions.
 - [`Imbalance`](https://docs.rs/frame-support/latest/frame_support/traits/trait.Imbalance.html): Functions for handling
-imbalances between total issuance in the system and account balances. Must be used when a function
-creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
+  imbalances between total issuance in the system and account balances. Must be used when a function
+  creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
 - [`IsDeadAccount`](https://docs.rs/frame-support/latest/frame_support/traits/trait.IsDeadAccount.html): Determiner to say whether a
-given account is unused.
+  given account is unused.
 
 ## Interface
 
@@ -92,7 +92,7 @@ The Staking module uses the `LockableCurrency` trait to lock a stash account's f
 
 ```rust
 use frame_support::traits::{WithdrawReasons, LockableCurrency};
-use sp_runtime::traits::Bounded;
+use sp_arithmetic::traits::Bounded;
 pub trait Config: frame_system::Config {
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 }
@@ -117,6 +117,6 @@ The Balances module depends on the [`GenesisConfig`](https://docs.rs/pallet-bala
 
 ## Assumptions
 
-* Total issued balanced of all accounts should be less than `Config::Balance::max_value()`.
+- Total issued balanced of all accounts should be less than `Config::Balance::max_value()`.
 
 License: Apache-2.0

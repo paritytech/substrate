@@ -23,10 +23,10 @@ use parity_scale_codec::{Decode, Encode};
 use sc_cli::Result;
 use sc_executor::{sp_wasm_interface::HostFunctions, WasmExecutor};
 use serde::de::DeserializeOwned;
+use sp_arithmetic::traits::One;
 use sp_core::H256;
 use sp_inherents::{InherentData, InherentDataProvider};
 use sp_io::TestExternalities;
-use sp_arithmetic::traits::One;
 use sp_runtime::{
 	traits::{Header, NumberFor},
 	Digest,

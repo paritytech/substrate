@@ -1246,7 +1246,7 @@ impl<T: Config> Pallet<T> {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
 		if block_number.is_zero() {
-			return;
+			return
 		}
 
 		let phase = ExecutionPhase::<T>::get().unwrap_or_default();
@@ -1605,11 +1605,11 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
 
 		if new_version.spec_name != current_version.spec_name {
-			return Err(Error::<T>::InvalidSpecName.into());
+			return Err(Error::<T>::InvalidSpecName.into())
 		}
 
 		if new_version.spec_version <= current_version.spec_version {
-			return Err(Error::<T>::SpecVersionNeedsToIncrease.into());
+			return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
 		}
 
 		Ok(())

@@ -21,9 +21,9 @@ mod mock;
 pub(crate) const LOG_TARGET: &str = "tests::e2e-epm";
 
 use mock::*;
+use sp_arithmetic::Perbill;
 use sp_core::Get;
 use sp_npos_elections::{to_supports, StakedAssignment};
-use sp_runtime::Perbill;
 
 use crate::mock::RuntimeOrigin;
 
@@ -190,7 +190,7 @@ fn continous_slashes_below_offending_threshold() {
 				// failed due to election minimum score.
 				if start_next_active_era().is_err() {
 					assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
-					break
+					break;
 				}
 
 				active_validator_set = Session::validators();

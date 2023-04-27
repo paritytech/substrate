@@ -211,7 +211,7 @@ where
 
 		// Validate equivocation proof (check votes are different and signatures are valid).
 		if !sp_consensus_beefy::check_equivocation_proof(&equivocation_proof) {
-			return Err(Error::<T>::InvalidEquivocationProof.into());
+			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 
 		// Check that the session id for the membership proof is within the
@@ -219,7 +219,7 @@ where
 		let set_id_session_index =
 			crate::SetIdSession::<T>::get(set_id).ok_or(Error::<T>::InvalidEquivocationProof)?;
 		if session_index != set_id_session_index {
-			return Err(Error::<T>::InvalidEquivocationProof.into());
+			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 
 		let offence = EquivocationOffence {
@@ -251,7 +251,7 @@ impl<T: Config> Pallet<T> {
 						target: LOG_TARGET,
 						"rejecting unsigned report equivocation transaction because it is not local/in-block."
 					);
-					return InvalidTransaction::Call.into();
+					return InvalidTransaction::Call.into()
 				},
 			}
 

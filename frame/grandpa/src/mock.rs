@@ -30,6 +30,7 @@ use frame_support::{
 	},
 };
 use pallet_session::historical as pallet_session_historical;
+use sp_arithmetic::Perbill;
 use sp_consensus_grandpa::{RoundNumber, SetId, GRANDPA_ENGINE_ID};
 use sp_core::{crypto::KeyTypeId, H256};
 use sp_keyring::Ed25519Keyring;
@@ -38,7 +39,7 @@ use sp_runtime::{
 	impl_opaque_keys,
 	testing::{Header, TestXt, UintAuthorityId},
 	traits::{IdentityLookup, OpaqueKeys},
-	DigestItem, Perbill,
+	DigestItem,
 };
 use sp_staking::{EraIndex, SessionIndex};
 

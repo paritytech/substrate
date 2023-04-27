@@ -171,13 +171,14 @@ mod tests {
 		traits::{ConstU32, ConstU64, GenesisBuild},
 	};
 	use sp_application_crypto::Pair;
+	use sp_arithmetic::Perbill;
 	use sp_authority_discovery::AuthorityPair;
 	use sp_core::{crypto::key_types, H256};
 	use sp_io::TestExternalities;
 	use sp_runtime::{
 		testing::{Header, UintAuthorityId},
 		traits::{ConvertInto, IdentityLookup, OpaqueKeys},
-		KeyTypeId, Perbill,
+		KeyTypeId,
 	};
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;

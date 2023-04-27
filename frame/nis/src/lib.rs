@@ -81,8 +81,7 @@ use frame_support::traits::{
 	tokens::{DepositConsequence, Fortitude, Preservation, Provenance, WithdrawConsequence},
 };
 pub use pallet::*;
-use sp_arithmetic::Perquintill;
-use sp_arithmetic::{traits::Unsigned, RationalArg};
+use sp_arithmetic::{traits::Unsigned, Perquintill, RationalArg};
 use sp_core::TypedGet;
 use sp_runtime::{
 	traits::{Convert, ConvertBack},
@@ -1024,7 +1023,7 @@ pub mod pallet {
 		) {
 			let mut summary: SummaryRecordOf<T> = Summary::<T>::get();
 			if summary.proportion_owed >= target {
-				return;
+				return
 			}
 
 			let now = frame_system::Pallet::<T>::block_number();
@@ -1039,14 +1038,14 @@ pub mod pallet {
 			totals.bounded_resize(queue_count as usize, (0, Zero::zero()));
 			for duration in (1..=queue_count).rev() {
 				if totals[duration as usize - 1].0.is_zero() {
-					continue;
+					continue
 				}
 				if remaining.is_zero() || queues_hit >= max_queues
 					|| !weight.check_accrue(T::WeightInfo::process_queue())
 					// No point trying to process a queue if we can't process a single bid.
 					|| !weight.can_accrue(T::WeightInfo::process_bid())
 				{
-					break;
+					break
 				}
 
 				let b = Self::process_queue(
@@ -1083,10 +1082,10 @@ pub mod pallet {
 			let expiry = now.saturating_add(T::BasePeriod::get().saturating_mul(duration.into()));
 			let mut count = 0;
 
-			while count < max_bids
-				&& !queue.is_empty()
-				&& !remaining.is_zero()
-				&& weight.check_accrue(T::WeightInfo::process_bid())
+			while count < max_bids &&
+				!queue.is_empty() &&
+				!remaining.is_zero() &&
+				weight.check_accrue(T::WeightInfo::process_bid())
 			{
 				let bid = match queue.pop() {
 					Some(b) => b,

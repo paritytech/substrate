@@ -18,8 +18,10 @@
 //! Miscellaneous types.
 
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
-use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
-use sp_arithmetic::ArithmeticError;
+use sp_arithmetic::{
+	traits::{AtLeast32BitUnsigned, Zero},
+	ArithmeticError,
+};
 use sp_core::RuntimeDebug;
 use sp_runtime::{traits::Convert, DispatchError, TokenError};
 use sp_std::fmt::Debug;

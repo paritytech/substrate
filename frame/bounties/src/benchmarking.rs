@@ -25,7 +25,7 @@ use frame_benchmarking::v1::{
 	account, benchmarks_instance_pallet, whitelisted_caller, BenchmarkError,
 };
 use frame_system::RawOrigin;
-use sp_runtime::traits::Bounded;
+use sp_arithmetic::traits::Bounded;
 
 use crate::Pallet as Bounties;
 use pallet_treasury::Pallet as Treasury;

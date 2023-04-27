@@ -27,10 +27,11 @@ use sp_std::{prelude::*, vec};
 use frame_benchmarking::v1::{account, benchmarks};
 use frame_support::traits::{Currency, Get, ValidatorSet, ValidatorSetWithIdentification};
 use frame_system::{Config as SystemConfig, Pallet as System, RawOrigin};
+use sp_arithmetic::{traits::Saturating, Perbill};
 
 #[cfg(test)]
-use sp_arithmetic::{traits::Saturating, Perbill};
-use sp_runtime::traits::{Convert, StaticLookup, UniqueSaturatedInto};
+use sp_arithmetic::traits::UniqueSaturatedInto;
+use sp_runtime::traits::{Convert, StaticLookup};
 use sp_staking::offence::{Offence, ReportOffence};
 
 use pallet_babe::EquivocationOffence as BabeEquivocationOffence;

@@ -169,7 +169,7 @@ where
 
 		// Validate the equivocation proof (check votes are different and signatures are valid)
 		if !sp_consensus_babe::check_equivocation_proof(equivocation_proof) {
-			return Err(Error::<T>::InvalidEquivocationProof.into());
+			return Err(Error::<T>::InvalidEquivocationProof.into())
 		}
 
 		let validator_set_count = key_owner_proof.validator_count();
@@ -181,7 +181,7 @@ where
 		// Check that the slot number is consistent with the session index
 		// in the key ownership proof (i.e. slot is for that epoch)
 		if Pallet::<T>::session_index_for_epoch(epoch_index) != session_index {
-			return Err(Error::<T>::InvalidKeyOwnershipProof.into());
+			return Err(Error::<T>::InvalidKeyOwnershipProof.into())
 		}
 
 		// Check the membership proof and extract the offender's id
@@ -213,7 +213,7 @@ impl<T: Config> Pallet<T> {
 						"rejecting unsigned report equivocation transaction because it is not local/in-block.",
 					);
 
-					return InvalidTransaction::Call.into();
+					return InvalidTransaction::Call.into()
 				},
 			}
 

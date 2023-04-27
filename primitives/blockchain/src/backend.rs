@@ -116,14 +116,13 @@ pub trait ForkBackend<Block: BlockT>:
 						// block hash for the parent number (bug?!), we can abort adding blocks.
 						let parent_number = meta.number.saturating_sub(1u32.into());
 						match self.hash(parent_number) {
-							Ok(Some(parent_hash)) => {
+							Ok(Some(parent_hash)) =>
 								if parent_hash == meta.parent {
-									break;
-								}
-							},
+									break
+								},
 							Ok(None) | Err(_) => {
 								missing_blocks.push(BlockId::<Block>::Number(parent_number));
-								break;
+								break
 							},
 						}
 
@@ -131,7 +130,7 @@ pub trait ForkBackend<Block: BlockT>:
 					},
 					Err(_e) => {
 						missing_blocks.push(BlockId::<Block>::Hash(route_head));
-						break;
+						break
 					},
 				}
 			}
@@ -144,7 +143,7 @@ pub trait ForkBackend<Block: BlockT>:
 					"Missing stale headers {:?} while expanding forks {:?}.",
 					fork_heads, missing_blocks
 				)),
-			));
+			))
 		}
 
 		Ok(expanded_forks)
@@ -210,7 +209,7 @@ pub trait Backend<Block: BlockT>:
 			let info = self.info();
 			if info.finalized_number > *base_header.number() {
 				// `base_header` is on a dead fork.
-				return Ok(None);
+				return Ok(None)
 			}
 			self.leaves()?
 		};
@@ -221,7 +220,7 @@ pub trait Backend<Block: BlockT>:
 			// go backwards through the chain (via parent links)
 			loop {
 				if current_hash == base_hash {
-					return Ok(Some(leaf_hash));
+					return Ok(Some(leaf_hash))
 				}
 
 				let current_header = self
@@ -230,7 +229,7 @@ pub trait Backend<Block: BlockT>:
 
 				// stop search in this chain once we go below the target's block number
 				if current_header.number() < base_header.number() {
-					break;
+					break
 				}
 
 				current_hash = *current_header.parent_hash();

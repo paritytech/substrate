@@ -243,10 +243,9 @@ use frame_support::{
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
-use sp_arithmetic::{traits::SaturatedConversion, PerThing, Perbill};
 use sp_arithmetic::{
-	traits::{CheckedAdd, Zero},
-	UpperOf,
+	traits::{CheckedAdd, SaturatedConversion, Zero},
+	PerThing, Perbill, UpperOf,
 };
 use sp_npos_elections::{BoundedSupports, ElectionScore, IdentifierT, Supports, VoteWeight};
 use sp_runtime::{
@@ -1423,7 +1422,7 @@ impl<T: Config> Pallet<T> {
 			.map_err(ElectionError::DataProvider)?;
 
 		if targets.len() > target_limit || voters.len() > voter_limit {
-			return Err(ElectionError::DataProvider("Snapshot too big for submission."));
+			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
 		}
 
 		let mut desired_targets = <Pallet<T> as ElectionProviderBase>::desired_targets_checked()
@@ -2552,8 +2551,8 @@ mod tests {
 
 		let mut active = 1;
 		while weight_with(active)
-			.all_lte(<Runtime as frame_system::Config>::BlockWeights::get().max_block)
-			|| active == all_voters
+			.all_lte(<Runtime as frame_system::Config>::BlockWeights::get().max_block) ||
+			active == all_voters
 		{
 			active += 1;
 		}

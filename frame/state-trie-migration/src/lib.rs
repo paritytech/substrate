@@ -86,7 +86,6 @@ pub mod pallet {
 	use sp_core::{
 		hexdisplay::HexDisplay, storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX,
 	};
-	use sp_runtime;
 	use sp_std::{ops::Deref, prelude::*};
 
 	pub(crate) type BalanceOf<T> =
@@ -242,13 +241,13 @@ pub mod pallet {
 			if limits.item.is_zero() || limits.size.is_zero() {
 				// handle this minor edge case, else we would call `migrate_tick` at least once.
 				log!(warn, "limits are zero. stopping");
-				return Ok(());
+				return Ok(())
 			}
 
 			while !self.exhausted(limits) && !self.finished() {
 				if let Err(e) = self.migrate_tick() {
 					log!(error, "migrate_until_exhaustion failed: {:?}", e);
-					return Err(e);
+					return Err(e)
 				}
 			}
 
@@ -325,7 +324,7 @@ pub mod pallet {
 				_ => {
 					// defensive: there must be an ongoing top migration.
 					frame_support::defensive!("cannot migrate child key.");
-					return Ok(());
+					return Ok(())
 				},
 			};
 
@@ -367,7 +366,7 @@ pub mod pallet {
 				Progress::Complete => {
 					// defensive: there must be an ongoing top migration.
 					frame_support::defensive!("cannot migrate top key.");
-					return Ok(());
+					return Ok(())
 				},
 			};
 
@@ -620,7 +619,7 @@ pub mod pallet {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
 				debug_assert!(_remainder.is_zero());
-				return Ok(().into());
+				return Ok(().into())
 			}
 
 			Self::deposit_event(Event::<T>::Migrated {
@@ -1695,7 +1694,7 @@ pub(crate) mod remote_tests {
 			let ((finished, weight), proof) = ext.execute_and_prove(|| {
 				let weight = run_to_block::<Runtime>(now + One::one()).1;
 				if StateTrieMigration::<Runtime>::migration_process().finished() {
-					return (true, weight);
+					return (true, weight)
 				}
 				duration += One::one();
 				now += One::one();
@@ -1722,7 +1721,7 @@ pub(crate) mod remote_tests {
 			ext.commit_all().unwrap();
 
 			if finished {
-				break;
+				break
 			}
 		}
 

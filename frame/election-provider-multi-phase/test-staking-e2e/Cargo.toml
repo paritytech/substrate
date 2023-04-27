@@ -19,6 +19,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive
 scale-info = { version = "2.0.1", features = ["derive"] }
 log = { version = "0.4.17", default-features = false }
 
+sp-arithmetic = { version = "6.0.0", default-features = false, path= "../../../primitives/arithmetic" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 sp-std = { version = "5.0.0", path = "../../../primitives/std" }

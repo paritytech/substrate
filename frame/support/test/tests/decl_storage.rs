@@ -20,7 +20,6 @@
 #[allow(dead_code)]
 mod tests {
 	use frame_support::metadata_ir::*;
-	use sp_arithmetic::traits::SaturatedConversion;
 	use sp_io::TestExternalities;
 
 	frame_support::decl_module! {

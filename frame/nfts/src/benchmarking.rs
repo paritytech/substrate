@@ -81,7 +81,7 @@ fn mint_item<T: Config<I>, I: 'static>(
 	let item_exists = Item::<T, I>::contains_key(&collection, &item);
 	let item_config = ItemConfigOf::<T, I>::get(&collection, &item);
 	if item_exists {
-		return (item, caller, caller_lookup);
+		return (item, caller, caller_lookup)
 	} else if let Some(item_config) = item_config {
 		assert_ok!(Nfts::<T, I>::force_mint(
 			SystemOrigin::Signed(caller.clone()).into(),

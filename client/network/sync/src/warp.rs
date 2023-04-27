@@ -121,7 +121,7 @@ where
 				_ => return,
 			}
 		} else {
-			return;
+			return
 		};
 
 		self.phase = new_phase;
@@ -145,7 +145,7 @@ where
 				log::debug!(target: "sync", "Unexpected warp proof response");
 				WarpProofImportResult::BadResponse
 			},
-			Phase::WarpProof { set_id, authorities, last_hash, warp_sync_provider } => {
+			Phase::WarpProof { set_id, authorities, last_hash, warp_sync_provider } =>
 				match warp_sync_provider.verify(&response, *set_id, authorities.clone()) {
 					Err(e) => {
 						log::debug!(target: "sync", "Bad warp proof response: {}", e);
@@ -165,8 +165,7 @@ where
 						self.phase = Phase::TargetBlock(header);
 						WarpProofImportResult::Success
 					},
-				}
-			},
+				},
 		}
 	}
 
@@ -177,7 +176,7 @@ where
 				log::debug!(target: "sync", "Unexpected target block response");
 				TargetBlockImportResult::BadResponse
 			},
-			Phase::TargetBlock(header) => {
+			Phase::TargetBlock(header) =>
 				if let Some(block_header) = &block.header {
 					if block_header == header {
 						if block.body.is_some() {
@@ -207,17 +206,15 @@ where
 				} else {
 					log::debug!(target: "sync", "Importing target block failed: missing header.");
 					TargetBlockImportResult::BadResponse
-				}
-			},
+				},
 		}
 	}
 
 	/// Produce next state request.
 	pub fn next_state_request(&self) -> Option<StateRequest> {
 		match &self.phase {
-			Phase::WarpProof { .. } | Phase::TargetBlock(_) | Phase::PendingTargetBlock { .. } => {
-				None
-			},
+			Phase::WarpProof { .. } | Phase::TargetBlock(_) | Phase::PendingTargetBlock { .. } =>
+				None,
 			Phase::State(sync) => Some(sync.next_request()),
 		}
 	}
@@ -237,8 +234,8 @@ where
 			Phase::TargetBlock(header) => {
 				let request = BlockRequest::<B> {
 					id: 0,
-					fields: BlockAttributes::HEADER
-						| BlockAttributes::BODY | BlockAttributes::JUSTIFICATION,
+					fields: BlockAttributes::HEADER |
+						BlockAttributes::BODY | BlockAttributes::JUSTIFICATION,
 					from: FromBlock::Hash(header.hash()),
 					direction: Direction::Ascending,
 					max: Some(1),
@@ -251,9 +248,8 @@ where
 	/// Return target block hash if it is known.
 	pub fn target_block_hash(&self) -> Option<B::Hash> {
 		match &self.phase {
-			Phase::WarpProof { .. } | Phase::TargetBlock(_) | Phase::PendingTargetBlock { .. } => {
-				None
-			},
+			Phase::WarpProof { .. } | Phase::TargetBlock(_) | Phase::PendingTargetBlock { .. } =>
+				None,
 			Phase::State(s) => Some(s.target()),
 		}
 	}
@@ -270,9 +266,8 @@ where
 	/// Check if the state is complete.
 	pub fn is_complete(&self) -> bool {
 		match &self.phase {
-			Phase::WarpProof { .. } | Phase::TargetBlock(_) | Phase::PendingTargetBlock { .. } => {
-				false
-			},
+			Phase::WarpProof { .. } | Phase::TargetBlock(_) | Phase::PendingTargetBlock { .. } =>
+				false,
 			Phase::State(sync) => sync.is_complete(),
 		}
 	}

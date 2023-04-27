@@ -24,13 +24,10 @@ use frame_support::{
 	weights::constants,
 };
 use frame_system::EnsureRoot;
+use sp_arithmetic::{traits::Zero, PerU16, Perbill};
 use sp_core::{ConstU32, Get, H256};
 use sp_npos_elections::{ElectionScore, VoteWeight};
-use sp_runtime::{
-	testing,
-	traits::{IdentityLookup, Zero},
-	transaction_validity, PerU16, Perbill,
-};
+use sp_runtime::{testing, traits::IdentityLookup, transaction_validity};
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
 	EraIndex, SessionIndex,
@@ -736,8 +733,8 @@ pub(crate) fn add_slash(who: &AccountId) {
 pub(crate) fn slash_through_offending_threshold() {
 	let validators = Session::validators();
 	let mut remaining_slashes =
-		<Runtime as pallet_staking::Config>::OffendingValidatorsThreshold::get() *
-			validators.len() as u32;
+		<Runtime as pallet_staking::Config>::OffendingValidatorsThreshold::get()
+			* validators.len() as u32;
 
 	for v in validators.into_iter() {
 		if remaining_slashes != 0 {

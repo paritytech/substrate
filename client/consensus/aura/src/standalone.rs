@@ -69,7 +69,7 @@ where
 /// Get the slot author for given block along with authorities.
 pub fn slot_author<P: Pair>(slot: Slot, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
 	if authorities.is_empty() {
-		return None;
+		return None
 	}
 
 	let idx = *slot % (authorities.len() as u64);
@@ -172,7 +172,7 @@ pub fn find_pre_digest<B: BlockT, Signature: Codec>(
 	header: &B::Header,
 ) -> Result<Slot, PreDigestLookupError> {
 	if header.number().is_zero() {
-		return Ok(0.into());
+		return Ok(0.into())
 	}
 
 	let mut pre_digest: Option<Slot> = None;
@@ -209,7 +209,7 @@ where
 	match compatibility_mode {
 		CompatibilityMode::None => {},
 		// Use `initialize_block` until we hit the block that should disable the mode.
-		CompatibilityMode::UseInitializeBlock { until } => {
+		CompatibilityMode::UseInitializeBlock { until } =>
 			if *until > context_block_number {
 				runtime_api
 					.initialize_block(
@@ -223,8 +223,7 @@ where
 						),
 					)
 					.map_err(|_| ConsensusError::InvalidAuthoritiesSet)?;
-			}
-		},
+			},
 	}
 
 	runtime_api
@@ -305,7 +304,7 @@ where
 
 	if slot > slot_now {
 		header.digest_mut().push(seal);
-		return Err(SealVerificationError::Deferred(header, slot));
+		return Err(SealVerificationError::Deferred(header, slot))
 	} else {
 		// check the signature is valid under the expected authority and
 		// chain state.

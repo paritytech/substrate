@@ -26,7 +26,7 @@ use frame_support::{
 	traits::{Currency, EnsureOrigin, Get, Hooks},
 };
 use frame_system::RawOrigin;
-use sp_runtime::traits::Zero;
+use sp_arithmetic::traits::Zero;
 use sp_staking::{EraIndex, StakingInterface};
 use sp_std::prelude::*;
 

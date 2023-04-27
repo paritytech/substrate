@@ -187,8 +187,8 @@ mod tests {
 	use super::*;
 	use crate::{ElectionProvider, PhragMMS, SequentialPhragmen};
 	use frame_support::{assert_noop, parameter_types, traits::ConstU32};
+	use sp_arithmetic::Perbill;
 	use sp_npos_elections::Support;
-	use sp_runtime::Perbill;
 	type AccountId = u64;
 	type BlockNumber = u64;
 

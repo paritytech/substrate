@@ -24,11 +24,9 @@ use super::*;
 use frame_benchmarking::v1::benchmarks;
 use frame_support::{traits::UnfilteredDispatchable, WeakBoundedVec};
 use frame_system::RawOrigin;
+use sp_arithmetic::traits::Zero;
 use sp_core::{offchain::OpaqueMultiaddr, OpaquePeerId};
-use sp_runtime::{
-	traits::{ValidateUnsigned, Zero},
-	transaction_validity::TransactionSource,
-};
+use sp_runtime::{traits::ValidateUnsigned, transaction_validity::TransactionSource};
 
 use crate::Pallet as ImOnline;
 

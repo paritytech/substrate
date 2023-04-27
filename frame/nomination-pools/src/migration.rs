@@ -222,14 +222,14 @@ pub mod v2 {
 						Some(x) => x,
 						None => {
 							log!(error, "pool {} has no member! deleting it..", id);
-							return None;
+							return None
 						},
 					};
 					let bonded_pool = match BondedPools::<T>::get(id) {
 						Some(x) => x,
 						None => {
 							log!(error, "pool {} has no bonded pool! deleting it..", id);
-							return None;
+							return None
 						},
 					};
 
@@ -244,7 +244,7 @@ pub mod v2 {
 								Some(x) => x,
 								None => {
 									log!(error, "pool {} for member {:?} does not exist!", id, who);
-									return None;
+									return None
 								},
 							};
 
@@ -356,8 +356,8 @@ pub mod v2 {
 			// all reward accounts must have more than ED.
 			RewardPools::<T>::iter().for_each(|(id, _)| {
 				assert!(
-					T::Currency::free_balance(&Pallet::<T>::create_reward_account(id))
-						>= T::Currency::minimum_balance()
+					T::Currency::free_balance(&Pallet::<T>::create_reward_account(id)) >=
+						T::Currency::minimum_balance()
 				)
 			});
 
@@ -547,10 +547,10 @@ pub mod v4 {
 		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
 			// ensure all BondedPools items now contain an `inner.commission: Commission` field.
 			ensure!(
-				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.current.is_none()
-					&& inner.commission.max.is_none()
-					&& inner.commission.change_rate.is_none()
-					&& inner.commission.throttle_from.is_none()),
+				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.current.is_none() &&
+					inner.commission.max.is_none() &&
+					inner.commission.change_rate.is_none() &&
+					inner.commission.throttle_from.is_none()),
 				"a commission value has been incorrectly set"
 			);
 			ensure!(
@@ -641,8 +641,8 @@ pub mod v5 {
 				"There are undecodable BondedPools in storage. This migration will not fix that."
 			);
 			ensure!(
-				SubPoolsStorage::<T>::iter_keys().count()
-					== SubPoolsStorage::<T>::iter_values().count(),
+				SubPoolsStorage::<T>::iter_keys().count() ==
+					SubPoolsStorage::<T>::iter_values().count(),
 				"There are undecodable SubPools in storage. This migration will not fix that."
 			);
 			ensure!(
@@ -693,8 +693,8 @@ pub mod v5 {
 				"There are undecodable BondedPools in storage."
 			);
 			ensure!(
-				SubPoolsStorage::<T>::iter_keys().count()
-					== SubPoolsStorage::<T>::iter_values().count(),
+				SubPoolsStorage::<T>::iter_keys().count() ==
+					SubPoolsStorage::<T>::iter_values().count(),
 				"There are undecodable SubPools in storage."
 			);
 			ensure!(

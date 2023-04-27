@@ -279,8 +279,8 @@ impl<Header: HeaderT> HasVoted<Header> {
 	pub fn propose(&self) -> Option<&PrimaryPropose<Header>> {
 		match self {
 			HasVoted::Yes(_, Vote::Propose(propose)) => Some(propose),
-			HasVoted::Yes(_, Vote::Prevote(propose, _))
-			| HasVoted::Yes(_, Vote::Precommit(propose, _, _)) => propose.as_ref(),
+			HasVoted::Yes(_, Vote::Prevote(propose, _)) |
+			HasVoted::Yes(_, Vote::Precommit(propose, _, _)) => propose.as_ref(),
 			_ => None,
 		}
 	}
@@ -288,8 +288,8 @@ impl<Header: HeaderT> HasVoted<Header> {
 	/// Returns the prevote we should vote with (if any.)
 	pub fn prevote(&self) -> Option<&Prevote<Header>> {
 		match self {
-			HasVoted::Yes(_, Vote::Prevote(_, prevote))
-			| HasVoted::Yes(_, Vote::Precommit(_, prevote, _)) => Some(prevote),
+			HasVoted::Yes(_, Vote::Prevote(_, prevote)) |
+			HasVoted::Yes(_, Vote::Precommit(_, prevote, _)) => Some(prevote),
 			_ => None,
 		}
 	}
@@ -503,7 +503,7 @@ where
 			if *equivocation.offender() == local_id {
 				return Err(Error::Safety(
 					"Refraining from sending equivocation report for our own equivocation.".into(),
-				));
+				))
 			}
 		}
 
@@ -526,9 +526,8 @@ where
 
 		// find the hash of the latest block in the current set
 		let current_set_latest_hash = match next_change {
-			Some((_, n)) if n.is_zero() => {
-				return Err(Error::Safety("Authority set change signalled at genesis.".to_string()))
-			},
+			Some((_, n)) if n.is_zero() =>
+				return Err(Error::Safety("Authority set change signalled at genesis.".to_string())),
 			// the next set starts at `n` so the current one lasts until `n - 1`. if
 			// `n` is later than the best block, then the current set is still live
 			// at best block.
@@ -565,7 +564,7 @@ where
 					target: LOG_TARGET,
 					"Equivocation offender is not part of the authority set."
 				);
-				return Ok(());
+				return Ok(())
 			},
 		};
 
@@ -615,7 +614,7 @@ where
 	Client: HeaderMetadata<Block, Error = sp_blockchain::Error>,
 {
 	if base == block {
-		return Err(GrandpaError::NotDescendent);
+		return Err(GrandpaError::NotDescendent)
 	}
 
 	let tree_route_res = sp_blockchain::tree_route(&**client, block, base);
@@ -631,12 +630,12 @@ where
 				e
 			);
 
-			return Err(GrandpaError::NotDescendent);
+			return Err(GrandpaError::NotDescendent)
 		},
 	};
 
 	if tree_route.common_block().hash != base {
-		return Err(GrandpaError::NotDescendent);
+		return Err(GrandpaError::NotDescendent)
 	}
 
 	// skip one because our ancestry is meant to start from the parent of `block`,
@@ -708,7 +707,7 @@ where
 			//       before activating the new set. the `authority_set` is updated immediately thus
 			//       we restrict the voter based on that.
 			if set_id != authority_set.set_id() {
-				return Ok(None);
+				return Ok(None)
 			}
 
 			best_chain_containing(block, client, authority_set, select_chain, voting_rule)
@@ -727,13 +726,12 @@ where
 		let local_id = local_authority_id(&self.voters, self.config.keystore.as_ref());
 
 		let has_voted = match self.voter_set_state.has_voted(round) {
-			HasVoted::Yes(id, vote) => {
+			HasVoted::Yes(id, vote) =>
 				if local_id.as_ref().map(|k| k == &id).unwrap_or(false) {
 					HasVoted::Yes(id, vote)
 				} else {
 					HasVoted::No
-				}
-			},
+				},
 			HasVoted::No => HasVoted::No,
 		};
 
@@ -809,7 +807,7 @@ where
 				// we've already proposed in this round (in a previous run),
 				// ignore the given vote and don't update the voter set
 				// state
-				return Ok(None);
+				return Ok(None)
 			}
 
 			let mut current_rounds = current_rounds.clone();
@@ -867,7 +865,7 @@ where
 				// we've already prevoted in this round (in a previous run),
 				// ignore the given vote and don't update the voter set
 				// state
-				return Ok(None);
+				return Ok(None)
 			}
 
 			// report to telemetry and prometheus
@@ -930,7 +928,7 @@ where
 				// we've already precommitted in this round (in a previous run),
 				// ignore the given vote and don't update the voter set
 				// state
-				return Ok(None);
+				return Ok(None)
 			}
 
 			// report to telemetry and prometheus
@@ -941,7 +939,7 @@ where
 				HasVoted::Yes(_, Vote::Prevote(_, prevote)) => prevote,
 				_ => {
 					let msg = "Voter precommitting before prevoting.";
-					return Err(Error::Safety(msg.to_string()));
+					return Err(Error::Safety(msg.to_string()))
 				},
 			};
 
@@ -994,7 +992,7 @@ where
 					(completed_rounds, current_rounds)
 				} else {
 					let msg = "Voter acting while in paused state.";
-					return Err(Error::Safety(msg.to_string()));
+					return Err(Error::Safety(msg.to_string()))
 				};
 
 			let mut completed_rounds = completed_rounds.clone();
@@ -1055,7 +1053,7 @@ where
 					(completed_rounds, current_rounds)
 				} else {
 					let msg = "Voter acting while in paused state.";
-					return Err(Error::Safety(msg.to_string()));
+					return Err(Error::Safety(msg.to_string()))
 				};
 
 			let mut completed_rounds = completed_rounds.clone();
@@ -1193,7 +1191,7 @@ where
 				block,
 			);
 
-			return Ok(None);
+			return Ok(None)
 		},
 	};
 
@@ -1219,7 +1217,7 @@ where
 				err,
 			);
 
-			return Ok(None);
+			return Ok(None)
 		},
 	};
 
@@ -1236,16 +1234,16 @@ where
 				err,
 			);
 
-			return Ok(None);
+			return Ok(None)
 		},
 	};
 
 	let is_descendent_of = is_descendent_of(&*client, None);
 
-	if target_header.number() > best_header.number()
-		|| target_header.number() == best_header.number()
-			&& target_header.hash() != best_header.hash()
-		|| !is_descendent_of(&target_header.hash(), &best_header.hash())?
+	if target_header.number() > best_header.number() ||
+		target_header.number() == best_header.number() &&
+			target_header.hash() != best_header.hash() ||
+		!is_descendent_of(&target_header.hash(), &best_header.hash())?
 	{
 		debug!(
 			target: LOG_TARGET,
@@ -1278,7 +1276,7 @@ where
 			}
 
 			if *target_header.number() == target_number {
-				break;
+				break
 			}
 
 			target_header = client
@@ -1347,7 +1345,7 @@ where
 				status.finalized_number,
 		);
 
-		return Ok(());
+		return Ok(())
 	}
 
 	// FIXME #1483: clone only when changed
@@ -1398,10 +1396,10 @@ where
 				if !justification_required {
 					if let Some(justification_period) = justification_period {
 						let last_finalized_number = client.info().finalized_number;
-						justification_required = (!last_finalized_number.is_zero()
-							|| number - last_finalized_number == justification_period)
-							&& (last_finalized_number / justification_period
-								!= number / justification_period);
+						justification_required = (!last_finalized_number.is_zero() ||
+							number - last_finalized_number == justification_period) &&
+							(last_finalized_number / justification_period !=
+								number / justification_period);
 					}
 				}
 
@@ -1497,7 +1495,7 @@ where
 				);
 				warn!(target: LOG_TARGET, "Node is in a potentially inconsistent state.");
 
-				return Err(e.into());
+				return Err(e.into())
 			}
 		}
 

@@ -24,6 +24,7 @@ use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
 };
+use sp_arithmetic::Perbill;
 use sp_runtime::traits::IdentityLookup;
 
 type AccountId = u64;
@@ -151,7 +152,7 @@ parameter_types! {
 pub struct OnChainSeqPhragmen;
 impl onchain::Config for OnChainSeqPhragmen {
 	type System = Test;
-	type Solver = SequentialPhragmen<AccountId, sp_arithmetic::Perbill>;
+	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = ConstU32<100>;

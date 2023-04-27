@@ -74,12 +74,9 @@ use frame_support::{
 };
 use frame_system::{self as system};
 use scale_info::TypeInfo;
-use sp_io::hashing::blake2_256;
 use sp_arithmetic::traits::{One, Saturating, Zero};
-use sp_runtime::{
-	traits::BadOrigin,
-	BoundedVec, RuntimeDebug,
-};
+use sp_io::hashing::blake2_256;
+use sp_runtime::{traits::BadOrigin, BoundedVec, RuntimeDebug};
 use sp_std::{borrow::Borrow, cmp::Ordering, marker::PhantomData, prelude::*};
 
 pub use pallet::*;

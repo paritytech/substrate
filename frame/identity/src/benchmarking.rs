@@ -28,7 +28,7 @@ use frame_support::{
 	traits::{EnsureOrigin, Get},
 };
 use frame_system::RawOrigin;
-use sp_runtime::traits::Bounded;
+use sp_arithmetic::traits::Bounded;
 
 const SEED: u32 = 0;
 
