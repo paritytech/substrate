@@ -1222,10 +1222,20 @@ impl<T: Config> Pallet<T> {
 		a.consumers == 0 || a.providers > 1
 	}
 
-	/// True if the account has at least one provider reference.
-	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
+	/// True if the account has at least one provider reference and adding `amount` consumer
+	/// references would not take it above the the maximum.
+	pub fn can_accrue_consumers(who: &T::AccountId, amount: u32) -> bool {
 		let a = Account::<T>::get(who);
-		a.providers > 0 && a.consumers < T::MaxConsumers::max_consumers()
+		match a.consumers.checked_add(amount) {
+			Some(c) => a.providers > 0 && c <= T::MaxConsumers::max_consumers(),
+			None => false,
+		}
+	}
+
+	/// True if the account has at least one provider reference and fewer consumer references than
+	/// the maximum.
+	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
+		Self::can_accrue_consumers(who, 1)
 	}
 
 	/// Deposits an event into this block's event record.
@@ -1679,8 +1689,10 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 		let is_default = account.data == T::AccountData::default();
 		let mut some_data = if is_default { None } else { Some(account.data) };
 		let result = f(&mut some_data)?;
-		if Self::providers(k) > 0 {
+		if Self::providers(k) > 0 || Self::sufficients(k) > 0 {
 			Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
+		} else {
+			Account::<T>::remove(k)
 		}
 		Ok(result)
 	}
