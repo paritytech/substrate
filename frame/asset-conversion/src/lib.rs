@@ -1012,7 +1012,7 @@ pub mod pallet {
 				Err(Error::<T>::ZeroLiquidity.into())?
 			}
 
-			if amount_out == reserve_out {
+			if amount_out >= reserve_out {
 				Err(Error::<T>::AmountOutTooHigh.into())?
 			}
 
