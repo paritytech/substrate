@@ -40,7 +40,7 @@ use sp_core::{
 pub use sp_io::TestExternalities;
 use sp_runtime::{traits::Block as BlockT, StateVersion};
 use std::{
-	cmp::max,
+	cmp::{max, min},
 	fs,
 	num::NonZeroUsize,
 	ops::{Deref, DerefMut},
@@ -348,7 +348,7 @@ where
 			Err(_) => Self::DEFAULT_PARALLELISM,
 		};
 		assert!(requested > 0, "TRY_RUNTIME_MAX_THREADS must be greater than 0");
-		return NonZeroUsize::new(max(requested, avaliable))
+		return NonZeroUsize::new(min(requested, avaliable))
 			.expect("requested and avaliable are non-zero; qed")
 	}
 
