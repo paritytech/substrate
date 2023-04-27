@@ -2,48 +2,23 @@
 use ark_algebra_test_templates::*;
 use ark_ff::{fields::Field, One, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
-use ark_std::{rand::Rng, test_rng, vec, vec::Vec, UniformRand, Zero};
+use ark_std::{rand::Rng, test_rng, vec, vec::Vec, UniformRand};
 use sp_ark_models::{pairing::PairingOutput, AffineRepr, CurveGroup, Group};
 
 use sp_ark_bls12_381::{
-	fq::Fq, fq2::Fq2, fr::Fr, G1Affine as G1Affine_Host, G1Projective as G1Projective_Host,
-	G2Affine as G2Affine_Host, G2Projective as G2Projective_Host, HostFunctions,
+	curves::{
+		g1::{G1Affine, G1Projective},
+		g2::{G2Affine, G2Projective},
+	},
+	fq::Fq,
+	fq2::Fq2,
+	fr::Fr,
 };
 
-#[derive(PartialEq, Eq)]
-pub struct Host {}
-
-impl HostFunctions for Host {
-	fn bls12_381_multi_miller_loop(a: Vec<u8>, b: Vec<u8>) -> Result<Vec<u8>, ()> {
-		sp_io::elliptic_curves::bls12_381_multi_miller_loop(a, b)
-	}
-	fn bls12_381_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, ()> {
-		sp_io::elliptic_curves::bls12_381_final_exponentiation(f12)
-	}
-	fn bls12_381_msm_g1(bases: Vec<u8>, bigints: Vec<u8>) -> Result<Vec<u8>, ()> {
-		sp_io::elliptic_curves::bls12_381_msm_g1(bases, bigints)
-	}
-	fn bls12_381_msm_g2(bases: Vec<u8>, bigints: Vec<u8>) -> Result<Vec<u8>, ()> {
-		sp_io::elliptic_curves::bls12_381_msm_g2(bases, bigints)
-	}
-	fn bls12_381_mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-		sp_io::elliptic_curves::bls12_381_mul_projective_g1(base, scalar)
-	}
-	fn bls12_381_mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-		sp_io::elliptic_curves::bls12_381_mul_projective_g2(base, scalar)
-	}
-}
-
-type G1Projective = G1Projective_Host<Host>;
-type G1Affine = G1Affine_Host<Host>;
-type G2Projective = G2Projective_Host<Host>;
-type G2Affine = G2Affine_Host<Host>;
-type Bls12_381 = sp_ark_bls12_381::Bls12_381<Host>;
-
-test_group!(g1; G1Projective; sw);
-test_group!(g2; G2Projective; sw);
-test_group!(pairing_output; PairingOutput<Bls12_381>; msm);
-test_pairing!(ark_pairing; super::Bls12_381);
+test_group!(g1; sp_ark_bls12_381::curves::g1::G1Projective; sw);
+test_group!(g2; sp_ark_bls12_381::curves::g2::G2Projective; sw);
+test_group!(pairing_output; PairingOutput<sp_ark_bls12_381::curves::Bls12_381>; msm);
+test_pairing!(ark_pairing; sp_ark_bls12_381::curves::Bls12_381);
 
 #[test]
 fn test_g1_endomorphism_beta() {
@@ -53,7 +28,7 @@ fn test_g1_endomorphism_beta() {
 #[test]
 fn test_g1_subgroup_membership_via_endomorphism() {
 	let mut rng = test_rng();
-	let generator = G1Projective::rand(&mut rng).into_affine();
+	let generator = sp_ark_bls12_381::curves::g1::G1Projective::rand(&mut rng).into_affine();
 	assert!(generator.is_in_correct_subgroup_assuming_on_curve());
 }
 
@@ -64,8 +39,12 @@ fn test_g1_subgroup_non_membership_via_endomorphism() {
 		let x = Fq::rand(&mut rng);
 		let greatest = rng.gen();
 
-		if let Some(p) = G1Affine::get_point_from_x_unchecked(x, greatest) {
-			if !<G1Projective as ark_std::Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
+		if let Some(p) =
+			sp_ark_bls12_381::curves::g1::G1Affine::get_point_from_x_unchecked(x, greatest)
+		{
+			if !<sp_ark_bls12_381::curves::g1::G1Projective as ark_std::Zero>::is_zero(
+				&p.mul_bigint(Fr::characteristic()),
+			) {
 				assert!(!p.is_in_correct_subgroup_assuming_on_curve());
 				return
 			}
@@ -76,7 +55,7 @@ fn test_g1_subgroup_non_membership_via_endomorphism() {
 #[test]
 fn test_g2_subgroup_membership_via_endomorphism() {
 	let mut rng = test_rng();
-	let generator = G2Projective::rand(&mut rng).into_affine();
+	let generator = sp_ark_bls12_381::curves::g2::G2Projective::rand(&mut rng).into_affine();
 	assert!(generator.is_in_correct_subgroup_assuming_on_curve());
 }
 
@@ -87,8 +66,12 @@ fn test_g2_subgroup_non_membership_via_endomorphism() {
 		let x = Fq2::rand(&mut rng);
 		let greatest = rng.gen();
 
-		if let Some(p) = G2Affine::get_point_from_x_unchecked(x, greatest) {
-			if !<G2Projective as Zero>::is_zero(&p.mul_bigint(Fr::characteristic())) {
+		if let Some(p) =
+			sp_ark_bls12_381::curves::g2::G2Affine::get_point_from_x_unchecked(x, greatest)
+		{
+			if !<sp_ark_bls12_381::curves::g2::G2Projective as Zero>::is_zero(
+				&p.mul_bigint(Fr::characteristic()),
+			) {
 				assert!(!p.is_in_correct_subgroup_assuming_on_curve());
 				return
 			}

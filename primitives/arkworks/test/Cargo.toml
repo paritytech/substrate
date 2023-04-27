@@ -17,12 +17,11 @@ ark-serialize = { version = "0.4.0", default-features = false }
 sp-ark-models = { version = "0.4.0", default-features = false }
 
 [dev-dependencies]
-sp-io =  { version = "7.0.0", path = "../../io", default-features =  false }
 sp-arkworks = { path = "../" }
 ark-ec = { version = "0.4.0", default-features = false }
 ark-algebra-test-templates = { version = "0.4.0", default-features = false }
 sp-ark-bls12-377 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", default-features = false }
-sp-ark-bls12-381 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", defult-features = false }
+sp-ark-bls12-381 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", default-features = false }
 sp-ark-bw6-761 = { version = "0.4.0",git = "https://github.com/paritytech/ark-substrate", default-features = false }
 sp-ark-ed-on-bls12-377 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", default-features = false }
 sp-ark-ed-on-bls12-381-bandersnatch = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", default-features = false }
@@ -34,7 +33,7 @@ std = [
     "ark-std/std",
 	"ark-serialize/std",
     "sp-ark-models/std",
-	"sp-io/std",
+    "sp-arkworks/std",
 	"ark-ec/std",
     "ark-algebra-test-templates/std",
 	"sp-ark-bls12-377/std",
@@ -42,7 +41,6 @@ std = [
     "sp-ark-bw6-761/std",
     "sp-ark-ed-on-bls12-377/std",
     "sp-ark-ed-on-bls12-381-bandersnatch/std",
-    "sp-arkworks/std"
 ]
 curve = [ "scalar_field", "base_field" ]
 scalar_field = []

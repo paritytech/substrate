@@ -333,3 +333,4 @@ codegen-units = 1
 
 [patch.crates-io]
 sp-arkworks =  { path = "./primitives/arkworks" }
+sp-io =  { path = "./primitives/io" }
