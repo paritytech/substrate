@@ -359,7 +359,7 @@ mod list {
 		// make sure there are no duplicates.
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			Bag::<Runtime>::get(10).unwrap().insert_unchecked(2, 10);
-			assert_eq!(List::<Runtime>::do_try_state(), Err("duplicate identified"));
+			assert_eq!(List::<Runtime>::do_try_state(), ListError::Duplicate);
 		});
 
 		// ensure count is in sync with `ListNodes::count()`.
@@ -373,7 +373,10 @@ mod list {
 			CounterForListNodes::<Runtime>::mutate(|counter| *counter += 1);
 			assert_eq!(crate::ListNodes::<Runtime>::count(), 5);
 
-			assert_eq!(List::<Runtime>::do_try_state(), Err("iter_count != stored_count"));
+			assert_eq!(
+				List::<Runtime>::do_try_state(),
+				DispatchError::Other("iter_count != stored_count")
+			);
 		});
 	}
 
