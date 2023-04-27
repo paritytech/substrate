@@ -343,7 +343,7 @@ where
 			.get();
 		assert!(avaliable > 0, "avaliable parallelism must be greater than 0");
 		return NonZeroUsize::new(min(avaliable, Self::MAX_PARALLELISM))
-			.expect("avaliable is non-zero and 4 is non-zero; qed")
+			.expect("avaliable is non-zero and MAX_PARRELISM is non-zero; qed")
 	}
 
 	async fn rpc_get_storage(
