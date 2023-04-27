@@ -1714,7 +1714,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(
 			ValidatorCount::<T>::get() <=
 				<T::ElectionProvider as frame_election_provider_support::ElectionProviderBase>::MaxWinners::get(),
-			DispatchError::Other("validator count exceeded election max winners")
+			Error::<T>::TooManyValidators
 		);
 		Ok(())
 	}

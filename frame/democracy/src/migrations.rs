@@ -69,10 +69,7 @@ pub mod v1 {
 
 			let props_count = v0::PublicProps::<T>::get().len();
 			log::info!(target: TARGET, "{} public proposals will be migrated.", props_count,);
-			ensure!(
-				props_count <= T::MaxProposals::get() as usize,
-				DispatchError::Other("too many proposals")
-			);
+			ensure!(props_count <= T::MaxProposals::get() as usize, Error::<T>::TooMany);
 
 			let referenda_count = v0::ReferendumInfoOf::<T>::iter().count();
 			log::info!(target: TARGET, "{} referenda will be migrated.", referenda_count);

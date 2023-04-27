@@ -3082,7 +3082,7 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(
 			MaxPools::<T>::get().map_or(true, |max| bonded_pools.len() <= (max as usize)),
-			DispatchError::Other("the count of the above set must be less than `MaxPools`")
+			Error::<T>::MaxPools
 		);
 
 		for id in reward_pools {
@@ -3154,7 +3154,7 @@ impl<T: Config> Pallet<T> {
 			);
 			ensure!(MaxPoolMembersPerPool::<T>::get()
 				.map_or(true, |max| bonded_pool.member_counter <= max),
-				DispatchError::Other("Each `BondedPool.member_counter` must be less than `MaxPoolMembersPerPool`")
+				Error::<T>::MaxPoolMembers
 			);
 
 			let depositor = PoolMembers::<T>::get(&bonded_pool.roles.depositor).unwrap();
@@ -3168,7 +3168,7 @@ impl<T: Config> Pallet<T> {
 		})?;
 		ensure!(
 			MaxPoolMembers::<T>::get().map_or(true, |max| all_members <= max),
-			DispatchError::Other("There can't be more than `MaxPoolMembers` in a pool.")
+			Error::<T>::MaxPoolMembers
 		);
 
 		if level <= 1 {
