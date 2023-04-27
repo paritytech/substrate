@@ -867,8 +867,8 @@ benchmarks! {
 	seal_deposit_event_per_topic_and_byte {
 		let t in 0 .. T::Schedule::get().limits.event_topics;
 		// More bytes here leads to cheaper byte in emitted event.
-		// Hence we lower the upper bound to increase the resulting per byte component.
-		let n in 0 .. Perbill::from_percent(10).mul_ceil(T::Schedule::get().limits.payload_len);
+		// Hence we consider the worst case of a single byte payload.
+		let n in 0 .. 1;
 		let topics = (0..t).map(|i| T::Hashing::hash_of(&i)).collect::<Vec<_>>().encode();
 		let topics_len = topics.len();
 		let code = WasmModule::<T>::from(ModuleDefinition {
