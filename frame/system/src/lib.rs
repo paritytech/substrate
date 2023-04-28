@@ -207,7 +207,7 @@ pub mod pallet {
 			use super::*;
 			use sp_runtime::traits::IdentityLookup;
 
-			pub struct TestDefaultConfig {}
+			pub struct TestDefaultConfig;
 
 			#[register_default_impl(TestDefaultConfig)]
 			impl DefaultConfig for TestDefaultConfig {
