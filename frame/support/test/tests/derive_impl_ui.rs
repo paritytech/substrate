@@ -18,6 +18,7 @@
 #![cfg(not(feature = "disable-ui-tests"))]
 #![cfg(test)]
 
+#[rustversion::attr(not(stable), ignore)]
 #[test]
 fn derive_impl_ui() {
 	// Only run the ui tests when `RUN_UI_TESTS` is set.
