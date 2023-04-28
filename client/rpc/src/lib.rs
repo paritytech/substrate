@@ -66,7 +66,7 @@ pub mod utils {
 		T: Serialize + Send + 'static,
 		R: Serialize + Send + 'static,
 	{
-		let Ok(sink )= pending.accept().await else {
+		let Ok(sink) = pending.accept().await else {
 			return SubscriptionResponse::Closed
 		};
 		pipe_from_stream(sink, stream, executor).await
