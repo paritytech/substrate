@@ -120,8 +120,7 @@ fn combine_impls(
 					Some(item)
 				}
 			}
-		})
-		.collect::<Vec<ImplItem>>();
+		});
 	final_impl.items.extend(extended_items);
 	final_impl
 }
