@@ -29,7 +29,7 @@ benchmarks! {
 
 	}: _<T::RuntimeOrigin>(origin, full_name.clone())
 	verify {
-		assert!(TxPause::<T>::paused_calls(full_name).is_some())
+		assert!(PausedCalls::<T>::get(full_name).is_some())
 	}
 
   unpause {
@@ -40,7 +40,7 @@ benchmarks! {
 
 		}: _<T::RuntimeOrigin>(unpause_origin, full_name.clone())
 	verify {
-		assert!(TxPause::<T>::paused_calls(full_name).is_none())
+		assert!(PausedCalls::<T>::get(full_name).is_none())
 	}
 
 	impl_benchmark_test_suite!(TxPause, crate::mock::new_test_ext(), crate::mock::Test);
