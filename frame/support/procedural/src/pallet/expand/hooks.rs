@@ -121,8 +121,10 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 
 				#frame_support::log::error!(
 					target: #frame_support::LOG_TARGET,
-					"{pallet_name}: On chain storage version {on_chain_version:?} is set to non zero,\
+					"{}: On chain storage version {:?} is set to non zero,\
 					 while the pallet is missing the `#[pallet::storage_version(VERSION)]` attribute.",
+					pallet_name,
+					on_chain_version,
 				);
 
 				return Err("On chain storage version set, while the pallet doesn't \
