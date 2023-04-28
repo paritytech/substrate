@@ -126,7 +126,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				);
 
 				return Err("On chain storage version set, while pallet doesn't \
-							has the `#[pallet::storage_version(VERSION)]` attribute.");
+							have the `#[pallet::storage_version(VERSION)]` attribute.");
 			}
 		}
 	};
