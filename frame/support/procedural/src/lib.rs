@@ -821,11 +821,35 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// locally in the context of the foreign trait and the pallet (or context) in which it is
 /// defined
 ///
+/// ## Importing & Re-Exporting
+///
+/// Since `#[derive_impl(..)]` is a
+/// [`macro_magic`](https://docs.rs/macro_magic/latest/macro_magic/)-based attribute macro,
+/// special care must be taken when importing and re-exporting it. Glob imports will work
+/// properly, such as `use frame_support::*` to bring `derive_impl` into scope, however any
+/// other use statements involving `derive_impl` should have
+/// [`#[macro_magic::use_attr]`](https://docs.rs/macro_magic/latest/macro_magic/attr.use_attr.html)
+/// attached or your use statement will fail to fully bring the macro into scope.
+///
+/// This brings `derive_impl` into scope in the current context:
+/// ```ignore
+/// #[use_attr]
+/// use frame_support::derive_impl;
+/// ```
+///
+/// This brings `derive_impl` into scope and publicly re-exports it from the current context:
+/// ```ignore
+/// #[use_attr]
+/// pub use frame_support::derive_impl;
+/// ```
+///
 /// ## Expansion
 ///
-/// The macro will expand to the local impl, with any extra items from the foreign impl that
-/// aren't present in the local impl also included. In the case of a colliding item, the
-/// version of the item that exists in the local impl will be retained.
+/// The `#[derive_impl(foreign_path as disambiguation_path)]` attribute will expand to the
+/// local impl, with any extra items from the foreign impl that aren't present in the local
+/// impl also included. In the case of a colliding trait item, the version of the item that
+/// exists in the local impl will be retained. All imported items are qualified by the
+/// `disambiguation_path`, as discussed above.
 ///
 /// ## Handling of Unnamed Trait Items
 ///
