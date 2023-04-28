@@ -22,13 +22,11 @@ use clap::Args;
 #[derive(Debug, Clone, Args)]
 pub struct TelemetryParams {
 	/// Disable connecting to the Substrate telemetry server.
-	///
 	/// Telemetry is on by default on global chains.
 	#[arg(long)]
 	pub no_telemetry: bool,
 
 	/// The URL of the telemetry server to connect to.
-	///
 	/// This flag can be passed multiple times as a means to specify multiple
 	/// telemetry endpoints. Verbosity levels range from 0-9, with 0 denoting
 	/// the least verbosity.
