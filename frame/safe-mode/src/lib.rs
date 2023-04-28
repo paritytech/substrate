@@ -217,16 +217,14 @@ pub mod pallet {
 	/// Configure the initial state of this pallet in the genesis block.
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub entered_until: Option<T::BlockNumber>,
-		pub _phantom: PhantomData<T>,
+		pub entered_until: Option<T::BlockNumber>
 	}
-
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		// NOTE: `derive(Default)` does not work together with `#[pallet::genesis_config]`.
 		// We therefore need to add a trivial default impl.
 		fn default() -> Self {
-			Self { entered_until: None, _phantom: PhantomData }
+			Self { entered_until: None }
 		}
 	}
 
