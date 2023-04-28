@@ -2,7 +2,7 @@
 use ark_algebra_test_templates::*;
 use ark_ff::{fields::Field, One, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate};
-use ark_std::{rand::Rng, test_rng, vec, vec::Vec, UniformRand};
+use ark_std::{rand::Rng, test_rng, vec, UniformRand};
 use sp_ark_models::{pairing::PairingOutput, AffineRepr, CurveGroup, Group};
 
 use sp_ark_bls12_381::{

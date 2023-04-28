@@ -20,11 +20,11 @@ sp-ark-models = { version = "0.4.0", default-features = false }
 sp-arkworks = { path = "../" }
 ark-ec = { version = "0.4.0", default-features = false }
 ark-algebra-test-templates = { version = "0.4.0", default-features = false }
-sp-ark-bls12-377 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", default-features = false }
-sp-ark-bls12-381 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", default-features = false }
-sp-ark-bw6-761 = { version = "0.4.0",git = "https://github.com/paritytech/ark-substrate", default-features = false }
-sp-ark-ed-on-bls12-377 = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", default-features = false }
-sp-ark-ed-on-bls12-381-bandersnatch = { version = "0.4.0", git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-bls12-377 = { version = "0.4.0-alpha", git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-bls12-381 = { version = "0.4.0-alpha", git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-bw6-761 = { version = "0.4.0-alpha",git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-ed-on-bls12-377 = { version = "0.4.0-alpha", git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-ed-on-bls12-381-bandersnatch = { version = "0.4.0-alpha", git = "https://github.com/paritytech/ark-substrate", default-features = false }
 
 [features]
 default = [ "std" ]
