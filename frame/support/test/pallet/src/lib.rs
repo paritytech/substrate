@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Testing pallet macro
+//! A basic pallet that can be used to test `construct_runtime!`.
 
 // Ensure docs are propagated properly by the macros.
 #![warn(missing_docs)]

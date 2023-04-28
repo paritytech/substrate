@@ -40,7 +40,6 @@ mod nested {
 
 		#[pallet::call]
 		impl<T: Config> Pallet<T> {
-			#[pallet::weight(0)]
 			pub fn fail(_origin: OriginFor<T>) -> DispatchResult {
 				Err(Error::<T>::Something.into())
 			}
@@ -87,15 +86,12 @@ pub mod module {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(0)]
 		pub fn fail(_origin: OriginFor<T>) -> DispatchResult {
 			Err(Error::<T>::Something.into())
 		}
-		#[pallet::weight(0)]
 		pub fn aux_1(_origin: OriginFor<T>, #[pallet::compact] _data: u32) -> DispatchResult {
 			unreachable!()
 		}
-		#[pallet::weight(0)]
 		pub fn aux_2(
 			_origin: OriginFor<T>,
 			_data: i32,

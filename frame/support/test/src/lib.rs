@@ -15,8 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test crate for frame_support. Allow to make use of `frame_support::decl_storage`.
-//! See tests directory.
+//! Minimal `frame_system::Config`-super trait pallet.
 
 // Make sure we fail compilation on warnings
 #![warn(missing_docs)]
@@ -110,7 +109,9 @@ where
 	o.into().map(|_| ()).map_err(|_| "bad origin: expected to be a root origin")
 }
 
-/// Prelude to be used alongside pallet macro, for ease of use.
+/// Same semantic as [`frame_system`].
+// Note: we cannot use [`frame_system`] here since the pallet does not depend on
+// [`frame_system::Config`].
 pub mod pallet_prelude {
 	pub use crate::ensure_root;
 
