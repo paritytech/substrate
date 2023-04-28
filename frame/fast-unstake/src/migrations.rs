@@ -18,14 +18,18 @@
 pub mod v1 {
 	use crate::{types::BalanceOf, *};
 	use frame_support::{
-		dispatch::{DispatchError, DispatchResult},
-		ensure,
 		storage::unhashed,
 		traits::{Defensive, Get, GetStorageVersion, OnRuntimeUpgrade},
 		weights::Weight,
 	};
 	use sp_staking::EraIndex;
 	use sp_std::prelude::*;
+
+	#[cfg(feature = "try-runtime")]
+	use frame_support::{
+		dispatch::{DispatchError, DispatchResult},
+		ensure,
+	};
 
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
