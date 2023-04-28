@@ -53,10 +53,10 @@ impl ToTokens for DeriveImplAttrArgs {
 /// or not.
 fn impl_item_ident(impl_item: &ImplItem) -> Option<&Ident> {
 	match impl_item {
-		ImplItem::Const(item) => Some(item.ident.clone()),
-		ImplItem::Fn(item) => Some(item.sig.ident.clone()),
-		ImplItem::Type(item) => Some(item.ident.clone()),
-		ImplItem::Macro(item) => item.mac.path.get_ident().cloned(),
+		ImplItem::Const(item) => Some(&item.ident),
+		ImplItem::Fn(item) => Some(&item.sig.ident),
+		ImplItem::Type(item) => Some(&item.ident),
+		ImplItem::Macro(item) => item.mac.path.get_ident(),
 		_ => None,
 	}
 }
@@ -83,6 +83,7 @@ fn combine_impls(
 		.items
 		.iter()
 		.filter_map(|impl_item| impl_item_ident(impl_item))
+		.cloned()
 		.collect();
 	let existing_unsupported_items: HashSet<ImplItem> = local_impl
 		.items
@@ -91,36 +92,33 @@ fn combine_impls(
 		.cloned()
 		.collect();
 	let mut final_impl = local_impl;
-	let extended_items = foreign_impl
-		.items
-		.into_iter()
-		.filter_map(|item| {
-			if let Some(ident) = impl_item_ident(&item) {
-				if existing_local_keys.contains(&ident) {
-					// do not copy colliding items that have an ident
-					None
-				} else {
-					if matches!(item, ImplItem::Type(_)) {
-						// modify and insert uncolliding type items
-						let modified_item: ImplItem = parse_quote! {
-							type #ident = <#foreign_path as #disambiguation_path>::#ident;
-						};
-						Some(modified_item)
-					} else {
-						// copy uncolliding non-type items that have an ident
-						Some(item)
-					}
-				}
+	let extended_items = foreign_impl.items.into_iter().filter_map(|item| {
+		if let Some(ident) = impl_item_ident(&item) {
+			if existing_local_keys.contains(&ident) {
+				// do not copy colliding items that have an ident
+				None
 			} else {
-				if existing_unsupported_items.contains(&item) {
-					// do not copy colliding items that lack an ident
-					None
+				if matches!(item, ImplItem::Type(_)) {
+					// modify and insert uncolliding type items
+					let modified_item: ImplItem = parse_quote! {
+						type #ident = <#foreign_path as #disambiguation_path>::#ident;
+					};
+					Some(modified_item)
 				} else {
-					// copy uncolliding items without an ident verbaitm
+					// copy uncolliding non-type items that have an ident
 					Some(item)
 				}
 			}
-		});
+		} else {
+			if existing_unsupported_items.contains(&item) {
+				// do not copy colliding items that lack an ident
+				None
+			} else {
+				// copy uncolliding items without an ident verbaitm
+				Some(item)
+			}
+		}
+	});
 	final_impl.items.extend(extended_items);
 	final_impl
 }
