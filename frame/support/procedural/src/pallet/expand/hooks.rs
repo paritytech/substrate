@@ -125,7 +125,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 					 while the pallet is missing the `#[pallet::storage_version(VERSION)]` attribute.",
 				);
 
-				return Err("On chain storage version set, while pallet doesn't \
+				return Err("On chain storage version set, while the pallet doesn't \
 							have the `#[pallet::storage_version(VERSION)]` attribute.");
 			}
 		}
