@@ -1372,33 +1372,6 @@ sp_api::decl_runtime_apis! {
 		/// Perform a call from a specified account to a given contract.
 		///
 		/// See [`crate::Pallet::bare_call`].
-		#[api_version(3)]
-		fn call_v3(
-			origin: AccountId,
-			dest: AccountId,
-			value: Balance,
-			gas_limit: Option<Weight>,
-			storage_deposit_limit: Option<Balance>,
-			input_data: Vec<u8>,
-		) -> ContractExecResultWEvents<Balance, EventRecord>;
-
-		/// Instantiate a new contract.
-		///
-		/// See `[crate::Pallet::bare_instantiate]`.
-		#[api_version(3)]
-		fn instantiate_v3(
-			origin: AccountId,
-			value: Balance,
-			gas_limit: Option<Weight>,
-			storage_deposit_limit: Option<Balance>,
-			code: Code<Hash>,
-			data: Vec<u8>,
-			salt: Vec<u8>,
-		) -> ContractInstantiateResultWEvents<AccountId, Balance, EventRecord>;
-
-		/// Perform a call from a specified account to a given contract.
-		///
-		/// See [`crate::Pallet::bare_call`].
 		fn call(
 			origin: AccountId,
 			dest: AccountId,
@@ -1440,5 +1413,48 @@ sp_api::decl_runtime_apis! {
 			address: AccountId,
 			key: Vec<u8>,
 		) -> GetStorageResult;
+	}
+
+	pub trait ContractsApiV3<AccountId, Balance, BlockNumber, Hash, EventRecord> where
+		AccountId: Codec,
+		Balance: Codec,
+		BlockNumber: Codec,
+		Hash: Codec,
+		EventRecord: Codec,
+	{
+		/// Perform a call from a specified account to a given contract.
+		///
+		/// See [`crate::Pallet::bare_call`].
+		fn call(
+			origin: AccountId,
+			dest: AccountId,
+			value: Balance,
+			gas_limit: Option<Weight>,
+			storage_deposit_limit: Option<Balance>,
+			input_data: Vec<u8>,
+		) -> ContractExecResultWEvents<Balance, EventRecord>;
+
+		/// Instantiate a new contract.
+		///
+		/// See `[crate::Pallet::bare_instantiate]`.
+		fn instantiate(
+			origin: AccountId,
+			value: Balance,
+			gas_limit: Option<Weight>,
+			storage_deposit_limit: Option<Balance>,
+			code: Code<Hash>,
+			data: Vec<u8>,
+			salt: Vec<u8>,
+		) -> ContractInstantiateResultWEvents<AccountId, Balance, EventRecord>;
+
+		/// Upload new code without instantiating a contract from it.
+		///
+		/// See [`crate::Pallet::bare_upload_code`].
+		fn upload_code(
+			origin: AccountId,
+			code: Vec<u8>,
+			storage_deposit_limit: Option<Balance>,
+			determinism: Determinism,
+		) -> CodeUploadResult<Hash, Balance>;
 	}
 }
