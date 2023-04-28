@@ -25,10 +25,7 @@ use super::{
 	error::{Error, Result},
 	ChildStateBackend, StateBackend,
 };
-use crate::{
-	utils::{accept_and_pipe_from_stream, SubscriptionResponse},
-	DenyUnsafe, SubscriptionTaskExecutor,
-};
+use crate::{utils::accept_and_pipe_from_stream, DenyUnsafe, SubscriptionTaskExecutor};
 
 use futures::{future, stream, StreamExt};
 use jsonrpsee::{core::async_trait, PendingSubscriptionSink};
@@ -64,7 +61,7 @@ struct QueryStorageRange<Block: BlockT> {
 /// State API backend for full nodes.
 pub struct FullState<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
-	_executor: SubscriptionTaskExecutor,
+	executor: SubscriptionTaskExecutor,
 	_phantom: PhantomData<(BE, Block)>,
 }
 
@@ -79,7 +76,7 @@ where
 {
 	/// Create new state API backend for full nodes.
 	pub fn new(client: Arc<Client>, executor: SubscriptionTaskExecutor) -> Self {
-		Self { client, _executor: executor, _phantom: PhantomData }
+		Self { client, executor, _phantom: PhantomData }
 	}
 
 	/// Returns given block hash or best block hash if None is passed.
@@ -391,15 +388,15 @@ where
 		};
 
 		let mut previous_version = initial.clone();
+		let client = self.client.clone();
 
 		// A stream of new versions
-		let version_stream = self
-			.client
+		let version_stream = client
 			.import_notification_stream()
 			.filter(|n| future::ready(n.is_new_best))
 			.filter_map(move |n| {
 				let version =
-					self.client.runtime_version_at(n.hash).map_err(|e| Error::Client(Box::new(e)));
+					client.runtime_version_at(n.hash).map_err(|e| Error::Client(Box::new(e)));
 
 				match version {
 					Ok(version) if version != previous_version => {
@@ -411,8 +408,7 @@ where
 			});
 
 		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
-
-		let _: SubscriptionResponse<()> = accept_and_pipe_from_stream(pending, stream).await;
+		accept_and_pipe_from_stream::<(), _, _>(pending, stream, &self.executor).await;
 	}
 
 	async fn subscribe_storage(
@@ -454,7 +450,7 @@ where
 			.chain(storage_stream)
 			.filter(|storage| future::ready(!storage.changes.is_empty()));
 
-		let _: SubscriptionResponse<()> = accept_and_pipe_from_stream(pending, stream).await;
+		accept_and_pipe_from_stream::<(), _, _>(pending, stream, &self.executor).await;
 	}
 
 	fn trace_block(

@@ -66,7 +66,7 @@ pub trait GrandpaApi<Notification, Hash, Number> {
 
 /// Provides RPC methods for interacting with GRANDPA.
 pub struct Grandpa<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
-	_executor: SubscriptionTaskExecutor,
+	executor: SubscriptionTaskExecutor,
 	authority_set: AuthoritySet,
 	voter_state: VoterState,
 	justification_stream: GrandpaJustificationStream<Block>,
@@ -83,13 +83,7 @@ impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
 		justification_stream: GrandpaJustificationStream<Block>,
 		finality_proof_provider: Arc<ProofProvider>,
 	) -> Self {
-		Self {
-			_executor: executor,
-			authority_set,
-			voter_state,
-			justification_stream,
-			finality_proof_provider,
-		}
+		Self { executor, authority_set, voter_state, justification_stream, finality_proof_provider }
 	}
 }
 
@@ -114,7 +108,7 @@ where
 			},
 		);
 
-		accept_and_pipe_from_stream::<_, _, ()>(pending, stream).await;
+		accept_and_pipe_from_stream::<(), _, _>(pending, stream, &self.executor).await;
 	}
 
 	async fn prove_finality(

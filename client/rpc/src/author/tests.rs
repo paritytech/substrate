@@ -81,7 +81,7 @@ impl TestSetup {
 			pool: self.pool.clone(),
 			keystore: self.keystore.clone(),
 			deny_unsafe: DenyUnsafe::No,
-			_executor: test_executor(),
+			executor: test_executor(),
 		}
 	}
 

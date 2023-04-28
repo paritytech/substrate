@@ -117,7 +117,7 @@ where
 /// Subscribe to new headers.
 async fn subscribe_headers<Block, Client, F, G, S>(
 	client: &Arc<Client>,
-	_executor: &SubscriptionTaskExecutor,
+	executor: &SubscriptionTaskExecutor,
 	sink: SubscriptionSink,
 	best_block_hash: G,
 	stream: F,
@@ -143,5 +143,5 @@ async fn subscribe_headers<Block, Client, F, G, S>(
 	// duplicates at the beginning of the stream though.
 	let stream = stream::iter(maybe_header).chain(stream());
 
-	pipe_from_stream::<_, _, ()>(sink, stream).await;
+	pipe_from_stream::<(), _, _>(sink, stream, executor).await;
 }

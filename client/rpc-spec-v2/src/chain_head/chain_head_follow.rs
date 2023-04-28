@@ -559,18 +559,18 @@ where
 		sink: SubscriptionSink,
 		rx_stop: oneshot::Receiver<()>,
 	) -> SubscriptionResponse<FollowEvent<Block::Hash>> {
+		let client = self.client.clone();
+
 		// Register for the new block and finalized notifications.
-		let stream_import = self
-			.client
+		let stream_import = client
 			.import_notification_stream()
 			.map(|notification| NotificationType::NewBlock(notification));
 
-		let stream_finalized = self
-			.client
+		let stream_finalized = client
 			.finality_notification_stream()
 			.map(|notification| NotificationType::Finalized(notification));
 
-		let startup_point = StartupPoint::from(self.client.info());
+		let startup_point = StartupPoint::from(client.info());
 		let (initial_events, pruned_forks) = match self.generate_init_events(&startup_point) {
 			Ok(blocks) => blocks,
 			Err(err) => {

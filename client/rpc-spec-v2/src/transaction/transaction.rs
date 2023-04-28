@@ -53,13 +53,13 @@ pub struct Transaction<Pool, Client> {
 	/// Transactions pool.
 	pool: Arc<Pool>,
 	/// Executor to spawn subscriptions.
-	_executor: SubscriptionTaskExecutor,
+	executor: SubscriptionTaskExecutor,
 }
 
 impl<Pool, Client> Transaction<Pool, Client> {
 	/// Creates a new [`Transaction`].
 	pub fn new(client: Arc<Client>, pool: Arc<Pool>, executor: SubscriptionTaskExecutor) -> Self {
-		Transaction { client, pool, _executor: executor }
+		Transaction { client, pool, executor }
 	}
 }
 
@@ -123,15 +123,21 @@ where
 		match submit.await {
 			Ok(stream) => {
 				let mut state = TransactionState::new();
-				let stream = stream.filter_map(|event| async move { state.handle_event(event) });
-				futures::pin_mut!(stream);
-				accept_and_pipe_from_stream(pending, stream).await
+				let stream =
+					stream.filter_map(move |event| async move { state.handle_event(event) });
+
+				accept_and_pipe_from_stream(pending, Box::pin(stream), &self.executor).await
 			},
 			Err(err) => {
 				// We have not created an `Watcher` for the tx. Make sure the
 				// error is still propagated as an event.
-				let _sink = pending.accept().await;
-				SubscriptionResponse::Event(err.into())
+				let event: TransactionEvent<<Pool::Block as BlockT>::Hash> = err.into();
+				accept_and_pipe_from_stream(
+					pending,
+					futures::stream::once(async { event }).boxed(),
+					&self.executor,
+				)
+				.await
 			},
 		}
 	}

@@ -23,10 +23,7 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-use sc_rpc::{
-	utils::{accept_and_pipe_from_stream, SubscriptionResponse},
-	SubscriptionTaskExecutor,
-};
+use sc_rpc::{utils::accept_and_pipe_from_stream, SubscriptionTaskExecutor};
 use sp_runtime::traits::Block as BlockT;
 
 use futures::{task::SpawnError, FutureExt, StreamExt};
@@ -104,7 +101,7 @@ pub trait BeefyApi<Notification, Hash> {
 pub struct Beefy<Block: BlockT> {
 	finality_proof_stream: BeefyVersionedFinalityProofStream<Block>,
 	beefy_best_block: Arc<RwLock<Option<Block::Hash>>>,
-	_executor: SubscriptionTaskExecutor,
+	executor: SubscriptionTaskExecutor,
 }
 
 impl<Block> Beefy<Block>
@@ -127,7 +124,7 @@ where
 		});
 
 		executor.spawn("substrate-rpc-subscription", Some("rpc"), future.map(drop).boxed());
-		Ok(Self { finality_proof_stream, beefy_best_block, _executor: executor })
+		Ok(Self { finality_proof_stream, beefy_best_block, executor })
 	}
 }
 
@@ -143,7 +140,7 @@ where
 			.subscribe(100_000)
 			.map(|vfp| notification::EncodedVersionedFinalityProof::new::<Block>(vfp));
 
-		let _: SubscriptionResponse<()> = accept_and_pipe_from_stream(pending, stream).await;
+		accept_and_pipe_from_stream::<(), _, _>(pending, stream, &self.executor).await;
 	}
 
 	async fn latest_finalized(&self) -> Result<Block::Hash, Error> {

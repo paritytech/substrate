@@ -29,6 +29,7 @@ use crate::{
 	SubscriptionTaskExecutor,
 };
 use codec::Encode;
+use futures::FutureExt;
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
 	types::{ErrorObjectOwned, SubscriptionId},
@@ -55,7 +56,7 @@ pub struct ChainHead<BE, Block: BlockT, Client> {
 	/// Backend of the chain.
 	backend: Arc<BE>,
 	/// Executor to spawn subscriptions.
-	_executor: SubscriptionTaskExecutor,
+	executor: SubscriptionTaskExecutor,
 	/// Keep track of the pinned blocks for each subscription.
 	subscriptions: Arc<SubscriptionManagement<Block>>,
 	/// The hexadecimal encoded hash of the genesis block.
@@ -80,7 +81,7 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 		Self {
 			client,
 			backend,
-			_executor: executor,
+			executor,
 			subscriptions: Arc::new(SubscriptionManagement::new()),
 			genesis_hash,
 			max_pinned_blocks,
@@ -123,7 +124,7 @@ impl MaybePendingSubscription {
 
 	pub async fn reject(&mut self, err: impl Into<ErrorObjectOwned>) {
 		if let Some(p) = self.0.take() {
-			let _ = p.reject(err).await;
+			p.reject(err).await;
 		}
 	}
 }
@@ -189,7 +190,14 @@ where
 		let mut chain_head_follow =
 			ChainHeadFollower::new(client, backend, sub_handle, runtime_updates, sub_id.clone());
 
-		let res = chain_head_follow.generate_events(sink, rx_stop).await;
+		let (tx, rx) = futures::channel::oneshot::channel();
+		let fut = async move {
+			let res = chain_head_follow.generate_events(sink, rx_stop).await;
+			let _ = tx.send(res);
+		};
+
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		let res = rx.await.expect("Sender sends always a message; qed");
 
 		subscriptions.remove_subscription(&sub_id);
 		debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription removed", sub_id);

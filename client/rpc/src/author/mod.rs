@@ -55,7 +55,7 @@ pub struct Author<P, Client> {
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 	/// Executor to spawn subscriptions.
-	_executor: SubscriptionTaskExecutor,
+	executor: SubscriptionTaskExecutor,
 }
 
 impl<P, Client> Author<P, Client> {
@@ -67,7 +67,7 @@ impl<P, Client> Author<P, Client> {
 		deny_unsafe: DenyUnsafe,
 		executor: SubscriptionTaskExecutor,
 	) -> Self {
-		Author { client, pool, keystore, deny_unsafe, _executor: executor }
+		Author { client, pool, keystore, deny_unsafe, executor }
 	}
 }
 
@@ -201,6 +201,6 @@ where
 			},
 		};
 
-		accept_and_pipe_from_stream::<_, _, ()>(pending, stream).await;
+		accept_and_pipe_from_stream::<(), _, _>(pending, stream, &self.executor).await;
 	}
 }

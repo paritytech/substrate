@@ -247,6 +247,8 @@ async fn should_notify_about_storage_changes() {
 
 #[tokio::test]
 async fn should_send_initial_storage_changes_and_notifications() {
+	init_logger();
+
 	let mut sub = {
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let (api, _child) = new_full(client.clone(), test_executor(), DenyUnsafe::No);

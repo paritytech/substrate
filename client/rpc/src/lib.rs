@@ -46,27 +46,30 @@ pub type SubscriptionTaskExecutor = std::sync::Arc<dyn sp_core::traits::SpawnNam
 
 /// JSON-RPC helpers.
 pub mod utils {
-	use futures::{Stream, StreamExt};
+	use futures::{channel::oneshot, Future, FutureExt, Stream, StreamExt};
 	use jsonrpsee::{
 		IntoSubscriptionCloseResponse, PendingSubscriptionSink, SendTimeoutError,
 		SubscriptionCloseResponse, SubscriptionMessage, SubscriptionSink,
 	};
 	use sp_runtime::Serialize;
 
+	use crate::SubscriptionTaskExecutor;
+
 	/// Similar to [`pipe_from_stream`] but also attempts to accept the subscription.
-	pub async fn accept_and_pipe_from_stream<S, T, R>(
+	pub async fn accept_and_pipe_from_stream<R, S, T>(
 		pending: PendingSubscriptionSink,
 		stream: S,
+		executor: &SubscriptionTaskExecutor,
 	) -> SubscriptionResponse<R>
 	where
-		S: Stream<Item = T> + Unpin,
-		T: Serialize,
-		R: Serialize,
+		S: Stream<Item = T> + Unpin + Send + 'static,
+		T: Serialize + Send + 'static,
+		R: Serialize + Send + 'static,
 	{
 		let Ok(sink )= pending.accept().await else {
 			return SubscriptionResponse::Closed
 		};
-		pipe_from_stream(sink, stream).await
+		pipe_from_stream(sink, stream, executor).await
 	}
 
 	/// Feed items to the subscription from the underlying stream
@@ -75,33 +78,42 @@ pub mod utils {
 	///
 	/// This is simply a way to keep previous behaviour with unbounded streams
 	/// and should be replaced by specific RPC endpoint behaviour.
-	pub async fn pipe_from_stream<S, T, R>(
+	pub async fn pipe_from_stream<R, S, T>(
 		sink: SubscriptionSink,
 		mut stream: S,
+		executor: &SubscriptionTaskExecutor,
 	) -> SubscriptionResponse<R>
 	where
-		S: Stream<Item = T> + Unpin,
-		T: Serialize,
-		R: Serialize,
+		S: Stream<Item = T> + Unpin + Send + 'static,
+		T: Serialize + Send + 'static,
+		R: Serialize + Send + 'static,
 	{
-		loop {
-			tokio::select! {
-				biased;
-				_ = sink.closed() => break SubscriptionResponse::Closed,
+		let (tx, rx) = oneshot::channel();
 
-				maybe_item = stream.next() => {
-					let item = match maybe_item {
-						Some(item) => item,
-						None => break SubscriptionResponse::Closed,
-					};
+		let fut = async move {
+			let res = loop {
+				tokio::select! {
+					biased;
+					_ = sink.closed() => break SubscriptionResponse::<R>::Closed,
 
-					match sink.send_timeout(crate::utils::to_sub_message(&item), std::time::Duration::from_secs(60)).await {
-						Ok(_) => (),
-						Err(SendTimeoutError::Closed(_)) | Err(SendTimeoutError::Timeout(_)) => break SubscriptionResponse::Closed,
+					maybe_item = stream.next() => {
+						let msg = match maybe_item {
+							Some(item) => crate::utils::to_sub_message(&item),
+							None => break SubscriptionResponse::Closed,
+						};
+
+						match sink.send_timeout(msg, std::time::Duration::from_secs(60)).await {
+							Ok(_) => (),
+							Err(SendTimeoutError::Closed(_)) | Err(SendTimeoutError::Timeout(_)) => break SubscriptionResponse::Closed,
+						}
 					}
 				}
-			}
-		}
+			};
+			let _ = tx.send(res);
+		};
+
+		executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		rx.await.expect("Sender sends always a message; qed")
 	}
 
 	/// Subscription response type for substrate.
@@ -128,5 +140,24 @@ pub mod utils {
 	/// This function panics if the `Serialize` fails and is treated a bug.
 	pub fn to_sub_message(val: &impl Serialize) -> SubscriptionMessage {
 		SubscriptionMessage::from_json(val).expect("JSON serialization infallible; qed")
+	}
+
+	/// Spawn a subscription task and wait until it complete
+	pub async fn spawn_subscription_fut<R>(
+		executor: &SubscriptionTaskExecutor,
+		fut: impl Future<Output = SubscriptionResponse<R>> + Send + 'static,
+	) -> SubscriptionResponse<R>
+	where
+		R: Send + 'static,
+	{
+		let (tx, rx) = oneshot::channel();
+
+		let fut = async move {
+			_ = tx.send(fut.await);
+		};
+
+		executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+
+		rx.await.expect("Sender sends always a message; qed")
 	}
 }
