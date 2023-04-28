@@ -339,6 +339,10 @@ pub mod pallet {
 		Locked { who: T::AccountId, amount: T::Balance },
 		/// Some balance was unlocked.
 		Unlocked { who: T::AccountId, amount: T::Balance },
+		/// Some balance was frozen.
+		Frozen { who: T::AccountId, amount: T::Balance },
+		/// Some balance was thawed.
+		Thawed { who: T::AccountId, amount: T::Balance },
 	}
 
 	#[pallet::error]
@@ -524,7 +528,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call]
+	#[pallet::call(weight(<T as Config<I>>::WeightInfo))]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Transfer some liquid free balance to another account.
 		///
@@ -534,7 +538,6 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be `Signed` by the transactor.
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::transfer_allow_death())]
 		pub fn transfer_allow_death(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -596,7 +599,6 @@ pub mod pallet {
 		/// Exactly as `transfer_allow_death`, except the origin must be root and the source account
 		/// may be specified.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
 			origin: OriginFor<T>,
 			source: AccountIdLookupOf<T>,
@@ -617,7 +619,6 @@ pub mod pallet {
 		///
 		/// [`transfer_allow_death`]: struct.Pallet.html#method.transfer
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub fn transfer_keep_alive(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -645,7 +646,6 @@ pub mod pallet {
 		///   transfer everything except at least the existential deposit, which will guarantee to
 		///   keep the sender account alive (true).
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::transfer_all())]
 		pub fn transfer_all(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -672,7 +672,6 @@ pub mod pallet {
 		///
 		/// Can only be called by ROOT.
 		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::force_unreserve())]
 		pub fn force_unreserve(
 			origin: OriginFor<T>,
 			who: AccountIdLookupOf<T>,
@@ -786,7 +785,7 @@ pub mod pallet {
 				return false
 			}
 			a.flags.set_new_logic();
-			if !a.reserved.is_zero() || !a.frozen.is_zero() {
+			if !a.reserved.is_zero() && a.frozen.is_zero() {
 				if system::Pallet::<T>::providers(who) == 0 {
 					// Gah!! We have no provider refs :(
 					// This shouldn't practically happen, but we need a failsafe anyway: let's give
@@ -1086,7 +1085,10 @@ pub mod pallet {
 			who: &T::AccountId,
 			freezes: BoundedSlice<IdAmount<T::FreezeIdentifier, T::Balance>, T::MaxFreezes>,
 		) -> DispatchResult {
+			let mut prev_frozen = Zero::zero();
+			let mut after_frozen = Zero::zero();
 			let (_, maybe_dust) = Self::mutate_account(who, |b| {
+				prev_frozen = b.frozen;
 				b.frozen = Zero::zero();
 				for l in Locks::<T, I>::get(who).iter() {
 					b.frozen = b.frozen.max(l.amount);
@@ -1094,12 +1096,20 @@ pub mod pallet {
 				for l in freezes.iter() {
 					b.frozen = b.frozen.max(l.amount);
 				}
+				after_frozen = b.frozen;
 			})?;
 			debug_assert!(maybe_dust.is_none(), "Not altering main balance; qed");
 			if freezes.is_empty() {
 				Freezes::<T, I>::remove(who);
 			} else {
 				Freezes::<T, I>::insert(who, freezes);
+			}
+			if prev_frozen > after_frozen {
+				let amount = prev_frozen.saturating_sub(after_frozen);
+				Self::deposit_event(Event::Thawed { who: who.clone(), amount });
+			} else if after_frozen > prev_frozen {
+				let amount = after_frozen.saturating_sub(prev_frozen);
+				Self::deposit_event(Event::Frozen { who: who.clone(), amount });
 			}
 			Ok(())
 		}

@@ -30,3 +30,7 @@ macro_magic = { version = "0.3.3", features = ["proc_support"] }
 default = ["std"]
 std = []
 no-metadata-docs = []
+# Generate impl-trait for tuples with the given number of tuples. Will be needed as the number of
+# pallets in a runtime grows. Does increase the compile time!
+tuples-96 = []
+tuples-128 = []

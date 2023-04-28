@@ -36,7 +36,7 @@ pub struct InsertKeyCmd {
 	#[arg(long)]
 	suri: Option<String>,
 
-	/// Key type, examples: "gran", or "imon"
+	/// Key type, examples: "gran", or "imon".
 	#[arg(long)]
 	key_type: String,
 

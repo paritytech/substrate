@@ -217,6 +217,10 @@ pub mod pallet {
 
 		/// Origin allowed to set collective members
 		type SetMembersOrigin: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
+
+		/// The maximum weight of a dispatch call that can be proposed and executed.
+		#[pallet::constant]
+		type MaxProposalWeight: Get<Weight>;
 	}
 
 	#[pallet::genesis_config]
@@ -241,6 +245,10 @@ pub mod pallet {
 				members_set.len(),
 				self.members.len(),
 				"Members cannot contain duplicate accounts."
+			);
+			assert!(
+				self.members.len() <= T::MaxMembers::get() as usize,
+				"Members length cannot exceed MaxMembers.",
 			);
 
 			Pallet::<T, I>::initialize_members(&self.members)
@@ -667,6 +675,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<(u32, DispatchResultWithPostInfo), DispatchError> {
 		let proposal_len = proposal.encoded_size();
 		ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		ensure!(
+			proposal_weight.all_lte(T::MaxProposalWeight::get()),
+			Error::<T, I>::WrongProposalWeight
+		);
 
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
@@ -689,6 +702,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<(u32, u32), DispatchError> {
 		let proposal_len = proposal.encoded_size();
 		ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		ensure!(
+			proposal_weight.all_lte(T::MaxProposalWeight::get()),
+			Error::<T, I>::WrongProposalWeight
+		);
 
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
@@ -1093,6 +1111,8 @@ impl<T: Config<I>, I: 'static> InitializeMembers<T::AccountId> for Pallet<T, I> 
 	fn initialize_members(members: &[T::AccountId]) {
 		if !members.is_empty() {
 			assert!(<Members<T, I>>::get().is_empty(), "Members are already initialized!");
+			let mut members = members.to_vec();
+			members.sort();
 			<Members<T, I>>::put(members);
 		}
 	}

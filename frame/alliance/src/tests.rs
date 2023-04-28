@@ -629,3 +629,12 @@ fn remove_unscrupulous_items_works() {
 		assert_eq!(Alliance::unscrupulous_accounts(), Vec::<u64>::new());
 	});
 }
+
+#[test]
+fn weights_sane() {
+	let info = crate::Call::<Test>::join_alliance {}.get_dispatch_info();
+	assert_eq!(<() as crate::WeightInfo>::join_alliance(), info.weight);
+
+	let info = crate::Call::<Test>::nominate_ally { who: 10 }.get_dispatch_info();
+	assert_eq!(<() as crate::WeightInfo>::nominate_ally(), info.weight);
+}

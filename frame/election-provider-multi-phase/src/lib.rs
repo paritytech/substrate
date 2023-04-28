@@ -881,6 +881,11 @@ pub mod pallet {
 			// configure this pallet.
 			assert!(T::SignedMaxSubmissions::get() >= T::SignedMaxRefunds::get());
 		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
+			Self::do_try_state()
+		}
 	}
 
 	#[pallet::call]
@@ -1252,6 +1257,8 @@ pub mod pallet {
 	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<T::BlockNumber>, ValueQuery>;
 
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
+	///
+	/// Always sorted by score.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
 	pub type QueuedSolution<T: Config> =
@@ -1570,6 +1577,89 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+#[cfg(feature = "try-runtime")]
+impl<T: Config> Pallet<T> {
+	fn do_try_state() -> Result<(), &'static str> {
+		Self::try_state_snapshot()?;
+		Self::try_state_signed_submissions_map()?;
+		Self::try_state_phase_off()
+	}
+
+	// [`Snapshot`] state check. Invariants:
+	// - [`DesiredTargets`] exists if and only if [`Snapshot`] is present.
+	// - [`SnapshotMetadata`] exist if and only if [`Snapshot`] is present.
+	fn try_state_snapshot() -> Result<(), &'static str> {
+		if <Snapshot<T>>::exists() &&
+			<SnapshotMetadata<T>>::exists() &&
+			<DesiredTargets<T>>::exists()
+		{
+			Ok(())
+		} else if !<Snapshot<T>>::exists() &&
+			!<SnapshotMetadata<T>>::exists() &&
+			!<DesiredTargets<T>>::exists()
+		{
+			Ok(())
+		} else {
+			Err("If snapshot exists, metadata and desired targets should be set too. Otherwise, none should be set.")
+		}
+	}
+
+	// [`SignedSubmissionsMap`] state check. Invariants:
+	// - All [`SignedSubmissionIndices`] are present in [`SignedSubmissionsMap`], and no more;
+	// - [`SignedSubmissionNextIndex`] is not present in [`SignedSubmissionsMap`];
+	// - [`SignedSubmissionIndices`] is sorted by election score.
+	fn try_state_signed_submissions_map() -> Result<(), &'static str> {
+		let mut last_score: ElectionScore = Default::default();
+		let indices = <SignedSubmissionIndices<T>>::get();
+
+		for (i, indice) in indices.iter().enumerate() {
+			let submission = <SignedSubmissionsMap<T>>::get(indice.2);
+			if submission.is_none() {
+				return Err("All signed submissions indices must be part of the submissions map")
+			}
+
+			if i == 0 {
+				last_score = indice.0
+			} else {
+				if last_score.strict_threshold_better(indice.0, Perbill::zero()) {
+					return Err("Signed submission indices vector must be ordered by election score")
+				}
+				last_score = indice.0;
+			}
+		}
+
+		if <SignedSubmissionsMap<T>>::iter().nth(indices.len()).is_some() {
+			return Err("Signed submissions map length should be the same as the indices vec length")
+		}
+
+		match <SignedSubmissionNextIndex<T>>::get() {
+			0 => Ok(()),
+			next =>
+				if <SignedSubmissionsMap<T>>::get(next).is_some() {
+					return Err(
+						"The next submissions index should not be in the submissions maps already",
+					)
+				} else {
+					Ok(())
+				},
+		}
+	}
+
+	// [`Phase::Off`] state check. Invariants:
+	// - If phase is `Phase::Off`, [`Snapshot`] must be none.
+	fn try_state_phase_off() -> Result<(), &'static str> {
+		match Self::current_phase().is_off() {
+			false => Ok(()),
+			true =>
+				if <Snapshot<T>>::get().is_some() {
+					Err("Snapshot must be none when in Phase::Off")
+				} else {
+					Ok(())
+				},
+		}
+	}
+}
+
 impl<T: Config> ElectionProviderBase for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
@@ -1642,6 +1732,11 @@ mod feasibility_check {
 				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::SnapshotUnavailable
 			);
+
+			// kill also `SnapshotMetadata` and `DesiredTargets` for the storage state to be
+			// consistent for the try_state checks to pass.
+			<SnapshotMetadata<Runtime>>::kill();
+			<DesiredTargets<Runtime>>::kill();
 		})
 	}
 
