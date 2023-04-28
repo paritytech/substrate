@@ -214,19 +214,7 @@ benchmarks! {
 	on_initialize_per_trie_key {
 		let k in 0..1024;
 		let instance = Contract::<T>::with_storage(WasmModule::dummy(), k, T::Schedule::get().limits.payload_len)?;
-		instance.info()?.queue_trie_for_deletion()?;
-	}: {
-		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
-	}
-
-	#[pov_mode = Measured]
-	on_initialize_per_queue_item {
-		let q in 0..1024.min(T::DeletionQueueDepth::get());
-		for i in 0 .. q {
-			let instance = Contract::<T>::with_index(i, WasmModule::dummy(), vec![])?;
-			instance.info()?.queue_trie_for_deletion()?;
-			ContractInfoOf::<T>::remove(instance.account_id);
-		}
+		instance.info()?.queue_trie_for_deletion();
 	}: {
 		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
@@ -559,7 +547,7 @@ benchmarks! {
 	seal_gas_left {
 		let r in 0 .. API_BENCHMARK_RUNS;
 		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal0", "seal_gas_left", r
+			"seal1", "gas_left", r
 		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -616,9 +604,9 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_weight_to_fee",
-				params: vec![ValueType::I64, ValueType::I32, ValueType::I32],
+				module: "seal1",
+				name: "weight_to_fee",
+				params: vec![ValueType::I64, ValueType::I64, ValueType::I32, ValueType::I32],
 				return_type: None,
 			}],
 			data_segments: vec![DataSegment {
@@ -627,6 +615,7 @@ benchmarks! {
 			}],
 			call_body: Some(body::repeated(r, &[
 				Instruction::I64Const(500_000),
+				Instruction::I64Const(300_000),
 				Instruction::I32Const(4),
 				Instruction::I32Const(0),
 				Instruction::Call(0),
@@ -1596,15 +1585,25 @@ benchmarks! {
 		let callee_bytes = callees.iter().flat_map(|x| x.account_id.encode()).collect();
 		let value: BalanceOf<T> = 0u32.into();
 		let value_bytes = value.encode();
-		let value_len = value_bytes.len();
+		let value_len = BalanceOf::<T>::max_encoded_len() as u32;
+		// Set an own limit every 2nd call
+		let own_limit = (u32::MAX - 100).into();
+		let deposits = (0..r)
+			.map(|i| if i % 2 == 0 { 0u32.into() } else { own_limit } )
+			.collect::<Vec<BalanceOf<T>>>();
+		let deposits_bytes: Vec<u8> = deposits.iter().flat_map(|i| i.encode()).collect();
+		let deposits_len = deposits_bytes.len() as u32;
+		let deposit_len = value_len.clone();
+		let callee_offset = value_len + deposits_len;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_call",
+				module: "seal2",
+				name: "call",
 				params: vec![
 					ValueType::I32,
 					ValueType::I32,
+					ValueType::I64,
 					ValueType::I64,
 					ValueType::I32,
 					ValueType::I32,
@@ -1621,16 +1620,21 @@ benchmarks! {
 					value: value_bytes,
 				},
 				DataSegment {
-					offset: value_len as u32,
+					offset: value_len,
+					value: deposits_bytes,
+				},
+				DataSegment {
+					offset: callee_offset,
 					value: callee_bytes,
 				},
 			],
 			call_body: Some(body::repeated_dyn(r, vec![
-				Counter(value_len as u32, callee_len as u32), // callee_ptr
-				Regular(Instruction::I32Const(callee_len as i32)), // callee_len
-				Regular(Instruction::I64Const(0)), // gas
+				Regular(Instruction::I32Const(0)), // flags
+				Counter(callee_offset, callee_len as u32), // callee_ptr
+				Regular(Instruction::I64Const(0)), // ref_time weight
+				Regular(Instruction::I64Const(0)), // proof_size weight
+				Counter(value_len, deposit_len as u32), // deposit_limit_ptr
 				Regular(Instruction::I32Const(0)), // value_ptr
-				Regular(Instruction::I32Const(value_len as i32)), // value_len
 				Regular(Instruction::I32Const(0)), // input_data_ptr
 				Regular(Instruction::I32Const(0)), // input_data_len
 				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
@@ -1642,7 +1646,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, Some(BalanceOf::<T>::from(u32::MAX).into()), vec![])
 
 	// This is a slow call: We redeuce the number of runs.
 	#[pov_mode = Measured]
@@ -1754,17 +1758,17 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, bytes)
 
 	// We assume that every instantiate sends at least the minimum balance.
-	// This is a slow call: We redeuce the number of runs.
+	// This is a slow call: we reduce the number of runs.
 	#[pov_mode = Measured]
 	seal_instantiate {
-		let r in 0 .. API_BENCHMARK_RUNS / 2;
+		let r in 1 .. API_BENCHMARK_RUNS / 2;
 		let hashes = (0..r)
 			.map(|i| {
 				let code = WasmModule::<T>::from(ModuleDefinition {
 					memory: Some(ImportedMemory::max::<T>()),
 					call_body: Some(body::plain(vec![
-						// we need to add this in order to make contracts unique
-						// so that they can be deployed from the same sender
+						// We need to add this in order to make contracts unique,
+						// so that they can be deployed from the same sender.
 						Instruction::I32Const(i as i32),
 						Instruction::Drop,
 						Instruction::End,
@@ -1777,27 +1781,24 @@ benchmarks! {
 			.collect::<Result<Vec<_>, &'static str>>()?;
 		let hash_len = hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
 		let hashes_bytes = hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
-		let hashes_len = hashes_bytes.len();
+		let hashes_len = &hashes_bytes.len();
 		let value = Pallet::<T>::min_balance();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
-		let value_len = value_bytes.len();
+		let value_len = BalanceOf::<T>::max_encoded_len();
 		let addr_len = T::AccountId::max_encoded_len();
-
-		// offsets where to place static data in contract memory
-		let value_offset = 0;
-		let hashes_offset = value_offset + value_len;
+		// Offsets where to place static data in contract memory.
+		let hashes_offset = value_len;
 		let addr_len_offset = hashes_offset + hashes_len;
 		let addr_offset = addr_len_offset + addr_len;
-
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_instantiate",
+				module: "seal2",
+				name: "instantiate",
 				params: vec![
 					ValueType::I32,
-					ValueType::I32,
+					ValueType::I64,
 					ValueType::I64,
 					ValueType::I32,
 					ValueType::I32,
@@ -1814,7 +1815,7 @@ benchmarks! {
 			}],
 			data_segments: vec![
 				DataSegment {
-					offset: value_offset as u32,
+					offset: 0,
 					value: value_bytes,
 				},
 				DataSegment {
@@ -1828,10 +1829,10 @@ benchmarks! {
 			],
 			call_body: Some(body::repeated_dyn(r, vec![
 				Counter(hashes_offset as u32, hash_len as u32), // code_hash_ptr
-				Regular(Instruction::I32Const(hash_len as i32)), // code_hash_len
-				Regular(Instruction::I64Const(0)), // gas
-				Regular(Instruction::I32Const(value_offset as i32)), // value_ptr
-				Regular(Instruction::I32Const(value_len as i32)), // value_len
+				Regular(Instruction::I64Const(0)), // ref_time weight
+				Regular(Instruction::I64Const(0)), // proof_size weight
+				Regular(Instruction::I32Const(SENTINEL as i32)), // deposit limit ptr: use parent's limit
+				Regular(Instruction::I32Const(0)), // value_ptr
 				Regular(Instruction::I32Const(0)), // input_data_ptr
 				Regular(Instruction::I32Const(0)), // input_data_len
 				Regular(Instruction::I32Const(addr_offset as i32)), // address_ptr
@@ -1839,7 +1840,7 @@ benchmarks! {
 				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
 				Regular(Instruction::I32Const(0)), // output_len_ptr
 				Regular(Instruction::I32Const(0)), // salt_ptr
-				Regular(Instruction::I32Const(0)), // salt_ptr_len
+				Regular(Instruction::I32Const(0)), // salt_len_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -2020,9 +2021,114 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	// `n`: Message input length to verify in bytes.
+	#[pov_mode = Measured]
+	seal_sr25519_verify_per_byte {
+		let n in 0 .. T::MaxCodeLen::get() - 255; // need some buffer so the code size does not
+												  // exceed the max code size.
+
+		let message = (0..n).zip((32u8..127u8).cycle()).map(|(_, c)| c).collect::<Vec<_>>();
+		let message_len = message.len() as i32;
+
+		let key_type = sp_core::crypto::KeyTypeId(*b"code");
+		let pub_key = sp_io::crypto::sr25519_generate(key_type, None);
+		let sig = sp_io::crypto::sr25519_sign(key_type, &pub_key, &message).expect("Generates signature");
+		let sig = AsRef::<[u8; 64]>::as_ref(&sig).to_vec();
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "sr25519_verify",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: sig,
+				},
+				DataSegment {
+					offset: 64,
+					value: pub_key.to_vec(),
+				},
+				DataSegment {
+					offset: 96,
+					value: message,
+				},
+			],
+			call_body: Some(body::plain(vec![
+				Instruction::I32Const(0), // signature_ptr
+				Instruction::I32Const(64), // pub_key_ptr
+				Instruction::I32Const(message_len), // message_len
+				Instruction::I32Const(96), // message_ptr
+				Instruction::Call(0),
+				Instruction::Drop,
+				Instruction::End,
+			])),
+			.. Default::default()
+		});
+
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
 	// Only calling the function itself with valid arguments.
 	// It generates different private keys and signatures for the message "Hello world".
-	// This is a slow call: We redeuce the number of runs.
+	// This is a slow call: We reduce the number of runs.
+	#[pov_mode = Measured]
+	seal_sr25519_verify {
+		let r in 0 .. API_BENCHMARK_RUNS / 10;
+
+		let message = b"Hello world".to_vec();
+		let message_len = message.len() as i32;
+		let key_type = sp_core::crypto::KeyTypeId(*b"code");
+		let sig_params = (0..r)
+			.map(|i| {
+				let pub_key = sp_io::crypto::sr25519_generate(key_type, None);
+				let sig = sp_io::crypto::sr25519_sign(key_type, &pub_key, &message).expect("Generates signature");
+				let data: [u8; 96] = [AsRef::<[u8]>::as_ref(&sig), AsRef::<[u8]>::as_ref(&pub_key)].concat().try_into().unwrap();
+				data
+			})
+			.flatten()
+			.collect::<Vec<_>>();
+		let sig_params_len = sig_params.len() as i32;
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "sr25519_verify",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: sig_params
+				},
+				DataSegment {
+					offset: sig_params_len as u32,
+					value: message,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r, vec![
+				Counter(0, 96), // signature_ptr
+				Counter(64, 96), // pub_key_ptr
+				Regular(Instruction::I32Const(message_len)), // message_len
+				Regular(Instruction::I32Const(sig_params_len)), // message_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	// Only calling the function itself with valid arguments.
+	// It generates different private keys and signatures for the message "Hello world".
+	// This is a slow call: We reduce the number of runs.
 	#[pov_mode = Measured]
 	seal_ecdsa_recover {
 		let r in 0 .. API_BENCHMARK_RUNS / 10;
@@ -3020,16 +3126,12 @@ benchmarks! {
 	print_schedule {
 		#[cfg(feature = "std")]
 		{
-			let weight_limit = T::DeletionWeightLimit::get();
-			let max_queue_depth = T::DeletionQueueDepth::get() as usize;
-			let empty_queue_throughput = ContractInfo::<T>::deletion_budget(0, weight_limit);
-			let full_queue_throughput = ContractInfo::<T>::deletion_budget(max_queue_depth, weight_limit);
+			let max_weight = <T as frame_system::Config>::BlockWeights::get().max_block;
+			let (weight_per_key, key_budget) = ContractInfo::<T>::deletion_budget(max_weight);
 			println!("{:#?}", Schedule::<T>::default());
 			println!("###############################################");
-			println!("Lazy deletion weight per key: {}", empty_queue_throughput.0);
-			println!("Lazy deletion throughput per block (empty queue, full queue): {}, {}",
-				empty_queue_throughput.1, full_queue_throughput.1,
-			);
+			println!("Lazy deletion weight per key: {weight_per_key}");
+			println!("Lazy deletion throughput per block: {key_budget}");
 		}
 		#[cfg(not(feature = "std"))]
 		Err("Run this bench with a native runtime in order to see the schedule.")?;

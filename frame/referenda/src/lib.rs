@@ -874,22 +874,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let when = (when.saturating_add(alarm_interval.saturating_sub(One::one())) /
 			alarm_interval)
 			.saturating_mul(alarm_interval);
-		let maybe_result = T::Scheduler::schedule(
+		let result = T::Scheduler::schedule(
 			DispatchTime::At(when),
 			None,
 			128u8,
 			frame_system::RawOrigin::Root.into(),
 			call,
-		)
-		.ok()
-		.map(|x| (when, x));
-		debug_assert!(
-			maybe_result.is_some(),
-			"Unable to schedule a new alarm at #{:?} (now: #{:?})?!",
-			when,
-			frame_system::Pallet::<T>::block_number()
 		);
-		maybe_result
+		debug_assert!(
+			result.is_ok(),
+			"Unable to schedule a new alarm at #{:?} (now: #{:?}), scheduler error: `{:?}`",
+			when,
+			frame_system::Pallet::<T>::block_number(),
+			result.unwrap_err(),
+		);
+		result.ok().map(|x| (when, x))
 	}
 
 	/// Mutate a referendum's `status` into the correct deciding state.

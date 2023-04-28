@@ -17,7 +17,10 @@
 //! Helper for handling (i.e. answering) block requests from a remote peer via the
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
-use crate::schema::v1::{block_request::FromBlock, BlockResponse, Direction};
+use crate::{
+	schema::v1::{block_request::FromBlock, BlockResponse, Direction},
+	MAX_BLOCKS_IN_RESPONSE,
+};
 
 use codec::{Decode, Encode};
 use futures::{
@@ -50,7 +53,6 @@ use std::{
 };
 
 const LOG_TARGET: &str = "sync";
-const MAX_BLOCKS_IN_RESPONSE: usize = 128;
 const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 const MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER: usize = 2;
 

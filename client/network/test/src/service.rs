@@ -177,6 +177,7 @@ impl TestNetworkBuilder {
 
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			self.chain_sync_network.unwrap_or(NetworkServiceProvider::new());
+		let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 
 		let (engine, chain_sync_service, block_announce_config) = SyncingEngine::new(
 			Roles::from(&config::Role::Full),
@@ -192,6 +193,7 @@ impl TestNetworkBuilder {
 			block_request_protocol_config.name.clone(),
 			state_request_protocol_config.name.clone(),
 			None,
+			rx,
 		)
 		.unwrap();
 		let mut link = self.link.unwrap_or(Box::new(chain_sync_service.clone()));
@@ -217,6 +219,7 @@ impl TestNetworkBuilder {
 				light_client_request_protocol_config,
 			]
 			.to_vec(),
+			tx,
 		})
 		.unwrap();
 
@@ -234,8 +237,7 @@ impl TestNetworkBuilder {
 				tokio::time::sleep(std::time::Duration::from_millis(250)).await;
 			}
 		});
-		let stream = worker.service().event_stream("syncing");
-		tokio::spawn(engine.run(stream));
+		tokio::spawn(engine.run());
 
 		TestNetwork::new(worker)
 	}

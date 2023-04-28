@@ -5824,4 +5824,27 @@ mod staking_interface {
 			));
 		});
 	}
+
+	#[test]
+	fn status() {
+		ExtBuilder::default().build_and_execute(|| {
+			// stash of a validator is identified as a validator
+			assert_eq!(Staking::status(&11).unwrap(), StakerStatus::Validator);
+			// .. but not the controller.
+			assert!(Staking::status(&10).is_err());
+
+			// stash of nominator is identified as a nominator
+			assert_eq!(Staking::status(&101).unwrap(), StakerStatus::Nominator(vec![11, 21]));
+			// .. but not the controller.
+			assert!(Staking::status(&100).is_err());
+
+			// stash of chilled is identified as a chilled
+			assert_eq!(Staking::status(&41).unwrap(), StakerStatus::Idle);
+			// .. but not the controller.
+			assert!(Staking::status(&40).is_err());
+
+			// random other account.
+			assert!(Staking::status(&42).is_err());
+		})
+	}
 }

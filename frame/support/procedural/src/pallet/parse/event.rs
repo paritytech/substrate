@@ -104,7 +104,7 @@ impl EventDef {
 		let item = if let syn::Item::Enum(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::event, expected item enum"))
+			return Err(syn::Error::new(item.span(), "Invalid pallet::event, expected enum item"))
 		};
 
 		let event_attrs: Vec<PalletEventDepositAttr> =
