@@ -207,6 +207,12 @@ pub mod pallet {
 			use super::*;
 			use sp_runtime::traits::IdentityLookup;
 
+			/// Provides a viable default config that can be used with
+			/// [`derive_impl`](`frame_support::derive_impl`) to derive a testing pallet config
+			/// based on this one.
+			///
+			/// See `Test` in the "basic" example pallet's `test.rs` for an example of a
+			/// downstream user of this particular `TestDefaultConfig`
 			pub struct TestDefaultConfig;
 
 			#[register_default_impl(TestDefaultConfig)]
