@@ -472,7 +472,7 @@ benchmarks! {
 	set_controller {
 		let (stash, _) = create_stash_controller_inc::<T>(USER_SEED, 100, Default::default())?;
 		whitelist_account!(stash);
-	}: _(RawOrigin::Signed(stash))
+	}: _(RawOrigin::Signed(stash.clone()))
 	verify {
 		assert!(Ledger::<T>::contains_key(&stash));
 	}
