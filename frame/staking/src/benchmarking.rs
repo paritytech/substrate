@@ -470,13 +470,11 @@ benchmarks! {
 	}
 
 	set_controller {
-		let (stash, _) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
-		let new_controller = create_funded_user::<T>("new_controller", USER_SEED, 100);
-		let new_controller_lookup = T::Lookup::unlookup(new_controller.clone());
+		let (stash, _) = create_stash_controller_inc::<T>(USER_SEED, 100, Default::default())?;
 		whitelist_account!(stash);
-	}: _(RawOrigin::Signed(stash), new_controller_lookup)
+	}: _(RawOrigin::Signed(stash))
 	verify {
-		assert!(Ledger::<T>::contains_key(&new_controller));
+		assert!(Ledger::<T>::contains_key(&stash));
 	}
 
 	set_validator_count {

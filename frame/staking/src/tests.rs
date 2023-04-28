@@ -231,15 +231,15 @@ fn basic_setup_works() {
 #[test]
 fn change_controller_works() {
 	ExtBuilder::default().build_and_execute(|| {
-		// 10 and 11 are bonded as stash controller.
+		// 10 and 11 are bonded as controller and stash respectively.
 		assert_eq!(Staking::bonded(&11), Some(10));
 
 		// 10 can control 11 who is initially a validator.
 		assert_ok!(Staking::chill(RuntimeOrigin::signed(10)));
 
 		// change controller
-		assert_ok!(Staking::set_controller(RuntimeOrigin::signed(11), 5));
-		assert_eq!(Staking::bonded(&11), Some(5));
+		assert_ok!(Staking::set_controller(RuntimeOrigin::signed(11)));
+		assert_eq!(Staking::bonded(&11), Some(11));
 		mock::start_active_era(1);
 
 		// 10 is no longer in control.
@@ -247,7 +247,7 @@ fn change_controller_works() {
 			Staking::validate(RuntimeOrigin::signed(10), ValidatorPrefs::default()),
 			Error::<Test>::NotController,
 		);
-		assert_ok!(Staking::validate(RuntimeOrigin::signed(5), ValidatorPrefs::default()));
+		assert_ok!(Staking::validate(RuntimeOrigin::signed(11), ValidatorPrefs::default()));
 	})
 }
 

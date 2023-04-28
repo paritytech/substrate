@@ -89,6 +89,26 @@ pub fn create_stash_controller<T: Config>(
 	Ok((stash, controller))
 }
 
+/// Create a unique stash and controller pair.
+pub fn create_stash_controller_inc<T: Config>(
+	n: u32,
+	balance_factor: u32,
+	destination: RewardDestination<T::AccountId>,
+) -> Result<(T::AccountId, T::AccountId), &'static str> {
+	let stash = create_funded_user::<T>("stash", n, balance_factor);
+	let controller = create_funded_user::<T>("controller", n + 1, balance_factor);
+
+	let controller_lookup = T::Lookup::unlookup(controller.clone());
+	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
+	Staking::<T>::bond(
+		RawOrigin::Signed(stash.clone()).into(),
+		controller_lookup,
+		amount,
+		destination,
+	)?;
+	Ok((stash, controller))
+}
+
 /// Create a stash and controller pair with fixed balance.
 pub fn create_stash_controller_with_balance<T: Config>(
 	n: u32,

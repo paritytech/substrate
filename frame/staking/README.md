@@ -50,8 +50,9 @@ used.
 
 An account pair can become bonded using the [`bond`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.bond) call.
 
-Stash accounts can change their associated controller using the
-[`set_controller`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.set_controller) call.
+Stash accounts can update their associated controller back to their stash account using the
+[`set_controller`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.set_controller)
+call.
 
 There are three possible roles that any staked account pair can be in: `Validator`, `Nominator`
 and `Idle` (defined in [`StakerStatus`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.StakerStatus.html)). There are three
