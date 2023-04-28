@@ -25,7 +25,7 @@
 mod error;
 mod freeing_bump;
 
-pub use error::Error;
+pub use error::PoisonedError;
 pub use freeing_bump::{AllocationStats, FreeingBumpHeapAllocator};
 
 /// The size of one wasm page in bytes.

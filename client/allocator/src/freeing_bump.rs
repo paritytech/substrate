@@ -67,12 +67,14 @@
 //!   wasted. This is more pronounced (in terms of absolute heap amounts) with larger allocation
 //!   sizes.
 
-use crate::{Error, Memory, MAX_WASM_PAGES, PAGE_SIZE};
+use crate::{
+	error::{Error, PoisonedError, RecoverableError},
+	Memory, MAX_WASM_PAGES, PAGE_SIZE,
+};
 pub use sp_core::MAX_POSSIBLE_ALLOCATION;
 use sp_wasm_interface::{Pointer, WordSize};
 use std::{
 	cmp::{max, min},
-	mem,
 	ops::{Index, IndexMut, Range},
 };
 
@@ -86,9 +88,14 @@ const ALIGNMENT: u32 = 8;
 // to which it belongs.
 const HEADER_SIZE: u32 = 8;
 
-/// Create an allocator error.
-fn error(msg: &'static str) -> Error {
-	Error::Other(msg)
+/// Create a custom recoverable allocator error.
+fn recoverable_error(msg: &'static str) -> Error {
+	Error::Recoverable(RecoverableError::Other(msg))
+}
+
+/// Create a custom poisoned allocator error.
+fn poisoned_error(msg: &'static str) -> Error {
+	Error::Poisoned(PoisonedError::Other(msg))
 }
 
 const LOG_TARGET: &str = "wasm-heap";
@@ -130,7 +137,7 @@ impl Order {
 		if order < N_ORDERS as u32 {
 			Ok(Self(order))
 		} else {
-			Err(error("invalid order"))
+			Err(recoverable_error("invalid order"))
 		}
 	}
 
@@ -142,7 +149,7 @@ impl Order {
 	fn from_size(size: u32) -> Result<Self, Error> {
 		let clamped_size = if size > MAX_POSSIBLE_ALLOCATION {
 			log::warn!(target: LOG_TARGET, "going to fail due to allocating {:?}", size);
-			return Err(Error::RequestedAllocationTooLarge)
+			return Err(RecoverableError::RequestedAllocationTooLarge.into())
 		} else if size < MIN_POSSIBLE_ALLOCATION {
 			MIN_POSSIBLE_ALLOCATION
 		} else {
@@ -409,12 +416,17 @@ impl FreeingBumpHeapAllocator {
 		&mut self,
 		mem: &mut impl Memory,
 		size: WordSize,
-	) -> Result<Pointer<u8>, Error> {
-		if self.poisoned {
-			return Err(error("the allocator has been poisoned"))
+	) -> Result<Pointer<u8>, PoisonedError> {
+		match self.do_allocate(mem, size) {
+			Ok(ptr) => Ok(ptr),
+			Err(e) => e.recover_or_poison(Pointer::new(0), &mut self.poisoned),
 		}
+	}
 
-		let bomb = PoisonBomb { poisoned: &mut self.poisoned };
+	fn do_allocate(&mut self, mem: &mut impl Memory, size: WordSize) -> Result<Pointer<u8>, Error> {
+		if self.poisoned {
+			return Err(poisoned_error("the allocator has been poisoned"))
+		}
 
 		Self::observe_memory_size(&mut self.last_observed_memory_size, mem)?;
 		let order = Order::from_size(size)?;
@@ -424,13 +436,13 @@ impl FreeingBumpHeapAllocator {
 				if (u64::from(header_ptr) + u64::from(order.size()) + u64::from(HEADER_SIZE)) >
 					mem.size()
 				{
-					return Err(error("Invalid header pointer detected"))
+					return Err(poisoned_error("Invalid header pointer detected"))
 				}
 
 				// Remove this header from the free list.
 				let next_free = Header::read_from(mem, header_ptr)?
 					.into_free()
-					.ok_or_else(|| error("free list points to a occupied header"))?;
+					.ok_or_else(|| poisoned_error("free list points to a occupied header"))?;
 				self.free_lists[order] = next_free;
 
 				header_ptr
@@ -451,8 +463,6 @@ impl FreeingBumpHeapAllocator {
 		self.stats.address_space_used = self.bumper - self.original_heap_base;
 
 		log::trace!(target: LOG_TARGET, "after allocation: {:?}", self.stats);
-
-		bomb.disarm();
 		Ok(Pointer::new(header_ptr + HEADER_SIZE))
 	}
 
@@ -467,36 +477,42 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `ptr` - pointer to the allocated chunk
-	pub fn deallocate(&mut self, mem: &mut impl Memory, ptr: Pointer<u8>) -> Result<(), Error> {
-		if self.poisoned {
-			return Err(error("the allocator has been poisoned"))
+	pub fn deallocate(
+		&mut self,
+		mem: &mut impl Memory,
+		ptr: Pointer<u8>,
+	) -> Result<(), PoisonedError> {
+		match self.do_deallocate(mem, ptr) {
+			Ok(_) => Ok(()),
+			Err(e) => e.recover_or_poison((), &mut self.poisoned),
 		}
+	}
 
-		let bomb = PoisonBomb { poisoned: &mut self.poisoned };
+	fn do_deallocate(&mut self, mem: &mut impl Memory, ptr: Pointer<u8>) -> Result<(), Error> {
+		if self.poisoned {
+			return Err(poisoned_error("the allocator has been poisoned"))
+		}
 
 		Self::observe_memory_size(&mut self.last_observed_memory_size, mem)?;
 
 		let header_ptr = u32::from(ptr)
 			.checked_sub(HEADER_SIZE)
-			.ok_or_else(|| error("Invalid pointer for deallocation"))?;
+			.ok_or_else(|| poisoned_error("Invalid pointer for deallocation"))?;
 
 		let order = Header::read_from(mem, header_ptr)?
 			.into_occupied()
-			.ok_or_else(|| error("the allocation points to an empty header"))?;
+			.ok_or_else(|| poisoned_error("the allocation points to an empty header"))?;
 
 		// Update the just freed header and knit it back to the free list.
 		let prev_head = self.free_lists.replace(order, Link::Ptr(header_ptr));
 		Header::Free(prev_head).write_into(mem, header_ptr)?;
 
-		self.stats.bytes_allocated = self
-			.stats
-			.bytes_allocated
-			.checked_sub(order.size() + HEADER_SIZE)
-			.ok_or_else(|| error("underflow of the currently allocated bytes count"))?;
+		self.stats.bytes_allocated =
+			self.stats.bytes_allocated.checked_sub(order.size() + HEADER_SIZE).ok_or_else(
+				|| poisoned_error("underflow of the currently allocated bytes count"),
+			)?;
 
 		log::trace!("after deallocation: {:?}", self.stats);
-
-		bomb.disarm();
 		Ok(())
 	}
 
@@ -513,8 +529,8 @@ impl FreeingBumpHeapAllocator {
 		let required_size = u64::from(*bumper) + u64::from(size);
 
 		if required_size > memory.size() {
-			let required_pages =
-				pages_from_size(required_size).ok_or_else(|| Error::AllocatorOutOfSpace)?;
+			let required_pages = pages_from_size(required_size)
+				.ok_or_else(|| Error::Recoverable(RecoverableError::AllocatorOutOfSpace))?;
 
 			let current_pages = memory.pages();
 			let max_pages = memory.max_pages().unwrap_or(MAX_WASM_PAGES);
@@ -523,20 +539,20 @@ impl FreeingBumpHeapAllocator {
 				"current pages {current_pages} < required pages {required_pages}"
 			);
 
-			if current_pages >= max_pages {
+			if current_pages > max_pages {
 				log::debug!(
 					target: LOG_TARGET,
 					"Wasm pages ({current_pages}) are already at the maximum.",
 				);
 
-				return Err(Error::AllocatorOutOfSpace)
+				return Err(PoisonedError::PagesLimitExceeded.into())
 			} else if required_pages > max_pages {
 				log::debug!(
 					target: LOG_TARGET,
 					"Failed to grow memory from {current_pages} pages to at least {required_pages}\
 						 pages due to the maximum limit of {max_pages} pages",
 				);
-				return Err(Error::AllocatorOutOfSpace)
+				return Err(RecoverableError::AllocatorOutOfSpace.into())
 			}
 
 			// Ideally we want to double our current number of pages,
@@ -551,7 +567,7 @@ impl FreeingBumpHeapAllocator {
 					"Failed to grow memory from {current_pages} pages to {next_pages} pages",
 				);
 
-				return Err(Error::AllocatorOutOfSpace)
+				return Err(RecoverableError::AllocatorOutOfSpace.into())
 			}
 
 			debug_assert_eq!(memory.pages(), next_pages, "Number of pages should have increased!");
@@ -567,7 +583,7 @@ impl FreeingBumpHeapAllocator {
 		mem: &mut impl Memory,
 	) -> Result<(), Error> {
 		if mem.size() < *last_observed_memory_size {
-			return Err(Error::MemoryShrinked)
+			return Err(PoisonedError::MemoryShrinked.into())
 		}
 		*last_observed_memory_size = mem.size();
 		Ok(())
@@ -586,8 +602,8 @@ trait MemoryExt: Memory {
 	/// bounds.
 	fn read_le_u64(&self, ptr: u32) -> Result<u64, Error> {
 		self.with_access(|memory| {
-			let range =
-				heap_range(ptr, 8, memory.len()).ok_or_else(|| error("read out of heap bounds"))?;
+			let range = heap_range(ptr, 8, memory.len())
+				.ok_or_else(|| poisoned_error("read out of heap bounds"))?;
 			let bytes = memory[range]
 				.try_into()
 				.expect("[u8] slice of length 8 must be convertible to [u8; 8]");
@@ -600,7 +616,7 @@ trait MemoryExt: Memory {
 	fn write_le_u64(&mut self, ptr: u32, val: u64) -> Result<(), Error> {
 		self.with_access_mut(|memory| {
 			let range = heap_range(ptr, 8, memory.len())
-				.ok_or_else(|| error("write out of heap bounds"))?;
+				.ok_or_else(|| poisoned_error("write out of heap bounds"))?;
 			let bytes = val.to_le_bytes();
 			memory[range].copy_from_slice(&bytes[..]);
 			Ok(())
@@ -624,23 +640,6 @@ fn heap_range(offset: u32, length: u32, heap_len: usize) -> Option<Range<usize>>
 		Some(start..end)
 	} else {
 		None
-	}
-}
-
-/// A guard that will raise the poisoned flag on drop unless disarmed.
-struct PoisonBomb<'a> {
-	poisoned: &'a mut bool,
-}
-
-impl<'a> PoisonBomb<'a> {
-	fn disarm(self) {
-		mem::forget(self)
-	}
-}
-
-impl<'a> Drop for PoisonBomb<'a> {
-	fn drop(&mut self) {
-		*self.poisoned = true;
 	}
 }
 
@@ -842,7 +841,7 @@ mod tests {
 		let ptr = heap.allocate(&mut mem, PAGE_SIZE - 13);
 
 		// then
-		assert_eq!(Error::AllocatorOutOfSpace, ptr.unwrap_err());
+		assert_eq!(Pointer::new(0), ptr.unwrap());
 	}
 
 	#[test]
@@ -859,10 +858,7 @@ mod tests {
 
 		// then
 		// there is no room for another half page incl. its 8 byte prefix
-		match ptr2.unwrap_err() {
-			Error::AllocatorOutOfSpace => {},
-			e => panic!("Expected allocator out of space error, got: {:?}", e),
-		}
+		assert_eq!(Pointer::new(0), ptr2.unwrap());
 	}
 
 	#[test]
@@ -888,7 +884,7 @@ mod tests {
 		let ptr = heap.allocate(&mut mem, MAX_POSSIBLE_ALLOCATION + 1);
 
 		// then
-		assert_eq!(Error::RequestedAllocationTooLarge, ptr.unwrap_err());
+		assert_eq!(Pointer::new(0), ptr.unwrap());
 	}
 
 	#[test]
@@ -925,7 +921,7 @@ mod tests {
 		let ptr = heap.allocate(&mut mem, 8);
 
 		// then
-		assert_eq!(Error::AllocatorOutOfSpace, ptr.unwrap_err());
+		assert_eq!(Pointer::new(0), ptr.unwrap());
 	}
 
 	#[test]
@@ -1042,7 +1038,7 @@ mod tests {
 	}
 
 	#[test]
-	fn poison_oom() {
+	fn recoverable_oom() {
 		// given
 		let mut mem = MemoryInstance::with_pages(1);
 		mem.set_max_wasm_pages(1);
@@ -1050,12 +1046,11 @@ mod tests {
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
 		// when
-		let alloc_ptr = heap.allocate(&mut mem, PAGE_SIZE / 2).unwrap();
-		assert_eq!(Error::AllocatorOutOfSpace, heap.allocate(&mut mem, PAGE_SIZE).unwrap_err());
+		heap.allocate(&mut mem, PAGE_SIZE / 2).unwrap();
+		assert_eq!(Pointer::new(0), heap.allocate(&mut mem, PAGE_SIZE).unwrap());
 
 		// then
-		assert!(heap.poisoned);
-		assert!(heap.deallocate(&mut mem, alloc_ptr).is_err());
+		assert!(!heap.poisoned);
 	}
 
 	#[test]
@@ -1090,7 +1085,7 @@ mod tests {
 		mem.data.truncate(PAGE_SIZE as usize);
 
 		match heap.allocate(&mut mem, PAGE_SIZE / 2).unwrap_err() {
-			Error::MemoryShrinked => (),
+			PoisonedError::MemoryShrinked => (),
 			_ => panic!(),
 		}
 	}

@@ -15,19 +15,62 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// The error type used by the allocators.
+/// Error indicating that the state of the allocator is corrupt.
 #[derive(thiserror::Error, Debug, PartialEq)]
-pub enum Error {
+pub enum PoisonedError {
+	/// The client passed a memory instance which is smaller than previously observed.
+	#[error("Shrinking of the underlying memory is observed")]
+	MemoryShrinked,
+	/// More pages than permitted were allocated.
+	#[error("The pages limit was already exceeded")]
+	PagesLimitExceeded,
+	/// Some other error occurred.
+	#[error("Other: {0}")]
+	Other(&'static str),
+}
+
+#[derive(thiserror::Error, Debug, PartialEq)]
+pub enum RecoverableError {
 	/// Someone tried to allocate more memory than the allowed maximum per allocation.
 	#[error("Requested allocation size is too large")]
 	RequestedAllocationTooLarge,
 	/// Allocator run out of space.
 	#[error("Allocator ran out of space")]
 	AllocatorOutOfSpace,
-	/// The client passed a memory instance which is smaller than previously observed.
-	#[error("Shrinking of the underlying memory is observed")]
-	MemoryShrinked,
 	/// Some other error occurred.
 	#[error("Other: {0}")]
 	Other(&'static str),
+}
+
+/// The error type used by the allocators.
+#[derive(thiserror::Error, Debug, PartialEq)]
+pub(crate) enum Error {
+	#[error("Poisoned error: {0}")]
+	Poisoned(PoisonedError),
+	#[error("Recoverable error: {0}")]
+	Recoverable(RecoverableError),
+}
+
+impl Error {
+	/// Check if the error is poisoned.
+	pub fn recover_or_poison<T>(self, default: T, poisoned: &mut bool) -> Result<T, PoisonedError> {
+		if let Error::Poisoned(e) = self {
+			*poisoned = true;
+			return Err(e)
+		}
+
+		Ok(default)
+	}
+}
+
+impl From<PoisonedError> for Error {
+	fn from(value: PoisonedError) -> Self {
+		Error::Poisoned(value)
+	}
+}
+
+impl From<RecoverableError> for Error {
+	fn from(value: RecoverableError) -> Self {
+		Error::Recoverable(value)
+	}
 }

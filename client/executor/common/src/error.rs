@@ -67,7 +67,7 @@ pub enum Error {
 	Other(String),
 
 	#[error(transparent)]
-	Allocator(#[from] sc_allocator::Error),
+	Allocator(#[from] sc_allocator::PoisonedError),
 
 	#[error("Host function {0} execution failed with: {1}")]
 	FunctionExecution(String, String),
