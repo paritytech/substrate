@@ -196,7 +196,6 @@ pub mod pallet {
 	///
 	/// Safe-mode is automatically exited when the current block number exceeds this value.
 	#[pallet::storage]
-	#[pallet::getter(fn active_until)]
 	pub type EnteredUntil<T: Config> = StorageValue<_, T::BlockNumber, OptionQuery>;
 
 	/// Holds the reserve that was taken from an account at a specific block number.

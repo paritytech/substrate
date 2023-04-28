@@ -99,7 +99,6 @@ pub mod pallet {
 
 	/// The set of calls that are explicitly paused.
 	#[pallet::storage]
-	#[pallet::getter(fn paused_calls)]
 	pub type PausedCalls<T: Config> =
 		StorageMap<_, Blake2_128Concat, FullNameOf<T>, (), OptionQuery>;
 
