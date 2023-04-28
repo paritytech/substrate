@@ -217,23 +217,13 @@ test-linux-stable:
     # node-cli is excluded until https://github.com/paritytech/substrate/issues/11321 fixed
     - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
     - time cargo nextest run --workspace
-<<<<<<< HEAD
-                             --locked
-                             --release
-                             --verbose
-                             --features runtime-benchmarks,try-runtime
-                             --manifest-path ./bin/node/cli/Cargo.toml
-                             --exclude node-cli
-                             --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
-=======
       --locked
       --release
       --verbose
-      --features runtime-benchmarks
+      --features runtime-benchmarks,try-runtime
       --manifest-path ./bin/node/cli/Cargo.toml
       --exclude node-cli
       --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
->>>>>>> origin/master
     # we need to update cache only from one job
     - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
 
