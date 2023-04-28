@@ -45,13 +45,7 @@ pub fn expand_config(def: &mut Def) -> TokenStream {
 	}
 
 	if let Some(trait_items) = &config.default_sub_trait {
-		// get reference to frame_support
-		let support = match generate_crate_access_2018("frame-support") {
-			Ok(krate) => krate,
-			Err(err) => return err.to_compile_error(),
-		};
 		quote!(
-			#[#support::macro_magic::export_tokens]
 			pub trait DefaultConfig {
 				#(#trait_items)*
 			}
