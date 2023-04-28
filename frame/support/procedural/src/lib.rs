@@ -1015,7 +1015,7 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 /// ## Example
 ///
 /// ```ignore
-/// pub struct ExampleTestDefaultConfig {}
+/// pub struct ExampleTestDefaultConfig;
 ///
 /// #[register_default_impl(ExampleTestDefaultConfig)]
 /// impl DefaultConfig for ExampleTestDefaultConfig {
