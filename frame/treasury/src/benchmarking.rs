@@ -125,7 +125,7 @@ benchmarks_instance_pallet! {
 	}
 	verify {
 		if origin.is_ok() {
-			assert_last_event::<T, I>(Event::PaymentQueued{ payment_index: 0, asset_kind, amount: value, beneficiary }.into())
+			assert_last_event::<T, I>(Event::PaymentQueued{ pending_payment_index: 0, asset_kind, amount: value, beneficiary }.into())
 		}
 	}
 

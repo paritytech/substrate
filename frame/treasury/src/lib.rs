@@ -379,28 +379,31 @@ pub mod pallet {
 		UpdatedInactive { reactivated: BalanceOf<T, I>, deactivated: BalanceOf<T, I> },
 		/// The payment has been queued to be paid out at the next Spend Period
 		PaymentQueued {
-			payment_index: PendingPaymentIndex,
+			pending_payment_index: PendingPaymentIndex,
 			asset_kind: T::AssetKind,
 			amount: PayBalanceOf<T, I>,
 			beneficiary: T::AccountId,
 		},
 		/// The payment has been processed but awaiting payment status.
 		PaymentTriggered {
-			payment_index: PendingPaymentIndex,
+			pending_payment_index: PendingPaymentIndex,
 			asset_kind: T::AssetKind,
 			amount: PayBalanceOf<T, I>,
+			payment_id: <T::Paymaster as Pay>::Id,
 		},
 		/// The proposal was paid successfully
 		PaymentSuccess {
-			payment_index: PendingPaymentIndex,
+			pending_payment_index: PendingPaymentIndex,
 			asset_kind: T::AssetKind,
 			amount: PayBalanceOf<T, I>,
+			payment_id: <T::Paymaster as Pay>::Id,
 		},
 		/// The proposal payment failed. Payment will be retried in next spend period.
 		PaymentFailure {
-			payment_index: PendingPaymentIndex,
+			pending_payment_index: PendingPaymentIndex,
 			asset_kind: T::AssetKind,
 			amount: PayBalanceOf<T, I>,
+			payment_id: Option<<T::Paymaster as Pay>::Id>,
 		},
 	}
 
@@ -635,7 +638,7 @@ pub mod pallet {
 			PendingPayments::<T, I>::insert(next_index, pending_payment);
 
 			Self::deposit_event(Event::PaymentQueued {
-				payment_index: next_index,
+				pending_payment_index: next_index,
 				asset_kind,
 				amount,
 				beneficiary,
@@ -716,9 +719,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							total_spent += p.normalized_value;
 							p.payment_id = Some(id);
 							Self::deposit_event(Event::PaymentTriggered {
-								payment_index: key,
+								pending_payment_index: key,
 								asset_kind: p.asset_kind,
 								amount: p.value,
+								payment_id: id,
 							});
 							PendingPayments::<T, I>::set(key, Some(p));
 						},
@@ -726,9 +730,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							log::debug!(target: LOG_TARGET, "Paymaster::pay failed for PendingPayment with index: {:?} and error: {:?}", key, err);
 							missed_proposals = missed_proposals.saturating_add(1);
 							Self::deposit_event(Event::PaymentFailure {
-								payment_index: key,
+								pending_payment_index: key,
 								asset_kind: p.asset_kind,
 								amount: p.value,
+								payment_id: None,
 							});
 						},
 					},
@@ -742,9 +747,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							// try again in the next `T::SpendPeriod`.
 							missed_proposals = missed_proposals.saturating_add(1);
 							Self::deposit_event(Event::PaymentFailure {
-								payment_index: key,
+								pending_payment_index: key,
 								asset_kind: p.asset_kind,
 								amount: p.value,
+								payment_id: Some(payment_id),
 							});
 							// Force the payment to none, so a fresh payment is sent during the next
 							// T::SpendPeriod.
@@ -754,9 +760,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						PaymentStatus::Success => {
 							PendingPayments::<T, I>::remove(key);
 							Self::deposit_event(Event::PaymentSuccess {
-								payment_index: key,
+								pending_payment_index: key,
 								asset_kind: p.asset_kind,
 								amount: p.value,
+								payment_id,
 							});
 						},
 						// PaymentStatus::InProgress and PaymentStatus::Unknown indicate that the
