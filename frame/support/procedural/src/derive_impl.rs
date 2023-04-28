@@ -48,16 +48,19 @@ impl ToTokens for DeriveImplAttrArgs {
 
 #[test]
 fn test_derive_impl_attr_args_parsing() {
-	parse2::<DeriveImplAttrArgs>(quote!(some::path::TestDefaultConfig, some::path::DefaultConfig))
-		.unwrap();
 	parse2::<DeriveImplAttrArgs>(quote!(
-		frame_system::preludes::testing::TestDefaultConfig,
-		DefaultConfig
+		some::path::TestDefaultConfig as some::path::DefaultConfig
 	))
 	.unwrap();
-	parse2::<DeriveImplAttrArgs>(quote!(Something, some::path::DefaultConfig)).unwrap();
-	parse2::<DeriveImplAttrArgs>(quote!(Something, DefaultConfig)).unwrap();
-	assert!(parse2::<DeriveImplAttrArgs>(quote!(DefaultConfig)).is_err());
+	parse2::<DeriveImplAttrArgs>(quote!(
+		frame_system::preludes::testing::TestDefaultConfig as DefaultConfig
+	))
+	.unwrap();
+	parse2::<DeriveImplAttrArgs>(quote!(Something as some::path::DefaultConfig)).unwrap();
+	parse2::<DeriveImplAttrArgs>(quote!(Something as DefaultConfig)).unwrap();
+	parse2::<DeriveImplAttrArgs>(quote!(DefaultConfig)).unwrap();
+	assert!(parse2::<DeriveImplAttrArgs>(quote!()).is_err());
+	assert!(parse2::<DeriveImplAttrArgs>(quote!(Config Config)).is_err());
 }
 
 /// Gets the [`Ident`] representation of the given [`ImplItem`], if one exists. Otherwise
