@@ -156,7 +156,7 @@ frame_support::ord_parameter_types! {
 	pub const UnpauseOrigin: u64 = 2;
 }
 
-/// The calls that are never allowed to be paused.
+/// Calls that are never allowed to be paused.
 #[derive(Copy, Clone, Encode, Decode, RuntimeDebug, MaxEncodedLen, scale_info::TypeInfo)]
 pub struct WhitelistedCalls;
 impl Contains<FullNameOf<Test>> for WhitelistedCalls {

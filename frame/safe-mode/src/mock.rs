@@ -148,7 +148,7 @@ impl pallet_proxy::Config for Test {
 	type AnnouncementDepositFactor = ConstU64<1>;
 }
 
-/// The calls that can always bypass the safe-mode.
+/// The calls that can always bypass safe-mode.
 pub struct WhitelistedCalls;
 impl Contains<RuntimeCall> for WhitelistedCalls {
 	fn contains(call: &RuntimeCall) -> bool {

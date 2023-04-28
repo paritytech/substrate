@@ -41,7 +41,7 @@ pub type PalletNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
 /// [`Config::RuntimeCall`] variants.
 pub type CallNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
 
-/// A sully specified pallet ([`PalletNameOf`]) and optional call ([`CallNameOf`])
+/// A fully specified pallet ([`PalletNameOf`]) and optional call ([`CallNameOf`])
 /// to partially or fully specify an item a variant of a  [`Config::RuntimeCall`].
 pub type FullNameOf<T> = (PalletNameOf<T>, CallNameOf<T>);
 
@@ -74,7 +74,7 @@ pub mod pallet {
 
 		/// Contains all calls that cannot be paused.
 		///
-		/// The `TxMode` pallet cannot pause it's own calls, and does not need to be explicitly
+		/// The `TxMode` pallet cannot pause its own calls, and does not need to be explicitly
 		/// added here.
 		type WhitelistedCalls: Contains<FullNameOf<Self>>;
 
