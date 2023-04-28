@@ -85,11 +85,11 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNameLen: Get<u32>;
 
-		/// Specifies if functions and pallets with too long names should be treated as paused.
+		/// Handles the edge-case when trying to pause a call with a too long name.
 		///
-		/// Setting this to `true` ensures that all calls that are callable, are also pause-able.
-		/// Otherwise there could be a situation where a call is callable but not pause-able, which
-		/// would could be exploited.
+		/// `true` ensures that all calls of the runtime can be paused. Otherwise there could be a
+		/// situation where a call is callable but not pause-able, which would could be exploited.
+		/// In mostly all situations this can be set to `true` without any downside.
 		#[pallet::constant]
 		type PauseTooLongNames: Get<bool>;
 
