@@ -526,7 +526,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call]
+	#[pallet::call(weight(<T as Config<I>>::WeightInfo))]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Transfer some liquid free balance to another account.
 		///
@@ -536,7 +536,6 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be `Signed` by the transactor.
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::transfer_allow_death())]
 		pub fn transfer_allow_death(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -598,7 +597,6 @@ pub mod pallet {
 		/// Exactly as `transfer_allow_death`, except the origin must be root and the source account
 		/// may be specified.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
 			origin: OriginFor<T>,
 			source: AccountIdLookupOf<T>,
@@ -619,7 +617,6 @@ pub mod pallet {
 		///
 		/// [`transfer_allow_death`]: struct.Pallet.html#method.transfer
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub fn transfer_keep_alive(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -647,7 +644,6 @@ pub mod pallet {
 		///   transfer everything except at least the existential deposit, which will guarantee to
 		///   keep the sender account alive (true).
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::transfer_all())]
 		pub fn transfer_all(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -674,7 +670,6 @@ pub mod pallet {
 		///
 		/// Can only be called by ROOT.
 		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::force_unreserve())]
 		pub fn force_unreserve(
 			origin: OriginFor<T>,
 			who: AccountIdLookupOf<T>,

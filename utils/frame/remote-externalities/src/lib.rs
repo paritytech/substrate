@@ -40,7 +40,7 @@ use sp_core::{
 pub use sp_io::TestExternalities;
 use sp_runtime::{traits::Block as BlockT, StateVersion};
 use std::{
-	cmp::max,
+	cmp::{max, min},
 	fs,
 	num::NonZeroUsize,
 	ops::{Deref, DerefMut},
@@ -157,10 +157,14 @@ impl Transport {
 			} else {
 				uri.clone()
 			};
-			let http_client = HttpClientBuilder::default().build(uri).map_err(|e| {
-				log::error!(target: LOG_TARGET, "error: {:?}", e);
-				"failed to build http client"
-			})?;
+			let http_client = HttpClientBuilder::default()
+				.max_request_body_size(u32::MAX)
+				.request_timeout(std::time::Duration::from_secs(60 * 5))
+				.build(uri)
+				.map_err(|e| {
+					log::error!(target: LOG_TARGET, "error: {:?}", e);
+					"failed to build http client"
+				})?;
 
 			*self = Self::RemoteClient(Arc::new(http_client))
 		}
@@ -323,6 +327,7 @@ where
 	B::Hash: DeserializeOwned,
 	B::Header: DeserializeOwned,
 {
+	const DEFAULT_PARALLELISM: usize = 4;
 	const BATCH_SIZE_INCREASE_FACTOR: f32 = 1.10;
 	const BATCH_SIZE_DECREASE_FACTOR: f32 = 0.50;
 	const INITIAL_BATCH_SIZE: usize = 5000;
@@ -330,9 +335,21 @@ where
 	const DEFAULT_KEY_DOWNLOAD_PAGE: u32 = 1000;
 
 	/// Get the number of threads to use.
+	/// Cap the number of threads. Performance improvement beyond a small number of threads is
+	/// negligible, and too many threads can create issues with the HttpClient.
 	fn threads() -> NonZeroUsize {
-		thread::available_parallelism()
-			.unwrap_or(NonZeroUsize::new(1usize).expect("4 is non-zero; qed"))
+		let avaliable = thread::available_parallelism()
+			.unwrap_or(NonZeroUsize::new(1usize).expect("1 is non-zero; qed"))
+			.get();
+		assert!(avaliable > 0, "avaliable parallelism must be greater than 0");
+
+		let requested: usize = match std::env::var("TRY_RUNTIME_MAX_THREADS") {
+			Ok(n) => n.parse::<usize>().expect("TRY_RUNTIME_MAX_THREADS must be a number"),
+			Err(_) => Self::DEFAULT_PARALLELISM,
+		};
+		assert!(requested > 0, "TRY_RUNTIME_MAX_THREADS must be greater than 0");
+		return NonZeroUsize::new(min(requested, avaliable))
+			.expect("requested and avaliable are non-zero; qed")
 	}
 
 	async fn rpc_get_storage(
