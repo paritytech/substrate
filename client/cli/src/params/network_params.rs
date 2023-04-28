@@ -42,9 +42,7 @@ pub struct NetworkParams {
 	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
 
 	/// Whether to only synchronize the chain with reserved nodes.
-	///
 	/// Also disables automatic peer discovery.
-	///
 	/// TCP connections might still be established with non-reserved nodes.
 	/// In particular, if you are a validator your node might still connect to other
 	/// validator nodes and collator nodes regardless of whether they are defined as
@@ -95,14 +93,12 @@ pub struct NetworkParams {
 	pub in_peers_light: u32,
 
 	/// Disable mDNS discovery.
-	///
 	/// By default, the network will use mDNS to discover other nodes on the
 	/// local network. This disables it. Automatically implied when using --dev.
 	#[arg(long)]
 	pub no_mdns: bool,
 
 	/// Maximum number of peers from which to ask for the same blocks in parallel.
-	///
 	/// This allows downloading announced blocks from multiple peers. Decrease to save
 	/// traffic and risk increased latency.
 	#[arg(long, value_name = "COUNT", default_value_t = 5)]
@@ -113,7 +109,6 @@ pub struct NetworkParams {
 	pub node_key_params: NodeKeyParams,
 
 	/// Enable peer discovery on local networks.
-	///
 	/// By default this option is `true` for `--dev` or when the chain type is
 	/// `Local`/`Development` and false otherwise.
 	#[arg(long)]
@@ -121,7 +116,6 @@ pub struct NetworkParams {
 
 	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in
 	/// the presence of potentially adversarial nodes.
-	///
 	/// See the S/Kademlia paper for more information on the high level design as well as its
 	/// security improvements.
 	#[arg(long)]
