@@ -190,11 +190,11 @@ pub mod pallet {
 		Force,
 	}
 
-	/// Contains the last block number that the safe-mode will stay enter in.
+	/// Contains the last block number that the safe-mode will remain entered in.
 	///
-	/// This is set to `None` if the safe-mode is inactive.
-	/// The safe-mode is automatically deactivated when the current block number is greater than
-	/// this.
+	///  Set to `None` when safe-mode is exited.
+	///
+	/// Safe-mode is automatically exited when the current block number exceeds this value.
 	#[pallet::storage]
 	#[pallet::getter(fn active_until)]
 	pub type EnteredUntil<T: Config> = StorageValue<_, T::BlockNumber, OptionQuery>;
