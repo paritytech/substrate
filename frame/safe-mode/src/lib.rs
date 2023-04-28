@@ -217,7 +217,7 @@ pub mod pallet {
 	/// Configure the initial state of this pallet in the genesis block.
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub entered_until: Option<T::BlockNumber>
+		pub entered_until: Option<T::BlockNumber>,
 	}
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {

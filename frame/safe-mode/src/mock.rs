@@ -228,7 +228,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.unwrap();
 
 	GenesisBuild::<Test>::assimilate_storage(
-		&pallet_safe_mode::GenesisConfig { entered_until: None, _phantom: Default::default() },
+		&pallet_safe_mode::GenesisConfig { entered_until: None },
 		&mut t,
 	)
 	.unwrap();

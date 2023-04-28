@@ -100,7 +100,7 @@ fn fails_to_activate_if_activated() {
 #[test]
 fn fails_to_extend_if_not_activated() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(SafeMode::active_until(), None);
+		assert_eq!(EnteredUntil::<Test>::get(), None);
 		assert_noop!(SafeMode::extend(RuntimeOrigin::signed(2)), Error::<Test>::Exited);
 	});
 }
@@ -156,7 +156,7 @@ fn can_automatically_deactivate_after_timeout() {
 		assert_ok!(SafeMode::force_enter(signed(ForceEnterWeak::get())));
 		run_to(1 + activated_at_block + ForceEnterWeak::get());
 
-		assert_eq!(SafeMode::active_until(), None);
+		assert_eq!(EnteredUntil::<Test>::get(), None);
 	});
 }
 
@@ -219,7 +219,7 @@ fn can_activate() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert_eq!(
-			SafeMode::active_until().unwrap(),
+			EnteredUntil::<Test>::get().unwrap(),
 			System::block_number() + mock::EnterDuration::get()
 		);
 		assert_eq!(Balances::reserved_balance(0), mock::EnterStakeAmount::get());
@@ -235,7 +235,7 @@ fn cannot_extend() {
 		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert_err!(SafeMode::extend(RuntimeOrigin::signed(0)), Error::<Test>::AlreadyStaked);
 		assert_eq!(
-			SafeMode::active_until().unwrap(),
+			EnteredUntil::<Test>::get().unwrap(),
 			System::block_number() + mock::EnterDuration::get()
 		);
 		assert_eq!(Balances::reserved_balance(0), mock::EnterStakeAmount::get());
@@ -245,7 +245,7 @@ fn cannot_extend() {
 #[test]
 fn fails_signed_origin_when_explicit_origin_required() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(SafeMode::active_until(), None);
+		assert_eq!(EnteredUntil::<Test>::get(), None);
 		let activated_at_block = System::block_number();
 
 		assert_err!(SafeMode::force_enter(RuntimeOrigin::signed(0)), DispatchError::BadOrigin);
@@ -283,7 +283,7 @@ fn can_force_activate_with_config_origin() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::force_enter(signed(ForceEnterStrong::get())));
 		assert_eq!(
-			SafeMode::active_until().unwrap(),
+			EnteredUntil::<Test>::get().unwrap(),
 			System::block_number() + ForceEnterStrong::get()
 		);
 		assert_noop!(
@@ -296,7 +296,7 @@ fn can_force_activate_with_config_origin() {
 #[test]
 fn can_force_deactivate_with_config_origin() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(SafeMode::active_until(), None);
+		assert_eq!(EnteredUntil::<Test>::get(), None);
 		assert_err!(
 			SafeMode::force_exit(RuntimeOrigin::signed(ForceExitOrigin::get())),
 			Error::<Test>::Exited
@@ -312,12 +312,12 @@ fn can_force_extend_with_config_origin() {
 		// Activated by `Weak` and extended by `Medium`.
 		assert_ok!(SafeMode::force_enter(signed(ForceEnterWeak::get())));
 		assert_eq!(
-			SafeMode::active_until().unwrap(),
+			EnteredUntil::<Test>::get().unwrap(),
 			System::block_number() + ForceEnterWeak::get()
 		);
 		assert_ok!(SafeMode::force_extend(signed(ForceExtendWeak::get())));
 		assert_eq!(
-			SafeMode::active_until().unwrap(),
+			EnteredUntil::<Test>::get().unwrap(),
 			System::block_number() + ForceEnterWeak::get() + ForceExtendWeak::get()
 		);
 	});
@@ -506,7 +506,7 @@ fn can_slash_stake_with_config_origin() {
 #[test]
 fn fails_when_explicit_origin_required() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(SafeMode::active_until(), None);
+		assert_eq!(EnteredUntil::<Test>::get(), None);
 		let activated_at_block = System::block_number();
 
 		assert_err!(SafeMode::force_extend(signed(1)), DispatchError::BadOrigin);
