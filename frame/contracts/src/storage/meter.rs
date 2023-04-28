@@ -19,7 +19,7 @@
 
 use crate::{
 	storage::{ContractInfo, DepositAccount},
-	BalanceOf, Config, Error, Inspect, Pallet, System, LOG_TARGET,
+	BalanceOf, Config, Error, Inspect, Pallet, System,
 };
 use codec::Encode;
 use frame_support::{
@@ -523,35 +523,17 @@ impl<T: Config> Ext<T> for ReservingExt {
 				*amount,
 				ExistenceRequirement::KeepAlive,
 			),
-			// The receiver always exists because the initial value transfer from the
-			// origin to the contract has a keep alive existence requirement. When taking a deposit
-			// we make sure to leave at least the ed in the free balance.
-			//
-			// The sender always has enough balance because we track it in the `ContractInfo` and
-			// never send more back than we have. No one has access to the deposit account. Hence no
-			// other interaction with this account takes place.
 			Deposit::Refund(amount) => {
 				if terminated {
 					System::<T>::dec_consumers(&deposit_account);
 				}
-				let result = T::Currency::transfer(
+				T::Currency::transfer(
 					deposit_account,
 					origin,
 					*amount,
 					// We can safely use `AllowDeath` because our own consumer prevents an removal.
 					ExistenceRequirement::AllowDeath,
-				);
-				if matches!(result, Err(_)) {
-					log::error!(
-						target: LOG_TARGET,
-						"Failed to refund storage deposit {:?} from deposit account {:?} to origin {:?}: {:?}",
-						amount, deposit_account, origin, result,
-					);
-					if cfg!(debug_assertions) {
-						panic!("Unable to refund storage deposit. This is a bug.");
-					}
-				}
-				Ok(())
+				)
 			},
 		}
 	}
