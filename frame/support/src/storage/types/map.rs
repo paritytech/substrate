@@ -706,6 +706,9 @@ mod test {
 			assert_eq!((None, Ok(())), A::translate_next::<u8, _>(k, translate_next));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 10), (3, 10)]);
 
+			let _ = A::translate_next::<u8, _>(None, |_, _| None);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(3, 10)]);
+
 			let mut entries = vec![];
 			A::build_metadata(vec![], &mut entries);
 			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
