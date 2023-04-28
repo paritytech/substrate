@@ -12,12 +12,12 @@ use jsonrpsee::{
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::ChildInfo;
+use sc_rpc::testing::test_executor;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
 use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::well_known_keys::{self, CODE},
-	testing::TaskExecutor,
 };
 use sp_version::RuntimeVersion;
 use std::sync::Arc;
@@ -73,14 +73,9 @@ async fn setup_api() -> (
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [true]).await.unwrap();
 	let sub_id = sub.subscription_id();
@@ -112,14 +107,9 @@ async fn follow_subscription_produces_blocks() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
 	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
@@ -169,14 +159,9 @@ async fn follow_with_runtime() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
 	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [true]).await.unwrap();
@@ -274,14 +259,9 @@ async fn get_genesis() {
 	let backend = builder.backend();
 	let client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	let genesis: String =
 		api.call("chainHead_unstable_genesisHash", EmptyParams::new()).await.unwrap();
@@ -466,14 +446,9 @@ async fn call_runtime_without_flag() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 	let sub_id = sub.subscription_id();
@@ -651,14 +626,9 @@ async fn follow_generates_initial_blocks() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
 
@@ -778,14 +748,7 @@ async fn follow_exceeding_pinned_blocks() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		2,
-	)
-	.into_rpc();
+	let api = ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, 2).into_rpc();
 
 	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 
@@ -830,14 +793,7 @@ async fn follow_with_unpin() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		2,
-	)
-	.into_rpc();
+	let api = ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, 2).into_rpc();
 
 	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 	let sub_id = sub.subscription_id();
@@ -910,14 +866,9 @@ async fn follow_prune_best_block() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
 	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
@@ -1066,14 +1017,9 @@ async fn follow_forks_pruned_block() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	// Block tree before the subscription:
 	//
@@ -1179,14 +1125,9 @@ async fn follow_report_multiple_pruned_block() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	// Block tree:
 	//
@@ -1366,7 +1307,7 @@ async fn follow_finalized_before_new_block() {
 	let api = ChainHead::new(
 		client_mock.clone(),
 		backend,
-		Arc::new(TaskExecutor::default()),
+		test_executor(),
 		CHAIN_GENESIS,
 		MAX_PINNED_BLOCKS,
 	)

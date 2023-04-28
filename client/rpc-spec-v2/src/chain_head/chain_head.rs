@@ -29,7 +29,6 @@ use crate::{
 	SubscriptionTaskExecutor,
 };
 use codec::Encode;
-use futures::FutureExt;
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
 	types::{ErrorObjectOwned, SubscriptionId},
@@ -190,14 +189,10 @@ where
 		let mut chain_head_follow =
 			ChainHeadFollower::new(client, backend, sub_handle, runtime_updates, sub_id.clone());
 
-		let (tx, rx) = futures::channel::oneshot::channel();
-		let fut = async move {
-			let res = chain_head_follow.generate_events(sink, rx_stop).await;
-			let _ = tx.send(res);
-		};
-
-		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
-		let res = rx.await.expect("Sender sends always a message; qed");
+		let res = sc_rpc::utils::spawn_subscription_task(&self.executor, async move {
+			chain_head_follow.generate_events(sink, rx_stop).await
+		})
+		.await;
 
 		subscriptions.remove_subscription(&sub_id);
 		debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription removed", sub_id);

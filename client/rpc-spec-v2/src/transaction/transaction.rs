@@ -126,7 +126,7 @@ where
 				let stream =
 					stream.filter_map(move |event| async move { state.handle_event(event) });
 
-				accept_and_pipe_from_stream(pending, Box::pin(stream), &self.executor).await
+				accept_and_pipe_from_stream(pending, stream.boxed(), &self.executor).await
 			},
 			Err(err) => {
 				// We have not created an `Watcher` for the tx. Make sure the

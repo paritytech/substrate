@@ -20,11 +20,50 @@
 
 use std::{future::Future, sync::Arc};
 
-use sp_core::testing::TaskExecutor;
+/// A task executor that can be used for running RPC tests.
+///
+/// Warning: the tokio runtime must be initialized before calling this.
+#[derive(Clone)]
+pub struct TokioTestExecutor(tokio::runtime::Handle);
+
+impl TokioTestExecutor {
+	/// Create a new instance of `Self`.
+	pub fn new() -> Self {
+		Self(tokio::runtime::Handle::current())
+	}
+}
+
+impl Default for TokioTestExecutor {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
+impl sp_core::traits::SpawnNamed for TokioTestExecutor {
+	fn spawn_blocking(
+		&self,
+		_name: &'static str,
+		_group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
+		let handle = self.0.clone();
+		self.0.spawn_blocking(move || {
+			handle.block_on(future);
+		});
+	}
+	fn spawn(
+		&self,
+		_name: &'static str,
+		_group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
+		self.0.spawn(future);
+	}
+}
 
 /// Executor for testing.
-pub fn test_executor() -> Arc<sp_core::testing::TaskExecutor> {
-	Arc::new(TaskExecutor::default())
+pub fn test_executor() -> Arc<TokioTestExecutor> {
+	Arc::new(TokioTestExecutor::default())
 }
 
 /// Wrap a future in a timeout a little more concisely

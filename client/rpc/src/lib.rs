@@ -142,8 +142,8 @@ pub mod utils {
 		SubscriptionMessage::from_json(val).expect("JSON serialization infallible; qed")
 	}
 
-	/// Spawn a subscription task and wait until it complete
-	pub async fn spawn_subscription_fut<R>(
+	/// Spawn a subscription task and wait until it completes.
+	pub async fn spawn_subscription_task<R>(
 		executor: &SubscriptionTaskExecutor,
 		fut: impl Future<Output = SubscriptionResponse<R>> + Send + 'static,
 	) -> SubscriptionResponse<R>
