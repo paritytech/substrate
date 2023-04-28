@@ -115,7 +115,7 @@ use sp_runtime::{
 };
 use sp_std::{cmp::Ordering, prelude::*};
 
-#[cfg(feature = "try-runtime")]
+#[cfg(any(feature = "try-runtime", test))]
 use frame_support::dispatch::DispatchResult;
 
 mod benchmarking;
