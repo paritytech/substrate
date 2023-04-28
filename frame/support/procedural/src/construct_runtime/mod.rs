@@ -213,7 +213,7 @@ fn construct_runtime_final_expansion(
 ) -> Result<TokenStream2> {
 	let ExplicitRuntimeDeclaration {
 		name,
-		where_section: WhereSection { block, node_block, unchecked_extrinsic },
+		where_section: WhereSection { block, node_block, unchecked_extrinsic, interface },
 		pallets,
 		pallets_token,
 	} = definition;
@@ -253,8 +253,15 @@ fn construct_runtime_final_expansion(
 	let scrate = generate_crate_access(hidden_crate_name, "frame-support");
 	let scrate_decl = generate_hidden_includes(hidden_crate_name, "frame-support");
 
-	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate)?;
+	// If interface is set, then index 255 MUST NOT be used
+	if interface.is_some() && pallets.iter().any(|pallet| pallet.index == 255) {
+		return Err(syn::Error::new(
+			name.span(),
+			"Where clause defines interface, but index 255 is not free in Runtime.",
+		))
+	}
 
+	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate, interface)?;
 	let outer_origin = expand::expand_outer_origin(&name, system_pallet, &pallets, &scrate)?;
 	let all_pallets = decl_all_pallets(&name, pallets.iter(), &features);
 	let pallet_to_index = decl_pallet_runtime_setup(&name, &pallets, &scrate);
