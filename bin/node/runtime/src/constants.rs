@@ -51,7 +51,7 @@ pub mod time {
 	/// `SLOT_DURATION` should have the same value.
 	///
 	/// <https://research.web3.foundation/en/latest/polkadot/block-production/Babe.html#-6.-practical-results>
-	pub const MILLISECS_PER_BLOCK: Moment = 3000;
+	pub const MILLISECS_PER_BLOCK: Moment = 7500;
 	pub const SECS_PER_BLOCK: Moment = MILLISECS_PER_BLOCK / 1000;
 
 	// NOTE: Currently it is not possible to change the slot duration after the chain has started.

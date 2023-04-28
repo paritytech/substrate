@@ -42,10 +42,10 @@ pub use ss58_registry::{from_known_address_format, Ss58AddressFormat, Ss58Addres
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str =
-	"ppower tree notice scout record thank fiber scissors cute crop age exile";
+	"subject pulp drill ten logic mercy night repeat below negative august ahead";
 
 /// The address of the associated root phrase for our publicly known keys.
-pub const DEV_ADDRESS: &str = "5HYcaBn7E3BQia7gQUKL68hdGoQyheYPdYqy8X5yYdmDH5xr";
+pub const DEV_ADDRESS: &str = "5HGYDqeZHnFTHiGwSYyeMC5pUN9GKH2na6BPmQMudQzbY4Dg";
 
 /// The length of the junction identifier. Note that this is also referred to as the
 /// `CHAIN_CODE_LENGTH` in the context of Schnorrkel.
