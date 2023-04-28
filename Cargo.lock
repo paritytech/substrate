@@ -2582,7 +2582,6 @@ dependencies = [
  "criterion",
  "frame-support",
  "log",
- "macro_magic",
  "parity-scale-codec",
  "scale-info",
  "serde",
