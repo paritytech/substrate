@@ -734,6 +734,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 					Some(payment_id) => match T::Paymaster::check_payment(payment_id) {
 						PaymentStatus::Failure => {
+							log::debug!(
+								target: LOG_TARGET,
+								"Paymaster::pay failed for PendingPayment with index: {:?}",
+								key
+							);
 							// try again in the next `T::SpendPeriod`.
 							missed_proposals = missed_proposals.saturating_add(1);
 							Self::deposit_event(Event::PaymentFailure {
