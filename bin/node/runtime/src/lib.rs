@@ -222,6 +222,7 @@ impl Contains<RuntimeCall> for SafeModeWhitelistedCalls {
 	fn contains(call: &RuntimeCall) -> bool {
 		match call {
 			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) | RuntimeCall::TxPause(_) => true,
+			_ => false,
 		}
 	}
 }
