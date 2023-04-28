@@ -66,7 +66,7 @@ mod benchmarks {
 		_(origin);
 
 		assert_eq!(
-			SafeMode::<T>::active_until().unwrap(),
+			EnteredUntil::<T>::get().unwrap(),
 			System::<T>::block_number() + T::EnterDuration::get()
 		);
 		Ok(())
@@ -79,14 +79,11 @@ mod benchmarks {
 			T::ForceEnterOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 
 		let duration = T::ForceEnterOrigin::ensure_origin(force_origin.clone()).unwrap();
-		let call = Call::<T>::force_enter {};
 
-		#[block]
-		{
-			call.dispatch_bypass_filter(force_origin)?;
-		}
+		#[extrinsic_call]
+		_(force_origin as T::RuntimeOrigin);
 
-		assert_eq!(SafeMode::<T>::active_until().unwrap(), System::<T>::block_number() + duration);
+		assert_eq!(EnteredUntil::<T>::get().unwrap(), System::<T>::block_number() + duration);
 		Ok(())
 	}
 
@@ -105,7 +102,7 @@ mod benchmarks {
 		_(RawOrigin::Signed(alice));
 
 		assert_eq!(
-			SafeMode::<T>::active_until().unwrap(),
+			EnteredUntil::<T>::get().unwrap(),
 			System::<T>::block_number() + 1u32.into() + T::ExtendDuration::get()
 		);
 		Ok(())
@@ -129,7 +126,7 @@ mod benchmarks {
 		}
 
 		assert_eq!(
-			SafeMode::<T>::active_until().unwrap(),
+			EnteredUntil::<T>::get().unwrap(),
 			System::<T>::block_number() + 1u32.into() + duration
 		);
 		Ok(())
@@ -140,16 +137,12 @@ mod benchmarks {
 	fn force_exit() -> Result<(), BenchmarkError> {
 		let force_origin =
 			T::ForceExitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-
 		assert!(SafeMode::<T>::do_enter(None, 1u32.into()).is_ok());
-		let call = Call::<T>::force_exit {};
 
-		#[block]
-		{
-			call.dispatch_bypass_filter(force_origin)?;
-		}
+		#[extrinsic_call]
+		_(force_origin as T::RuntimeOrigin);
 
-		assert_eq!(SafeMode::<T>::active_until(), None);
+		assert_eq!(EnteredUntil::<T>::get(), None);
 		Ok(())
 	}
 
@@ -174,12 +167,8 @@ mod benchmarks {
 		System::<T>::on_initialize(System::<T>::block_number());
 		SafeMode::<T>::on_initialize(System::<T>::block_number());
 
-		let call = Call::<T>::release_stake { account: alice.clone(), block: 1u32.into() };
-
-		#[block]
-		{
-			call.dispatch_bypass_filter(origin.into()).unwrap();
-		}
+		#[extrinsic_call]
+		_(origin, alice.clone(), 1u32.into());
 
 		assert!(!Stakes::<T>::contains_key(&alice, &block));
 		assert_eq!(T::Currency::balance(&alice), init_bal::<T>());
@@ -209,12 +198,8 @@ mod benchmarks {
 		System::<T>::on_initialize(System::<T>::block_number());
 		SafeMode::<T>::on_initialize(System::<T>::block_number());
 
-		let call = Call::<T>::force_release_stake { account: alice.clone(), block };
-
-		#[block]
-		{
-			call.dispatch_bypass_filter(force_origin)?;
-		}
+		#[extrinsic_call]
+		_(force_origin as T::RuntimeOrigin, alice.clone(), block);
 
 		assert!(!Stakes::<T>::contains_key(&alice, block));
 		assert_eq!(T::Currency::balance(&alice), init_bal::<T>());
@@ -237,12 +222,8 @@ mod benchmarks {
 		EnteredUntil::<T>::put(&block);
 		assert!(SafeMode::<T>::do_exit(ExitReason::Force).is_ok());
 
-		let call = Call::<T>::force_slash_stake { account: alice.clone(), block };
-
-		#[block]
-		{
-			call.dispatch_bypass_filter(force_origin)?;
-		}
+		#[extrinsic_call]
+		_(force_origin as T::RuntimeOrigin, alice.clone(), block);
 
 		assert!(!Stakes::<T>::contains_key(&alice, block));
 		assert_eq!(T::Currency::balance(&alice), init_bal::<T>() - 1u32.into());
