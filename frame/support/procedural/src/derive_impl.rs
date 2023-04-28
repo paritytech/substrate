@@ -51,7 +51,7 @@ impl ToTokens for DeriveImplAttrArgs {
 ///
 /// Used by [`combine_impls`] to determine whether we can compare [`ImplItem`]s by [`Ident`]
 /// or not.
-fn impl_item_ident(impl_item: &ImplItem) -> Option<Ident> {
+fn impl_item_ident(impl_item: &ImplItem) -> Option<&Ident> {
 	match impl_item {
 		ImplItem::Const(item) => Some(item.ident.clone()),
 		ImplItem::Fn(item) => Some(item.sig.ident.clone()),
