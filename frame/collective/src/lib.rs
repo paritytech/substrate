@@ -981,11 +981,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		ensure!(
 			Self::proposals().into_iter().count() <= Self::proposal_count() as usize,
-			DispatchError::Other("The actual number of proposals is greater than `ProposalCount`")
+			"The actual number of proposals is greater than `ProposalCount`"
 		);
 		ensure!(
 			Self::proposals().into_iter().count() == <ProposalOf<T, I>>::iter_keys().count(),
-			DispatchError::Other("Proposal count inside `Proposals` is not equal to the proposal count in `ProposalOf`")
+			"Proposal count inside `Proposals` is not equal to the proposal count in `ProposalOf`"
 		);
 
 		Self::proposals().into_iter().try_for_each(|proposal| -> DispatchResult {
@@ -995,7 +995,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				ensure!(
 					ayes.saturating_add(nays) <= T::MaxMembers::get() as usize,
-					DispatchError::Other("The sum of ayes and nays is greater than `MaxMembers`")
+					"The sum of ayes and nays is greater than `MaxMembers`"
 				);
 			}
 			Ok(())
@@ -1007,7 +1007,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let proposal_index = votes.index;
 				ensure!(
 					!proposal_indices.contains(&proposal_index),
-					DispatchError::Other("The proposal index is not unique.")
+					"The proposal index is not unique."
 				);
 				proposal_indices.push(proposal_index);
 			}
@@ -1026,19 +1026,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		ensure!(
 			Self::members().len() <= T::MaxMembers::get() as usize,
-			DispatchError::Other("The member count is greater than `MaxMembers`.")
+			"The member count is greater than `MaxMembers`."
 		);
 
 		ensure!(
 			Self::members().windows(2).all(|members| members[0] <= members[1]),
-			DispatchError::Other("The members are not sorted by value.")
+			"The members are not sorted by value."
 		);
 
 		if let Some(prime) = Self::prime() {
-			ensure!(
-				Self::members().contains(&prime),
-				DispatchError::Other("Prime account is not a member.")
-			);
+			ensure!(Self::members().contains(&prime), "Prime account is not a member.");
 		}
 
 		Ok(())

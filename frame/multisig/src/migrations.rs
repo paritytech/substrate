@@ -46,7 +46,7 @@ pub mod v1 {
 		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			let onchain = Pallet::<T>::on_chain_storage_version();
 
-			ensure!(onchain < 1, DispatchError::Other("this migration can be deleted"));
+			ensure!(onchain < 1, "this migration can be deleted");
 
 			log!(info, "Number of calls to refund and delete: {}", Calls::<T>::iter().count());
 
@@ -74,8 +74,8 @@ pub mod v1 {
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(_state: Vec<u8>) -> DispatchResult {
 			let onchain = Pallet::<T>::on_chain_storage_version();
-			ensure!(onchain < 2, DispatchError::Other("this migration needs to be removed"));
-			ensure!(onchain == 1, DispatchError::Other("this migration needs to be run"));
+			ensure!(onchain < 2, "this migration needs to be removed");
+			ensure!(onchain == 1, "this migration needs to be run");
 			ensure!(
 				Calls::<T>::iter().count() == 0,
 				DispatchError::Other(

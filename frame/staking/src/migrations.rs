@@ -67,7 +67,7 @@ pub mod v13 {
 		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == ObsoleteReleases::V12_0_0,
-				DispatchError::Other("Required v12 before upgrading to v13")
+				"Required v12 before upgrading to v13"
 			);
 
 			Ok(Default::default())
@@ -93,12 +93,12 @@ pub mod v13 {
 		fn post_upgrade(_state: Vec<u8>) -> DispatchResult {
 			frame_support::ensure!(
 				Pallet::<T>::on_chain_storage_version() == 13,
-				DispatchError::Other("v13 not applied")
+				"v13 not applied"
 			);
 
 			frame_support::ensure!(
 				!StorageVersion::<T>::exists(),
-				DispatchError::Other("Storage version not migrated correctly")
+				"Storage version not migrated correctly"
 			);
 
 			Ok(())
@@ -123,13 +123,13 @@ pub mod v12 {
 		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == ObsoleteReleases::V11_0_0,
-				DispatchError::Other("Expected v11 before upgrading to v12")
+				"Expected v11 before upgrading to v12"
 			);
 
 			if HistoryDepth::<T>::exists() {
 				frame_support::ensure!(
 					T::HistoryDepth::get() == HistoryDepth::<T>::get(),
-					DispatchError::Other("Provided value of HistoryDepth should be same as the existing storage value")
+					"Provided value of HistoryDepth should be same as the existing storage value"
 				);
 			} else {
 				log::info!("No HistoryDepth in storage; nothing to remove");
@@ -155,7 +155,7 @@ pub mod v12 {
 		fn post_upgrade(_state: Vec<u8>) -> DispatchResult {
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == ObsoleteReleases::V12_0_0,
-				DispatchError::Other("v12 not applied")
+				"v12 not applied"
 			);
 			Ok(())
 		}
@@ -179,13 +179,13 @@ pub mod v11 {
 		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == ObsoleteReleases::V10_0_0,
-				DispatchError::Other("must upgrade linearly")
+				"must upgrade linearly"
 			);
 			let old_pallet_prefix = twox_128(N::get().as_bytes());
 
 			frame_support::ensure!(
 				sp_io::storage::next_key(&old_pallet_prefix).is_some(),
-				DispatchError::Other("no data for the old pallet name has been detected")
+				"no data for the old pallet name has been detected"
 			);
 
 			Ok(Default::default())
@@ -226,7 +226,7 @@ pub mod v11 {
 		fn post_upgrade(_state: Vec<u8>) -> DispatchResult {
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == ObsoleteReleases::V11_0_0,
-				DispatchError::Other("wrong version after the upgrade")
+				"wrong version after the upgrade"
 			);
 
 			let old_pallet_name = N::get();
@@ -240,14 +240,14 @@ pub mod v11 {
 			let old_pallet_prefix = twox_128(N::get().as_bytes());
 			frame_support::ensure!(
 				sp_io::storage::next_key(&old_pallet_prefix).is_none(),
-				DispatchError::Other("old pallet data hasn't been removed")
+				"old pallet data hasn't been removed"
 			);
 
 			let new_pallet_name = <P as PalletInfoAccess>::name();
 			let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
 			frame_support::ensure!(
 				sp_io::storage::next_key(&new_pallet_prefix).is_some(),
-				DispatchError::Other("new pallet data hasn't been created")
+				"new pallet data hasn't been created"
 			);
 
 			Ok(())
@@ -341,7 +341,7 @@ pub mod v9 {
 		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == ObsoleteReleases::V8_0_0,
-				DispatchError::Other("must upgrade linearly")
+				"must upgrade linearly"
 			);
 
 			let prev_count = T::VoterList::count();
@@ -365,7 +365,7 @@ pub mod v9 {
 
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == ObsoleteReleases::V9_0_0,
-				DispatchError::Other("must upgrade")
+				"must upgrade"
 			);
 			Ok(())
 		}

@@ -104,7 +104,7 @@ pub mod v1 {
 			// new version must be set.
 			ensure!(
 				Pallet::<T>::on_chain_storage_version() == 1,
-				DispatchError::Other("The onchain version must be updated after the migration.")
+				"The onchain version must be updated after the migration."
 			);
 			Pallet::<T>::try_state(frame_system::Pallet::<T>::block_number())?;
 			Ok(())
@@ -361,7 +361,7 @@ pub mod v2 {
 				ensure!(
 					T::Currency::free_balance(&Pallet::<T>::create_reward_account(id)) >=
 						T::Currency::minimum_balance(),
-					DispatchError::Other("Reward accounts must have greater balance than ED.")
+					"Reward accounts must have greater balance than ED."
 				);
 				Ok(())
 			})?;
@@ -374,7 +374,7 @@ pub mod v2 {
 			// new version must be set.
 			ensure!(
 				Pallet::<T>::on_chain_storage_version() == 2,
-				DispatchError::Other("The onchain version must be updated after the migration.")
+				"The onchain version must be updated after the migration."
 			);
 
 			// no reward or bonded pool has been skipped.
@@ -396,7 +396,7 @@ pub mod v2 {
 			RewardPools::<T>::iter().try_for_each(|(id, _)| -> DispatchResult {
 				ensure!(
 					RewardPool::<T>::current_balance(id) == Zero::zero(),
-					DispatchError::Other("Reward pool balance must be zero."),
+					"Reward pool balance must be zero.",
 				);
 				Ok(())
 			})?;
@@ -463,12 +463,9 @@ pub mod v3 {
 		fn post_upgrade(_: Vec<u8>) -> DispatchResult {
 			ensure!(
 				Metadata::<T>::iter_keys().all(|id| BondedPools::<T>::contains_key(&id)),
-				DispatchError::Other("not all of the stale metadata has been removed")
+				"not all of the stale metadata has been removed"
 			);
-			ensure!(
-				Pallet::<T>::on_chain_storage_version() == 3,
-				DispatchError::Other("wrong storage version")
-			);
+			ensure!(Pallet::<T>::on_chain_storage_version() == 3, "wrong storage version");
 			Ok(())
 		}
 	}
@@ -570,16 +567,13 @@ pub mod v4 {
 					inner.commission.max.is_none() &&
 					inner.commission.change_rate.is_none() &&
 					inner.commission.throttle_from.is_none()),
-				DispatchError::Other("a commission value has been incorrectly set")
+				"a commission value has been incorrectly set"
 			);
 			ensure!(
 				GlobalMaxCommission::<T>::get() == Some(U::get()),
-				DispatchError::Other("global maximum commission error")
+				"global maximum commission error"
 			);
-			ensure!(
-				Pallet::<T>::on_chain_storage_version() == 4,
-				DispatchError::Other("wrong storage version")
-			);
+			ensure!(Pallet::<T>::on_chain_storage_version() == 4, "wrong storage version");
 			Ok(())
 		}
 	}
@@ -682,7 +676,7 @@ pub mod v5 {
 			let rpool_values = RewardPools::<T>::iter_values().count() as u64;
 			ensure!(
 				rpool_keys == rpool_values,
-				DispatchError::Other("There are STILL undecodable RewardPools - migration failed")
+				"There are STILL undecodable RewardPools - migration failed"
 			);
 
 			if old_rpool_values != rpool_values {
@@ -701,30 +695,27 @@ pub mod v5 {
 					.is_zero() && reward_pool
 					.total_commission_claimed
 					.is_zero()),
-				DispatchError::Other("a commission value has been incorrectly set")
+				"a commission value has been incorrectly set"
 			);
-			ensure!(
-				Pallet::<T>::on_chain_storage_version() == 5,
-				DispatchError::Other("wrong storage version")
-			);
+			ensure!(Pallet::<T>::on_chain_storage_version() == 5, "wrong storage version");
 
 			// These should not have been touched - just in case.
 			ensure!(
 				PoolMembers::<T>::iter_keys().count() == PoolMembers::<T>::iter_values().count(),
-				DispatchError::Other("There are undecodable PoolMembers in storage.")
+				"There are undecodable PoolMembers in storage."
 			);
 			ensure!(
 				BondedPools::<T>::iter_keys().count() == BondedPools::<T>::iter_values().count(),
-				DispatchError::Other("There are undecodable BondedPools in storage.")
+				"There are undecodable BondedPools in storage."
 			);
 			ensure!(
 				SubPoolsStorage::<T>::iter_keys().count() ==
 					SubPoolsStorage::<T>::iter_values().count(),
-				DispatchError::Other("There are undecodable SubPools in storage.")
+				"There are undecodable SubPools in storage."
 			);
 			ensure!(
 				Metadata::<T>::iter_keys().count() == Metadata::<T>::iter_values().count(),
-				DispatchError::Other("There are undecodable Metadata in storage.")
+				"There are undecodable Metadata in storage."
 			);
 
 			Ok(())

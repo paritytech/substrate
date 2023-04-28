@@ -62,10 +62,7 @@ pub mod v1 {
 	impl<T: Config + frame_system::Config<Hash = H256>> OnRuntimeUpgrade for Migration<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-			ensure!(
-				StorageVersion::get::<Pallet<T>>() == 0,
-				DispatchError::Other("can only upgrade from version 0")
-			);
+			ensure!(StorageVersion::get::<Pallet<T>>() == 0, "can only upgrade from version 0");
 
 			let props_count = v0::PublicProps::<T>::get().len();
 			log::info!(target: TARGET, "{} public proposals will be migrated.", props_count,);
@@ -137,20 +134,14 @@ pub mod v1 {
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(state: Vec<u8>) -> frame_support::dispatch::DispatchResult {
-			ensure!(StorageVersion::get::<Pallet<T>>() == 1, DispatchError::Other("must upgrade"));
+			ensure!(StorageVersion::get::<Pallet<T>>() == 1, "must upgrade");
 
 			let (old_props_count, old_ref_count): (u32, u32) =
 				Decode::decode(&mut &state[..]).expect("pre_upgrade provides a valid state; qed");
 			let new_props_count = crate::PublicProps::<T>::get().len() as u32;
-			ensure!(
-				new_props_count == old_props_count,
-				DispatchError::Other("must migrate all public proposals")
-			);
+			ensure!(new_props_count == old_props_count, "must migrate all public proposals");
 			let new_ref_count = crate::ReferendumInfoOf::<T>::iter().count() as u32;
-			ensure!(
-				new_ref_count == old_ref_count,
-				DispatchError::Other("must migrate all referenda")
-			);
+			ensure!(new_ref_count == old_ref_count, "must migrate all referenda");
 
 			log::info!(
 				target: TARGET,

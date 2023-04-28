@@ -43,7 +43,7 @@ use sp_std::{
 };
 
 #[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
-use frame_support::dispatch::{DispatchError, DispatchResult};
+use frame_support::dispatch::DispatchResult;
 
 #[derive(Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, PalletError)]
 pub enum ListError {
@@ -519,14 +519,14 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
 			Self::iter().map(|node| node.id).all(|id| seen_in_list.insert(id)),
-			DispatchError::Other("duplicate identified")
+			"duplicate identified"
 		);
 
 		let iter_count = Self::iter().count() as u32;
 		let stored_count = crate::ListNodes::<T, I>::count();
 		let nodes_count = crate::ListNodes::<T, I>::iter().count() as u32;
-		ensure!(iter_count == stored_count, DispatchError::Other("iter_count != stored_count"));
-		ensure!(stored_count == nodes_count, DispatchError::Other("stored_count != nodes_count"));
+		ensure!(iter_count == stored_count, "iter_count != stored_count");
+		ensure!(stored_count == nodes_count, "stored_count != nodes_count");
 
 		crate::log!(trace, "count of nodes: {}", stored_count);
 
@@ -547,10 +547,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 		let nodes_in_bags_count =
 			active_bags.clone().fold(0u32, |acc, cur| acc + cur.iter().count() as u32);
-		ensure!(
-			nodes_count == nodes_in_bags_count,
-			DispatchError::Other("stored_count != nodes_in_bags_count")
-		);
+		ensure!(nodes_count == nodes_in_bags_count, "stored_count != nodes_in_bags_count");
 
 		crate::log!(trace, "count of active bags {}", active_bags.count());
 
@@ -763,7 +760,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 				// if there is no head, then there must not be a tail, meaning that the bag is
 				// empty.
 				.unwrap_or_else(|| self.tail.is_none()),
-			DispatchError::Other("head has a prev")
+			"head has a prev"
 		);
 
 		frame_support::ensure!(
@@ -772,7 +769,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 				// if there is no tail, then there must not be a head, meaning that the bag is
 				// empty.
 				.unwrap_or_else(|| self.head.is_none()),
-			DispatchError::Other("tail has a next")
+			"tail has a next"
 		);
 
 		let mut seen_in_bag = BTreeSet::new();
@@ -781,7 +778,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 				.map(|node| node.id)
 				// each voter is only seen once, thus there is no cycle within a bag
 				.all(|voter| seen_in_bag.insert(voter)),
-			DispatchError::Other("duplicate found in bag")
+			"duplicate found in bag"
 		);
 
 		Ok(())
@@ -906,10 +903,7 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 
 		let id = self.id();
 
-		frame_support::ensure!(
-			expected_bag.contains(id),
-			DispatchError::Other("node does not exist in the bag")
-		);
+		frame_support::ensure!(expected_bag.contains(id), "node does not exist in the bag");
 
 		let non_terminal_check = !self.is_terminal() &&
 			expected_bag.head.as_ref() != Some(id) &&
@@ -918,7 +912,7 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 			expected_bag.head.as_ref() == Some(id) || expected_bag.tail.as_ref() == Some(id);
 		frame_support::ensure!(
 			non_terminal_check || terminal_check,
-			DispatchError::Other("a terminal node is neither its bag head or tail")
+			"a terminal node is neither its bag head or tail"
 		);
 
 		Ok(())

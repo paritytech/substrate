@@ -95,7 +95,7 @@ pub mod v1 {
 		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			frame_support::ensure!(
 				Pallet::<T>::on_chain_storage_version() == 0,
-				DispatchError::Other("must upgrade linearly")
+				"must upgrade linearly"
 			);
 			let prev_count = Asset::<T>::iter().count();
 			Ok((prev_count as u32).encode())
@@ -126,7 +126,7 @@ pub mod v1 {
 			);
 
 			Asset::<T>::iter().try_for_each(|(_id, asset)| -> DispatchResult {
-				ensure!(asset.status == AssetStatus::Live || asset.status == AssetStatus::Frozen, DispatchError::Other("assets should only be live or frozen. None should be in destroying status, or undefined state"));
+				ensure!(asset.status == AssetStatus::Live || asset.status == AssetStatus::Frozen, "assets should only be live or frozen. None should be in destroying status, or undefined state");
 				Ok(())
 			})?;
 			Ok(())

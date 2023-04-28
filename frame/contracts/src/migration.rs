@@ -359,10 +359,7 @@ mod v8 {
 		use frame_support::traits::ReservableCurrency;
 		for (key, value) in ContractInfoOf::<T, OldContractInfo<T>>::iter() {
 			let reserved = T::Currency::reserved_balance(&key);
-			ensure!(
-				reserved >= value.storage_deposit,
-				DispatchError::Other("Reserved balance out of sync.")
-			);
+			ensure!(reserved >= value.storage_deposit, "Reserved balance out of sync.");
 		}
 		Ok(())
 	}
@@ -445,7 +442,7 @@ mod post_checks {
 				.storage_base_deposit
 				.saturating_add(value.storage_byte_deposit)
 				.saturating_add(value.storage_item_deposit);
-			ensure!(reserved >= stored, DispatchError::Other("Reserved balance out of sync."));
+			ensure!(reserved >= stored, "Reserved balance out of sync.");
 
 			let mut storage_bytes = 0u32;
 			let mut storage_items = 0u32;
@@ -458,14 +455,8 @@ mod post_checks {
 				storage_bytes.saturating_accrue(len);
 				storage_items.saturating_accrue(1);
 			}
-			ensure!(
-				storage_bytes == value.storage_bytes,
-				DispatchError::Other("Storage bytes do not match.")
-			);
-			ensure!(
-				storage_items == value.storage_items,
-				DispatchError::Other("Storage items do not match.")
-			);
+			ensure!(storage_bytes == value.storage_bytes, "Storage bytes do not match.");
+			ensure!(storage_items == value.storage_items, "Storage items do not match.");
 		}
 		Ok(())
 	}
@@ -474,7 +465,7 @@ mod post_checks {
 		for value in CodeStorage::<T>::iter_values() {
 			ensure!(
 				value.determinism == Determinism::Enforced,
-				DispatchError::Other("All pre-existing codes need to be deterministic.")
+				"All pre-existing codes need to be deterministic."
 			);
 		}
 		Ok(())

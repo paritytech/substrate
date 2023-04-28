@@ -233,7 +233,7 @@ pub mod pallet {
 			// `T::MaxErasToCheckPerBlock`.
 			ensure!(
 				ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
-				DispatchError::Other("the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`"),
+				"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
 			);
 
 			Ok(())

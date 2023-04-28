@@ -3073,11 +3073,11 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(
 			SubPoolsStorage::<T>::iter_keys().all(|k| bonded_pools.contains(&k)),
-			DispatchError::Other("`SubPoolsStorage` must be a subset of the above superset.")
+			"`SubPoolsStorage` must be a subset of the above superset."
 		);
 		ensure!(
 			Metadata::<T>::iter_keys().all(|k| bonded_pools.contains(&k)),
-			DispatchError::Other("`Metadata` keys must be a subset of the above superset.")
+			"`Metadata` keys must be a subset of the above superset."
 		);
 
 		ensure!(
@@ -3105,10 +3105,7 @@ impl<T: Config> Pallet<T> {
 		let mut all_members = 0u32;
 		PoolMembers::<T>::iter().try_for_each(|(_, d)| -> DispatchResult {
 			let bonded_pool = BondedPools::<T>::get(d.pool_id).unwrap();
-			ensure!(
-				!d.total_points().is_zero(),
-				DispatchError::Other("No member should have zero points")
-			);
+			ensure!(!d.total_points().is_zero(), "No member should have zero points");
 			*pools_members.entry(d.pool_id).or_default() += 1;
 			all_members += 1;
 
@@ -3150,7 +3147,7 @@ impl<T: Config> Pallet<T> {
 			ensure!(
 				pools_members.get(&id).copied().unwrap_or_default() ==
 				bonded_pool.member_counter,
-				DispatchError::Other("Each `BondedPool.member_counter` must be equal to the actual count of members of this pool")
+				"Each `BondedPool.member_counter` must be equal to the actual count of members of this pool"
 			);
 			ensure!(MaxPoolMembersPerPool::<T>::get()
 				.map_or(true, |max| bonded_pool.member_counter <= max),

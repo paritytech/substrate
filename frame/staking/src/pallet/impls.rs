@@ -1695,7 +1695,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(
 			T::VoterList::iter()
 				.all(|x| <Nominators<T>>::contains_key(&x) || <Validators<T>>::contains_key(&x)),
-			DispatchError::Other("VoterList contains non-staker")
+			"VoterList contains non-staker"
 		);
 
 		Self::check_nominators()?;
@@ -1708,11 +1708,11 @@ impl<T: Config> Pallet<T> {
 		ensure!(
 			<T as Config>::VoterList::count() ==
 				Nominators::<T>::count() + Validators::<T>::count(),
-			DispatchError::Other("wrong external count")
+			"wrong external count"
 		);
 		ensure!(
 			<T as Config>::TargetList::count() == Validators::<T>::count(),
-			DispatchError::Other("wrong external count")
+			"wrong external count"
 		);
 		ensure!(
 			ValidatorCount::<T>::get() <=
@@ -1741,7 +1741,7 @@ impl<T: Config> Pallet<T> {
 								.iter()
 								.map(|e| e.value)
 								.fold(Zero::zero(), |acc, x| acc + x),
-					DispatchError::Other("wrong total exposure."),
+					"wrong total exposure.",
 				);
 				Ok(())
 			})

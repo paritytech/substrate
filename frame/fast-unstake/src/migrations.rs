@@ -85,7 +85,7 @@ pub mod v1 {
 		fn post_upgrade(_: Vec<u8>) -> DispatchResult {
 			ensure!(
 				Pallet::<T>::on_chain_storage_version() == 1,
-				DispatchError::Other("The onchain version must be updated after the migration.")
+				"The onchain version must be updated after the migration."
 			);
 			Ok(())
 		}

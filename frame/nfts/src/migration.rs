@@ -93,10 +93,7 @@ pub mod v1 {
 		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			let current_version = Pallet::<T>::current_storage_version();
 			let onchain_version = Pallet::<T>::on_chain_storage_version();
-			ensure!(
-				onchain_version == 0 && current_version == 1,
-				DispatchError::Other("migration from version 0 to 1.")
-			);
+			ensure!(onchain_version == 0 && current_version == 1, "migration from version 0 to 1.");
 			let prev_count = Collection::<T>::iter().count();
 			Ok((prev_count as u32).encode())
 		}
@@ -114,10 +111,7 @@ pub mod v1 {
 				)
 			);
 
-			ensure!(
-				Pallet::<T>::on_chain_storage_version() == 1,
-				DispatchError::Other("wrong storage version")
-			);
+			ensure!(Pallet::<T>::on_chain_storage_version() == 1, "wrong storage version");
 
 			Ok(())
 		}
