@@ -359,7 +359,7 @@ pub mod v9 {
 
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == ObsoleteReleases::V9_0_0,
-				DispatchError::Other("must upgrade ")
+				DispatchError::Other("must upgrade")
 			);
 			Ok(())
 		}
