@@ -207,6 +207,43 @@ where
 			}
 		}
 	}
+
+	fn translate_next<O: Decode, F: FnMut(K, O) -> Option<V>>(
+		previous_key: Option<Vec<u8>>,
+		mut f: F,
+	) -> (Option<Vec<u8>>, Result<(), ()>) {
+		let prefix = G::prefix_hash();
+		let previous_key = previous_key.unwrap_or_else(|| prefix.clone());
+
+		match sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix)) {
+			Some(current_key) => {
+				let value = match unhashed::get::<O>(&current_key) {
+					Some(value) => value,
+					None => {
+						log::error!("Invalid translate: fail to decode old value");
+						return (Some(current_key), Err(()))
+					},
+				};
+
+				let mut key_material = G::Hasher::reverse(&current_key[prefix.len()..]);
+				let key = match K::decode(&mut key_material) {
+					Ok(key) => key,
+					Err(_) => {
+						log::error!("Invalid translate: fail to decode key");
+						return (Some(current_key), Err(()))
+					},
+				};
+
+				match f(key, value) {
+					Some(new) => unhashed::put::<V>(&current_key, &new),
+					None => unhashed::kill(&current_key),
+				}
+
+				(Some(current_key), Ok(()))
+			},
+			None => (None, Ok(())),
+		}
+	}
 }
 
 impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V> for G {
