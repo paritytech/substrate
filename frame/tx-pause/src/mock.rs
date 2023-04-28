@@ -209,7 +209,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.unwrap();
 
 	GenesisBuild::<Test>::assimilate_storage(
-		&pallet_tx_pause::GenesisConfig { paused: vec![], _phantom: Default::default() },
+		&pallet_tx_pause::GenesisConfig { paused: vec![] },
 		&mut t,
 	)
 	.unwrap();

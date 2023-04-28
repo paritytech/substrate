@@ -131,7 +131,6 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		/// The initially paused calls.
 		pub paused: Vec<FullNameOf<T>>,
-		pub _phantom: PhantomData<T>,
 	}
 
 	#[cfg(feature = "std")]
@@ -139,7 +138,7 @@ pub mod pallet {
 		// NOTE: `derive(Default)` does not work together with `#[pallet::genesis_config]`.
 		// We therefore need to add a trivial default impl.
 		fn default() -> Self {
-			Self { paused: Default::default(), _phantom: PhantomData }
+			Self { paused: Default::default() }
 		}
 	}
 
