@@ -133,8 +133,9 @@ mod tests {
 	use sc_consensus_grandpa::{
 		report, AuthorityId, FinalityProof, GrandpaJustification, GrandpaJustificationSender,
 	};
+	use sc_rpc::testing::test_executor;
 	use sp_blockchain::HeaderBackend;
-	use sp_core::{crypto::ByteArray, testing::TaskExecutor};
+	use sp_core::crypto::ByteArray;
 	use sp_keyring::Ed25519Keyring;
 	use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 	use substrate_test_runtime_client::{
@@ -251,7 +252,7 @@ mod tests {
 	{
 		let (justification_sender, justification_stream) = GrandpaJustificationStream::channel();
 		let finality_proof_provider = Arc::new(TestFinalityProofProvider { finality_proof });
-		let executor = Arc::new(TaskExecutor::default());
+		let executor = test_executor();
 
 		let rpc = Grandpa::new(
 			executor,

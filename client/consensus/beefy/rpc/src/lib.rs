@@ -222,7 +222,7 @@ mod tests {
 				// Success
 				return
 			}
-			std::thread::sleep(std::time::Duration::from_millis(50))
+			tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 		}
 
 		panic!(
