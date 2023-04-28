@@ -97,7 +97,6 @@ pub mod weights;
 
 #[cfg(test)]
 mod tests;
-
 use crate::{
 	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
 	gas::GasMeter,
@@ -108,8 +107,9 @@ use crate::{
 use codec::{Codec, Decode, Encode, HasCompact};
 use environmental::*;
 use frame_support::{
-	dispatch::{DispatchError, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
+	dispatch::{DispatchError, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo, RawOrigin},
 	ensure,
+	error::BadOrigin,
 	traits::{
 		tokens::fungible::Inspect, ConstU32, Contains, Currency, Get, Randomness,
 		ReservableCurrency, Time,
@@ -117,7 +117,7 @@ use frame_support::{
 	weights::Weight,
 	BoundedVec, RuntimeDebugNoBound, WeakBoundedVec,
 };
-use frame_system::{ensure_signed, ensure_signed_or_root, Pallet as System};
+use frame_system::{ensure_signed, pallet_prelude::OriginFor, Pallet as System};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
 	ContractInstantiateResult, ExecReturnValue, GetStorageResult, InstantiateReturnValue,
@@ -584,21 +584,15 @@ pub mod pallet {
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			// Ensure that the origin is either a signed extrinsic or root.
-			let origin = match ensure_signed_or_root(origin)? {
-				Some(t) => Origin::Signed(t),
-				None => Origin::Root,
-			};
-			let dest = T::Lookup::lookup(dest)?;
-			let gas_limit: Weight = gas_limit.into();
 			let common = CommonInput {
-				origin,
+				origin: Origin::from_origin_for(origin)?,
 				value,
 				data,
-				gas_limit,
+				gas_limit: gas_limit.into(),
 				storage_deposit_limit: storage_deposit_limit.map(Into::into),
 				debug_message: None,
 			};
+			let dest = T::Lookup::lookup(dest)?;
 			let mut output =
 				CallInput::<T> { dest, determinism: Determinism::Enforced }.run_guarded(common);
 			if let Ok(retval) = &output.result {
@@ -649,12 +643,11 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			let origin = ensure_signed(origin)?;
 			let code_len = code.len() as u32;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
-				origin: Origin::from_account_id(origin),
+				origin: Origin::from_origin_for(origin)?,
 				value,
 				data,
 				gas_limit,
@@ -692,11 +685,10 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			let origin = ensure_signed(origin)?;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
-				origin: Origin::from_account_id(origin),
+				origin: Origin::from_origin_for(origin)?,
 				value,
 				data,
 				gas_limit,
@@ -940,9 +932,14 @@ impl<T: Config> Origin<T> {
 	pub fn from_account_id(account_id: T::AccountId) -> Self {
 		Origin::Signed(account_id)
 	}
-}
-
-impl<T: Config> Origin<T> {
+	/// Creates a new Origin from a OriginFor
+	pub fn from_origin_for(o: OriginFor<T>) -> Result<Self, DispatchError> {
+		match o.into() {
+			Ok(RawOrigin::Root) => Ok(Self::Root),
+			Ok(RawOrigin::Signed(t)) => Ok(Self::Signed(t)),
+			_ => Err(BadOrigin.into()),
+		}
+	}
 	/// Returns the AccountId of a Signed Origin or an error if the origin is Root.
 	pub fn account_id(&self) -> Result<&T::AccountId, DispatchError> {
 		match self {
@@ -1003,6 +1000,16 @@ trait Invokable<T: Config> {
 		environmental!(executing_contract: bool);
 
 		let gas_limit = common.gas_limit;
+
+		// Check whether the origin is allowed here.
+		if let Err(e) = self.ensure_origin(common.origin.clone()) {
+			return InternalOutput {
+				gas_meter: GasMeter::new(gas_limit),
+				storage_deposit: Default::default(),
+				result: Err(ExecError { error: e.into(), origin: ErrorOrigin::Caller }),
+			}
+		}
+
 		executing_contract::using_once(&mut false, || {
 			executing_contract::with(|f| {
 				// Fail if already entered contract execution
@@ -1038,6 +1045,16 @@ trait Invokable<T: Config> {
 		common: CommonInput<T>,
 		gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output>;
+
+	/// This function ensures that the given `origin` is allowed to invoke the current `Invokable`.
+	///
+	/// Called by dispatchables and public functions through the [`Invokable::run_guarded`].
+	fn ensure_origin(&self, origin: Origin<T>) -> Result<Option<T::AccountId>, DispatchError> {
+		match origin {
+			Origin::Signed(t) => Ok(Some(t)),
+			_ => Err(DispatchError::BadOrigin),
+		}
+	}
 }
 
 impl<T: Config> Invokable<T> for CallInput<T> {
@@ -1073,6 +1090,13 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 			*determinism,
 		);
 		InternalOutput { gas_meter, storage_deposit: storage_meter.into_deposit(&origin), result }
+	}
+
+	fn ensure_origin(&self, origin: Origin<T>) -> Result<Option<T::AccountId>, DispatchError> {
+		match origin {
+			Origin::Signed(t) => Ok(Some(t)),
+			Origin::Root => Ok(None),
+		}
 	}
 }
 
@@ -1141,6 +1165,13 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 			result
 		};
 		InternalOutput { result: try_exec(), gas_meter, storage_deposit }
+	}
+
+	fn ensure_origin(&self, origin: Origin<T>) -> Result<Option<T::AccountId>, DispatchError> {
+		match origin {
+			Origin::Signed(t) => Ok(Some(t)),
+			Origin::Root => Err(DispatchError::RootNotAllowed),
+		}
 	}
 }
 

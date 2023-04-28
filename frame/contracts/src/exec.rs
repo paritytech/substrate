@@ -447,7 +447,7 @@ pub struct Frame<T: Config> {
 struct DelegatedCall<T: Config, E> {
 	/// The executable which is run instead of the contracts own `executable`.
 	executable: E,
-	/// The account id of the caller contract.
+	/// The caller of the contract stack.
 	caller: Origin<T>,
 }
 

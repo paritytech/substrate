@@ -4959,7 +4959,7 @@ fn root_cannot_instantiate_with_code() {
 	let (wasm, _) = compile_module::<Test>("dummy").unwrap();
 
 	ExtBuilder::default().build().execute_with(|| {
-		assert_noop!(
+		assert_err_ignore_postinfo!(
 			Contracts::instantiate_with_code(
 				RuntimeOrigin::root(),
 				0,
@@ -4969,7 +4969,7 @@ fn root_cannot_instantiate_with_code() {
 				vec![],
 				vec![],
 			),
-			DispatchError::BadOrigin,
+			DispatchError::RootNotAllowed,
 		);
 	});
 }
@@ -4979,7 +4979,7 @@ fn root_cannot_instantiate() {
 	let (_, code_hash) = compile_module::<Test>("dummy").unwrap();
 
 	ExtBuilder::default().build().execute_with(|| {
-		assert_noop!(
+		assert_err_ignore_postinfo!(
 			Contracts::instantiate(
 				RuntimeOrigin::root(),
 				0,
@@ -4989,7 +4989,7 @@ fn root_cannot_instantiate() {
 				vec![],
 				vec![],
 			),
-			DispatchError::BadOrigin,
+			DispatchError::RootNotAllowed
 		);
 	});
 }
