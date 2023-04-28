@@ -18,6 +18,8 @@
 pub mod v1 {
 	use crate::{types::BalanceOf, *};
 	use frame_support::{
+		dispatch::{DispatchError, DispatchResult},
+		ensure,
 		storage::unhashed,
 		traits::{Defensive, Get, GetStorageVersion, OnRuntimeUpgrade},
 		weights::Weight,

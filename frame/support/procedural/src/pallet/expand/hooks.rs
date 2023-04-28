@@ -17,6 +17,9 @@
 
 use crate::pallet::Def;
 
+#[cfg(feature = "try-runtime")]
+use crate::dispatch::{DispatchError, DispatchResult};
+
 /// * implement the individual traits using the Hooks trait
 pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 	let (where_clause, span, has_runtime_upgrade) = match def.hooks.as_ref() {
@@ -160,7 +163,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<#frame_support::sp_std::vec::Vec<u8>, &'static str> {
+			fn pre_upgrade() -> Result<#frame_support::sp_std::vec::Vec<u8>, DispatchError> {
 				<
 					Self
 					as

@@ -23,6 +23,12 @@ use frame_support::{
 	traits::OnRuntimeUpgrade,
 };
 
+#[cfg(feature = "try-runtime")]
+use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
+	ensure,
+};
+
 /// Used for release versioning upto v12.
 ///
 /// Obsolete from v13. Keeping around to make encoding/decoding of old migration code easier.

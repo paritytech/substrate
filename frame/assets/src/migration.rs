@@ -125,9 +125,10 @@ pub mod v1 {
 				)
 			);
 
-			Asset::<T>::iter().for_each(|(_id, asset)| {
-				ensure!(asset.status == AssetStatus::Live || asset.status == AssetStatus::Frozen, DispatchError::Other("assets should only be live or frozen. None should be in destroying status, or undefined state"))
-			});
+			Asset::<T>::iter().try_for_each(|(_id, asset)| -> DispatchResult {
+				ensure!(asset.status == AssetStatus::Live || asset.status == AssetStatus::Frozen, DispatchError::Other("assets should only be live or frozen. None should be in destroying status, or undefined state"));
+				Ok(())
+			})?;
 			Ok(())
 		}
 	}

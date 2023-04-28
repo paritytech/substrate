@@ -137,6 +137,9 @@ use sp_runtime::{
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
+#[cfg(feature = "try-runtime")]
+use frame_support::dispatch::DispatchError;
+
 #[allow(dead_code)]
 const LOG_TARGET: &str = "runtime::executive";
 

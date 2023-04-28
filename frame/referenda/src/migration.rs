@@ -97,7 +97,7 @@ pub mod v1 {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			let onchain_version = Pallet::<T, I>::on_chain_storage_version();
-			ensure!(onchain_version, 0, DispatchError::Other("migration from version 0 to 1."));
+			ensure!(onchain_version == 0, DispatchError::Other("migration from version 0 to 1."));
 			let referendum_count = v0::ReferendumInfoFor::<T, I>::iter().count();
 			log::info!(
 				target: TARGET,

@@ -128,7 +128,9 @@ pub mod v3 {
 						agenda.len(),
 						max_scheduled_per_block,
 					);
-					return Err("Agenda would overflow `MaxScheduledPerBlock`.")
+					return Err(DispatchError::Other(
+						"Agenda would overflow `MaxScheduledPerBlock`.",
+					))
 				}
 			}
 			// Check that bounding the calls will not overflow `MAX_LENGTH`.
@@ -145,7 +147,7 @@ pub mod v3 {
 									block_number,
 									l,
 								);
-								return Err("Call is too large.")
+								return Err(DispatchError::Other("Call is too large."))
 							}
 						},
 						_ => (),

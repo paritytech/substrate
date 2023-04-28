@@ -24,6 +24,12 @@ use frame_support::{
 };
 use sp_std::collections::btree_map::BTreeMap;
 
+#[cfg(feature = "try-runtime")]
+use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
+	ensure,
+};
+
 /// The log target.
 const TARGET: &'static str = "runtime::preimage::migration::v1";
 
@@ -164,7 +170,7 @@ pub mod v1 {
 					old_images
 				);
 			}
-			ensure!(StorageVersion::get::<Pallet<T>>(), 1, DispatchError::Other("must upgrade"));
+			ensure!(StorageVersion::get::<Pallet<T>>() == 1, DispatchError::Other("must upgrade"));
 			Ok(())
 		}
 	}

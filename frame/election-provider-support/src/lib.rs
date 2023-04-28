@@ -189,6 +189,9 @@ pub use sp_npos_elections::{
 };
 pub use traits::NposSolution;
 
+#[cfg(feature = "try-runtime")]
+use frame_support::dispatch::DispatchResult;
+
 // re-export for the solution macro, with the dependencies of the macro.
 #[doc(hidden)]
 pub use codec;

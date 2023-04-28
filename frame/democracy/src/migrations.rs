@@ -136,21 +136,19 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> DispatchResult {
-			assert_eq!(StorageVersion::get::<Pallet<T>>(), 1, "must upgrade");
+		fn post_upgrade(state: Vec<u8>) -> frame_support::dispatch::DispatchResult {
+			ensure!(StorageVersion::get::<Pallet<T>>() == 1, DispatchError::Other("must upgrade"));
 
 			let (old_props_count, old_ref_count): (u32, u32) =
 				Decode::decode(&mut &state[..]).expect("pre_upgrade provides a valid state; qed");
 			let new_props_count = crate::PublicProps::<T>::get().len() as u32;
 			ensure!(
-				new_props_count,
-				old_props_count,
+				new_props_count == old_props_count,
 				DispatchError::Other("must migrate all public proposals")
 			);
 			let new_ref_count = crate::ReferendumInfoOf::<T>::iter().count() as u32;
 			ensure!(
-				new_ref_count,
-				old_ref_count,
+				new_ref_count == old_ref_count,
 				DispatchError::Other("must migrate all referenda")
 			);
 

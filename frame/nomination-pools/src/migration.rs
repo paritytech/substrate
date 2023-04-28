@@ -357,13 +357,14 @@ pub mod v2 {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			// all reward accounts must have more than ED.
-			RewardPools::<T>::iter().for_each(|(id, _)| {
+			RewardPools::<T>::iter().try_for_each(|(id, _)| -> DispatchResult {
 				ensure!(
 					T::Currency::free_balance(&Pallet::<T>::create_reward_account(id)) >=
 						T::Currency::minimum_balance(),
 					DispatchError::Other("Reward accounts must have greater balance than ED.")
-				)
-			});
+				);
+				Ok(())
+			})?;
 
 			Ok(Vec::new())
 		}
@@ -392,12 +393,13 @@ pub mod v2 {
 
 			// all reward pools must have exactly ED in them. This means no reward can be claimed,
 			// and that setting reward counters all over the board to zero will work henceforth.
-			RewardPools::<T>::iter().for_each(|(id, _)| {
+			RewardPools::<T>::iter().try_for_each(|(id, _)| -> DispatchResult {
 				ensure!(
 					RewardPool::<T>::current_balance(id) == Zero::zero(),
 					DispatchError::Other("Reward pool balance must be zero."),
 				);
-			});
+				Ok(())
+			})?;
 
 			log!(info, "post upgrade hook for MigrateToV2 executed.");
 			Ok(())
