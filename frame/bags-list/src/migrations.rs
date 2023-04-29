@@ -93,18 +93,12 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		// The list node data should be corrupt at this point, so this is zero.
-		ensure!(
-			crate::ListNodes::<T, I>::iter().count() == 0,
-			DispatchError::Other("list node data is not corrupt")
-		);
+		ensure!(crate::ListNodes::<T, I>::iter().count() == 0, "list node data is not corrupt");
 		// We can use the helper `old::ListNode` to get the existing data.
 		let iter_node_count: u32 = old::ListNodes::<T, I>::iter().count() as u32;
 		let tracked_node_count: u32 = old::CounterForListNodes::<T, I>::get();
 		crate::log!(info, "number of nodes before: {:?} {:?}", iter_node_count, tracked_node_count);
-		ensure!(
-			iter_node_count == tracked_node_count,
-			DispatchError::Other("Node count is wrong.")
-		);
+		ensure!(iter_node_count == tracked_node_count, "Node count is wrong.");
 		Ok(iter_node_count.encode())
 	}
 
@@ -140,14 +134,8 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 			iter_node_count_after,
 			tracked_node_count_after,
 		);
-		ensure!(
-			iter_node_count_after == node_count_before,
-			DispatchError::Other("Not all nodes were migrated.")
-		);
-		ensure!(
-			tracked_node_count_after == iter_node_count_after,
-			DispatchError::Other("Node count is wrong.")
-		);
+		ensure!(iter_node_count_after == node_count_before, "Not all nodes were migrated.");
+		ensure!(tracked_node_count_after == iter_node_count_after, "Node count is wrong.");
 		Ok(())
 	}
 }

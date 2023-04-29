@@ -109,9 +109,7 @@ pub mod v1 {
 			let post_count = Asset::<T>::iter().count() as u32;
 			ensure!(
 				prev_count == post_count,
-				DispatchError::Other(
-					"the asset count before and after the migration should be the same"
-				)
+				"the asset count before and after the migration should be the same"
 			);
 
 			let current_version = Pallet::<T>::current_storage_version();
@@ -120,9 +118,7 @@ pub mod v1 {
 			frame_support::ensure!(current_version == 1, "must_upgrade");
 			ensure!(
 				current_version == onchain_version,
-				DispatchError::Other(
-					"after migration, the current_version and onchain_version should be the same"
-				)
+				"after migration, the current_version and onchain_version should be the same"
 			);
 
 			Asset::<T>::iter().try_for_each(|(_id, asset)| -> DispatchResult {

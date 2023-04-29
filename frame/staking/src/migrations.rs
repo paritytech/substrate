@@ -357,10 +357,8 @@ pub mod v9 {
 			let validators = Validators::<T>::count();
 			ensure!(
 				post_count == prev_count + validators,
-				DispatchError::Other(
-					"`VoterList` count after the migration must equal to the sum of \
-				 previous count and the current number of validators"
-				)
+				"`VoterList` count after the migration must equal to the sum of \
+				previous count and the current number of validators"
 			);
 
 			frame_support::ensure!(

@@ -106,9 +106,7 @@ pub mod v1 {
 			let post_count = Collection::<T>::iter().count() as u32;
 			ensure!(
 				prev_count == post_count,
-				DispatchError::Other(
-					"the records count before and after the migration should be the same"
-				)
+				"the records count before and after the migration should be the same"
 			);
 
 			ensure!(Pallet::<T>::on_chain_storage_version() == 1, "wrong storage version");

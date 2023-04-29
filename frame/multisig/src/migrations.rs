@@ -78,9 +78,7 @@ pub mod v1 {
 			ensure!(onchain == 1, "this migration needs to be run");
 			ensure!(
 				Calls::<T>::iter().count() == 0,
-				DispatchError::Other(
-					"there are some dangling calls that need to be destroyed and refunded"
-				)
+				"there are some dangling calls that need to be destroyed and refunded"
 			);
 			Ok(())
 		}

@@ -3066,9 +3066,7 @@ impl<T: Config> Pallet<T> {
 		let reward_pools = RewardPools::<T>::iter_keys().collect::<Vec<_>>();
 		ensure!(
 			bonded_pools == reward_pools,
-			DispatchError::Other(
-				"`BondedPools` and `RewardPools` must all have the EXACT SAME key-set."
-			)
+			"`BondedPools` and `RewardPools` must all have the EXACT SAME key-set."
 		);
 
 		ensure!(
@@ -3135,9 +3133,7 @@ impl<T: Config> Pallet<T> {
 			ensure!(
 				RewardPool::<T>::current_balance(id) >=
 					pools_members_pending_rewards.get(&id).copied().unwrap_or_default(),
-				DispatchError::Other(
-					"The sum of the pending rewards must be less than the leftover balance."
-				)
+				"The sum of the pending rewards must be less than the leftover balance."
 			);
 			Ok(())
 		})?;
@@ -3149,8 +3145,9 @@ impl<T: Config> Pallet<T> {
 				bonded_pool.member_counter,
 				"Each `BondedPool.member_counter` must be equal to the actual count of members of this pool"
 			);
-			ensure!(MaxPoolMembersPerPool::<T>::get()
-				.map_or(true, |max| bonded_pool.member_counter <= max),
+			ensure!(
+				MaxPoolMembersPerPool::<T>::get()
+					.map_or(true, |max| bonded_pool.member_counter <= max),
 				Error::<T>::MaxPoolMembers
 			);
 
@@ -3158,8 +3155,8 @@ impl<T: Config> Pallet<T> {
 			ensure!(
 				bonded_pool.is_destroying_and_only_depositor(depositor.active_points()) ||
 					depositor.active_points() >= MinCreateBond::<T>::get(),
-				DispatchError::Other("depositor must always have MinCreateBond stake in the pool, except for when the \
-				pool is being destroyed and the depositor is the last member"),
+				"depositor must always have MinCreateBond stake in the pool, except for when the \
+				pool is being destroyed and the depositor is the last member",
 			);
 			Ok(())
 		})?;
