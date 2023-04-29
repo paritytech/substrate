@@ -5922,6 +5922,7 @@ dependencies = [
  "pallet-contracts-primitives",
  "pallet-contracts-proc-macro",
  "pallet-insecure-randomness-collective-flip",
+ "pallet-proxy",
  "pallet-timestamp",
  "pallet-utility",
  "parity-scale-codec",
