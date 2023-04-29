@@ -1094,27 +1094,29 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 
 /// Trait grouping types shared by a VRF signer and verifiers.
 pub trait VrfCrypto {
-	/// VRF input data.
+	/// VRF input.
 	type VrfInput;
-	/// VRF pre-output generated from input data.
-	type VrfPreOutput;
-	/// Associated signature type.
+	/// VRF output generated from input data.
+	type VrfOutput;
+	/// VRF Auxcontext specific aux data.
+	type VrfSignData;
+	/// VRF signature.
 	type VrfSignature;
 }
 
 /// VRF Secret Key.
 pub trait VrfSecret: VrfCrypto {
-	/// Get VRF pre-output.
-	fn vrf_preout(&self, data: &Self::VrfInput) -> Self::VrfPreOutput;
+	/// Get VRF-specific output .
+	fn vrf_output(&self, data: &Self::VrfInput) -> Self::VrfOutput;
 
-	/// Sign input data with optional pre-computed pre-output.
-	fn vrf_sign(&self, input: &Self::VrfInput) -> Self::VrfSignature;
+	/// Sign VRF-specific data.
+	fn vrf_sign(&self, input: &Self::VrfSignData) -> Self::VrfSignature;
 }
 
 /// VRF Public Key.
 pub trait VrfPublic: VrfCrypto {
 	/// Verify input data signature.
-	fn vrf_verify(&self, data: &Self::VrfInput, signature: &Self::VrfSignature) -> bool;
+	fn vrf_verify(&self, data: &Self::VrfSignData, signature: &Self::VrfSignature) -> bool;
 }
 
 /// An identifier for a specific cryptographic algorithm used by a key pair

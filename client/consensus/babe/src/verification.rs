@@ -30,7 +30,7 @@ use sp_consensus_babe::{
 		CompatibleDigestItem, PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest,
 		SecondaryVRFPreDigest,
 	},
-	make_vrf_input, AuthorityId, AuthorityPair, AuthoritySignature,
+	make_vrf_sign_data, AuthorityId, AuthorityPair, AuthoritySignature,
 };
 use sp_consensus_slots::Slot;
 use sp_core::{
@@ -171,9 +171,9 @@ fn check_primary_header<B: BlockT + Sized>(
 		return Err(babe_err(Error::BadSignature(pre_hash)))
 	}
 
-	let vrf_input = make_vrf_input(&epoch.randomness, pre_digest.slot, epoch_index);
+	let data = make_vrf_sign_data(&epoch.randomness, pre_digest.slot, epoch_index);
 
-	if !authority_id.as_inner_ref().vrf_verify(&vrf_input, &pre_digest.vrf_signature) {
+	if !authority_id.as_inner_ref().vrf_verify(&data, &pre_digest.vrf_signature) {
 		return Err(babe_err(Error::VrfVerificationFailed))
 	}
 
@@ -182,10 +182,10 @@ fn check_primary_header<B: BlockT + Sized>(
 
 	let score = authority_id
 		.as_inner_ref()
-		.output_bytes::<AUTHORING_SCORE_LENGTH>(
+		.make_bytes::<AUTHORING_SCORE_LENGTH>(
 			AUTHORING_SCORE_VRF_CONTEXT,
-			&vrf_input,
-			&pre_digest.vrf_signature.preout,
+			&data.as_ref(),
+			&pre_digest.vrf_signature.output,
 		)
 		.map(u128::from_le_bytes)
 		.map_err(|_| babe_err(Error::VrfVerificationFailed))?;
@@ -253,9 +253,9 @@ fn check_secondary_vrf_header<B: BlockT>(
 		return Err(Error::BadSignature(pre_hash))
 	}
 
-	let vrf_input = make_vrf_input(&epoch.randomness, pre_digest.slot, epoch_index);
+	let data = make_vrf_sign_data(&epoch.randomness, pre_digest.slot, epoch_index);
 
-	if !author.as_inner_ref().vrf_verify(&vrf_input, &pre_digest.vrf_signature) {
+	if !author.as_inner_ref().vrf_verify(&data, &pre_digest.vrf_signature) {
 		return Err(Error::VrfVerificationFailed)
 	}
 

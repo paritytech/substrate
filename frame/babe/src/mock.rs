@@ -314,17 +314,16 @@ pub fn make_secondary_vrf_pre_digest(
 	Digest { logs: vec![log] }
 }
 
-pub fn make_vrf_signature_and_output(
+pub fn make_vrf_signature_and_randomness(
 	slot: Slot,
 	pair: &sp_consensus_babe::AuthorityPair,
 ) -> (VrfSignature, Randomness) {
-	let vrf_input = sp_consensus_babe::make_vrf_input(&Babe::randomness(), slot, 0);
+	let transcript = sp_consensus_babe::make_vrf_transcript(&Babe::randomness(), slot, 0);
 
-	let signature = pair.as_ref().vrf_sign(&vrf_input);
+	let randomness =
+		pair.as_ref().make_bytes(sp_consensus_babe::RANDOMNESS_VRF_CONTEXT, &transcript);
 
-	let randomness = pair
-		.as_ref()
-		.output_bytes(sp_consensus_babe::RANDOMNESS_VRF_CONTEXT, &vrf_input);
+	let signature = pair.as_ref().vrf_sign(&transcript.into());
 
 	(signature, randomness)
 }

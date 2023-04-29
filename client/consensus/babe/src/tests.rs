@@ -29,7 +29,8 @@ use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_babe::{
-	inherents::InherentDataProvider, make_vrf_input, AllowedSlots, AuthorityId, AuthorityPair, Slot,
+	inherents::InherentDataProvider, make_vrf_sign_data, AllowedSlots, AuthorityId, AuthorityPair,
+	Slot,
 };
 use sp_consensus_slots::SlotDuration;
 use sp_core::crypto::Pair;
@@ -629,24 +630,18 @@ fn claim_vrf_check() {
 		PreDigest::Primary(d) => d,
 		v => panic!("Unexpected pre-digest variant {:?}", v),
 	};
-	let vrf_input = make_vrf_input(&epoch.randomness.clone(), 0.into(), epoch.epoch_index);
-	let sign = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, &public, &vrf_input)
-		.unwrap()
-		.unwrap();
-	assert_eq!(pre_digest.vrf_signature.preout, sign.preout);
+	let data = make_vrf_sign_data(&epoch.randomness.clone(), 0.into(), epoch.epoch_index);
+	let sign = keystore.sr25519_vrf_sign(AuthorityId::ID, &public, &data).unwrap().unwrap();
+	assert_eq!(pre_digest.vrf_signature.output, sign.output);
 
 	// We expect a SecondaryVRF claim for slot 1
 	let pre_digest = match claim_slot(1.into(), &epoch, &keystore).unwrap().0 {
 		PreDigest::SecondaryVRF(d) => d,
 		v => panic!("Unexpected pre-digest variant {:?}", v),
 	};
-	let vrf_input = make_vrf_input(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
-	let sign = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, &public, &vrf_input)
-		.unwrap()
-		.unwrap();
-	assert_eq!(pre_digest.vrf_signature.preout, sign.preout);
+	let data = make_vrf_sign_data(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
+	let sign = keystore.sr25519_vrf_sign(AuthorityId::ID, &public, &data).unwrap().unwrap();
+	assert_eq!(pre_digest.vrf_signature.output, sign.output);
 
 	// Check that correct epoch index has been used if epochs are skipped (primary VRF)
 	let slot = Slot::from(103);
@@ -655,13 +650,10 @@ fn claim_vrf_check() {
 		v => panic!("Unexpected claim variant {:?}", v),
 	};
 	let fixed_epoch = epoch.clone_for_slot(slot);
-	let vrf_input = make_vrf_input(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
-	let sign = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, &public, &vrf_input)
-		.unwrap()
-		.unwrap();
+	let data = make_vrf_sign_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
+	let sign = keystore.sr25519_vrf_sign(AuthorityId::ID, &public, &data).unwrap().unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);
-	assert_eq!(claim.vrf_signature.preout, sign.preout);
+	assert_eq!(claim.vrf_signature.output, sign.output);
 
 	// Check that correct epoch index has been used if epochs are skipped (secondary VRF)
 	let slot = Slot::from(100);
@@ -670,13 +662,10 @@ fn claim_vrf_check() {
 		v => panic!("Unexpected claim variant {:?}", v),
 	};
 	let fixed_epoch = epoch.clone_for_slot(slot);
-	let vrf_input = make_vrf_input(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
-	let sign = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, &public, &vrf_input)
-		.unwrap()
-		.unwrap();
+	let data = make_vrf_sign_data(&epoch.randomness.clone(), slot, fixed_epoch.epoch_index);
+	let sign = keystore.sr25519_vrf_sign(AuthorityId::ID, &public, &data).unwrap().unwrap();
 	assert_eq!(fixed_epoch.epoch_index, 11);
-	assert_eq!(pre_digest.vrf_signature.preout, sign.preout);
+	assert_eq!(pre_digest.vrf_signature.output, sign.output);
 }
 
 // Propose and import a new BABE block on top of the given parent.

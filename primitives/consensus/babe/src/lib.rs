@@ -32,7 +32,9 @@ use sp_std::vec::Vec;
 
 use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
 
-pub use sp_core::sr25519::vrf::{VrfInput, VrfPreOutput, VrfProof, VrfSignature};
+pub use sp_core::sr25519::vrf::{
+	VrfInput, VrfOutput, VrfProof, VrfSignData, VrfSignature, VrfTranscript,
+};
 
 /// Key type for BABE module.
 pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::BABE;
@@ -95,7 +97,7 @@ pub type BabeAuthorityWeight = u64;
 pub type BabeBlockWeight = u32;
 
 /// Make VRF input suitable for BABE's randomness generation.
-pub fn make_vrf_input(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfInput {
+pub fn make_vrf_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfInput {
 	VrfInput::new(
 		&BABE_ENGINE_ID,
 		&[
@@ -104,6 +106,11 @@ pub fn make_vrf_input(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfInp
 			(b"chain randomness", randomness),
 		],
 	)
+}
+
+/// Make VRF signing data suitable for BABE's protocol.
+pub fn make_vrf_sign_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfSignData {
+	make_vrf_transcript(randomness, slot, epoch).into()
 }
 
 /// An consensus log item for BABE.
