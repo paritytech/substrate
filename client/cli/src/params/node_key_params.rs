@@ -33,16 +33,12 @@ const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 #[derive(Debug, Clone, Args)]
 pub struct NodeKeyParams {
 	/// The secret key to use for libp2p networking.
-	///
 	/// The value is a string that is parsed according to the choice of
 	/// `--node-key-type` as follows:
-	///
 	///   `ed25519`:
 	///   The value is parsed as a hex-encoded Ed25519 32 byte secret key,
 	///   i.e. 64 hex characters.
-	///
 	/// The value of this option takes precedence over `--node-key-file`.
-	///
 	/// WARNING: Secrets provided as command-line arguments are easily exposed.
 	/// Use of this option should be limited to development and testing. To use
 	/// an externally managed secret key, use `--node-key-file` instead.
@@ -50,33 +46,25 @@ pub struct NodeKeyParams {
 	pub node_key: Option<String>,
 
 	/// The type of secret key to use for libp2p networking.
-	///
 	/// The secret key of the node is obtained as follows:
-	///
 	///   * If the `--node-key` option is given, the value is parsed as a secret key according to
 	///     the type. See the documentation for `--node-key`.
-	///
 	///   * If the `--node-key-file` option is given, the secret key is read from the specified
 	///     file. See the documentation for `--node-key-file`.
-	///
 	///   * Otherwise, the secret key is read from a file with a predetermined, type-specific name
 	///     from the chain-specific network config directory inside the base directory specified by
 	///     `--base-dir`. If this file does not exist, it is created with a newly generated secret
 	///     key of the chosen type.
-	///
 	/// The node's secret key determines the corresponding public key and hence the
 	/// node's peer ID in the context of libp2p.
 	#[arg(long, value_name = "TYPE", value_enum, ignore_case = true, default_value_t = NodeKeyType::Ed25519)]
 	pub node_key_type: NodeKeyType,
 
 	/// The file from which to read the node's secret key to use for libp2p networking.
-	///
 	/// The contents of the file are parsed according to the choice of `--node-key-type`
 	/// as follows:
-	///
 	///   `ed25519`:
 	///   The file must contain an unencoded 32 byte or hex encoded Ed25519 secret key.
-	///
 	/// If the file does not exist, it is created with a newly generated secret key of
 	/// the chosen type.
 	#[arg(long, value_name = "FILE")]
