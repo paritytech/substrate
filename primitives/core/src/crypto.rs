@@ -1096,9 +1096,9 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 pub trait VrfCrypto {
 	/// VRF input.
 	type VrfInput;
-	/// VRF output generated from input data.
+	/// VRF output.
 	type VrfOutput;
-	/// VRF Auxcontext specific aux data.
+	/// VRF signing data.
 	type VrfSignData;
 	/// VRF signature.
 	type VrfSignature;
