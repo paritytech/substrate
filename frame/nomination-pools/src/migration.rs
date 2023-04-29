@@ -380,15 +380,11 @@ pub mod v2 {
 			// no reward or bonded pool has been skipped.
 			ensure!(
 				RewardPools::<T>::iter().count() as u32 == RewardPools::<T>::count(),
-				DispatchError::Other(
-					"The count of reward pools must remain the same after the migration."
-				)
+				"The count of reward pools must remain the same after the migration."
 			);
 			ensure!(
 				BondedPools::<T>::iter().count() as u32 == BondedPools::<T>::count(),
-				DispatchError::Other(
-					"The count of reward pools must remain the same after the migration."
-				)
+				"The count of reward pools must remain the same after the migration."
 			);
 
 			// all reward pools must have exactly ED in them. This means no reward can be claimed,
