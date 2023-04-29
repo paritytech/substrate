@@ -623,7 +623,7 @@ pub mod vrf {
 	pub struct VrfSignature {
 		/// VRF output.
 		pub output: VrfOutput,
-		/// VRF input proof.
+		/// VRF proof.
 		pub proof: VrfProof,
 	}
 
