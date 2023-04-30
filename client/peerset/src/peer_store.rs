@@ -38,7 +38,7 @@ const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
 /// decrement of 50 we decrease absolute value of the reputation by 1/50. This corresponds to a
 /// factor of `k = 0.98`. It takes ~ `ln(0.5) / ln(k)` seconds to reduce the reputation by half,
 /// or 34.3 seconds for the values above. In this setup the maximum allowed absolute value of
-/// `i32::MAX` becomes 0 in ~1100 seconds.
+/// `i32::MAX` becomes 0 in ~1100 seconds (actually less due to integer arithmetic).
 const INVERSE_DECREMENT: i32 = 50;
 /// Amount of time between the moment we last updated the [`PeerStore`] entry and the moment we
 /// remove it, once the reputation value reaches 0.
@@ -179,14 +179,30 @@ impl PeerStoreInner {
 	}
 
 	fn report_disconnect(&mut self, peer_id: PeerId) {
-		self.peers
-			.entry(peer_id)
-			.or_default()
-			.add_reputation(DISCONNECT_REPUTATION_CHANGE);
+		let peer_info = self.peers.entry(peer_id).or_default();
+		peer_info.add_reputation(DISCONNECT_REPUTATION_CHANGE);
+
+		log::trace!(
+			target: LOG_TARGET,
+			"Peer {} disconnected, reputation: {:+} to {}",
+			peer_id,
+			DISCONNECT_REPUTATION_CHANGE,
+			peer_info.reputation,
+		);
 	}
 
 	fn report_peer(&mut self, peer_id: PeerId, change: ReputationChange) {
-		self.peers.entry(peer_id).or_default().add_reputation(change.value);
+		let peer_info = self.peers.entry(peer_id).or_default();
+		peer_info.add_reputation(change.value);
+
+		log::trace!(
+			target: LOG_TARGET,
+			"Report {}: {:+} to {}. Reason: {}.",
+			peer_id,
+			change.value,
+			peer_info.reputation,
+			change.reason,
+		);
 	}
 
 	fn peer_reputation(&self, peer_id: &PeerId) -> i32 {
