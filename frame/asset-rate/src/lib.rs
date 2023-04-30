@@ -63,7 +63,7 @@ use frame_support::traits::{
 	fungible::Inspect,
 	tokens::{Balance, ConversionFromAssetBalance},
 };
-use sp_runtime::{traits::Zero, FixedPointNumber, FixedPointOperand, FixedU128};
+use sp_arithmetic::{traits::Zero, FixedPointNumber, FixedPointOperand, FixedU128};
 
 pub use pallet::*;
 pub use weights::WeightInfo;

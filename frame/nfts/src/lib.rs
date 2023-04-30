@@ -51,7 +51,10 @@ use frame_support::traits::{
 use frame_system::Config as SystemConfig;
 
 use sp_arithmetic::traits::{Saturating, Zero};
-use sp_runtime::{traits::StaticLookup, RuntimeDebug};
+use sp_runtime::{
+	traits::{IdentifyAccount, StaticLookup, Verify},
+	RuntimeDebug,
+};
 use sp_std::prelude::*;
 
 pub use pallet::*;

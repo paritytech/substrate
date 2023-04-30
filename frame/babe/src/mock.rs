@@ -26,7 +26,6 @@ use frame_support::{
 };
 use pallet_session::historical as pallet_session_historical;
 use sp_arithmetic::Perbill;
-use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_consensus_babe::{AuthorityId, AuthorityPair, Randomness, Slot, VrfSignature};
 use sp_core::{
 	crypto::{KeyTypeId, Pair, VrfSigner},

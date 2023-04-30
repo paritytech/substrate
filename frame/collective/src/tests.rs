@@ -216,7 +216,7 @@ fn record(event: RuntimeEvent) -> EventRecord<RuntimeEvent, H256> {
 }
 
 fn default_max_proposal_weight() -> Weight {
-	sp_runtime::Perbill::from_percent(80) * BlockWeights::get().max_block
+	sp_arithmetic::Perbill::from_percent(80) * BlockWeights::get().max_block
 }
 
 #[test]

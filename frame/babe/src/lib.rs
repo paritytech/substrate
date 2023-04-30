@@ -29,7 +29,6 @@ use frame_support::{
 	weights::Weight,
 	BoundedVec, WeakBoundedVec,
 };
-use sp_application_crypto::ByteArray;
 use sp_arithmetic::{
 	traits::{One, SaturatedConversion, Saturating, Zero},
 	Permill,
@@ -40,9 +39,8 @@ use sp_consensus_babe::{
 	EquivocationProof, Randomness as BabeRandomness, Slot, BABE_ENGINE_ID, RANDOMNESS_LENGTH,
 	RANDOMNESS_VRF_CONTEXT,
 };
-use sp_consensus_vrf::schnorrkel;
-use sp_runtime::{generic::DigestItem, traits::IsMember, ConsensusEngineId};
 use sp_core::crypto::Wraps;
+use sp_runtime::{generic::DigestItem, traits::IsMember, ConsensusEngineId};
 use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::{offence::OffenceReportSystem, SessionIndex};
 use sp_std::prelude::*;

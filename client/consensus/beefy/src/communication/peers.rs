@@ -21,9 +21,9 @@
 // TODO (issue #12296): replace this naive peer tracking with generic one that infers data
 // from multiple network protocols.
 
+use sc_network::{PeerId, ReputationChange};
 use sp_arithmetic::traits::Zero;
 use sp_runtime::traits::{Block, NumberFor};
-use sc_network::{PeerId, ReputationChange};
 use std::collections::{HashMap, VecDeque};
 
 /// Report specifying a reputation change for a given peer.

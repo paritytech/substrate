@@ -32,7 +32,10 @@ use frame_support::{
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use pallet_contracts_primitives::StorageDeposit as Deposit;
-use sp_arithmetic::{traits::Saturating, FixedPointNumber, FixedU128, Zero};
+use sp_arithmetic::{
+	traits::{Saturating, Zero},
+	FixedPointNumber, FixedU128,
+};
 use sp_std::{marker::PhantomData, vec::Vec};
 
 /// Deposit that uses the native currency's balance type.
