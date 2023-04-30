@@ -272,8 +272,8 @@ fn transition_to_signed_phase_from_unsigned() {
 
 			roll_to_epm_unsigned();
 
-			// At the end of the epoch we will run elect and rotate to a new session with
-			// a new set of validators.
+			// At the end of the epoch we will run elect and if everything is fine will 
+			// select a new set of validators.
 			assert!(<ElectionProviderMultiPhase as ElectionProvider>::elect().is_ok());
 		});
 }
