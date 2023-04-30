@@ -20,6 +20,7 @@ mod mock;
 
 pub(crate) const LOG_TARGET: &str = "tests::e2e-epm";
 
+use frame_election_provider_support::ElectionProvider;
 use mock::*;
 use pallet_election_provider_multi_phase::Phase;
 use sp_core::Get;
@@ -209,10 +210,10 @@ fn continous_slashes_below_offending_threshold() {
 #[test]
 /// During an ongoing incident we may want to alter the phase in EPM.
 ///
-/// This test will simulate a case where for some reason we want a new set of
-/// validators to be elected but we are still in an off phase. Since we want to
-/// speed things up and already start preparing a new solution, we will force
-/// enter the signed phase.
+/// This test will simulate a case where for some reason we want to start an
+/// election earlier while we are still in an off phase. To achieve this we will
+/// use the `force_start_phase` extrinsic to start a signed phase at the start
+/// of the next block.
 fn transition_to_signed_phase_from_off_phase() {
 	ExtBuilder::default().build_and_execute(|| {
 		assert_eq!(active_era(), 0);
@@ -236,31 +237,43 @@ fn transition_to_signed_phase_from_off_phase() {
 #[test]
 /// During an ongoing incident we may want to alter the phase in EPM.
 ///
-/// This test will simulate a case where we are coming to an end of the unsigned
-/// phase but no signed or unsigned solution was submitted. Since we don't want
-/// to get into the fallback strategy which can result in transitioning to an
-/// emergency phase if fallback is not set, we will force transition to a signed
-/// phase so that election happens one more time in hope of getting a solution.
+/// This test will simulate a case where we are in an unsigned phase but no
+/// signed or unsigned solution was submitted. Since we don't want to get into
+/// the fallback strategy which can result in transitioning to an emergency
+/// phase if fallback is not set, we will force transition to a signed phase so
+/// that election happens one more time in hope of getting a solution.
 fn transition_to_signed_phase_from_unsigned() {
-	ExtBuilder::default().build_and_execute(|| {
-		assert_eq!(active_era(), 0);
-		assert_eq!(Session::current_index(), 0);
-		assert!(ElectionProviderMultiPhase::current_phase().is_off());
+	let staking_builder = StakingExtBuilder::default().validator_count(10);
+	let epm_builder = EpmExtBuilder::default().disable_emergency_throttling();
 
-		roll_to_epm_unsigned();
-		assert_eq!(Session::current_index(), 0);
-		assert!(ElectionProviderMultiPhase::current_phase().is_unsigned());
+	ExtBuilder::default()
+		.staking(staking_builder)
+		.epm(epm_builder)
+		.build_and_execute(|| {
+			assert_eq!(active_era(), 0);
+			assert_eq!(Session::current_index(), 0);
+			assert!(ElectionProviderMultiPhase::current_phase().is_off());
 
-		assert!(ElectionProviderMultiPhase::force_start_phase(
-			RuntimeOrigin::root(),
-			Phase::Signed
-		)
-		.is_ok());
+			roll_to_epm_unsigned();
+			assert_eq!(Session::current_index(), 0);
+			assert!(ElectionProviderMultiPhase::current_phase().is_unsigned());
 
-		roll_to(System::block_number() + 1, false);
-		assert!(ElectionProviderMultiPhase::current_phase().is_signed());
+			assert!(ElectionProviderMultiPhase::force_start_phase(
+				RuntimeOrigin::root(),
+				Phase::Signed
+			)
+			.is_ok());
 
-		// Now solutions can be submitted again in a hope to finding a good enought
-		// solution this time.
-	});
+			roll_to(System::block_number() + 1, false);
+			assert!(ElectionProviderMultiPhase::current_phase().is_signed());
+
+			// New solutions can be submitted again in a hope to finding a good enought
+			// solution this time.
+
+			roll_to_epm_unsigned();
+
+			// At the end of the epoch we will run elect and rotate to a new session with
+			// a new set of validators.
+			assert!(<ElectionProviderMultiPhase as ElectionProvider>::elect().is_ok());
+		});
 }
