@@ -111,6 +111,8 @@ impl Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
+	type SessionsPerEra = ();
+	type BondingDuration = ConstU32<3>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -138,6 +140,7 @@ pub struct Offence {
 	pub validator_set_count: u32,
 	pub offenders: Vec<u64>,
 	pub time_slot: u128,
+	pub session_index: SessionIndex
 }
 
 impl offence::Offence<u64> for Offence {
@@ -157,10 +160,15 @@ impl offence::Offence<u64> for Offence {
 	}
 
 	fn session_index(&self) -> SessionIndex {
-		1
+		self.session_index
 	}
 
 	fn slash_fraction(&self, offenders_count: u32) -> Perbill {
 		Perbill::from_percent(5 + offenders_count * 100 / self.validator_set_count)
 	}
+}
+
+/// Create the report id for the given `offender` and `time_slot` combination.
+pub fn report_id(time_slot: u128, offender: u64) -> H256 {
+	Offences::report_id::<Offence>(&time_slot, &offender)
 }

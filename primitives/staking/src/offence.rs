@@ -117,8 +117,11 @@ pub trait Offence<Offender> {
 /// Errors that may happen on offence reports.
 #[derive(PartialEq, sp_runtime::RuntimeDebug)]
 pub enum OffenceError {
-	/// The report has already been sumbmitted.
+	/// The report has already been submitted.
 	DuplicateReport,
+
+	/// The report is no longer useful.
+	ObsoleteReport,
 
 	/// Other error has happened.
 	Other(u8),
@@ -129,6 +132,7 @@ impl sp_runtime::traits::Printable for OffenceError {
 		"OffenceError".print();
 		match self {
 			Self::DuplicateReport => "DuplicateReport".print(),
+			Self::ObsoleteReport => "ObsoleteReport".print(),
 			Self::Other(e) => {
 				"Other".print();
 				e.print();

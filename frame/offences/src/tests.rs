@@ -22,7 +22,7 @@
 use super::*;
 use crate::mock::{
 	new_test_ext, offence_reports, with_on_offence_fractions, Offence, Offences, RuntimeEvent,
-	System, KIND,
+	System, KIND, report_id
 };
 use frame_system::{EventRecord, Phase};
 use sp_runtime::Perbill;
@@ -32,9 +32,10 @@ fn should_report_an_authority_and_trigger_on_offence() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
+		let session_index = 1;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
-		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let offence = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
 
 		// when
 		Offences::report_offence(vec![], offence).unwrap();
@@ -51,9 +52,10 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
+		let session_index = 1;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
-		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let offence = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
 		Offences::report_offence(vec![], offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
@@ -76,9 +78,10 @@ fn should_report_in_different_time_slot() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
+		let session_index = 1;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
-		let mut offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let mut offence = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
 		Offences::report_offence(vec![], offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
@@ -102,9 +105,10 @@ fn should_deposit_event() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
+		let session_index = 1;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
-		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let offence = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
 
 		// when
 		Offences::report_offence(vec![], offence).unwrap();
@@ -129,9 +133,10 @@ fn doesnt_deposit_event_for_dups() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
+		let session_index = 1;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
-		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let offence = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
 		Offences::report_offence(vec![], offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
@@ -162,10 +167,11 @@ fn doesnt_deposit_event_for_dups() {
 fn reports_if_an_offence_is_dup() {
 	new_test_ext().execute_with(|| {
 		let time_slot = 42;
+		let session_index = 1;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence =
-			|time_slot, offenders| Offence { validator_set_count: 5, time_slot, offenders };
+			|time_slot, offenders| Offence { validator_set_count: 5, session_index, time_slot, offenders };
 
 		let mut test_offence = offence(time_slot, vec![0]);
 
@@ -220,10 +226,11 @@ fn should_properly_count_offences() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
+		let session_index = 1;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
-		let offence1 = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
-		let offence2 = Offence { validator_set_count: 5, time_slot, offenders: vec![4] };
+		let offence1 = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
+		let offence2 = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![4] };
 		Offences::report_offence(vec![], offence1).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
@@ -242,6 +249,67 @@ fn should_properly_count_offences() {
 				OffenceDetails { offender: 5, reporters: vec![] },
 				OffenceDetails { offender: 4, reporters: vec![] },
 			]
+		);
+	});
+}
+
+/// We insert offences in sorted order using the time slot in the `session_reports`.
+/// This test ensures that it works as expected.
+#[test]
+fn should_properly_sort_offences() {
+	new_test_ext().execute_with(|| {
+		// given
+		let time_slot = 42;
+		let session_index = 31;
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+
+		let offence1 = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
+		let offence2 = Offence { validator_set_count: 5, session_index, time_slot: time_slot + 1, offenders: vec![4] };
+		let offence3 =
+			Offence { validator_set_count: 5, session_index: session_index + 1, time_slot: time_slot + 1, offenders: vec![6, 7] };
+		let offence4 =
+			Offence { validator_set_count: 5, session_index: session_index - 1, time_slot: time_slot - 1, offenders: vec![3] };
+		Offences::report_offence(vec![], offence1).unwrap();
+		with_on_offence_fractions(|f| {
+			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
+			f.clear();
+		});
+
+		// when
+		// report for the second time
+		Offences::report_offence(vec![], offence2).unwrap();
+		Offences::report_offence(vec![], offence3).unwrap();
+		Offences::report_offence(vec![], offence4).unwrap();
+
+		// then
+		let session_reports = Vec::<(u32, Vec::<(Kind, u128, sp_core::H256)>)>::decode(
+			&mut &crate::SessionReports::<crate::mock::Runtime>::get()[..],
+		)
+		.unwrap();
+		assert_eq!(
+			session_reports,
+			vec![
+				(
+					session_index - 1, 
+					vec![
+						(KIND, time_slot - 1, report_id(time_slot - 1, 3)),
+					]
+				),
+				(
+					session_index, 
+					vec![
+						(KIND, time_slot, report_id(time_slot, 5)),
+						(KIND, time_slot + 1, report_id(time_slot + 1, 4)),
+					]
+				),
+				(
+					session_index + 1, 
+					vec![
+						(KIND, time_slot + 1, report_id(time_slot + 1, 6)),
+						(KIND, time_slot + 1, report_id(time_slot + 1, 7)),
+					]
+				),
+			],
 		);
 	});
 }
