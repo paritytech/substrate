@@ -313,3 +313,64 @@ fn should_properly_sort_offences() {
 		);
 	});
 }
+
+#[test]
+fn should_properly_clear_obsolete_offences() {
+	new_test_ext().execute_with(|| {
+		// given
+		let time_slot = 42;
+		let session_index = 31;
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+
+		let offence1 = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
+		let offence2 = Offence { validator_set_count: 5, session_index, time_slot: time_slot + 1, offenders: vec![4] };
+		let offence3 =
+			Offence { validator_set_count: 5, session_index: session_index + 7, time_slot: time_slot + 5, offenders: vec![6, 7] };
+		let offence4 =
+			Offence { validator_set_count: 5, session_index: session_index - 1, time_slot: time_slot - 1, offenders: vec![3] };
+		Offences::report_offence(vec![], offence1).unwrap();
+		with_on_offence_fractions(|f| {
+			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
+			f.clear();
+		});
+
+		// when
+		// report for the second time
+		Offences::report_offence(vec![], offence2).unwrap();
+		Offences::report_offence(vec![], offence3).unwrap();
+		Offences::report_offence(vec![], offence4).unwrap();
+
+		Offences::clear_obsolete_reports::<Offence>(session_index + 10);
+
+		// then
+		let session_reports = Vec::<(u32, Vec::<(Kind, u128, sp_core::H256)>)>::decode(
+			&mut &crate::SessionReports::<crate::mock::Runtime>::get()[..],
+		)
+		.unwrap();
+		assert_eq!(
+			session_reports,
+			vec![
+				(
+					session_index + 7, 
+					vec![
+						(KIND, time_slot + 5, report_id(time_slot + 5, 6)),
+						(KIND, time_slot + 5, report_id(time_slot + 5, 7)),
+					]
+				),
+			],
+		);
+
+		assert_eq!(
+			offence_reports(KIND, time_slot),
+			vec![]
+		);
+
+		assert_eq!(
+			offence_reports(KIND, time_slot + 5),
+			vec![
+				OffenceDetails { offender: 6, reporters: vec![] },
+				OffenceDetails { offender: 7, reporters: vec![] },
+			]
+		);
+	});
+}

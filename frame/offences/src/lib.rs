@@ -123,6 +123,31 @@ impl<T: Config> Pallet<T> {
 	fn max_session_report_age() -> SessionIndex {
 		return T::BondingDuration::get() * T::SessionsPerEra::get()
 	}
+
+	// Todo: Call this at the start of new session
+	fn clear_obsolete_reports<O: Offence<T::IdentificationTuple>>(current_session_index: SessionIndex) {
+		if current_session_index <= Self::max_session_report_age() { return; }
+
+		let session_reports = SessionReports::<T>::get();
+		let mut session_reports = 
+			Vec::<(SessionIndex, Vec::<(Kind, O::TimeSlot, ReportIdOf<T>)>)>::decode(&mut &session_reports[..])
+			.unwrap_or_default();
+
+		let obsolete_session_index = current_session_index - Self::max_session_report_age();
+
+		let pos = session_reports.partition_point(|(when, _)| when < &obsolete_session_index);
+		for i in 0..pos {
+			if let Some(reports) = session_reports.get(i) {
+				for (kind, time_slot, report_id) in &reports.1 {
+					ConcurrentReportsIndex::<T>::remove(kind, time_slot.encode());
+					Reports::<T>::remove(report_id);
+				}
+			}
+		}
+		
+		session_reports.drain(..pos);
+		SessionReports::<T>::set(session_reports.encode());
+	}
 }
 
 impl<T, O> ReportOffence<T::AccountId, T::IdentificationTuple, O> for Pallet<T>

@@ -111,7 +111,7 @@ impl Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
-	type SessionsPerEra = ();
+	type SessionsPerEra = ConstU32<2>;
 	type BondingDuration = ConstU32<3>;
 }
 
