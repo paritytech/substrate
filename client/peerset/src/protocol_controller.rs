@@ -498,7 +498,7 @@ impl ProtocolController {
 			// We do not assert here, because due to asynchronous nature of communication
 			// between `ProtocolController` and `Notifications` we can receive `Action::Dropped`
 			// for a peer we already disconnected ourself.
-			warn!(
+			trace!(
 				target: LOG_TARGET,
 				"Received `Action::Dropped` for not connected peer {} on {:?}.",
 				peer_id,
