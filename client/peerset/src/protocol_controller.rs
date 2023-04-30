@@ -42,7 +42,6 @@ enum Action {
 	RemoveReservedPeer(PeerId),
 	SetReservedPeers(HashSet<PeerId>),
 	SetReservedOnly(bool),
-	DisconnectPeer(PeerId),
 	GetReservedPeers(oneshot::Sender<Vec<PeerId>>),
 }
 
@@ -90,12 +89,6 @@ impl ProtocolHandle {
 	/// as reserved for the given set.
 	pub fn set_reserved_only(&self, reserved: bool) {
 		let _ = self.actions_tx.unbounded_send(Action::SetReservedOnly(reserved));
-	}
-
-	/// Disconnect peer. You should remove the `PeerId` from the `PeerStore` first
-	/// to not connect to the peer again during the next slot allocation.
-	pub fn disconnect_peer(&self, peer_id: PeerId) {
-		let _ = self.actions_tx.unbounded_send(Action::DisconnectPeer(peer_id));
 	}
 
 	/// Get the list of reserved peers.
@@ -270,7 +263,6 @@ impl ProtocolController {
 			Action::RemoveReservedPeer(peer_id) => self.on_remove_reserved_peer(peer_id),
 			Action::SetReservedPeers(peer_ids) => self.on_set_reserved_peers(peer_ids),
 			Action::SetReservedOnly(reserved_only) => self.on_set_reserved_only(reserved_only),
-			Action::DisconnectPeer(peer_id) => self.on_disconnect_peer(peer_id),
 			Action::GetReservedPeers(pending_response) =>
 				self.on_get_reserved_peers(pending_response),
 		}
@@ -427,35 +419,6 @@ impl ProtocolController {
 	/// Get the list of reserved peers.
 	fn on_get_reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
 		let _ = pending_response.send(self.reserved_nodes.keys().cloned().collect());
-	}
-
-	/// Disconnect the peer.
-	fn on_disconnect_peer(&mut self, peer_id: PeerId) {
-		// Don't do anything if the node is reserved.
-		if self.reserved_nodes.contains_key(&peer_id) {
-			warn!(
-				target: LOG_TARGET,
-				"Ignoring request to disconnect reserved peer {} from {:?}.", peer_id, self.set_id,
-			);
-			return
-		}
-
-		match self.nodes.remove(&peer_id) {
-			Some(direction) => {
-				trace!(target: LOG_TARGET, "Disconnecting peer {peer_id} ({direction:?}).");
-				match direction {
-					Direction::Inbound => self.num_in -= 1,
-					Direction::Outbound => self.num_out -= 1,
-				}
-				self.drop_connection(peer_id);
-			},
-			None => {
-				warn!(
-					target: LOG_TARGET,
-					"Trying to disconnect unknown peer {} from {:?}.", peer_id, self.set_id,
-				);
-			},
-		}
 	}
 
 	/// Indicate that we received an incoming connection. Must be answered either with
@@ -1348,115 +1311,6 @@ mod tests {
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert_eq!(controller.num_in, 0);
 		assert_eq!(controller.num_out, 0);
-	}
-
-	#[test]
-	fn disconnecting_regular_peers_work() {
-		let peer1 = PeerId::random();
-		let peer2 = PeerId::random();
-		let outgoing_candidates = vec![peer1];
-
-		let config = SetConfig {
-			in_peers: 10,
-			out_peers: 10,
-			bootnodes: Vec::new(),
-			reserved_nodes: HashSet::new(),
-			reserved_only: false,
-		};
-		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
-
-		let mut peer_store = MockPeerStoreHandle::new();
-		peer_store.expect_is_banned().once().return_const(false);
-		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
-
-		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
-
-		// Connect `peer1` as outbound & `peer2` as inbound.
-		controller.alloc_slots();
-		controller.on_incoming_connection(peer2, IncomingIndex(1));
-		let mut messages = Vec::new();
-		while let Some(message) = rx.try_recv().ok() {
-			messages.push(message);
-		}
-		assert_eq!(messages.len(), 2);
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
-		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
-		assert_eq!(controller.nodes.len(), 2);
-		assert!(matches!(controller.nodes.get(&peer1), Some(Direction::Outbound)));
-		assert!(matches!(controller.nodes.get(&peer2), Some(Direction::Inbound)));
-		assert_eq!(controller.num_in, 1);
-		assert_eq!(controller.num_out, 1);
-
-		controller.on_disconnect_peer(peer1);
-		assert_eq!(rx.try_recv().unwrap(), Message::Drop { set_id: SetId(0), peer_id: peer1 });
-		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
-		assert_eq!(controller.nodes.len(), 1);
-		assert!(!controller.nodes.contains_key(&peer1));
-		assert_eq!(controller.num_in, 1);
-		assert_eq!(controller.num_out, 0);
-
-		controller.on_disconnect_peer(peer2);
-		assert_eq!(rx.try_recv().unwrap(), Message::Drop { set_id: SetId(0), peer_id: peer2 });
-		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
-		assert_eq!(controller.nodes.len(), 0);
-		assert_eq!(controller.num_in, 0);
-		assert_eq!(controller.num_out, 0);
-	}
-
-	#[test]
-	fn disconnecting_reserved_peers_is_a_noop() {
-		let reserved1 = PeerId::random();
-		let reserved2 = PeerId::random();
-
-		let config = SetConfig {
-			in_peers: 10,
-			out_peers: 10,
-			bootnodes: Vec::new(),
-			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
-			reserved_only: false,
-		};
-		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
-
-		let mut peer_store = MockPeerStoreHandle::new();
-		peer_store.expect_is_banned().times(2).return_const(false);
-		peer_store.expect_outgoing_candidates().once().return_const(Vec::new());
-
-		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
-
-		// Connect `reserved1` as inbound & `reserved2` as outbound.
-		controller.on_incoming_connection(reserved1, IncomingIndex(1));
-		controller.alloc_slots();
-		let mut messages = Vec::new();
-		while let Some(message) = rx.try_recv().ok() {
-			messages.push(message);
-		}
-		assert_eq!(messages.len(), 2);
-		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
-		assert!(matches!(
-			controller.reserved_nodes.get(&reserved1),
-			Some(PeerState::Connected(Direction::Inbound))
-		));
-		assert!(matches!(
-			controller.reserved_nodes.get(&reserved2),
-			Some(PeerState::Connected(Direction::Outbound))
-		));
-
-		controller.on_disconnect_peer(reserved1);
-		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
-		assert!(matches!(
-			controller.reserved_nodes.get(&reserved1),
-			Some(PeerState::Connected(Direction::Inbound))
-		));
-
-		controller.on_disconnect_peer(reserved2);
-		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
-		assert!(matches!(
-			controller.reserved_nodes.get(&reserved2),
-			Some(PeerState::Connected(Direction::Outbound))
-		));
 	}
 
 	#[test]
