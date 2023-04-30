@@ -153,7 +153,7 @@ where
 		.map_err(rpc_err_handler)
 		.and_then(|maybe_header| maybe_header.ok_or("header_not_found").map(|h| *h.number()))?;
 
-	let next = number + sp_runtime::traits::One::one();
+	let next = number + sp_arithmetic::traits::One::one();
 
 	let next_hash = match ChainApi::<(), Block::Hash, Block::Header, ()>::block_hash(
 		rpc,
