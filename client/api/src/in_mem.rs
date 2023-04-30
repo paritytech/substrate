@@ -115,6 +115,7 @@ struct BlockchainStorage<Block: BlockT> {
 }
 
 /// In-memory blockchain. Supports concurrent reads.
+#[derive(Clone)]
 pub struct Blockchain<Block: BlockT> {
 	storage: Arc<RwLock<BlockchainStorage<Block>>>,
 }
@@ -122,13 +123,6 @@ pub struct Blockchain<Block: BlockT> {
 impl<Block: BlockT> Default for Blockchain<Block> {
 	fn default() -> Self {
 		Self::new()
-	}
-}
-
-impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
-	fn clone(&self) -> Self {
-		let storage = Arc::new(RwLock::new(self.storage.read().clone()));
-		Blockchain { storage }
 	}
 }
 
