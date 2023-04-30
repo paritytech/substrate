@@ -139,7 +139,7 @@ fn generate_impl_calls(
 			.ident;
 
 		for item in &impl_.items {
-			if let ImplItem::Method(method) = item {
+			if let ImplItem::Fn(method) = item {
 				let impl_call =
 					generate_impl_call(&method.sig, &impl_.self_ty, input, &impl_trait)?;
 
@@ -720,7 +720,7 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 
 // Filters all attributes except the cfg ones.
 fn filter_cfg_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
-	attrs.iter().filter(|a| a.path.is_ident("cfg")).cloned().collect()
+	attrs.iter().filter(|a| a.path().is_ident("cfg")).cloned().collect()
 }
 
 // Extracts the value of `API_VERSION_ATTRIBUTE` and handles errors.
@@ -732,7 +732,7 @@ fn extract_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<u64>
 	// First fetch all `API_VERSION_ATTRIBUTE` values (should be only one)
 	let api_ver = attrs
 		.iter()
-		.filter(|a| a.path.is_ident(API_VERSION_ATTRIBUTE))
+		.filter(|a| a.path().is_ident(API_VERSION_ATTRIBUTE))
 		.collect::<Vec<_>>();
 
 	if api_ver.len() > 1 {

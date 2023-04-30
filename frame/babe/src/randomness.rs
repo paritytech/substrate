@@ -19,7 +19,7 @@
 //! randomness collected from VRF outputs.
 
 use super::{
-	AuthorVrfRandomness, Config, EpochStart, NextRandomness, Randomness, VRF_OUTPUT_LENGTH,
+	AuthorVrfRandomness, Config, EpochStart, NextRandomness, Randomness, RANDOMNESS_LENGTH,
 };
 use frame_support::traits::Randomness as RandomnessT;
 use sp_runtime::traits::{Hash, One, Saturating};
@@ -132,7 +132,7 @@ pub struct CurrentBlockRandomness<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromTwoEpochsAgo<T> {
 	fn random(subject: &[u8]) -> (T::Hash, T::BlockNumber) {
 		let mut subject = subject.to_vec();
-		subject.reserve(VRF_OUTPUT_LENGTH);
+		subject.reserve(RANDOMNESS_LENGTH);
 		subject.extend_from_slice(&Randomness::<T>::get()[..]);
 
 		(T::Hashing::hash(&subject[..]), EpochStart::<T>::get().0)
@@ -142,7 +142,7 @@ impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromTwoEpochs
 impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromOneEpochAgo<T> {
 	fn random(subject: &[u8]) -> (T::Hash, T::BlockNumber) {
 		let mut subject = subject.to_vec();
-		subject.reserve(VRF_OUTPUT_LENGTH);
+		subject.reserve(RANDOMNESS_LENGTH);
 		subject.extend_from_slice(&NextRandomness::<T>::get()[..]);
 
 		(T::Hashing::hash(&subject[..]), EpochStart::<T>::get().1)
@@ -153,7 +153,7 @@ impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for ParentBlockRand
 	fn random(subject: &[u8]) -> (Option<T::Hash>, T::BlockNumber) {
 		let random = AuthorVrfRandomness::<T>::get().map(|random| {
 			let mut subject = subject.to_vec();
-			subject.reserve(VRF_OUTPUT_LENGTH);
+			subject.reserve(RANDOMNESS_LENGTH);
 			subject.extend_from_slice(&random);
 
 			T::Hashing::hash(&subject[..])
