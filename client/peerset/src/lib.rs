@@ -421,8 +421,6 @@ pub enum DropReason {
 	Unknown,
 	/// Substream or connection has been explicitly refused by the target. In other words, the
 	/// peer doesn't actually belong to this set.
-	///
-	/// This has the side effect of calling [`PeersetHandle::remove_from_peers_set`].
 	Refused,
 }
 
