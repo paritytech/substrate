@@ -156,10 +156,6 @@ pub trait NetworkPeers {
 	/// Disconnect from a node as soon as possible.
 	///
 	/// This triggers the same effects as if the connection had closed itself spontaneously.
-	///
-	/// See also [`NetworkPeers::remove_from_peers_set`], which has the same effect but also
-	/// prevents the local node from re-establishing an outgoing substream to this peer until it
-	/// is added again.
 	fn disconnect_peer(&self, who: PeerId, protocol: ProtocolName);
 
 	/// Connect to unreserved peers and allow unreserved peers to connect for syncing purposes.

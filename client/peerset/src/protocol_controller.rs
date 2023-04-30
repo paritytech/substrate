@@ -353,7 +353,7 @@ impl ProtocolController {
 		if let PeerState::Connected(direction) = state {
 			if self.reserved_only {
 				// Disconnect the node.
-				info!(
+				trace!(
 					target: LOG_TARGET,
 					"Disconnecting previously reserved node {} ({:?}) on {:?}.",
 					peer_id,
@@ -533,7 +533,7 @@ impl ProtocolController {
 			*state = PeerState::NotConnected;
 			Ok(true)
 		} else {
-			Err(peer_id.clone())
+			Err(*peer_id)
 		}
 	}
 
@@ -960,8 +960,8 @@ mod tests {
 		assert_eq!(controller.num_in, 0);
 
 		// Drop peers.
-		controller.on_peer_dropped(peer1.clone());
-		controller.on_peer_dropped(peer2.clone());
+		controller.on_peer_dropped(peer1);
+		controller.on_peer_dropped(peer2);
 
 		// Slots are freed.
 		assert_eq!(controller.num_out, 0);
@@ -1047,7 +1047,7 @@ mod tests {
 	fn disabling_reserved_only_mode_allows_to_connect_to_peers() {
 		let peer1 = PeerId::random();
 		let peer2 = PeerId::random();
-		let candidates = vec![peer1.clone(), peer2.clone()];
+		let candidates = vec![peer1, peer2];
 
 		let config = SetConfig {
 			in_peers: 0,
