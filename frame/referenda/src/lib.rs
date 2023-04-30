@@ -1297,6 +1297,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// * There must exist track info for the track of the referendum.
 	/// * The deciding stage has to begin before confirmation period.
+	/// * If alarm is set the nudge call has to be at most `UndecidingTimeout` blocks away
+	///  from the submission block.
 	///
 	/// Looking at tracks:
 	/// * The `TrackQueue` should be empty if `DecidingCount` is less than
@@ -1342,6 +1344,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								"Deciding status cannot begin before confirming stage."
 							)
 						)
+					}
+
+					if let Some(alarm) = status.alarm {
+						ensure!(alarm.0 <= status.submitted.saturating_add(T::UndecidingTimeout::get()), "The alarm cannot be set more than `UndecidingTimeout` away from the submission block.")
 					}
 				},
 				_ => {},
