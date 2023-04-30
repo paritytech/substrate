@@ -465,7 +465,7 @@ mod multiplier_tests {
 			run_with_system_weight(i, || {
 				let next = runtime_multiplier_update(Multiplier::one());
 				let truth = truth_value_update(i, Multiplier::one());
-				assert_eq_error_rate!(truth, next, Multiplier::from_inner(60_000_000));
+				assert_eq_error_rate!(truth, next, Multiplier::from_inner(50_000_000));
 			});
 		});
 
