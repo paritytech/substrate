@@ -111,7 +111,7 @@ pub enum ExistenceReason<Balance, AccountId> {
 	/// Some other `AccountId` has placed a deposit to make this account exist.
 	/// An account with such a reason might not be referenced in `system`.
 	#[codec(index = 4)]
-	ForeignDeposit(AccountId, Balance),
+	DepositFrom(AccountId, Balance),
 }
 
 impl<Balance, AccountId> ExistenceReason<Balance, AccountId>
@@ -131,11 +131,11 @@ where
 		}
 	}
 
-	pub(crate) fn take_foreign_deposit(&mut self) -> Option<(AccountId, Balance)> {
-		if !matches!(self, ExistenceReason::ForeignDeposit(..)) {
+	pub(crate) fn take_deposit_from(&mut self) -> Option<(AccountId, Balance)> {
+		if !matches!(self, ExistenceReason::DepositFrom(..)) {
 			return None
 		}
-		if let ExistenceReason::ForeignDeposit(depositor, deposit) =
+		if let ExistenceReason::DepositFrom(depositor, deposit) =
 			sp_std::mem::replace(self, ExistenceReason::DepositRefunded)
 		{
 			Some((depositor, deposit))

@@ -83,8 +83,9 @@
 //! * `cancel_approval`: Rescind a previous approval.
 //! * `transfer_approved`: Transfer third-party's assets to another account.
 //! * `touch`: Create an asset account for non-provider assets. Caller must place a deposit.
-//! * `refund`: Return the deposit (if any) of the caller's asset account.
-//! * `refund_foreign`: Return the foreign deposit (if any) of a specified asset account.
+//! * `refund`: Return the deposit (if any) of the caller's asset account or a consumer reference
+//!   (if any) of the caller's account.
+//! * `refund_other`: Return the deposit (if any) of a specified asset account.
 //!
 //! ### Permissioned Functions
 //!
@@ -524,6 +525,8 @@ pub mod pallet {
 		AssetStatusChanged { asset_id: T::AssetId },
 		/// The min_balance of an asset has been updated by the asset owner.
 		AssetMinBalanceChanged { asset_id: T::AssetId, new_min_balance: T::Balance },
+		/// Some account `who` was created with a deposit from `depositor`.
+		Touched { asset_id: T::AssetId, who: T::AccountId, depositor: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -945,10 +948,23 @@ pub mod pallet {
 			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let who = T::Lookup::lookup(who)?;
 			let id: T::AssetId = id.into();
 
-			Self::do_freeze(origin, id, who, false)
+			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(
+				d.status == AssetStatus::Live || d.status == AssetStatus::Frozen,
+				Error::<T, I>::AssetNotLive
+			);
+			ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
+			let who = T::Lookup::lookup(who)?;
+
+			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
+				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.is_frozen = true;
+				Ok(())
+			})?;
+
+			Self::deposit_event(Event::<T, I>::Frozen { asset_id: id, who });
+			Ok(())
 		}
 
 		/// Allow unprivileged transfers from an account again.
@@ -1491,10 +1507,11 @@ pub mod pallet {
 		pub fn touch(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
-			Self::do_touch(id, &who, &who)
+			Self::do_touch(id, who.clone(), who)
 		}
 
-		/// Return the deposit (if any) of an asset account.
+		/// Return the deposit (if any) of an asset account or a consumer reference (if any) of an
+		/// account.
 		///
 		/// The origin must be Signed.
 		///
@@ -1561,20 +1578,19 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Disallow further unprivileged transfers from an account. Creates the account and takes a
-		/// deposit if it does not already exist in `Account`.
+		/// Create an asset account for `who`.
 		///
-		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
+		/// A deposit will be taken from the signer account.
 		///
-		/// - `id`: The identifier of the asset to be frozen.
-		/// - `who`: The account to be frozen.
+		/// - `origin`: Must be Signed by `Freezer` or `Admin` of the asset `id`; the signer account
+		///   must have sufficient funds for a deposit to be taken.
+		/// - `id`: The identifier of the asset for the account to be created.
+		/// - `who`: The account to be created.
 		///
-		/// Emits `Frozen`.
-		///
-		/// Weight: `O(1)`
+		/// Emits `Touched` event when successful.
 		#[pallet::call_index(29)]
-		#[pallet::weight(T::WeightInfo::freeze_creating())]
-		pub fn freeze_creating(
+		#[pallet::weight(T::WeightInfo::touch())]
+		pub fn touch_other(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
 			who: AccountIdLookupOf<T>,
@@ -1583,7 +1599,7 @@ pub mod pallet {
 			let who = T::Lookup::lookup(who)?;
 			let id: T::AssetId = id.into();
 
-			Self::do_freeze(origin, id, who, true)
+			Self::do_touch(id, who, origin)
 		}
 
 		/// Return the deposit (if any) of a target asset account. Useful if you are the depositor.
@@ -1597,15 +1613,15 @@ pub mod pallet {
 		///
 		/// Emits `Refunded` event when successful.
 		#[pallet::call_index(30)]
-		#[pallet::weight(T::WeightInfo::refund_foreign())]
-		pub fn refund_foreign(
+		#[pallet::weight(T::WeightInfo::refund_other())]
+		pub fn refund_other(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
 			who: T::AccountId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
-			Self::do_refund_foreign(&origin, id, &who)
+			Self::do_refund_other(id, &who, &origin)
 		}
 	}
 }
