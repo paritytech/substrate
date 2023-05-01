@@ -99,7 +99,7 @@ impl<T: Config> Key<T> {
 /// Call or instantiate both called into other contracts and pass through errors happening
 /// in those to the caller. This enum is for the caller to distinguish whether the error
 /// happened during the execution of the callee or in the current execution context.
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug, PartialEq)]
 pub enum ErrorOrigin {
 	/// Caller error origin.
 	///
@@ -111,7 +111,7 @@ pub enum ErrorOrigin {
 }
 
 /// Error returned by contract execution.
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug, PartialEq)]
 pub struct ExecError {
 	/// The reason why the execution failed.
 	pub error: DispatchError,

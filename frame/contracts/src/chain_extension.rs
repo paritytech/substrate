@@ -71,7 +71,7 @@
 //! on how to use a chain extension in order to provide new features to ink! contracts.
 
 use crate::{
-	wasm::{Runtime, RuntimeCosts},
+	wasm::{Memory, Runtime, RuntimeCosts},
 	Error,
 };
 use codec::{Decode, MaxEncodedLen};
@@ -112,7 +112,10 @@ pub trait ChainExtension<C: Config> {
 	/// In case of `Err` the contract execution is immediately suspended and the passed error
 	/// is returned to the caller. Otherwise the value of [`RetVal`] determines the exit
 	/// behaviour.
-	fn call<E: Ext<T = C>>(&mut self, env: Environment<E, InitState>) -> Result<RetVal>;
+	fn call<E: Ext<T = C>, M: Memory<E::T>>(
+		&mut self,
+		env: Environment<E, M, InitState>,
+	) -> Result<RetVal>;
 
 	/// Determines whether chain extensions are enabled for this chain.
 	///
@@ -148,7 +151,10 @@ pub trait RegisteredChainExtension<C: Config>: ChainExtension<C> {
 #[impl_trait_for_tuples::impl_for_tuples(10)]
 #[tuple_types_custom_trait_bound(RegisteredChainExtension<C>)]
 impl<C: Config> ChainExtension<C> for Tuple {
-	fn call<E: Ext<T = C>>(&mut self, mut env: Environment<E, InitState>) -> Result<RetVal> {
+	fn call<E: Ext<T = C>, M: Memory<E::T>>(
+		&mut self,
+		mut env: Environment<E, M, InitState>,
+	) -> Result<RetVal> {
 		for_tuples!(
 			#(
 				if (Tuple::ID == env.ext_id()) && Tuple::enabled() {
@@ -188,15 +194,15 @@ pub enum RetVal {
 ///
 /// It uses [typestate programming](https://docs.rust-embedded.org/book/static-guarantees/typestate-programming.html)
 /// to enforce the correct usage of the parameters passed to the chain extension.
-pub struct Environment<'a, 'b, E: Ext, S: State> {
+pub struct Environment<'a, 'b, E: Ext, M: Memory<E::T>, S: State> {
 	/// The actual data of this type.
-	inner: Inner<'a, 'b, E>,
+	inner: Inner<'a, 'b, E, M>,
 	/// `S` is only used in the type system but never as value.
 	phantom: PhantomData<S>,
 }
 
 /// Functions that are available in every state of this type.
-impl<'a, 'b, E: Ext, S: State> Environment<'a, 'b, E, S> {
+impl<'a, 'b, E: Ext, M: Memory<E::T>, S: State> Environment<'a, 'b, E, M, S> {
 	/// The function id within the `id` passed by a contract.
 	///
 	/// It returns the two least significant bytes of the `id` passed by a contract as the other
@@ -251,14 +257,14 @@ impl<'a, 'b, E: Ext, S: State> Environment<'a, 'b, E, S> {
 ///
 /// Those are the functions that determine how the arguments to the chain extensions
 /// should be consumed.
-impl<'a, 'b, E: Ext> Environment<'a, 'b, E, InitState> {
+impl<'a, 'b, E: Ext, M: Memory<E::T>> Environment<'a, 'b, E, M, InitState> {
 	/// Creates a new environment for consumption by a chain extension.
 	///
 	/// It is only available to this crate because only the wasm runtime module needs to
 	/// ever create this type. Chain extensions merely consume it.
 	pub(crate) fn new(
-		runtime: &'a mut Runtime<'b, E>,
-		memory: &'a mut [u8],
+		runtime: &'a mut Runtime<'b, E, M>,
+		memory: &'a mut M,
 		id: u32,
 		input_ptr: u32,
 		input_len: u32,
@@ -272,23 +278,23 @@ impl<'a, 'b, E: Ext> Environment<'a, 'b, E, InitState> {
 	}
 
 	/// Use all arguments as integer values.
-	pub fn only_in(self) -> Environment<'a, 'b, E, OnlyInState> {
+	pub fn only_in(self) -> Environment<'a, 'b, E, M, OnlyInState> {
 		Environment { inner: self.inner, phantom: PhantomData }
 	}
 
 	/// Use input arguments as integer and output arguments as pointer to a buffer.
-	pub fn prim_in_buf_out(self) -> Environment<'a, 'b, E, PrimInBufOutState> {
+	pub fn prim_in_buf_out(self) -> Environment<'a, 'b, E, M, PrimInBufOutState> {
 		Environment { inner: self.inner, phantom: PhantomData }
 	}
 
 	/// Use input and output arguments as pointers to a buffer.
-	pub fn buf_in_buf_out(self) -> Environment<'a, 'b, E, BufInBufOutState> {
+	pub fn buf_in_buf_out(self) -> Environment<'a, 'b, E, M, BufInBufOutState> {
 		Environment { inner: self.inner, phantom: PhantomData }
 	}
 }
 
 /// Functions to use the input arguments as integers.
-impl<'a, 'b, E: Ext, S: PrimIn> Environment<'a, 'b, E, S> {
+impl<'a, 'b, E: Ext, M: Memory<E::T>, S: PrimIn> Environment<'a, 'b, E, M, S> {
 	/// The `input_ptr` argument.
 	pub fn val0(&self) -> u32 {
 		self.inner.input_ptr
@@ -301,7 +307,7 @@ impl<'a, 'b, E: Ext, S: PrimIn> Environment<'a, 'b, E, S> {
 }
 
 /// Functions to use the output arguments as integers.
-impl<'a, 'b, E: Ext, S: PrimOut> Environment<'a, 'b, E, S> {
+impl<'a, 'b, E: Ext, M: Memory<E::T>, S: PrimOut> Environment<'a, 'b, E, M, S> {
 	/// The `output_ptr` argument.
 	pub fn val2(&self) -> u32 {
 		self.inner.output_ptr
@@ -314,7 +320,7 @@ impl<'a, 'b, E: Ext, S: PrimOut> Environment<'a, 'b, E, S> {
 }
 
 /// Functions to use the input arguments as pointer to a buffer.
-impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S> {
+impl<'a, 'b, E: Ext, M: Memory<E::T>, S: BufIn> Environment<'a, 'b, E, M, S> {
 	/// Reads `min(max_len, in_len)` from contract memory.
 	///
 	/// This does **not** charge any weight. The caller must make sure that the an
@@ -324,11 +330,7 @@ impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S> {
 	/// charge the overall costs either using `max_len` (worst case approximation) or using
 	/// [`in_len()`](Self::in_len).
 	pub fn read(&self, max_len: u32) -> Result<Vec<u8>> {
-		self.inner.runtime.read_sandbox_memory(
-			self.inner.memory,
-			self.inner.input_ptr,
-			self.inner.input_len.min(max_len),
-		)
+		self.inner.memory.read(self.inner.input_ptr, self.inner.input_len.min(max_len))
 	}
 
 	/// Reads `min(buffer.len(), in_len) from contract memory.
@@ -342,11 +344,7 @@ impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S> {
 			let buffer = core::mem::take(buffer);
 			&mut buffer[..len.min(self.inner.input_len as usize)]
 		};
-		self.inner.runtime.read_sandbox_memory_into_buf(
-			self.inner.memory,
-			self.inner.input_ptr,
-			sliced,
-		)?;
+		self.inner.memory.read_into_buf(self.inner.input_ptr, sliced)?;
 		*buffer = sliced;
 		Ok(())
 	}
@@ -358,20 +356,14 @@ impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S> {
 	/// weight of the chain extension. This should usually be the case when fixed input types
 	/// are used.
 	pub fn read_as<T: Decode + MaxEncodedLen>(&mut self) -> Result<T> {
-		self.inner
-			.runtime
-			.read_sandbox_memory_as(self.inner.memory, self.inner.input_ptr)
+		self.inner.memory.read_as(self.inner.input_ptr)
 	}
 
 	/// Reads and decodes a type with a dynamic size from contract memory.
 	///
 	/// Make sure to include `len` in your weight calculations.
 	pub fn read_as_unbounded<T: Decode>(&mut self, len: u32) -> Result<T> {
-		self.inner.runtime.read_sandbox_memory_as_unbounded(
-			self.inner.memory,
-			self.inner.input_ptr,
-			len,
-		)
+		self.inner.memory.read_as_unbounded(self.inner.input_ptr, len)
 	}
 
 	/// The length of the input as passed in as `input_len`.
@@ -386,7 +378,7 @@ impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S> {
 }
 
 /// Functions to use the output arguments as pointer to a buffer.
-impl<'a, 'b, E: Ext, S: BufOut> Environment<'a, 'b, E, S> {
+impl<'a, 'b, E: Ext, M: Memory<E::T>, S: BufOut> Environment<'a, 'b, E, M, S> {
 	/// Write the supplied buffer to contract memory.
 	///
 	/// If the contract supplied buffer is smaller than the passed `buffer` an `Err` is returned.
@@ -418,11 +410,11 @@ impl<'a, 'b, E: Ext, S: BufOut> Environment<'a, 'b, E, S> {
 /// All data is put into this struct to easily pass it around as part of the typestate
 /// pattern. Also it creates the opportunity to box this struct in the future in case it
 /// gets too large.
-struct Inner<'a, 'b, E: Ext> {
+struct Inner<'a, 'b, E: Ext, M: Memory<E::T>> {
 	/// The runtime contains all necessary functions to interact with the running contract.
-	runtime: &'a mut Runtime<'b, E>,
+	runtime: &'a mut Runtime<'b, E, M>,
 	/// Reference to the contracts memory.
-	memory: &'a mut [u8],
+	memory: &'a mut M,
 	/// Verbatim argument passed to `seal_call_chain_extension`.
 	id: u32,
 	/// Verbatim argument passed to `seal_call_chain_extension`.

@@ -21,15 +21,10 @@
 
 use crate::{
 	chain_extension::ChainExtension,
-	storage::meter::Diff,
-	wasm::{
-		runtime::AllowDeprecatedInterface, CodeInfo, Determinism, Environment, WasmBlob,
-		BYTES_PER_PAGE,
-	},
-	AccountIdOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
+	wasm::{runtime::AllowDeprecatedInterface, Determinism, Environment, WasmBlob, BYTES_PER_PAGE},
+	Config, Error, Schedule, LOG_TARGET,
 };
-use codec::MaxEncodedLen;
-use sp_runtime::{traits::Hash, DispatchError};
+use sp_runtime::DispatchError;
 #[cfg(any(test, feature = "runtime-benchmarks"))]
 use sp_std::prelude::Vec;
 use wasmi::{
@@ -218,7 +213,7 @@ impl LoadedModule {
 /// 1. General engine-side validation makes sure the module is consistent and does not contain
 ///    forbidden WebAssembly features.
 /// 2. Additional checks which are specific to smart contracts eligible for this pallet.
-fn validate<E, T>(
+pub fn validate<E, T>(
 	code: &[u8],
 	schedule: &Schedule<T>,
 	determinism: Determinism,
@@ -249,7 +244,7 @@ where
 	// We don't actually ever execute this instance so we can get away with a minimal stack which
 	// reduces the amount of memory that needs to be zeroed.
 	let stack_limits = StackLimits::new(1, 1, 0).expect("initial <= max; qed");
-	WasmBlob::<T>::instantiate::<E, _>(
+	WasmBlob::<T>::instantiate_wasm::<E, _>(
 		&code,
 		(),
 		schedule,
@@ -265,38 +260,6 @@ where
 	Ok(())
 }
 
-/// Validates the given binary `code` is a valid Wasm module satisfying following constraints:
-///
-/// - The module doesn't export any memory.
-/// - The module does imports memory, which limits lay within the limits permitted by the
-///   `schedule`.
-/// - All imported functions from the external environment match defined by `env` module.
-///
-/// Also constructs contract `code_info` by calculating the storage deposit.
-pub fn prepare<E, T>(
-	code: CodeVec<T>,
-	schedule: &Schedule<T>,
-	owner: AccountIdOf<T>,
-	determinism: Determinism,
-) -> Result<WasmBlob<T>, (DispatchError, &'static str)>
-where
-	E: Environment<()>,
-	T: Config,
-{
-	validate::<E, T>(code.as_ref(), schedule, determinism)?;
-
-	// Calculate deposit for storing contract code and `code_info` in two different storage items.
-	let code_len = code.len() as u32;
-	let bytes_added = code_len.saturating_add(<CodeInfo<T>>::max_encoded_len() as u32);
-	let deposit = Diff { bytes_added, items_added: 2, ..Default::default() }
-		.update_contract::<T>(None)
-		.charge_or_zero();
-	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0, code_len };
-	let code_hash = T::Hashing::hash(&code);
-
-	Ok(WasmBlob { code, code_info, code_hash })
-}
-
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking and testing.
 ///
 /// For benchmarking we need to construct special contracts that might not pass our
@@ -305,6 +268,8 @@ where
 #[cfg(any(test, feature = "runtime-benchmarks"))]
 pub mod benchmarking {
 	use super::*;
+	use crate::{AccountIdOf, CodeInfo, CodeVec};
+	use sp_runtime::traits::Hash;
 
 	/// Prepare function that does not perform export section checks on the passed in code.
 	pub fn prepare<T: Config>(
@@ -336,7 +301,8 @@ mod tests {
 	use crate::{
 		exec::Ext,
 		schedule::Limits,
-		tests::{Test, ALICE},
+		tests::Test,
+		wasm::{Memory, RiscvHandler, RiscvMemory},
 	};
 	use pallet_contracts_proc_macro::define_env;
 	use std::fmt;
@@ -382,7 +348,7 @@ mod tests {
 		($name:ident, $wat:expr, $($expected:tt)*) => {
 			#[test]
 			fn $name() {
-				let wasm = wat::parse_str($wat).unwrap().try_into().unwrap();
+				let wasm = wat::parse_str($wat).unwrap();
 				let schedule = Schedule {
 					limits: Limits {
 					    globals: 3,
@@ -395,10 +361,9 @@ mod tests {
 					},
 					.. Default::default()
 				};
-				let r = prepare::<env::Env, Test>(
-					wasm,
+				let r = validate::<env::Env, Test>(
+					wasm.as_ref(),
 					&schedule,
-					ALICE,
 					Determinism::Enforced,
 				);
 				assert_matches::assert_matches!(r.map_err(|(_, msg)| msg), $($expected)*);

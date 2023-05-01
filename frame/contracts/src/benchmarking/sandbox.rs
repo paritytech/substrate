@@ -42,7 +42,7 @@ impl<T: Config> From<&WasmModule<T>> for Sandbox {
 	/// Creates an instance from the supplied module.
 	/// Sets the execution engine fuel level to `u64::MAX`.
 	fn from(module: &WasmModule<T>) -> Self {
-		let (mut store, _memory, instance) = WasmBlob::<T>::instantiate::<EmptyEnv, _>(
+		let (mut store, _memory, instance) = WasmBlob::<T>::instantiate_wasm::<EmptyEnv, _>(
 			&module.code,
 			(),
 			&<T>::Schedule::get(),

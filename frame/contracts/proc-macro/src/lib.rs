@@ -73,8 +73,8 @@ fn derive_debug(input: TokenStream, fmt: impl Fn(&Ident) -> TokenStream2) -> Tok
 
 	#[cfg(not(feature = "full"))]
 	let fields = {
-		drop(fmt);
-		drop(data);
+		let _fmt = fmt;
+		let _data = data;
 		TokenStream2::new()
 	};
 
@@ -154,6 +154,16 @@ fn format_default(field: &Ident) -> TokenStream2 {
 	}
 }
 
+/// The target for which to generate host functions.
+enum Target {
+	/// Empty implementations which are just used for validation.
+	Dummy,
+	/// Generate code to register host functions with wasmi.
+	Wasm,
+	/// Generate code to be placed in a riscv syscall handler.
+	RiscV,
+}
+
 /// Parsed environment definition.
 struct EnvDef {
 	host_funcs: Vec<HostFn>,
@@ -169,6 +179,13 @@ struct HostFn {
 	alias_to: Option<String>,
 	/// Formulating the predicate inverted makes the expression using it simpler.
 	not_deprecated: bool,
+	/// If `None` the host function is not available from RISC-V.
+	riscv: Option<RiscV>,
+}
+
+struct RiscV {
+	syscall_no: u32,
+	pass_by_reference: bool,
 }
 
 enum HostFnReturn {
@@ -187,6 +204,13 @@ impl HostFnReturn {
 		};
 		quote! {
 			::core::result::Result<#ok, ::wasmi::core::Trap>
+		}
+	}
+
+	fn riscv_map(&self) -> TokenStream2 {
+		match self {
+			Self::Unit => quote! { (|_| 0u64) },
+			_ => quote! { ::core::convert::Into::into },
 		}
 	}
 }
@@ -214,6 +238,7 @@ impl HostFn {
 		let mut is_stable = true;
 		let mut alias_to = None;
 		let mut not_deprecated = true;
+		let mut riscv = None;
 		while let Some(attr) = attrs.pop() {
 			let ident = attr.path().get_ident().ok_or(err(span, msg))?.to_string();
 			match ident.as_str() {
@@ -242,6 +267,34 @@ impl HostFn {
 						return Err(err(span, "#[deprecated] can only be specified once"))
 					}
 					not_deprecated = false;
+				},
+				"riscv" => {
+					if riscv.is_some() {
+						return Err(err(span, "#[riscv] can only be specified once"))
+					}
+					let mut syscall_no = None;
+					let mut pass_by_reference = false;
+					attr.parse_nested_meta(|meta| {
+						if meta.path.is_ident("syscall_no") {
+							if syscall_no.is_some() {
+								return Err(err(span, "syscall_no can only be specified once"))
+							}
+							let content;
+							syn::parenthesized!(content in meta.input);
+							let n: u32 = content.parse::<syn::LitInt>()?.base10_parse()?;
+							syscall_no = Some(n);
+							return Ok(())
+						}
+						if meta.path.is_ident("pass_by_reference") {
+							pass_by_reference = true;
+							return Ok(())
+						}
+						return Err(err(span, "unrecognized argument to #[riscv]"));
+					})?;
+					riscv = Some(RiscV {
+						syscall_no: syscall_no.ok_or_else(|| err(span, "#[riscv] needs a syscall_no argument"))?,
+						pass_by_reference,
+					});
 				},
 				_ => return Err(err(span, msg)),
 			}
@@ -348,6 +401,7 @@ impl HostFn {
 							is_stable,
 							alias_to,
 							not_deprecated,
+							riscv,
 						})
 					},
 					_ => Err(err(span, &msg)),
@@ -560,25 +614,12 @@ fn expand_env(def: &EnvDef, docs: bool) -> TokenStream2 {
 ///   - real implementation, to register it in the contract execution environment;
 ///   - dummy implementation, to be used as mocks for contract validation step.
 fn expand_impls(def: &EnvDef) -> TokenStream2 {
-	let impls = expand_functions(def, true, quote! { crate::wasm::Runtime<E> });
-	let dummy_impls = expand_functions(def, false, quote! { () });
+	let dummy_impls = expand_functions(def, Target::Dummy);
+	let wasm_impls = expand_functions(def, Target::Wasm);
+	let riscv_impls = expand_functions(def, Target::RiscV);
 
 	quote! {
-		impl<'a, E: Ext> crate::wasm::Environment<crate::wasm::runtime::Runtime<'a, E>> for Env
-		{
-			fn define(
-				store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>,
-				linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E>>,
-				allow_unstable: AllowUnstableInterface,
-				allow_deprecated: AllowDeprecatedInterface,
-			) -> Result<(),::wasmi::errors::LinkerError> {
-				#impls
-				Ok(())
-			}
-		}
-
-		impl crate::wasm::Environment<()> for Env
-		{
+		impl crate::wasm::Environment<()> for Env {
 			fn define(
 				store: &mut ::wasmi::Store<()>,
 				linker: &mut ::wasmi::Linker<()>,
@@ -589,13 +630,120 @@ fn expand_impls(def: &EnvDef) -> TokenStream2 {
 				Ok(())
 			}
 		}
+
+		impl<'ext, E: Ext> crate::wasm::Environment<crate::wasm::runtime::Runtime<'ext, E, crate::wasm::WasmMemory<E::T>>> for Env
+		{
+			fn define(
+				store: &mut ::wasmi::Store<crate::wasm::Runtime<E, crate::wasm::WasmMemory<E::T>>>,
+				linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E, crate::wasm::WasmMemory<E::T>>>,
+				allow_unstable: AllowUnstableInterface,
+				allow_deprecated: AllowDeprecatedInterface,
+			) -> Result<(),::wasmi::errors::LinkerError> {
+				#wasm_impls
+				Ok(())
+			}
+		}
+
+		impl RiscvHandler for Env {
+			fn handler_idx<E: Ext>() -> u32 {
+				private::riscv_syscall_handler::<E> as u32
+			}
+		}
+
+		mod private {
+			use super::*;
+
+			pub extern "C" fn riscv_syscall_handler<E: Ext>(
+				__state__: &mut ::sp_io::RiscvState<crate::wasm::Runtime<E, crate::wasm::RiscvMemory<E::T>>>,
+				__a0__: u32,
+				__a1__: u32,
+				__a2__: u32,
+				__a3__: u32,
+				__a4__: u32,
+				__a5__: u32,
+			) -> u64 {
+				log::debug!(
+					target: "runtime::contracts::strace",
+					"ecall: a0={:08X} a1={:08X} a2={:08X} a3={:08X} a4={:08X} a5={:08X}",
+					__a0__, __a1__, __a2__, __a3__, __a4__, __a5__
+				);
+				#riscv_impls
+			}
+		}
 	}
 }
 
-fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2) -> TokenStream2 {
+fn riscv_input_decoder<'a, P, I>(func: &'a str, pass_by_reference: bool, param_names: P, param_types: I) -> TokenStream2
+where
+	P: Iterator<Item=&'a alloc::boxed::Box<syn::Pat>>,
+	I: Iterator<Item=&'a alloc::boxed::Box<syn::Type>>,
+{
+	// the input is passed as pointer to a scale encoded tuple
+	if pass_by_reference {
+		return quote! {
+			let (#( #param_names, )*): (#( #param_types, )*) = memory.read_as(__a1__)?;
+		};
+	}
+
+	// otherwise we bind the registers to names
+	const ALLOWED_REGISTERS: u32 = 5;
+	let mut registers_used = 0;
+	let mut bindings = alloc::vec![];
+	for (idx, (name, ty)) in param_names.zip(param_types).enumerate() {
+		let syn::Type::Path(path) = &**ty else {
+			panic!("Type needs to be path");
+		};
+		let Some(ident) = path.path.get_ident() else {
+			panic!("Type needs to be ident");
+		};
+		let size = if ident == "i8" || ident == "i16" || ident == "i32" || ident == "u8" || ident == "u16" || ident == "u32" {
+			1
+		} else if ident == "i64" || ident == "u64" {
+			2
+		} else {
+			panic!("Pass by value only supports primitives");
+		};
+		registers_used += size;
+		if registers_used > ALLOWED_REGISTERS {
+			panic!("Used too many registers: {}", func);
+		}
+		let this_reg = quote::format_ident!("__a{}__", idx);
+		let next_reg = quote::format_ident!("__a{}__", idx + 1);
+		let binding = if size == 1 {
+			quote! {
+				let #name = #this_reg as #ty;
+			}
+		} else {
+			quote! {
+				let #name = (#this_reg | (#next_reg << 32)) as #ty;
+			}
+		};
+		bindings.push(binding);
+	}
+	quote! {
+		#( #bindings )*
+	}
+}
+
+fn expand_functions(def: &EnvDef, target: Target) -> TokenStream2 {
 	let impls = def.host_funcs.iter().map(|f| {
 		// skip the context and memory argument
 		let params = f.item.sig.inputs.iter().skip(2);
+		let param_names = params.clone().filter_map(|arg| {
+			let FnArg::Typed(arg) = arg else {
+				return None;
+			};
+			Some(&arg.pat)
+		});
+		let param_types = params.clone().filter_map(|arg| {
+			let FnArg::Typed(arg) = arg else {
+				return None;
+			};
+			Some(&arg.ty)
+		});
+		let riscv = f.riscv.as_ref().map(|r5| (r5.syscall_no, riscv_input_decoder(&f.name, r5.pass_by_reference, param_names.clone(), param_types.clone())));
+
+		//panic!("{:#?}", param_types.collect::<Vec<_>>());
 
 		let (module, name, body, wasm_output, output) = (
 			f.module(),
@@ -626,114 +774,141 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 			quote! {
 				let result = #body;
 				if ::log::log_enabled!(target: "runtime::contracts::strace", ::log::Level::Trace) {
-						use sp_std::fmt::Write;
-						let mut w = sp_std::Writer::default();
-						let _ = core::write!(&mut w, #trace_fmt_str, #( #trace_fmt_args, )* result);
-						let msg = core::str::from_utf8(&w.inner()).unwrap_or_default();
-						ctx.ext().append_debug_buffer(msg);
+					use sp_std::fmt::Write;
+					let mut w = sp_std::Writer::default();
+					let _ = core::write!(&mut w, #trace_fmt_str, #( #trace_fmt_args, )* result);
+					let msg = core::str::from_utf8(&w.inner()).unwrap_or_default();
+					ctx.ext().append_debug_buffer(msg);
 				}
 				result
 			}
 		};
-
-		// If we don't expand blocks (implementing for `()`) we change a few things:
-		// - We replace any code by unreachable!
-		// - Allow unused variables as the code that uses is not expanded
-		// - We don't need to map the error as we simply panic if they code would ever be executed
-		let inner = if expand_blocks {
-			quote! { || #output {
-				let (memory, ctx) = __caller__
-					.data()
-					.memory()
-					.expect("Memory must be set when setting up host data; qed")
-					.data_and_store_mut(&mut __caller__);
-				#wrapped_body_with_trace
-			} }
-		} else {
-			quote! { || -> #wasm_output {
-				// This is part of the implementation for `Environment<()>` which is not
-				// meant to be actually executed. It is only for validation which will
-				// never call host functions.
-				::core::unreachable!()
-			} }
-		};
-		let into_host = if expand_blocks {
-			quote! {
-				|reason| {
-					::wasmi::core::Trap::from(reason)
-				}
-			}
-		} else {
-			quote! {
-				|reason| { reason }
-			}
-		};
-		let allow_unused =  if expand_blocks {
-			quote! { }
-		} else {
-			quote! { #[allow(unused_variables)] }
-		};
-		let sync_gas_before = if expand_blocks {
-			quote! {
-				// Gas left in the gas meter right before switching to engine execution.
-				let __gas_before__ = {
-					let engine_consumed_total =
-						__caller__.fuel_consumed().expect("Fuel metering is enabled; qed");
-					let gas_meter = __caller__.data_mut().ext().gas_meter_mut();
-					gas_meter
-						.charge_fuel(engine_consumed_total)
-						.map_err(TrapReason::from)
-						.map_err(#into_host)?
-						.ref_time()
-				};
-			}
-		} else {
-			quote! { }
-		};
-		// Gas left in the gas meter right after returning from engine execution.
-		let sync_gas_after = if expand_blocks {
-			quote! {
-				let mut gas_after = __caller__.data_mut().ext().gas_meter().gas_left().ref_time();
-				let mut host_consumed = __gas_before__.saturating_sub(gas_after);
-				// Possible undercharge of at max 1 fuel here, if host consumed less than `instruction_weights.base`
-				// Not a problem though, as soon as host accounts its spent gas properly.
-				let fuel_consumed = host_consumed
-					.checked_div(__caller__.data_mut().ext().schedule().instruction_weights.base as u64)
-					.ok_or(Error::<E::T>::InvalidSchedule)
-					.map_err(TrapReason::from)
-					.map_err(#into_host)?;
-				 __caller__
-					 .consume_fuel(fuel_consumed)
-					 .map_err(|_| TrapReason::from(Error::<E::T>::OutOfGas))
-					 .map_err(#into_host)?;
-			}
-		} else {
-			quote! { }
-		};
-
-		quote! {
+		let is_enabled = quote! {
 			// We need to allow all interfaces when runtime benchmarks are performed because
 			// we generate the weights even when those interfaces are not enabled. This
 			// is necessary as the decision whether we allow unstable or deprecated functions
 			// is a decision made at runtime. Generation of the weights happens statically.
-			if ::core::cfg!(feature = "runtime-benchmarks") ||
+			::core::cfg!(feature = "runtime-benchmarks") ||
 				((#is_stable || __allow_unstable__) && (#not_deprecated || __allow_deprecated__))
-			{
-				#allow_unused
-				linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
- 					#sync_gas_before
-					let mut func = #inner;
-					let result = func().map_err(#into_host).map(::core::convert::Into::into);
-					#sync_gas_after
-					result
-				}))?;
-			}
+		};
+		let riscv_map = f.returns.riscv_map();
+
+		match target {
+			Target::Dummy => {
+				quote! {
+					if #is_enabled {
+						#[allow(unused_variables)]
+						linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<()>, #( #params, )*| -> #wasm_output {
+							// dummy host functions are never executed
+							::core::unreachable!()
+						}))?;
+					}
+				}
+			},
+			Target::Wasm => {
+				quote! {
+					if #is_enabled {
+						linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<crate::wasm::Runtime<E, crate::wasm::WasmMemory<E::T>>>, #( #params, )*| -> #wasm_output {
+							fn set_trap_reason<T: Into<TrapReason>, A: Ext, B: Memory<A::T>>(ctx: &mut crate::wasm::Runtime<A, B>, trap_reason: T) -> ::wasmi::core::Trap {
+								ctx.set_trap_reason(trap_reason.into());
+								::wasmi::core::Trap::new("Supervisor Error")
+							};
+
+							// sync gas from engine to host
+							let __gas_before__ = {
+								let engine_consumed_total =
+									__caller__.fuel_consumed().expect("Fuel metering is enabled; qed");
+								__caller__.data_mut().ext().gas_meter_mut()
+									.charge_fuel(engine_consumed_total)
+									.map_err(|err| set_trap_reason(__caller__.data_mut(), err))?
+									.ref_time()
+							};
+
+							// ctx and memory is for access by the body
+							let (__memory__, ctx) = __caller__
+									.data()
+									.memory()
+									.expect("Memory must be set when setting up host data; qed")
+									.data_and_store_mut(&mut __caller__);
+							let memory = &mut crate::wasm::WasmMemory::<E::T>::new(__memory__ as *mut [u8]);
+
+							// this body has no access to the variables we brought into scope
+							let mut func = || #output {
+								#wrapped_body_with_trace
+							};
+							let result = func()
+								.map(Into::into)
+								.map_err(|err| set_trap_reason(ctx, err));
+
+							// sync gas from host to engine
+							let mut gas_after = ctx.ext().gas_meter().gas_left().ref_time();
+							let mut host_consumed = __gas_before__.saturating_sub(gas_after);
+							let instruction_weight = ctx.ext().schedule().instruction_weights.base;
+							// Possible undercharge of at max 1 fuel here, if host consumed less
+							// than `instruction_weights.base` Not a problem though, as soon as host
+							// accounts its spent gas properly.
+							let fuel_consumed = host_consumed
+								.checked_div(u64::from(instruction_weight))
+								.ok_or(Error::<E::T>::InvalidSchedule)
+								.map_err(|err| set_trap_reason(ctx, err))?;
+							__caller__
+								.consume_fuel(fuel_consumed)
+								.map_err(|_| set_trap_reason(__caller__.data_mut(), TrapReason::from(Error::<E::T>::OutOfGas)))?;
+
+							result
+						}))?;
+					}
+				}
+			},
+			Target::RiscV => {
+				if let Some((syscall_no, input_decoder)) = riscv {
+					quote! {
+						#syscall_no if #is_enabled => {
+							let mut func = || #output {
+								#input_decoder
+								#wrapped_body_with_trace
+							};
+							match func() {
+								Ok(outcome) => #riscv_map(outcome),
+								Err(trap_reason) => {
+									ctx.set_trap_reason(trap_reason);
+									// this signals to the sandbox to stop the execution
+									__state__.exit = true;
+									// this value is never used in case of exit
+									0
+								}
+							}
+						},
+					}
+				} else {
+					quote! {}
+				}
+			},
 		}
 	});
-	quote! {
-		let __allow_unstable__ = matches!(allow_unstable, AllowUnstableInterface::Yes);
-		let __allow_deprecated__ = matches!(allow_deprecated, AllowDeprecatedInterface::Yes);
-		#( #impls )*
+
+	match target {
+		Target::Dummy | Target::Wasm => {
+			quote! {
+				let __allow_unstable__ = matches!(allow_unstable, AllowUnstableInterface::Yes);
+				let __allow_deprecated__ = matches!(allow_deprecated, AllowDeprecatedInterface::Yes);
+				#( #impls )*
+			}
+		},
+		Target::RiscV => {
+			quote! {
+				// TODO
+				let __allow_unstable__ = true;
+				let __allow_deprecated__ = true;
+				// riscv memory access does not use a reference
+				let memory = &mut RiscvMemory::<E::T>::default();
+				let ctx = unsafe { &mut __state__.user };
+				match __a0__ {
+					#( #impls )*
+					_ => todo!(),
+				}
+			}
+		},
 	}
 }
 

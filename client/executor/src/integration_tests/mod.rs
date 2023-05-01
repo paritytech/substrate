@@ -821,3 +821,16 @@ fn return_overflow(wasm_method: WasmExecutionMethod) {
 		error => panic!("unexpected error: {:?}", error),
 	}
 }
+
+test_wasm_execution!(test_riscv);
+fn test_riscv(wasm_method: WasmExecutionMethod) {
+	// riscv is not implemented when using wasmi for the runtime
+	if let WasmExecutionMethod::Interpreted = wasm_method {
+		return
+	}
+
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	call_in_wasm("test_riscv", &[], wasm_method, &mut ext).unwrap();
+}

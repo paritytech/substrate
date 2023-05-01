@@ -325,6 +325,21 @@ pub trait FunctionContext {
 	/// It should only be called once, however calling it more than once
 	/// is harmless and will overwrite the previously set error message.
 	fn register_panic_error_message(&mut self, message: &str);
+	fn riscv(&mut self) -> &mut dyn Riscv;
+}
+
+pub trait Riscv {
+	fn execute(
+		&mut self,
+		program: &[u8],
+		a0: u32,
+		syscall_handler: u32,
+		state_ptr: u32,
+	) -> Result<u8>;
+
+	fn read_memory(&mut self, offset: u32, buf_ptr: u32, buf_len: u32) -> Result<bool>;
+
+	fn write_memory(&mut self, offset: u32, buf_ptr: u32, buf_len: u32) -> Result<bool>;
 }
 
 if_wasmtime_is_enabled! {
