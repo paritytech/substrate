@@ -1616,9 +1616,9 @@ fn metadata() {
 		},
 	];
 
-	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs().is_empty() &&
-		pallets[0].error.as_ref().unwrap().ty.type_info().docs().is_empty() &&
-		pallets[0].calls.as_ref().unwrap().ty.type_info().docs().is_empty();
+	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs.is_empty() &&
+		pallets[0].error.as_ref().unwrap().ty.type_info().docs.is_empty() &&
+		pallets[0].calls.as_ref().unwrap().ty.type_info().docs.is_empty();
 
 	if cfg!(feature = "no-metadata-docs") {
 		assert!(empty_doc)
@@ -1671,7 +1671,7 @@ fn metadata_at_version() {
 
 #[test]
 fn metadata_versions() {
-	assert_eq!(vec![LATEST_METADATA_VERSION], Runtime::metadata_versions());
+	assert_eq!(vec![LATEST_METADATA_VERSION, u32::MAX], Runtime::metadata_versions());
 }
 
 #[test]

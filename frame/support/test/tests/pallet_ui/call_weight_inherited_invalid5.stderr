@@ -1,0 +1,11 @@
+error: unexpected token
+  --> tests/pallet_ui/call_weight_inherited_invalid5.rs:14:50
+   |
+14 |     #[pallet::call(weight(<T as Config>::WeightInfo straycat))]
+   |                                                     ^^^^^^^^
+
+error: unexpected token
+  --> tests/pallet_ui/call_weight_inherited_invalid5.rs:34:52
+   |
+34 |     #[pallet::call(weight = <T as Config>::WeightInfo straycat)]
+   |                                                       ^^^^^^^^
