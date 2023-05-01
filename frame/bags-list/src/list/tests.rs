@@ -20,7 +20,6 @@ use crate::{
 	mock::{test_utils::*, *},
 	List, Bag, Node, ListError,
 	notional_bag_for,
-	list_bags_get, list_bags_contains_key
 };
 use core::marker::PhantomData;
 use frame_election_provider_support::{SortedListProvider, ScoreProvider, VoteWeight};
@@ -39,29 +38,29 @@ fn node(
 #[test]
 fn basic_setup_works() {
 	ExtBuilder::default().build_and_execute(|| {
-		// assert_eq!(ListNodes::<Runtime>::count(), 4);
-		// assert_eq!(ListNodes::<Runtime>::iter().count(), 4);
-		// assert_eq!(ListBags::<Runtime>::iter().count(), 2);
+		assert_eq!(List::<Runtime>::count(), 4);
+		assert_eq!(List::<Runtime>::iter().count(), 4);
+		assert_eq!(List::<Runtime>::bag_count(), 2);
 
 		assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
 		// the state of the bags is as expected
 		assert_eq!(
-			list_bags_get(10).unwrap(),
+			Bag::<Runtime>::get_raw(10).unwrap(),
 			Bag::<Runtime> { head: Some(1), tail: Some(1), bag_upper: 0, _phantom: PhantomData }
 		);
 		assert_eq!(
-			list_bags_get(1_000).unwrap(),
+			Bag::<Runtime>::get_raw(1_000).unwrap(),
 			Bag::<Runtime> { head: Some(2), tail: Some(4), bag_upper: 0, _phantom: PhantomData }
 		);
 
-		// assert_eq!(ListNodes::<Runtime>::get(2).unwrap(), node(2, None, Some(3), 1_000));
-		// assert_eq!(ListNodes::<Runtime>::get(3).unwrap(), node(3, Some(2), Some(4), 1_000));
-		// assert_eq!(ListNodes::<Runtime>::get(4).unwrap(), node(4, Some(3), None, 1_000));
-		// assert_eq!(ListNodes::<Runtime>::get(1).unwrap(), node(1, None, None, 10));
+		assert_eq!(Node::<Runtime>::get(&2).unwrap(), node(2, None, Some(3), 1_000));
+		assert_eq!(Node::<Runtime>::get(&3).unwrap(), node(3, Some(2), Some(4), 1_000));
+		assert_eq!(Node::<Runtime>::get(&4).unwrap(), node(4, Some(3), None, 1_000));
+		assert_eq!(Node::<Runtime>::get(&1).unwrap(), node(1, None, None, 10));
 
-		// // non-existent id does not have a storage footprint
-		// assert_eq!(ListNodes::<Runtime>::get(42), None);
+		// non-existent id does not have a storage footprint
+		assert_eq!(Node::<Runtime>::get(&42), None);
 
 		// iteration of the bags would yield:
 		assert_eq!(
@@ -259,14 +258,14 @@ mod list {
 	#[test]
 	fn remove_works() {		
 		let ensure_left = |id, counter| {
-			// assert!(!ListNodes::<Runtime>::contains_key(id));
-			// assert_eq!(ListNodes::<Runtime>::count(), counter);
-			// assert_eq!(ListNodes::<Runtime>::iter().count() as u32, counter);
+			assert!(!List::<Runtime>::contains(id));
+			assert_eq!(List::<Runtime>::count(), counter);
+			assert_eq!(List::<Runtime>::iter().count() as u32, counter);
 		};
 
 		ExtBuilder::default().build_and_execute(|| {
 			// removing a non-existent id is a noop
-			// assert!(!ListNodes::<Runtime>::contains_key(42));
+			assert!(!List::<Runtime>::contains(&42));
 			assert_noop!(List::<Runtime>::remove(&42), ListError::NodeNotFound);
 
 			// when removing a node from a bag with multiple nodes:
@@ -275,7 +274,7 @@ mod list {
 			// then
 			assert_eq!(get_list_as_ids(), vec![3, 4, 1]);
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![3, 4])]);
-			ensure_left(2, 3);
+			ensure_left(&2, 3);
 
 			// when removing a node from a bag with only one node:
 			List::<Runtime>::remove(&1).unwrap();
@@ -283,21 +282,21 @@ mod list {
 			// then
 			assert_eq!(get_list_as_ids(), vec![3, 4]);
 			assert_eq!(List::<Runtime>::get_bags(), vec![(1_000, vec![3, 4])]);
-			ensure_left(1, 2);
+			ensure_left(&1, 2);
 			// bag 10 is removed
-			// assert!(!list_bags_contains_key::<Runtime, ()>::contains_key(10));
+			assert_eq!(Bag::<Runtime>::get_raw(10), None);
 			
 			// remove remaining ids to make sure storage cleans up as expected
 			List::<Runtime>::remove(&3).unwrap();
-			ensure_left(3, 1);
+			ensure_left(&3, 1);
 			assert_eq!(get_list_as_ids(), vec![4]);
 
 			List::<Runtime>::remove(&4).unwrap();
-			ensure_left(4, 0);
+			ensure_left(&4, 0);
 			assert_eq!(get_list_as_ids(), Vec::<AccountId>::new());
 
 			// bags are deleted via removals
-			// assert_eq!(ListBags::<Runtime>::iter().count(), 0);
+			assert_eq!(List::<Runtime>::bag_count(), 0);
 		});
 	}
 
@@ -366,14 +365,14 @@ mod list {
 
 		// ensure count is in sync with `ListNodes::count()`.
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
-			// assert_eq!(crate::ListNodes::<Runtime>::count(), 4);
+			assert_eq!(List::<Runtime>::count(), 4);
 			// we do some wacky stuff here to get access to the counter, since it is (reasonably)
 			// not exposed as mutable in any sense.
 			#[frame_support::storage_alias]
 			type CounterForListNodes<T: Config> =
 				StorageValue<crate::Pallet<T>, u32, frame_support::pallet_prelude::ValueQuery>;
 			CounterForListNodes::<Runtime>::mutate(|counter| *counter += 1);
-			// assert_eq!(crate::ListNodes::<Runtime>::count(), 5);
+			assert_eq!(List::<Runtime>::count(), 5);
 
 			assert_eq!(List::<Runtime>::do_try_state(), Err("iter_count != stored_count"));
 		});
@@ -411,11 +410,11 @@ mod list {
 			};
 
 			// given
-			// ListNodes::<Runtime>::insert(10, node_10_no_bag);
-			// ListNodes::<Runtime>::insert(11, node_11_no_bag);
+			List::<Runtime>::insert_unchecked(10, node_10_no_bag);
+			List::<Runtime>::insert_unchecked(11, node_11_no_bag);
 			StakingMock::set_score_of(&10, 14);
 			StakingMock::set_score_of(&11, 15);
-			assert!(!list_bags_contains_key::<Runtime, ()>(15));
+			assert_eq!(Bag::<Runtime>::get(15), None);
 			assert_eq!(List::<Runtime>::get_bags(), vec![]);
 
 			// then .. this panics
@@ -441,7 +440,7 @@ mod list {
 				score: 1_000,
 				_phantom: PhantomData,
 			};
-			// assert!(!crate::ListNodes::<Runtime>::contains_key(42));
+			assert!(!List::<Runtime>::contains(&42));
 
 			let node_1 = Node::<Runtime>::get(&1).unwrap();
 
@@ -471,7 +470,7 @@ mod list {
 				score: 1_000,
 				_phantom: PhantomData,
 			};
-			// assert!(!crate::ListNodes::<Runtime>::contains_key(42));
+			assert!(!List::<Runtime>::contains(&42));
 
 			let node_2 = Node::<Runtime>::get(&2).unwrap();
 
@@ -501,7 +500,7 @@ mod list {
 				score: 1_000,
 				_phantom: PhantomData,
 			};
-			// assert!(!crate::ListNodes::<Runtime>::contains_key(42));
+			assert!(!List::<Runtime>::contains(&42));
 
 			let node_3 = Node::<Runtime>::get(&3).unwrap();
 
@@ -531,7 +530,7 @@ mod list {
 				score: 1_000,
 				_phantom: PhantomData,
 			};
-			// assert!(!crate::ListNodes::<Runtime>::contains_key(42));
+			assert!(!List::<Runtime>::contains(&42));
 
 			let node_4 = Node::<Runtime>::get(&4).unwrap();
 
@@ -574,7 +573,7 @@ mod bags {
 				.filter(|bag_upper| !vec![10, 1_000].contains(bag_upper))
 				.for_each(|bag_upper| {
 					assert_storage_noop!(assert_eq!(Bag::<Runtime>::get(*bag_upper), None));
-					assert!(!list_bags_contains_key::<Runtime, ()>(*bag_upper));
+					assert_eq!(Bag::<Runtime>::get(*bag_upper), None);
 				});
 
 			// when we make a pre-existing bag empty
@@ -602,17 +601,17 @@ mod bags {
 			let mut bag_10 = Bag::<Runtime>::get(10).unwrap();
 			bag_10.insert_node_unchecked(node(42, 5));
 
-			// assert_eq!(
-			// 	ListNodes::<Runtime>::get(&42).unwrap(),
-			// 	Node {
-			// 		bag_upper: 10,
-			// 		score: 5,
-			// 		prev: Some(1),
-			// 		next: None,
-			// 		id: 42,
-			// 		_phantom: PhantomData
-			// 	}
-			// );
+			assert_eq!(
+				Node::<Runtime>::get(&42).unwrap(),
+				Node {
+					bag_upper: 10,
+					score: 5,
+					prev: Some(1),
+					next: None,
+					id: 42,
+					_phantom: PhantomData
+				}
+			);
 		});
 	}
 

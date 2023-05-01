@@ -587,6 +587,15 @@ mod bags_list {
 		pub fn count() -> u32 {
 			ListNodes::<T, I>::count()
 		}
+
+		pub fn bag_count() -> usize {
+			ListBags::<T, I>::iter().count()
+		}
+
+		#[cfg(test)]
+		pub fn insert_unchecked(account_id: T::AccountId, node: Node<T, I>) {
+			ListNodes::<T, I>::insert(account_id, node);
+		}
 	}
 
 	/// A Node is the fundamental element comprising the doubly-linked list described by `Bag`.
@@ -713,29 +722,6 @@ mod bags_list {
 		}
 	}
 
-
-    /// A single node, within some bag.
-	///
-	/// Nodes store links forward and back within their respective bags.
-	#[pallet::storage]
-	type ListNodes<T: Config<I>, I: 'static = ()> =
-		CountedStorageMap<_, Twox64Concat, T::AccountId, Node<T, I>>;
-
-	/// A bag stored in storage.
-	///
-	/// Stores a `Bag` struct, which stores head and tail pointers to itself.
-	#[pallet::storage]
-	type ListBags<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::Score, Bag<T, I>>;
-
-	pub fn list_bags_get<T: Config<I>, I: 'static>(score: T::Score) -> Option<Bag<T, I>> {
-		ListBags::<T, I>::get(score)
-	}
-
-	pub fn list_bags_contains_key<T: Config<I>, I: 'static>(score: T::Score) -> bool {
-		ListBags::<T, I>::contains_key(score)
-	}
-
 	/// A Bag is a doubly-linked list of ids, where each id is mapped to a [`Node`].
 	///
 	/// Note that we maintain both head and tail pointers. While it would be possible to get away with
@@ -773,6 +759,10 @@ mod bags_list {
 				bag.bag_upper = bag_upper;
 				bag
 			})
+		}
+
+		pub fn get_raw(score: T::Score) -> Option<Bag<T, I>> { 
+			ListBags::<T, I>::get(score)
 		}
 
 		/// Get a bag by its upper score or make it, appropriately initialized. Does not check if
@@ -948,4 +938,17 @@ mod bags_list {
 		}
 	}
 
+	/// A single node, within some bag.
+	///
+	/// Nodes store links forward and back within their respective bags.
+	#[pallet::storage]
+	type ListNodes<T: Config<I>, I: 'static = ()> =
+		CountedStorageMap<_, Twox64Concat, T::AccountId, Node<T, I>>;
+
+	/// A bag stored in storage.
+	///
+	/// Stores a `Bag` struct, which stores head and tail pointers to itself.
+	#[pallet::storage]
+	type ListBags<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::Score, Bag<T, I>>;
 }
