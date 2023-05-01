@@ -247,18 +247,6 @@ default:
 
 #### stage:                       .pre
 
-check-crates-publishing-pipeline:
-  stage: .pre
-  extends:
-    - .kubernetes-env
-    - .crates-publishing-pipeline
-  script:
-    - git clone
-      --depth 1
-      --branch "$RELENG_SCRIPTS_BRANCH"
-      https://github.com/paritytech/releng-scripts.git
-    - ONLY_CHECK_PIPELINE=true ./releng-scripts/publish-crates
-
 # By default our pipelines are interruptible, but some special pipelines shouldn't be interrupted:
 # * multi-project pipelines such as the ones triggered by the scripts repo
 # * the scheduled automatic-crate-publishing pipeline

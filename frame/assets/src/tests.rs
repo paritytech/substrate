@@ -21,6 +21,7 @@ use super::*;
 use crate::{mock::*, Error};
 use frame_support::{
 	assert_noop, assert_ok,
+	dispatch::GetDispatchInfo,
 	traits::{fungibles::InspectEnumerable, tokens::Preservation::Protect, Currency},
 };
 use pallet_balances::Error as BalancesError;
@@ -1354,4 +1355,13 @@ fn multiple_transfer_alls_work_ok() {
 		assert_eq!(Balances::free_balance(&1), 0);
 		assert_eq!(Balances::free_balance(&1337), 100);
 	});
+}
+
+#[test]
+fn weights_sane() {
+	let info = crate::Call::<Test>::create { id: 10, admin: 4, min_balance: 3 }.get_dispatch_info();
+	assert_eq!(<() as crate::WeightInfo>::create(), info.weight);
+
+	let info = crate::Call::<Test>::finish_destroy { id: 10 }.get_dispatch_info();
+	assert_eq!(<() as crate::WeightInfo>::finish_destroy(), info.weight);
 }

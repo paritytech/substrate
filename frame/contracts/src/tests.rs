@@ -33,7 +33,7 @@ use crate::{
 use assert_matches::assert_matches;
 use codec::Encode;
 use frame_support::{
-	assert_err, assert_err_ignore_postinfo, assert_noop, assert_ok,
+	assert_err, assert_err_ignore_postinfo, assert_err_with_weight, assert_noop, assert_ok,
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
 	parameter_types,
 	storage::child,
@@ -70,6 +70,7 @@ frame_support::construct_runtime!(
 		Randomness: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
 		Utility: pallet_utility::{Pallet, Call, Storage, Event},
 		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>},
+		Proxy: pallet_proxy::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -337,6 +338,22 @@ impl pallet_utility::Config for Test {
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 }
+
+impl pallet_proxy::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type Currency = Balances;
+	type ProxyType = ();
+	type ProxyDepositBase = ConstU64<1>;
+	type ProxyDepositFactor = ConstU64<1>;
+	type MaxProxies = ConstU32<32>;
+	type WeightInfo = ();
+	type MaxPending = ConstU32<32>;
+	type CallHasher = BlakeTwo256;
+	type AnnouncementDepositBase = ConstU64<1>;
+	type AnnouncementDepositFactor = ConstU64<1>;
+}
+
 parameter_types! {
 	pub MySchedule: Schedule<Test> = {
 		let mut schedule = <Schedule<Test>>::default();
@@ -2992,6 +3009,86 @@ fn sr25519_verify() {
 }
 
 #[test]
+fn failed_deposit_charge_should_roll_back_call() {
+	let (wasm_caller, _) = compile_module::<Test>("call_runtime_and_call").unwrap();
+	let (wasm_callee, _) = compile_module::<Test>("store_call").unwrap();
+	const ED: u64 = 200;
+
+	let execute = || {
+		ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+			// Instantiate both contracts.
+			let addr_caller = Contracts::bare_instantiate(
+				ALICE,
+				0,
+				GAS_LIMIT,
+				None,
+				Code::Upload(wasm_caller.clone()),
+				vec![],
+				vec![],
+				false,
+			)
+			.result
+			.unwrap()
+			.account_id;
+			let addr_callee = Contracts::bare_instantiate(
+				ALICE,
+				0,
+				GAS_LIMIT,
+				None,
+				Code::Upload(wasm_callee.clone()),
+				vec![],
+				vec![],
+				false,
+			)
+			.result
+			.unwrap()
+			.account_id;
+
+			// Give caller proxy access to Alice.
+			assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(ALICE), addr_caller.clone(), (), 0));
+
+			// Create a Proxy call that will attempt to transfer away Alice's balance.
+			let transfer_call =
+				Box::new(RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
+					dest: CHARLIE,
+					value: pallet_balances::Pallet::<Test>::free_balance(&ALICE) - 2 * ED,
+				}));
+
+			// Wrap the transfer call in a proxy call.
+			let transfer_proxy_call = RuntimeCall::Proxy(pallet_proxy::Call::proxy {
+				real: ALICE,
+				force_proxy_type: Some(()),
+				call: transfer_call,
+			});
+
+			let data = (
+				(ED - DepositPerItem::get()) as u32, // storage length
+				addr_callee,
+				transfer_proxy_call,
+			);
+
+			<Pallet<Test>>::call(
+				RuntimeOrigin::signed(ALICE),
+				addr_caller.clone(),
+				0,
+				GAS_LIMIT,
+				None,
+				data.encode(),
+			)
+		})
+	};
+
+	// With a low enough deposit per byte, the call should succeed.
+	let result = execute().unwrap();
+
+	// Bump the deposit per byte to a high value to trigger a FundsUnavailable error.
+	DEPOSIT_PER_BYTE.with(|c| *c.borrow_mut() = ED);
+	assert_err_with_weight!(execute(), TokenError::FundsUnavailable, result.actual_weight);
+}
+
+#[test]
 fn upload_code_works() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 
@@ -3587,6 +3684,59 @@ fn storage_deposit_works() {
 				},
 			]
 		);
+	});
+}
+
+#[test]
+fn storage_deposit_callee_works() {
+	let (wasm_caller, _code_hash_caller) = compile_module::<Test>("call").unwrap();
+	let (wasm_callee, _code_hash_callee) = compile_module::<Test>("store_call").unwrap();
+	const ED: u64 = 200;
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Create both contracts: Constructors do nothing.
+		let addr_caller = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm_caller),
+			vec![],
+			vec![],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+		let addr_callee = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm_callee),
+			vec![],
+			vec![],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		assert_ok!(Contracts::call(
+			RuntimeOrigin::signed(ALICE),
+			addr_caller,
+			0,
+			GAS_LIMIT,
+			None,
+			(100u32, &addr_callee).encode()
+		));
+
+		let callee = get_contract(&addr_callee);
+		let deposit = ED + DepositPerByte::get() * 100 + DepositPerItem::get() * 1;
+
+		assert_eq!(test_utils::get_balance(callee.deposit_account()), deposit);
+		assert_eq!(callee.total_deposit(), deposit);
 	});
 }
 
