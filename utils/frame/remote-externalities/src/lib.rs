@@ -141,10 +141,15 @@ impl Transport {
 		if let Self::Uri(uri) = self {
 			log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
 
-			let ws_client = WsClientBuilder::default().build(uri).await.map_err(|e| {
-				log::error!(target: LOG_TARGET, "error: {:?}", e);
-				"failed to build ws client"
-			})?;
+			let ws_client = WsClientBuilder::default()
+				.max_request_body_size(u32::MAX)
+				.request_timeout(std::time::Duration::from_secs(60 * 5))
+				.build(uri)
+				.await
+				.map_err(|e| {
+					log::error!(target: LOG_TARGET, "error: {:?}", e);
+					"failed to build ws client"
+				})?;
 
 			*self = Self::RemoteClient(Arc::new(ws_client))
 		}
