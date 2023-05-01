@@ -3477,7 +3477,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-debug-1086#bfa9ea95477fcad40e40a1dc75002a845c12e462"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-debug-1086#5a8637e3a93410a452711d253cdc9efb5e0ca8f8"
 dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-proc-macros",
@@ -3490,7 +3490,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-client-transport"
 version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-debug-1086#bfa9ea95477fcad40e40a1dc75002a845c12e462"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-debug-1086#5a8637e3a93410a452711d253cdc9efb5e0ca8f8"
 dependencies = [
  "futures-util",
  "http",
@@ -3510,7 +3510,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-core"
 version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-debug-1086#bfa9ea95477fcad40e40a1dc75002a845c12e462"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-debug-1086#5a8637e3a93410a452711d253cdc9efb5e0ca8f8"
 dependencies = [
  "anyhow",
  "arrayvec 0.7.2",
@@ -3537,7 +3537,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-debug-1086#bfa9ea95477fcad40e40a1dc75002a845c12e462"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-debug-1086#5a8637e3a93410a452711d253cdc9efb5e0ca8f8"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -3549,7 +3549,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-server"
 version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-debug-1086#bfa9ea95477fcad40e40a1dc75002a845c12e462"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-debug-1086#5a8637e3a93410a452711d253cdc9efb5e0ca8f8"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -3570,7 +3570,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-debug-1086#bfa9ea95477fcad40e40a1dc75002a845c12e462"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-debug-1086#5a8637e3a93410a452711d253cdc9efb5e0ca8f8"
 dependencies = [
  "anyhow",
  "beef",
@@ -3583,7 +3583,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.16.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-debug-1086#bfa9ea95477fcad40e40a1dc75002a845c12e462"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=na-debug-1086#5a8637e3a93410a452711d253cdc9efb5e0ca8f8"
 dependencies = [
  "http",
  "jsonrpsee-client-transport",
@@ -12152,7 +12152,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
  "digest 0.10.6",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
