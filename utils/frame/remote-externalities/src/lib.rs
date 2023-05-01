@@ -22,7 +22,7 @@
 
 use async_recursion::async_recursion;
 use codec::{Decode, Encode};
-use futures::{channel::mpsc, stream::StreamExt};
+use indicatif::{ProgressBar, ProgressStyle};
 use jsonrpsee::{
 	core::params::ArrayParams,
 	http_client::{HttpClient, HttpClientBuilder},
@@ -39,14 +39,13 @@ use sp_core::{
 };
 pub use sp_io::TestExternalities;
 use sp_runtime::{traits::Block as BlockT, StateVersion};
+use spinners::{Spinner, Spinners};
 use std::{
-	cmp::{max, min},
+	cmp::max,
 	fs,
-	num::NonZeroUsize,
 	ops::{Deref, DerefMut},
 	path::{Path, PathBuf},
-	sync::Arc,
-	thread,
+	time::Instant,
 };
 use substrate_rpc_client::{rpc_params, BatchRequestBuilder, ChainApi, ClientT, StateApi};
 
@@ -119,20 +118,13 @@ pub enum Transport {
 	/// Use the `URI` to open a new WebSocket connection.
 	Uri(String),
 	/// Use HTTP connection.
-	RemoteClient(Arc<HttpClient>),
+	RemoteClient(HttpClient),
 }
 
 impl Transport {
 	fn as_client(&self) -> Option<&HttpClient> {
 		match self {
 			Self::RemoteClient(client) => Some(client),
-			_ => None,
-		}
-	}
-
-	fn as_client_cloned(&self) -> Option<Arc<HttpClient>> {
-		match self {
-			Self::RemoteClient(client) => Some(client.clone()),
 			_ => None,
 		}
 	}
@@ -166,7 +158,7 @@ impl Transport {
 					"failed to build http client"
 				})?;
 
-			*self = Self::RemoteClient(Arc::new(http_client))
+			*self = Self::RemoteClient(http_client)
 		}
 
 		Ok(())
@@ -179,8 +171,8 @@ impl From<String> for Transport {
 	}
 }
 
-impl From<Arc<HttpClient>> for Transport {
-	fn from(client: Arc<HttpClient>) -> Self {
+impl From<HttpClient> for Transport {
+	fn from(client: HttpClient) -> Self {
 		Transport::RemoteClient(client)
 	}
 }
@@ -213,13 +205,6 @@ impl<B: BlockT> OnlineConfig<B> {
 	fn rpc_client(&self) -> &HttpClient {
 		self.transport
 			.as_client()
-			.expect("http client must have been initialized by now; qed.")
-	}
-
-	/// Return a cloned rpc (http) client, suitable for being moved to threads.
-	fn rpc_client_cloned(&self) -> Arc<HttpClient> {
-		self.transport
-			.as_client_cloned()
 			.expect("http client must have been initialized by now; qed.")
 	}
 
@@ -327,30 +312,11 @@ where
 	B::Hash: DeserializeOwned,
 	B::Header: DeserializeOwned,
 {
-	const DEFAULT_PARALLELISM: usize = 4;
 	const BATCH_SIZE_INCREASE_FACTOR: f32 = 1.10;
 	const BATCH_SIZE_DECREASE_FACTOR: f32 = 0.50;
 	const INITIAL_BATCH_SIZE: usize = 5000;
 	// NOTE: increasing this value does not seem to impact speed all that much.
 	const DEFAULT_KEY_DOWNLOAD_PAGE: u32 = 1000;
-
-	/// Get the number of threads to use.
-	/// Cap the number of threads. Performance improvement beyond a small number of threads is
-	/// negligible, and too many threads can create issues with the HttpClient.
-	fn threads() -> NonZeroUsize {
-		let avaliable = thread::available_parallelism()
-			.unwrap_or(NonZeroUsize::new(1usize).expect("1 is non-zero; qed"))
-			.get();
-		assert!(avaliable > 0, "avaliable parallelism must be greater than 0");
-
-		let requested: usize = match std::env::var("TRY_RUNTIME_MAX_THREADS") {
-			Ok(n) => n.parse::<usize>().expect("TRY_RUNTIME_MAX_THREADS must be a number"),
-			Err(_) => Self::DEFAULT_PARALLELISM,
-		};
-		assert!(requested > 0, "TRY_RUNTIME_MAX_THREADS must be greater than 0");
-		return NonZeroUsize::new(min(requested, avaliable))
-			.expect("requested and avaliable are non-zero; qed")
-	}
 
 	async fn rpc_get_storage(
 		&self,
@@ -471,9 +437,10 @@ where
 	/// ```
 	#[async_recursion]
 	async fn get_storage_data_dynamic_batch_size(
-		client: &Arc<HttpClient>,
+		client: &HttpClient,
 		payloads: Vec<(String, ArrayParams)>,
 		batch_size: usize,
+		bar: &ProgressBar,
 	) -> Result<Vec<Option<StorageData>>, String> {
 		// All payloads have been processed
 		if payloads.is_empty() {
@@ -514,6 +481,7 @@ where
 					client,
 					payloads,
 					max(1, (batch_size as f32 * Self::BATCH_SIZE_DECREASE_FACTOR) as usize),
+					bar,
 				)
 				.await
 			},
@@ -521,19 +489,22 @@ where
 
 		// Collect the data from this batch
 		let mut data: Vec<Option<StorageData>> = vec![];
+		let batch_response_len = batch_response.len();
 		for item in batch_response.into_iter() {
 			match item {
 				Ok(x) => data.push(x),
 				Err(e) => return Err(e.message().to_string()),
 			}
 		}
+		bar.inc(batch_response_len as u64);
 
 		// Return this data joined with the remaining keys
-		let payloads = payloads.iter().skip(batch_size).cloned().collect::<Vec<_>>();
+		let remaining_payloads = payloads.iter().skip(batch_size).cloned().collect::<Vec<_>>();
 		let mut rest = Self::get_storage_data_dynamic_batch_size(
 			client,
-			payloads,
+			remaining_payloads,
 			max(batch_size + 1, (batch_size as f32 * Self::BATCH_SIZE_INCREASE_FACTOR) as usize),
+			bar,
 		)
 		.await?;
 		data.append(&mut rest);
@@ -550,154 +521,86 @@ where
 		at: B::Hash,
 		pending_ext: &mut TestExternalities,
 	) -> Result<Vec<KeyValue>, &'static str> {
-		let keys = self.rpc_get_keys_paged(prefix.clone(), at).await?;
+		let start = Instant::now();
+		let mut sp = Spinner::with_timer(Spinners::Dots, "Scraping keys...".into());
+		let keys = self
+			.rpc_get_keys_paged(prefix.clone(), at)
+			.await?
+			.into_iter()
+			.filter(|k| !is_default_child_storage_key(&k.0))
+			.collect::<Vec<_>>();
+		sp.stop_with_message(format!(
+			"✅ Found {} keys ({}s)",
+			keys.len(),
+			start.elapsed().as_secs()
+		));
 		if keys.is_empty() {
 			return Ok(Default::default())
 		}
 
-		let client = self.as_online().rpc_client_cloned();
-		let threads = Self::threads().get();
-		let thread_chunk_size = (keys.len() + threads - 1) / threads;
+		let client = self.as_online().rpc_client();
+		let payloads = keys
+			.iter()
+			.map(|key| ("state_getStorage".to_string(), rpc_params!(key, at)))
+			.collect::<Vec<_>>();
 
-		log::info!(
-			target: LOG_TARGET,
-			"Querying a total of {} keys from prefix {:?}, splitting among {} threads, {} keys per thread",
-			keys.len(),
-			HexDisplay::from(&prefix),
-			threads,
-			thread_chunk_size,
+		let bar = ProgressBar::new(payloads.len() as u64);
+		let bar_message = format!("Downloading key values");
+		bar.set_message(bar_message);
+		bar.set_style(
+			ProgressStyle::with_template(
+				"[{elapsed_precise}] {msg} [{wide_bar}] {pos}/{len} ({eta})",
+			)
+			.unwrap()
+			.progress_chars("=>-"),
 		);
-
-		let mut handles = Vec::new();
-		let keys_chunked: Vec<Vec<StorageKey>> =
-			keys.chunks(thread_chunk_size).map(|s| s.into()).collect::<Vec<_>>();
-
-		enum Message {
-			/// This thread completed the assigned work.
-			Terminated,
-			/// The thread produced the following batch response.
-			Batch(Vec<(Vec<u8>, Vec<u8>)>),
-			/// A request from the batch failed.
-			BatchFailed(String),
+		let batches = payloads.chunks(&payloads.len() / 4);
+		let mut operations = vec![];
+		for payload_batch in batches {
+			operations.push(Self::get_storage_data_dynamic_batch_size(
+				&client,
+				payload_batch.to_vec(),
+				Self::INITIAL_BATCH_SIZE,
+				&bar,
+			))
 		}
+		let storage_data = futures::future::join_all(operations)
+			.await
+			.into_iter()
+			.map(|r| r.unwrap())
+			.flatten()
+			.collect::<Vec<_>>();
+		bar.finish_with_message("✅ Downloaded key values");
+		print!("\n");
+		// std::io::stdout().flush().unwrap();
+		// std::io::stderr().flush().unwrap();
 
-		let (tx, mut rx) = mpsc::unbounded::<Message>();
+		// Check if we got responses for all submitted requests.
+		assert_eq!(keys.len(), storage_data.len());
 
-		for thread_keys in keys_chunked {
-			let thread_sender = tx.clone();
-			let thread_client = client.clone();
-			let handle = std::thread::spawn(move || {
-				// Process the payloads in chunks so each thread can pass kvs back to the main
-				// thread to start inserting before all of the data has been queried from the node.
-				// Inserting data takes a very long time, so the earlier it can start the better.
-				let mut thread_key_values = vec![];
-				let chunk_size = thread_keys.len() / 1;
-				for thread_keys_chunk in thread_keys.chunks(chunk_size) {
-					let mut thread_key_chunk_values = Vec::with_capacity(thread_keys_chunk.len());
-
-					let payloads = thread_keys_chunk
-						.iter()
-						.map(|key| ("state_getStorage".to_string(), rpc_params!(key, at)))
-						.collect::<Vec<_>>();
-
-					let rt = tokio::runtime::Runtime::new().unwrap();
-					let storage_data = match rt.block_on(Self::get_storage_data_dynamic_batch_size(
-						&thread_client,
-						payloads,
-						Self::INITIAL_BATCH_SIZE,
-					)) {
-						Ok(storage_data) => storage_data,
-						Err(e) => {
-							thread_sender.unbounded_send(Message::BatchFailed(e)).unwrap();
-							return Default::default()
-						},
-					};
-
-					// Check if we got responses for all submitted requests.
-					assert_eq!(thread_keys_chunk.len(), storage_data.len());
-
-					let mut batch_kv = Vec::with_capacity(thread_keys_chunk.len());
-					for (key, maybe_value) in thread_keys_chunk.iter().zip(storage_data) {
-						match maybe_value {
-							Some(data) => {
-								thread_key_chunk_values.push((key.clone(), data.clone()));
-								batch_kv.push((key.clone().0, data.0));
-							},
-							None => {
-								log::warn!(
-									target: LOG_TARGET,
-									"key {:?} had none corresponding value.",
-									&key
-								);
-								let data = StorageData(vec![]);
-								thread_key_chunk_values.push((key.clone(), data.clone()));
-								batch_kv.push((key.clone().0, data.0));
-							},
-						};
-					}
-
-					// Send this chunk to the main thread to start inserting.
-					thread_sender.unbounded_send(Message::Batch(batch_kv)).unwrap();
-					thread_key_values.extend(thread_key_chunk_values);
-				}
-
-				thread_sender.unbounded_send(Message::Terminated).unwrap();
-				thread_key_values
-			});
-
-			handles.push(handle);
-		}
-
-		// first, wait until all threads send a `Terminated` message, in the meantime populate
-		// `pending_ext`.
-		let mut terminated = 0usize;
-		let mut batch_failed = false;
-		let mut processed = 0usize;
-		loop {
-			match rx.next().await.unwrap() {
-				Message::Batch(kvs) => {
-					let kvs = kvs
-						.into_iter()
-						.filter(|(k, _)| !is_default_child_storage_key(k))
-						.collect::<Vec<_>>();
-					processed += kvs.len();
-					pending_ext.batch_insert(kvs);
-					log::info!(
-						target: LOG_TARGET,
-						"inserting keys progress = {:.0}% [{} / {}]",
-						(processed as f32 / keys.len() as f32) * 100f32,
-						processed,
-						keys.len(),
-					);
+		let key_values = keys
+			.iter()
+			.zip(storage_data)
+			.map(|(key, maybe_value)| match maybe_value {
+				Some(data) => (key.clone(), data),
+				None => {
+					log::warn!(target: LOG_TARGET, "key {:?} had none corresponding value.", &key);
+					let data = StorageData(vec![]);
+					(key.clone(), data)
 				},
-				Message::BatchFailed(error) => {
-					log::error!(target: LOG_TARGET, "Batch processing failed: {:?}", error);
-					batch_failed = true;
-					break
-				},
-				Message::Terminated => {
-					terminated += 1;
-					if terminated == handles.len() {
-						break
-					}
-				},
-			}
-		}
+			})
+			.collect::<Vec<_>>();
 
-		// Ensure all threads finished execution before returning.
-		let keys_and_values =
-			handles.into_iter().flat_map(|h| h.join().unwrap()).collect::<Vec<_>>();
-
-		if batch_failed {
-			return Err("Batch failed.")
-		}
-
-		Ok(keys_and_values)
+		let mut sp = Spinner::with_timer(Spinners::Dots, "Inserting keys into DB...".into());
+		let start = Instant::now();
+		pending_ext.batch_insert(key_values.clone().into_iter().map(|(k, v)| (k.0, v.0)));
+		sp.stop_with_message(format!("✅ Inserted keys into DB ({}s)", start.elapsed().as_secs()));
+		Ok(key_values)
 	}
 
 	/// Get the values corresponding to `child_keys` at the given `prefixed_top_key`.
 	pub(crate) async fn rpc_child_get_storage_paged(
-		client: &Arc<HttpClient>,
+		client: &HttpClient,
 		prefixed_top_key: &StorageKey,
 		child_keys: Vec<StorageKey>,
 		at: B::Hash,
@@ -718,10 +621,12 @@ where
 			})
 			.collect::<Vec<_>>();
 
+		let bar = ProgressBar::new(payloads.len() as u64);
 		let storage_data = match Self::get_storage_data_dynamic_batch_size(
 			client,
 			payloads,
 			Self::INITIAL_BATCH_SIZE,
+			&bar,
 		)
 		.await
 		{
@@ -814,19 +719,15 @@ where
 
 		let at = self.as_online().at_expected();
 
-		let arc_client = self.as_online().rpc_client_cloned();
+		let client = self.as_online().rpc_client();
 		let mut child_kv = vec![];
 		for prefixed_top_key in child_roots {
-			let child_keys = Self::rpc_child_get_keys(
-				arc_client.as_ref(),
-				&prefixed_top_key,
-				StorageKey(vec![]),
-				at,
-			)
-			.await?;
+			let child_keys =
+				Self::rpc_child_get_keys(&client, &prefixed_top_key, StorageKey(vec![]), at)
+					.await?;
 
 			let child_kv_inner =
-				Self::rpc_child_get_storage_paged(&arc_client, &prefixed_top_key, child_keys, at)
+				Self::rpc_child_get_storage_paged(&client, &prefixed_top_key, child_keys, at)
 					.await?;
 
 			let prefixed_top_key = PrefixedStorageKey::new(prefixed_top_key.clone().0);
