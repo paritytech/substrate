@@ -11,15 +11,15 @@ license = "MIT/Apache-2.0"
 edition = "2021"
 
 [dependencies]
-ark-ff = { version="0.4.0", default-features = false }
+ark-ff = { version="0.4.2", default-features = false }
 ark-std = { version = "0.4.0", default-features = false }
-ark-serialize = { version = "0.4.0", default-features = false }
+ark-serialize = { version = "0.4.2", default-features = false }
 sp-ark-models = { version = "0.4.0", default-features = false }
 
 [dev-dependencies]
 sp-arkworks = { path = "../" }
-ark-ec = { version = "0.4.0", default-features = false }
-ark-algebra-test-templates = { version = "0.4.0", default-features = false }
+ark-ec = { version = "0.4.2", default-features = false }
+ark-algebra-test-templates = { version = "0.4.2", default-features = false }
 sp-ark-bls12-377 = { version = "0.4.0-alpha", git = "https://github.com/paritytech/ark-substrate", default-features = false }
 sp-ark-bls12-381 = { version = "0.4.0-alpha", git = "https://github.com/paritytech/ark-substrate", default-features = false }
 sp-ark-bw6-761 = { version = "0.4.0-alpha",git = "https://github.com/paritytech/ark-substrate", default-features = false }
