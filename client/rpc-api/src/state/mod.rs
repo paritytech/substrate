@@ -62,6 +62,18 @@ pub trait StateApi<Hash> {
 		hash: Option<Hash>,
 	) -> RpcResult<Vec<StorageKey>>;
 
+	/// Returns the keys along with their values with prefix with pagination support.
+	/// Up to `count` items will be returned.
+	/// If `start_key` is passed, return next items in storage in lexicographic order.
+	#[method(name = "state_getPairsPaged", blocking)]
+	fn storage_pairs_paged(
+		&self,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+		hash: Option<Hash>,
+	) -> RpcResult<Vec<(StorageKey, StorageData)>>;
+
 	/// Returns a storage entry at a specific block's state.
 	#[method(name = "state_getStorage", aliases = ["state_getStorageAt"], blocking)]
 	fn storage(&self, key: StorageKey, hash: Option<Hash>) -> RpcResult<Option<StorageData>>;

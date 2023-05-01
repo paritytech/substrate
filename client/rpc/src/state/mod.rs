@@ -82,7 +82,7 @@ where
 		prefix: StorageKey,
 	) -> Result<Vec<(StorageKey, StorageData)>, Error>;
 
-	/// Returns the keys with prefix with pagination support.
+	/// Returns the keys with prefix along with their values, with pagination support.
 	fn storage_keys_paged(
 		&self,
 		block: Option<Block::Hash>,
@@ -90,6 +90,15 @@ where
 		count: u32,
 		start_key: Option<StorageKey>,
 	) -> Result<Vec<StorageKey>, Error>;
+
+	/// Returns the keys with prefix with pagination support.
+	fn storage_pairs_paged(
+		&self,
+		block: Option<Block::Hash>,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+	) -> Result<Vec<(StorageKey, StorageData)>, Error>;
 
 	/// Returns a storage entry at a specific block's state.
 	fn storage(
@@ -243,6 +252,24 @@ where
 		}
 		self.backend
 			.storage_keys_paged(block, prefix, count, start_key)
+			.map_err(Into::into)
+	}
+
+	fn storage_pairs_paged(
+		&self,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> RpcResult<Vec<(StorageKey, StorageData)>> {
+		if count > STORAGE_KEYS_PAGED_MAX_COUNT {
+			return Err(JsonRpseeError::from(Error::InvalidCount {
+				value: count,
+				max: STORAGE_KEYS_PAGED_MAX_COUNT,
+			}))
+		}
+		self.backend
+			.storage_pairs_paged(block, prefix, count, start_key)
 			.map_err(Into::into)
 	}
 

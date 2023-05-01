@@ -249,6 +249,19 @@ where
 			.map_err(client_err)
 	}
 
+	fn storage_pairs_paged(
+		&self,
+		block: Option<Block::Hash>,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+	) -> std::result::Result<Vec<(StorageKey, StorageData)>, Error> {
+		self.block_or_best(block)
+			.and_then(|block| self.client.storage_pairs(block, prefix.as_ref(), start_key.as_ref()))
+			.map(|iter| iter.take(count as usize).collect())
+			.map_err(client_err)
+	}
+
 	fn storage(
 		&self,
 		block: Option<Block::Hash>,
