@@ -214,6 +214,101 @@ pub trait Keystore: Send + Sync {
 	}
 }
 
+impl Keystore for Arc<dyn Keystore> {
+	fn sr25519_public_keys(&self, key_type: KeyTypeId) -> Vec<sr25519::Public> {
+		(**self).sr25519_public_keys(key_type)
+	}
+
+	fn sr25519_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<sr25519::Public, Error> {
+		(**self).sr25519_generate_new(key_type, seed)
+	}
+
+	fn sr25519_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		msg: &[u8],
+	) -> Result<Option<sr25519::Signature>, Error> {
+		(**self).sr25519_sign(key_type, public, msg)
+	}
+
+	fn sr25519_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		transcript: &sr25519::vrf::VrfTranscript,
+	) -> Result<Option<sr25519::vrf::VrfSignature>, Error> {
+		(**self).sr25519_vrf_sign(key_type, public, transcript)
+	}
+
+	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {
+		(**self).ed25519_public_keys(key_type)
+	}
+
+	fn ed25519_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<ed25519::Public, Error> {
+		(**self).ed25519_generate_new(key_type, seed)
+	}
+
+	fn ed25519_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &ed25519::Public,
+		msg: &[u8],
+	) -> Result<Option<ed25519::Signature>, Error> {
+		(**self).ed25519_sign(key_type, public, msg)
+	}
+
+	fn ecdsa_public_keys(&self, key_type: KeyTypeId) -> Vec<ecdsa::Public> {
+		(**self).ecdsa_public_keys(key_type)
+	}
+
+	fn ecdsa_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<ecdsa::Public, Error> {
+		(**self).ecdsa_generate_new(key_type, seed)
+	}
+
+	fn ecdsa_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &ecdsa::Public,
+		msg: &[u8],
+	) -> Result<Option<ecdsa::Signature>, Error> {
+		(**self).ecdsa_sign(key_type, public, msg)
+	}
+
+	fn ecdsa_sign_prehashed(
+		&self,
+		key_type: KeyTypeId,
+		public: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> Result<Option<ecdsa::Signature>, Error> {
+		(**self).ecdsa_sign_prehashed(key_type, public, msg)
+	}
+
+	fn insert(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
+		(**self).insert(key_type, suri, public)
+	}
+
+	fn keys(&self, key_type: KeyTypeId) -> Result<Vec<Vec<u8>>, Error> {
+		(**self).keys(key_type)
+	}
+
+	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+		(**self).has_keys(public_keys)
+	}
+}
+
 /// A shared pointer to a keystore implementation.
 pub type KeystorePtr = Arc<dyn Keystore>;
 

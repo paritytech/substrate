@@ -410,6 +410,7 @@ where
 		client.clone(),
 		chain_info.best_hash,
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
+		keystore.clone(),
 	)
 	.map_err(|e| Error::Application(Box::new(e)))?;
 
