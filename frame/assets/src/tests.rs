@@ -182,7 +182,7 @@ fn refunding_with_sufficient_existence_reason_should_fail() {
 		// create sufficient asset
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
-		// create an asset account with sufficient existence reason 
+		// create an asset account with sufficient existence reason
 		// by transferring some sufficient assets
 		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		assert_eq!(Assets::balance(0, 1), 50);

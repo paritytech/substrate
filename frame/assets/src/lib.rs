@@ -108,8 +108,8 @@
 //!   Owner.
 //! * `set_metadata`: Set the metadata of an asset class; called by the asset class's Owner.
 //! * `clear_metadata`: Remove the metadata of an asset class; called by the asset class's Owner.
-//! * `touch_other`: Create an asset account for specified account. Caller must place a deposit; called by the asset
-//!   class's Freezer or Admin.
+//! * `touch_other`: Create an asset account for specified account. Caller must place a deposit;
+//!   called by the asset class's Freezer or Admin.
 //!
 //! Please refer to the [`Call`] enum and its associated variants for documentation on each
 //! function.
