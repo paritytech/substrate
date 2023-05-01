@@ -26,9 +26,6 @@
 
 use frame_support::pallet_macros::*;
 
-#[cfg(test)]
-mod tests;
-
 #[export_section]
 mod bags_list {
 	use codec::{Decode, Encode, MaxEncodedLen};

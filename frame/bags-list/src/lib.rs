@@ -58,16 +58,18 @@ use frame_election_provider_support::{ScoreProvider, SortedListProvider};
 use frame_system::ensure_signed;
 use sp_runtime::traits::{AtLeast32BitUnsigned, StaticLookup};
 use sp_std::prelude::*;
+use bags_list::*;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
 
-mod list;
 pub mod migrations;
 #[cfg(any(test, feature = "fuzz"))]
 pub mod mock;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_bags_list;
 pub mod weights;
 
 pub use pallet::*;

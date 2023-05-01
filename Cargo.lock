@@ -491,6 +491,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "bags-list"
+version = "1.0.0"
+dependencies = [
+ "frame-support",
+ "macro_magic",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "base-x"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5790,6 +5802,7 @@ dependencies = [
 name = "pallet-bags-list"
 version = "4.0.0-dev"
 dependencies = [
+ "bags-list",
  "frame-benchmarking",
  "frame-election-provider-support",
  "frame-support",

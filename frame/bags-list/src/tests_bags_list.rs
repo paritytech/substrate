@@ -26,6 +26,8 @@ use frame_election_provider_support::{SortedListProvider, ScoreProvider, VoteWei
 use frame_support::{assert_ok, assert_storage_noop};
 use std::iter;
 
+//TODO: These tests should move under `bags-list` crate
+
 fn node(
 	id: AccountId,
 	prev: Option<AccountId>,

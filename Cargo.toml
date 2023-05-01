@@ -80,6 +80,7 @@ members = [
 	"frame/authorship",
 	"frame/babe",
 	"frame/bags-list",
+	"frame/bags-list/src/bags-list",
 	"frame/bags-list/fuzzer",
 	"frame/bags-list/remote-tests",
 	"frame/balances",
