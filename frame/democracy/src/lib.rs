@@ -1308,7 +1308,12 @@ impl<T: Config> Pallet<T> {
 		})?;
 		// Extend the lock to `balance` (rather than setting it) since we don't know what other
 		// votes are in place.
-		T::Currency::extend_lock(DEMOCRACY_ID, who, vote.balance(), WithdrawReasons::TRANSFER);
+		T::Currency::extend_lock(
+			DEMOCRACY_ID,
+			who,
+			vote.balance(),
+			WithdrawReasons::except(WithdrawReasons::RESERVE),
+		);
 		ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
 		Ok(())
 	}
@@ -1454,7 +1459,12 @@ impl<T: Config> Pallet<T> {
 			let votes = Self::increase_upstream_delegation(&target, conviction.votes(balance));
 			// Extend the lock to `balance` (rather than setting it) since we don't know what other
 			// votes are in place.
-			T::Currency::extend_lock(DEMOCRACY_ID, &who, balance, WithdrawReasons::TRANSFER);
+			T::Currency::extend_lock(
+				DEMOCRACY_ID,
+				&who,
+				balance,
+				WithdrawReasons::except(WithdrawReasons::RESERVE),
+			);
 			Ok(votes)
 		})?;
 		Self::deposit_event(Event::<T>::Delegated { who, target });
@@ -1499,7 +1509,12 @@ impl<T: Config> Pallet<T> {
 		if lock_needed.is_zero() {
 			T::Currency::remove_lock(DEMOCRACY_ID, who);
 		} else {
-			T::Currency::set_lock(DEMOCRACY_ID, who, lock_needed, WithdrawReasons::TRANSFER);
+			T::Currency::set_lock(
+				DEMOCRACY_ID,
+				who,
+				lock_needed,
+				WithdrawReasons::except(WithdrawReasons::RESERVE),
+			);
 		}
 	}
 
@@ -1591,11 +1606,6 @@ impl<T: Config> Pallet<T> {
 
 		if approved {
 			Self::deposit_event(Event::<T>::Passed { ref_index: index });
-			// Actually `hold` the proposal now since we didn't hold it when it came in via the
-			// submit extrinsic and we now know that it will be needed. This will be reversed by
-			// Scheduler pallet once it is executed which assumes that we will already have placed
-			// a `hold` on it.
-			T::Preimages::hold(&status.proposal);
 
 			// Earliest it can be scheduled for is next block.
 			let when = now.saturating_add(status.delay.max(One::one()));
