@@ -244,21 +244,21 @@ pub mod pallet {
 		}
 	}
 
-	// #[pallet::hooks]
-	// impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-	// 	fn integrity_test() {
-	// 		// ensure they are strictly increasing, this also implies that duplicates are detected.
-	// 		assert!(
-	// 			T::BagThresholds::get().windows(2).all(|window| window[1] > window[0]),
-	// 			"thresholds must strictly increase, and have no duplicates",
-	// 		);
-	// 	}
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		fn integrity_test() {
+			// ensure they are strictly increasing, this also implies that duplicates are detected.
+			assert!(
+				T::BagThresholds::get().windows(2).all(|window| window[1] > window[0]),
+				"thresholds must strictly increase, and have no duplicates",
+			);
+		}
 
-	// 	#[cfg(feature = "try-runtime")]
-	// 	fn try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
-	// 		<Self as SortedListProvider<T::AccountId>>::try_state()
-	// 	}
-	// }
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
+			<Self as SortedListProvider<T::AccountId>>::try_state()
+		}
+	}
 }
 
 #[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
