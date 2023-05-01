@@ -21,7 +21,6 @@ use super::*;
 use frame_support::{traits::Get, BoundedVec};
 
 #[must_use]
-#[derive(PartialEq)]
 pub(super) enum DeadConsequence {
 	Remove,
 	Keep,
