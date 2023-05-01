@@ -500,6 +500,11 @@ impl<'a> From<ExtensionInput<'a>> for Vec<u8> {
 	}
 }
 
+impl Default for Origin<Test> {
+	fn default() -> Self {
+		Self::Signed(ALICE)
+	}
+}
 // Perform a call to a plain account.
 // The actual transfer fails because we can only call contracts.
 // Then we check that at least the base costs where charged (no runtime gas costs.)

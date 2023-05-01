@@ -447,7 +447,7 @@ pub struct Frame<T: Config> {
 struct DelegatedCall<T: Config, E> {
 	/// The executable which is run instead of the contracts own `executable`.
 	executable: E,
-	/// The caller of the contract stack.
+	/// The caller of the contract.
 	caller: Origin<T>,
 }
 
@@ -1088,7 +1088,7 @@ where
 		// any `value` other than 0.
 		let caller = match self.caller() {
 			Origin::Signed(caller) => caller,
-			Origin::Root if value == 0u32.into() => return Ok(()),
+			Origin::Root if value.is_zero() => return Ok(()),
 			Origin::Root => return DispatchError::RootNotAllowed.into(),
 		};
 		Self::transfer(ExistenceRequirement::KeepAlive, &caller, &frame.account_id, value)
@@ -1202,7 +1202,7 @@ where
 			FrameArgs::Call {
 				dest: account_id,
 				cached_info: Some(contract_info),
-				delegated_call: Some(DelegatedCall { executable, caller: self.caller() }),
+				delegated_call: Some(DelegatedCall { executable, caller: self.caller().clone() }),
 			},
 			value,
 			Weight::zero(),
@@ -1303,7 +1303,7 @@ where
 		} else {
 			self.frames()
 				.nth(1)
-				.map(|f| Origin::Signed(f.account_id.clone()))
+				.map(|f| Origin::from_account_id(f.account_id.clone()))
 				.unwrap_or(self.origin.clone())
 		}
 	}
@@ -1321,7 +1321,7 @@ where
 	}
 
 	fn caller_is_origin(&self) -> bool {
-		&self.origin == &self.caller()
+		self.origin == self.caller()
 	}
 
 	fn caller_is_root(&self) -> bool {

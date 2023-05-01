@@ -460,7 +460,7 @@ mod tests {
 				gas_meter: GasMeter::new(Weight::from_parts(10_000_000_000, 10 * 1024 * 1024)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
-				caller: Origin::Signed(ALICE),
+				caller: Default::default(),
 				sr25519_verify: Default::default(),
 			}
 		}
@@ -564,7 +564,7 @@ mod tests {
 			false
 		}
 		fn caller_is_root(&self) -> bool {
-			false
+			&self.caller == &Origin::Root
 		}
 		fn address(&self) -> &AccountIdOf<Self::T> {
 			&BOB
@@ -3017,10 +3017,18 @@ mod tests {
 	)
 )
 "#;
+		// The default `caller` is ALICE. Therefore not root.
 		let output = execute(CODE_CALLER_IS_ROOT, vec![], MockExt::default()).unwrap();
-
-		// The mock ext just always returns 0u32 (`false`)
 		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: 0u32.encode() },);
+
+		// The caller is forced to be root instead of using the default ALICE.
+		let output = execute(
+			CODE_CALLER_IS_ROOT,
+			vec![],
+			MockExt { caller: Origin::Root, ..MockExt::default() },
+		)
+		.unwrap();
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: 1u32.encode() },);
 	}
 
 	#[test]

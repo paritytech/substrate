@@ -585,7 +585,7 @@ pub mod pallet {
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let common = CommonInput {
-				origin: Origin::from_origin_for(origin)?,
+				origin: Origin::from_runtime_origin(origin)?,
 				value,
 				data,
 				gas_limit: gas_limit.into(),
@@ -647,7 +647,7 @@ pub mod pallet {
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
-				origin: Origin::from_origin_for(origin)?,
+				origin: Origin::from_runtime_origin(origin)?,
 				value,
 				data,
 				gas_limit,
@@ -688,7 +688,7 @@ pub mod pallet {
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
-				origin: Origin::from_origin_for(origin)?,
+				origin: Origin::from_runtime_origin(origin)?,
 				value,
 				data,
 				gas_limit,
@@ -932,8 +932,8 @@ impl<T: Config> Origin<T> {
 	pub fn from_account_id(account_id: T::AccountId) -> Self {
 		Origin::Signed(account_id)
 	}
-	/// Creates a new Origin from a OriginFor
-	pub fn from_origin_for(o: OriginFor<T>) -> Result<Self, DispatchError> {
+	/// Creates a new Origin from a `RuntimeOrigin`.
+	pub fn from_runtime_origin(o: OriginFor<T>) -> Result<Self, DispatchError> {
 		match o.into() {
 			Ok(RawOrigin::Root) => Ok(Self::Root),
 			Ok(RawOrigin::Signed(t)) => Ok(Self::Signed(t)),
@@ -1001,7 +1001,10 @@ trait Invokable<T: Config> {
 
 		let gas_limit = common.gas_limit;
 
-		// Check whether the origin is allowed here.
+		// Check whether the origin is allowed here. The responsibility of making this decision is
+		// delegated to `ensure_origin`, this could vary for different implementations of this
+		// trait. For example, some actions might not allow Root origin as they could require an
+		// AccountId associated with the origin.
 		if let Err(e) = self.ensure_origin(common.origin.clone()) {
 			return InternalOutput {
 				gas_meter: GasMeter::new(gas_limit),
@@ -1049,12 +1052,7 @@ trait Invokable<T: Config> {
 	/// This function ensures that the given `origin` is allowed to invoke the current `Invokable`.
 	///
 	/// Called by dispatchables and public functions through the [`Invokable::run_guarded`].
-	fn ensure_origin(&self, origin: Origin<T>) -> Result<Option<T::AccountId>, DispatchError> {
-		match origin {
-			Origin::Signed(t) => Ok(Some(t)),
-			_ => Err(DispatchError::BadOrigin),
-		}
-	}
+	fn ensure_origin(&self, origin: Origin<T>) -> Result<(), DispatchError>;
 }
 
 impl<T: Config> Invokable<T> for CallInput<T> {
@@ -1092,11 +1090,8 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 		InternalOutput { gas_meter, storage_deposit: storage_meter.into_deposit(&origin), result }
 	}
 
-	fn ensure_origin(&self, origin: Origin<T>) -> Result<Option<T::AccountId>, DispatchError> {
-		match origin {
-			Origin::Signed(t) => Ok(Some(t)),
-			Origin::Root => Ok(None),
-		}
+	fn ensure_origin(&self, _origin: Origin<T>) -> Result<(), DispatchError> {
+		Ok(())
 	}
 }
 
@@ -1167,9 +1162,9 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 		InternalOutput { result: try_exec(), gas_meter, storage_deposit }
 	}
 
-	fn ensure_origin(&self, origin: Origin<T>) -> Result<Option<T::AccountId>, DispatchError> {
+	fn ensure_origin(&self, origin: Origin<T>) -> Result<(), DispatchError> {
 		match origin {
-			Origin::Signed(t) => Ok(Some(t)),
+			Origin::Signed(_) => Ok(()),
 			Origin::Root => Err(DispatchError::RootNotAllowed),
 		}
 	}
