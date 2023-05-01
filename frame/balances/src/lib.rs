@@ -205,7 +205,10 @@ type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::fungible::Credit};
+	use frame_support::{
+		pallet_prelude::*,
+		traits::{fungible::Credit, tokens::Precision},
+	};
 	use frame_system::pallet_prelude::*;
 
 	pub type CreditOf<T, I> = Credit<<T as frame_system::Config>::AccountId, Pallet<T, I>>;
@@ -334,6 +337,10 @@ pub mod pallet {
 		Locked { who: T::AccountId, amount: T::Balance },
 		/// Some balance was unlocked.
 		Unlocked { who: T::AccountId, amount: T::Balance },
+		/// Some balance was frozen.
+		Frozen { who: T::AccountId, amount: T::Balance },
+		/// Some balance was thawed.
+		Thawed { who: T::AccountId, amount: T::Balance },
 	}
 
 	#[pallet::error]
@@ -519,7 +526,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call]
+	#[pallet::call(weight(<T as Config<I>>::WeightInfo))]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Transfer some liquid free balance to another account.
 		///
@@ -529,7 +536,6 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be `Signed` by the transactor.
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::transfer_allow_death())]
 		pub fn transfer_allow_death(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -591,7 +597,6 @@ pub mod pallet {
 		/// Exactly as `transfer_allow_death`, except the origin must be root and the source account
 		/// may be specified.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
 			origin: OriginFor<T>,
 			source: AccountIdLookupOf<T>,
@@ -612,7 +617,6 @@ pub mod pallet {
 		///
 		/// [`transfer_allow_death`]: struct.Pallet.html#method.transfer
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub fn transfer_keep_alive(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -640,7 +644,6 @@ pub mod pallet {
 		///   transfer everything except at least the existential deposit, which will guarantee to
 		///   keep the sender account alive (true).
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::transfer_all())]
 		pub fn transfer_all(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -667,7 +670,6 @@ pub mod pallet {
 		///
 		/// Can only be called by ROOT.
 		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::force_unreserve())]
 		pub fn force_unreserve(
 			origin: OriginFor<T>,
 			who: AccountIdLookupOf<T>,
@@ -781,15 +783,20 @@ pub mod pallet {
 				return false
 			}
 			a.flags.set_new_logic();
-			if !a.reserved.is_zero() || !a.frozen.is_zero() {
-				if !system::Pallet::<T>::can_inc_consumer(who) {
-					// Gah!! We have a non-zero reserve balance but no provider refs :(
+			if !a.reserved.is_zero() && a.frozen.is_zero() {
+				if system::Pallet::<T>::providers(who) == 0 {
+					// Gah!! We have no provider refs :(
 					// This shouldn't practically happen, but we need a failsafe anyway: let's give
 					// them enough for an ED.
-					a.free = a.free.min(Self::ed());
+					log::warn!(
+						target: LOG_TARGET,
+						"account with a non-zero reserve balance has no provider refs, account_id: '{:?}'.",
+						who
+					);
+					a.free = a.free.max(Self::ed());
 					system::Pallet::<T>::inc_providers(who);
 				}
-				let _ = system::Pallet::<T>::inc_consumers(who).defensive();
+				let _ = system::Pallet::<T>::inc_consumers_without_limit(who).defensive();
 			}
 			// Should never fail - we're only setting a bit.
 			let _ = T::AccountStore::try_mutate_exists(who, |account| -> DispatchResult {
@@ -1076,7 +1083,10 @@ pub mod pallet {
 			who: &T::AccountId,
 			freezes: BoundedSlice<IdAmount<T::FreezeIdentifier, T::Balance>, T::MaxFreezes>,
 		) -> DispatchResult {
+			let mut prev_frozen = Zero::zero();
+			let mut after_frozen = Zero::zero();
 			let (_, maybe_dust) = Self::mutate_account(who, |b| {
+				prev_frozen = b.frozen;
 				b.frozen = Zero::zero();
 				for l in Locks::<T, I>::get(who).iter() {
 					b.frozen = b.frozen.max(l.amount);
@@ -1084,6 +1094,7 @@ pub mod pallet {
 				for l in freezes.iter() {
 					b.frozen = b.frozen.max(l.amount);
 				}
+				after_frozen = b.frozen;
 			})?;
 			debug_assert!(maybe_dust.is_none(), "Not altering main balance; qed");
 			if freezes.is_empty() {
@@ -1091,63 +1102,69 @@ pub mod pallet {
 			} else {
 				Freezes::<T, I>::insert(who, freezes);
 			}
+			if prev_frozen > after_frozen {
+				let amount = prev_frozen.saturating_sub(after_frozen);
+				Self::deposit_event(Event::Thawed { who: who.clone(), amount });
+			} else if after_frozen > prev_frozen {
+				let amount = after_frozen.saturating_sub(prev_frozen);
+				Self::deposit_event(Event::Frozen { who: who.clone(), amount });
+			}
 			Ok(())
 		}
 
 		/// Move the reserved balance of one account into the balance of another, according to
-		/// `status`.
+		/// `status`. This will respect freezes/locks only if `fortitude` is `Polite`.
 		///
-		/// Is a no-op if:
-		/// - the value to be moved is zero; or
-		/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
+		/// Is a no-op if the value to be moved is zero.
 		///
 		/// NOTE: returns actual amount of transferred value in `Ok` case.
 		pub(crate) fn do_transfer_reserved(
 			slashed: &T::AccountId,
 			beneficiary: &T::AccountId,
 			value: T::Balance,
-			best_effort: bool,
+			precision: Precision,
+			fortitude: Fortitude,
 			status: Status,
 		) -> Result<T::Balance, DispatchError> {
 			if value.is_zero() {
 				return Ok(Zero::zero())
 			}
 
+			let max = <Self as fungible::InspectHold<_>>::reducible_total_balance_on_hold(
+				slashed, fortitude,
+			);
+			let actual = match precision {
+				Precision::BestEffort => value.min(max),
+				Precision::Exact => value,
+			};
+			ensure!(actual <= max, TokenError::FundsUnavailable);
 			if slashed == beneficiary {
 				return match status {
-					Status::Free => Ok(value.saturating_sub(Self::unreserve(slashed, value))),
-					Status::Reserved => Ok(value.saturating_sub(Self::reserved_balance(slashed))),
+					Status::Free => Ok(actual.saturating_sub(Self::unreserve(slashed, actual))),
+					Status::Reserved => Ok(actual),
 				}
 			}
 
-			let ((actual, maybe_dust_1), maybe_dust_2) = Self::try_mutate_account(
+			let ((_, maybe_dust_1), maybe_dust_2) = Self::try_mutate_account(
 				beneficiary,
-				|to_account, is_new| -> Result<(T::Balance, Option<T::Balance>), DispatchError> {
+				|to_account, is_new| -> Result<((), Option<T::Balance>), DispatchError> {
 					ensure!(!is_new, Error::<T, I>::DeadAccount);
-					Self::try_mutate_account(
-						slashed,
-						|from_account, _| -> Result<T::Balance, DispatchError> {
-							let actual = cmp::min(from_account.reserved, value);
-							ensure!(
-								best_effort || actual == value,
-								Error::<T, I>::InsufficientBalance
-							);
-							match status {
-								Status::Free =>
-									to_account.free = to_account
-										.free
-										.checked_add(&actual)
-										.ok_or(ArithmeticError::Overflow)?,
-								Status::Reserved =>
-									to_account.reserved = to_account
-										.reserved
-										.checked_add(&actual)
-										.ok_or(ArithmeticError::Overflow)?,
-							}
-							from_account.reserved -= actual;
-							Ok(actual)
-						},
-					)
+					Self::try_mutate_account(slashed, |from_account, _| -> DispatchResult {
+						match status {
+							Status::Free =>
+								to_account.free = to_account
+									.free
+									.checked_add(&actual)
+									.ok_or(ArithmeticError::Overflow)?,
+							Status::Reserved =>
+								to_account.reserved = to_account
+									.reserved
+									.checked_add(&actual)
+									.ok_or(ArithmeticError::Overflow)?,
+						}
+						from_account.reserved.saturating_reduce(actual);
+						Ok(())
+					})
 				},
 			)?;
 

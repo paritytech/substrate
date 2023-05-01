@@ -33,7 +33,7 @@ pub use self::helpers::ReadProof;
 /// Substrate state API
 #[rpc(client, server)]
 pub trait StateApi<Hash> {
-	/// Call a contract at a block's state.
+	/// Call a method from the runtime API at a block's state.
 	#[method(name = "state_call", aliases = ["state_callAt"], blocking)]
 	fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> RpcResult<Bytes>;
 
@@ -85,8 +85,10 @@ pub trait StateApi<Hash> {
 	/// Query historical storage entries (by key) starting from a block given as the second
 	/// parameter.
 	///
-	/// NOTE This first returned result contains the initial state of storage for all keys.
+	/// NOTE: The first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
+	/// WARNING: The time complexity of this query is O(|keys|*dist(block, hash)), and the
+	/// memory complexity is O(dist(block, hash)) -- use with caution.
 	#[method(name = "state_queryStorage", blocking)]
 	fn query_storage(
 		&self,
@@ -95,7 +97,9 @@ pub trait StateApi<Hash> {
 		hash: Option<Hash>,
 	) -> RpcResult<Vec<StorageChangeSet<Hash>>>;
 
-	/// Query storage entries (by key) starting at block hash given as the second parameter.
+	/// Query storage entries (by key) at a block hash given as the second parameter.
+	/// NOTE: Each StorageChangeSet in the result corresponds to exactly one element --
+	/// the storage value under an input key at the input block hash.
 	#[method(name = "state_queryStorageAt", blocking)]
 	fn query_storage_at(
 		&self,

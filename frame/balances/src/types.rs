@@ -102,9 +102,9 @@ pub struct AccountData<Balance> {
 	/// This is the sum of all individual holds together with any sums still under the (deprecated)
 	/// reserves API.
 	pub reserved: Balance,
-	/// The amount that `free` may not drop below when reducing the balance, except for actions
-	/// where the account owner cannot reasonably benefit from thr balance reduction, such as
-	/// slashing.
+	/// The amount that `free + reserved` may not drop below when reducing the balance, except for
+	/// actions where the account owner cannot reasonably benefit from the balance reduction, such
+	/// as slashing.
 	pub frozen: Balance,
 	/// Extra information about this account. The MSB is a flag indicating whether the new ref-
 	/// counting logic is in place for this account.

@@ -223,7 +223,7 @@ For each peer the sync maintains the number of our common best block with that p
 whenever peer announce new blocks or our best block advances. This allows to keep track of peers that have new
 block data and request new information as soon as it is announced. In keep-up mode, we also track peers that
 announce blocks on all branches and not just the best branch. The sync algorithm tries to be greedy and download
-All data that's announced.
+all data that's announced.
 
 ## Fast sync
 
@@ -262,8 +262,8 @@ After the latest state has been imported the node is fully operational, but is s
 data. I.e. it is unable to serve bock bodies and headers other than the most recent one. To make sure all
 nodes have block history available, a background sync process is started that downloads all the missing blocks.
 It is run in parallel with the keep-up sync and does not interfere with downloading of the recent blocks.
-During this download we also import GRANPA justifications for blocks with authority set changes, so that
-The warp-synced node has all the data to serve for other nodes nodes that might want to sync from it with
+During this download we also import GRANDPA justifications for blocks with authority set changes, so that
+the warp-synced node has all the data to serve for other nodes nodes that might want to sync from it with
 any method.
 
 # Usage
