@@ -312,6 +312,7 @@ where
 	B::Hash: DeserializeOwned,
 	B::Header: DeserializeOwned,
 {
+	const PARALLEL_REQUESTS: usize = 4;
 	const BATCH_SIZE_INCREASE_FACTOR: f32 = 1.10;
 	const BATCH_SIZE_DECREASE_FACTOR: f32 = 0.50;
 	const INITIAL_BATCH_SIZE: usize = 5000;
@@ -554,7 +555,7 @@ where
 			.unwrap()
 			.progress_chars("=>-"),
 		);
-		let batches = payloads.chunks(&payloads.len() / 4);
+		let batches = payloads.chunks(&payloads.len() / Self::PARALLEL_REQUESTS);
 		let mut operations = vec![];
 		for payload_batch in batches {
 			operations.push(Self::get_storage_data_dynamic_batch_size(
