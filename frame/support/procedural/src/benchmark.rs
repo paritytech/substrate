@@ -28,9 +28,9 @@ use syn::{
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{Comma, Gt, Lt, PathSep},
-	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod, LitInt,
-	Pat, Path, PathArguments, PathSegment, Result, ReturnType, Signature, Stmt, Token, Type,
-	TypePath, Visibility, WhereClause,
+	Attribute, Error, Expr, ExprBlock, ExprCall, ExprPath, FnArg, Item, ItemFn, ItemMod, Pat, Path,
+	PathArguments, PathSegment, Result, ReturnType, Signature, Stmt, Token, Type, TypePath,
+	Visibility, WhereClause,
 };
 
 mod keywords {
@@ -53,18 +53,18 @@ mod keywords {
 #[derive(Clone)]
 struct ParamDef {
 	name: String,
-	typ: Type,
-	start: u32,
-	end: u32,
+	_typ: Type,
+	start: syn::GenericArgument,
+	end: syn::GenericArgument,
 }
 
 /// Allows easy parsing of the `<10, 20>` component of `x: Linear<10, 20>`.
 #[derive(Parse)]
 struct RangeArgs {
 	_lt_token: Lt,
-	start: LitInt,
+	start: syn::GenericArgument,
 	_comma: Comma,
-	end: LitInt,
+	end: syn::GenericArgument,
 	_gt_token: Gt,
 }
 
@@ -228,17 +228,8 @@ fn parse_params(item_fn: &ItemFn) -> Result<Vec<ParamDef>> {
 		let Some(segment) = tpath.path.segments.last() else { return invalid_param(typ.span()) };
 		let args = segment.arguments.to_token_stream().into();
 		let Ok(args) = syn::parse::<RangeArgs>(args) else { return invalid_param(typ.span()) };
-		let Ok(start) = args.start.base10_parse::<u32>() else { return invalid_param(args.start.span()) };
-		let Ok(end) = args.end.base10_parse::<u32>() else { return invalid_param(args.end.span()) };
 
-		if end < start {
-			return Err(Error::new(
-				args.start.span(),
-				"The start of a `ParamRange` must be less than or equal to the end",
-			))
-		}
-
-		params.push(ParamDef { name, typ: typ.clone(), start, end });
+		params.push(ParamDef { name, _typ: typ.clone(), start: args.start, end: args.end });
 	}
 	Ok(params)
 }
@@ -690,7 +681,6 @@ pub fn benchmarks(
 struct UnrolledParams {
 	param_ranges: Vec<TokenStream2>,
 	param_names: Vec<TokenStream2>,
-	param_types: Vec<TokenStream2>,
 }
 
 impl UnrolledParams {
@@ -700,8 +690,8 @@ impl UnrolledParams {
 			.iter()
 			.map(|p| {
 				let name = Ident::new(&p.name, Span::call_site());
-				let start = p.start;
-				let end = p.end;
+				let start = &p.start;
+				let end = &p.end;
 				quote!(#name, #start, #end)
 			})
 			.collect();
@@ -712,14 +702,7 @@ impl UnrolledParams {
 				quote!(#name)
 			})
 			.collect();
-		let param_types: Vec<TokenStream2> = params
-			.iter()
-			.map(|p| {
-				let typ = &p.typ;
-				quote!(#typ)
-			})
-			.collect();
-		UnrolledParams { param_ranges, param_names, param_types }
+		UnrolledParams { param_ranges, param_names }
 	}
 }
 
@@ -735,7 +718,6 @@ fn expand_benchmark(
 		Ok(ident) => ident,
 		Err(err) => return err.to_compile_error().into(),
 	};
-	let home = quote!(#krate::v2);
 	let codec = quote!(#krate::frame_support::codec);
 	let traits = quote!(#krate::frame_support::traits);
 	let setup_stmts = benchmark_def.setup_stmts;
@@ -747,7 +729,6 @@ fn expand_benchmark(
 	let unrolled = UnrolledParams::from(&benchmark_def.params);
 	let param_names = unrolled.param_names;
 	let param_ranges = unrolled.param_ranges;
-	let param_types = unrolled.param_types;
 
 	let type_use_generics = match is_instance {
 		false => quote!(T),
@@ -771,6 +752,18 @@ fn expand_benchmark(
 				final_args.push((*(*arg)).clone());
 			}
 			expr_call.args = final_args;
+
+			let origin = match origin {
+				Expr::Cast(t) => {
+					let ty = t.ty.clone();
+					quote! {
+						<<T as frame_system::Config>::RuntimeOrigin as From<#ty>>::from(#origin);
+					}
+				},
+				_ => quote! {
+					#origin.into();
+				},
+			};
 
 			// determine call name (handles `_` and normal call syntax)
 			let expr_span = expr_call.span();
@@ -812,7 +805,7 @@ fn expand_benchmark(
 				let __call_decoded = <Call<#type_use_generics> as #codec::Decode>
 					::decode(&mut &__benchmarked_call_encoded[..])
 					.expect("call is encoded above, encoding must be correct");
-				let __origin = #origin.into();
+				let __origin = #origin;
 				<Call<#type_use_generics> as #traits::UnfilteredDispatchable>::dispatch_bypass_filter(
 					__call_decoded,
 					__origin,
@@ -885,11 +878,6 @@ fn expand_benchmark(
 	let res = quote! {
 		// benchmark function definition
 		#fn_def
-
-		// compile-time assertions that each referenced param type implements ParamRange
-		#(
-			#home::assert_impl_all!(#param_types: #home::ParamRange);
-		)*
 
 		#[allow(non_camel_case_types)]
 		#(
@@ -987,6 +975,9 @@ fn expand_benchmark(
 						// Test the lowest, highest (if its different from the lowest)
 						// and up to num_values-2 more equidistant values in between.
 						// For 0..10 and num_values=6 this would mean: [0, 2, 4, 6, 8, 10]
+						if high < low {
+							return Err("The start of a `ParamRange` must be less than or equal to the end".into());
+						}
 
 						let mut values = #krate::vec![low];
 						let diff = (high - low).min(num_values - 1);

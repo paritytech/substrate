@@ -23,7 +23,7 @@ use crate::{self as pallet_balances, AccountData, Config, CreditOf, Error, Palle
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	assert_err, assert_noop, assert_ok, assert_storage_noop,
-	dispatch::DispatchInfo,
+	dispatch::{DispatchInfo, GetDispatchInfo},
 	parameter_types,
 	traits::{
 		tokens::fungible, ConstU32, ConstU64, ConstU8, Imbalance as ImbalanceT, OnUnbalanced,
@@ -293,4 +293,13 @@ pub fn events() -> Vec<RuntimeEvent> {
 /// create a transaction info struct from weight. Handy to avoid building the whole struct.
 pub fn info_from_weight(w: Weight) -> DispatchInfo {
 	DispatchInfo { weight: w, ..Default::default() }
+}
+
+#[test]
+fn weights_sane() {
+	let info = crate::Call::<Test>::transfer_allow_death { dest: 10, value: 4 }.get_dispatch_info();
+	assert_eq!(<() as crate::WeightInfo>::transfer_allow_death(), info.weight);
+
+	let info = crate::Call::<Test>::force_unreserve { who: 10, amount: 4 }.get_dispatch_info();
+	assert_eq!(<() as crate::WeightInfo>::force_unreserve(), info.weight);
 }
