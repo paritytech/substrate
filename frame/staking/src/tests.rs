@@ -4517,11 +4517,11 @@ mod election_data_provider {
 
 	#[test]
 	fn set_minimum_active_stake_lower_bond_works() {
-		// if there are no voters, minimum active stake is `MinNominatorBond` (should not happen).
+		// if there are no voters, minimum active stake is zero (should not happen).
 		ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 			assert_eq!(<Test as Config>::VoterList::count(), 0);
 			assert_ok!(<Staking as ElectionDataProvider>::electing_voters(None));
-			assert_eq!(MinimumActiveStake::<Test>::get(), MinNominatorBond::<Test>::get());
+			assert_eq!(MinimumActiveStake::<Test>::get(), 0);
 		});
 
 		// lower non-zero active stake below `MinNominatorBond` is the minimum active stake if
