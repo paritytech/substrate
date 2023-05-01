@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Benchmarks for Sudo Pallet
+//! Benchmarks for Sudo Pallet
 
 use super::*;
 use crate::Pallet;
@@ -44,6 +44,43 @@ mod benchmarks {
 		_(RawOrigin::Signed(caller.clone()), new_sudoer_lookup);
 
 		assert_last_event::<T>(Event::KeyChanged { old_sudoer: Some(caller) }.into());
+	}
+
+	#[benchmark]
+	fn sudo() {
+		let caller: T::AccountId = whitelisted_caller();
+		Key::<T>::put(caller.clone());
+
+		let call: <T as Config>::RuntimeCall = frame_system::Call::remark { remark: vec![] }.into();
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller.clone()), Box::new(call.clone()));
+
+		let res = call.dispatch_bypass_filter(RawOrigin::Signed(caller.clone()).into());
+
+		assert_last_event::<T>(
+			Event::Sudid { sudo_result: res.map(|_| ()).map_err(|e| e.error) }.into(),
+		)
+	}
+
+	#[benchmark]
+	fn sudo_as() {
+		let caller: T::AccountId = whitelisted_caller();
+		Key::<T>::put(caller.clone());
+
+		let call: <T as Config>::RuntimeCall = frame_system::Call::remark { remark: vec![] }.into();
+
+		let who: T::AccountId = account("as", 0, SEED);
+		let who_lookup = T::Lookup::unlookup(who.clone());
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), who_lookup, Box::new(call.clone()));
+
+		let res = call.dispatch_bypass_filter(RawOrigin::Signed(who).into());
+
+		assert_last_event::<T>(
+			Event::SudoAsDone { sudo_result: res.map(|_| ()).map_err(|e| e.error) }.into(),
+		)
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_bench_ext(), crate::mock::Test);

@@ -134,7 +134,8 @@ pub mod pallet {
 		/// A sudo-able call.
 		type RuntimeCall: Parameter
 			+ UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
-			+ GetDispatchInfo;
+			+ GetDispatchInfo
+			+ From<frame_system::Call<Self>>;
 
 		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
@@ -203,7 +204,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1).
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::set_key())] // FIXME
+		#[pallet::weight(T::WeightInfo::set_key())]
 		pub fn set_key(
 			origin: OriginFor<T>,
 			new: AccountIdLookupOf<T>,
