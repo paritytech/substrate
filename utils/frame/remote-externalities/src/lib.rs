@@ -555,17 +555,16 @@ where
 			.unwrap()
 			.progress_chars("=>-"),
 		);
-		let batches = payloads.chunks(&payloads.len() / Self::PARALLEL_REQUESTS);
-		let mut operations = vec![];
-		for payload_batch in batches {
-			operations.push(Self::get_storage_data_dynamic_batch_size(
+		let payloads_batched = payloads.chunks(&payloads.len() / Self::PARALLEL_REQUESTS);
+		let requests = payloads_batched.map(|payload_batch| {
+			Self::get_storage_data_dynamic_batch_size(
 				&client,
 				payload_batch.to_vec(),
 				Self::INITIAL_BATCH_SIZE,
 				&bar,
-			))
-		}
-		let storage_data = futures::future::join_all(operations)
+			)
+		});
+		let storage_data = futures::future::join_all(requests)
 			.await
 			.into_iter()
 			.map(|r| r.unwrap())
