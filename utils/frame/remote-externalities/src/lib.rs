@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use indicatif::{ProgressBar, ProgressStyle};
 use jsonrpsee::{
 	core::params::ArrayParams,
-	http_client::{HttpClient, HttpClientBuilder},
+	ws_client::{WsClient, WsClientBuilder},
 };
 use log::*;
 use serde::de::DeserializeOwned;
@@ -45,6 +45,7 @@ use std::{
 	fs,
 	ops::{Deref, DerefMut},
 	path::{Path, PathBuf},
+	sync::Arc,
 	time::Instant,
 };
 use substrate_rpc_client::{rpc_params, BatchRequestBuilder, ChainApi, ClientT, StateApi};
@@ -54,7 +55,7 @@ type TopKeyValues = Vec<KeyValue>;
 type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
 
 const LOG_TARGET: &str = "remote-ext";
-const DEFAULT_HTTP_ENDPOINT: &str = "https://rpc.polkadot.io:443";
+const DEFAULT_WS_ENDPOINT: &str = "wss://rpc.polkadot.io:443";
 /// The snapshot that we store on disk.
 #[derive(Decode, Encode)]
 struct Snapshot<B: BlockT> {
@@ -117,48 +118,34 @@ pub struct OfflineConfig {
 pub enum Transport {
 	/// Use the `URI` to open a new WebSocket connection.
 	Uri(String),
-	/// Use HTTP connection.
-	RemoteClient(HttpClient),
+	/// Use WS connection.
+	RemoteClient(Arc<WsClient>),
 }
 
 impl Transport {
-	fn as_client(&self) -> Option<&HttpClient> {
+	fn as_client(&self) -> Option<&WsClient> {
 		match self {
 			Self::RemoteClient(client) => Some(client),
 			_ => None,
 		}
 	}
 
-	// Build an HttpClient from a URI.
+	// Build an WsClient from a URI.
 	async fn init(&mut self) -> Result<(), &'static str> {
 		if let Self::Uri(uri) = self {
 			log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
 
-			// If we have a ws uri, try to convert it to an http uri.
-			// We use an HTTP client rather than WS because WS starts to choke with "accumulated
-			// message length exceeds maximum" errors after processing ~10k keys when fetching
-			// from a node running a default configuration.
-			let uri = if uri.starts_with("ws://") {
-				let uri = uri.replace("ws://", "http://");
-				log::info!(target: LOG_TARGET, "replacing ws:// in uri with http://: {:?} (ws is currently unstable for fetching remote storage, for more see https://github.com/paritytech/jsonrpsee/issues/1086)", uri);
-				uri
-			} else if uri.starts_with("wss://") {
-				let uri = uri.replace("wss://", "https://");
-				log::info!(target: LOG_TARGET, "replacing wss:// in uri with https://: {:?} (ws is currently unstable for fetching remote storage, for more see https://github.com/paritytech/jsonrpsee/issues/1086)", uri);
-				uri
-			} else {
-				uri.clone()
-			};
-			let http_client = HttpClientBuilder::default()
+			let ws_client = WsClientBuilder::default()
 				.max_request_body_size(u32::MAX)
 				.request_timeout(std::time::Duration::from_secs(60 * 5))
 				.build(uri)
+				.await
 				.map_err(|e| {
 					log::error!(target: LOG_TARGET, "error: {:?}", e);
-					"failed to build http client"
+					"failed to build ws client"
 				})?;
 
-			*self = Self::RemoteClient(http_client)
+			*self = Self::RemoteClient(Arc::new(ws_client))
 		}
 
 		Ok(())
@@ -171,9 +158,9 @@ impl From<String> for Transport {
 	}
 }
 
-impl From<HttpClient> for Transport {
-	fn from(client: HttpClient) -> Self {
-		Transport::RemoteClient(client)
+impl From<WsClient> for Transport {
+	fn from(client: WsClient) -> Self {
+		Transport::RemoteClient(Arc::new(client))
 	}
 }
 
@@ -201,11 +188,11 @@ pub struct OnlineConfig<B: BlockT> {
 }
 
 impl<B: BlockT> OnlineConfig<B> {
-	/// Return rpc (http) client reference.
-	fn rpc_client(&self) -> &HttpClient {
+	/// Return rpc (ws) client reference.
+	fn rpc_client(&self) -> &WsClient {
 		self.transport
 			.as_client()
-			.expect("http client must have been initialized by now; qed.")
+			.expect("ws client must have been initialized by now; qed.")
 	}
 
 	fn at_expected(&self) -> B::Hash {
@@ -216,7 +203,7 @@ impl<B: BlockT> OnlineConfig<B> {
 impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self {
-			transport: Transport::from(DEFAULT_HTTP_ENDPOINT.to_owned()),
+			transport: Transport::from(DEFAULT_WS_ENDPOINT.to_owned()),
 			child_trie: true,
 			at: None,
 			state_snapshot: None,
@@ -396,7 +383,7 @@ where
 	///
 	/// # Arguments
 	///
-	/// * `client` - An `Arc` wrapped `HttpClient` used for making the requests.
+	/// * `client` - A `WsClient` used for making the requests.
 	/// * `payloads` - A vector of tuples containing a JSONRPC method name and `ArrayParams`
 	/// * `batch_size` - The initial batch size to use for the request. The batch size will be
 	///   adjusted dynamically in case of failure.
@@ -417,11 +404,11 @@ where
 	/// # Example
 	///
 	/// ```ignore
-	/// use your_crate::{get_storage_data_dynamic_batch_size, HttpClient, ArrayParams};
+	/// use your_crate::{get_storage_data_dynamic_batch_size, WsClient, ArrayParams};
 	/// use std::sync::Arc;
 	///
 	/// async fn example() {
-	///     let client = Arc::new(HttpClient::new());
+	///     let client = WsClient::new();
 	///     let payloads = vec![
 	///         ("some_method".to_string(), ArrayParams::new(vec![])),
 	///         ("another_method".to_string(), ArrayParams::new(vec![])),
@@ -437,7 +424,7 @@ where
 	/// ```
 	#[async_recursion]
 	async fn get_storage_data_dynamic_batch_size(
-		client: &HttpClient,
+		client: &WsClient,
 		payloads: Vec<(String, ArrayParams)>,
 		batch_size: usize,
 		bar: &ProgressBar,
@@ -600,7 +587,7 @@ where
 
 	/// Get the values corresponding to `child_keys` at the given `prefixed_top_key`.
 	pub(crate) async fn rpc_child_get_storage_paged(
-		client: &HttpClient,
+		client: &WsClient,
 		prefixed_top_key: &StorageKey,
 		child_keys: Vec<StorageKey>,
 		at: B::Hash,
@@ -653,7 +640,7 @@ where
 	}
 
 	pub(crate) async fn rpc_child_get_keys(
-		client: &HttpClient,
+		client: &WsClient,
 		prefixed_top_key: &StorageKey,
 		child_prefix: StorageKey,
 		at: B::Hash,
@@ -810,7 +797,7 @@ where
 	///
 	/// initializes the remote client in `transport`, and sets the `at` field, if not specified.
 	async fn init_remote_client(&mut self) -> Result<(), &'static str> {
-		// First, initialize the http client.
+		// First, initialize the ws client.
 		self.as_online_mut().transport.init().await?;
 
 		// Then, if `at` is not set, set it.
