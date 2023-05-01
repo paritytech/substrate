@@ -2700,7 +2700,11 @@ fn claim_swap_should_work() {
 		Balances::make_free_balance_be(&user_1, initial_balance);
 		Balances::make_free_balance_be(&user_2, initial_balance);
 
-		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_1.clone(), default_collection_config()));
+		assert_ok!(Nfts::force_create(
+			RuntimeOrigin::root(),
+			user_1.clone(),
+			default_collection_config()
+		));
 
 		assert_ok!(Nfts::mint(
 			RuntimeOrigin::signed(user_1.clone()),
@@ -3133,6 +3137,34 @@ fn add_remove_item_attributes_approval_should_work() {
 			CancelAttributesApprovalWitness { account_attributes: 1 },
 		));
 		assert_eq!(item_attributes_approvals(collection_id, item_id), vec![user_3]);
+	})
+}
+
+#[test]
+fn validate_signature() {
+	new_test_ext().execute_with(|| {
+		let user_1_pair = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
+		let user_1_signer = MultiSigner::Sr25519(user_1_pair.public());
+		let user_1 = user_1_signer.clone().into_account();
+		let mint_data: PreSignedMint<u32, u32, AccountId, u32> = PreSignedMint {
+			collection: 0,
+			item: 0,
+			attributes: vec![],
+			metadata: vec![],
+			only_account: None,
+			deadline: 100000,
+		};
+		let encoded_data = Encode::encode(&mint_data);
+		let signature = MultiSignature::Sr25519(user_1_pair.sign(&encoded_data));
+		assert_ok!(Nfts::validate_signature(&encoded_data, &signature, &user_1));
+
+		let mut wrapped_data: Vec<u8> = Vec::new();
+		wrapped_data.extend(b"<Bytes>");
+		wrapped_data.extend(&encoded_data);
+		wrapped_data.extend(b"</Bytes>");
+
+		let signature = MultiSignature::Sr25519(user_1_pair.sign(&wrapped_data));
+		assert_ok!(Nfts::validate_signature(&encoded_data, &signature, &user_1));
 	})
 }
 

@@ -21,8 +21,6 @@
 
 use crate::{ed25519, sr25519};
 #[cfg(feature = "std")]
-use base58::{FromBase58, ToBase58};
-#[cfg(feature = "std")]
 use bip39::{Language, Mnemonic, MnemonicType};
 use codec::{Decode, Encode, MaxEncodedLen};
 #[cfg(feature = "std")]
@@ -30,11 +28,8 @@ use rand::{rngs::OsRng, RngCore};
 #[cfg(feature = "std")]
 use regex::Regex;
 use scale_info::TypeInfo;
-/// Trait for accessing reference to `SecretString`.
-pub use secrecy::ExposeSecret;
-/// A store for sensitive data.
 #[cfg(feature = "std")]
-pub use secrecy::SecretString;
+pub use secrecy::{ExposeSecret, SecretString};
 use sp_runtime_interface::pass_by::PassByInner;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
@@ -276,7 +271,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 		const CHECKSUM_LEN: usize = 2;
 		let body_len = Self::LEN;
 
-		let data = s.from_base58().map_err(|_| PublicError::BadBase58)?;
+		let data = bs58::decode(s).into_vec().map_err(|_| PublicError::BadBase58)?;
 		if data.len() < 2 {
 			return Err(PublicError::BadLength)
 		}
@@ -345,7 +340,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 		v.extend(self.as_ref());
 		let r = ss58hash(&v);
 		v.extend(&r[0..2]);
-		v.to_base58()
+		bs58::encode(v).into_string()
 	}
 
 	/// Return the ss58-check string for this key.
@@ -484,7 +479,7 @@ pub trait ByteArray: AsRef<[u8]> + AsMut<[u8]> + for<'a> TryFrom<&'a [u8], Error
 	}
 }
 
-/// Trait suitable for typical cryptographic PKI key public type.
+/// Trait suitable for typical cryptographic key public type.
 pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {}
 
 /// An opaque 32-byte cryptographic identifier.
@@ -721,10 +716,6 @@ mod dummy {
 			true
 		}
 
-		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(_: &[u8], _: M, _: P) -> bool {
-			true
-		}
-
 		fn public(&self) -> Self::Public {
 			Self
 		}
@@ -922,9 +913,6 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool;
 
-	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool;
-
 	/// Get the public key.
 	fn public(&self) -> Self::Public;
 
@@ -1104,6 +1092,27 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 	}
 }
 
+/// Trait grouping types shared by a VRF signer and verifiers.
+pub trait VrfCrypto {
+	/// Associated signature type.
+	type VrfSignature;
+
+	/// Vrf input data. Generally some form of transcript.
+	type VrfInput;
+}
+
+/// VRF Signer.
+pub trait VrfSigner: VrfCrypto {
+	/// Sign input data.
+	fn vrf_sign(&self, data: &Self::VrfInput) -> Self::VrfSignature;
+}
+
+/// VRF Verifier.
+pub trait VrfVerifier: VrfCrypto {
+	/// Verify input data signature.
+	fn vrf_verify(&self, data: &Self::VrfInput, signature: &Self::VrfSignature) -> bool;
+}
+
 /// An identifier for a specific cryptographic algorithm used by a key pair
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
@@ -1255,14 +1264,6 @@ mod tests {
 		}
 
 		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool {
-			true
-		}
-
-		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
-			_sig: &[u8],
-			_message: M,
-			_pubkey: P,
-		) -> bool {
 			true
 		}
 

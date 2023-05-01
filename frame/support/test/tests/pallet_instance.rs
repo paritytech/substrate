@@ -27,7 +27,7 @@ use sp_io::{
 };
 use sp_runtime::{DispatchError, ModuleError};
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use codec::MaxEncodedLen;
 	use frame_support::{pallet_prelude::*, parameter_types, scale_info};

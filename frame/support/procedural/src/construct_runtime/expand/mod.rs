@@ -18,15 +18,23 @@
 mod call;
 mod config;
 mod event;
+mod freeze_reason;
+mod hold_reason;
 mod inherent;
+mod lock_id;
 mod metadata;
 mod origin;
+mod slash_reason;
 mod unsigned;
 
 pub use call::expand_outer_dispatch;
 pub use config::expand_outer_config;
 pub use event::expand_outer_event;
+pub use freeze_reason::expand_outer_freeze_reason;
+pub use hold_reason::expand_outer_hold_reason;
 pub use inherent::expand_outer_inherent;
+pub use lock_id::expand_outer_lock_id;
 pub use metadata::expand_runtime_metadata;
 pub use origin::expand_outer_origin;
+pub use slash_reason::expand_outer_slash_reason;
 pub use unsigned::expand_outer_validate_unsigned;

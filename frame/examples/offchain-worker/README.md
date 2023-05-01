@@ -26,4 +26,4 @@ Additional logic in OCW is put in place to prevent spamming the network with bot
 and unsigned transactions, and custom `UnsignedValidator` makes sure that there is only
 one unsigned transaction floating in the network.
 
-License: Unlicense
+License: MIT-0

@@ -20,12 +20,12 @@
 use assert_cmd::cargo::cargo_bin;
 use nix::sys::signal::Signal::{self, SIGINT, SIGTERM};
 use std::{
-	process::{self, Child, Command},
+	process::{self, Command},
 	time::Duration,
 };
 use tempfile::tempdir;
 
-pub mod common;
+use substrate_cli_test_utils as common;
 
 #[tokio::test]
 async fn running_the_node_works_and_can_be_interrupted() {
@@ -71,17 +71,8 @@ async fn running_the_node_works_and_can_be_interrupted() {
 #[tokio::test]
 async fn running_two_nodes_with_the_same_ws_port_should_work() {
 	common::run_with_timeout(Duration::from_secs(60 * 10), async move {
-		fn start_node() -> Child {
-			Command::new(cargo_bin("substrate"))
-				.stdout(process::Stdio::piped())
-				.stderr(process::Stdio::piped())
-				.args(&["--dev", "--tmp", "--ws-port=45789", "--no-hardware-benchmarks"])
-				.spawn()
-				.unwrap()
-		}
-
-		let mut first_node = common::KillChildOnDrop(start_node());
-		let mut second_node = common::KillChildOnDrop(start_node());
+		let mut first_node = common::KillChildOnDrop(common::start_node());
+		let mut second_node = common::KillChildOnDrop(common::start_node());
 
 		let stderr = first_node.stderr.take().unwrap();
 		let ws_url = common::extract_info_from_output(stderr).0.ws_url;
