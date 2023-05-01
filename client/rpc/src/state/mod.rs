@@ -262,7 +262,6 @@ where
 		start_key: Option<StorageKey>,
 		block: Option<Block::Hash>,
 	) -> RpcResult<Vec<(StorageKey, StorageData)>> {
-        self.deny_unsafe.check_if_safe()?;
 		if count > STORAGE_KEYS_PAGED_MAX_COUNT {
 			return Err(JsonRpseeError::from(Error::InvalidCount {
 				value: count,
