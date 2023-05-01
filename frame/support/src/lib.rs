@@ -48,7 +48,6 @@ pub use once_cell;
 pub use paste;
 #[doc(hidden)]
 pub use scale_info;
-#[cfg(feature = "std")]
 pub use serde;
 pub use sp_api::metadata_ir;
 pub use sp_core::{OpaqueMetadata, Void};
@@ -818,7 +817,6 @@ macro_rules! assert_error_encoded_size {
 	} => {};
 }
 
-#[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde::{Deserialize, Serialize};
 

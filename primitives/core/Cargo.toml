@@ -120,6 +120,7 @@ serde = [
 	"dep:serde",
 	"array-bytes",
 	"blake2",
+        "bounded-collections/serde",
 	"bs58/alloc",
 	"scale-info/serde",
 	"secrecy/alloc",

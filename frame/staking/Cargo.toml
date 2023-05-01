@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-serde = { version = "1.0.136", optional = true }
+serde = { version = "1.0.136", default-features = false, features = ["alloc", "derive"]}
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = [
 	"derive",
 ] }
@@ -21,7 +21,7 @@ scale-info = { version = "2.5.0", default-features = false, features = ["derive"
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking", features = ["serde"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-session = { version = "4.0.0-dev", default-features = false, features = [
@@ -53,7 +53,7 @@ rand_chacha = { version = "0.2" }
 default = ["std"]
 std = [
 	"frame-benchmarking?/std",
-	"serde",
+	"serde/std",
 	"codec/std",
 	"scale-info/std",
 	"sp-std/std",

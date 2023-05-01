@@ -19,9 +19,9 @@ scale-info = { version = "2.5.0", default-features = false, features = ["derive"
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core", features = ["serde"] }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime", features = ["serde"] }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [features]

@@ -66,6 +66,7 @@
 
 #[cfg(feature = "std")]
 use serde::Serialize;
+
 #[cfg(feature = "runtime-benchmarks")]
 use sp_runtime::traits::TrailingZeroInput;
 use sp_runtime::{
@@ -632,7 +633,7 @@ pub mod pallet {
 	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		#[cfg_attr(feature = "std", serde(with = "sp_core::bytes"))]
+		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
 	}
 
