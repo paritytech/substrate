@@ -248,10 +248,14 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn integrity_test() {
 			// ensure they are strictly increasing, this also implies that duplicates are detected.
-			assert!(
-				T::BagThresholds::get().windows(2).all(|window| window[1] > window[0]),
-				"thresholds must strictly increase, and have no duplicates",
-			);
+			for window in T::BagThresholds::get().windows(2) {
+				assert!(window[1] > window[0], "thresholds must strictly increase, and have no duplicates");
+			}
+			// FAIL-CI: Following snippet fails under `import_section` but above snippet works
+			// assert!(
+			// 	T::BagThresholds::get().windows(2).all(|window| window[1] > window[0]),
+			// 	"thresholds must strictly increase, and have no duplicates",
+			// );
 		}
 
 		#[cfg(feature = "try-runtime")]
