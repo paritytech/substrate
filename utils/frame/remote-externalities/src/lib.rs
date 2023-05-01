@@ -555,11 +555,11 @@ where
 			.unwrap()
 			.progress_chars("=>-"),
 		);
-		let payloads_batched = payloads.chunks(&payloads.len() / Self::PARALLEL_REQUESTS);
-		let requests = payloads_batched.map(|payload_batch| {
+		let payloads_chunked = payloads.chunks(&payloads.len() / Self::PARALLEL_REQUESTS);
+		let requests = payloads_chunked.map(|payload_chunk| {
 			Self::get_storage_data_dynamic_batch_size(
 				&client,
-				payload_batch.to_vec(),
+				payload_chunk.to_vec(),
 				Self::INITIAL_BATCH_SIZE,
 				&bar,
 			)
