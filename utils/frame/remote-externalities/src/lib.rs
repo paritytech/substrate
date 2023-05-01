@@ -572,8 +572,6 @@ where
 			.collect::<Vec<_>>();
 		bar.finish_with_message("✅ Downloaded key values");
 		print!("\n");
-		// std::io::stdout().flush().unwrap();
-		// std::io::stderr().flush().unwrap();
 
 		// Check if we got responses for all submitted requests.
 		assert_eq!(keys.len(), storage_data.len());
