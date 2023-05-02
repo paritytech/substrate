@@ -127,6 +127,10 @@ pub struct Limits {
 
 	/// The maximum size of a storage value and event payload in bytes.
 	pub payload_len: u32,
+
+	/// The maximum node runtime memory. This is for integrity checks only and does not affect the
+	/// real setting.
+	pub runtime_memory: u32,
 }
 
 impl Limits {
@@ -479,6 +483,7 @@ impl Default for Limits {
 			br_table_size: 256,
 			subject_len: 32,
 			payload_len: 16 * 1024,
+			runtime_memory: 1024 * 1024 * 128,
 		}
 	}
 }

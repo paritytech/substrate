@@ -38,7 +38,6 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 #[derive(Debug, Clone, Parser)]
 pub struct RunCmd {
 	/// Enable validator mode.
-	///
 	/// The node will be started with the authority role and actively
 	/// participate in any consensus task that it can (e.g. depending on
 	/// availability of local keys).
@@ -51,7 +50,6 @@ pub struct RunCmd {
 	pub no_grandpa: bool,
 
 	/// Listen to all RPC interfaces.
-	///
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
 	/// proxy server to filter out dangerous methods. More details:
 	/// <https://docs.substrate.io/main-docs/build/custom-rpc/#public-rpcs>.
@@ -60,13 +58,11 @@ pub struct RunCmd {
 	pub rpc_external: bool,
 
 	/// Listen to all RPC interfaces.
-	///
 	/// Same as `--rpc-external`.
 	#[arg(long)]
 	pub unsafe_rpc_external: bool,
 
 	/// RPC methods to expose.
-	///
 	/// - `unsafe`: Exposes every RPC method.
 	/// - `safe`: Exposes only a safe subset of RPC methods, denying unsafe RPC methods.
 	/// - `auto`: Acts as `safe` if RPC is served externally, e.g. when `--rpc--external` is
@@ -105,7 +101,6 @@ pub struct RunCmd {
 	pub rpc_max_connections: Option<usize>,
 
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
-	///
 	/// A comma-separated list of origins (protocol://domain or special `null`
 	/// value). Value of `all` will disable origin validation. Default is to
 	/// allow localhost and <https://polkadot.js.org> origins. When running in
@@ -114,7 +109,6 @@ pub struct RunCmd {
 	pub rpc_cors: Option<Cors>,
 
 	/// The human-readable name for this node.
-	///
 	/// It's used as network node name.
 	#[arg(long, value_name = "NAME")]
 	pub name: Option<String>,
@@ -193,13 +187,10 @@ pub struct RunCmd {
 	pub force_authoring: bool,
 
 	/// Run a temporary node.
-	///
 	/// A temporary directory will be created to store the configuration and will be deleted
 	/// at the end of the process.
-	///
 	/// Note: the directory is random per process execution. This directory is used as base path
 	/// which includes: database, node key and keystore.
-	///
 	/// When `--dev` is given and no explicit `--base-path`, this option is implied.
 	#[arg(long, conflicts_with = "base_path")]
 	pub tmp: bool,
