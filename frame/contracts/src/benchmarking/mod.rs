@@ -234,7 +234,7 @@ benchmarks! {
 		Contracts::<T>::reinstrument_module(&mut module, &schedule)?;
 	}
 
-	// This benchmarks the v9 migration cost
+	// This benchmarks the v9 migration cost.
 	#[pov_mode = Measured]
 	v9_translate_wasm_module {
 		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
@@ -244,7 +244,7 @@ benchmarks! {
 		migration.step();
 	}
 
-	// This benchmarks the base weight of dispatching a migrate call
+	// This benchmarks the base weight of dispatching a migrate call.
 	#[pov_mode = Measured]
 	migrate {
 		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
