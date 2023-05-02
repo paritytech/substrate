@@ -191,8 +191,6 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 		let target_version = <Pallet<T>>::current_storage_version();
 		if M::is_upgrade_supported(storage_version, target_version) {
 			let nonce = <crate::Nonce<T>>::get();
-			log::info!(target: LOG_TARGET, "Pre-upgrade current nonce: {}", nonce);
-
 			Ok(Vec::new())
 		} else {
 			log::error!(
