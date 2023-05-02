@@ -276,7 +276,7 @@ impl OverlayedChanges {
 	/// `None` can be used to delete a value specified by the given key.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub(crate) fn set_child_storage(
+	pub fn set_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
 		key: StorageKey,

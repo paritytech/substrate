@@ -39,6 +39,7 @@ use sp_core::{
 };
 pub use sp_io::TestExternalities;
 use sp_runtime::{traits::Block as BlockT, StateVersion};
+use sp_state_machine::OverlayedChanges;
 use spinners::{Spinner, Spinners};
 use std::{
 	cmp::max,
@@ -520,7 +521,7 @@ where
 		&self,
 		prefix: StorageKey,
 		at: B::Hash,
-		pending_ext: &mut TestExternalities,
+		ext_overlay: &mut OverlayedChanges,
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let start = Instant::now();
 		let mut sp = Spinner::with_timer(Spinners::Dots, "Scraping keys...".into());
@@ -546,7 +547,7 @@ where
 			.collect::<Vec<_>>();
 
 		let bar = ProgressBar::new(payloads.len() as u64);
-		let bar_message = format!("Downloading key values");
+		let bar_message = "Downloading key values".to_string();
 		bar.set_message(bar_message);
 		bar.set_style(
 			ProgressStyle::with_template(
@@ -596,7 +597,9 @@ where
 
 		let mut sp = Spinner::with_timer(Spinners::Dots, "Inserting keys into DB...".into());
 		let start = Instant::now();
-		pending_ext.batch_insert(key_values.clone().into_iter().map(|(k, v)| (k.0, v.0)));
+		key_values.clone().into_iter().for_each(|(k, v)| {
+			ext_overlay.set_storage(k.0, Some(v.0));
+		});
 		sp.stop_with_message(format!("✅ Inserted keys into DB ({}s)", start.elapsed().as_secs()));
 		Ok(key_values)
 	}
@@ -703,7 +706,7 @@ where
 	async fn load_child_remote(
 		&self,
 		top_kv: &[KeyValue],
-		pending_ext: &mut TestExternalities,
+		ext_overlay: &mut OverlayedChanges,
 	) -> Result<ChildKeyValues, &'static str> {
 		let child_roots = top_kv
 			.into_iter()
@@ -747,7 +750,7 @@ where
 				child_kv_inner.iter().cloned().map(|(k, v)| (k.0, v.0)).collect::<Vec<_>>();
 			child_kv.push((info.clone(), child_kv_inner));
 			for (k, v) in key_values {
-				pending_ext.insert_child(info.clone(), k, v);
+				ext_overlay.set_child_storage(&info, k, Some(v));
 			}
 		}
 
@@ -756,11 +759,11 @@ where
 
 	/// Build `Self` from a network node denoted by `uri`.
 	///
-	/// This function concurrently populates `pending_ext`. the return value is only for writing to
-	/// cache, we can also optimize further.
+	/// This function populates `ext_overlay`. The return value is for optionally writing to a
+	/// snapshot file.
 	async fn load_top_remote(
 		&self,
-		pending_ext: &mut TestExternalities,
+		ext_overlay: &mut OverlayedChanges,
 	) -> Result<TopKeyValues, &'static str> {
 		let config = self.as_online();
 		let at = self
@@ -773,7 +776,7 @@ where
 		for prefix in &config.hashed_prefixes {
 			let now = std::time::Instant::now();
 			let additional_key_values =
-				self.rpc_get_pairs_paged(StorageKey(prefix.to_vec()), at, pending_ext).await?;
+				self.rpc_get_pairs_paged(StorageKey(prefix.to_vec()), at, ext_overlay).await?;
 			let elapsed = now.elapsed();
 			log::info!(
 				target: LOG_TARGET,
@@ -793,7 +796,7 @@ where
 			);
 			match self.rpc_get_storage(key.clone(), Some(at)).await? {
 				Some(value) => {
-					pending_ext.insert(key.clone().0, value.clone().0);
+					ext_overlay.set_storage(key.clone().0, Some(value.clone().0));
 					keys_and_values.push((key, value));
 				},
 				None => {
@@ -874,8 +877,10 @@ where
 			Default::default(),
 			self.overwrite_state_version.unwrap_or(state_version),
 		);
-		let top_kv = self.load_top_remote(&mut pending_ext).await?;
-		let child_kv = self.load_child_remote(&top_kv, &mut pending_ext).await?;
+		let top_kv = self.load_top_remote(&mut pending_ext.overlayed_changes_mut()).await?;
+		let child_kv = self
+			.load_child_remote(&top_kv, &mut pending_ext.overlayed_changes_mut())
+			.await?;
 
 		if let Some(path) = self.as_online().state_snapshot.clone().map(|c| c.path) {
 			let snapshot = Snapshot::<B> {
@@ -925,24 +930,23 @@ where
 			Default::default(),
 			self.overwrite_state_version.unwrap_or(state_version),
 		);
+		let ext_overlay = inner_ext.overlayed_changes_mut();
 
-		info!(target: LOG_TARGET, "injecting a total of {} top keys", top.len());
-		let top = top
-			.into_iter()
+		info!(target: LOG_TARGET, "injecting {} top keys", top.len());
+		top.into_iter()
 			.filter(|(k, _)| !is_default_child_storage_key(k.as_ref()))
-			.map(|(k, v)| (k.0, v.0))
-			.collect::<Vec<_>>();
-		inner_ext.batch_insert(top);
+			.for_each(|(k, v)| {
+				ext_overlay.set_storage(k.0, Some(v.0));
+			});
 
 		info!(
 			target: LOG_TARGET,
-			"injecting a total of {} child keys",
+			"injecting {} child keys",
 			child.iter().flat_map(|(_, kv)| kv).count()
 		);
-
 		for (info, key_values) in child {
 			for (k, v) in key_values {
-				inner_ext.insert_child(info.clone(), k.0, v.0);
+				ext_overlay.set_child_storage(&info.clone(), k.0, Some(v.0));
 			}
 		}
 
@@ -960,6 +964,7 @@ where
 				}
 			},
 		};
+		let ext_overlay = ext.inner_ext.overlayed_changes_mut();
 
 		// inject manual key values.
 		if !self.hashed_key_values.is_empty() {
@@ -968,7 +973,10 @@ where
 				"extending externalities with {} manually injected key-values",
 				self.hashed_key_values.len()
 			);
-			ext.batch_insert(self.hashed_key_values.into_iter().map(|(k, v)| (k.0, v.0)));
+
+			self.hashed_key_values.into_iter().for_each(|(k, v)| {
+				ext_overlay.set_storage(k.0, Some(v.0));
+			});
 		}
 
 		// exclude manual key values.

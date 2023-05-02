@@ -117,7 +117,12 @@ where
 		}
 	}
 
-	/// Returns the overlayed changes.
+	/// Returns a mutable reference to the overlayed changes.
+	pub fn overlayed_changes_mut(&mut self) -> &mut OverlayedChanges {
+		&mut self.overlay
+	}
+
+	/// Returns an immutable reference to the overlayed changes.
 	pub fn overlayed_changes(&self) -> &OverlayedChanges {
 		&self.overlay
 	}
