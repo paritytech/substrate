@@ -89,7 +89,7 @@ where
 
 /// Params required to start the instant sealing authorship task.
 pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, TP, SC, CS, CIDP, P> {
-	/// Block import instance for well. importing blocks.
+	/// Block import instance.
 	pub block_import: BI,
 
 	/// The environment we are producing blocks for.
@@ -141,17 +141,19 @@ pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, TP, SC, 
 	pub create_inherent_data_providers: CIDP,
 }
 
+/// Params required to start the delayed finalization task.
 pub struct DelayedFinalizeParams<C, S> {
 	/// Block import instance for well. importing blocks.
 	pub client: Arc<C>,
 
+	/// Handle for spawning delayed finalization tasks.
 	pub spawn_handle: S,
 
 	/// The delay in seconds before a block is finalized.
 	pub delay_sec: u64,
 }
 
-/// Creates the background authorship task for the manual seal engine.
+/// Creates the background authorship task for the manually seal engine.
 pub async fn run_manual_seal<B, BI, CB, E, C, TP, SC, CS, CIDP, P>(
 	ManualSealParams {
 		mut block_import,
