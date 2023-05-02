@@ -1049,7 +1049,7 @@ trait Invokable<T: Config> {
 		gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output>;
 
-	/// This function ensures that the given `origin` is allowed to invoke the current `Invokable`.
+	/// This method ensures that the given `origin` is allowed to invoke the current `Invokable`.
 	///
 	/// Called by dispatchables and public functions through the [`Invokable::run_guarded`].
 	fn ensure_origin(&self, origin: Origin<T>) -> Result<(), DispatchError>;
