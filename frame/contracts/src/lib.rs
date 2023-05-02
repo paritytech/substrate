@@ -1001,8 +1001,8 @@ trait Invokable<T: Config> {
 
 		let gas_limit = common.gas_limit;
 
-		// Check whether the origin is allowed here. The responsibility of making this decision is
-		// delegated to `ensure_origin`, this could vary for different implementations of this
+		// Check whether the origin is allowed here. The logic of the access rules
+		// is in the `ensure_origin`, this could vary for different implementations of this
 		// trait. For example, some actions might not allow Root origin as they could require an
 		// AccountId associated with the origin.
 		if let Err(e) = self.ensure_origin(common.origin.clone()) {
