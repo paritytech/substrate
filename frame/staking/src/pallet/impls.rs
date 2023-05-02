@@ -1805,9 +1805,9 @@ impl<T: Config> Pallet<T> {
 							0 => { /* not supporting this validator at all. */ },
 							1 => sum += individual[0].value,
 							_ =>
-								return Err(DispatchError::Other(
-									"nominator cannot back a validator more than once.",
-								)),
+								return Err(
+									"nominator cannot back a validator more than once.".into()
+								),
 						};
 						Ok(())
 					})

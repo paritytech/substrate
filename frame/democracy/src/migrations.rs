@@ -20,7 +20,6 @@
 use super::*;
 use frame_support::{pallet_prelude::*, storage_alias, traits::OnRuntimeUpgrade, BoundedVec};
 use sp_core::H256;
-use sp_runtime::{TryRuntimeError, TryRuntimeResult};
 
 /// The log target.
 const TARGET: &'static str = "runtime::democracy::migration::v1";
@@ -62,7 +61,7 @@ pub mod v1 {
 
 	impl<T: Config + frame_system::Config<Hash = H256>> OnRuntimeUpgrade for Migration<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+		fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 			ensure!(StorageVersion::get::<Pallet<T>>() == 0, "can only upgrade from version 0");
 
 			let props_count = v0::PublicProps::<T>::get().len();
@@ -134,7 +133,7 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> TryRuntimeResult {
+		fn post_upgrade(state: Vec<u8>) -> sp_runtime::TryRuntimeResult {
 			ensure!(StorageVersion::get::<Pallet<T>>() == 1, "must upgrade");
 
 			let (old_props_count, old_ref_count): (u32, u32) =

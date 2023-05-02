@@ -378,7 +378,7 @@ use sp_runtime::{
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
 
-#[cfg(feature = "try-runtime")]
+#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
 use sp_runtime::TryRuntimeResult;
 
 /// The log target of this pallet.

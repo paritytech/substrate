@@ -24,8 +24,6 @@ use frame_support::{
 	Identity,
 };
 
-use sp_runtime::{TryRuntimeError, TryRuntimeResult};
-
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
 
@@ -45,7 +43,7 @@ pub mod v1 {
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+		fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 			let onchain = Pallet::<T>::on_chain_storage_version();
 
 			ensure!(onchain < 1, "this migration can be deleted");
@@ -74,7 +72,7 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_state: Vec<u8>) -> TryRuntimeResult {
+		fn post_upgrade(_state: Vec<u8>) -> sp_runtime::TryRuntimeResult {
 			let onchain = Pallet::<T>::on_chain_storage_version();
 			ensure!(onchain < 2, "this migration needs to be removed");
 			ensure!(onchain == 1, "this migration needs to be run");

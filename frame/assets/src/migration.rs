@@ -17,6 +17,8 @@
 
 use super::*;
 use frame_support::{log, traits::OnRuntimeUpgrade};
+
+#[cfg(feature = "try-runtime")]
 use sp_runtime::{TryRuntimeError, TryRuntimeResult};
 
 pub mod v1 {

@@ -86,10 +86,13 @@ pub mod pallet {
 		traits::{Defensive, ReservableCurrency, StorageVersion},
 	};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::{traits::Zero, DispatchResult, TryRuntimeResult};
+	use sp_runtime::{traits::Zero, DispatchResult};
 	use sp_staking::{EraIndex, StakingInterface};
 	use sp_std::{prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
+
+	#[cfg(feature = "try-runtime")]
+	use sp_runtime::TryRuntimeResult;
 
 	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
 	#[codec(mel_bound(T: Config))]

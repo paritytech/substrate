@@ -1220,9 +1220,7 @@ impl<T: Config> Pallet<T> {
 		if Members::<T>::get() == members {
 			Ok(())
 		} else {
-			Err(DispatchError::Other(
-				"try_state checks: Members must be always sorted by account ID",
-			))
+			Err("try_state checks: Members must be always sorted by account ID".into())
 		}
 	}
 
@@ -1236,9 +1234,8 @@ impl<T: Config> Pallet<T> {
 		if RunnersUp::<T>::get() == sorted {
 			Ok(())
 		} else {
-			Err(DispatchError::Other(
-				"try_state checks: Runners Up must always be sorted by stake (worst to best)",
-			))
+			Err("try_state checks: Runners Up must always be sorted by stake (worst to best)"
+				.into())
 		}
 	}
 
@@ -1251,18 +1248,14 @@ impl<T: Config> Pallet<T> {
 		if Candidates::<T>::get() == candidates {
 			Ok(())
 		} else {
-			Err(DispatchError::Other(
-				"try_state checks: Candidates must be always sorted by account ID",
-			))
+			Err("try_state checks: Candidates must be always sorted by account ID".into())
 		}
 	}
 	// [`Candidates`] and [`RunnersUp`] state checks. Invariants:
 	//  - Candidates and runners-ups sets are disjoint.
 	fn try_state_candidates_runners_up_disjoint() -> TryRuntimeResult {
 		match Self::intersects(&Self::candidates_ids(), &Self::runners_up_ids()) {
-			true => Err(DispatchError::Other(
-				"Candidates and runners up sets should always be disjoint",
-			)),
+			true => Err("Candidates and runners up sets should always be disjoint".into()),
 			false => Ok(()),
 		}
 	}
@@ -1274,9 +1267,8 @@ impl<T: Config> Pallet<T> {
 		match Self::intersects(&Pallet::<T>::members_ids(), &Self::candidates_ids()) &&
 			Self::intersects(&Pallet::<T>::members_ids(), &Self::runners_up_ids())
 		{
-			true => Err(DispatchError::Other(
-				"Members set should be disjoint from candidates and runners-up sets",
-			)),
+			true =>
+				Err("Members set should be disjoint from candidates and runners-up sets".into()),
 			false => Ok(()),
 		}
 	}
@@ -1291,7 +1283,7 @@ impl<T: Config> Pallet<T> {
 			.all(|s| s.stake != BalanceOf::<T>::zero())
 		{
 			true => Ok(()),
-			false => Err(DispatchError::Other("Members and RunnersUp must have approval stake")),
+			false => Err("Members and RunnersUp must have approval stake".into()),
 		}
 	}
 

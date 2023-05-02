@@ -25,8 +25,11 @@ use frame_support::{
 	traits::{Get, OnRuntimeUpgrade},
 	Identity, Twox64Concat,
 };
-use sp_runtime::{traits::Saturating, TryRuntimeError, TryRuntimeResult};
+use sp_runtime::traits::Saturating;
 use sp_std::{marker::PhantomData, prelude::*};
+
+#[cfg(feature = "try-runtime")]
+use sp_runtime::{TryRuntimeError, TryRuntimeResult};
 
 /// Performs all necessary migrations based on `StorageVersion`.
 pub struct Migration<T: Config>(PhantomData<T>);
