@@ -36,7 +36,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # third-party dependencies
 array-bytes = "4.1"
-clap = { version = "4.0.9", features = ["derive"], optional = true }
+clap = { version = "4.2.5", features = ["derive"], optional = true }
 codec = { package = "parity-scale-codec", version = "3.2.2" }
 serde = { version = "1.0.136", features = ["derive"] }
 jsonrpsee = { version = "0.16.2", features = ["server"] }
@@ -130,7 +130,7 @@ pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 substrate-cli-test-utils = { path = "../../../test-utils/cli" }
 
 [build-dependencies]
-clap = { version = "4.0.9", optional = true }
+clap = { version = "4.2.5", optional = true }
 clap_complete = { version = "4.0.2", optional = true }
 node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
