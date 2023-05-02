@@ -1134,22 +1134,22 @@ impl<T: Config> Pallet<T> {
 		let starting_origin = ServiceHead::<T>::get().unwrap();
 
 		while let Some(head) = Self::bump_service_head(&mut WeightMeter::max_limit()) {
-			assert!(
+			ensure!(
 				BookStateFor::<T>::contains_key(&head),
 				"Service head must point to an existing book"
 			);
 
 			let head_book_state = BookStateFor::<T>::get(&head);
-			assert!(
+			ensure!(
 				head_book_state.message_count > 0,
 				"There must be some messages if in ReadyRing"
 			);
-			assert!(head_book_state.size > 0, "There must be some messages if in ReadyRing");
-			assert!(
+			ensure!(head_book_state.size > 0, "There must be some messages if in ReadyRing");
+			ensure!(
 				head_book_state.end > head_book_state.begin,
 				"End > Begin if unprocessed messages exists"
 			);
-			assert!(
+			ensure!(
 				head_book_state.ready_neighbours.is_some(),
 				"There must be neighbours if in ReadyRing"
 			);
