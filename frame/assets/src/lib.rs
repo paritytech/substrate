@@ -197,6 +197,24 @@ pub trait AssetsCallback<AssetId, AccountId> {
 /// Empty implementation in case no callbacks are required.
 impl<AssetId, AccountId> AssetsCallback<AssetId, AccountId> for () {}
 
+/// Trait for creating an asset account with a deposit taken from a specified by client depositor.
+pub trait Touch {
+	/// Identifier for the class of asset.
+	type AssetId;
+	/// Account identifier type.
+	type AccountId;
+	/// The type for currency units of the deposit.
+	type Balance;
+	/// The deposit amount required for creating an asset account.
+	fn deposit() -> Option<Self::Balance>;
+	/// Create an account for `who` of the `asset` with a deposit taken from the `depositor`.
+	fn touch(
+		asset: Self::AssetId,
+		who: Self::AccountId,
+		depositor: Self::AccountId,
+	) -> DispatchResult;
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -1575,7 +1593,11 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let id: T::AssetId = id.into();
-
+			let asset = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(
+				&origin == &asset.admin || &origin == &asset.freezer,
+				Error::<T, I>::NoPermission
+			);
 			Self::do_touch(id, who, origin)
 		}
 
@@ -1599,6 +1621,26 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
 			Self::do_refund_other(id, &who, &origin)
+		}
+	}
+
+	/// Implements `Touch` trait.
+	/// Note that a depositor can be any account, without any specific privilege.
+	impl<T: Config<I>, I: 'static> Touch for Pallet<T, I> {
+		type AssetId = T::AssetId;
+		type AccountId = T::AccountId;
+		type Balance = DepositBalanceOf<T, I>;
+
+		fn deposit() -> Option<Self::Balance> {
+			Some(T::AssetAccountDeposit::get())
+		}
+
+		fn touch(
+			asset: Self::AssetId,
+			who: Self::AccountId,
+			depositor: Self::AccountId,
+		) -> DispatchResult {
+			Self::do_touch(asset, who, depositor)
 		}
 	}
 }
