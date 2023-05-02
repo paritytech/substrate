@@ -53,8 +53,7 @@ use frame_system::{
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use pallet_contracts_primitives::{
-	Code, CodeUploadResult, ContractExecResult, ContractExecResultWEvents,
-	ContractInstantiateResult, ContractInstantiateResultWEvents, GetStorageResult,
+	Code, CodeUploadResult, ContractExecResult, ContractInstantiateResult, GetStorageResult,
 };
 use pallet_election_provider_multi_phase::SolutionAccuracyOf;
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
@@ -2159,7 +2158,7 @@ impl_runtime_apis! {
 			gas_limit: Option<Weight>,
 			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
-		) -> ContractExecResult<Balance> {
+		) -> ContractExecResult<Balance, ()> {
 			let gas_limit = gas_limit.unwrap_or(RuntimeBlockWeights::get().max_block);
 			let result = Contracts::bare_call(
 				origin,
@@ -2190,7 +2189,7 @@ impl_runtime_apis! {
 			code: Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
-		) -> ContractInstantiateResult<AccountId, Balance>
+		) -> ContractInstantiateResult<AccountId, Balance, ()>
 		{
 			let gas_limit = gas_limit.unwrap_or(RuntimeBlockWeights::get().max_block);
 			let result = Contracts::bare_instantiate(
@@ -2249,7 +2248,7 @@ impl_runtime_apis! {
 			gas_limit: Option<Weight>,
 			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
-		) -> ContractExecResultWEvents<Balance, EventRecord> {
+		) -> ContractExecResult<Balance, EventRecord> {
 			let gas_limit = gas_limit.unwrap_or(RuntimeBlockWeights::get().max_block);
 			Contracts::bare_call(
 				origin,
@@ -2272,7 +2271,7 @@ impl_runtime_apis! {
 			code: Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
-		) -> ContractInstantiateResultWEvents<AccountId, Balance, EventRecord>
+		) -> ContractInstantiateResult<AccountId, Balance, EventRecord>
 		{
 			let gas_limit = gas_limit.unwrap_or(RuntimeBlockWeights::get().max_block);
 			Contracts::bare_instantiate(

@@ -76,21 +76,13 @@ pub struct ContractResult<R, Balance, EventRecord> {
 	pub events: Option<Vec<EventRecord>>,
 }
 
-/// Result type of a `bare_call` call as well as `ContractsApiV3::call`.
-pub type ContractExecResultWEvents<Balance, EventRecord> =
+/// Result type of a `bare_call` call as well as `ContractsApi::call` and `ContractsApiV3::call`.
+pub type ContractExecResult<Balance, EventRecord> =
 	ContractResult<Result<ExecReturnValue, DispatchError>, Balance, EventRecord>;
 
-/// Result type of the `ContractsApi::call` call.
-pub type ContractExecResult<Balance> =
-	ContractResult<Result<ExecReturnValue, DispatchError>, Balance, ()>;
-
-/// Result type of a `bare_instantiate` call as well as `ContractsApiV3::instantiate`.
-pub type ContractInstantiateResultWEvents<AccountId, Balance, EventRecord> =
+/// Result type of a `bare_instantiate` call as well as `ContractsApi::call` and `ContractsApiV3::instantiate`.
+pub type ContractInstantiateResult<AccountId, Balance, EventRecord> =
 	ContractResult<Result<InstantiateReturnValue<AccountId>, DispatchError>, Balance, EventRecord>;
-
-/// Result type of the `ContractsApi::instantiate` call.
-pub type ContractInstantiateResult<AccountId, Balance> =
-	ContractResult<Result<InstantiateReturnValue<AccountId>, DispatchError>, Balance, ()>;
 
 /// Result type of a `bare_code_upload` call.
 pub type CodeUploadResult<CodeHash, Balance> =
