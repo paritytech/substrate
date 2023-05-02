@@ -3081,6 +3081,47 @@ fn bare_call_result_returns_events() {
 }
 
 #[test]
+fn bare_call_result_does_not_return_events() {
+	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+
+		let addr = Contracts::bare_instantiate(
+			ALICE,
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm),
+			vec![],
+			vec![],
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			vec![],
+			DebugInfo::Skip,
+			Determinism::Enforced,
+			CollectEvents::Skip,
+		);
+
+		let events = result.events;
+		assert_return_code!(&result.result.unwrap(), RuntimeReturnCode::Success);
+		assert!(!System::events().is_empty());
+		assert!(events.is_none());
+	});
+}
+
+#[test]
 fn sr25519_verify() {
 	let (wasm, _code_hash) = compile_module::<Test>("sr25519_verify").unwrap();
 
