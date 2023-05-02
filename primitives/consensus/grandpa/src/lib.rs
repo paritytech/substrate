@@ -451,12 +451,11 @@ where
 	H: Encode,
 	N: Encode,
 {
-	use sp_application_crypto::AppKey;
-	use sp_core::crypto::Public;
+	use sp_application_crypto::AppCrypto;
 
 	let encoded = localized_payload(round, set_id, &message);
 	let signature = keystore
-		.sign_with(AuthorityId::ID, &public.to_public_crypto_pair(), &encoded[..])
+		.ed25519_sign(AuthorityId::ID, public.as_ref(), &encoded[..])
 		.ok()
 		.flatten()?
 		.try_into()

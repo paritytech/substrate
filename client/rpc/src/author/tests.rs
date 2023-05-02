@@ -31,8 +31,8 @@ use sc_transaction_pool_api::TransactionStatus;
 use sp_core::{
 	blake2_256,
 	bytes::to_hex,
-	crypto::{ByteArray, CryptoTypePublicPair, Pair},
-	ed25519, sr25519,
+	crypto::{ByteArray, Pair},
+	ed25519,
 	testing::{ED25519, SR25519},
 	H256,
 };
@@ -227,9 +227,7 @@ async fn author_should_insert_key() {
 	api.call::<_, ()>("author_insertKey", params).await.unwrap();
 	let pubkeys = setup.keystore.keys(ED25519).unwrap();
 
-	assert!(
-		pubkeys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, keypair.public().to_raw_vec()))
-	);
+	assert!(pubkeys.contains(&keypair.public().to_raw_vec()));
 }
 
 #[tokio::test]
@@ -242,10 +240,8 @@ async fn author_should_rotate_keys() {
 		SessionKeys::decode(&mut &new_pubkeys[..]).expect("SessionKeys decode successfully");
 	let ed25519_pubkeys = setup.keystore.keys(ED25519).unwrap();
 	let sr25519_pubkeys = setup.keystore.keys(SR25519).unwrap();
-	assert!(ed25519_pubkeys
-		.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, session_keys.ed25519.to_raw_vec())));
-	assert!(sr25519_pubkeys
-		.contains(&CryptoTypePublicPair(sr25519::CRYPTO_ID, session_keys.sr25519.to_raw_vec())));
+	assert!(ed25519_pubkeys.contains(&session_keys.ed25519.to_raw_vec()));
+	assert!(sr25519_pubkeys.contains(&session_keys.sr25519.to_raw_vec()));
 }
 
 #[tokio::test]

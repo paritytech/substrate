@@ -22,7 +22,8 @@ use frame_support::{
 	traits::{
 		fungibles::{Balanced, Credit, Inspect},
 		tokens::{
-			Balance, BalanceConversion, Fortitude::Polite, Precision::Exact, Preservation::Protect,
+			Balance, ConversionToAssetBalance, Fortitude::Polite, Precision::Exact,
+			Preservation::Protect,
 		},
 	},
 	unsigned::TransactionValidityError,
@@ -87,7 +88,7 @@ impl<A, B: Balanced<A>> HandleCredit<A, B> for () {
 }
 
 /// Implements the asset transaction for a balance to asset converter (implementing
-/// [`BalanceConversion`]) and a credit handler (implementing [`HandleCredit`]).
+/// [`ConversionToAssetBalance`]) and a credit handler (implementing [`HandleCredit`]).
 ///
 /// The credit handler is given the complete fee in terms of the asset used for the transaction.
 pub struct FungiblesAdapter<CON, HC>(PhantomData<(CON, HC)>);
@@ -97,7 +98,7 @@ pub struct FungiblesAdapter<CON, HC>(PhantomData<(CON, HC)>);
 impl<T, CON, HC> OnChargeAssetTransaction<T> for FungiblesAdapter<CON, HC>
 where
 	T: Config,
-	CON: BalanceConversion<BalanceOf<T>, AssetIdOf<T>, AssetBalanceOf<T>>,
+	CON: ConversionToAssetBalance<BalanceOf<T>, AssetIdOf<T>, AssetBalanceOf<T>>,
 	HC: HandleCredit<T::AccountId, T::Fungibles>,
 	AssetIdOf<T>: FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Eq + TypeInfo,
 {

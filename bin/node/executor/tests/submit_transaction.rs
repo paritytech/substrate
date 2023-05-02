@@ -18,7 +18,7 @@
 use codec::Decode;
 use frame_system::offchain::{SendSignedTransaction, Signer, SubmitTransaction};
 use kitchensink_runtime::{Executive, Indices, Runtime, UncheckedExtrinsic};
-use sp_application_crypto::AppKey;
+use sp_application_crypto::AppCrypto;
 use sp_core::offchain::{testing::TestTransactionPoolExt, TransactionPoolExt};
 use sp_keyring::sr25519::Keyring::Alice;
 use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};

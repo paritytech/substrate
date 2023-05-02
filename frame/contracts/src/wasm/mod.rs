@@ -43,7 +43,7 @@ use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
 	AccountIdOf, BalanceOf, CodeHash, CodeVec, Config, Error, OwnerInfoOf, RelaxedCodeVec,
-	Schedule,
+	Schedule, LOG_TARGET,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::dispatch::{DispatchError, DispatchResult};
@@ -326,7 +326,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 			},
 		)
 		.map_err(|msg| {
-			log::debug!(target: "runtime::contracts", "failed to instantiate code: {}", msg);
+			log::debug!(target: LOG_TARGET, "failed to instantiate code: {}", msg);
 			Error::<T>::CodeRejected
 		})?;
 		store.data_mut().set_memory(memory);
@@ -335,7 +335,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 			.get_export(&store, function.identifier())
 			.and_then(|export| export.into_func())
 			.ok_or_else(|| {
-				log::error!(target: "runtime::contracts", "failed to find entry point");
+				log::error!(target: LOG_TARGET, "failed to find entry point");
 				Error::<T>::CodeRejected
 			})?;
 
@@ -374,9 +374,7 @@ mod tests {
 	};
 	use assert_matches::assert_matches;
 	use frame_support::{
-		assert_err, assert_ok,
-		dispatch::DispatchResultWithPostInfo,
-		weights::{OldWeight, Weight},
+		assert_err, assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight,
 	};
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
@@ -436,6 +434,7 @@ mod tests {
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
 		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
+		sr25519_verify: RefCell<Vec<([u8; 64], Vec<u8>, [u8; 32])>>,
 		code_hashes: Vec<CodeHash<Test>>,
 	}
 
@@ -460,6 +459,7 @@ mod tests {
 				gas_meter: GasMeter::new(Weight::from_parts(10_000_000_000, 10 * 1024 * 1024)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
+				sr25519_verify: Default::default(),
 			}
 		}
 	}
@@ -470,6 +470,7 @@ mod tests {
 		fn call(
 			&mut self,
 			_gas_limit: Weight,
+			_deposit_limit: BalanceOf<Self::T>,
 			to: AccountIdOf<Self::T>,
 			value: u64,
 			data: Vec<u8>,
@@ -489,6 +490,7 @@ mod tests {
 		fn instantiate(
 			&mut self,
 			gas_limit: Weight,
+			_deposit_limit: BalanceOf<Self::T>,
 			code_hash: CodeHash<Test>,
 			value: u64,
 			data: Vec<u8>,
@@ -587,7 +589,11 @@ mod tests {
 			16_384
 		}
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
-			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.ref_time().into())
+			BalanceOf::<Self::T>::from(1312_u32)
+				.saturating_mul(weight.ref_time().into())
+				.saturating_add(
+					BalanceOf::<Self::T>::from(103_u32).saturating_mul(weight.proof_size()),
+				)
 		}
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
@@ -613,6 +619,10 @@ mod tests {
 		) -> Result<[u8; 33], ()> {
 			self.ecdsa_recover.borrow_mut().push((*signature, *message_hash));
 			Ok([3; 33])
+		}
+		fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool {
+			self.sr25519_verify.borrow_mut().push((*signature, message.to_vec(), *pub_key));
+			true
 		}
 		fn contract_info(&mut self) -> &mut crate::ContractInfo<Self::T> {
 			unimplemented!()
@@ -1321,6 +1331,49 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn contract_sr25519() {
+		const CODE_SR25519: &str = r#"
+(module
+	(import "seal0" "sr25519_verify" (func $sr25519_verify (param i32 i32 i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(drop
+			(call $sr25519_verify
+				(i32.const 0) ;; Pointer to signature.
+				(i32.const 64) ;; Pointer to public key.
+				(i32.const 16) ;; message length.
+				(i32.const 96) ;; Pointer to message.
+			)
+		)
+	)
+	(func (export "deploy"))
+
+	;; Signature (64 bytes)
+	(data (i32.const 0)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+
+	;;  public key (32 bytes)
+	(data (i32.const 64)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+
+	;;  message. (16 bytes)
+	(data (i32.const 96)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+)
+"#;
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(&CODE_SR25519, vec![], &mut mock_ext));
+		assert_eq!(mock_ext.sr25519_verify.into_inner(), [([1; 64], [1; 16].to_vec(), [1; 32])]);
+	}
+
 	const CODE_GET_STORAGE: &str = r#"
 (module
 	(import "seal0" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32) (result i32)))
@@ -1542,7 +1595,7 @@ mod tests {
 
 	const CODE_GAS_PRICE: &str = r#"
 (module
-	(import "seal0" "seal_weight_to_fee" (func $seal_weight_to_fee (param i64 i32 i32)))
+	(import "seal1" "weight_to_fee" (func $seal_weight_to_fee (param i64 i64 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1559,7 +1612,7 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the gas price in the buffer
-		(call $seal_weight_to_fee (i64.const 2) (i32.const 0) (i32.const 32))
+		(call $seal_weight_to_fee (i64.const 2) (i64.const 1) (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert
@@ -1569,11 +1622,11 @@ mod tests {
 			)
 		)
 
-		;; assert that contents of the buffer is equal to the i64 value of 2 * 1312.
+		;; assert that contents of the buffer is equal to the i64 value of 2 * 1312 + 103 = 2727.
 		(call $assert
 			(i64.eq
 				(i64.load (i32.const 0))
-				(i64.const 2624)
+				(i64.const 2727)
 			)
 		)
 	)
@@ -1588,12 +1641,12 @@ mod tests {
 
 	const CODE_GAS_LEFT: &str = r#"
 (module
-	(import "seal0" "seal_gas_left" (func $seal_gas_left (param i32 i32)))
+	(import "seal1" "gas_left" (func $seal_gas_left (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; size of our buffer is 32 bytes
-	(data (i32.const 32) "\20")
+	;; Make output buffer size 20 bytes
+	(data (i32.const 20) "\14")
 
 	(func $assert (param i32)
 		(block $ok
@@ -1605,19 +1658,19 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; This stores the gas left in the buffer
-		(call $seal_gas_left (i32.const 0) (i32.const 32))
+		;; This stores the weight left to the buffer
+		(call $seal_gas_left (i32.const 0) (i32.const 20))
 
-		;; assert len == 8
+		;; Assert len <= 16 (max encoded Weight len)
 		(call $assert
-			(i32.eq
-				(i32.load (i32.const 32))
-				(i32.const 8)
+			(i32.le_u
+				(i32.load (i32.const 20))
+				(i32.const 16)
 			)
 		)
 
-		;; return gas left
-		(call $seal_return (i32.const 0) (i32.const 0) (i32.const 8))
+		;; Return weight left and its encoded value len
+		(call $seal_return (i32.const 0) (i32.const 0) (i32.load (i32.const 20)))
 
 		(unreachable)
 	)
@@ -1632,11 +1685,22 @@ mod tests {
 
 		let output = execute(CODE_GAS_LEFT, vec![], &mut ext).unwrap();
 
-		let OldWeight(gas_left) = OldWeight::decode(&mut &*output.data).unwrap();
+		let weight_left = Weight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
-		// TODO: account for proof size weight
-		assert!(gas_left < gas_limit.ref_time(), "gas_left must be less than initial");
-		assert!(gas_left > actual_left.ref_time(), "gas_left must be greater than final");
+
+		assert!(weight_left.all_lt(gas_limit), "gas_left must be less than initial");
+		assert!(weight_left.all_gt(actual_left), "gas_left must be greater than final");
+	}
+
+	/// Test that [`frame_support::weights::OldWeight`] en/decodes the same as our
+	/// [`crate::OldWeight`].
+	#[test]
+	fn old_weight_decode() {
+		#![allow(deprecated)]
+		let sp = frame_support::weights::OldWeight(42).encode();
+		let our = crate::OldWeight::decode(&mut &*sp).unwrap();
+
+		assert_eq!(our, 42);
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"

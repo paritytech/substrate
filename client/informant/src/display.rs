@@ -76,7 +76,7 @@ impl<B: BlockT> InformantDisplay<B> {
 		let best_number = info.chain.best_number;
 		let best_hash = info.chain.best_hash;
 		let finalized_number = info.chain.finalized_number;
-		let num_connected_peers = net_status.num_connected_peers;
+		let num_connected_peers = sync_status.num_connected_peers;
 		let speed = speed::<B>(best_number, self.last_number, self.last_update);
 		let total_bytes_inbound = net_status.total_bytes_inbound;
 		let total_bytes_outbound = net_status.total_bytes_outbound;

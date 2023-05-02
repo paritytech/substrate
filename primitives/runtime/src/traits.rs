@@ -30,7 +30,7 @@ use crate::{
 use impl_trait_for_tuples::impl_for_tuples;
 #[cfg(feature = "std")]
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use sp_application_crypto::AppKey;
+use sp_application_crypto::AppCrypto;
 pub use sp_arithmetic::traits::{
 	checked_pow, ensure_pow, AtLeast32Bit, AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedDiv,
 	CheckedMul, CheckedShl, CheckedShr, CheckedSub, Ensure, EnsureAdd, EnsureAddAssign, EnsureDiv,
@@ -148,10 +148,10 @@ pub trait AppVerify {
 }
 
 impl<
-		S: Verify<Signer = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic>
+		S: Verify<Signer = <<T as AppCrypto>::Public as sp_application_crypto::AppPublic>::Generic>
 			+ From<T>,
 		T: sp_application_crypto::Wraps<Inner = S>
-			+ sp_application_crypto::AppKey
+			+ sp_application_crypto::AppCrypto
 			+ sp_application_crypto::AppSignature
 			+ AsRef<S>
 			+ AsMut<S>
@@ -159,16 +159,18 @@ impl<
 	> AppVerify for T
 where
 	<S as Verify>::Signer: IdentifyAccount<AccountId = <S as Verify>::Signer>,
-	<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic: IdentifyAccount<
-		AccountId = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic,
+	<<T as AppCrypto>::Public as sp_application_crypto::AppPublic>::Generic: IdentifyAccount<
+		AccountId = <<T as AppCrypto>::Public as sp_application_crypto::AppPublic>::Generic,
 	>,
 {
-	type AccountId = <T as AppKey>::Public;
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<T as AppKey>::Public) -> bool {
+	type AccountId = <T as AppCrypto>::Public;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<T as AppCrypto>::Public) -> bool {
 		use sp_application_crypto::IsWrappedBy;
 		let inner: &S = self.as_ref();
 		let inner_pubkey =
-			<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(signer);
+			<<T as AppCrypto>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(
+				signer,
+			);
 		Verify::verify(inner, msg, inner_pubkey)
 	}
 }

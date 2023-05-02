@@ -287,6 +287,24 @@ fn alarm_interval_works() {
 }
 
 #[test]
+fn decision_time_is_correct() {
+	new_test_ext().execute_with(|| {
+		let decision_time = |since: u64| {
+			Pallet::<Test>::decision_time(
+				&DecidingStatus { since: since.into(), confirming: None },
+				&Tally { ayes: 100, nays: 5 },
+				TestTracksInfo::tracks()[0].0,
+				&TestTracksInfo::tracks()[0].1,
+			)
+		};
+
+		for i in 0u64..=100 {
+			assert!(decision_time(i) > i, "The decision time should be delayed by the curve");
+		}
+	});
+}
+
+#[test]
 fn auto_timeout_should_happen_with_nothing_but_submit() {
 	new_test_ext().execute_with(|| {
 		// #1: submit
