@@ -113,10 +113,10 @@ pub trait MigrateSequence: private::Sealed {
 	/// Returns the new cursor or `None` if the migration is finished.
 	fn steps(version: StorageVersion, cursor: &[u8], weight_left: &mut Weight) -> Option<Cursor>;
 
-	/// Verify that each migration's cursor fits into the Cursor type.
+	/// Verify that each migration's cursor fits into `Cursor`.
 	fn integrity_test();
 
-	/// Returns whether migration from `in_storage` to `target` is supported.
+	/// Returns whether migrating from `in_storage` to `target` is supported.
 	/// A migration is supported if (in_storage + 1, target) is contained by `VERSION_RANGE`.
 	fn is_upgrade_supported(in_storage: StorageVersion, target: StorageVersion) -> bool {
 		if in_storage == target {
