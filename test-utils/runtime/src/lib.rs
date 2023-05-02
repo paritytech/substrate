@@ -46,13 +46,11 @@ use frame_system::limits::{BlockLength, BlockWeights};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 pub use sp_core::hash::H256;
 use sp_inherents::{CheckInherentsResult, InherentData};
-#[cfg(feature = "std")]
-use sp_runtime::traits::NumberFor;
 use sp_runtime::{
 	create_runtime_str, impl_opaque_keys,
 	traits::{
 		BlakeTwo256, BlindCheckable, Block as BlockT, Extrinsic as ExtrinsicT, GetNodeBlockType,
-		GetRuntimeBlockType, IdentityLookup, Verify,
+		GetRuntimeBlockType, IdentityLookup, NumberFor, Verify,
 	},
 	transaction_validity::{
 		InvalidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
@@ -1213,6 +1211,33 @@ cfg_if! {
 					_slot: sp_consensus_babe::Slot,
 					_authority_id: sp_consensus_babe::AuthorityId,
 				) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
+					None
+				}
+			}
+
+			impl sp_consensus_grandpa::GrandpaApi<Block> for Runtime {
+				fn grandpa_authorities() -> sp_consensus_grandpa::AuthorityList {
+					Vec::new()
+				}
+
+				fn current_set_id() -> sp_consensus_grandpa::SetId {
+					0
+				}
+
+				fn submit_report_equivocation_unsigned_extrinsic(
+					_equivocation_proof: sp_consensus_grandpa::EquivocationProof<
+						<Block as BlockT>::Hash,
+						NumberFor<Block>,
+					>,
+					_key_owner_proof: sp_consensus_grandpa::OpaqueKeyOwnershipProof,
+				) -> Option<()> {
+					None
+				}
+
+				fn generate_key_ownership_proof(
+					_set_id: sp_consensus_grandpa::SetId,
+					_authority_id: sp_consensus_grandpa::AuthorityId,
+				) -> Option<sp_consensus_grandpa::OpaqueKeyOwnershipProof> {
 					None
 				}
 			}

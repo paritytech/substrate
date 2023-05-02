@@ -1988,7 +1988,7 @@ async fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 	// keys it should work
 	equivocation.identity = TryFrom::try_from(&[1; 32][..]).unwrap();
 	let equivocation_proof = sp_consensus_grandpa::Equivocation::Prevote(equivocation);
-	assert!(environment.report_equivocation(equivocation_proof).is_ok());
+	environment.report_equivocation(equivocation_proof).unwrap();
 }
 
 #[tokio::test]
