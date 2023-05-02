@@ -143,7 +143,7 @@ pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, TP, SC, 
 
 /// Params required to start the delayed finalization task.
 pub struct DelayedFinalizeParams<C, S> {
-	/// Block import instance for well. importing blocks.
+	/// Block import instance.
 	pub client: Arc<C>,
 
 	/// Handle for spawning delayed finalization tasks.
