@@ -747,7 +747,10 @@ pub mod pallet {
 					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
 				(NoMigrationPerformed, weight) => {
 					if cfg!(feature = "runtime-benchmarks") {
-						return Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No })
+						return Ok(PostDispatchInfo {
+							actual_weight: Some(weight),
+							pays_fee: Pays::No,
+						})
 					}
 					let err: DispatchError = <Error<T>>::NoMigrationPerformed.into();
 					Err(err.with_weight(weight))
