@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test environment for Nft Royalties pallet.
+//! Test environment for NFTs Royalty pallet.
 
 use super::*;
 use crate as pallet_nfts_royalty;

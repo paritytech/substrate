@@ -47,7 +47,7 @@ fn last_event() -> NftsRoyaltyEvent<Test> {
 	.unwrap()
 }
 
-// Create a collection calling directly the NFT pallet
+// Create a collection calling directly the NFTs pallet
 fn create_collection() {
 	assert_ok!(Nfts::force_create(
 		RuntimeOrigin::root(),
@@ -71,7 +71,7 @@ fn set_up_balances(initial_balance: u64){
 }
 
 #[test]
-fn nft_minting_with_royalties_should_work() {
+fn nft_minting_with_royalty_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		assert_ok!(NftsRoyalty::mint(
@@ -83,11 +83,11 @@ fn nft_minting_with_royalties_should_work() {
 			Permill::from_percent(5),
 			account(1)
 		));
-		// Get the items directly from the NFT pallet, to see if has been created there
+		// Get the items directly from the NFTs pallet, to see if has been created there
 		let mut items: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
 		items.sort();
 		assert_eq!(items, vec![(account(1), 0, 42)]);
-		// Read royalties pallet storage.
+		// Read royalty pallet's storage.
 		let nft_with_royalty = NftWithRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
@@ -104,7 +104,7 @@ fn nft_minting_with_royalties_should_work() {
 }
 
 #[test]
-fn nft_minting_with_royalties_fail_collection_not_exist() {
+fn nft_minting_with_royalty_fail_collection_not_exist() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			NftsRoyalty::mint(
@@ -121,7 +121,7 @@ fn nft_minting_with_royalties_fail_collection_not_exist() {
 	});
 }
 #[test]
-fn nft_burn_with_royalties_should_work() {
+fn nft_burn_with_royalty_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		// Mint the item we are going to burn
@@ -136,7 +136,7 @@ fn nft_burn_with_royalties_should_work() {
 		));
 		// Burn the item
 		assert_ok!(NftsRoyalty::burn(RuntimeOrigin::signed(account(1)), 0, 42));
-		// Get the items directly from the NFT pallet, to see if has been burned there
+		// Get the items directly from the NFTs pallet, to see if has been burned there
 		let mut items: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
 		items.sort();
 		assert_eq!(items, vec![]);
@@ -152,9 +152,9 @@ fn nft_burn_with_royalties_should_work() {
 	});
 }
 #[test]
-fn nft_burn_error_nft_has_no_royalties() {
+fn nft_burn_error_nft_has_no_royalty() {
 	new_test_ext().execute_with(|| {
-		// Try to burn the item doesn't have royalties
+		// Try to burn an item that doesn't have a royalty
 		assert_noop!(
 			NftsRoyalty::burn(RuntimeOrigin::signed(account(1)), 0, 42),
 			Error::<Test>::NoRoyaltyExists
@@ -163,7 +163,7 @@ fn nft_burn_error_nft_has_no_royalties() {
 }
 
 #[test]
-fn transfer_royalties_should_work() {
+fn transfer_royalty_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		assert_ok!(NftsRoyalty::mint(
@@ -175,7 +175,7 @@ fn transfer_royalties_should_work() {
 			Permill::from_percent(5),
 			account(1)
 		));
-		// Read royalties pallet storage.
+		// Read royalty pallet's storage.
 		let nft_with_royalty = NftWithRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
@@ -186,7 +186,7 @@ fn transfer_royalties_should_work() {
 			42,
 			account(2)
 		));
-		// Read royalties pallet storage.
+		// Read royalty pallet's storage.
 		let nft_with_royalty = NftWithRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(2));
@@ -200,7 +200,7 @@ fn transfer_royalties_should_work() {
 }
 
 #[test]
-fn transfer_royalties_should_fail_if_not_royalties_recipient() {
+fn transfer_royalty_should_fail_if_no_royalty_recipient() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		assert_ok!(NftsRoyalty::mint(
@@ -212,7 +212,7 @@ fn transfer_royalties_should_fail_if_not_royalties_recipient() {
 			Permill::from_percent(5),
 			account(1)
 		));
-		// Read royalties pallet storage.
+		// Read royalty pallet's storage.
 		let nft_with_royalty = NftWithRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
@@ -226,7 +226,7 @@ fn transfer_royalties_should_fail_if_not_royalties_recipient() {
 			),
 			Error::<Test>::NoPermission
 		);
-		// Read royalties pallet storage to check the royalties haven't changed.
+		// Read royalty pallet's storage to check that the royalty has not changed.
 		let nft_with_royalty = NftWithRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
@@ -244,7 +244,7 @@ fn set_item_with_royalty_should_work() {
             account(1),
             ItemConfig { settings: ItemSettings::all_enabled() }
         ));
-        // Make sure the item does not already exist in royalties pallet storage.
+        // Make sure the item does not already exist in the royalty pallet's storage.
         assert_eq!(NftWithRoyalty::<Test>::get((0, 43)), None);
         assert_ok!(NftsRoyalty::set_royalty(
             RuntimeOrigin::signed(account(1)),
@@ -253,7 +253,7 @@ fn set_item_with_royalty_should_work() {
             Permill::from_percent(5),
             account(1)
         ));
-        // Read royalties pallet storage.
+        // Read royalty pallet's storage.
         let nft_with_royalty = NftWithRoyalty::<Test>::get((0, 43)).unwrap();
         assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
         assert_eq!(nft_with_royalty.royalty_recipient, account(1));
@@ -298,13 +298,13 @@ fn buy_should_work() {
 			42,
 			60
 		));
-		// Get the items directly from the NFT pallet, to see if the owner has changed
+		// Get the items directly from the NFTs pallet, to see if the owner has changed
 		let mut items: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
 		items.sort();
 		assert_eq!(items, vec![(account(2), 0, 42)]);
-		// Check the balance of royalty owner -> initial balance + price item + royalties.
+		// Check the balance of royalty owner -> initial balance + price item + royalty.
 		assert_eq!(Balances::total_balance(&account(1)), initial_balance + 50 + 5);
-		// Check the balances of buyer -> initial balance - price item - royalties.
+		// Check the balance of buyer -> initial balance - price item - royalty.
 		assert_eq!(Balances::total_balance(&account(2)), initial_balance - 50 - 5);
 		assert_eq!(
 			last_event(),
@@ -319,7 +319,7 @@ fn buy_should_work() {
 }
 
 #[test]
-fn error_if_no_royalties_on_item_to_buy() {
+fn error_if_no_royalty_on_item_to_buy() {
     new_test_ext().execute_with(|| {
         create_collection();
 		let initial_balance = 100;

@@ -113,6 +113,17 @@ pub mod pallet {
 			>;
 	}
 
+	/// NFT collection with royalty
+	#[pallet::storage]
+	#[pallet::getter(fn nft_collection_with_royalty)]
+	pub type NftCollectionWithRoyalty<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::NftCollectionId,
+		RoyaltyDetails<T::AccountId>,
+		OptionQuery,
+	>;
+
 	/// The storage for NFTs with a royalty.
 	#[pallet::storage]
 	#[pallet::getter(fn nft_with_royalty)]
@@ -149,6 +160,12 @@ pub mod pallet {
 			royalty_percentage: Permill,
 			royalty_recipient: T::AccountId,
 		},
+		/// The royalty percentage and recipient for a collection has been set.
+		RoyaltyForCollectionSet {
+			nft_collection: T::NftCollectionId,
+			royalty_percentage: Permill,
+			royalty_recipient: T::AccountId,
+		},
 		/// The royalty for an NFT item has been paid.
 		RoyaltyPaid {
 			nft_collection: T::NftCollectionId,
@@ -170,6 +187,8 @@ pub mod pallet {
 		RoyaltyAlreadyExists,
 		/// The NFT is not for sale.
 		NotForSale,
+		/// NFT collection does not exist.
+		CollectionDoesNotExist
 	}
 
 	#[pallet::call]
@@ -354,6 +373,52 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Set the royalty for an existing collection.
+		///
+		/// The origin must be the actual owner of the `item`.
+		///
+		/// - `collection`: The NFT collection.
+		/// - `royalty_percentage`: Royalty percentage to be set.
+		/// - `royalty_recipient`: Account into which the royalty will be sent to.
+		///
+		/// Emits `RoyaltySet`.
+		///
+		#[pallet::call_index(4)]
+		#[pallet::weight(0)]
+		pub fn set_collection_royalty(
+			origin: OriginFor<T>,
+			collection_id: T::NftCollectionId,
+			royalty_percentage: Permill,
+			royalty_recipient: T::AccountId,
+		) -> DispatchResult {
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
+
+			if let Some(check_origin) = maybe_check_origin {
+				todo!("Ensure owner of collection");
+			}
+
+			todo!("Ensure collection exists");
+
+			// Set a royalty for the entire collection
+			NftCollectionWithRoyalty::<T>::insert(
+				collection_id,
+				RoyaltyDetails::<T::AccountId> {
+					royalty_percentage,
+					royalty_recipient: royalty_recipient.clone(),
+				},
+			);
+
+			Self::deposit_event(Event::RoyaltyForCollectionSet {
+				nft_collection: collection_id,
+				royalty_percentage,
+				royalty_recipient: royalty_recipient.clone(),
+			});
+
+			Ok(())
+		}
+
 		/// Allows to buy an item if it's up for sale and pays the royalties associated to it.
 		///
 		/// Origin must be Signed and must not be the owner of the `item`.
@@ -364,7 +429,7 @@ pub mod pallet {
 		///
 		/// Emits `RoyaltyPaid`.
 		///
-		#[pallet::call_index(4)]
+		#[pallet::call_index(5)]
 		#[pallet::weight(0)]
 		pub fn buy(
 			origin: OriginFor<T>,
