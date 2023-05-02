@@ -1868,7 +1868,7 @@ pub mod env {
 	/// Note that only the origin can be root. Hence this function returning `true` implies that the
 	/// caller is being called by the origin.
 	///
-	/// A return value of `true` indicates that this contract is being called by a root origin
+	/// A return value of `true` indicates that this contract is being called by a root origin,
 	/// and `false` indicates that the caller is a signed origin.
 	///
 	/// Returned value is a `u32`-encoded boolean: (`0 = false`, `1 = true`).
