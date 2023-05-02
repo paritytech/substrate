@@ -27,7 +27,7 @@ async-recursion = "1.0.4"
 
 [dev-dependencies]
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
-pallet-elections-phragmen = { version = "5.0.0-dev", path = "../../../frame/elections-phragmen" }
+pallet-elections = { version = "5.0.0-dev", path = "../../../frame/elections" }
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 
 [features]

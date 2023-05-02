@@ -185,7 +185,7 @@ impl<T: Config> ElectionProvider for OnChainExecution<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{ElectionProvider, PhragMMS, SequentialPhragmen};
+	use crate::{ApprovalVoting, ElectionProvider, PhragMMS, SequentialPhragmen};
 	use frame_support::{assert_noop, parameter_types, traits::ConstU32};
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
@@ -235,6 +235,7 @@ mod tests {
 
 	struct PhragmenParams;
 	struct PhragMMSParams;
+	struct ApprovalVotingParams;
 
 	parameter_types! {
 		pub static MaxWinners: u32 = 10;
@@ -254,6 +255,16 @@ mod tests {
 	impl Config for PhragMMSParams {
 		type System = Runtime;
 		type Solver = PhragMMS<AccountId, Perbill>;
+		type DataProvider = mock_data_provider::DataProvider;
+		type WeightInfo = ();
+		type MaxWinners = MaxWinners;
+		type VotersBound = ConstU32<600>;
+		type TargetsBound = ConstU32<400>;
+	}
+
+	impl Config for ApprovalVotingParams {
+		type System = Runtime;
+		type Solver = ApprovalVoting<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		type MaxWinners = MaxWinners;
@@ -331,6 +342,23 @@ mod tests {
 					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
 				]
 			);
+		})
+	}
+
+	#[test]
+	fn onchain_approval_voting_works() {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
+			DesiredTargets::set(3);
+
+			// note that the `OnChainExecution::elect` implementation normalizes the vote weights.
+			assert_eq!(
+				<OnChainExecution::<ApprovalVotingParams> as ElectionProvider>::elect().unwrap(),
+				vec![
+					(10, Support { total: 20, voters: vec![(1, 5), (3, 15)] }),
+					(20, Support { total: 15, voters: vec![(1, 5), (2, 10)] }),
+					(30, Support { total: 25, voters: vec![(2, 10), (3, 15)] })
+				]
+			)
 		})
 	}
 }
