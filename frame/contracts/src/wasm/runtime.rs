@@ -1865,8 +1865,8 @@ pub mod env {
 
 	/// Checks whether the caller of the current contract is root.
 	///
-	/// Note that only the origin can be root. Hence this function implies that the caller is being
-	/// called by the origin.
+	/// Note that only the origin can be root. Hence this function returning `true` implies that the
+	/// caller is being called by the origin.
 	///
 	/// A return value of `true` indicates that this contract is being called by a root origin
 	/// and `false` indicates that the caller is a signed origin.
