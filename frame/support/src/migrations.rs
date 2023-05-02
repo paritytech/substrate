@@ -28,7 +28,9 @@ use sp_std::marker::PhantomData;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+/// Can store the current pallet version in storage.
 pub trait StoreCurrentStorageVersion<T: GetStorageVersion + PalletInfoAccess> {
+	/// Write the current storage version to the storage.
 	fn store_current_storage_version();
 }
 
