@@ -244,6 +244,12 @@ benchmarks! {
 		migration.step();
 	}
 
+	// This benchmarks the base weight of dispatching a migrate call
+	#[pov_mode = Measured]
+	migrate {
+		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
+	}:  _(origin, Weight::MAX)
+
 	// This benchmarks the overhead of loading a code of size `c` byte from storage and into
 	// the sandbox. This does **not** include the actual execution for which the gas meter
 	// is responsible. This is achieved by generating all code to the `deploy` function
