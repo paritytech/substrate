@@ -1626,6 +1626,7 @@ pub mod pallet {
 
 	/// Implements `Touch` trait.
 	/// Note that a depositor can be any account, without any specific privilege.
+	/// This implementation is supposed to be used only for creation of system accounts.
 	impl<T: Config<I>, I: 'static> Touch for Pallet<T, I> {
 		type AssetId = T::AssetId;
 		type AccountId = T::AccountId;
