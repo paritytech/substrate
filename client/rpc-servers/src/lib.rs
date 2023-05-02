@@ -39,17 +39,10 @@ pub use jsonrpsee::core::{
 	traits::IdProvider,
 };
 
-/// Default maximum number of connections for JSON-RPC servers.
-const RPC_MAX_CONNECTIONS: u32 = 100;
-/// Default maximum number subscriptions per connection for JSON-RPC servers.
-const RPC_MAX_SUBS_PER_CONN: u32 = 1024;
 const MEGABYTE: u32 = 1024 * 1024;
 
 /// Type alias for the JSON-RPC server.
 pub type Server = ServerHandle;
-
-/// Maximal payload accepted by JSON-RPC servers.
-pub const RPC_MAX_PAYLOAD_DEFAULT: u32 = 15 * MEGABYTE;
 
 /// RPC server configuration.
 #[derive(Debug)]
@@ -59,13 +52,13 @@ pub struct Config<'a, M: Send + Sync + 'static> {
 	/// CORS.
 	pub cors: Option<&'a Vec<String>>,
 	/// Maximum connections.
-	pub max_connections: Option<usize>,
+	pub max_connections: u32,
 	/// Maximum subscriptions per connection.
-	pub max_subs_per_conn: Option<usize>,
+	pub max_subs_per_conn: u32,
 	/// Maximum rpc request payload size.
-	pub max_payload_in_mb: Option<usize>,
+	pub max_payload_in_mb: u32,
 	/// Maximum rpc response payload size.
-	pub max_payload_out_mb: Option<usize>,
+	pub max_payload_out_mb: u32,
 	/// Metrics.
 	pub metrics: Option<RpcMetrics>,
 	/// RPC API.
@@ -101,12 +94,10 @@ pub async fn start_server<M: Send + Sync + 'static>(
 		.layer(try_into_cors(cors)?);
 
 	let mut builder = ServerBuilder::new()
-		.max_request_body_size(payload_size_or_default(max_payload_in_mb))
-		.max_response_body_size(payload_size_or_default(max_payload_out_mb))
-		.max_connections(max_connections.map_or(RPC_MAX_CONNECTIONS, |m| m as u32))
-		.max_subscriptions_per_connection(
-			max_subs_per_conn.map_or(RPC_MAX_SUBS_PER_CONN, |m| m as u32),
-		)
+		.max_request_body_size(max_payload_in_mb.saturating_mul(MEGABYTE))
+		.max_response_body_size(max_payload_out_mb.saturating_mul(MEGABYTE))
+		.max_connections(max_connections)
+		.max_subscriptions_per_connection(max_subs_per_conn)
 		.ping_interval(std::time::Duration::from_secs(30))
 		.set_host_filtering(host_filter)
 		.set_middleware(middleware)
@@ -165,10 +156,6 @@ fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModu
 		.expect("infallible all other methods have their own address space; qed");
 
 	rpc_api
-}
-
-fn payload_size_or_default(size_mb: Option<usize>) -> u32 {
-	size_mb.map_or(RPC_MAX_PAYLOAD_DEFAULT, |mb| (mb as u32).saturating_mul(MEGABYTE))
 }
 
 fn try_into_cors(

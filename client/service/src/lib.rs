@@ -386,9 +386,7 @@ where
 		addr
 	};
 
-	let addr = config
-		.rpc_addr
-		.unwrap_or_else(|| "127.0.0.1:9944".parse().expect("valid sockaddr; qed"));
+	let addr = config.rpc_addr.unwrap_or(([127, 0, 0, 1], 9944).into());
 	let backup_addr = backup_port(addr);
 	let metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
 

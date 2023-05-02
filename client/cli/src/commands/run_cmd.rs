@@ -79,26 +79,25 @@ pub struct RunCmd {
 
 	/// Set the the maximum RPC request payload size for both HTTP and WS in megabytes.
 	/// Default is 15MiB.
-	#[arg(long)]
-	pub rpc_max_request_size: Option<usize>,
+	#[arg(long, default_value_t = 15)]
+	pub rpc_max_request_size: u32,
 
 	/// Set the the maximum RPC response payload size for both HTTP and WS in megabytes.
 	/// Default is 15MiB.
-	#[arg(long)]
-	pub rpc_max_response_size: Option<usize>,
+	#[arg(long, default_value_t = 15)]
+	pub rpc_max_response_size: u32,
 
 	/// Set the the maximum concurrent subscriptions per connection.
-	/// Default is 1024.
-	#[arg(long)]
-	pub rpc_max_subscriptions_per_connection: Option<usize>,
+	#[arg(long, default_value_t = 1024)]
+	pub rpc_max_subscriptions_per_connection: u32,
 
 	/// Specify JSON-RPC server TCP port.
-	#[arg(long, value_name = "PORT")]
-	pub rpc_port: Option<u16>,
+	#[arg(long, value_name = "PORT", default_value_t = 9944)]
+	pub rpc_port: u16,
 
 	/// Maximum number of RPC server connections.
-	#[arg(long, value_name = "COUNT")]
-	pub rpc_max_connections: Option<usize>,
+	#[arg(long, value_name = "COUNT", default_value_t = 100)]
+	pub rpc_max_connections: u32,
 
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
 	/// A comma-separated list of origins (protocol://domain or special `null`
@@ -314,7 +313,7 @@ impl CliConfiguration for RunCmd {
 		Ok(self.no_grandpa)
 	}
 
-	fn rpc_max_connections(&self) -> Result<Option<usize>> {
+	fn rpc_max_connections(&self) -> Result<u32> {
 		Ok(self.rpc_max_connections)
 	}
 
@@ -339,7 +338,7 @@ impl CliConfiguration for RunCmd {
 			.into())
 	}
 
-	fn rpc_addr(&self, default_listen_port: u16) -> Result<Option<SocketAddr>> {
+	fn rpc_addr(&self, _default_listen_port: u16) -> Result<Option<SocketAddr>> {
 		let interface = rpc_interface(
 			self.rpc_external,
 			self.unsafe_rpc_external,
@@ -347,22 +346,22 @@ impl CliConfiguration for RunCmd {
 			self.validator,
 		)?;
 
-		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(default_listen_port))))
+		Ok(Some(SocketAddr::new(interface, self.rpc_port)))
 	}
 
 	fn rpc_methods(&self) -> Result<sc_service::config::RpcMethods> {
 		Ok(self.rpc_methods.into())
 	}
 
-	fn rpc_max_request_size(&self) -> Result<Option<usize>> {
+	fn rpc_max_request_size(&self) -> Result<u32> {
 		Ok(self.rpc_max_request_size)
 	}
 
-	fn rpc_max_response_size(&self) -> Result<Option<usize>> {
+	fn rpc_max_response_size(&self) -> Result<u32> {
 		Ok(self.rpc_max_response_size)
 	}
 
-	fn rpc_max_subscriptions_per_connection(&self) -> Result<Option<usize>> {
+	fn rpc_max_subscriptions_per_connection(&self) -> Result<u32> {
 		Ok(self.rpc_max_subscriptions_per_connection)
 	}
 

@@ -295,9 +295,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			.unwrap_or_default())
 	}
 
-	/// Get the RPC address (`None` if disabled).
-	///
-	/// By default this is `None`.
+	/// Get the RPC address.
 	fn rpc_addr(&self, _default_listen_port: u16) -> Result<Option<SocketAddr>> {
 		Ok(None)
 	}
@@ -310,11 +308,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(Default::default())
 	}
 
-	/// Get the maximum number of RPC server connections (`None` if unlimited).
-	///
-	/// By default this is `None`.
-	fn rpc_max_connections(&self) -> Result<Option<usize>> {
-		Ok(None)
+	/// Get the maximum number of RPC server connections.
+	fn rpc_max_connections(&self) -> Result<u32> {
+		Ok(Default::default())
 	}
 
 	/// Get the RPC cors (`None` if disabled)
@@ -325,18 +321,18 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	}
 
 	/// Get maximum RPC request payload size.
-	fn rpc_max_request_size(&self) -> Result<Option<usize>> {
-		Ok(None)
+	fn rpc_max_request_size(&self) -> Result<u32> {
+		Ok(Default::default())
 	}
 
 	/// Get maximum RPC response payload size.
-	fn rpc_max_response_size(&self) -> Result<Option<usize>> {
-		Ok(None)
+	fn rpc_max_response_size(&self) -> Result<u32> {
+		Ok(Default::default())
 	}
 
 	/// Get maximum number of subscriptions per connection.
-	fn rpc_max_subscriptions_per_connection(&self) -> Result<Option<usize>> {
-		Ok(None)
+	fn rpc_max_subscriptions_per_connection(&self) -> Result<u32> {
+		Ok(Default::default())
 	}
 
 	/// Get the prometheus configuration (`None` if disabled)
