@@ -207,6 +207,7 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 /// The result of a migration step.
 #[derive(Debug, PartialEq)]
 pub enum MigrateResult {
+	/// No migration was performed
 	NoMigrationPerformed,
 	InProgress,
 	Completed,
