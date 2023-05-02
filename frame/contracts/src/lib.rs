@@ -1361,59 +1361,7 @@ impl<T: Config> Pallet<T> {
 sp_api::decl_runtime_apis! {
 	/// The API used to dry-run contract interactions.
 	#[api_version(2)]
-	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash> where
-		AccountId: Codec,
-		Balance: Codec,
-		BlockNumber: Codec,
-		Hash: Codec,
-	{
-		/// Perform a call from a specified account to a given contract.
-		///
-		/// See [`crate::Pallet::bare_call`].
-		fn call(
-			origin: AccountId,
-			dest: AccountId,
-			value: Balance,
-			gas_limit: Option<Weight>,
-			storage_deposit_limit: Option<Balance>,
-			input_data: Vec<u8>,
-		) -> ContractExecResult<Balance, ()>;
-
-		/// Instantiate a new contract.
-		///
-		/// See `[crate::Pallet::bare_instantiate]`.
-		fn instantiate(
-			origin: AccountId,
-			value: Balance,
-			gas_limit: Option<Weight>,
-			storage_deposit_limit: Option<Balance>,
-			code: Code<Hash>,
-			data: Vec<u8>,
-			salt: Vec<u8>,
-		) -> ContractInstantiateResult<AccountId, Balance, ()>;
-
-		/// Upload new code without instantiating a contract from it.
-		///
-		/// See [`crate::Pallet::bare_upload_code`].
-		fn upload_code(
-			origin: AccountId,
-			code: Vec<u8>,
-			storage_deposit_limit: Option<Balance>,
-			determinism: Determinism,
-		) -> CodeUploadResult<Hash, Balance>;
-
-		/// Query a given storage key in a given contract.
-		///
-		/// Returns `Ok(Some(Vec<u8>))` if the storage value exists under the given key in the
-		/// specified account and `Ok(None)` if it doesn't. If the account specified by the address
-		/// doesn't exist, or doesn't have a contract then `Err` is returned.
-		fn get_storage(
-			address: AccountId,
-			key: Vec<u8>,
-		) -> GetStorageResult;
-	}
-
-	pub trait ContractsApiV3<AccountId, Balance, BlockNumber, Hash, EventRecord> where
+	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash, EventRecord> where
 		AccountId: Codec,
 		Balance: Codec,
 		BlockNumber: Codec,
@@ -1454,5 +1402,58 @@ sp_api::decl_runtime_apis! {
 			storage_deposit_limit: Option<Balance>,
 			determinism: Determinism,
 		) -> CodeUploadResult<Hash, Balance>;
+
+		/// Query a given storage key in a given contract.
+		///
+		/// Returns `Ok(Some(Vec<u8>))` if the storage value exists under the given key in the
+		/// specified account and `Ok(None)` if it doesn't. If the account specified by the address
+		/// doesn't exist, or doesn't have a contract then `Err` is returned.
+		fn get_storage(
+			address: AccountId,
+			key: Vec<u8>,
+		) -> GetStorageResult;
 	}
+
+	// pub trait ContractsApiV3<AccountId, Balance, BlockNumber, Hash, EventRecord> where
+	// 	AccountId: Codec,
+	// 	Balance: Codec,
+	// 	BlockNumber: Codec,
+	// 	Hash: Codec,
+	// 	EventRecord: Codec,
+	// {
+	// 	/// Perform a call from a specified account to a given contract.
+	// 	///
+	// 	/// See [`crate::Pallet::bare_call`].
+	// 	fn call(
+	// 		origin: AccountId,
+	// 		dest: AccountId,
+	// 		value: Balance,
+	// 		gas_limit: Option<Weight>,
+	// 		storage_deposit_limit: Option<Balance>,
+	// 		input_data: Vec<u8>,
+	// 	) -> ContractExecResult<Balance, EventRecord>;
+
+	// 	/// Instantiate a new contract.
+	// 	///
+	// 	/// See `[crate::Pallet::bare_instantiate]`.
+	// 	fn instantiate(
+	// 		origin: AccountId,
+	// 		value: Balance,
+	// 		gas_limit: Option<Weight>,
+	// 		storage_deposit_limit: Option<Balance>,
+	// 		code: Code<Hash>,
+	// 		data: Vec<u8>,
+	// 		salt: Vec<u8>,
+	// 	) -> ContractInstantiateResult<AccountId, Balance, EventRecord>;
+
+	// 	/// Upload new code without instantiating a contract from it.
+	// 	///
+	// 	/// See [`crate::Pallet::bare_upload_code`].
+	// 	fn upload_code(
+	// 		origin: AccountId,
+	// 		code: Vec<u8>,
+	// 		storage_deposit_limit: Option<Balance>,
+	// 		determinism: Determinism,
+	// 	) -> CodeUploadResult<Hash, Balance>;
+	// }
 }

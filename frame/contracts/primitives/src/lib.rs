@@ -76,11 +76,11 @@ pub struct ContractResult<R, Balance, EventRecord> {
 	pub events: Option<Vec<EventRecord>>,
 }
 
-/// Result type of a `bare_call` call as well as `ContractsApi::call` and `ContractsApiV3::call`.
+/// Result type of a `bare_call` call as well as `ContractsApi::call`.
 pub type ContractExecResult<Balance, EventRecord> =
 	ContractResult<Result<ExecReturnValue, DispatchError>, Balance, EventRecord>;
 
-/// Result type of a `bare_instantiate` call as well as `ContractsApi::call` and `ContractsApiV3::instantiate`.
+/// Result type of a `bare_instantiate` call as well as `ContractsApi::call`.
 pub type ContractInstantiateResult<AccountId, Balance, EventRecord> =
 	ContractResult<Result<InstantiateReturnValue<AccountId>, DispatchError>, Balance, EventRecord>;
 
