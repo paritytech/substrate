@@ -78,12 +78,10 @@ pub struct RunCmd {
 	pub rpc_methods: RpcMethods,
 
 	/// Set the the maximum RPC request payload size for both HTTP and WS in megabytes.
-	/// Default is 15MiB.
 	#[arg(long, default_value_t = 15)]
 	pub rpc_max_request_size: u32,
 
 	/// Set the the maximum RPC response payload size for both HTTP and WS in megabytes.
-	/// Default is 15MiB.
 	#[arg(long, default_value_t = 15)]
 	pub rpc_max_response_size: u32,
 
