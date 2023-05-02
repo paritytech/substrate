@@ -1183,7 +1183,6 @@ impl<T: Config> Pallet<T> {
 			debug_message: debug_message.as_mut(),
 		};
 		let output = CallInput::<T> { dest, determinism }.run_guarded(common);
-		// collect events if CollectEvents is UnsafeCollect
 		let events = if matches!(collect_events, CollectEvents::UnsafeCollect) {
 			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
 		} else {
@@ -1362,12 +1361,11 @@ impl<T: Config> Pallet<T> {
 sp_api::decl_runtime_apis! {
 	/// The API used to dry-run contract interactions.
 	#[api_version(2)]
-	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash, EventRecord> where
+	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash> where
 		AccountId: Codec,
 		Balance: Codec,
 		BlockNumber: Codec,
 		Hash: Codec,
-		EventRecord: Codec,
 	{
 		/// Perform a call from a specified account to a given contract.
 		///
