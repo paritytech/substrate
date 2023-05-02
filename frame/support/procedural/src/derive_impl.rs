@@ -79,15 +79,15 @@ fn combine_impls(
 	foreign_path: Path,
 	disambiguation_path: Path,
 ) -> ItemImpl {
-	let (existing_local_keys, existing_unsupported_items): (HashSet<ImplItem>, HashSet<ImplItem>) = local_impl
-		.items
-		.iter()
-		.cloned()
-		.filter(|impl_item| impl_item_ident(impl_item).is_some())
-		.partition();
+	let (existing_local_keys, existing_unsupported_items): (HashSet<ImplItem>, HashSet<ImplItem>) =
+		local_impl
+			.items
+			.iter()
+			.cloned()
+			.partition(|impl_item| impl_item_ident(impl_item).is_some());
 	let existing_local_keys: HashSet<Ident> = existing_local_keys
 		.into_iter()
-		.filter_map(|item| impl_item_ident(item))
+		.filter_map(|item| impl_item_ident(&item).cloned())
 		.collect();
 	let mut final_impl = local_impl;
 	let extended_items = foreign_impl.items.into_iter().filter_map(|item| {
