@@ -564,12 +564,17 @@ where
 				&bar,
 			)
 		});
-		let storage_data = futures::future::join_all(requests)
-			.await
-			.into_iter()
-			.map(|r| r.unwrap())
-			.flatten()
-			.collect::<Vec<_>>();
+		// Execute the requests and move the Result outside.
+		let storage_data_result: Result<Vec<_>, _> =
+			futures::future::join_all(requests).await.into_iter().collect();
+		// Handle the Result.
+		let storage_data = match storage_data_result {
+			Ok(storage_data) => storage_data.into_iter().flatten().collect::<Vec<_>>(),
+			Err(e) => {
+				log::error!(target: LOG_TARGET, "Error while getting storage data: {}", e);
+				return Err("Error while getting storage data")
+			},
+		};
 		bar.finish_with_message("✅ Downloaded key values");
 		print!("\n");
 
