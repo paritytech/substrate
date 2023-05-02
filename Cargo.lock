@@ -8920,6 +8920,7 @@ dependencies = [
  "assert_matches",
  "async-trait",
  "futures",
+ "futures-timer",
  "jsonrpsee",
  "log",
  "parity-scale-codec",
