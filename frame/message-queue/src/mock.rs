@@ -285,6 +285,7 @@ where
 	ext
 }
 
+/// Run the function pointer inside externalities and asserts the try_state hook at the end.
 pub fn build_and_execute<T: Config>(test: impl FnOnce() -> ())
 where
 	<T as frame_system::Config>::BlockNumber: From<u32>,
