@@ -191,6 +191,8 @@ pub enum RuntimeCosts {
 	OwnCodeHash,
 	/// Weight of calling `seal_caller_is_origin`.
 	CallerIsOrigin,
+	/// Weight of calling `caller_is_root`.
+	CallerIsRoot,
 	/// Weight of calling `seal_address`.
 	Address,
 	/// Weight of calling `seal_gas_left`.
@@ -283,6 +285,7 @@ impl RuntimeCosts {
 			CodeHash => s.code_hash,
 			OwnCodeHash => s.own_code_hash,
 			CallerIsOrigin => s.caller_is_origin,
+			CallerIsRoot => s.caller_is_root,
 			Address => s.address,
 			GasLeft => s.gas_left,
 			Balance => s.balance,
@@ -1750,14 +1753,18 @@ pub mod env {
 	/// If this is a top-level call (i.e. initiated by an extrinsic) the origin address of the
 	/// extrinsic will be returned. Otherwise, if this call is initiated by another contract then
 	/// the address of the contract will be returned. The value is encoded as T::AccountId.
+	///
+	/// If there is no address associated with the caller (e.g. because the caller is root) then
+	/// it traps with `BadOrigin`.
 	#[prefixed_alias]
 	fn caller(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::Caller)?;
+		let caller = ctx.ext.caller().account_id()?.clone();
 		Ok(ctx.write_sandbox_output(
 			memory,
 			out_ptr,
 			out_len_ptr,
-			&ctx.ext.caller().encode(),
+			&caller.encode(),
 			false,
 			already_charged,
 		)?)
@@ -1854,6 +1861,21 @@ pub mod env {
 	fn caller_is_origin(ctx: _, _memory: _) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::CallerIsOrigin)?;
 		Ok(ctx.ext.caller_is_origin() as u32)
+	}
+
+	/// Checks whether the caller of the current contract is root.
+	///
+	/// Note that only the origin of the call stack can be root. Hence this function returning
+	/// `true` implies that the contract is being called by the origin.
+	///
+	/// A return value of `true` indicates that this contract is being called by a root origin,
+	/// and `false` indicates that the caller is a signed origin.
+	///
+	/// Returned value is a `u32`-encoded boolean: (`0 = false`, `1 = true`).
+	#[unstable]
+	fn caller_is_root(ctx: _, _memory: _) -> Result<u32, TrapReason> {
+		ctx.charge_gas(RuntimeCosts::CallerIsRoot)?;
+		Ok(ctx.ext.caller_is_root() as u32)
 	}
 
 	/// Stores the address of the current contract into the supplied buffer.
