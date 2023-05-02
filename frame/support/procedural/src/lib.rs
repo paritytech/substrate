@@ -1000,17 +1000,12 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
-/// Attach this attribute to an impl statement that needs to be registered for use with the
-/// [`macro@derive_impl`] attribute macro.
+/// Attach this attribute to an impl statement that you want to use with
+/// [`#[derive_impl(..)]`](`macro@derive_impl`).
 ///
-/// You must also specify an ident as the only argument to the attribute. This ident will be
-/// used as the export name for this default config impl, and is the name you must provide to
-/// [`macro@derive_impl`] when you import this impl.
-///
-/// The ident you provide is exported at the root of the crate where it is defined, so the
-/// ident must be unique at the crate level so as not to collide with other items. This is
-/// because internally this attribute aliases to macro_magic's `#[export_tokens]` macro, which
-/// relies on crate-level `macro_rules!` exports to export tokens for use elsewhere.
+/// You must also provide an identifier/name as the attribute's argument. This is the name you
+/// must provide to [`#[derive_impl(..)]`](`macro@derive_impl`) when you import this impl via
+/// the `foreign_path` argument. This name should be unique at the crate-level.
 ///
 /// ## Example
 ///
@@ -1027,7 +1022,6 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 /// 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 /// }
 /// ```
-///
 /// This macro acts as a thin wrapper around macro_magic's `#[export_tokens]`. See the docs
 /// [here](https://docs.rs/macro_magic/latest/macro_magic/attr.export_tokens.html) for more info.
 #[proc_macro_attribute]
