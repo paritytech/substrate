@@ -9441,6 +9441,7 @@ dependencies = [
  "sc-block-builder",
  "sc-chain-spec",
  "sc-client-api",
+ "sc-service",
  "sc-transaction-pool-api",
  "sc-utils",
  "serde",
