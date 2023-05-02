@@ -248,7 +248,9 @@ benchmarks! {
 	#[pov_mode = Measured]
 	migrate {
 		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
-	}:  _(origin, Weight::MAX)
+	}:  {
+		<Contracts<T>>::migrate(origin.into(), Weight::MAX).unwrap_or_default()
+	}
 
 	// This benchmarks the overhead of loading a code of size `c` byte from storage and into
 	// the sandbox. This does **not** include the actual execution for which the gas meter
