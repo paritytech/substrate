@@ -34,6 +34,12 @@ fn asset_ids() -> Vec<u32> {
 	s
 }
 
+/// returns tuple of asset's account and sufficient counts
+fn asset_account_counts(asset_id: u32) -> (u32, u32) {
+	let asset = Asset::<Test>::get(asset_id).unwrap();
+	(asset.accounts, asset.sufficients)
+}
+
 #[test]
 fn transfer_should_never_burn() {
 	new_test_ext().execute_with(|| {
@@ -154,9 +160,11 @@ fn refunding_asset_deposit_without_burn_should_work() {
 		assert_eq!(Assets::balance(0, 2), 100);
 		assert_eq!(Assets::balance(0, 1), 0);
 		assert_eq!(Balances::reserved_balance(&1), 10);
+		assert_eq!(asset_account_counts(0), (2, 0));
 		assert_ok!(Assets::refund(RuntimeOrigin::signed(1), 0, false));
 		assert_eq!(Balances::reserved_balance(&1), 0);
 		assert_eq!(Assets::balance(1, 0), 0);
+		assert_eq!(asset_account_counts(0), (1, 0));
 	});
 }
 
@@ -187,6 +195,7 @@ fn refunding_with_sufficient_existence_reason_should_fail() {
 		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 		assert_eq!(Assets::balance(0, 1), 50);
 		assert_eq!(Assets::balance(0, 2), 50);
+		assert_eq!(asset_account_counts(0), (2, 2));
 		// fails to refund
 		assert_noop!(Assets::refund(RuntimeOrigin::signed(2), 0, true), Error::<Test>::NoDeposit);
 	});
@@ -223,6 +232,7 @@ fn refunding_frozen_with_consumer_ref_works() {
 		assert_eq!(System::consumers(&2), 1);
 		assert_eq!(Assets::balance(0, 1), 50);
 		assert_eq!(Assets::balance(0, 2), 50);
+		assert_eq!(asset_account_counts(0), (2, 0));
 		// freeze asset account `2` and asset `0`
 		assert_ok!(Assets::freeze(RuntimeOrigin::signed(1), 0, 2));
 		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
@@ -230,6 +240,7 @@ fn refunding_frozen_with_consumer_ref_works() {
 		assert_ok!(Assets::refund(RuntimeOrigin::signed(2), 0, true));
 		assert!(!Account::<Test>::contains_key(0, &2));
 		assert_eq!(System::consumers(&2), 0);
+		assert_eq!(asset_account_counts(0), (1, 0));
 	});
 }
 
@@ -253,6 +264,7 @@ fn refunding_frozen_with_deposit_works() {
 		assert_eq!(System::consumers(&2), 1);
 		assert_eq!(Assets::balance(0, 1), 50);
 		assert_eq!(Assets::balance(0, 2), 50);
+		assert_eq!(asset_account_counts(0), (2, 0));
 		// ensure refundable even if asset account and asset is frozen
 		assert_ok!(Assets::freeze(RuntimeOrigin::signed(1), 0, 2));
 		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
@@ -261,6 +273,7 @@ fn refunding_frozen_with_deposit_works() {
 		assert!(!Account::<Test>::contains_key(0, &2));
 		assert_eq!(Balances::reserved_balance(&2), 0);
 		assert_eq!(System::consumers(&2), 0);
+		assert_eq!(asset_account_counts(0), (1, 0));
 	});
 }
 
@@ -1013,20 +1026,25 @@ fn refund_other_works() {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::set_team(RuntimeOrigin::signed(1), 0, 1, 1, 2));
 		assert!(!Account::<Test>::contains_key(0, &3));
+		assert_eq!(asset_account_counts(0), (0, 0));
 
 		// success case; freezer is depositor
 		assert_ok!(Assets::touch_other(RuntimeOrigin::signed(2), 0, 3));
 		assert_eq!(Balances::reserved_balance(&2), 10);
+		assert_eq!(asset_account_counts(0), (1, 0));
 		assert_ok!(Assets::refund_other(RuntimeOrigin::signed(2), 0, 3));
 		assert_eq!(Balances::reserved_balance(&2), 0);
 		assert!(!Account::<Test>::contains_key(0, &3));
+		assert_eq!(asset_account_counts(0), (0, 0));
 
 		// success case; admin is depositor
 		assert_ok!(Assets::touch_other(RuntimeOrigin::signed(1), 0, 3));
 		assert_eq!(Balances::reserved_balance(&1), 10);
+		assert_eq!(asset_account_counts(0), (1, 0));
 		assert_ok!(Assets::refund_other(RuntimeOrigin::signed(1), 0, 3));
 		assert_eq!(Balances::reserved_balance(&1), 0);
 		assert!(!Account::<Test>::contains_key(0, &3));
+		assert_eq!(asset_account_counts(0), (0, 0));
 	})
 }
 
