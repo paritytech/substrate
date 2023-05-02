@@ -474,14 +474,6 @@ where
 						break EndProposingReason::HitBlockWeightLimit
 					}
 				},
-				Err(e) if skipped > 0 => {
-					pending_iterator.report_invalid(&pending_tx);
-					trace!(
-						"[{:?}] Ignoring invalid transaction when skipping: {}",
-						pending_tx_hash,
-						e
-					);
-				},
 				Err(e) => {
 					pending_iterator.report_invalid(&pending_tx);
 					debug!("[{:?}] Invalid transaction: {}", pending_tx_hash, e);
@@ -740,8 +732,11 @@ mod tests {
 		);
 	}
 
+	// This test ensures that if one transaction of a user was rejected, because for example
+	// the weight limit was hit, we don't mark the other transactions of the user as invalid because
+	// the nonce is not matching.
 	#[test]
-	fn should_not_remove_invalid_transactions_when_skipping() {
+	fn should_not_remove_invalid_transactions_from_the_same_sender_after_one_was_invalid() {
 		// given
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();

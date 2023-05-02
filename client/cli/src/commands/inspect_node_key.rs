@@ -34,13 +34,11 @@ use std::{
 )]
 pub struct InspectNodeKeyCmd {
 	/// Name of file to read the secret key from.
-	///
 	/// If not given, the secret key is read from stdin (up to EOF).
 	#[arg(long)]
 	file: Option<PathBuf>,
 
 	/// The input is in raw binary format.
-	///
 	/// If not given, the input is read as an hex encoded string.
 	#[arg(long)]
 	bin: bool,
