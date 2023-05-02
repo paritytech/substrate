@@ -2140,7 +2140,7 @@ fn post_runtime_upgrade_detects_storage_version_issues() {
 		// any storage version "enabled".
 		assert!(ExecutiveWithUpgradePallet4::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost)
 			.unwrap_err()
-			.contains("On chain storage version set, while pallet doesn't"));
+			.contains("On chain storage version set, while the pallet doesn't"));
 	});
 }
 
