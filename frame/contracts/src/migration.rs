@@ -378,20 +378,21 @@ mod test {
 	use super::*;
 	use crate::tests::{ExtBuilder, Test};
 
-	#[derive(frame_support::DefaultNoBound, Encode, Decode, MaxEncodedLen)]
-	struct MockMigration<const N: u16, T: Config> {
-		_phantom: sp_std::marker::PhantomData<T>,
-		last_key: u16,
+	#[derive(Default, Encode, Decode, MaxEncodedLen)]
+	struct MockMigration<const N: u16> {
+		// MockMigration<N> needs `N` steps to finish
+		count: u16,
 	}
 
-	impl<const N: u16, T: Config> Migrate for MockMigration<N, T> {
+	impl<const N: u16> Migrate for MockMigration<N> {
 		const VERSION: u16 = N;
 		fn max_step_weight() -> Weight {
 			Weight::from_all(1)
 		}
 		fn step(&mut self) -> (IsFinished, Weight) {
-			self.last_key += 1;
-			if self.last_key == N {
+			assert!(self.count != N);
+			self.count += 1;
+			if self.count == N {
 				(IsFinished::Yes, Weight::from_all(1))
 			} else {
 				(IsFinished::No, Weight::from_all(1))
@@ -408,13 +409,13 @@ mod test {
 
 	#[test]
 	fn version_range_works() {
-		let range = <(MockMigration<1, Test>, MockMigration<2, Test>)>::VERSION_RANGE;
+		let range = <(MockMigration<1>, MockMigration<2>)>::VERSION_RANGE;
 		assert_eq!(range, (1, 2));
 	}
 
 	#[test]
 	fn is_upgrade_supported_works() {
-		type M = (MockMigration<7, Test>, MockMigration<8, Test>, MockMigration<9, Test>);
+		type M = (MockMigration<7>, MockMigration<8>, MockMigration<9>);
 
 		[(1, 1), (6, 9), (8, 9)].into_iter().for_each(|(from, to)| {
 			assert!(
@@ -437,7 +438,7 @@ mod test {
 
 	#[test]
 	fn steps_works() {
-		type M = (MockMigration<2, Test>, MockMigration<3, Test>);
+		type M = (MockMigration<2>, MockMigration<3>);
 		let version = StorageVersion::new(2);
 		let cursor = M::new(version);
 
@@ -452,7 +453,7 @@ mod test {
 
 	#[test]
 	fn no_migration_performed_works() {
-		type M = (MockMigration<2, Test>, MockMigration<3, Test>);
+		type M = (MockMigration<2>, MockMigration<3>);
 		type TestMigration = Migration<Test, M>;
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -462,7 +463,7 @@ mod test {
 
 	#[test]
 	fn migration_works() {
-		type M = (MockMigration<1, Test>, MockMigration<2, Test>);
+		type M = (MockMigration<1>, MockMigration<2>);
 		type TestMigration = Migration<Test, M>;
 
 		ExtBuilder::default().build().execute_with(|| {
