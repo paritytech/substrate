@@ -25,7 +25,7 @@ use frame_support::{
 	traits::{Get, OnRuntimeUpgrade},
 	Identity, Twox64Concat,
 };
-use sp_runtime::traits::Saturating;
+use sp_runtime::{traits::Saturating, TryRuntimeError, TryRuntimeResult};
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// Performs all necessary migrations based on `StorageVersion`.
@@ -66,7 +66,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		let version = <Pallet<T>>::on_chain_storage_version();
 
 		if version == 7 {
@@ -77,7 +77,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> DispatchResult {
+	fn post_upgrade(state: Vec<u8>) -> TryRuntimeResult {
 		let version = Decode::decode(&mut state.as_ref()).map_err(|_| "Cannot decode version")?;
 		post_checks::post_upgrade::<T>(version)
 	}
@@ -355,7 +355,7 @@ mod v8 {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	pub fn pre_upgrade<T: Config>() -> Result<(), DispatchError> {
+	pub fn pre_upgrade<T: Config>() -> Result<(), TryRuntimeError> {
 		use frame_support::traits::ReservableCurrency;
 		for (key, value) in ContractInfoOf::<T, OldContractInfo<T>>::iter() {
 			let reserved = T::Currency::reserved_balance(&key);
@@ -418,7 +418,7 @@ mod post_checks {
 	type ContractInfoOf<T: Config, V> =
 		StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, V>;
 
-	pub fn post_upgrade<T: Config>(old_version: StorageVersion) -> DispatchResult {
+	pub fn post_upgrade<T: Config>(old_version: StorageVersion) -> TryRuntimeResult {
 		if old_version < 7 {
 			return Ok(())
 		}
@@ -434,7 +434,7 @@ mod post_checks {
 		Ok(())
 	}
 
-	fn v8<T: Config>() -> DispatchResult {
+	fn v8<T: Config>() -> TryRuntimeResult {
 		use frame_support::traits::ReservableCurrency;
 		for (key, value) in ContractInfoOf::<T, ContractInfo<T>>::iter() {
 			let reserved = T::Currency::reserved_balance(&key);
@@ -461,7 +461,7 @@ mod post_checks {
 		Ok(())
 	}
 
-	fn v9<T: Config>() -> DispatchResult {
+	fn v9<T: Config>() -> TryRuntimeResult {
 		for value in CodeStorage::<T>::iter_values() {
 			ensure!(
 				value.determinism == Determinism::Enforced,

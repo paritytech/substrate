@@ -22,6 +22,8 @@ use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use frame_support::{pallet_prelude::*, storage_alias, traits::OnRuntimeUpgrade};
 use log;
 
+use sp_runtime::{TryRuntimeError, TryRuntimeResult};
+
 /// Initial version of storage types.
 pub mod v0 {
 	use super::*;
@@ -95,7 +97,7 @@ pub mod v1 {
 	pub struct MigrateV0ToV1<T, I = ()>(PhantomData<(T, I)>);
 	impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for MigrateV0ToV1<T, I> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			let onchain_version = Pallet::<T, I>::on_chain_storage_version();
 			ensure!(onchain_version == 0, "migration from version 0 to 1.");
 			let referendum_count = v0::ReferendumInfoFor::<T, I>::iter().count();
@@ -147,7 +149,7 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> DispatchResult {
+		fn post_upgrade(state: Vec<u8>) -> TryRuntimeResult {
 			let onchain_version = Pallet::<T, I>::on_chain_storage_version();
 			ensure!(onchain_version == 1, "must upgrade from version 0 to 1.");
 			let pre_referendum_count: u32 = Decode::decode(&mut &state[..])

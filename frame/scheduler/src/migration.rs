@@ -19,6 +19,7 @@
 
 use super::*;
 use frame_support::traits::OnRuntimeUpgrade;
+use sp_runtime::{TryRuntimeError, TryRuntimeResult};
 
 /// The log target.
 const TARGET: &'static str = "runtime::scheduler::migration";
@@ -97,7 +98,7 @@ pub mod v3 {
 
 	impl<T: Config<Hash = PreimageHash>> OnRuntimeUpgrade for MigrateToV4<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			ensure!(StorageVersion::get::<Pallet<T>>() == 3, "Can only upgrade from version 3");
 
 			let agendas = Agenda::<T>::iter_keys().count() as u32;
@@ -125,9 +126,7 @@ pub mod v3 {
 						agenda.len(),
 						max_scheduled_per_block,
 					);
-					return Err(DispatchError::Other(
-						"Agenda would overflow `MaxScheduledPerBlock`.",
-					))
+					return Err("Agenda would overflow `MaxScheduledPerBlock`.".into())
 				}
 			}
 			// Check that bounding the calls will not overflow `MAX_LENGTH`.
@@ -144,7 +143,7 @@ pub mod v3 {
 									block_number,
 									l,
 								);
-								return Err(DispatchError::Other("Call is too large."))
+								return Err("Call is too large.".into())
 							}
 						},
 						_ => (),
@@ -171,7 +170,7 @@ pub mod v3 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> DispatchResult {
+		fn post_upgrade(state: Vec<u8>) -> TryRuntimeResult {
 			ensure!(StorageVersion::get::<Pallet<T>>() == 4, "Must upgrade");
 
 			// Check that everything decoded fine.
@@ -212,7 +211,7 @@ pub mod v4 {
 
 	impl<T: Config> OnRuntimeUpgrade for CleanupAgendas<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			assert_eq!(
 				StorageVersion::get::<Pallet<T>>(),
 				4,
@@ -287,7 +286,7 @@ pub mod v4 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> DispatchResult {
+		fn post_upgrade(state: Vec<u8>) -> TryRuntimeResult {
 			ensure!(StorageVersion::get::<Pallet<T>>() == 4, "Version must not change");
 
 			let (old_agendas, non_empty_agendas): (u32, u32) =

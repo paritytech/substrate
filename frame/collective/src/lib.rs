@@ -60,6 +60,9 @@ use frame_support::{
 	weights::Weight,
 };
 
+#[cfg(any(feature = "try-runtime", test))]
+use sp_runtime::TryRuntimeResult;
+
 #[cfg(test)]
 mod tests;
 
@@ -352,7 +355,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: BlockNumberFor<T>) -> DispatchResult {
+		fn try_state(_n: BlockNumberFor<T>) -> TryRuntimeResult {
 			Self::do_try_state()
 		}
 	}
@@ -972,13 +975,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Looking at prime account:
 	/// * The prime account must be a member of the collective.
 	#[cfg(any(feature = "try-runtime", test))]
-	fn do_try_state() -> DispatchResult {
-		Self::proposals().into_iter().try_for_each(|proposal| -> DispatchResult {
+	fn do_try_state() -> TryRuntimeResult {
+		Self::proposals().into_iter().try_for_each(|proposal| -> TryRuntimeResult {
 			ensure!(
 				Self::proposal_of(proposal).is_some(),
-				DispatchError::Other(
-					"Proposal hash from `Proposals` is not found inside the `ProposalOf` mapping."
-				)
+				"Proposal hash from `Proposals` is not found inside the `ProposalOf` mapping."
 			);
 			Ok(())
 		})?;
@@ -992,7 +993,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			"Proposal count inside `Proposals` is not equal to the proposal count in `ProposalOf`"
 		);
 
-		Self::proposals().into_iter().try_for_each(|proposal| -> DispatchResult {
+		Self::proposals().into_iter().try_for_each(|proposal| -> TryRuntimeResult {
 			if let Some(votes) = Self::voting(proposal) {
 				let ayes = votes.ayes.len();
 				let nays = votes.nays.len();
@@ -1006,7 +1007,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})?;
 
 		let mut proposal_indices = vec![];
-		Self::proposals().into_iter().try_for_each(|proposal| -> DispatchResult {
+		Self::proposals().into_iter().try_for_each(|proposal| -> TryRuntimeResult {
 			if let Some(votes) = Self::voting(proposal) {
 				let proposal_index = votes.index;
 				ensure!(
@@ -1018,12 +1019,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(())
 		})?;
 
-		<Voting<T, I>>::iter_keys().try_for_each(|proposal_hash| -> DispatchResult {
+		<Voting<T, I>>::iter_keys().try_for_each(|proposal_hash| -> TryRuntimeResult {
 			ensure!(
 				Self::proposals().contains(&proposal_hash),
-				DispatchError::Other(
-					"`Proposals` doesn't contain the proposal hash from the `Voting` storage map."
-				)
+				"`Proposals` doesn't contain the proposal hash from the `Voting` storage map."
 			);
 			Ok(())
 		})?;

@@ -25,10 +25,9 @@ use frame_support::{
 use sp_std::collections::btree_map::BTreeMap;
 
 #[cfg(feature = "try-runtime")]
-use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
-	ensure,
-};
+use frame_support::ensure;
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
 
 /// The log target.
 const TARGET: &'static str = "runtime::preimage::migration::v1";
@@ -84,7 +83,7 @@ pub mod v1 {
 
 	impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			ensure!(StorageVersion::get::<Pallet<T>>() == 0, "can only upgrade from version 0");
 
 			let images = v0::image_count::<T>().expect("v0 storage corrupted");

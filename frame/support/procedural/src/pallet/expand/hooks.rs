@@ -18,7 +18,7 @@
 use crate::pallet::Def;
 
 #[cfg(feature = "try-runtime")]
-use crate::dispatch::{DispatchError, DispatchResult};
+use sp_runtime::{TryRuntimeError, TryRuntimeResult};
 
 /// * implement the individual traits using the Hooks trait
 pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {

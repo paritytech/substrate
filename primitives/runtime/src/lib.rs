@@ -775,6 +775,12 @@ pub type ApplyExtrinsicResult =
 pub type ApplyExtrinsicResultWithInfo<T> =
 	Result<DispatchResultWithInfo<T>, transaction_validity::TransactionValidityError>;
 
+/// The error type used as return type in try runtime hooks.
+pub type TryRuntimeError = DispatchError;
+
+/// Used in try runtime hooks whenever there is no return value.
+pub type TryRuntimeResult = Result<(), TryRuntimeError>;
+
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
 pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(

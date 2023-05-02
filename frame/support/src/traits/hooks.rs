@@ -23,7 +23,7 @@ use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
 #[cfg(feature = "try-runtime")]
-use crate::dispatch::{DispatchError, DispatchResult};
+use sp_runtime::{TryRuntimeError, TryRuntimeResult};
 
 /// The block initialization trait.
 ///
@@ -139,7 +139,7 @@ pub trait OnRuntimeUpgrade {
 	/// Same as `on_runtime_upgrade`, but perform the optional `pre_upgrade` and `post_upgrade` as
 	/// well.
 	#[cfg(feature = "try-runtime")]
-	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, DispatchError> {
+	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
 		let maybe_state = if checks {
 			let _guard = frame_support::StorageNoopGuard::default();
 			let state = Self::pre_upgrade()?;
@@ -170,7 +170,7 @@ pub trait OnRuntimeUpgrade {
 	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
 	/// inaccurate.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		Ok(Vec::new())
 	}
 
@@ -185,7 +185,7 @@ pub trait OnRuntimeUpgrade {
 	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
 	/// inaccurate.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> DispatchResult {
+	fn post_upgrade(_state: Vec<u8>) -> TryRuntimeResult {
 		Ok(())
 	}
 }
@@ -204,7 +204,7 @@ impl OnRuntimeUpgrade for Tuple {
 	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
 	/// hooks for tuples are a noop.
 	#[cfg(feature = "try-runtime")]
-	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, DispatchError> {
+	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
 		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::try_on_runtime_upgrade(checks)?); )* );
 		Ok(weight)
@@ -280,7 +280,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// This hook should not alter any storage.
 	#[cfg(feature = "try-runtime")]
-	fn try_state(_n: BlockNumber) -> DispatchResult {
+	fn try_state(_n: BlockNumber) -> TryRuntimeResult {
 		Ok(())
 	}
 
@@ -292,7 +292,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		Ok(Vec::new())
 	}
 
@@ -304,7 +304,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> DispatchResult {
+	fn post_upgrade(_state: Vec<u8>) -> TryRuntimeResult {
 		Ok(())
 	}
 
@@ -386,13 +386,13 @@ mod tests {
 					}
 
 					#[cfg(feature = "try-runtime")]
-					fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+					fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 						Pre::mutate(|s| s.push(stringify!($name)));
 						Ok(Vec::new())
 					}
 
 					#[cfg(feature = "try-runtime")]
-					fn post_upgrade(_: Vec<u8>) -> DispatchResult {
+					fn post_upgrade(_: Vec<u8>) -> TryRuntimeResult {
 						Post::mutate(|s| s.push(stringify!($name)));
 						Ok(())
 					}

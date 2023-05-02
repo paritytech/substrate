@@ -21,7 +21,8 @@ use crate::{
 	ListBags, ListNodes,
 };
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
-use frame_support::{assert_ok, assert_storage_noop, dispatch::DispatchError};
+use frame_support::{assert_ok, assert_storage_noop};
+use sp_runtime::TryRuntimeError;
 
 fn node(
 	id: AccountId,
@@ -361,7 +362,7 @@ mod list {
 			Bag::<Runtime>::get(10).unwrap().insert_unchecked(2, 10);
 			assert_eq!(
 				List::<Runtime>::do_try_state(),
-				DispatchError::Other("duplicate identified").into()
+				TryRuntimeError::Other("duplicate identified").into()
 			);
 		});
 
@@ -378,7 +379,7 @@ mod list {
 
 			assert_eq!(
 				List::<Runtime>::do_try_state(),
-				DispatchError::Other("iter_count != stored_count").into()
+				TryRuntimeError::Other("iter_count != stored_count").into()
 			);
 		});
 	}

@@ -43,7 +43,7 @@ use sp_std::{
 };
 
 #[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
-use frame_support::dispatch::DispatchResult;
+use sp_runtime::TryRuntimeResult;
 
 #[derive(Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, PalletError)]
 pub enum ListError {
@@ -515,7 +515,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// * and sanity-checks all bags and nodes. This will cascade down all the checks and makes sure
 	/// all bags and nodes are checked per *any* update to `List`.
 	#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
-	pub(crate) fn do_try_state() -> DispatchResult {
+	pub(crate) fn do_try_state() -> TryRuntimeResult {
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
 			Self::iter().map(|node| node.id).all(|id| seen_in_list.insert(id)),
@@ -753,7 +753,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 	/// * Ensures tail has no next.
 	/// * Ensures there are no loops, traversal from head to tail is correct.
 	#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
-	fn do_try_state(&self) -> DispatchResult {
+	fn do_try_state(&self) -> TryRuntimeResult {
 		frame_support::ensure!(
 			self.head()
 				.map(|head| head.prev().is_none())
@@ -898,7 +898,7 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 	}
 
 	#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
-	fn do_try_state(&self) -> DispatchResult {
+	fn do_try_state(&self) -> TryRuntimeResult {
 		let expected_bag = Bag::<T, I>::get(self.bag_upper).ok_or("bag not found for node")?;
 
 		let id = self.id();

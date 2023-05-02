@@ -26,10 +26,9 @@ pub mod v1 {
 	use sp_std::prelude::*;
 
 	#[cfg(feature = "try-runtime")]
-	use frame_support::{
-		dispatch::{DispatchError, DispatchResult},
-		ensure,
-	};
+	use frame_support::ensure;
+	#[cfg(feature = "try-runtime")]
+	use sp_runtime::{TryRuntimeError, TryRuntimeResult};
 
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
@@ -71,7 +70,7 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			ensure!(
 				Pallet::<T>::on_chain_storage_version() == 0,
 				"The onchain storage version must be zero for the migration to execute."
@@ -80,7 +79,7 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: Vec<u8>) -> DispatchResult {
+		fn post_upgrade(_: Vec<u8>) -> TryRuntimeResult {
 			ensure!(
 				Pallet::<T>::on_chain_storage_version() == 1,
 				"The onchain version must be updated after the migration."

@@ -16,8 +16,6 @@
 // limitations under the License.
 
 #[cfg(feature = "try-runtime")]
-use crate::dispatch::{DispatchError, DispatchResult};
-#[cfg(feature = "try-runtime")]
 use crate::storage::unhashed::contains_prefixed_key;
 use crate::{
 	traits::{GetStorageVersion, PalletInfoAccess},
@@ -160,7 +158,7 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		let hashed_prefix = twox_128(P::get().as_bytes());
 		match contains_prefixed_key(&hashed_prefix) {
 			true => log::info!("Found {} keys pre-removal 👀", P::get()),
@@ -173,14 +171,12 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> DispatchResult {
+	fn post_upgrade(_state: Vec<u8>) -> sp_runtime::TryRuntimeResult {
 		let hashed_prefix = twox_128(P::get().as_bytes());
 		match contains_prefixed_key(&hashed_prefix) {
 			true => {
 				log::error!("{} has keys remaining post-removal ❗", P::get());
-				return Err(DispatchError::Other(
-					"Keys remaining post-removal, this should never happen 🚨",
-				))
+				return Err("Keys remaining post-removal, this should never happen 🚨".into())
 			},
 			false => log::info!("No {} keys found post-removal 🎉", P::get()),
 		};

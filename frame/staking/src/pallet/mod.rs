@@ -824,7 +824,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(n: BlockNumberFor<T>) -> DispatchResult {
+		fn try_state(n: BlockNumberFor<T>) -> sp_runtime::TryRuntimeResult {
 			Self::do_try_state(n)
 		}
 	}

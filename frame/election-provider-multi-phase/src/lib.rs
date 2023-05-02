@@ -258,7 +258,7 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 #[cfg(feature = "try-runtime")]
-use frame_support::dispatch::DispatchResult;
+use sp_runtime::TryRuntimeResult;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -886,7 +886,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> DispatchResult {
+		fn try_state(_n: T::BlockNumber) -> TryRuntimeResult {
 			Self::do_try_state()
 		}
 	}
@@ -1582,7 +1582,7 @@ impl<T: Config> Pallet<T> {
 
 #[cfg(feature = "try-runtime")]
 impl<T: Config> Pallet<T> {
-	fn do_try_state() -> DispatchResult {
+	fn do_try_state() -> TryRuntimeResult {
 		Self::try_state_snapshot()?;
 		Self::try_state_signed_submissions_map()?;
 		Self::try_state_phase_off()
@@ -1591,7 +1591,7 @@ impl<T: Config> Pallet<T> {
 	// [`Snapshot`] state check. Invariants:
 	// - [`DesiredTargets`] exists if and only if [`Snapshot`] is present.
 	// - [`SnapshotMetadata`] exist if and only if [`Snapshot`] is present.
-	fn try_state_snapshot() -> DispatchResult {
+	fn try_state_snapshot() -> TryRuntimeResult {
 		if <Snapshot<T>>::exists() &&
 			<SnapshotMetadata<T>>::exists() &&
 			<DesiredTargets<T>>::exists()
@@ -1603,7 +1603,7 @@ impl<T: Config> Pallet<T> {
 		{
 			Ok(())
 		} else {
-			Err(DispatchError::Other("If snapshot exists, metadata and desired targets should be set too. Otherwise, none should be set."))
+			Err("If snapshot exists, metadata and desired targets should be set too. Otherwise, none should be set.".into())
 		}
 	}
 
@@ -1611,43 +1611,44 @@ impl<T: Config> Pallet<T> {
 	// - All [`SignedSubmissionIndices`] are present in [`SignedSubmissionsMap`], and no more;
 	// - [`SignedSubmissionNextIndex`] is not present in [`SignedSubmissionsMap`];
 	// - [`SignedSubmissionIndices`] is sorted by election score.
-	fn try_state_signed_submissions_map() -> DispatchResult {
+	fn try_state_signed_submissions_map() -> TryRuntimeResult {
 		let mut last_score: ElectionScore = Default::default();
 		let indices = <SignedSubmissionIndices<T>>::get();
 
 		for (i, indice) in indices.iter().enumerate() {
 			let submission = <SignedSubmissionsMap<T>>::get(indice.2);
 			if submission.is_none() {
-				return Err(DispatchError::Other(
-					"All signed submissions indices must be part of the submissions map",
-				))
+				return Err(
+					"All signed submissions indices must be part of the submissions map".into()
+				)
 			}
 
 			if i == 0 {
 				last_score = indice.0
 			} else {
 				if last_score.strict_threshold_better(indice.0, Perbill::zero()) {
-					return Err(DispatchError::Other(
-						"Signed submission indices vector must be ordered by election score",
-					))
+					return Err(
+						"Signed submission indices vector must be ordered by election score".into()
+					)
 				}
 				last_score = indice.0;
 			}
 		}
 
 		if <SignedSubmissionsMap<T>>::iter().nth(indices.len()).is_some() {
-			return Err(DispatchError::Other(
-				"Signed submissions map length should be the same as the indices vec length",
-			))
+			return Err(
+				"Signed submissions map length should be the same as the indices vec length".into()
+			)
 		}
 
 		match <SignedSubmissionNextIndex<T>>::get() {
 			0 => Ok(()),
 			next =>
 				if <SignedSubmissionsMap<T>>::get(next).is_some() {
-					return Err(DispatchError::Other(
-						"The next submissions index should not be in the submissions maps already",
-					))
+					return Err(
+						"The next submissions index should not be in the submissions maps already"
+							.into(),
+					)
 				} else {
 					Ok(())
 				},
@@ -1656,12 +1657,12 @@ impl<T: Config> Pallet<T> {
 
 	// [`Phase::Off`] state check. Invariants:
 	// - If phase is `Phase::Off`, [`Snapshot`] must be none.
-	fn try_state_phase_off() -> DispatchResult {
+	fn try_state_phase_off() -> TryRuntimeResult {
 		match Self::current_phase().is_off() {
 			false => Ok(()),
 			true =>
 				if <Snapshot<T>>::get().is_some() {
-					Err(DispatchError::Other("Snapshot must be none when in Phase::Off"))
+					Err("Snapshot must be none when in Phase::Off".into())
 				} else {
 					Ok(())
 				},

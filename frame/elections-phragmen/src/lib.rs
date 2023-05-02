@@ -116,7 +116,7 @@ use sp_runtime::{
 use sp_std::{cmp::Ordering, prelude::*};
 
 #[cfg(any(feature = "try-runtime", test))]
-use frame_support::dispatch::DispatchResult;
+use sp_runtime::TryRuntimeResult;
 
 mod benchmarking;
 pub mod weights;
@@ -330,7 +330,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> DispatchResult {
+		fn try_state(_n: T::BlockNumber) -> TryRuntimeResult {
 			Self::do_try_state()
 		}
 	}
@@ -1202,7 +1202,7 @@ impl<T: Config> ContainsLengthBound for Pallet<T> {
 
 #[cfg(any(feature = "try-runtime", test))]
 impl<T: Config> Pallet<T> {
-	fn do_try_state() -> DispatchResult {
+	fn do_try_state() -> TryRuntimeResult {
 		Self::try_state_members()?;
 		Self::try_state_runners_up()?;
 		Self::try_state_candidates()?;
@@ -1213,7 +1213,7 @@ impl<T: Config> Pallet<T> {
 
 	/// [`Members`] state checks. Invariants:
 	///  - Members are always sorted based on account ID.
-	fn try_state_members() -> DispatchResult {
+	fn try_state_members() -> TryRuntimeResult {
 		let mut members = Members::<T>::get().clone();
 		members.sort_by_key(|m| m.who.clone());
 
@@ -1228,7 +1228,7 @@ impl<T: Config> Pallet<T> {
 
 	// [`RunnersUp`] state checks. Invariants:
 	//  - Elements are sorted based on weight (worst to best).
-	fn try_state_runners_up() -> DispatchResult {
+	fn try_state_runners_up() -> TryRuntimeResult {
 		let mut sorted = RunnersUp::<T>::get();
 		// worst stake first
 		sorted.sort_by(|a, b| a.stake.cmp(&b.stake));
@@ -1244,7 +1244,7 @@ impl<T: Config> Pallet<T> {
 
 	// [`Candidates`] state checks. Invariants:
 	//  - Always sorted based on account ID.
-	fn try_state_candidates() -> DispatchResult {
+	fn try_state_candidates() -> TryRuntimeResult {
 		let mut candidates = Candidates::<T>::get().clone();
 		candidates.sort_by_key(|(c, _)| c.clone());
 
@@ -1258,7 +1258,7 @@ impl<T: Config> Pallet<T> {
 	}
 	// [`Candidates`] and [`RunnersUp`] state checks. Invariants:
 	//  - Candidates and runners-ups sets are disjoint.
-	fn try_state_candidates_runners_up_disjoint() -> DispatchResult {
+	fn try_state_candidates_runners_up_disjoint() -> TryRuntimeResult {
 		match Self::intersects(&Self::candidates_ids(), &Self::runners_up_ids()) {
 			true => Err(DispatchError::Other(
 				"Candidates and runners up sets should always be disjoint",
@@ -1270,7 +1270,7 @@ impl<T: Config> Pallet<T> {
 	// [`Members`], [`Candidates`] and [`RunnersUp`] state checks. Invariants:
 	//  - Members and candidates sets are disjoint;
 	//  - Members and runners-ups sets are disjoint.
-	fn try_state_members_disjoint() -> DispatchResult {
+	fn try_state_members_disjoint() -> TryRuntimeResult {
 		match Self::intersects(&Pallet::<T>::members_ids(), &Self::candidates_ids()) &&
 			Self::intersects(&Pallet::<T>::members_ids(), &Self::runners_up_ids())
 		{
@@ -1284,7 +1284,7 @@ impl<T: Config> Pallet<T> {
 	// [`Members`], [`RunnersUp`] and approval stake state checks. Invariants:
 	// - Selected members should have approval stake;
 	// - Selected RunnersUp should have approval stake.
-	fn try_state_members_approval_stake() -> DispatchResult {
+	fn try_state_members_approval_stake() -> TryRuntimeResult {
 		match Members::<T>::get()
 			.iter()
 			.chain(RunnersUp::<T>::get().iter())

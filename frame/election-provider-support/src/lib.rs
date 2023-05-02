@@ -190,7 +190,7 @@ pub use sp_npos_elections::{
 pub use traits::NposSolution;
 
 #[cfg(feature = "try-runtime")]
-use frame_support::dispatch::DispatchResult;
+use sp_runtime::TryRuntimeResult;
 
 // re-export for the solution macro, with the dependencies of the macro.
 #[doc(hidden)]
@@ -567,7 +567,7 @@ pub trait SortedListProvider<AccountId> {
 
 	/// Check internal state of the list. Only meant for debugging.
 	#[cfg(feature = "try-runtime")]
-	fn try_state() -> DispatchResult;
+	fn try_state() -> TryRuntimeResult;
 
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.
