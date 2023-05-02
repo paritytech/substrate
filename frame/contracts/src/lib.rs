@@ -131,7 +131,7 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
 	exec::Frame,
-	migration::Migration,
+	migration::*,
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 	wasm::Determinism,
@@ -177,7 +177,11 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
+	#[cfg(not(test))]
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(9);
+
+	#[cfg(test)]
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -314,10 +318,14 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
-			// TODO: run migration here
-			if Migration::<T>::ensure_migrated().is_err() {
-				return T::DbWeight::get().reads(1)
-			}
+			use MigrateResult::*;
+
+			let remaining_weight = match Migration::<T>::migrate(remaining_weight) {
+				(InProgress, weight) => return remaining_weight.saturating_sub(weight),
+				(NoMigrationPerformed | Completed, weight) =>
+					remaining_weight.saturating_sub(weight),
+			};
+
 			ContractInfo::<T>::process_deletion_queue_batch(remaining_weight)
 				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
 		}
@@ -724,15 +732,24 @@ pub mod pallet {
 			)
 		}
 
-		/// TODO: add benchmark for base weight
-		/// TODO: add a minimum weight limit so that people don't spam small free extrinsics
 		#[pallet::call_index(9)]
-		#[pallet::weight(*weight_limit)]
+		#[pallet::weight(T::WeightInfo::migrate().saturating_add(*weight_limit))]
 		pub fn migrate(origin: OriginFor<T>, weight_limit: Weight) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
-			Migration::<T>::migrate(weight_limit)
-				.map(|weight| PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No })
-				.map_err(|(weight, error)| error.with_weight(weight))
+			ensure!(
+				weight_limit.any_gt(T::WeightInfo::migrate().saturating_mul(10)),
+				Error::<T>::MigrateWeightLimitTooLow
+			);
+
+			use MigrateResult::*;
+			match Migration::<T>::migrate(weight_limit) {
+				(InProgress | Completed, weight) =>
+					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
+				(NoMigrationPerformed, weight) => {
+					let err: DispatchError = <Error<T>>::NoMigrationPerformed.into();
+					Err(err.with_weight(weight))
+				},
+			}
 		}
 	}
 
@@ -886,8 +903,12 @@ pub mod pallet {
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
+		/// A pending migration needs to complete before the extrinsic can be called.
 		MigrationInProgress,
+		/// Migrate dispatch call was attempted but no migration was performed.
 		NoMigrationPerformed,
+		/// The weight limit for a migration dispatch call was too low.
+		MigrateWeightLimitTooLow,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.

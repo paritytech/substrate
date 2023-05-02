@@ -18,25 +18,46 @@
 //! Update `CodeStorage` with the new `determinism` field.
 
 use crate::{
-	migration::{IsFinished, Migrate, PROOF_DECODE},
-	CodeHash, Config, Determinism, Pallet, Weight,
+	migration::{IsFinished, Migrate},
+	weights::WeightInfo,
+	CodeHash, Config, Determinism, Pallet, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode};
 use frame_support::{
-	codec, pallet_prelude::*, storage, storage_alias, traits::Get, BoundedVec, DefaultNoBound,
-	Identity, StoragePrefixedMap,
+	codec, pallet_prelude::*, storage_alias, BoundedVec, DefaultNoBound, Identity,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
-#[derive(Encode, Decode)]
-struct OldPrefabWasmModule {
-	#[codec(compact)]
-	pub instruction_weights_version: u32,
-	#[codec(compact)]
-	pub initial: u32,
-	#[codec(compact)]
-	pub maximum: u32,
-	pub code: Vec<u8>,
+mod old {
+	use super::*;
+
+	#[derive(Encode, Decode)]
+	pub struct PrefabWasmModule {
+		#[codec(compact)]
+		pub instruction_weights_version: u32,
+		#[codec(compact)]
+		pub initial: u32,
+		#[codec(compact)]
+		pub maximum: u32,
+		pub code: Vec<u8>,
+	}
+
+	#[storage_alias]
+	pub type CodeStorage<T: Config> =
+		StorageMap<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+pub fn store_old_dummy_code<T: Config>(len: usize) {
+	use sp_runtime::traits::Hash;
+	let module = old::PrefabWasmModule {
+		instruction_weights_version: 0,
+		initial: 0,
+		maximum: 0,
+		code: vec![42u8; len],
+	};
+	let hash = T::Hashing::hash(&module.code);
+	old::CodeStorage::<T>::insert(hash, module);
 }
 
 #[derive(Encode, Decode)]
@@ -52,9 +73,6 @@ struct PrefabWasmModule {
 }
 
 #[storage_alias]
-type OldCodeStorage<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, OldPrefabWasmModule>;
-
-#[storage_alias]
 type CodeStorage<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
@@ -63,22 +81,23 @@ pub struct Migration<T: Config> {
 	_phantom: PhantomData<T>,
 }
 
-impl<T: Config> Migrate<T> for Migration<T> {
+impl<T: Config> Migrate for Migration<T> {
 	const VERSION: u16 = 9;
 
 	fn max_step_weight() -> Weight {
-		// TODO: benchmark step
-		Weight::from_parts(0, 0)
+		T::WeightInfo::v9_translate_wasm_module(T::MaxCodeLen::get())
 	}
 
-	fn step(&mut self) -> (IsFinished, Option<Weight>) {
+	fn step(&mut self) -> (IsFinished, Weight) {
 		let mut iter = if let Some(last_key) = self.last_key.take() {
-			OldCodeStorage::<T>::iter_from(last_key.to_vec())
+			old::CodeStorage::<T>::iter_from(last_key.to_vec())
 		} else {
-			OldCodeStorage::<T>::iter()
+			old::CodeStorage::<T>::iter()
 		};
 
 		if let Some((key, old)) = iter.next() {
+			log::debug!(target: LOG_TARGET, "Migrating contract code {:?}", key);
+			let len = old.code.len() as u32;
 			let module = PrefabWasmModule {
 				instruction_weights_version: old.instruction_weights_version,
 				initial: old.initial,
@@ -88,9 +107,10 @@ impl<T: Config> Migrate<T> for Migration<T> {
 			};
 			CodeStorage::<T>::insert(key, module);
 			self.last_key = Some(iter.last_raw_key().to_vec().try_into().unwrap());
-			(IsFinished::No, None)
+			(IsFinished::No, T::WeightInfo::v9_translate_wasm_module(len))
 		} else {
-			(IsFinished::Yes, None)
+			log::debug!(target: LOG_TARGET, "No more contracts code to migrate");
+			(IsFinished::Yes, T::WeightInfo::v9_translate_wasm_module(0))
 		}
 	}
 }

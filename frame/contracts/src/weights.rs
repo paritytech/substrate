@@ -166,6 +166,16 @@ pub trait WeightInfo {
 	fn instr_i64shru(r: u32, ) -> Weight;
 	fn instr_i64rotl(r: u32, ) -> Weight;
 	fn instr_i64rotr(r: u32, ) -> Weight;
+
+	// TODO run benchmark to generate
+	fn migrate() -> Weight {
+		Weight::from_parts(0, 0)
+	}
+
+	// TODO run benchmark to generate
+	fn v9_translate_wasm_module(_r: u32, ) -> Weight {
+		Weight::from_parts(0, 0)
+	}
 }
 
 /// Weights for pallet_contracts using the Substrate node and recommended hardware.

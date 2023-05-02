@@ -234,6 +234,16 @@ benchmarks! {
 		Contracts::<T>::reinstrument_module(&mut module, &schedule)?;
 	}
 
+	// This benchmarks the v9 migration cost
+	#[pov_mode = Measured]
+	v9_translate_wasm_module {
+		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
+		migration::v9::store_old_dummy_code::<T>(c as usize);
+		let mut migration = migration::v9::Migration::<T>::default();
+	}: {
+		migration.step();
+	}
+
 	// This benchmarks the overhead of loading a code of size `c` byte from storage and into
 	// the sandbox. This does **not** include the actual execution for which the gas meter
 	// is responsible. This is achieved by generating all code to the `deploy` function
