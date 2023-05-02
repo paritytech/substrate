@@ -65,7 +65,6 @@ pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend: 'static, 
 	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<ExecutorDispatch>,
-	keystore: Option<KeystorePtr>,
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	enable_offchain_indexing_api: bool,
@@ -113,18 +112,11 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			child_storage_extension: Default::default(),
 			genesis_init: Default::default(),
 			_executor: Default::default(),
-			keystore: None,
 			fork_blocks: None,
 			bad_blocks: None,
 			enable_offchain_indexing_api: false,
 			no_genesis: false,
 		}
-	}
-
-	/// Set the keystore that should be used by the externalities.
-	pub fn set_keystore(mut self, keystore: KeystorePtr) -> Self {
-		self.keystore = Some(keystore);
-		self
 	}
 
 	/// Alter the genesis storage parameters.

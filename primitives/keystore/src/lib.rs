@@ -214,7 +214,7 @@ pub trait Keystore: Send + Sync {
 	}
 }
 
-impl Keystore for Arc<dyn Keystore> {
+impl<T: Keystore + ?Sized> Keystore for Arc<T> {
 	fn sr25519_public_keys(&self, key_type: KeyTypeId) -> Vec<sr25519::Public> {
 		(**self).sr25519_public_keys(key_type)
 	}
