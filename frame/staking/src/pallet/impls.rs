@@ -53,7 +53,7 @@ use super::{pallet::*, STAKING_ID};
 
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
-#[cfg(feature = "try-runtime")]
+#[cfg(any(test, feature = "try-runtime"))]
 use sp_runtime::TryRuntimeResult;
 
 /// The maximum number of iterations that we do whilst iterating over `T::VoterList` in
