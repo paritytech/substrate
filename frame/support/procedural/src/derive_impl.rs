@@ -79,44 +79,37 @@ fn combine_impls(
 	foreign_path: Path,
 	disambiguation_path: Path,
 ) -> ItemImpl {
-	let existing_local_keys: HashSet<Ident> = local_impl
+	let (existing_local_keys, existing_unsupported_items): (HashSet<ImplItem>, HashSet<ImplItem>) = local_impl
 		.items
 		.iter()
-		.filter_map(|impl_item| impl_item_ident(impl_item))
 		.cloned()
-		.collect();
-	let existing_unsupported_items: HashSet<ImplItem> = local_impl
-		.items
-		.iter()
-		.filter(|impl_item| impl_item_ident(impl_item).is_none())
-		.cloned()
+		.filter(|impl_item| impl_item_ident(impl_item).is_some())
+		.partition();
+	let existing_local_keys: HashSet<Ident> = existing_local_keys
+		.into_iter()
+		.filter_map(|item| impl_item_ident(item))
 		.collect();
 	let mut final_impl = local_impl;
 	let extended_items = foreign_impl.items.into_iter().filter_map(|item| {
 		if let Some(ident) = impl_item_ident(&item) {
 			if existing_local_keys.contains(&ident) {
 				// do not copy colliding items that have an ident
-				None
-			} else {
-				if matches!(item, ImplItem::Type(_)) {
-					// modify and insert uncolliding type items
-					let modified_item: ImplItem = parse_quote! {
-						type #ident = <#foreign_path as #disambiguation_path>::#ident;
-					};
-					Some(modified_item)
-				} else {
-					// copy uncolliding non-type items that have an ident
-					Some(item)
-				}
+				return None
 			}
+			if matches!(item, ImplItem::Type(_)) {
+				// modify and insert uncolliding type items
+				let modified_item: ImplItem = parse_quote! {
+					type #ident = <#foreign_path as #disambiguation_path>::#ident;
+				};
+				return Some(modified_item)
+			}
+			// copy uncolliding non-type items that have an ident
+			Some(item)
 		} else {
-			if existing_unsupported_items.contains(&item) {
-				// do not copy colliding items that lack an ident
-				None
-			} else {
-				// copy uncolliding items without an ident verbaitm
-				Some(item)
-			}
+			// do not copy colliding items that lack an ident
+			(!existing_unsupported_items.contains(&item))
+				// copy uncolliding items without an ident verbatim
+				.then_some(item)
 		}
 	});
 	final_impl.items.extend(extended_items);
