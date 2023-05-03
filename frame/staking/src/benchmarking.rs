@@ -72,14 +72,13 @@ pub fn create_validator_with_nominators<T: Config>(
 	n: u32,
 	upper_bound: u32,
 	dead: bool,
-	destination: RewardDestination<T::AccountId>,
 ) -> Result<(T::AccountId, Vec<(T::AccountId, T::AccountId)>), &'static str> {
 	// Clean up any existing state.
 	clear_validators_and_nominators::<T>();
 	let mut points_total = 0;
 	let mut points_individual = Vec::new();
 
-	let (v_stash, v_controller) = create_stash_controller::<T>(0, 100, destination.clone())?;
+	let (v_stash, v_controller) = create_stash_controller::<T>(0, 100, RewardDestination::Staked)?;
 	let validator_prefs =
 		ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 	Staking::<T>::validate(RawOrigin::Signed(v_controller).into(), validator_prefs)?;
@@ -94,9 +93,9 @@ pub fn create_validator_with_nominators<T: Config>(
 	// Give the validator n nominators, but keep total users in the system the same.
 	for i in 0..upper_bound {
 		let (n_stash, n_controller) = if !dead {
-			create_stash_controller::<T>(u32::MAX - i, 100, destination.clone())?
+			create_stash_controller::<T>(u32::MAX - i, 100, RewardDestination::Staked)?
 		} else {
-			create_stash_and_dead_controller::<T>(u32::MAX - i, 100, destination.clone())?
+			create_stash_and_dead_payee::<T>(u32::MAX - i, 100)?
 		};
 		if i < n {
 			Staking::<T>::nominate(
@@ -548,8 +547,7 @@ benchmarks! {
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
-			true,
-			RewardDestination::Controller,
+			true
 		)?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
@@ -581,8 +579,7 @@ benchmarks! {
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
-			false,
-			RewardDestination::Staked,
+			false
 		)?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
@@ -976,7 +973,6 @@ mod tests {
 				n,
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
-				RewardDestination::Staked,
 			)
 			.unwrap();
 
@@ -1005,7 +1001,6 @@ mod tests {
 				n,
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
-				RewardDestination::Staked,
 			)
 			.unwrap();
 
