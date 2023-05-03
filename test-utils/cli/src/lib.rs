@@ -69,6 +69,8 @@ pub fn start_node() -> (Child, String) {
 	let child = Command::new(cargo_bin("node-template"))
 		.stdout(process::Stdio::piped())
 		.stderr(process::Stdio::piped())
+		// Revert this back once we have resolve this issue:
+		// https://github.com/paritytech/substrate/issues/13969
 		// .args(&[
 		// 	"--dev",
 		// 	"--tmp",
