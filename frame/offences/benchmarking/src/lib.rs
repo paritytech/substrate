@@ -116,7 +116,6 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 	T::Currency::make_free_balance_be(&stash, free_amount);
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
-		controller_lookup.clone(),
 		amount,
 		reward_destination.clone(),
 	)?;
@@ -139,7 +138,6 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 
 		Staking::<T>::bond(
 			RawOrigin::Signed(nominator_stash.clone()).into(),
-			nominator_controller_lookup.clone(),
 			amount,
 			reward_destination.clone(),
 		)?;

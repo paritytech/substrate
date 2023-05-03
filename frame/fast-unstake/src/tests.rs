@@ -812,7 +812,7 @@ mod on_idle {
 
 			// create a new validator that 100% not exposed.
 			Balances::make_free_balance_be(&42, 100 + Deposit::get());
-			assert_ok!(Staking::bond(RuntimeOrigin::signed(42), 42, 10, RewardDestination::Staked));
+			assert_ok!(Staking::bond(RuntimeOrigin::signed(42), 10, RewardDestination::Staked));
 			assert_ok!(Staking::validate(RuntimeOrigin::signed(42), Default::default()));
 
 			// let them register:

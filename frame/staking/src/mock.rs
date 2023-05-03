@@ -465,18 +465,18 @@ impl ExtBuilder {
 			stakers = vec![
 				// (stash, ctrl, stake, status)
 				// these two will be elected in the default test where we elect 2.
-				(11, 10, self.balance_factor * 1000, StakerStatus::<AccountId>::Validator),
-				(21, 20, self.balance_factor * 1000, StakerStatus::<AccountId>::Validator),
+				(11, 11, self.balance_factor * 1000, StakerStatus::<AccountId>::Validator),
+				(21, 21, self.balance_factor * 1000, StakerStatus::<AccountId>::Validator),
 				// a loser validator
-				(31, 30, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
+				(31, 31, self.balance_factor * 500, StakerStatus::<AccountId>::Validator),
 				// an idle validator
-				(41, 40, self.balance_factor * 1000, StakerStatus::<AccountId>::Idle),
+				(41, 41, self.balance_factor * 1000, StakerStatus::<AccountId>::Idle),
 			];
 			// optionally add a nominator
 			if self.nominate {
 				stakers.push((
 					101,
-					100,
+					101,
 					self.balance_factor * 500,
 					StakerStatus::<AccountId>::Nominator(vec![11, 21]),
 				))
@@ -566,12 +566,7 @@ pub(crate) fn current_era() -> EraIndex {
 pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
 	let _ = Balances::make_free_balance_be(&stash, val);
 	let _ = Balances::make_free_balance_be(&ctrl, val);
-	assert_ok!(Staking::bond(
-		RuntimeOrigin::signed(stash),
-		ctrl,
-		val,
-		RewardDestination::Controller
-	));
+	assert_ok!(Staking::bond(RuntimeOrigin::signed(stash), val, RewardDestination::Controller));
 }
 
 pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {

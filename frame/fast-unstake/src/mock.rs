@@ -377,7 +377,6 @@ pub fn create_exposed_nominator(exposed: AccountId, era: u32) {
 	Balances::make_free_balance_be(&exposed, 100);
 	assert_ok!(Staking::bond(
 		RuntimeOrigin::signed(exposed),
-		exposed,
 		10,
 		pallet_staking::RewardDestination::Staked
 	));
