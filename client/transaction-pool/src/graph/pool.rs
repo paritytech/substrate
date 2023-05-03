@@ -461,10 +461,10 @@ mod tests {
 	use futures::executor::block_on;
 	use parking_lot::Mutex;
 	use sc_transaction_pool_api::TransactionStatus;
-	use sp_keyring::AccountKeyring::{Alice, Bob};
 	use sp_runtime::transaction_validity::TransactionSource;
 	use std::{collections::HashMap, time::Instant};
 	use substrate_test_runtime::{AccountId, ExtrinsicBuilder, Transfer, H256};
+	use substrate_test_runtime_client::AccountKeyring::{Alice, Bob};
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
