@@ -139,15 +139,14 @@ pub fn derive_impl(
 
 	// have disambiguation_path default to the item being impl'd in the foreign impl if we
 	// don't specify an `as [disambiguation_path]` in the macro attr
-	let disambiguation_path = disambiguation_path.unwrap_or_else(|| {
-		let Some((_, foreign_impl_path, _)) = foreign_impl.clone().trait_ else {
-			return Err(
-				syn::Error::new(foreign_impl.span(),
-				"Impl statement must have a defined type being implemented for a defined type such as `impl A for B`")
-			);
-		};
-		Ok(foreign_impl_path)
-	})?;
+	let disambiguation_path = match (disambiguation_path, foreign_impl.clone().trait_) {
+		(Some(disambiguation_path), _) => disambiguation_path,
+		(None, Some((_, foreign_impl_path, _))) => foreign_impl_path,
+		_ => return Err(syn::Error::new(
+				foreign_impl.span(),
+				"Impl statement must have a defined type being implemented for a defined type such as `impl A for B`"
+			 ))
+	};
 
 	// generate the combined impl
 	let combined_impl = combine_impls(local_impl, foreign_impl, foreign_path, disambiguation_path);
