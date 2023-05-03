@@ -1485,7 +1485,7 @@ pub mod pallet {
 		pub fn touch(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
-			Self::do_touch(id, who.clone(), who)
+			Self::do_touch(id, who.clone(), who, true)
 		}
 
 		/// Return the deposit (if any) of an asset account or a consumer reference (if any) of an
@@ -1575,12 +1575,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let id: T::AssetId = id.into();
-			let asset = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(
-				&origin == &asset.admin || &origin == &asset.freezer,
-				Error::<T, I>::NoPermission
-			);
-			Self::do_touch(id, who, origin)
+			Self::do_touch(id, who, origin, false)
 		}
 
 		/// Return the deposit (if any) of a target asset account. Useful if you are the depositor.
@@ -1617,7 +1612,7 @@ pub mod pallet {
 		}
 
 		fn touch(asset: T::AssetId, who: T::AccountId, depositor: T::AccountId) -> DispatchResult {
-			Self::do_touch(asset, who, depositor)
+			Self::do_touch(asset, who, depositor, true)
 		}
 	}
 }
