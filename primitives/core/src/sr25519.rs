@@ -545,6 +545,8 @@ pub mod vrf {
 		SignatureError,
 	};
 
+	const DEFAULT_EXTRA_DATA_LABEL: &[u8] = b"VRF";
+
 	/// Transcript ready to be used for VRF related operations.
 	#[derive(Clone)]
 	pub struct VrfTranscript(pub merlin::Transcript);
@@ -699,14 +701,17 @@ pub mod vrf {
 	#[cfg(feature = "full_crypto")]
 	impl VrfSecret for Pair {
 		fn vrf_sign(&self, data: &Self::VrfSignData) -> Self::VrfSignature {
-			let transcript = data.transcript.0.clone();
+			let inout = self.0.vrf_create_hash(data.transcript.0.clone());
 
-			let (inout, proof, _) = match data.extra {
-				Some(ref extra) => self.0.vrf_sign_extra(transcript, extra.0.clone()),
-				None => self.0.vrf_sign(transcript),
-			};
-			let output = data.output.clone().unwrap_or_else(|| VrfOutput(inout.to_output()));
-			VrfSignature { output, proof: VrfProof(proof) }
+			let extra = data
+				.extra
+				.as_ref()
+				.map(|e| e.0.clone())
+				.unwrap_or_else(|| merlin::Transcript::new(DEFAULT_EXTRA_DATA_LABEL));
+
+			let proof = self.0.dleq_proove(extra, &inout, true).0;
+
+			VrfSignature { output: VrfOutput(inout.to_output()), proof: VrfProof(proof) }
 		}
 
 		fn vrf_output(&self, input: &Self::VrfInput) -> Self::VrfOutput {
@@ -724,21 +729,21 @@ pub mod vrf {
 
 	impl VrfPublic for Public {
 		fn vrf_verify(&self, data: &Self::VrfSignData, signature: &Self::VrfSignature) -> bool {
-			schnorrkel::PublicKey::from_bytes(self)
-				.and_then(|public| {
-					let transcript = data.transcript.0.clone();
-					match data.extra {
-						Some(ref extra) => public.vrf_verify_extra(
-							transcript,
-							&signature.output.0,
-							&signature.proof.0,
-							extra.0.clone(),
-						),
-						None =>
-							public.vrf_verify(transcript, &signature.output.0, &signature.proof.0),
-					}
-				})
-				.is_ok()
+			let do_verify = || {
+				let public = schnorrkel::PublicKey::from_bytes(self)?;
+
+				let inout =
+					signature.output.0.attach_input_hash(&public, data.transcript.0.clone())?;
+
+				let extra = data
+					.extra
+					.as_ref()
+					.map(|e| e.0.clone())
+					.unwrap_or_else(|| merlin::Transcript::new(DEFAULT_EXTRA_DATA_LABEL));
+
+				public.dleq_verify(extra, &inout, &signature.proof.0, true)
+			};
+			do_verify().is_ok()
 		}
 	}
 
