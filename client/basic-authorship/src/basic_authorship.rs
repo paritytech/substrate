@@ -557,7 +557,7 @@ mod tests {
 	const SOURCE: TransactionSource = TransactionSource::External;
 
 	// Note:
-	// Maximum normal extrinsic size for substrate_test_runtime is ~65% of max_block (refer to
+	// Maximum normal extrinsic size for `substrate_test_runtime` is ~65% of max_block (refer to
 	// substrate_test_runtime::RuntimeBlockWeights for details).
 	// This extrinsic sizing allows for:
 	// - one huge xts + a lot of tiny dust
@@ -567,6 +567,7 @@ mod tests {
 	const HUGE: u32 = 649000000;
 	const MEDIUM: u32 = 250000000;
 	const TINY: u32 = 1000;
+
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY)).nonce(nonce).build()

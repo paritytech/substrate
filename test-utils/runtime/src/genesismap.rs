@@ -21,7 +21,7 @@ use super::{
 	currency, substrate_test_pallet, wasm_binary_unwrap, AccountId, AuthorityId, Balance,
 	GenesisConfig,
 };
-use codec::{Encode, Joiner};
+use codec::Encode;
 use sc_service::construct_genesis_block;
 use sp_core::storage::{well_known_keys, StateVersion, Storage};
 use sp_runtime::{

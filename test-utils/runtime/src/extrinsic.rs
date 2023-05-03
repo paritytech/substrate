@@ -26,7 +26,7 @@ use sp_keyring::AccountKeyring;
 use sp_runtime::{transaction_validity::TransactionPriority, Perbill};
 use sp_std::prelude::*;
 
-/// Transfer used in test substrate pallet. Extrinsic is created and signed basing on this data.
+/// Transfer used in test substrate pallet. Extrinsic is created and signed using this data.
 #[derive(Clone)]
 pub struct Transfer {
 	pub from: Pair,

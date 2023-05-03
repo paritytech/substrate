@@ -241,6 +241,7 @@ impl sp_runtime::traits::Dispatchable for CheckSubstrateCall {
 	type Config = CheckSubstrateCall;
 	type Info = CheckSubstrateCall;
 	type PostInfo = CheckSubstrateCall;
+
 	fn dispatch(
 		self,
 		_origin: Self::RuntimeOrigin,
@@ -310,6 +311,7 @@ const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 /// We allow for 2 seconds of compute with a 6 second average block time, with maximum proof size.
 const MAXIMUM_BLOCK_WEIGHT: Weight =
 	Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND.saturating_mul(2), u64::MAX);
+
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
 	pub const Version: RuntimeVersion = VERSION;
@@ -397,7 +399,7 @@ impl pallet_balances::Config for Runtime {
 
 impl substrate_test_pallet::Config for Runtime {}
 
-// required for pallet_babe::Config
+// Required for `pallet_babe::Config`.
 impl pallet_timestamp::Config for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
@@ -624,12 +626,12 @@ impl_runtime_apis! {
 		fn configuration() -> sp_consensus_babe::BabeConfiguration {
 			let epoch_config = Babe::epoch_config().unwrap_or(TEST_RUNTIME_BABE_EPOCH_CONFIGURATION);
 			sp_consensus_babe::BabeConfiguration {
-				slot_duration: 1000,
+				slot_duration: Babe::slot_duration(),
 				epoch_length: EpochDuration::get(),
 				c: epoch_config.c,
 				authorities: SubstrateTest::authorities()
 					.into_iter().map(|x|(x, 1)).collect(),
-					randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
+					randomness: Babe::randomness(),
 					allowed_slots: epoch_config.allowed_slots,
 			}
 		}
@@ -821,7 +823,6 @@ pub mod storage_key_generator {
 	use sp_keyring::AccountKeyring;
 
 	fn concat_hashes(input: &Vec<&[u8]>) -> String {
-		// sp_core::hashing::twox_128(input[0]).encode_hex::<String>()
 		input.iter().map(|s| sp_core::hashing::twox_128(s)).map(hex::encode).collect()
 	}
 
