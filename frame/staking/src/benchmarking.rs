@@ -221,7 +221,7 @@ benchmarks! {
 		whitelist_account!(stash);
 	}: _(RawOrigin::Signed(stash.clone()), amount, reward_destination)
 	verify {
-		assert!(Bonded::<T>::contains_key(stash));
+		assert!(Bonded::<T>::contains_key(stash.clone()));
 		assert!(Ledger::<T>::contains_key(stash));
 	}
 
