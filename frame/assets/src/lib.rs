@@ -1614,7 +1614,7 @@ pub mod pallet {
 		/// - `id`: The identifier of the account's asset.
 		/// - `who`: The account to be unblocked.
 		///
-		/// Emits `Unblocked`.
+		/// Emits `Blocked`.
 		///
 		/// Weight: `O(1)`
 		#[pallet::call_index(31)]
