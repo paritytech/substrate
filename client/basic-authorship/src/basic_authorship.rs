@@ -558,7 +558,7 @@ mod tests {
 
 	// Note:
 	// Maximum normal extrinsic size for `substrate_test_runtime` is ~65% of max_block (refer to
-	// substrate_test_runtime::RuntimeBlockWeights for details).
+	// `substrate_test_runtime::RuntimeBlockWeights` for details).
 	// This extrinsic sizing allows for:
 	// - one huge xts + a lot of tiny dust
 	// - one huge, no medium,

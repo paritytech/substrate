@@ -311,7 +311,7 @@ const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(10);
 /// We allow `Normal` extrinsics to fill up the block up to 75%, the rest can be used
 /// by  Operational  extrinsics.
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
-/// We allow for 2 seconds of compute with a 6 second average block time, with maximum proof size.
+/// Max weight, actual value does not matter for test runtime.
 const MAXIMUM_BLOCK_WEIGHT: Weight =
 	Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND.saturating_mul(2), u64::MAX);
 
@@ -1001,7 +1001,7 @@ mod tests {
 
 	#[test]
 	fn heap_pages_is_respected() {
-		// This tests that the on-chain HEAP_PAGES parameter is respected.
+		// This tests that the on-chain `HEAP_PAGES` parameter is respected.
 
 		// Create a client devoting only 8 pages of wasm memory. This gives us ~512k of heap memory.
 		let mut client = TestClientBuilder::new()

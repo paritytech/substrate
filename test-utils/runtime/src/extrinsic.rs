@@ -180,7 +180,7 @@ impl ExtrinsicBuilder {
 		self
 	}
 
-	/// Extrinsic will be signed by signer
+	/// Extrinsic will be signed by `signer`
 	pub fn signer(mut self, signer: Pair) -> Self {
 		self.signer = Some(signer);
 		self

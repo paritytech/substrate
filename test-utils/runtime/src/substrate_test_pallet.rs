@@ -15,6 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # substrate-test pallet
+//!
+//! Provides functionality used in unit-tests of numerous modules across substrate that require
+//! functioning runtime. Some calls are allowed to be submitted as unsigned extrinsics, however most
+//! of them requires signing. Refer to `pallet::Call` for further details.
+
 use crate::AuthorityId;
 use frame_support::{pallet_prelude::*, storage};
 use sp_runtime::transaction_validity::{
