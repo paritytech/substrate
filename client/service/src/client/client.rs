@@ -939,7 +939,7 @@ where
 		// If there is only one leaf, best block is guaranteed to be
 		// a descendant of the new finalized block. If not,
 		// we need to check.
-		if self.backend.blockchain().leaves()?.len() != 1 {
+		if self.backend.blockchain().leaves()?.len() > 1 {
 			let route_from_best =
 				sp_blockchain::tree_route(self.backend.blockchain(), best_block, block)?;
 
