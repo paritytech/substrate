@@ -571,7 +571,6 @@ pub mod vrf {
 	pub type VrfInput = VrfTranscript;
 
 	/// VRF input ready to be used for VRF sign and verify operations.
-	// Note: here we may potentially add a closure to check-before-sign...
 	#[derive(Clone)]
 	pub struct VrfSignData {
 		/// Transcript data contributing to VRF output.
