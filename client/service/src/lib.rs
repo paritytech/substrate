@@ -380,57 +380,37 @@ where
 		}
 	}
 
-	let (max_request_size, ws_max_response_size, http_max_response_size) =
-		legacy_cli_parsing(config);
-
-	let random_port = |mut addr: SocketAddr| {
+	// if binding the specified port failed then a random port is assigned by the OS.
+	let backup_port = |mut addr: SocketAddr| {
 		addr.set_port(0);
 		addr
 	};
 
-	let ws_addr = config
-		.rpc_ws
-		.unwrap_or_else(|| "127.0.0.1:9944".parse().expect("valid sockaddr; qed"));
-	let ws_addr2 = random_port(ws_addr);
-
-	let http_addr = config
-		.rpc_http
-		.unwrap_or_else(|| "127.0.0.1:9933".parse().expect("valid sockaddr; qed"));
-	let http_addr2 = random_port(http_addr);
-
+	let addr = config.rpc_addr.unwrap_or(([127, 0, 0, 1], 9944).into());
+	let backup_addr = backup_port(addr);
 	let metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
 
-	let server_config = sc_rpc_server::WsConfig {
-		max_connections: config.rpc_ws_max_connections,
-		max_payload_in_mb: max_request_size,
-		max_payload_out_mb: ws_max_response_size,
+	let server_config = sc_rpc_server::Config {
+		addrs: [addr, backup_addr],
+		max_connections: config.rpc_max_connections,
+		max_payload_in_mb: config.rpc_max_request_size,
+		max_payload_out_mb: config.rpc_max_response_size,
 		max_subs_per_conn: config.rpc_max_subs_per_conn,
+		rpc_api: gen_rpc_module(deny_unsafe(addr, &config.rpc_methods))?,
+		metrics,
+		id_provider: rpc_id_provider,
+		cors: config.rpc_cors.as_ref(),
+		tokio_handle: config.tokio_handle.clone(),
 	};
 
-	let http_fut = sc_rpc_server::start_http(
-		[http_addr, http_addr2],
-		config.rpc_cors.as_ref(),
-		max_request_size,
-		http_max_response_size,
-		metrics.clone(),
-		gen_rpc_module(deny_unsafe(http_addr, &config.rpc_methods))?,
-		config.tokio_handle.clone(),
-	);
-
-	let ws_fut = sc_rpc_server::start(
-		[ws_addr, ws_addr2],
-		config.rpc_cors.as_ref(),
-		server_config.clone(),
-		metrics.clone(),
-		gen_rpc_module(deny_unsafe(ws_addr, &config.rpc_methods))?,
-		config.tokio_handle.clone(),
-		rpc_id_provider,
-	);
-
+	// TODO: https://github.com/paritytech/substrate/issues/13773
+	//
+	// `block_in_place` is a hack to allow callers to call `block_on` prior to
+	// calling `start_rpc_servers`.
 	match tokio::task::block_in_place(|| {
-		config.tokio_handle.block_on(futures::future::try_join(http_fut, ws_fut))
+		config.tokio_handle.block_on(sc_rpc_server::start_server(server_config))
 	}) {
-		Ok((http, ws)) => Ok(Box::new((waiting::Server(Some(http)), waiting::Server(Some(ws))))),
+		Ok(server) => Ok(Box::new(waiting::Server(Some(server)))),
 		Err(e) => Err(Error::Application(e)),
 	}
 }
@@ -532,51 +512,6 @@ where
 			|tx| if tx.is_propagable() { Some(tx.data().clone()) } else { None },
 		)
 	}
-}
-
-fn legacy_cli_parsing(config: &Configuration) -> (Option<usize>, Option<usize>, Option<usize>) {
-	let ws_max_response_size = match (
-		config.ws_max_out_buffer_capacity,
-		config.rpc_max_response_size,
-	) {
-		(Some(legacy_max), max) => {
-			eprintln!("DEPRECATED: `--ws_max_out_buffer_capacity` has been removed; use `rpc-max-response-size or rpc-max-request-size` instead");
-			eprintln!("Setting WS `rpc-max-response-size` to `max(ws_max_out_buffer_capacity, rpc_max_response_size)`");
-			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
-		},
-		(None, Some(m)) => Some(m),
-		(None, None) => None,
-	};
-
-	let max_request_size = match (config.rpc_max_payload, config.rpc_max_request_size) {
-		(Some(legacy_max), max) => {
-			eprintln!("DEPRECATED: `--rpc_max_payload` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
-			eprintln!(
-				"Setting `rpc-max-response-size` to `max(rpc_max_payload, rpc_max_request_size)`"
-			);
-			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
-		},
-		(None, Some(max)) => Some(max),
-		(None, None) => None,
-	};
-
-	let http_max_response_size = match (config.rpc_max_payload, config.rpc_max_response_size) {
-		(Some(legacy_max), max) => {
-			eprintln!("DEPRECATED: `--rpc_max_payload` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
-			eprintln!(
-				"Setting HTTP `rpc-max-response-size` to `max(rpc_max_payload, rpc_max_response_size)`"
-			);
-			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
-		},
-		(None, Some(max)) => Some(max),
-		(None, None) => None,
-	};
-
-	if config.rpc_ipc.is_some() {
-		eprintln!("DEPRECATED: `--ipc-path` has no effect anymore IPC support has been removed");
-	}
-
-	(max_request_size, ws_max_response_size, http_max_response_size)
 }
 
 #[cfg(test)]
