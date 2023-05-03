@@ -547,7 +547,7 @@ where
 			.collect::<Vec<_>>();
 
 		let bar = ProgressBar::new(payloads.len() as u64);
-		let bar_message = format!("Downloading key values");
+		let bar_message = "Downloading key values".to_string();
 		bar.set_message(bar_message);
 		bar.set_style(
 			ProgressStyle::with_template(

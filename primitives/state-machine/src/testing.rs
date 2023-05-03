@@ -189,7 +189,7 @@ where
 			.map(|(k, v)| (k, v.0))
 			.collect::<Vec<(H::Out, Vec<u8>)>>();
 
-		(raw_key_values, self.backend.root().clone())
+		(raw_key_values, *self.backend.root())
 	}
 
 	/// Return a new backend with all pending changes.
