@@ -43,5 +43,6 @@ substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" 
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/maybe-compressed-blob" }
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
+sc-service = { version = "0.10.0-dev", features = ["test-helpers"], path = "../service" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 assert_matches = "1.3.0"

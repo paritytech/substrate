@@ -28,13 +28,13 @@ use crate::{
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, CollectEvents, Config, ContractInfo, ContractInfoOf, DebugInfo,
-	DefaultAddressGenerator, DeletionQueueCounter, Error, Pallet, Schedule,
+	DefaultAddressGenerator, DeletionQueueCounter, Error, Origin, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
 use frame_support::{
-	assert_err, assert_err_ignore_postinfo, assert_noop, assert_ok,
-	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
+	assert_err, assert_err_ignore_postinfo, assert_err_with_weight, assert_noop, assert_ok,
+	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
 	parameter_types,
 	storage::child,
 	traits::{
@@ -70,6 +70,7 @@ frame_support::construct_runtime!(
 		Randomness: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
 		Utility: pallet_utility::{Pallet, Call, Storage, Event},
 		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>},
+		Proxy: pallet_proxy::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -337,6 +338,22 @@ impl pallet_utility::Config for Test {
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 }
+
+impl pallet_proxy::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type Currency = Balances;
+	type ProxyType = ();
+	type ProxyDepositBase = ConstU64<1>;
+	type ProxyDepositFactor = ConstU64<1>;
+	type MaxProxies = ConstU32<32>;
+	type WeightInfo = ();
+	type MaxPending = ConstU32<32>;
+	type CallHasher = BlakeTwo256;
+	type AnnouncementDepositBase = ConstU64<1>;
+	type AnnouncementDepositFactor = ConstU64<1>;
+}
+
 parameter_types! {
 	pub MySchedule: Schedule<Test> = {
 		let mut schedule = <Schedule<Test>>::default();
@@ -500,6 +517,11 @@ impl<'a> From<ExtensionInput<'a>> for Vec<u8> {
 	}
 }
 
+impl Default for Origin<Test> {
+	fn default() -> Self {
+		Self::Signed(ALICE)
+	}
+}
 // Perform a call to a plain account.
 // The actual transfer fails because we can only call contracts.
 // Then we check that at least the base costs where charged (no runtime gas costs.)
@@ -975,18 +997,21 @@ fn deploy_and_call_other_contract() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: caller_addr.clone(),
+						caller: Origin::from_account_id(caller_addr.clone()),
 						contract: callee_addr.clone(),
 					}),
-					topics: vec![hash(&caller_addr), hash(&callee_addr)],
+					topics: vec![
+						hash(&Origin::<Test>::from_account_id(caller_addr.clone())),
+						hash(&callee_addr)
+					],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Origin::from_account_id(ALICE),
 						contract: caller_addr.clone(),
 					}),
-					topics: vec![hash(&ALICE), hash(&caller_addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&caller_addr)],
 				},
 			]
 		);
@@ -1300,10 +1325,10 @@ fn self_destruct_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
-					topics: vec![hash(&ALICE), hash(&addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3190,6 +3215,88 @@ fn sr25519_verify() {
 }
 
 #[test]
+fn failed_deposit_charge_should_roll_back_call() {
+	let (wasm_caller, _) = compile_module::<Test>("call_runtime_and_call").unwrap();
+	let (wasm_callee, _) = compile_module::<Test>("store_call").unwrap();
+	const ED: u64 = 200;
+
+	let execute = || {
+		ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+			// Instantiate both contracts.
+			let addr_caller = Contracts::bare_instantiate(
+				ALICE,
+				0,
+				GAS_LIMIT,
+				None,
+				Code::Upload(wasm_caller.clone()),
+				vec![],
+				vec![],
+				DebugInfo::Skip,
+				CollectEvents::Skip,
+			)
+			.result
+			.unwrap()
+			.account_id;
+			let addr_callee = Contracts::bare_instantiate(
+				ALICE,
+				0,
+				GAS_LIMIT,
+				None,
+				Code::Upload(wasm_callee.clone()),
+				vec![],
+				vec![],
+				DebugInfo::Skip,
+				CollectEvents::Skip,
+			)
+			.result
+			.unwrap()
+			.account_id;
+
+			// Give caller proxy access to Alice.
+			assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(ALICE), addr_caller.clone(), (), 0));
+
+			// Create a Proxy call that will attempt to transfer away Alice's balance.
+			let transfer_call =
+				Box::new(RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
+					dest: CHARLIE,
+					value: pallet_balances::Pallet::<Test>::free_balance(&ALICE) - 2 * ED,
+				}));
+
+			// Wrap the transfer call in a proxy call.
+			let transfer_proxy_call = RuntimeCall::Proxy(pallet_proxy::Call::proxy {
+				real: ALICE,
+				force_proxy_type: Some(()),
+				call: transfer_call,
+			});
+
+			let data = (
+				(ED - DepositPerItem::get()) as u32, // storage length
+				addr_callee,
+				transfer_proxy_call,
+			);
+
+			<Pallet<Test>>::call(
+				RuntimeOrigin::signed(ALICE),
+				addr_caller.clone(),
+				0,
+				GAS_LIMIT,
+				None,
+				data.encode(),
+			)
+		})
+	};
+
+	// With a low enough deposit per byte, the call should succeed.
+	let result = execute().unwrap();
+
+	// Bump the deposit per byte to a high value to trigger a FundsUnavailable error.
+	DEPOSIT_PER_BYTE.with(|c| *c.borrow_mut() = ED);
+	assert_err_with_weight!(execute(), TokenError::FundsUnavailable, result.actual_weight);
+}
+
+#[test]
 fn upload_code_works() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 
@@ -3738,10 +3845,10 @@ fn storage_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
-					topics: vec![hash(&ALICE), hash(&addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3755,10 +3862,10 @@ fn storage_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
-					topics: vec![hash(&ALICE), hash(&addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3772,10 +3879,10 @@ fn storage_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
-					topics: vec![hash(&ALICE), hash(&addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -4239,18 +4346,24 @@ fn set_code_hash() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Origin::from_account_id(ALICE),
 						contract: contract_addr.clone(),
 					}),
-					topics: vec![hash(&ALICE), hash(&contract_addr)],
+					topics: vec![
+						hash(&Origin::<Test>::from_account_id(ALICE)),
+						hash(&contract_addr)
+					],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Origin::from_account_id(ALICE),
 						contract: contract_addr.clone(),
 					}),
-					topics: vec![hash(&ALICE), hash(&contract_addr)],
+					topics: vec![
+						hash(&Origin::<Test>::from_account_id(ALICE)),
+						hash(&contract_addr)
+					],
 				},
 			],
 		);
@@ -5164,5 +5277,125 @@ fn account_reentrance_count_works() {
 
 		assert_eq!(result1.data, 1.encode());
 		assert_eq!(result2.data, 0.encode());
+	});
+}
+
+#[test]
+fn root_cannot_upload_code() {
+	let (wasm, _) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().build().execute_with(|| {
+		assert_noop!(
+			Contracts::upload_code(RuntimeOrigin::root(), wasm, None, Determinism::Enforced),
+			DispatchError::BadOrigin,
+		);
+	});
+}
+
+#[test]
+fn root_cannot_remove_code() {
+	let (_, code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().build().execute_with(|| {
+		assert_noop!(
+			Contracts::remove_code(RuntimeOrigin::root(), code_hash),
+			DispatchError::BadOrigin,
+		);
+	});
+}
+
+#[test]
+fn signed_cannot_set_code() {
+	let (_, code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().build().execute_with(|| {
+		assert_noop!(
+			Contracts::set_code(RuntimeOrigin::signed(ALICE), BOB, code_hash),
+			DispatchError::BadOrigin,
+		);
+	});
+}
+
+#[test]
+fn none_cannot_call_code() {
+	ExtBuilder::default().build().execute_with(|| {
+		assert_noop!(
+			Contracts::call(RuntimeOrigin::none(), BOB, 0, GAS_LIMIT, None, Vec::new()),
+			DispatchError::BadOrigin,
+		);
+	});
+}
+
+#[test]
+fn root_can_call() {
+	let (wasm, _) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		let addr = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm),
+			vec![],
+			vec![],
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		// Call the contract.
+		assert_ok!(Contracts::call(
+			RuntimeOrigin::root(),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			vec![]
+		));
+	});
+}
+
+#[test]
+fn root_cannot_instantiate_with_code() {
+	let (wasm, _) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().build().execute_with(|| {
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate_with_code(
+				RuntimeOrigin::root(),
+				0,
+				GAS_LIMIT,
+				None,
+				wasm,
+				vec![],
+				vec![],
+			),
+			DispatchError::RootNotAllowed,
+		);
+	});
+}
+
+#[test]
+fn root_cannot_instantiate() {
+	let (_, code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().build().execute_with(|| {
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate(
+				RuntimeOrigin::root(),
+				0,
+				GAS_LIMIT,
+				None,
+				code_hash,
+				vec![],
+				vec![],
+			),
+			DispatchError::RootNotAllowed
+		);
 	});
 }

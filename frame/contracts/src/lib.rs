@@ -97,7 +97,6 @@ pub mod weights;
 
 #[cfg(test)]
 mod tests;
-
 use crate::{
 	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
 	gas::GasMeter,
@@ -105,19 +104,20 @@ use crate::{
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
 	weights::WeightInfo,
 };
-use codec::{Codec, Encode, HasCompact};
+use codec::{Codec, Decode, Encode, HasCompact};
 use environmental::*;
 use frame_support::{
-	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
+	dispatch::{DispatchError, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo, RawOrigin},
 	ensure,
+	error::BadOrigin,
 	traits::{
 		tokens::fungible::Inspect, ConstU32, Contains, Currency, Get, Randomness,
 		ReservableCurrency, Time,
 	},
 	weights::Weight,
-	BoundedVec, WeakBoundedVec,
+	BoundedVec, RuntimeDebugNoBound, WeakBoundedVec,
 };
-use frame_system::{EventRecord, Pallet as System};
+use frame_system::{ensure_signed, pallet_prelude::OriginFor, EventRecord, Pallet as System};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
 	ContractInstantiateResult, ExecReturnValue, GetStorageResult, InstantiateReturnValue,
@@ -586,17 +586,15 @@ pub mod pallet {
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			let gas_limit: Weight = gas_limit.into();
-			let origin = ensure_signed(origin)?;
-			let dest = T::Lookup::lookup(dest)?;
 			let common = CommonInput {
-				origin,
+				origin: Origin::from_runtime_origin(origin)?,
 				value,
 				data,
-				gas_limit,
+				gas_limit: gas_limit.into(),
 				storage_deposit_limit: storage_deposit_limit.map(Into::into),
 				debug_message: None,
 			};
+			let dest = T::Lookup::lookup(dest)?;
 			let mut output =
 				CallInput::<T> { dest, determinism: Determinism::Enforced }.run_guarded(common);
 			if let Ok(retval) = &output.result {
@@ -647,12 +645,11 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			let origin = ensure_signed(origin)?;
 			let code_len = code.len() as u32;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
-				origin,
+				origin: Origin::from_runtime_origin(origin)?,
 				value,
 				data,
 				gas_limit,
@@ -690,11 +687,10 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			let origin = ensure_signed(origin)?;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
-				origin,
+				origin: Origin::from_runtime_origin(origin)?,
 				value,
 				data,
 				gas_limit,
@@ -766,8 +762,8 @@ pub mod pallet {
 		/// calls. This is because on failure all storage changes including events are
 		/// rolled back.
 		Called {
-			/// The account that called the `contract`.
-			caller: T::AccountId,
+			/// The caller of the `contract`.
+			caller: Origin<T>,
 			/// The contract that was called.
 			contract: T::AccountId,
 		},
@@ -926,9 +922,38 @@ pub mod pallet {
 		StorageValue<_, DeletionQueueManager<T>, ValueQuery>;
 }
 
+/// The type of origins supported by the contracts pallet.
+#[derive(Clone, Encode, Decode, PartialEq, TypeInfo, RuntimeDebugNoBound)]
+pub enum Origin<T: Config> {
+	Root,
+	Signed(T::AccountId),
+}
+
+impl<T: Config> Origin<T> {
+	/// Creates a new Signed Caller from an AccountId.
+	pub fn from_account_id(account_id: T::AccountId) -> Self {
+		Origin::Signed(account_id)
+	}
+	/// Creates a new Origin from a `RuntimeOrigin`.
+	pub fn from_runtime_origin(o: OriginFor<T>) -> Result<Self, DispatchError> {
+		match o.into() {
+			Ok(RawOrigin::Root) => Ok(Self::Root),
+			Ok(RawOrigin::Signed(t)) => Ok(Self::Signed(t)),
+			_ => Err(BadOrigin.into()),
+		}
+	}
+	/// Returns the AccountId of a Signed Origin or an error if the origin is Root.
+	pub fn account_id(&self) -> Result<&T::AccountId, DispatchError> {
+		match self {
+			Origin::Signed(id) => Ok(id),
+			Origin::Root => Err(DispatchError::RootNotAllowed),
+		}
+	}
+}
+
 /// Context of a contract invocation.
 struct CommonInput<'a, T: Config> {
-	origin: T::AccountId,
+	origin: Origin<T>,
 	value: BalanceOf<T>,
 	data: Vec<u8>,
 	gas_limit: Weight,
@@ -1006,6 +1031,19 @@ trait Invokable<T: Config> {
 		environmental!(executing_contract: bool);
 
 		let gas_limit = common.gas_limit;
+
+		// Check whether the origin is allowed here. The logic of the access rules
+		// is in the `ensure_origin`, this could vary for different implementations of this
+		// trait. For example, some actions might not allow Root origin as they could require an
+		// AccountId associated with the origin.
+		if let Err(e) = self.ensure_origin(common.origin.clone()) {
+			return InternalOutput {
+				gas_meter: GasMeter::new(gas_limit),
+				storage_deposit: Default::default(),
+				result: Err(ExecError { error: e.into(), origin: ErrorOrigin::Caller }),
+			}
+		}
+
 		executing_contract::using_once(&mut false, || {
 			executing_contract::with(|f| {
 				// Fail if already entered contract execution
@@ -1041,6 +1079,11 @@ trait Invokable<T: Config> {
 		common: CommonInput<T>,
 		gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output>;
+
+	/// This method ensures that the given `origin` is allowed to invoke the current `Invokable`.
+	///
+	/// Called by dispatchables and public functions through the [`Invokable::run_guarded`].
+	fn ensure_origin(&self, origin: Origin<T>) -> Result<(), DispatchError>;
 }
 
 impl<T: Config> Invokable<T> for CallInput<T> {
@@ -1051,8 +1094,10 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 		common: CommonInput<T>,
 		mut gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output> {
+		let CallInput { dest, determinism } = self;
+		let CommonInput { origin, value, data, debug_message, .. } = common;
 		let mut storage_meter =
-			match StorageMeter::new(&common.origin, common.storage_deposit_limit, common.value) {
+			match StorageMeter::new(&origin, common.storage_deposit_limit, common.value) {
 				Ok(meter) => meter,
 				Err(err) =>
 					return InternalOutput {
@@ -1062,8 +1107,6 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 					},
 			};
 		let schedule = T::Schedule::get();
-		let CallInput { dest, determinism } = self;
-		let CommonInput { origin, value, data, debug_message, .. } = common;
 		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
 			origin.clone(),
 			dest.clone(),
@@ -1075,7 +1118,19 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 			debug_message,
 			*determinism,
 		);
-		InternalOutput { gas_meter, storage_deposit: storage_meter.into_deposit(&origin), result }
+
+		match storage_meter.try_into_deposit(&origin) {
+			Ok(storage_deposit) => InternalOutput { gas_meter, storage_deposit, result },
+			Err(err) => InternalOutput {
+				gas_meter,
+				storage_deposit: Default::default(),
+				result: Err(err.into()),
+			},
+		}
+	}
+
+	fn ensure_origin(&self, _origin: Origin<T>) -> Result<(), DispatchError> {
+		Ok(())
 	}
 }
 
@@ -1090,12 +1145,15 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 		let mut storage_deposit = Default::default();
 		let try_exec = || {
 			let schedule = T::Schedule::get();
+			let InstantiateInput { salt, .. } = self;
+			let CommonInput { origin: contract_origin, .. } = common;
+			let origin = contract_origin.account_id()?;
 			let (extra_deposit, executable) = match &self.code {
 				Code::Upload(binary) => {
 					let executable = PrefabWasmModule::from_code(
 						binary.clone(),
 						&schedule,
-						common.origin.clone(),
+						origin.clone(),
 						Determinism::Enforced,
 						TryInstantiate::Skip,
 					)
@@ -1117,14 +1175,13 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 					PrefabWasmModule::from_storage(*hash, &schedule, &mut gas_meter)?,
 				),
 			};
+			let contract_origin = Origin::from_account_id(origin.clone());
 			let mut storage_meter = StorageMeter::new(
-				&common.origin,
+				&contract_origin,
 				common.storage_deposit_limit,
 				common.value.saturating_add(extra_deposit),
 			)?;
-
-			let InstantiateInput { salt, .. } = self;
-			let CommonInput { origin, value, data, debug_message, .. } = common;
+			let CommonInput { value, data, debug_message, .. } = common;
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
 				origin.clone(),
 				executable,
@@ -1136,12 +1193,20 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 				&salt,
 				debug_message,
 			);
+
 			storage_deposit = storage_meter
-				.into_deposit(&origin)
+				.try_into_deposit(&contract_origin)?
 				.saturating_add(&StorageDeposit::Charge(extra_deposit));
 			result
 		};
 		InternalOutput { result: try_exec(), gas_meter, storage_deposit }
+	}
+
+	fn ensure_origin(&self, origin: Origin<T>) -> Result<(), DispatchError> {
+		match origin {
+			Origin::Signed(_) => Ok(()),
+			Origin::Root => Err(DispatchError::RootNotAllowed),
+		}
 	}
 }
 
@@ -1174,6 +1239,7 @@ impl<T: Config> Pallet<T> {
 		} else {
 			None
 		};
+		let origin = Origin::from_account_id(origin);
 		let common = CommonInput {
 			origin,
 			value,
@@ -1230,7 +1296,7 @@ impl<T: Config> Pallet<T> {
 			None
 		};
 		let common = CommonInput {
-			origin,
+			origin: Origin::from_account_id(origin),
 			value,
 			data,
 			gas_limit,
