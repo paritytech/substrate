@@ -1703,21 +1703,20 @@ fn storage_keys_prefix_and_start_key_works() {
 
 	let block_hash = client.info().best_hash;
 
-	let child_root = b":child_storage:default:child".to_vec();
+	let child_root = array_bytes::bytes2hex("", b":child_storage:default:child");
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked("3a"));
 	let child_prefix = StorageKey(b"sec".to_vec());
 
 	let res: Vec<_> = client
 		.storage_keys(block_hash, Some(&prefix), None)
 		.unwrap()
-		.map(|x| x.0)
+		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
 	assert_eq!(
 		res,
 		[
-			child_root.clone(),
-			array_bytes::hex2bytes_unchecked("3a636f6465"),
-			array_bytes::hex2bytes_unchecked("3a686561707061676573"),
+			&child_root,
+			"3a636f6465",
 		]
 	);
 
@@ -1728,20 +1727,9 @@ fn storage_keys_prefix_and_start_key_works() {
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
 		)
 		.unwrap()
-		.map(|x| x.0)
+		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
-	assert_eq!(res, [array_bytes::hex2bytes_unchecked("3a686561707061676573")]);
-
-	let res: Vec<_> = client
-		.storage_keys(
-			block_hash,
-			Some(&prefix),
-			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a686561707061676573"))),
-		)
-		.unwrap()
-		.map(|x| x.0)
-		.collect();
-	assert_eq!(res, Vec::<Vec<u8>>::new());
+	assert_eq!(res, Vec::<String>::new());
 
 	let res: Vec<_> = client
 		.child_storage_keys(block_hash, child_info.clone(), Some(&child_prefix), None)
@@ -1824,13 +1812,13 @@ fn storage_keys_works() {
 		res,
 		[
 			"3a636f6465",
-			"3a686561707061676573",
 			"52008686cc27f6e5ed83a216929942f8bcd32a396f09664a5698f81371934b56",
 			"5348d72ac6cc66e5d8cbecc27b0e0677503b845fe2382d819f83001781788fd5",
 			"5c2d5fda66373dabf970e4fb13d277ce91c5233473321129d32b5a8085fa8133",
 			"6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081",
 			"66484000ed3f75c95fc7b03f39c20ca1e1011e5999278247d3b2f5e3c3273808",
 			"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
+			"811ecfaadcf5f2ee1d67393247e2f71a1662d433e8ce7ff89fb0d4aa9561820b",
 		]
 	);
 
@@ -1848,13 +1836,13 @@ fn storage_keys_works() {
 	assert_eq!(
 		res,
 		[
-			"3a686561707061676573",
 			"52008686cc27f6e5ed83a216929942f8bcd32a396f09664a5698f81371934b56",
 			"5348d72ac6cc66e5d8cbecc27b0e0677503b845fe2382d819f83001781788fd5",
 			"5c2d5fda66373dabf970e4fb13d277ce91c5233473321129d32b5a8085fa8133",
 			"6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081",
 			"66484000ed3f75c95fc7b03f39c20ca1e1011e5999278247d3b2f5e3c3273808",
 			"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
+			"811ecfaadcf5f2ee1d67393247e2f71a1662d433e8ce7ff89fb0d4aa9561820b",
 		]
 	);
 
