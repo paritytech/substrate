@@ -36,6 +36,7 @@ use sp_core::{
 		well_known_keys::{is_default_child_storage_key, DEFAULT_CHILD_STORAGE_KEY_PREFIX},
 		ChildInfo, ChildType, PrefixedStorageKey, StorageData, StorageKey,
 	},
+	H256,
 };
 pub use sp_io::TestExternalities;
 use sp_runtime::{traits::Block as BlockT, StateVersion};
@@ -60,8 +61,8 @@ const DEFAULT_HTTP_ENDPOINT: &str = "https://rpc.polkadot.io:443";
 struct Snapshot<B: BlockT> {
 	state_version: StateVersion,
 	block_hash: B::Hash,
-	top: TopKeyValues,
-	child: ChildKeyValues,
+	db: Vec<(H256, Vec<u8>)>,
+	storage_root: H256,
 }
 
 /// An externalities that acts exactly the same as [`sp_io::TestExternalities`] but has a few extra
@@ -874,18 +875,22 @@ where
 			Default::default(),
 			self.overwrite_state_version.unwrap_or(state_version),
 		);
-		let top_kv = self.load_top_remote(&mut pending_ext).await?;
-		let child_kv = self.load_child_remote(&top_kv, &mut pending_ext).await?;
 
+		// Load data from the remote into `pending_ext`.
+		let top_kv = self.load_top_remote(&mut pending_ext).await?;
+		self.load_child_remote(&top_kv, &mut pending_ext).await?;
+
+		// If we need to save a snapshot, save the raw storage and root hash to the snapshot.
 		if let Some(path) = self.as_online().state_snapshot.clone().map(|c| c.path) {
+			let (raw_storage, storage_root) = pending_ext.drain_raw_storage();
 			let snapshot = Snapshot::<B> {
 				state_version,
-				top: top_kv,
-				child: child_kv,
 				block_hash: self
 					.as_online()
 					.at
 					.expect("set to `Some` in `init_remote_client`; must be called before; qed"),
+				db: raw_storage,
+				storage_root,
 			};
 			let encoded = snapshot.encode();
 			log::info!(
@@ -917,7 +922,7 @@ where
 		&mut self,
 		config: OfflineConfig,
 	) -> Result<RemoteExternalities<B>, &'static str> {
-		let Snapshot { block_hash, top, child, state_version } =
+		let Snapshot { block_hash, state_version, db, storage_root } =
 			self.load_snapshot(config.state_snapshot.path.clone())?;
 
 		let mut inner_ext = TestExternalities::new_with_code_and_state(
@@ -925,26 +930,7 @@ where
 			Default::default(),
 			self.overwrite_state_version.unwrap_or(state_version),
 		);
-
-		info!(target: LOG_TARGET, "injecting a total of {} top keys", top.len());
-		let top = top
-			.into_iter()
-			.filter(|(k, _)| !is_default_child_storage_key(k.as_ref()))
-			.map(|(k, v)| (k.0, v.0))
-			.collect::<Vec<_>>();
-		inner_ext.batch_insert(top);
-
-		info!(
-			target: LOG_TARGET,
-			"injecting a total of {} child keys",
-			child.iter().flat_map(|(_, kv)| kv).count()
-		);
-
-		for (info, key_values) in child {
-			for (k, v) in key_values {
-				inner_ext.insert_child(info.clone(), k.0, v.0);
-			}
-		}
+		inner_ext.set_raw_storage_and_root(db, storage_root);
 
 		Ok(RemoteExternalities { inner_ext, block_hash })
 	}

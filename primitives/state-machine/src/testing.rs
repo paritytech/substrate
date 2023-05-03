@@ -27,7 +27,7 @@ use crate::{
 	StorageTransactionCache, StorageValue, TrieBackendBuilder,
 };
 
-use hash_db::Hasher;
+use hash_db::{HashDB, Hasher};
 use sp_core::{
 	offchain::testing::TestPersistentOffchainDB,
 	storage::{
@@ -158,6 +158,38 @@ where
 	/// Registers the given extension for this instance.
 	pub fn register_extension<E: Any + Extension>(&mut self, ext: E) {
 		self.extensions.register(ext);
+	}
+
+	/// Sets raw storage key/values and a root.
+	///
+	/// This can be used as a fast way to restore the storage state from a backup because the trie
+	/// does not need to be computed.
+	pub fn set_raw_storage_and_root(
+		&mut self,
+		raw_storage: Vec<(H::Out, Vec<u8>)>,
+		storage_root: H::Out,
+	) {
+		for (k, v) in raw_storage {
+			self.backend.backend_storage_mut().emplace(k, hash_db::EMPTY_PREFIX, v);
+		}
+		self.backend.set_root(storage_root);
+	}
+
+	/// Drains the underlying raw storage key/values and returns the root hash.
+	///
+	/// Useful for backing up the storage in a format that can be quickly re-loaded.
+	///
+	/// Note: This DB will be inoperable after this call.
+	pub fn drain_raw_storage(&mut self) -> (Vec<(H::Out, Vec<u8>)>, H::Out) {
+		let raw_key_values = self
+			.backend
+			.backend_storage_mut()
+			.drain()
+			.into_iter()
+			.map(|(k, v)| (k, v.0))
+			.collect::<Vec<(H::Out, Vec<u8>)>>();
+
+		(raw_key_values, self.backend.root().clone())
 	}
 
 	/// Return a new backend with all pending changes.
