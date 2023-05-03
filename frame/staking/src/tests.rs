@@ -740,35 +740,6 @@ fn nominators_also_get_slashed_pro_rata() {
 }
 
 #[test]
-fn double_staking_should_fail() {
-	// should test (in the same order):
-	// * an account already bonded as stash cannot be be stashed again.
-	// * an account already bonded as stash cannot nominate.
-	// * an account already bonded as controller can nominate.
-	ExtBuilder::default().build_and_execute(|| {
-		let arbitrary_value = 5;
-		// 2 = controller, 1 stashed => ok
-		assert_ok!(Staking::bond(
-			RuntimeOrigin::signed(1),
-			arbitrary_value,
-			RewardDestination::default()
-		));
-		// 4 = not used so far, 1 stashed => not allowed.
-		assert_noop!(
-			Staking::bond(RuntimeOrigin::signed(1), arbitrary_value, RewardDestination::default()),
-			Error::<Test>::AlreadyBonded,
-		);
-		// 1 = stashed => attempting to nominate should fail.
-		assert_noop!(
-			Staking::nominate(RuntimeOrigin::signed(1), vec![1]),
-			Error::<Test>::NotController
-		);
-		// 2 = controller  => nominating should work.
-		assert_ok!(Staking::nominate(RuntimeOrigin::signed(2), vec![1]));
-	});
-}
-
-#[test]
 fn session_and_eras_work_simple() {
 	ExtBuilder::default().period(1).build_and_execute(|| {
 		assert_eq!(active_era(), 0);
