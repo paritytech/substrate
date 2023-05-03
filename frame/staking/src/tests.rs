@@ -769,27 +769,6 @@ fn double_staking_should_fail() {
 }
 
 #[test]
-fn double_controlling_should_fail() {
-	// should test (in the same order):
-	// * an account already bonded as controller CANNOT be reused as the controller of another
-	//   account.
-	ExtBuilder::default().build_and_execute(|| {
-		let arbitrary_value = 5;
-		// 2 = controller, 1 stashed => ok
-		assert_ok!(Staking::bond(
-			RuntimeOrigin::signed(1),
-			arbitrary_value,
-			RewardDestination::default(),
-		));
-		// 2 = controller, 3 stashed (Note that 2 is reused.) => no-op
-		assert_noop!(
-			Staking::bond(RuntimeOrigin::signed(3), arbitrary_value, RewardDestination::default()),
-			Error::<Test>::AlreadyPaired,
-		);
-	});
-}
-
-#[test]
 fn session_and_eras_work_simple() {
 	ExtBuilder::default().period(1).build_and_execute(|| {
 		assert_eq!(active_era(), 0);
