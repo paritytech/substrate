@@ -257,11 +257,8 @@ fn change_controller_already_paired_once_stash() {
 #[test]
 fn rewards_should_work() {
 	ExtBuilder::default().nominate(true).session_per_era(3).build_and_execute(|| {
-		let init_balance_10 = Balances::total_balance(&10);
 		let init_balance_11 = Balances::total_balance(&11);
-		let init_balance_20 = Balances::total_balance(&20);
 		let init_balance_21 = Balances::total_balance(&21);
-		let init_balance_100 = Balances::total_balance(&100);
 		let init_balance_101 = Balances::total_balance(&101);
 
 		// Set payees
@@ -281,11 +278,8 @@ fn rewards_should_work() {
 		start_session(1);
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
 
-		assert_eq!(Balances::total_balance(&10), init_balance_10);
 		assert_eq!(Balances::total_balance(&11), init_balance_11);
-		assert_eq!(Balances::total_balance(&20), init_balance_20);
 		assert_eq!(Balances::total_balance(&21), init_balance_21);
-		assert_eq!(Balances::total_balance(&100), init_balance_100);
 		assert_eq!(Balances::total_balance(&101), init_balance_101);
 		assert_eq!(
 			Staking::eras_reward_points(active_era()),
@@ -294,10 +288,10 @@ fn rewards_should_work() {
 				individual: vec![(11, 100), (21, 50)].into_iter().collect(),
 			}
 		);
-		let part_for_10 = Perbill::from_rational::<u32>(1000, 1125);
-		let part_for_20 = Perbill::from_rational::<u32>(1000, 1375);
-		let part_for_100_from_10 = Perbill::from_rational::<u32>(125, 1125);
-		let part_for_100_from_20 = Perbill::from_rational::<u32>(375, 1375);
+		let part_for_11 = Perbill::from_rational::<u32>(1000, 1125);
+		let part_for_21 = Perbill::from_rational::<u32>(1000, 1375);
+		let part_for_101_from_11 = Perbill::from_rational::<u32>(125, 1125);
+		let part_for_101_from_21 = Perbill::from_rational::<u32>(375, 1375);
 
 		start_session(2);
 		start_session(3);
@@ -315,25 +309,22 @@ fn rewards_should_work() {
 		mock::make_all_reward_payment(0);
 
 		assert_eq_error_rate!(
-			Balances::total_balance(&10),
-			init_balance_10 + part_for_10 * total_payout_0 * 2 / 3,
+			Balances::total_balance(&11),
+			init_balance_11 + part_for_11 * total_payout_0 * 2 / 3,
 			2,
 		);
-		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
 		assert_eq_error_rate!(
-			Balances::total_balance(&20),
-			init_balance_20 + part_for_20 * total_payout_0 * 1 / 3,
+			Balances::total_balance(&21),
+			init_balance_21 + part_for_21 * total_payout_0 * 1 / 3,
 			2,
 		);
-		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
-			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * total_payout_0 * 2 / 3 +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			Balances::total_balance(&101),
+			init_balance_101 +
+				part_for_101_from_11 * total_payout_0 * 2 / 3 +
+				part_for_101_from_21 * total_payout_0 * 1 / 3,
 			2
 		);
-		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
 
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
 		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
@@ -357,25 +348,22 @@ fn rewards_should_work() {
 		mock::make_all_reward_payment(1);
 
 		assert_eq_error_rate!(
-			Balances::total_balance(&10),
-			init_balance_10 + part_for_10 * (total_payout_0 * 2 / 3 + total_payout_1),
+			Balances::total_balance(&11),
+			init_balance_11 + part_for_11 * (total_payout_0 * 2 / 3 + total_payout_1),
 			2,
 		);
-		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
 		assert_eq_error_rate!(
-			Balances::total_balance(&20),
-			init_balance_20 + part_for_20 * total_payout_0 * 1 / 3,
+			Balances::total_balance(&21),
+			init_balance_21 + part_for_21 * total_payout_0 * 1 / 3,
 			2,
 		);
-		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
-			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1) +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			Balances::total_balance(&101),
+			init_balance_101 +
+				part_for_101_from_11 * (total_payout_0 * 2 / 3 + total_payout_1) +
+				part_for_101_from_21 * total_payout_0 * 1 / 3,
 			2
 		);
-		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
 	});
 }
 
