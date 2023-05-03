@@ -61,7 +61,7 @@ const DEFAULT_HTTP_ENDPOINT: &str = "https://rpc.polkadot.io:443";
 struct Snapshot<B: BlockT> {
 	state_version: StateVersion,
 	block_hash: B::Hash,
-	db: Vec<(H256, Vec<u8>)>,
+	raw_storage: Vec<(H256, Vec<u8>)>,
 	storage_root: H256,
 }
 
@@ -889,7 +889,7 @@ where
 					.as_online()
 					.at
 					.expect("set to `Some` in `init_remote_client`; must be called before; qed"),
-				db: raw_storage,
+				raw_storage,
 				storage_root,
 			};
 			let encoded = snapshot.encode();
@@ -922,7 +922,7 @@ where
 		&mut self,
 		config: OfflineConfig,
 	) -> Result<RemoteExternalities<B>, &'static str> {
-		let Snapshot { block_hash, state_version, db, storage_root } =
+		let Snapshot { block_hash, state_version, raw_storage, storage_root } =
 			self.load_snapshot(config.state_snapshot.path.clone())?;
 
 		let mut inner_ext = TestExternalities::new_with_code_and_state(
@@ -930,7 +930,7 @@ where
 			Default::default(),
 			self.overwrite_state_version.unwrap_or(state_version),
 		);
-		inner_ext.set_raw_storage_and_root(db, storage_root);
+		inner_ext.set_raw_storage_and_root(raw_storage, storage_root);
 
 		Ok(RemoteExternalities { inner_ext, block_hash })
 	}
@@ -1046,7 +1046,7 @@ mod test_prelude {
 mod tests {
 	use super::test_prelude::*;
 
-	#[tokio::test(flavor = "multi_thread")]
+	#[tokio::test]
 	async fn can_load_state_snapshot() {
 		init_logger();
 		Builder::<Block>::new()
@@ -1059,7 +1059,7 @@ mod tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test(flavor = "multi_thread")]
+	#[tokio::test]
 	async fn can_exclude_from_snapshot() {
 		init_logger();
 
@@ -1095,7 +1095,7 @@ mod remote_tests {
 	use super::test_prelude::*;
 	use std::os::unix::fs::MetadataExt;
 
-	#[tokio::test(flavor = "multi_thread")]
+	#[tokio::test]
 	async fn state_version_is_kept_and_can_be_altered() {
 		const CACHE: &'static str = "state_version_is_kept_and_can_be_altered";
 		init_logger();
@@ -1136,7 +1136,7 @@ mod remote_tests {
 		assert_eq!(cached_ext.state_version, other);
 	}
 
-	#[tokio::test(flavor = "multi_thread")]
+	#[tokio::test]
 	async fn snapshot_block_hash_works() {
 		const CACHE: &'static str = "snapshot_block_hash_works";
 		init_logger();
@@ -1163,7 +1163,7 @@ mod remote_tests {
 		assert_eq!(ext.block_hash, cached_ext.block_hash);
 	}
 
-	#[tokio::test(flavor = "multi_thread")]
+	#[tokio::test]
 	async fn offline_else_online_works() {
 		const CACHE: &'static str = "offline_else_online_works_data";
 		init_logger();
@@ -1208,7 +1208,7 @@ mod remote_tests {
 		std::fs::remove_file(to_delete[0].path()).unwrap();
 	}
 
-	#[tokio::test(flavor = "multi_thread")]
+	#[tokio::test]
 	async fn can_build_one_small_pallet() {
 		init_logger();
 		Builder::<Block>::new()
@@ -1223,7 +1223,7 @@ mod remote_tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test(flavor = "multi_thread")]
+	#[tokio::test]
 	async fn can_build_few_pallet() {
 		init_logger();
 		Builder::<Block>::new()
@@ -1263,7 +1263,7 @@ mod remote_tests {
 			.collect::<Vec<_>>();
 
 		let snap: Snapshot<Block> = Builder::<Block>::new().load_snapshot(CACHE.into()).unwrap();
-		assert!(matches!(snap, Snapshot { top, child, .. } if top.len() > 0 && child.len() == 0));
+		assert!(matches!(snap, Snapshot { raw_storage, .. } if raw_storage.len() > 0));
 
 		assert!(to_delete.len() == 1);
 		let to_delete = to_delete.first().unwrap();
@@ -1271,7 +1271,7 @@ mod remote_tests {
 		std::fs::remove_file(to_delete.path()).unwrap();
 	}
 
-	#[tokio::test(flavor = "multi_thread")]
+	#[tokio::test]
 	async fn can_create_child_snapshot() {
 		const CACHE: &'static str = "can_create_child_snapshot";
 		init_logger();
@@ -1295,7 +1295,7 @@ mod remote_tests {
 			.collect::<Vec<_>>();
 
 		let snap: Snapshot<Block> = Builder::<Block>::new().load_snapshot(CACHE.into()).unwrap();
-		assert!(matches!(snap, Snapshot { top, child, .. } if top.len() > 0 && child.len() > 0));
+		assert!(matches!(snap, Snapshot { raw_storage, .. } if raw_storage.len() > 0));
 
 		assert!(to_delete.len() == 1);
 		let to_delete = to_delete.first().unwrap();
@@ -1303,7 +1303,7 @@ mod remote_tests {
 		std::fs::remove_file(to_delete.path()).unwrap();
 	}
 
-	#[tokio::test(flavor = "multi_thread")]
+	#[tokio::test]
 	async fn can_build_big_pallet() {
 		if std::option_env!("TEST_WS").is_none() {
 			return
@@ -1322,7 +1322,7 @@ mod remote_tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test(flavor = "multi_thread")]
+	#[tokio::test]
 	async fn can_fetch_all() {
 		if std::option_env!("TEST_WS").is_none() {
 			return
