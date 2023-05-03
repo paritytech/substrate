@@ -199,7 +199,7 @@ pub trait AssetsCallback<AssetId, AccountId> {
 /// Empty implementation in case no callbacks are required.
 impl<AssetId, AccountId> AssetsCallback<AssetId, AccountId> for () {}
 
-#[frame_support::pallet()]
+#[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
