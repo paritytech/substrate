@@ -135,8 +135,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if increase_supply && details.supply.checked_add(&amount).is_none() {
 			return DepositConsequence::Overflow
 		}
-		if let Some(balance) = Self::maybe_balance(id, who) {
-			if balance.checked_add(&amount).is_none() {
+		if let Some(account) = Account::<T, I>::get(id, who) {
+			if account.status.is_blocked() {
+				return DepositConsequence::Blocked
+			}
+			if account.balance.checked_add(&amount).is_none() {
 				return DepositConsequence::Overflow
 			}
 		} else {

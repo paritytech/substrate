@@ -102,7 +102,7 @@
 //! * `burn`: Decreases the asset balance of an account; called by the asset class's Admin.
 //! * `force_transfer`: Transfers between arbitrary accounts; called by the asset class's Admin.
 //! * `freeze`: Disallows further `transfer`s from an account; called by the asset class's Freezer.
-//! * `thaw`: Allows further `transfer`s from an account; called by the asset class's Admin.
+//! * `thaw`: Allows further `transfer`s to and from an account; called by the asset class's Admin.
 //! * `transfer_ownership`: Changes an asset class's Owner; called by the asset class's Owner.
 //! * `set_team`: Changes an asset class's Admin, Freezer and Issuer; called by the asset class's
 //!   Owner.
@@ -110,6 +110,8 @@
 //! * `clear_metadata`: Remove the metadata of an asset class; called by the asset class's Owner.
 //! * `touch_other`: Create an asset account for specified account. Caller must place a deposit;
 //!   called by the asset class's Freezer or Admin.
+//! * `block`: Disallows further `transfer`s to and from an account; called by the asset class's
+//!   Freezer.
 //!
 //! Please refer to the [`Call`] enum and its associated variants for documentation on each
 //! function.
@@ -197,7 +199,7 @@ pub trait AssetsCallback<AssetId, AccountId> {
 /// Empty implementation in case no callbacks are required.
 impl<AssetId, AccountId> AssetsCallback<AssetId, AccountId> for () {}
 
-#[frame_support::pallet]
+#[frame_support::pallet()]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
@@ -527,6 +529,8 @@ pub mod pallet {
 		AssetMinBalanceChanged { asset_id: T::AssetId, new_min_balance: T::Balance },
 		/// Some account `who` was created with a deposit from `depositor`.
 		Touched { asset_id: T::AssetId, who: T::AccountId, depositor: T::AccountId },
+		/// Some account `who` was blocked.
+		Blocked { asset_id: T::AssetId, who: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -958,7 +962,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Allow unprivileged transfers from an account again.
+		/// Allow unprivileged transfers to and from an account again.
 		///
 		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
 		///
@@ -1601,6 +1605,43 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
 			Self::do_refund_other(id, &who, &origin)
+		}
+
+		/// Disallow further unprivileged transfers of an asset `id` to and from an account `who`.
+		///
+		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
+		///
+		/// - `id`: The identifier of the account's asset.
+		/// - `who`: The account to be unblocked.
+		///
+		/// Emits `Unblocked`.
+		///
+		/// Weight: `O(1)`
+		#[pallet::call_index(31)]
+		pub fn block(
+			origin: OriginFor<T>,
+			id: T::AssetIdParameter,
+			who: AccountIdLookupOf<T>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let id: T::AssetId = id.into();
+
+			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(
+				d.status == AssetStatus::Live || d.status == AssetStatus::Frozen,
+				Error::<T, I>::AssetNotLive
+			);
+			ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
+			let who = T::Lookup::lookup(who)?;
+
+			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
+				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.status =
+					AccountStatus::Blocked;
+				Ok(())
+			})?;
+
+			Self::deposit_event(Event::<T, I>::Blocked { asset_id: id, who });
+			Ok(())
 		}
 	}
 }

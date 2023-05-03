@@ -166,6 +166,10 @@ impl AccountStatus {
 	pub(crate) fn is_frozen(&self) -> bool {
 		matches!(self, AccountStatus::Frozen | AccountStatus::Blocked)
 	}
+	/// Returns `true` if blocked.
+	pub(crate) fn is_blocked(&self) -> bool {
+		matches!(self, AccountStatus::Blocked)
+	}
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
