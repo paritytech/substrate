@@ -3665,18 +3665,18 @@ fn test_payout_stakers() {
 
 		// Top 64 nominators of validator 11 automatically paid out, including the validator
 		// Validator payout goes to controller.
-		assert!(Balances::free_balance(&10) > balance);
+		assert!(Balances::free_balance(&11) > balance);
 		for i in 36..100 {
-			assert!(Balances::free_balance(&(100 + i)) > balance + i as Balance);
+			assert!(Balances::free_balance(&(1000 + i)) > balance + i as Balance);
 		}
 		// The bottom 36 do not
 		for i in 0..36 {
-			assert_eq!(Balances::free_balance(&(100 + i)), balance + i as Balance);
+			assert_eq!(Balances::free_balance(&(1000 + i)), balance + i as Balance);
 		}
 
 		// We track rewards in `claimed_rewards` vec
 		assert_eq!(
-			Staking::ledger(&10),
+			Staking::ledger(&11),
 			Some(StakingLedger {
 				stash: 11,
 				total: 1000,
@@ -3707,7 +3707,7 @@ fn test_payout_stakers() {
 
 		// We track rewards in `claimed_rewards` vec
 		assert_eq!(
-			Staking::ledger(&10),
+			Staking::ledger(&11),
 			Some(StakingLedger {
 				stash: 11,
 				total: 1000,
@@ -3740,7 +3740,7 @@ fn test_payout_stakers() {
 			expected_last_reward_era
 		));
 		assert_eq!(
-			Staking::ledger(&10),
+			Staking::ledger(&11),
 			Some(StakingLedger {
 				stash: 11,
 				total: 1000,
@@ -3755,7 +3755,7 @@ fn test_payout_stakers() {
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 23));
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 42));
 		assert_eq!(
-			Staking::ledger(&10),
+			Staking::ledger(&11),
 			Some(StakingLedger {
 				stash: 11,
 				total: 1000,
