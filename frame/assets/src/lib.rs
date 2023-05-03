@@ -1601,14 +1601,14 @@ pub mod pallet {
 		}
 	}
 
-	/// Implements `AccountTouch` trait.
+	/// Implements [AccountTouch] trait.
 	/// Note that a depositor can be any account, without any specific privilege.
 	/// This implementation is supposed to be used only for creation of system accounts.
 	impl<T: Config<I>, I: 'static> AccountTouch<T::AssetId, T::AccountId> for Pallet<T, I> {
 		type Balance = DepositBalanceOf<T, I>;
 
-		fn deposit() -> Option<Self::Balance> {
-			Some(T::AssetAccountDeposit::get())
+		fn deposit() -> Self::Balance {
+			T::AssetAccountDeposit::get()
 		}
 
 		fn touch(asset: T::AssetId, who: T::AccountId, depositor: T::AccountId) -> DispatchResult {

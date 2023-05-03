@@ -308,7 +308,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Creates an account for `who` to hold asset `id` with a zero balance and takes a deposit.
-	/// 
+	///
 	/// If invoked `permissionless = true` than a depositor can be anyone, if `permissioned = false`
 	/// a depositor must be the asset's `Admin` or `Freezer`.
 	pub(super) fn do_touch(
