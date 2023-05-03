@@ -357,8 +357,7 @@ impl<'a> ToClientSideDecl<'a> {
 
 		items.into_iter().for_each(|i| match i {
 			TraitItem::Fn(method) => {
-				let fn_decl =
-					self.create_method_decl(method, trait_generics_num);
+				let fn_decl = self.create_method_decl(method, trait_generics_num);
 				result.push(fn_decl.into());
 			},
 			r => result.push(r),

@@ -17,9 +17,7 @@
 
 use sp_api::{Core, ProvideRuntimeApi};
 use sp_runtime::traits::{HashFor, Header as HeaderT};
-use sp_state_machine::{
-	create_proof_check_backend, execution_proof_check_on_trie_backend,
-};
+use sp_state_machine::{create_proof_check_backend, execution_proof_check_on_trie_backend};
 use substrate_test_runtime_client::{
 	prelude::*,
 	runtime::{Block, Header, TestAPI, Transfer},
@@ -53,8 +51,7 @@ fn calling_runtime_signature_changed_old_function() {
 
 #[test]
 fn use_trie_function() {
-	let client = TestClientBuilder::new()
-		.build();
+	let client = TestClientBuilder::new().build();
 	let runtime_api = client.runtime_api();
 	let best_hash = client.chain_info().best_hash;
 	assert_eq!(runtime_api.use_trie(best_hash).unwrap(), 2);
@@ -82,8 +79,7 @@ fn initialize_block_works() {
 
 #[test]
 fn record_proof_works() {
-	let (client, longest_chain) = TestClientBuilder::new()
-		.build_with_longest_chain();
+	let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 
 	let storage_root =
 		*futures::executor::block_on(longest_chain.best_chain()).unwrap().state_root();

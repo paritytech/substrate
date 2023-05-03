@@ -93,7 +93,6 @@ pub use sp_storage as storage;
 #[doc(hidden)]
 pub use sp_std;
 
-
 /// Hex-serialized shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord))]

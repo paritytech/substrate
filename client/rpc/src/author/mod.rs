@@ -37,10 +37,10 @@ use sc_transaction_pool_api::{
 	error::IntoPoolError, BlockHash, InPoolTransaction, TransactionFor, TransactionPool,
 	TransactionSource, TxHash,
 };
-use sp_api::{ProvideRuntimeApi, ApiExt};
+use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
-use sp_keystore::{KeystorePtr, KeystoreExt};
+use sp_keystore::{KeystoreExt, KeystorePtr};
 use sp_runtime::{generic, traits::Block as BlockT};
 use sp_session::SessionKeys;
 

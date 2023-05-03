@@ -25,8 +25,8 @@ pub use http::SharedClient;
 use libp2p::{Multiaddr, PeerId};
 use sp_core::{
 	offchain::{
-		self, HttpError, HttpRequestId, HttpRequestStatus, OffchainStorage,
-		OpaqueMultiaddr, OpaqueNetworkState, StorageKind, Timestamp,
+		self, HttpError, HttpRequestId, HttpRequestStatus, OffchainStorage, OpaqueMultiaddr,
+		OpaqueNetworkState, StorageKind, Timestamp,
 	},
 	OpaquePeerId,
 };

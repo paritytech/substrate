@@ -1712,13 +1712,7 @@ fn storage_keys_prefix_and_start_key_works() {
 		.unwrap()
 		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
-	assert_eq!(
-		res,
-		[
-			&child_root,
-			"3a636f6465",
-		]
-	);
+	assert_eq!(res, [&child_root, "3a636f6465",]);
 
 	let res: Vec<_> = client
 		.storage_keys(

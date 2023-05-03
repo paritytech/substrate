@@ -64,8 +64,8 @@ use prometheus_endpoint::{PrometheusError, Registry};
 use sc_client_api::{
 	backend::{AuxStore, Backend},
 	utils::is_descendent_of,
-	BlockchainEvents, CallExecutor, ExecutorProvider, Finalizer, LockImportRun,
-	StorageProvider, TransactionFor,
+	BlockchainEvents, CallExecutor, ExecutorProvider, Finalizer, LockImportRun, StorageProvider,
+	TransactionFor,
 };
 use sc_consensus::BlockImport;
 use sc_network::types::ProtocolName;

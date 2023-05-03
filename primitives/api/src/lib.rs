@@ -76,9 +76,9 @@ pub use codec::{self, Decode, DecodeLimit, Encode};
 #[cfg(feature = "std")]
 pub use hash_db::Hasher;
 #[doc(hidden)]
-pub use sp_core::offchain;
-#[doc(hidden)]
 pub use scale_info;
+#[doc(hidden)]
+pub use sp_core::offchain;
 #[doc(hidden)]
 #[cfg(not(feature = "std"))]
 pub use sp_core::to_substrate_wasm_fn_return_value;

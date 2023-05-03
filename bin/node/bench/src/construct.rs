@@ -100,9 +100,7 @@ impl core::BenchmarkDescription for ConstructionBenchmarkDescription {
 	fn name(&self) -> Cow<'static, str> {
 		format!(
 			"Block construction ({:?}/{}, {:?} backend)",
-			self.block_type,
-			self.size,
-			self.database_type,
+			self.block_type, self.size, self.database_type,
 		)
 		.into()
 	}
