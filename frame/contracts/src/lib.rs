@@ -981,7 +981,7 @@ pub enum CollectEvents {
 	/// # Note
 	///
 	/// Events should only be collected when called off-chain, as this would otherwise
-	/// collect all the Events emitted in the block so far and put them in them into the PoV.
+	/// collect all the Events emitted in the block so far and put them into the PoV.
 	///
 	/// **Never** use this mode for on-chain execution.
 	UnsafeCollect,

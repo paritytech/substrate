@@ -29,9 +29,16 @@ use sp_runtime::{
 use sp_std::prelude::*;
 use sp_weights::Weight;
 
-/// Result type of a `bare_call` or `bare_instantiate` call.
+/// Result type of a `bare_call` or `bare_instantiate` call as well as `ContractsApi::call` and
+/// `ContractsApi::instantiate`.
 ///
 /// It contains the execution result together with some auxiliary information.
+///
+/// #Note
+///
+/// It has been extended to include `events` at the end of the struct while not bumping the
+/// `ContractsApi` version. Therefore when SCALE decoding a `ContractResult` its trailing data
+/// should be ignored to avoid any potential compatibility issues.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct ContractResult<R, Balance, EventRecord> {
 	/// How much weight was consumed during execution.
@@ -80,7 +87,7 @@ pub struct ContractResult<R, Balance, EventRecord> {
 pub type ContractExecResult<Balance, EventRecord> =
 	ContractResult<Result<ExecReturnValue, DispatchError>, Balance, EventRecord>;
 
-/// Result type of a `bare_instantiate` call as well as `ContractsApi::call`.
+/// Result type of a `bare_instantiate` call as well as `ContractsApi::instantiate`.
 pub type ContractInstantiateResult<AccountId, Balance, EventRecord> =
 	ContractResult<Result<InstantiateReturnValue<AccountId>, DispatchError>, Balance, EventRecord>;
 
