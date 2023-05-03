@@ -860,9 +860,7 @@ pub mod pallet {
 				return Err(Error::<T>::AlreadyBonded.into())
 			}
 
-			let controller = T::Lookup::lookup(controller)?;
-
-			if <Ledger<T>>::contains_key(&controller) {
+			if <Ledger<T>>::contains_key(&stash) {
 				return Err(Error::<T>::AlreadyPaired.into())
 			}
 
@@ -875,7 +873,7 @@ pub mod pallet {
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
-			<Bonded<T>>::insert(&stash, &controller);
+			<Bonded<T>>::insert(&stash, &stash);
 			<Payee<T>>::insert(&stash, payee);
 
 			let current_era = CurrentEra::<T>::get().unwrap_or(0);
@@ -886,7 +884,7 @@ pub mod pallet {
 			let value = value.min(stash_balance);
 			Self::deposit_event(Event::<T>::Bonded { stash: stash.clone(), amount: value });
 			let item = StakingLedger {
-				stash,
+				stash: stash.clone(),
 				total: value,
 				active: value,
 				unlocking: Default::default(),
@@ -897,7 +895,7 @@ pub mod pallet {
 					// satisfied.
 					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			};
-			Self::update_ledger(&controller, &item);
+			Self::update_ledger(&stash, &item);
 			Ok(())
 		}
 
