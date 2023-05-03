@@ -370,7 +370,7 @@ mod tests {
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
-		BalanceOf, CodeHash, Error, Pallet as Contracts,
+		BalanceOf, CodeHash, Error, Origin, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
 	use frame_support::{
@@ -436,6 +436,7 @@ mod tests {
 		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
 		sr25519_verify: RefCell<Vec<([u8; 64], Vec<u8>, [u8; 32])>>,
 		code_hashes: Vec<CodeHash<Test>>,
+		caller: Origin<Test>,
 	}
 
 	/// The call is mocked and just returns this hardcoded value.
@@ -459,6 +460,7 @@ mod tests {
 				gas_meter: GasMeter::new(Weight::from_parts(10_000_000_000, 10 * 1024 * 1024)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
+				caller: Default::default(),
 				sr25519_verify: Default::default(),
 			}
 		}
@@ -545,8 +547,8 @@ mod tests {
 			}
 			Ok(result)
 		}
-		fn caller(&self) -> &AccountIdOf<Self::T> {
-			&ALICE
+		fn caller(&self) -> Origin<Self::T> {
+			self.caller.clone()
 		}
 		fn is_contract(&self, _address: &AccountIdOf<Self::T>) -> bool {
 			true
@@ -560,6 +562,9 @@ mod tests {
 		}
 		fn caller_is_origin(&self) -> bool {
 			false
+		}
+		fn caller_is_root(&self) -> bool {
+			&self.caller == &Origin::Root
 		}
 		fn address(&self) -> &AccountIdOf<Self::T> {
 			&BOB
@@ -1497,6 +1502,16 @@ mod tests {
 	#[test]
 	fn caller() {
 		assert_ok!(execute(CODE_CALLER, vec![], MockExt::default()));
+	}
+
+	#[test]
+	fn caller_traps_when_no_account_id() {
+		let mut ext = MockExt::default();
+		ext.caller = Origin::Root;
+		assert_eq!(
+			execute(CODE_CALLER, vec![], ext),
+			Err(ExecError { error: DispatchError::RootNotAllowed, origin: ErrorOrigin::Caller })
+		);
 	}
 
 	/// calls `seal_address` and compares the result with the constant (BOB's address part).
@@ -2975,6 +2990,45 @@ mod tests {
 
 		// The mock ext just always returns 0u32 (`false`)
 		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: 0u32.encode() },);
+	}
+
+	#[test]
+	fn caller_is_root_works() {
+		const CODE_CALLER_IS_ROOT: &str = r#"
+;; This runs `caller_is_root` check on zero account address
+(module
+	(import "seal0" "caller_is_root" (func $caller_is_root (result i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; [0, 4) here the return code of the `caller_is_root` will be stored
+	;; we initialize it with non-zero value to be sure that it's being overwritten below
+	(data (i32.const 0) "\10\10\10\10")
+
+	(func (export "deploy"))
+
+	(func (export "call")
+		(i32.store
+			(i32.const 0)
+			(call $caller_is_root)
+		)
+		;; exit with success and take `caller_is_root` return code to the output buffer
+		(call $seal_return (i32.const 0) (i32.const 0) (i32.const 4))
+	)
+)
+"#;
+		// The default `caller` is ALICE. Therefore not root.
+		let output = execute(CODE_CALLER_IS_ROOT, vec![], MockExt::default()).unwrap();
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: 0u32.encode() },);
+
+		// The caller is forced to be root instead of using the default ALICE.
+		let output = execute(
+			CODE_CALLER_IS_ROOT,
+			vec![],
+			MockExt { caller: Origin::Root, ..MockExt::default() },
+		)
+		.unwrap();
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: 1u32.encode() },);
 	}
 
 	#[test]
