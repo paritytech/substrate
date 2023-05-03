@@ -229,16 +229,19 @@ fn basic_setup_works() {
 }
 
 #[test]
-fn change_controller_works() {
+fn change_controller_already_paired_once_stash() {
 	ExtBuilder::default().build_and_execute(|| {
 		// 10 and 11 are bonded as controller and stash respectively.
-		assert_eq!(Staking::bonded(&11), Some(10));
+		assert_eq!(Staking::bonded(&11), Some(11));
 
-		// 10 can control 11 who is initially a validator.
-		assert_ok!(Staking::chill(RuntimeOrigin::signed(10)));
+		// 11 is initially a validator.
+		assert_ok!(Staking::chill(RuntimeOrigin::signed(11)));
 
-		// change controller
-		assert_ok!(Staking::set_controller(RuntimeOrigin::signed(11)));
+		// Controller cannot change once matching with stash.
+		assert_noop!(
+			Staking::set_controller(RuntimeOrigin::signed(11)),
+			Error::<Test>::AlreadyPaired
+		);
 		assert_eq!(Staking::bonded(&11), Some(11));
 		mock::start_active_era(1);
 
@@ -939,21 +942,21 @@ fn cannot_transfer_staked_balance() {
 	// Tests that a stash account cannot transfer funds
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		// Confirm account 11 is stashed
-		assert_eq!(Staking::bonded(&11), Some(10));
+		assert_eq!(Staking::bonded(&11), Some(11));
 		// Confirm account 11 has some free balance
 		assert_eq!(Balances::free_balance(11), 1000);
-		// Confirm account 11 (via controller 10) is totally staked
+		// Confirm account 11 (via controller) is totally staked
 		assert_eq!(Staking::eras_stakers(active_era(), 11).total, 1000);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
-			Balances::transfer_allow_death(RuntimeOrigin::signed(11), 20, 1),
+			Balances::transfer_allow_death(RuntimeOrigin::signed(11), 21, 1),
 			TokenError::Frozen,
 		);
 
 		// Give account 11 extra free balance
 		let _ = Balances::make_free_balance_be(&11, 10000);
 		// Confirm that account 11 can now transfer some balance
-		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(11), 20, 1));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(11), 21, 1));
 	});
 }
 
@@ -964,17 +967,17 @@ fn cannot_transfer_staked_balance_2() {
 	// 21 has 2000 free balance but 1000 at stake
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		// Confirm account 21 is stashed
-		assert_eq!(Staking::bonded(&21), Some(20));
+		assert_eq!(Staking::bonded(&21), Some(21));
 		// Confirm account 21 has some free balance
 		assert_eq!(Balances::free_balance(21), 2000);
-		// Confirm account 21 (via controller 20) is totally staked
+		// Confirm account 21 (via controller) is totally staked
 		assert_eq!(Staking::eras_stakers(active_era(), 21).total, 1000);
 		// Confirm account 21 can transfer at most 1000
 		assert_noop!(
-			Balances::transfer_allow_death(RuntimeOrigin::signed(21), 20, 1001),
+			Balances::transfer_allow_death(RuntimeOrigin::signed(21), 21, 1001),
 			TokenError::Frozen,
 		);
-		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(21), 20, 1000));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(21), 21, 1000));
 	});
 }
 
@@ -983,7 +986,7 @@ fn cannot_reserve_staked_balance() {
 	// Checks that a bonded account cannot reserve balance from free balance
 	ExtBuilder::default().build_and_execute(|| {
 		// Confirm account 11 is stashed
-		assert_eq!(Staking::bonded(&11), Some(10));
+		assert_eq!(Staking::bonded(&11), Some(11));
 		// Confirm account 11 has some free balance
 		assert_eq!(Balances::free_balance(11), 1000);
 		// Confirm account 11 (via controller 10) is totally staked
@@ -3446,18 +3449,18 @@ fn disabled_validators_are_kept_disabled_for_whole_era() {
 			// nominations are not updated.
 			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 
-			// validator 10 should not be disabled since the offence wasn't slashable
-			assert!(!is_disabled(10));
-			// validator 20 gets disabled since it got slashed
-			assert!(is_disabled(20));
+			// validator 11 should not be disabled since the offence wasn't slashable
+			assert!(!is_disabled(11));
+			// validator 21 gets disabled since it got slashed
+			assert!(is_disabled(21));
 
 			advance_session();
 
 			// disabled validators should carry-on through all sessions in the era
-			assert!(!is_disabled(10));
-			assert!(is_disabled(20));
+			assert!(!is_disabled(11));
+			assert!(is_disabled(21));
 
-			// validator 10 should now get disabled
+			// validator 11 should now get disabled
 			on_offence_now(
 				&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
 				&[Perbill::from_percent(25)],
@@ -3469,14 +3472,14 @@ fn disabled_validators_are_kept_disabled_for_whole_era() {
 			advance_session();
 
 			// and both are disabled in the last session of the era
-			assert!(is_disabled(10));
-			assert!(is_disabled(20));
+			assert!(is_disabled(11));
+			assert!(is_disabled(21));
 
 			mock::start_active_era(2);
 
 			// when a new era starts disabled validators get cleared
-			assert!(!is_disabled(10));
-			assert!(!is_disabled(20));
+			assert!(!is_disabled(11));
+			assert!(!is_disabled(21));
 		});
 }
 
@@ -3490,11 +3493,11 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		// Consumed weight for all payout_stakers dispatches that fail
 		let err_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
 
-		let init_balance_10 = Balances::total_balance(&10);
-		let init_balance_100 = Balances::total_balance(&100);
+		let init_balance_11 = Balances::total_balance(&11);
+		let init_balance_101 = Balances::total_balance(&101);
 
-		let part_for_10 = Perbill::from_rational::<u32>(1000, 1125);
-		let part_for_100 = Perbill::from_rational::<u32>(125, 1125);
+		let part_for_11 = Perbill::from_rational::<u32>(1000, 1125);
+		let part_for_101 = Perbill::from_rational::<u32>(125, 1125);
 
 		// Check state
 		Payee::<Test>::insert(11, RewardDestination::Controller);
@@ -3554,12 +3557,12 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		// only era 1 and 2 can be rewarded.
 
 		assert_eq!(
-			Balances::total_balance(&10),
-			init_balance_10 + part_for_10 * (total_payout_1 + total_payout_2),
+			Balances::total_balance(&11),
+			init_balance_11 + part_for_11 * (total_payout_1 + total_payout_2),
 		);
 		assert_eq!(
-			Balances::total_balance(&100),
-			init_balance_100 + part_for_100 * (total_payout_1 + total_payout_2),
+			Balances::total_balance(&101),
+			init_balance_101 + part_for_101 * (total_payout_1 + total_payout_2),
 		);
 	});
 }
@@ -4305,38 +4308,38 @@ fn session_buffering_no_offset() {
 #[test]
 fn cannot_rebond_to_lower_than_ed() {
 	ExtBuilder::default()
-		.existential_deposit(10)
-		.balance_factor(10)
+		.existential_deposit(11)
+		.balance_factor(11)
 		.build_and_execute(|| {
 			// initial stuff.
 			assert_eq!(
-				Staking::ledger(&20).unwrap(),
+				Staking::ledger(&21).unwrap(),
 				StakingLedger {
 					stash: 21,
-					total: 10 * 1000,
-					active: 10 * 1000,
+					total: 11 * 1000,
+					active: 11 * 1000,
 					unlocking: Default::default(),
 					claimed_rewards: bounded_vec![],
 				}
 			);
 
 			// unbond all of it. must be chilled first.
-			assert_ok!(Staking::chill(RuntimeOrigin::signed(20)));
-			assert_ok!(Staking::unbond(RuntimeOrigin::signed(20), 10 * 1000));
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(21)));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(21), 11 * 1000));
 			assert_eq!(
-				Staking::ledger(&20).unwrap(),
+				Staking::ledger(&21).unwrap(),
 				StakingLedger {
 					stash: 21,
-					total: 10 * 1000,
+					total: 11 * 1000,
 					active: 0,
-					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, era: 3 }],
+					unlocking: bounded_vec![UnlockChunk { value: 11 * 1000, era: 3 }],
 					claimed_rewards: bounded_vec![],
 				}
 			);
 
 			// now bond a wee bit more
 			assert_noop!(
-				Staking::rebond(RuntimeOrigin::signed(20), 5),
+				Staking::rebond(RuntimeOrigin::signed(21), 5),
 				Error::<Test>::InsufficientBond
 			);
 		})
@@ -4391,7 +4394,7 @@ fn do_not_die_when_active_is_ed() {
 		.build_and_execute(|| {
 			// given
 			assert_eq!(
-				Staking::ledger(&20).unwrap(),
+				Staking::ledger(&21).unwrap(),
 				StakingLedger {
 					stash: 21,
 					total: 1000 * ed,
@@ -4402,13 +4405,13 @@ fn do_not_die_when_active_is_ed() {
 			);
 
 			// when unbond all of it except ed.
-			assert_ok!(Staking::unbond(RuntimeOrigin::signed(20), 999 * ed));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(21), 999 * ed));
 			start_active_era(3);
-			assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(20), 100));
+			assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(21), 100));
 
 			// then
 			assert_eq!(
-				Staking::ledger(&20).unwrap(),
+				Staking::ledger(&21).unwrap(),
 				StakingLedger {
 					stash: 21,
 					total: ed,
@@ -4471,9 +4474,9 @@ mod election_data_provider {
 	fn set_minimum_active_stake_is_correct() {
 		ExtBuilder::default()
 			.nominate(false)
-			.add_staker(61, 60, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
-			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![21]))
-			.add_staker(81, 80, 50, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.add_staker(61, 61, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.add_staker(71, 71, 10, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.add_staker(81, 81, 50, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.build_and_execute(|| {
 				assert_ok!(<Staking as ElectionDataProvider>::electing_voters(None));
 				assert_eq!(MinimumActiveStake::<Test>::get(), 10);
@@ -4545,19 +4548,19 @@ mod election_data_provider {
 			// ppl, but then lower the MaxNomination limit.
 			.add_staker(
 				61,
-				60,
+				61,
 				2_000,
 				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
 			)
 			.add_staker(
 				71,
-				70,
+				71,
 				2_000,
 				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
 			)
 			.add_staker(
 				81,
-				80,
+				81,
 				2_000,
 				StakerStatus::<AccountId>::Nominator(vec![21, 22, 23, 24, 25]),
 			)
@@ -5026,8 +5029,8 @@ fn min_commission_works() {
 fn change_of_max_nominations() {
 	use frame_election_provider_support::ElectionDataProvider;
 	ExtBuilder::default()
-		.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
-		.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
+		.add_staker(61, 61, 10, StakerStatus::Nominator(vec![1]))
+		.add_staker(71, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
 		.balance_factor(10)
 		.build_and_execute(|| {
 			// pre-condition
@@ -5037,7 +5040,7 @@ fn change_of_max_nominations() {
 				Nominators::<Test>::iter()
 					.map(|(k, n)| (k, n.targets.len()))
 					.collect::<Vec<_>>(),
-				vec![(70, 3), (101, 2), (60, 1)]
+				vec![(101, 2), (71, 3), (61, 1)]
 			);
 			// 3 validators and 3 nominators
 			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3);
@@ -5049,7 +5052,7 @@ fn change_of_max_nominations() {
 				Nominators::<Test>::iter()
 					.map(|(k, n)| (k, n.targets.len()))
 					.collect::<Vec<_>>(),
-				vec![(70, 3), (101, 2), (60, 1)]
+				vec![(101, 2), (71, 3), (61, 1)]
 			);
 			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3);
 
@@ -5060,7 +5063,7 @@ fn change_of_max_nominations() {
 				Nominators::<Test>::iter()
 					.map(|(k, n)| (k, n.targets.len()))
 					.collect::<Vec<_>>(),
-				vec![(70, 3), (101, 2), (60, 1)]
+				vec![(101, 2), (71, 3), (61, 1)]
 			);
 			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3);
 
@@ -5072,12 +5075,12 @@ fn change_of_max_nominations() {
 				Nominators::<Test>::iter()
 					.map(|(k, n)| (k, n.targets.len()))
 					.collect::<Vec<_>>(),
-				vec![(101, 2), (60, 1)]
+				vec![(101, 2), (61, 1)]
 			);
 			// 70 is still in storage..
-			assert!(Nominators::<Test>::contains_key(70));
+			assert!(Nominators::<Test>::contains_key(71));
 			// but its value cannot be decoded and default is returned.
-			assert!(Nominators::<Test>::get(70).is_none());
+			assert!(Nominators::<Test>::get(71).is_none());
 
 			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 2);
 			assert!(Nominators::<Test>::contains_key(101));
@@ -5090,12 +5093,12 @@ fn change_of_max_nominations() {
 				Nominators::<Test>::iter()
 					.map(|(k, n)| (k, n.targets.len()))
 					.collect::<Vec<_>>(),
-				vec![(60, 1)]
+				vec![(61, 1)]
 			);
-			assert!(Nominators::<Test>::contains_key(70));
-			assert!(Nominators::<Test>::contains_key(60));
-			assert!(Nominators::<Test>::get(70).is_none());
-			assert!(Nominators::<Test>::get(60).is_some());
+			assert!(Nominators::<Test>::contains_key(71));
+			assert!(Nominators::<Test>::contains_key(61));
+			assert!(Nominators::<Test>::get(71).is_none());
+			assert!(Nominators::<Test>::get(61).is_some());
 			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 1);
 
 			// now one of them can revive themselves by re-nominating to a proper value.
@@ -5104,13 +5107,13 @@ fn change_of_max_nominations() {
 				Nominators::<Test>::iter()
 					.map(|(k, n)| (k, n.targets.len()))
 					.collect::<Vec<_>>(),
-				vec![(70, 1), (60, 1)]
+				vec![(71, 1), (61, 1)]
 			);
 
 			// or they can be chilled by any account.
 			assert!(Nominators::<Test>::contains_key(101));
 			assert!(Nominators::<Test>::get(101).is_none());
-			assert_ok!(Staking::chill_other(RuntimeOrigin::signed(70), 100));
+			assert_ok!(Staking::chill_other(RuntimeOrigin::signed(71), 101));
 			assert!(!Nominators::<Test>::contains_key(101));
 			assert!(Nominators::<Test>::get(101).is_none());
 		})

@@ -578,11 +578,7 @@ pub(crate) fn bond_validator(who: AccountId, val: Balance) {
 	));
 }
 
-pub(crate) fn bond_nominator(
-	who: AccountId,
-	val: Balance,
-	target: Vec<AccountId>,
-) {
+pub(crate) fn bond_nominator(who: AccountId, val: Balance, target: Vec<AccountId>) {
 	bond(who, val);
 	assert_ok!(Staking::nominate(RuntimeOrigin::signed(who), target));
 }
