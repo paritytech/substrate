@@ -342,17 +342,13 @@ impl ConfigDef {
 					helper::take_first_item_pallet_attr::<PalletAttr>(trait_item)
 				{
 					if pallet_attr.ident == "constant" {
-						match trait_item {
-							syn::TraitItem::Type(ref typ) => {
-								let constant = ConstMetadataDef::try_from(typ)?;
-								consts_metadata.push(constant);
-							},
-							_ => {
-								let msg =
-									"Invalid pallet::constant in pallet::config, expected type trait item";
-								return Err(syn::Error::new(trait_item.span(), msg))
-							},
-						}
+						let syn::TraitItem::Type(ref typ) = trait_item else {
+							let msg =
+								"Invalid pallet::constant in pallet::config, expected type trait item";
+							return Err(syn::Error::new(trait_item.span(), msg))
+						};
+						let constant = ConstMetadataDef::try_from(typ)?;
+						consts_metadata.push(constant);
 					} else if pallet_attr.ident == "no_default" {
 						no_default = true
 					} else {
