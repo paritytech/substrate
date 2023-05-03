@@ -404,10 +404,9 @@ impl substrate_test_pallet::Config for Runtime {}
 
 // Required for `pallet_babe::Config`.
 impl pallet_timestamp::Config for Runtime {
-	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = Babe;
-	type MinimumPeriod = ConstU64<5>;
+	type MinimumPeriod = ConstU64<500>;
 	type WeightInfo = pallet_timestamp::weights::SubstrateWeight<Runtime>;
 }
 
