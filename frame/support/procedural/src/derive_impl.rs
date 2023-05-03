@@ -161,7 +161,7 @@ fn test_derive_impl_attr_args_parsing() {
 	))
 	.unwrap();
 	parse2::<DeriveImplAttrArgs>(quote!(
-		frame_system::preludes::testing::TestDefaultConfig as DefaultConfig
+		frame_system::prelude::testing::TestDefaultConfig as DefaultConfig
 	))
 	.unwrap();
 	parse2::<DeriveImplAttrArgs>(quote!(Something as some::path::DefaultConfig)).unwrap();

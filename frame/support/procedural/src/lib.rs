@@ -874,7 +874,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// Consider the following taken from the `basic` example pallet:
 ///
 /// ```ignore
-/// #[derive_impl(frame_system::preludes::testing::TestDefaultConfig as frame_system::pallet::DefaultConfig)]
+/// #[derive_impl(frame_system::prelude::testing::TestDefaultConfig as frame_system::pallet::DefaultConfig)]
 /// impl frame_system::Config for Test {
 /// 	// These are all defined by system as mandatory.
 /// 	type BaseCallFilter = frame_support::traits::Everything;
@@ -920,7 +920,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// ```ignore
 /// impl frame_system::Config for Test {
-/// 	use frame_system::preludes::testing::TestDefaultConfig;
+/// 	use frame_system::prelude::testing::TestDefaultConfig;
 /// 	use frame_system::pallet::DefaultConfig;
 ///
 /// 	type BaseCallFilter = frame_support::traits::Everything;
