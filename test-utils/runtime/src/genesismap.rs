@@ -23,7 +23,12 @@ use super::{
 };
 use codec::Encode;
 use sc_service::construct_genesis_block;
-use sp_core::storage::{well_known_keys, StateVersion, Storage};
+use sp_core::{
+	sr25519,
+	storage::{well_known_keys, StateVersion, Storage},
+	Pair,
+};
+use sp_keyring::{AccountKeyring, Sr25519Keyring};
 use sp_runtime::{
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT},
 	BuildStorage,
@@ -39,8 +44,6 @@ pub struct GenesisStorageBuilder {
 	extra_storage: Storage,
 	wasm_code: Option<Vec<u8>>,
 }
-use sp_core::{sr25519, Pair};
-use sp_keyring::{AccountKeyring, Sr25519Keyring};
 
 impl Default for GenesisStorageBuilder {
 	/// Creates a builder with default settings for `substrate_test_runtime`.

@@ -568,7 +568,6 @@ mod tests {
 	const MEDIUM: u32 = 250000000;
 	const TINY: u32 = 1000;
 
-
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY)).nonce(nonce).build()
 	}

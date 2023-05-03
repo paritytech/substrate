@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Provides utils for building the `Extrinsic` instances used with `substrate-test-runtime`.
+
 use crate::{
 	substrate_test_pallet::pallet::Call as PalletCall, AccountId, Balance, BalancesCall,
 	CheckSubstrateCall, Extrinsic, Index, Pair, RuntimeCall, SignedPayload, TransferData,
@@ -29,9 +31,13 @@ use sp_std::prelude::*;
 /// Transfer used in test substrate pallet. Extrinsic is created and signed using this data.
 #[derive(Clone)]
 pub struct Transfer {
+	/// Transfer sender and signer of created extrinsic
 	pub from: Pair,
+	/// The recipient of the transfer
 	pub to: AccountId,
+	/// Amount of transfer
 	pub amount: Balance,
+	/// Sender's account nonce at which transfer is valid
 	pub nonce: u64,
 }
 

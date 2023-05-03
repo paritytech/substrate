@@ -389,7 +389,7 @@ impl pallet_balances::Config for Runtime {
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = frame_system::Pallet<Runtime>;
+	type AccountStore = System;
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
@@ -503,10 +503,9 @@ impl_runtime_apis! {
 			utx: <Block as BlockT>::Extrinsic,
 			block_hash: <Block as BlockT>::Hash,
 		) -> TransactionValidity {
-			log::trace!(target: LOG_TARGET, "validate_transaction {:?}", utx);
-			let r = Executive::validate_transaction(source, utx, block_hash);
-			log::trace!(target: LOG_TARGET, "validate_transaction a {:?}", r);
-			r
+			let validity = Executive::validate_transaction(source, utx.clone(), block_hash);
+			log::trace!(target: LOG_TARGET, "validate_transaction {:?} {:?}", utx, validity);
+			validity
 		}
 	}
 
@@ -637,15 +636,15 @@ impl_runtime_apis! {
 		}
 
 		fn current_epoch_start() -> Slot {
-			<pallet_babe::Pallet<Runtime>>::current_epoch_start()
+			Babe::current_epoch_start()
 		}
 
 		fn current_epoch() -> sp_consensus_babe::Epoch {
-			<pallet_babe::Pallet<Runtime>>::current_epoch()
+			Babe::current_epoch()
 		}
 
 		fn next_epoch() -> sp_consensus_babe::Epoch {
-			<pallet_babe::Pallet<Runtime>>::next_epoch()
+			Babe::next_epoch()
 		}
 
 		fn submit_report_equivocation_unsigned_extrinsic(
@@ -894,7 +893,7 @@ pub mod storage_key_generator {
 	/// for the debugging convenience only. Value of each hex-string is documented with the literal
 	/// origin.
 	pub fn get_expected_storage_hashed_keys() -> Vec<String> {
-		vec![
+		[
 			//System|:__STORAGE_VERSION__:
 			"00771836bebdd29870ff246d305c578c4e7b9012096b41c4eb3aaf947f6ea429",
 			//SubstrateTest|Authorities
