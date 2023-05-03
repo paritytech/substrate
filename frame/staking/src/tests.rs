@@ -139,16 +139,16 @@ fn kill_stash_works() {
 fn basic_setup_works() {
 	// Verifies initial conditions of mock
 	ExtBuilder::default().build_and_execute(|| {
-		// Account 11 is stashed and locked, and account 10 is the controller
-		assert_eq!(Staking::bonded(&11), Some(10));
-		// Account 21 is stashed and locked, and account 20 is the controller
-		assert_eq!(Staking::bonded(&21), Some(20));
+		// Account 11 is stashed and locked, and is the controller
+		assert_eq!(Staking::bonded(&11), Some(11));
+		// Account 21 is stashed and locked and is the controller
+		assert_eq!(Staking::bonded(&21), Some(21));
 		// Account 1 is not a stashed
 		assert_eq!(Staking::bonded(&1), None);
 
-		// Account 10 controls the stash from account 11, which is 100 * balance_factor units
+		// Account 11 controls its own stash, which is 100 * balance_factor units
 		assert_eq!(
-			Staking::ledger(&10).unwrap(),
+			Staking::ledger(&11).unwrap(),
 			StakingLedger {
 				stash: 11,
 				total: 1000,
@@ -157,9 +157,9 @@ fn basic_setup_works() {
 				claimed_rewards: bounded_vec![],
 			}
 		);
-		// Account 20 controls the stash from account 21, which is 200 * balance_factor units
+		// Account 21 controls its own stash, which is 200 * balance_factor units
 		assert_eq!(
-			Staking::ledger(&20),
+			Staking::ledger(&21),
 			Some(StakingLedger {
 				stash: 21,
 				total: 1000,
@@ -182,7 +182,7 @@ fn basic_setup_works() {
 		);
 
 		assert_eq!(
-			Staking::ledger(100),
+			Staking::ledger(101),
 			Some(StakingLedger {
 				stash: 101,
 				total: 500,
@@ -459,20 +459,20 @@ fn blocking_and_kicking_works() {
 		.build_and_execute(|| {
 			// block validator 10/11
 			assert_ok!(Staking::validate(
-				RuntimeOrigin::signed(10),
+				RuntimeOrigin::signed(11),
 				ValidatorPrefs { blocked: true, ..Default::default() }
 			));
 			// attempt to nominate from 100/101...
-			assert_ok!(Staking::nominate(RuntimeOrigin::signed(100), vec![11]));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(101), vec![11]));
 			// should have worked since we're already nominated them
 			assert_eq!(Nominators::<Test>::get(&101).unwrap().targets, vec![11]);
 			// kick the nominator
-			assert_ok!(Staking::kick(RuntimeOrigin::signed(10), vec![101]));
+			assert_ok!(Staking::kick(RuntimeOrigin::signed(11), vec![101]));
 			// should have been kicked now
 			assert!(Nominators::<Test>::get(&101).unwrap().targets.is_empty());
 			// attempt to nominate from 100/101...
 			assert_noop!(
-				Staking::nominate(RuntimeOrigin::signed(100), vec![11]),
+				Staking::nominate(RuntimeOrigin::signed(101), vec![11]),
 				Error::<Test>::BadTarget
 			);
 		});
@@ -1390,7 +1390,7 @@ fn auto_withdraw_may_not_unlock_all_chunks() {
 
 		// fills the chunking slots for account
 		mock::start_active_era(current_era);
-		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(11), 1));
 
 		current_era += 1;
 		mock::start_active_era(current_era);
@@ -1398,12 +1398,12 @@ fn auto_withdraw_may_not_unlock_all_chunks() {
 		// unbonding will fail because i) there are no remaining chunks and ii) no filled chunks
 		// can be released because current chunk hasn't stay in the queue for at least
 		// `BondingDuration`
-		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
+		assert_noop!(Staking::unbond(RuntimeOrigin::signed(11), 1), Error::<Test>::NoMoreChunks);
 
 		// fast-forward a few eras for unbond to be successful with implicit withdraw
 		current_era += 10;
 		mock::start_active_era(current_era);
-		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(11), 1));
 	})
 }
 
