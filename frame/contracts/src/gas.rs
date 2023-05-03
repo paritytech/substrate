@@ -181,17 +181,36 @@ impl<T: Config> GasMeter<T> {
 		self.gas_left = self.gas_left.saturating_add(adjustment).min(self.gas_limit);
 	}
 
+	/// Update the `ref_time` component of the `gas_left` to bring it into line with
+	/// the Wasm engine gas meter.
+	///
+	/// This is used for gas synchronizations with the engine both on enter and on exit
+	/// of every host function.
+	///
+	/// Normally this would never fail, as engine should fail first when out of gas.
+	pub fn sync_reftime(&mut self, consumed: u64) -> Result<(), DispatchError> {
+		if !consumed.is_zero() {
+			let ref_time = self.gas_left.ref_time_mut();
+			*ref_time = self
+				.gas_limit
+				.ref_time()
+				.checked_sub(consumed)
+				.ok_or_else(|| Error::<T>::OutOfGas)?;
+		}
+		Ok(())
+	}
+
 	/// Returns the amount of gas that is required to run the same call.
 	///
 	/// This can be different from `gas_spent` because due to `adjust_gas` the amount of
 	/// spent gas can temporarily drop and be refunded later.
 	pub fn gas_required(&self) -> Weight {
-		self.gas_limit - self.gas_left_lowest()
+		self.gas_limit.saturating_sub(self.gas_left_lowest())
 	}
 
 	/// Returns how much gas was spent
 	pub fn gas_consumed(&self) -> Weight {
-		self.gas_limit - self.gas_left
+		self.gas_limit.saturating_sub(self.gas_left)
 	}
 
 	/// Returns how much gas left from the initial budget.

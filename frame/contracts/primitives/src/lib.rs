@@ -113,6 +113,8 @@ pub struct ExecReturnValue {
 	pub flags: ReturnFlags,
 	/// Buffer passed along by `seal_return`. Empty when `seal_return` was never called.
 	pub data: Vec<u8>,
+	/// Gas consumed during the execution. This is returned from the engine.
+	pub reftime_consumed: u64,
 }
 
 impl ExecReturnValue {

@@ -325,7 +325,7 @@ pub trait Executable<T: Config>: Sized {
 	/// Load the executable from storage.
 	///
 	/// # Note
-	/// Charges size base load and instrumentation weight from the gas meter.
+	/// Charges size base load weight from the gas meter.
 	fn from_storage(
 		code_hash: CodeHash<T>,
 		schedule: &Schedule<T>,
@@ -345,6 +345,7 @@ pub trait Executable<T: Config>: Sized {
 	fn remove_user(code_hash: CodeHash<T>);
 
 	/// Execute the specified exported function and return the result.
+	/// `reftime_limit` is passed to the execution engine to account for gas.
 	///
 	/// When the specified function is `Constructor` the executable is stored and its
 	/// refcount incremented.
@@ -358,6 +359,7 @@ pub trait Executable<T: Config>: Sized {
 		ext: &mut E,
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
+		reftime_limit: u64,
 	) -> ExecResult;
 
 	/// The code hash of the executable.
@@ -706,6 +708,7 @@ where
 			schedule,
 			determinism,
 		)?;
+
 		let stack = Self {
 			origin,
 			schedule,
@@ -864,10 +867,19 @@ where
 			// Every non delegate call or instantiate also optionally transfers the balance.
 			self.initial_transfer()?;
 
-			// Call into the wasm blob.
+			// Take the ref_time part of the gas_left from the current frame.
+			let frame = self.top_frame();
+			let reftime_left = frame.nested_gas.gas_left().ref_time();
+
+			// Call into the Wasm blob.
+			// We pass `reftime_left` into the execution engine to initialize its gas metering.
 			let output = executable
-				.execute(self, &entry_point, input_data)
+				.execute(self, &entry_point, input_data, reftime_left)
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
+
+			// Sync this frame's gas meter with the engine's one.
+			let frame = self.top_frame_mut();
+			frame.nested_gas.sync_reftime(output.reftime_consumed)?;
 
 			// Avoid useless work that would be reverted anyways.
 			if output.did_revert() {

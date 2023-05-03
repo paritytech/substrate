@@ -221,7 +221,9 @@ impl<T: Config> PrefabWasmModule<T> {
 			.wasm_multi_value(false)
 			.wasm_mutable_global(false)
 			.wasm_sign_extension(false)
-			.wasm_saturating_float_to_int(false);
+			.wasm_saturating_float_to_int(false)
+			.consume_fuel(true);
+
 		let engine = Engine::new(&config);
 		let module = Module::new(&engine, code)?;
 		let mut store = Store::new(&engine, host_state);
@@ -313,6 +315,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 		ext: &mut E,
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
+		reftime_limit: u64,
 	) -> ExecResult {
 		let runtime = Runtime::new(ext, input_data);
 		let (mut store, memory, instance) = Self::instantiate::<crate::wasm::runtime::Env, _>(
@@ -331,6 +334,11 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 		})?;
 		store.data_mut().set_memory(memory);
 
+		// Set fuel limit for the Wasm module execution.
+		store
+			.add_fuel(reftime_limit)
+			.expect("We've set up engine to fuel consuming mode; qed");
+
 		let exported_func = instance
 			.get_export(&store, function.identifier())
 			.and_then(|export| export.into_func())
@@ -345,8 +353,9 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 		}
 
 		let result = exported_func.call(&mut store, &[], &mut []);
+		let reftime_consumed = store.fuel_consumed().unwrap_or_default();
 
-		store.into_data().to_execution_result(result)
+		store.into_data().to_execution_result(result, reftime_consumed)
 	}
 
 	fn code_hash(&self) -> &CodeHash<T> {

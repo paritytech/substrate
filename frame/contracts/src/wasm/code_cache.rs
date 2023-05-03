@@ -161,6 +161,7 @@ pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> D
 /// If the module was instrumented with a lower version of schedule than
 /// the current one given as an argument, then this function will perform
 /// re-instrumentation and update the cache in the storage.
+// TODO this should ho to PreFabWasmMod without re-instrumentation.
 pub fn load<T: Config>(
 	code_hash: CodeHash<T>,
 	schedule: &Schedule<T>,

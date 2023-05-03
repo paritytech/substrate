@@ -30,8 +30,8 @@ use crate::{
 use codec::{Encode, MaxEncodedLen};
 use sp_runtime::{traits::Hash, DispatchError};
 use sp_std::prelude::*;
-use wasm_instrument::{
-	parity_wasm::elements::{self, External, Internal, MemoryType, Type, ValueType},
+use wasm_instrument::parity_wasm::elements::{
+	self, External, Internal, MemoryType, Type, ValueType,
 };
 use wasmi::StackLimits;
 use wasmparser::{Validator, WasmFeatures};
@@ -381,8 +381,7 @@ where
 		contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
 		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
 
-		let memory_limits =
-			get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
+		let memory_limits = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
 
 		let code = contract_module.into_wasm_code()?;
 
@@ -482,6 +481,7 @@ where
 /// Strictly speaking is not necessary to check the existing code before reinstrumenting because
 /// it can't change in the meantime. However, since we recently switched the validation library
 /// we want to re-validate to weed out any bugs that were lurking in the old version.
+/// TODO remove this func
 pub fn reinstrument<E, T>(
 	original_code: &[u8],
 	schedule: &Schedule<T>,
