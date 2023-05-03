@@ -197,28 +197,10 @@ pub trait AssetsCallback<AssetId, AccountId> {
 /// Empty implementation in case no callbacks are required.
 impl<AssetId, AccountId> AssetsCallback<AssetId, AccountId> for () {}
 
-/// Trait for creating an asset account with a deposit taken from a specified by client depositor.
-pub trait Touch {
-	/// Identifier for the class of asset.
-	type AssetId;
-	/// Account identifier type.
-	type AccountId;
-	/// The type for currency units of the deposit.
-	type Balance;
-	/// The deposit amount required for creating an asset account.
-	fn deposit() -> Option<Self::Balance>;
-	/// Create an account for `who` of the `asset` with a deposit taken from the `depositor`.
-	fn touch(
-		asset: Self::AssetId,
-		who: Self::AccountId,
-		depositor: Self::AccountId,
-	) -> DispatchResult;
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::AccountTouch};
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
@@ -1624,23 +1606,17 @@ pub mod pallet {
 		}
 	}
 
-	/// Implements `Touch` trait.
+	/// Implements `AccountTouch` trait.
 	/// Note that a depositor can be any account, without any specific privilege.
 	/// This implementation is supposed to be used only for creation of system accounts.
-	impl<T: Config<I>, I: 'static> Touch for Pallet<T, I> {
-		type AssetId = T::AssetId;
-		type AccountId = T::AccountId;
+	impl<T: Config<I>, I: 'static> AccountTouch<T::AssetId, T::AccountId> for Pallet<T, I> {
 		type Balance = DepositBalanceOf<T, I>;
 
 		fn deposit() -> Option<Self::Balance> {
 			Some(T::AssetAccountDeposit::get())
 		}
 
-		fn touch(
-			asset: Self::AssetId,
-			who: Self::AccountId,
-			depositor: Self::AccountId,
-		) -> DispatchResult {
+		fn touch(asset: T::AssetId, who: T::AccountId, depositor: T::AccountId) -> DispatchResult {
 			Self::do_touch(asset, who, depositor)
 		}
 	}

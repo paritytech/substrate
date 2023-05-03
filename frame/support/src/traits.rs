@@ -118,6 +118,9 @@ pub use messages::{
 	ProcessMessageError, ServiceQueues, TransformOrigin,
 };
 
+mod account;
+pub use account::Touch as AccountTouch;
+
 #[cfg(feature = "try-runtime")]
 mod try_runtime;
 #[cfg(feature = "try-runtime")]
