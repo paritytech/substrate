@@ -40,7 +40,7 @@ use sc_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::Block as BlockT;
 
 use std::{
-	collections::{HashMap, HashSet, VecDeque},
+	collections::{HashMap, HashSet},
 	future::Future,
 	iter,
 	pin::Pin,
@@ -77,8 +77,6 @@ type PendingSyncSubstreamValidation =
 
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT> {
-	/// Pending list of messages to return from `poll` as a priority.
-	pending_messages: VecDeque<CustomMessageOutcome>,
 	/// Used to report reputation changes.
 	peerset_handle: sc_peerset::PeersetHandle,
 	/// Handles opening the unique substream and sending and receiving raw messages.
@@ -181,7 +179,6 @@ impl<B: BlockT> Protocol<B> {
 		};
 
 		let protocol = Self {
-			pending_messages: VecDeque::new(),
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
 			notification_protocols: iter::once(block_announces_protocol.notifications_protocol)
@@ -440,22 +437,6 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
 	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
-		if let Some(message) = self.pending_messages.pop_front() {
-			return Poll::Ready(ToSwarm::GenerateEvent(message))
-		}
-
-		let event = match self.behaviour.poll(cx, params) {
-			Poll::Pending => return Poll::Pending,
-			Poll::Ready(ToSwarm::GenerateEvent(ev)) => ev,
-			Poll::Ready(ToSwarm::Dial { opts }) => return Poll::Ready(ToSwarm::Dial { opts }),
-			Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }) =>
-				return Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }),
-			Poll::Ready(ToSwarm::ReportObservedAddr { address, score }) =>
-				return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
-			Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }) =>
-				return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
-		};
-
 		while let Poll::Ready(Some(validation_result)) =
 			self.sync_substream_validations.poll_next_unpin(cx)
 		{
@@ -472,6 +453,18 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 				},
 			}
 		}
+
+		let event = match self.behaviour.poll(cx, params) {
+			Poll::Pending => return Poll::Pending,
+			Poll::Ready(ToSwarm::GenerateEvent(ev)) => ev,
+			Poll::Ready(ToSwarm::Dial { opts }) => return Poll::Ready(ToSwarm::Dial { opts }),
+			Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }) =>
+				return Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }),
+			Poll::Ready(ToSwarm::ReportObservedAddr { address, score }) =>
+				return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
+			Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }) =>
+				return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
+		};
 
 		let outcome = match event {
 			NotificationsOut::CustomProtocolOpen {
@@ -535,7 +528,6 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 							) {
 								Ok(handshake) => {
 									let roles = handshake.roles;
-									self.peers.insert(peer_id, roles);
 
 									let (tx, rx) = oneshot::channel();
 									let _ = self.tx.unbounded_send(
@@ -668,10 +660,6 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 
 		if !matches!(outcome, CustomMessageOutcome::None) {
 			return Poll::Ready(ToSwarm::GenerateEvent(outcome))
-		}
-
-		if let Some(message) = self.pending_messages.pop_front() {
-			return Poll::Ready(ToSwarm::GenerateEvent(message))
 		}
 
 		// This block can only be reached if an event was pulled from the behaviour and that

@@ -109,6 +109,7 @@ where
 			.ok_or_else(|| ImportError("Unknown validator set".to_string()))?;
 
 		decode_and_verify_finality_proof::<Block>(&encoded[..], number, &validator_set)
+			.map_err(|(err, _)| err)
 	}
 }
 

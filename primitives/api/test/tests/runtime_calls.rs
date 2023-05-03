@@ -29,6 +29,7 @@ use substrate_test_runtime_client::{
 use codec::Encode;
 use sc_block_builder::BlockBuilderProvider;
 use sp_consensus::SelectChain;
+use substrate_test_runtime_client::sc_executor::WasmExecutor;
 
 fn calling_function_with_strat(strat: ExecutionStrategy) {
 	let client = TestClientBuilder::new().set_execution_strategy(strat).build();
@@ -178,11 +179,8 @@ fn record_proof_works() {
 
 	// Use the proof backend to execute `execute_block`.
 	let mut overlay = Default::default();
-	let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new(
-		WasmExecutionMethod::Interpreted,
-		None,
-		8,
-		2,
+	let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new_with_wasm_executor(
+		WasmExecutor::builder().build(),
 	);
 	execution_proof_check_on_trie_backend(
 		&backend,

@@ -1,5 +1,0 @@
-error: The start of a `ParamRange` must be less than or equal to the end
-  --> tests/benchmark_ui/bad_param_range.rs:10:21
-   |
-10 |     fn bench(x: Linear<3, 1>) {
-   |                        ^
