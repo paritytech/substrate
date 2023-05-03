@@ -823,8 +823,16 @@ pub mod storage_key_generator {
 	use sp_core::Pair;
 	use sp_keyring::AccountKeyring;
 
+	/// Generate hex string without prefix
+	pub(super) fn hex<T>(x: T) -> String
+	where
+		T: array_bytes::Hex,
+	{
+		x.hex(Default::default())
+	}
+
 	fn concat_hashes(input: &Vec<&[u8]>) -> String {
-		input.iter().map(|s| sp_core::hashing::twox_128(s)).map(hex::encode).collect()
+		input.iter().map(|s| sp_core::hashing::twox_128(s)).map(hex).collect()
 	}
 
 	fn twox_64_concat(x: &[u8]) -> Vec<u8> {
@@ -855,7 +863,7 @@ pub mod storage_key_generator {
 
 		let mut expected_keys = keys.iter().map(concat_hashes).collect::<Vec<String>>();
 
-		expected_keys.extend(literals.iter().map(hex::encode));
+		expected_keys.extend(literals.into_iter().map(hex));
 
 		let balances_map_keys = (0..16_usize)
 			.into_iter()
@@ -873,7 +881,7 @@ pub mod storage_key_generator {
 					.collect::<Vec<u8>>()
 			})
 			.map(|hash_pubkey| {
-				[concat_hashes(&vec![b"System", b"Account"]), hex::encode(hash_pubkey)].concat()
+				[concat_hashes(&vec![b"System", b"Account"]), hex(hash_pubkey)].concat()
 			});
 
 		expected_keys.extend(balances_map_keys);
@@ -881,7 +889,7 @@ pub mod storage_key_generator {
 		expected_keys.push(
 			[
 				concat_hashes(&vec![b"System", b"BlockHash"]),
-				hex::encode(0u64.using_encoded(twox_64_concat)),
+				hex(0u64.using_encoded(twox_64_concat)),
 			]
 			.concat(),
 		);
@@ -1091,7 +1099,7 @@ mod tests {
 				.top
 				.keys()
 				.cloned()
-				.map(hex::encode)
+				.map(storage_key_generator::hex)
 				.collect::<Vec<_>>(),
 			storage_key_generator::get_expected_storage_hashed_keys()
 		);

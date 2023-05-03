@@ -52,7 +52,7 @@ sp-externalities = { version = "0.13.0", default-features = false, path = "../..
 sp-debug-derive = { path = "../../primitives/debug-derive" }
 
 # 3rd party
-hex = { version = "0.4.3", default-features = false, optional = true }
+array-bytes = { version = "6.1", optional = true }
 log = { version = "0.4.17", default-features = false }
 serde = { version = "1.0.136", optional = true, features = ["derive"] }
 
@@ -72,6 +72,7 @@ default = [
 	"std",
 ]
 std = [
+	"array-bytes",
 	"sp-application-crypto/std",
 	"sp-consensus-aura/std",
 	"sp-consensus-babe/std",
@@ -111,7 +112,6 @@ std = [
 	"sp-transaction-pool/std",
 	"trie-db/std",
 	"substrate-wasm-builder",
-	"hex/std"
 ]
 # Special feature to disable logging
 disable-logging = [ "sp-api/disable-logging" ]
