@@ -532,9 +532,9 @@ where
 			.filter(|k| !is_default_child_storage_key(&k.0))
 			.collect::<Vec<_>>();
 		sp.stop_with_message(format!(
-			"✅ Found {} keys ({}s)",
+			"✅ Found {} keys ({:.2}s)",
 			keys.len(),
-			start.elapsed().as_secs()
+			start.elapsed().as_secs_f32()
 		));
 		if keys.is_empty() {
 			return Ok(Default::default())
@@ -598,7 +598,10 @@ where
 		let mut sp = Spinner::with_timer(Spinners::Dots, "Inserting keys into DB...".into());
 		let start = Instant::now();
 		pending_ext.batch_insert(key_values.clone().into_iter().map(|(k, v)| (k.0, v.0)));
-		sp.stop_with_message(format!("✅ Inserted keys into DB ({}s)", start.elapsed().as_secs()));
+		sp.stop_with_message(format!(
+			"✅ Inserted keys into DB ({:.2}s)",
+			start.elapsed().as_secs_f32()
+		));
 		Ok(key_values)
 	}
 
@@ -778,9 +781,9 @@ where
 			let elapsed = now.elapsed();
 			log::info!(
 				target: LOG_TARGET,
-				"adding data for hashed prefix: {:?}, took {:?}s",
+				"adding data for hashed prefix: {:?}, took {:.2}s",
 				HexDisplay::from(prefix),
-				elapsed.as_secs()
+				elapsed.as_secs_f32()
 			);
 			keys_and_values.extend(additional_key_values);
 		}
@@ -922,6 +925,8 @@ where
 		&mut self,
 		config: OfflineConfig,
 	) -> Result<RemoteExternalities<B>, &'static str> {
+		let mut sp = Spinner::with_timer(Spinners::Dots, "Loading snapshot...".into());
+		let start = Instant::now();
 		let Snapshot { block_hash, state_version, raw_storage, storage_root } =
 			self.load_snapshot(config.state_snapshot.path.clone())?;
 
@@ -931,6 +936,7 @@ where
 			self.overwrite_state_version.unwrap_or(state_version),
 		);
 		inner_ext.set_raw_storage_and_root(raw_storage, storage_root);
+		sp.stop_with_message(format!("✅ Loaded snapshot ({:.2}s)", start.elapsed().as_secs_f32()));
 
 		Ok(RemoteExternalities { inner_ext, block_hash })
 	}
