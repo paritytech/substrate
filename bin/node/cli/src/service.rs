@@ -345,7 +345,7 @@ pub fn new_full_base(
 		Vec::default(),
 	));
 
-	let (network, system_rpc_tx, tx_handler_controller, network_starter, sync_service) =
+	let (network, tx_handler_controller, network_starter, sync_service) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
@@ -377,12 +377,10 @@ pub fn new_full_base(
 		config,
 		backend,
 		client: client.clone(),
-		keystore: keystore_container.keystore(),
 		network: network.clone(),
 		rpc_builder: Box::new(rpc_builder),
 		transaction_pool: transaction_pool.clone(),
 		task_manager: &mut task_manager,
-		system_rpc_tx,
 		tx_handler_controller,
 		sync_service: sync_service.clone(),
 		telemetry: telemetry.as_mut(),

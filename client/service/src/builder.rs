@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	build_network_future, build_system_rpc_future,
+	build_network_future,
 	client::{Client, ClientConfig},
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 	error::Error,
@@ -50,18 +50,10 @@ use sc_network_sync::{
 	service::network::NetworkServiceProvider, state_request_handler::StateRequestHandler,
 	warp_request_handler::RequestHandler as WarpSyncRequestHandler, SyncingService,
 };
-use sc_rpc::{
-	author::AuthorApiServer,
-	chain::ChainApiServer,
-	offchain::OffchainApiServer,
-	state::{ChildStateApiServer, StateApiServer},
-	system::SystemApiServer,
-	DenyUnsafe, SubscriptionTaskExecutor,
-};
+use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor};
 use sc_rpc_spec_v2::{chain_head::ChainHeadApiServer, transaction::TransactionApiServer};
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::{MaintainedTransactionPool, TransactionPool};
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_api::{CallApiAt, ProvideRuntimeApi};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::block_validation::{
@@ -345,8 +337,6 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub backend: Arc<Backend>,
 	/// A task manager returned by `new_full_parts`.
 	pub task_manager: &'a mut TaskManager,
-	/// A shared keystore returned by `new_full_parts`.
-	pub keystore: KeystorePtr,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
 	/// Builds additional [`RpcModule`]s that should be added to the server
@@ -354,8 +344,6 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 		Box<dyn Fn(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<TRpc>, Error>>,
 	/// A shared network instance.
 	pub network: Arc<dyn SpawnTaskNetwork<TBl>>,
-	/// A Sender for RPC requests.
-	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	/// Controller for transactions handlers
 	pub tx_handler_controller:
 		sc_network_transactions::TransactionsHandlerController<<TBl as BlockT>::Hash>,
@@ -432,11 +420,9 @@ where
 		task_manager,
 		client,
 		backend,
-		keystore,
 		transaction_pool,
 		rpc_builder,
 		network,
-		system_rpc_tx,
 		tx_handler_controller,
 		sync_service,
 		telemetry,
@@ -518,9 +504,6 @@ where
 			task_manager.spawn_handle(),
 			client.clone(),
 			transaction_pool.clone(),
-			keystore.clone(),
-			system_rpc_tx.clone(),
-			&config,
 			backend.clone(),
 			&*rpc_builder,
 		)
@@ -617,9 +600,6 @@ fn gen_rpc_module<TBl, TBackend, TCl, TRpc, TExPool>(
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
-	keystore: KeystorePtr,
-	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-	config: &Configuration,
 	backend: Arc<TBackend>,
 	rpc_builder: &(dyn Fn(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<TRpc>, Error>),
 ) -> Result<RpcModule<()>, Error>
@@ -643,26 +623,8 @@ where
 	TBl::Hash: Unpin,
 	TBl::Header: Unpin,
 {
-	let system_info = sc_rpc::system::SystemInfo {
-		chain_name: config.chain_spec.name().into(),
-		impl_name: config.impl_name.clone(),
-		impl_version: config.impl_version.clone(),
-		properties: config.chain_spec.properties(),
-		chain_type: config.chain_spec.chain_type(),
-	};
-
 	let mut rpc_api = RpcModule::new(());
 	let task_executor = Arc::new(spawn_handle);
-
-	let (chain, state, child_state) = {
-		let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone()).into_rpc();
-		let (state, child_state) =
-			sc_rpc::state::new_full(client.clone(), task_executor.clone(), deny_unsafe);
-		let state = state.into_rpc();
-		let child_state = child_state.into_rpc();
-
-		(chain, state, child_state)
-	};
 
 	let transaction_v2 = sc_rpc_spec_v2::transaction::Transaction::new(
 		client.clone(),
@@ -692,33 +654,10 @@ where
 	)
 	.into_rpc();
 
-	let author = sc_rpc::author::Author::new(
-		client.clone(),
-		transaction_pool,
-		keystore,
-		deny_unsafe,
-		task_executor.clone(),
-	)
-	.into_rpc();
-
-	let system = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe).into_rpc();
-
-	if let Some(storage) = backend.offchain_storage() {
-		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe).into_rpc();
-
-		rpc_api.merge(offchain).map_err(|e| Error::Application(e.into()))?;
-	}
-
 	// Part of the RPC v2 spec.
 	rpc_api.merge(transaction_v2).map_err(|e| Error::Application(e.into()))?;
 	rpc_api.merge(chain_head_v2).map_err(|e| Error::Application(e.into()))?;
 
-	// Part of the old RPC spec.
-	rpc_api.merge(chain).map_err(|e| Error::Application(e.into()))?;
-	rpc_api.merge(author).map_err(|e| Error::Application(e.into()))?;
-	rpc_api.merge(system).map_err(|e| Error::Application(e.into()))?;
-	rpc_api.merge(state).map_err(|e| Error::Application(e.into()))?;
-	rpc_api.merge(child_state).map_err(|e| Error::Application(e.into()))?;
 	// Additional [`RpcModule`]s defined in the node to fit the specific blockchain
 	let extra_rpcs = rpc_builder(deny_unsafe, task_executor.clone())?;
 	rpc_api.merge(extra_rpcs).map_err(|e| Error::Application(e.into()))?;
@@ -750,7 +689,6 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 ) -> Result<
 	(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 		sc_network_transactions::TransactionsHandlerController<<TBl as BlockT>::Hash>,
 		NetworkStarter,
 		Arc<SyncingService<TBl>>,
@@ -928,7 +866,6 @@ where
 		.extra_sets
 		.insert(0, transactions_handler_proto.set_config());
 
-	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
 
@@ -947,20 +884,6 @@ where
 	);
 	spawn_handle.spawn("import-queue", None, import_queue.run(Box::new(sync_service_import_queue)));
 	spawn_handle.spawn_blocking("syncing", None, engine.run());
-
-	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc", 10_000);
-	spawn_handle.spawn(
-		"system-rpc-handler",
-		Some("networking"),
-		build_system_rpc_future(
-			config.role.clone(),
-			network_mut.service().clone(),
-			sync_service.clone(),
-			client.clone(),
-			system_rpc_rx,
-			has_bootnodes,
-		),
-	);
 
 	let future =
 		build_network_future(network_mut, client, sync_service.clone(), config.announce_block);
@@ -1003,7 +926,6 @@ where
 
 	Ok((
 		network,
-		system_rpc_tx,
 		tx_handler_controller,
 		NetworkStarter(network_start_tx),
 		sync_service.clone(),
