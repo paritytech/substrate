@@ -23,6 +23,7 @@ use crate::dispatch::DispatchResult;
 pub trait Touch<AssetId, AccountId> {
 	/// The type for currency units of the deposit.
 	type Balance;
+
 	/// The deposit amount of a native currency required for creating an asset account.
 	fn deposit() -> Option<Self::Balance>;
 	/// Create an account for `who` of the `asset` with a deposit taken from the `depositor`.
