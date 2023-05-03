@@ -695,9 +695,9 @@ fn nominators_also_get_slashed_pro_rata() {
 		assert_eq!(initial_exposure.others.first().unwrap().who, 101);
 
 		// staked values;
-		let nominator_stake = Staking::ledger(100).unwrap().active;
+		let nominator_stake = Staking::ledger(101).unwrap().active;
 		let nominator_balance = balances(&101).0;
-		let validator_stake = Staking::ledger(10).unwrap().active;
+		let validator_stake = Staking::ledger(11).unwrap().active;
 		let validator_balance = balances(&11).0;
 		let exposed_stake = initial_exposure.total;
 		let exposed_validator = initial_exposure.own;
@@ -710,8 +710,8 @@ fn nominators_also_get_slashed_pro_rata() {
 		);
 
 		// both stakes must have been decreased.
-		assert!(Staking::ledger(100).unwrap().active < nominator_stake);
-		assert!(Staking::ledger(10).unwrap().active < validator_stake);
+		assert!(Staking::ledger(101).unwrap().active < nominator_stake);
+		assert!(Staking::ledger(11).unwrap().active < validator_stake);
 
 		let slash_amount = slash_percent * exposed_stake;
 		let validator_share =
@@ -724,8 +724,8 @@ fn nominators_also_get_slashed_pro_rata() {
 		assert!(nominator_share > 0);
 
 		// both stakes must have been decreased pro-rata.
-		assert_eq!(Staking::ledger(100).unwrap().active, nominator_stake - nominator_share);
-		assert_eq!(Staking::ledger(10).unwrap().active, validator_stake - validator_share);
+		assert_eq!(Staking::ledger(101).unwrap().active, nominator_stake - nominator_share);
+		assert_eq!(Staking::ledger(11).unwrap().active, validator_stake - validator_share);
 		assert_eq!(
 			balances(&101).0, // free balance
 			nominator_balance - nominator_share,
@@ -735,7 +735,7 @@ fn nominators_also_get_slashed_pro_rata() {
 			validator_balance - validator_share,
 		);
 		// Because slashing happened.
-		assert!(is_disabled(10));
+		assert!(is_disabled(11));
 	});
 }
 
@@ -3260,9 +3260,9 @@ fn non_slashable_offence_doesnt_disable_validator() {
 		);
 
 		// the offence for validator 10 wasn't slashable so it wasn't disabled
-		assert!(!is_disabled(10));
+		assert!(!is_disabled(11));
 		// whereas validator 20 gets disabled
-		assert!(is_disabled(20));
+		assert!(is_disabled(21));
 	});
 }
 
