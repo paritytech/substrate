@@ -142,10 +142,12 @@ pub fn derive_impl(
 	let disambiguation_path = match (disambiguation_path, foreign_impl.clone().trait_) {
 		(Some(disambiguation_path), _) => disambiguation_path,
 		(None, Some((_, foreign_impl_path, _))) => foreign_impl_path,
-		_ => return Err(syn::Error::new(
+		_ =>
+			return Err(syn::Error::new(
 				foreign_impl.span(),
-				"Impl statement must have a defined type being implemented for a defined type such as `impl A for B`"
-			 ))
+				"Impl statement must have a defined type being implemented \
+				for a defined type such as `impl A for B`",
+			)),
 	};
 
 	// generate the combined impl
