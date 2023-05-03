@@ -187,8 +187,11 @@ decl_runtime_apis! {
 		fn function_signature_changed() -> u64;
 		/// trie no_std testing
 		fn use_trie() -> u64;
+		/// Calls function in the loop using never-inlined function pointer
 		fn benchmark_indirect_call() -> u64;
+		/// Calls function in the loop
 		fn benchmark_direct_call() -> u64;
+		/// Allocates vector with given capacity.
 		fn vec_with_capacity(size: u32) -> Vec<u8>;
 		/// Returns the initialized block number.
 		fn get_block_number() -> u64;
