@@ -120,10 +120,10 @@ impl GenesisStorageBuilder {
 			.build_storage()
 			.expect("Build storage from substrate-test-runtime GenesisConfig");
 
-		storage.top.extend(std::iter::once((
+		storage.top.insert(
 			well_known_keys::HEAP_PAGES.into(),
-			vec![].and(&(self.heap_pages_override.unwrap_or(16_u64))),
-		)));
+			self.heap_pages_override.unwrap_or(16_u64).encode(),
+		);
 
 		storage.top.extend(self.extra_storage.top.clone());
 		storage.children_default.extend(self.extra_storage.children_default.clone());
