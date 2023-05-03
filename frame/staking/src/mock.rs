@@ -563,30 +563,28 @@ pub(crate) fn current_era() -> EraIndex {
 	Staking::current_era().unwrap()
 }
 
-pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
-	let _ = Balances::make_free_balance_be(&stash, val);
-	let _ = Balances::make_free_balance_be(&ctrl, val);
-	assert_ok!(Staking::bond(RuntimeOrigin::signed(stash), val, RewardDestination::Controller));
+pub(crate) fn bond(who: AccountId, val: Balance) {
+	let _ = Balances::make_free_balance_be(&who, val);
+	assert_ok!(Staking::bond(RuntimeOrigin::signed(who), val, RewardDestination::Controller));
 }
 
-pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
-	bond(stash, ctrl, val);
-	assert_ok!(Staking::validate(RuntimeOrigin::signed(ctrl), ValidatorPrefs::default()));
+pub(crate) fn bond_validator(who: AccountId, val: Balance) {
+	bond(who, val);
+	assert_ok!(Staking::validate(RuntimeOrigin::signed(who), ValidatorPrefs::default()));
 	assert_ok!(Session::set_keys(
-		RuntimeOrigin::signed(ctrl),
-		SessionKeys { other: ctrl.into() },
+		RuntimeOrigin::signed(who),
+		SessionKeys { other: who.into() },
 		vec![]
 	));
 }
 
 pub(crate) fn bond_nominator(
-	stash: AccountId,
-	ctrl: AccountId,
+	who: AccountId,
 	val: Balance,
 	target: Vec<AccountId>,
 ) {
-	bond(stash, ctrl, val);
-	assert_ok!(Staking::nominate(RuntimeOrigin::signed(ctrl), target));
+	bond(who, val);
+	assert_ok!(Staking::nominate(RuntimeOrigin::signed(who), target));
 }
 
 /// Progress to the given block, triggering session and era changes as we progress.

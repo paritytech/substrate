@@ -2127,11 +2127,11 @@ fn phragmen_should_not_overflow() {
 		let _ = Staking::chill(RuntimeOrigin::signed(10));
 		let _ = Staking::chill(RuntimeOrigin::signed(20));
 
-		bond_validator(3, 2, Votes::max_value() as Balance);
-		bond_validator(5, 4, Votes::max_value() as Balance);
+		bond_validator(3, Votes::max_value() as Balance);
+		bond_validator(5, Votes::max_value() as Balance);
 
-		bond_nominator(7, 6, Votes::max_value() as Balance, vec![3, 5]);
-		bond_nominator(9, 8, Votes::max_value() as Balance, vec![3, 5]);
+		bond_nominator(7, Votes::max_value() as Balance, vec![3, 5]);
+		bond_nominator(9, Votes::max_value() as Balance, vec![3, 5]);
 
 		mock::start_active_era(1);
 
@@ -3697,13 +3697,13 @@ fn test_payout_stakers() {
 		// Track the exposure of the validator and the nominators that will get paid out.
 		let mut payout_exposure = balance;
 		// Create a validator:
-		bond_validator(11, 10, balance); // Default(64)
+		bond_validator(11, balance); // Default(64)
 		assert_eq!(Validators::<Test>::count(), 1);
 
 		// Create nominators, targeting stash of validators
 		for i in 0..100 {
 			let bond_amount = balance + i as Balance;
-			bond_nominator(1000 + i, 100 + i, bond_amount, vec![11]);
+			bond_nominator(1000 + i, bond_amount, vec![11]);
 			total_exposure += bond_amount;
 			if i >= 36 {
 				payout_exposure += bond_amount;
@@ -3849,11 +3849,11 @@ fn payout_stakers_handles_basic_errors() {
 
 		// Same setup as the test above
 		let balance = 1000;
-		bond_validator(11, 10, balance); // Default(64)
+		bond_validator(11, balance); // Default(64)
 
 		// Create nominators, targeting stash
 		for i in 0..100 {
-			bond_nominator(1000 + i, 100 + i, balance + i as Balance, vec![11]);
+			bond_nominator(1000 + i, balance + i as Balance, vec![11]);
 		}
 
 		mock::start_active_era(1);
@@ -3945,7 +3945,7 @@ fn payout_stakers_handles_weight_refund() {
 		assert!(max_nom_rewarded_weight.any_gt(half_max_nom_rewarded_weight));
 
 		let balance = 1000;
-		bond_validator(11, 10, balance);
+		bond_validator(11, balance);
 
 		// Era 1
 		start_active_era(1);
@@ -3956,7 +3956,7 @@ fn payout_stakers_handles_weight_refund() {
 		// Add some `half_max_nom_rewarded` nominators who will start backing the validator in the
 		// next era.
 		for i in 0..half_max_nom_rewarded {
-			bond_nominator((1000 + i).into(), (100 + i).into(), balance + i as Balance, vec![11]);
+			bond_nominator((1000 + i).into(), balance + i as Balance, vec![11]);
 		}
 
 		// Era 2
@@ -3998,7 +3998,7 @@ fn payout_stakers_handles_weight_refund() {
 		// Add enough nominators so that we are at the limit. They will be active nominators
 		// in the next era.
 		for i in half_max_nom_rewarded..max_nom_rewarded {
-			bond_nominator((1000 + i).into(), (100 + i).into(), balance + i as Balance, vec![11]);
+			bond_nominator((1000 + i).into(), balance + i as Balance, vec![11]);
 		}
 
 		// Era 5
@@ -4032,9 +4032,9 @@ fn payout_stakers_handles_weight_refund() {
 fn bond_during_era_correctly_populates_claimed_rewards() {
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		// Era = None
-		bond_validator(9, 8, 1000);
+		bond_validator(9, 1000);
 		assert_eq!(
-			Staking::ledger(&8),
+			Staking::ledger(&9),
 			Some(StakingLedger {
 				stash: 9,
 				total: 1000,
@@ -4044,9 +4044,9 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 			})
 		);
 		mock::start_active_era(5);
-		bond_validator(11, 10, 1000);
+		bond_validator(11, 1000);
 		assert_eq!(
-			Staking::ledger(&10),
+			Staking::ledger(&11),
 			Some(StakingLedger {
 				stash: 11,
 				total: 1000,
@@ -4060,9 +4060,9 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 		let current_era = 99;
 		let last_reward_era = 99 - HistoryDepth::get();
 		mock::start_active_era(current_era);
-		bond_validator(13, 12, 1000);
+		bond_validator(13, 1000);
 		assert_eq!(
-			Staking::ledger(&12),
+			Staking::ledger(&13),
 			Some(StakingLedger {
 				stash: 13,
 				total: 1000,
@@ -4151,10 +4151,10 @@ fn payout_creates_controller() {
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
 		// Create a validator:
-		bond_validator(11, 10, balance);
+		bond_validator(11, balance);
 
 		// Create a stash/controller pair
-		bond_nominator(1234, 1337, 100, vec![11]);
+		bond_nominator(1234, 100, vec![11]);
 
 		// kill controller
 		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1337), 1234, 100));
@@ -4177,10 +4177,10 @@ fn payout_to_any_account_works() {
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
 		// Create a validator:
-		bond_validator(11, 10, balance); // Default(64)
+		bond_validator(11, balance); // Default(64)
 
 		// Create a stash/controller pair
-		bond_nominator(1234, 1337, 100, vec![11]);
+		bond_nominator(1234, 100, vec![11]);
 
 		// Update payout location
 		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(1337), RewardDestination::Account(42)));
