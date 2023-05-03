@@ -108,7 +108,7 @@ fn bond_amount<T: Config>() -> BalanceOf<T> {
 fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'static str> {
 	let stash: T::AccountId = account("stash", n, SEED);
 	let controller: T::AccountId = account("controller", n, SEED);
-	let controller_lookup: LookupSourceOf<T> = T::Lookup::unlookup(controller.clone());
+	let stash_lookup: LookupSourceOf<T> = T::Lookup::unlookup(stash.clone());
 	let reward_destination = RewardDestination::Staked;
 	let amount = bond_amount::<T>();
 	// add twice as much balance to prevent the account from being killed.
@@ -122,7 +122,7 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 
 	let validator_prefs =
 		ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
-	Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), validator_prefs)?;
+	Staking::<T>::validate(RawOrigin::Signed(stash.clone()).into(), validator_prefs)?;
 
 	let mut individual_exposures = vec![];
 	let mut nominator_stashes = vec![];
@@ -130,8 +130,6 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 	for i in 0..nominators {
 		let nominator_stash: T::AccountId =
 			account("nominator stash", n * MAX_NOMINATORS + i, SEED);
-		let nominator_controller: T::AccountId =
-			account("nominator controller", n * MAX_NOMINATORS + i, SEED);
 		T::Currency::make_free_balance_be(&nominator_stash, free_amount);
 
 		Staking::<T>::bond(
@@ -140,9 +138,9 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 			reward_destination.clone(),
 		)?;
 
-		let selected_validators: Vec<LookupSourceOf<T>> = vec![controller_lookup.clone()];
+		let selected_validators: Vec<LookupSourceOf<T>> = vec![stash_lookup.clone()];
 		Staking::<T>::nominate(
-			RawOrigin::Signed(nominator_controller.clone()).into(),
+			RawOrigin::Signed(nominator_stash.clone()).into(),
 			selected_validators,
 		)?;
 
