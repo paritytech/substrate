@@ -1606,11 +1606,6 @@ impl<T: Config> Pallet<T> {
 
 		if approved {
 			Self::deposit_event(Event::<T>::Passed { ref_index: index });
-			// Actually `hold` the proposal now since we didn't hold it when it came in via the
-			// submit extrinsic and we now know that it will be needed. This will be reversed by
-			// Scheduler pallet once it is executed which assumes that we will already have placed
-			// a `hold` on it.
-			T::Preimages::hold(&status.proposal);
 
 			// Earliest it can be scheduled for is next block.
 			let when = now.saturating_add(status.delay.max(One::one()));

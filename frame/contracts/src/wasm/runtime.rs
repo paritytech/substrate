@@ -191,6 +191,8 @@ pub enum RuntimeCosts {
 	OwnCodeHash,
 	/// Weight of calling `seal_caller_is_origin`.
 	CallerIsOrigin,
+	/// Weight of calling `caller_is_root`.
+	CallerIsRoot,
 	/// Weight of calling `seal_address`.
 	Address,
 	/// Weight of calling `seal_gas_left`.
@@ -283,6 +285,7 @@ impl RuntimeCosts {
 			CodeHash => s.code_hash,
 			OwnCodeHash => s.own_code_hash,
 			CallerIsOrigin => s.caller_is_origin,
+			CallerIsRoot => s.caller_is_root,
 			Address => s.address,
 			GasLeft => s.gas_left,
 			Balance => s.balance,
@@ -433,7 +436,7 @@ bitflags! {
 /// The kind of call that should be performed.
 enum CallType {
 	/// Execute another instantiated contract
-	Call { callee_ptr: u32, value_ptr: u32, gas: u64 },
+	Call { callee_ptr: u32, value_ptr: u32, deposit_ptr: u32, weight: Weight },
 	/// Execute deployed code in the context (storage, account ID, value) of the caller contract
 	DelegateCall { code_hash_ptr: u32 },
 }
@@ -873,16 +876,22 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		};
 
 		let call_outcome = match call_type {
-			CallType::Call { callee_ptr, value_ptr, gas } => {
+			CallType::Call { callee_ptr, value_ptr, deposit_ptr, weight } => {
 				let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
 					self.read_sandbox_memory_as(memory, callee_ptr)?;
+				let deposit_limit: BalanceOf<<E as Ext>::T> = if deposit_ptr == SENTINEL {
+					BalanceOf::<<E as Ext>::T>::zero()
+				} else {
+					self.read_sandbox_memory_as(memory, deposit_ptr)?
+				};
 				let value: BalanceOf<<E as Ext>::T> =
 					self.read_sandbox_memory_as(memory, value_ptr)?;
 				if value > 0u32.into() {
 					self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
 				}
 				self.ext.call(
-					Weight::from_parts(gas, 0),
+					weight,
+					deposit_limit,
 					callee,
 					value,
 					input_data,
@@ -926,7 +935,8 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		&mut self,
 		memory: &mut [u8],
 		code_hash_ptr: u32,
-		gas: u64,
+		weight: Weight,
+		deposit_ptr: u32,
 		value_ptr: u32,
 		input_data_ptr: u32,
 		input_data_len: u32,
@@ -937,8 +947,12 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		salt_ptr: u32,
 		salt_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		let gas = Weight::from_parts(gas, 0);
 		self.charge_gas(RuntimeCosts::InstantiateBase { input_data_len, salt_len })?;
+		let deposit_limit: BalanceOf<<E as Ext>::T> = if deposit_ptr == SENTINEL {
+			BalanceOf::<<E as Ext>::T>::zero()
+		} else {
+			self.read_sandbox_memory_as(memory, deposit_ptr)?
+		};
 		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(memory, value_ptr)?;
 		if value > 0u32.into() {
 			self.charge_gas(RuntimeCosts::InstantiateSurchargeTransfer)?;
@@ -947,7 +961,8 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 			self.read_sandbox_memory_as(memory, code_hash_ptr)?;
 		let input_data = self.read_sandbox_memory(memory, input_data_ptr, input_data_len)?;
 		let salt = self.read_sandbox_memory(memory, salt_ptr, salt_len)?;
-		let instantiate_outcome = self.ext.instantiate(gas, code_hash, value, input_data, &salt);
+		let instantiate_outcome =
+			self.ext.instantiate(weight, deposit_limit, code_hash, value, input_data, &salt);
 		if let Ok((address, output)) = &instantiate_outcome {
 			if !output.flags.contains(ReturnFlags::REVERT) {
 				self.write_sandbox_output(
@@ -993,6 +1008,7 @@ pub mod env {
 	///
 	/// NOTE: This is a implementation defined call and is NOT a part of the public API.
 	/// This call is supposed to be called only by instrumentation injected code.
+	/// It deals only with the *ref_time* Weight.
 	///
 	/// - `amount`: How much gas is used.
 	fn gas(ctx: _, _memory: _, amount: u64) -> Result<(), TrapReason> {
@@ -1002,8 +1018,9 @@ pub mod env {
 
 	/// Set the value at the given key in the contract storage.
 	///
-	/// Equivalent to the newer version [`super::seal1::Api::set_storage`] with the exception of the
-	/// return type. Still a valid thing to call when not interested in the return value.
+	/// Equivalent to the newer [`seal1`][`super::api_doc::Version1::set_storage`] version with the
+	/// exception of the return type. Still a valid thing to call when not interested in the return
+	/// value.
 	#[prefixed_alias]
 	fn set_storage(
 		ctx: _,
@@ -1076,8 +1093,9 @@ pub mod env {
 
 	/// Clear the value at the given key in the contract storage.
 	///
-	/// Equivalent to the newer version [`super::seal1::Api::clear_storage`] with the exception of
-	/// the return type. Still a valid thing to call when not interested in the return value.
+	/// Equivalent to the newer [`seal1`][`super::api_doc::Version1::clear_storage`] version with
+	/// the exception of the return type. Still a valid thing to call when not interested in the
+	/// return value.
 	#[prefixed_alias]
 	fn clear_storage(ctx: _, memory: _, key_ptr: u32) -> Result<(), TrapReason> {
 		ctx.clear_storage(memory, KeyType::Fix, key_ptr).map(|_| ())
@@ -1299,7 +1317,47 @@ pub mod env {
 		ctx.call(
 			memory,
 			CallFlags::ALLOW_REENTRY,
-			CallType::Call { callee_ptr, value_ptr, gas },
+			CallType::Call {
+				callee_ptr,
+				value_ptr,
+				deposit_ptr: SENTINEL,
+				weight: Weight::from_parts(gas, 0),
+			},
+			input_data_ptr,
+			input_data_len,
+			output_ptr,
+			output_len_ptr,
+		)
+	}
+
+	/// Make a call to another contract.
+	///
+	/// Equivalent to the newer [`seal2`][`super::api_doc::Version2::call`] version but works with
+	/// *ref_time* Weight only. It is recommended to switch to the latest version, once it's
+	/// stabilized.
+	#[version(1)]
+	#[prefixed_alias]
+	fn call(
+		ctx: _,
+		memory: _,
+		flags: u32,
+		callee_ptr: u32,
+		gas: u64,
+		value_ptr: u32,
+		input_data_ptr: u32,
+		input_data_len: u32,
+		output_ptr: u32,
+		output_len_ptr: u32,
+	) -> Result<ReturnCode, TrapReason> {
+		ctx.call(
+			memory,
+			CallFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?,
+			CallType::Call {
+				callee_ptr,
+				value_ptr,
+				deposit_ptr: SENTINEL,
+				weight: Weight::from_parts(gas, 0),
+			},
 			input_data_ptr,
 			input_data_len,
 			output_ptr,
@@ -1318,7 +1376,12 @@ pub mod env {
 	/// - `flags`: See `crate::wasm::runtime::CallFlags` for a documentation of the supported flags.
 	/// - `callee_ptr`: a pointer to the address of the callee contract. Should be decodable as an
 	///   `T::AccountId`. Traps otherwise.
-	/// - `gas`: how much gas to devote to the execution.
+	/// - `ref_time_limit`: how much *ref_time* Weight to devote to the execution.
+	/// - `proof_size_limit`: how much *proof_size* Weight to devote to the execution.
+	/// - `deposit_ptr`: a pointer to the buffer with value of the storage deposit limit for the
+	///   call. Should be decodable as a `T::Balance`. Traps otherwise. Passing `SENTINEL` means
+	///   setting no specific limit for the call, which implies storage usage up to the limit of the
+	///   parent call.
 	/// - `value_ptr`: a pointer to the buffer with value, how much value to send. Should be
 	///   decodable as a `T::Balance`. Traps otherwise.
 	/// - `input_data_ptr`: a pointer to a buffer to be used as input data to the callee.
@@ -1336,14 +1399,16 @@ pub mod env {
 	/// - `ReturnCode::CalleeTrapped`
 	/// - `ReturnCode::TransferFailed`
 	/// - `ReturnCode::NotCallable`
-	#[version(1)]
-	#[prefixed_alias]
+	#[version(2)]
+	#[unstable]
 	fn call(
 		ctx: _,
 		memory: _,
 		flags: u32,
 		callee_ptr: u32,
-		gas: u64,
+		ref_time_limit: u64,
+		proof_size_limit: u64,
+		deposit_ptr: u32,
 		value_ptr: u32,
 		input_data_ptr: u32,
 		input_data_len: u32,
@@ -1353,7 +1418,12 @@ pub mod env {
 		ctx.call(
 			memory,
 			CallFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?,
-			CallType::Call { callee_ptr, value_ptr, gas },
+			CallType::Call {
+				callee_ptr,
+				value_ptr,
+				deposit_ptr,
+				weight: Weight::from_parts(ref_time_limit, proof_size_limit),
+			},
 			input_data_ptr,
 			input_data_len,
 			output_ptr,
@@ -1417,8 +1487,7 @@ pub mod env {
 	/// # Note
 	///
 	/// The values `_code_hash_len` and `_value_len` are ignored because the encoded sizes
-	/// of those types are fixed through
-	/// [`codec::MaxEncodedLen`]. The fields exist
+	/// of those types are fixed through [`codec::MaxEncodedLen`]. The fields exist
 	/// for backwards compatibility. Consider switching to the newest version of this function.
 	#[prefixed_alias]
 	fn instantiate(
@@ -1441,7 +1510,47 @@ pub mod env {
 		ctx.instantiate(
 			memory,
 			code_hash_ptr,
-			gas,
+			Weight::from_parts(gas, 0),
+			SENTINEL,
+			value_ptr,
+			input_data_ptr,
+			input_data_len,
+			address_ptr,
+			address_len_ptr,
+			output_ptr,
+			output_len_ptr,
+			salt_ptr,
+			salt_len,
+		)
+	}
+
+	/// Instantiate a contract with the specified code hash.
+	///
+	/// Equivalent to the newer [`seal2`][`super::api_doc::Version2::instantiate`] version but works
+	/// with *ref_time* Weight only. It is recommended to switch to the latest version, once it's
+	/// stabilized.
+	#[version(1)]
+	#[prefixed_alias]
+	fn instantiate(
+		ctx: _,
+		memory: _,
+		code_hash_ptr: u32,
+		gas: u64,
+		value_ptr: u32,
+		input_data_ptr: u32,
+		input_data_len: u32,
+		address_ptr: u32,
+		address_len_ptr: u32,
+		output_ptr: u32,
+		output_len_ptr: u32,
+		salt_ptr: u32,
+		salt_len: u32,
+	) -> Result<ReturnCode, TrapReason> {
+		ctx.instantiate(
+			memory,
+			code_hash_ptr,
+			Weight::from_parts(gas, 0),
+			SENTINEL,
 			value_ptr,
 			input_data_ptr,
 			input_data_len,
@@ -1468,15 +1577,21 @@ pub mod env {
 	/// # Parameters
 	///
 	/// - `code_hash_ptr`: a pointer to the buffer that contains the initializer code.
-	/// - `gas`: how much gas to devote to the execution of the initializer code.
+	/// - `ref_time_limit`: how much *ref_time* Weight to devote to the execution.
+	/// - `proof_size_limit`: how much *proof_size* Weight to devote to the execution.
+	/// - `deposit_ptr`: a pointer to the buffer with value of the storage deposit limit for
+	///   instantiation. Should be decodable as a `T::Balance`. Traps otherwise. Passing `SENTINEL`
+	///   means setting no specific limit for the call, which implies storage usage up to the limit
+	///   of the parent call.
 	/// - `value_ptr`: a pointer to the buffer with value, how much value to send. Should be
 	///   decodable as a `T::Balance`. Traps otherwise.
 	/// - `input_data_ptr`: a pointer to a buffer to be used as input data to the initializer code.
 	/// - `input_data_len`: length of the input data buffer.
-	/// - `address_ptr`: a pointer where the new account's address is copied to.
-	/// - `address_len_ptr`: in-out pointer to where the length of the buffer is read from and the
-	///   actual length is written to.
-	/// - `output_ptr`: a pointer where the output buffer is copied to.
+	/// - `address_ptr`: a pointer where the new account's address is copied to. `SENTINEL` means
+	///   not to copy.
+	/// - `address_len_ptr`: pointer to where put the length of the address.
+	/// - `output_ptr`: a pointer where the output buffer is copied to. `SENTINEL` means not to
+	///   copy.
 	/// - `output_len_ptr`: in-out pointer to where the length of the buffer is read from and the
 	///   actual length is written to.
 	/// - `salt_ptr`: Pointer to raw bytes used for address derivation. See `fn contract_address`.
@@ -1494,13 +1609,15 @@ pub mod env {
 	/// - `ReturnCode::CalleeTrapped`
 	/// - `ReturnCode::TransferFailed`
 	/// - `ReturnCode::CodeNotFound`
-	#[version(1)]
-	#[prefixed_alias]
+	#[version(2)]
+	#[unstable]
 	fn instantiate(
 		ctx: _,
 		memory: _,
 		code_hash_ptr: u32,
-		gas: u64,
+		ref_time_limit: u64,
+		proof_size_limit: u64,
+		deposit_ptr: u32,
 		value_ptr: u32,
 		input_data_ptr: u32,
 		input_data_len: u32,
@@ -1514,7 +1631,8 @@ pub mod env {
 		ctx.instantiate(
 			memory,
 			code_hash_ptr,
-			gas,
+			Weight::from_parts(ref_time_limit, proof_size_limit),
+			deposit_ptr,
 			value_ptr,
 			input_data_ptr,
 			input_data_len,
@@ -1635,14 +1753,18 @@ pub mod env {
 	/// If this is a top-level call (i.e. initiated by an extrinsic) the origin address of the
 	/// extrinsic will be returned. Otherwise, if this call is initiated by another contract then
 	/// the address of the contract will be returned. The value is encoded as T::AccountId.
+	///
+	/// If there is no address associated with the caller (e.g. because the caller is root) then
+	/// it traps with `BadOrigin`.
 	#[prefixed_alias]
 	fn caller(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::Caller)?;
+		let caller = ctx.ext.caller().account_id()?.clone();
 		Ok(ctx.write_sandbox_output(
 			memory,
 			out_ptr,
 			out_len_ptr,
-			&ctx.ext.caller().encode(),
+			&caller.encode(),
 			false,
 			already_charged,
 		)?)
@@ -1741,6 +1863,21 @@ pub mod env {
 		Ok(ctx.ext.caller_is_origin() as u32)
 	}
 
+	/// Checks whether the caller of the current contract is root.
+	///
+	/// Note that only the origin of the call stack can be root. Hence this function returning
+	/// `true` implies that the contract is being called by the origin.
+	///
+	/// A return value of `true` indicates that this contract is being called by a root origin,
+	/// and `false` indicates that the caller is a signed origin.
+	///
+	/// Returned value is a `u32`-encoded boolean: (`0 = false`, `1 = true`).
+	#[unstable]
+	fn caller_is_root(ctx: _, _memory: _) -> Result<u32, TrapReason> {
+		ctx.charge_gas(RuntimeCosts::CallerIsRoot)?;
+		Ok(ctx.ext.caller_is_root() as u32)
+	}
+
 	/// Stores the address of the current contract into the supplied buffer.
 	///
 	/// The value is stored to linear memory at the address pointed to by `out_ptr`.
@@ -1762,17 +1899,9 @@ pub mod env {
 
 	/// Stores the price for the specified amount of gas into the supplied buffer.
 	///
-	/// The value is stored to linear memory at the address pointed to by `out_ptr`.
-	/// `out_len_ptr` must point to a u32 value that describes the available space at
-	/// `out_ptr`. This call overwrites it with the size of the value. If the available
-	/// space at `out_ptr` is less than the size of the value a trap is triggered.
-	///
-	/// The data is encoded as `T::Balance`.
-	///
-	/// # Note
-	///
-	/// It is recommended to avoid specifying very small values for `gas` as the prices for a single
-	/// gas can be smaller than one.
+	/// Equivalent to the newer [`seal1`][`super::api_doc::Version2::weight_to_fee`] version but
+	/// works with *ref_time* Weight only. It is recommended to switch to the latest version, once
+	/// it's stabilized.
 	#[prefixed_alias]
 	fn weight_to_fee(
 		ctx: _,
@@ -1793,18 +1922,76 @@ pub mod env {
 		)?)
 	}
 
-	/// Stores the amount of gas left into the supplied buffer.
+	/// Stores the price for the specified amount of weight into the supplied buffer.
+	///
+	/// # Parameters
+	///
+	/// - `out_ptr`: pointer to the linear memory where the returning value is written to. If the
+	///   available space at `out_ptr` is less than the size of the value a trap is triggered.
+	/// - `out_len_ptr`: in-out pointer into linear memory where the buffer length is read from and
+	///   the value length is written to.
+	///
+	/// The data is encoded as `T::Balance`.
+	///
+	/// # Note
+	///
+	/// It is recommended to avoid specifying very small values for `ref_time_limit` and
+	/// `proof_size_limit` as the prices for a single gas can be smaller than the basic balance
+	/// unit.
+	#[version(1)]
+	#[unstable]
+	fn weight_to_fee(
+		ctx: _,
+		memory: _,
+		ref_time_limit: u64,
+		proof_size_limit: u64,
+		out_ptr: u32,
+		out_len_ptr: u32,
+	) -> Result<(), TrapReason> {
+		let weight = Weight::from_parts(ref_time_limit, proof_size_limit);
+		ctx.charge_gas(RuntimeCosts::WeightToFee)?;
+		Ok(ctx.write_sandbox_output(
+			memory,
+			out_ptr,
+			out_len_ptr,
+			&ctx.ext.get_weight_price(weight).encode(),
+			false,
+			already_charged,
+		)?)
+	}
+
+	/// Stores the weight left into the supplied buffer.
+	///
+	/// Equivalent to the newer [`seal1`][`super::api_doc::Version2::gas_left`] version but
+	/// works with *ref_time* Weight only. It is recommended to switch to the latest version, once
+	/// it's stabilized.
+	#[prefixed_alias]
+	fn gas_left(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+		ctx.charge_gas(RuntimeCosts::GasLeft)?;
+		let gas_left = &ctx.ext.gas_meter().gas_left().ref_time().encode();
+		Ok(ctx.write_sandbox_output(
+			memory,
+			out_ptr,
+			out_len_ptr,
+			gas_left,
+			false,
+			already_charged,
+		)?)
+	}
+
+	/// Stores the amount of weight left into the supplied buffer.
 	///
 	/// The value is stored to linear memory at the address pointed to by `out_ptr`.
 	/// `out_len_ptr` must point to a u32 value that describes the available space at
 	/// `out_ptr`. This call overwrites it with the size of the value. If the available
 	/// space at `out_ptr` is less than the size of the value a trap is triggered.
 	///
-	/// The data is encoded as Gas.
-	#[prefixed_alias]
+	/// The data is encoded as Weight.
+	#[version(1)]
+	#[unstable]
 	fn gas_left(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::GasLeft)?;
-		let gas_left = &ctx.ext.gas_meter().gas_left().ref_time().encode();
+		let gas_left = &ctx.ext.gas_meter().gas_left().encode();
 		Ok(ctx.write_sandbox_output(
 			memory,
 			out_ptr,

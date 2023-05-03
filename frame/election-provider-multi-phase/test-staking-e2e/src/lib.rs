@@ -34,8 +34,8 @@ macro_rules! log {
 		log::$level!(
 			target: crate::LOG_TARGET,
 			concat!("🛠️  ", $patter)  $(, $values)*
-        )
-    };
+		)
+	};
 }
 
 fn log_current_time() {
