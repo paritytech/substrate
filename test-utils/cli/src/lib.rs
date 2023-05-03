@@ -66,15 +66,16 @@ use tokio::{
 pub fn start_node() -> (Child, String) {
 	let port = 45789;
 
-	let child = Command::new(cargo_bin("substrate"))
+	let child = Command::new(cargo_bin("node-template"))
 		.stdout(process::Stdio::piped())
 		.stderr(process::Stdio::piped())
-		.args(&[
-			"--dev",
-			"--tmp",
-			format!("--ws-port={}", port).as_str(),
-			"--no-hardware-benchmarks",
-		])
+		// .args(&[
+		// 	"--dev",
+		// 	"--tmp",
+		// 	format!("--ws-port={}", port).as_str(),
+		// 	"--no-hardware-benchmarks",
+		// ])
+		.args(&["--dev", "--ws-port=45789"])
 		.kill_on_drop(true)
 		.spawn()
 		.unwrap();
