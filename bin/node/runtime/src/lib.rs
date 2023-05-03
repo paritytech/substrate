@@ -2168,8 +2168,8 @@ impl_runtime_apis! {
 				storage_deposit_limit,
 				input_data,
 				pallet_contracts::DebugInfo::UnsafeDebug,
-				pallet_contracts::Determinism::Enforced,
 				pallet_contracts::CollectEvents::UnsafeCollect,
+				pallet_contracts::Determinism::Enforced,
 			)
 		}
 

@@ -71,7 +71,7 @@ pub struct ContractResult<R, Balance, EventRecord> {
 	pub debug_message: Vec<u8>,
 	/// The execution result of the wasm code.
 	pub result: R,
-	/// The events that were emitted during execution. It is an options as event collection is
+	/// The events that were emitted during execution. It is an option as event collection is
 	/// optional.
 	pub events: Option<Vec<EventRecord>>,
 }

@@ -952,8 +952,8 @@ benchmarks! {
 			None,
 			vec![],
 			DebugInfo::UnsafeDebug,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result?;
 	}
@@ -1002,8 +1002,8 @@ benchmarks! {
 			None,
 			vec![],
 			DebugInfo::UnsafeDebug,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result?;
 	}
@@ -3195,8 +3195,8 @@ benchmarks! {
 			None,
 			data,
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result?;
 	}
@@ -3245,8 +3245,8 @@ benchmarks! {
 			None,
 			data,
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result?;
 	}

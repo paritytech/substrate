@@ -1473,8 +1473,8 @@ fn crypto_hashes() {
 				None,
 				params,
 				DebugInfo::Skip,
-				Determinism::Enforced,
 				CollectEvents::Skip,
+				Determinism::Enforced,
 			)
 			.result
 			.unwrap();
@@ -1517,8 +1517,8 @@ fn transfer_return_code() {
 			None,
 			vec![],
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1560,8 +1560,8 @@ fn call_return_code() {
 			None,
 			AsRef::<[u8]>::as_ref(&DJANGO).to_vec(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1596,8 +1596,8 @@ fn call_return_code() {
 				.cloned()
 				.collect(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1617,8 +1617,8 @@ fn call_return_code() {
 				.cloned()
 				.collect(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1637,8 +1637,8 @@ fn call_return_code() {
 				.cloned()
 				.collect(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1691,8 +1691,8 @@ fn instantiate_return_code() {
 			None,
 			callee_hash.clone(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1708,8 +1708,8 @@ fn instantiate_return_code() {
 			None,
 			vec![0; 33],
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1724,8 +1724,8 @@ fn instantiate_return_code() {
 			None,
 			callee_hash.iter().chain(&1u32.to_le_bytes()).cloned().collect(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1740,8 +1740,8 @@ fn instantiate_return_code() {
 			None,
 			callee_hash.iter().chain(&2u32.to_le_bytes()).cloned().collect(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1830,8 +1830,8 @@ fn chain_extension_works() {
 			None,
 			input.clone(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		);
 		assert_eq!(TestExtension::last_seen_buffer(), input);
 		assert_eq!(result.result.unwrap().data, input);
@@ -1845,8 +1845,8 @@ fn chain_extension_works() {
 			None,
 			ExtensionInput { extension_id: 0, func_id: 1, extra: &[] }.into(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1862,8 +1862,8 @@ fn chain_extension_works() {
 			None,
 			ExtensionInput { extension_id: 0, func_id: 2, extra: &[0] }.into(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		);
 		assert_ok!(result.result);
 		let gas_consumed = result.gas_consumed;
@@ -1875,8 +1875,8 @@ fn chain_extension_works() {
 			None,
 			ExtensionInput { extension_id: 0, func_id: 2, extra: &[42] }.into(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		);
 		assert_ok!(result.result);
 		assert_eq!(result.gas_consumed.ref_time(), gas_consumed.ref_time() + 42);
@@ -1888,8 +1888,8 @@ fn chain_extension_works() {
 			None,
 			ExtensionInput { extension_id: 0, func_id: 2, extra: &[95] }.into(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		);
 		assert_ok!(result.result);
 		assert_eq!(result.gas_consumed.ref_time(), gas_consumed.ref_time() + 95);
@@ -1903,8 +1903,8 @@ fn chain_extension_works() {
 			None,
 			ExtensionInput { extension_id: 0, func_id: 3, extra: &[] }.into(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1922,8 +1922,8 @@ fn chain_extension_works() {
 			None,
 			ExtensionInput { extension_id: 1, func_id: 0, extra: &[] }.into(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -1985,8 +1985,8 @@ fn chain_extension_temp_storage_works() {
 				None,
 				input.clone(),
 				DebugInfo::Skip,
-				Determinism::Enforced,
 				CollectEvents::Skip,
+				Determinism::Enforced,
 			)
 			.result
 		);
@@ -2546,8 +2546,8 @@ fn reinstrument_does_charge() {
 			None,
 			zero.clone(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		);
 		assert!(!result0.result.unwrap().did_revert());
 
@@ -2559,8 +2559,8 @@ fn reinstrument_does_charge() {
 			None,
 			zero.clone(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		);
 		assert!(!result1.result.unwrap().did_revert());
 
@@ -2582,8 +2582,8 @@ fn reinstrument_does_charge() {
 			None,
 			zero.clone(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		);
 		assert!(!result2.result.unwrap().did_revert());
 		assert!(result2.gas_consumed.ref_time() > result1.gas_consumed.ref_time());
@@ -2623,8 +2623,8 @@ fn debug_message_works() {
 			None,
 			vec![],
 			DebugInfo::UnsafeDebug,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		);
 
 		assert_matches!(result.result, Ok(_));
@@ -2661,8 +2661,8 @@ fn debug_message_logging_disabled() {
 			None,
 			vec![],
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		);
 		assert_matches!(result.result, Ok(_));
 		// the dispatchables always run without debugging
@@ -2699,8 +2699,8 @@ fn debug_message_invalid_utf8() {
 			None,
 			vec![],
 			DebugInfo::UnsafeDebug,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		);
 		assert_ok!(result.result);
 		assert!(result.debug_message.is_empty());
@@ -2761,8 +2761,8 @@ fn gas_estimation_nested_call_fixed_limit() {
 			None,
 			input.clone(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		);
 		assert_ok!(&result.result);
 
@@ -2779,8 +2779,8 @@ fn gas_estimation_nested_call_fixed_limit() {
 				Some(result.storage_deposit.charge_or_zero()),
 				input.clone(),
 				DebugInfo::Skip,
-				Determinism::Enforced,
 				CollectEvents::Skip,
+				Determinism::Enforced,
 			)
 			.result
 		);
@@ -2794,8 +2794,8 @@ fn gas_estimation_nested_call_fixed_limit() {
 			Some(result.storage_deposit.charge_or_zero()),
 			input,
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result;
 		assert_err!(result, <Error<Test>>::OutOfGas);
@@ -2856,8 +2856,8 @@ fn gas_estimation_call_runtime() {
 			None,
 			call.encode(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		);
 		// contract encodes the result of the dispatch runtime
 		let outcome = u32::decode(&mut result.result.unwrap().data.as_ref()).unwrap();
@@ -2874,8 +2874,8 @@ fn gas_estimation_call_runtime() {
 				None,
 				call.encode(),
 				DebugInfo::Skip,
-				Determinism::Enforced,
 				CollectEvents::Skip,
+				Determinism::Enforced,
 			)
 			.result
 		);
@@ -2940,8 +2940,8 @@ fn call_runtime_reentrancy_guarded() {
 			None,
 			call.encode(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -3004,8 +3004,8 @@ fn ecdsa_recover() {
 			None,
 			params,
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -3015,7 +3015,7 @@ fn ecdsa_recover() {
 }
 
 #[test]
-fn bare_instantiate_result_returns_events() {
+fn bare_instantiate_returns_events() {
 	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -3040,7 +3040,7 @@ fn bare_instantiate_result_returns_events() {
 }
 
 #[test]
-fn bare_instantiate_result_does_not_return_events() {
+fn bare_instantiate_does_not_return_events() {
 	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -3065,7 +3065,7 @@ fn bare_instantiate_result_does_not_return_events() {
 }
 
 #[test]
-fn bare_call_result_returns_events() {
+fn bare_call_returns_events() {
 	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -3094,8 +3094,8 @@ fn bare_call_result_returns_events() {
 			None,
 			vec![],
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::UnsafeCollect,
+			Determinism::Enforced,
 		);
 
 		let events = result.events.unwrap();
@@ -3106,7 +3106,7 @@ fn bare_call_result_returns_events() {
 }
 
 #[test]
-fn bare_call_result_does_not_return_events() {
+fn bare_call_does_not_return_events() {
 	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -3135,8 +3135,8 @@ fn bare_call_result_does_not_return_events() {
 			None,
 			vec![],
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		);
 
 		let events = result.events;
@@ -3199,8 +3199,8 @@ fn sr25519_verify() {
 				None,
 				params,
 				DebugInfo::Skip,
-				Determinism::Enforced,
 				CollectEvents::Skip,
+				Determinism::Enforced,
 			)
 			.result
 			.unwrap()
@@ -4193,8 +4193,8 @@ fn contract_reverted() {
 			None,
 			input,
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -4307,8 +4307,8 @@ fn set_code_hash() {
 			None,
 			new_code_hash.as_ref().to_vec(),
 			DebugInfo::UnsafeDebug,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -4323,8 +4323,8 @@ fn set_code_hash() {
 			None,
 			vec![],
 			DebugInfo::UnsafeDebug,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -4717,8 +4717,8 @@ fn deposit_limit_in_nested_instantiate() {
 			Some(codec::Compact(callee_info_len + 2 + ED + 4).into()),
 			(1u32, &code_hash_callee, callee_info_len + 2 + ED + 3).encode(),
 			DebugInfo::Skip,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		);
 
 		let returned = result.result.unwrap();
@@ -4984,8 +4984,8 @@ fn cannot_instantiate_indeterministic_code() {
 				None,
 				code_hash.encode(),
 				DebugInfo::Skip,
-				Determinism::Enforced,
 				CollectEvents::Skip,
+				Determinism::Enforced,
 			)
 			.result,
 			<Error<Test>>::Indeterministic,
@@ -5001,8 +5001,8 @@ fn cannot_instantiate_indeterministic_code() {
 				None,
 				code_hash.encode(),
 				DebugInfo::Skip,
-				Determinism::Relaxed,
 				CollectEvents::Skip,
+				Determinism::Relaxed,
 			)
 			.result,
 			<Error<Test>>::Indeterministic,
@@ -5051,8 +5051,8 @@ fn cannot_set_code_indeterministic_code() {
 				None,
 				code_hash.encode(),
 				DebugInfo::Skip,
-				Determinism::Relaxed,
 				CollectEvents::Skip,
+				Determinism::Relaxed,
 			)
 			.result,
 			<Error<Test>>::Indeterministic,
@@ -5101,8 +5101,8 @@ fn delegate_call_indeterministic_code() {
 				None,
 				code_hash.encode(),
 				DebugInfo::Skip,
-				Determinism::Enforced,
 				CollectEvents::Skip,
+				Determinism::Enforced,
 			)
 			.result,
 			<Error<Test>>::Indeterministic,
@@ -5118,8 +5118,8 @@ fn delegate_call_indeterministic_code() {
 				None,
 				code_hash.encode(),
 				DebugInfo::Skip,
-				Determinism::Relaxed,
 				CollectEvents::Skip,
+				Determinism::Relaxed,
 			)
 			.result
 		);
@@ -5159,8 +5159,8 @@ fn reentrance_count_works_with_call() {
 			None,
 			input,
 			DebugInfo::UnsafeDebug,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -5200,8 +5200,8 @@ fn reentrance_count_works_with_delegated_call() {
 			None,
 			input,
 			DebugInfo::UnsafeDebug,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -5255,8 +5255,8 @@ fn account_reentrance_count_works() {
 			None,
 			contract_addr.encode(),
 			DebugInfo::UnsafeDebug,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();
@@ -5269,8 +5269,8 @@ fn account_reentrance_count_works() {
 			None,
 			another_contract_addr.encode(),
 			DebugInfo::UnsafeDebug,
-			Determinism::Enforced,
 			CollectEvents::Skip,
+			Determinism::Enforced,
 		)
 		.result
 		.unwrap();

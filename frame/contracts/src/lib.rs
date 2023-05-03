@@ -980,7 +980,7 @@ pub enum CollectEvents {
 	///
 	/// # Note
 	///
-	/// Events should only be collected when called off-chain, as this would
+	/// Events should only be collected when called off-chain, as this would otherwise
 	/// collect all the Events emitted in the block so far and put them in them into the PoV.
 	///
 	/// **Never** use this mode for on-chain execution.
@@ -1231,8 +1231,8 @@ impl<T: Config> Pallet<T> {
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
 		debug: DebugInfo,
-		determinism: Determinism,
 		collect_events: CollectEvents,
+		determinism: Determinism,
 	) -> ContractExecResult<BalanceOf<T>, EventRecordOf<T>> {
 		let mut debug_message = if matches!(debug, DebugInfo::UnsafeDebug) {
 			Some(DebugBufferVec::<T>::default())
