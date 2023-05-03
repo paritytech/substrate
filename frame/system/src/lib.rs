@@ -200,7 +200,7 @@ pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
 
-	pub mod preludes {
+	pub mod prelude {
 		use super::*;
 		pub mod testing {
 			type AccountId = u64;
