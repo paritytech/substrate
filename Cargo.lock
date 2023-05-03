@@ -6098,6 +6098,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-election-provider-e2e-test"
+version = "1.0.0"
+dependencies = [
+ "frame-election-provider-support",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-bags-list",
+ "pallet-balances",
+ "pallet-election-provider-multi-phase",
+ "pallet-session",
+ "pallet-staking",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-npos-elections",
+ "sp-runtime",
+ "sp-staking",
+ "sp-std",
+ "sp-tracing",
+]
+
+[[package]]
 name = "pallet-election-provider-multi-phase"
 version = "4.0.0-dev"
 dependencies = [
