@@ -64,14 +64,14 @@ impl GenesisConfig {
 			})
 			.map(|(k, v)| (blake2_256(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(
-				vec![
-					(well_known_keys::CODE.into(), wasm_runtime),
-					(
-						well_known_keys::HEAP_PAGES.into(),
-						vec![].and(&(self.heap_pages_override.unwrap_or(16_u64))),
-					),
-				]
-				.into_iter(),
+				vec![(well_known_keys::CODE.into(), wasm_runtime)]
+					.into_iter()
+					.chain(
+						self.heap_pages_override
+							.into_iter()
+							.map(|h| (well_known_keys::HEAP_PAGES.into(), h.encode())),
+					)
+					.into_iter(),
 			)
 			.collect();
 		map.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
