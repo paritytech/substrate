@@ -133,7 +133,7 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 /// **WARNING**
 /// Do not use this directly unless you want trouble, since it allows you to alter account balances
 /// without keeping the issuance up to date. It has no safeguards against accidentally creating
-/// token imbalances in your system leading to accidental imflation or deflation. It's really just
+/// token imbalances in your system leading to accidental inflation or deflation. It's really just
 /// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
 /// use.
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
@@ -146,7 +146,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// invariants such as any Existential Deposits needed or overflows/underflows.
 	/// If this cannot be done for some reason (e.g. because the account doesn't exist) then an
 	/// `Err` is returned.
-	// Implmentation note: This should increment the consumer refs if it moves total on hold from
+	// Implementation note: This should increment the consumer refs if it moves total on hold from
 	// zero to non-zero and decrement in the opposite direction.
 	//
 	// Since this was not done in the previous logic, this will need either a migration or a

@@ -99,8 +99,7 @@ pub fn store<T: Config>(mut module: PrefabWasmModule<T>, instantiated: bool) -> 
 					&T::HoldReason::get(),
 					&new_owner_info.owner,
 					new_owner_info.deposit,
-				)
-				.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
+				)?;
 				new_owner_info.refcount = if instantiated { 1 } else { 0 };
 				<PristineCode<T>>::insert(&code_hash, orig_code);
 				<CodeStorage<T>>::insert(&code_hash, module);
