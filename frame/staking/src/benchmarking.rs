@@ -216,15 +216,13 @@ const USER_SEED: u32 = 999666;
 benchmarks! {
 	bond {
 		let stash = create_funded_user::<T>("stash", USER_SEED, 100);
-		let controller = create_funded_user::<T>("controller", USER_SEED, 100);
-		let controller_lookup = T::Lookup::unlookup(controller.clone());
 		let reward_destination = RewardDestination::Staked;
 		let amount = T::Currency::minimum_balance() * 10u32.into();
 		whitelist_account!(stash);
-	}: _(RawOrigin::Signed(stash.clone()), controller_lookup, amount, reward_destination)
+	}: _(RawOrigin::Signed(stash.clone()), amount, reward_destination)
 	verify {
 		assert!(Bonded::<T>::contains_key(stash));
-		assert!(Ledger::<T>::contains_key(controller));
+		assert!(Ledger::<T>::contains_key(stash));
 	}
 
 	bond_extra {
