@@ -5999,7 +5999,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "wasm-instrument 0.4.0",
- "wasmi 0.28.0",
+ "wasmi 0.29.0",
  "wasmparser-nostd",
  "wat",
 ]
@@ -12657,10 +12657,11 @@ dependencies = [
 
 [[package]]
 name = "wasmi"
-version = "0.28.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e61a7006b0fdf24f6bbe8dcfdad5ca1b350de80061fb2827f31c82fbbb9565a"
+checksum = "677160b1166881badada1137afc6457777126f328ae63a18058b504f546f0828"
 dependencies = [
+ "smallvec",
  "spin 0.9.5",
  "wasmi_arena",
  "wasmi_core 0.12.0",
