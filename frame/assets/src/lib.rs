@@ -949,7 +949,8 @@ pub mod pallet {
 			let who = T::Lookup::lookup(who)?;
 
 			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
-				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.is_frozen = true;
+				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.status =
+					AccountStatus::Frozen;
 				Ok(())
 			})?;
 
@@ -985,7 +986,8 @@ pub mod pallet {
 			let who = T::Lookup::lookup(who)?;
 
 			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
-				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.is_frozen = false;
+				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.status =
+					AccountStatus::Liquid;
 				Ok(())
 			})?;
 

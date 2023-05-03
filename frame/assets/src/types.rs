@@ -145,12 +145,35 @@ where
 	}
 }
 
+#[test]
+fn ensure_bool_decodes_to_liquid_or_frozen() {
+	assert_eq!(false.encode(), AccountStatus::Liquid.encode());
+	assert_eq!(true.encode(), AccountStatus::Frozen.encode());
+}
+
+/// The status of an asset account.
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+pub enum AccountStatus {
+	/// Asset account can receive and transfer the assets.
+	Liquid,
+	/// Asset account cannot transfer the assets.
+	Frozen,
+	/// Asset account cannot receive and transfer the assets.
+	Blocked,
+}
+impl AccountStatus {
+	/// Returns `true` if frozen or blocked.
+	pub(crate) fn is_frozen(&self) -> bool {
+		matches!(self, AccountStatus::Frozen | AccountStatus::Blocked)
+	}
+}
+
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct AssetAccount<Balance, DepositBalance, Extra, AccountId> {
 	/// The balance.
 	pub(super) balance: Balance,
-	/// Whether the account is frozen.
-	pub(super) is_frozen: bool,
+	/// The status of the account.
+	pub(super) status: AccountStatus,
 	/// The reason for the existence of the account.
 	pub(super) reason: ExistenceReason<DepositBalance, AccountId>,
 	/// Additional "sidecar" data, in case some other pallet wants to use this storage item.
