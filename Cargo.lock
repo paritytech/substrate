@@ -218,21 +218,6 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ca84f3628370c59db74ee214b3263d58f9aadd9b4fe7e711fd87dc452b7f163"
 dependencies = [
- "anstyle 1.0.0",
- "anstyle-parse",
- "anstyle-query",
- "anstyle-wincon",
- "colorchoice",
- "is-terminal",
- "utf8parse",
-]
-
-[[package]]
-name = "anstyle"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ca84f3628370c59db74ee214b3263d58f9aadd9b4fe7e711fd87dc452b7f163"
-dependencies = [
  "anstyle",
  "anstyle-parse",
  "anstyle-query",
@@ -273,40 +258,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "180abfa45703aebe0093f79badacc01b8fd4ea2e35118747e5811127f926e188"
 dependencies = [
  "anstyle",
- "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "anstyle"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41ed9a86bf92ae6580e0a31281f65a1b1d867c0cc68d5346e2ae128dddfa6a7d"
-
-[[package]]
-name = "anstyle-parse"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e765fd216e48e067936442276d1d57399e37bce53c264d6fefbe298080cb57ee"
-dependencies = [
- "utf8parse",
-]
-
-[[package]]
-name = "anstyle-query"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ca11d4be1bab0c8bc8734a9aa7bf4ee8316d462a08c6ac5052f888fef5b494b"
-dependencies = [
- "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "anstyle-wincon"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "180abfa45703aebe0093f79badacc01b8fd4ea2e35118747e5811127f926e188"
-dependencies = [
- "anstyle 1.0.0",
  "windows-sys 0.48.0",
 ]
 
@@ -521,7 +472,7 @@ dependencies = [
 [[package]]
 name = "ark-scale"
 version = "0.0.2"
-source = "git+https://github.com/w3f/ark-scale#f9fdb109d377cf196e3a62711481877435c12180"
+source = "git+https://github.com/w3f/ark-scale#2da0a330df465a7e1691a9ef86f7511469f5312a"
 dependencies = [
  "ark-ec",
  "ark-serialize",
@@ -665,7 +616,7 @@ version = "2.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86d6b683edf8d1119fe420a94f8a7e389239666aa72e65495d91c00462510151"
 dependencies = [
- "anstyle 0.3.5",
+ "anstyle",
  "bstr",
  "doc-comment",
  "predicates 3.0.3",
@@ -1231,7 +1182,7 @@ name = "chain-spec-builder"
 version = "2.0.0"
 dependencies = [
  "ansi_term",
- "clap 4.2.5",
+ "clap 4.2.7",
  "node-cli",
  "rand 0.8.5",
  "sc-chain-spec",
@@ -1357,9 +1308,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.2.5"
+version = "4.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a1f23fa97e1d1641371b51f35535cb26959b8e27ab50d167a8b996b5bada819"
+checksum = "34d21f9bf1b425d2968943631ec91202fe5e837264063503708b83013f8fc938"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -1368,12 +1319,12 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.2.5"
+version = "4.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fdc5d93c358224b4d6867ef1356d740de2303e9892edc06c5340daeccd96bab"
+checksum = "914c8c79fb560f238ef6429439a30023c862f7a28e688c58f7203f12b29970bd"
 dependencies = [
  "anstream",
- "anstyle 1.0.0",
+ "anstyle",
  "bitflags",
  "clap_lex 0.4.1",
  "strsim",
@@ -1385,7 +1336,7 @@ version = "4.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a19591b2ab0e3c04b588a0e04ddde7b9eaa423646d1b4a8092879216bf47473"
 dependencies = [
- "clap 4.2.5",
+ "clap 4.2.7",
 ]
 
 [[package]]
@@ -1397,7 +1348,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 2.0.14",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -2636,7 +2587,7 @@ dependencies = [
  "Inflector",
  "array-bytes",
  "chrono",
- "clap 4.2.5",
+ "clap 4.2.7",
  "comfy-table",
  "frame-benchmarking",
  "frame-support",
@@ -2727,7 +2678,7 @@ dependencies = [
 name = "frame-election-solution-type-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 4.2.5",
+ "clap 4.2.7",
  "frame-election-provider-solution-type",
  "frame-election-provider-support",
  "frame-support",
@@ -4860,9 +4811,9 @@ checksum = "2532096657941c2fea9c289d370a250971c689d4f143798ff67113ec042024a5"
 
 [[package]]
 name = "matrixmultiply"
-version = "0.3.6"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcce854c9e76cfd191182c280eb5460cb8efd2cb4e58a1fd56bc41102d7e5802"
+checksum = "090126dc04f95dc0d1c1c91f61bdd474b3930ca064c1edc8a849da2c6cbe1e77"
 dependencies = [
  "autocfg",
  "rawpointer",
@@ -5300,7 +5251,7 @@ name = "node-bench"
 version = "0.9.0-dev"
 dependencies = [
  "array-bytes",
- "clap 4.2.5",
+ "clap 4.2.7",
  "derive_more",
  "fs_extra",
  "futures",
@@ -5337,7 +5288,7 @@ version = "3.0.0-dev"
 dependencies = [
  "array-bytes",
  "assert_cmd",
- "clap 4.2.5",
+ "clap 4.2.7",
  "clap_complete",
  "criterion",
  "frame-benchmarking-cli",
@@ -5459,7 +5410,7 @@ dependencies = [
 name = "node-inspect"
 version = "0.9.0-dev"
 dependencies = [
- "clap 4.2.5",
+ "clap 4.2.7",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-api",
@@ -5517,7 +5468,7 @@ dependencies = [
 name = "node-runtime-generate-bags"
 version = "3.0.0"
 dependencies = [
- "clap 4.2.5",
+ "clap 4.2.7",
  "generate-bags",
  "kitchensink-runtime",
 ]
@@ -5526,7 +5477,7 @@ dependencies = [
 name = "node-template"
 version = "4.0.0-dev"
 dependencies = [
- "clap 4.2.5",
+ "clap 4.2.7",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-system",
@@ -7445,9 +7396,9 @@ dependencies = [
 
 [[package]]
 name = "parity-db"
-version = "0.4.6"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00bfb81cf5c90a222db2fb7b3a7cbf8cc7f38dfb6647aca4d98edf8281f56ed5"
+checksum = "bd4572a52711e2ccff02b4973ec7e4a5b5c23387ebbfbd6cd42b34755714cefc"
 dependencies = [
  "blake2",
  "crc32fast",
@@ -7845,7 +7796,7 @@ version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09963355b9f467184c04017ced4a2ba2d75cbcb4e7462690d388233253d4b1a9"
 dependencies = [
- "anstyle 0.3.5",
+ "anstyle",
  "difflib",
  "itertools",
  "predicates-core",
@@ -8811,7 +8762,7 @@ version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
  "chrono",
- "clap 4.2.5",
+ "clap 4.2.7",
  "fdlimit",
  "futures",
  "futures-timer",
@@ -9926,7 +9877,7 @@ dependencies = [
 name = "sc-storage-monitor"
 version = "0.1.0"
 dependencies = [
- "clap 4.2.5",
+ "clap 4.2.7",
  "fs4",
  "futures",
  "log",
@@ -10671,7 +10622,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-377"
 version = "0.4.0-alpha"
-source = "git+https://github.com/paritytech/ark-substrate#44957cd837b275bc05bcfde027dd6394a9297736"
+source = "git+https://github.com/paritytech/ark-substrate#89340cc7df401cbc5416be8d3e76a142292ec75a"
 dependencies = [
  "ark-bls12-377",
  "ark-ff",
@@ -10686,7 +10637,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bls12-381"
 version = "0.4.0-alpha"
-source = "git+https://github.com/paritytech/ark-substrate#44957cd837b275bc05bcfde027dd6394a9297736"
+source = "git+https://github.com/paritytech/ark-substrate#89340cc7df401cbc5416be8d3e76a142292ec75a"
 dependencies = [
  "ark-bls12-381",
  "ark-ff",
@@ -10701,7 +10652,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-bw6-761"
 version = "0.4.0-alpha"
-source = "git+https://github.com/paritytech/ark-substrate#44957cd837b275bc05bcfde027dd6394a9297736"
+source = "git+https://github.com/paritytech/ark-substrate#89340cc7df401cbc5416be8d3e76a142292ec75a"
 dependencies = [
  "ark-bw6-761",
  "ark-ff",
@@ -10715,7 +10666,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-377"
 version = "0.4.0-alpha"
-source = "git+https://github.com/paritytech/ark-substrate#44957cd837b275bc05bcfde027dd6394a9297736"
+source = "git+https://github.com/paritytech/ark-substrate#89340cc7df401cbc5416be8d3e76a142292ec75a"
 dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
@@ -10731,7 +10682,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-ed-on-bls12-381-bandersnatch"
 version = "0.4.0-alpha"
-source = "git+https://github.com/paritytech/ark-substrate#44957cd837b275bc05bcfde027dd6394a9297736"
+source = "git+https://github.com/paritytech/ark-substrate#89340cc7df401cbc5416be8d3e76a142292ec75a"
 dependencies = [
  "ark-ec",
  "ark-ed-on-bls12-381-bandersnatch",
@@ -10748,7 +10699,7 @@ dependencies = [
 [[package]]
 name = "sp-ark-models"
 version = "0.4.0-alpha"
-source = "git+https://github.com/paritytech/ark-substrate#44957cd837b275bc05bcfde027dd6394a9297736"
+source = "git+https://github.com/paritytech/ark-substrate#89340cc7df401cbc5416be8d3e76a142292ec75a"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -11015,7 +10966,7 @@ dependencies = [
 [[package]]
 name = "sp-core"
 version = "7.0.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 dependencies = [
  "array-bytes",
  "bitflags",
@@ -11072,7 +11023,7 @@ dependencies = [
 [[package]]
 name = "sp-core-hashing"
 version = "5.0.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -11113,7 +11064,7 @@ dependencies = [
 [[package]]
 name = "sp-debug-derive"
 version = "5.0.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -11133,7 +11084,7 @@ dependencies = [
 [[package]]
 name = "sp-externalities"
 version = "0.13.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 dependencies = [
  "environmental",
  "parity-scale-codec",
@@ -11185,7 +11136,7 @@ dependencies = [
 [[package]]
 name = "sp-io"
 version = "7.0.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 dependencies = [
  "bytes",
  "ed25519",
@@ -11237,7 +11188,7 @@ dependencies = [
 [[package]]
 name = "sp-keystore"
 version = "0.13.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 dependencies = [
  "futures",
  "parity-scale-codec",
@@ -11302,7 +11253,7 @@ dependencies = [
 name = "sp-npos-elections-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 4.2.5",
+ "clap 4.2.7",
  "honggfuzz",
  "parity-scale-codec",
  "rand 0.8.5",
@@ -11332,7 +11283,7 @@ dependencies = [
 [[package]]
 name = "sp-panic-handler"
 version = "5.0.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 dependencies = [
  "backtrace",
  "lazy_static",
@@ -11402,7 +11353,7 @@ dependencies = [
 [[package]]
 name = "sp-runtime-interface"
 version = "7.0.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 dependencies = [
  "bytes",
  "impl-trait-for-tuples",
@@ -11431,7 +11382,7 @@ dependencies = [
 [[package]]
 name = "sp-runtime-interface-proc-macro"
 version = "6.0.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 dependencies = [
  "Inflector",
  "proc-macro-crate",
@@ -11539,7 +11490,7 @@ dependencies = [
 [[package]]
 name = "sp-state-machine"
 version = "0.13.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 dependencies = [
  "hash-db",
  "log",
@@ -11563,7 +11514,7 @@ version = "5.0.0"
 [[package]]
 name = "sp-std"
 version = "5.0.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 
 [[package]]
 name = "sp-storage"
@@ -11580,7 +11531,7 @@ dependencies = [
 [[package]]
 name = "sp-storage"
 version = "7.0.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -11630,7 +11581,7 @@ dependencies = [
 [[package]]
 name = "sp-tracing"
 version = "6.0.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 dependencies = [
  "parity-scale-codec",
  "sp-std 5.0.0 (git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration)",
@@ -11692,7 +11643,7 @@ dependencies = [
 [[package]]
 name = "sp-trie"
 version = "7.0.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 dependencies = [
  "ahash 0.8.3",
  "hash-db",
@@ -11755,7 +11706,7 @@ dependencies = [
 [[package]]
 name = "sp-wasm-interface"
 version = "7.0.0"
-source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#e4c507d0fb9ebf1e9cd7c61b55b708c7129efa22"
+source = "git+https://github.com/paritytech/substrate.git?branch=achimcc/arkworks-integration#c00b5cedf3c27388f2fc474c27a78b6cc6452163"
 dependencies = [
  "anyhow",
  "impl-trait-for-tuples",
@@ -11918,7 +11869,7 @@ dependencies = [
 name = "subkey"
 version = "3.0.0"
 dependencies = [
- "clap 4.2.5",
+ "clap 4.2.7",
  "sc-cli",
 ]
 
@@ -11960,7 +11911,7 @@ dependencies = [
 name = "substrate-frame-cli"
 version = "4.0.0-dev"
 dependencies = [
- "clap 4.2.5",
+ "clap 4.2.7",
  "frame-support",
  "frame-system",
  "sc-cli",
@@ -12843,7 +12794,7 @@ version = "0.10.0-dev"
 dependencies = [
  "assert_cmd",
  "async-trait",
- "clap 4.2.5",
+ "clap 4.2.7",
  "frame-remote-externalities",
  "frame-try-runtime",
  "hex",
@@ -13039,12 +12990,6 @@ dependencies = [
 [[package]]
 name = "utf8parse"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
-
-[[package]]
-name = "uuid"
-version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 
@@ -13909,13 +13854,13 @@ version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a3e1820f08b8513f676f7ab6c1f99ff312fb97b553d30ff4dd86f9f15728aa7"
 dependencies = [
- "windows_aarch64_gnullvm 0.42.1",
- "windows_aarch64_msvc 0.42.1",
- "windows_i686_gnu 0.42.1",
- "windows_i686_msvc 0.42.1",
- "windows_x86_64_gnu 0.42.1",
- "windows_x86_64_gnullvm 0.42.1",
- "windows_x86_64_msvc 0.42.1",
+ "windows_aarch64_gnullvm 0.42.2",
+ "windows_aarch64_msvc 0.42.2",
+ "windows_i686_gnu 0.42.2",
+ "windows_i686_msvc 0.42.2",
+ "windows_x86_64_gnu 0.42.2",
+ "windows_x86_64_gnullvm 0.42.2",
+ "windows_x86_64_msvc 0.42.2",
 ]
 
 [[package]]
@@ -13924,7 +13869,7 @@ version = "0.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75283be5efb2831d37ea142365f009c02ec203cd29a3ebecbc093d52315b66d0"
 dependencies = [
- "windows-targets 0.42.1",
+ "windows-targets 0.42.2",
 ]
 
 [[package]]
@@ -13942,13 +13887,13 @@ version = "0.42.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e5180c00cd44c9b1c88adb3693291f1cd93605ded80c250a75d472756b4d071"
 dependencies = [
- "windows_aarch64_gnullvm 0.42.1",
- "windows_aarch64_msvc 0.42.1",
- "windows_i686_gnu 0.42.1",
- "windows_i686_msvc 0.42.1",
- "windows_x86_64_gnu 0.42.1",
- "windows_x86_64_gnullvm 0.42.1",
- "windows_x86_64_msvc 0.42.1",
+ "windows_aarch64_gnullvm 0.42.2",
+ "windows_aarch64_msvc 0.42.2",
+ "windows_i686_gnu 0.42.2",
+ "windows_i686_msvc 0.42.2",
+ "windows_x86_64_gnu 0.42.2",
+ "windows_x86_64_gnullvm 0.42.2",
+ "windows_x86_64_msvc 0.42.2",
 ]
 
 [[package]]
@@ -13979,12 +13924,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91ae572e1b79dba883e0d315474df7305d12f569b400fcf90581b06062f7e1bc"
 
 [[package]]
-name = "windows_aarch64_gnullvm"
-version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91ae572e1b79dba883e0d315474df7305d12f569b400fcf90581b06062f7e1bc"
-
-[[package]]
 name = "windows_aarch64_msvc"
 version = "0.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13995,12 +13934,6 @@ name = "windows_aarch64_msvc"
 version = "0.42.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e08e8864a60f06ef0d0ff4ba04124db8b0fb3be5776a5cd47641e942e58c4d43"
-
-[[package]]
-name = "windows_aarch64_msvc"
-version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2ef27e0d7bdfcfc7b868b317c1d32c641a6fe4629c171b8928c7b08d98d7cf3"
 
 [[package]]
 name = "windows_aarch64_msvc"
@@ -14027,12 +13960,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "622a1962a7db830d6fd0a69683c80a18fda201879f0f447f065a3b7467daa241"
 
 [[package]]
-name = "windows_i686_gnu"
-version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "622a1962a7db830d6fd0a69683c80a18fda201879f0f447f065a3b7467daa241"
-
-[[package]]
 name = "windows_i686_msvc"
 version = "0.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14043,12 +13970,6 @@ name = "windows_i686_msvc"
 version = "0.42.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "44d840b6ec649f480a41c8d80f9c65108b92d89345dd94027bfe06ac444d1060"
-
-[[package]]
-name = "windows_i686_msvc"
-version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4542c6e364ce21bf45d69fdd2a8e455fa38d316158cfd43b3ac1c5b1b19f8e00"
 
 [[package]]
 name = "windows_i686_msvc"
@@ -14075,22 +13996,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca2b8a661f7628cbd23440e50b05d705db3686f894fc9580820623656af974b1"
 
 [[package]]
-name = "windows_x86_64_gnu"
-version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca2b8a661f7628cbd23440e50b05d705db3686f894fc9580820623656af974b1"
-
-[[package]]
 name = "windows_x86_64_gnullvm"
 version = "0.42.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26d41b46a36d453748aedef1486d5c7a85db22e56aff34643984ea85514e94a3"
-
-[[package]]
-name = "windows_x86_64_gnullvm"
-version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7896dbc1f41e08872e9d5e8f8baa8fdd2677f29468c4e156210174edc7f7b953"
 
 [[package]]
 name = "windows_x86_64_gnullvm"
@@ -14117,16 +14026,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a515f5799fe4961cb532f983ce2b23082366b898e52ffbce459c86f67c8378a"
 
 [[package]]
-name = "windows_x86_64_msvc"
-version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a515f5799fe4961cb532f983ce2b23082366b898e52ffbce459c86f67c8378a"
-
-[[package]]
 name = "winnow"
-version = "0.4.4"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5617da7e1f97bf363947d767b91aaf3c2bbc19db7fda9c65af1278713d58e0a2"
+checksum = "61de7bac303dc551fe038e2b3cef0f571087a47571ea6e79a87692ac99b99699"
 dependencies = [
  "memchr",
 ]
