@@ -132,8 +132,6 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 			account("nominator stash", n * MAX_NOMINATORS + i, SEED);
 		let nominator_controller: T::AccountId =
 			account("nominator controller", n * MAX_NOMINATORS + i, SEED);
-		let nominator_controller_lookup: LookupSourceOf<T> =
-			T::Lookup::unlookup(nominator_controller.clone());
 		T::Currency::make_free_balance_be(&nominator_stash, free_amount);
 
 		Staking::<T>::bond(
