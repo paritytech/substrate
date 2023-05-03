@@ -412,7 +412,7 @@ where
 				)
 			})?;
 
-		let total_weight = parent_weight + pre_digest.ticket_aux.is_some() as u32;
+		let total_weight = parent_weight + pre_digest.ticket_claim.is_some() as u32;
 
 		aux_schema::write_block_weight(hash, total_weight, |values| {
 			block

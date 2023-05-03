@@ -22,7 +22,6 @@ serde = { version = "1.0.136", features = ["derive"], optional = true }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../api" }
 sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../application-crypto" }
 sp-consensus-slots = { version = "0.10.0-dev", default-features = false, path = "../slots" }
-sp-consensus-vrf = { version = "0.10.0-dev", default-features = false, path = "../vrf" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../core" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../inherents" }
 sp-keystore = { version = "0.13.0", default-features = false, optional = true, path = "../../keystore" }
@@ -41,7 +40,6 @@ std = [
  	"sp-api/std",
  	"sp-application-crypto/std",
 	"sp-consensus-slots/std",
- 	"sp-consensus-vrf/std",
  	"sp-core/std",
  	"sp-inherents/std",
  	"sp-keystore/std",

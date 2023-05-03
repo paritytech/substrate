@@ -40,7 +40,6 @@ use log::{debug, error, info, log, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
 use scale_codec::{Decode, Encode};
-use schnorrkel::SignatureError;
 
 use sc_client_api::{backend::AuxStore, BlockchainEvents, ProvideUncles, UsageProvider};
 use sc_consensus::{
@@ -65,7 +64,7 @@ use sp_consensus::{
 	BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle,
 };
 use sp_consensus_slots::Slot;
-use sp_core::{crypto::ByteArray, ExecutionContext, Pair};
+use sp_core::{ExecutionContext, Pair};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::KeystorePtr;
 use sp_runtime::{
@@ -78,11 +77,10 @@ use sp_runtime::{
 pub use sp_consensus_sassafras::{
 	digests::{CompatibleDigestItem, ConsensusLog, NextEpochDescriptor, PreDigest},
 	inherents::SassafrasInherentData,
-	vrf::{make_slot_transcript, make_ticket_transcript},
-	AuthorityId, AuthorityIndex, AuthorityPair, AuthoritySignature, SassafrasApi,
-	SassafrasAuthorityWeight, SassafrasConfiguration, SassafrasEpochConfiguration, Ticket,
-	TicketAux, TicketEnvelope, VRFOutput, VRFProof, SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH,
-	VRF_PROOF_LENGTH,
+	make_slot_vrf_transcript, make_ticket_vrf_transcript, AuthorityId, AuthorityIndex,
+	AuthorityPair, AuthoritySignature, SassafrasApi, SassafrasAuthorityWeight,
+	SassafrasConfiguration, SassafrasEpochConfiguration, TicketClaim, TicketData, TicketEnvelope,
+	TicketId, TicketSecret, SASSAFRAS_ENGINE_ID,
 };
 
 mod authorship;
@@ -99,6 +97,9 @@ pub use block_import::{block_import, SassafrasBlockImport};
 pub use verification::SassafrasVerifier;
 
 const LOG_TARGET: &str = "sassafras 🌳";
+
+/// Intermediate key for Babe engine.
+pub const INTERMEDIATE_KEY: &[u8] = b"sass1";
 
 /// Errors encountered by the Sassafras routines.
 #[derive(Debug, thiserror::Error)]
@@ -137,8 +138,8 @@ pub enum Error<B: BlockT> {
 	#[error("Bad signature on {0:?}")]
 	BadSignature(B::Hash),
 	/// VRF verification failed
-	#[error("VRF verification failed: {0:?}")]
-	VRFVerificationFailed(SignatureError),
+	#[error("VRF verification failed")]
+	VrfVerificationFailed,
 	/// Unexpected authoring mechanism
 	#[error("Unexpected authoring mechanism")]
 	UnexpectedAuthoringMechanism,
@@ -180,10 +181,10 @@ impl<B: BlockT> From<Error<B>> for String {
 	}
 }
 
-// Convenience function
-fn sassafras_err<B: BlockT>(error: Error<B>) -> Error<B> {
-	error!(target: LOG_TARGET, "{}", error);
-	error
+// Convenience function for error logging
+fn sassafras_err<B: BlockT>(err: Error<B>) -> Error<B> {
+	error!(target: LOG_TARGET, "{}", err);
+	err
 }
 
 /// Sassafras epoch information augmented with private tickets information.
@@ -195,8 +196,8 @@ pub struct Epoch {
 	pub start_slot: Slot,
 	/// Epoch configuration.
 	pub config: SassafrasConfiguration,
-	/// Tickets auxiliary data.
-	pub tickets_aux: BTreeMap<VRFOutput, (AuthorityIndex, TicketAux)>,
+	/// Tickets associated secret data.
+	pub tickets_aux: BTreeMap<TicketId, (AuthorityIndex, TicketSecret)>,
 }
 
 impl From<sp_consensus_sassafras::Epoch> for Epoch {
@@ -276,25 +277,19 @@ pub struct SassafrasIntermediate<B: BlockT> {
 	pub epoch_descriptor: ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 }
 
-/// Intermediate key for Babe engine.
-pub static INTERMEDIATE_KEY: &[u8] = b"sass1";
-
-/// Extract the Sassafras pre digest from the given header. Pre-runtime digests are
-/// mandatory, the function will return `Err` if none is found.
+/// Extract the Sassafras pre digest from the given header.
+///
+/// Pre-runtime digests are mandatory, the function will return `Err` if none is found.
 fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>> {
-	// Genesis block doesn't contain a pre digest so let's generate a
-	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
-		const PROOF: &str = "zero sequence is a valid vrf output/proof; qed";
-		let vrf_output = VRFOutput::try_from([0; VRF_OUTPUT_LENGTH]).expect(PROOF);
-		let vrf_proof = VRFProof::try_from([0; VRF_PROOF_LENGTH]).expect(PROOF);
-		return Ok(PreDigest {
-			authority_idx: 0,
-			slot: 0.into(),
-			vrf_output,
-			vrf_proof,
-			ticket_aux: None,
-		})
+		// Genesis block doesn't contain a pre digest so let's generate a
+		// dummy one to not break any invariants in the rest of the code
+		use sp_consensus_sassafras::VrfTranscript;
+		use sp_core::crypto::VrfSigner;
+		let pair = sp_consensus_sassafras::AuthorityPair::from_seed(&[0u8; 32]);
+		let transcript = VrfTranscript::new(b"", &[]);
+		let vrf_signature = pair.as_ref().vrf_sign(&transcript);
+		return Ok(PreDigest { authority_idx: 0, slot: 0.into(), ticket_claim: None, vrf_signature })
 	}
 
 	let mut pre_digest: Option<_> = None;

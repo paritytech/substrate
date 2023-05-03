@@ -18,14 +18,14 @@
 //! Private implementation details of Sassafras digests.
 
 use super::{
-	AuthorityId, AuthorityIndex, AuthoritySignature, SassafrasAuthorityWeight,
-	SassafrasEpochConfiguration, Slot, TicketAux, SASSAFRAS_ENGINE_ID,
+	AuthorityId, AuthorityIndex, AuthoritySignature, Randomness, SassafrasAuthorityWeight,
+	SassafrasEpochConfiguration, Slot, TicketClaim, SASSAFRAS_ENGINE_ID,
 };
 
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
-use sp_consensus_vrf::schnorrkel::{Randomness, VRFOutput, VRFProof};
+use sp_core::sr25519::vrf::VrfSignature;
 use sp_runtime::{DigestItem, RuntimeDebug};
 use sp_std::vec::Vec;
 
@@ -36,12 +36,11 @@ pub struct PreDigest {
 	pub authority_idx: AuthorityIndex,
 	/// Corresponding slot number.
 	pub slot: Slot,
-	/// Slot VRF output.
-	pub vrf_output: VRFOutput,
-	/// Slot VRF proof.
-	pub vrf_proof: VRFProof,
+	/// Slot claim VRF signature.
+	/// TODO DAVXY we can store this Signature as a Seal DigestItem
+	pub vrf_signature: VrfSignature,
 	/// Ticket auxiliary information for claim check.
-	pub ticket_aux: Option<TicketAux>,
+	pub ticket_claim: Option<TicketClaim>,
 }
 
 /// Information about the next epoch. This is broadcast in the first block

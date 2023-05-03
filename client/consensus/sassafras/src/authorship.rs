@@ -20,10 +20,10 @@
 
 use super::*;
 
+use sp_application_crypto::Wraps;
 use sp_consensus_sassafras::{
-	digests::PreDigest,
-	vrf::{make_slot_transcript_data, make_ticket_transcript_data},
-	AuthorityId, Slot, Ticket, TicketAux, TicketEnvelope,
+	digests::PreDigest, make_slot_vrf_transcript, make_ticket_vrf_transcript, AuthorityId, Slot,
+	TicketClaim, TicketData, TicketEnvelope, TicketId,
 };
 use sp_core::{twox_64, ByteArray};
 
@@ -43,7 +43,7 @@ pub(crate) fn secondary_authority_index(
 pub(crate) fn claim_slot(
 	slot: Slot,
 	epoch: &Epoch,
-	ticket: Option<Ticket>,
+	maybe_ticket: Option<(TicketId, TicketData)>,
 	keystore: &KeystorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let config = &epoch.config;
@@ -52,18 +52,22 @@ pub(crate) fn claim_slot(
 		return None
 	}
 
-	let (authority_idx, ticket_aux) = match ticket {
-		Some(ticket) => {
+	let (authority_idx, ticket_claim) = match maybe_ticket {
+		Some((ticket_id, ticket_data)) => {
 			log::debug!(target: LOG_TARGET, "[TRY PRIMARY]");
-			let (authority_idx, ticket_aux) = epoch.tickets_aux.get(&ticket)?.clone();
+			let (authority_idx, ticket_secret) = epoch.tickets_aux.get(&ticket_id)?.clone();
 			log::debug!(
 				target: LOG_TARGET,
-				"Ticket = [ticket: {:02x?}, auth: {}, attempt: {}]",
-				&ticket.as_bytes()[0..8],
+				"Ticket = [ticket: {:x?}, auth: {}, attempt: {}]",
+				ticket_id,
 				authority_idx,
-				ticket_aux.attempt
+				ticket_data.attempt_idx
 			);
-			(authority_idx, Some(ticket_aux))
+			// TODO DAVXY : using ticket_secret
+			let _ = ticket_secret;
+			let erased_signature = [0; 64];
+			let claim = TicketClaim { erased_signature };
+			(authority_idx, Some(claim))
 		},
 		None => {
 			log::debug!(target: LOG_TARGET, "[TRY SECONDARY]");
@@ -73,19 +77,13 @@ pub(crate) fn claim_slot(
 
 	let authority_id = config.authorities.get(authority_idx as usize).map(|auth| &auth.0)?;
 
-	let transcript_data = make_slot_transcript_data(&config.randomness, slot, epoch.epoch_idx);
-	let signature = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), transcript_data)
+	let transcript = make_slot_vrf_transcript(&config.randomness, slot, epoch.epoch_idx);
+	let vrf_signature = keystore
+		.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &transcript)
 		.ok()
 		.flatten()?;
 
-	let pre_digest = PreDigest {
-		authority_idx,
-		slot,
-		vrf_output: VRFOutput(signature.output),
-		vrf_proof: VRFProof(signature.proof),
-		ticket_aux,
-	};
+	let pre_digest = PreDigest { authority_idx, slot, vrf_signature, ticket_claim };
 
 	Some((pre_digest, authority_id.clone()))
 }
@@ -97,16 +95,16 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 	let config = &epoch.config;
 	let max_attempts = config.threshold_params.attempts_number;
 	let redundancy_factor = config.threshold_params.redundancy_factor;
-	let mut tickets = vec![];
+	let mut tickets = Vec::new();
 
-	let threshold = sp_consensus_sassafras::compute_threshold(
+	let threshold = sp_consensus_sassafras::compute_ticket_id_threshold(
 		redundancy_factor,
 		config.epoch_duration as u32,
 		max_attempts,
 		config.authorities.len() as u32,
 	);
 	// TODO-SASS-P4 remove me
-	log::debug!(target: LOG_TARGET, "Tickets threshold: {:032x}", threshold);
+	log::debug!(target: LOG_TARGET, "Tickets threshold: {:016x}", threshold);
 
 	let authorities = config.authorities.iter().enumerate().map(|(index, a)| (index, &a.0));
 	for (authority_idx, authority_id) in authorities {
@@ -114,37 +112,48 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 			continue
 		}
 
-		let make_ticket = |attempt| {
-			let transcript_data =
-				make_ticket_transcript_data(&config.randomness, attempt, epoch.epoch_idx);
+		let make_ticket = |attempt_idx| {
+			// DAVXY TODO: we don't have to sign this but we need to sign later using pedersen vrf.
+			// This transcript use used only to get the ticket `preout`
+			// Requires the new keystore VRF interface...
+			let transcript =
+				make_ticket_vrf_transcript(&config.randomness, attempt_idx, epoch.epoch_idx);
 
-			// TODO-SASS-P4: can be a good idea to replace `vrf_sign` with `vrf_sign_after_check`,
-			// But we need to modify the CryptoStore interface first.
 			let signature = keystore
-				.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), transcript_data.clone())
+				.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &transcript)
 				.ok()??;
 
-			let ticket = VRFOutput(signature.output);
-			if !sp_consensus_sassafras::check_threshold(&ticket, threshold) {
+			let ticket_id = authority_id
+				.as_inner_ref()
+				.make_bytes::<[u8; 16]>(b"context", &transcript, &signature.output)
+				.map(|bytes| u128::from_le_bytes(bytes))
+				.ok()?;
+
+			if ticket_id >= threshold {
 				return None
 			}
-			let envelope = TicketEnvelope {
-				ticket,
-				// TODO-SASS-P3: placeholder...
-				zk_proof: VRFProof::try_from([0; 64]).expect("FIXME"),
-			};
 
-			let ticket_aux =
-				TicketAux { attempt: attempt as u32, proof: VRFProof(signature.proof) };
+			// TODO DAVXY: compute proper erased_secret/public and revealed_public
+			let erased_secret = [0; 32];
+			let erased_public = [0; 32];
+			let revealed_public = [0; 32];
+			let ticket_data = TicketData { attempt_idx, erased_public, revealed_public };
 
-			Some((envelope, ticket_aux))
+			// TODO DAVXY: placeholder
+			let ring_proof = ();
+			let ticket_envelope =
+				TicketEnvelope { data: ticket_data, vrf_preout: signature.output, ring_proof };
+
+			let ticket_secret = TicketSecret { attempt_idx, erased_secret };
+
+			Some((ticket_envelope, ticket_id, ticket_secret))
 		};
 
 		for attempt in 0..max_attempts {
-			if let Some((envelope, ticket_aux)) = make_ticket(attempt) {
+			if let Some((envelope, ticket_id, ticket_secret)) = make_ticket(attempt) {
 				epoch
 					.tickets_aux
-					.insert(envelope.ticket, (authority_idx as AuthorityIndex, ticket_aux));
+					.insert(ticket_id, (authority_idx as AuthorityIndex, ticket_secret));
 				tickets.push(envelope);
 			}
 		}
@@ -225,7 +234,8 @@ where
 		debug!(target: LOG_TARGET, "Attempting to claim slot {}", slot);
 
 		// Get the next slot ticket from the runtime.
-		let ticket = self.client.runtime_api().slot_ticket(parent_header.hash(), slot).ok()?;
+		let maybe_ticket =
+			self.client.runtime_api().slot_ticket(parent_header.hash(), slot).ok()?;
 
 		// TODO-SASS-P2: remove me
 		debug!(target: LOG_TARGET, "parent {}", parent_header.hash());
@@ -236,7 +246,7 @@ where
 				.shared_data()
 				.viable_epoch(epoch_descriptor, |slot| Epoch::genesis(&self.genesis_config, slot))?
 				.as_ref(),
-			ticket,
+			maybe_ticket,
 			&self.keystore,
 		);
 		if claim.is_some() {

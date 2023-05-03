@@ -18,27 +18,24 @@
 //! Primitives for Sassafras
 //! TODO-SASS-P2 : write proper docs
 
-#![deny(warnings)]
-#![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
+// TODO DAVXY enable warnings
+// #![deny(warnings)]
+// #![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-use sp_core::{crypto, U256};
+use sp_core::crypto::KeyTypeId;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
 
 pub use sp_consensus_slots::{Slot, SlotDuration};
-pub use sp_consensus_vrf::schnorrkel::{
-	PublicKey, Randomness, VRFOutput, VRFProof, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH,
-	VRF_PROOF_LENGTH,
-};
+pub use sp_core::sr25519::vrf::{VrfOutput, VrfProof, VrfSignature, VrfTranscript};
 
 pub mod digests;
 pub mod inherents;
-pub mod vrf;
 
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::SASSAFRAS, sr25519};
@@ -46,7 +43,16 @@ mod app {
 }
 
 /// Key type for Sassafras protocol.
-pub const KEY_TYPE: crypto::KeyTypeId = sp_application_crypto::key_types::SASSAFRAS;
+pub const KEY_TYPE: KeyTypeId = sp_application_crypto::key_types::SASSAFRAS;
+
+/// Consensus engine identifier.
+pub const SASSAFRAS_ENGINE_ID: ConsensusEngineId = *b"SASS";
+
+/// VRF context used for per-slot randomness generation.
+pub const RANDOMNESS_VRF_CONTEXT: &[u8] = b"SassafrasRandomnessVRFContext";
+
+/// VRF output length for per-slot randomness.
+pub const RANDOMNESS_LENGTH: usize = 32;
 
 /// The index of an authority.
 pub type AuthorityIndex = u32;
@@ -63,12 +69,6 @@ pub type AuthoritySignature = app::Signature;
 /// the main Sassafras module. If that ever changes, then this must, too.
 pub type AuthorityId = app::Public;
 
-/// The `ConsensusEngineId` of BABE.
-pub const SASSAFRAS_ENGINE_ID: ConsensusEngineId = *b"SASS";
-
-/// The length of the public key
-pub const PUBLIC_KEY_LENGTH: usize = 32;
-
 /// The weight of an authority.
 // NOTE: we use a unique name for the weight to avoid conflicts with other
 // `Weight` types, since the metadata isn't able to disambiguate.
@@ -81,8 +81,11 @@ pub type SassafrasBlockWeight = u32;
 /// An equivocation proof for multiple block authorships on the same slot (i.e. double vote).
 pub type EquivocationProof<H> = sp_consensus_slots::EquivocationProof<H, AuthorityId>;
 
+/// Randomness required by some SASSAFRAS operations.
+pub type Randomness = [u8; RANDOMNESS_LENGTH];
+
 /// Configuration data used by the Sassafras consensus engine.
-#[derive(Clone, Encode, Decode, RuntimeDebug, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, RuntimeDebug, PartialEq, Eq, TypeInfo)]
 pub struct SassafrasConfiguration {
 	/// The slot duration in milliseconds.
 	pub slot_duration: u64,
@@ -104,7 +107,7 @@ impl SassafrasConfiguration {
 }
 
 /// Sassafras epoch information
-#[derive(Encode, Decode, PartialEq, Eq, Clone, Debug)]
+#[derive(Encode, Decode, PartialEq, Eq, Clone, Debug, TypeInfo)]
 pub struct Epoch {
 	/// The epoch index.
 	pub epoch_idx: u64,
@@ -125,41 +128,63 @@ pub struct SassafrasEpochConfiguration {
 	pub attempts_number: u32,
 }
 
-/// Ticket value.
-pub type Ticket = VRFOutput;
+/// Ticket identifier.
+pub type TicketId = u128;
 
-/// Ticket proof.
-pub type TicketProof = VRFProof;
+/// TODO DAVXY
+/// input obtained via `make_vrf_input_transcript`
+pub fn make_ticket_value(_in: &VrfTranscript, out: &VrfOutput) -> TicketId {
+	// TODO DAVXY temporary way to generate id... use io.make_bytes()
+	let preout = out;
+	let mut raw: [u8; 16] = [0; 16];
+	raw.copy_from_slice(&preout.0 .0[0..16]);
+	u128::from_le_bytes(raw)
+}
+
+/// Ticket value.
+// TODO: potentially this can be opaque to separate the protocol from the application
+#[derive(Debug, Default, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub struct TicketData {
+	/// Attempt index.
+	pub attempt_idx: u32,
+	/// Ed25519 public key which gets erased when claiming the ticket.
+	pub erased_public: [u8; 32],
+	/// Ed25519 public key which gets exposed when claiming the ticket.
+	pub revealed_public: [u8; 32],
+}
 
 /// Ticket ZK commitment proof.
 /// TODO-SASS-P3: this is a placeholder.
-pub type TicketZkProof = VRFProof;
+pub type TicketRingProof = ();
 
 /// Ticket envelope used on submission.
 // TODO-SASS-P3: we are currently using Shnorrkel structures as placeholders.
 // Should switch to new RVRF primitive soon.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct TicketEnvelope {
-	/// Ring VRF output.
-	pub ticket: Ticket,
-	/// Ring VRF zk proof.
-	pub zk_proof: TicketZkProof,
-	// Ticket opaque utility data.
-	// TODO-SASS-P3: Interpretation of this data is up to the application? Investigate
-	// Suggested by Jeff:
-	// - ephemeral_pk: public key used to...
-	// - revealed_pk: ???
-	// - gossip_auth_id: identifier to reach this actor in a separate gossip network
-	//pub data: Vec<u8>,
+	/// VRF output.
+	pub data: TicketData,
+	/// VRF pre-output used to generate the ticket id.
+	pub vrf_preout: VrfOutput,
+	// /// Pedersen VRF signature
+	// pub ped_signature: (),
+	/// Ring VRF proof.
+	pub ring_proof: TicketRingProof,
 }
 
 /// Ticket private auxiliary information.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct TicketAux {
-	/// Attempt number.
-	pub attempt: u32,
-	/// Ticket proof used to claim a slot.
-	pub proof: TicketProof,
+pub struct TicketSecret {
+	/// Attempt index.
+	pub attempt_idx: u32,
+	/// Ed25519 used to claim ticket ownership.
+	pub erased_secret: [u8; 32],
+}
+
+/// Ticket claim information filled by the block author.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub struct TicketClaim {
+	pub erased_signature: [u8; 64],
 }
 
 /// Computes the threshold for a given epoch as T = (x*s)/(a*v), where:
@@ -170,18 +195,18 @@ pub struct TicketAux {
 /// The parameters should be chosen such that T <= 1.
 /// If `attempts * validators` is zero then we fallback to T = 0
 // TODO-SASS-P3: this formula must be double-checked...
-pub fn compute_threshold(redundancy: u32, slots: u32, attempts: u32, validators: u32) -> U256 {
+pub fn compute_ticket_id_threshold(
+	redundancy: u32,
+	slots: u32,
+	attempts: u32,
+	validators: u32,
+) -> TicketId {
 	let den = attempts as u64 * validators as u64;
 	let num = redundancy as u64 * slots as u64;
-	U256::max_value()
+	TicketId::max_value()
 		.checked_div(den.into())
-		.unwrap_or(U256::zero())
+		.unwrap_or_default()
 		.saturating_mul(num.into())
-}
-
-/// Returns true if the given VRF output is lower than the given threshold, false otherwise.
-pub fn check_threshold(ticket: &Ticket, threshold: U256) -> bool {
-	U256::from(ticket.as_bytes()) < threshold
 }
 
 /// An opaque type used to represent the key ownership proof at the runtime API boundary.
@@ -189,20 +214,55 @@ pub fn check_threshold(ticket: &Ticket, threshold: U256) -> bool {
 /// parameterized when defining the runtime. At the runtime API boundary this type is unknown and
 /// as such we keep this opaque representation, implementors of the runtime API will have to make
 /// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
-#[derive(Decode, Encode, PartialEq)]
+#[derive(Decode, Encode, PartialEq, TypeInfo)]
 pub struct OpaqueKeyOwnershipProof(Vec<u8>);
 
-impl OpaqueKeyOwnershipProof {
-	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded representation.
-	pub fn new(inner: Vec<u8>) -> OpaqueKeyOwnershipProof {
-		OpaqueKeyOwnershipProof(inner)
-	}
+// impl OpaqueKeyOwnershipProof {
+// 	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded representation.
+// 	pub fn new(inner: Vec<u8>) -> OpaqueKeyOwnershipProof {
+// 		OpaqueKeyOwnershipProof(inner)
+// 	}
 
-	/// Try to decode this `OpaqueKeyOwnershipProof` into the given concrete key
-	/// ownership proof type.
-	pub fn decode<T: Decode>(self) -> Option<T> {
-		Decode::decode(&mut &self.0[..]).ok()
-	}
+// 	/// Try to decode this `OpaqueKeyOwnershipProof` into the given concrete key
+// 	/// ownership proof type.
+// 	pub fn decode<T: Decode>(self) -> Option<T> {
+// 		Decode::decode(&mut &self.0[..]).ok()
+// 	}
+// }
+
+/// Make per slot randomness VRF input transcript.
+///
+/// Input randomness is current epoch randomness.
+pub fn make_slot_vrf_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfTranscript {
+	VrfTranscript::new(
+		&SASSAFRAS_ENGINE_ID,
+		&[
+			(b"type", b"slot-transcript"),
+			(b"slot", &slot.to_le_bytes()),
+			(b"epoch", &epoch.to_le_bytes()),
+			(b"randomness", randomness),
+		],
+	)
+}
+
+/// Make ticket VRF transcript data container.
+///
+/// Input randomness is current epoch randomness.
+#[cfg(feature = "std")]
+pub fn make_ticket_vrf_transcript(
+	randomness: &Randomness,
+	attempt: u32,
+	epoch: u64,
+) -> VrfTranscript {
+	VrfTranscript::new(
+		&SASSAFRAS_ENGINE_ID,
+		&[
+			(b"type", b"ticket-transcript"),
+			(b"attempt", &attempt.to_le_bytes()),
+			(b"epoch", &epoch.to_le_bytes()),
+			(b"randomness", randomness),
+		],
+	)
 }
 
 // Runtime API.
@@ -213,8 +273,11 @@ sp_api::decl_runtime_apis! {
 		/// This method returns `false` when creation of the extrinsics fails.
 		fn submit_tickets_unsigned_extrinsic(tickets: Vec<TicketEnvelope>) -> bool;
 
-		/// Get expected ticket value for the given slot.
-		fn slot_ticket(slot: Slot) -> Option<Ticket>;
+		/// Get ticket id associated to the given slot.
+		fn slot_ticket_id(slot: Slot) -> Option<TicketId>;
+
+		/// Get ticket id and data associated to the given slot.
+		fn slot_ticket(slot: Slot) -> Option<(TicketId, TicketData)>;
 
 		/// Current epoch information.
 		fn current_epoch() -> Epoch;

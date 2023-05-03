@@ -18,6 +18,8 @@
 
 //! Types and functions related to block verification.
 
+use sp_application_crypto::Wraps;
+
 use super::*;
 
 // Allowed slot drift.
@@ -36,15 +38,15 @@ struct VerificationParams<'a, B: 'a + BlockT> {
 	/// Origin
 	origin: BlockOrigin,
 	/// Expected ticket for this block.
-	ticket: Option<Ticket>,
+	maybe_ticket: Option<(TicketId, TicketData)>,
 }
 
 /// Verified information
 struct VerifiedHeaderInfo {
 	/// Authority index.
 	authority_id: AuthorityId,
-	/// Seal found within the header.
-	seal: DigestItem,
+	// /// Seal found within the header.
+	// seal: DigestItem,
 }
 
 /// Check a header has been signed by the right key. If the slot is too far in
@@ -59,7 +61,7 @@ struct VerifiedHeaderInfo {
 fn check_header<B: BlockT + Sized>(
 	params: VerificationParams<B>,
 ) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo>, Error<B>> {
-	let VerificationParams { mut header, pre_digest, slot_now, epoch, origin, ticket } = params;
+	let VerificationParams { header, pre_digest, slot_now, epoch, origin, maybe_ticket } = params;
 	let config = &epoch.config;
 
 	// Check that the slot is not in the future, with some drift being allowed.
@@ -74,30 +76,40 @@ fn check_header<B: BlockT + Sized>(
 
 	// Check header signature
 
-	let seal = header
-		.digest_mut()
-		.pop()
-		.ok_or_else(|| sassafras_err(Error::HeaderUnsealed(header.hash())))?;
+	// Check slot-vrf proof
 
-	let signature = seal
-		.as_sassafras_seal()
-		.ok_or_else(|| sassafras_err(Error::HeaderBadSeal(header.hash())))?;
+	// TODO DAVXY: probably there is not need to also add an explicit `Seal`
+	// it would be just redundant and we can just push the block header hash within
+	// the slot-vrf-transcript
 
-	let pre_hash = header.hash();
-	if !AuthorityPair::verify(&signature, &pre_hash, &authority_id) {
-		return Err(sassafras_err(Error::BadSignature(pre_hash)))
+	use sp_core::crypto::VrfVerifier;
+	let transcript = make_slot_vrf_transcript(&config.randomness, pre_digest.slot, epoch.epoch_idx);
+	if !authority_id.as_inner_ref().vrf_verify(&transcript, &pre_digest.vrf_signature) {
+		return Err(sassafras_err(Error::VrfVerificationFailed))
 	}
+
+	// let seal = header
+	// 	.digest_mut()
+	// 	.pop()
+	// 	.ok_or_else(|| sassafras_err(Error::HeaderUnsealed(header.hash())))?;
+
+	// let signature = seal
+	// 	.as_sassafras_seal()
+	// 	.ok_or_else(|| sassafras_err(Error::HeaderBadSeal(header.hash())))?;
+
+	// let pre_hash = header.hash();
+	// if !AuthorityPair::verify(&signature, &pre_hash, &authority_id) {
+	// 	return Err(sassafras_err(Error::BadSignature(pre_hash)))
+	// }
 
 	// Check authorship method and claim
 
-	match (&ticket, &pre_digest.ticket_aux) {
-		(Some(ticket), Some(ticket_aux)) => {
+	match (&maybe_ticket, &pre_digest.ticket_claim) {
+		(Some((_ticket_id, ticket_data)), Some(ticket_claim)) => {
 			log::debug!(target: LOG_TARGET, "checking primary");
-			let transcript =
-				make_ticket_transcript(&config.randomness, ticket_aux.attempt, epoch.epoch_idx);
-			schnorrkel::PublicKey::from_bytes(authority_id.as_slice())
-				.and_then(|p| p.vrf_verify(transcript, &ticket, &ticket_aux.proof))
-				.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
+			// TODO DAVXY: check erased_signature
+			let _public = ticket_data.erased_public;
+			let _signature = ticket_claim.erased_signature;
 		},
 		(None, None) => {
 			log::debug!(target: LOG_TARGET, "checking secondary");
@@ -118,14 +130,7 @@ fn check_header<B: BlockT + Sized>(
 			},
 	}
 
-	// Check slot-vrf proof
-
-	let transcript = make_slot_transcript(&config.randomness, pre_digest.slot, epoch.epoch_idx);
-	schnorrkel::PublicKey::from_bytes(authority_id.as_slice())
-		.and_then(|p| p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof))
-		.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
-
-	let info = VerifiedHeaderInfo { authority_id, seal };
+	let info = VerifiedHeaderInfo { authority_id };
 
 	Ok(CheckedHeader::Checked(header, info))
 }
@@ -354,7 +359,7 @@ where
 				.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.genesis_config, slot))
 				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
 
-			let ticket = self
+			let maybe_ticket = self
 				.client
 				.runtime_api()
 				.slot_ticket(parent_hash, pre_digest.slot)
@@ -367,7 +372,7 @@ where
 				slot_now,
 				epoch: viable_epoch.as_ref(),
 				origin: block.origin,
-				ticket,
+				maybe_ticket,
 			};
 			let checked_header = check_header::<Block>(verification_params)?;
 
@@ -432,7 +437,8 @@ where
 
 				block.header = pre_header;
 				block.post_hash = Some(hash);
-				block.post_digests.push(verified_info.seal);
+				// TODO DAVXY: seal required???
+				// block.post_digests.push(verified_info.seal);
 				block.insert_intermediate(
 					INTERMEDIATE_KEY,
 					SassafrasIntermediate::<Block> { epoch_descriptor },

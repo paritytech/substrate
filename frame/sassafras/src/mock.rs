@@ -22,12 +22,11 @@ use crate::{self as pallet_sassafras, SameAuthoritiesForever};
 use frame_support::traits::{ConstU32, ConstU64, GenesisBuild, OnFinalize, OnInitialize};
 use scale_codec::Encode;
 use sp_consensus_sassafras::{
-	digests::PreDigest,
-	vrf::{self, VRFOutput, VRFProof},
-	AuthorityIndex, AuthorityPair, Slot, TicketEnvelope,
+	digests::PreDigest, AuthorityIndex, AuthorityPair, Slot, TicketData, TicketEnvelope,
+	VrfSignature,
 };
 use sp_core::{
-	crypto::{IsWrappedBy, Pair},
+	crypto::{Pair, VrfSigner},
 	H256, U256,
 };
 use sp_runtime::{
@@ -135,9 +134,7 @@ pub fn new_test_ext_with_pairs(
 	(pairs, storage.into())
 }
 
-fn make_ticket_vrf(slot: Slot, attempt: u32, pair: &AuthorityPair) -> (VRFOutput, VRFProof) {
-	let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
-
+fn make_ticket(slot: Slot, attempt: u32, pair: &AuthorityPair) -> TicketEnvelope {
 	let mut epoch = Sassafras::epoch_index();
 	let mut randomness = Sassafras::randomness();
 
@@ -148,12 +145,17 @@ fn make_ticket_vrf(slot: Slot, attempt: u32, pair: &AuthorityPair) -> (VRFOutput
 		randomness = crate::NextRandomness::<Test>::get();
 	}
 
-	let transcript = vrf::make_ticket_transcript(&randomness, attempt, epoch);
-	let inout = pair.vrf_sign(transcript);
-	let output = VRFOutput(inout.0.to_output());
-	let proof = VRFProof(inout.1);
+	let transcript =
+		sp_consensus_sassafras::make_ticket_vrf_transcript(&randomness, attempt, epoch);
 
-	(output, proof)
+	// TODO DAVXY: NOT REQUIRED ONCE WE HAVE THE NEW API...
+	// (i.e. we just require the preout)
+	let signature = pair.as_ref().vrf_sign(&transcript);
+
+	// TODO DAVXY: use some well known valid test keys...
+	let data =
+		TicketData { attempt_idx: attempt, erased_public: [0; 32], revealed_public: [0; 32] };
+	TicketEnvelope { data, vrf_preout: signature.output, ring_proof: () }
 }
 
 /// Construct at most `attempts` tickets for the given `slot`.
@@ -162,16 +164,11 @@ fn make_ticket_vrf(slot: Slot, attempt: u32, pair: &AuthorityPair) -> (VRFOutput
 pub fn make_tickets(slot: Slot, attempts: u32, pair: &AuthorityPair) -> Vec<TicketEnvelope> {
 	(0..attempts)
 		.into_iter()
-		.map(|attempt| {
-			let (ticket, zk_proof) = make_ticket_vrf(slot, attempt, pair);
-			TicketEnvelope { ticket, zk_proof }
-		})
+		.map(|attempt| make_ticket(slot, attempt, pair))
 		.collect()
 }
 
-fn make_slot_vrf(slot: Slot, pair: &AuthorityPair) -> (VRFOutput, VRFProof) {
-	let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
-
+fn slot_claim_vrf_signature(slot: Slot, pair: &AuthorityPair) -> VrfSignature {
 	let mut epoch = Sassafras::epoch_index();
 	let mut randomness = Sassafras::randomness();
 
@@ -182,12 +179,8 @@ fn make_slot_vrf(slot: Slot, pair: &AuthorityPair) -> (VRFOutput, VRFProof) {
 		randomness = crate::NextRandomness::<Test>::get();
 	}
 
-	let transcript = vrf::make_slot_transcript(&randomness, slot, epoch);
-	let inout = pair.vrf_sign(transcript);
-	let output = VRFOutput(inout.0.to_output());
-	let proof = VRFProof(inout.1);
-
-	(output, proof)
+	let transcript = sp_consensus_sassafras::make_slot_vrf_transcript(&randomness, slot, epoch);
+	pair.as_ref().vrf_sign(&transcript)
 }
 
 /// Produce a `PreDigest` instance for the given parameters.
@@ -196,8 +189,8 @@ pub fn make_pre_digest(
 	slot: Slot,
 	pair: &AuthorityPair,
 ) -> PreDigest {
-	let (vrf_output, vrf_proof) = make_slot_vrf(slot, pair);
-	PreDigest { authority_idx, slot, vrf_output, vrf_proof, ticket_aux: None }
+	let vrf_signature = slot_claim_vrf_signature(slot, pair);
+	PreDigest { authority_idx, slot, vrf_signature, ticket_aux: None }
 }
 
 /// Produce a `PreDigest` instance for the given parameters and wrap the result into a `Digest`
