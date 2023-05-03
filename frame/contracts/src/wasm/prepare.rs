@@ -31,7 +31,6 @@ use codec::{Encode, MaxEncodedLen};
 use sp_runtime::{traits::Hash, DispatchError};
 use sp_std::prelude::*;
 use wasm_instrument::{
-	gas_metering,
 	parity_wasm::elements::{self, External, Internal, MemoryType, Type, ValueType},
 };
 use wasmi::StackLimits;
@@ -64,24 +63,21 @@ enum InstrumentReason {
 	Reinstrument,
 }
 
-struct ContractModule<'a, T: Config> {
-	/// A deserialized module. The module is valid (this is Guaranteed by `new` method).
-	module: elements::Module,
-	schedule: &'a Schedule<T>,
-}
+/// The inner deserialized module is valid (this is Guaranteed by `new` method).
+struct ContractModule(elements::Module);
 
-impl<'a, T: Config> ContractModule<'a, T> {
+impl ContractModule {
 	/// Creates a new instance of `ContractModule`.
 	///
 	/// Returns `Err` if the `original_code` couldn't be decoded or
 	/// if it contains an invalid module.
-	fn new(original_code: &[u8], schedule: &'a Schedule<T>) -> Result<Self, &'static str> {
+	fn new(original_code: &[u8]) -> Result<Self, &'static str> {
 		let module =
 			elements::deserialize_buffer(original_code).map_err(|_| "Can't decode wasm code")?;
 
 		// Return a `ContractModule` instance with
 		// __valid__ module.
-		Ok(ContractModule { module, schedule })
+		Ok(ContractModule(module))
 	}
 
 	/// Ensures that module doesn't declare internal memories.
@@ -90,7 +86,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 	/// Memory section contains declarations of internal linear memories, so if we find one
 	/// we reject such a module.
 	fn ensure_no_internal_memory(&self) -> Result<(), &'static str> {
-		if self.module.memory_section().map_or(false, |ms| ms.entries().len() > 0) {
+		if self.0.memory_section().map_or(false, |ms| ms.entries().len() > 0) {
 			return Err("module declares internal memory")
 		}
 		Ok(())
@@ -98,7 +94,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 
 	/// Ensures that tables declared in the module are not too big.
 	fn ensure_table_size_limit(&self, limit: u32) -> Result<(), &'static str> {
-		if let Some(table_section) = self.module.table_section() {
+		if let Some(table_section) = self.0.table_section() {
 			// In Wasm MVP spec, there may be at most one table declared. Double check this
 			// explicitly just in case the Wasm version changes.
 			if table_section.entries().len() > 1 {
@@ -117,7 +113,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 
 	/// Ensure that any `br_table` instruction adheres to its immediate value limit.
 	fn ensure_br_table_size_limit(&self, limit: u32) -> Result<(), &'static str> {
-		let code_section = if let Some(type_section) = self.module.code_section() {
+		let code_section = if let Some(type_section) = self.0.code_section() {
 			type_section
 		} else {
 			return Ok(())
@@ -134,7 +130,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 	}
 
 	fn ensure_global_variable_limit(&self, limit: u32) -> Result<(), &'static str> {
-		if let Some(global_section) = self.module.global_section() {
+		if let Some(global_section) = self.0.global_section() {
 			if global_section.entries().len() > limit as usize {
 				return Err("module declares too many globals")
 			}
@@ -143,7 +139,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 	}
 
 	fn ensure_local_variable_limit(&self, limit: u32) -> Result<(), &'static str> {
-		if let Some(code_section) = self.module.code_section() {
+		if let Some(code_section) = self.0.code_section() {
 			for func_body in code_section.bodies() {
 				let locals_count: u32 =
 					func_body.locals().iter().map(|val_type| val_type.count()).sum();
@@ -157,7 +153,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 
 	/// Ensure that no function exists that has more parameters than allowed.
 	fn ensure_parameter_limit(&self, limit: u32) -> Result<(), &'static str> {
-		let type_section = if let Some(type_section) = self.module.type_section() {
+		let type_section = if let Some(type_section) = self.0.type_section() {
 			type_section
 		} else {
 			return Ok(())
@@ -172,14 +168,6 @@ impl<'a, T: Config> ContractModule<'a, T> {
 		Ok(())
 	}
 
-	fn inject_gas_metering(self, determinism: Determinism) -> Result<Self, &'static str> {
-		let gas_rules = self.schedule.rules(determinism);
-		let backend = gas_metering::host_function::Injector::new("seal0", "gas");
-		let contract_module = gas_metering::inject(self.module, backend, &gas_rules)
-			.map_err(|_| "gas instrumentation failed")?;
-		Ok(ContractModule { module: contract_module, schedule: self.schedule })
-	}
-
 	/// Check that the module has required exported functions. For now
 	/// these are just entrypoints:
 	///
@@ -191,7 +179,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 		let mut deploy_found = false;
 		let mut call_found = false;
 
-		let module = &self.module;
+		let module = &self.0;
 
 		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
 		let export_entries = module.export_section().map(|is| is.entries()).unwrap_or(&[]);
@@ -263,11 +251,11 @@ impl<'a, T: Config> ContractModule<'a, T> {
 	/// and enforces and returns the memory type declared by the contract if any.
 	///
 	/// `import_fn_banlist`: list of function names that are disallowed to be imported
-	fn scan_imports(
+	fn scan_imports<T: Config>(
 		&self,
 		import_fn_banlist: &[&[u8]],
 	) -> Result<Option<&MemoryType>, &'static str> {
-		let module = &self.module;
+		let module = &self.0;
 		let import_entries = module.import_section().map(|is| is.entries()).unwrap_or(&[]);
 		let mut imported_mem_type = None;
 
@@ -276,7 +264,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 				External::Table(_) => return Err("Cannot import tables"),
 				External::Global(_) => return Err("Cannot import globals"),
 				External::Function(_) => {
-					if !T::ChainExtension::enabled() &&
+					if !<T as Config>::ChainExtension::enabled() &&
 						import.field().as_bytes() == b"seal_call_chain_extension"
 					{
 						return Err("module uses chain extensions but chain extensions are disabled")
@@ -305,7 +293,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 	}
 
 	fn into_wasm_code(self) -> Result<Vec<u8>, &'static str> {
-		elements::serialize(self.module).map_err(|_| "error serializing instrumented module")
+		elements::serialize(self.0).map_err(|_| "error serializing instrumented module")
 	}
 }
 
@@ -336,12 +324,12 @@ fn get_memory_limits<T: Config>(
 	}
 }
 
-/// Check and instrument the given `original_code`.
+/// Check that given `code` satisfies constraints required for the contract Wasm module.
 ///
-/// On success it returns the instrumented versions together with its `(initial, maximum)`
-/// error requirement. The memory requirement was also validated against the `schedule`.
-fn instrument<E, T>(
-	original_code: &[u8],
+/// On success it returns back the code together with its `(initial, maximum)`
+/// memory limits. The memory requirement was also validated against the `schedule`.
+fn validate<E, T>(
+	code: &[u8],
 	schedule: &Schedule<T>,
 	determinism: Determinism,
 	try_instantiate: TryInstantiate,
@@ -377,14 +365,14 @@ where
 		simd: false,
 		memory_control: false,
 	})
-	.validate_all(original_code)
+	.validate_all(code)
 	.map_err(|err| {
 		log::debug!(target: LOG_TARGET, "{}", err);
 		(Error::<T>::CodeRejected.into(), "validation of new code failed")
 	})?;
 
 	let (code, (initial, maximum)) = (|| {
-		let contract_module = ContractModule::new(original_code, schedule)?;
+		let contract_module = ContractModule::new(code)?;
 		contract_module.scan_exports()?;
 		contract_module.ensure_no_internal_memory()?;
 		contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
@@ -393,12 +381,10 @@ where
 		contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
 		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
 
-		// We disallow importing `gas` function here since it is treated as implementation detail.
-		let disallowed_imports = [b"gas".as_ref()];
 		let memory_limits =
-			get_memory_limits(contract_module.scan_imports(&disallowed_imports)?, schedule)?;
+			get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
 
-		let code = contract_module.inject_gas_metering(determinism)?.into_wasm_code()?;
+		let code = contract_module.into_wasm_code()?;
 
 		Ok((code, memory_limits))
 	})()
@@ -434,8 +420,7 @@ where
 	Ok((code, (initial, maximum)))
 }
 
-/// Loads the given module given in `original_code`, performs some checks on it and
-/// does some preprocessing.
+/// Loads the given module given in `original_code` and performs some checks on it.
 ///
 /// The checks are:
 ///
@@ -443,8 +428,6 @@ where
 /// - the module doesn't define an internal memory instance
 /// - imported memory (if any) doesn't reserve more memory than permitted by the `schedule`
 /// - all imported functions from the external environment matches defined by `env` module
-///
-/// The preprocessing includes injecting code for gas metering and metering the height of stack.
 pub fn prepare<E, T>(
 	original_code: CodeVec<T>,
 	schedule: &Schedule<T>,
@@ -456,7 +439,8 @@ where
 	E: Environment<()>,
 	T: Config,
 {
-	let (code, (initial, maximum)) = instrument::<E, T>(
+	// TODO: remove passing the code to the validator?
+	let (code, (initial, maximum)) = validate::<E, T>(
 		original_code.as_ref(),
 		schedule,
 		determinism,
@@ -495,7 +479,7 @@ where
 /// Same as [`prepare`] but without constructing a new module.
 ///
 /// Used to update the code of an existing module to the newest [`Schedule`] version.
-/// Stictly speaking is not necessary to check the existing code before reinstrumenting because
+/// Strictly speaking is not necessary to check the existing code before reinstrumenting because
 /// it can't change in the meantime. However, since we recently switched the validation library
 /// we want to re-validate to weed out any bugs that were lurking in the old version.
 pub fn reinstrument<E, T>(
@@ -507,7 +491,7 @@ where
 	E: Environment<()>,
 	T: Config,
 {
-	instrument::<E, T>(
+	validate::<E, T>(
 		original_code,
 		schedule,
 		determinism,
