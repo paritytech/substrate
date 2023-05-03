@@ -4100,32 +4100,6 @@ fn offences_weight_calculated_correctly() {
 }
 
 #[test]
-fn payout_creates_controller() {
-	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-		let balance = 1000;
-		// Create a validator:
-		bond_validator(11, balance);
-
-		// Create a stash/controller pair
-		bond_nominator(1234, 100, vec![11]);
-
-		// kill controller
-		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1337), 1234, 100));
-		assert_eq!(Balances::free_balance(1337), 0);
-
-		mock::start_active_era(1);
-		Staking::reward_by_ids(vec![(11, 1)]);
-		// compute and ensure the reward amount is greater than zero.
-		let _ = current_total_payout_for_duration(reward_time_per_era());
-		mock::start_active_era(2);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
-
-		// Controller is created
-		assert!(Balances::free_balance(1337) > 0);
-	})
-}
-
-#[test]
 fn payout_to_any_account_works() {
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
