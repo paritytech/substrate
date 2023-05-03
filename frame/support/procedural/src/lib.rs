@@ -790,7 +790,19 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// The attribute should be attached to an impl block (strictly speaking a `syn::ItemImpl`) for
 /// which we want to inject defaults in the event of missing trait items in the block.
 ///
-/// The attribute takes two arguments separated by an `as` with the general form:
+/// The attribute minimally takes a single `foreign_path` argument, which should be the module
+/// path to an impl registered via [`#[register_default_impl]`](`macro@register_default_impl`)
+/// that contains the default trait items we want to potentially inject, with the general form:
+///
+/// ```ignore
+/// #[derive_impl(foreign_path)]
+/// impl SomeTrait for SomeStruct {
+///     ...
+/// }
+/// ```
+///
+/// Optionally, a `disambiguation_path` can be specified as follows by providing `as
+/// path::here` after the `foreign_path`:
 ///
 /// ```ignore
 /// #[derive_impl(foreign_path as disambiguation_path)]
@@ -799,20 +811,15 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// }
 /// ```
 ///
-/// The `foreign_path` should be the path to an impl registered via
-/// [`#[register_default_impl]`](`macro@register_default_impl`) that contains the default trait
-/// items we want to potentially inject.
+/// The `disambiguation_path`, if specified, should be the path to a trait that will be used to
+/// qualify all default entries that are injected into the local impl. For example if your
+/// `foreign_path` is `some::path::TestTrait` and your `disambiguation_path` is
+/// `another::path::DefaultTrait`, any items injected into the local impl will be qualified as
+/// `<some::path::TestTrait as another::path::DefaultTrait>::specific_trait_item`.
 ///
-/// The `disambiguation_path` should be the path to a trait that will be used to qualify all
-/// default entries that are injected into the local impl. For example if your `foreign_path`
-/// is `some::path::TestTrait` and your `disambiguation_path` is `another::path::DefaultTrait`,
-/// any items injected into the local impl will be qualified as `<some::path::TestTrait as
-/// another::path::DefaultTrait>::specific_trait_item`.
-///
-/// Optionally, you may omit the `as disambiguation_path` portion, in which case the
-/// `disambiguation_path` will internally default to `A` from the `impl A for B` part of the
-/// foreign impl. This is useful for scenarios where all of the relevant types are already in
-/// scope.
+/// If you omit the `as disambiguation_path` portion, the `disambiguation_path` will internally
+/// default to `A` from the `impl A for B` part of the foreign impl. This is useful for
+/// scenarios where all of the relevant types are already in scope via `use` statements.
 ///
 /// Conversely, the `foreign_path` argument is required and cannot be omitted.
 ///
