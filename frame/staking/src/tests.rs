@@ -1693,8 +1693,6 @@ fn reward_to_stake_works() {
 			// Trigger another new era as the info are frozen before the era start.
 			mock::start_active_era(2);
 
-			println!("{:?} / 2 = {:?}", total_payout_0, total_payout_0 / 2);
-
 			// -- new infos
 			assert_eq!(Staking::eras_stakers(active_era(), 11).total, _11_balance);
 			assert_eq!(Staking::eras_stakers(active_era(), 21).total, _21_balance);
