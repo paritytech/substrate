@@ -18,7 +18,7 @@
 use super::helper;
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
-use syn::{spanned::Spanned, token, Ident, Token};
+use syn::{spanned::Spanned, token, Token};
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -33,6 +33,8 @@ mod keyword {
 	syn::custom_keyword!(Event);
 	syn::custom_keyword!(frame_system);
 	syn::custom_keyword!(disable_frame_system_supertrait_check);
+	syn::custom_keyword!(no_default);
+	syn::custom_keyword!(constant);
 }
 
 /// Input definition for the pallet config.
@@ -128,6 +130,15 @@ impl syn::parse::Parse for DisableFrameSystemSupertraitCheck {
 	}
 }
 
+/// Parsing for the `typ` portion of `PalletAttr`
+#[derive(derive_syn_parse::Parse, PartialEq, Eq)]
+pub enum PalletAttrType {
+	#[peek(keyword::no_default, name = "no_default")]
+	NoDefault(keyword::no_default),
+	#[peek(keyword::constant, name = "constant")]
+	Constant(keyword::constant),
+}
+
 /// Parsing for `#[pallet::X]`
 #[derive(derive_syn_parse::Parse)]
 pub struct PalletAttr {
@@ -138,7 +149,7 @@ pub struct PalletAttr {
 	_pallet: keyword::pallet,
 	#[prefix(Token![::] in _bracket)]
 	#[inside(_bracket)]
-	ident: Ident,
+	typ: PalletAttrType,
 }
 
 pub struct ConfigBoundParse(syn::Ident);
@@ -340,24 +351,16 @@ impl ConfigDef {
 				if let Ok(Some(pallet_attr)) =
 					helper::take_first_item_pallet_attr::<PalletAttr>(trait_item)
 				{
-					if pallet_attr.ident == "constant" {
-						let syn::TraitItem::Type(ref typ) = trait_item else {
-							let msg =
-								"Invalid pallet::constant in pallet::config, expected type trait item";
-							return Err(syn::Error::new(trait_item.span(), msg))
-						};
-						let constant = ConstMetadataDef::try_from(typ)?;
-						consts_metadata.push(constant);
-					} else if pallet_attr.ident == "no_default" {
-						no_default = true
-					} else {
-						return Err(syn::Error::new(
-							pallet_attr.ident.span(),
-							format!(
-								"Unsupported attribute `#[pallet::{}]` attached to a pallet config item",
-								pallet_attr.ident.to_string()
-							),
-						))
+					match (pallet_attr.typ, &trait_item) {
+						(PalletAttrType::Constant(_), syn::TraitItem::Type(ref typ)) =>
+							consts_metadata.push(ConstMetadataDef::try_from(typ)?),
+						(PalletAttrType::Constant(_), _) =>
+							return Err(syn::Error::new(
+								trait_item.span(),
+								"Invalid pallet::constant in pallet::config, expected \
+								type trait item",
+							)),
+						(PalletAttrType::NoDefault(_), _) => no_default = true,
 					}
 				}
 			}
