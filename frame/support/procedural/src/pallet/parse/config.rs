@@ -136,8 +136,7 @@ pub struct PalletAttr {
 	_bracket: token::Bracket,
 	#[inside(_bracket)]
 	_pallet: keyword::pallet,
-	#[inside(_bracket)]
-	_sep: Token![::],
+	#[prefix(Token![::] in _bracket)]
 	#[inside(_bracket)]
 	ident: Ident,
 }
