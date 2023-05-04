@@ -98,7 +98,8 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		max_runtime_instances: 8,
 		runtime_cache_size: 2,
 		announce_block: true,
-		base_path: Some(base_path),
+		data_path: base_path.path().into(),
+		base_path,
 		informant_output_format: Default::default(),
 		wasm_runtime_overrides: None,
 	};

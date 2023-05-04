@@ -88,13 +88,17 @@ cargo-check-benches:
     - !reference [.job-switcher, before_script]
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
-    # merges in the master branch on PRs
+    # merges in the master branch on PRs. skip if base is not master
     - 'if [ $CI_COMMIT_REF_NAME != "master" ]; then
-      BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq -r .base.ref);
-      printf "Merging base branch %s\n" "${BASE:=master}";
-      git config user.email "ci@gitlab.parity.io";
-      git fetch origin "refs/heads/${BASE}";
-      git merge --verbose --no-edit FETCH_HEAD;
+        BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq -r .base.ref);
+        printf "Merging base branch %s\n" "${BASE:=master}";
+        if [ $BASE != "master" ]; then
+          echo "$BASE is not master, skipping merge";
+        else
+          git config user.email "ci@gitlab.parity.io";
+          git fetch origin "refs/heads/${BASE}";
+          git merge --verbose --no-edit FETCH_HEAD;
+        fi
       fi'
   parallel: 2
   script:
