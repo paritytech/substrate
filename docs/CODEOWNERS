@@ -19,16 +19,16 @@
 # - The latest matching rule, if multiple, takes precedence.
 
 # CI
-/scripts/ci/ @paritytech/ci
 /.github/ @paritytech/ci
 /.gitlab-ci.yml @paritytech/ci
+/scripts/ci/ @paritytech/ci
 
 # WASM executor, low-level client <-> WASM interface and other WASM-related code
-/client/executor/ @koute
 /client/allocator/ @koute
-/primitives/wasm-interface/ @koute
-/primitives/runtime-interface/ @koute
+/client/executor/ @koute
 /primitives/panic-handler/ @koute
+/primitives/runtime-interface/ @koute
+/primitives/wasm-interface/ @koute
 /utils/wasm-builder/ @koute
 
 # Systems-related bits and bobs on the client side
@@ -37,14 +37,15 @@
 
 # FRAME
 /frame/ @paritytech/frame-coders
+/frame/state-trie-migration/ @paritytech/frame-coders @cheme
 
 # GRANDPA, BABE, consensus stuff
+/client/consensus/babe/ @andresilva
+/client/consensus/grandpa/ @andresilva
+/client/consensus/pow/ @sorpaas
+/client/consensus/slots/ @andresilva
 /frame/babe/ @andresilva
 /frame/grandpa/ @andresilva
-/client/consensus/grandpa/ @andresilva
-/client/consensus/babe/ @andresilva
-/client/consensus/slots/ @andresilva
-/client/consensus/pow/ @sorpaas
 /primitives/consensus/pow/ @sorpaas
 
 # BEEFY, MMR
@@ -57,8 +58,9 @@
 /frame/contracts/ @athei
 
 # NPoS and election
+/frame/election-provider-multi-phase/ @paritytech/staking-core
 /frame/election-provider-support/ @paritytech/staking-core
-/frame/staking/ @paritytech/staking-core
-/frame/nomination-pools/ @paritytech/staking-core
 /frame/elections-phragmen/ @paritytech/staking-core
+/frame/nomination-pools/ @paritytech/staking-core
+/frame/staking/ @paritytech/staking-core
 /primitives/npos-elections/ @paritytech/staking-core
