@@ -20,7 +20,7 @@ use frame_support::traits::fungible::{conformance_tests, Inspect, Mutate};
 use paste::paste;
 
 macro_rules! run_tests {
-    ($parent_module:tt :: $child_module:tt, $ext_deposit:expr, $($name:ident),*) => {
+    ($path:path, $ext_deposit:expr, $($name:ident),*) => {
 		$(
 			paste! {
 				#[test]
@@ -29,7 +29,7 @@ macro_rules! run_tests {
 					let builder = ExtBuilder::default().existential_deposit($ext_deposit).dust_trap(trap_account);
 					builder.build_and_execute_with(|| {
 						Balances::set_balance(&trap_account, Balances::minimum_balance());
-						$parent_module::$child_module::$name::<
+						$path::$name::<
 							Balances,
 							<Test as frame_system::Config>::AccountId,
 						>(Some(trap_account));
@@ -40,7 +40,7 @@ macro_rules! run_tests {
 				fn [< $name _existential_deposit_ $ext_deposit _dust_trap_off >]() {
 					let builder = ExtBuilder::default().existential_deposit($ext_deposit);
 					builder.build_and_execute_with(|| {
-						$parent_module::$child_module::$name::<
+						$path::$name::<
 							Balances,
 							<Test as frame_system::Config>::AccountId,
 						>(None);
@@ -49,9 +49,9 @@ macro_rules! run_tests {
 			}
 		)*
 	};
-	($parent_module:tt :: $child_module:tt, $ext_deposit:expr) => {
+	($path:path, $ext_deposit:expr) => {
 		run_tests!(
-			$parent_module::$child_module,
+			$path,
 			$ext_deposit,
 			mint_into_success,
 			mint_into_overflow,
