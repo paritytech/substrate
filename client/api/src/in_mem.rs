@@ -114,6 +114,7 @@ struct BlockchainStorage<Block: BlockT> {
 }
 
 /// In-memory blockchain. Supports concurrent reads.
+#[derive(Clone)]
 pub struct Blockchain<Block: BlockT> {
 	storage: Arc<RwLock<BlockchainStorage<Block>>>,
 }
@@ -121,13 +122,6 @@ pub struct Blockchain<Block: BlockT> {
 impl<Block: BlockT> Default for Blockchain<Block> {
 	fn default() -> Self {
 		Self::new()
-	}
-}
-
-impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
-	fn clone(&self) -> Self {
-		let storage = Arc::new(RwLock::new(self.storage.read().clone()));
-		Blockchain { storage }
 	}
 }
 
@@ -624,6 +618,7 @@ where
 	states: RwLock<HashMap<Block::Hash, InMemoryBackend<HashFor<Block>>>>,
 	blockchain: Blockchain<Block>,
 	import_lock: RwLock<()>,
+	pinned_blocks: RwLock<HashMap<Block::Hash, i64>>,
 }
 
 impl<Block: BlockT> Backend<Block>
@@ -631,12 +626,27 @@ where
 	Block::Hash: Ord,
 {
 	/// Create a new instance of in-mem backend.
+	///
+	/// # Warning
+	///
+	/// For testing purposes only!
 	pub fn new() -> Self {
 		Backend {
 			states: RwLock::new(HashMap::new()),
 			blockchain: Blockchain::new(),
 			import_lock: Default::default(),
+			pinned_blocks: Default::default(),
 		}
+	}
+
+	/// Return the number of references active for a pinned block.
+	///
+	/// # Warning
+	///
+	/// For testing purposes only!
+	pub fn pin_refs(&self, hash: &<Block as BlockT>::Hash) -> Option<i64> {
+		let blocks = self.pinned_blocks.read();
+		blocks.get(hash).map(|value| *value)
 	}
 }
 
@@ -787,11 +797,16 @@ where
 		false
 	}
 
-	fn pin_block(&self, _: <Block as BlockT>::Hash) -> blockchain::Result<()> {
+	fn pin_block(&self, hash: <Block as BlockT>::Hash) -> blockchain::Result<()> {
+		let mut blocks = self.pinned_blocks.write();
+		*blocks.entry(hash).or_default() += 1;
 		Ok(())
 	}
 
-	fn unpin_block(&self, _: <Block as BlockT>::Hash) {}
+	fn unpin_block(&self, hash: <Block as BlockT>::Hash) {
+		let mut blocks = self.pinned_blocks.write();
+		blocks.entry(hash).and_modify(|counter| *counter -= 1).or_insert(-1);
+	}
 }
 
 impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> where Block::Hash: Ord {}
