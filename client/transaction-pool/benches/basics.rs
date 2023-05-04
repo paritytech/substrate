@@ -65,7 +65,7 @@ impl ChainApi for TestApi {
 		_source: TransactionSource,
 		uxt: <Self::Block as BlockT>::Extrinsic,
 	) -> Self::ValidationFuture {
-		let transfer = TransferData::try_from_unchecked_extrinsic(&uxt)
+		let transfer = TransferData::try_from(&uxt)
 			.expect("uxt is expected to be bench_call (carrying TransferData)");
 		let nonce = transfer.nonce;
 		let from = transfer.from;

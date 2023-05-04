@@ -279,9 +279,7 @@ impl sc_transaction_pool::ChainApi for TestApi {
 			Err(e) => return ready(Err(e)),
 		}
 
-		let (requires, provides) = if let Some(transfer) =
-			TransferData::try_from_unchecked_extrinsic(&uxt)
-		{
+		let (requires, provides) = if let Ok(transfer) = TransferData::try_from(&uxt) {
 			let chain_nonce = self.chain.read().nonces.get(&transfer.from).cloned().unwrap_or(0);
 			let requires =
 				if chain_nonce == transfer.nonce { vec![] } else { vec![vec![chain_nonce as u8]] };

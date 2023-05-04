@@ -59,19 +59,20 @@ impl Default for TransferData {
 	}
 }
 
-impl TransferData {
-	/// If feasible extract `TransferData` from given `Extrinsic`
-	pub fn try_from_unchecked_extrinsic(uxt: &Extrinsic) -> Option<Self> {
+/// If feasible converts given `Extrinsic` to `TransferData`
+impl TryFrom<&Extrinsic> for TransferData {
+	type Error = ();
+	fn try_from(uxt: &Extrinsic) -> Result<Self, Self::Error> {
 		match uxt {
 			Extrinsic {
 				function: RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest, value }),
 				signature: Some((from, _, (CheckNonce(nonce), ..))),
-			} => Some(TransferData { from: *from, to: *dest, amount: *value, nonce: *nonce }),
+			} => Ok(TransferData { from: *from, to: *dest, amount: *value, nonce: *nonce }),
 			Extrinsic {
 				function: RuntimeCall::SubstrateTest(PalletCall::bench_call { transfer }),
 				signature: None,
-			} => Some(transfer.clone()),
-			_ => None,
+			} => Ok(transfer.clone()),
+			_ => Err(()),
 		}
 	}
 }

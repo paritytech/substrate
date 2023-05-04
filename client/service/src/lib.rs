@@ -557,6 +557,6 @@ mod tests {
 
 		// then
 		assert_eq!(transactions.len(), 1);
-		assert!(TransferData::try_from_unchecked_extrinsic(&transactions[0].1).is_some());
+		assert!(TransferData::try_from(&transactions[0].1).is_ok());
 	}
 }

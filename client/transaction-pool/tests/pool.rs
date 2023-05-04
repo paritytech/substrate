@@ -89,7 +89,7 @@ fn submission_should_work() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, vec![209]);
 }
@@ -103,7 +103,7 @@ fn multiple_submission_should_work() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, vec![209, 210]);
 }
@@ -117,7 +117,7 @@ fn early_nonce_should_be_culled() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, Vec::<Index>::new());
 }
@@ -130,7 +130,7 @@ fn late_nonce_should_be_queued() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, Vec::<Index>::new());
 
@@ -138,7 +138,7 @@ fn late_nonce_should_be_queued() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, vec![209, 210]);
 }
@@ -152,7 +152,7 @@ fn prune_tags_should_work() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, vec![209, 210]);
 
@@ -163,7 +163,7 @@ fn prune_tags_should_work() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, vec![210]);
 }
@@ -180,7 +180,7 @@ fn should_ban_invalid_transactions() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, Vec::<Index>::new());
 
@@ -233,7 +233,7 @@ fn should_correctly_prune_transactions_providing_more_than_one_tag() {
 	let pending: Vec<_> = pool
 		.validated_pool()
 		.ready()
-		.map(|a| TransferData::try_from_unchecked_extrinsic(&a.data).unwrap().nonce)
+		.map(|a| TransferData::try_from(&a.data).unwrap().nonce)
 		.collect();
 	assert_eq!(pending, vec![211]);
 

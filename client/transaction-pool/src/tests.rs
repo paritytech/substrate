@@ -77,8 +77,7 @@ impl ChainApi for TestApi {
 				function: RuntimeCall::Balances(BalancesCall::transfer_allow_death { .. }),
 				..
 			} => {
-				let TransferData { nonce, .. } =
-					TransferData::try_from_unchecked_extrinsic(&uxt).unwrap();
+				let TransferData { nonce, .. } = (&uxt).try_into().unwrap();
 				// This is used to control the test flow.
 				if nonce > 0 {
 					let opt = self.delay.lock().take();
