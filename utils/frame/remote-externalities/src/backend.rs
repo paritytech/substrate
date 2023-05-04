@@ -68,6 +68,13 @@ impl<H: serde::ser::Serialize + DeserializeOwned + Send + Sync + Clone + 'static
 	}
 }
 
+// TODO: explore some better hacks to make `trait Backend` friendlier towards async and &mut
+// TODO: alternative abstraction: do it at the TriBackendStorage layer
+// struct OnDemandTrieBackendStorage<> {
+// 	inner: MemoryDB,
+// 	rpc: _
+// }
+
 impl<H: serde::ser::Serialize + DeserializeOwned + Send + Sync + Clone + 'static>
 	Backend<DefaultHasher> for RemoteExternalitiesBackend<H>
 {
