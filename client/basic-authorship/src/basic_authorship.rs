@@ -740,7 +740,7 @@ mod tests {
 			client.clone(),
 		);
 
-		let tiny = |nonce| {
+		let medium = |nonce| {
 			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(MEDIUM))
 				.nonce(nonce)
 				.build()
@@ -752,7 +752,7 @@ mod tests {
 		block_on(txpool.submit_at(
 			&BlockId::number(0),
 			SOURCE,
-			vec![tiny(0), tiny(1), huge(2), tiny(3), huge(4), tiny(5), tiny(6)],
+			vec![medium(0), medium(1), huge(2), medium(3), huge(4), medium(5), medium(6)],
 		))
 		.unwrap();
 
