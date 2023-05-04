@@ -23,7 +23,7 @@ use sp_runtime::{
 	traits::IdentityLookup,
 	DispatchError, DispatchResult,
 };
-use sp_staking::{EraIndex, Stake, StakingInterface};
+use sp_staking::{EraIndex, Stake, StakerStatus, StakingInterface};
 use Currency;
 
 pub(crate) type AccountId = u64;
@@ -169,18 +169,12 @@ impl StakingInterface for StakingMock {
 		unreachable!();
 	}
 
-	fn stake(
-		who: &Self::AccountId,
-	) -> Result<Stake<Self::AccountId, Self::Balance>, DispatchError> {
+	fn stake(who: &Self::AccountId) -> Result<Stake<Self::Balance>, DispatchError> {
 		if !Nominators::get().contains(who) && !Validators::get().contains(who) {
 			return Err(DispatchError::Other("not bonded"))
 		}
 		let stake = Balances::total_balance(who);
-		Ok(Stake {
-			stash: *who,
-			active: stake.saturating_sub(ExistentialDeposit::get()),
-			total: stake,
-		})
+		Ok(Stake { active: stake.saturating_sub(ExistentialDeposit::get()), total: stake })
 	}
 
 	fn bond(_: &Self::AccountId, _: Self::Balance, _: &Self::AccountId) -> DispatchResult {
@@ -225,6 +219,10 @@ impl StakingInterface for StakingMock {
 
 	fn is_validator(who: &Self::AccountId) -> bool {
 		Validators::get().contains(who)
+	}
+
+	fn status(_: &Self::AccountId) -> Result<StakerStatus<Self::AccountId>, DispatchError> {
+		unreachable!();
 	}
 
 	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
