@@ -154,13 +154,6 @@ macro_rules! app_crypto_pair {
 			) -> bool {
 				<$pair>::verify(&sig.0, message, pubkey.as_ref())
 			}
-			fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
-				sig: &[u8],
-				message: M,
-				pubkey: P,
-			) -> bool {
-				<$pair>::verify_weak(sig, message, pubkey)
-			}
 			fn public(&self) -> Self::Public {
 				Public(self.0.public())
 			}
@@ -314,6 +307,13 @@ macro_rules! app_crypto_public_common {
 
 			fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
 				<$public>::try_from(data).map(Into::into)
+			}
+		}
+
+		impl Public {
+			/// Convert into wrapped generic public key type.
+			pub fn into_inner(self) -> $public {
+				self.0
 			}
 		}
 	};
@@ -475,6 +475,13 @@ macro_rules! app_crypto_signature_common {
 
 			fn try_from(data: $crate::Vec<u8>) -> Result<Self, Self::Error> {
 				Self::try_from(&data[..])
+			}
+		}
+
+		impl Signature {
+			/// Convert into wrapped generic signature type.
+			pub fn into_inner(self) -> $sig {
+				self.0
 			}
 		}
 	};

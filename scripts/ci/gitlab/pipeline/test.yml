@@ -21,27 +21,30 @@ find-fail-ci-phrase:
       exit 0;
       fi
 
-cargo-deny:
+cargo-deny-licenses:
   stage: test
   extends:
     - .docker-env
-    - .nightly-pipeline
+    - .test-refs
+  variables:
+    CARGO_DENY_CMD: "cargo deny --all-features check licenses -c ./scripts/ci/deny.toml"
   script:
     - rusty-cachier snapshot create
-    - cargo deny check --hide-inclusion-graph -c ./scripts/ci/deny.toml
+    - $CARGO_DENY_CMD --hide-inclusion-graph
     - rusty-cachier cache upload
   after_script:
     - !reference [.rusty-cachier, after_script]
     - echo "___The complete log is in the artifacts___"
-    - cargo deny check -c ./scripts/ci/deny.toml 2> deny.log
+    - $CARGO_DENY_CMD 2> deny.log
+    - if [ $CI_JOB_STATUS != 'success' ]; then
+        echo 'Please check license of your crate or add an exception to scripts/ci/deny.toml';
+      fi
   artifacts:
     name: $CI_COMMIT_SHORT_SHA
     expire_in: 3 days
     when: always
     paths:
       - deny.log
-  # FIXME: Temporarily allow to fail.
-  allow_failure: true
 
 cargo-fmt:
   stage: test
@@ -85,13 +88,17 @@ cargo-check-benches:
     - !reference [.job-switcher, before_script]
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
-    # merges in the master branch on PRs
+    # merges in the master branch on PRs. skip if base is not master
     - 'if [ $CI_COMMIT_REF_NAME != "master" ]; then
-      BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq -r .base.ref);
-      printf "Merging base branch %s\n" "${BASE:=master}";
-      git config user.email "ci@gitlab.parity.io";
-      git fetch origin "refs/heads/${BASE}";
-      git merge --verbose --no-edit FETCH_HEAD;
+        BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq -r .base.ref);
+        printf "Merging base branch %s\n" "${BASE:=master}";
+        if [ $BASE != "master" ]; then
+          echo "$BASE is not master, skipping merge";
+        else
+          git config user.email "ci@gitlab.parity.io";
+          git fetch origin "refs/heads/${BASE}";
+          git merge --verbose --no-edit FETCH_HEAD;
+        fi
       fi'
   parallel: 2
   script:
@@ -112,8 +119,6 @@ cargo-check-benches:
       | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json
       ;;
       esac
-  tags:
-    - linux-docker-benches
 
 node-bench-regression-guard:
   # it's not belong to `build` semantically, but dag jobs can't depend on each other
