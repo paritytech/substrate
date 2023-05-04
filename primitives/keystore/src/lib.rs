@@ -72,22 +72,33 @@ pub trait Keystore: Send + Sync {
 		msg: &[u8],
 	) -> Result<Option<sr25519::Signature>, Error>;
 
-	/// Generate an sr25519 VRF signature for a given transcript data.
+	/// Generate an sr25519 VRF signature for the given data.
 	///
 	/// Receives [`KeyTypeId`] and an [`sr25519::Public`] key to be able to map
 	/// them to a private key that exists in the keystore.
 	///
-	/// Returns a result containing the signature data.
-	/// Namely, VRFOutput and VRFProof which are returned inside the `VRFSignature`
-	/// container struct.
 	/// Returns `None` if the given `key_type` and `public` combination doesn't
 	/// exist in the keystore or an `Err` when something failed.
 	fn sr25519_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript: &sr25519::vrf::VrfTranscript,
+		data: &sr25519::vrf::VrfSignData,
 	) -> Result<Option<sr25519::vrf::VrfSignature>, Error>;
+
+	/// Generate an sr25519 VRF output for a given input data.
+	///
+	/// Receives [`KeyTypeId`] and an [`sr25519::Public`] key to be able to map
+	/// them to a private key that exists in the keystore.
+	///
+	/// Returns `None` if the given `key_type` and `public` combination doesn't
+	/// exist in the keystore or an `Err` when something failed.
+	fn sr25519_vrf_output(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		input: &sr25519::vrf::VrfInput,
+	) -> Result<Option<sr25519::vrf::VrfOutput>, Error>;
 
 	/// Returns all ed25519 public keys for the given key type.
 	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public>;
