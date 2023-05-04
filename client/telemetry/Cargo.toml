@@ -14,7 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-chrono = "0.4.19"
+chrono = "0.4.24"
 futures = "0.3.21"
 libp2p = { version = "0.50.0", features = ["dns", "tcp", "tokio", "wasm-ext", "websocket"] }
 log = "0.4.17"
