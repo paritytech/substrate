@@ -25,7 +25,7 @@ use crate::{
 	SolutionOf, SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Decode, Encode, HasCompact};
-use frame_election_provider_support::{traits::SignedDepositBase, NposSolution};
+use frame_election_provider_support::{traits::DepositCalculator, NposSolution};
 use frame_support::traits::{
 	defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency,
 };
@@ -359,7 +359,10 @@ pub struct GeometricDepositBase<T> {
 	_marker: PhantomData<T>,
 }
 
-impl<T: Config> SignedDepositBase<BalanceOf<T>> for GeometricDepositBase<T> {
+impl<T: Config> DepositCalculator<BalanceOf<T>> for GeometricDepositBase<T> {
+	/// The fixed deposit base upon which the geometric series is calculated.
+	type BaseDeposit = T::SignedFixedDepositBase;
+
 	/// Increase factor of the geometric progression, as a percentage.
 	///
 	/// The nth progression term will be `IncreaseFactor`% larger than the nth-1 term.
@@ -377,7 +380,7 @@ impl<T: Config> SignedDepositBase<BalanceOf<T>> for GeometricDepositBase<T> {
 
 		increase_factor
 			.saturating_pow(queue_len)
-			.saturating_mul_int(T::SignedFixedDepositBase::get())
+			.saturating_mul_int(Self::BaseDeposit::get())
 	}
 }
 

@@ -565,7 +565,7 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 	use frame_election_provider_support::{
-		traits::SignedDepositBase, InstantElectionProvider, NposSolver,
+		traits::DepositCalculator, InstantElectionProvider, NposSolver,
 	};
 	use frame_support::{pallet_prelude::*, traits::EstimateCallFee};
 	use frame_system::pallet_prelude::*;
@@ -677,7 +677,7 @@ pub mod pallet {
 
 		/// Something that calculates the signed deposit base based on the signed submissions queue
 		/// size.
-		type SignedDepositBase: SignedDepositBase<BalanceOf<Self>>;
+		type SignedDepositBase: DepositCalculator<BalanceOf<Self>>;
 
 		/// Increase factor of the geometric series for the base deposit computation.
 		///

@@ -125,8 +125,11 @@ where
 	) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
 }
 
-/// A type that calculates the deposit base for signed election submissions.
-pub trait SignedDepositBase<Balance> {
+/// A type that calculates deposits for signed submissions.
+pub trait DepositCalculator<Balance> {
+	/// The fixed base deposit used to calculate the final deposit.
+	type BaseDeposit: Get<Balance>;
+
 	/// A percentage representing the increase factor of the base deposit, if any.
 	type IncreaseFactor: Get<Percent>;
 
