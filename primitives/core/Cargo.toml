@@ -118,7 +118,7 @@ serde = [
 	"dep:serde",
 	"array-bytes",
 	"blake2",
-	"bs58",
+	"bs58/alloc",
 	"scale-info/serde",
 	"secrecy/alloc",
 	"impl-serde",
