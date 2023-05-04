@@ -579,13 +579,11 @@ pub mod vrf {
 		pub(super) transcript: VrfTranscript,
 		/// Extra transcript data to be signed by the VRF.
 		pub(super) extra: Option<VrfTranscript>,
-		/// Optional pre-computed output
-		pub(super) output: Option<VrfOutput>,
 	}
 
 	impl From<VrfInput> for VrfSignData {
 		fn from(transcript: VrfInput) -> Self {
-			VrfSignData { transcript, extra: None, output: None }
+			VrfSignData { transcript, extra: None }
 		}
 	}
 
@@ -598,23 +596,17 @@ pub mod vrf {
 
 	impl VrfSignData {
 		/// Build a new instance ready to be used for VRF signer and verifier.
-		pub fn new(transcript: VrfTranscript) -> Self {
-			transcript.into()
-		}
-
-		/// Add extra non-input data to be signed by the VRF signer.
-		pub fn with_extra(mut self, transcript: VrfTranscript) -> Self {
-			self.extra = Some(transcript);
-			self
-		}
-
-		/// Add pre-computed output to be used during `sign` operation.
 		///
-		/// This output is computed by the main transcript.
-		/// If an output doesn't correspond to the main sign data `transcript` then
-		/// the signature will be invalid and its verification fails.
-		pub fn with_output(mut self, output: VrfOutput) -> Self {
-			self.output = Some(output);
+		/// `input` will contribute to the VRF output bytes.
+		pub fn new(input: VrfTranscript) -> Self {
+			input.into()
+		}
+
+		/// Add some extra data to be signed.
+		///
+		/// `extra` will not contribute to the VRF output bytes.
+		pub fn with_extra(mut self, extra: VrfTranscript) -> Self {
+			self.extra = Some(extra);
 			self
 		}
 	}
@@ -1084,21 +1076,6 @@ mod tests {
 	}
 
 	#[test]
-	fn vrf_sign_verify_with_output() {
-		let pair = Pair::from_seed(b"12345678901234567890123456789012");
-		let public = pair.public();
-
-		let input = VrfTranscript::new(b"label", &[(b"domain1", b"data1")]);
-		let output = pair.vrf_output(&input);
-
-		let data = input.into_sign_data().with_output(output);
-
-		let signature = pair.vrf_sign(&data);
-
-		assert!(public.vrf_verify(&data, &signature));
-	}
-
-	#[test]
 	fn vrf_make_bytes_matches() {
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
@@ -1113,7 +1090,7 @@ mod tests {
 		assert_eq!(out1, out2);
 
 		let extra = VrfTranscript::new(b"extra", &[(b"domain2", b"data2")]);
-		let data = input.clone().into_sign_data().with_extra(extra).with_output(output);
+		let data = input.clone().into_sign_data().with_extra(extra);
 		let signature = pair.vrf_sign(&data);
 		assert!(public.vrf_verify(&data, &signature));
 
