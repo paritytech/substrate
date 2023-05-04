@@ -56,9 +56,10 @@ pub struct ConfigDef {
 	pub attr_span: proc_macro2::Span,
 	/// Whether a default sub-trait should be generated.
 	///
-	/// No, if `None`.
-	/// Yes, if `Some(_)`, with the inner items that should be included.
-	pub default_sub_trait: Option<Vec<syn::TraitItem>>,
+	/// Contains default sub-trait items (instantiated by `#[pallet::default_config]`). Vec
+	/// will be empty if `#[pallet::default_config]` is not specified or if there are no trait
+	/// items
+	pub default_sub_trait: Vec<syn::TraitItem>,
 }
 
 /// Input definition for a constant in pallet config.
@@ -340,7 +341,7 @@ impl ConfigDef {
 
 		let mut has_event_type = false;
 		let mut consts_metadata = vec![];
-		let mut default_subtrait_items = vec![];
+		let mut default_sub_trait = vec![];
 		for trait_item in &mut item.items {
 			// Parse for event
 			let is_event = check_event_type(frame_system, trait_item, has_instance)?;
@@ -366,14 +367,9 @@ impl ConfigDef {
 			}
 
 			if !no_default && !is_event && enable_default {
-				default_subtrait_items.push(trait_item.clone());
+				default_sub_trait.push(trait_item.clone());
 			}
 		}
-
-		let default_sub_trait = match enable_default {
-			true => Some(default_subtrait_items),
-			false => None,
-		};
 
 		let attr: Option<DisableFrameSystemSupertraitCheck> =
 			helper::take_first_item_pallet_attr(&mut item.attrs)?;
