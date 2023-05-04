@@ -100,6 +100,7 @@ members = [
 	"frame/try-runtime",
 	"frame/elections-phragmen",
 	"frame/election-provider-multi-phase",
+	"frame/election-provider-multi-phase/test-staking-e2e",
 	"frame/election-provider-support",
 	"frame/election-provider-support/benchmarking",
 	"frame/election-provider-support/solution-type",

@@ -13,6 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+serde = { version = "1.0.136", optional = true }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 sp-core = { version = "7.0.0", default-features = false, path = "../core" }
@@ -23,6 +24,7 @@ impl-trait-for-tuples = "0.2.2"
 [features]
 default = ["std"]
 std = [
+	"serde",
 	"codec/std",
 	"scale-info/std",
 	"sp-core/std",

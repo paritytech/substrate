@@ -23,7 +23,7 @@
 use crate::currency_to_vote::CurrencyToVote;
 use codec::{FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::{DispatchError, DispatchResult, Saturating};
+use sp_runtime::{DispatchError, DispatchResult, RuntimeDebug, Saturating};
 use sp_std::{collections::btree_map::BTreeMap, ops::Sub, vec::Vec};
 
 pub mod offence;
@@ -35,6 +35,18 @@ pub type SessionIndex = u32;
 
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
+
+/// Representation of the status of a staker.
+#[derive(RuntimeDebug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone))]
+pub enum StakerStatus<AccountId> {
+	/// Chilling.
+	Idle,
+	/// Declaring desire in validate, i.e author blocks.
+	Validator,
+	/// Declaring desire to nominate, delegate, or generally approve of the given set of others.
+	Nominator(Vec<AccountId>),
+}
 
 /// Trait describing something that implements a hook for any operations to perform when a staker is
 /// slashed.
@@ -63,7 +75,7 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 /// A struct that reflects stake that an account has in the staking system. Provides a set of
 /// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
-pub struct Stake<AccountId, Balance> {
+pub struct Stake<Balance> {
 	/// The total stake that `stash` has in the staking system. This includes the
 	/// `active` stake, and any funds currently in the process of unbonding via
 	/// [`StakingInterface::unbond`].
@@ -90,7 +102,7 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 	///
 	/// This is effectively any changes to the bond amount, such as bonding more funds, and
 	/// unbonding.
-	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>);
+	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<Balance>>);
 
 	/// Fired when someone sets their intention to nominate.
 	fn on_nominator_add(who: &AccountId);
@@ -169,22 +181,25 @@ pub trait StakingInterface {
 	/// This should be the latest planned era that the staking system knows about.
 	fn current_era() -> EraIndex;
 
-	/// Returns the stake of `who`.
-	fn stake(who: &Self::AccountId)
-		-> Result<Stake<Self::AccountId, Self::Balance>, DispatchError>;
+	/// Returns the [`Stake`] of `who`.
+	fn stake(who: &Self::AccountId) -> Result<Stake<Self::Balance>, DispatchError>;
 
+	/// Total stake of a staker, `Err` if not a staker.
 	fn total_stake(who: &Self::AccountId) -> Result<Self::Balance, DispatchError> {
 		Self::stake(who).map(|s| s.total)
 	}
 
+	/// Total active portion of a staker's [`Stake`], `Err` if not a staker.
 	fn active_stake(who: &Self::AccountId) -> Result<Self::Balance, DispatchError> {
 		Self::stake(who).map(|s| s.active)
 	}
 
+	/// Returns whether a staker is unbonding, `Err` if not a staker at all.
 	fn is_unbonding(who: &Self::AccountId) -> Result<bool, DispatchError> {
 		Self::stake(who).map(|s| s.active != s.total)
 	}
 
+	/// Returns whether a staker is FULLY unbonding, `Err` if not a staker at all.
 	fn fully_unbond(who: &Self::AccountId) -> DispatchResult {
 		Self::unbond(who, Self::stake(who)?.active)
 	}
@@ -238,8 +253,16 @@ pub trait StakingInterface {
 	/// Checks whether or not this is a validator account.
 	fn is_validator(who: &Self::AccountId) -> bool;
 
+	/// Return the status of the given staker, `None` if not staked at all.
+	fn status(who: &Self::AccountId) -> Result<StakerStatus<Self::AccountId>, DispatchError>;
+
 	/// Get the nominations of a stash, if they are a nominator, `None` otherwise.
-	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>>;
+	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
+		match Self::status(who) {
+			Ok(StakerStatus::Nominator(t)) => Some(t),
+			_ => None,
+		}
+	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_era_stakers(

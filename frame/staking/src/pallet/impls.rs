@@ -22,6 +22,7 @@ use frame_election_provider_support::{
 	SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
+	defensive,
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
@@ -38,7 +39,7 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, OnStakingUpdate, SessionIndex, Stake, StakingInterface,
+	EraIndex, OnStakingUpdate, SessionIndex, Stake, StakerStatus, StakingInterface,
 };
 use sp_std::prelude::*;
 
@@ -269,11 +270,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This will also update the stash lock.
 	pub(crate) fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T>) {
-		let prev_ledger = Self::ledger(controller).map(|l| Stake {
-			stash: l.stash,
-			total: l.total,
-			active: l.active,
-		});
+		let prev_ledger =
+			Self::ledger(controller).map(|l| Stake { total: l.total, active: l.active });
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
 		T::EventListeners::on_stake_update(&ledger.stash, prev_ledger);
@@ -1616,9 +1614,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::current_era().unwrap_or(Zero::zero())
 	}
 
-	fn stake(
-		who: &Self::AccountId,
-	) -> Result<Stake<Self::AccountId, Self::Balance>, DispatchError> {
+	fn stake(who: &Self::AccountId) -> Result<Stake<BalanceOf<T>>, DispatchError> {
 		Self::bonded(who)
 			.and_then(|c| Self::ledger(c))
 			.map(|l| Stake { total: l.total, active: l.active })
@@ -1673,11 +1669,38 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	}
 
 	fn is_validator(who: &Self::AccountId) -> bool {
-		Validators::<T>::contains_key(who)
+		matches!(Self::status(who), Ok(StakerStatus::Validator))
+	}
+
+	fn status(
+		who: &Self::AccountId,
+	) -> Result<sp_staking::StakerStatus<Self::AccountId>, DispatchError> {
+		let is_bonded = Self::bonded(who).is_some();
+		if !is_bonded {
+			return Err(Error::<T>::NotStash.into())
+		}
+
+		let is_validator = Validators::<T>::contains_key(&who);
+		let is_nominator = Nominators::<T>::get(&who);
+
+		match (is_validator, is_nominator.is_some()) {
+			(false, false) => Ok(StakerStatus::Idle),
+			(true, false) => Ok(StakerStatus::Validator),
+			(false, true) => Ok(StakerStatus::Nominator(
+				is_nominator.expect("is checked above; qed").targets.into_inner(),
+			)),
+			(true, true) => {
+				defensive!("cannot be both validators and nominator");
+				Err(Error::<T>::BadState.into())
+			},
+		}
 	}
 
 	fn nominations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
-		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
+		match Self::status(who) {
+			Ok(StakerStatus::Nominator(t)) => Some(t),
+			_ => None,
+		}
 	}
 
 	sp_staking::runtime_benchmarks_enabled! {

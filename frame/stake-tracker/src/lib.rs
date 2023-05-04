@@ -92,22 +92,20 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
-	fn on_stake_update(who: &T::AccountId, _: Option<Stake<T::AccountId, BalanceOf<T>>>) {
+	fn on_stake_update(who: &T::AccountId, _: Option<Stake<BalanceOf<T>>>) {
 		if let Ok(current_stake) = T::Staking::stake(who) {
 			let current_active = current_stake.active;
 
 			// If this is a nominator, update their position in the `VoterList`.
-			if let Some(_) = T::Staking::nominations(&current_stake.stash) {
-				let _ =
-					T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active))
-						.defensive_proof("Nominator's position in VoterList updated; qed");
+			if let Some(_) = T::Staking::nominations(who) {
+				let _ = T::VoterList::on_update(who, Self::to_vote(current_active))
+					.defensive_proof("Nominator's position in VoterList updated; qed");
 			}
 
 			// If this is a validator, update their position in the `VoterList`.
-			if T::Staking::is_validator(&current_stake.stash) {
-				let _ =
-					T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active))
-						.defensive_proof("Validator's position in VoterList updated; qed");
+			if T::Staking::is_validator(who) {
+				let _ = T::VoterList::on_update(who, Self::to_vote(current_active))
+					.defensive_proof("Validator's position in VoterList updated; qed");
 			}
 		}
 	}
