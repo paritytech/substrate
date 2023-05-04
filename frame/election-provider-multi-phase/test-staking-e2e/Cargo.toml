@@ -31,6 +31,7 @@ frame-election-provider-support = { version = "4.0.0-dev", path = "../../electio
 
 pallet-election-provider-multi-phase = { version = "4.0.0-dev", path = "../../election-provider-multi-phase" }
 pallet-staking = { version = "4.0.0-dev", path = "../../staking" }
+pallet-stake-tracker = { version = "4.0.0-dev", path = "../../stake-tracker" }
 pallet-bags-list = { version = "4.0.0-dev", path = "../../bags-list" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }

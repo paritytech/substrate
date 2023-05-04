@@ -6110,6 +6110,7 @@ dependencies = [
  "pallet-balances",
  "pallet-election-provider-multi-phase",
  "pallet-session",
+ "pallet-stake-tracker",
  "pallet-staking",
  "pallet-timestamp",
  "parity-scale-codec",
