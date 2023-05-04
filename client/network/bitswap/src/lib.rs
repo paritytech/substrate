@@ -470,7 +470,7 @@ mod tests {
 		let mut client = TestClientBuilder::with_tx_storage(u32::MAX).build();
 		let mut block_builder = client.new_block(Default::default()).unwrap();
 
-		// encoded extrsinic: [161, .. , 2, 6, 16, 19, 55, 19, 56]
+		// encoded extrinsic: [161, .. , 2, 6, 16, 19, 55, 19, 56]
 		let ext = ExtrinsicBuilder::new_indexed_call(vec![0x13, 0x37, 0x13, 0x38]).build();
 		let pattern_index = ext.encoded_size() - 4;
 

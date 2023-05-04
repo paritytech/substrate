@@ -861,7 +861,7 @@ mod tests {
 			}
 			.into_unchecked_extrinsic(),
 		)
-		.chain((0..extrinsics_num - 1).map(|v| extrinsic(v as u64 + 1)))
+		.chain((1..extrinsics_num as u64).map(extrinsic))
 		.collect::<Vec<_>>();
 
 		let block_limit = genesis_header.encoded_size() +

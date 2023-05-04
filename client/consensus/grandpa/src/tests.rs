@@ -783,8 +783,7 @@ async fn finalizes_multiple_pending_changes_in_order() {
 			&mut builder,
 			ScheduledChange { next_authorities: make_ids(peers_b), delay: 0 },
 		);
-		let block = builder.build().unwrap().block;
-		block
+		builder.build().unwrap().block
 	});
 
 	// add more blocks on top of it (until we have 25)
@@ -796,8 +795,7 @@ async fn finalizes_multiple_pending_changes_in_order() {
 			&mut builder,
 			ScheduledChange { next_authorities: make_ids(peers_c), delay: 4 },
 		);
-		let block = builder.build().unwrap().block;
-		block
+		builder.build().unwrap().block
 	});
 
 	// add more blocks on top of it (until we have 30)

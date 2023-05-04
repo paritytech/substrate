@@ -317,7 +317,6 @@ fn block_builder_works_with_transactions() {
 
 #[test]
 fn block_builder_does_not_include_invalid() {
-	sp_tracing::try_init_simple();
 	let mut client = substrate_test_runtime_client::new();
 	let mut builder = client.new_block(Default::default()).unwrap();
 
