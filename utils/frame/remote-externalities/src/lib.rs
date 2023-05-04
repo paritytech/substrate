@@ -46,7 +46,7 @@ use std::{
 	fs,
 	ops::{Deref, DerefMut},
 	path::{Path, PathBuf},
-	time::Instant,
+	time::{Duration, Instant},
 };
 use substrate_rpc_client::{rpc_params, BatchRequestBuilder, ChainApi, ClientT, StateApi};
 
@@ -547,11 +547,11 @@ where
 			.collect::<Vec<_>>();
 
 		let bar = ProgressBar::new(payloads.len() as u64);
-		let bar_message = "Downloading key values".to_string();
-		bar.set_message(bar_message);
+		bar.enable_steady_tick(Duration::from_secs(1));
+		bar.set_message("Downloading key values".to_string());
 		bar.set_style(
 			ProgressStyle::with_template(
-				"[{elapsed_precise}] {msg} [{wide_bar}] {pos}/{len} ({eta})",
+				"[{elapsed_precise}] {msg} {per_sec} [{wide_bar}] {pos}/{len} ({eta})",
 			)
 			.unwrap()
 			.progress_chars("=>-"),
@@ -885,14 +885,14 @@ where
 
 		// If we need to save a snapshot, save the raw storage and root hash to the snapshot.
 		if let Some(path) = self.as_online().state_snapshot.clone().map(|c| c.path) {
-			let (raw_storage, storage_root) = pending_ext.drain_raw_storage();
+			let (raw_storage, storage_root) = pending_ext.into_raw_snapshot();
 			let snapshot = Snapshot::<B> {
 				state_version,
 				block_hash: self
 					.as_online()
 					.at
 					.expect("set to `Some` in `init_remote_client`; must be called before; qed"),
-				raw_storage,
+				raw_storage: raw_storage.clone(),
 				storage_root,
 			};
 			let encoded = snapshot.encode();
@@ -903,6 +903,15 @@ where
 				path
 			);
 			std::fs::write(path, encoded).map_err(|_| "fs::write failed")?;
+
+			// pending_ext was consumed when creating the snapshot, need to reinitailize it
+			let mut pending_ext = TestExternalities::new_with_code_and_state(
+				Default::default(),
+				Default::default(),
+				self.overwrite_state_version.unwrap_or(state_version),
+			);
+			pending_ext.from_raw_snapshot(raw_storage, storage_root);
+			return Ok(pending_ext)
 		}
 
 		Ok(pending_ext)
@@ -935,7 +944,7 @@ where
 			Default::default(),
 			self.overwrite_state_version.unwrap_or(state_version),
 		);
-		inner_ext.set_raw_storage_and_root(raw_storage, storage_root);
+		inner_ext.from_raw_snapshot(raw_storage, storage_root);
 		sp.stop_with_message(format!("✅ Loaded snapshot ({:.2}s)", start.elapsed().as_secs_f32()));
 
 		Ok(RemoteExternalities { inner_ext, block_hash })

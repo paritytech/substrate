@@ -164,11 +164,7 @@ where
 	///
 	/// This can be used as a fast way to restore the storage state from a backup because the trie
 	/// does not need to be computed.
-	pub fn set_raw_storage_and_root(
-		&mut self,
-		raw_storage: Vec<(H::Out, Vec<u8>)>,
-		storage_root: H::Out,
-	) {
+	pub fn from_raw_snapshot(&mut self, raw_storage: Vec<(H::Out, Vec<u8>)>, storage_root: H::Out) {
 		for (k, v) in raw_storage {
 			self.backend.backend_storage_mut().emplace(k, hash_db::EMPTY_PREFIX, v);
 		}
@@ -180,7 +176,7 @@ where
 	/// Useful for backing up the storage in a format that can be quickly re-loaded.
 	///
 	/// Note: This DB will be inoperable after this call.
-	pub fn drain_raw_storage(&mut self) -> (Vec<(H::Out, Vec<u8>)>, H::Out) {
+	pub fn into_raw_snapshot(mut self) -> (Vec<(H::Out, Vec<u8>)>, H::Out) {
 		let raw_key_values = self
 			.backend
 			.backend_storage_mut()
@@ -407,12 +403,12 @@ mod tests {
 		original_ext.insert_child(child_info.clone(), b"doggytown".to_vec(), b"is_sunny".to_vec());
 
 		// Drain the raw storage and root.
-		let (raw_storage, storage_root) = original_ext.drain_raw_storage();
+		let (raw_storage, storage_root) = original_ext.into_raw_snapshot();
 
 		// Load the raw storage and root into a new TestExternalities.
 		let mut recovered_ext =
 			TestExternalities::<BlakeTwo256>::from((Default::default(), Default::default()));
-		recovered_ext.set_raw_storage_and_root(raw_storage, storage_root);
+		recovered_ext.from_raw_snapshot(raw_storage, storage_root);
 
 		// Check the storage root is the same as the original
 		assert_eq!(original_ext.backend.root(), recovered_ext.backend.root());
