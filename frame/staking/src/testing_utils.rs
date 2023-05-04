@@ -88,10 +88,11 @@ pub fn create_stash_controller_inc<T: Config>(
 	balance_factor: u32,
 	destination: RewardDestination<T::AccountId>,
 ) -> Result<(T::AccountId, T::AccountId), &'static str> {
-	let staker = create_funded_user::<T>("stash", n, balance_factor);
+	let stash = create_funded_user::<T>("stash", n, balance_factor);
+	let unused_controller = create_funded_user::<T>("controller", n + 1, balance_factor);
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
-	Staking::<T>::bond(RawOrigin::Signed(staker.clone()).into(), amount, destination)?;
-	Ok((staker.clone(), staker))
+	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), amount, destination)?;
+	Ok((stash, unused_controller))
 }
 
 /// Create a stash and controller pair with fixed balance.

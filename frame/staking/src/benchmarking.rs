@@ -467,7 +467,20 @@ benchmarks! {
 	}
 
 	set_controller {
-		let (stash, _) = create_stash_controller_inc::<T>(USER_SEED, 100, Default::default())?;
+		let (stash, ctlr) = create_stash_controller_inc::<T>(9000, 100, Default::default())?;
+
+		// update ledger to be a *different* controller to stash
+		if let Some(l) = Ledger::<T>::take(&stash) {
+			<Ledger<T>>::insert(&ctlr, l);
+		}
+		// update bonded account to be unique controller
+		<Bonded<T>>::insert(&stash, &ctlr);
+
+		// ensure `ctlr` is the currently stored controller
+		assert!(!Ledger::<T>::contains_key(&stash));
+		assert!(Ledger::<T>::contains_key(&ctlr));
+		assert_eq!(Bonded::<T>::get(&stash), Some(ctlr.clone()));
+
 		whitelist_account!(stash);
 	}: _(RawOrigin::Signed(stash.clone()))
 	verify {
