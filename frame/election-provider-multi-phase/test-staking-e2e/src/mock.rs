@@ -29,7 +29,7 @@ use sp_npos_elections::{ElectionScore, VoteWeight};
 use sp_runtime::{
 	testing,
 	traits::{IdentityLookup, Zero},
-	transaction_validity, PerU16, Perbill,
+	transaction_validity, PerU16, Perbill, Percent,
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
@@ -40,7 +40,8 @@ use std::collections::BTreeMap;
 
 use frame_election_provider_support::{onchain, ElectionDataProvider, SequentialPhragmen, Weight};
 use pallet_election_provider_multi_phase::{
-	unsigned::MinerConfig, ElectionCompute, QueuedSolution, SolutionAccuracyOf,
+	unsigned::MinerConfig, ElectionCompute, GeometricDepositBase, QueuedSolution,
+	SolutionAccuracyOf,
 };
 use pallet_staking::StakerStatus;
 
@@ -190,7 +191,9 @@ parameter_types! {
 	pub static TransactionPriority: transaction_validity::TransactionPriority = 1;
 	pub static MaxWinners: u32 = 100;
 	pub static MaxVotesPerVoter: u32 = 16;
-	pub static MaxNominations: u32 = 16;
+	pub static MaxNominations: u32  = 16;
+	pub static SignedFixedDepositBase: Balance = 1;
+	pub static SignedDepositBaseIncreaseFactor: Percent = Percent::from_percent(10);
 }
 
 impl pallet_election_provider_multi_phase::Config for Runtime {
@@ -206,7 +209,9 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type MinerConfig = Self;
 	type SignedMaxSubmissions = ConstU32<10>;
 	type SignedRewardBase = ();
-	type SignedDepositBase = ();
+	type SignedDepositBase = GeometricDepositBase<Runtime>;
+	type SignedFixedDepositBase = SignedFixedDepositBase;
+	type SignedDepositBaseIncreaseFactor = SignedDepositBaseIncreaseFactor;
 	type SignedDepositByte = ();
 	type SignedMaxRefunds = ConstU32<3>;
 	type SignedDepositWeight = ();
