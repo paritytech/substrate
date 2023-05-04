@@ -785,6 +785,8 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// partial impl and an external impl containing defaults that can be overriden in the local
 /// impl.
 ///
+/// For a full end-to-end example, see [below](#use-case-auto-derive-test-pallet-config-traits).
+///
 /// ## Usage
 ///
 /// The attribute should be attached to an impl block (strictly speaking a `syn::ItemImpl`) for
