@@ -1154,7 +1154,8 @@ impl<Hash> PreimageRecipient<Hash> for () {
 	fn unnote_preimage(_: &Hash) {}
 }
 
-/// Trait for creating an asset account with a deposit taken from a specified by client depositor.
+/// Trait for creating an asset account with a deposit taken from a designated depositor specified
+/// by the client.
 pub trait AccountTouch<AssetId, AccountId> {
 	/// The type for currency units of the deposit.
 	type Balance;
