@@ -301,7 +301,7 @@ impl TryFrom<MultiSignature> for ecdsa::Signature {
 
 /// Public key for any known crypto algorithm.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-#[cfg_attr(all(feature = "serde", feature = "full_crypto"), derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum MultiSigner {
 	/// An Ed25519 identity.
 	Ed25519(ed25519::Public),
