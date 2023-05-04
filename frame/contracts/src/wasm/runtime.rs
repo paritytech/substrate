@@ -551,17 +551,6 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		self.ext.gas_meter().adjust_gas(charged, token);
 	}
 
-	/// Update `ref_time` weight left in the gas meter with the value from the engine's state.
-	pub fn pull_gas(&mut self, consumed: u64) -> Result<(), DispatchError> {
-		self.ext.gas_meter().sync_reftime(consumed)
-	}
-
-	/// Update the engine gas meter with the `ref_time` weight left.
-	/// TODO this one should be generated in the proc_macro
-	pub fn push_gas(&mut self, consumed: u64) -> Result<(), DispatchError> {
-		self.ext.gas_meter().sync_reftime(consumed)
-	}
-
 	/// Read designated chunk from the sandbox memory.
 	///
 	/// Returns `Err` if one of the following conditions occurs:

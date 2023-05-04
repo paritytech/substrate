@@ -624,8 +624,8 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 			let trace_fmt_str = format!("{}::{}({}) = {{:?}}\n", module, name, params_fmt_str);
 
 			quote! {
+				let result = #body;
 				if ::log::log_enabled!(target: "runtime::contracts::strace", ::log::Level::Trace) {
-					let result = #body;
 					{
 						use sp_std::fmt::Write;
 						let mut w = sp_std::Writer::default();
@@ -633,10 +633,8 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 						let msg = core::str::from_utf8(&w.inner()).unwrap_or_default();
 						ctx.ext().append_debug_buffer(msg);
 					}
-					result
-				} else {
-					#body
 				}
+				result
 			}
 		};
 
@@ -677,6 +675,25 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		} else {
 			quote! { #[allow(unused_variables)] }
 		};
+		let sync_gas_before = if expand_blocks {
+			quote! {
+				let gas_before = {
+				   let engine_consumed = __caller__.fuel_consumed().expect("Fuel metering is enabled; qed");
+				   __caller__.data_mut().ext.gas_meter().sync_reftime(engine_consumed).map_err(|e| TrapReason::from(e)).map_err(#map_err)?
+				};
+			}
+		} else {
+			quote! { }
+		};
+		let sync_gas_after = if expand_blocks {
+			quote! {
+				let gas_after = __caller__.data().ext.gas_meter_immut().gas_left().ref_time();
+				let host_consumed = gas_before.saturating_sub(gas_after);
+				__caller__.consume_fuel(host_consumed).map_err(|_| TrapReason::from(Error::<E::T>::OutOfGas)).map_err(#map_err)?;
+			}
+		} else {
+			quote! { }
+		};
 
 		quote! {
 			// We need to allow all interfaces when runtime benchmarks are performed because
@@ -688,10 +705,13 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 			{
 				#allow_unused
 				linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
-					let mut func = #inner;
-					func()
-						.map_err(#map_err)
-						.map(::core::convert::Into::into)
+ 					#sync_gas_before
+					let result = {
+					   let mut func = #inner;
+					   func().map_err(#map_err).map(::core::convert::Into::into)
+					};
+					#sync_gas_after
+					result
 				}))?;
 			}
 		}
