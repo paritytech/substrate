@@ -1344,7 +1344,6 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.1.0"
-source = "git+https://github.com/w3f/ring-proof#56ca3cb17f2e9ea5f9c675327689aa1136aa7b9f"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -2420,7 +2419,6 @@ dependencies = [
 [[package]]
 name = "fflonk"
 version = "0.1.0"
-source = "git+https://github.com/w3f/fflonk#cbcfc4524779872fb9883110f07890cdc46633ea"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -8434,7 +8432,6 @@ dependencies = [
 [[package]]
 name = "ring"
 version = "0.1.0"
-source = "git+https://github.com/w3f/ring-proof#56ca3cb17f2e9ea5f9c675327689aa1136aa7b9f"
 dependencies = [
  "ark-ec",
  "ark-ff",

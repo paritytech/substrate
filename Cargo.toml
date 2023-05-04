@@ -337,3 +337,11 @@ codegen-units = 1
 [patch."https://github.com/w3f/ring-vrf"]
 bandersnatch_vrfs = { path = "/mnt/ssd/users/develop/w3f/ring-vrf/bandersnatch_vrfs" }
 dleq_vrf = { path = "/mnt/ssd/users/develop/w3f/ring-vrf/dleq_vrf" }
+
+# https://github.com/w3f/fflonk/pull/31
+[patch."https://github.com/w3f/fflonk"]
+fflonk = { path = "/mnt/ssd/users/develop/w3f/fflonk" }
+
+# https://github.com/w3f/ring-proof/pull/5
+[patch."https://github.com/w3f/ring-proof"]
+ring = { path = "/mnt/ssd/users/develop/w3f/ring-proof/ring" }
