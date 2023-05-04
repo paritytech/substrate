@@ -26,7 +26,7 @@ use syn::{parse2, parse_quote, spanned::Spanned, Ident, ImplItem, ItemImpl, Path
 
 #[derive(Parse)]
 pub struct DeriveImplAttrArgs {
-	pub foreign_path: Path,
+	pub default_impl_path: Path,
 	_as: Option<Token![as]>,
 	#[parse_if(_as.is_some())]
 	pub disambiguation_path: Option<Path>,
@@ -34,13 +34,13 @@ pub struct DeriveImplAttrArgs {
 
 impl ForeignPath for DeriveImplAttrArgs {
 	fn foreign_path(&self) -> &Path {
-		&self.foreign_path
+		&self.default_impl_path
 	}
 }
 
 impl ToTokens for DeriveImplAttrArgs {
 	fn to_tokens(&self, tokens: &mut TokenStream2) {
-		tokens.extend(self.foreign_path.to_token_stream());
+		tokens.extend(self.default_impl_path.to_token_stream());
 		tokens.extend(self._as.to_token_stream());
 		tokens.extend(self.disambiguation_path.to_token_stream());
 	}
@@ -69,14 +69,14 @@ fn impl_item_ident(impl_item: &ImplItem) -> Option<&Ident> {
 /// This process has the following caveats:
 /// * Colliding items that have an ident are not copied into `local_impl`
 /// * Uncolliding items that have an ident are copied into `local_impl` but are qualified as `type
-///   #ident = <#foreign_path as #disambiguation_path>::#ident;`
+///   #ident = <#default_impl_path as #disambiguation_path>::#ident;`
 /// * Items that lack an ident are de-duplicated so only unique items that lack an ident are copied
 ///   into `local_impl`. Items that lack an ident and also exist verbatim in `local_impl` are not
 ///   copied over.
 fn combine_impls(
 	local_impl: ItemImpl,
 	foreign_impl: ItemImpl,
-	foreign_path: Path,
+	default_impl_path: Path,
 	disambiguation_path: Path,
 ) -> ItemImpl {
 	let (existing_local_keys, existing_unsupported_items): (HashSet<ImplItem>, HashSet<ImplItem>) =
@@ -99,7 +99,7 @@ fn combine_impls(
 			if matches!(item, ImplItem::Type(_)) {
 				// modify and insert uncolliding type items
 				let modified_item: ImplItem = parse_quote! {
-					type #ident = <#foreign_path as #disambiguation_path>::#ident;
+					type #ident = <#default_impl_path as #disambiguation_path>::#ident;
 				};
 				return Some(modified_item)
 			}
@@ -118,8 +118,8 @@ fn combine_impls(
 
 /// Internal implementation behind [`#[derive_impl(..)]`](`macro@crate::derive_impl`).
 ///
-/// `foreign_path`: the module path of the external `impl` statement whose tokens we are
-///	                importing via `macro_magic`
+/// `default_impl_path`: the module path of the external `impl` statement whose tokens we are
+///	                     importing via `macro_magic`
 ///
 /// `foreign_tokens`: the tokens for the external `impl` statement
 ///
@@ -128,14 +128,14 @@ fn combine_impls(
 /// `disambiguation_path`: the module path of the external trait we will use to qualify
 ///                        defaults imported from the external `impl` statement
 pub fn derive_impl(
-	foreign_path: TokenStream2,
+	default_impl_path: TokenStream2,
 	foreign_tokens: TokenStream2,
 	local_tokens: TokenStream2,
 	disambiguation_path: Option<Path>,
 ) -> Result<TokenStream2> {
 	let local_impl = parse2::<ItemImpl>(local_tokens)?;
 	let foreign_impl = parse2::<ItemImpl>(foreign_tokens)?;
-	let foreign_path = parse2::<Path>(foreign_path)?;
+	let default_impl_path = parse2::<Path>(default_impl_path)?;
 
 	// have disambiguation_path default to the item being impl'd in the foreign impl if we
 	// don't specify an `as [disambiguation_path]` in the macro attr
@@ -151,7 +151,8 @@ pub fn derive_impl(
 	};
 
 	// generate the combined impl
-	let combined_impl = combine_impls(local_impl, foreign_impl, foreign_path, disambiguation_path);
+	let combined_impl =
+		combine_impls(local_impl, foreign_impl, default_impl_path, disambiguation_path);
 
 	Ok(quote!(#combined_impl))
 }

@@ -790,22 +790,23 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// The attribute should be attached to an impl block (strictly speaking a `syn::ItemImpl`) for
 /// which we want to inject defaults in the event of missing trait items in the block.
 ///
-/// The attribute minimally takes a single `foreign_path` argument, which should be the module
-/// path to an impl registered via [`#[register_default_impl]`](`macro@register_default_impl`)
-/// that contains the default trait items we want to potentially inject, with the general form:
+/// The attribute minimally takes a single `default_impl_path` argument, which should be the
+/// module path to an impl registered via
+/// [`#[register_default_impl]`](`macro@register_default_impl`) that contains the default trait
+/// items we want to potentially inject, with the general form:
 ///
 /// ```ignore
-/// #[derive_impl(foreign_path)]
+/// #[derive_impl(default_impl_path)]
 /// impl SomeTrait for SomeStruct {
 ///     ...
 /// }
 /// ```
 ///
 /// Optionally, a `disambiguation_path` can be specified as follows by providing `as
-/// path::here` after the `foreign_path`:
+/// path::here` after the `default_impl_path`:
 ///
 /// ```ignore
-/// #[derive_impl(foreign_path as disambiguation_path)]
+/// #[derive_impl(default_impl_path as disambiguation_path)]
 /// impl SomeTrait for SomeStruct {
 /// 	...
 /// }
@@ -813,7 +814,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// The `disambiguation_path`, if specified, should be the path to a trait that will be used to
 /// qualify all default entries that are injected into the local impl. For example if your
-/// `foreign_path` is `some::path::TestTrait` and your `disambiguation_path` is
+/// `default_impl_path` is `some::path::TestTrait` and your `disambiguation_path` is
 /// `another::path::DefaultTrait`, any items injected into the local impl will be qualified as
 /// `<some::path::TestTrait as another::path::DefaultTrait>::specific_trait_item`.
 ///
@@ -821,7 +822,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// default to `A` from the `impl A for B` part of the foreign impl. This is useful for
 /// scenarios where all of the relevant types are already in scope via `use` statements.
 ///
-/// Conversely, the `foreign_path` argument is required and cannot be omitted.
+/// Conversely, the `default_impl_path` argument is required and cannot be omitted.
 ///
 /// You can also make use of `#[pallet::no_default]` on specific items in your foreign trait
 /// that you want to ensure will not be copied over but that you nonetheless want to use
@@ -852,7 +853,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// ## Expansion
 ///
-/// The `#[derive_impl(foreign_path as disambiguation_path)]` attribute will expand to the
+/// The `#[derive_impl(default_impl_path as disambiguation_path)]` attribute will expand to the
 /// local impl, with any extra items from the foreign impl that aren't present in the local
 /// impl also included. In the case of a colliding trait item, the version of the item that
 /// exists in the local impl will be retained. All imported items are qualified by the
@@ -1012,7 +1013,7 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 ///
 /// You must also provide an identifier/name as the attribute's argument. This is the name you
 /// must provide to [`#[derive_impl(..)]`](`macro@derive_impl`) when you import this impl via
-/// the `foreign_path` argument. This name should be unique at the crate-level.
+/// the `default_impl_path` argument. This name should be unique at the crate-level.
 ///
 /// ## Example
 ///
