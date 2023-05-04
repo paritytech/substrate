@@ -41,7 +41,10 @@ use sc_executor::{
 	NativeExecutionDispatch, RuntimeVersionOf, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY,
 };
 use sc_keystore::LocalKeystore;
-use sc_network::{config::SyncMode, NetworkService, NetworkStateInfo, NetworkStatusProvider};
+use sc_network::{
+	config::{FullNetworkConfiguration, SyncMode},
+	NetworkService, NetworkStateInfo, NetworkStatusProvider,
+};
 use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{role::Roles, sync::warp::WarpSyncParams};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
@@ -730,6 +733,8 @@ where
 pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// The service configuration.
 	pub config: &'a Configuration,
+	/// Full network configuration.
+	pub net_config: FullNetworkConfiguration,
 	/// A shared client returned by `new_full_parts`.
 	pub client: Arc<TCl>,
 	/// A shared transaction pool.
@@ -773,6 +778,7 @@ where
 {
 	let BuildNetworkParams {
 		config,
+		mut net_config,
 		client,
 		transaction_pool,
 		spawn_handle,
@@ -780,8 +786,6 @@ where
 		block_announce_validator_builder,
 		warp_sync_params,
 	} = params;
-
-	let mut request_response_protocol_configs = Vec::new();
 
 	if warp_sync_params.is_none() && config.network.sync_mode.is_warp() {
 		return Err("Warp sync enabled, but no warp sync provider configured.".into())
@@ -809,8 +813,8 @@ where
 			&protocol_id,
 			config.chain_spec.fork_id(),
 			client.clone(),
-			config.network.default_peers_set.in_peers as usize +
-				config.network.default_peers_set.out_peers as usize,
+			net_config.network_config.default_peers_set.in_peers as usize +
+				net_config.network_config.default_peers_set.out_peers as usize,
 		);
 		spawn_handle.spawn("block-request-handler", Some("networking"), handler.run());
 		protocol_config
@@ -822,7 +826,7 @@ where
 			&protocol_id,
 			config.chain_spec.fork_id(),
 			client.clone(),
-			config.network.default_peers_set_num_full as usize,
+			net_config.network_config.default_peers_set_num_full as usize,
 		);
 		spawn_handle.spawn("state-request-handler", Some("networking"), handler.run());
 		protocol_config
@@ -864,7 +868,7 @@ where
 		Roles::from(&config.role),
 		client.clone(),
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()).as_ref(),
-		&config.network,
+		&net_config,
 		protocol_id.clone(),
 		&config.chain_spec.fork_id().map(ToOwned::to_owned),
 		block_announce_validator,
@@ -879,39 +883,20 @@ where
 	let sync_service_import_queue = sync_service.clone();
 	let sync_service = Arc::new(sync_service);
 
-	request_response_protocol_configs.push(config.network.ipfs_server.then(|| {
+	// install request handlers to `FullNetworkConfiguration`
+	net_config.add_request_response_protocol(block_request_protocol_config);
+	net_config.add_request_response_protocol(state_request_protocol_config);
+	net_config.add_request_response_protocol(light_client_request_protocol_config);
+
+	if let Some(config) = warp_sync_protocol_config {
+		net_config.add_request_response_protocol(config);
+	}
+
+	if config.network.ipfs_server {
 		let (handler, protocol_config) = BitswapRequestHandler::new(client.clone());
 		spawn_handle.spawn("bitswap-request-handler", Some("networking"), handler.run());
-		protocol_config
-	}));
-
-	let genesis_hash = client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
-	let mut network_params = sc_network::config::Params::<TBl> {
-		role: config.role.clone(),
-		executor: {
-			let spawn_handle = Clone::clone(&spawn_handle);
-			Box::new(move |fut| {
-				spawn_handle.spawn("libp2p-node", Some("networking"), fut);
-			})
-		},
-		network_config: config.network.clone(),
-		genesis_hash,
-		protocol_id: protocol_id.clone(),
-		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
-		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
-		block_announce_config,
-		tx,
-		request_response_protocol_configs: request_response_protocol_configs
-			.into_iter()
-			.chain([
-				Some(block_request_protocol_config),
-				Some(state_request_protocol_config),
-				Some(light_client_request_protocol_config),
-				warp_sync_protocol_config,
-			])
-			.flatten()
-			.collect::<Vec<_>>(),
-	};
+		net_config.add_request_response_protocol(protocol_config);
+	}
 
 	// crate transactions protocol and add it to the list of supported protocols of `network_params`
 	let transactions_handler_proto = sc_network_transactions::TransactionsHandlerPrototype::new(
@@ -923,12 +908,27 @@ where
 			.expect("Genesis block exists; qed"),
 		config.chain_spec.fork_id(),
 	);
-	network_params
-		.network_config
-		.extra_sets
-		.insert(0, transactions_handler_proto.set_config());
+	net_config.add_notification_protocol(transactions_handler_proto.set_config());
 
-	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
+	let genesis_hash = client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
+	let network_params = sc_network::config::Params::<TBl> {
+		role: config.role.clone(),
+		executor: {
+			let spawn_handle = Clone::clone(&spawn_handle);
+			Box::new(move |fut| {
+				spawn_handle.spawn("libp2p-node", Some("networking"), fut);
+			})
+		},
+		network_config: net_config,
+		genesis_hash,
+		protocol_id: protocol_id.clone(),
+		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
+		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+		block_announce_config,
+		tx,
+	};
+
+	let has_bootnodes = !network_params.network_config.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
 
