@@ -6540,6 +6540,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-session",
  "sp-staking",
  "sp-std",
 ]
@@ -10847,6 +10848,7 @@ dependencies = [
 name = "sp-session"
 version = "4.0.0-dev"
 dependencies = [
+ "impl-trait-for-tuples",
  "parity-scale-codec",
  "scale-info",
  "sp-api",

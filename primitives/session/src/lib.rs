@@ -130,3 +130,19 @@ where
 
 	Ok(())
 }
+
+pub trait SessionChangeListener {
+	fn on_session_change(session_index: SessionIndex);
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
+#[tuple_types_custom_trait_bound(SessionChangeListener)]
+impl SessionChangeListener for Tuple {
+	fn on_session_change(session_index: SessionIndex) {
+		for_tuples!(
+			#(
+				Tuple::on_session_change(session_index);
+			)*
+		)
+	}
+}

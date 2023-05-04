@@ -282,7 +282,7 @@ fn should_properly_sort_offences() {
 		Offences::report_offence(vec![], offence4).unwrap();
 
 		// then
-		let session_reports = Vec::<(u32, Vec::<(Kind, u128, sp_core::H256)>)>::decode(
+		let session_reports = Vec::<(u32, Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>)>::decode(
 			&mut &crate::SessionReports::<crate::mock::Runtime>::get()[..],
 		)
 		.unwrap();
@@ -292,21 +292,21 @@ fn should_properly_sort_offences() {
 				(
 					session_index - 1, 
 					vec![
-						(KIND, time_slot - 1, report_id(time_slot - 1, 3)),
+						(KIND, (time_slot - 1).encode(), report_id(time_slot - 1, 3)),
 					]
 				),
 				(
 					session_index, 
 					vec![
-						(KIND, time_slot, report_id(time_slot, 5)),
-						(KIND, time_slot + 1, report_id(time_slot + 1, 4)),
+						(KIND, time_slot.encode(), report_id(time_slot, 5)),
+						(KIND, (time_slot + 1).encode(), report_id(time_slot + 1, 4)),
 					]
 				),
 				(
 					session_index + 1, 
 					vec![
-						(KIND, time_slot + 1, report_id(time_slot + 1, 6)),
-						(KIND, time_slot + 1, report_id(time_slot + 1, 7)),
+						(KIND, (time_slot + 1).encode(), report_id(time_slot + 1, 6)),
+						(KIND, (time_slot + 1).encode(), report_id(time_slot + 1, 7)),
 					]
 				),
 			],
@@ -340,10 +340,10 @@ fn should_properly_clear_obsolete_offences() {
 		Offences::report_offence(vec![], offence3).unwrap();
 		Offences::report_offence(vec![], offence4).unwrap();
 
-		Offences::clear_obsolete_reports::<Offence>(session_index + 10);
+		Offences::clear_obsolete_reports(session_index + 10);
 
 		// then
-		let session_reports = Vec::<(u32, Vec::<(Kind, u128, sp_core::H256)>)>::decode(
+		let session_reports = Vec::<(u32, Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>)>::decode(
 			&mut &crate::SessionReports::<crate::mock::Runtime>::get()[..],
 		)
 		.unwrap();
@@ -353,8 +353,8 @@ fn should_properly_clear_obsolete_offences() {
 				(
 					session_index + 7, 
 					vec![
-						(KIND, time_slot + 5, report_id(time_slot + 5, 6)),
-						(KIND, time_slot + 5, report_id(time_slot + 5, 7)),
+						(KIND, (time_slot + 5).encode(), report_id(time_slot + 5, 6)),
+						(KIND, (time_slot + 5).encode(), report_id(time_slot + 5, 7)),
 					]
 				),
 			],

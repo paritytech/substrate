@@ -36,7 +36,9 @@ use sp_staking::{
 	offence::{Kind, Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
 	SessionIndex, EraIndex
 };
+use sp_session::SessionChangeListener;
 use sp_std::prelude::*;
+use core::marker::PhantomData;
 
 pub use pallet::*;
 
@@ -70,13 +72,8 @@ pub mod pallet {
 		/// A handler called for every offence report.
 		type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple, Weight>;
 		
-		/// Number of sessions per era.
 		#[pallet::constant]
-		type SessionsPerEra: Get<SessionIndex>;
-
-		/// Number of eras that staked funds must remain bonded for.
-		#[pallet::constant]
-		type BondingDuration: Get<EraIndex>;
+		type MaxSessionReportAge: Get<EraIndex>;
 	}
 
 	/// The primary structure that holds all offence records keyed by report identifiers.
@@ -104,7 +101,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type SessionReports<T: Config> = StorageValue<
 		_,
-		Vec<u8>, //(SessionIndex, Vec<(Kind, O::TimeSlot, ReportIdOf<T>)>)
+		Vec<u8>, //(SessionIndex, Vec<(Kind, OpaqueTimeSlot, ReportIdOf<T>)>)
 		ValueQuery,
 	>;
 
@@ -120,26 +117,21 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn max_session_report_age() -> SessionIndex {
-		return T::BondingDuration::get() * T::SessionsPerEra::get()
-	}
-
-	// Todo: Call this at the start of new session
-	fn clear_obsolete_reports<O: Offence<T::IdentificationTuple>>(current_session_index: SessionIndex) {
-		if current_session_index <= Self::max_session_report_age() { return; }
+	fn clear_obsolete_reports(current_session_index: SessionIndex) {
+		if current_session_index <= T::MaxSessionReportAge::get() { return; }
 
 		let session_reports = SessionReports::<T>::get();
 		let mut session_reports = 
-			Vec::<(SessionIndex, Vec::<(Kind, O::TimeSlot, ReportIdOf<T>)>)>::decode(&mut &session_reports[..])
+			Vec::<(SessionIndex, Vec::<(Kind, OpaqueTimeSlot, ReportIdOf<T>)>)>::decode(&mut &session_reports[..])
 			.unwrap_or_default();
 
-		let obsolete_session_index = current_session_index - Self::max_session_report_age();
+		let obsolete_session_index = current_session_index - T::MaxSessionReportAge::get();
 
 		let pos = session_reports.partition_point(|(when, _)| when < &obsolete_session_index);
 		for i in 0..pos {
 			if let Some(reports) = session_reports.get(i) {
 				for (kind, time_slot, report_id) in &reports.1 {
-					ConcurrentReportsIndex::<T>::remove(kind, time_slot.encode());
+					ConcurrentReportsIndex::<T>::remove(kind, time_slot);
 					Reports::<T>::remove(report_id);
 				}
 			}
@@ -149,6 +141,12 @@ impl<T: Config> Pallet<T> {
 		SessionReports::<T>::set(session_reports.encode());
 	}
 }
+
+impl<T: Config> SessionChangeListener for Pallet<T> {
+	fn on_session_change(session_index: SessionIndex) {
+		Self::clear_obsolete_reports(session_index)
+	}
+} 
 
 impl<T, O> ReportOffence<T::AccountId, T::IdentificationTuple, O> for Pallet<T>
 where
@@ -266,7 +264,8 @@ struct TriageOutcome<T: Config> {
 struct ReportIndexStorage<T: Config, O: Offence<T::IdentificationTuple>> {
 	opaque_time_slot: OpaqueTimeSlot,
 	concurrent_reports: Vec<ReportIdOf<T>>,
-	session_reports: Vec<(SessionIndex, Vec<(Kind, O::TimeSlot, ReportIdOf<T>)>)>,
+	session_reports: Vec<(SessionIndex, Vec<(Kind, OpaqueTimeSlot, ReportIdOf<T>)>)>,
+	_phantom: PhantomData<O>,
 }
 
 impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
@@ -276,26 +275,28 @@ impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 
 		let session_reports = SessionReports::<T>::get();
 		let session_reports = 
-			Vec::<(SessionIndex, Vec::<(Kind, O::TimeSlot, ReportIdOf<T>)>)>::decode(&mut &session_reports[..])
+			Vec::<(SessionIndex, Vec::<(Kind, OpaqueTimeSlot, ReportIdOf<T>)>)>::decode(&mut &session_reports[..])
 			.unwrap_or_default();
 
 		let concurrent_reports = <ConcurrentReportsIndex<T>>::get(&O::ID, &opaque_time_slot);
 
-		Self { opaque_time_slot, concurrent_reports, session_reports }
+		Self { opaque_time_slot, concurrent_reports, session_reports, _phantom: Default::default() }
 	}
 
 	/// Insert a new report to the index.
 	fn insert(&mut self, report_id: ReportIdOf<T>, time_slot: &O::TimeSlot, session_index: SessionIndex) {
+		let opaque_time_slot = time_slot.encode();
+
 		let pos = self.session_reports.partition_point(|(when, _)| when < &session_index);
 		
 		if let Some(report) = self.session_reports.get_mut(pos) {
 			if report.0 == session_index {
-				report.1.push((O::ID, time_slot.clone(), report_id));
+				report.1.push((O::ID, opaque_time_slot, report_id));
 			} else {
-				self.session_reports.insert(pos, (session_index, vec![(O::ID, time_slot.clone(), report_id)]));
+				self.session_reports.insert(pos, (session_index, vec![(O::ID, opaque_time_slot, report_id)]));
 			}
 		} else {
-			self.session_reports.insert(pos, (session_index, vec![(O::ID, time_slot.clone(), report_id)]));
+			self.session_reports.insert(pos, (session_index, vec![(O::ID, opaque_time_slot, report_id)]));
 		}
 
 		// Update the list of concurrent reports.

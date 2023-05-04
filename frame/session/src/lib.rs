@@ -136,6 +136,7 @@ use sp_std::{
 	ops::{Rem, Sub},
 	prelude::*,
 };
+use sp_session::SessionChangeListener;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
@@ -405,6 +406,8 @@ pub mod pallet {
 
 		/// Handler when a session has changed.
 		type SessionHandler: SessionHandler<Self::ValidatorId>;
+
+		type SessionChangeListener: SessionChangeListener;
 
 		/// The keys.
 		type Keys: OpaqueKeys + Member + Parameter + MaybeSerializeDeserialize;
@@ -704,6 +707,7 @@ impl<T: Config> Pallet<T> {
 
 		// Tell everyone about the new session keys.
 		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys, &queued_amalgamated);
+		T::SessionChangeListener::on_session_change(session_index);
 	}
 
 	/// Disable the validator of index `i`, returns `false` if the validator was already disabled.
