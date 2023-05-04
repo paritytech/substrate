@@ -265,7 +265,8 @@ fn node_config<
 		tracing_receiver: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
-		base_path: Some(BasePath::new(root)),
+		base_path: BasePath::new(root.clone()),
+		data_path: root,
 		informant_output_format: Default::default(),
 		runtime_cache_size: 2,
 	}
