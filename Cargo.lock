@@ -2596,6 +2596,7 @@ name = "frame-support-test"
 version = "3.0.0"
 dependencies = [
  "frame-benchmarking",
+ "frame-executive",
  "frame-support",
  "frame-support-test-pallet",
  "frame-system",
