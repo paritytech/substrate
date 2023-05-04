@@ -748,7 +748,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type SignedMaxSubmissions = ConstU32<10>;
 	type SignedRewardBase = SignedRewardBase;
 	type SignedDepositBase = GeometricDepositBase<Runtime>;
-	type SignedFixedDepositBase = SignedDepositBase;
+	type SignedFixedDepositBase = SignedFixedDepositBase;
 	type SignedDepositBaseIncreaseFactor = SignedDepositBaseIncreaseFactor;
 	type SignedDepositByte = SignedDepositByte;
 	type SignedMaxRefunds = ConstU32<3>;
