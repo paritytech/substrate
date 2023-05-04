@@ -107,7 +107,6 @@ fn bond_amount<T: Config>() -> BalanceOf<T> {
 
 fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'static str> {
 	let stash: T::AccountId = account("stash", n, SEED);
-	let controller: T::AccountId = account("controller", n, SEED);
 	let stash_lookup: LookupSourceOf<T> = T::Lookup::unlookup(stash.clone());
 	let reward_destination = RewardDestination::Staked;
 	let amount = bond_amount::<T>();
@@ -153,7 +152,7 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 	let current_era = 0u32;
 	Staking::<T>::add_era_stakers(current_era, stash.clone(), exposure);
 
-	Ok(Offender { controller, stash, nominator_stashes })
+	Ok(Offender { controller: stash.clone(), stash, nominator_stashes })
 }
 
 fn make_offenders<T: Config>(
