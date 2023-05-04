@@ -324,7 +324,8 @@ impl InstanceFilter<RuntimeCall> for ProxyType {
 					RuntimeCall::Elections(..) |
 					RuntimeCall::Treasury(..)
 			),
-			ProxyType::Staking => matches!(c, RuntimeCall::Staking(..)),
+			ProxyType::Staking =>
+				matches!(c, RuntimeCall::Staking(..) | RuntimeCall::FastUnstake(..)),
 		}
 	}
 	fn is_superset(&self, o: &Self) -> bool {
