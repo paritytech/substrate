@@ -662,7 +662,9 @@ impl<T: Config> Pallet<T> {
 		<Ledger<T>>::remove(&controller);
 
 		<Payee<T>>::remove(stash);
+
 		Self::do_remove_validator(stash);
+
 		Self::do_remove_nominator(stash);
 
 		frame_system::Pallet::<T>::dec_consumers(stash);
@@ -1669,7 +1671,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	}
 
 	fn is_validator(who: &Self::AccountId) -> bool {
-		matches!(Self::status(who), Ok(StakerStatus::Validator))
+		Validators::<T>::contains_key(who)
 	}
 
 	fn status(
@@ -1680,7 +1682,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 			return Err(Error::<T>::NotStash.into())
 		}
 
-		let is_validator = Validators::<T>::contains_key(&who);
+		let is_validator = Self::is_validator(who);
 		let is_nominator = Nominators::<T>::get(&who);
 
 		match (is_validator, is_nominator.is_some()) {
@@ -1697,10 +1699,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	}
 
 	fn nominations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
-		match Self::status(who) {
-			Ok(StakerStatus::Nominator(t)) => Some(t),
-			_ => None,
-		}
+		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
 	}
 
 	sp_staking::runtime_benchmarks_enabled! {

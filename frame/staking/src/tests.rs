@@ -5887,10 +5887,7 @@ mod on_staking_update {
 			assert_ok!(Staking::bond_extra(RuntimeOrigin::signed(3), 500));
 			assert_eq!(
 				EmittedEvents::take(),
-				vec![
-					StakeUpdate(3, None),
-					StakeUpdate(3, Some(Stake { stash: 3, total: 100, active: 100 }))
-				]
+				vec![StakeUpdate(3, None), StakeUpdate(3, Some(Stake { total: 100, active: 100 }))]
 			);
 		});
 	}
@@ -5942,7 +5939,7 @@ mod on_staking_update {
 				EmittedEvents::take(),
 				[
 					NominatorRemove(1, vec![11]),
-					StakeUpdate(1, Some(Stake { stash: 1, total: 10, active: 10 }))
+					StakeUpdate(1, Some(Stake { total: 10, active: 10 }))
 				]
 			);
 		});
@@ -5967,10 +5964,7 @@ mod on_staking_update {
 			assert_ok!(Staking::unbond(RuntimeOrigin::signed(2), 10));
 			assert_eq!(
 				EmittedEvents::take(),
-				[
-					ValidatorRemove(1),
-					StakeUpdate(1, Some(Stake { stash: 1, total: 10, active: 10 }))
-				]
+				[ValidatorRemove(1), StakeUpdate(1, Some(Stake { total: 10, active: 10 }))]
 			);
 		});
 	}

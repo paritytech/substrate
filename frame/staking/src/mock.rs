@@ -292,7 +292,7 @@ impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashM
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StakingEvent {
-	StakeUpdate(AccountId, Option<Stake<AccountId, Balance>>),
+	StakeUpdate(AccountId, Option<Stake<Balance>>),
 	NominatorAdd(AccountId),
 	NominatorUpdate(AccountId, Vec<AccountId>),
 	ValidatorAdd(AccountId),
@@ -308,7 +308,7 @@ parameter_types! {
 
 pub struct EventListenerMock;
 impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
-	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<AccountId, Balance>>) {
+	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<Balance>>) {
 		EmittedEvents::mutate(|x| x.push(StakeUpdate(*who, prev_stake)))
 	}
 
