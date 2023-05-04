@@ -130,8 +130,10 @@ pub struct Configuration {
 	pub max_runtime_instances: usize,
 	/// Announce block automatically after they have been imported
 	pub announce_block: bool,
-	/// Base path of the configuration
-	pub base_path: Option<BasePath>,
+	/// Data path root for the configured chain.
+	pub data_path: PathBuf,
+	/// Base path of the configuration. This is shared between chains.
+	pub base_path: BasePath,
 	/// Configuration of the output format that the informant uses.
 	pub informant_output_format: sc_informant::OutputFormat,
 	/// Maximum number of different runtime versions that can be cached.

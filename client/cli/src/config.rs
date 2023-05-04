@@ -491,6 +491,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			)?,
 			keystore,
 			database: self.database_config(&config_dir, database_cache_size, database)?,
+			data_path: config_dir,
 			trie_cache_maximum_size: self.trie_cache_maximum_size()?,
 			state_pruning: self.state_pruning()?,
 			blocks_pruning: self.blocks_pruning()?,
@@ -519,7 +520,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			max_runtime_instances,
 			announce_block: self.announce_block()?,
 			role,
-			base_path: Some(base_path),
+			base_path,
 			informant_output_format: Default::default(),
 			runtime_cache_size,
 		})

@@ -309,6 +309,13 @@ macro_rules! app_crypto_public_common {
 				<$public>::try_from(data).map(Into::into)
 			}
 		}
+
+		impl Public {
+			/// Convert into wrapped generic public key type.
+			pub fn into_inner(self) -> $public {
+				self.0
+			}
+		}
 	};
 }
 
@@ -468,6 +475,13 @@ macro_rules! app_crypto_signature_common {
 
 			fn try_from(data: $crate::Vec<u8>) -> Result<Self, Self::Error> {
 				Self::try_from(&data[..])
+			}
+		}
+
+		impl Signature {
+			/// Convert into wrapped generic signature type.
+			pub fn into_inner(self) -> $sig {
+				self.0
 			}
 		}
 	};
