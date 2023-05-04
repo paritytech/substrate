@@ -900,7 +900,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// where `TestDefaultConfig` was defined and registered as follows:
 ///
 /// ```ignore
-/// pub struct TestDefaultConfig {}
+/// pub struct TestDefaultConfig;
 ///
 /// #[register_default_impl(TestDefaultConfig)]
 /// impl DefaultConfig for TestDefaultConfig {
