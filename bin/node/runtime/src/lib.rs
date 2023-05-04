@@ -620,7 +620,7 @@ parameter_types! {
 
 	// signed config
 	pub const SignedRewardBase: Balance = 1 * DOLLARS;
-	pub const SignedDepositBase: Balance = 1 * DOLLARS;
+	pub const SignedFixedDepositBase: Balance = 1 * DOLLARS;
 	pub const SignedDepositBaseIncreaseFactor: Percent = Percent::from_percent(10);
 	pub const SignedDepositByte: Balance = 1 * CENTS;
 
