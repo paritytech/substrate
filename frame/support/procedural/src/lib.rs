@@ -819,15 +819,15 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// `<some::path::TestTrait as another::path::DefaultTrait>::specific_trait_item`.
 ///
 /// If you omit the `as disambiguation_path` portion, the `disambiguation_path` will internally
-/// default to `A` from the `impl A for B` part of the foreign impl. This is useful for
+/// default to `A` from the `impl A for B` part of the default impl. This is useful for
 /// scenarios where all of the relevant types are already in scope via `use` statements.
 ///
 /// Conversely, the `default_impl_path` argument is required and cannot be omitted.
 ///
-/// You can also make use of `#[pallet::no_default]` on specific items in your foreign trait
+/// You can also make use of `#[pallet::no_default]` on specific items in your default impl
 /// that you want to ensure will not be copied over but that you nonetheless want to use
-/// locally in the context of the foreign trait and the pallet (or context) in which it is
-/// defined
+/// locally in the context of the foreign impl and the pallet (or context) in which it is
+/// defined.
 ///
 /// ## Importing & Re-Exporting
 ///
