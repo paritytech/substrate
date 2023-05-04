@@ -195,7 +195,7 @@ pub trait Keystore: Send + Sync {
 		&self,
 		key_type: KeyTypeId,
 		public: &bandersnatch::Public,
-		input: &bandersnatch::vrf::VrfInput,
+		input: &bandersnatch::vrf::VrfSignData,
 	) -> Result<Option<bandersnatch::vrf::VrfSignature>, Error>;
 
 	/// Insert a new secret key.

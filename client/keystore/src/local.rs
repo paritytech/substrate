@@ -254,15 +254,16 @@ impl Keystore for LocalKeystore {
 		self.sign::<bandersnatch::Pair>(key_type, public, msg)
 	}
 
-	// Maybe we can expose just one bandersnatch sign here (the above one reduces to this when input
-	// len = 0)
+	// TODO DAVXY
+	// Maybe we can expose just this bandersnatch sign (the above one reduces to this with
+	// input len = 0)
 	fn bandersnatch_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
 		public: &bandersnatch::Public,
-		input: &bandersnatch::vrf::VrfInput,
+		data: &bandersnatch::vrf::VrfSignData,
 	) -> std::result::Result<Option<bandersnatch::vrf::VrfSignature>, TraitError> {
-		self.vrf_sign::<bandersnatch::Pair>(key_type, public, input)
+		self.vrf_sign::<bandersnatch::Pair>(key_type, public, data)
 	}
 
 	fn insert(

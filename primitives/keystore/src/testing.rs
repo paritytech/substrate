@@ -238,9 +238,9 @@ impl Keystore for MemoryKeystore {
 		&self,
 		key_type: KeyTypeId,
 		public: &bandersnatch::Public,
-		input: &bandersnatch::vrf::VrfInput,
+		data: &bandersnatch::vrf::VrfSignData,
 	) -> Result<Option<bandersnatch::vrf::VrfSignature>, Error> {
-		self.vrf_sign::<bandersnatch::Pair>(key_type, public, input)
+		self.vrf_sign::<bandersnatch::Pair>(key_type, public, data)
 	}
 
 	fn insert(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {

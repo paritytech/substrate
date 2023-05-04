@@ -22,10 +22,10 @@
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
 use crate::crypto::{
-	ByteArray, CryptoType, CryptoTypeId, Derive, Public as TraitPublic, UncheckedFrom, VrfVerifier,
+	ByteArray, CryptoType, CryptoTypeId, Derive, Public as TraitPublic, UncheckedFrom, VrfPublic,
 };
 #[cfg(feature = "full_crypto")]
-use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError, VrfSigner};
+use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError, VrfSecret};
 
 #[cfg(feature = "full_crypto")]
 use bandersnatch_vrfs::SecretKey;
@@ -238,7 +238,7 @@ impl TraitPair for Pair {
 	fn sign(&self, data: &[u8]) -> Signature {
 		let input = vrf::VrfInput::new(SIGNING_CTX, &[data], &[])
 			.expect("less than max input messages; qed");
-		self.vrf_sign(&input).signature
+		self.vrf_sign(&input.into()).signature
 	}
 
 	/// Verify a signature on a message.
@@ -247,8 +247,11 @@ impl TraitPair for Pair {
 	fn verify<M: AsRef<[u8]>>(signature: &Self::Signature, data: M, public: &Self::Public) -> bool {
 		let input = vrf::VrfInput::new(SIGNING_CTX, &[data.as_ref()], &[])
 			.expect("less than max input messages; qed");
-		let signature = vrf::VrfSignature { signature: signature.clone(), preouts: Box::new([]) };
-		public.vrf_verify(&input, &signature)
+		let signature = vrf::VrfSignature {
+			signature: signature.clone(),
+			output: vrf::VrfOutput { preouts: Box::new([]) },
+		};
+		public.vrf_verify(&input.into(), &signature)
 	}
 
 	/// Return a vec filled with seed raw data.
@@ -278,6 +281,7 @@ pub mod vrf {
 	const MAX_VRF_INPUT_MESSAGES: usize = 3;
 
 	/// Input to be used for VRF sign and verify operations.
+	#[derive(Clone)]
 	pub struct VrfInput {
 		/// Associated Fiat-Shamir transcript
 		pub(super) transcript: Transcript,
@@ -297,7 +301,7 @@ pub mod vrf {
 			if messages.len() > MAX_VRF_INPUT_MESSAGES {
 				return None
 			}
-			let mut transcript = Transcript::new(label);
+			let mut transcript = Transcript::new_labeled(label);
 			transcript_data.iter().for_each(|b| transcript.append_slice(b));
 			let messages = messages
 				.into_iter()
@@ -307,6 +311,34 @@ pub mod vrf {
 				.collect();
 			Some(VrfInput { transcript, messages })
 		}
+
+		/// Map to `VrfSignData`
+		pub fn into_sign_data(self) -> VrfSignData {
+			self.into()
+		}
+	}
+
+	/// TODO davxy docs
+	pub struct VrfOutput {
+		/// VRF pre-outputs
+		pub(super) preouts: Box<[bandersnatch_vrfs::VrfPreOut]>,
+	}
+
+	/// TODO davxy docs
+	pub struct VrfSignData {
+		pub(super) input: VrfInput,
+	}
+
+	impl From<VrfInput> for VrfSignData {
+		fn from(input: VrfInput) -> Self {
+			VrfSignData { input }
+		}
+	}
+
+	impl AsRef<VrfInput> for VrfSignData {
+		fn as_ref(&self) -> &VrfInput {
+			&self.input
+		}
 	}
 
 	/// TODO davxy: docs
@@ -314,20 +346,23 @@ pub mod vrf {
 		/// VRF signature
 		pub(super) signature: Signature,
 		/// VRF pre-outputs
-		pub(super) preouts: Box<[bandersnatch_vrfs::VrfPreOut]>,
+		pub(super) output: VrfOutput,
 	}
 
 	#[cfg(feature = "full_crypto")]
 	impl VrfCrypto for Pair {
-		type VrfSignature = VrfSignature;
 		type VrfInput = VrfInput;
+		type VrfOutput = VrfOutput;
+		type VrfSignData = VrfSignData;
+		type VrfSignature = VrfSignature;
 	}
 
 	#[cfg(feature = "full_crypto")]
-	impl VrfSigner for Pair {
-		fn vrf_sign(&self, input: &Self::VrfInput) -> Self::VrfSignature {
+	impl VrfSecret for Pair {
+		fn vrf_sign(&self, data: &Self::VrfSignData) -> Self::VrfSignature {
 			// Hack used because backend signature type is generic over the number of ios
 			// @burdges can we provide a vec or boxed version?
+			let input = &data.input;
 			match input.messages.len() {
 				0 => self.vrf_sign_gen::<0>(input),
 				1 => self.vrf_sign_gen::<1>(input),
@@ -336,21 +371,35 @@ pub mod vrf {
 				_ => panic!("Max VRF input messages is set to: {}", MAX_VRF_INPUT_MESSAGES),
 			}
 		}
+
+		fn vrf_output(&self, input: &Self::VrfInput) -> Self::VrfOutput {
+			let ios: Vec<_> =
+				input.messages.iter().map(|i| self.0.clone().0.vrf_inout(i.clone())).collect();
+
+			let preout = bandersnatch_vrfs::vrf::collect_preoutputs_vec(&ios);
+			let preouts = preout.into_boxed_slice();
+
+			let output = VrfOutput { preouts };
+			output
+		}
 	}
 
 	impl VrfCrypto for Public {
-		type VrfSignature = VrfSignature;
 		type VrfInput = VrfInput;
+		type VrfOutput = VrfOutput;
+		type VrfSignData = VrfSignData;
+		type VrfSignature = VrfSignature;
 	}
 
-	impl VrfVerifier for Public {
-		fn vrf_verify(&self, input: &Self::VrfInput, signature: &Self::VrfSignature) -> bool {
-			let preouts_len = signature.preouts.len();
-			if preouts_len != input.messages.len() {
+	impl VrfPublic for Public {
+		fn vrf_verify(&self, data: &Self::VrfSignData, signature: &Self::VrfSignature) -> bool {
+			let preouts_len = signature.output.preouts.len();
+			if preouts_len != data.input.messages.len() {
 				return false
 			}
 			// Hack used because backend signature type is generic over the number of ios
 			// @burdges can we provide a vec or boxed version?
+			let input = &data.input;
 			match preouts_len {
 				0 => self.vrf_verify_gen::<0>(input, signature),
 				1 => self.vrf_verify_gen::<1>(input, signature),
@@ -376,10 +425,8 @@ pub mod vrf {
 				.signature
 				.serialize_compressed(sign_bytes.as_mut_slice())
 				.expect("serialization can't fail");
-			VrfSignature {
-				signature: Signature(sign_bytes),
-				preouts: Box::new(signature.preoutputs),
-			}
+			let output = VrfOutput { preouts: Box::new(signature.preoutputs) };
+			VrfSignature { signature: Signature(sign_bytes), output }
 		}
 
 		/// Generate output bytes from the given VRF input.
@@ -408,6 +455,7 @@ pub mod vrf {
 			};
 
 			let Ok(preouts) = signature
+				.output
 				.preouts
 				.iter()
 				.map(|o| o.clone())
@@ -439,7 +487,7 @@ pub mod vrf {
 		) -> Option<[u8; N]> {
 			let inout = bandersnatch_vrfs::VrfInOut {
 				input: input.messages.get(index)?.clone().into_vrf_input(),
-				preoutput: self.preouts.get(index)?.clone(),
+				preoutput: self.output.preouts.get(index)?.clone(),
 			};
 			let bytes = inout.vrf_output_bytes(input.transcript.clone());
 			Some(bytes)
@@ -449,8 +497,8 @@ pub mod vrf {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::crypto::DEV_PHRASE;
+	use super::{vrf::*, *};
+	use crate::crypto::{VrfPublic, VrfSecret, DEV_PHRASE};
 	const DEV_SEED: &[u8; SEED_SERIALIZED_LEN] = &[0; SEED_SERIALIZED_LEN];
 
 	fn b2h(bytes: &[u8]) -> String {
@@ -502,38 +550,35 @@ mod tests {
 
 	#[test]
 	fn vrf_sign_verify() {
-		use super::vrf::*;
-		use crate::crypto::{VrfSigner, VrfVerifier};
-
 		let pair = Pair::from_seed(DEV_SEED);
 		let public = pair.public();
 		// let input = VrfInput::new(b"test", &[b"foo", b"bar"], &[]);
-		let input = VrfInput::new(b"test", &[b"foo", b"bar"], &[(b"msg1", b"hello")]).unwrap();
+		let data = VrfInput::new(b"test", &[b"foo", b"bar"], &[(b"msg1", b"hello")])
+			.unwrap()
+			.into();
 
-		let signature = pair.vrf_sign(&input);
+		let signature = pair.vrf_sign(&data);
 
-		assert!(public.vrf_verify(&input, &signature));
+		assert!(public.vrf_verify(&data, &signature));
 	}
 
 	#[test]
 	fn vrf_sign_verify_bad_inputs() {
-		use super::vrf::*;
-		use crate::crypto::{VrfSigner, VrfVerifier};
-
 		let pair = Pair::from_seed(DEV_SEED);
 		let public = pair.public();
 
-		let input = VrfInput::new(b"test", &[b"foo", b"bar"], &[(b"msg1", b"hello")]).unwrap();
+		let data = VrfInput::new(b"test", &[b"foo", b"bar"], &[(b"msg1", b"hello")])
+			.unwrap()
+			.into();
 
-		let signature = pair.vrf_sign(&input);
+		let signature = pair.vrf_sign(&data);
 
-		let input = VrfInput::new(b"test", &[b"foo", b"bar"], &[]).unwrap();
-		assert!(!public.vrf_verify(&input, &signature));
+		let data = VrfInput::new(b"test", &[b"foo", b"bar"], &[]).unwrap().into();
+		assert!(!public.vrf_verify(&data, &signature));
 	}
 
 	#[test]
 	fn vrf_make_bytes_matches() {
-		use super::vrf::*;
 		let pair = Pair::from_seed(DEV_SEED);
 
 		let input = VrfInput::new(
@@ -543,7 +588,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let sign = pair.vrf_sign(&input);
+		let sign = pair.vrf_sign(&input.clone().into());
 
 		let out0 = pair.output_bytes::<32>(&input, 0).unwrap();
 		let out1 = sign.output_bytes::<32>(&input, 0).unwrap();
