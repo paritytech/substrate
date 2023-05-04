@@ -403,6 +403,7 @@ mod tests {
 		original_ext.insert_child(child_info.clone(), b"doggytown".to_vec(), b"is_sunny".to_vec());
 
 		// Drain the raw storage and root.
+		let root = original_ext.backend.root().clone();
 		let (raw_storage, storage_root) = original_ext.into_raw_snapshot();
 
 		// Load the raw storage and root into a new TestExternalities.
@@ -411,7 +412,7 @@ mod tests {
 		recovered_ext.from_raw_snapshot(raw_storage, storage_root);
 
 		// Check the storage root is the same as the original
-		assert_eq!(original_ext.backend.root(), recovered_ext.backend.root());
+		assert_eq!(root, *recovered_ext.backend.root());
 
 		// Check the original storage key/values were recovered correctly
 		assert_eq!(recovered_ext.backend.storage(b"doe").unwrap(), Some(b"reindeer".to_vec()));
