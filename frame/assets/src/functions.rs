@@ -312,20 +312,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Creates an account for `who` to hold asset `id` with a zero balance and takes a deposit.
 	///
-	/// If invoked `permissionless = true`, then a depositor can be anyone. If `permissionless =
-	/// false`, then the depositor must be the asset's `Admin` or `Freezer`.
+	/// When `check_depositor` is set to false, the depositor can be anyone, but if set to true,
+	/// the depositor must be either the asset's Admin or Freezer.
 	pub(super) fn do_touch(
 		id: T::AssetId,
 		who: T::AccountId,
 		depositor: T::AccountId,
-		permissionless: bool,
+		check_depositor: bool,
 	) -> DispatchResult {
 		ensure!(!Account::<T, I>::contains_key(id, &who), Error::<T, I>::AlreadyExists);
 		let deposit = T::AssetAccountDeposit::get();
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 		ensure!(
-			permissionless || &depositor == &details.admin || &depositor == &details.freezer,
+			!check_depositor || &depositor == &details.admin || &depositor == &details.freezer,
 			Error::<T, I>::NoPermission
 		);
 		let reason = Self::new_account(&who, &mut details, Some((&depositor, deposit)))?;
