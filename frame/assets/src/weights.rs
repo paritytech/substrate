@@ -80,6 +80,7 @@ pub trait WeightInfo {
 	fn touch() -> Weight;
 	fn refund() -> Weight;
 	fn refund_other() -> Weight;
+	fn block() -> Weight;
 }
 
 /// Weights for pallet_assets using the Substrate node and recommended hardware.
@@ -501,6 +502,19 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
+	/// Storage: Assets Asset (r:1 w:0)
+	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2685, mode: MaxEncodedLen)
+	/// Storage: Assets Account (r:1 w:1)
+	/// Proof: Assets Account (max_values: None, max_size: Some(134), added: 2609, mode: MaxEncodedLen)
+	fn block() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `459`
+		//  Estimated: `3675`
+		// Minimum execution time: 115_000_000 picoseconds.
+		Weight::from_parts(163_000_000, 3675)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -920,5 +934,18 @@ impl WeightInfo for () {
 		Weight::from_parts(32_519_000, 3675)
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
+	}
+	/// Storage: Assets Asset (r:1 w:0)
+	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2685, mode: MaxEncodedLen)
+	/// Storage: Assets Account (r:1 w:1)
+	/// Proof: Assets Account (max_values: None, max_size: Some(134), added: 2609, mode: MaxEncodedLen)
+	fn block() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `459`
+		//  Estimated: `3675`
+		// Minimum execution time: 115_000_000 picoseconds.
+		Weight::from_parts(163_000_000, 3675)
+			.saturating_add(RocksDbWeight::get().reads(2_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 }

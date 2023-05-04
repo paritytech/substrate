@@ -135,8 +135,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if increase_supply && details.supply.checked_add(&amount).is_none() {
 			return DepositConsequence::Overflow
 		}
-		if let Some(balance) = Self::maybe_balance(id, who) {
-			if balance.checked_add(&amount).is_none() {
+		if let Some(account) = Account::<T, I>::get(id, who) {
+			if account.status.is_blocked() {
+				return DepositConsequence::Blocked
+			}
+			if account.balance.checked_add(&amount).is_none() {
 				return DepositConsequence::Overflow
 			}
 		} else {
@@ -179,7 +182,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Some(a) => a,
 			None => return BalanceLow,
 		};
-		if account.is_frozen {
+		if account.status.is_frozen() {
 			return Frozen
 		}
 		if let Some(rest) = account.balance.checked_sub(&amount) {
@@ -220,7 +223,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 
 		let account = Account::<T, I>::get(id, who).ok_or(Error::<T, I>::NoAccount)?;
-		ensure!(!account.is_frozen, Error::<T, I>::Frozen);
+		ensure!(!account.status.is_frozen(), Error::<T, I>::Frozen);
 
 		let amount = if let Some(frozen) = T::Freezer::frozen_balance(id, who) {
 			// Frozen balance: account CANNOT be deleted
@@ -333,7 +336,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&who,
 			AssetAccountOf::<T, I> {
 				balance: Zero::zero(),
-				is_frozen: false,
+				status: AccountStatus::Liquid,
 				reason,
 				extra: T::Extra::default(),
 			},
@@ -382,7 +385,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			account.reason.take_deposit_from().ok_or(Error::<T, I>::NoDeposit)?;
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-		ensure!(!account.is_frozen, Error::<T, I>::Frozen);
+		ensure!(!account.status.is_frozen(), Error::<T, I>::Frozen);
 		ensure!(caller == &depositor || caller == &details.admin, Error::<T, I>::NoPermission);
 		ensure!(account.balance.is_zero(), Error::<T, I>::WouldBurn);
 
@@ -464,7 +467,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						*maybe_account = Some(AssetAccountOf::<T, I> {
 							balance: amount,
 							reason: Self::new_account(beneficiary, details, None)?,
-							is_frozen: false,
+							status: AccountStatus::Liquid,
 							extra: T::Extra::default(),
 						});
 					},
@@ -658,7 +661,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					maybe_account @ None => {
 						*maybe_account = Some(AssetAccountOf::<T, I> {
 							balance: credit,
-							is_frozen: false,
+							status: AccountStatus::Liquid,
 							reason: Self::new_account(dest, details, None)?,
 							extra: T::Extra::default(),
 						});

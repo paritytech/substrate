@@ -739,6 +739,37 @@ fn approve_transfer_frozen_asset_should_not_work() {
 }
 
 #[test]
+fn transferring_from_blocked_account_should_not_work() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
+		assert_eq!(Assets::balance(0, 1), 100);
+		assert_ok!(Assets::block(RuntimeOrigin::signed(1), 0, 1));
+		// behaves as frozen when transferring from blocked
+		assert_noop!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50), Error::<Test>::Frozen);
+		assert_ok!(Assets::thaw(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50));
+		assert_ok!(Assets::transfer(RuntimeOrigin::signed(2), 0, 1, 50));
+	});
+}
+
+#[test]
+fn transferring_to_blocked_account_should_not_work() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 2, 100));
+		assert_eq!(Assets::balance(0, 1), 100);
+		assert_eq!(Assets::balance(0, 2), 100);
+		assert_ok!(Assets::block(RuntimeOrigin::signed(1), 0, 1));
+		assert_noop!(Assets::transfer(RuntimeOrigin::signed(2), 0, 1, 50), TokenError::Blocked);
+		assert_ok!(Assets::thaw(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Assets::transfer(RuntimeOrigin::signed(2), 0, 1, 50));
+		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50));
+	});
+}
+
+#[test]
 fn origin_guards_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));

@@ -532,5 +532,12 @@ benchmarks_instance_pallet! {
 		assert!(T::Currency::reserved_balance(&asset_owner).is_zero());
 	}
 
+	block {
+		let (asset_id, caller, caller_lookup) = create_default_minted_asset::<T, I>(true, 100u32.into());
+	}: _(SystemOrigin::Signed(caller.clone()), asset_id, caller_lookup)
+	verify {
+		assert_last_event::<T, I>(Event::Blocked { asset_id: asset_id.into(), who: caller }.into());
+	}
+
 	impl_benchmark_test_suite!(Assets, crate::mock::new_test_ext(), crate::mock::Test)
 }
