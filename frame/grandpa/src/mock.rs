@@ -286,9 +286,7 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 
 	// controllers are the same as stash
 	let stakers: Vec<_> = (0..authorities.len())
-		.map(|i| {
-			(i as u64, i as u64, 10_000, pallet_staking::StakerStatus::<u64>::Validator)
-		})
+		.map(|i| (i as u64, i as u64, 10_000, pallet_staking::StakerStatus::<u64>::Validator))
 		.collect();
 
 	let staking_config = pallet_staking::GenesisConfig::<Test> {
