@@ -19,12 +19,11 @@
 use either::Either;
 use libp2p::{
 	core::{
-		self,
 		muxing::StreamMuxerBox,
 		transport::{Boxed, OptionalTransport},
 		upgrade,
 	},
-	dns, identity, mplex, noise, tcp, websocket, PeerId, Transport, TransportExt,
+	dns, identity, noise, tcp, websocket, PeerId, Transport, TransportExt,
 };
 use std::{sync::Arc, time::Duration};
 
@@ -100,10 +99,6 @@ pub fn build_transport(
 		};
 
 	let multiplexing_config = {
-		let mut mplex_config = mplex::MplexConfig::new();
-		mplex_config.set_max_buffer_behaviour(mplex::MaxBufferBehaviour::Block);
-		mplex_config.set_max_buffer_size(usize::MAX);
-
 		let mut yamux_config = libp2p::yamux::YamuxConfig::default();
 		// Enable proper flow-control: window updates are only sent when
 		// buffered data has been consumed.
@@ -114,7 +109,7 @@ pub fn build_transport(
 			yamux_config.set_receive_window_size(yamux_window_size);
 		}
 
-		core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
+		yamux_config
 	};
 
 	let transport = transport
