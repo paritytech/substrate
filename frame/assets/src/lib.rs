@@ -200,7 +200,7 @@ impl<AssetId, AccountId> AssetsCallback<AssetId, AccountId> for () {}
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::AccountTouch};
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
@@ -1485,7 +1485,7 @@ pub mod pallet {
 		pub fn touch(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
-			Self::do_touch(id, who.clone(), who)
+			Self::do_touch(id, who.clone(), who, true)
 		}
 
 		/// Return the deposit (if any) of an asset account or a consumer reference (if any) of an
@@ -1575,8 +1575,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let id: T::AssetId = id.into();
-
-			Self::do_touch(id, who, origin)
+			Self::do_touch(id, who, origin, false)
 		}
 
 		/// Return the deposit (if any) of a target asset account. Useful if you are the depositor.
@@ -1599,6 +1598,21 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
 			Self::do_refund_other(id, &who, &origin)
+		}
+	}
+
+	/// Implements [AccountTouch] trait.
+	/// Note that a depositor can be any account, without any specific privilege.
+	/// This implementation is supposed to be used only for creation of system accounts.
+	impl<T: Config<I>, I: 'static> AccountTouch<T::AssetId, T::AccountId> for Pallet<T, I> {
+		type Balance = DepositBalanceOf<T, I>;
+
+		fn deposit_required() -> Self::Balance {
+			T::AssetAccountDeposit::get()
+		}
+
+		fn touch(asset: T::AssetId, who: T::AccountId, depositor: T::AccountId) -> DispatchResult {
+			Self::do_touch(asset, who, depositor, true)
 		}
 	}
 }
