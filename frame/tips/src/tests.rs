@@ -263,11 +263,11 @@ fn report_awesome_and_tip_works() {
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 10));
 		assert_noop!(Tips::tip(RuntimeOrigin::signed(9), h, 10), BadOrigin);
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(100), h.into()));
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 102);
 		assert_eq!(Balances::free_balance(3), 8);
-		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -283,10 +283,10 @@ fn report_awesome_from_beneficiary_and_tip_works() {
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 10));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 10));
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(100), h.into()));
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 110);
-		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -315,6 +315,7 @@ fn close_tip_works() {
 		assert_noop!(Tips::close_tip(RuntimeOrigin::signed(0), h.into()), Error::<Test>::Premature);
 
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
 		assert_noop!(Tips::close_tip(RuntimeOrigin::none(), h.into()), BadOrigin);
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
@@ -325,8 +326,6 @@ fn close_tip_works() {
 			Tips::close_tip(RuntimeOrigin::signed(100), h.into()),
 			Error::<Test>::UnknownTip
 		);
-
-		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -352,14 +351,13 @@ fn slash_tip_works() {
 		assert_noop!(Tips::slash_tip(RuntimeOrigin::signed(0), h), BadOrigin);
 
 		// can remove from root.
+		Tips::do_try_state().unwrap();
 		assert_ok!(Tips::slash_tip(RuntimeOrigin::root(), h));
 		assert_eq!(last_event(), TipEvent::TipSlashed { tip_hash: h, finder: 0, deposit: 12 });
 
 		// tipper slashed
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 88);
-
-		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -373,6 +371,7 @@ fn retract_tip_works() {
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(10), h, 10));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 10));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 10));
+		Tips::do_try_state().unwrap();
 		assert_noop!(Tips::retract_tip(RuntimeOrigin::signed(10), h), Error::<Test>::NotFinder);
 		assert_ok!(Tips::retract_tip(RuntimeOrigin::signed(0), h));
 		System::set_block_number(2);
@@ -387,6 +386,7 @@ fn retract_tip_works() {
 		let h = tip_hash();
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 10));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 10));
+		Tips::do_try_state().unwrap();
 		assert_noop!(Tips::retract_tip(RuntimeOrigin::signed(0), h), Error::<Test>::NotFinder);
 		assert_ok!(Tips::retract_tip(RuntimeOrigin::signed(10), h));
 		System::set_block_number(2);
@@ -394,8 +394,6 @@ fn retract_tip_works() {
 			Tips::close_tip(RuntimeOrigin::signed(10), h.into()),
 			Error::<Test>::UnknownTip
 		);
-
-		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -408,9 +406,9 @@ fn tip_median_calculation_works() {
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 10));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(12), h, 1000000));
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
-		Tips::do_try_state().unwrap();
 	});
 }
 
@@ -428,9 +426,9 @@ fn tip_changing_works() {
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(11), h, 100));
 		assert_ok!(Tips::tip(RuntimeOrigin::signed(10), h, 10));
 		System::set_block_number(2);
+		Tips::do_try_state().unwrap();
 		assert_ok!(Tips::close_tip(RuntimeOrigin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
-		Tips::do_try_state().unwrap();
 	});
 }
 

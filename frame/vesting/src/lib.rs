@@ -421,7 +421,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			if schedule1_index == schedule2_index {
-				return Ok(())
+				return Ok(());
 			};
 			let schedule1_index = schedule1_index as usize;
 			let schedule2_index = schedule2_index as usize;
@@ -499,7 +499,7 @@ impl<T: Config> Pallet<T> {
 		// Validate user inputs.
 		ensure!(schedule.locked() >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
 		if !schedule.is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into())
+			return Err(Error::<T>::InvalidScheduleParams.into());
 		};
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
@@ -647,8 +647,8 @@ impl<T: Config> Pallet<T> {
 		};
 
 		debug_assert!(
-			locked_now > Zero::zero() && schedules.len() > 0 ||
-				locked_now == Zero::zero() && schedules.len() == 0
+			locked_now > Zero::zero() && schedules.len() > 0
+				|| locked_now == Zero::zero() && schedules.len() == 0
 		);
 
 		Ok((schedules, locked_now))
@@ -660,24 +660,32 @@ impl<T: Config> Pallet<T> {
 	///
 	/// ## Invariants:
 	///
-	/// * The `per_block` payments left of every account currently vesting
-	/// * is equal to the total balance currently locked.
+	/// For each account currently vesting:
+	/// * The `per_block` amount left to be claimed is equal to the
+	/// total balance currently locked.
+	///
+	/// *`total_per_block` is the total amount left to be unlocked after the starting block.
+	/// *`total_locked` is the total amount locked.
+	///
+	/// * `one_extra` accounts for the extra block that
+	/// will be added to the vesting schedule if `per_block` is bigger than `locked`.
 	#[cfg(any(feature = "try-runtime", test))]
 	pub fn do_try_state() -> Result<(), &'static str> {
 		Vesting::<T>::iter().for_each(|(_, d)| {
 			let vesting = d.to_vec();
 			let mut total_per_block: BalanceOf<T> = Zero::zero();
-			let mut total_locked_now: BalanceOf<T> = Zero::zero();
+			let mut total_locked: BalanceOf<T> = Zero::zero();
 			for info in vesting.iter() {
 				// get the number of remaining vesting blocks<>balance
-				let payments_left: BalanceOf<T> =
+				let amount_left: BalanceOf<T> =
 					info.ending_block_as_balance::<T::BlockNumberToBalance>();
-				total_per_block += info.per_block().saturating_mul(payments_left);
-				total_locked_now += info
+				total_per_block += info.per_block().saturating_mul(amount_left);
+				// get the total block<>balance still locked.
+				total_locked += info
 					.locked_at::<T::BlockNumberToBalance>(<frame_system::Pallet<T>>::block_number());
 			}
-			let one_extra = total_per_block.saturating_sub(total_locked_now);
-			assert_eq!(total_per_block, total_locked_now.saturating_add(one_extra));
+			let one_extra = total_per_block.saturating_sub(total_locked);
+			assert_eq!(total_per_block, total_locked.saturating_add(one_extra));
 		});
 		Ok(())
 	}
@@ -722,13 +730,13 @@ where
 		starting_block: T::BlockNumber,
 	) -> DispatchResult {
 		if locked.is_zero() {
-			return Ok(())
+			return Ok(());
 		}
 
 		let vesting_schedule = VestingInfo::new(locked, per_block, starting_block);
 		// Check for `per_block` or `locked` of 0.
 		if !vesting_schedule.is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into())
+			return Err(Error::<T>::InvalidScheduleParams.into());
 		};
 
 		let mut schedules = Self::vesting(who).unwrap_or_default();
@@ -756,7 +764,7 @@ where
 	) -> DispatchResult {
 		// Check for `per_block` or `locked` of 0.
 		if !VestingInfo::new(locked, per_block, starting_block).is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into())
+			return Err(Error::<T>::InvalidScheduleParams.into());
 		}
 
 		ensure!(

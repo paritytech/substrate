@@ -253,8 +253,8 @@ pub mod pallet {
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
 			ensure!(!Tips::<T, I>::contains_key(&hash), Error::<T, I>::AlreadyKnown);
 
-			let deposit = T::TipReportDepositBase::get() +
-				T::DataDepositPerByte::get() * (reason.len() as u32).into();
+			let deposit = T::TipReportDepositBase::get()
+				+ T::DataDepositPerByte::get() * (reason.len() as u32).into();
 			T::Currency::reserve(&finder, deposit)?;
 
 			Reasons::<T, I>::insert(&reason_hash, &reason);
@@ -508,9 +508,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Some(m) => {
 					member = members_iter.next();
 					if m < a {
-						continue
+						continue;
 					} else {
-						break true
+						break true;
 					}
 				},
 			}
@@ -613,12 +613,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// ## Invariants:
 	///
-	/// * `Reasons` and `Tips` must have the same length of keys
+	/// * There should be a corresponding `OpenTip.reason` for each key in `Reasons`.
 	#[cfg(any(feature = "try-runtime", test))]
 	pub fn do_try_state() -> Result<(), &'static str> {
 		let reasons = Reasons::<T, I>::iter_keys().collect::<Vec<_>>();
 		let tips = Tips::<T, I>::iter_keys().collect::<Vec<_>>();
-		assert_eq!(reasons.len(), tips.len());
+
+		for reason in reasons {
+			for tip in &tips {
+				assert_eq!(reason, Tips::<T, I>::get(tip).unwrap().reason);
+			}
+		}
 		Ok(())
 	}
 }
