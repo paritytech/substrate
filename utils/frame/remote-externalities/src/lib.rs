@@ -423,7 +423,7 @@ where
 	/// use std::sync::Arc;
 	///
 	/// async fn example() {
-	///     let client = Arc::new(HttpClient::new());
+	///     let client = HttpClient::new();
 	///     let payloads = vec![
 	///         ("some_method".to_string(), ArrayParams::new(vec![])),
 	///         ("another_method".to_string(), ArrayParams::new(vec![])),
