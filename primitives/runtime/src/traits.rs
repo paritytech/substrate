@@ -826,7 +826,7 @@ sp_core::impl_maybe_marker!(
 	trait MaybeHash: sp_std::hash::Hash;
 );
 
-sp_core::impl_maybe_marker_serde_full!(
+sp_core::impl_maybe_marker_serde!(
 	/// A type that implements Serialize when in std environment or serde feature is activated.
 	trait MaybeSerialize: Serialize;
 

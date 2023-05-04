@@ -397,7 +397,7 @@ macro_rules! impl_maybe_marker {
 /// # Example
 ///
 /// ```
-/// sp_core::impl_maybe_marker_serde_full! {
+/// sp_core::impl_maybe_marker_serde! {
 ///     /// A marker for a type that implements `Debug` when `feature = serde` or `feature = std`.
 ///     trait MaybeDebug: std::fmt::Debug;
 ///     /// A marker for a type that implements `Debug + Display` when `feature = serde` or `feature = std`.
@@ -405,7 +405,7 @@ macro_rules! impl_maybe_marker {
 /// }
 /// ```
 #[macro_export]
-macro_rules! impl_maybe_marker_serde_full {
+macro_rules! impl_maybe_marker_serde {
 	(
 		$(
 			$(#[$doc:meta] )+
@@ -479,7 +479,7 @@ macro_rules! generate_feature_enabled_macro {
 			}
 
 			// Work around for: <https://github.com/rust-lang/rust/pull/52234>
-			#[doc(hidden)] 
+			#[doc(hidden)]
 			pub use [<_ $macro_name>] as $macro_name;
 		}
 	};
