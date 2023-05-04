@@ -312,8 +312,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Creates an account for `who` to hold asset `id` with a zero balance and takes a deposit.
 	///
-	/// When `check_depositor` is set to false, the depositor can be anyone, but if set to true,
-	/// the depositor must be either the asset's Admin or Freezer.
+	/// When `check_depositor` is set to true, the depositor must be either the asset's Admin or
+	/// Freezer, otherwise the depositor can be any account.
 	pub(super) fn do_touch(
 		id: T::AssetId,
 		who: T::AccountId,
