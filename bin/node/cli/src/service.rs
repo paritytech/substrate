@@ -35,6 +35,7 @@ use sc_network::{event::Event, NetworkEventStream, NetworkService};
 use sc_network_common::sync::warp::WarpSyncParams;
 use sc_network_sync::SyncingService;
 use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
+use sc_statement_store::Store as StatementStore;
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
@@ -148,6 +149,7 @@ pub fn new_partial(
 			),
 			grandpa::SharedVoterState,
 			Option<Telemetry>,
+			Arc<StatementStore>,
 		),
 	>,
 	ServiceError,
@@ -227,6 +229,15 @@ pub fn new_partial(
 
 	let import_setup = (block_import, grandpa_link, babe_link);
 
+	let statement_store = sc_statement_store::Store::new_shared(
+		&config.data_path,
+		Default::default(),
+		client.clone(),
+		config.prometheus_registry(),
+		&task_manager.spawn_handle(),
+	)
+	.map_err(|e| ServiceError::Other(format!("Statement store error: {:?}", e)))?;
+
 	let (rpc_extensions_builder, rpc_setup) = {
 		let (_, grandpa_link, _) = &import_setup;
 
@@ -247,6 +258,7 @@ pub fn new_partial(
 		let chain_spec = config.chain_spec.cloned_box();
 
 		let rpc_backend = backend.clone();
+		let rpc_statement_store = statement_store.clone();
 		let rpc_extensions_builder = move |deny_unsafe, subscription_executor| {
 			let deps = node_rpc::FullDeps {
 				client: client.clone(),
@@ -265,6 +277,7 @@ pub fn new_partial(
 					subscription_executor,
 					finality_provider: finality_proof_provider.clone(),
 				},
+				statement_store: rpc_statement_store.clone(),
 			};
 
 			node_rpc::create_full(deps, rpc_backend.clone()).map_err(Into::into)
@@ -281,7 +294,7 @@ pub fn new_partial(
 		select_chain,
 		import_queue,
 		transaction_pool,
-		other: (rpc_extensions_builder, import_setup, rpc_setup, telemetry),
+		other: (rpc_extensions_builder, import_setup, rpc_setup, telemetry, statement_store),
 	})
 }
 
@@ -325,7 +338,7 @@ pub fn new_full_base(
 		keystore_container,
 		select_chain,
 		transaction_pool,
-		other: (rpc_builder, import_setup, rpc_setup, mut telemetry),
+		other: (rpc_builder, import_setup, rpc_setup, mut telemetry, statement_store),
 	} = new_partial(&config)?;
 
 	let shared_voter_state = rpc_setup;
@@ -334,6 +347,16 @@ pub fn new_full_base(
 		&client.block_hash(0).ok().flatten().expect("Genesis block exists; qed"),
 		&config.chain_spec,
 	);
+
+	let statement_handler_proto = sc_network_statement::StatementHandlerPrototype::new(
+		client
+			.block_hash(0u32.into())
+			.ok()
+			.flatten()
+			.expect("Genesis block exists; qed"),
+		config.chain_spec.fork_id(),
+	);
+	config.network.extra_sets.push(statement_handler_proto.set_config());
 
 	config
 		.network
@@ -526,7 +549,7 @@ pub fn new_full_base(
 			sync: Arc::new(sync_service.clone()),
 			telemetry: telemetry.as_ref().map(|x| x.handle()),
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
-			prometheus_registry,
+			prometheus_registry: prometheus_registry.clone(),
 			shared_voter_state,
 		};
 
@@ -538,6 +561,26 @@ pub fn new_full_base(
 			grandpa::run_grandpa_voter(grandpa_config)?,
 		);
 	}
+
+	// Spawn statement protocol worker
+	let statement_protocol_executor = {
+		let spawn_handle = task_manager.spawn_handle();
+		Box::new(move |fut| {
+			spawn_handle.spawn("network-statement-validator", Some("networking"), fut);
+		})
+	};
+	let statement_handler = statement_handler_proto.build(
+		network.clone(),
+		sync_service.clone(),
+		statement_store.clone(),
+		prometheus_registry.as_ref(),
+		statement_protocol_executor,
+	)?;
+	task_manager.spawn_handle().spawn(
+		"network-statement-handler",
+		Some("networking"),
+		statement_handler.run(),
+	);
 
 	network_starter.start_network();
 	Ok(NewFullBase {

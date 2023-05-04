@@ -16,31 +16,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Substrate RPC implementation.
-//!
-//! A core implementation of Substrate RPC interfaces.
+//! Configuration of the statement protocol
 
-#![warn(missing_docs)]
+use std::time;
 
-pub use jsonrpsee::core::{
-	id_providers::{
-		RandomIntegerIdProvider as RandomIntegerSubscriptionId,
-		RandomStringIdProvider as RandomStringSubscriptionId,
-	},
-	traits::IdProvider as RpcSubscriptionIdProvider,
-};
-pub use sc_rpc_api::DenyUnsafe;
+/// Interval at which we propagate statements;
+pub(crate) const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(1000);
 
-pub mod author;
-pub mod chain;
-pub mod dev;
-pub mod offchain;
-pub mod state;
-pub mod statement;
-pub mod system;
+/// Maximum number of known statement hashes to keep for a peer.
+pub(crate) const MAX_KNOWN_STATEMENTS: usize = 10240;
 
-#[cfg(any(test, feature = "test-helpers"))]
-pub mod testing;
+/// Maximum allowed size for a statement notification.
+pub(crate) const MAX_STATEMENT_SIZE: u64 = 256 * 1024;
 
-/// Task executor that is being used by RPC subscriptions.
-pub type SubscriptionTaskExecutor = std::sync::Arc<dyn sp_core::traits::SpawnNamed>;
+/// Maximum number of statement validation request we keep at any moment.
+pub(crate) const MAX_PENDING_STATEMENTS: usize = 8192;
