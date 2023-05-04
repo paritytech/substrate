@@ -52,15 +52,11 @@ pub struct ImportParams {
 	pub wasm_method: WasmExecutionMethod,
 
 	/// The WASM instantiation method to use.
-	///
 	/// Only has an effect when `wasm-execution` is set to `compiled`.
-	///
 	/// The copy-on-write strategies are only supported on Linux.
 	/// If the copy-on-write variant of a strategy is unsupported
 	/// the executor will fall back to the non-CoW equivalent.
-	///
 	/// The fastest (and the default) strategy available is `pooling-copy-on-write`.
-	///
 	/// The `legacy-instance-reuse` strategy is deprecated and will
 	/// be removed in the future. It should only be used in case of
 	/// issues with the default instantiation strategy.
@@ -73,7 +69,6 @@ pub struct ImportParams {
 	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// Specify the path where local WASM runtimes are stored.
-	///
 	/// These runtimes will override on-chain runtimes when the version matches.
 	#[arg(long, value_name = "PATH")]
 	pub wasm_runtime_overrides: Option<PathBuf>,
@@ -83,13 +78,11 @@ pub struct ImportParams {
 	pub execution_strategies: ExecutionStrategiesParams,
 
 	/// Specify the state cache size.
-	///
 	/// Providing `0` will disable the cache.
 	#[arg(long, value_name = "Bytes", default_value_t = 67108864)]
 	pub trie_cache_size: usize,
 
 	/// DEPRECATED
-	///
 	/// Switch to `--trie-cache-size`.
 	#[arg(long)]
 	state_cache_size: Option<usize>,
