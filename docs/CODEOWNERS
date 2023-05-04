@@ -23,9 +23,6 @@
 /.github/ @paritytech/ci
 /.gitlab-ci.yml @paritytech/ci
 
-# Sandboxing capability of Substrate Runtime
-/primitives/sandbox/ @pepyakin @koute
-
 # WASM executor, low-level client <-> WASM interface and other WASM-related code
 /client/executor/ @koute
 /client/allocator/ @koute
@@ -38,6 +35,9 @@
 /client/sysinfo/ @koute
 /client/tracing/ @koute
 
+# FRAME
+/frame/ @paritytech/frame-coders
+
 # GRANDPA, BABE, consensus stuff
 /frame/babe/ @andresilva
 /frame/grandpa/ @andresilva
@@ -48,11 +48,9 @@
 /primitives/consensus/pow/ @sorpaas
 
 # BEEFY, MMR
-/client/beefy/ @acatangiu
 /frame/beefy/ @acatangiu
 /frame/beefy-mmr/ @acatangiu
 /frame/merkle-mountain-range/ @acatangiu
-/primitives/beefy/ @acatangiu
 /primitives/merkle-mountain-range/ @acatangiu
 
 # Contracts
@@ -64,9 +62,3 @@
 /frame/nomination-pools/ @paritytech/staking-core
 /frame/elections-phragmen/ @paritytech/staking-core
 /primitives/npos-elections/ @paritytech/staking-core
-
-# Fixed point arithmetic
-/primitives/sp-arithmetic/ @kianenigma
-
-# Transaction weight stuff
-/frame/support/src/weights.rs @shawntabrizi
