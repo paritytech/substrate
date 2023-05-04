@@ -1,7 +1,6 @@
 use std::{
 	collections::HashMap,
 	fs::{self, File, OpenOptions},
-	io::{Read, Write},
 	path::{Path, PathBuf},
 	process::Command,
 };
@@ -64,19 +63,18 @@ fn find_cargo_tomls(path: &PathBuf) -> Vec<PathBuf> {
 	result
 }
 
-/// Parse the given `Cargo.toml`
+/// Parse the given `Cargo.toml`.
 fn parse_cargo_toml(file: &Path) -> CargoToml {
-	let mut content = String::new();
-	File::open(file)
-		.expect("Cargo.toml exists")
-		.read_to_string(&mut content)
-		.expect("Reads file");
-	content.parse().expect("Cargo.toml is a valid toml file")
+	fs::read_to_string(file)
+		.unwrap_or_else(|e| panic!("Failed to read `{}`: {}", file.display(), e))
+		.parse()
+		.unwrap_or_else(|e| panic!("Failed to parse `{}`: {}", file.display(), e))
 }
 
+/// Write the given `Cargo.toml` to the given path.
 fn write_cargo_toml(path: &Path, cargo_toml: CargoToml) {
-	let mut file = File::create(path).expect(&format!("Creates `{}`.", path.display()));
-	write!(file, "{}", cargo_toml).expect("Writes `Cargo.toml`");
+	fs::write(path, cargo_toml.to_string())
+		.unwrap_or_else(|e| panic!("Failed to write `{}`: {}", path.display(), e));
 }
 
 /// Gets the latest commit id of the repository given by `path`.
@@ -141,48 +139,6 @@ fn update_git_dependencies<F: Copy + Fn(&str) -> bool>(
 		.collect()
 }
 
-#[test]
-fn test_update_git_dependencies() {
-	let toml = r#"
-[dev-dependencies]
-scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-
-[dependencies]
-scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-sp-io = { version = "7.0.0", path = "../../../../primitives/io" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/system" }
-"#;
-	let mut cargo_toml = toml.parse::<CargoToml>().expect("invalid doc");
-	let actual_deps = update_git_dependencies(&mut cargo_toml, |_| true);
-
-	assert_eq!(actual_deps.len(), 3);
-	assert_eq!(actual_deps.get("dependencies").unwrap().len(), 2);
-	assert_eq!(actual_deps.get("dev-dependencies").unwrap().len(), 0);
-	assert_eq!(
-		actual_deps.get("dependencies").unwrap().get("sp-io").unwrap(),
-		&Dependency { name: "sp-io".into(), version: Some("7.0.0".into()), default_features: None }
-	);
-	assert_eq!(
-		actual_deps.get("dependencies").unwrap().get("frame-system").unwrap(),
-		&Dependency {
-			name: "frame-system".into(),
-			version: Some("4.0.0-dev".into()),
-			default_features: Some(false),
-		}
-	);
-
-	let expected_toml = r#"
-[dev-dependencies]
-scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-
-[dependencies]
-scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-sp-io = { workspace = true }
-frame-system = { workspace = true }
-"#;
-	assert_eq!(cargo_toml.to_string(), expected_toml);
-}
-
 /// Processes all `Cargo.toml` files, aggregates dependencies and saves the changes.
 fn process_cargo_tomls(cargo_tomls: &Vec<PathBuf>) -> Dependencies {
 	/// Merge dependencies from one collection in another.
@@ -244,55 +200,6 @@ fn update_root_cargo_toml(
 	let mut profile = Table::new();
 	profile.insert("release", Item::Table(panic_unwind));
 	cargo_toml.insert("profile", Item::Table(profile.into()));
-}
-
-#[test]
-fn test_update_root_cargo_toml() {
-	let mut cargo_toml = CargoToml::new();
-	update_root_cargo_toml(
-		&mut cargo_toml,
-		&vec!["node".into(), "pallets/template".into(), "runtime".into()],
-		Dependencies::from([
-			(
-				"dependencies".into(),
-				HashMap::from([
-					(
-						"sp-io".into(),
-						Dependency {
-							name: "sp-io".into(),
-							version: Some("7.0.0".into()),
-							default_features: None,
-						},
-					),
-					(
-						"frame-system".into(),
-						Dependency {
-							name: "frame-system".into(),
-							version: Some("4.0.0-dev".into()),
-							default_features: Some(true),
-						},
-					),
-				]),
-			),
-			("dev-dependencies".into(), HashMap::new()),
-			("build-dependencies".into(), HashMap::new()),
-		]),
-		"commit_id",
-	);
-
-	let expected_toml = r#"[workspace]
-members = ["node", "pallets/template", "runtime"]
-
-[workspace.dependencies]
-frame-system = { version = "4.0.0-dev", default-features = true, git = "https://github.com/paritytech/substrate.git", rev = "commit_id" }
-sp-io = { version = "7.0.0", git = "https://github.com/paritytech/substrate.git", rev = "commit_id" }
-
-[profile]
-
-[profile.release]
-panic = "unwind"
-"#;
-	assert_eq!(cargo_toml.to_string(), expected_toml);
 }
 
 fn process_root_cargo_toml(
@@ -412,4 +319,104 @@ fn main() {
 	let mut tar = tar::Builder::new(output);
 	tar.append_dir_all("substrate-node-template", node_template_path)
 		.expect("Writes substrate-node-template archive");
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_update_git_dependencies() {
+		let toml = r#"
+[dev-dependencies]
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+
+[dependencies]
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+sp-io = { version = "7.0.0", path = "../../../../primitives/io" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/system" }
+"#;
+		let mut cargo_toml = toml.parse::<CargoToml>().expect("invalid doc");
+		let actual_deps = update_git_dependencies(&mut cargo_toml, |_| true);
+
+		assert_eq!(actual_deps.len(), 3);
+		assert_eq!(actual_deps.get("dependencies").unwrap().len(), 2);
+		assert_eq!(actual_deps.get("dev-dependencies").unwrap().len(), 0);
+		assert_eq!(
+			actual_deps.get("dependencies").unwrap().get("sp-io").unwrap(),
+			&Dependency {
+				name: "sp-io".into(),
+				version: Some("7.0.0".into()),
+				default_features: None
+			}
+		);
+		assert_eq!(
+			actual_deps.get("dependencies").unwrap().get("frame-system").unwrap(),
+			&Dependency {
+				name: "frame-system".into(),
+				version: Some("4.0.0-dev".into()),
+				default_features: Some(false),
+			}
+		);
+
+		let expected_toml = r#"
+[dev-dependencies]
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+
+[dependencies]
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+sp-io = { workspace = true }
+frame-system = { workspace = true }
+"#;
+		assert_eq!(cargo_toml.to_string(), expected_toml);
+	}
+
+	#[test]
+	fn test_update_root_cargo_toml() {
+		let mut cargo_toml = CargoToml::new();
+		update_root_cargo_toml(
+			&mut cargo_toml,
+			&vec!["node".into(), "pallets/template".into(), "runtime".into()],
+			Dependencies::from([
+				(
+					"dependencies".into(),
+					HashMap::from([
+						(
+							"sp-io".into(),
+							Dependency {
+								name: "sp-io".into(),
+								version: Some("7.0.0".into()),
+								default_features: None,
+							},
+						),
+						(
+							"frame-system".into(),
+							Dependency {
+								name: "frame-system".into(),
+								version: Some("4.0.0-dev".into()),
+								default_features: Some(true),
+							},
+						),
+					]),
+				),
+				("dev-dependencies".into(), HashMap::new()),
+				("build-dependencies".into(), HashMap::new()),
+			]),
+			"commit_id",
+		);
+
+		let expected_toml = r#"[workspace]
+members = ["node", "pallets/template", "runtime"]
+
+[workspace.dependencies]
+frame-system = { version = "4.0.0-dev", default-features = true, git = "https://github.com/paritytech/substrate.git", rev = "commit_id" }
+sp-io = { version = "7.0.0", git = "https://github.com/paritytech/substrate.git", rev = "commit_id" }
+
+[profile]
+
+[profile.release]
+panic = "unwind"
+"#;
+		assert_eq!(cargo_toml.to_string(), expected_toml);
+	}
 }
