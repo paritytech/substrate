@@ -68,6 +68,9 @@ pub fn add_slashing_spans<T: Config>(who: &T::AccountId, spans: u32) {
 // This function clears all existing validators and nominators from the set, and generates one new
 // validator being nominated by n nominators, and returns the validator stash account and the
 // nominators' stash and controller. It also starts an era and creates pending payouts.
+//
+// TODO: duplicate the creation functions used here and replace them to have the unique controller
+// scenario.
 pub fn create_validator_with_nominators<T: Config>(
 	n: u32,
 	upper_bound: u32,
