@@ -369,7 +369,7 @@ impl<T: Config> SignedDepositBase<BalanceOf<T>> for GeometricDepositBase<T> {
 	/// submissions.
 	///
 	/// The nth term is obtained by calculating `base * (1 + increase_factor)^nth`. Example: factor
-	/// 5, with initial deposit of 1000 and 10% of increase factor is 1000 * (1 + 1.1)^5.
+	/// 5, with initial deposit of 1000 and 10% of increase factor is 1000 * (1 + 0.1)^5.
 	fn calculate(queue_len: usize) -> BalanceOf<T> {
 		let increase_factor: FixedU128 =
 			<Percent as Into<FixedU128>>::into(Self::IncreaseFactor::get()) +
