@@ -29,4 +29,5 @@ rustflags = [
   "-Aclippy::needless_option_as_deref",  # false positives
   "-Aclippy::derivable_impls",           # false positives
   "-Aclippy::stable_sort_primitive",     # prefer stable sort
+  "-Aclippy::extra-unused-type-parameters" # stylistic
 ]
