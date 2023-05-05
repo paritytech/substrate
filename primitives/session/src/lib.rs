@@ -147,6 +147,10 @@ impl SessionChangeListener for Tuple {
 	}
 }
 
+impl SessionChangeListener for () {
+	fn on_session_change(session_index: SessionIndex) {}
+}
+
 pub trait SessionInfoProvider {
 	fn current_session_index() -> SessionIndex;
 }
