@@ -129,7 +129,7 @@ pub mod v2 {
 					Some(old_value.migrate_from_v1_to_v2())
 				});
 				current_version.put::<Pallet<T>>();
-				log::info!(target: "runtime::assets", "Upgraded {} pools, storage to version {:?}", translated, current_version);
+				log::info!(target: "runtime::assets", "Upgraded {} asset classes, storage to version {:?}", translated, current_version);
 				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
 			} else {
 				log::info!(target: "runtime::assets",  "Migration did not execute. This probably should be removed");
