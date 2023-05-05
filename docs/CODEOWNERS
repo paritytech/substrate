@@ -38,6 +38,8 @@
 # FRAME
 /frame/ @paritytech/frame-coders
 /frame/state-trie-migration/ @paritytech/frame-coders @cheme
+/frame/nfts/ @jsidorenko
+/frame/uniques/ @jsidorenko
 
 # GRANDPA, BABE, consensus stuff
 /client/consensus/babe/ @andresilva
