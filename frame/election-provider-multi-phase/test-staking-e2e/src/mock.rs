@@ -155,6 +155,7 @@ impl pallet_session::Config for Runtime {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Runtime>;
 	type WeightInfo = ();
+	type SessionChangeListener = ();
 }
 impl pallet_session::historical::Config for Runtime {
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;

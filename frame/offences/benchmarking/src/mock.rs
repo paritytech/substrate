@@ -128,6 +128,7 @@ impl pallet_session::Config for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type WeightInfo = ();
+	type SessionChangeListener = ();
 }
 
 pallet_staking_reward_curve::build! {
@@ -204,6 +205,7 @@ impl pallet_offences::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
+	type SessionInfoProvider = Session;
 }
 
 impl<T> frame_system::offchain::SendTransactionTypes<T> for Test

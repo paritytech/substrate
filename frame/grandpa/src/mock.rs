@@ -120,6 +120,7 @@ impl pallet_session::Config for Test {
 	type SessionHandler = <TestSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = TestSessionKeys;
 	type WeightInfo = ();
+	type SessionChangeListener = ();
 }
 
 impl pallet_session::historical::Config for Test {
@@ -218,6 +219,7 @@ impl pallet_offences::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
+	type SessionInfoProvider = Session;
 }
 
 parameter_types! {

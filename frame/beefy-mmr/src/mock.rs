@@ -99,6 +99,7 @@ impl pallet_session::Config for Test {
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;
 	type WeightInfo = ();
+	type SessionChangeListener = ();
 }
 
 pub type MmrLeaf = sp_consensus_beefy::mmr::MmrLeaf<
