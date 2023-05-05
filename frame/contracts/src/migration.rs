@@ -50,6 +50,7 @@ pub enum IsFinished {
 }
 
 /// A trait that allows to migrate storage from one version to another.
+///
 /// The migration is done in steps. The migration is finished when
 /// `step()` returns `IsFinished::Yes`.
 pub trait Migrate: Codec + MaxEncodedLen + Default {
@@ -60,6 +61,7 @@ pub trait Migrate: Codec + MaxEncodedLen + Default {
 	fn max_step_weight() -> Weight;
 
 	/// Process one step of the migration.
+	///
 	/// Returns whether the migration is finished and the weight consumed.
 	fn step(&mut self) -> (IsFinished, Weight);
 }
@@ -87,6 +89,7 @@ mod private {
 }
 
 /// Defines a sequence of migrations.
+///
 /// The sequence must be defined by a tuple of migrations, each of which must implement the
 /// `Migrate` trait. Migrations must be ordered by their versions with no gaps.
 pub trait MigrateSequence: private::Sealed {
@@ -110,6 +113,7 @@ pub trait MigrateSequence: private::Sealed {
 	fn new(version: StorageVersion) -> Cursor;
 
 	/// Execute the migration step until the weight limit is reached.
+	///
 	/// Returns the new cursor or `None` if the migration is finished.
 	fn steps(version: StorageVersion, cursor: &[u8], weight_left: &mut Weight) -> Option<Cursor>;
 
@@ -117,6 +121,7 @@ pub trait MigrateSequence: private::Sealed {
 	fn integrity_test();
 
 	/// Returns whether migrating from `in_storage` to `target` is supported.
+	///
 	/// A migration is supported if (in_storage + 1, target) is contained by `VERSION_RANGE`.
 	fn is_upgrade_supported(in_storage: StorageVersion, target: StorageVersion) -> bool {
 		if in_storage == target {
