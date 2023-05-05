@@ -222,7 +222,8 @@ impl<T: Config> PrefabWasmModule<T> {
 			.wasm_mutable_global(false)
 			.wasm_sign_extension(false)
 			.wasm_saturating_float_to_int(false)
-			.consume_fuel(true);
+			.consume_fuel(true)
+			.fuel_consumption_mode(FuelConsumptionMode::Eager);
 
 		let engine = Engine::new(&config);
 		let module = Module::new(&engine, code)?;
