@@ -312,7 +312,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
-	#[cfg(feature = "std")]
+	#[cfg(feature = "serde")]
 	fn from_string(s: &str) -> Result<Self, PublicError> {
 		Self::from_string_with_version(s).and_then(|(r, v)| match v {
 			v if !v.is_custom() => Ok(r),
@@ -352,7 +352,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
-	#[cfg(feature = "std")]
+	#[cfg(feature = "serde")]
 	fn from_string_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
 		Self::from_ss58check_with_version(s)
 	}
@@ -459,10 +459,20 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Public + Derive> Ss58Codec for T {
 	}
 }
 
-// Use the default implementations of the trait in serde feature.
-// The std implementation is not available because of std only crate Regex.
+// No_std implementation of `from_string` functions.
+// The std version is not available due to std only crate Regex.
 #[cfg(all(not(feature = "std"), feature = "serde"))]
-impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Public + Derive> Ss58Codec for T {}
+impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Public + Derive> Ss58Codec for T {
+	fn from_string(s: &str) -> Result<Self, PublicError> {
+		//FXIME: Needed for #13334, but it needs a regex alternative.
+		unimplemented!()
+	}
+
+	fn from_string_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
+		//FXIME: Needed for #13334, but it needs a regex alternative.
+		unimplemented!()
+	}
+}
 
 /// Trait used for types that are really just a fixed-length array.
 pub trait ByteArray: AsRef<[u8]> + AsMut<[u8]> + for<'a> TryFrom<&'a [u8], Error = ()> {
