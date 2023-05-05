@@ -65,7 +65,7 @@ pub struct RunCmd {
 	/// RPC methods to expose.
 	/// - `unsafe`: Exposes every RPC method.
 	/// - `safe`: Exposes only a safe subset of RPC methods, denying unsafe RPC methods.
-	/// - `auto`: Acts as `safe` if RPC is served externally, e.g. when `--{rpc,ws}-external` is
+	/// - `auto`: Acts as `safe` if RPC is served externally, e.g. when `--rpc--external` is
 	///   passed, otherwise acts as `unsafe`.
 	#[arg(
 		long,
@@ -77,58 +77,25 @@ pub struct RunCmd {
 	)]
 	pub rpc_methods: RpcMethods,
 
-	/// Listen to all Websocket interfaces.
-	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
-	/// proxy server to filter out dangerous methods. More details:
-	/// <https://docs.substrate.io/main-docs/build/custom-rpc/#public-rpcs>.
-	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
-	#[arg(long)]
-	pub ws_external: bool,
-
-	/// Listen to all Websocket interfaces.
-	/// Same as `--ws-external` but doesn't warn you about it.
-	#[arg(long)]
-	pub unsafe_ws_external: bool,
-
-	/// DEPRECATED, this has no affect anymore. Use `rpc_max_request_size` or
-	/// `rpc_max_response_size` instead.
-	#[arg(long)]
-	pub rpc_max_payload: Option<usize>,
-
 	/// Set the the maximum RPC request payload size for both HTTP and WS in megabytes.
-	/// Default is 15MiB.
-	#[arg(long)]
-	pub rpc_max_request_size: Option<usize>,
+	#[arg(long, default_value_t = 15)]
+	pub rpc_max_request_size: u32,
 
 	/// Set the the maximum RPC response payload size for both HTTP and WS in megabytes.
-	/// Default is 15MiB.
-	#[arg(long)]
-	pub rpc_max_response_size: Option<usize>,
+	#[arg(long, default_value_t = 15)]
+	pub rpc_max_response_size: u32,
 
 	/// Set the the maximum concurrent subscriptions per connection.
-	/// Default is 1024.
-	#[arg(long)]
-	pub rpc_max_subscriptions_per_connection: Option<usize>,
+	#[arg(long, default_value_t = 1024)]
+	pub rpc_max_subscriptions_per_connection: u32,
 
-	/// DEPRECATED, IPC support has been removed.
-	#[arg(long, value_name = "PATH")]
-	pub ipc_path: Option<String>,
+	/// Specify JSON-RPC server TCP port.
+	#[arg(long, value_name = "PORT", default_value_t = 9944)]
+	pub rpc_port: u16,
 
-	/// Specify HTTP RPC server TCP port.
-	#[arg(long, value_name = "PORT")]
-	pub rpc_port: Option<u16>,
-
-	/// Specify WebSockets RPC server TCP port.
-	#[arg(long, value_name = "PORT")]
-	pub ws_port: Option<u16>,
-
-	/// Maximum number of WS RPC server connections.
-	#[arg(long, value_name = "COUNT")]
-	pub ws_max_connections: Option<usize>,
-
-	/// DEPRECATED, this has no affect anymore. Use `rpc_max_response_size` instead.
-	#[arg(long)]
-	pub ws_max_out_buffer_capacity: Option<usize>,
+	/// Maximum number of RPC server connections.
+	#[arg(long, value_name = "COUNT", default_value_t = 100)]
+	pub rpc_max_connections: u32,
 
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
 	/// A comma-separated list of origins (protocol://domain or special `null`
@@ -344,8 +311,8 @@ impl CliConfiguration for RunCmd {
 		Ok(self.no_grandpa)
 	}
 
-	fn rpc_ws_max_connections(&self) -> Result<Option<usize>> {
-		Ok(self.ws_max_connections)
+	fn rpc_max_connections(&self) -> Result<u32> {
+		Ok(self.rpc_max_connections)
 	}
 
 	fn rpc_cors(&self, is_dev: bool) -> Result<Option<Vec<String>>> {
@@ -369,7 +336,7 @@ impl CliConfiguration for RunCmd {
 			.into())
 	}
 
-	fn rpc_http(&self, default_listen_port: u16) -> Result<Option<SocketAddr>> {
+	fn rpc_addr(&self, _default_listen_port: u16) -> Result<Option<SocketAddr>> {
 		let interface = rpc_interface(
 			self.rpc_external,
 			self.unsafe_rpc_external,
@@ -377,46 +344,23 @@ impl CliConfiguration for RunCmd {
 			self.validator,
 		)?;
 
-		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(default_listen_port))))
-	}
-
-	fn rpc_ipc(&self) -> Result<Option<String>> {
-		Ok(self.ipc_path.clone())
-	}
-
-	fn rpc_ws(&self, default_listen_port: u16) -> Result<Option<SocketAddr>> {
-		let interface = rpc_interface(
-			self.ws_external,
-			self.unsafe_ws_external,
-			self.rpc_methods,
-			self.validator,
-		)?;
-
-		Ok(Some(SocketAddr::new(interface, self.ws_port.unwrap_or(default_listen_port))))
+		Ok(Some(SocketAddr::new(interface, self.rpc_port)))
 	}
 
 	fn rpc_methods(&self) -> Result<sc_service::config::RpcMethods> {
 		Ok(self.rpc_methods.into())
 	}
 
-	fn rpc_max_payload(&self) -> Result<Option<usize>> {
-		Ok(self.rpc_max_payload)
-	}
-
-	fn rpc_max_request_size(&self) -> Result<Option<usize>> {
+	fn rpc_max_request_size(&self) -> Result<u32> {
 		Ok(self.rpc_max_request_size)
 	}
 
-	fn rpc_max_response_size(&self) -> Result<Option<usize>> {
+	fn rpc_max_response_size(&self) -> Result<u32> {
 		Ok(self.rpc_max_response_size)
 	}
 
-	fn rpc_max_subscriptions_per_connection(&self) -> Result<Option<usize>> {
+	fn rpc_max_subscriptions_per_connection(&self) -> Result<u32> {
 		Ok(self.rpc_max_subscriptions_per_connection)
-	}
-
-	fn ws_max_out_buffer_capacity(&self) -> Result<Option<usize>> {
-		Ok(self.ws_max_out_buffer_capacity)
 	}
 
 	fn transaction_pool(&self, is_dev: bool) -> Result<TransactionPoolOptions> {
@@ -475,7 +419,7 @@ fn rpc_interface(
 ) -> Result<IpAddr> {
 	if is_external && is_validator && rpc_methods != RpcMethods::Unsafe {
 		return Err(Error::Input(
-			"--rpc-external and --ws-external options shouldn't be used if the node is running as \
+			"--rpc-external option shouldn't be used if the node is running as \
 			 a validator. Use `--unsafe-rpc-external` or `--rpc-methods=unsafe` if you understand \
 			 the risks. See the options description for more information."
 				.to_owned(),

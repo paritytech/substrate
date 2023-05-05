@@ -39,14 +39,22 @@ fn calling_runtime_function() {
 }
 
 #[test]
-fn calling_runtime_signature_changed_old_function() {
+fn calling_native_runtime_function() {
+	calling_function_with_strat(ExecutionStrategy::NativeWhenPossible);
+}
+
+#[test]
+fn calling_wasm_runtime_function() {
+	calling_function_with_strat(ExecutionStrategy::AlwaysWasm);
+}
+
+#[test]
+fn calling_native_runtime_signature_changed_function() {
 	let client = TestClientBuilder::new().build();
 	let runtime_api = client.runtime_api();
 	let best_hash = client.chain_info().best_hash;
 
-	#[allow(deprecated)]
-	let res = runtime_api.function_signature_changed_before_version_2(best_hash).unwrap();
-	assert_eq!(&res, &[1, 2]);
+	assert_eq!(runtime_api.function_signature_changed(best_hash).unwrap(), 1);
 }
 
 #[test]
@@ -98,7 +106,7 @@ fn record_proof_works() {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Bob.into(),
 	}
-	.into_signed_tx();
+	.into_unchecked_extrinsic();
 
 	// Build the block and record proof
 	let mut builder = client

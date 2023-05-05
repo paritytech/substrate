@@ -82,6 +82,57 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		proc_macro2::TokenStream::new()
 	};
 
+	// If a storage version is set, we should ensure that the storage version on chain matches the
+	// current storage version. This assumes that `Executive` is running custom migrations before
+	// the pallets are called.
+	let post_storage_version_check = if def.pallet_struct.storage_version.is_some() {
+		quote::quote! {
+			let on_chain_version = <Self as #frame_support::traits::GetStorageVersion>::on_chain_storage_version();
+			let current_version = <Self as #frame_support::traits::GetStorageVersion>::current_storage_version();
+
+			if on_chain_version != current_version {
+				let pallet_name = <
+					<T as #frame_system::Config>::PalletInfo
+					as
+					#frame_support::traits::PalletInfo
+				>::name::<Self>().unwrap_or("<unknown pallet name>");
+
+				#frame_support::log::error!(
+					target: #frame_support::LOG_TARGET,
+					"{}: On chain storage version {:?} doesn't match current storage version {:?}.",
+					pallet_name,
+					on_chain_version,
+					current_version,
+				);
+
+				return Err("On chain and current storage version do not match. Missing runtime upgrade?");
+			}
+		}
+	} else {
+		quote::quote! {
+			let on_chain_version = <Self as #frame_support::traits::GetStorageVersion>::on_chain_storage_version();
+
+			if on_chain_version != #frame_support::traits::StorageVersion::new(0) {
+				let pallet_name = <
+					<T as #frame_system::Config>::PalletInfo
+					as
+					#frame_support::traits::PalletInfo
+				>::name::<Self>().unwrap_or("<unknown pallet name>");
+
+				#frame_support::log::error!(
+					target: #frame_support::LOG_TARGET,
+					"{}: On chain storage version {:?} is set to non zero,\
+					 while the pallet is missing the `#[pallet::storage_version(VERSION)]` attribute.",
+					pallet_name,
+					on_chain_version,
+				);
+
+				return Err("On chain storage version set, while the pallet doesn't \
+							have the `#[pallet::storage_version(VERSION)]` attribute.");
+			}
+		}
+	};
+
 	quote::quote_spanned!(span =>
 		#hooks_impl
 
@@ -170,6 +221,8 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 
 			#[cfg(feature = "try-runtime")]
 			fn post_upgrade(state: #frame_support::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+				#post_storage_version_check
+
 				<
 					Self
 					as

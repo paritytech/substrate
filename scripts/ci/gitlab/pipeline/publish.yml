@@ -254,8 +254,8 @@ publish-crates-manual:
 check-crate-publishing:
   stage: publish
   extends:
-    - .test-refs
     - .crates-publishing-template
+    - .crates-publishing-pipeline
   # When lots of crates are taken into account (for example on master where all crates are tested)
   # the job might take a long time, as evidenced by:
   # https://gitlab.parity.io/parity/mirrors/substrate/-/jobs/2269364

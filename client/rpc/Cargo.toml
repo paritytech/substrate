@@ -35,6 +35,7 @@ sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
 sp-version = { version = "5.0.0", path = "../../primitives/version" }
+sp-statement-store = { version = "4.0.0-dev", path = "../../primitives/statement-store" }
 
 tokio = "1.22.0"
 
