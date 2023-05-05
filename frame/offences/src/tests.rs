@@ -32,7 +32,7 @@ fn should_report_an_authority_and_trigger_on_offence() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		let session_index = 1;
+		let session_index = 10;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
@@ -52,7 +52,7 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		let session_index = 1;
+		let session_index = 10;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
@@ -74,11 +74,28 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 }
 
 #[test]
+fn should_not_report_an_obsolete_offence() {
+	new_test_ext().execute_with(|| {
+		// given
+		let time_slot = 42;
+		let session_index = 3;
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+
+		let offence = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
+		assert_eq!(Offences::report_offence(vec![], offence), Err(OffenceError::ObsoleteReport));
+
+		with_on_offence_fractions(|f| {
+			assert_eq!(f.clone(), vec![]);
+		});
+	});
+}
+
+#[test]
 fn should_report_in_different_time_slot() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		let session_index = 1;
+		let session_index = 10;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let mut offence = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
@@ -105,7 +122,7 @@ fn should_deposit_event() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		let session_index = 1;
+		let session_index = 10;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
@@ -133,7 +150,7 @@ fn doesnt_deposit_event_for_dups() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		let session_index = 1;
+		let session_index = 10;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
@@ -167,7 +184,7 @@ fn doesnt_deposit_event_for_dups() {
 fn reports_if_an_offence_is_dup() {
 	new_test_ext().execute_with(|| {
 		let time_slot = 42;
-		let session_index = 1;
+		let session_index = 10;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence =
@@ -226,7 +243,7 @@ fn should_properly_count_offences() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		let session_index = 1;
+		let session_index = 10;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence1 = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
@@ -260,7 +277,7 @@ fn should_properly_sort_offences() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		let session_index = 31;
+		let session_index = 10;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence1 = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
@@ -319,7 +336,7 @@ fn should_properly_clear_obsolete_offences() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
-		let session_index = 31;
+		let session_index = 10;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence1 = Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };

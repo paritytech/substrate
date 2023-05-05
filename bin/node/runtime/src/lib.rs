@@ -1340,6 +1340,7 @@ impl pallet_offences::Config for Runtime {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type MaxSessionReportAge = MaxSessionReportAge;
+	type SessionInfoProvider = Session;
 }
 
 impl pallet_authority_discovery::Config for Runtime {

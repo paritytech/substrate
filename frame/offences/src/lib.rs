@@ -36,7 +36,7 @@ use sp_staking::{
 	offence::{Kind, Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
 	SessionIndex, EraIndex
 };
-use sp_session::SessionChangeListener;
+use sp_session::{SessionChangeListener, SessionInfoProvider};
 use sp_std::prelude::*;
 use core::marker::PhantomData;
 
@@ -74,6 +74,8 @@ pub mod pallet {
 		
 		#[pallet::constant]
 		type MaxSessionReportAge: Get<EraIndex>;
+
+		type SessionInfoProvider: SessionInfoProvider;
 	}
 
 	/// The primary structure that holds all offence records keyed by report identifiers.
@@ -156,7 +158,14 @@ where
 	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
 		let offenders = offence.offenders();
 		let time_slot = offence.time_slot();
+
 		let session_index = offence.session_index();
+		let current_session_index = T::SessionInfoProvider::current_session_index();
+
+		if current_session_index > T::MaxSessionReportAge::get()
+			&& session_index < current_session_index - T::MaxSessionReportAge::get() {
+			return Err(OffenceError::ObsoleteReport);
+		}
 
 		// Go through all offenders in the offence report and find all offenders that were spotted
 		// in unique reports.

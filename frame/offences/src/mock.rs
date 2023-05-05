@@ -66,6 +66,13 @@ pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> 
 	OnOffencePerbill::mutate(|fractions| f(fractions))
 }
 
+pub struct SessionInfoProvider;
+impl sp_session::SessionInfoProvider for SessionInfoProvider {
+	fn current_session_index() -> SessionIndex {
+		10
+	}
+}
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
@@ -112,6 +119,7 @@ impl Config for Runtime {
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
 	type MaxSessionReportAge = ConstU32<6>;
+	type SessionInfoProvider = SessionInfoProvider;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

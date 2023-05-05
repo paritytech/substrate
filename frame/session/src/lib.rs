@@ -136,7 +136,7 @@ use sp_std::{
 	ops::{Rem, Sub},
 	prelude::*,
 };
-use sp_session::SessionChangeListener;
+use sp_session::{SessionChangeListener, SessionInfoProvider};
 
 pub use pallet::*;
 pub use weights::WeightInfo;
@@ -945,5 +945,11 @@ impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 
 		let validators = <Pallet<T>>::validators();
 		validators.get(i as usize).cloned()
+	}
+}
+
+impl<T: Config> SessionInfoProvider for Pallet<T> {
+	fn current_session_index() -> SessionIndex {
+		<CurrentIndex<T>>::get()
 	}
 }
