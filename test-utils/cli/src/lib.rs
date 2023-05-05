@@ -282,7 +282,7 @@ pub fn extract_info_from_output(read: impl Read + Send) -> (NodeInfo, String) {
 			data.push_str("\n");
 
 			// does the line contain our port (we expect this specific output from substrate).
-			let sock_addr = match line.split_once("Running JSON-RPC WS server: addr=") {
+			let sock_addr = match line.split_once("Running JSON-RPC server: addr=") {
 				None => return None,
 				Some((_, after)) => after.split_once(",").unwrap().0,
 			};

@@ -297,7 +297,7 @@ mod tests {
 	};
 	use sp_consensus::BlockOrigin;
 	use sp_runtime::codec::Encode;
-	use substrate_test_runtime::Extrinsic;
+	use substrate_test_runtime::ExtrinsicBuilder;
 	use substrate_test_runtime_client::{self, prelude::*, TestClientBuilder};
 
 	#[tokio::test]
@@ -470,7 +470,9 @@ mod tests {
 		let mut client = TestClientBuilder::with_tx_storage(u32::MAX).build();
 		let mut block_builder = client.new_block(Default::default()).unwrap();
 
-		let ext = Extrinsic::Store(vec![0x13, 0x37, 0x13, 0x38]);
+		// encoded extrinsic: [161, .. , 2, 6, 16, 19, 55, 19, 56]
+		let ext = ExtrinsicBuilder::new_indexed_call(vec![0x13, 0x37, 0x13, 0x38]).build();
+		let pattern_index = ext.encoded_size() - 4;
 
 		block_builder.push(ext.clone()).unwrap();
 		let block = block_builder.build().unwrap().block;
@@ -494,7 +496,7 @@ mod tests {
 								0x70,
 								cid::multihash::Multihash::wrap(
 									u64::from(cid::multihash::Code::Blake2b256),
-									&sp_core::hashing::blake2_256(&ext.encode()[2..]),
+									&sp_core::hashing::blake2_256(&ext.encode()[pattern_index..]),
 								)
 								.unwrap(),
 							)
