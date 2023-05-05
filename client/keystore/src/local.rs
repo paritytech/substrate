@@ -20,7 +20,7 @@
 use parking_lot::RwLock;
 use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
 use sp_core::{
-	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSigner},
+	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSecret},
 	ecdsa, ed25519, sr25519,
 };
 use sp_keystore::{Error as TraitError, Keystore, KeystorePtr};
@@ -98,18 +98,32 @@ impl LocalKeystore {
 		Ok(signature)
 	}
 
-	fn vrf_sign<T: CorePair + VrfSigner>(
+	fn vrf_sign<T: CorePair + VrfSecret>(
 		&self,
 		key_type: KeyTypeId,
 		public: &T::Public,
-		transcript: &T::VrfInput,
+		data: &T::VrfSignData,
 	) -> std::result::Result<Option<T::VrfSignature>, TraitError> {
 		let sig = self
 			.0
 			.read()
 			.key_pair_by_type::<T>(public, key_type)?
-			.map(|pair| pair.vrf_sign(transcript));
+			.map(|pair| pair.vrf_sign(data));
 		Ok(sig)
+	}
+
+	fn vrf_output<T: CorePair + VrfSecret>(
+		&self,
+		key_type: KeyTypeId,
+		public: &T::Public,
+		input: &T::VrfInput,
+	) -> std::result::Result<Option<T::VrfOutput>, TraitError> {
+		let preout = self
+			.0
+			.read()
+			.key_pair_by_type::<T>(public, key_type)?
+			.map(|pair| pair.vrf_output(input));
+		Ok(preout)
 	}
 }
 
@@ -142,9 +156,18 @@ impl Keystore for LocalKeystore {
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript: &sr25519::vrf::VrfTranscript,
+		data: &sr25519::vrf::VrfSignData,
 	) -> std::result::Result<Option<sr25519::vrf::VrfSignature>, TraitError> {
-		self.vrf_sign::<sr25519::Pair>(key_type, public, transcript)
+		self.vrf_sign::<sr25519::Pair>(key_type, public, data)
+	}
+
+	fn sr25519_vrf_output(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		input: &sr25519::vrf::VrfInput,
+	) -> std::result::Result<Option<sr25519::vrf::VrfOutput>, TraitError> {
+		self.vrf_output::<sr25519::Pair>(key_type, public, input)
 	}
 
 	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {

@@ -35,13 +35,11 @@ use std::{
 )]
 pub struct GenerateNodeKeyCmd {
 	/// Name of file to save secret key to.
-	///
 	/// If not given, the secret key is printed to stdout.
 	#[arg(long)]
 	file: Option<PathBuf>,
 
 	/// The output is in raw binary format.
-	///
 	/// If not given, the output is written as an hex encoded string.
 	#[arg(long)]
 	bin: bool,

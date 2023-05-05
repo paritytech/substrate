@@ -129,6 +129,10 @@ impl pallet_balances::Config for Runtime {
 	type HoldIdentifier = ();
 	type MaxHolds = ();
 	type WeightInfo = ();
+	type HoldIdentifier = ();
+	type FreezeIdentifier = ();
+	type MaxHolds = traits::ConstU32<1>;
+	type MaxFreezes = traits::ConstU32<1>;
 }
 
 impl pallet_timestamp::Config for Runtime {
