@@ -23,9 +23,9 @@ use frame_support::{
 	weights::Weight,
 	DefaultNoBound,
 };
+use sp_core::Get;
 use sp_runtime::traits::Zero;
 use sp_std::marker::PhantomData;
-use sp_core::Get;
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
@@ -195,7 +195,8 @@ impl<T: Config> GasMeter<T> {
 	pub fn sync_reftime(&mut self, consumed: u64) -> Result<u64, DispatchError> {
 		let ref_time = self.gas_left.ref_time_mut();
 		if !consumed.is_zero() {
-			let reftime_consumed = consumed.saturating_mul(T::Schedule::get().instruction_weights.base as u64);
+			let reftime_consumed =
+				consumed.saturating_mul(T::Schedule::get().instruction_weights.base as u64);
 			*ref_time = self
 				.gas_limit
 				.ref_time()

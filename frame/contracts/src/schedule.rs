@@ -18,7 +18,7 @@
 //! This module contains the cost schedule and supporting code that constructs a
 //! sane default schedule from a `WeightInfo` implementation.
 
-use crate::{wasm::Determinism, weights::WeightInfo, Config};
+use crate::{weights::WeightInfo, Config};
 
 use codec::{Decode, Encode};
 use frame_support::{weights::Weight, DefaultNoBound};
@@ -28,7 +28,6 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::RuntimeDebug;
 use sp_std::marker::PhantomData;
-use wasm_instrument::{gas_metering, parity_wasm::elements};
 
 /// Definition of the cost schedule and other parameterizations for the wasm vm.
 ///
@@ -424,10 +423,7 @@ impl Default for Limits {
 
 impl<T: Config> Default for InstructionWeights<T> {
 	fn default() -> Self {
-		Self {
-			base: cost_instr!(instr_i64const, 1),
-			_phantom: PhantomData,
-		}
+		Self { base: cost_instr!(instr_i64const, 1), _phantom: PhantomData }
 	}
 }
 

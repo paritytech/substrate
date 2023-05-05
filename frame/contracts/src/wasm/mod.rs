@@ -18,12 +18,8 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-mod code_cache;
 mod prepare;
 mod runtime;
-
-#[cfg(feature = "runtime-benchmarks")]
-pub use crate::wasm::code_cache::reinstrument;
 
 #[cfg(doc)]
 pub use crate::wasm::runtime::api_doc;
@@ -41,55 +37,47 @@ pub use crate::wasm::{
 
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
-	gas::GasMeter,
-	AccountIdOf, BalanceOf, CodeHash, CodeVec, Config, Error, OwnerInfoOf, RelaxedCodeVec,
-	Schedule, LOG_TARGET,
+	gas::{GasMeter, Token},
+	weights::WeightInfo,
+	AccountIdOf, BadOrigin, BalanceOf, CodeHash, CodeStorage, CodeVec, Config, Error, Event,
+	OwnerInfoOf, Pallet, Schedule, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::dispatch::{DispatchError, DispatchResult};
+use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
+	ensure,
+	traits::ReservableCurrency,
+};
 use sp_core::Get;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 use wasmi::{
-	Config as WasmiConfig, Engine, Instance, Linker, Memory, MemoryType, Module, StackLimits, Store, FuelConsumptionMode,
+	Config as WasmiConfig, Engine, FuelConsumptionMode, Instance, Linker, Memory, MemoryType,
+	Module, StackLimits, Store,
 };
 
 /// A prepared wasm module ready for execution.
 ///
 /// # Note
 ///
-/// This data structure is mostly immutable once created and stored. The exceptions that
-/// can be changed by calling a contract are `instruction_weights_version` and `code`.
-/// `instruction_weights_version` and `code` change when a contract with an outdated instrumentation
-/// is called. Therefore one must be careful when holding any in-memory representation of this
-/// type while calling into a contract as those fields can get out of date.
+/// This data structure is immutable once created and stored.
 #[derive(Clone, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
 #[codec(mel_bound())]
 #[scale_info(skip_type_params(T))]
 pub struct PrefabWasmModule<T: Config> {
-	/// Version of the instruction weights with which the code was instrumented.
-	#[codec(compact)]
-	instruction_weights_version: u32,
 	/// Initial memory size of a contract's sandbox.
 	#[codec(compact)]
 	initial: u32,
 	/// The maximum memory size of a contract's sandbox.
 	#[codec(compact)]
 	maximum: u32,
-	/// Code instrumented with the latest schedule.
-	code: RelaxedCodeVec<T>,
+	/// Module's code.
+	code: CodeVec<T>,
 	/// A code that might contain non deterministic features and is therefore never allowed
 	/// to be run on chain. Specifically this code can never be instantiated into a contract
 	/// and can just be used through a delegate call.
 	determinism: Determinism,
-	/// The uninstrumented, pristine version of the code.
-	///
-	/// It is not stored because the pristine code has its own storage item. The value
-	/// is only `Some` when this module was created from an `original_code` and `None` if
-	/// it was loaded from storage.
-	#[codec(skip)]
-	original_code: Option<CodeVec<T>>,
-	/// The code hash of the stored code which is defined as the hash over the `original_code`.
+	/// The code hash of the stored code.
 	///
 	/// As the map key there is no need to store the hash in the value, too. It is set manually
 	/// when loading the module from storage.
@@ -149,20 +137,43 @@ impl ExportedFunction {
 	}
 }
 
+/// Costs for operations that are related to code handling.
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+#[derive(Clone, Copy)]
+enum CodeToken {
+	/// Weight for loading a contract per byte.
+	Load(u32),
+}
+
+impl<T: Config> Token<T> for CodeToken {
+	fn weight(&self) -> Weight {
+		use self::CodeToken::*;
+		// In case of `Load` we already covered the general costs of
+		// calling the storage but still need to account for the actual size of the
+		// contract code. This is why we subtract `T::*::(0)`. We need to do this at this
+		// point because when charging the general weight for calling the contract we not know the
+		// size of the contract.
+		match *self {
+			Load(len) => T::WeightInfo::call_with_code_per_byte(len)
+				.saturating_sub(T::WeightInfo::call_with_code_per_byte(0)),
+		}
+	}
+}
+
 impl<T: Config> PrefabWasmModule<T> {
-	/// Create the module by checking and instrumenting `original_code`.
+	/// Create the module by checking the `code`.
 	///
 	/// This does **not** store the module. For this one need to either call [`Self::store`]
 	/// or [`<Self as Executable>::execute`][`Executable::execute`].
 	pub fn from_code(
-		original_code: Vec<u8>,
+		code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
 		determinism: Determinism,
 		try_instantiate: TryInstantiate,
 	) -> Result<Self, (DispatchError, &'static str)> {
 		let module = prepare::prepare::<runtime::Env, T>(
-			original_code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
+			code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
 			schedule,
 			owner,
 			determinism,
@@ -176,14 +187,14 @@ impl<T: Config> PrefabWasmModule<T> {
 	/// Otherwise the code is stored when [`<Self as Executable>::execute`][`Executable::execute`]
 	/// is called.
 	pub fn store(self) -> DispatchResult {
-		code_cache::store(self, false)
+		Self::store_code(self, false)
 	}
 
 	/// Remove the code from storage and refund the deposit to its owner.
 	///
 	/// Applies all necessary checks before removing the code.
 	pub fn remove(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
-		code_cache::try_remove::<T>(origin, code_hash)
+		Self::try_remove_code(origin, code_hash)
 	}
 
 	/// Returns whether there is a deposit to be paid for this module.
@@ -251,21 +262,134 @@ impl<T: Config> PrefabWasmModule<T> {
 		Ok((store, memory, instance))
 	}
 
+	/// Put the module blob in storage.
+	///
+	/// Increments the refcount of the in-storage `prefab_module` if it already exists in storage
+	/// under the specified `code_hash`.
+	fn store_code(mut module: Self, instantiated: bool) -> DispatchResult {
+		let code_hash = sp_std::mem::take(&mut module.code_hash);
+		<OwnerInfoOf<T>>::mutate(&code_hash, |owner_info| {
+			match owner_info {
+				// Instantiate existing contract.
+				//
+				// No need to update the `CodeStorage` as any re-instrumentation eagerly saves
+				// the re-instrumented code.
+				Some(owner_info) if instantiated => {
+					owner_info.refcount = owner_info.refcount.checked_add(1).expect(
+						"
+					refcount is 64bit. Generating this overflow would require to store
+					_at least_ 18 exabyte of data assuming that a contract consumes only
+					one byte of data. Any node would run out of storage space before hitting
+					this overflow.
+					qed
+				",
+					);
+					Ok(())
+				},
+				// Re-upload existing contract without executing it.
+				//
+				// We are careful here to just overwrite the code to not include it into the PoV.
+				// We do this because the uploaded code was instrumented with the latest schedule
+				// and hence we persist those changes. Otherwise the next execution will pay again
+				// for the instrumentation.
+				Some(_) => {
+					<CodeStorage<T>>::insert(&code_hash, module);
+					Ok(())
+				},
+				// Upload a new contract.
+				//
+				// We need to write all data structures and collect the deposit.
+				None => {
+					let mut new_owner_info = module.owner_info.take().expect(
+						"If an executable isn't in storage it was uploaded.
+				If it was uploaded the owner info was generated and attached. qed
+				",
+					);
+					// This `None` case happens only in freshly uploaded modules. This means that
+					// the `owner` is always the origin of the current transaction.
+					T::Currency::reserve(&new_owner_info.owner, new_owner_info.deposit)
+						.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
+					new_owner_info.refcount = if instantiated { 1 } else { 0 };
+					<CodeStorage<T>>::insert(&code_hash, module);
+					*owner_info = Some(new_owner_info);
+					<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeStored { code_hash });
+					Ok(())
+				},
+			}
+		})
+	}
+
+	/// Try to remove code together with all associated information.
+	fn try_remove_code(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
+		<OwnerInfoOf<T>>::try_mutate_exists(&code_hash, |existing| {
+			if let Some(owner_info) = existing {
+				ensure!(owner_info.refcount == 0, <Error<T>>::CodeInUse);
+				ensure!(&owner_info.owner == origin, BadOrigin);
+				T::Currency::unreserve(&owner_info.owner, owner_info.deposit);
+				*existing = None;
+				<CodeStorage<T>>::remove(&code_hash);
+				<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeRemoved { code_hash });
+				Ok(())
+			} else {
+				Err(<Error<T>>::CodeNotFound.into())
+			}
+		})
+	}
+
+	/// Load code with the given code hash.
+	fn load_code(
+		code_hash: CodeHash<T>,
+		gas_meter: &mut GasMeter<T>,
+	) -> Result<PrefabWasmModule<T>, DispatchError> {
+		let max_code_len = T::MaxCodeLen::get();
+		let charged = gas_meter.charge(CodeToken::Load(max_code_len))?;
+
+		let mut module = <CodeStorage<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
+		let code_len = module.code.len() as u32;
+		gas_meter.adjust_gas(charged, CodeToken::Load(code_len));
+		module.code_hash = code_hash;
+
+		Ok(module)
+	}
+
+	/// Decrement the refcount of a code in-storage by one.
+	///
+	/// # Note
+	///
+	/// A contract whose refcount dropped to zero isn't automatically removed. A `remove_code`
+	/// transaction must be submitted by the original uploader to do so.
+	fn decrement_refcount(code_hash: CodeHash<T>) {
+		<OwnerInfoOf<T>>::mutate(code_hash, |existing| {
+			if let Some(info) = existing {
+				info.refcount = info.refcount.saturating_sub(1);
+			}
+		});
+	}
+
+	/// Increment the refcount of a code in-storage by one.
+	///
+	/// # Errors
+	///
+	/// [`Error::CodeNotFound`] is returned if the specified `code_hash` does not exist.
+	fn increment_refcount(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+		<OwnerInfoOf<T>>::mutate(code_hash, |existing| -> Result<(), DispatchError> {
+			if let Some(info) = existing {
+				info.refcount = info.refcount.saturating_add(1);
+				Ok(())
+			} else {
+				Err(Error::<T>::CodeNotFound.into())
+			}
+		})
+	}
 	/// See [`Self::from_code_unchecked`].
 	#[cfg(feature = "runtime-benchmarks")]
 	pub fn store_code_unchecked(
-		original_code: Vec<u8>,
+		code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: T::AccountId,
 	) -> DispatchResult {
-		let executable = Self::from_code_unchecked(original_code, schedule, owner)?;
-		code_cache::store(executable, false)
-	}
-
-	/// Decrement instruction_weights_version by 1. Panics if it is already 0.
-	#[cfg(test)]
-	pub fn decrement_version(&mut self) {
-		self.instruction_weights_version = self.instruction_weights_version.checked_sub(1).unwrap();
+		let executable = Self::from_code_unchecked(code, schedule, owner)?;
+		store_code(executable, false)
 	}
 
 	/// Create the module without checking nor instrumenting the passed code.
@@ -277,11 +401,11 @@ impl<T: Config> PrefabWasmModule<T> {
 	/// during testing when we want to deploy codes that do not pass the instantiation checks.
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	fn from_code_unchecked(
-		original_code: Vec<u8>,
+		code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: T::AccountId,
 	) -> Result<Self, DispatchError> {
-		prepare::benchmarking::prepare(original_code, schedule, owner)
+		prepare::benchmarking::prepare(code, schedule, owner)
 			.map_err::<DispatchError, _>(Into::into)
 	}
 }
@@ -297,18 +421,18 @@ impl<T: Config> OwnerInfo<T> {
 impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 	fn from_storage(
 		code_hash: CodeHash<T>,
-		schedule: &Schedule<T>,
+		_schedule: &Schedule<T>,
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError> {
-		code_cache::load(code_hash, schedule, gas_meter)
+		Self::load_code(code_hash, gas_meter)
 	}
 
 	fn add_user(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
-		code_cache::increment_refcount::<T>(code_hash)
+		Self::increment_refcount(code_hash)
 	}
 
 	fn remove_user(code_hash: CodeHash<T>) {
-		code_cache::decrement_refcount::<T>(code_hash)
+		Self::decrement_refcount(code_hash)
 	}
 
 	fn execute<E: Ext<T = T>>(
@@ -337,7 +461,9 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 
 		// Set fuel limit for the Wasm module execution.
 		// We normalize it by the base instruction weight, as its cost in wasmi engine is 1.
-		let fuel_limit = reftime_limit.checked_div(T::Schedule::get().instruction_weights.base as u64).ok_or(Error::<T>::InvalidSchedule)?;
+		let fuel_limit = reftime_limit
+			.checked_div(T::Schedule::get().instruction_weights.base as u64)
+			.ok_or(Error::<T>::InvalidSchedule)?;
 		store
 			.add_fuel(fuel_limit)
 			.expect("We've set up engine to fuel consuming mode; qed");
@@ -352,13 +478,14 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 
 		// We store before executing so that the code hash is available in the constructor.
 		if let &ExportedFunction::Constructor = function {
-			code_cache::store(self, true)?;
+			Self::store_code(self, true)?;
 		}
 
 		let result = exported_func.call(&mut store, &[], &mut []);
 		let engine_consumed = store.fuel_consumed().expect("Fuel metering is enabled; qed");
 		// Scale the value back to `ref_time` weight.
-		let reftime_consumed = engine_consumed.saturating_mul(T::Schedule::get().instruction_weights.base as u64);
+		let reftime_consumed =
+			engine_consumed.saturating_mul(T::Schedule::get().instruction_weights.base as u64);
 
 		store.into_data().to_execution_result(result, reftime_consumed)
 	}

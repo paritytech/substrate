@@ -55,25 +55,16 @@ pub enum TryInstantiate {
 	Skip,
 }
 
-/// The reason why a contract is instrumented.
-enum InstrumentReason {
-	/// A new code is uploaded.
-	New,
-	/// Existing code is re-instrumented.
-	Reinstrument,
-}
-
 /// The inner deserialized module is valid (this is Guaranteed by `new` method).
 struct ContractModule(elements::Module);
 
 impl ContractModule {
 	/// Creates a new instance of `ContractModule`.
 	///
-	/// Returns `Err` if the `original_code` couldn't be decoded or
+	/// Returns `Err` if the `code` couldn't be decoded or
 	/// if it contains an invalid module.
-	fn new(original_code: &[u8]) -> Result<Self, &'static str> {
-		let module =
-			elements::deserialize_buffer(original_code).map_err(|_| "Can't decode wasm code")?;
+	fn new(code: &[u8]) -> Result<Self, &'static str> {
+		let module = elements::deserialize_buffer(code).map_err(|_| "Can't decode wasm code")?;
 
 		// Return a `ContractModule` instance with
 		// __valid__ module.
@@ -333,7 +324,6 @@ fn validate<E, T>(
 	schedule: &Schedule<T>,
 	determinism: Determinism,
 	try_instantiate: TryInstantiate,
-	reason: InstrumentReason,
 ) -> Result<(Vec<u8>, (u32, u32)), (DispatchError, &'static str)>
 where
 	E: Environment<()>,
@@ -405,10 +395,7 @@ where
 			(),
 			(initial, maximum),
 			stack_limits,
-			match reason {
-				InstrumentReason::New => AllowDeprecatedInterface::No,
-				InstrumentReason::Reinstrument => AllowDeprecatedInterface::Yes,
-			},
+			AllowDeprecatedInterface::No,
 		)
 		.map_err(|err| {
 			log::debug!(target: LOG_TARGET, "{}", err);
@@ -419,7 +406,7 @@ where
 	Ok((code, (initial, maximum)))
 }
 
-/// Loads the given module given in `original_code` and performs some checks on it.
+/// Loads the given module given in `code` and performs some checks on it.
 ///
 /// The checks are:
 ///
@@ -428,7 +415,7 @@ where
 /// - imported memory (if any) doesn't reserve more memory than permitted by the `schedule`
 /// - all imported functions from the external environment matches defined by `env` module
 pub fn prepare<E, T>(
-	original_code: CodeVec<T>,
+	code: CodeVec<T>,
 	schedule: &Schedule<T>,
 	owner: AccountIdOf<T>,
 	determinism: Determinism,
@@ -438,24 +425,16 @@ where
 	E: Environment<()>,
 	T: Config,
 {
-	// TODO: remove passing the code to the validator?
-	let (code, (initial, maximum)) = validate::<E, T>(
-		original_code.as_ref(),
-		schedule,
-		determinism,
-		try_instantiate,
-		InstrumentReason::New,
-	)?;
+	let (code, (initial, maximum)) =
+		validate::<E, T>(code.as_ref(), schedule, determinism, try_instantiate)?;
 
-	let original_code_len = original_code.len();
+	let code_len = code.len();
 
 	let mut module = PrefabWasmModule {
-		instruction_weights_version: 42,
 		initial,
 		maximum,
-		code: code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
-		code_hash: T::Hashing::hash(&original_code),
-		original_code: Some(original_code),
+		code: code.clone().try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
+		code_hash: T::Hashing::hash(&code),
 		owner_info: None,
 		determinism,
 	};
@@ -464,7 +443,7 @@ where
 	// storage items. This is also why we have `3` items added and not only one.
 	let bytes_added = module
 		.encoded_size()
-		.saturating_add(original_code_len)
+		.saturating_add(code_len)
 		.saturating_add(<OwnerInfo<T>>::max_encoded_len()) as u32;
 	let deposit = Diff { bytes_added, items_added: 3, ..Default::default() }
 		.update_contract::<T>(None)
@@ -473,39 +452,6 @@ where
 	module.owner_info = Some(OwnerInfo { owner, deposit, refcount: 0 });
 
 	Ok(module)
-}
-
-/// Same as [`prepare`] but without constructing a new module.
-///
-/// Used to update the code of an existing module to the newest [`Schedule`] version.
-/// Strictly speaking is not necessary to check the existing code before reinstrumenting because
-/// it can't change in the meantime. However, since we recently switched the validation library
-/// we want to re-validate to weed out any bugs that were lurking in the old version.
-/// TODO remove this func
-pub fn reinstrument<E, T>(
-	original_code: &[u8],
-	schedule: &Schedule<T>,
-	determinism: Determinism,
-) -> Result<Vec<u8>, DispatchError>
-where
-	E: Environment<()>,
-	T: Config,
-{
-	validate::<E, T>(
-		original_code,
-		schedule,
-		determinism,
-		// This function was triggered by an interaction with an existing contract code
-		// that will try to instantiate anyways. Failing here would not help
-		// as the contract is already on chain.
-		TryInstantiate::Skip,
-		InstrumentReason::Reinstrument,
-	)
-	.map_err(|(err, msg)| {
-		log::error!(target: LOG_TARGET, "CodeRejected during reinstrument: {}", msg);
-		err
-	})
-	.map(|(code, _)| code)
 }
 
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking and testing.
@@ -518,24 +464,19 @@ where
 pub mod benchmarking {
 	use super::*;
 
-	/// Prepare function that neither checks nor instruments the passed in code.
+	/// Prepare function that does not check the passed in code.
 	pub fn prepare<T: Config>(
-		original_code: Vec<u8>,
+		code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
 	) -> Result<PrefabWasmModule<T>, &'static str> {
-		let contract_module = ContractModule::new(&original_code, schedule)?;
+		let contract_module = ContractModule::new(&code, schedule)?;
 		let memory_limits = get_memory_limits(contract_module.scan_imports(&[])?, schedule)?;
 		Ok(PrefabWasmModule {
-			instruction_weights_version: 42,
 			initial: memory_limits.0,
 			maximum: memory_limits.1,
-			code_hash: T::Hashing::hash(&original_code),
-			original_code: Some(original_code.try_into().map_err(|_| "Original code too large")?),
-			code: contract_module
-				.into_wasm_code()?
-				.try_into()
-				.map_err(|_| "Instrumented code too large")?,
+			code_hash: T::Hashing::hash(&code),
+			code: contract_module.into_wasm_code()?.try_into().map_err(|_| "Code too large")?,
 			owner_info: Some(OwnerInfo {
 				owner,
 				// this is a helper function for benchmarking which skips deposit collection

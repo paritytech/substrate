@@ -13,8 +13,8 @@ This module extends accounts based on the `Currency` trait to have smart-contrac
 be used with other modules that implement accounts based on `Currency`. These "smart-contract accounts"
 have the ability to instantiate smart-contracts and make calls to other contract and non-contract accounts.
 
-The smart-contract code is stored once in a `code_cache`, and later retrievable via its `code_hash`.
-This means that multiple smart-contracts can be instantiated from the same `code_cache`, without replicating
+The smart-contract code is stored once, and later retrievable via its `code_hash`.
+This means that multiple smart-contracts can be instantiated from the same `code`, without replicating
 the code each time.
 
 When a smart-contract is called, its associated code is retrieved via the code hash and gets executed.

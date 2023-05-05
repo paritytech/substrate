@@ -30,7 +30,7 @@
 //! These "smart-contract accounts" have the ability to instantiate smart-contracts and make calls
 //! to other contract and non-contract accounts.
 //!
-//! The smart-contract code is stored once in a code cache, and later retrievable via its hash.
+//! The smart-contract code is stored once, and later retrievable via its hash.
 //! This means that multiple smart-contracts can be instantiated from the same hash, without
 //! replicating the code each time.
 //!
@@ -115,7 +115,7 @@ use frame_support::{
 		ReservableCurrency, Time,
 	},
 	weights::Weight,
-	BoundedVec, RuntimeDebugNoBound, WeakBoundedVec,
+	BoundedVec, RuntimeDebugNoBound,
 };
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, Pallet as System};
 use pallet_contracts_primitives::{
@@ -145,7 +145,6 @@ type TrieId = BoundedVec<u8, ConstU32<128>>;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
-type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 
