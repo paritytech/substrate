@@ -172,6 +172,7 @@ parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
+	pub const MaxSessionReportAge: SessionIndex = BondingDuration::get() * SessionsPerEra::get();
 }
 
 pub struct OnChainSeqPhragmen;
@@ -220,6 +221,7 @@ impl pallet_offences::Config for Test {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type SessionInfoProvider = Session;
+	type MaxSessionReportAge = MaxSessionReportAge;
 }
 
 parameter_types! {
