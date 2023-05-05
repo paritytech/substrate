@@ -131,28 +131,15 @@ where
 	Ok(())
 }
 
-/// A trait to be notified when the session changes
+/// A trait to be notified when the session changes. 
+/// This is in contrast to `SessionHandler` which handles events for specific keys. 
+#[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait SessionChangeListener {
 	fn on_session_change(session_index: SessionIndex);
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
-#[tuple_types_custom_trait_bound(SessionChangeListener)]
-impl SessionChangeListener for Tuple {
-	fn on_session_change(session_index: SessionIndex) {
-		for_tuples!(
-			#(
-				Tuple::on_session_change(session_index);
-			)*
-		)
-	}
-}
-
-impl SessionChangeListener for () {
-	fn on_session_change(_session_index: SessionIndex) {}
-}
-
 /// A trait get the current session info
+#[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait SessionInfoProvider {
 	fn current_session_index() -> SessionIndex;
 }
