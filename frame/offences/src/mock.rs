@@ -147,7 +147,7 @@ pub struct Offence {
 	pub validator_set_count: u32,
 	pub offenders: Vec<u64>,
 	pub time_slot: u128,
-	pub session_index: SessionIndex
+	pub session_index: SessionIndex,
 }
 
 impl offence::Offence<u64> for Offence {

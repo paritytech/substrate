@@ -130,13 +130,13 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
 	ConsensusEngineId, KeyTypeId, Permill, RuntimeAppPublic,
 };
+use sp_session::{SessionChangeListener, SessionInfoProvider};
 use sp_staking::SessionIndex;
 use sp_std::{
 	marker::PhantomData,
 	ops::{Rem, Sub},
 	prelude::*,
 };
-use sp_session::{SessionChangeListener, SessionInfoProvider};
 
 pub use pallet::*;
 pub use weights::WeightInfo;
