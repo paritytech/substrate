@@ -36,7 +36,7 @@ mod tests {
 				Command::new(cargo_bin("substrate"))
 					.stdout(process::Stdio::piped())
 					.stderr(process::Stdio::piped())
-					.args(&["try-runtime", "--runtime=existing"])
+					.args(&["try-runtime", "-lruntime=debug", "--runtime=existing"])
                     .args(&["on-runtime-upgrade", "--checks=pre-and-post"])
 					.args(&["live", format!("--uri={}", ws_url).as_str()])
 					.kill_on_drop(true)
@@ -51,19 +51,16 @@ mod tests {
 
 			// Kick off the on-runtime-upgrade process and wait for the on-runtime-upgrade to succeed.
 			let on_runtime_upgrade = run_on_runtime_upgrade(ws_url).await;
-            let re = Regex::new(r"TryRuntime_on_runtime_upgrade executed without errors").unwrap();
+
+            // Check for errors
             let error_re = Regex::new(r"(?i)error").unwrap();
             let stderr_str = from_utf8(&on_runtime_upgrade.stderr).unwrap();
+
+            // Check for success line
+            let re = Regex::new(r"TryRuntime_on_runtime_upgrade executed without errors").unwrap();
             
             if error_re.is_match(stderr_str) {
-                // Output the line where the error matched in the stderr.
-                let stderr_str_lines: Vec<&str> = stderr_str.lines().collect();
-                for (_, line) in stderr_str_lines.iter().enumerate() {
-                    if error_re.is_match(line) {
-                        println!("{}", line);
-                        break;
-                    }
-                }
+                println!("on_runtime_upgrade.stderr: {}", from_utf8(&on_runtime_upgrade.stderr).unwrap());
                 panic!("Error found in stderr");
             }
             
