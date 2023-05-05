@@ -1,11 +1,7 @@
-error: Invalid pallet::call, requires weight attribute i.e. `#[pallet::weight($expr)]`
-  --> tests/pallet_ui/dev_mode_without_arg.rs:24:7
+error: A pallet::call requires either a concrete `#[pallet::weight($expr)]` or an
+                               inherited weight from the `#[pallet:call(weight($type))]` attribute, but
+                               none were given.
+  --> tests/pallet_ui/dev_mode_without_arg.rs:22:7
    |
-24 |         pub fn my_call(_origin: OriginFor<T>) -> DispatchResult {
+22 |         pub fn my_call(_origin: OriginFor<T>) -> DispatchResult {
    |             ^^
-
-error[E0432]: unresolved import `pallet`
- --> tests/pallet_ui/dev_mode_without_arg.rs:3:9
-  |
-3 | pub use pallet::*;
-  |         ^^^^^^ help: a similar path exists: `test_pallet::pallet`

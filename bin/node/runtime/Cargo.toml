@@ -39,6 +39,7 @@ sp-runtime = { version = "7.0.0", default-features = false, path = "../../../pri
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
+sp-statement-store = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/statement-store" }
 sp-version = { version = "5.0.0", default-features = false, path = "../../../primitives/version" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../../primitives/io" }
 
@@ -105,6 +106,7 @@ pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-staking-reward-curve = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking/reward-curve" }
 pallet-staking-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking/runtime-api" }
 pallet-state-trie-migration = { version = "4.0.0-dev", default-features = false, path = "../../../frame/state-trie-migration" }
+pallet-statement = { version = "4.0.0-dev", default-features = false, path = "../../../frame/statement" }
 pallet-scheduler = { version = "4.0.0-dev", default-features = false, path = "../../../frame/scheduler" }
 pallet-society = { version = "4.0.0-dev", default-features = false, path = "../../../frame/society" }
 pallet-sudo = { version = "4.0.0-dev", default-features = false, path = "../../../frame/sudo" }
@@ -187,6 +189,7 @@ std = [
 	"pallet-staking/std",
 	"pallet-staking-runtime-api/std",
 	"pallet-state-trie-migration/std",
+	"pallet-statement/std",
 	"pallet-salary/std",
 	"sp-session/std",
 	"pallet-sudo/std",
@@ -204,6 +207,7 @@ std = [
 	"pallet-treasury/std",
 	"pallet-asset-rate/std",
 	"sp-transaction-pool/std",
+	"sp-statement-store/std",
 	"pallet-utility/std",
 	"sp-version/std",
 	"pallet-society/std",
@@ -330,6 +334,7 @@ try-runtime = [
 	"pallet-session/try-runtime",
 	"pallet-staking/try-runtime",
 	"pallet-state-trie-migration/try-runtime",
+	"pallet-statement/try-runtime",
 	"pallet-scheduler/try-runtime",
 	"pallet-society/try-runtime",
 	"pallet-sudo/try-runtime",
