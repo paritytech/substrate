@@ -1599,9 +1599,10 @@ pub mod pallet {
 		pub fn refund_other(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
-			who: T::AccountId,
+			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+			let who = T::Lookup::lookup(who)?;
 			let id: T::AssetId = id.into();
 			Self::do_refund_other(id, &who, &origin)
 		}
