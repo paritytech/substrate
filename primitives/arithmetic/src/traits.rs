@@ -32,6 +32,8 @@ use sp_std::ops::{
 	Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Shl, Shr, Sub, SubAssign,
 };
 
+use crate::MultiplyRational;
+
 /// A meta trait for arithmetic type operations, regardless of any limitation on size.
 pub trait BaseArithmetic:
 	From<u8>
@@ -186,9 +188,9 @@ pub trait AtLeast32Bit: BaseArithmetic + From<u16> + From<u32> {}
 impl<T: BaseArithmetic + From<u16> + From<u32>> AtLeast32Bit for T {}
 
 /// A meta trait for arithmetic.  Same as [`AtLeast32Bit `], but also bounded to be unsigned.
-pub trait AtLeast32BitUnsigned: AtLeast32Bit + Unsigned {}
+pub trait AtLeast32BitUnsigned: AtLeast32Bit + Unsigned + MultiplyRational {}
 
-impl<T: AtLeast32Bit + Unsigned> AtLeast32BitUnsigned for T {}
+impl<T: AtLeast32Bit + Unsigned + MultiplyRational> AtLeast32BitUnsigned for T {}
 
 /// Just like `From` except that if the source value is too big to fit into the destination type
 /// then it'll saturate the destination.

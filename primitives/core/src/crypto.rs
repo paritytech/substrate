@@ -19,11 +19,7 @@
 //! Cryptographic utilities.
 // end::description[]
 
-#[cfg(feature = "std")]
-use crate::hexdisplay::HexDisplay;
 use crate::{ed25519, sr25519};
-#[cfg(feature = "std")]
-use base58::{FromBase58, ToBase58};
 #[cfg(feature = "std")]
 use bip39::{Language, Mnemonic, MnemonicType};
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -32,11 +28,8 @@ use rand::{rngs::OsRng, RngCore};
 #[cfg(feature = "std")]
 use regex::Regex;
 use scale_info::TypeInfo;
-/// Trait for accessing reference to `SecretString`.
-pub use secrecy::ExposeSecret;
-/// A store for sensitive data.
 #[cfg(feature = "std")]
-pub use secrecy::SecretString;
+pub use secrecy::{ExposeSecret, SecretString};
 use sp_runtime_interface::pass_by::PassByInner;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
@@ -278,7 +271,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 		const CHECKSUM_LEN: usize = 2;
 		let body_len = Self::LEN;
 
-		let data = s.from_base58().map_err(|_| PublicError::BadBase58)?;
+		let data = bs58::decode(s).into_vec().map_err(|_| PublicError::BadBase58)?;
 		if data.len() < 2 {
 			return Err(PublicError::BadLength)
 		}
@@ -347,7 +340,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 		v.extend(self.as_ref());
 		let r = ss58hash(&v);
 		v.extend(&r[0..2]);
-		v.to_base58()
+		bs58::encode(v).into_string()
 	}
 
 	/// Return the ss58-check string for this key.
@@ -486,11 +479,8 @@ pub trait ByteArray: AsRef<[u8]> + AsMut<[u8]> + for<'a> TryFrom<&'a [u8], Error
 	}
 }
 
-/// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {
-	/// Return `CryptoTypePublicPair` from public key.
-	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair;
-}
+/// Trait suitable for typical cryptographic key public type.
+pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {}
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -689,11 +679,7 @@ mod dummy {
 			b""
 		}
 	}
-	impl Public for Dummy {
-		fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
-			CryptoTypePublicPair(CryptoTypeId(*b"dumm"), <Self as ByteArray>::to_raw_vec(self))
-		}
-	}
+	impl Public for Dummy {}
 
 	impl Pair for Dummy {
 		type Public = Dummy;
@@ -727,10 +713,6 @@ mod dummy {
 		}
 
 		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool {
-			true
-		}
-
-		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(_: &[u8], _: M, _: P) -> bool {
 			true
 		}
 
@@ -931,9 +913,6 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool;
 
-	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool;
-
 	/// Get the public key.
 	fn public(&self) -> Self::Public;
 
@@ -1113,28 +1092,37 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 	}
 }
 
+/// Trait grouping types shared by a VRF signer and verifiers.
+pub trait VrfCrypto {
+	/// VRF input.
+	type VrfInput;
+	/// VRF output.
+	type VrfOutput;
+	/// VRF signing data.
+	type VrfSignData;
+	/// VRF signature.
+	type VrfSignature;
+}
+
+/// VRF Secret Key.
+pub trait VrfSecret: VrfCrypto {
+	/// Get VRF-specific output .
+	fn vrf_output(&self, data: &Self::VrfInput) -> Self::VrfOutput;
+
+	/// Sign VRF-specific data.
+	fn vrf_sign(&self, input: &Self::VrfSignData) -> Self::VrfSignature;
+}
+
+/// VRF Public Key.
+pub trait VrfPublic: VrfCrypto {
+	/// Verify input data signature.
+	fn vrf_verify(&self, data: &Self::VrfSignData, signature: &Self::VrfSignature) -> bool;
+}
+
 /// An identifier for a specific cryptographic algorithm used by a key pair
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct CryptoTypeId(pub [u8; 4]);
-
-/// A type alias of CryptoTypeId & a public key
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
-
-#[cfg(feature = "std")]
-impl sp_std::fmt::Display for CryptoTypePublicPair {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		let id = match str::from_utf8(&(self.0).0[..]) {
-			Ok(id) => id.to_string(),
-			Err(_) => {
-				format!("{:#?}", self.0)
-			},
-		};
-		write!(f, "{}-{}", id, HexDisplay::from(&self.1))
-	}
-}
 
 /// Known key types; this also functions as a global registry of key types for projects wishing to
 /// avoid collisions with each other.
@@ -1158,6 +1146,8 @@ pub mod key_types {
 	pub const AUTHORITY_DISCOVERY: KeyTypeId = KeyTypeId(*b"audi");
 	/// Key type for staking, built-in. Identified as `stak`.
 	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
+	/// A key type for signing statements
+	pub const STATEMENT: KeyTypeId = KeyTypeId(*b"stmt");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
@@ -1223,11 +1213,7 @@ mod tests {
 			vec![]
 		}
 	}
-	impl Public for TestPublic {
-		fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
-			CryptoTypePublicPair(CryptoTypeId(*b"dumm"), self.to_raw_vec())
-		}
-	}
+	impl Public for TestPublic {}
 	impl Pair for TestPair {
 		type Public = TestPublic;
 		type Seed = [u8; 8];
@@ -1284,14 +1270,6 @@ mod tests {
 		}
 
 		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool {
-			true
-		}
-
-		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
-			_sig: &[u8],
-			_message: M,
-			_pubkey: P,
-		) -> bool {
 			true
 		}
 

@@ -20,6 +20,7 @@
 //! Parse the module into `Def` struct through `Def::try_from` function.
 
 pub mod call;
+pub mod composite;
 pub mod config;
 pub mod error;
 pub mod event;
@@ -35,6 +36,7 @@ pub mod storage;
 pub mod type_value;
 pub mod validate_unsigned;
 
+use composite::{keyword::CompositeKeyword, CompositeDef};
 use frame_support_procedural_tools::generate_crate_access_2018;
 use syn::spanned::Spanned;
 
@@ -56,6 +58,7 @@ pub struct Def {
 	pub genesis_build: Option<genesis_build::GenesisBuildDef>,
 	pub validate_unsigned: Option<validate_unsigned::ValidateUnsignedDef>,
 	pub extra_constants: Option<extra_constants::ExtraConstantsDef>,
+	pub composites: Vec<composite::CompositeDef>,
 	pub type_values: Vec<type_value::TypeValueDef>,
 	pub frame_system: syn::Ident,
 	pub frame_support: syn::Ident,
@@ -91,6 +94,7 @@ impl Def {
 		let mut extra_constants = None;
 		let mut storages = vec![];
 		let mut type_values = vec![];
+		let mut composites: Vec<CompositeDef> = vec![];
 
 		for (index, item) in items.iter_mut().enumerate() {
 			let pallet_attr: Option<PalletAttr> = helper::take_first_item_pallet_attr(item)?;
@@ -106,8 +110,8 @@ impl Def {
 					let m = hooks::HooksDef::try_from(span, index, item)?;
 					hooks = Some(m);
 				},
-				Some(PalletAttr::RuntimeCall(span)) if call.is_none() =>
-					call = Some(call::CallDef::try_from(span, index, item, dev_mode)?),
+				Some(PalletAttr::RuntimeCall(cw, span)) if call.is_none() =>
+					call = Some(call::CallDef::try_from(span, index, item, dev_mode, cw)?),
 				Some(PalletAttr::Error(span)) if error.is_none() =>
 					error = Some(error::ErrorDef::try_from(span, index, item)?),
 				Some(PalletAttr::RuntimeEvent(span)) if event.is_none() =>
@@ -135,6 +139,32 @@ impl Def {
 				Some(PalletAttr::ExtraConstants(_)) =>
 					extra_constants =
 						Some(extra_constants::ExtraConstantsDef::try_from(index, item)?),
+				Some(PalletAttr::Composite(span)) => {
+					let composite =
+						composite::CompositeDef::try_from(span, index, &frame_support, item)?;
+					if composites.iter().any(|def| {
+						match (&def.composite_keyword, &composite.composite_keyword) {
+							(
+								CompositeKeyword::FreezeReason(_),
+								CompositeKeyword::FreezeReason(_),
+							) |
+							(CompositeKeyword::HoldReason(_), CompositeKeyword::HoldReason(_)) |
+							(CompositeKeyword::LockId(_), CompositeKeyword::LockId(_)) |
+							(
+								CompositeKeyword::SlashReason(_),
+								CompositeKeyword::SlashReason(_),
+							) => true,
+							_ => false,
+						}
+					}) {
+						let msg = format!(
+							"Invalid duplicated `{}` definition",
+							composite.composite_keyword
+						);
+						return Err(syn::Error::new(composite.composite_keyword.span(), &msg))
+					}
+					composites.push(composite);
+				},
 				Some(attr) => {
 					let msg = "Invalid duplicated attribute";
 					return Err(syn::Error::new(attr.span(), msg))
@@ -171,6 +201,7 @@ impl Def {
 			origin,
 			inherent,
 			storages,
+			composites,
 			type_values,
 			frame_system,
 			frame_support,
@@ -371,6 +402,7 @@ impl GenericKind {
 mod keyword {
 	syn::custom_keyword!(origin);
 	syn::custom_keyword!(call);
+	syn::custom_keyword!(weight);
 	syn::custom_keyword!(event);
 	syn::custom_keyword!(config);
 	syn::custom_keyword!(hooks);
@@ -385,6 +417,7 @@ mod keyword {
 	syn::custom_keyword!(generate_store);
 	syn::custom_keyword!(Store);
 	syn::custom_keyword!(extra_constants);
+	syn::custom_keyword!(composite_enum);
 }
 
 /// Parse attributes for item in pallet module
@@ -393,7 +426,44 @@ enum PalletAttr {
 	Config(proc_macro2::Span),
 	Pallet(proc_macro2::Span),
 	Hooks(proc_macro2::Span),
-	RuntimeCall(proc_macro2::Span),
+	/// A `#[pallet::call]` with optional attributes to specialize the behaviour.
+	///
+	/// # Attributes
+	///
+	/// Each attribute `attr` can take the form of `#[pallet::call(attr = …)]` or
+	/// `#[pallet::call(attr(…))]`. The possible attributes are:
+	///
+	/// ## `weight`
+	///
+	/// Can be used to reduce the repetitive weight annotation in the trivial case. It accepts one
+	/// argument that is expected to be an implementation of the `WeightInfo` or something that
+	/// behaves syntactically equivalent. This allows to annotate a `WeightInfo` for all the calls.
+	/// Now each call does not need to specify its own `#[pallet::weight]` but can instead use the
+	/// one from the `#[pallet::call]` definition. So instead of having to write it on each call:
+	///
+	/// ```ignore
+	/// #[pallet::call]
+	/// impl<T: Config> Pallet<T> {
+	///     #[pallet::weight(T::WeightInfo::create())]
+	///     pub fn create(
+	/// ```
+	/// you can now omit it on the call itself, if the name of the weigh function matches the call:
+	///
+	/// ```ignore
+	/// #[pallet::call(weight = <T as crate::Config>::WeightInfo)]
+	/// impl<T: Config> Pallet<T> {
+	///     pub fn create(
+	/// ```
+	///
+	/// It is possible to use this syntax together with instantiated pallets by using `Config<I>`
+	/// instead.
+	///
+	/// ### Dev Mode
+	///
+	/// Normally the `dev_mode` sets all weights of calls without a `#[pallet::weight]` annotation
+	/// to zero. Now when there is a `weight` attribute on the `#[pallet::call]`, then that is used
+	/// instead of the zero weight. So to say: it works together with `dev_mode`.
+	RuntimeCall(Option<InheritedCallWeightAttr>, proc_macro2::Span),
 	Error(proc_macro2::Span),
 	RuntimeEvent(proc_macro2::Span),
 	RuntimeOrigin(proc_macro2::Span),
@@ -404,6 +474,7 @@ enum PalletAttr {
 	ValidateUnsigned(proc_macro2::Span),
 	TypeValue(proc_macro2::Span),
 	ExtraConstants(proc_macro2::Span),
+	Composite(proc_macro2::Span),
 }
 
 impl PalletAttr {
@@ -412,7 +483,7 @@ impl PalletAttr {
 			Self::Config(span) => *span,
 			Self::Pallet(span) => *span,
 			Self::Hooks(span) => *span,
-			Self::RuntimeCall(span) => *span,
+			Self::RuntimeCall(_, span) => *span,
 			Self::Error(span) => *span,
 			Self::RuntimeEvent(span) => *span,
 			Self::RuntimeOrigin(span) => *span,
@@ -423,6 +494,7 @@ impl PalletAttr {
 			Self::ValidateUnsigned(span) => *span,
 			Self::TypeValue(span) => *span,
 			Self::ExtraConstants(span) => *span,
+			Self::Composite(span) => *span,
 		}
 	}
 }
@@ -443,7 +515,12 @@ impl syn::parse::Parse for PalletAttr {
 		} else if lookahead.peek(keyword::hooks) {
 			Ok(PalletAttr::Hooks(content.parse::<keyword::hooks>()?.span()))
 		} else if lookahead.peek(keyword::call) {
-			Ok(PalletAttr::RuntimeCall(content.parse::<keyword::call>()?.span()))
+			let span = content.parse::<keyword::call>().expect("peeked").span();
+			let attr = match content.is_empty() {
+				true => None,
+				false => Some(InheritedCallWeightAttr::parse(&content)?),
+			};
+			Ok(PalletAttr::RuntimeCall(attr, span))
 		} else if lookahead.peek(keyword::error) {
 			Ok(PalletAttr::Error(content.parse::<keyword::error>()?.span()))
 		} else if lookahead.peek(keyword::event) {
@@ -464,8 +541,40 @@ impl syn::parse::Parse for PalletAttr {
 			Ok(PalletAttr::TypeValue(content.parse::<keyword::type_value>()?.span()))
 		} else if lookahead.peek(keyword::extra_constants) {
 			Ok(PalletAttr::ExtraConstants(content.parse::<keyword::extra_constants>()?.span()))
+		} else if lookahead.peek(keyword::composite_enum) {
+			Ok(PalletAttr::Composite(content.parse::<keyword::composite_enum>()?.span()))
 		} else {
 			Err(lookahead.error())
 		}
+	}
+}
+
+/// The optional weight annotation on a `#[pallet::call]` like `#[pallet::call(weight($type))]`.
+#[derive(Clone)]
+pub struct InheritedCallWeightAttr {
+	pub typename: syn::Type,
+	pub span: proc_macro2::Span,
+}
+
+impl syn::parse::Parse for InheritedCallWeightAttr {
+	// Parses `(weight($type))` or `(weight = $type)`.
+	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+		let content;
+		syn::parenthesized!(content in input);
+		content.parse::<keyword::weight>()?;
+		let lookahead = content.lookahead1();
+
+		let buffer = if lookahead.peek(syn::token::Paren) {
+			let inner;
+			syn::parenthesized!(inner in content);
+			inner
+		} else if lookahead.peek(syn::Token![=]) {
+			content.parse::<syn::Token![=]>().expect("peeked");
+			content
+		} else {
+			return Err(lookahead.error())
+		};
+
+		Ok(Self { typename: buffer.parse()?, span: input.span() })
 	}
 }
