@@ -26,7 +26,7 @@ pub trait Create<AccountId>: Inspect<AccountId> {
 	/// Create a new fungible asset.
 	fn create(
 		id: Self::AssetId,
-		admin: AccountId,
+		admin: Option<AccountId>,
 		is_sufficient: bool,
 		min_balance: Self::Balance,
 	) -> DispatchResult;

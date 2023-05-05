@@ -644,7 +644,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///   considered dust and cleaned up.
 	pub(super) fn do_force_create(
 		id: T::AssetId,
-		owner: T::AccountId,
+		owner: Option<T::AccountId>,
 		is_sufficient: bool,
 		min_balance: T::Balance,
 	) -> DispatchResult {
@@ -654,10 +654,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Asset::<T, I>::insert(
 			id,
 			AssetDetails {
-				owner: Some(owner.clone()),
-				issuer: Some(owner.clone()),
-				admin: Some(owner.clone()),
-				freezer: Some(owner.clone()),
+				owner: owner.clone(),
+				issuer: owner.clone(),
+				admin: owner.clone(),
+				freezer: owner.clone(),
 				supply: Zero::zero(),
 				deposit: Zero::zero(),
 				min_balance,

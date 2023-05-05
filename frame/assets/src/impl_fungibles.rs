@@ -139,7 +139,7 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 impl<T: Config<I>, I: 'static> fungibles::Create<T::AccountId> for Pallet<T, I> {
 	fn create(
 		id: T::AssetId,
-		admin: T::AccountId,
+		admin: Option<T::AccountId>,
 		is_sufficient: bool,
 		min_balance: Self::Balance,
 	) -> DispatchResult {

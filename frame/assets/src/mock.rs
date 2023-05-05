@@ -95,7 +95,7 @@ impl pallet_balances::Config for Test {
 
 pub struct AssetsCallbackHandle;
 impl AssetsCallback<AssetId, AccountId> for AssetsCallbackHandle {
-	fn created(_id: &AssetId, _owner: &AccountId) -> Result<(), ()> {
+	fn created(_id: &AssetId, _owner: &Option<AccountId>) -> Result<(), ()> {
 		if Self::should_err() {
 			Err(())
 		} else {

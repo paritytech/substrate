@@ -163,7 +163,6 @@ use frame_support::{
 	storage::KeyPrefixIterator,
 	traits::{
 		tokens::{fungibles, DepositConsequence, WithdrawConsequence},
-		BalanceStatus::Reserved,
 		Currency, EnsureOriginWithArg, ReservableCurrency, StoredMap,
 	},
 };
@@ -173,12 +172,11 @@ pub use pallet::*;
 pub use weights::WeightInfo;
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
-const LOG_TARGET: &str = "runtime::assets";
 
-/// Trait with callbacks that are executed after successfull asset creation or destruction.
+/// Trait with callbacks that are executed after successful asset creation or destruction.
 pub trait AssetsCallback<AssetId, AccountId> {
 	/// Indicates that asset with `id` was successfully created by the `owner`
-	fn created(_id: &AssetId, _owner: &AccountId) -> Result<(), ()> {
+	fn created(_id: &AssetId, _owner: &Option<AccountId>) -> Result<(), ()> {
 		Ok(())
 	}
 
@@ -444,7 +442,12 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Some asset class was created.
-		Created { asset_id: T::AssetId, creator: T::AccountId, owner: T::AccountId },
+		Created {
+			asset_id: T::AssetId,
+			creator: T::AccountId,
+			owner: T::AccountId,
+			admin: Option<T::AccountId>,
+		},
 		/// Some assets were issued.
 		Issued { asset_id: T::AssetId, owner: T::AccountId, amount: T::Balance },
 		/// Some assets were transferred.
@@ -459,12 +462,12 @@ pub mod pallet {
 		/// The management team changed.
 		TeamChanged {
 			asset_id: T::AssetId,
-			issuer: T::AccountId,
-			admin: T::AccountId,
-			freezer: T::AccountId,
+			issuer: Option<T::AccountId>,
+			admin: Option<T::AccountId>,
+			freezer: Option<T::AccountId>,
 		},
 		/// The owner changed.
-		OwnerChanged { asset_id: T::AssetId, owner: T::AccountId },
+		OwnerChanged { asset_id: T::AssetId, owner: Option<T::AccountId> },
 		/// Some account `who` was frozen.
 		Frozen { asset_id: T::AssetId, who: T::AccountId },
 		/// Some account `who` was thawed.
@@ -486,7 +489,7 @@ pub mod pallet {
 		/// An asset class was destroyed.
 		Destroyed { asset_id: T::AssetId },
 		/// Some asset class was force-created.
-		ForceCreated { asset_id: T::AssetId, owner: T::AccountId },
+		ForceCreated { asset_id: T::AssetId, owner: Option<T::AccountId> },
 		/// New metadata has been set for an asset.
 		MetadataSet {
 			asset_id: T::AssetId,
@@ -593,12 +596,12 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
-			admin: AccountIdLookupOf<T>,
+			admin: Option<AccountIdLookupOf<T>>,
 			min_balance: T::Balance,
 		) -> DispatchResult {
 			let id: T::AssetId = id.into();
 			let owner = T::CreateOrigin::ensure_origin(origin, &id)?;
-			let admin = T::Lookup::lookup(admin)?;
+			let admin = admin.map(T::Lookup::lookup).transpose()?;
 
 			ensure!(!Asset::<T, I>::contains_key(id), Error::<T, I>::InUse);
 			ensure!(!min_balance.is_zero(), Error::<T, I>::MinBalanceZero);
@@ -610,9 +613,9 @@ pub mod pallet {
 				id,
 				AssetDetails {
 					owner: Some(owner.clone()),
-					issuer: Some(admin.clone()),
-					admin: Some(admin.clone()),
-					freezer: Some(admin.clone()),
+					issuer: admin.clone(),
+					admin: admin.clone(),
+					freezer: admin.clone(),
 					supply: Zero::zero(),
 					deposit,
 					min_balance,
@@ -623,11 +626,15 @@ pub mod pallet {
 					status: AssetStatus::Live,
 				},
 			);
-			ensure!(T::CallbackHandle::created(&id, &owner).is_ok(), Error::<T, I>::CallbackFailed);
+			ensure!(
+				T::CallbackHandle::created(&id, &Some(owner.clone())).is_ok(),
+				Error::<T, I>::CallbackFailed
+			);
 			Self::deposit_event(Event::Created {
 				asset_id: id,
 				creator: owner.clone(),
-				owner: admin,
+				owner,
+				admin,
 			});
 
 			Ok(())
@@ -656,12 +663,12 @@ pub mod pallet {
 		pub fn force_create(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
-			owner: AccountIdLookupOf<T>,
+			owner: Option<AccountIdLookupOf<T>>,
 			is_sufficient: bool,
 			#[pallet::compact] min_balance: T::Balance,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
-			let owner = T::Lookup::lookup(owner)?;
+			let owner = owner.map(T::Lookup::lookup).transpose()?;
 			let id: T::AssetId = id.into();
 			Self::do_force_create(id, owner, is_sufficient, min_balance)
 		}
@@ -771,10 +778,10 @@ pub mod pallet {
 			beneficiary: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
+			let origin = ensure_signed_or_root(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 			let id: T::AssetId = id.into();
-			Self::do_mint(id, &beneficiary, amount, Some(origin))?;
+			Self::do_mint(id, &beneficiary, amount, origin)?;
 			Ok(())
 		}
 
@@ -800,12 +807,12 @@ pub mod pallet {
 			who: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
+			let origin = ensure_signed_or_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let id: T::AssetId = id.into();
 
 			let f = DebitFlags { keep_alive: false, best_effort: true };
-			let _ = Self::do_burn(id, &who, amount, Some(origin), f)?;
+			let _ = Self::do_burn(id, &who, amount, origin, f)?;
 			Ok(())
 		}
 
@@ -902,13 +909,13 @@ pub mod pallet {
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
+			let origin = ensure_signed_or_root(origin)?;
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
 			let id: T::AssetId = id.into();
 
 			let f = TransferFlags { keep_alive: false, best_effort: false, burn_dust: false };
-			Self::do_transfer(id, &source, &dest, amount, Some(origin), f).map(|_| ())
+			Self::do_transfer(id, &source, &dest, amount, origin, f).map(|_| ())
 		}
 
 		/// Disallow further unprivileged transfers from an account.
@@ -927,7 +934,7 @@ pub mod pallet {
 			id: T::AssetIdParameter,
 			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
+			let origin = ensure_signed_or_root(origin)?;
 			let id: T::AssetId = id.into();
 
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
@@ -935,7 +942,7 @@ pub mod pallet {
 				d.status == AssetStatus::Live || d.status == AssetStatus::Frozen,
 				Error::<T, I>::AssetNotLive
 			);
-			ensure!(Some(origin) == d.freezer, Error::<T, I>::NoPermission);
+			ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
 
 			let who = T::Lookup::lookup(who)?;
 
@@ -964,7 +971,7 @@ pub mod pallet {
 			id: T::AssetIdParameter,
 			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
+			let origin = ensure_signed_or_root(origin)?;
 			let id: T::AssetId = id.into();
 
 			let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
@@ -972,7 +979,7 @@ pub mod pallet {
 				details.status == AssetStatus::Live || details.status == AssetStatus::Frozen,
 				Error::<T, I>::AssetNotLive
 			);
-			ensure!(Some(origin) == details.admin, Error::<T, I>::NoPermission);
+			ensure!(origin == details.admin, Error::<T, I>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
 
 			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
@@ -995,13 +1002,13 @@ pub mod pallet {
 		/// Weight: `O(1)`
 		#[pallet::call_index(13)]
 		pub fn freeze_asset(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
+			let origin = ensure_signed_or_root(origin)?;
 			let id: T::AssetId = id.into();
 
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-				ensure!(Some(origin) == d.freezer.clone(), Error::<T, I>::NoPermission);
+				ensure!(origin == d.freezer.clone(), Error::<T, I>::NoPermission);
 
 				d.status = AssetStatus::Frozen;
 
@@ -1021,12 +1028,12 @@ pub mod pallet {
 		/// Weight: `O(1)`
 		#[pallet::call_index(14)]
 		pub fn thaw_asset(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
+			let origin = ensure_signed_or_root(origin)?;
 			let id: T::AssetId = id.into();
 
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(Some(origin) == d.admin.clone(), Error::<T, I>::NoPermission);
+				ensure!(origin == d.admin.clone(), Error::<T, I>::NoPermission);
 				ensure!(d.status == AssetStatus::Frozen, Error::<T, I>::NotFrozen);
 
 				d.status = AssetStatus::Live;
@@ -1050,30 +1057,35 @@ pub mod pallet {
 		pub fn transfer_ownership(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
-			owner: AccountIdLookupOf<T>,
+			owner: Option<AccountIdLookupOf<T>>,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
-			let owner = T::Lookup::lookup(owner)?;
+			let origin = ensure_signed_or_root(origin)?;
+			let owner = owner.map(T::Lookup::lookup).transpose()?;
 			let id: T::AssetId = id.into();
 
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(details.status == AssetStatus::Live, Error::<T, I>::LiveAsset);
-				ensure!(Some(origin) == details.owner.clone(), Error::<T, I>::NoPermission);
+				ensure!(origin == details.owner.clone(), Error::<T, I>::NoPermission);
 
-				if details.owner == Some(owner.clone()) {
+				if details.owner == owner.clone() {
 					return Ok(())
 				}
 
-				let metadata_deposit = Metadata::<T, I>::get(id).deposit;
-				let deposit = details.deposit + metadata_deposit;
-
 				// Move the deposit to the new owner.
 				if let Some(details_owner) = &details.owner {
-					T::Currency::repatriate_reserved(details_owner, &owner, deposit, Reserved)?;
+					let metadata_deposit = Metadata::<T, I>::get(id).deposit;
+					let old_deposit = details.deposit + metadata_deposit;
+
+					T::Currency::unreserve(&details_owner, old_deposit);
+
+					if let Some(account) = owner.clone() {
+						let new_deposit = T::AssetDeposit::get() + metadata_deposit;
+						T::Currency::reserve(&account, new_deposit)?;
+					}
 				}
 
-				details.owner = Some(owner.clone());
+				details.owner = owner.clone();
 
 				Self::deposit_event(Event::OwnerChanged { asset_id: id, owner });
 				Ok(())
@@ -1096,24 +1108,30 @@ pub mod pallet {
 		pub fn set_team(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
-			issuer: AccountIdLookupOf<T>,
-			admin: AccountIdLookupOf<T>,
-			freezer: AccountIdLookupOf<T>,
+			issuer: Option<AccountIdLookupOf<T>>,
+			admin: Option<AccountIdLookupOf<T>>,
+			freezer: Option<AccountIdLookupOf<T>>,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
-			let issuer = T::Lookup::lookup(issuer)?;
-			let admin = T::Lookup::lookup(admin)?;
-			let freezer = T::Lookup::lookup(freezer)?;
+			let origin = ensure_signed_or_root(origin)?;
+			let issuer = issuer.map(T::Lookup::lookup).transpose()?;
+			let admin = admin.map(T::Lookup::lookup).transpose()?;
+			let freezer = freezer.map(T::Lookup::lookup).transpose()?;
 			let id: T::AssetId = id.into();
 
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-				ensure!(Some(origin) == details.owner.clone(), Error::<T, I>::NoPermission);
+				ensure!(origin == details.owner.clone(), Error::<T, I>::NoPermission);
 
-				details.issuer = Some(issuer.clone());
-				details.admin = Some(admin.clone());
-				details.freezer = Some(freezer.clone());
+				if details.issuer.is_some() {
+					details.issuer = issuer.clone();
+				}
+				if details.admin.is_some() {
+					details.admin = admin.clone();
+				}
+				if details.freezer.is_some() {
+					details.freezer = freezer.clone();
+				}
 
 				Self::deposit_event(Event::TeamChanged { asset_id: id, issuer, admin, freezer });
 				Ok(())
@@ -1293,10 +1311,10 @@ pub mod pallet {
 		pub fn force_asset_status(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
-			owner: AccountIdLookupOf<T>,
-			issuer: AccountIdLookupOf<T>,
-			admin: AccountIdLookupOf<T>,
-			freezer: AccountIdLookupOf<T>,
+			owner: Option<AccountIdLookupOf<T>>,
+			issuer: Option<AccountIdLookupOf<T>>,
+			admin: Option<AccountIdLookupOf<T>>,
+			freezer: Option<AccountIdLookupOf<T>>,
 			#[pallet::compact] min_balance: T::Balance,
 			is_sufficient: bool,
 			is_frozen: bool,
@@ -1307,10 +1325,28 @@ pub mod pallet {
 			Asset::<T, I>::try_mutate(id, |maybe_asset| {
 				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(asset.status != AssetStatus::Destroying, Error::<T, I>::AssetNotLive);
-				asset.owner = Some(T::Lookup::lookup(owner)?);
-				asset.issuer = Some(T::Lookup::lookup(issuer)?);
-				asset.admin = Some(T::Lookup::lookup(admin)?);
-				asset.freezer = Some(T::Lookup::lookup(freezer)?);
+
+				let prev_owner = asset.owner;
+				let new_owner = owner.map(T::Lookup::lookup).transpose()?;
+
+				// move the deposit
+				if prev_owner != new_owner {
+					let metadata_deposit = Metadata::<T, I>::get(id).deposit;
+
+					if let Some(account) = prev_owner {
+						let old_deposit = asset.deposit + metadata_deposit;
+						T::Currency::unreserve(&account, old_deposit);
+					}
+					if let Some(account) = new_owner.clone() {
+						let new_deposit = T::AssetDeposit::get() + metadata_deposit;
+						T::Currency::reserve(&account, new_deposit)?;
+					}
+				}
+
+				asset.owner = new_owner;
+				asset.issuer = issuer.map(T::Lookup::lookup).transpose()?;
+				asset.admin = admin.map(T::Lookup::lookup).transpose()?;
+				asset.freezer = freezer.map(T::Lookup::lookup).transpose()?;
 				asset.min_balance = min_balance;
 				asset.is_sufficient = is_sufficient;
 				if is_frozen {
@@ -1524,11 +1560,11 @@ pub mod pallet {
 			id: T::AssetIdParameter,
 			min_balance: T::Balance,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
+			let origin = ensure_signed_or_root(origin)?;
 			let id: T::AssetId = id.into();
 
 			let mut details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(Some(origin) == details.owner, Error::<T, I>::NoPermission);
+			ensure!(origin == details.owner, Error::<T, I>::NoPermission);
 
 			let old_min_balance = details.min_balance;
 			// If the asset is marked as sufficient it won't be allowed to
