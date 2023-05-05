@@ -19,13 +19,18 @@
 
 use crate::{self as pallet_nis, Perquintill, WithMaximumOf};
 
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{ConstU16, ConstU32, ConstU64, Currency, OnFinalize, OnInitialize, StorageMapShim},
+	traits::{
+		fungible::Inspect, ConstU16, ConstU32, ConstU64, Everything, OnFinalize, OnInitialize,
+		StorageMapShim,
+	},
 	weights::Weight,
 	PalletId,
 };
 use pallet_balances::{Instance1, Instance2};
+use scale_info::TypeInfo;
 use sp_core::{ConstU128, H256};
 use sp_runtime::{
 	testing::Header,
@@ -34,6 +39,8 @@ use sp_runtime::{
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+
+pub type Balance = u64;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -50,7 +57,7 @@ frame_support::construct_runtime!(
 );
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::Everything;
+	type BaseCallFilter = Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type RuntimeOrigin = RuntimeOrigin;
@@ -67,35 +74,45 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<u64>;
+	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ConstU16<42>;
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_balances::Config<Instance1> for Test {
-	type Balance = u64;
+	type Balance = Balance;
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
-	type ExistentialDeposit = frame_support::traits::ConstU64<1>;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 	type MaxLocks = ();
 	type MaxReserves = ConstU32<1>;
 	type ReserveIdentifier = [u8; 8];
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = HoldIdentifier;
+	type MaxHolds = ConstU32<1>;
+}
+
+#[derive(
+	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, Debug, TypeInfo,
+)]
+pub enum HoldIdentifier {
+	Nis,
 }
 
 impl pallet_balances::Config<Instance2> for Test {
 	type Balance = u128;
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
-	type ExistentialDeposit = frame_support::traits::ConstU128<1>;
+	type ExistentialDeposit = ConstU128<1>;
 	type AccountStore = StorageMapShim<
 		pallet_balances::Account<Test, Instance2>,
-		frame_system::Provider<Test>,
 		u64,
 		pallet_balances::AccountData<u128>,
 	>;
@@ -103,16 +120,20 @@ impl pallet_balances::Config<Instance2> for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 parameter_types! {
-	pub IgnoredIssuance: u64 = Balances::total_balance(&0); // Account zero is ignored.
+	pub IgnoredIssuance: Balance = Balances::total_balance(&0); // Account zero is ignored.
 	pub const NisPalletId: PalletId = PalletId(*b"py/nis  ");
 	pub static Target: Perquintill = Perquintill::zero();
 	pub const MinReceipt: Perquintill = Perquintill::from_percent(1);
 	pub const ThawThrottle: (Perquintill, u64) = (Perquintill::from_percent(25), 5);
 	pub static MaxIntakeWeight: Weight = Weight::from_parts(2_000_000_000_000, 0);
-	pub const ReserveId: [u8; 8] = *b"py/nis  ";
+	pub const HoldReason: HoldIdentifier = HoldIdentifier::Nis;
 }
 
 ord_parameter_types! {
@@ -140,7 +161,7 @@ impl pallet_nis::Config for Test {
 	type MaxIntakeWeight = MaxIntakeWeight;
 	type MinReceipt = MinReceipt;
 	type ThawThrottle = ThawThrottle;
-	type ReserveId = ReserveId;
+	type HoldReason = HoldReason;
 }
 
 // This function basically just builds a genesis storage key/value store according to
@@ -153,6 +174,13 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.assimilate_storage(&mut t)
 	.unwrap();
 	t.into()
+}
+
+// This function basically just builds a genesis storage key/value store according to
+// our desired mockup, but without any balances.
+#[cfg(feature = "runtime-benchmarks")]
+pub fn new_test_ext_empty() -> sp_io::TestExternalities {
+	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
 
 pub fn run_to_block(n: u64) {

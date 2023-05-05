@@ -66,7 +66,6 @@ pub struct FullState<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
 	executor: SubscriptionTaskExecutor,
 	_phantom: PhantomData<(BE, Block)>,
-	rpc_max_payload: Option<usize>,
 }
 
 impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
@@ -79,12 +78,8 @@ where
 	Block: BlockT + 'static,
 {
 	/// Create new state API backend for full nodes.
-	pub fn new(
-		client: Arc<Client>,
-		executor: SubscriptionTaskExecutor,
-		rpc_max_payload: Option<usize>,
-	) -> Self {
-		Self { client, executor, _phantom: PhantomData, rpc_max_payload }
+	pub fn new(client: Arc<Client>, executor: SubscriptionTaskExecutor) -> Self {
+		Self { client, executor, _phantom: PhantomData }
 	}
 
 	/// Returns given block hash or best block hash if None is passed.
@@ -481,7 +476,6 @@ where
 			targets,
 			storage_keys,
 			methods,
-			self.rpc_max_payload,
 		)
 		.trace_block()
 		.map_err(|e| invalid_block::<Block>(block, None, e.to_string()))

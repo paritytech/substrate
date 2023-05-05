@@ -57,9 +57,12 @@
 //! It is illegal to send a [`NotifsHandlerIn::Open`] before a previously-emitted
 //! [`NotifsHandlerIn::Open`] has gotten an answer.
 
-use crate::protocol::notifications::upgrade::{
-	NotificationsIn, NotificationsInSubstream, NotificationsOut, NotificationsOutSubstream,
-	UpgradeCollec,
+use crate::{
+	protocol::notifications::upgrade::{
+		NotificationsIn, NotificationsInSubstream, NotificationsOut, NotificationsOutSubstream,
+		UpgradeCollec,
+	},
+	types::ProtocolName,
 };
 
 use bytes::BytesMut;
@@ -77,7 +80,6 @@ use libp2p::{
 };
 use log::error;
 use parking_lot::{Mutex, RwLock};
-use sc_network_common::protocol::ProtocolName;
 use std::{
 	collections::VecDeque,
 	mem,
@@ -945,8 +947,9 @@ pub mod tests {
 				Poll::Ready(Some(NotificationsSinkMessage::Notification { message })) =>
 					Poll::Ready(Some(message)),
 				Poll::Pending => Poll::Ready(None),
-				Poll::Ready(Some(NotificationsSinkMessage::ForceClose)) | Poll::Ready(None) =>
-					panic!("sink closed"),
+				Poll::Ready(Some(NotificationsSinkMessage::ForceClose)) | Poll::Ready(None) => {
+					panic!("sink closed")
+				},
 			})
 			.await
 		}

@@ -25,7 +25,7 @@ use crate::{
 	wasm::{
 		runtime::AllowDeprecatedInterface, Determinism, Environment, OwnerInfo, PrefabWasmModule,
 	},
-	AccountIdOf, CodeVec, Config, Error, Schedule,
+	AccountIdOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
 };
 use codec::{Encode, MaxEncodedLen};
 use sp_runtime::{traits::Hash, DispatchError};
@@ -50,7 +50,7 @@ pub enum TryInstantiate {
 	Instantiate,
 	/// Skip the instantiation during preparation.
 	///
-	/// This makes sense when the preparation takes place as part of an instantation. Then
+	/// This makes sense when the preparation takes place as part of an instantiation. Then
 	/// this instantiation would fail the whole transaction and an extra check is not
 	/// necessary.
 	Skip,
@@ -155,52 +155,6 @@ impl<'a, T: Config> ContractModule<'a, T> {
 		Ok(())
 	}
 
-	/// Ensures that no floating point types are in use.
-	fn ensure_no_floating_types(&self) -> Result<(), &'static str> {
-		if let Some(global_section) = self.module.global_section() {
-			for global in global_section.entries() {
-				match global.global_type().content_type() {
-					ValueType::F32 | ValueType::F64 =>
-						return Err("use of floating point type in globals is forbidden"),
-					_ => {},
-				}
-			}
-		}
-
-		if let Some(code_section) = self.module.code_section() {
-			for func_body in code_section.bodies() {
-				for local in func_body.locals() {
-					match local.value_type() {
-						ValueType::F32 | ValueType::F64 =>
-							return Err("use of floating point type in locals is forbidden"),
-						_ => {},
-					}
-				}
-			}
-		}
-
-		if let Some(type_section) = self.module.type_section() {
-			for wasm_type in type_section.types() {
-				match wasm_type {
-					Type::Function(func_type) => {
-						let return_type = func_type.results().get(0);
-						for value_type in func_type.params().iter().chain(return_type) {
-							match value_type {
-								ValueType::F32 | ValueType::F64 =>
-									return Err(
-										"use of floating point type in function types is forbidden",
-									),
-								_ => {},
-							}
-						}
-					},
-				}
-			}
-		}
-
-		Ok(())
-	}
-
 	/// Ensure that no function exists that has more parameters than allowed.
 	fn ensure_parameter_limit(&self, limit: u32) -> Result<(), &'static str> {
 		let type_section = if let Some(type_section) = self.module.type_section() {
@@ -219,7 +173,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 	}
 
 	fn inject_gas_metering(self, determinism: Determinism) -> Result<Self, &'static str> {
-		let gas_rules = self.schedule.rules(&self.module, determinism);
+		let gas_rules = self.schedule.rules(determinism);
 		let backend = gas_metering::host_function::Injector::new("seal0", "gas");
 		let contract_module = gas_metering::inject(self.module, backend, &gas_rules)
 			.map_err(|_| "gas instrumentation failed")?;
@@ -376,7 +330,7 @@ fn get_memory_limits<T: Config>(
 			},
 		}
 	} else {
-		// If none memory imported then just crate an empty placeholder.
+		// If none memory imported then just create an empty placeholder.
 		// Any access to it will lead to out of bounds trap.
 		Ok((0, 0))
 	}
@@ -411,10 +365,9 @@ where
 		memory64: false,
 		extended_const: false,
 		component_model: false,
-		// This is not our only defense: We check for float types later in the preparation
-		// process. Additionally, all instructions explictily  need to have weights assigned
+		// This is not our only defense: All instructions explicitly need to have weights assigned
 		// or the deployment will fail. We have none assigned for float instructions.
-		deterministic_only: matches!(determinism, Determinism::Deterministic),
+		floats: matches!(determinism, Determinism::Relaxed),
 		mutable_global: false,
 		saturating_float_to_int: false,
 		sign_extension: false,
@@ -422,10 +375,11 @@ where
 		multi_value: false,
 		reference_types: false,
 		simd: false,
+		memory_control: false,
 	})
 	.validate_all(original_code)
 	.map_err(|err| {
-		log::debug!(target: "runtime::contracts", "{}", err);
+		log::debug!(target: LOG_TARGET, "{}", err);
 		(Error::<T>::CodeRejected.into(), "validation of new code failed")
 	})?;
 
@@ -439,10 +393,6 @@ where
 		contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
 		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
 
-		if matches!(determinism, Determinism::Deterministic) {
-			contract_module.ensure_no_floating_types()?;
-		}
-
 		// We disallow importing `gas` function here since it is treated as implementation detail.
 		let disallowed_imports = [b"gas".as_ref()];
 		let memory_limits =
@@ -453,7 +403,7 @@ where
 		Ok((code, memory_limits))
 	})()
 	.map_err(|msg: &str| {
-		log::debug!(target: "runtime::contracts", "new code rejected: {}", msg);
+		log::debug!(target: LOG_TARGET, "new code rejected: {}", msg);
 		(Error::<T>::CodeRejected.into(), msg)
 	})?;
 
@@ -476,7 +426,7 @@ where
 			},
 		)
 		.map_err(|err| {
-			log::debug!(target: "runtime::contracts", "{}", err);
+			log::debug!(target: LOG_TARGET, "{}", err);
 			(Error::<T>::CodeRejected.into(), "new code rejected after instrumentation")
 		})?;
 	}
@@ -568,7 +518,7 @@ where
 		InstrumentReason::Reinstrument,
 	)
 	.map_err(|(err, msg)| {
-		log::error!(target: "runtime::contracts", "CodeRejected during reinstrument: {}", msg);
+		log::error!(target: LOG_TARGET, "CodeRejected during reinstrument: {}", msg);
 		err
 	})
 	.map(|(code, _)| code)
@@ -608,7 +558,7 @@ pub mod benchmarking {
 				deposit: Default::default(),
 				refcount: 0,
 			}),
-			determinism: Determinism::Deterministic,
+			determinism: Determinism::Enforced,
 		})
 	}
 }
@@ -682,7 +632,7 @@ mod tests {
 					wasm,
 					&schedule,
 					ALICE,
-					Determinism::Deterministic,
+					Determinism::Enforced,
 					TryInstantiate::Instantiate,
 				);
 				assert_matches::assert_matches!(r.map_err(|(_, msg)| msg), $($expected)*);
@@ -704,7 +654,7 @@ mod tests {
 			)
 			(func (export "deploy"))
 		)"#,
-		Err("gas instrumentation failed")
+		Err("validation of new code failed")
 	);
 
 	mod functions {
@@ -1214,7 +1164,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("use of floating point type in globals is forbidden")
+			Err("validation of new code failed")
 		);
 
 		prepare_test!(
@@ -1226,7 +1176,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("use of floating point type in locals is forbidden")
+			Err("validation of new code failed")
 		);
 
 		prepare_test!(
@@ -1238,7 +1188,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("use of floating point type in function types is forbidden")
+			Err("validation of new code failed")
 		);
 
 		prepare_test!(
@@ -1250,7 +1200,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("use of floating point type in function types is forbidden")
+			Err("validation of new code failed")
 		);
 	}
 }

@@ -28,7 +28,7 @@ use serde::Serialize;
 use codec::{Codec, Decode, Encode, Input};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	traits::{Header as HeaderT, NumberFor},
 	ConsensusEngineId, RuntimeDebug,
@@ -234,14 +234,11 @@ impl<N: Codec> ConsensusLog<N> {
 /// GRANDPA happens when a voter votes on the same round (either at prevote or
 /// precommit stage) for different blocks. Proving is achieved by collecting the
 /// signed messages of conflicting votes.
-#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq, Eq, TypeInfo)]
 pub struct EquivocationProof<H, N> {
 	set_id: SetId,
 	equivocation: Equivocation<H, N>,
 }
-
-// Don't bother the grandpa crate...
-impl<H: PartialEq, N: PartialEq> Eq for EquivocationProof<H, N> {}
 
 impl<H, N> EquivocationProof<H, N> {
 	/// Create a new `EquivocationProof` for the given set id and using the
@@ -271,7 +268,7 @@ impl<H, N> EquivocationProof<H, N> {
 
 /// Wrapper object for GRANDPA equivocation proofs, useful for unifying prevote
 /// and precommit equivocations under a common type.
-#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq, Eq, TypeInfo)]
 pub enum Equivocation<H, N> {
 	/// Proof of equivocation at prevote stage.
 	Prevote(grandpa::Equivocation<AuthorityId, grandpa::Prevote<H, N>, AuthoritySignature>),
@@ -444,7 +441,7 @@ where
 /// Localizes the message to the given set and round and signs the payload.
 #[cfg(feature = "std")]
 pub fn sign_message<H, N>(
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	message: grandpa::Message<H, N>,
 	public: AuthorityId,
 	round: RoundNumber,
@@ -454,20 +451,15 @@ where
 	H: Encode,
 	N: Encode,
 {
-	use sp_application_crypto::AppKey;
-	use sp_core::crypto::Public;
+	use sp_application_crypto::AppCrypto;
 
 	let encoded = localized_payload(round, set_id, &message);
-	let signature = SyncCryptoStore::sign_with(
-		&*keystore,
-		AuthorityId::ID,
-		&public.to_public_crypto_pair(),
-		&encoded[..],
-	)
-	.ok()
-	.flatten()?
-	.try_into()
-	.ok()?;
+	let signature = keystore
+		.ed25519_sign(AuthorityId::ID, public.as_ref(), &encoded[..])
+		.ok()
+		.flatten()?
+		.try_into()
+		.ok()?;
 
 	Some(grandpa::SignedMessage { message, signature, id: public })
 }

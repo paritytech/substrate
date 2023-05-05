@@ -29,6 +29,7 @@ rand = "0.8.5"
 threadpool = "1.7"
 tracing = "0.1.29"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
+sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
 sc-peerset = { version = "4.0.0-dev", path = "../peerset" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }

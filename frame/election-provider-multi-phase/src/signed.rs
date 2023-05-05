@@ -462,7 +462,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Infallible
 	pub fn finalize_signed_phase_accept_solution(
-		ready_solution: ReadySolution<T>,
+		ready_solution: ReadySolution<T::AccountId, T::MaxWinners>,
 		who: &T::AccountId,
 		deposit: BalanceOf<T>,
 		call_fee: BalanceOf<T>,
@@ -554,6 +554,11 @@ mod tests {
 				MultiPhase::submit(RuntimeOrigin::signed(10), Box::new(solution)),
 				Error::<Runtime>::PreDispatchEarlySubmission,
 			);
+
+			// make sure invariants hold true and post-test try state checks to pass.
+			<crate::Snapshot<Runtime>>::kill();
+			<crate::SnapshotMetadata<Runtime>>::kill();
+			<crate::DesiredTargets<Runtime>>::kill();
 		})
 	}
 

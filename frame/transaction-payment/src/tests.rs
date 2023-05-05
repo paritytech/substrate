@@ -285,7 +285,7 @@ fn signed_ext_length_fee_is_also_updated_per_congestion() {
 
 #[test]
 fn query_info_and_fee_details_works() {
-	let call = RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+	let call = RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 2, value: 69 });
 	let origin = 111111;
 	let extra = ();
 	let xt = TestXt::new(call.clone(), Some((origin, extra)));
@@ -348,7 +348,7 @@ fn query_info_and_fee_details_works() {
 
 #[test]
 fn query_call_info_and_fee_details_works() {
-	let call = RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+	let call = RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 2, value: 69 });
 	let info = call.get_dispatch_info();
 	let encoded_call = call.encode();
 	let len = encoded_call.len() as u32;
@@ -530,7 +530,11 @@ fn refund_does_not_recreate_account() {
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
 			// kill the account between pre and post dispatch
-			assert_ok!(Balances::transfer(Some(2).into(), 3, Balances::free_balance(2)));
+			assert_ok!(Balances::transfer_allow_death(
+				Some(2).into(),
+				3,
+				Balances::free_balance(2)
+			));
 			assert_eq!(Balances::free_balance(2), 0);
 
 			assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(

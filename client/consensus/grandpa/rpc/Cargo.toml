@@ -10,7 +10,7 @@ readme = "README.md"
 homepage = "https://substrate.io"
 
 [dependencies]
-finality-grandpa = { version = "0.16.1", features = ["derive-codec"] }
+finality-grandpa = { version = "0.16.2", features = ["derive-codec"] }
 futures = "0.3.16"
 jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"] }
 log = "0.4.8"

@@ -65,7 +65,7 @@ use sp_core::{
 	traits::SpawnNamed,
 };
 #[cfg(feature = "test-helpers")]
-use sp_keystore::SyncCryptoStorePtr;
+use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{
@@ -161,7 +161,7 @@ pub fn new_in_mem<E, Block, G, RA>(
 	backend: Arc<in_mem::Backend<Block>>,
 	executor: E,
 	genesis_block_builder: G,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -224,7 +224,7 @@ pub fn new_with_backend<B, E, Block, G, RA>(
 	backend: Arc<B>,
 	executor: E,
 	genesis_block_builder: G,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
@@ -243,15 +243,11 @@ where
 		Default::default(),
 		keystore,
 		sc_offchain::OffchainDb::factory_from_backend(&*backend),
+		Arc::new(executor.clone()),
 	);
 
-	let call_executor = LocalCallExecutor::new(
-		backend.clone(),
-		executor,
-		spawn_handle.clone(),
-		config.clone(),
-		extensions,
-	)?;
+	let call_executor =
+		LocalCallExecutor::new(backend.clone(), executor, config.clone(), extensions)?;
 
 	Client::new(
 		backend,
@@ -940,19 +936,24 @@ where
 			return Err(sp_blockchain::Error::NotInFinalizedChain)
 		}
 
-		let route_from_best =
-			sp_blockchain::tree_route(self.backend.blockchain(), best_block, block)?;
+		// If there is only one leaf, best block is guaranteed to be
+		// a descendant of the new finalized block. If not,
+		// we need to check.
+		if self.backend.blockchain().leaves()?.len() > 1 {
+			let route_from_best =
+				sp_blockchain::tree_route(self.backend.blockchain(), best_block, block)?;
 
-		// if the block is not a direct ancestor of the current best chain,
-		// then some other block is the common ancestor.
-		if route_from_best.common_block().hash != block {
-			// NOTE: we're setting the finalized block as best block, this might
-			// be slightly inaccurate since we might have a "better" block
-			// further along this chain, but since best chain selection logic is
-			// plugable we cannot make a better choice here. usages that need
-			// an accurate "best" block need to go through `SelectChain`
-			// instead.
-			operation.op.mark_head(block)?;
+			// if the block is not a direct ancestor of the current best chain,
+			// then some other block is the common ancestor.
+			if route_from_best.common_block().hash != block {
+				// NOTE: we're setting the finalized block as best block, this might
+				// be slightly inaccurate since we might have a "better" block
+				// further along this chain, but since best chain selection logic is
+				// plugable we cannot make a better choice here. usages that need
+				// an accurate "best" block need to go through `SelectChain`
+				// instead.
+				operation.op.mark_head(block)?;
+			}
 		}
 
 		let enacted = route_from_finalized.enacted();

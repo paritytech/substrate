@@ -17,6 +17,16 @@
 
 //! Implementations for fungibles trait.
 
+use frame_support::{
+	defensive,
+	traits::tokens::{
+		Fortitude,
+		Precision::{self, BestEffort},
+		Preservation::{self, Expendable},
+		Provenance::{self, Minted},
+	},
+};
+
 use super::*;
 
 impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T, I> {
@@ -35,21 +45,27 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 		Pallet::<T, I>::balance(asset, who)
 	}
 
+	fn total_balance(asset: Self::AssetId, who: &<T as SystemConfig>::AccountId) -> Self::Balance {
+		Pallet::<T, I>::balance(asset, who)
+	}
+
 	fn reducible_balance(
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
-		keep_alive: bool,
+		preservation: Preservation,
+		_: Fortitude,
 	) -> Self::Balance {
-		Pallet::<T, I>::reducible_balance(asset, who, keep_alive).unwrap_or(Zero::zero())
+		Pallet::<T, I>::reducible_balance(asset, who, !matches!(preservation, Expendable))
+			.unwrap_or(Zero::zero())
 	}
 
 	fn can_deposit(
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
-		mint: bool,
+		provenance: Provenance,
 	) -> DepositConsequence {
-		Pallet::<T, I>::can_increase(asset, who, amount, mint)
+		Pallet::<T, I>::can_increase(asset, who, amount, provenance == Minted)
 	}
 
 	fn can_withdraw(
@@ -65,69 +81,26 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 	}
 }
 
-impl<T: Config<I>, I: 'static> fungibles::InspectMetadata<<T as SystemConfig>::AccountId>
+impl<T: Config<I>, I: 'static> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {}
+impl<T: Config<I>, I: 'static> fungibles::Balanced<<T as SystemConfig>::AccountId>
 	for Pallet<T, I>
 {
-	/// Return the name of an asset.
-	fn name(asset: &Self::AssetId) -> Vec<u8> {
-		Metadata::<T, I>::get(asset).name.to_vec()
-	}
-
-	/// Return the symbol of an asset.
-	fn symbol(asset: &Self::AssetId) -> Vec<u8> {
-		Metadata::<T, I>::get(asset).symbol.to_vec()
-	}
-
-	/// Return the decimals of an asset.
-	fn decimals(asset: &Self::AssetId) -> u8 {
-		Metadata::<T, I>::get(asset).decimals
-	}
-}
-
-impl<T: Config<I>, I: 'static> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {
-	fn mint_into(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> DispatchResult {
-		Self::do_mint(asset, who, amount, None)
-	}
-
-	fn burn_from(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> Result<Self::Balance, DispatchError> {
-		let f = DebitFlags { keep_alive: false, best_effort: false };
-		Self::do_burn(asset, who, amount, None, f)
-	}
-
-	fn slash(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> Result<Self::Balance, DispatchError> {
-		let f = DebitFlags { keep_alive: false, best_effort: true };
-		Self::do_burn(asset, who, amount, None, f)
-	}
-}
-
-impl<T: Config<I>, I: 'static> fungibles::Transfer<T::AccountId> for Pallet<T, I> {
-	fn transfer(
-		asset: Self::AssetId,
-		source: &T::AccountId,
-		dest: &T::AccountId,
-		amount: T::Balance,
-		keep_alive: bool,
-	) -> Result<T::Balance, DispatchError> {
-		let f = TransferFlags { keep_alive, best_effort: false, burn_dust: false };
-		Self::do_transfer(asset, source, dest, amount, None, f)
-	}
+	type OnDropCredit = fungibles::DecreaseIssuance<T::AccountId, Self>;
+	type OnDropDebt = fungibles::IncreaseIssuance<T::AccountId, Self>;
 }
 
 impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T, I> {
-	fn set_balance(_: Self::AssetId, _: &T::AccountId, _: Self::Balance) -> DispatchResult {
-		unreachable!("set_balance is not used if other functions are impl'd");
+	fn handle_raw_dust(_: Self::AssetId, _: Self::Balance) {}
+	fn handle_dust(_: fungibles::Dust<T::AccountId, Self>) {
+		defensive!("`decrease_balance` and `increase_balance` have non-default impls; nothing else calls this; qed");
+	}
+	fn write_balance(
+		_: Self::AssetId,
+		_: &T::AccountId,
+		_: Self::Balance,
+	) -> Result<Option<Self::Balance>, DispatchError> {
+		defensive!("write_balance is not used if other functions are impl'd");
+		Err(DispatchError::Unavailable)
 	}
 	fn set_total_issuance(id: T::AssetId, amount: Self::Balance) {
 		Asset::<T, I>::mutate_exists(id, |maybe_asset| {
@@ -140,36 +113,27 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 		asset: T::AssetId,
 		who: &T::AccountId,
 		amount: Self::Balance,
+		precision: Precision,
+		preservation: Preservation,
+		_: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
-		let f = DebitFlags { keep_alive: false, best_effort: false };
+		let f = DebitFlags {
+			keep_alive: preservation != Expendable,
+			best_effort: precision == BestEffort,
+		};
 		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(()))
-	}
-	fn decrease_balance_at_most(
-		asset: T::AssetId,
-		who: &T::AccountId,
-		amount: Self::Balance,
-	) -> Self::Balance {
-		let f = DebitFlags { keep_alive: false, best_effort: true };
-		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(())).unwrap_or(Zero::zero())
 	}
 	fn increase_balance(
 		asset: T::AssetId,
 		who: &T::AccountId,
 		amount: Self::Balance,
+		_: Precision,
 	) -> Result<Self::Balance, DispatchError> {
 		Self::increase_balance(asset, who, amount, |_| Ok(()))?;
 		Ok(amount)
 	}
-	fn increase_balance_at_most(
-		asset: T::AssetId,
-		who: &T::AccountId,
-		amount: Self::Balance,
-	) -> Self::Balance {
-		match Self::increase_balance(asset, who, amount, |_| Ok(())) {
-			Ok(()) => amount,
-			Err(_) => Zero::zero(),
-		}
-	}
+
+	// TODO: #13196 implement deactivate/reactivate once we have inactive balance tracking.
 }
 
 impl<T: Config<I>, I: 'static> fungibles::Create<T::AccountId> for Pallet<T, I> {

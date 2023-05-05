@@ -23,7 +23,7 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays},
 	log,
 	pallet_prelude::*,
-	traits::{Get, KeyOwnerProofSystem, OneSessionHandler},
+	traits::{Get, OneSessionHandler},
 	weights::Weight,
 	BoundedSlice, BoundedVec, Parameter,
 };
@@ -34,10 +34,10 @@ use frame_system::{
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, Member},
-	KeyTypeId, RuntimeAppPublic,
+	RuntimeAppPublic,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_staking::SessionIndex;
+use sp_staking::{offence::OffenceReportSystem, SessionIndex};
 use sp_std::prelude::*;
 
 use sp_consensus_beefy::{
@@ -52,10 +52,10 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub use crate::equivocation::{
-	BeefyEquivocationOffence, BeefyOffence, BeefyTimeSlot, EquivocationHandler, HandleEquivocation,
-};
+pub use crate::equivocation::{EquivocationOffence, EquivocationReportSystem, TimeSlot};
 pub use pallet::*;
+
+use crate::equivocation::EquivocationEvidenceFor;
 
 const LOG_TARGET: &str = "runtime::beefy";
 
@@ -73,30 +73,6 @@ pub mod pallet {
 			+ BeefyAuthorityId<sp_runtime::traits::Keccak256>
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen;
-
-		/// A system for proving ownership of keys, i.e. that a given key was part
-		/// of a validator set, needed for validating equivocation reports.
-		type KeyOwnerProofSystem: KeyOwnerProofSystem<
-			(KeyTypeId, Self::BeefyId),
-			Proof = Self::KeyOwnerProof,
-			IdentificationTuple = Self::KeyOwnerIdentification,
-		>;
-
-		/// The proof of key ownership, used for validating equivocation reports
-		/// The proof must include the session index and validator count of the
-		/// session at which the equivocation occurred.
-		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
-
-		/// The identification of a key owner, used when reporting equivocations.
-		type KeyOwnerIdentification: Parameter;
-
-		/// The equivocation handling subsystem, defines methods to report an
-		/// offence (after the equivocation has been validated) and for submitting a
-		/// transaction to report an equivocation (from an offchain context).
-		/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
-		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
-		/// definition.
-		type HandleEquivocation: HandleEquivocation<Self>;
 
 		/// The maximum number of authorities that can be added.
 		#[pallet::constant]
@@ -120,6 +96,19 @@ pub mod pallet {
 
 		/// Weights for this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// The proof of key ownership, used for validating equivocation reports
+		/// The proof must include the session index and validator count of the
+		/// session at which the equivocation occurred.
+		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+
+		/// The equivocation handling subsystem.
+		///
+		/// Defines methods to publish, check and process an equivocation offence.
+		type EquivocationReportSystem: OffenceReportSystem<
+			Option<Self::AccountId>,
+			EquivocationEvidenceFor<Self>,
+		>;
 	}
 
 	#[pallet::pallet]
@@ -229,7 +218,12 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
 
-			Self::do_report_equivocation(Some(reporter), *equivocation_proof, key_owner_proof)
+			T::EquivocationReportSystem::process_evidence(
+				Some(reporter),
+				(*equivocation_proof, key_owner_proof),
+			)?;
+			// Waive the fee since the report is valid and beneficial
+			Ok(Pays::No.into())
 		}
 
 		/// Report voter equivocation/misbehavior. This method will verify the
@@ -256,20 +250,22 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
-			Self::do_report_equivocation(
-				T::HandleEquivocation::block_author(),
-				*equivocation_proof,
-				key_owner_proof,
-			)
+			T::EquivocationReportSystem::process_evidence(
+				None,
+				(*equivocation_proof, key_owner_proof),
+			)?;
+			Ok(Pays::No.into())
 		}
 	}
 
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
+
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 			Self::pre_dispatch(call)
 		}
+
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			Self::validate_unsigned(source, call)
 		}
@@ -295,11 +291,7 @@ impl<T: Config> Pallet<T> {
 		>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::HandleEquivocation::submit_unsigned_equivocation_report(
-			equivocation_proof,
-			key_owner_proof,
-		)
-		.ok()
+		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()
 	}
 
 	fn change_authorities(
@@ -367,62 +359,6 @@ impl<T: Config> Pallet<T> {
 		SetIdSession::<T>::insert(0, 0);
 
 		Ok(())
-	}
-
-	fn do_report_equivocation(
-		reporter: Option<T::AccountId>,
-		equivocation_proof: EquivocationProof<
-			BlockNumberFor<T>,
-			T::BeefyId,
-			<T::BeefyId as RuntimeAppPublic>::Signature,
-		>,
-		key_owner_proof: T::KeyOwnerProof,
-	) -> DispatchResultWithPostInfo {
-		// We check the equivocation within the context of its set id (and
-		// associated session) and round. We also need to know the validator
-		// set count at the time of the offence since it is required to calculate
-		// the slash amount.
-		let set_id = equivocation_proof.set_id();
-		let round = *equivocation_proof.round_number();
-		let offender_id = equivocation_proof.offender_id().clone();
-		let session_index = key_owner_proof.session();
-		let validator_count = key_owner_proof.validator_count();
-
-		// validate the key ownership proof extracting the id of the offender.
-		let offender = T::KeyOwnerProofSystem::check_proof(
-			(sp_consensus_beefy::KEY_TYPE, offender_id),
-			key_owner_proof,
-		)
-		.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
-
-		// validate equivocation proof (check votes are different and signatures are valid).
-		if !sp_consensus_beefy::check_equivocation_proof(&equivocation_proof) {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
-		}
-
-		// check that the session id for the membership proof is within the
-		// bounds of the set id reported in the equivocation.
-		let set_id_session_index =
-			Self::session_for_set(set_id).ok_or(Error::<T>::InvalidEquivocationProof)?;
-		if session_index != set_id_session_index {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
-		}
-
-		// report to the offences module rewarding the sender.
-		T::HandleEquivocation::report_offence(
-			reporter.into_iter().collect(),
-			<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
-				session_index,
-				validator_count,
-				offender,
-				set_id,
-				round,
-			),
-		)
-		.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
-
-		// waive the fee since the report is valid and beneficial
-		Ok(Pays::No.into())
 	}
 }
 

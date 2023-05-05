@@ -357,7 +357,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -878,12 +877,9 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<O, ()> {
-		let zero_account_id =
-			AccountId::decode(&mut TrailingZeroInput::zeroes()).map_err(|_| ())?;
-		let members = Who::sorted_members();
-		let first_member = match members.get(0) {
+		let first_member = match Who::sorted_members().first() {
 			Some(account) => account.clone(),
-			None => zero_account_id,
+			None => AccountId::decode(&mut TrailingZeroInput::zeroes()).map_err(|_| ())?,
 		};
 		Ok(O::from(RawOrigin::Signed(first_member)))
 	}
@@ -1226,10 +1222,20 @@ impl<T: Config> Pallet<T> {
 		a.consumers == 0 || a.providers > 1
 	}
 
-	/// True if the account has at least one provider reference.
-	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
+	/// True if the account has at least one provider reference and adding `amount` consumer
+	/// references would not take it above the the maximum.
+	pub fn can_accrue_consumers(who: &T::AccountId, amount: u32) -> bool {
 		let a = Account::<T>::get(who);
-		a.providers > 0 && a.consumers < T::MaxConsumers::max_consumers()
+		match a.consumers.checked_add(amount) {
+			Some(c) => a.providers > 0 && c <= T::MaxConsumers::max_consumers(),
+			None => false,
+		}
+	}
+
+	/// True if the account has at least one provider reference and fewer consumer references than
+	/// the maximum.
+	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
+		Self::can_accrue_consumers(who, 1)
 	}
 
 	/// Deposits an event into this block's event record.
@@ -1444,6 +1450,14 @@ impl<T: Config> Pallet<T> {
 		// Dereferencing the events here is fine since we are not in the
 		// memory-restricted runtime.
 		Self::read_events_no_consensus().map(|e| *e).collect()
+	}
+
+	/// Get a single event at specified index.
+	///
+	/// Should only be called if you know what you are doing and outside of the runtime block
+	/// execution else it can have a large impact on the PoV size of a block.
+	pub fn event_no_consensus(index: usize) -> Option<T::RuntimeEvent> {
+		Self::read_events_no_consensus().nth(index).map(|e| e.event.clone())
 	}
 
 	/// Get the current events deposited by the runtime.
@@ -1665,10 +1679,6 @@ impl<T: Config> BlockNumberProvider for Pallet<T> {
 	}
 }
 
-fn is_providing<T: Default + Eq>(d: &T) -> bool {
-	d != &T::default()
-}
-
 /// Implement StoredMap for a simple single-item, provide-when-not-default system. This works fine
 /// for storing a single item which allows the account to continue existing as long as it's not
 /// empty/default.
@@ -1684,23 +1694,14 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 		f: impl FnOnce(&mut Option<T::AccountData>) -> Result<R, E>,
 	) -> Result<R, E> {
 		let account = Account::<T>::get(k);
-		let was_providing = is_providing(&account.data);
-		let mut some_data = if was_providing { Some(account.data) } else { None };
+		let is_default = account.data == T::AccountData::default();
+		let mut some_data = if is_default { None } else { Some(account.data) };
 		let result = f(&mut some_data)?;
-		let is_providing = some_data.is_some();
-		if !was_providing && is_providing {
-			Self::inc_providers(k);
-		} else if was_providing && !is_providing {
-			match Self::dec_providers(k)? {
-				DecRefStatus::Reaped => return Ok(result),
-				DecRefStatus::Exists => {
-					// Update value as normal...
-				},
-			}
-		} else if !was_providing && !is_providing {
-			return Ok(result)
+		if Self::providers(k) > 0 || Self::sufficients(k) > 0 {
+			Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
+		} else {
+			Account::<T>::remove(k)
 		}
-		Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
 		Ok(result)
 	}
 }
