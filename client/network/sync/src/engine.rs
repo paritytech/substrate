@@ -308,13 +308,6 @@ where
 				imp_p.extend(peer_ids);
 			}
 
-			// for reserved in network_config
-			// 	.extra_sets
-			// 	.iter()
-			// 	.flat_map(|s| s.set_config.reserved_nodes.iter())
-			// {
-			// 	imp_p.insert(reserved.peer_id);
-			// }
 			imp_p.shrink_to_fit();
 			imp_p
 		};
