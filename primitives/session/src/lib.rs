@@ -139,7 +139,6 @@ pub trait SessionChangeListener {
 }
 
 /// A trait get the current session info
-#[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait SessionInfoProvider {
 	fn current_session_index() -> SessionIndex;
 }
