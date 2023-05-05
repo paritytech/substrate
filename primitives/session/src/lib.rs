@@ -149,7 +149,7 @@ impl SessionChangeListener for Tuple {
 }
 
 impl SessionChangeListener for () {
-	fn on_session_change(session_index: SessionIndex) {}
+	fn on_session_change(_session_index: SessionIndex) {}
 }
 
 /// A trait get the current session info
