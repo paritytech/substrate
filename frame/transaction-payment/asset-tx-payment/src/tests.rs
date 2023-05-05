@@ -163,8 +163,8 @@ fn transaction_payment_in_asset_possible() {
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
 				asset_id.into(),
-				42,   /* owner */
-				true, /* is_sufficient */
+				Some(42), /* owner */
+				true,     /* is_sufficient */
 				min_balance
 			));
 
@@ -216,8 +216,8 @@ fn transaction_payment_without_fee() {
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
 				asset_id.into(),
-				42,   /* owner */
-				true, /* is_sufficient */
+				Some(42), /* owner */
+				true,     /* is_sufficient */
 				min_balance
 			));
 
@@ -269,8 +269,8 @@ fn asset_transaction_payment_with_tip_and_refund() {
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
 				asset_id.into(),
-				42,   /* owner */
-				true, /* is_sufficient */
+				Some(42), /* owner */
+				true,     /* is_sufficient */
 				min_balance
 			));
 
@@ -321,8 +321,8 @@ fn payment_from_account_with_only_assets() {
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
 				asset_id.into(),
-				42,   /* owner */
-				true, /* is_sufficient */
+				Some(42), /* owner */
+				true,     /* is_sufficient */
 				min_balance
 			));
 
@@ -380,8 +380,8 @@ fn payment_only_with_existing_sufficient_asset() {
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
 				asset_id.into(),
-				42,    /* owner */
-				false, /* is_sufficient */
+				Some(42), /* owner */
+				false,    /* is_sufficient */
 				min_balance
 			));
 			// pre_dispatch fails for non-sufficient asset
@@ -405,8 +405,8 @@ fn converted_fee_is_never_zero_if_input_fee_is_not() {
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
 				asset_id.into(),
-				42,   /* owner */
-				true, /* is_sufficient */
+				Some(42), /* owner */
+				true,     /* is_sufficient */
 				min_balance
 			));
 
@@ -470,8 +470,8 @@ fn post_dispatch_fee_is_zero_if_pre_dispatch_fee_is_zero() {
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
 				asset_id.into(),
-				42,   /* owner */
-				true, /* is_sufficient */
+				Some(42), /* owner */
+				true,     /* is_sufficient */
 				min_balance
 			));
 
@@ -527,8 +527,8 @@ fn post_dispatch_fee_is_zero_if_unsigned_pre_dispatch_fee_is_zero() {
 			assert_ok!(Assets::force_create(
 				RuntimeOrigin::root(),
 				asset_id.into(),
-				42,   /* owner */
-				true, /* is_sufficient */
+				Some(42), /* owner */
+				true,     /* is_sufficient */
 				min_balance
 			));
 
