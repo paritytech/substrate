@@ -493,6 +493,18 @@ benchmarks_instance_pallet! {
 		assert!(Account::<T, I>::contains_key(asset_id.into(), &new_account));
 	}
 
+	touch_other {
+		let (asset_id, asset_owner, asset_owner_lookup) = create_default_asset::<T, I>(false);
+		let new_account: T::AccountId = account("newaccount", 1, SEED);
+		let new_account_lookup = T::Lookup::unlookup(new_account.clone());
+		T::Currency::make_free_balance_be(&asset_owner, DepositBalanceOf::<T, I>::max_value());
+		assert_ne!(asset_owner, new_account);
+		assert!(!Account::<T, I>::contains_key(asset_id.into(), &new_account));
+	}: _(SystemOrigin::Signed(asset_owner.clone()), asset_id, new_account_lookup)
+	verify {
+		assert!(Account::<T, I>::contains_key(asset_id.into(), &new_account));
+	}
+
 	refund {
 		let (asset_id, asset_owner, asset_owner_lookup) = create_default_asset::<T, I>(false);
 		let new_account: T::AccountId = account("newaccount", 1, SEED);
@@ -526,7 +538,7 @@ benchmarks_instance_pallet! {
 		// `touch_other` should reserve balance of the freezer
 		assert!(!T::Currency::reserved_balance(&asset_owner).is_zero());
 		assert!(Account::<T, I>::contains_key(asset_id.into(), &new_account));
-	}: _(SystemOrigin::Signed(asset_owner.clone()), asset_id, new_account.clone())
+	}: _(SystemOrigin::Signed(asset_owner.clone()), asset_id, new_account_lookup.clone())
 	verify {
 		// this should repatriate the reserved balance of the freezer
 		assert!(T::Currency::reserved_balance(&asset_owner).is_zero());

@@ -1572,7 +1572,7 @@ pub mod pallet {
 		///
 		/// Emits `Touched` event when successful.
 		#[pallet::call_index(29)]
-		#[pallet::weight(T::WeightInfo::touch())]
+		#[pallet::weight(T::WeightInfo::touch_other())]
 		pub fn touch_other(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
