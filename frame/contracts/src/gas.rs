@@ -25,6 +25,7 @@ use frame_support::{
 };
 use sp_runtime::traits::Zero;
 use sp_std::marker::PhantomData;
+use sp_core::Get;
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
@@ -182,7 +183,8 @@ impl<T: Config> GasMeter<T> {
 	}
 
 	/// Update the `ref_time` component of the `gas_left` to bring it into line with
-	/// the Wasm engine gas meter.
+	/// the Wasm engine gas meter. Passed `consumed` value is scaled by multiplying it by the
+	/// weight of a basic operation, as such an operation in wasmi engine costs 1.
 	///
 	/// This is used for gas synchronizations with the engine both on enter and on exit
 	/// of every host function.
@@ -193,10 +195,11 @@ impl<T: Config> GasMeter<T> {
 	pub fn sync_reftime(&mut self, consumed: u64) -> Result<u64, DispatchError> {
 		let ref_time = self.gas_left.ref_time_mut();
 		if !consumed.is_zero() {
+			let reftime_consumed = consumed.saturating_mul(T::Schedule::get().instruction_weights.base as u64);
 			*ref_time = self
 				.gas_limit
 				.ref_time()
-				.checked_sub(consumed)
+				.checked_sub(reftime_consumed)
 				.ok_or_else(|| Error::<T>::OutOfGas)?;
 		}
 		Ok(*ref_time)

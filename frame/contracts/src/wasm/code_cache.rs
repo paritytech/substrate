@@ -175,7 +175,7 @@ pub fn load<T: Config>(
 	gas_meter.adjust_gas(charged, CodeToken::Load(instrumented_code_len));
 	prefab_module.code_hash = code_hash;
 
-	if prefab_module.instruction_weights_version < schedule.instruction_weights.version {
+	if prefab_module.instruction_weights_version < 42 {
 		// The instruction weights have changed.
 		// We need to re-instrument the code with the new instruction weights.
 		let charged = gas_meter.charge(CodeToken::Reinstrument(instrumented_code_len))?;
@@ -208,7 +208,7 @@ pub fn reinstrument<T: Config>(
 		)?,
 		Some("Contract exceeds size limit after re-instrumentation."),
 	);
-	prefab_module.instruction_weights_version = schedule.instruction_weights.version;
+	prefab_module.instruction_weights_version = 42;
 	<CodeStorage<T>>::insert(&prefab_module.code_hash, &*prefab_module);
 	Ok(original_code_len as u32)
 }

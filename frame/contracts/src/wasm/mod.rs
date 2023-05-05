@@ -51,7 +51,7 @@ use sp_core::Get;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 use wasmi::{
-	Config as WasmiConfig, Engine, Instance, Linker, Memory, MemoryType, Module, StackLimits, Store,
+	Config as WasmiConfig, Engine, Instance, Linker, Memory, MemoryType, Module, StackLimits, Store, FuelConsumptionMode,
 };
 
 /// A prepared wasm module ready for execution.
@@ -336,8 +336,10 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 		store.data_mut().set_memory(memory);
 
 		// Set fuel limit for the Wasm module execution.
+		// We normalize it by the base instruction weight, as its cost in wasmi engine is 1.
+		let fuel_limit = reftime_limit.checked_div(T::Schedule::get().instruction_weights.base as u64).ok_or(Error::<T>::InvalidSchedule)?;
 		store
-			.add_fuel(reftime_limit)
+			.add_fuel(fuel_limit)
 			.expect("We've set up engine to fuel consuming mode; qed");
 
 		let exported_func = instance
@@ -354,7 +356,9 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 		}
 
 		let result = exported_func.call(&mut store, &[], &mut []);
-		let reftime_consumed = store.fuel_consumed().unwrap_or_default();
+		let engine_consumed = store.fuel_consumed().expect("Fuel metering is enabled; qed");
+		// Scale the value back to `ref_time` weight.
+		let reftime_consumed = engine_consumed.saturating_mul(T::Schedule::get().instruction_weights.base as u64);
 
 		store.into_data().to_execution_result(result, reftime_consumed)
 	}

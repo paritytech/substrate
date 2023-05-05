@@ -659,7 +659,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 				::core::unreachable!()
 			} }
 		};
-		let map_err = if expand_blocks {
+		let into_host = if expand_blocks {
 			quote! {
 				|reason| {
 					::wasmi::core::Trap::from(reason)
@@ -670,6 +670,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 				|reason| { reason }
 			}
 		};
+		let into_trap = quote! { |e| TrapReason::from(e) };
 		let allow_unused =  if expand_blocks {
 			quote! { }
 		} else {
@@ -678,8 +679,9 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		let sync_gas_before = if expand_blocks {
 			quote! {
 				let gas_before = {
-				   let engine_consumed = __caller__.fuel_consumed().expect("Fuel metering is enabled; qed");
-				   __caller__.data_mut().ext.gas_meter().sync_reftime(engine_consumed).map_err(|e| TrapReason::from(e)).map_err(#map_err)?
+					let engine_consumed = __caller__.fuel_consumed().expect("Fuel metering is enabled; qed");
+					let reftime_consumed = engine_consumed.saturating_mul(<E::T as Config>::Schedule::get().instruction_weights.base as u64);
+				   __caller__.data_mut().ext.gas_meter().sync_reftime(reftime_consumed).map_err(#into_trap).map_err(#into_host)?
 				};
 			}
 		} else {
@@ -689,7 +691,8 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 			quote! {
 				let gas_after = __caller__.data().ext.gas_meter_immut().gas_left().ref_time();
 				let host_consumed = gas_before.saturating_sub(gas_after);
-				__caller__.consume_fuel(host_consumed).map_err(|_| TrapReason::from(Error::<E::T>::OutOfGas)).map_err(#map_err)?;
+				let fuel_consumed = host_consumed.checked_div(<E::T as Config>::Schedule::get().instruction_weights.base as u64).ok_or(Error::<E::T>::InvalidSchedule).map_err(#into_trap).map_err(#into_host)?;
+				__caller__.consume_fuel(fuel_consumed).map_err(|_| TrapReason::from(Error::<E::T>::OutOfGas)).map_err(#into_host)?;
 			}
 		} else {
 			quote! { }
@@ -708,7 +711,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
  					#sync_gas_before
 					let result = {
 					   let mut func = #inner;
-					   func().map_err(#map_err).map(::core::convert::Into::into)
+					   func().map_err(#into_host).map(::core::convert::Into::into)
 					};
 					#sync_gas_after
 					result

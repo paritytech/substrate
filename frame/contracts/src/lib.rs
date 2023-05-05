@@ -784,8 +784,8 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// A new schedule must have a greater version than the current one.
-		InvalidScheduleVersion,
+		/// Invalid schedule supplied, e.g. with zero weight of a basic operation.
+		InvalidSchedule,
 		/// Invalid combination of flags supplied to `seal_call` or `seal_delegate_call`.
 		InvalidCallFlags,
 		/// The executed contract exhausted its gas limit.

@@ -450,7 +450,7 @@ where
 	let original_code_len = original_code.len();
 
 	let mut module = PrefabWasmModule {
-		instruction_weights_version: schedule.instruction_weights.version,
+		instruction_weights_version: 42,
 		initial,
 		maximum,
 		code: code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
@@ -527,7 +527,7 @@ pub mod benchmarking {
 		let contract_module = ContractModule::new(&original_code, schedule)?;
 		let memory_limits = get_memory_limits(contract_module.scan_imports(&[])?, schedule)?;
 		Ok(PrefabWasmModule {
-			instruction_weights_version: schedule.instruction_weights.version,
+			instruction_weights_version: 42,
 			initial: memory_limits.0,
 			maximum: memory_limits.1,
 			code_hash: T::Hashing::hash(&original_code),
