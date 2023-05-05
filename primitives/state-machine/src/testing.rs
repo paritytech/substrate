@@ -403,7 +403,7 @@ mod tests {
 		original_ext.insert_child(child_info.clone(), b"doggytown".to_vec(), b"is_sunny".to_vec());
 
 		// Drain the raw storage and root.
-		let root = original_ext.backend.root().clone();
+		let root = *original_ext.backend.root();
 		let (raw_storage, storage_root) = original_ext.into_raw_snapshot();
 
 		// Load the raw storage and root into a new TestExternalities.
