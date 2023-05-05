@@ -131,6 +131,7 @@ where
 	Ok(())
 }
 
+/// A trait to be notified when the session changes
 pub trait SessionChangeListener {
 	fn on_session_change(session_index: SessionIndex);
 }
@@ -151,6 +152,7 @@ impl SessionChangeListener for () {
 	fn on_session_change(session_index: SessionIndex) {}
 }
 
+/// A trait get the current session info
 pub trait SessionInfoProvider {
 	fn current_session_index() -> SessionIndex;
 }
