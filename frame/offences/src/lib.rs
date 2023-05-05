@@ -97,6 +97,14 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	/// A vector of active reports sorted by `SessionIndex`.
+	/// For each session index, all reports are stored along with 
+	/// their kind and time slot info. 
+	/// 
+	/// On start of a new session, all reports with a session index older than 
+	/// `MaxSessionReportAge` are removed.
+	/// 
+	/// Note that time_slot is encoded as stored as an opaque type.
 	#[pallet::storage]
 	pub type SessionReports<T: Config> = StorageValue<
 		_,
