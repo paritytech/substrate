@@ -296,6 +296,7 @@ mod tests {
 				rpc_max_response_size: Default::default(),
 				rpc_id_provider: Default::default(),
 				rpc_max_subs_per_conn: Default::default(),
+				rpc_port: 9944,
 				prometheus_config: None,
 				telemetry_endpoints: None,
 				default_heap_pages: None,
