@@ -160,11 +160,15 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 	);
 
-	let storage_version = if let Some(v) = def.pallet_struct.storage_version.as_ref() {
-		quote::quote! { #v }
-	} else {
-		quote::quote! { #frame_support::traits::StorageVersion::default() }
-	};
+	let (storage_version, current_storage_version_ty) =
+		if let Some(v) = def.pallet_struct.storage_version.as_ref() {
+			(quote::quote! { #v }, quote::quote! { #frame_support::traits::StorageVersion })
+		} else {
+			(
+				quote::quote! { core::default::Default::default() },
+				quote::quote! { #frame_support::traits::NoStorageVersionSet },
+			)
+		};
 
 	let whitelisted_storage_idents: Vec<syn::Ident> = def
 		.storages
@@ -199,7 +203,9 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			for #pallet_ident<#type_use_gen>
 			#config_where_clause
 		{
-			fn current_storage_version() -> #frame_support::traits::StorageVersion {
+			type CurrentStorageVersion = #current_storage_version_ty;
+
+			fn current_storage_version() -> Self::CurrentStorageVersion {
 				#storage_version
 			}
 
@@ -214,7 +220,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			#config_where_clause
 		{
 			fn on_genesis() {
-				let storage_version = #storage_version;
+				let storage_version: #frame_support::traits::StorageVersion = #storage_version;
 				storage_version.put::<Self>();
 			}
 		}

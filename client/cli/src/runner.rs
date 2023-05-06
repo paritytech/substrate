@@ -259,6 +259,7 @@ mod tests {
 	fn create_runner() -> Runner<Cli> {
 		let runtime = build_runtime().unwrap();
 
+		let root = PathBuf::from("db");
 		let runner = Runner::new(
 			Configuration {
 				impl_name: "spec".into(),
@@ -268,7 +269,7 @@ mod tests {
 				transaction_pool: Default::default(),
 				network: NetworkConfiguration::new_memory(),
 				keystore: sc_service::config::KeystoreConfig::InMemory,
-				database: sc_client_db::DatabaseSource::ParityDb { path: PathBuf::from("db") },
+				database: sc_client_db::DatabaseSource::ParityDb { path: root.clone() },
 				trie_cache_maximum_size: None,
 				state_pruning: None,
 				blocks_pruning: sc_client_db::BlocksPruning::KeepAll,
@@ -306,7 +307,8 @@ mod tests {
 				tracing_receiver: Default::default(),
 				max_runtime_instances: 8,
 				announce_block: true,
-				base_path: None,
+				base_path: sc_service::BasePath::new(root.clone()),
+				data_path: root,
 				informant_output_format: Default::default(),
 				runtime_cache_size: 2,
 			},

@@ -15,13 +15,14 @@ error: `Pallet` does not have #[pallet::inherent] defined, perhaps you should re
    |
    = note: this error originates in the macro `pallet::__substrate_inherent_check::is_inherent_part_defined` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0599]: no function or associated item named `create_inherent` found for struct `Pallet` in the current scope
+error[E0599]: no function or associated item named `create_inherent` found for struct `pallet::Pallet` in the current scope
   --> tests/construct_runtime_ui/undefined_inherent_part.rs:49:1
    |
 11 |       pub struct Pallet<T>(_);
    |       -------------------- function or associated item `create_inherent` not found for this struct
 ...
-49 | / construct_runtime! {
+49 |   construct_runtime! {
+   |  _^
 50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
@@ -35,13 +36,14 @@ error[E0599]: no function or associated item named `create_inherent` found for s
            candidate #1: `ProvideInherent`
    = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0599]: no function or associated item named `is_inherent` found for struct `Pallet` in the current scope
+error[E0599]: no function or associated item named `is_inherent` found for struct `pallet::Pallet` in the current scope
   --> tests/construct_runtime_ui/undefined_inherent_part.rs:49:1
    |
 11 |       pub struct Pallet<T>(_);
    |       -------------------- function or associated item `is_inherent` not found for this struct
 ...
-49 | / construct_runtime! {
+49 |   construct_runtime! {
+   |  _^
 50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
@@ -55,13 +57,14 @@ error[E0599]: no function or associated item named `is_inherent` found for struc
            candidate #1: `ProvideInherent`
    = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0599]: no function or associated item named `check_inherent` found for struct `Pallet` in the current scope
+error[E0599]: no function or associated item named `check_inherent` found for struct `pallet::Pallet` in the current scope
   --> tests/construct_runtime_ui/undefined_inherent_part.rs:49:1
    |
 11 |       pub struct Pallet<T>(_);
    |       -------------------- function or associated item `check_inherent` not found for this struct
 ...
-49 | / construct_runtime! {
+49 |   construct_runtime! {
+   |  _^
 50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
@@ -75,13 +78,14 @@ error[E0599]: no function or associated item named `check_inherent` found for st
            candidate #1: `ProvideInherent`
    = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0599]: no associated item named `INHERENT_IDENTIFIER` found for struct `Pallet` in the current scope
+error[E0599]: no associated item named `INHERENT_IDENTIFIER` found for struct `pallet::Pallet` in the current scope
   --> tests/construct_runtime_ui/undefined_inherent_part.rs:49:1
    |
 11 |       pub struct Pallet<T>(_);
    |       -------------------- associated item `INHERENT_IDENTIFIER` not found for this struct
 ...
-49 | / construct_runtime! {
+49 |   construct_runtime! {
+   |  _^
 50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
@@ -95,13 +99,14 @@ error[E0599]: no associated item named `INHERENT_IDENTIFIER` found for struct `P
            candidate #1: `ProvideInherent`
    = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0599]: no function or associated item named `is_inherent_required` found for struct `Pallet` in the current scope
+error[E0599]: no function or associated item named `is_inherent_required` found for struct `pallet::Pallet` in the current scope
   --> tests/construct_runtime_ui/undefined_inherent_part.rs:49:1
    |
 11 |       pub struct Pallet<T>(_);
    |       -------------------- function or associated item `is_inherent_required` not found for this struct
 ...
-49 | / construct_runtime! {
+49 |   construct_runtime! {
+   |  _^
 50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
