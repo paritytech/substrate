@@ -672,8 +672,9 @@ pub fn generate_node_name() -> String {
 /// by passing a another port to this function.
 pub fn rpc_interface(cfg: RpcAddrConfig) -> Result<Option<SocketAddr>> {
 	let RpcAddrConfig { is_external, is_unsafe_external, rpc_methods, is_validator, port } = cfg;
+	let rpc_methods = rpc_methods.into();
 
-	if is_external && is_validator && rpc_methods != RpcMethods::Unsafe.into() {
+	if is_external && is_validator && rpc_methods != RpcMethods::Unsafe {
 		return Err(crate::Error::Input(
 			"--rpc-external option shouldn't be used if the node is running as \
 			 a validator. Use `--unsafe-rpc-external` or `--rpc-methods=unsafe` if you understand \
@@ -683,7 +684,7 @@ pub fn rpc_interface(cfg: RpcAddrConfig) -> Result<Option<SocketAddr>> {
 	}
 
 	let ip = if is_external || is_unsafe_external {
-		if rpc_methods == RpcMethods::Unsafe.into() {
+		if rpc_methods == RpcMethods::Unsafe {
 			log::warn!(
 				"It isn't safe to expose RPC publicly without a proxy server that filters \
 				 available set of RPC methods."
