@@ -672,7 +672,6 @@ pub fn generate_node_name() -> String {
 /// by passing a another port to this function.
 pub fn rpc_interface(cfg: RpcAddrConfig) -> Result<Option<SocketAddr>> {
 	let RpcAddrConfig { is_external, is_unsafe_external, rpc_methods, is_validator, port } = cfg;
-	let rpc_methods = rpc_methods.into();
 
 	if is_external && is_validator && rpc_methods != RpcMethods::Unsafe {
 		return Err(crate::Error::Input(
