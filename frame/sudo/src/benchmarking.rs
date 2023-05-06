@@ -28,7 +28,7 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
-#[benchmarks]
+#[benchmarks( where <T as Config>::RuntimeCall: From<frame_system::Call<T>>)]
 mod benchmarks {
 	use super::*;
 
@@ -56,11 +56,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller.clone()), Box::new(call.clone()));
 
-		let res = call.dispatch_bypass_filter(RawOrigin::Signed(caller.clone()).into());
-
-		assert_last_event::<T>(
-			Event::Sudid { sudo_result: res.map(|_| ()).map_err(|e| e.error) }.into(),
-		)
+		assert_last_event::<T>(Event::Sudid { sudo_result: Ok(()) }.into())
 	}
 
 	#[benchmark]
@@ -76,11 +72,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), who_lookup, Box::new(call.clone()));
 
-		let res = call.dispatch_bypass_filter(RawOrigin::Signed(who).into());
-
-		assert_last_event::<T>(
-			Event::SudoAsDone { sudo_result: res.map(|_| ()).map_err(|e| e.error) }.into(),
-		)
+		assert_last_event::<T>(Event::SudoAsDone { sudo_result: Ok(()) }.into())
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_bench_ext(), crate::mock::Test);

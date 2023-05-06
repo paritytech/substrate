@@ -113,7 +113,7 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 pub mod weights;
-pub use weights::*;
+pub use weights::WeightInfo;
 
 pub use extension::CheckOnlySudoAccount;
 pub use pallet::*;
@@ -134,8 +134,7 @@ pub mod pallet {
 		/// A sudo-able call.
 		type RuntimeCall: Parameter
 			+ UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
-			+ GetDispatchInfo
-			+ From<frame_system::Call<Self>>;
+			+ GetDispatchInfo;
 
 		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
