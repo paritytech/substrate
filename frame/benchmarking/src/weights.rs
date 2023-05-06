@@ -68,49 +68,49 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 191_000 picoseconds.
-		Weight::from_parts(255_847, 0)
+		// Minimum execution time: 164_000 picoseconds.
+		Weight::from_parts(210_285, 0)
 	}
 	/// The range of component `i` is `[0, 1000000]`.
 	fn subtraction(_i: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 195_000 picoseconds.
-		Weight::from_parts(273_014, 0)
+		// Minimum execution time: 165_000 picoseconds.
+		Weight::from_parts(208_975, 0)
 	}
 	/// The range of component `i` is `[0, 1000000]`.
 	fn multiplication(_i: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 201_000 picoseconds.
-		Weight::from_parts(274_162, 0)
+		// Minimum execution time: 170_000 picoseconds.
+		Weight::from_parts(232_771, 0)
 	}
 	/// The range of component `i` is `[0, 1000000]`.
 	fn division(_i: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 178_000 picoseconds.
-		Weight::from_parts(251_440, 0)
+		// Minimum execution time: 161_000 picoseconds.
+		Weight::from_parts(235_148, 0)
 	}
 	fn hashing() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 25_701_115_000 picoseconds.
-		Weight::from_parts(26_032_391_000, 0)
+		// Minimum execution time: 25_116_432_000 picoseconds.
+		Weight::from_parts(25_350_920_000, 0)
 	}
 	/// The range of component `i` is `[0, 100]`.
 	fn sr25519_verification(i: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 293_000 picoseconds.
-		Weight::from_parts(2_982_248, 0)
-			// Standard Error: 6_354
-			.saturating_add(Weight::from_parts(55_626_797, 0).saturating_mul(i.into()))
+		// Minimum execution time: 212_000 picoseconds.
+		Weight::from_parts(1_430_339, 0)
+			// Standard Error: 5_622
+			.saturating_add(Weight::from_parts(56_280_915, 0).saturating_mul(i.into()))
 	}
 }
 
@@ -121,48 +121,48 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 191_000 picoseconds.
-		Weight::from_parts(255_847, 0)
+		// Minimum execution time: 164_000 picoseconds.
+		Weight::from_parts(210_285, 0)
 	}
 	/// The range of component `i` is `[0, 1000000]`.
 	fn subtraction(_i: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 195_000 picoseconds.
-		Weight::from_parts(273_014, 0)
+		// Minimum execution time: 165_000 picoseconds.
+		Weight::from_parts(208_975, 0)
 	}
 	/// The range of component `i` is `[0, 1000000]`.
 	fn multiplication(_i: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 201_000 picoseconds.
-		Weight::from_parts(274_162, 0)
+		// Minimum execution time: 170_000 picoseconds.
+		Weight::from_parts(232_771, 0)
 	}
 	/// The range of component `i` is `[0, 1000000]`.
 	fn division(_i: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 178_000 picoseconds.
-		Weight::from_parts(251_440, 0)
+		// Minimum execution time: 161_000 picoseconds.
+		Weight::from_parts(235_148, 0)
 	}
 	fn hashing() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 25_701_115_000 picoseconds.
-		Weight::from_parts(26_032_391_000, 0)
+		// Minimum execution time: 25_116_432_000 picoseconds.
+		Weight::from_parts(25_350_920_000, 0)
 	}
 	/// The range of component `i` is `[0, 100]`.
 	fn sr25519_verification(i: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 293_000 picoseconds.
-		Weight::from_parts(2_982_248, 0)
-			// Standard Error: 6_354
-			.saturating_add(Weight::from_parts(55_626_797, 0).saturating_mul(i.into()))
+		// Minimum execution time: 212_000 picoseconds.
+		Weight::from_parts(1_430_339, 0)
+			// Standard Error: 5_622
+			.saturating_add(Weight::from_parts(56_280_915, 0).saturating_mul(i.into()))
 	}
 }
