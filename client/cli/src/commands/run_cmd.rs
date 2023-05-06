@@ -23,7 +23,9 @@ use crate::{
 		ImportParams, KeystoreParams, NetworkParams, OffchainWorkerParams, SharedParams,
 		TransactionPoolParams,
 	},
-	CliConfiguration, PrometheusParams, RuntimeParams, TelemetryParams,
+	rpc_interface, CliConfiguration, PrometheusParams, RpcAddrConfig, RuntimeParams,
+	TelemetryParams, RPC_DEFAULT_MAX_CONNECTIONS, RPC_DEFAULT_MAX_REQUEST_SIZE_MB,
+	RPC_DEFAULT_MAX_RESPONSE_SIZE_MB, RPC_DEFAULT_MAX_SUBS_PER_CONN, RPC_DEFAULT_PORT,
 };
 use clap::Parser;
 use regex::Regex;
@@ -32,7 +34,7 @@ use sc_service::{
 	ChainSpec, Role,
 };
 use sc_telemetry::TelemetryEndpoints;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 
 /// The `run` command used to run a node.
 #[derive(Debug, Clone, Parser)]
@@ -78,23 +80,23 @@ pub struct RunCmd {
 	pub rpc_methods: RpcMethods,
 
 	/// Set the the maximum RPC request payload size for both HTTP and WS in megabytes.
-	#[arg(long, default_value_t = 15)]
+	#[arg(long, default_value_t = RPC_DEFAULT_MAX_REQUEST_SIZE_MB)]
 	pub rpc_max_request_size: u32,
 
 	/// Set the the maximum RPC response payload size for both HTTP and WS in megabytes.
-	#[arg(long, default_value_t = 15)]
+	#[arg(long, default_value_t = RPC_DEFAULT_MAX_RESPONSE_SIZE_MB)]
 	pub rpc_max_response_size: u32,
 
 	/// Set the the maximum concurrent subscriptions per connection.
-	#[arg(long, default_value_t = 1024)]
+	#[arg(long, default_value_t = RPC_DEFAULT_MAX_SUBS_PER_CONN)]
 	pub rpc_max_subscriptions_per_connection: u32,
 
 	/// Specify JSON-RPC server TCP port.
-	#[arg(long, value_name = "PORT", default_value_t = 9944)]
+	#[arg(long, value_name = "PORT", default_value_t = RPC_DEFAULT_PORT)]
 	pub rpc_port: u16,
 
 	/// Maximum number of RPC server connections.
-	#[arg(long, value_name = "COUNT", default_value_t = 100)]
+	#[arg(long, value_name = "COUNT", default_value_t = RPC_DEFAULT_MAX_CONNECTIONS)]
 	pub rpc_max_connections: u32,
 
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
@@ -337,14 +339,14 @@ impl CliConfiguration for RunCmd {
 	}
 
 	fn rpc_addr(&self, _default_listen_port: u16) -> Result<Option<SocketAddr>> {
-		let interface = rpc_interface(
-			self.rpc_external,
-			self.unsafe_rpc_external,
-			self.rpc_methods,
-			self.validator,
-		)?;
-
-		Ok(Some(SocketAddr::new(interface, self.rpc_port)))
+		let cfg = RpcAddrConfig {
+			is_external: self.rpc_external,
+			is_unsafe_external: self.unsafe_rpc_external,
+			rpc_methods: self.rpc_methods.into(),
+			is_validator: self.validator,
+			port: self.rpc_port,
+		};
+		rpc_interface(cfg)
 	}
 
 	fn rpc_methods(&self) -> Result<sc_service::config::RpcMethods> {
@@ -393,51 +395,22 @@ impl CliConfiguration for RunCmd {
 pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 	let name = _name.to_string();
 	if name.chars().count() >= crate::NODE_NAME_MAX_LENGTH {
-		return Err("Node name too long")
+		return Err("Node name too long");
 	}
 
 	let invalid_chars = r"[\\.@]";
 	let re = Regex::new(invalid_chars).unwrap();
 	if re.is_match(&name) {
-		return Err("Node name should not contain invalid chars such as '.' and '@'")
+		return Err("Node name should not contain invalid chars such as '.' and '@'");
 	}
 
 	let invalid_patterns = r"(https?:\\/+)?(www)+";
 	let re = Regex::new(invalid_patterns).unwrap();
 	if re.is_match(&name) {
-		return Err("Node name should not contain urls")
+		return Err("Node name should not contain urls");
 	}
 
 	Ok(())
-}
-
-fn rpc_interface(
-	is_external: bool,
-	is_unsafe_external: bool,
-	rpc_methods: RpcMethods,
-	is_validator: bool,
-) -> Result<IpAddr> {
-	if is_external && is_validator && rpc_methods != RpcMethods::Unsafe {
-		return Err(Error::Input(
-			"--rpc-external option shouldn't be used if the node is running as \
-			 a validator. Use `--unsafe-rpc-external` or `--rpc-methods=unsafe` if you understand \
-			 the risks. See the options description for more information."
-				.to_owned(),
-		))
-	}
-
-	if is_external || is_unsafe_external {
-		if rpc_methods == RpcMethods::Unsafe {
-			log::warn!(
-				"It isn't safe to expose RPC publicly without a proxy server that filters \
-				 available set of RPC methods."
-			);
-		}
-
-		Ok(Ipv4Addr::UNSPECIFIED.into())
-	} else {
-		Ok(Ipv4Addr::LOCALHOST.into())
-	}
 }
 
 /// CORS setting
@@ -468,7 +441,7 @@ fn parse_cors(s: &str) -> Result<Cors> {
 		match part {
 			"all" | "*" => {
 				is_all = true;
-				break
+				break;
 			},
 			other => origins.push(other.to_owned()),
 		}

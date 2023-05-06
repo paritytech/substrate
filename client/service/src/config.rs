@@ -101,6 +101,8 @@ pub struct Configuration {
 	pub rpc_id_provider: Option<Box<dyn crate::RpcSubscriptionIdProvider>>,
 	/// Maximum allowed subscriptions per rpc connection
 	pub rpc_max_subs_per_conn: u32,
+	/// JSON-RPC server default port.
+	pub rpc_port: u16,
 	/// Prometheus endpoint configuration. `None` if disabled.
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
@@ -247,7 +249,7 @@ impl Configuration {
 }
 
 /// Available RPC methods.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum RpcMethods {
 	/// Expose every RPC method only when RPC is listening on `localhost`,
 	/// otherwise serve only safe RPC methods.

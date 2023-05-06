@@ -45,6 +45,17 @@ pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
 /// The recommended open file descriptor limit to be configured for the process.
 const RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT: u64 = 10_000;
 
+/// The default port.
+pub const RPC_DEFAULT_PORT: u16 = 9944;
+/// The default max number of subscriptions per connection.
+pub const RPC_DEFAULT_MAX_SUBS_PER_CONN: u32 = 1024;
+/// The default max request size in MB.
+pub const RPC_DEFAULT_MAX_REQUEST_SIZE_MB: u32 = 15;
+/// The default max response size in MB.
+pub const RPC_DEFAULT_MAX_RESPONSE_SIZE_MB: u32 = 15;
+/// The default number of connection..
+pub const RPC_DEFAULT_MAX_CONNECTIONS: u32 = 100;
+
 /// Default configuration values used by Substrate
 ///
 /// These values will be used by [`CliConfiguration`] to set
@@ -61,7 +72,7 @@ pub trait DefaultConfigurationValues {
 	///
 	/// By default this is `9944`.
 	fn rpc_listen_port() -> u16 {
-		9944
+		RPC_DEFAULT_PORT
 	}
 
 	/// The port Substrate should listen on for prometheus connections.
@@ -73,6 +84,20 @@ pub trait DefaultConfigurationValues {
 }
 
 impl DefaultConfigurationValues for () {}
+
+/// Configuration for RPC interface.
+pub struct RpcAddrConfig {
+	/// RPC interface exposed externally.
+	pub is_external: bool,
+	/// RPC interface exposed unsafe methods externally.
+	pub is_unsafe_external: bool,
+	/// Available RPC methods.
+	pub rpc_methods: RpcMethods,
+	/// Is running as validator.
+	pub is_validator: bool,
+	/// Port to run the RPC server on.
+	pub port: u16,
+}
 
 /// A trait that allows converting an object to a Configuration
 pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
@@ -296,6 +321,8 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	}
 
 	/// Get the RPC address.
+	//
+	// NOTE: This is just a blanket impl and should replaced by implementors.
 	fn rpc_addr(&self, _default_listen_port: u16) -> Result<Option<SocketAddr>> {
 		Ok(None)
 	}
@@ -303,14 +330,14 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Returns the RPC method set to expose.
 	///
 	/// By default this is `RpcMethods::Auto` (unsafe RPCs are denied iff
-	/// `{rpc,ws}_external` returns true, respectively).
+	/// `rpc_external` returns true, respectively).
 	fn rpc_methods(&self) -> Result<RpcMethods> {
 		Ok(Default::default())
 	}
 
 	/// Get the maximum number of RPC server connections.
 	fn rpc_max_connections(&self) -> Result<u32> {
-		Ok(Default::default())
+		Ok(RPC_DEFAULT_MAX_CONNECTIONS)
 	}
 
 	/// Get the RPC cors (`None` if disabled)
@@ -322,17 +349,17 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 	/// Get maximum RPC request payload size.
 	fn rpc_max_request_size(&self) -> Result<u32> {
-		Ok(Default::default())
+		Ok(RPC_DEFAULT_MAX_REQUEST_SIZE_MB)
 	}
 
 	/// Get maximum RPC response payload size.
 	fn rpc_max_response_size(&self) -> Result<u32> {
-		Ok(Default::default())
+		Ok(RPC_DEFAULT_MAX_RESPONSE_SIZE_MB)
 	}
 
 	/// Get maximum number of subscriptions per connection.
 	fn rpc_max_subscriptions_per_connection(&self) -> Result<u32> {
-		Ok(Default::default())
+		Ok(RPC_DEFAULT_MAX_SUBS_PER_CONN)
 	}
 
 	/// Get the prometheus configuration (`None` if disabled)
@@ -506,6 +533,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_max_response_size: self.rpc_max_response_size()?,
 			rpc_id_provider: None,
 			rpc_max_subs_per_conn: self.rpc_max_subscriptions_per_connection()?,
+			rpc_port: DCV::rpc_listen_port(),
 			prometheus_config: self
 				.prometheus_config(DCV::prometheus_listen_port(), &chain_spec)?,
 			telemetry_endpoints,
@@ -636,4 +664,36 @@ pub fn generate_node_name() -> String {
 			return node_name
 		}
 	}
+}
+
+/// Helper to construct a RPC interface.
+///
+/// It's possible to override the default port
+/// by passing a another port to this function.
+pub fn rpc_interface(cfg: RpcAddrConfig) -> Result<Option<SocketAddr>> {
+	let RpcAddrConfig { is_external, is_unsafe_external, rpc_methods, is_validator, port } = cfg;
+
+	if is_external && is_validator && rpc_methods != RpcMethods::Unsafe.into() {
+		return Err(crate::Error::Input(
+			"--rpc-external option shouldn't be used if the node is running as \
+			 a validator. Use `--unsafe-rpc-external` or `--rpc-methods=unsafe` if you understand \
+			 the risks. See the options description for more information."
+				.to_owned(),
+		))
+	}
+
+	let ip = if is_external || is_unsafe_external {
+		if rpc_methods == RpcMethods::Unsafe.into() {
+			log::warn!(
+				"It isn't safe to expose RPC publicly without a proxy server that filters \
+				 available set of RPC methods."
+			);
+		}
+
+		std::net::Ipv4Addr::UNSPECIFIED
+	} else {
+		std::net::Ipv4Addr::LOCALHOST
+	};
+
+	Ok(Some((ip, port).into()))
 }
