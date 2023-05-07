@@ -351,9 +351,53 @@ where
 		prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<StorageKey>, &'static str> {
-		let mut last_key: Option<StorageKey> = None;
+		const NUM_PARTS: usize = 4; // number of parts to divide the prefix into
+
+		let mut tasks = Vec::with_capacity(NUM_PARTS);
+
+		// Divide the prefix into N parts
+		let prefix_bytes = prefix.0;
+		let total_len = prefix_bytes.len();
+		let part_len = total_len / NUM_PARTS;
+		let mut start_index = 0;
+
+		for _ in 0..NUM_PARTS {
+			let end_index = start_index + part_len;
+
+			// Ensure the last part covers the remainder of the prefix bytes
+			let end_index = if end_index >= total_len { total_len } else { end_index };
+
+			let part_prefix = StorageKey(prefix_bytes[start_index..end_index].to_vec());
+			let task = self.rpc_get_keys_paged_part(part_prefix, at);
+			tasks.push(task);
+
+			start_index = end_index;
+		}
+
 		let mut all_keys: Vec<StorageKey> = vec![];
-		let keys = loop {
+		for task in futures::future::join_all(tasks).await {
+			let mut keys = task?;
+			all_keys.append(&mut keys);
+		}
+
+		// Filter out default child storage keys
+		let filtered_keys = all_keys
+			.into_iter()
+			.filter(|k| !is_default_child_storage_key(&k.0))
+			.collect::<Vec<_>>();
+
+		Ok(filtered_keys)
+	}
+
+	async fn rpc_get_keys_paged_part(
+		&self,
+		prefix: StorageKey,
+		at: B::Hash,
+	) -> Result<Vec<StorageKey>, &'static str> {
+		let mut last_key: Option<StorageKey> = None;
+		let mut keys: Vec<StorageKey> = vec![];
+
+		loop {
 			let page = self
 				.as_online()
 				.rpc_client()
@@ -368,25 +412,26 @@ where
 					error!(target: LOG_TARGET, "Error = {:?}", e);
 					"rpc get_keys failed"
 				})?;
-			let page_len = page.len();
 
-			all_keys.extend(page);
+			let page_len = page.len();
+			keys.extend(page);
 
 			if page_len < Self::DEFAULT_KEY_DOWNLOAD_PAGE as usize {
 				log::debug!(target: LOG_TARGET, "last page received: {}", page_len);
-				break all_keys
+				break
 			} else {
-				let new_last_key =
-					all_keys.last().expect("all_keys is populated; has .last(); qed");
+				let new_last_key = keys.last().expect("keys is populated; has .last(); qed");
+
 				log::debug!(
 					target: LOG_TARGET,
 					"new total = {}, full page received: {}",
-					all_keys.len(),
+					keys.len(),
 					HexDisplay::from(new_last_key)
 				);
+
 				last_key = Some(new_last_key.clone());
 			}
-		};
+		}
 
 		Ok(keys)
 	}
