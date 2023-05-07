@@ -38,6 +38,7 @@
 //!   funds must be removed from an account before it is known precisely what should be done with
 //!   them.
 
+pub mod conformance_tests;
 pub mod freeze;
 pub mod hold;
 mod imbalance;
