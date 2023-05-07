@@ -999,10 +999,9 @@ mod tests {
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_api::{ApiExt, ProvideRuntimeApi};
 	use sp_consensus::BlockOrigin;
-	use sp_core::{storage::well_known_keys::HEAP_PAGES, ExecutionContext};
+	use sp_core::{storage::well_known_keys::HEAP_PAGES, traits::CallContext};
 	use sp_keyring::AccountKeyring;
 	use sp_runtime::{traits::SignedExtension, transaction_validity::InvalidTransaction};
-	use sp_state_machine::ExecutionStrategy;
 	use substrate_test_runtime_client::{
 		prelude::*, runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder,
 	};

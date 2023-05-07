@@ -23,8 +23,11 @@
 
 use crate::AuthorityId;
 use frame_support::{pallet_prelude::*, storage};
-use sp_runtime::transaction_validity::{
-	InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
+use sp_runtime::{
+	traits::Hash,
+	transaction_validity::{
+		InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
+	},
 };
 use sp_std::prelude::*;
 
@@ -38,7 +41,7 @@ pub mod pallet {
 	use crate::TransferData;
 	use frame_system::pallet_prelude::*;
 	use sp_core::storage::well_known_keys;
-	use sp_runtime::{transaction_validity::TransactionPriority, Perbill};
+	use sp_runtime::{traits::BlakeTwo256, transaction_validity::TransactionPriority, Perbill};
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
@@ -225,7 +228,10 @@ pub mod pallet {
 				Call::deposit_log_digest_item { .. } |
 				Call::storage_change { .. } |
 				Call::read { .. } |
-				Call::read_and_panic { .. } => Ok(Default::default()),
+				Call::read_and_panic { .. } => Ok(ValidTransaction {
+					provides: vec![BlakeTwo256::hash_of(call).encode()],
+					..Default::default()
+				}),
 				_ => Err(TransactionValidityError::Invalid(InvalidTransaction::Call)),
 			}
 		}

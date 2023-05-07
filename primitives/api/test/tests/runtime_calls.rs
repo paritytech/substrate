@@ -39,16 +39,6 @@ fn calling_runtime_function() {
 }
 
 #[test]
-fn calling_native_runtime_function() {
-	calling_function_with_strat(ExecutionStrategy::NativeWhenPossible);
-}
-
-#[test]
-fn calling_wasm_runtime_function() {
-	calling_function_with_strat(ExecutionStrategy::AlwaysWasm);
-}
-
-#[test]
 fn calling_native_runtime_signature_changed_function() {
 	let client = TestClientBuilder::new().build();
 	let runtime_api = client.runtime_api();
