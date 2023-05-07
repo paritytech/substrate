@@ -15,6 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Fast Unstake Pallet
+//!
+//! ## Overview
+//!
 //! A pallet that's designed to JUST do the following:
 //!
 //! If a nominator is not exposed in any `ErasStakers` (i.e. "has not actively backed any
@@ -27,16 +31,16 @@
 //! Nominator" role explained in the
 //! [February Staking Update](https://polkadot.network/blog/staking-update-february-2022/).
 //!
-//! This pallet works off the basis of `on_idle`, meaning that it provides no guarantee about when
-//! it will succeed, if at all. Moreover, the queue implementation is unordered. In case of
-//! congestion, no FIFO ordering is provided.
+//! This pallet works off the basis of `on_idle`, meaning that it
+//! provides no guarantee about when it will succeed, if at all. Moreover, the queue implementation
+//! is unordered. In case of congestion, no FIFO ordering is provided.
 //!
 //! Stakers who are certain about NOT being exposed can register themselves with
-//! [`Call::register_fast_unstake`]. This will chill, and fully unbond the staker, and place them in
-//! the queue to be checked.
+//! [`Pallet::register_fast_unstake`]. This will chill, and fully unbond the staker, and place them
+//! in the queue to be checked.
 //!
 //! Once queued, but not being actively processed, stakers can withdraw their request via
-//! [`Call::deregister`].
+//! [`Pallet::deregister`].
 //!
 //! Once queued, a staker wishing to unbond can perform no further action in pallet-staking. This is
 //! to prevent them from accidentally exposing themselves behind a validator etc.
@@ -46,16 +50,44 @@
 //!
 //! If unsuccessful, meaning that the staker was exposed sometime in the last `BondingDuration` eras
 //! they will end up being slashed for the amount of wasted work they have inflicted on the chian.
+//!
+//! ## Details
+//!
+//! The main components of this pallet are:
+//! - [`pallet::Pallet`], which implements all of the dispatchable extrinsics of the pallet, among
+//!   other public functions.
+//! 	- The subset of the functions that are dispatchable can be identified either in
+//!    [`pallet::dispatchables`] module or in [`pallet::Call`] enum.
+//! - [`pallet::storage_types`], which contains the list of all types that are representing a
+//!   storage item. Otherwise, all storage items are listed among [`pallet::types`].
+//! - [`pallet::Config`], which contains the configuration trait of this pallet.
+//! - [`pallet::Event`].
+//! - [`pallet::Error`].
+//!
+//! All of which can be seen in more detail in [`pallet`] module.
+//!
+//! ## Examples
+//!
+//! Fast-unstake with multiple participants in the queue.
+//!
+//! ```
+#![doc = include_str!("../examples/fast_unstake_success_multi.rs")]
+//! ```
+//! 
+//! Fast unstake failing because a nominator is exposed.
+//! ```
+#![doc = include_str!("../examples/exposed_nominator_cannot_unstake.rs")]
+//! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use pallet::*;
 
-#[cfg(test)]
-mod mock;
+#[cfg(any(test, feature = "std"))]
+pub mod mock;
 
 #[cfg(test)]
-mod tests;
+pub mod tests;
 
 // NOTE: enable benchmarking in tests as well.
 #[cfg(feature = "runtime-benchmarks")]
@@ -77,6 +109,7 @@ macro_rules! log {
 	};
 }
 
+/// Foo
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;

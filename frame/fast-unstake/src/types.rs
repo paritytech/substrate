@@ -35,7 +35,7 @@ pub type BalanceOf<T> =
 #[scale_info(skip_type_params(T))]
 pub struct UnstakeRequest<T: Config> {
 	/// This list of stashes being processed in this request, and their corresponding deposit.
-	pub(crate) stashes: BoundedVec<(T::AccountId, BalanceOf<T>), T::BatchSize>,
+	pub stashes: BoundedVec<(T::AccountId, BalanceOf<T>), T::BatchSize>,
 	/// The list of eras for which they have been checked.
-	pub(crate) checked: BoundedVec<EraIndex, MaxChecking<T>>,
+	pub checked: BoundedVec<EraIndex, MaxChecking<T>>,
 }

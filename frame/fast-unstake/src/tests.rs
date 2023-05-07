@@ -304,59 +304,6 @@ mod on_idle {
 	}
 
 	#[test]
-	fn successful_multi_queue() {
-		ExtBuilder::default().build_and_execute(|| {
-			ErasToCheckPerBlock::<T>::put(BondingDuration::get() + 1);
-			CurrentEra::<T>::put(BondingDuration::get());
-
-			// register multi accounts for fast unstake
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), Some(Deposit::get()));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(4)));
-			assert_eq!(Queue::<T>::get(3), Some(Deposit::get()));
-
-			// assert 2 queue items are in Queue & None in Head to start with
-			assert_eq!(Queue::<T>::count(), 2);
-			assert_eq!(Head::<T>::get(), None);
-
-			// process on idle and check eras for next Queue item
-			next_block(true);
-
-			// process on idle & let go of current Head
-			next_block(true);
-
-			// confirm Head / Queue items remaining
-			assert_eq!(Queue::<T>::count(), 1);
-			assert_eq!(Head::<T>::get(), None);
-
-			// process on idle and check eras for next Queue item
-			next_block(true);
-
-			// process on idle & let go of current Head
-			next_block(true);
-
-			// Head & Queue should now be empty
-			assert_eq!(Head::<T>::get(), None);
-			assert_eq!(Queue::<T>::count(), 0);
-
-			assert_eq!(
-				fast_unstake_events_since_last_call(),
-				vec![
-					Event::BatchChecked { eras: vec![3, 2, 1, 0] },
-					Event::Unstaked { stash: 1, result: Ok(()) },
-					Event::BatchFinished { size: 1 },
-					Event::BatchChecked { eras: vec![3, 2, 1, 0] },
-					Event::Unstaked { stash: 3, result: Ok(()) },
-					Event::BatchFinished { size: 1 },
-				]
-			);
-
-			assert_unstaked(&1);
-			assert_unstaked(&3);
-		});
-	}
-
-	#[test]
 	fn successful_unstake() {
 		ExtBuilder::default().build_and_execute(|| {
 			ErasToCheckPerBlock::<T>::put(BondingDuration::get() + 1);
@@ -690,48 +637,6 @@ mod on_idle {
 			);
 
 			assert_unstaked(&1);
-		});
-	}
-
-	#[test]
-	fn exposed_nominator_cannot_unstake() {
-		ExtBuilder::default().build_and_execute(|| {
-			ErasToCheckPerBlock::<T>::put(1);
-			CurrentEra::<T>::put(BondingDuration::get());
-
-			// create an exposed nominator in era 1
-			let exposed = 666;
-			create_exposed_nominator(exposed, 1);
-
-			// a few blocks later, we realize they are slashed
-			next_block(true);
-			assert_eq!(
-				Head::<T>::get(),
-				Some(UnstakeRequest {
-					stashes: bounded_vec![(exposed, Deposit::get())],
-					checked: bounded_vec![3]
-				})
-			);
-			next_block(true);
-			assert_eq!(
-				Head::<T>::get(),
-				Some(UnstakeRequest {
-					stashes: bounded_vec![(exposed, Deposit::get())],
-					checked: bounded_vec![3, 2]
-				})
-			);
-			next_block(true);
-			assert_eq!(Head::<T>::get(), None);
-
-			assert_eq!(
-				fast_unstake_events_since_last_call(),
-				vec![
-					Event::BatchChecked { eras: vec![3] },
-					Event::BatchChecked { eras: vec![2] },
-					Event::Slashed { stash: exposed, amount: Deposit::get() },
-					Event::BatchFinished { size: 0 }
-				]
-			);
 		});
 	}
 

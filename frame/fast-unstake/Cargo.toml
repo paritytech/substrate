@@ -27,14 +27,13 @@ frame-election-provider-support = { default-features = false, path = "../electio
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 
-[dev-dependencies]
-pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
-pallet-staking = { path = "../staking" }
-pallet-balances = { path = "../balances" }
-pallet-timestamp = { path = "../timestamp" }
+pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve", optional = true }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core", optional = true }
+substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils", optional = true }
+sp-tracing = { version = "6.0.0", path = "../../primitives/tracing", optional = true }
+pallet-staking = { path = "../staking", optional = true }
+pallet-balances = { path = "../balances", optional = true }
+pallet-timestamp = { path = "../timestamp", optional = true }
 
 [features]
 default = ["std"]
@@ -54,6 +53,14 @@ std = [
 	"frame-election-provider-support/std",
 
 	"frame-benchmarking/std",
+
+	"pallet-staking-reward-curve",
+	"sp-core",
+	"substrate-test-utils",
+	"sp-tracing",
+	"pallet-staking",
+	"pallet-balances",
+	"pallet-timestamp"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
