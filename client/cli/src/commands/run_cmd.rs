@@ -24,6 +24,8 @@ use crate::{
 		TransactionPoolParams,
 	},
 	CliConfiguration, PrometheusParams, RuntimeParams, TelemetryParams,
+	RPC_DEFAULT_MAX_CONNECTIONS, RPC_DEFAULT_MAX_REQUEST_SIZE_MB, RPC_DEFAULT_MAX_RESPONSE_SIZE_MB,
+	RPC_DEFAULT_MAX_SUBS_PER_CONN,
 };
 use clap::Parser;
 use regex::Regex;
@@ -78,23 +80,23 @@ pub struct RunCmd {
 	pub rpc_methods: RpcMethods,
 
 	/// Set the the maximum RPC request payload size for both HTTP and WS in megabytes.
-	#[arg(long, default_value_t = 15)]
+	#[arg(long, default_value_t = RPC_DEFAULT_MAX_REQUEST_SIZE_MB)]
 	pub rpc_max_request_size: u32,
 
 	/// Set the the maximum RPC response payload size for both HTTP and WS in megabytes.
-	#[arg(long, default_value_t = 15)]
+	#[arg(long, default_value_t = RPC_DEFAULT_MAX_RESPONSE_SIZE_MB)]
 	pub rpc_max_response_size: u32,
 
 	/// Set the the maximum concurrent subscriptions per connection.
-	#[arg(long, default_value_t = 1024)]
+	#[arg(long, default_value_t = RPC_DEFAULT_MAX_SUBS_PER_CONN)]
 	pub rpc_max_subscriptions_per_connection: u32,
 
 	/// Specify JSON-RPC server TCP port.
-	#[arg(long, value_name = "PORT", default_value_t = 9944)]
-	pub rpc_port: u16,
+	#[arg(long, value_name = "PORT")]
+	pub rpc_port: Option<u16>,
 
 	/// Maximum number of RPC server connections.
-	#[arg(long, value_name = "COUNT", default_value_t = 100)]
+	#[arg(long, value_name = "COUNT", default_value_t = RPC_DEFAULT_MAX_CONNECTIONS)]
 	pub rpc_max_connections: u32,
 
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
@@ -336,7 +338,7 @@ impl CliConfiguration for RunCmd {
 			.into())
 	}
 
-	fn rpc_addr(&self, _default_listen_port: u16) -> Result<Option<SocketAddr>> {
+	fn rpc_addr(&self, default_listen_port: u16) -> Result<Option<SocketAddr>> {
 		let interface = rpc_interface(
 			self.rpc_external,
 			self.unsafe_rpc_external,
@@ -344,7 +346,7 @@ impl CliConfiguration for RunCmd {
 			self.validator,
 		)?;
 
-		Ok(Some(SocketAddr::new(interface, self.rpc_port)))
+		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(default_listen_port))))
 	}
 
 	fn rpc_methods(&self) -> Result<sc_service::config::RpcMethods> {
