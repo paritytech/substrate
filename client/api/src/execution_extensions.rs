@@ -166,7 +166,7 @@ pub struct ExecutionExtensions<Block: BlockT> {
 	strategies: ExecutionStrategies,
 	keystore: Option<KeystorePtr>,
 	offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
-	// FIXME: these two are only RwLock because of https://github.com/paritytech/substrate/issues/4587
+	// FIXME: these three are only RwLock because of https://github.com/paritytech/substrate/issues/4587
 	//        remove when fixed.
 	// To break retain cycle between `Client` and `TransactionPool` we require this
 	// extension to be a `Weak` reference.
@@ -174,6 +174,7 @@ pub struct ExecutionExtensions<Block: BlockT> {
 	// during initialization.
 	transaction_pool: RwLock<Option<Weak<dyn OffchainSubmitTransaction<Block>>>>,
 	extensions_factory: RwLock<Box<dyn ExtensionsFactory<Block>>>,
+	statement_store: RwLock<Option<Weak<dyn sp_statement_store::StatementStore>>>,
 	read_runtime_version: Arc<dyn ReadRuntimeVersion>,
 }
 
@@ -186,6 +187,7 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 		read_runtime_version: Arc<dyn ReadRuntimeVersion>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
+		let statement_store = RwLock::new(None);
 		let extensions_factory = Box::new(());
 		Self {
 			strategies,
@@ -193,6 +195,7 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 			offchain_db,
 			extensions_factory: RwLock::new(extensions_factory),
 			transaction_pool,
+			statement_store,
 			read_runtime_version,
 		}
 	}
@@ -213,6 +216,11 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 		T: OffchainSubmitTransaction<Block> + 'static,
 	{
 		*self.transaction_pool.write() = Some(Arc::downgrade(pool) as _);
+	}
+
+	/// Register statement store extension.
+	pub fn register_statement_store(&self, store: Arc<dyn sp_statement_store::StatementStore>) {
+		*self.statement_store.write() = Some(Arc::downgrade(&store) as _);
 	}
 
 	/// Based on the execution context and capabilities it produces
@@ -245,6 +253,11 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 			}
 		}
 
+		if capabilities.contains(offchain::Capabilities::STATEMENT_STORE) {
+			if let Some(store) = self.statement_store.read().as_ref().and_then(|x| x.upgrade()) {
+				extensions.register(sp_statement_store::runtime_api::StatementStoreExt(store));
+			}
+		}
 		if capabilities.contains(offchain::Capabilities::OFFCHAIN_DB_READ) ||
 			capabilities.contains(offchain::Capabilities::OFFCHAIN_DB_WRITE)
 		{

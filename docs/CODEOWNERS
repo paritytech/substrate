@@ -19,54 +19,50 @@
 # - The latest matching rule, if multiple, takes precedence.
 
 # CI
-/scripts/ci/ @paritytech/ci
 /.github/ @paritytech/ci
 /.gitlab-ci.yml @paritytech/ci
-
-# Sandboxing capability of Substrate Runtime
-/primitives/sandbox/ @pepyakin @koute
+/scripts/ci/ @paritytech/ci
 
 # WASM executor, low-level client <-> WASM interface and other WASM-related code
-/client/executor/ @koute
 /client/allocator/ @koute
-/primitives/wasm-interface/ @koute
-/primitives/runtime-interface/ @koute
+/client/executor/ @koute
 /primitives/panic-handler/ @koute
+/primitives/runtime-interface/ @koute
+/primitives/wasm-interface/ @koute
 /utils/wasm-builder/ @koute
 
 # Systems-related bits and bobs on the client side
 /client/sysinfo/ @koute
 /client/tracing/ @koute
 
+# FRAME
+/frame/ @paritytech/frame-coders
+/frame/nfts/ @jsidorenko
+/frame/state-trie-migration/ @paritytech/frame-coders @cheme
+/frame/uniques/ @jsidorenko
+
 # GRANDPA, BABE, consensus stuff
+/client/consensus/babe/ @andresilva
+/client/consensus/grandpa/ @andresilva
+/client/consensus/pow/ @sorpaas
+/client/consensus/slots/ @andresilva
 /frame/babe/ @andresilva
 /frame/grandpa/ @andresilva
-/client/consensus/grandpa/ @andresilva
-/client/consensus/babe/ @andresilva
-/client/consensus/slots/ @andresilva
-/client/consensus/pow/ @sorpaas
 /primitives/consensus/pow/ @sorpaas
 
 # BEEFY, MMR
-/client/beefy/ @acatangiu
 /frame/beefy/ @acatangiu
 /frame/beefy-mmr/ @acatangiu
 /frame/merkle-mountain-range/ @acatangiu
-/primitives/beefy/ @acatangiu
 /primitives/merkle-mountain-range/ @acatangiu
 
 # Contracts
 /frame/contracts/ @athei
 
 # NPoS and election
+/frame/election-provider-multi-phase/ @paritytech/staking-core
 /frame/election-provider-support/ @paritytech/staking-core
-/frame/staking/ @paritytech/staking-core
-/frame/nomination-pools/ @paritytech/staking-core
 /frame/elections-phragmen/ @paritytech/staking-core
+/frame/nomination-pools/ @paritytech/staking-core
+/frame/staking/ @paritytech/staking-core
 /primitives/npos-elections/ @paritytech/staking-core
-
-# Fixed point arithmetic
-/primitives/sp-arithmetic/ @kianenigma
-
-# Transaction weight stuff
-/frame/support/src/weights.rs @shawntabrizi
