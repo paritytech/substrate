@@ -120,7 +120,7 @@ store-failure-output = true
 # To check if you added your test to a filter and group correctly, use this command:
 # cargo nextest show-config test-groups --config-file scripts/ci/gitlab/nextest.toml --features runtime-benchmarks --workspace --locked --release --manifest-path ./bin/node/cli/Cargo.toml
 # For the non-default [[profile.default.overrides]] i.e. [[profile.local.overrides]] add `--profile local` to the above command
-filter = "test(follow_report_multiple_pruned_block) | test (follow_forks_pruned_block) | test(returns_status_for_pruned_blocks) | test(can_sync_small_non_best_forks) | test(telemetry_works) | test(running_the_node_works_and_can_be_interrupted) | test(notifications_back_pressure)"
+filter = "test(follow_report_multiple_pruned_block) | test (follow_forks_pruned_block) | test(can_sync_small_non_best_forks) | test(telemetry_works) | test(running_the_node_works_and_can_be_interrupted) | test(notifications_back_pressure)"
 # Flaky tests are executed exclusively
 test-group = 'flaky'
 # only run 1 test at a time by default.
