@@ -553,6 +553,8 @@ pub enum DispatchError {
 	Corruption,
 	/// Some resource (e.g. a preimage) is unavailable right now. This might fix itself later.
 	Unavailable,
+	/// Root origin is not allowed.
+	RootNotAllowed,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -624,6 +626,8 @@ pub enum TokenError {
 	CannotCreateHold,
 	/// Withdrawal would cause unwanted loss of account.
 	NotExpendable,
+	/// Account cannot receive the assets.
+	Blocked,
 }
 
 impl From<TokenError> for &'static str {
@@ -639,6 +643,7 @@ impl From<TokenError> for &'static str {
 			TokenError::CannotCreateHold =>
 				"Account cannot be created for recording amount on hold",
 			TokenError::NotExpendable => "Account that is desired to remain would die",
+			TokenError::Blocked => "Account cannot receive the assets",
 		}
 	}
 }
@@ -678,6 +683,7 @@ impl From<DispatchError> for &'static str {
 			Exhausted => "Resources exhausted",
 			Corruption => "State corrupt",
 			Unavailable => "Resource unavailable",
+			RootNotAllowed => "Root not allowed",
 		}
 	}
 }
@@ -724,6 +730,7 @@ impl traits::Printable for DispatchError {
 			Exhausted => "Resources exhausted".print(),
 			Corruption => "State corrupt".print(),
 			Unavailable => "Resource unavailable".print(),
+			RootNotAllowed => "Root not allowed".print(),
 		}
 	}
 }
