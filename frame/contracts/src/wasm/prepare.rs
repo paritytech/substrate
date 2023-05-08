@@ -284,7 +284,7 @@ impl ContractModule {
 	}
 
 	fn into_wasm_code(self) -> Result<Vec<u8>, &'static str> {
-		elements::serialize(self.0).map_err(|_| "error serializing instrumented module")
+		elements::serialize(self.0).map_err(|_| "error serializing contract module")
 	}
 }
 
@@ -399,7 +399,7 @@ where
 		)
 		.map_err(|err| {
 			log::debug!(target: LOG_TARGET, "{}", err);
-			(Error::<T>::CodeRejected.into(), "new code rejected after instrumentation")
+			(Error::<T>::CodeRejected.into(), "new code rejected on wasmi instantiation")
 		})?;
 	}
 
@@ -457,7 +457,7 @@ where
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking and testing.
 ///
 /// For benchmarking we need to construct special contracts that might not pass our
-/// sanity checks or need to skip instrumentation for correct results. We hide functions
+/// sanity checks. We hide functions
 /// allowing this behind a feature that is only set during benchmarking or testing to
 /// prevent usage in production code.
 #[cfg(any(test, feature = "runtime-benchmarks"))]

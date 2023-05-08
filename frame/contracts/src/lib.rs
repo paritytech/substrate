@@ -279,9 +279,7 @@ pub mod pallet {
 		/// The address generator used to generate the addresses of contracts.
 		type AddressGenerator: AddressGenerator<Self>;
 
-		/// The maximum length of a contract code in bytes. This limit applies to the instrumented
-		/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
-		/// a wasm binary below this maximum size.
+		/// The maximum length of a contract code in bytes.
 		///
 		/// The value should be chosen carefully taking into the account the overall memory limit
 		/// your runtime has, as well as the [maximum allowed callstack
@@ -335,15 +333,15 @@ pub mod pallet {
 			// encoded one. This is because even a single-byte wasm instruction has 16-byte size in
 			// wasmi. This gives us `MaxCodeLen*16` safety margin.
 			//
-			// Next, the pallet keeps both the original and instrumented wasm blobs for each
-			// contract, hence we add up `MaxCodeLen*2` more to the safety margin.
+			// Next, the pallet keeps the Wasm blob for each
+			// contract, hence we add up one `MaxCodeLen` more to the safety margin.
 			//
 			// Finally, the inefficiencies of the freeing-bump allocator
 			// being used in the client for the runtime memory allocations, could lead to possible
 			// memory allocations for contract code grow up to `x4` times in some extreme cases,
 			// which gives us total multiplier of `18*4` for `MaxCodeLen`.
 			//
-			// That being said, for every contract executed in runtime, at least `MaxCodeLen*18*4`
+			// That being said, for every contract executed in runtime, at least `MaxCodeLen*17*4`
 			// memory should be available. Note that maximum allowed heap memory and stack size per
 			// each contract (stack frame) should also be counted.
 			//
@@ -352,7 +350,7 @@ pub mod pallet {
 			//
 			// This gives us the following formula:
 			//
-			// `(MaxCodeLen * 18 * 4 + MAX_STACK_SIZE + max_heap_size) * max_call_depth <
+			// `(MaxCodeLen * 17 * 4 + MAX_STACK_SIZE + max_heap_size) * max_call_depth <
 			// max_runtime_mem/2`
 			//
 			// Hence the upper limit for the `MaxCodeLen` can be defined as follows:
@@ -361,7 +359,7 @@ pub mod pallet {
 				.saturating_div(max_call_depth)
 				.saturating_sub(max_heap_size)
 				.saturating_sub(MAX_STACK_SIZE)
-				.saturating_div(18 * 4);
+				.saturating_div(17 * 4);
 
 			assert!(
 				T::MaxCodeLen::get() < code_len_limit,
@@ -472,7 +470,7 @@ pub mod pallet {
 		///
 		/// If the code does not already exist a deposit is reserved from the caller
 		/// and unreserved only when [`Self::remove_code`] is called. The size of the reserve
-		/// depends on the instrumented size of the the supplied `code`.
+		/// depends on the size of the supplied `code`.
 		///
 		/// If the code already exists in storage it will still return `Ok` and upgrades
 		/// the in storage version to the current
@@ -621,7 +619,7 @@ pub mod pallet {
 		///
 		/// Instantiation is executed as follows:
 		///
-		/// - The supplied `code` is instrumented, deployed, and a `code_hash` is created for that
+		/// - The supplied `code` is deployed, and a `code_hash` is created for that
 		///   code.
 		/// - If the `code_hash` already exists on the chain the underlying `code` will be shared.
 		/// - The destination address is computed based on the sender, code_hash and the salt.
@@ -847,7 +845,7 @@ pub mod pallet {
 		/// or via RPC an `Ok` will be returned. In this case the caller needs to inspect the flags
 		/// to determine whether a reversion has taken place.
 		ContractReverted,
-		/// The contract's code was found to be invalid during validation or instrumentation.
+		/// The contract's code was found to be invalid during validation.
 		///
 		/// The most likely cause of this is that an API was used which is not supported by the
 		/// node. This happens if an older node is used with a new version of ink!. Try updating
@@ -860,11 +858,7 @@ pub mod pallet {
 		Indeterministic,
 	}
 
-	/// A mapping from an original code hash to the original code, untouched by instrumentation.
-	#[pallet::storage]
-	pub(crate) type PristineCode<T: Config> = StorageMap<_, Identity, CodeHash<T>, CodeVec<T>>;
-
-	/// A mapping between an original code hash and instrumented wasm code, ready for execution.
+	/// A mapping between an original code hash and Wasm code, ready for execution.
 	#[pallet::storage]
 	pub(crate) type CodeStorage<T: Config> =
 		StorageMap<_, Identity, CodeHash<T>, PrefabWasmModule<T>>;
@@ -1324,7 +1318,7 @@ impl<T: Config> Pallet<T> {
 		ContractInfo::<T>::load_code_hash(account)
 	}
 
-	/// Store code for benchmarks which does not check nor instrument the code.
+	/// Store code for benchmarks which does not validate the code.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn store_code_raw(
 		code: Vec<u8>,

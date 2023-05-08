@@ -271,9 +271,6 @@ impl<T: Config> PrefabWasmModule<T> {
 		<OwnerInfoOf<T>>::mutate(&code_hash, |owner_info| {
 			match owner_info {
 				// Instantiate existing contract.
-				//
-				// No need to update the `CodeStorage` as any re-instrumentation eagerly saves
-				// the re-instrumented code.
 				Some(owner_info) if instantiated => {
 					owner_info.refcount = owner_info.refcount.checked_add(1).expect(
 						"
@@ -286,23 +283,15 @@ impl<T: Config> PrefabWasmModule<T> {
 					);
 					Ok(())
 				},
-				// Re-upload existing contract without executing it.
-				//
-				// We are careful here to just overwrite the code to not include it into the PoV.
-				// We do this because the uploaded code was instrumented with the latest schedule
-				// and hence we persist those changes. Otherwise the next execution will pay again
-				// for the instrumentation.
-				Some(_) => {
-					<CodeStorage<T>>::insert(&code_hash, module);
-					Ok(())
-				},
+				// Contract code is already stored in storage. Nothing to be done here.
+				Some(_) => Ok(()),
 				// Upload a new contract.
 				//
 				// We need to write all data structures and collect the deposit.
 				None => {
 					let mut new_owner_info = module.owner_info.take().expect(
 						"If an executable isn't in storage it was uploaded.
-				If it was uploaded the owner info was generated and attached. qed
+				If it was uploaded, the owner info was generated and attached. qed
 				",
 					);
 					// This `None` case happens only in freshly uploaded modules. This means that
@@ -392,11 +381,11 @@ impl<T: Config> PrefabWasmModule<T> {
 		store_code(executable, false)
 	}
 
-	/// Create the module without checking nor instrumenting the passed code.
+	/// Create the module without checking the passed code.
 	///
 	/// # Note
 	///
-	/// This is useful for benchmarking where we don't want instrumentation to skew
+	/// This is useful for benchmarking where we don't want validation of the module to skew
 	/// our results. This also does not collect any deposit from the `owner`. Also useful
 	/// during testing when we want to deploy codes that do not pass the instantiation checks.
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
@@ -744,7 +733,7 @@ mod tests {
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
 		}
-		fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
+		fn gas_meter_mut(&mut self) -> &mut GasMeter<Self::T> {
 			&mut self.gas_meter
 		}
 		fn append_debug_buffer(&mut self, msg: &str) -> bool {

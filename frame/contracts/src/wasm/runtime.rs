@@ -174,9 +174,6 @@ impl HostError for TrapReason {}
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Copy, Clone)]
 pub enum RuntimeCosts {
-	/// Charge the gas meter with the cost of a metering block. The charged costs are
-	/// the supplied cost of the block plus the overhead of the metering itself.
-	MeteringBlock(u64),
 	/// Weight charged for copying data from the sandbox.
 	CopyFromContract(u32),
 	/// Weight charged for copying data to the sandbox.
@@ -277,7 +274,6 @@ impl RuntimeCosts {
 	fn token<T: Config>(&self, s: &HostFnWeights<T>) -> RuntimeToken {
 		use self::RuntimeCosts::*;
 		let weight = match *self {
-			MeteringBlock(amount) => s.gas.saturating_add(Weight::from_parts(amount, 0)),
 			CopyFromContract(len) => s.return_per_byte.saturating_mul(len.into()),
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
@@ -369,7 +365,7 @@ impl RuntimeCosts {
 macro_rules! charge_gas {
 	($runtime:expr, $costs:expr) => {{
 		let token = $costs.token(&$runtime.ext.schedule().host_fn_weights);
-		$runtime.ext.gas_meter().charge(token)
+		$runtime.ext.gas_meter_mut().charge(token)
 	}};
 }
 
@@ -548,7 +544,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	/// refunded to match the actual amount.
 	pub fn adjust_gas(&mut self, charged: ChargedAmount, actual_costs: RuntimeCosts) {
 		let token = actual_costs.token(&self.ext.schedule().host_fn_weights);
-		self.ext.gas_meter().adjust_gas(charged, token);
+		self.ext.gas_meter_mut().adjust_gas(charged, token);
 	}
 
 	/// Read designated chunk from the sandbox memory.
@@ -1016,19 +1012,6 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 // for every function.
 #[define_env(doc)]
 pub mod env {
-	/// Account for used gas. Traps if gas used is greater than gas limit.
-	///
-	/// NOTE: This is a implementation defined call and is NOT a part of the public API.
-	/// This call is supposed to be called only by instrumentation injected code.
-	/// It deals only with the *ref_time* Weight.
-	///
-	/// - `amount`: How much gas is used.
-	/// TODO remove this host fn
-	fn gas(ctx: _, _memory: _, amount: u64) -> Result<(), TrapReason> {
-		ctx.charge_gas(RuntimeCosts::MeteringBlock(amount))?;
-		Ok(())
-	}
-
 	/// Set the value at the given key in the contract storage.
 	///
 	/// Equivalent to the newer [`seal1`][`super::api_doc::Version1::set_storage`] version with the

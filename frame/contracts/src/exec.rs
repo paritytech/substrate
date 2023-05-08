@@ -135,7 +135,7 @@ pub trait Ext: sealing::Sealed {
 
 	/// Call (possibly transferring some amount of funds) into the specified account.
 	///
-	/// Returns the original code size of the called contract.
+	/// Returns the code size of the called contract.
 	fn call(
 		&mut self,
 		gas_limit: Weight,
@@ -148,7 +148,7 @@ pub trait Ext: sealing::Sealed {
 
 	/// Execute code in the current frame.
 	///
-	/// Returns the original code size of the called contract.
+	/// Returns the code size of the called contract.
 	fn delegate_call(
 		&mut self,
 		code: CodeHash<Self::T>,
@@ -159,7 +159,7 @@ pub trait Ext: sealing::Sealed {
 	///
 	/// Returns the original code size of the called contract.
 	/// The newly created account will be associated with `code`. `value` specifies the amount of
-	/// value transferred from this to the newly created account.
+	/// value transferred from the caller to the newly created account.
 	fn instantiate(
 		&mut self,
 		gas_limit: Weight,
@@ -263,11 +263,11 @@ pub trait Ext: sealing::Sealed {
 	/// Get a reference to the schedule used by the current call.
 	fn schedule(&self) -> &Schedule<Self::T>;
 
-	/// Get a mutable reference to the nested gas meter.
-	fn gas_meter(&mut self) -> &mut GasMeter<Self::T>;
+	/// Get an immutable reference to the nested gas meter.
+	fn gas_meter(&self) -> &GasMeter<Self::T>;
 
 	/// Get a mutable reference to the nested gas meter.
-	fn gas_meter_immut(&self) -> &GasMeter<Self::T>;
+	fn gas_meter_mut(&mut self) -> &mut GasMeter<Self::T>;
 
 	/// Append a string to the debug buffer.
 	///
@@ -368,7 +368,7 @@ pub trait Executable<T: Config>: Sized {
 	/// The code hash of the executable.
 	fn code_hash(&self) -> &CodeHash<T>;
 
-	/// Size of the instrumented code in bytes.
+	/// Size of the conract code in bytes.
 	fn code_len(&self) -> u32;
 
 	/// The code does not contain any instructions which could lead to indeterminism.
@@ -1208,7 +1208,7 @@ where
 		code_hash: CodeHash<Self::T>,
 		input_data: Vec<u8>,
 	) -> Result<ExecReturnValue, ExecError> {
-		let executable = E::from_storage(code_hash, self.schedule, self.gas_meter())?;
+		let executable = E::from_storage(code_hash, self.schedule, self.gas_meter_mut())?;
 		let top_frame = self.top_frame_mut();
 		let contract_info = top_frame.contract_info().clone();
 		let account_id = top_frame.account_id.clone();
@@ -1235,7 +1235,7 @@ where
 		input_data: Vec<u8>,
 		salt: &[u8],
 	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
-		let executable = E::from_storage(code_hash, self.schedule, self.gas_meter())?;
+		let executable = E::from_storage(code_hash, self.schedule, self.gas_meter_mut())?;
 		let nonce = self.next_nonce();
 		let executable = self.push_frame(
 			FrameArgs::Instantiate {
@@ -1387,12 +1387,12 @@ where
 		self.schedule
 	}
 
-	fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
-		&mut self.top_frame_mut().nested_gas
+	fn gas_meter(&self) -> &GasMeter<Self::T> {
+		&self.top_frame().nested_gas
 	}
 
-	fn gas_meter_immut(&self) -> &GasMeter<Self::T> {
-		&self.top_frame().nested_gas
+	fn gas_meter_mut(&mut self) -> &mut GasMeter<Self::T> {
+		&mut self.top_frame_mut().nested_gas
 	}
 
 	fn append_debug_buffer(&mut self, msg: &str) -> bool {
