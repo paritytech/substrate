@@ -1235,6 +1235,10 @@ pub mod env {
 		out_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
+		ensure!(
+			key_len <= <<E as Ext>::T as Config>::MaxStorageKeyLen::get(),
+			Error::<E::T>::DecodingFailed
+		);
 		let key = ctx.read_sandbox_memory(memory, key_ptr, key_len)?;
 		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(
 			&Key::<E::T>::try_from_var(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
@@ -2608,7 +2612,13 @@ pub mod env {
 		ctx.adjust_gas(charged, RuntimeCosts::CallRuntime(actual_weight));
 		match result {
 			Ok(_) => Ok(ReturnCode::Success),
-			Err(_) => Ok(ReturnCode::CallRuntimeFailed),
+			Err(e) => {
+				if ctx.ext.append_debug_buffer("") {
+					ctx.ext.append_debug_buffer("seal0::call_runtime failed with: ");
+					ctx.ext.append_debug_buffer(e.into());
+				};
+				Ok(ReturnCode::CallRuntimeFailed)
+			},
 		}
 	}
 
