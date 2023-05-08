@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod v10;
+mod v11;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod v9;
 #[cfg(not(feature = "runtime-benchmarks"))]
@@ -41,7 +43,7 @@ fn invalid_version(version: StorageVersion) -> ! {
 }
 
 pub type Cursor = BoundedVec<u8, ConstU32<1024>>;
-type Migrations<T> = (NoopMigration<7>, NoopMigration<8>, v9::Migration<T>);
+type Migrations<T> = (v9::Migration<T>, v10::Migration<T>, v11::Migration<T>);
 
 /// IsFinished describes whether a migration is finished or not.
 pub enum IsFinished {
@@ -135,7 +137,8 @@ pub trait MigrateSequence: private::Sealed {
 		let Some(first_supported) = low.checked_sub(1) else {
 			return false
 		};
-		in_storage >= first_supported && target == high
+
+		in_storage == first_supported && target == high
 	}
 }
 
@@ -421,7 +424,7 @@ mod test {
 	fn is_upgrade_supported_works() {
 		type M = (MockMigration<7>, MockMigration<8>, MockMigration<9>);
 
-		[(1, 1), (6, 9), (8, 9)].into_iter().for_each(|(from, to)| {
+		[(1, 1), (6, 9)].into_iter().for_each(|(from, to)| {
 			assert!(
 				M::is_upgrade_supported(StorageVersion::new(from), StorageVersion::new(to)),
 				"{} -> {} is supported",
@@ -471,6 +474,7 @@ mod test {
 		type TestMigration = Migration<Test, M>;
 
 		ExtBuilder::default().build().execute_with(|| {
+			assert_eq!(StorageVersion::get::<Pallet<Test>>(), 0);
 			TestMigration::on_runtime_upgrade();
 			for (version, status) in [(1, MigrateResult::InProgress), (2, MigrateResult::Completed)]
 			{
@@ -481,7 +485,8 @@ mod test {
 				);
 			}
 
-			assert_eq!(TestMigration::migrate(Weight::MAX).0, MigrateResult::NoMigrationPerformed)
+			assert_eq!(TestMigration::migrate(Weight::MAX).0, MigrateResult::NoMigrationPerformed);
+			assert_eq!(StorageVersion::get::<Pallet<Test>>(), 2);
 		});
 	}
 }
