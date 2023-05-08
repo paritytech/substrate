@@ -62,7 +62,8 @@ pub trait Inspect<AccountId>: Sized {
 	/// The minimum balance any single account may have.
 	fn minimum_balance(asset: Self::AssetId) -> Self::Balance;
 
-	/// Get the total amount of funds whose ultimate bneficial ownership can be determined as `who`.
+	/// Get the total amount of funds whose ultimate beneficial ownership can be determined as
+	/// `who`.
 	///
 	/// This may include funds which are wholly inaccessible to `who`, either temporarily or even
 	/// indefinitely.
@@ -135,7 +136,7 @@ impl<A, T: Balanced<A>> Dust<A, T> {
 /// **WARNING**
 /// Do not use this directly unless you want trouble, since it allows you to alter account balances
 /// without keeping the issuance up to date. It has no safeguards against accidentally creating
-/// token imbalances in your system leading to accidental imflation or deflation. It's really just
+/// token imbalances in your system leading to accidental inflation or deflation. It's really just
 /// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
 /// use.
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
