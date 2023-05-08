@@ -24,6 +24,16 @@ sp-std = { version = "5.0.0", path = "../std", default-features = false }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
 ark-scale = { git = "https://github.com/w3f/ark-scale", features = ["hazmat"], default-features = false }
 
+[dev-dependencies]
+sp-io = { path = "../io", default-features = false }
+ark-algebra-test-templates = { version = "0.4.2", default-features = false }
+sp-ark-models = { version = "0.4.0-alpha", git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-bls12-377 = { version = "0.4.0-alpha", git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-bls12-381 = { version = "0.4.0-alpha", git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-bw6-761 = { version = "0.4.0-alpha",git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-ed-on-bls12-377 = { version = "0.4.0-alpha", git = "https://github.com/paritytech/ark-substrate", default-features = false }
+sp-ark-ed-on-bls12-381-bandersnatch = { version = "0.4.0-alpha", git = "https://github.com/paritytech/ark-substrate", default-features = false }
+
 [features]
 default = [ "std" ]
 std = [
@@ -39,4 +49,11 @@ std = [
 	"sp-std/std",
 	"codec/std",
 	"ark-scale/std",
+	"sp-io/std",
+	"ark-algebra-test-templates/std",
+	"sp-ark-bls12-377/std",
+	"sp-ark-bls12-381/std",
+    "sp-ark-bw6-761/std",
+    "sp-ark-ed-on-bls12-377/std",
+    "sp-ark-ed-on-bls12-381-bandersnatch/std",
 ]
