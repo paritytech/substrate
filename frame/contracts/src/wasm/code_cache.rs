@@ -41,7 +41,7 @@ use frame_support::{
 	traits::{fungible::MutateHold, tokens::Precision::BestEffort, Get},
 	WeakBoundedVec,
 };
-use sp_runtime::traits::BadOrigin;
+use sp_runtime::{traits::BadOrigin, TokenError};
 use sp_std::vec;
 
 /// Put the instrumented module in storage.
@@ -99,7 +99,13 @@ pub fn store<T: Config>(mut module: PrefabWasmModule<T>, instantiated: bool) -> 
 					&T::HoldReason::get(),
 					&new_owner_info.owner,
 					new_owner_info.deposit,
-				)?;
+					// )?;
+				)
+				.map_err(|e| match e {
+					DispatchError::Token(TokenError::FundsUnavailable) =>
+						<Error<T>>::StorageDepositNotEnoughFunds.into(),
+					_ => e,
+				})?;
 				new_owner_info.refcount = if instantiated { 1 } else { 0 };
 				<PristineCode<T>>::insert(&code_hash, orig_code);
 				<CodeStorage<T>>::insert(&code_hash, module);
