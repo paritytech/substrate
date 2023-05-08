@@ -1,4 +1,4 @@
-error[E0599]: no variant or associated item named `new_call_variant_thing` found for enum `Call` in the current scope
+error[E0599]: no variant or associated item named `new_call_variant_thing` found for enum `frame_support_test::Call` in the current scope
  --> tests/benchmark_ui/invalid_origin.rs:6:1
   |
 6 | #[benchmarks]

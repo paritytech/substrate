@@ -218,5 +218,5 @@ fn runtime_metadata() {
 
 	let rt = Runtime;
 	let runtime_metadata = (&rt).runtime_metadata();
-	assert_eq!(runtime_metadata, expected_runtime_metadata);
+	pretty_assertions::assert_eq!(runtime_metadata, expected_runtime_metadata);
 }

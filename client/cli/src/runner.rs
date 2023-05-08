@@ -259,6 +259,7 @@ mod tests {
 	fn create_runner() -> Runner<Cli> {
 		let runtime = build_runtime().unwrap();
 
+		let root = PathBuf::from("db");
 		let runner = Runner::new(
 			Configuration {
 				impl_name: "spec".into(),
@@ -268,7 +269,7 @@ mod tests {
 				transaction_pool: Default::default(),
 				network: NetworkConfiguration::new_memory(),
 				keystore: sc_service::config::KeystoreConfig::InMemory,
-				database: sc_client_db::DatabaseSource::ParityDb { path: PathBuf::from("db") },
+				database: sc_client_db::DatabaseSource::ParityDb { path: root.clone() },
 				trie_cache_maximum_size: None,
 				state_pruning: None,
 				blocks_pruning: sc_client_db::BlocksPruning::KeepAll,
@@ -287,18 +288,15 @@ mod tests {
 				wasm_method: Default::default(),
 				wasm_runtime_overrides: None,
 				execution_strategies: Default::default(),
-				rpc_http: None,
-				rpc_ws: None,
-				rpc_ipc: None,
-				rpc_ws_max_connections: None,
+				rpc_addr: None,
+				rpc_max_connections: Default::default(),
 				rpc_cors: None,
 				rpc_methods: Default::default(),
-				rpc_max_payload: None,
-				rpc_max_request_size: None,
-				rpc_max_response_size: None,
-				rpc_id_provider: None,
-				rpc_max_subs_per_conn: None,
-				ws_max_out_buffer_capacity: None,
+				rpc_max_request_size: Default::default(),
+				rpc_max_response_size: Default::default(),
+				rpc_id_provider: Default::default(),
+				rpc_max_subs_per_conn: Default::default(),
+				rpc_port: 9944,
 				prometheus_config: None,
 				telemetry_endpoints: None,
 				default_heap_pages: None,
@@ -310,7 +308,8 @@ mod tests {
 				tracing_receiver: Default::default(),
 				max_runtime_instances: 8,
 				announce_block: true,
-				base_path: None,
+				base_path: sc_service::BasePath::new(root.clone()),
+				data_path: root,
 				informant_output_format: Default::default(),
 				runtime_cache_size: 2,
 			},

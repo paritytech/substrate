@@ -117,7 +117,7 @@ use frame_support::{
 	weights::Weight,
 	BoundedVec, RuntimeDebugNoBound, WeakBoundedVec,
 };
-use frame_system::{ensure_signed, pallet_prelude::OriginFor, Pallet as System};
+use frame_system::{ensure_signed, pallet_prelude::OriginFor, EventRecord, Pallet as System};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
 	ContractInstantiateResult, ExecReturnValue, GetStorageResult, InstantiateReturnValue,
@@ -148,6 +148,8 @@ type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
 type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
+type EventRecordOf<T> =
+	EventRecord<<T as frame_system::Config>::RuntimeEvent, <T as frame_system::Config>::Hash>;
 
 /// The old weight type.
 ///
@@ -971,6 +973,35 @@ struct InstantiateInput<T: Config> {
 	salt: Vec<u8>,
 }
 
+/// Determines whether events should be collected during execution.
+#[derive(PartialEq)]
+pub enum CollectEvents {
+	/// Collect events.
+	///
+	/// # Note
+	///
+	/// Events should only be collected when called off-chain, as this would otherwise
+	/// collect all the Events emitted in the block so far and put them into the PoV.
+	///
+	/// **Never** use this mode for on-chain execution.
+	UnsafeCollect,
+	/// Skip event collection.
+	Skip,
+}
+
+/// Determines whether debug messages will be collected.
+#[derive(PartialEq)]
+pub enum DebugInfo {
+	/// Collect debug messages.
+	/// # Note
+	///
+	/// This should only ever be set to `UnsafeDebug` when executing as an RPC because
+	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
+	UnsafeDebug,
+	/// Skip collection of debug messages.
+	Skip,
+}
+
 /// Return type of private helper functions.
 struct InternalOutput<T: Config, O> {
 	/// The gas meter that was used to execute the call.
@@ -1187,11 +1218,11 @@ impl<T: Config> Pallet<T> {
 	///
 	/// # Note
 	///
-	/// `debug` should only ever be set to `true` when executing as an RPC because
-	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
-	/// If set to `true` it returns additional human readable debugging information.
+	/// If `debug` is set to `DebugInfo::UnsafeDebug` it returns additional human readable debugging
+	/// information.
 	///
-	/// It returns the execution result and the amount of used weight.
+	/// If `collect_events` is set to `CollectEvents::UnsafeCollect` it collects all the Events
+	/// emitted in the block so far and the ones emitted during the execution of this contract.
 	pub fn bare_call(
 		origin: T::AccountId,
 		dest: T::AccountId,
@@ -1199,10 +1230,15 @@ impl<T: Config> Pallet<T> {
 		gas_limit: Weight,
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
-		debug: bool,
+		debug: DebugInfo,
+		collect_events: CollectEvents,
 		determinism: Determinism,
-	) -> ContractExecResult<BalanceOf<T>> {
-		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
+	) -> ContractExecResult<BalanceOf<T>, EventRecordOf<T>> {
+		let mut debug_message = if matches!(debug, DebugInfo::UnsafeDebug) {
+			Some(DebugBufferVec::<T>::default())
+		} else {
+			None
+		};
 		let origin = Origin::from_account_id(origin);
 		let common = CommonInput {
 			origin,
@@ -1213,12 +1249,19 @@ impl<T: Config> Pallet<T> {
 			debug_message: debug_message.as_mut(),
 		};
 		let output = CallInput::<T> { dest, determinism }.run_guarded(common);
+		let events = if matches!(collect_events, CollectEvents::UnsafeCollect) {
+			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
+		} else {
+			None
+		};
+
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default().to_vec(),
+			events,
 		}
 	}
 
@@ -1231,9 +1274,11 @@ impl<T: Config> Pallet<T> {
 	///
 	/// # Note
 	///
-	/// `debug` should only ever be set to `true` when executing as an RPC because
-	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
-	/// If set to `true` it returns additional human readable debugging information.
+	/// If `debug` is set to `DebugInfo::UnsafeDebug` it returns additional human readable debugging
+	/// information.
+	///
+	/// If `collect_events` is set to `CollectEvents::UnsafeCollect` it collects all the Events
+	/// emitted in the block so far.
 	pub fn bare_instantiate(
 		origin: T::AccountId,
 		value: BalanceOf<T>,
@@ -1242,9 +1287,14 @@ impl<T: Config> Pallet<T> {
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
-		debug: bool,
-	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>> {
-		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
+		debug: DebugInfo,
+		collect_events: CollectEvents,
+	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>, EventRecordOf<T>> {
+		let mut debug_message = if debug == DebugInfo::UnsafeDebug {
+			Some(DebugBufferVec::<T>::default())
+		} else {
+			None
+		};
 		let common = CommonInput {
 			origin: Origin::from_account_id(origin),
 			value,
@@ -1254,6 +1304,12 @@ impl<T: Config> Pallet<T> {
 			debug_message: debug_message.as_mut(),
 		};
 		let output = InstantiateInput::<T> { code, salt }.run_guarded(common);
+		// collect events if CollectEvents is UnsafeCollect
+		let events = if collect_events == CollectEvents::UnsafeCollect {
+			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
+		} else {
+			None
+		};
 		ContractInstantiateResult {
 			result: output
 				.result
@@ -1263,6 +1319,7 @@ impl<T: Config> Pallet<T> {
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default().to_vec(),
+			events,
 		}
 	}
 
@@ -1370,11 +1427,12 @@ impl<T: Config> Pallet<T> {
 sp_api::decl_runtime_apis! {
 	/// The API used to dry-run contract interactions.
 	#[api_version(2)]
-	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash> where
+	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash, EventRecord> where
 		AccountId: Codec,
 		Balance: Codec,
 		BlockNumber: Codec,
 		Hash: Codec,
+		EventRecord: Codec,
 	{
 		/// Perform a call from a specified account to a given contract.
 		///
@@ -1386,7 +1444,7 @@ sp_api::decl_runtime_apis! {
 			gas_limit: Option<Weight>,
 			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
-		) -> ContractExecResult<Balance>;
+		) -> ContractExecResult<Balance, EventRecord>;
 
 		/// Instantiate a new contract.
 		///
@@ -1399,8 +1457,7 @@ sp_api::decl_runtime_apis! {
 			code: Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
-		) -> ContractInstantiateResult<AccountId, Balance>;
-
+		) -> ContractInstantiateResult<AccountId, Balance, EventRecord>;
 
 		/// Upload new code without instantiating a contract from it.
 		///
