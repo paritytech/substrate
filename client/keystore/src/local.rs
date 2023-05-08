@@ -21,7 +21,7 @@ use parking_lot::RwLock;
 use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
 use sp_core::{
 	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSecret},
-	ecdsa, ed25519, sr25519,
+	ecdsa, ed25519, sr25519, ecies,
 };
 use sp_keystore::{Error as TraitError, Keystore, KeystorePtr};
 use std::{
@@ -192,6 +192,20 @@ impl Keystore for LocalKeystore {
 		msg: &[u8],
 	) -> std::result::Result<Option<ed25519::Signature>, TraitError> {
 		self.sign::<ed25519::Pair>(key_type, public, msg)
+	}
+
+	fn ed25519_decrypt(
+		&self,
+		key_type: KeyTypeId,
+		public: &ed25519::Public,
+		msg: &[u8],
+	) -> std::result::Result<Option<Vec<u8>>, TraitError> {
+		self.0
+			.read()
+			.key_pair_by_type::<ed25519::Pair>(public, key_type)?
+			.map(|pair| ecies::decrypt_ed25519(&pair, msg))
+			.transpose()
+			.map_err(|e| TraitError::Other(format!("Decryption error: {:?}", e)))
 	}
 
 	fn ecdsa_public_keys(&self, key_type: KeyTypeId) -> Vec<ecdsa::Public> {

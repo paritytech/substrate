@@ -21,7 +21,7 @@ use crate::{Error, Keystore, KeystorePtr};
 
 use sp_core::{
 	crypto::{ByteArray, KeyTypeId, Pair, VrfSecret},
-	ecdsa, ed25519, sr25519,
+	ecdsa, ed25519, sr25519, ecies,
 };
 
 use parking_lot::RwLock;
@@ -179,6 +179,18 @@ impl Keystore for MemoryKeystore {
 		msg: &[u8],
 	) -> Result<Option<ed25519::Signature>, Error> {
 		self.sign::<ed25519::Pair>(key_type, public, msg)
+	}
+
+	fn ed25519_decrypt(
+		&self,
+		key_type: KeyTypeId,
+		public: &ed25519::Public,
+		msg: &[u8],
+	) -> Result<Option<Vec<u8>>, Error> {
+		self.pair::<ed25519::Pair>(key_type, public)
+			.map(|pair| ecies::decrypt_ed25519(&pair, msg))
+			.transpose()
+			.map_err(|e| Error::Other(format!("Decryption error: {:?}", e)))
 	}
 
 	fn ecdsa_public_keys(&self, key_type: KeyTypeId) -> Vec<ecdsa::Public> {

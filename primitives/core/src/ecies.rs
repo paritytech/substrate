@@ -16,7 +16,7 @@
 // limitations under the License.
 
 // tag::description[]
-//! Encryption scheme that uses x25519 key exchange.
+//! ECIES encryption scheme using x25519 key exchange and AEAD.
 // end::description[]
 
 use crate::crypto::Pair;
@@ -24,8 +24,10 @@ use aes_gcm::{aead::Aead, KeyInit};
 use rand::{rngs::OsRng, RngCore};
 use sha2::Digest;
 
-type SecretKey = x25519_dalek::StaticSecret;
-type PublicKey = x25519_dalek::PublicKey;
+/// x25519 secret key.
+pub type SecretKey = x25519_dalek::StaticSecret;
+/// x25519 public key.
+pub type PublicKey = x25519_dalek::PublicKey;
 
 /// Encryption or decryption error.
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
@@ -66,9 +68,9 @@ fn kdf(shared_secret: &[u8]) -> [u8; AES_KEY_LEN] {
 	aes_key
 }
 
-/// Encrypt `plaintext` with the given public key. Decryption can be performed with the matching
+/// Encrypt `plaintext` with the given public x25519 public key. Decryption can be performed with the matching
 /// secret key.
-pub fn encrypt(pk: &PublicKey, plaintext: &[u8]) -> Result<Vec<u8>, Error> {
+pub fn encrypt_x25519(pk: &PublicKey, plaintext: &[u8]) -> Result<Vec<u8>, Error> {
 	let ephemeral_sk = x25519_dalek::StaticSecret::new(OsRng);
 	let ephemeral_pk = x25519_dalek::PublicKey::from(&ephemeral_sk);
 
@@ -89,7 +91,7 @@ pub fn encrypt(pk: &PublicKey, plaintext: &[u8]) -> Result<Vec<u8>, Error> {
 	Ok(out)
 }
 
-/// Encrypt `plaintext` with the given public key. Decryption can be performed with the matching
+/// Encrypt `plaintext` with the given ed25519 public key. Decryption can be performed with the matching
 /// secret key.
 pub fn encrypt_ed25519(pk: &crate::ed25519::Public, plaintext: &[u8]) -> Result<Vec<u8>, Error> {
 	let ed25519 = curve25519_dalek::edwards::CompressedEdwardsY(pk.0);
@@ -99,11 +101,11 @@ pub fn encrypt_ed25519(pk: &crate::ed25519::Public, plaintext: &[u8]) -> Result<
 		.expect("The compressed point is invalid")
 		.to_montgomery();
 	let montgomery = x25519_dalek::PublicKey::from(x25519.to_bytes());
-	encrypt(&montgomery, plaintext)
+	encrypt_x25519(&montgomery, plaintext)
 }
 
-/// Decrypt with the secret key.
-pub fn decrypt(sk: &SecretKey, encrypted: &[u8]) -> Result<Vec<u8>, Error> {
+/// Decrypt with the given x25519 secret key.
+pub fn decrypt_x25519(sk: &SecretKey, encrypted: &[u8]) -> Result<Vec<u8>, Error> {
 	if encrypted.len() < PK_LEN + NONCE_LEN {
 		return Err(Error::BadData)
 	}
@@ -120,13 +122,13 @@ pub fn decrypt(sk: &SecretKey, encrypted: &[u8]) -> Result<Vec<u8>, Error> {
 	aes_decrypt(&aes_key, &nonce, &encrypted[PK_LEN + NONCE_LEN..])
 }
 
-/// Decrypt with the secret key.
+/// Decrypt with the given ed25519 key pair.
 pub fn decrypt_ed25519(pair: &crate::ed25519::Pair, encrypted: &[u8]) -> Result<Vec<u8>, Error> {
 	let raw = pair.to_raw_vec();
 	let hash: [u8; 32] =
 		sha2::Sha512::digest(&raw).as_slice()[..32].try_into().expect("Hashing error");
 	let secret = x25519_dalek::StaticSecret::from(hash);
-	decrypt(&secret, encrypted)
+	decrypt_x25519(&secret, encrypted)
 }
 
 #[cfg(test)]
@@ -141,9 +143,9 @@ mod test {
 		let pk = PublicKey::from(&sk);
 
 		let plain_message = b"An important secret message";
-		let encrypted = encrypt(&pk, plain_message).unwrap();
+		let encrypted = encrypt_x25519(&pk, plain_message).unwrap();
 
-		let decrypted = decrypt(&sk, &encrypted).unwrap();
+		let decrypted = decrypt_x25519(&sk, &encrypted).unwrap();
 		assert_eq!(plain_message, decrypted.as_slice());
 	}
 
@@ -165,11 +167,11 @@ mod test {
 		let pk = PublicKey::from(&sk);
 
 		let plain_message = b"An important secret message";
-		let encrypted = encrypt(&pk, plain_message).unwrap();
+		let encrypted = encrypt_x25519(&pk, plain_message).unwrap();
 
-		assert_eq!(decrypt(&sk, &[]), Err(Error::BadData));
+		assert_eq!(decrypt_x25519(&sk, &[]), Err(Error::BadData));
 		assert_eq!(
-			decrypt(&sk, &encrypted[0..super::PK_LEN + super::NONCE_LEN - 1]),
+			decrypt_x25519(&sk, &encrypted[0..super::PK_LEN + super::NONCE_LEN - 1]),
 			Err(Error::BadData)
 		);
 	}

@@ -128,6 +128,21 @@ pub trait Keystore: Send + Sync {
 		msg: &[u8],
 	) -> Result<Option<ed25519::Signature>, Error>;
 
+	/// Decrypt a message with a given ed25519 key.
+	///
+	/// Receives [`KeyTypeId`] and an [`ed25519::Public`] key to be able to map
+	/// them to a private key that exists in the keystore.
+	///
+	/// Returns an decrypted [`Vec<u8>`] or `None` in case the given `key_type`
+	/// and `public` combination doesn't exist in the keystore.
+	/// An `Err` will be returned if decryption has failed.
+	fn ed25519_decrypt(
+		&self,
+		key_type: KeyTypeId,
+		public: &ed25519::Public,
+		msg: &[u8],
+	) -> Result<Option<Vec<u8>>, Error>;
+
 	/// Returns all ecdsa public keys for the given key type.
 	fn ecdsa_public_keys(&self, key_type: KeyTypeId) -> Vec<ecdsa::Public>;
 
