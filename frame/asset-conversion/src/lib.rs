@@ -99,6 +99,7 @@ pub mod pallet {
 				Precision::Exact,
 				Preservation::{Expendable, Preserve},
 			},
+			AccountTouch,
 		},
 		BoundedBTreeSet, PalletId,
 	};
@@ -153,7 +154,8 @@ pub mod pallet {
 
 		/// Registry for the assets.
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
-			+ Mutate<Self::AccountId>;
+			+ Mutate<Self::AccountId>
+			+ AccountTouch<Self::AssetId, Self::AccountId>;
 
 		/// Registry for the lp tokens. Ideally only this pallet should have create permissions on
 		/// the assets.
@@ -398,6 +400,13 @@ pub mod pallet {
 				T::PoolSetupFee::get(),
 				Preserve,
 			)?;
+
+			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(asset1) {
+				T::Assets::touch(asset, pool_account.clone(), sender.clone())?;
+			}
+			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(asset2) {
+				T::Assets::touch(asset, pool_account.clone(), sender.clone())?;
+			}
 
 			let lp_token = NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value());
 			let next_lp_token_id = lp_token.increment();

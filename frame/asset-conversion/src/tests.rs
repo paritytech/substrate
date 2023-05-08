@@ -164,6 +164,7 @@ fn can_create_pool() {
 
 		// validate we can create Asset(1)/Asset(2) pool
 		let token_1 = NativeOrAssetId::Asset(1);
+		create_tokens(user, vec![token_1]);
 		assert_ok!(AssetConversion::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 
 		// validate we can force the first asset to be the Native currency only
