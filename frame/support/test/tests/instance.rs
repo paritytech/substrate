@@ -45,7 +45,7 @@ mod module1 {
 	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
-	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
+	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {

@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Minimal `frame_system::Config`-super trait pallet.
+//! Minimal pallet without `frame_system::Config`-super trait.
 
 // Make sure we fail compilation on warnings
 #![warn(missing_docs)]
@@ -32,7 +32,7 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	/// The configuration trait
 	#[pallet::config]

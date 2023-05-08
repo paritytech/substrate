@@ -42,7 +42,7 @@ mod module1 {
 	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
-	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
+	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
@@ -81,7 +81,7 @@ mod module2 {
 	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -128,7 +128,7 @@ mod nested {
 		use frame_support_test as frame_system;
 
 		#[pallet::pallet]
-		pub struct Pallet<T>(PhantomData<T>);
+		pub struct Pallet<T>(_);
 
 		#[pallet::config]
 		pub trait Config: frame_system::Config {
@@ -183,7 +183,7 @@ pub mod module3 {
 	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
