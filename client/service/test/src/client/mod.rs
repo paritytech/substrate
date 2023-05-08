@@ -1728,7 +1728,7 @@ fn storage_keys_works() {
 	sp_tracing::try_init_simple();
 
 	let expected_keys =
-		substrate_test_runtime::storage_key_generator::get_expected_storage_hashed_keys();
+		substrate_test_runtime::storage_key_generator::get_expected_storage_hashed_keys(false);
 
 	let client = substrate_test_runtime_client::new();
 	let block_hash = client.info().best_hash;
@@ -1767,10 +1767,10 @@ fn storage_keys_works() {
 		res,
 		expected_keys
 			.iter()
-			.filter(|&i| i > &"3a636f64".to_string())
+			.filter(|&i| *i > "3a636f64")
 			.take(8)
 			.cloned()
-			.collect::<Vec<String>>()
+			.collect::<Vec<_>>()
 	);
 
 	// Starting at a complete key the first key is skipped.
@@ -1788,10 +1788,10 @@ fn storage_keys_works() {
 		res,
 		expected_keys
 			.iter()
-			.filter(|&i| i > &"3a636f6465".to_string())
+			.filter(|&i| *i > "3a636f6465")
 			.take(8)
 			.cloned()
-			.collect::<Vec<String>>()
+			.collect::<Vec<_>>()
 	);
 
 	const SOME_BALANCE_KEY : &str = "26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9e2c1dc507e2035edbbd8776c440d870460c57f0008067cc01c5ff9eb2e2f9b3a94299a915a91198bd1021a6c55596f57";
@@ -1809,10 +1809,10 @@ fn storage_keys_works() {
 		res,
 		expected_keys
 			.iter()
-			.filter(|&i| i > &SOME_BALANCE_KEY.to_string())
+			.filter(|&i| *i > SOME_BALANCE_KEY)
 			.take(8)
 			.cloned()
-			.collect::<Vec<String>>()
+			.collect::<Vec<_>>()
 	);
 }
 
