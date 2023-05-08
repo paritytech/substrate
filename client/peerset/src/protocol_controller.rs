@@ -270,16 +270,19 @@ impl ProtocolController {
 
 	/// Send "accept" message to `Notifications`.
 	fn accept_connection(&self, incoming_index: IncomingIndex) {
+		trace!(target: LOG_TARGET, "Accepting {incoming_index:?}.");
 		let _ = self.to_notifications.unbounded_send(Message::Accept(incoming_index));
 	}
 
 	/// Send "reject" message to `Notifications`.
 	fn reject_connection(&self, incoming_index: IncomingIndex) {
+		trace!(target: LOG_TARGET, "Rejecting {incoming_index:?}.");
 		let _ = self.to_notifications.unbounded_send(Message::Reject(incoming_index));
 	}
 
 	/// Send "connect" message to `Notifications`.
 	fn start_connection(&self, peer_id: PeerId) {
+		trace!(target: LOG_TARGET, "Connecting to {peer_id}.");
 		let _ = self
 			.to_notifications
 			.unbounded_send(Message::Connect { set_id: self.set_id, peer_id });
@@ -287,6 +290,7 @@ impl ProtocolController {
 
 	/// Send "drop" message to `Notifications`.
 	fn drop_connection(&self, peer_id: PeerId) {
+		trace!(target: LOG_TARGET, "Dropping {peer_id}.");
 		let _ = self
 			.to_notifications
 			.unbounded_send(Message::Drop { set_id: self.set_id, peer_id });
