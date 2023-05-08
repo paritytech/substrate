@@ -53,7 +53,6 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use pallet_nfts::{ItemConfig, ItemSettings};
 	use sp_std::fmt::Display;
-	
 
 	use frame_support::{
 		pallet_prelude::*,
@@ -88,13 +87,13 @@ pub mod pallet {
 		/// attributes.
 		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
-		/// Identifier for the collection of NFT.
+		/// Identifier for the NFT collection.
 		type NftCollectionId: Member + Parameter + MaxEncodedLen + Copy + Display;
 
-		/// The type used to identify an NFT within a collection.
+		/// Identifier for the NFT item within a collection.
 		type NftItemId: Member + Parameter + MaxEncodedLen + Copy + Display;
 
-		/// Registry for minted NFTs.
+		/// NonFungibles traits used within this pallet.
 		type Nfts: NonFungiblesInspect<
 				Self::AccountId,
 				ItemId = Self::NftItemId,
@@ -113,7 +112,7 @@ pub mod pallet {
 			>;
 	}
 
-	/// NFT collection with royalty
+	/// The storage for NFT collections with a royalty
 	#[pallet::storage]
 	#[pallet::getter(fn nft_collection_with_royalty)]
 	pub type NftCollectionWithRoyalty<T: Config> = StorageMap<
@@ -124,7 +123,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// The storage for NFTs with a royalty.
+	/// The storage for NFT items with a royalty.
 	#[pallet::storage]
 	#[pallet::getter(fn nft_with_royalty)]
 	pub type NftWithRoyalty<T: Config> = StorageMap<
