@@ -21,7 +21,7 @@ use crate::{Error, Keystore, KeystorePtr};
 
 use sp_core::{
 	crypto::{ByteArray, KeyTypeId, Pair, VrfSecret},
-	ecdsa, ed25519, sr25519, ecies,
+	ecdsa, ecies, ed25519, sr25519,
 };
 
 use parking_lot::RwLock;

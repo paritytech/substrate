@@ -68,8 +68,8 @@ fn kdf(shared_secret: &[u8]) -> [u8; AES_KEY_LEN] {
 	aes_key
 }
 
-/// Encrypt `plaintext` with the given public x25519 public key. Decryption can be performed with the matching
-/// secret key.
+/// Encrypt `plaintext` with the given public x25519 public key. Decryption can be performed with
+/// the matching secret key.
 pub fn encrypt_x25519(pk: &PublicKey, plaintext: &[u8]) -> Result<Vec<u8>, Error> {
 	let ephemeral_sk = x25519_dalek::StaticSecret::new(OsRng);
 	let ephemeral_pk = x25519_dalek::PublicKey::from(&ephemeral_sk);
@@ -91,8 +91,8 @@ pub fn encrypt_x25519(pk: &PublicKey, plaintext: &[u8]) -> Result<Vec<u8>, Error
 	Ok(out)
 }
 
-/// Encrypt `plaintext` with the given ed25519 public key. Decryption can be performed with the matching
-/// secret key.
+/// Encrypt `plaintext` with the given ed25519 public key. Decryption can be performed with the
+/// matching secret key.
 pub fn encrypt_ed25519(pk: &crate::ed25519::Public, plaintext: &[u8]) -> Result<Vec<u8>, Error> {
 	let ed25519 = curve25519_dalek::edwards::CompressedEdwardsY(pk.0);
 	let x25519 = ed25519
