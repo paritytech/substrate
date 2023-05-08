@@ -131,12 +131,11 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
 	exec::Frame,
-	migration::{Migration, MigrateSequence, NoopMigration},
+	migration::{MigrateSequence, Migration, NoopMigration},
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 	wasm::Determinism,
 };
-
 
 #[cfg(doc)]
 pub use crate::wasm::api_doc;
@@ -178,11 +177,11 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
-	#[cfg(not(test))]
+	#[cfg(not(any(test, feature = "runtime-benchmarks")))]
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(11);
 
 	/// Hard coded storage version for running tests that depend on the current storage version.
-	#[cfg(test)]
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 	#[pallet::pallet]
@@ -743,11 +742,14 @@ pub mod pallet {
 				Error::<T>::MigrateWeightLimitTooLow
 			);
 
+			let (result, weight) = Migration::<T>::migrate(weight_limit);
+			let weight = weight.saturating_add(T::WeightInfo::migrate());
+
 			use migration::MigrateResult::*;
-			match Migration::<T>::migrate(weight_limit) {
-				(InProgress | Completed, weight) =>
+			match result {
+				InProgress | Completed =>
 					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
-				(NoMigrationPerformed, weight) => {
+				NoMigrationPerformed => {
 					let err: DispatchError = <Error<T>>::NoMigrationPerformed.into();
 					Err(err.with_weight(weight))
 				},

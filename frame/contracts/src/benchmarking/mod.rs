@@ -31,12 +31,13 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
+	migration::Migrate,
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
 use codec::{Encode, MaxEncodedLen};
 use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
-use frame_support::weights::Weight;
+use frame_support::{pallet_prelude::StorageVersion, weights::Weight};
 use frame_system::RawOrigin;
 use sp_runtime::{
 	traits::{Bounded, Hash},
@@ -244,12 +245,19 @@ benchmarks! {
 		migration.step();
 	}
 
-	// This benchmarks the base weight of dispatching a migrate call.
+	// This benchmarks the base weight of dispatching a noop migrate call.
 	#[pov_mode = Measured]
 	migrate {
 		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
+
+		// Execute a (noop) migration a step from 0 -> 1
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 0);
+		MigrationInProgress::<T>::set(Some(Default::default()));
+
 	}:  {
 		<Contracts<T>>::migrate(origin.into(), Weight::MAX).unwrap_or_default()
+	} verify {
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
 	}
 
 	// This benchmarks the overhead of loading a code of size `c` byte from storage and into

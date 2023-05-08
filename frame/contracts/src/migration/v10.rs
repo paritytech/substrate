@@ -18,12 +18,68 @@
 //! Update `CodeStorage` with the new `determinism` field.
 
 use crate::{
+	address::AddressGenerator,
+	exec::AccountIdOf,
 	migration::{IsFinished, Migrate},
-	Config, Weight,
+	BalanceOf, CodeHash, Config, Pallet, TrieId, Weight,
 };
 use codec::{Decode, Encode};
-use frame_support::{codec, pallet_prelude::*, DefaultNoBound};
-use sp_std::marker::PhantomData;
+use frame_support::{
+	codec,
+	pallet_prelude::*,
+	storage_alias,
+	traits::{Currency, ExistenceRequirement},
+	DefaultNoBound,
+};
+use sp_std::{marker::PhantomData, ops::Deref};
+mod old {
+	use super::*;
+
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+	#[scale_info(skip_type_params(T))]
+	pub struct ContractInfo<T: Config> {
+		pub trie_id: TrieId,
+		pub code_hash: CodeHash<T>,
+		pub storage_bytes: u32,
+		pub storage_items: u32,
+		pub storage_byte_deposit: BalanceOf<T>,
+		pub storage_item_deposit: BalanceOf<T>,
+		pub storage_base_deposit: BalanceOf<T>,
+	}
+
+	#[storage_alias]
+	pub type ContractInfoOf<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
+		ContractInfo<T>,
+	>;
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(T))]
+pub struct DepositAccount<T: Config>(AccountIdOf<T>);
+
+impl<T: Config> Deref for DepositAccount<T> {
+	type Target = AccountIdOf<T>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(T))]
+pub struct ContractInfo<T: Config> {
+	pub trie_id: TrieId,
+	deposit_account: DepositAccount<T>,
+	pub code_hash: CodeHash<T>,
+	storage_bytes: u32,
+	storage_items: u32,
+	pub storage_byte_deposit: BalanceOf<T>,
+	storage_item_deposit: BalanceOf<T>,
+	storage_base_deposit: BalanceOf<T>,
+}
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
 pub struct Migration<T: Config> {
@@ -39,6 +95,20 @@ impl<T: Config> Migrate for Migration<T> {
 
 	fn step(&mut self) -> (IsFinished, Weight) {
 		// TODO
+
+		let (account, contract) = old::ContractInfoOf::<T>::iter().next().unwrap();
+
+		let deposit_account: DepositAccount<T> =
+			DepositAccount(T::AddressGenerator::deposit_address(&account));
+
+		T::Currency::transfer(
+			&account,
+			&deposit_account,
+			contract.storage_byte_deposit,
+			ExistenceRequirement::KeepAlive,
+		)
+		.unwrap();
+
 		(IsFinished::Yes, Self::max_step_weight())
 	}
 }
