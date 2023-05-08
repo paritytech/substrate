@@ -556,7 +556,7 @@ where
 			.unwrap()
 			.progress_chars("=>-"),
 		);
-		let payloads_chunked = payloads.chunks(&payloads.len() / Self::PARALLEL_REQUESTS);
+		let payloads_chunked = payloads.chunks((&payloads.len() / Self::PARALLEL_REQUESTS).max(1));
 		let requests = payloads_chunked.map(|payload_chunk| {
 			Self::get_storage_data_dynamic_batch_size(
 				&client,
