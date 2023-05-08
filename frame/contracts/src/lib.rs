@@ -178,8 +178,9 @@ pub mod pallet {
 
 	/// The current storage version.
 	#[cfg(not(test))]
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(9);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(11);
 
+	/// Hard coded storage version for running tests that depend on the current storage version.
 	#[cfg(test)]
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
