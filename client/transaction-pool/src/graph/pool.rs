@@ -463,7 +463,8 @@ mod tests {
 	use sc_transaction_pool_api::TransactionStatus;
 	use sp_runtime::transaction_validity::TransactionSource;
 	use std::{collections::HashMap, time::Instant};
-	use substrate_test_runtime::{AccountId, Extrinsic, Transfer, H256};
+	use substrate_test_runtime::{AccountId, ExtrinsicBuilder, Transfer, H256};
+	use substrate_test_runtime_client::AccountKeyring::{Alice, Bob};
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
@@ -477,7 +478,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
@@ -494,7 +495,7 @@ mod tests {
 		// given
 		let pool = pool();
 		let uxt = uxt(Transfer {
-			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			from: Alice.into(),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 0,
@@ -520,8 +521,8 @@ mod tests {
 			TestApi::default().into(),
 		);
 
-		// after validation `IncludeData` will be set to non-propagable
-		let uxt = Extrinsic::IncludeData(vec![42]);
+		// after validation `IncludeData` will be set to non-propagable (validate_transaction mock)
+		let uxt = ExtrinsicBuilder::new_include_data(vec![42]).build();
 
 		// when
 		let res = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt));
@@ -542,7 +543,7 @@ mod tests {
 				&BlockId::Number(0),
 				SOURCE,
 				uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 0,
@@ -553,7 +554,7 @@ mod tests {
 				&BlockId::Number(0),
 				SOURCE,
 				uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 1,
@@ -565,7 +566,7 @@ mod tests {
 				&BlockId::Number(0),
 				SOURCE,
 				uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 3,
@@ -594,7 +595,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
@@ -605,7 +606,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 1,
@@ -616,7 +617,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 3,
@@ -645,7 +646,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
@@ -659,27 +660,27 @@ mod tests {
 		// then
 		assert!(pool.validated_pool.is_banned(&hash1));
 	}
+	use codec::Encode;
 
 	#[test]
 	fn should_limit_futures() {
+		sp_tracing::try_init_simple();
+
+		let xt = uxt(Transfer {
+			from: Alice.into(),
+			to: AccountId::from_h256(H256::from_low_u64_be(2)),
+			amount: 5,
+			nonce: 1,
+		});
+
 		// given
-		let limit = Limit { count: 100, total_bytes: 200 };
+		let limit = Limit { count: 100, total_bytes: xt.encoded_size() };
 
 		let options = Options { ready: limit.clone(), future: limit.clone(), ..Default::default() };
 
 		let pool = Pool::new(options, true.into(), TestApi::default().into());
 
-		let hash1 = block_on(pool.submit_one(
-			&BlockId::Number(0),
-			SOURCE,
-			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
-				to: AccountId::from_h256(H256::from_low_u64_be(2)),
-				amount: 5,
-				nonce: 1,
-			}),
-		))
-		.unwrap();
+		let hash1 = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, xt)).unwrap();
 		assert_eq!(pool.validated_pool().status().future, 1);
 
 		// when
@@ -687,7 +688,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(2)),
+				from: Bob.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 10,
@@ -715,7 +716,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 1,
@@ -738,7 +739,7 @@ mod tests {
 			&BlockId::Number(0),
 			SOURCE,
 			uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: INVALID_NONCE,
@@ -763,7 +764,7 @@ mod tests {
 				&BlockId::Number(0),
 				SOURCE,
 				uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 0,
@@ -795,7 +796,7 @@ mod tests {
 				&BlockId::Number(0),
 				SOURCE,
 				uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 0,
@@ -828,7 +829,7 @@ mod tests {
 				&BlockId::Number(0),
 				SOURCE,
 				uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 1,
@@ -843,7 +844,7 @@ mod tests {
 				&BlockId::Number(0),
 				SOURCE,
 				uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 0,
@@ -863,7 +864,7 @@ mod tests {
 			// given
 			let pool = pool();
 			let uxt = uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
@@ -887,7 +888,7 @@ mod tests {
 			// given
 			let pool = pool();
 			let uxt = uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
@@ -918,7 +919,7 @@ mod tests {
 			let pool = Pool::new(options, true.into(), TestApi::default().into());
 
 			let xt = uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
@@ -928,7 +929,7 @@ mod tests {
 
 			// when
 			let xt = uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(2)),
+				from: Bob.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(1)),
 				amount: 4,
 				nonce: 1,
@@ -952,13 +953,17 @@ mod tests {
 
 				let pool = Pool::new(options, true.into(), TestApi::default().into());
 
-				let xt = Extrinsic::IncludeData(Vec::new());
+				// after validation `IncludeData` will have priority set to 9001
+				// (validate_transaction mock)
+				let xt = ExtrinsicBuilder::new_include_data(Vec::new()).build();
 				block_on(pool.submit_one(&BlockId::Number(0), SOURCE, xt)).unwrap();
 				assert_eq!(pool.validated_pool().status().ready, 1);
 
 				// then
+				// after validation `Transfer` will have priority set to 4 (validate_transaction
+				// mock)
 				let xt = uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(2)),
+					from: Bob.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(1)),
 					amount: 4,
 					nonce: 1,
@@ -977,12 +982,16 @@ mod tests {
 
 				let pool = Pool::new(options, true.into(), TestApi::default().into());
 
-				let xt = Extrinsic::IncludeData(Vec::new());
+				// after validation `IncludeData` will have priority set to 9001
+				// (validate_transaction mock)
+				let xt = ExtrinsicBuilder::new_include_data(Vec::new()).build();
 				block_on(pool.submit_and_watch(&BlockId::Number(0), SOURCE, xt)).unwrap();
 				assert_eq!(pool.validated_pool().status().ready, 1);
 
+				// after validation `Transfer` will have priority set to 4 (validate_transaction
+				// mock)
 				let xt = uxt(Transfer {
-					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					from: Alice.into(),
 					to: AccountId::from_h256(H256::from_low_u64_be(2)),
 					amount: 5,
 					nonce: 0,
@@ -992,7 +1001,9 @@ mod tests {
 				assert_eq!(pool.validated_pool().status().ready, 2);
 
 				// when
-				let xt = Extrinsic::Store(Vec::new());
+				// after validation `Store` will have priority set to 9001 (validate_transaction
+				// mock)
+				let xt = ExtrinsicBuilder::new_indexed_call(Vec::new()).build();
 				block_on(pool.submit_one(&BlockId::Number(1), SOURCE, xt)).unwrap();
 				assert_eq!(pool.validated_pool().status().ready, 2);
 
@@ -1014,7 +1025,7 @@ mod tests {
 
 			// when
 			let xt = uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 1,
@@ -1030,7 +1041,7 @@ mod tests {
 			// But now before the previous one is imported we import
 			// the one that it depends on.
 			let xt = uxt(Transfer {
-				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				from: Alice.into(),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 4,
 				nonce: 0,

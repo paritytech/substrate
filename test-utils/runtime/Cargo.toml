@@ -35,6 +35,10 @@ sp-session = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../frame/babe" }
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../frame/balances" }
+pallet-root-testing = { version = "1.0.0-dev", default-features = false, path = "../../frame/root-testing" }
+pallet-sudo = { version = "4.0.0-dev", default-features = false, path = "../../frame/sudo" }
+frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../frame/executive" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../frame/timestamp" }
@@ -45,18 +49,20 @@ trie-db = { version = "0.27.0", default-features = false }
 sc-service = { version = "0.10.0-dev", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
 sp-state-machine = { version = "0.13.0", default-features = false, path = "../../primitives/state-machine" }
 sp-externalities = { version = "0.13.0", default-features = false, path = "../../primitives/externalities" }
+sp-debug-derive = { path = "../../primitives/debug-derive" }
 
 # 3rd party
-cfg-if = "1.0"
+array-bytes = { version = "6.1", optional = true }
 log = { version = "0.4.17", default-features = false }
 serde = { version = "1.0.136", optional = true, features = ["derive"] }
 
 [dev-dependencies]
+futures = "0.3.21"
 sc-block-builder = { version = "0.10.0-dev", path = "../../client/block-builder" }
 sc-executor = { version = "0.10.0-dev", path = "../../client/executor" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 substrate-test-runtime-client = { version = "2.0.0", path = "./client" }
-futures = "0.3.21"
+sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../utils/wasm-builder", optional = true }
@@ -66,7 +72,7 @@ default = [
 	"std",
 ]
 std = [
-	"pallet-beefy-mmr/std",
+	"array-bytes",
 	"sp-application-crypto/std",
 	"sp-consensus-aura/std",
 	"sp-consensus-babe/std",
@@ -93,9 +99,13 @@ std = [
 	"sp-externalities/std",
 	"sp-state-machine/std",
 	"pallet-babe/std",
+	"pallet-beefy-mmr/std",
+	"pallet-timestamp/std",
+	"pallet-balances/std",
+	"pallet-sudo/std",
+	"pallet-root-testing/std",
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
-	"pallet-timestamp/std",
 	"sc-service",
 	"sp-consensus-grandpa/std",
 	"sp-trie/std",
