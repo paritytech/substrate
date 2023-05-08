@@ -69,6 +69,7 @@ pub trait Migrate: Codec + MaxEncodedLen + Default {
 }
 
 /// A noop migration that can be used when there is no migration to be done for a given version.
+#[doc(hidden)]
 #[derive(frame_support::DefaultNoBound, Encode, Decode, MaxEncodedLen)]
 pub struct NoopMigration<const N: u16>;
 
@@ -84,9 +85,10 @@ impl<const N: u16> Migrate for NoopMigration<N> {
 }
 
 mod private {
+	use crate::migration::Migrate;
 	pub trait Sealed {}
 	#[impl_trait_for_tuples::impl_for_tuples(10)]
-	#[tuple_types_custom_trait_bound(crate::Migrate)]
+	#[tuple_types_custom_trait_bound(Migrate)]
 	impl Sealed for Tuple {}
 }
 
@@ -198,7 +200,6 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 		let storage_version = <Pallet<T>>::on_chain_storage_version();
 		let target_version = <Pallet<T>>::current_storage_version();
 		if M::is_upgrade_supported(storage_version, target_version) {
-			let nonce = <crate::Nonce<T>>::get();
 			Ok(Vec::new())
 		} else {
 			log::error!(

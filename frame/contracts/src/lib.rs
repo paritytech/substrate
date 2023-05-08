@@ -131,11 +131,12 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
 	exec::Frame,
-	migration::*,
+	migration::{Migration, MigrateSequence, NoopMigration},
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 	wasm::Determinism,
 };
+
 
 #[cfg(doc)]
 pub use crate::wasm::api_doc;
@@ -319,7 +320,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
-			use MigrateResult::*;
+			use migration::MigrateResult::*;
 
 			let remaining_weight = match Migration::<T>::migrate(remaining_weight) {
 				(InProgress, weight) => return remaining_weight.saturating_sub(weight),
@@ -742,7 +743,7 @@ pub mod pallet {
 				Error::<T>::MigrateWeightLimitTooLow
 			);
 
-			use MigrateResult::*;
+			use migration::MigrateResult::*;
 			match Migration::<T>::migrate(weight_limit) {
 				(InProgress | Completed, weight) =>
 					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
