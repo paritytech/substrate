@@ -38,7 +38,7 @@ pub trait BlockDownloader<Block: BlockT>: Send + Sync {
 	/// Performs the protocol specific sequence to fetch the block from the peer.
 	/// Output: if the download succeeds, the response is a `Vec<u8>` which is
 	/// in a format specific to the protocol implementation. The block data
-	/// can be extracted from this response using `BlockDownloader::block_response_into_blocks()`.
+	/// can be extracted from this response using [`BlockDownloader::block_response_into_blocks`].
 	async fn download_block(
 		&self,
 		who: PeerId,
@@ -53,6 +53,7 @@ pub trait BlockDownloader<Block: BlockT>: Send + Sync {
 	) -> Result<Vec<BlockData<Block>>, BlockResponseError>;
 }
 
+/// Errors returned by [`BlockDownloader::block_response_into_blocks`].
 #[derive(Debug)]
 pub enum BlockResponseError {
 	/// Failed to decode the response bytes.
@@ -62,7 +63,8 @@ pub enum BlockResponseError {
 	ExtractionFailed(String),
 }
 
-/// Block relay specific params for network creation.
+/// Block relay specific params for network creation, specified in
+/// ['sc_service::BuildNetworkParams'].
 pub struct BlockRelayParams<Block: BlockT> {
 	pub server: Box<dyn BlockServer<Block>>,
 	pub downloader: Arc<dyn BlockDownloader<Block>>,

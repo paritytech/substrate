@@ -139,7 +139,8 @@ enum SeenRequestsValue {
 	Fulfilled(usize),
 }
 
-/// Handler for incoming block requests from a remote peer.
+/// The full block server implementation of [`BlockServer`]. It handles
+/// the incoming block requests from a remote peer.
 pub struct BlockRequestHandler<B: BlockT, Client> {
 	client: Arc<Client>,
 	request_receiver: mpsc::Receiver<IncomingRequest>,
@@ -492,6 +493,7 @@ enum HandleRequestError {
 	SendResponse,
 }
 
+/// The full block downloader implementation of [`BlockDownloader].
 pub struct FullBlockDownloader {
 	protocol_name: ProtocolName,
 	network: NetworkServiceHandle,
@@ -564,7 +566,6 @@ impl FullBlockDownloader {
 	}
 }
 
-/// The full block download implementation.
 #[async_trait::async_trait]
 impl<B: BlockT> BlockDownloader<B> for FullBlockDownloader {
 	async fn download_block(
