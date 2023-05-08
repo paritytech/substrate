@@ -392,12 +392,6 @@ pub mod pallet {
 		}
 
 		/// Set the new runtime code.
-		///
-		/// - `O(C + S)` where `C` length of `code` and `S` complexity of `can_set_code`
-		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is
-		///   expensive).
-		/// The weight of this function is dependent on the runtime, but generally this is very
-		/// expensive.
 		#[pallet::call_index(2)]
 		#[pallet::weight((T::SystemWeightInfo::set_code(), DispatchClass::Operational))]
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
@@ -409,9 +403,6 @@ pub mod pallet {
 		}
 
 		/// Set the new runtime code without doing any checks of the given `code`.
-		///
-		/// - `O(C)` where `C` length of `code`
-		/// The weight of this function is dependent on the runtime.
 		#[pallet::call_index(3)]
 		#[pallet::weight((T::SystemWeightInfo::set_code(), DispatchClass::Operational))]
 		pub fn set_code_without_checks(
@@ -1259,7 +1250,7 @@ impl<T: Config> Pallet<T> {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
 		if block_number.is_zero() {
-			return;
+			return
 		}
 
 		let phase = ExecutionPhase::<T>::get().unwrap_or_default();
@@ -1417,8 +1408,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Deposits a log and ensures it matches the block's log data.
-	///
-	/// - `O(1)`
 	pub fn deposit_log(item: generic::DigestItem) {
 		<Digest<T>>::append(item);
 	}
