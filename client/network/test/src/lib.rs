@@ -88,12 +88,10 @@ use sp_runtime::{
 };
 use substrate_test_runtime_client::AccountKeyring;
 pub use substrate_test_runtime_client::{
-	runtime::{Block, Extrinsic, Hash, Header, Transfer},
+	runtime::{Block, ExtrinsicBuilder, Hash, Header, Transfer},
 	TestClient, TestClientBuilder, TestClientBuilderExt,
 };
 use tokio::time::timeout;
-
-type AuthorityId = sp_consensus_babe::AuthorityId;
 
 /// A Verifier that accepts all blocks and passes them on with the configured
 /// finality to be imported.
@@ -474,7 +472,7 @@ where
 						amount: 1,
 						nonce,
 					};
-					builder.push(transfer.into_signed_tx()).unwrap();
+					builder.push(transfer.into_unchecked_extrinsic()).unwrap();
 					nonce += 1;
 					builder.build().unwrap().block
 				},
@@ -495,16 +493,6 @@ where
 				ForkChoiceStrategy::LongestChain,
 			)
 		}
-	}
-
-	pub fn push_authorities_change_block(
-		&mut self,
-		new_authorities: Vec<AuthorityId>,
-	) -> Vec<H256> {
-		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
-			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
-			builder.build().unwrap().block
-		})
 	}
 
 	/// Get a reference to the client.
