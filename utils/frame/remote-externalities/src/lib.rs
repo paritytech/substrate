@@ -356,25 +356,17 @@ where
 		let mut tasks = Vec::with_capacity(NUM_PARTS);
 
 		// Divide the prefix into N parts
-		let prefix_bytes = prefix.0;
-		let total_len = prefix_bytes.len();
-		let part_len = total_len / NUM_PARTS;
-		let mut start_index = 0;
+		let mut start_key = prefix.clone();
+		let mut end_key = prefix.clone();
+		let mut all_keys: Vec<StorageKey> = vec![];
 
 		for _ in 0..NUM_PARTS {
-			let end_index = start_index + part_len;
-
-			// Ensure the last part covers the remainder of the prefix bytes
-			let end_index = if end_index >= total_len { total_len } else { end_index };
-
-			let part_prefix = StorageKey(prefix_bytes[start_index..end_index].to_vec());
-			let task = self.rpc_get_keys_paged_part(part_prefix, at);
+			end_key.0[0] = start_key.0[0].wrapping_add(1);
+			let task = self.rpc_get_keys_paged_range(start_key.clone(), end_key.clone(), at);
 			tasks.push(task);
-
-			start_index = end_index;
+			start_key.0[0] = end_key.0[0].wrapping_add(1);
 		}
 
-		let mut all_keys: Vec<StorageKey> = vec![];
 		for task in futures::future::join_all(tasks).await {
 			let mut keys = task?;
 			all_keys.append(&mut keys);
@@ -389,9 +381,16 @@ where
 		Ok(filtered_keys)
 	}
 
-	async fn rpc_get_keys_paged_part(
+	/// Retrieves all the storage keys between `start_key` (inclusive)
+	/// and `end_key` (exclusive), safe RPC methods.
+	///
+	/// The function uses a loop to retrieve the keys in pages, starting from `start_key`
+	/// and continuing until the last key retrieved is greater than or equal to `end_key`,
+	/// or until there are no more keys to retrieve.
+	async fn rpc_get_keys_paged_range(
 		&self,
-		prefix: StorageKey,
+		start_key: StorageKey,
+		end_key: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<StorageKey>, &'static str> {
 		let mut last_key: Option<StorageKey> = None;
@@ -402,7 +401,7 @@ where
 				.as_online()
 				.rpc_client()
 				.storage_keys_paged(
-					Some(prefix.clone()),
+					Some(start_key.clone()),
 					Self::DEFAULT_KEY_DOWNLOAD_PAGE,
 					last_key.clone(),
 					Some(at),
@@ -428,6 +427,10 @@ where
 					keys.len(),
 					HexDisplay::from(new_last_key)
 				);
+
+				if new_last_key > &end_key {
+					break
+				}
 
 				last_key = Some(new_last_key.clone());
 			}
