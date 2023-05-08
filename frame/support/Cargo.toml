@@ -70,7 +70,11 @@ std = [
 	"log/std",
 	"environmental/std",
 ]
-runtime-benchmarks = []
+runtime-benchmarks = [
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+	"sp-staking/runtime-benchmarks"
+]
 try-runtime = []
 # By default some types have documentation, `no-metadata-docs` allows to reduce the documentation
 # in the metadata.

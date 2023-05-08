@@ -21,6 +21,7 @@ use sc_client_api::backend;
 use sp_api::{ApiExt, ProvideRuntimeApi};
 
 use sc_block_builder::BlockBuilderApi;
+use substrate_test_runtime::*;
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {
@@ -29,11 +30,18 @@ pub trait BlockBuilderExt {
 		&mut self,
 		transfer: substrate_test_runtime::Transfer,
 	) -> Result<(), sp_blockchain::Error>;
-	/// Add storage change extrinsic to the block.
+
+	/// Add unsigned storage change extrinsic to the block.
 	fn push_storage_change(
 		&mut self,
 		key: Vec<u8>,
 		value: Option<Vec<u8>>,
+	) -> Result<(), sp_blockchain::Error>;
+
+	/// Adds an extrinsic which pushes DigestItem to header's log
+	fn push_deposit_log_digest_item(
+		&mut self,
+		log: sp_runtime::generic::DigestItem,
 	) -> Result<(), sp_blockchain::Error>;
 }
 
@@ -52,7 +60,7 @@ where
 		&mut self,
 		transfer: substrate_test_runtime::Transfer,
 	) -> Result<(), sp_blockchain::Error> {
-		self.push(transfer.into_signed_tx())
+		self.push(transfer.into_unchecked_extrinsic())
 	}
 
 	fn push_storage_change(
@@ -60,6 +68,13 @@ where
 		key: Vec<u8>,
 		value: Option<Vec<u8>>,
 	) -> Result<(), sp_blockchain::Error> {
-		self.push(substrate_test_runtime::Extrinsic::StorageChange(key, value))
+		self.push(ExtrinsicBuilder::new_storage_change(key, value).build())
+	}
+
+	fn push_deposit_log_digest_item(
+		&mut self,
+		log: sp_runtime::generic::DigestItem,
+	) -> Result<(), sp_blockchain::Error> {
+		self.push(ExtrinsicBuilder::new_deposit_log_digest_item(log).build())
 	}
 }

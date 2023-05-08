@@ -1,0 +1,29 @@
+[package]
+description = "Substrate statement protocol"
+name = "sc-network-statement"
+version = "0.10.0-dev"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+documentation = "https://docs.rs/sc-network-statement"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+array-bytes = "4.1"
+async-channel = "1.8.0"
+codec = { package = "parity-scale-codec", version = "3.2.2", features = ["derive"] }
+futures = "0.3.21"
+libp2p = "0.50.0"
+log = "0.4.17"
+pin-project = "1.0.12"
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
+sc-network-common = { version = "0.10.0-dev", path = "../common" }
+sc-network = { version = "0.10.0-dev", path = "../" }
+sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sp-statement-store = { version = "4.0.0-dev", path = "../../../primitives/statement-store" }
