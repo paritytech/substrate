@@ -61,55 +61,6 @@ fn calling_native_runtime_signature_changed_function() {
 }
 
 #[test]
-fn calling_wasm_runtime_signature_changed_old_function() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-		.build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-
-	#[allow(deprecated)]
-	let res = runtime_api.function_signature_changed_before_version_2(best_hash).unwrap();
-	assert_eq!(&res, &[1, 2]);
-}
-
-#[test]
-fn calling_with_both_strategy_and_fail_on_wasm_should_return_error() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert!(runtime_api.fail_on_wasm(best_hash).is_err());
-}
-
-#[test]
-fn calling_with_both_strategy_and_fail_on_native_should_work() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert_eq!(runtime_api.fail_on_native(best_hash).unwrap(), 1);
-}
-
-#[test]
-fn calling_with_native_else_wasm_and_fail_on_wasm_should_work() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::NativeElseWasm)
-		.build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert_eq!(runtime_api.fail_on_wasm(best_hash).unwrap(), 1);
-}
-
-#[test]
-fn calling_with_native_else_wasm_and_fail_on_native_should_work() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::NativeElseWasm)
-		.build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert_eq!(runtime_api.fail_on_native(best_hash).unwrap(), 1);
-}
-
-#[test]
 fn use_trie_function() {
 	let client = TestClientBuilder::new()
 		.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
@@ -162,7 +113,7 @@ fn record_proof_works() {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Bob.into(),
 	}
-	.into_signed_tx();
+	.into_unchecked_extrinsic();
 
 	// Build the block and record proof
 	let mut builder = client
