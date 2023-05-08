@@ -324,7 +324,7 @@ impl pallet_balances::Config for Test {
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
 	type HoldIdentifier = HoldIdentifier;
-	type MaxHolds = ();
+	type MaxHolds = ConstU32<1>;
 }
 
 impl pallet_timestamp::Config for Test {
