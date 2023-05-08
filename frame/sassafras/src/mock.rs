@@ -22,8 +22,8 @@ use crate::{self as pallet_sassafras, SameAuthoritiesForever};
 use frame_support::traits::{ConstU32, ConstU64, GenesisBuild, OnFinalize, OnInitialize};
 use scale_codec::Encode;
 use sp_consensus_sassafras::{
-	digests::PreDigest, AuthorityIndex, AuthorityPair, Slot, TicketData, TicketEnvelope,
-	VrfSignature,
+	digests::PreDigest, AuthorityIndex, AuthorityPair, SassafrasEpochConfiguration, Slot,
+	TicketData, TicketEnvelope, VrfSignature,
 };
 use sp_core::{
 	crypto::{Pair, VrfSigner},
@@ -106,6 +106,12 @@ frame_support::construct_runtime!(
 	}
 );
 
+// Default used under tests.
+// The max redundancy factor allows to accept all submitted tickets without worrying
+// about the threshold.
+pub const TEST_EPOCH_CONFIGURATION: SassafrasEpochConfiguration =
+	SassafrasEpochConfiguration { redundancy_factor: u32::MAX, attempts_number: 32 };
+
 /// Build and returns test storage externalities
 pub fn new_test_ext(authorities_len: usize) -> sp_io::TestExternalities {
 	new_test_ext_with_pairs(authorities_len).1
@@ -124,7 +130,8 @@ pub fn new_test_ext_with_pairs(
 
 	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-	let config = pallet_sassafras::GenesisConfig { authorities, epoch_config: Default::default() };
+	let config =
+		pallet_sassafras::GenesisConfig { authorities, epoch_config: TEST_EPOCH_CONFIGURATION };
 	<pallet_sassafras::GenesisConfig as GenesisBuild<Test>>::assimilate_storage(
 		&config,
 		&mut storage,
@@ -190,7 +197,7 @@ pub fn make_pre_digest(
 	pair: &AuthorityPair,
 ) -> PreDigest {
 	let vrf_signature = slot_claim_vrf_signature(slot, pair);
-	PreDigest { authority_idx, slot, vrf_signature, ticket_aux: None }
+	PreDigest { authority_idx, slot, vrf_signature, ticket_claim: None }
 }
 
 /// Produce a `PreDigest` instance for the given parameters and wrap the result into a `Digest`
@@ -204,6 +211,24 @@ pub fn make_wrapped_pre_digest(
 	let log =
 		DigestItem::PreRuntime(sp_consensus_sassafras::SASSAFRAS_ENGINE_ID, pre_digest.encode());
 	Digest { logs: vec![log] }
+}
+
+pub fn initialize_block(
+	number: u64,
+	slot: Slot,
+	parent_hash: H256,
+	pair: &AuthorityPair,
+) -> Digest {
+	let digest = make_wrapped_pre_digest(0, slot, pair);
+	System::reset_events();
+	System::initialize(&number, &parent_hash, &digest);
+	Sassafras::on_initialize(number);
+	digest
+}
+
+pub fn finalize_block(number: u64) -> Header {
+	Sassafras::on_finalize(number);
+	System::finalize()
 }
 
 /// Progress the pallet state up to the given block `number` and `slot`.

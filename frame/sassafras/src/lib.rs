@@ -43,7 +43,7 @@
 //! To anonymously publish the ticket to the chain a validator sends their tickets
 //! to a random validator who later puts it on-chain as a transaction.
 
-// #![deny(warnings)]
+#![deny(warnings)]
 #![warn(unused_must_use, unsafe_code, unused_variables, unused_imports, missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -224,10 +224,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type TicketsData<T> = StorageMap<_, Identity, TicketId, TicketData, ValueQuery>;
 
-	/// Next epoch tickets temporary accumulator.
-	/// Special `u32::MAX` key is reserved for partially sorted segment.
+	/// Next epoch tickets accumulator.
+	/// Special `u32::MAX` key is reserved for a partially sorted segment.
 	// This bound is set as `MaxTickets` in the unlucky case where we receive one Ticket at a time.
-	// The max capacity is thus MaxTickets^2. Not much, given that we save TicketIds here.
+	// The max capacity is thus MaxTickets^2. Not much, given that we save `TicketIds` here.
 	#[pallet::storage]
 	pub type NextTicketsSegments<T: Config> =
 		StorageMap<_, Identity, u32, BoundedVec<TicketId, T::MaxTickets>, ValueQuery>;
@@ -301,7 +301,7 @@ pub mod pallet {
 			let pre_digest = Initialized::<T>::take()
 				.expect("Finalization is called after initialization; qed.");
 
-			// TODO-SASS-P3: use make-bytes!!!
+			// TODO-SASS-P3 DAVXY: use make-bytes!!!
 			// let bytes = .... ; for the moment we just use the pre-output
 			Self::deposit_randomness(pre_digest.vrf_signature.output.0.as_bytes());
 
@@ -338,8 +338,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_none(origin)?;
 
-			let mut metadata = TicketsMeta::<T>::get();
-
 			log::debug!(target: LOG_TARGET, "@@@@@@@@@@ received {} tickets", tickets.len());
 
 			// Check tickets score
@@ -371,10 +369,14 @@ pub mod pallet {
 				}
 			}
 
-			// We just require a unique key to save the tickets ids segment.
-			metadata.segments_count += 1;
-			NextTicketsSegments::<T>::insert(metadata.segments_count, segment);
-			TicketsMeta::<T>::set(metadata);
+			if !segment.is_empty() {
+				log::debug!(target: LOG_TARGET, "@@@@@@@@@@ appending segment with {} tickets", segment.len());
+				let mut metadata = TicketsMeta::<T>::get();
+				NextTicketsSegments::<T>::insert(metadata.segments_count, segment);
+				metadata.segments_count += 1;
+				TicketsMeta::<T>::set(metadata);
+			}
+
 			Ok(())
 		}
 
@@ -812,11 +814,10 @@ impl<T: Config> Pallet<T> {
 	// entries. If all the segments were consumed then the sorted vector is saved as the
 	// next epoch tickets, else it is saved to be used by next calls to this function.
 	fn sort_tickets(max_iter: u32, epoch_tag: u8, metadata: &mut TicketsMetadata) {
-		let mut segments_count = metadata.segments_count;
-		let max_iter = max_iter.min(segments_count);
+		let max_iter = max_iter.min(metadata.segments_count);
 		let max_tickets = T::MaxTickets::get() as usize;
 
-		// Fetch the partial result.
+		// Fetch the sorted result (if any).
 		let mut new_segment = NextTicketsSegments::<T>::take(u32::MAX).into_inner();
 
 		let mut require_sort = max_iter != 0;
@@ -829,37 +830,35 @@ impl<T: Config> Pallet<T> {
 
 		// Consume at most `max_iter` segments.
 		for _ in 0..max_iter {
-			let segment = NextTicketsSegments::<T>::take(segments_count);
+			metadata.segments_count -= 1;
+			let segment = NextTicketsSegments::<T>::take(metadata.segments_count);
 
+			// Merge only elements below the current sorted segment sup.
 			segment.into_iter().filter(|t| t < &sup).for_each(|t| new_segment.push(t));
 			if new_segment.len() > max_tickets {
 				require_sort = false;
+				// Sort and truncnate the result
 				new_segment.sort_unstable();
 				new_segment[max_tickets..].iter().for_each(|id| TicketsData::<T>::remove(id));
 				new_segment.truncate(max_tickets);
 				sup = new_segment[max_tickets - 1];
 			}
-
-			segments_count -= 1;
 		}
 
 		if require_sort {
 			new_segment.sort_unstable();
 		}
 
-		if segments_count == 0 {
+		if metadata.segments_count == 0 {
 			// Sort is over, write to next epoch map.
-			// TODO-SASS-P3: is there a better way to write a map from a vector?
 			new_segment.iter().enumerate().for_each(|(i, id)| {
 				TicketsIds::<T>::insert((epoch_tag, i as u32), id);
 			});
 			metadata.tickets_count[epoch_tag as usize] = new_segment.len() as u32;
 		} else {
-			// Keep the partial result for next invocations.
+			// Keep the partial result for next calls.
 			NextTicketsSegments::<T>::insert(u32::MAX, BoundedVec::truncate_from(new_segment));
 		}
-
-		// metadata.segments_count = segments_count;
 	}
 
 	/// Submit next epoch validator tickets via an unsigned extrinsic constructed with a call to
