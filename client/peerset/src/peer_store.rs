@@ -48,16 +48,16 @@ pub trait PeerReputationProvider: Debug + Send {
 	/// Check whether the peer is banned.
 	fn is_banned(&self, peer_id: &PeerId) -> bool;
 
-	/// Report the peer disconnect for reputation adjustement.
+	/// Report peer disconnection for reputation adjustment.
 	fn report_disconnect(&mut self, peer_id: PeerId);
 
-	/// Adjust peer reputation value.
+	/// Adjust peer reputation.
 	fn report_peer(&mut self, peer_id: PeerId, change: ReputationChange);
 
-	/// Get peer reputation value.
+	/// Get peer reputation.
 	fn peer_reputation(&self, peer_id: &PeerId) -> i32;
 
-	/// Get the candidates for initiating outgoing connections.
+	/// Get candidates with highest reputations for initiating outgoing connections.
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId>;
 }
 
@@ -233,6 +233,7 @@ impl PeerStoreInner {
 		self.peers
 			.iter_mut()
 			.for_each(|(_, info)| info.decay_reputation(seconds_passed));
+
 		// Retain only entries with non-zero reputation values or not expired ones.
 		let now = Instant::now();
 		self.peers

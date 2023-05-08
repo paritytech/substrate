@@ -598,22 +598,22 @@ impl ProtocolController {
 				(!self.reserved_nodes.contains_key(&peer_id) && !self.nodes.contains_key(&peer_id))
 					.then_some(peer_id)
 					.or_else(|| {
-						debug_assert!(false, "`PeerStore` returned a node we asked to ignore.");
 						error!(
 							target: LOG_TARGET,
 							"`PeerStore` returned a node we asked to ignore: {peer_id}.",
 						);
+						debug_assert!(false, "`PeerStore` returned a node we asked to ignore.");
 						None
 					})
 			})
 			.collect::<Vec<_>>();
 
 		if candidates.len() > available_slots {
-			debug_assert!(false, "`PeerStore` returned more nodes than there are slots available.");
 			error!(
 				target: LOG_TARGET,
 				"`PeerStore` returned more nodes than there are slots available.",
-			)
+			);
+			debug_assert!(false, "`PeerStore` returned more nodes than there are slots available.");
 		}
 
 		candidates.into_iter().take(available_slots).for_each(|peer_id| {
