@@ -1,5 +1,5 @@
-# This is the default config used by nextest. It is embedded in the binary at
-# build time. It may be used as a template for .config/nextest.toml.
+# This is the config used by nextest.
+# Configuration reference: https://nexte.st/book/configuration.html
 
 [store]
 # The directory under the workspace root at which nextest-related files are
@@ -16,7 +16,7 @@ dir = "target/nextest"
 # * retries = 3
 # * retries = { backoff = "fixed", count = 2, delay = "1s" }
 # * retries = { backoff = "exponential", count = 10, delay = "1s", jitter = true, max-delay = "10s" }
-retries = 5
+retries = { backoff = "exponential", count = 5, delay = "5s", jitter = true }
 
 # The number of threads to run tests with. Supported values are either an integer or
 # the string "num-cpus". Can be overridden through the `--test-threads` option.
@@ -41,10 +41,10 @@ threads-required = 1
 # failed and retried tests.
 #
 # Can be overridden through the `--status-level` flag.
-status-level = "pass"
+status-level = "skip"
 
 # Similar to status-level, show these test statuses at the end of the run.
-final-status-level = "flaky"
+final-status-level = "fail"
 
 # "failure-output" defines when standard output and standard error for failing tests are produced.
 # Accepted values are
@@ -57,7 +57,7 @@ final-status-level = "flaky"
 # For large test suites and CI it is generally useful to use "immediate-final".
 #
 # Can be overridden through the `--failure-output` option.
-failure-output = "immediate"
+failure-output = "immediate-final"
 
 # "success-output" controls production of standard output and standard error on success. This should
 # generally be set to "never".
@@ -65,7 +65,7 @@ success-output = "never"
 
 # Cancel the test run on the first failure. For CI runs, consider setting this
 # to false.
-fail-fast = true
+fail-fast = false
 
 # Treat a test that takes longer than the configured 'period' as slow, and print a message.
 # See <https://nexte.st/book/slow-tests> for more information.
@@ -108,17 +108,25 @@ store-success-output = false
 store-failure-output = true
 
 # This profile is activated if MIRI_SYSROOT is set.
-[profile.default-miri]
+# [profile.default-miri]
 # Miri tests take up a lot of memory, so only run 1 test at a time by default.
-test-threads = 1
-
-# Mutual exclusion of tests with `cargo build` invocation as a lock to avoid multiple
-# simultaneous invocations clobbering each other.
-[test-groups]
-serial-integration = { max-threads = 1 }
 
 # Running UI tests sequentially
 # More info can be found here: https://github.com/paritytech/ci_cd/issues/754
 [[profile.default.overrides]]
-filter = 'test(/(^ui$|_ui|ui_)/)'
-test-group = 'serial-integration'
+# To list all the tests, use this command:
+# cargo nextest list --workspace --locked --release --features=runtime-benchmarks
+#
+# To check if you added your test to a filter and group correctly, use this command:
+# cargo nextest show-config test-groups --config-file scripts/ci/gitlab/nextest.toml --features runtime-benchmarks --workspace --locked --release --manifest-path ./bin/node/cli/Cargo.toml
+# For the non-default [[profile.default.overrides]] i.e. [[profile.local.overrides]] add `--profile local` to the above command
+filter = "test(follow_report_multiple_pruned_block) | test (follow_forks_pruned_block) | test(returns_status_for_pruned_blocks) | test(can_sync_small_non_best_forks) | test(telemetry_works) | test(running_the_node_works_and_can_be_interrupted) | test(notifications_back_pressure)"
+# Flaky tests are executed exclusively
+test-group = 'flaky'
+# only run 1 test at a time by default.
+# test-threads = 1
+
+# Mutual exclusion of tests with `cargo build` invocation as a lock to avoid multiple
+# simultaneous invocations clobbering each other.
+[test-groups]
+flaky = { max-threads = 1 }

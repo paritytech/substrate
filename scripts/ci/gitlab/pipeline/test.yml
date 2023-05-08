@@ -217,13 +217,17 @@ test-linux-stable:
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     # tests are partitioned by nextest and executed in parallel on $CI_NODE_TOTAL runners
     - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
-    - time cargo nextest run --workspace
-      --locked
-      --release
-      --verbose
-      --features runtime-benchmarks
-      --manifest-path ./bin/node/cli/Cargo.toml
-      --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
+    - cargo nextest show-config test-groups --config-file scripts/ci/gitlab/nextest.toml --features runtime-benchmarks --workspace --locked --release --manifest-path ./bin/node/cli/Cargo.toml
+    - time cargo nextest run
+        --workspace
+        --locked
+        --release
+        --verbose
+        --features runtime-benchmarks
+        --manifest-path ./bin/node/cli/Cargo.toml
+        --color always
+        --config-file scripts/ci/gitlab/nextest.toml
+        --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
     # we need to update cache only from one job
     - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
   artifacts:
