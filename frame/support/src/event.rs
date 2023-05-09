@@ -101,6 +101,7 @@
 /// # fn main() {}
 /// ```
 #[macro_export]
+#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead. For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
 macro_rules! decl_event {
 	(
 		$(#[$attr:meta])*
@@ -134,7 +135,6 @@ macro_rules! decl_event {
 		/// Events for this module.
 		///
 		$(#[$attr])*
-		#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead.")]
 		pub enum Event {
 			$(
 				$events
