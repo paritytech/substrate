@@ -277,12 +277,12 @@ impl ExtBuilder {
 		let stakers = vec![
 			// (stash, ctrl, stake, status)
 			// these two will be elected in the default test where we elect 2.
-			(11, 10, 1000, StakerStatus::<AccountId>::Validator),
-			(21, 20, 1000, StakerStatus::<AccountId>::Validator),
+			(11, 11, 1000, StakerStatus::<AccountId>::Validator),
+			(21, 21, 1000, StakerStatus::<AccountId>::Validator),
 			// a loser validator
-			(31, 30, 500, StakerStatus::<AccountId>::Validator),
+			(31, 31, 500, StakerStatus::<AccountId>::Validator),
 			// an idle validator
-			(41, 40, 1000, StakerStatus::<AccountId>::Idle),
+			(41, 41, 1000, StakerStatus::<AccountId>::Idle),
 		];
 
 		let _ = pallet_staking::GenesisConfig::<Test> {
