@@ -9349,6 +9349,7 @@ dependencies = [
  "libp2p",
  "log",
  "mockall",
+ "parking_lot 0.12.1",
  "partial_sort",
  "rand 0.8.5",
  "sc-utils",

@@ -18,12 +18,13 @@
 
 use libp2p::PeerId;
 use log::trace;
+use parking_lot::Mutex;
 use partial_sort::PartialSort;
 use std::{
 	cmp::{Ord, Ordering, PartialOrd},
 	collections::{hash_map::Entry, HashMap, HashSet},
 	fmt::Debug,
-	sync::{Arc, Mutex},
+	sync::Arc,
 	time::{Duration, Instant},
 };
 use wasm_timer::Delay;
@@ -71,27 +72,27 @@ pub struct PeerStoreHandle {
 
 impl PeerStoreProvider for PeerStoreHandle {
 	fn is_banned(&self, peer_id: &PeerId) -> bool {
-		self.inner.lock().unwrap().is_banned(peer_id)
+		self.inner.lock().is_banned(peer_id)
 	}
 
 	fn register_protocol(&self, protocol_handle: ProtocolHandle) {
-		self.inner.lock().unwrap().register_protocol(protocol_handle);
+		self.inner.lock().register_protocol(protocol_handle);
 	}
 
 	fn report_disconnect(&mut self, peer_id: PeerId) {
-		self.inner.lock().unwrap().report_disconnect(peer_id)
+		self.inner.lock().report_disconnect(peer_id)
 	}
 
 	fn report_peer(&mut self, peer_id: PeerId, change: ReputationChange) {
-		self.inner.lock().unwrap().report_peer(peer_id, change)
+		self.inner.lock().report_peer(peer_id, change)
 	}
 
 	fn peer_reputation(&self, peer_id: &PeerId) -> i32 {
-		self.inner.lock().unwrap().peer_reputation(peer_id)
+		self.inner.lock().peer_reputation(peer_id)
 	}
 
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId> {
-		self.inner.lock().unwrap().outgoing_candidates(count, ignored)
+		self.inner.lock().outgoing_candidates(count, ignored)
 	}
 }
 
@@ -101,12 +102,12 @@ impl PeerStoreHandle {
 	/// This number might not include some connected peers in rare cases when their reputation
 	/// was not updated for one hour, because their entries in [`PeerStore`] were dropped.
 	pub fn num_known_peers(&self) -> usize {
-		self.inner.lock().unwrap().peers.len()
+		self.inner.lock().peers.len()
 	}
 
 	/// Add known peer.
 	pub fn add_known_peer(&mut self, peer_id: PeerId) {
-		self.inner.lock().unwrap().add_known_peer(peer_id);
+		self.inner.lock().add_known_peer(peer_id);
 	}
 }
 
@@ -324,7 +325,7 @@ impl PeerStore {
 				elapsed_now.as_secs() - elapsed_latest.as_secs()
 			};
 
-			self.inner.lock().unwrap().progress_time(seconds_passed);
+			self.inner.lock().progress_time(seconds_passed);
 			let _ = Delay::new(Duration::from_secs(1)).await;
 		}
 	}
