@@ -576,10 +576,6 @@ benchmarks! {
 	}: payout_stakers(RawOrigin::Signed(caller), validator, current_era)
 	verify {
 		let balance_after = T::Currency::free_balance(&validator_controller);
-		println!("{:?}", balance_before);
-		println!("{:?}", balance_after);
-
-
 		ensure!(
 			balance_before < balance_after,
 			"Balance of validator controller should have increased after payout.",
