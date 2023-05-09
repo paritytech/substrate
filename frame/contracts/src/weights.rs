@@ -170,9 +170,13 @@ pub trait WeightInfo {
 	fn instr_i64rotl(r: u32, ) -> Weight;
 	fn instr_i64rotr(r: u32, ) -> Weight;
 	fn migrate() -> Weight { Weight::zero() }
+	fn migrate_noop() -> Weight { Weight::zero() }
 	fn v9_migration_step(_k: u32) -> Weight { Weight::zero() }
 	fn v10_migration_step() -> Weight { Weight::zero() }
 	fn v11_migration_step(_k: u32) -> Weight { Weight::zero() }
+	fn on_runtime_upgrade() -> Weight { Weight::zero() }
+	fn on_runtime_upgrade_noop() -> Weight { Weight::zero() }
+	fn on_runtime_upgrade_in_progress() -> Weight { Weight::zero() }
 }
 
 /// Weights for pallet_contracts using the Substrate node and recommended hardware.

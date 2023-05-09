@@ -235,7 +235,7 @@ benchmarks! {
 		Contracts::<T>::reinstrument_module(&mut module, &schedule)?;
 	}
 
-	// This benchmarks the v9 migration cost.
+	// This benchmarks the v9 migration step.
 	#[pov_mode = Measured]
 	v9_migration_step {
 		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
@@ -245,6 +245,7 @@ benchmarks! {
 		migration.step();
 	}
 
+	// This benchmarks the v10 migration step.
 	#[pov_mode = Measured]
 	v10_migration_step {
 		let account = account::<T::AccountId>("account", 0, 0);
@@ -256,6 +257,7 @@ benchmarks! {
 		migration.step();
 	}
 
+	// This benchmarks the v11 migration step.
 	#[pov_mode = Measured]
 	v11_migration_step {
 		let k in 0 .. 1024;
@@ -267,13 +269,20 @@ benchmarks! {
 
 	// This benchmarks the base weight of dispatching a noop migrate call.
 	#[pov_mode = Measured]
+	migrate_noop {
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+	}:  {
+		Migration::<T>::migrate(Weight::MAX);
+	} verify {
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+	}
+
+	// This benchmarks the base weight of dispatching a noop migrate call.
+	#[pov_mode = Measured]
 	migrate {
 		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
-
-		// Execute a (noop) migration a step from 0 -> 1
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
 		MigrationInProgress::<T>::set(Some(Default::default()));
-
 	}:  {
 		<Contracts<T>>::migrate(origin.into(), Weight::MAX).unwrap_or_default()
 	} verify {
@@ -282,8 +291,17 @@ benchmarks! {
 
 	// This benchmarks the base weight of dispatching a noop migrate call.
 	#[pov_mode = Measured]
+	on_runtime_upgrade_noop {
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+	}:  {
+		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
+	} verify {
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+	}
+
+	// This benchmarks the base weight of dispatching a noop migrate call.
+	#[pov_mode = Measured]
 	on_runtime_upgrade {
-		// Execute a (noop) migration a step from 0 -> 1
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
 		MigrationInProgress::<T>::set(Some(Default::default()));
 

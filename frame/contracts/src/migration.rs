@@ -20,7 +20,7 @@ pub mod v10;
 pub mod v11;
 pub mod v9;
 
-use crate::{Config, Error, MigrationInProgress, Pallet, Weight, LOG_TARGET};
+use crate::{weights::WeightInfo, Config, Error, MigrationInProgress, Pallet, Weight, LOG_TARGET};
 use codec::{Codec, Decode};
 use frame_support::{
 	codec,
@@ -157,17 +157,15 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 	fn on_runtime_upgrade() -> Weight {
 		let latest_version = <Pallet<T>>::current_storage_version();
 		let storage_version = <Pallet<T>>::on_chain_storage_version();
-		let mut weight = T::DbWeight::get().reads(1);
 
 		if storage_version == latest_version {
-			return weight
+			return T::WeightInfo::on_runtime_upgrade_noop()
 		}
 
 		// In case a migration is already in progress we create the next migration
 		// (if any) right when the current one finishes.
-		weight.saturating_accrue(T::DbWeight::get().reads(1));
 		if Self::in_progress() {
-			return weight
+			return T::WeightInfo::on_runtime_upgrade_in_progress()
 		}
 
 		log::info!(
@@ -175,6 +173,7 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 			"RuntimeUpgraded. Upgrading storage from {storage_version:?} to {latest_version:?}.",
 		);
 
+		let mut weight = T::WeightInfo::on_runtime_upgrade();
 		let cursor = M::new(storage_version + 1);
 		MigrationInProgress::<T>::set(Some(cursor));
 		weight.saturating_accrue(T::DbWeight::get().writes(1));
@@ -195,7 +194,7 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 			}
 		}
 
-		weight
+		return weight
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -238,8 +237,7 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 	pub(crate) fn migrate(weight_limit: Weight) -> (MigrateResult, Weight) {
 		let mut weight_left = weight_limit;
 
-		// for mutating `MigrationInProgress` and `StorageVersion`
-		if weight_left.checked_reduce(T::DbWeight::get().reads_writes(2, 2)).is_none() {
+		if weight_left.checked_reduce(T::WeightInfo::migrate_noop()).is_none() {
 			return (MigrateResult::NoMigrationPerformed, Weight::zero())
 		}
 
@@ -391,6 +389,29 @@ impl MigrateSequence for Tuple {
 mod test {
 	use super::*;
 	use crate::tests::{ExtBuilder, Test};
+
+	mod mock_pallet {
+		pub use pallet::*;
+		#[frame_support::pallet(dev_mode)]
+		pub mod pallet {
+			use frame_support::pallet_prelude::*;
+
+			const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
+
+			#[pallet::pallet]
+			#[pallet::storage_version(STORAGE_VERSION)]
+			pub struct Pallet<T>(_);
+
+			#[pallet::config]
+			pub trait Config: frame_system::Config + Sized {
+				type RuntimeEvent: From<Event<Self>>
+					+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+			}
+
+			#[pallet::event]
+			pub enum Event<T: Config> {}
+		}
+	}
 
 	#[derive(Default, Encode, Decode, MaxEncodedLen)]
 	struct MockMigration<const N: u16> {
