@@ -1067,8 +1067,10 @@ where
 		to: &T::AccountId,
 		value: BalanceOf<T>,
 	) -> DispatchResult {
-		T::Currency::transfer(from, to, value, preservation)
-			.map_err(|_| Error::<T>::TransferFailed)?;
+		if !value.is_zero() {
+			T::Currency::transfer(from, to, value, preservation)
+				.map_err(|_| Error::<T>::TransferFailed)?;
+		}
 		Ok(())
 	}
 
@@ -1247,11 +1249,11 @@ where
 		let info = frame.terminate();
 		frame.nested_storage.terminate(&info);
 		System::<T>::dec_consumers(&frame.account_id);
-		T::Currency::transfer(
+		Self::transfer(
+			Preservation::Expendable,
 			&frame.account_id,
 			beneficiary,
 			T::Currency::reducible_balance(&frame.account_id, Preservation::Expendable, Polite),
-			Preservation::Expendable,
 		)?;
 		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
