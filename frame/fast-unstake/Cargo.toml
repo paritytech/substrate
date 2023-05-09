@@ -56,14 +56,6 @@ std = [
 	"frame-election-provider-support/std",
 
 	"frame-benchmarking/std",
-
-	"pallet-staking-reward-curve",
-	"sp-core",
-	"substrate-test-utils",
-	"sp-tracing",
-	"pallet-staking",
-	"pallet-balances",
-	"pallet-timestamp"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

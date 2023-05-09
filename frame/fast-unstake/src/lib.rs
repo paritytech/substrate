@@ -94,7 +94,6 @@ macro_rules! log {
 	};
 }
 
-/// Foo
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;

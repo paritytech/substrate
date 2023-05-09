@@ -215,7 +215,7 @@ parameter_types! {
 	static FastUnstakeEvents: u32 = 0;
 }
 
-pub fn fast_unstake_events_since_last_call() -> Vec<super::Event<Runtime>> {
+pub(crate) fn fast_unstake_events_since_last_call() -> Vec<super::Event<Runtime>> {
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)
@@ -270,7 +270,7 @@ impl ExtBuilder {
 			});
 	}
 
-	pub fn batch(self, size: u32) -> Self {
+	pub(crate) fn batch(self, size: u32) -> Self {
 		BatchSize::set(size);
 		self
 	}
@@ -338,7 +338,7 @@ impl ExtBuilder {
 	}
 }
 
-pub fn run_to_block(n: u64, on_idle: bool) {
+pub(crate) fn run_to_block(n: u64, on_idle: bool) {
 	let current_block = System::block_number();
 	assert!(n > current_block);
 	while System::block_number() < n {
@@ -357,7 +357,7 @@ pub fn run_to_block(n: u64, on_idle: bool) {
 	}
 }
 
-pub fn next_block(on_idle: bool) {
+pub(crate) fn next_block(on_idle: bool) {
 	let current = System::block_number();
 	run_to_block(current + 1, on_idle);
 }
