@@ -92,7 +92,7 @@ fn set_staking_configs_works() {
 #[test]
 fn force_unstake_works() {
 	ExtBuilder::default().build_and_execute(|| {
-		// Account 11 (also controller)  is stashed and locked
+		// Account 11 (also controller) is stashed and locked
 		assert_eq!(Staking::bonded(&11), Some(11));
 		// Adds 2 slashing spans
 		add_slash(&11);
@@ -226,6 +226,40 @@ fn basic_setup_works() {
 		// New era is not being forced
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 	});
+}
+
+#[test]
+fn change_controller_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		let (stash, controller) = testing_utils::create_unique_stash_controller::<Test>(
+			0,
+			100,
+			RewardDestination::Staked,
+			false,
+		)
+		.unwrap();
+
+		// ensure `stash` and `controller` are bonded as stash controller pair.
+		assert_eq!(Staking::bonded(&stash), Some(controller.clone()));
+
+		// `controller` can control `stash` who is initially a validator.
+		assert_ok!(Staking::chill(RuntimeOrigin::signed(controller)));
+
+		// sets controller back to `stash`.
+		assert_ok!(Staking::set_controller(RuntimeOrigin::signed(stash.clone())));
+		assert_eq!(Staking::bonded(&stash), Some(stash.clone()));
+		mock::start_active_era(1);
+
+		// `controller` is no longer in control. `stash` is now controller.
+		assert_noop!(
+			Staking::validate(RuntimeOrigin::signed(controller), ValidatorPrefs::default()),
+			Error::<Test>::NotController,
+		);
+		assert_ok!(Staking::validate(
+			RuntimeOrigin::signed(stash.clone()),
+			ValidatorPrefs::default()
+		));
+	})
 }
 
 #[test]
