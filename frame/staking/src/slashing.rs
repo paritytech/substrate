@@ -618,7 +618,7 @@ pub fn do_slash<T: Config>(
 			*reward_payout = reward_payout.saturating_sub(missing);
 		}
 
-		<Pallet<T>>::update_ledger(&controller, &ledger);
+		ledger.put_by_controller(&controller);
 
 		// trigger the event
 		<Pallet<T>>::deposit_event(super::Event::<T>::Slashed {

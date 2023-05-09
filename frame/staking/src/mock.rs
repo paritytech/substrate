@@ -35,7 +35,10 @@ use sp_runtime::{
 	testing::{Header, UintAuthorityId},
 	traits::{IdentityLookup, Zero},
 };
-use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
+use sp_staking::{
+	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
+	OnStakingUpdate, Stake,
+};
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -45,6 +48,58 @@ pub(crate) type AccountId = u64;
 pub(crate) type AccountIndex = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u128;
+pub(crate) type T = Test;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum StakingEvent {
+	StakeUpdate(AccountId, Option<Stake<Balance>>),
+	NominatorAdd(AccountId),
+	NominatorUpdate(AccountId, Vec<AccountId>),
+	ValidatorAdd(AccountId),
+	ValidatorUpdate(AccountId),
+	ValidatorRemove(AccountId),
+	NominatorRemove(AccountId, Vec<AccountId>),
+	Unstake(AccountId),
+}
+
+parameter_types! {
+	pub static EmittedEvents: Vec<StakingEvent> = Vec::new();
+}
+
+pub struct EventListenerMock;
+impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
+	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<Balance>>) {
+		EmittedEvents::mutate(|x| x.push(StakingEvent::StakeUpdate(*who, prev_stake)))
+	}
+
+	fn on_nominator_add(who: &AccountId) {
+		EmittedEvents::mutate(|x| x.push(StakingEvent::NominatorAdd(*who)))
+	}
+
+	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>) {
+		EmittedEvents::mutate(|x| x.push(StakingEvent::NominatorUpdate(*who, prev_nominations)));
+	}
+
+	fn on_validator_add(who: &AccountId) {
+		EmittedEvents::mutate(|x| x.push(StakingEvent::ValidatorAdd(*who)));
+	}
+
+	fn on_validator_update(who: &AccountId) {
+		EmittedEvents::mutate(|x| x.push(StakingEvent::ValidatorUpdate(*who)));
+	}
+
+	fn on_validator_remove(who: &AccountId) {
+		EmittedEvents::mutate(|x| x.push(StakingEvent::ValidatorRemove(*who)));
+	}
+
+	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>) {
+		EmittedEvents::mutate(|x| x.push(StakingEvent::NominatorRemove(*who, nominations)));
+	}
+
+	fn on_unstake(who: &AccountId) {
+		EmittedEvents::mutate(|x| x.push(StakingEvent::Unstake(*who)));
+	}
+}
 
 /// Another session handler struct to test on_disabled.
 pub struct OtherSessionHandler;
@@ -306,6 +361,7 @@ impl crate::pallet::pallet::Config for Test {
 	type MaxUnlockingChunks = MaxUnlockingChunks;
 	type HistoryDepth = HistoryDepth;
 	type OnStakerSlash = OnStakerSlashMock<Test>;
+	type EventListeners = EventListenerMock;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -448,6 +504,7 @@ impl ExtBuilder {
 				(100, self.balance_factor * 2000),
 				(101, self.balance_factor * 2000),
 				// aux accounts
+				(66, self.balance_factor * 1000),
 				(60, self.balance_factor),
 				(61, self.balance_factor * 2000),
 				(70, self.balance_factor),
@@ -548,6 +605,8 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		sp_tracing::try_init_simple();
 		let mut ext = self.build();
+		// Clean up all the events produced on init.
+		EmittedEvents::take();
 		ext.execute_with(test);
 		ext.execute_with(|| {
 			Staking::do_try_state(System::block_number()).unwrap();

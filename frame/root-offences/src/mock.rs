@@ -198,6 +198,7 @@ impl pallet_staking::Config for Test {
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
+	type EventListeners = ();
 	type WeightInfo = ();
 }
 

@@ -17,6 +17,7 @@
 
 //! Implementations for the Staking FRAME Pallet.
 
+use codec::EncodeLike;
 use frame_election_provider_support::{
 	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
 	SortedListProvider, VoteWeight, VoterOf,
@@ -27,7 +28,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, Defensive, DefensiveResult, EstimateNextNewSession, Get,
-		Imbalance, LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
+		Imbalance, OnUnbalanced, TryCollect, UnixTime,
 	},
 	weights::Weight,
 };
@@ -39,7 +40,7 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, SessionIndex, Stake, StakingInterface,
+	EraIndex, OnStakingUpdate, SessionIndex, Stake, StakingInterface,
 };
 use sp_std::prelude::*;
 
@@ -49,7 +50,7 @@ use crate::{
 	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
-use super::{pallet::*, STAKING_ID};
+use super::pallet::*;
 
 /// The maximum number of iterations that we do whilst iterating over `T::VoterList` in
 /// `get_npos_voters`.
@@ -60,10 +61,17 @@ use super::{pallet::*, STAKING_ID};
 const NPOS_MAX_ITERATIONS_COEFFICIENT: u32 = 2;
 
 impl<T: Config> Pallet<T> {
+	/// Get the ledger associated with the given controller account.
+	pub(crate) fn ledger<A: EncodeLike<T::AccountId>>(controller: A) -> Option<StakingLedger<T>> {
+		StakingLedger::<T>::get_by_controller(controller)
+	}
+
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
-		// Weight note: consider making the stake accessible through stash.
-		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
+		Self::bonded(stash)
+			.and_then(|c| Self::ledger(&c))
+			.map(|l| l.active)
+			.unwrap_or_default()
 	}
 
 	/// Internal impl of [`Self::slashable_balance_of`] that returns [`VoteWeight`].
@@ -97,35 +105,34 @@ impl<T: Config> Pallet<T> {
 		controller: &T::AccountId,
 		num_slashing_spans: u32,
 	) -> Result<Weight, DispatchError> {
-		let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+		let mut ledger = Self::ledger(controller).ok_or(Error::<T>::NotController)?;
 		let (stash, old_total) = (ledger.stash.clone(), ledger.total);
 		if let Some(current_era) = Self::current_era() {
 			ledger = ledger.consolidate_unlocked(current_era)
 		}
 
-		let used_weight =
+		let (used_weight, ledger_total) =
 			if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
 				// This account must have called `unbond()` with some value that caused the active
 				// portion to fall below existential deposit + will have no more unlocking chunks
 				// left. We can now safely remove all staking-related information.
 				Self::kill_stash(&stash, num_slashing_spans)?;
-				// Remove the lock.
-				T::Currency::remove_lock(STAKING_ID, &stash);
 
-				T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans)
+				(T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans), ledger.total)
 			} else {
 				// This was the consequence of a partial unbond. just update the ledger and move on.
-				Self::update_ledger(&controller, &ledger);
+				let total = ledger.total;
+				ledger.put_by_controller(controller);
 
 				// This is only an update, so we use less overall weight.
-				T::WeightInfo::withdraw_unbonded_update(num_slashing_spans)
+				(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans), total)
 			};
 
 		// `old_total` should never be less than the new total because
 		// `consolidate_unlocked` strictly subtracts balance.
-		if ledger.total < old_total {
+		if ledger_total < old_total {
 			// Already checked that this won't overflow by entry condition.
-			let value = old_total - ledger.total;
+			let value = old_total - ledger_total;
 			Self::deposit_event(Event::<T>::Withdrawn { stash, amount: value });
 		}
 
@@ -158,7 +165,8 @@ impl<T: Config> Pallet<T> {
 		let controller = Self::bonded(&validator_stash).ok_or_else(|| {
 			Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		})?;
-		let mut ledger = <Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController)?;
+
+		let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 
 		ledger
 			.claimed_rewards
@@ -180,8 +188,8 @@ impl<T: Config> Pallet<T> {
 		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
 
 		// Input data seems good, no errors allowed after this point
-
-		<Ledger<T>>::insert(&controller, &ledger);
+		let ledger_stash = ledger.stash.clone();
+		ledger.put_by_controller(&controller);
 
 		// Get Era reward points. It has TOTAL and INDIVIDUAL
 		// Find the fraction of the era reward that belongs to the validator
@@ -194,7 +202,7 @@ impl<T: Config> Pallet<T> {
 		let total_reward_points = era_reward_points.total;
 		let validator_reward_points = era_reward_points
 			.individual
-			.get(&ledger.stash)
+			.get(&ledger_stash)
 			.copied()
 			.unwrap_or_else(Zero::zero);
 
@@ -223,16 +231,16 @@ impl<T: Config> Pallet<T> {
 
 		Self::deposit_event(Event::<T>::PayoutStarted {
 			era_index: era,
-			validator_stash: ledger.stash.clone(),
+			validator_stash: ledger_stash.clone(),
 		});
 
 		let mut total_imbalance = PositiveImbalanceOf::<T>::zero();
 		// We can now make total validator payout:
 		if let Some(imbalance) =
-			Self::make_payout(&ledger.stash, validator_staking_payout + validator_commission_payout)
+			Self::make_payout(&ledger_stash, validator_staking_payout + validator_commission_payout)
 		{
 			Self::deposit_event(Event::<T>::Rewarded {
-				stash: ledger.stash,
+				stash: ledger_stash,
 				amount: imbalance.peek(),
 			});
 			total_imbalance.subsume(imbalance);
@@ -266,14 +274,6 @@ impl<T: Config> Pallet<T> {
 		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
 	}
 
-	/// Update the ledger for a controller.
-	///
-	/// This will also update the stash lock.
-	pub(crate) fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T>) {
-		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
-		<Ledger<T>>::insert(controller, ledger);
-	}
-
 	/// Chill a stash account.
 	pub(crate) fn chill_stash(stash: &T::AccountId) {
 		let chilled_as_validator = Self::do_remove_validator(stash);
@@ -292,12 +292,12 @@ impl<T: Config> Pallet<T> {
 				.map(|controller| T::Currency::deposit_creating(&controller, amount)),
 			RewardDestination::Stash => T::Currency::deposit_into_existing(stash, amount).ok(),
 			RewardDestination::Staked => Self::bonded(stash)
-				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
-				.and_then(|(controller, mut l)| {
+				.and_then(|c| Self::ledger(&c).map(|l| (l, c)))
+				.and_then(|(mut l, controller)| {
 					l.active += amount;
 					l.total += amount;
 					let r = T::Currency::deposit_into_existing(stash, amount).ok();
-					Self::update_ledger(&controller, &l);
+					l.put_by_controller(&controller);
 					r
 				}),
 			RewardDestination::Account(dest_account) =>
@@ -655,12 +655,12 @@ impl<T: Config> Pallet<T> {
 
 		slashing::clear_stash_metadata::<T>(stash, num_slashing_spans)?;
 
-		<Bonded<T>>::remove(stash);
-		<Ledger<T>>::remove(&controller);
-
-		<Payee<T>>::remove(stash);
 		Self::do_remove_validator(stash);
 		Self::do_remove_nominator(stash);
+
+		<Bonded<T>>::remove(stash);
+		<Payee<T>>::remove(stash);
+		Self::ledger(&controller).map(|l| l.remove(&controller));
 
 		frame_system::Pallet::<T>::dec_consumers(stash);
 
@@ -879,12 +879,23 @@ impl<T: Config> Pallet<T> {
 	/// to `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
-		if !Nominators::<T>::contains_key(who) {
+		let nominator_exists = Nominators::<T>::contains_key(who);
+		// Get previous nominations before the nominator is updated.
+		let prev_targets = Self::nominations(who);
+		let new_targets = nominations.targets.clone().into_inner();
+
+		Nominators::<T>::insert(who, nominations);
+
+		if nominator_exists {
 			// maybe update sorted list.
+			if prev_targets != Some(new_targets) {
+				T::EventListeners::on_nominator_update(who, prev_targets.unwrap_or_default());
+			}
+		} else {
 			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
 				.defensive_unwrap_or_default();
+			T::EventListeners::on_nominator_add(who);
 		}
-		Nominators::<T>::insert(who, nominations);
 
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
@@ -901,20 +912,13 @@ impl<T: Config> Pallet<T> {
 	/// `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
-		let outcome = if Nominators::<T>::contains_key(who) {
-			Nominators::<T>::remove(who);
+		if let Some(nominations) = Self::nominations(who) {
 			let _ = T::VoterList::on_remove(who).defensive();
-			true
-		} else {
-			false
-		};
-
-		debug_assert_eq!(
-			Nominators::<T>::count() + Validators::<T>::count(),
-			T::VoterList::count()
-		);
-
-		outcome
+			Nominators::<T>::remove(who);
+			T::EventListeners::on_nominator_remove(who, nominations);
+			return true
+		}
+		false
 	}
 
 	/// This function will add a validator to the `Validators` storage map.
@@ -925,17 +929,20 @@ impl<T: Config> Pallet<T> {
 	/// `Validators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
-		if !Validators::<T>::contains_key(who) {
-			// maybe update sorted list.
+		let validator_exists = Validators::<T>::contains_key(who);
+
+		let prev_prefs = Validators::<T>::get(who);
+		Validators::<T>::insert(who, prefs.clone());
+
+		if validator_exists {
+			if prev_prefs != prefs {
+				T::EventListeners::on_validator_update(who);
+			}
+		} else {
 			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
 				.defensive_unwrap_or_default();
+			T::EventListeners::on_validator_add(who);
 		}
-		Validators::<T>::insert(who, prefs);
-
-		debug_assert_eq!(
-			Nominators::<T>::count() + Validators::<T>::count(),
-			T::VoterList::count()
-		);
 	}
 
 	/// This function will remove a validator from the `Validators` storage map.
@@ -946,20 +953,13 @@ impl<T: Config> Pallet<T> {
 	/// `Validators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
-		let outcome = if Validators::<T>::contains_key(who) {
+		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
 			let _ = T::VoterList::on_remove(who).defensive();
-			true
-		} else {
-			false
-		};
-
-		debug_assert_eq!(
-			Nominators::<T>::count() + Validators::<T>::count(),
-			T::VoterList::count()
-		);
-
-		outcome
+			T::EventListeners::on_validator_remove(who);
+			return true
+		}
+		false
 	}
 
 	/// Register some amount of weight directly with the system pallet.
@@ -1059,17 +1059,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 		});
 		<Bonded<T>>::insert(voter.clone(), voter.clone());
-		<Ledger<T>>::insert(
-			voter.clone(),
-			StakingLedger {
-				stash: voter.clone(),
-				active: stake,
-				total: stake,
-				unlocking: Default::default(),
-				claimed_rewards: Default::default(),
-			},
-		);
-
+		StakingLedger::<T>::new(voter.clone(), stake).put_by_controller(&voter);
 		Self::do_add_nominator(&voter, Nominations { targets, submitted_in: 0, suppressed: false });
 	}
 
@@ -1077,16 +1067,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	fn add_target(target: T::AccountId) {
 		let stake = MinValidatorBond::<T>::get() * 100u32.into();
 		<Bonded<T>>::insert(target.clone(), target.clone());
-		<Ledger<T>>::insert(
-			target.clone(),
-			StakingLedger {
-				stash: target.clone(),
-				active: stake,
-				total: stake,
-				unlocking: Default::default(),
-				claimed_rewards: Default::default(),
-			},
-		);
+		StakingLedger::<T>::new(target.clone(), stake).put_by_controller(&target);
 		Self::do_add_validator(
 			&target,
 			ValidatorPrefs { commission: Perbill::zero(), blocked: false },
@@ -1118,16 +1099,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
 				.unwrap_or_else(|| MinNominatorBond::<T>::get() * 100u32.into());
 			<Bonded<T>>::insert(v.clone(), v.clone());
-			<Ledger<T>>::insert(
-				v.clone(),
-				StakingLedger {
-					stash: v.clone(),
-					active: stake,
-					total: stake,
-					unlocking: Default::default(),
-					claimed_rewards: Default::default(),
-				},
-			);
+			StakingLedger::<T>::new(v.clone(), stake).put_by_controller(&v);
 			Self::do_add_validator(
 				&v,
 				ValidatorPrefs { commission: Perbill::zero(), blocked: false },
@@ -1139,16 +1111,8 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 			});
 			<Bonded<T>>::insert(v.clone(), v.clone());
-			<Ledger<T>>::insert(
-				v.clone(),
-				StakingLedger {
-					stash: v.clone(),
-					active: stake,
-					total: stake,
-					unlocking: Default::default(),
-					claimed_rewards: Default::default(),
-				},
-			);
+
+			StakingLedger::<T>::new(v.clone(), stake).put_by_controller(&v);
 			Self::do_add_nominator(
 				&v,
 				Nominations { targets: t, submitted_in: 0, suppressed: false },
@@ -1611,8 +1575,8 @@ impl<T: Config> StakingInterface for Pallet<T> {
 
 	fn stake(who: &Self::AccountId) -> Result<Stake<BalanceOf<T>>, DispatchError> {
 		Self::bonded(who)
-			.and_then(|c| Self::ledger(c))
-			.map(|l| Stake { total: l.total, active: l.active })
+			.and_then(|c| Self::ledger(&c))
+			.map(Into::into)
 			.ok_or(Error::<T>::NotStash.into())
 	}
 
@@ -1814,7 +1778,7 @@ impl<T: Config> Pallet<T> {
 
 	fn ensure_ledger_consistent(ctrl: T::AccountId) -> Result<(), &'static str> {
 		// ensures ledger.total == ledger.active + sum(ledger.unlocking).
-		let ledger = Self::ledger(ctrl.clone()).ok_or("Not a controller.")?;
+		let ledger = Self::ledger(&ctrl.clone()).ok_or("Not a controller.")?;
 		let real_total: BalanceOf<T> =
 			ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
 		ensure!(real_total == ledger.total, "ledger.total corrupt");

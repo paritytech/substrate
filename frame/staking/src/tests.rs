@@ -30,7 +30,7 @@ use pallet_balances::Error as BalancesError;
 use sp_runtime::{
 	assert_eq_error_rate,
 	traits::{BadOrigin, Dispatchable},
-	Perbill, Percent, Rounding, TokenError,
+	Perbill, Percent, Perquintill, Rounding, TokenError,
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
@@ -5846,5 +5846,568 @@ mod staking_interface {
 			// random other account.
 			assert!(Staking::status(&42).is_err());
 		})
+	}
+}
+
+mod on_staking_update {
+	//! The tests in this module can be best visualized via the following diagram:
+	//!
+	//! ```mermaid
+	//! states:
+	//! non-staker
+	//! chill
+	//! validator
+	//! nominator
+	//!
+	//! functions:
+	//!
+	//! bond
+	//! chill
+	//! validate
+	//! nominate
+	//! change bonded-amount (update_ledger: unbond, rebond, bond_extra + slash, reward)
+	//! withdraw_unbonded (kill, stay_alive)
+	//! ```
+	use frame_election_provider_support::ElectionDataProvider;
+	use sp_staking::{Stake, StakingInterface};
+
+	use super::*;
+	use crate::mock::StakingEvent::*;
+
+	/// A shared testable code path for any staker who is going through the process of being
+	/// unbonded.
+	fn staker_withdraw_unbonded_alive_test(stash: AccountId, ctrl: AccountId) {
+		let initial_stake = Staking::slashable_balance_of(&stash);
+		assert_eq!(
+			<Staking as StakingInterface>::stake(&stash).unwrap(),
+			Stake { active: initial_stake, total: initial_stake }
+		);
+		assert_eq!(current_era(), 0);
+
+		// when:
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(ctrl), 5));
+
+		// then:
+		assert_eq!(
+			EmittedEvents::take(),
+			vec![StakingEvent::StakeUpdate(
+				stash,
+				Some(Stake { active: initial_stake, total: initial_stake })
+			)]
+		);
+		assert_eq!(
+			<Staking as StakingInterface>::stake(&stash).unwrap(),
+			Stake { active: initial_stake - 5, total: initial_stake }
+		);
+
+		// when:
+		assert_storage_noop!(assert_ok!(Staking::withdraw_unbonded(
+			RuntimeOrigin::signed(ctrl),
+			0
+		)));
+
+		// then:
+		assert_eq!(EmittedEvents::take(), vec![]);
+		assert_eq!(
+			<Staking as StakingInterface>::stake(&stash).unwrap(),
+			Stake { active: initial_stake - 5, total: initial_stake }
+		);
+
+		// when:
+		start_active_era(BondingDuration::get() - 1);
+		assert_storage_noop!(assert_ok!(Staking::withdraw_unbonded(
+			RuntimeOrigin::signed(ctrl),
+			0
+		)));
+
+		// then:
+		assert_eq!(EmittedEvents::take(), vec![]);
+		assert_eq!(
+			<Staking as StakingInterface>::stake(&stash).unwrap(),
+			Stake { active: initial_stake - 5, total: initial_stake }
+		);
+
+		// when:
+		start_active_era(BondingDuration::get());
+		assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(ctrl), 0));
+
+		// then:
+		assert_eq!(
+			EmittedEvents::take(),
+			vec![StakeUpdate(
+				stash,
+				Some(Stake { total: initial_stake, active: initial_stake - 5 })
+			)]
+		);
+		assert_eq!(
+			<Staking as StakingInterface>::stake(&stash).unwrap(),
+			Stake { active: initial_stake - 5, total: initial_stake - 5 }
+		);
+	}
+
+	/// A shared testable code path for any staker who is going having their bonded amount updated.
+	fn staker_update_bonded_amount_test(stash: AccountId, ctrl: AccountId) {
+		let initial_stake = Staking::slashable_balance_of(&stash);
+		assert!(
+			Balances::free_balance(&stash) >= initial_stake + 10,
+			"this test needs to ensure that stash has at least 10 extra units to bond further"
+		);
+		assert_eq!(
+			<Staking as StakingInterface>::stake(&stash).unwrap(),
+			Stake { active: initial_stake, total: initial_stake }
+		);
+
+		// when updating bonded amount (which should be done by the stash)
+		assert_ok!(Staking::bond_extra(RuntimeOrigin::signed(stash), 10));
+
+		// then note the pre-ledger is given as an argument.
+		assert_eq!(
+			EmittedEvents::take(),
+			vec![StakingEvent::StakeUpdate(
+				stash,
+				Some(Stake { active: initial_stake, total: initial_stake })
+			)]
+		);
+		assert_eq!(
+			<Staking as StakingInterface>::stake(&stash).unwrap(),
+			Stake { active: initial_stake + 10, total: initial_stake + 10 }
+		);
+
+		// when:
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(ctrl), 5));
+
+		// then:
+		assert_eq!(
+			EmittedEvents::take(),
+			vec![StakingEvent::StakeUpdate(
+				stash,
+				Some(Stake { active: initial_stake + 10, total: initial_stake + 10 })
+			)]
+		);
+		assert_eq!(
+			<Staking as StakingInterface>::stake(&stash).unwrap(),
+			Stake { active: initial_stake + 5, total: initial_stake + 10 }
+		);
+
+		// when:
+		assert_ok!(Staking::rebond(RuntimeOrigin::signed(ctrl), 2));
+
+		// then:
+		assert_eq!(
+			EmittedEvents::take(),
+			vec![StakingEvent::StakeUpdate(
+				stash,
+				Some(Stake { active: initial_stake + 5, total: initial_stake + 10 })
+			)]
+		);
+		assert_eq!(
+			<Staking as StakingInterface>::stake(&stash).unwrap(),
+			Stake { active: initial_stake + 7, total: initial_stake + 10 }
+		);
+	}
+
+	mod non_staker {
+		use super::*;
+
+		#[test]
+		fn bond() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given:
+				assert_eq!(Bonded::<T>::get(66), None);
+
+				// when:
+				assert_ok!(Staking::bond(RuntimeOrigin::signed(66), 66, 100, Default::default()));
+
+				// then:
+				assert_eq!(EmittedEvents::take(), vec![StakeUpdate(66, None)]);
+			})
+		}
+
+		#[test]
+		fn validate() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given:
+				assert_eq!(Bonded::<T>::get(66), None);
+
+				// when:
+				assert_noop!(
+					Staking::validate(RuntimeOrigin::signed(66), Default::default()),
+					Error::<T>::NotController
+				);
+
+				// then:
+				assert_eq!(EmittedEvents::take(), vec![]);
+			})
+		}
+
+		#[test]
+		fn nominate() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given:
+				assert_eq!(Bonded::<T>::get(66), None);
+
+				// when:
+				assert_noop!(
+					Staking::nominate(RuntimeOrigin::signed(66), Default::default()),
+					Error::<T>::NotController
+				);
+
+				// then:
+				assert_eq!(EmittedEvents::take(), vec![]);
+			})
+		}
+
+		#[test]
+		fn update_bonded_amount() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given:
+				assert_eq!(Bonded::<T>::get(66), None);
+
+				// when:
+				assert_noop!(
+					Staking::bond_extra(RuntimeOrigin::signed(66), Default::default()),
+					Error::<T>::NotStash
+				);
+
+				// then:
+				assert_eq!(EmittedEvents::take(), vec![]);
+
+				// when:
+				assert_noop!(
+					Staking::unbond(RuntimeOrigin::signed(66), Default::default()),
+					Error::<T>::NotController
+				);
+
+				// then:
+				assert_eq!(EmittedEvents::take(), vec![]);
+
+				// when:
+				assert_noop!(
+					Staking::rebond(RuntimeOrigin::signed(66), Default::default()),
+					Error::<T>::NotController
+				);
+
+				// then:
+				assert_eq!(EmittedEvents::take(), vec![]);
+			})
+		}
+	}
+
+	mod chilled {
+		use super::*;
+
+		const STASH: AccountId = 41;
+		const CTRL: AccountId = 40;
+
+		#[test]
+		fn account() {
+			ExtBuilder::default().build_and_execute(|| {
+				// stash 41 is bonded to controller 40, but chilled.
+				assert!(Bonded::<T>::contains_key(STASH));
+				assert!(Ledger::<T>::contains_key(CTRL));
+				assert!(!Validators::<T>::contains_key(STASH));
+				assert!(!Nominators::<T>::contains_key(STASH));
+			})
+		}
+
+		#[test]
+		fn bond() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given `fn account`
+
+				// when:
+				assert_noop!(
+					Staking::bond(RuntimeOrigin::signed(STASH), CTRL, 100, Default::default()),
+					Error::<T>::AlreadyBonded,
+				);
+
+				// then:
+				assert_eq!(EmittedEvents::take(), vec![]);
+			})
+		}
+
+		#[test]
+		fn validate() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given `fn account`
+
+				// when validated by the controller.
+				assert_ok!(Staking::validate(RuntimeOrigin::signed(CTRL), Default::default()));
+
+				// then event is about the stash.
+				assert_eq!(EmittedEvents::take(), vec![StakingEvent::ValidatorAdd(STASH)]);
+			})
+		}
+
+		#[test]
+		fn nominate() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given `fn account`
+
+				// when nominated by the controller
+				let arbitrary_validators =
+					<Staking as ElectionDataProvider>::electable_targets(None).unwrap();
+				assert_ok!(Staking::nominate(RuntimeOrigin::signed(CTRL), arbitrary_validators));
+
+				// then:
+				assert_eq!(EmittedEvents::take(), vec![StakingEvent::NominatorAdd(STASH)]);
+			})
+		}
+
+		#[test]
+		fn update_bonded_amount() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given `fn account`, and
+				staker_update_bonded_amount_test(STASH, CTRL);
+			})
+		}
+
+		#[test]
+		fn withdraw_unbonded() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given `fn account`, and
+				staker_withdraw_unbonded_alive_test(STASH, CTRL);
+
+				let leftover = Staking::slashable_balance_of(&STASH);
+				// when: unbond and withdraw everything.
+				assert_ok!(Staking::unbond(RuntimeOrigin::signed(CTRL), leftover));
+				start_active_era(BondingDuration::get() * 2);
+				assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(CTRL), 0));
+
+				// then:
+				assert_eq!(
+					EmittedEvents::take(),
+					vec![
+						StakeUpdate(STASH, Some(Stake { total: leftover, active: leftover })),
+						Unstake(STASH)
+					]
+				);
+				assert!(<Staking as StakingInterface>::stake(&STASH).is_err());
+			})
+		}
+	}
+
+	mod nominator {
+		use super::*;
+
+		const STASH: AccountId = 101;
+		const CTRL: AccountId = 100;
+
+		#[test]
+		fn account() {
+			ExtBuilder::default().build_and_execute(|| {
+				// stash 41 is bonded to controller 40, but chilled.
+				assert!(Bonded::<T>::contains_key(STASH));
+				assert!(Ledger::<T>::contains_key(CTRL));
+				assert!(Nominators::<T>::contains_key(STASH));
+				assert!(!Validators::<T>::contains_key(STASH));
+			})
+		}
+
+		#[test]
+		fn bond() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given `fn account`
+
+				// when:
+				assert_noop!(
+					Staking::bond(
+						RuntimeOrigin::signed(STASH),
+						CTRL,
+						Default::default(),
+						Default::default()
+					),
+					Error::<T>::AlreadyBonded,
+				);
+
+				// then:
+				assert_eq!(EmittedEvents::take(), vec![]);
+			})
+		}
+
+		#[test]
+		fn validate() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given `fn account`
+
+				// when validated by the controller.
+				let nominations = Nominators::<T>::get(STASH).unwrap().targets;
+				assert_ok!(Staking::validate(RuntimeOrigin::signed(CTRL), Default::default()));
+
+				// then event is about the stash.
+				assert_eq!(
+					EmittedEvents::take(),
+					vec![
+						StakingEvent::NominatorRemove(STASH, nominations.into_inner()),
+						StakingEvent::ValidatorAdd(STASH)
+					]
+				);
+			})
+		}
+
+		#[test]
+		fn nominate() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given `fn account`
+
+				// when nominating exactly the same set
+				let nominations = Nominators::<T>::get(STASH).unwrap().targets.into_inner();
+				assert_ok!(Staking::nominate(RuntimeOrigin::signed(CTRL), nominations.clone()));
+
+				// then:
+				assert_eq!(EmittedEvents::take(), vec![]);
+
+				// when nominating a different set.
+				assert_ok!(Staking::nominate(
+					RuntimeOrigin::signed(CTRL),
+					nominations.iter().take(1).cloned().collect::<Vec<AccountId>>()
+				));
+				assert_eq!(EmittedEvents::take(), vec![NominatorUpdate(STASH, vec![11, 21])]);
+				assert_eq!(<Staking as StakingInterface>::nominations(&STASH).unwrap(), vec![11])
+			})
+		}
+
+		#[test]
+		fn update_bonded_amount() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given `fn account`, and
+				staker_update_bonded_amount_test(STASH, CTRL);
+			})
+		}
+
+		#[test]
+		fn withdraw_unbonded() {
+			ExtBuilder::default().min_nominator_bond(0).build_and_execute(|| {
+				// given `fn account`
+				staker_withdraw_unbonded_alive_test(STASH, CTRL);
+
+				let leftover = Staking::slashable_balance_of(&STASH);
+				// when: unbond and withdraw everything.
+				assert_ok!(Staking::unbond(RuntimeOrigin::signed(CTRL), leftover));
+				start_active_era(BondingDuration::get() * 2);
+				assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(CTRL), 0));
+
+				// TODO: test with the implicit withdraw that we do in unbond.
+
+				// then:
+				assert_eq!(
+					EmittedEvents::take(),
+					vec![
+						StakeUpdate(STASH, Some(Stake { total: leftover, active: leftover })),
+						NominatorRemove(STASH, vec![11, 21]),
+						Unstake(STASH)
+					]
+				);
+				assert!(<Staking as StakingInterface>::stake(&STASH).is_err());
+			})
+		}
+	}
+
+	mod validator {
+		use super::*;
+
+		const STASH: AccountId = 11;
+		const CTRL: AccountId = 10;
+
+		#[test]
+		fn account() {
+			ExtBuilder::default().build_and_execute(|| {
+				// stash 41 is bonded to controller 40, but chilled.
+				assert!(Bonded::<T>::contains_key(STASH));
+				assert!(Ledger::<T>::contains_key(CTRL));
+				assert!(!Nominators::<T>::contains_key(STASH));
+				assert!(Validators::<T>::contains_key(STASH));
+			})
+		}
+
+		#[test]
+		fn bond() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given `fn account`
+
+				// when:
+				assert_noop!(
+					Staking::bond(
+						RuntimeOrigin::signed(STASH),
+						CTRL,
+						Default::default(),
+						Default::default()
+					),
+					Error::<T>::AlreadyBonded,
+				);
+
+				// then:
+				assert_eq!(EmittedEvents::take(), vec![]);
+			})
+		}
+
+		#[test]
+		fn validate() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given `fn account`
+
+				// when validated to the same pref.
+				let prefs = Validators::<T>::get(STASH);
+				assert_ok!(Staking::validate(RuntimeOrigin::signed(CTRL), prefs.clone()));
+
+				// then
+				assert_eq!(EmittedEvents::take(), vec![]);
+
+				// when validated to a new pref.
+				let new_prefs = ValidatorPrefs { blocked: !prefs.blocked, ..prefs };
+				assert_ok!(Staking::validate(RuntimeOrigin::signed(CTRL), new_prefs));
+
+				// then
+				assert_eq!(EmittedEvents::take(), vec![ValidatorUpdate(11)]);
+			})
+		}
+
+		#[test]
+		fn nominate() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given `fn account`
+
+				// when switching to nominate
+				let nominations = vec![STASH];
+				assert_ok!(Staking::nominate(RuntimeOrigin::signed(CTRL), nominations.clone()));
+
+				// then:
+				assert_eq!(EmittedEvents::take(), vec![ValidatorRemove(11), NominatorAdd(11)]);
+			})
+		}
+
+		#[test]
+		fn update_bonded_amount() {
+			ExtBuilder::default().build_and_execute(|| {
+				// given `fn account`, and
+				Balances::make_free_balance_be(&STASH, Staking::slashable_balance_of(&STASH) * 2);
+				staker_update_bonded_amount_test(STASH, CTRL);
+			})
+		}
+
+		#[test]
+		fn withdraw_unbonded() {
+			ExtBuilder::default().min_validator_bond(0).build_and_execute(|| {
+				// given `fn account`
+				staker_withdraw_unbonded_alive_test(STASH, CTRL);
+
+				let leftover = Staking::slashable_balance_of(&STASH);
+				// when: unbond and withdraw everything.
+				assert_ok!(Staking::unbond(RuntimeOrigin::signed(CTRL), leftover));
+				start_active_era(BondingDuration::get() * 2);
+				assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(CTRL), 0));
+
+				// then:
+				assert_eq!(
+					EmittedEvents::take(),
+					vec![
+						StakeUpdate(STASH, Some(Stake { total: leftover, active: leftover })),
+						ValidatorRemove(STASH),
+						Unstake(STASH)
+					]
+				);
+				assert!(<Staking as StakingInterface>::stake(&STASH).is_err());
+			})
+		}
 	}
 }
