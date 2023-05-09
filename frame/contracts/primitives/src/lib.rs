@@ -109,7 +109,9 @@ pub enum ContractAccessError {
 	MigrationInProgress,
 }
 
-impl<T, B: Zero> From<DispatchError> for ContractResult<Result<T, DispatchError>, B> {
+impl<T, B: Zero, EventRecord> From<DispatchError>
+	for ContractResult<Result<T, DispatchError>, B, EventRecord>
+{
 	fn from(error: DispatchError) -> Self {
 		ContractResult {
 			gas_consumed: Zero::zero(),
@@ -117,6 +119,7 @@ impl<T, B: Zero> From<DispatchError> for ContractResult<Result<T, DispatchError>
 			storage_deposit: Default::default(),
 			debug_message: Vec::new(),
 			result: Err(error),
+			events: None,
 		}
 	}
 }
