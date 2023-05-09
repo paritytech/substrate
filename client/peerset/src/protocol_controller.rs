@@ -52,9 +52,7 @@ use std::{
 };
 use wasm_timer::Delay;
 
-use crate::{
-	peer_store::PeerReputationProvider, IncomingIndex, Message, SetConfig, SetId, LOG_TARGET,
-};
+use crate::{peer_store::PeerStoreProvider, IncomingIndex, Message, SetConfig, SetId, LOG_TARGET};
 
 /// External API actions.
 #[derive(Debug)]
@@ -198,7 +196,7 @@ pub struct ProtocolController {
 	to_notifications: TracingUnboundedSender<Message>,
 	/// `PeerStore` handle for checking peer reputation values and getting connection candidates
 	/// with highest reputation.
-	peer_store: Box<dyn PeerReputationProvider>,
+	peer_store: Box<dyn PeerStoreProvider>,
 }
 
 impl ProtocolController {
@@ -207,7 +205,7 @@ impl ProtocolController {
 		set_id: SetId,
 		config: SetConfig,
 		to_notifications: TracingUnboundedSender<Message>,
-		peer_store: Box<dyn PeerReputationProvider>,
+		peer_store: Box<dyn PeerStoreProvider>,
 	) -> (ProtocolHandle, ProtocolController) {
 		let (actions_tx, actions_rx) = tracing_unbounded("mpsc_api_protocol", 10_000);
 		let (events_tx, events_rx) = tracing_unbounded("mpsc_notifications_protocol", 10_000);
@@ -662,8 +660,7 @@ impl ProtocolController {
 mod tests {
 	use super::{Direction, PeerState, ProtocolController};
 	use crate::{
-		peer_store::PeerReputationProvider, IncomingIndex, Message, ReputationChange, SetConfig,
-		SetId,
+		peer_store::PeerStoreProvider, IncomingIndex, Message, ReputationChange, SetConfig, SetId,
 	};
 	use libp2p::PeerId;
 	use sc_utils::mpsc::{tracing_unbounded, TryRecvError};
@@ -673,7 +670,7 @@ mod tests {
 		#[derive(Debug)]
 		pub PeerStoreHandle {}
 
-		impl PeerReputationProvider for PeerStoreHandle {
+		impl PeerStoreProvider for PeerStoreHandle {
 			fn is_banned(&self, peer_id: &PeerId) -> bool;
 			fn report_disconnect(&mut self, peer_id: PeerId);
 			fn report_peer(&mut self, peer_id: PeerId, change: ReputationChange);

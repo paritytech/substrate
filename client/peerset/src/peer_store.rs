@@ -44,7 +44,7 @@ const INVERSE_DECREMENT: i32 = 50;
 /// remove it, once the reputation value reaches 0.
 const FORGET_AFTER: Duration = Duration::from_secs(3600);
 
-pub trait PeerReputationProvider: Debug + Send {
+pub trait PeerStoreProvider: Debug + Send {
 	/// Check whether the peer is banned.
 	fn is_banned(&self, peer_id: &PeerId) -> bool;
 
@@ -66,7 +66,7 @@ pub struct PeerStoreHandle {
 	inner: Arc<Mutex<PeerStoreInner>>,
 }
 
-impl PeerReputationProvider for PeerStoreHandle {
+impl PeerStoreProvider for PeerStoreHandle {
 	fn is_banned(&self, peer_id: &PeerId) -> bool {
 		self.inner.lock().unwrap().is_banned(peer_id)
 	}

@@ -35,7 +35,7 @@
 mod peer_store;
 mod protocol_controller;
 
-use peer_store::{PeerReputationProvider, PeerStore, PeerStoreHandle};
+use peer_store::{PeerStore, PeerStoreHandle, PeerStoreProvider};
 use protocol_controller::{ProtocolController, ProtocolHandle};
 
 use futures::{
