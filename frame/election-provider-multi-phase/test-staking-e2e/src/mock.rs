@@ -376,12 +376,12 @@ impl Default for StakingExtBuilder {
 			(21, 21, 1000, StakerStatus::<AccountId>::Validator),
 			// loser validators if validator_count() is default.
 			(31, 31, 500, StakerStatus::<AccountId>::Validator),
-			(41, 41,1500, StakerStatus::<AccountId>::Validator),
-			(51, 51,1500, StakerStatus::<AccountId>::Validator),
-			(61, 61,1500, StakerStatus::<AccountId>::Validator),
-			(71, 71,1500, StakerStatus::<AccountId>::Validator),
-			(81, 81,1500, StakerStatus::<AccountId>::Validator),
-			(91, 91,1500, StakerStatus::<AccountId>::Validator),
+			(41, 41, 1500, StakerStatus::<AccountId>::Validator),
+			(51, 51, 1500, StakerStatus::<AccountId>::Validator),
+			(61, 61, 1500, StakerStatus::<AccountId>::Validator),
+			(71, 71, 1500, StakerStatus::<AccountId>::Validator),
+			(81, 81, 1500, StakerStatus::<AccountId>::Validator),
+			(91, 91, 1500, StakerStatus::<AccountId>::Validator),
 			(101, 101, 500, StakerStatus::<AccountId>::Validator),
 			// an idle validator
 			(201, 201, 1000, StakerStatus::<AccountId>::Idle),
