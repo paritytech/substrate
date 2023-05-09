@@ -553,6 +553,8 @@ pub enum DispatchError {
 	Corruption,
 	/// Some resource (e.g. a preimage) is unavailable right now. This might fix itself later.
 	Unavailable,
+	/// Root origin is not allowed.
+	RootNotAllowed,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -624,6 +626,8 @@ pub enum TokenError {
 	CannotCreateHold,
 	/// Withdrawal would cause unwanted loss of account.
 	NotExpendable,
+	/// Account cannot receive the assets.
+	Blocked,
 }
 
 impl From<TokenError> for &'static str {
@@ -639,6 +643,7 @@ impl From<TokenError> for &'static str {
 			TokenError::CannotCreateHold =>
 				"Account cannot be created for recording amount on hold",
 			TokenError::NotExpendable => "Account that is desired to remain would die",
+			TokenError::Blocked => "Account cannot receive the assets",
 		}
 	}
 }
@@ -678,6 +683,7 @@ impl From<DispatchError> for &'static str {
 			Exhausted => "Resources exhausted",
 			Corruption => "State corrupt",
 			Unavailable => "Resource unavailable",
+			RootNotAllowed => "Root not allowed",
 		}
 	}
 }
@@ -724,6 +730,7 @@ impl traits::Printable for DispatchError {
 			Exhausted => "Resources exhausted".print(),
 			Corruption => "State corrupt".print(),
 			Unavailable => "Resource unavailable".print(),
+			RootNotAllowed => "Root not allowed".print(),
 		}
 	}
 }
@@ -1052,5 +1059,25 @@ mod tests {
 			assert_eq!(sp_io::storage::get(b"a").unwrap(), vec![1u8; 44]);
 			assert_eq!(sp_io::storage::get(b"b").unwrap(), vec![2u8; 33]);
 		});
+	}
+}
+
+// NOTE: we have to test the sp_core stuff also from a different crate to check that the macro
+// can access the sp_core crate.
+#[cfg(test)]
+mod sp_core_tests {
+	use super::*;
+
+	#[test]
+	#[should_panic]
+	fn generate_feature_enabled_macro_panics() {
+		sp_core::generate_feature_enabled_macro!(if_test, test, $);
+		if_test!(panic!("This should panic"));
+	}
+
+	#[test]
+	fn generate_feature_enabled_macro_works() {
+		sp_core::generate_feature_enabled_macro!(if_not_test, not(test), $);
+		if_not_test!(panic!("This should not panic"));
 	}
 }

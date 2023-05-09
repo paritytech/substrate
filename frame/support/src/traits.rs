@@ -55,8 +55,8 @@ pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter
 mod misc;
 pub use misc::{
 	defensive_prelude::{self, *},
-	Backing, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16,
-	ConstU32, ConstU64, ConstU8, DefensiveMax, DefensiveMin, DefensiveSaturating,
+	AccountTouch, Backing, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128,
+	ConstU16, ConstU32, ConstU64, ConstU8, DefensiveMax, DefensiveMin, DefensiveSaturating,
 	DefensiveTruncateFrom, EnsureInherentsAreFirst, EqualPrivilegeOnly, EstimateCallFee,
 	ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime, IsSubType, IsType,
 	Len, OffchainWorker, OnKilledAccount, OnNewAccount, PrivilegeCmp, SameOrOther, Time,
@@ -75,8 +75,8 @@ pub use randomness::Randomness;
 mod metadata;
 pub use metadata::{
 	CallMetadata, CrateVersion, GetCallIndex, GetCallMetadata, GetCallName, GetStorageVersion,
-	PalletInfo, PalletInfoAccess, PalletInfoData, PalletsInfoAccess, StorageVersion,
-	STORAGE_VERSION_STORAGE_KEY_POSTFIX,
+	NoStorageVersionSet, PalletInfo, PalletInfoAccess, PalletInfoData, PalletsInfoAccess,
+	StorageVersion, STORAGE_VERSION_STORAGE_KEY_POSTFIX,
 };
 
 mod hooks;
