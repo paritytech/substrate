@@ -98,7 +98,7 @@ pub fn create_unique_stash_controller<T: Config>(
 	};
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
 	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), amount, destination)?;
-	
+
 	// update ledger to be a *different* controller to stash
 	if let Some(l) = Ledger::<T>::take(&stash) {
 		<Ledger<T>>::insert(&controller, l);
