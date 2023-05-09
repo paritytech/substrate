@@ -107,7 +107,10 @@ use crate::{
 use codec::{Codec, Decode, Encode, HasCompact};
 use environmental::*;
 use frame_support::{
-	dispatch::{DispatchError, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo, RawOrigin},
+	dispatch::{
+		DispatchError, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo, RawOrigin,
+		WithPostDispatchInfo,
+	},
 	ensure,
 	error::BadOrigin,
 	traits::{
@@ -605,9 +608,6 @@ pub mod pallet {
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			Migration::<T>::ensure_migrated()?;
-			let gas_limit: Weight = gas_limit.into();
-			let origin = ensure_signed(origin)?;
-			let dest = T::Lookup::lookup(dest)?;
 			let common = CommonInput {
 				origin: Origin::from_runtime_origin(origin)?,
 				value,
@@ -668,7 +668,6 @@ pub mod pallet {
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			Migration::<T>::ensure_migrated()?;
-			let origin = ensure_signed(origin)?;
 			let code_len = code.len() as u32;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
@@ -712,7 +711,6 @@ pub mod pallet {
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			Migration::<T>::ensure_migrated()?;
-			let origin = ensure_signed(origin)?;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
