@@ -28,7 +28,9 @@ error[E0412]: cannot find type `Origin` in module `pallet`
    | |_^ not found in `pallet`
    |
    = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
-help: consider importing this type alias
+help: consider importing one of these items
+   |
+1  | use frame_support_test::Origin;
    |
 1  | use frame_system::Origin;
    |

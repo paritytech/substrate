@@ -594,6 +594,28 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[pov_mode = Measured]
+	seal_caller_is_root {
+		let r in 0 .. API_BENCHMARK_RUNS;
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "caller_is_root",
+				params: vec![],
+				return_type: Some(ValueType::I32),
+			}],
+			call_body: Some(body::repeated(r, &[
+				Instruction::Call(0),
+				Instruction::Drop,
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Root;
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	#[pov_mode = Measured]
 	seal_address {
 		let r in 0 .. API_BENCHMARK_RUNS;
 		let instance = Contract::<T>::new(WasmModule::getter(
@@ -988,7 +1010,8 @@ benchmarks! {
 			Weight::MAX,
 			None,
 			vec![],
-			true,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result?;
@@ -1037,7 +1060,8 @@ benchmarks! {
 			Weight::MAX,
 			None,
 			vec![],
-			true,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result?;
@@ -3229,7 +3253,8 @@ benchmarks! {
 			Weight::MAX,
 			None,
 			data,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result?;
@@ -3278,7 +3303,8 @@ benchmarks! {
 			Weight::MAX,
 			None,
 			data,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result?;

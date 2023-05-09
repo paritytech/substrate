@@ -547,37 +547,29 @@ mod tests {
 	use sp_api::Core;
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::{BlockOrigin, Environment, Proposer};
-	use sp_core::Pair;
-	use sp_runtime::{generic::BlockId, traits::NumberFor};
+	use sp_runtime::{generic::BlockId, traits::NumberFor, Perbill};
 	use substrate_test_runtime_client::{
 		prelude::*,
-		runtime::{Extrinsic, Transfer},
+		runtime::{Block as TestBlock, Extrinsic, ExtrinsicBuilder, Transfer},
 		TestClientBuilder, TestClientBuilderExt,
 	};
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
-	fn extrinsic(nonce: u64) -> Extrinsic {
-		Transfer {
-			amount: Default::default(),
-			nonce,
-			from: AccountKeyring::Alice.into(),
-			to: AccountKeyring::Bob.into(),
-		}
-		.into_signed_tx()
-	}
+	// Note:
+	// Maximum normal extrinsic size for `substrate_test_runtime` is ~65% of max_block (refer to
+	// `substrate_test_runtime::RuntimeBlockWeights` for details).
+	// This extrinsic sizing allows for:
+	// - one huge xts + a lot of tiny dust
+	// - one huge, no medium,
+	// - two medium xts
+	// This is widely exploited in following tests.
+	const HUGE: u32 = 649000000;
+	const MEDIUM: u32 = 250000000;
+	const TINY: u32 = 1000;
 
-	fn exhausts_resources_extrinsic_from(who: usize) -> Extrinsic {
-		let pair = AccountKeyring::numeric(who);
-		let transfer = Transfer {
-			// increase the amount to bump priority
-			amount: 1,
-			nonce: 0,
-			from: pair.public(),
-			to: AccountKeyring::Bob.into(),
-		};
-		let signature = pair.sign(&transfer.encode()).into();
-		Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: true }
+	fn extrinsic(nonce: u64) -> Extrinsic {
+		ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY)).nonce(nonce).build()
 	}
 
 	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
@@ -738,7 +730,7 @@ mod tests {
 	#[test]
 	fn should_not_remove_invalid_transactions_from_the_same_sender_after_one_was_invalid() {
 		// given
-		let mut client = Arc::new(substrate_test_runtime_client::new());
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
@@ -748,38 +740,29 @@ mod tests {
 			client.clone(),
 		);
 
+		let medium = |nonce| {
+			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(MEDIUM))
+				.nonce(nonce)
+				.build()
+		};
+		let huge = |nonce| {
+			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE)).nonce(nonce).build()
+		};
+
 		block_on(txpool.submit_at(
 			&BlockId::number(0),
 			SOURCE,
-			vec![
-				extrinsic(0),
-				extrinsic(1),
-				Transfer {
-					amount: Default::default(),
-					nonce: 2,
-					from: AccountKeyring::Alice.into(),
-					to: AccountKeyring::Bob.into(),
-				}.into_resources_exhausting_tx(),
-				extrinsic(3),
-				Transfer {
-					amount: Default::default(),
-					nonce: 4,
-					from: AccountKeyring::Alice.into(),
-					to: AccountKeyring::Bob.into(),
-				}.into_resources_exhausting_tx(),
-				extrinsic(5),
-				extrinsic(6),
-			],
+			vec![medium(0), medium(1), huge(2), medium(3), huge(4), medium(5), medium(6)],
 		))
 		.unwrap();
 
 		let mut proposer_factory =
 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
 		let mut propose_block = |client: &TestClient,
-		                         number,
+		                         parent_number,
 		                         expected_block_extrinsics,
 		                         expected_pool_transactions| {
-			let hash = client.expect_block_hash_from_id(&BlockId::Number(number)).unwrap();
+			let hash = client.expect_block_hash_from_id(&BlockId::Number(parent_number)).unwrap();
 			let proposer = proposer_factory.init_with_now(
 				&client.expect_header(hash).unwrap(),
 				Box::new(move || time::Instant::now()),
@@ -794,10 +777,28 @@ mod tests {
 
 			// then
 			// block should have some extrinsics although we have some more in the pool.
-			assert_eq!(txpool.ready().count(), expected_pool_transactions);
-			assert_eq!(block.extrinsics().len(), expected_block_extrinsics);
+			assert_eq!(
+				txpool.ready().count(),
+				expected_pool_transactions,
+				"at block: {}",
+				block.header.number
+			);
+			assert_eq!(
+				block.extrinsics().len(),
+				expected_block_extrinsics,
+				"at block: {}",
+				block.header.number
+			);
 
 			block
+		};
+
+		let import_and_maintain = |mut client: Arc<TestClient>, block: TestBlock| {
+			let hash = block.hash();
+			block_on(client.import(BlockOrigin::Own, block)).unwrap();
+			block_on(txpool.maintain(chain_event(
+				client.expect_header(hash).expect("there should be header"),
+			)));
 		};
 
 		block_on(
@@ -811,19 +812,28 @@ mod tests {
 
 		// let's create one block and import it
 		let block = propose_block(&client, 0, 2, 7);
-		let hashof1 = block.hash();
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-
-		block_on(
-			txpool.maintain(chain_event(
-				client.expect_header(hashof1).expect("there should be header"),
-			)),
-		);
+		import_and_maintain(client.clone(), block);
 		assert_eq!(txpool.ready().count(), 5);
 
 		// now let's make sure that we can still make some progress
-		let block = propose_block(&client, 1, 2, 5);
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
+		let block = propose_block(&client, 1, 1, 5);
+		import_and_maintain(client.clone(), block);
+		assert_eq!(txpool.ready().count(), 4);
+
+		// again let's make sure that we can still make some progress
+		let block = propose_block(&client, 2, 1, 4);
+		import_and_maintain(client.clone(), block);
+		assert_eq!(txpool.ready().count(), 3);
+
+		// again let's make sure that we can still make some progress
+		let block = propose_block(&client, 3, 1, 3);
+		import_and_maintain(client.clone(), block);
+		assert_eq!(txpool.ready().count(), 2);
+
+		// again let's make sure that we can still make some progress
+		let block = propose_block(&client, 4, 2, 2);
+		import_and_maintain(client.clone(), block);
+		assert_eq!(txpool.ready().count(), 0);
 	}
 
 	#[test]
@@ -849,9 +859,9 @@ mod tests {
 				amount: 100,
 				nonce: 0,
 			}
-			.into_signed_tx(),
+			.into_unchecked_extrinsic(),
 		)
-		.chain((0..extrinsics_num - 1).map(|v| Extrinsic::IncludeData(vec![v as u8; 10])))
+		.chain((1..extrinsics_num as u64).map(extrinsic))
 		.collect::<Vec<_>>();
 
 		let block_limit = genesis_header.encoded_size() +
@@ -862,7 +872,7 @@ mod tests {
 				.sum::<usize>() +
 			Vec::<Extrinsic>::new().encoded_size();
 
-		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, extrinsics)).unwrap();
+		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, extrinsics.clone())).unwrap();
 
 		block_on(txpool.maintain(chain_event(genesis_header.clone())));
 
@@ -905,7 +915,13 @@ mod tests {
 
 		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
 
-		// Give it enough time
+		// Exact block_limit, which includes:
+		// 99 (header_size) + 718 (proof@initialize_block) + 246 (one Transfer extrinsic)
+		let block_limit = {
+			let builder =
+				client.new_block_at(genesis_header.hash(), Default::default(), true).unwrap();
+			builder.estimate_block_size(true) + extrinsics[0].encoded_size()
+		};
 		let block = block_on(proposer.propose(
 			Default::default(),
 			Default::default(),
@@ -915,7 +931,7 @@ mod tests {
 		.map(|r| r.block)
 		.unwrap();
 
-		// The block limit didn't changed, but we now include the proof in the estimation of the
+		// The block limit was increased, but we now include the proof in the estimation of the
 		// block size and thus, only the `Transfer` will fit into the block. It reads more data
 		// than we have reserved in the block limit.
 		assert_eq!(block.extrinsics().len(), 1);
@@ -934,6 +950,15 @@ mod tests {
 			client.clone(),
 		);
 
+		let tiny = |nonce| {
+			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY)).nonce(nonce).build()
+		};
+		let huge = |who| {
+			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE))
+				.signer(AccountKeyring::numeric(who))
+				.build()
+		};
+
 		block_on(
 			txpool.submit_at(
 				&BlockId::number(0),
@@ -941,9 +966,9 @@ mod tests {
 				// add 2 * MAX_SKIPPED_TRANSACTIONS that exhaust resources
 				(0..MAX_SKIPPED_TRANSACTIONS * 2)
 					.into_iter()
-					.map(|i| exhausts_resources_extrinsic_from(i))
+					.map(huge)
 					// and some transactions that are okay.
-					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
+					.chain((0..MAX_SKIPPED_TRANSACTIONS as u64).into_iter().map(tiny))
 					.collect(),
 			),
 		)
@@ -997,15 +1022,27 @@ mod tests {
 			client.clone(),
 		);
 
+		let tiny = |who| {
+			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(TINY))
+				.signer(AccountKeyring::numeric(who))
+				.nonce(1)
+				.build()
+		};
+		let huge = |who| {
+			ExtrinsicBuilder::new_fill_block(Perbill::from_parts(HUGE))
+				.signer(AccountKeyring::numeric(who))
+				.build()
+		};
+
 		block_on(
 			txpool.submit_at(
 				&BlockId::number(0),
 				SOURCE,
 				(0..MAX_SKIPPED_TRANSACTIONS + 2)
 					.into_iter()
-					.map(|i| exhausts_resources_extrinsic_from(i))
+					.map(huge)
 					// and some transactions that are okay.
-					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
+					.chain((0..MAX_SKIPPED_TRANSACTIONS + 2).into_iter().map(tiny))
 					.collect(),
 			),
 		)
@@ -1018,7 +1055,7 @@ mod tests {
 					.expect("there should be header"),
 			)),
 		);
-		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 2 + 2);
+		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 2 + 4);
 
 		let mut proposer_factory =
 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
@@ -1049,8 +1086,13 @@ mod tests {
 				.map(|r| r.block)
 				.unwrap();
 
-		// then the block should have no transactions despite some in the pool
-		assert_eq!(block.extrinsics().len(), 1);
+		// then the block should have one or two transactions. This maybe random as they are
+		// processed in parallel. The same signer and consecutive nonces for huge and tiny
+		// transactions guarantees that max two transactions will get to the block.
+		assert!(
+			(1..3).contains(&block.extrinsics().len()),
+			"Block shall contain one or two extrinsics."
+		);
 		assert!(
 			cell2.lock().0 > MAX_SKIPPED_TRANSACTIONS,
 			"Not enough calls to current time, which indicates the test might have ended because of deadline, not soft deadline"
