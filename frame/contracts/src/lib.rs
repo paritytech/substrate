@@ -107,11 +107,7 @@ use crate::{
 use codec::{Codec, Decode, Encode, HasCompact};
 use environmental::*;
 use frame_support::{
-<<<<<<< HEAD
-	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo, WithPostDispatchInfo},
-=======
 	dispatch::{DispatchError, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo, RawOrigin},
->>>>>>> master
 	ensure,
 	error::BadOrigin,
 	traits::{
