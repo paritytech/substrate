@@ -18,8 +18,28 @@
 
 //! Protocol Controller. Generic implementation of peer management for protocols.
 //! Responsible for accepting/rejecting incoming connections and initiating outgoing connections,
-//! respecting the inbound and outbound peer slot counts. Communicates with `Peerset` to get and
+//! respecting the inbound and outbound peer slot counts. Communicates with `PeerStore` to get and
 //! update peer reputation values and sends commands to `Notifications`.
+//!
+//! Due to asynchronous nature of communication between `ProtocolController` and `Notifications`,
+//! `ProtocolController` has an imperfect view of the states of the peers. This can lead to sending
+//! confusing commands to `Notifications`. To mitigate this issue, the following measures are taken:
+//!
+//! 1. `Notifications` ignores all commands from `ProtocolController` after sending "incoming"
+//!    request, except the answer to this "incoming" request.
+//! 2. `ProtocolController` does not modify the peers state after a command to `Notifications`
+//!    was sent, but before ACK for this command was heard back.
+//! 3. Network peer events from `Notifictions` are prioritized over actions from external API and
+//!    internal actions by `ProtocolController` (like slot allocation).
+//!
+//! Even though the fuzz test from the crate does not reveal any inconsistencies in peer states
+//! observed by `Notifications`, measures above do not provide 100% guarantee against confusing
+//! commands from `ProtocolController`. This might happen, for example, if a network state event
+//! from `Notifications` is processed after an external API action sent at the same time.
+//! For this reason, `Notifications` must employ defensive  programming and behave in a defined way
+//! if seemingly impossible sequences of commands are received. For example, `Notifications` must
+//! correctly handle a "connect" command for the peer it thinks is already connected, and a "drop"
+//! command for a peer that was previously dropped.
 
 use futures::{channel::oneshot, future::Either, FutureExt, StreamExt};
 use libp2p::PeerId;
@@ -36,18 +56,27 @@ use crate::{
 	peer_store::PeerReputationProvider, IncomingIndex, Message, SetConfig, SetId, LOG_TARGET,
 };
 
+/// External API actions.
 #[derive(Debug)]
 enum Action {
+	/// Add a reserved peer or mark already connected peer as reserved.
 	AddReservedPeer(PeerId),
+	/// Remove a reserved peer.
 	RemoveReservedPeer(PeerId),
+	/// Update reserved peers to match the provided set.
 	SetReservedPeers(HashSet<PeerId>),
+	/// Set/unset reserved-only mode.
 	SetReservedOnly(bool),
+	/// Get the list of reserved peers.
 	GetReservedPeers(oneshot::Sender<Vec<PeerId>>),
 }
 
+/// Network events from `Notifications`.
 #[derive(Debug)]
 enum Event {
+	/// Incoming connection from the peer.
 	IncomingConnection(PeerId, IncomingIndex),
+	/// Connection with the peer dropped.
 	Dropped(PeerId),
 }
 
@@ -213,7 +242,8 @@ impl ProtocolController {
 	///
 	/// Intended for tests only. Use `run` for driving [`ProtocolController`].
 	pub async fn next_action(&mut self) -> bool {
-		// Perform tasks prioritizing connection events processing.
+		// Perform tasks prioritizing connection events processing
+		// (see the module documentation for details).
 		let either = loop {
 			if let Some(event) = self.events_rx.next().now_or_never() {
 				match event {
