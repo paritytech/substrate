@@ -20,7 +20,7 @@
 use parking_lot::RwLock;
 use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
 #[cfg(feature = "bls_non_production")]
-use sp_core::bls381;
+use sp_core::{bls377, bls381};
 use sp_core::{
 	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSigner},
 	ecdsa, ed25519, sr25519,
@@ -236,6 +236,33 @@ impl Keystore for LocalKeystore {
 		msg: &[u8],
 	) -> std::result::Result<Option<bls381::Signature>, TraitError> {
 		self.sign::<bls381::Pair>(key_type, public, msg)
+	}
+
+	#[cfg(feature = "bls_non_production")]
+	fn bls377_public_keys(&self, key_type: KeyTypeId) -> Vec<bls377::Public> {
+		self.public_keys::<bls377::Pair>(key_type)
+	}
+
+	#[cfg(feature = "bls_non_production")]
+	/// Generate a new pair compatible with the 'bls377' signature scheme.
+	///
+	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
+	fn bls377_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<bls377::Public, TraitError> {
+		self.generate_new::<bls377::Pair>(key_type, seed)
+	}
+
+	#[cfg(feature = "bls_non_production")]
+	fn bls377_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bls377::Public,
+		msg: &[u8],
+	) -> std::result::Result<Option<bls377::Signature>, TraitError> {
+		self.sign::<bls377::Pair>(key_type, public, msg)
 	}
 
 	fn insert(

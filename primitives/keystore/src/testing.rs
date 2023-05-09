@@ -20,7 +20,7 @@
 use crate::{Error, Keystore, KeystorePtr};
 
 #[cfg(feature = "bls_non_production")]
-use sp_core::bls12_381;
+use sp_core::{bls377, bls381};
 use sp_core::{
 	crypto::{ByteArray, KeyTypeId, Pair, VrfSigner},
 	ecdsa, ed25519, sr25519,
@@ -217,6 +217,30 @@ impl Keystore for MemoryKeystore {
 		msg: &[u8],
 	) -> Result<Option<bls381::Signature>, Error> {
 		self.sign::<bls381::Pair>(key_type, public, msg)
+	}
+
+	#[cfg(feature = "bls_non_production")]
+	fn bls377_public_keys(&self, key_type: KeyTypeId) -> Vec<bls377::Public> {
+		self.public_keys::<bls377::Pair>(key_type)
+	}
+
+	#[cfg(feature = "bls_non_production")]
+	fn bls377_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls377::Public, Error> {
+		self.generate_new::<bls377::Pair>(key_type, seed)
+	}
+
+	#[cfg(feature = "bls_non_production")]
+	fn bls377_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bls377::Public,
+		msg: &[u8],
+	) -> Result<Option<bls377::Signature>, Error> {
+		self.sign::<bls377::Pair>(key_type, public, msg)
 	}
 
 	fn insert(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
