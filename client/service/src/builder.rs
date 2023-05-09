@@ -882,7 +882,8 @@ where
 		net_config.add_request_response_protocol(protocol_config);
 	}
 
-	// create transactions protocol and add it to the list of supported protocols of `network_params`
+	// create transactions protocol and add it to the list of supported protocols of
+	// `network_params`
 	let transactions_handler_proto = sc_network_transactions::TransactionsHandlerPrototype::new(
 		protocol_id.clone(),
 		client
