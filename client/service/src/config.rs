@@ -101,6 +101,8 @@ pub struct Configuration {
 	pub rpc_id_provider: Option<Box<dyn crate::RpcSubscriptionIdProvider>>,
 	/// Maximum allowed subscriptions per rpc connection
 	pub rpc_max_subs_per_conn: u32,
+	/// JSON-RPC server default port.
+	pub rpc_port: u16,
 	/// Prometheus endpoint configuration. `None` if disabled.
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
@@ -130,8 +132,10 @@ pub struct Configuration {
 	pub max_runtime_instances: usize,
 	/// Announce block automatically after they have been imported
 	pub announce_block: bool,
-	/// Base path of the configuration
-	pub base_path: Option<BasePath>,
+	/// Data path root for the configured chain.
+	pub data_path: PathBuf,
+	/// Base path of the configuration. This is shared between chains.
+	pub base_path: BasePath,
 	/// Configuration of the output format that the informant uses.
 	pub informant_output_format: sc_informant::OutputFormat,
 	/// Maximum number of different runtime versions that can be cached.
