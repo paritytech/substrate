@@ -27,14 +27,14 @@ use crate::{
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Code, CodeStorage, Config, ContractInfo, ContractInfoOf, DefaultAddressGenerator,
-	DeletionQueueCounter, Error, Pallet, Schedule,
+	BalanceOf, Code, CodeStorage, CollectEvents, Config, ContractInfo, ContractInfoOf, DebugInfo,
+	DefaultAddressGenerator, DeletionQueueCounter, Error, Origin, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
 use frame_support::{
-	assert_err, assert_err_ignore_postinfo, assert_noop, assert_ok,
-	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
+	assert_err, assert_err_ignore_postinfo, assert_err_with_weight, assert_noop, assert_ok,
+	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
 	parameter_types,
 	storage::child,
 	traits::{
@@ -70,6 +70,7 @@ frame_support::construct_runtime!(
 		Randomness: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
 		Utility: pallet_utility::{Pallet, Call, Storage, Event},
 		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>},
+		Proxy: pallet_proxy::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -337,6 +338,22 @@ impl pallet_utility::Config for Test {
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 }
+
+impl pallet_proxy::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type Currency = Balances;
+	type ProxyType = ();
+	type ProxyDepositBase = ConstU64<1>;
+	type ProxyDepositFactor = ConstU64<1>;
+	type MaxProxies = ConstU32<32>;
+	type WeightInfo = ();
+	type MaxPending = ConstU32<32>;
+	type CallHasher = BlakeTwo256;
+	type AnnouncementDepositBase = ConstU64<1>;
+	type AnnouncementDepositFactor = ConstU64<1>;
+}
+
 parameter_types! {
 	pub MySchedule: Schedule<Test> = {
 		let mut schedule = <Schedule<Test>>::default();
@@ -500,6 +517,11 @@ impl<'a> From<ExtensionInput<'a>> for Vec<u8> {
 	}
 }
 
+impl Default for Origin<Test> {
+	fn default() -> Self {
+		Self::Signed(ALICE)
+	}
+}
 // Perform a call to a plain account.
 // The actual transfer fails because we can only call contracts.
 // Then we check that at least the base costs where charged (no runtime gas costs.)
@@ -552,7 +574,8 @@ fn instantiate_and_call_and_deposit_event() {
 			Code::Existing(code_hash),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -658,7 +681,8 @@ fn deposit_event_max_value_limit() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -704,7 +728,8 @@ fn run_out_of_gas() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -746,7 +771,8 @@ fn instantiate_unique_trie_id() {
 			Code::Existing(code_hash),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -808,7 +834,8 @@ fn storage_max_value_limit() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -858,7 +885,8 @@ fn deploy_and_call_other_contract() {
 			Code::Upload(caller_wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -969,18 +997,21 @@ fn deploy_and_call_other_contract() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: caller_addr.clone(),
+						caller: Origin::from_account_id(caller_addr.clone()),
 						contract: callee_addr.clone(),
 					}),
-					topics: vec![hash(&caller_addr), hash(&callee_addr)],
+					topics: vec![
+						hash(&Origin::<Test>::from_account_id(caller_addr.clone())),
+						hash(&callee_addr)
+					],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Origin::from_account_id(ALICE),
 						contract: caller_addr.clone(),
 					}),
-					topics: vec![hash(&ALICE), hash(&caller_addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&caller_addr)],
 				},
 			]
 		);
@@ -1004,7 +1035,8 @@ fn delegate_call() {
 			Code::Upload(caller_wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1043,7 +1075,8 @@ fn transfer_allow_death_cannot_kill_account() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1083,7 +1116,8 @@ fn cannot_self_destruct_through_draning() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1127,7 +1161,8 @@ fn cannot_self_destruct_through_storage_refund_after_price_change() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1185,7 +1220,8 @@ fn cannot_self_destruct_while_live() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1229,7 +1265,8 @@ fn self_destruct_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1288,10 +1325,10 @@ fn self_destruct_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
-					topics: vec![hash(&ALICE), hash(&addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -1336,7 +1373,8 @@ fn destroy_contract_and_transfer_funds() {
 			Code::Upload(caller_wasm),
 			callee_code_hash.as_ref().to_vec(),
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1400,7 +1438,8 @@ fn crypto_hashes() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1433,7 +1472,8 @@ fn crypto_hashes() {
 				GAS_LIMIT,
 				None,
 				params,
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 				Determinism::Enforced,
 			)
 			.result
@@ -1460,7 +1500,8 @@ fn transfer_return_code() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1475,7 +1516,8 @@ fn transfer_return_code() {
 			GAS_LIMIT,
 			None,
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -1501,7 +1543,8 @@ fn call_return_code() {
 			Code::Upload(caller_code),
 			vec![0],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1516,7 +1559,8 @@ fn call_return_code() {
 			GAS_LIMIT,
 			None,
 			AsRef::<[u8]>::as_ref(&DJANGO).to_vec(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -1531,7 +1575,8 @@ fn call_return_code() {
 			Code::Upload(callee_code),
 			vec![0],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1550,7 +1595,8 @@ fn call_return_code() {
 				.chain(&0u32.to_le_bytes())
 				.cloned()
 				.collect(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -1570,7 +1616,8 @@ fn call_return_code() {
 				.chain(&1u32.to_le_bytes())
 				.cloned()
 				.collect(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -1589,7 +1636,8 @@ fn call_return_code() {
 				.chain(&2u32.to_le_bytes())
 				.cloned()
 				.collect(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -1626,7 +1674,8 @@ fn instantiate_return_code() {
 			Code::Upload(caller_code),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1641,7 +1690,8 @@ fn instantiate_return_code() {
 			GAS_LIMIT,
 			None,
 			callee_hash.clone(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -1657,7 +1707,8 @@ fn instantiate_return_code() {
 			GAS_LIMIT,
 			None,
 			vec![0; 33],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -1672,7 +1723,8 @@ fn instantiate_return_code() {
 			GAS_LIMIT,
 			None,
 			callee_hash.iter().chain(&1u32.to_le_bytes()).cloned().collect(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -1687,7 +1739,8 @@ fn instantiate_return_code() {
 			GAS_LIMIT,
 			None,
 			callee_hash.iter().chain(&2u32.to_le_bytes()).cloned().collect(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -1732,7 +1785,8 @@ fn disabled_chain_extension_errors_on_call() {
 			Code::Upload(code),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1759,7 +1813,8 @@ fn chain_extension_works() {
 			Code::Upload(code),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1774,7 +1829,8 @@ fn chain_extension_works() {
 			GAS_LIMIT,
 			None,
 			input.clone(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		);
 		assert_eq!(TestExtension::last_seen_buffer(), input);
@@ -1788,7 +1844,8 @@ fn chain_extension_works() {
 			GAS_LIMIT,
 			None,
 			ExtensionInput { extension_id: 0, func_id: 1, extra: &[] }.into(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -1804,7 +1861,8 @@ fn chain_extension_works() {
 			GAS_LIMIT,
 			None,
 			ExtensionInput { extension_id: 0, func_id: 2, extra: &[0] }.into(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		);
 		assert_ok!(result.result);
@@ -1816,7 +1874,8 @@ fn chain_extension_works() {
 			GAS_LIMIT,
 			None,
 			ExtensionInput { extension_id: 0, func_id: 2, extra: &[42] }.into(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		);
 		assert_ok!(result.result);
@@ -1828,7 +1887,8 @@ fn chain_extension_works() {
 			GAS_LIMIT,
 			None,
 			ExtensionInput { extension_id: 0, func_id: 2, extra: &[95] }.into(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		);
 		assert_ok!(result.result);
@@ -1842,7 +1902,8 @@ fn chain_extension_works() {
 			GAS_LIMIT,
 			None,
 			ExtensionInput { extension_id: 0, func_id: 3, extra: &[] }.into(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -1860,7 +1921,8 @@ fn chain_extension_works() {
 			GAS_LIMIT,
 			None,
 			ExtensionInput { extension_id: 1, func_id: 0, extra: &[] }.into(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -1898,7 +1960,8 @@ fn chain_extension_temp_storage_works() {
 			Code::Upload(code),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1921,8 +1984,9 @@ fn chain_extension_temp_storage_works() {
 				GAS_LIMIT,
 				None,
 				input.clone(),
-				false,
-				Determinism::Enforced
+				DebugInfo::Skip,
+				CollectEvents::Skip,
+				Determinism::Enforced,
 			)
 			.result
 		);
@@ -1944,7 +2008,8 @@ fn lazy_removal_works() {
 			Code::Upload(code),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -1997,7 +2062,8 @@ fn lazy_batch_removal_works() {
 				Code::Upload(code.clone()),
 				vec![],
 				vec![i],
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 			)
 			.result
 			.unwrap()
@@ -2062,7 +2128,8 @@ fn lazy_removal_partial_remove_works() {
 			Code::Upload(code),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2143,7 +2210,8 @@ fn lazy_removal_does_no_run_on_low_remaining_weight() {
 			Code::Upload(code),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2214,7 +2282,8 @@ fn lazy_removal_does_not_use_all_weight() {
 			Code::Upload(code),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2304,7 +2373,8 @@ fn deletion_queue_ring_buffer_overflow() {
 				Code::Upload(code.clone()),
 				vec![],
 				vec![i],
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 			)
 			.result
 			.unwrap()
@@ -2361,7 +2431,8 @@ fn refcounter() {
 			Code::Upload(wasm.clone()),
 			vec![],
 			vec![0],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2374,7 +2445,8 @@ fn refcounter() {
 			Code::Upload(wasm.clone()),
 			vec![],
 			vec![1],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2390,7 +2462,8 @@ fn refcounter() {
 			Code::Existing(code_hash),
 			vec![],
 			vec![2],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2456,7 +2529,8 @@ fn reinstrument_does_charge() {
 			Code::Upload(wasm),
 			zero.clone(),
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2471,7 +2545,8 @@ fn reinstrument_does_charge() {
 			GAS_LIMIT,
 			None,
 			zero.clone(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		);
 		assert!(!result0.result.unwrap().did_revert());
@@ -2483,7 +2558,8 @@ fn reinstrument_does_charge() {
 			GAS_LIMIT,
 			None,
 			zero.clone(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		);
 		assert!(!result1.result.unwrap().did_revert());
@@ -2505,7 +2581,8 @@ fn reinstrument_does_charge() {
 			GAS_LIMIT,
 			None,
 			zero.clone(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		);
 		assert!(!result2.result.unwrap().did_revert());
@@ -2532,7 +2609,8 @@ fn debug_message_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2544,7 +2622,8 @@ fn debug_message_works() {
 			GAS_LIMIT,
 			None,
 			vec![],
-			true,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		);
 
@@ -2567,7 +2646,8 @@ fn debug_message_logging_disabled() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2580,7 +2660,8 @@ fn debug_message_logging_disabled() {
 			GAS_LIMIT,
 			None,
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		);
 		assert_matches!(result.result, Ok(_));
@@ -2604,7 +2685,8 @@ fn debug_message_invalid_utf8() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2616,7 +2698,8 @@ fn debug_message_invalid_utf8() {
 			GAS_LIMIT,
 			None,
 			vec![],
-			true,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		);
 		assert_ok!(result.result);
@@ -2640,7 +2723,8 @@ fn gas_estimation_nested_call_fixed_limit() {
 			Code::Upload(caller_code),
 			vec![],
 			vec![0],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2654,7 +2738,8 @@ fn gas_estimation_nested_call_fixed_limit() {
 			Code::Upload(callee_code),
 			vec![],
 			vec![1],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2675,7 +2760,8 @@ fn gas_estimation_nested_call_fixed_limit() {
 			GAS_LIMIT,
 			None,
 			input.clone(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		);
 		assert_ok!(&result.result);
@@ -2692,7 +2778,8 @@ fn gas_estimation_nested_call_fixed_limit() {
 				result.gas_required,
 				Some(result.storage_deposit.charge_or_zero()),
 				input.clone(),
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 				Determinism::Enforced,
 			)
 			.result
@@ -2706,7 +2793,8 @@ fn gas_estimation_nested_call_fixed_limit() {
 			result.gas_required.sub_proof_size(1),
 			Some(result.storage_deposit.charge_or_zero()),
 			input,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result;
@@ -2732,7 +2820,8 @@ fn gas_estimation_call_runtime() {
 			Code::Upload(caller_code),
 			vec![],
 			vec![0],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2746,7 +2835,8 @@ fn gas_estimation_call_runtime() {
 			Code::Upload(callee_code),
 			vec![],
 			vec![1],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2765,7 +2855,8 @@ fn gas_estimation_call_runtime() {
 			GAS_LIMIT,
 			None,
 			call.encode(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		);
 		// contract encodes the result of the dispatch runtime
@@ -2782,7 +2873,8 @@ fn gas_estimation_call_runtime() {
 				result.gas_required,
 				None,
 				call.encode(),
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 				Determinism::Enforced,
 			)
 			.result
@@ -2807,7 +2899,8 @@ fn call_runtime_reentrancy_guarded() {
 			Code::Upload(caller_code),
 			vec![],
 			vec![0],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2821,7 +2914,8 @@ fn call_runtime_reentrancy_guarded() {
 			Code::Upload(callee_code),
 			vec![],
 			vec![1],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2845,7 +2939,8 @@ fn call_runtime_reentrancy_guarded() {
 			GAS_LIMIT,
 			None,
 			call.encode(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -2871,7 +2966,8 @@ fn ecdsa_recover() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2907,7 +3003,8 @@ fn ecdsa_recover() {
 			GAS_LIMIT,
 			None,
 			params,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -2915,6 +3012,138 @@ fn ecdsa_recover() {
 		assert!(!result.did_revert());
 		assert_eq!(result.data, EXPECTED_COMPRESSED_PUBLIC_KEY);
 	})
+}
+
+#[test]
+fn bare_instantiate_returns_events() {
+	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+
+		let result = Contracts::bare_instantiate(
+			ALICE,
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm),
+			vec![],
+			vec![],
+			DebugInfo::Skip,
+			CollectEvents::UnsafeCollect,
+		);
+
+		let events = result.events.unwrap();
+		assert!(!events.is_empty());
+		assert_eq!(events, System::events());
+	});
+}
+
+#[test]
+fn bare_instantiate_does_not_return_events() {
+	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+
+		let result = Contracts::bare_instantiate(
+			ALICE,
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm),
+			vec![],
+			vec![],
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+		);
+
+		let events = result.events;
+		assert!(!System::events().is_empty());
+		assert!(events.is_none());
+	});
+}
+
+#[test]
+fn bare_call_returns_events() {
+	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+
+		let addr = Contracts::bare_instantiate(
+			ALICE,
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm),
+			vec![],
+			vec![],
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			vec![],
+			DebugInfo::Skip,
+			CollectEvents::UnsafeCollect,
+			Determinism::Enforced,
+		);
+
+		let events = result.events.unwrap();
+		assert_return_code!(&result.result.unwrap(), RuntimeReturnCode::Success);
+		assert!(!events.is_empty());
+		assert_eq!(events, System::events());
+	});
+}
+
+#[test]
+fn bare_call_does_not_return_events() {
+	let (wasm, _code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+
+		let addr = Contracts::bare_instantiate(
+			ALICE,
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm),
+			vec![],
+			vec![],
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			vec![],
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+			Determinism::Enforced,
+		);
+
+		let events = result.events;
+		assert_return_code!(&result.result.unwrap(), RuntimeReturnCode::Success);
+		assert!(!System::events().is_empty());
+		assert!(events.is_none());
+	});
 }
 
 #[test]
@@ -2933,7 +3162,8 @@ fn sr25519_verify() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -2968,7 +3198,8 @@ fn sr25519_verify() {
 				GAS_LIMIT,
 				None,
 				params,
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 				Determinism::Enforced,
 			)
 			.result
@@ -2980,7 +3211,89 @@ fn sr25519_verify() {
 
 		// verification should fail for other messages
 		assert_return_code!(call_with(&b"hello worlD"), RuntimeReturnCode::Sr25519VerifyFailed);
-	})
+	});
+}
+
+#[test]
+fn failed_deposit_charge_should_roll_back_call() {
+	let (wasm_caller, _) = compile_module::<Test>("call_runtime_and_call").unwrap();
+	let (wasm_callee, _) = compile_module::<Test>("store_call").unwrap();
+	const ED: u64 = 200;
+
+	let execute = || {
+		ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+			// Instantiate both contracts.
+			let addr_caller = Contracts::bare_instantiate(
+				ALICE,
+				0,
+				GAS_LIMIT,
+				None,
+				Code::Upload(wasm_caller.clone()),
+				vec![],
+				vec![],
+				DebugInfo::Skip,
+				CollectEvents::Skip,
+			)
+			.result
+			.unwrap()
+			.account_id;
+			let addr_callee = Contracts::bare_instantiate(
+				ALICE,
+				0,
+				GAS_LIMIT,
+				None,
+				Code::Upload(wasm_callee.clone()),
+				vec![],
+				vec![],
+				DebugInfo::Skip,
+				CollectEvents::Skip,
+			)
+			.result
+			.unwrap()
+			.account_id;
+
+			// Give caller proxy access to Alice.
+			assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(ALICE), addr_caller.clone(), (), 0));
+
+			// Create a Proxy call that will attempt to transfer away Alice's balance.
+			let transfer_call =
+				Box::new(RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
+					dest: CHARLIE,
+					value: pallet_balances::Pallet::<Test>::free_balance(&ALICE) - 2 * ED,
+				}));
+
+			// Wrap the transfer call in a proxy call.
+			let transfer_proxy_call = RuntimeCall::Proxy(pallet_proxy::Call::proxy {
+				real: ALICE,
+				force_proxy_type: Some(()),
+				call: transfer_call,
+			});
+
+			let data = (
+				(ED - DepositPerItem::get()) as u32, // storage length
+				addr_callee,
+				transfer_proxy_call,
+			);
+
+			<Pallet<Test>>::call(
+				RuntimeOrigin::signed(ALICE),
+				addr_caller.clone(),
+				0,
+				GAS_LIMIT,
+				None,
+				data.encode(),
+			)
+		})
+	};
+
+	// With a low enough deposit per byte, the call should succeed.
+	let result = execute().unwrap();
+
+	// Bump the deposit per byte to a high value to trigger a FundsUnavailable error.
+	DEPOSIT_PER_BYTE.with(|c| *c.borrow_mut() = ED);
+	assert_err_with_weight!(execute(), TokenError::FundsUnavailable, result.actual_weight);
 }
 
 #[test]
@@ -3236,7 +3549,8 @@ fn instantiate_with_zero_balance_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3346,7 +3660,8 @@ fn instantiate_with_below_existential_deposit_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3461,7 +3776,8 @@ fn storage_deposit_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3529,10 +3845,10 @@ fn storage_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
-					topics: vec![hash(&ALICE), hash(&addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3546,10 +3862,10 @@ fn storage_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
-					topics: vec![hash(&ALICE), hash(&addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3563,10 +3879,10 @@ fn storage_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Origin::from_account_id(ALICE),
 						contract: addr.clone(),
 					}),
-					topics: vec![hash(&ALICE), hash(&addr)],
+					topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3599,7 +3915,8 @@ fn storage_deposit_callee_works() {
 			Code::Upload(wasm_caller),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3612,7 +3929,8 @@ fn storage_deposit_callee_works() {
 			Code::Upload(wasm_callee),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3653,7 +3971,8 @@ fn set_code_extrinsic() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3737,7 +4056,8 @@ fn slash_cannot_kill_account() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3826,7 +4146,8 @@ fn contract_reverted() {
 			Code::Existing(code_hash),
 			input.clone(),
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap();
@@ -3843,7 +4164,8 @@ fn contract_reverted() {
 			Code::Existing(code_hash),
 			ReturnFlags::empty().bits().encode(),
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3870,7 +4192,8 @@ fn contract_reverted() {
 			GAS_LIMIT,
 			None,
 			input,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -3903,7 +4226,8 @@ fn code_rejected_error_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			true,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 		);
 		assert_err!(result.result, <Error<Test>>::CodeRejected);
 		assert_eq!(
@@ -3930,7 +4254,8 @@ fn code_rejected_error_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			true,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 		);
 		assert_err!(result.result, <Error<Test>>::CodeRejected);
 		assert_eq!(
@@ -3957,7 +4282,8 @@ fn set_code_hash() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -3980,7 +4306,8 @@ fn set_code_hash() {
 			GAS_LIMIT,
 			None,
 			new_code_hash.as_ref().to_vec(),
-			true,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -3995,7 +4322,8 @@ fn set_code_hash() {
 			GAS_LIMIT,
 			None,
 			vec![],
-			true,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -4018,18 +4346,24 @@ fn set_code_hash() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Origin::from_account_id(ALICE),
 						contract: contract_addr.clone(),
 					}),
-					topics: vec![hash(&ALICE), hash(&contract_addr)],
+					topics: vec![
+						hash(&Origin::<Test>::from_account_id(ALICE)),
+						hash(&contract_addr)
+					],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::Called {
-						caller: ALICE,
+						caller: Origin::from_account_id(ALICE),
 						contract: contract_addr.clone(),
 					}),
-					topics: vec![hash(&ALICE), hash(&contract_addr)],
+					topics: vec![
+						hash(&Origin::<Test>::from_account_id(ALICE)),
+						hash(&contract_addr)
+					],
 				},
 			],
 		);
@@ -4052,7 +4386,8 @@ fn storage_deposit_limit_is_enforced() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4126,7 +4461,8 @@ fn deposit_limit_in_nested_calls() {
 			Code::Upload(wasm_caller),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4139,7 +4475,8 @@ fn deposit_limit_in_nested_calls() {
 			Code::Upload(wasm_callee),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4270,7 +4607,8 @@ fn deposit_limit_in_nested_instantiate() {
 			Code::Upload(wasm_caller),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4284,7 +4622,8 @@ fn deposit_limit_in_nested_instantiate() {
 			Code::Upload(wasm_callee),
 			vec![0, 0, 0, 0],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4377,7 +4716,8 @@ fn deposit_limit_in_nested_instantiate() {
 			GAS_LIMIT,
 			Some(codec::Compact(callee_info_len + 2 + ED + 4).into()),
 			(1u32, &code_hash_callee, callee_info_len + 2 + ED + 3).encode(),
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		);
 
@@ -4420,7 +4760,8 @@ fn deposit_limit_honors_liquidity_restrictions() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4464,7 +4805,8 @@ fn deposit_limit_honors_existential_deposit() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4507,7 +4849,8 @@ fn deposit_limit_honors_min_leftover() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4562,7 +4905,8 @@ fn cannot_instantiate_indeterministic_code() {
 				Code::Upload(wasm.clone()),
 				vec![],
 				vec![],
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 			)
 			.result,
 			<Error<Test>>::CodeRejected,
@@ -4607,7 +4951,8 @@ fn cannot_instantiate_indeterministic_code() {
 				Code::Existing(code_hash),
 				vec![],
 				vec![],
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 			)
 			.result,
 			<Error<Test>>::Indeterministic,
@@ -4622,7 +4967,8 @@ fn cannot_instantiate_indeterministic_code() {
 			Code::Upload(caller_wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4637,7 +4983,8 @@ fn cannot_instantiate_indeterministic_code() {
 				GAS_LIMIT,
 				None,
 				code_hash.encode(),
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 				Determinism::Enforced,
 			)
 			.result,
@@ -4653,7 +5000,8 @@ fn cannot_instantiate_indeterministic_code() {
 				GAS_LIMIT,
 				None,
 				code_hash.encode(),
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 				Determinism::Relaxed,
 			)
 			.result,
@@ -4686,7 +5034,8 @@ fn cannot_set_code_indeterministic_code() {
 			Code::Upload(caller_wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4701,7 +5050,8 @@ fn cannot_set_code_indeterministic_code() {
 				GAS_LIMIT,
 				None,
 				code_hash.encode(),
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 				Determinism::Relaxed,
 			)
 			.result,
@@ -4734,7 +5084,8 @@ fn delegate_call_indeterministic_code() {
 			Code::Upload(caller_wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4749,7 +5100,8 @@ fn delegate_call_indeterministic_code() {
 				GAS_LIMIT,
 				None,
 				code_hash.encode(),
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 				Determinism::Enforced,
 			)
 			.result,
@@ -4765,7 +5117,8 @@ fn delegate_call_indeterministic_code() {
 				GAS_LIMIT,
 				None,
 				code_hash.encode(),
-				false,
+				DebugInfo::Skip,
+				CollectEvents::Skip,
 				Determinism::Relaxed,
 			)
 			.result
@@ -4788,7 +5141,8 @@ fn reentrance_count_works_with_call() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4804,7 +5158,8 @@ fn reentrance_count_works_with_call() {
 			GAS_LIMIT,
 			None,
 			input,
-			true,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -4827,7 +5182,8 @@ fn reentrance_count_works_with_delegated_call() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4843,7 +5199,8 @@ fn reentrance_count_works_with_delegated_call() {
 			GAS_LIMIT,
 			None,
 			input,
-			true,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -4868,7 +5225,8 @@ fn account_reentrance_count_works() {
 			Code::Upload(wasm),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4882,7 +5240,8 @@ fn account_reentrance_count_works() {
 			Code::Upload(wasm_reentrance_count),
 			vec![],
 			vec![],
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 		)
 		.result
 		.unwrap()
@@ -4895,7 +5254,8 @@ fn account_reentrance_count_works() {
 			GAS_LIMIT,
 			None,
 			contract_addr.encode(),
-			true,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -4908,7 +5268,8 @@ fn account_reentrance_count_works() {
 			GAS_LIMIT,
 			None,
 			another_contract_addr.encode(),
-			true,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result
@@ -4916,5 +5277,125 @@ fn account_reentrance_count_works() {
 
 		assert_eq!(result1.data, 1.encode());
 		assert_eq!(result2.data, 0.encode());
+	});
+}
+
+#[test]
+fn root_cannot_upload_code() {
+	let (wasm, _) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().build().execute_with(|| {
+		assert_noop!(
+			Contracts::upload_code(RuntimeOrigin::root(), wasm, None, Determinism::Enforced),
+			DispatchError::BadOrigin,
+		);
+	});
+}
+
+#[test]
+fn root_cannot_remove_code() {
+	let (_, code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().build().execute_with(|| {
+		assert_noop!(
+			Contracts::remove_code(RuntimeOrigin::root(), code_hash),
+			DispatchError::BadOrigin,
+		);
+	});
+}
+
+#[test]
+fn signed_cannot_set_code() {
+	let (_, code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().build().execute_with(|| {
+		assert_noop!(
+			Contracts::set_code(RuntimeOrigin::signed(ALICE), BOB, code_hash),
+			DispatchError::BadOrigin,
+		);
+	});
+}
+
+#[test]
+fn none_cannot_call_code() {
+	ExtBuilder::default().build().execute_with(|| {
+		assert_noop!(
+			Contracts::call(RuntimeOrigin::none(), BOB, 0, GAS_LIMIT, None, Vec::new()),
+			DispatchError::BadOrigin,
+		);
+	});
+}
+
+#[test]
+fn root_can_call() {
+	let (wasm, _) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		let addr = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm),
+			vec![],
+			vec![],
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		// Call the contract.
+		assert_ok!(Contracts::call(
+			RuntimeOrigin::root(),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			vec![]
+		));
+	});
+}
+
+#[test]
+fn root_cannot_instantiate_with_code() {
+	let (wasm, _) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().build().execute_with(|| {
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate_with_code(
+				RuntimeOrigin::root(),
+				0,
+				GAS_LIMIT,
+				None,
+				wasm,
+				vec![],
+				vec![],
+			),
+			DispatchError::RootNotAllowed,
+		);
+	});
+}
+
+#[test]
+fn root_cannot_instantiate() {
+	let (_, code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().build().execute_with(|| {
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate(
+				RuntimeOrigin::root(),
+				0,
+				GAS_LIMIT,
+				None,
+				code_hash,
+				vec![],
+				vec![],
+			),
+			DispatchError::RootNotAllowed
+		);
 	});
 }

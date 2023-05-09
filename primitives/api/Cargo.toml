@@ -55,4 +55,4 @@ std = [
 # This sets the max logging level to `off` for `log`.
 disable-logging = ["log/max_level_off"]
 # Do not report the documentation in the metadata.
-no-metadata-docs = []
+no-metadata-docs = ["sp-api-proc-macro/no-metadata-docs"]

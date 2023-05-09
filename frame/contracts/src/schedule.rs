@@ -260,6 +260,9 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_caller_is_origin`.
 	pub caller_is_origin: Weight,
 
+	/// Weight of calling `seal_caller_is_root`.
+	pub caller_is_root: Weight,
+
 	/// Weight of calling `seal_address`.
 	pub address: Weight,
 
@@ -557,6 +560,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			code_hash: cost!(seal_code_hash),
 			own_code_hash: cost!(seal_own_code_hash),
 			caller_is_origin: cost!(seal_caller_is_origin),
+			caller_is_root: cost!(seal_caller_is_root),
 			address: cost!(seal_address),
 			gas_left: cost!(seal_gas_left),
 			balance: cost!(seal_balance),
