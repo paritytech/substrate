@@ -351,42 +351,74 @@ where
 		prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<StorageKey>, &'static str> {
-		const NUM_PARTS: usize = 4; // number of parts to divide the prefix into
+		// number of parts to divide the prefix into
+		const NUM_PARTS: usize = 4;
 
-		let mut tasks = Vec::with_capacity(NUM_PARTS);
-
-		// Divide the prefix into N parts
-		let mut start_key = prefix.clone();
-		let mut end_key = prefix.clone();
-		let mut all_keys: Vec<StorageKey> = vec![];
-
-		for _ in 0..NUM_PARTS {
-			end_key.0[0] = start_key.0[0].wrapping_add(1);
-			let task = self.rpc_get_keys_paged_range(start_key.clone(), end_key.clone(), at);
-			tasks.push(task);
-			start_key.0[0] = end_key.0[0].wrapping_add(1);
-		}
-
-		for task in futures::future::join_all(tasks).await {
-			let mut keys = task?;
-			all_keys.append(&mut keys);
-		}
-
-		// Filter out default child storage keys
-		let filtered_keys = all_keys
+		let chunks = Self::split_storage_key_prefix(prefix, NUM_PARTS);
+		let tasks = chunks
 			.into_iter()
-			.filter(|k| !is_default_child_storage_key(&k.0))
+			.map(|(start_key, end_key)| self.rpc_get_keys_paged_range(start_key, end_key, at))
 			.collect::<Vec<_>>();
 
-		Ok(filtered_keys)
+		let all_keys = futures::future::join_all(tasks)
+			.await
+			.into_iter()
+			.collect::<Result<Vec<_>, _>>()?
+			.into_iter()
+			.flatten()
+			.collect::<Vec<_>>();
+
+		Ok(all_keys)
 	}
 
-	/// Retrieves all the storage keys between `start_key` (inclusive)
-	/// and `end_key` (exclusive), safe RPC methods.
-	///
-	/// The function uses a loop to retrieve the keys in pages, starting from `start_key`
-	/// and continuing until the last key retrieved is greater than or equal to `end_key`,
-	/// or until there are no more keys to retrieve.
+	// This function splits the prefix into `num_parts` equal chunks of ranges represented
+	// by pairs of (start_key, end_key) where start_key is the starting key of each chunk
+	// and end_key is the ending key of each chunk.
+	fn split_storage_key_prefix(
+		prefix: StorageKey,
+		num_parts: usize,
+	) -> Vec<(StorageKey, StorageKey)> {
+		let mut start_key = prefix.clone();
+		let mut chunks = vec![];
+
+		// loops `num_parts` times, each time calling the `get_next_wrapping_index` function
+		// with the current `start_key` value, and pushing the result as a tuple
+		// of `(start_key, end_key)` onto the `chunks` vector. The `start_key` value is then
+		// updated to the `end_key` value
+		for _ in 0..num_parts {
+			let end_key = StorageKey(Self::get_next_wrapping_index(&start_key.0));
+			chunks.push((start_key.clone(), end_key.clone()));
+			start_key = end_key;
+		}
+
+		chunks
+	}
+
+	// This function takes a byte slice `key` as input and returns the next wrapping index
+	// of `key`. It iterates over key in reverse order, incrementing each byte by 1
+	// and setting carry to true if the incremented byte overflows.
+	fn get_next_wrapping_index(key: &[u8]) -> Vec<u8> {
+		let mut next_index = key.to_vec();
+		let mut carry = true;
+
+		for i in (0..key.len()).rev() {
+			if carry {
+				next_index[i] = key[i].wrapping_add(1);
+				carry = next_index[i] == 0;
+			} else {
+				break
+			}
+		}
+
+		if carry {
+			next_index.insert(0, 1);
+		}
+
+		next_index
+	}
+
+	/// Retrieves all the storage keys between `start_key` (inclusive) and `end_key` (exclusive),
+	/// using safe RPC methods.
 	async fn rpc_get_keys_paged_range(
 		&self,
 		start_key: StorageKey,
