@@ -19,7 +19,7 @@
 
 pub mod testing;
 
-#[cfg(feature = "bls_non_production")]
+#[cfg(feature = "bls-experimental")]
 use sp_core::{bls377, bls381};
 use sp_core::{
 	crypto::{ByteArray, CryptoTypeId, KeyTypeId},
@@ -163,15 +163,15 @@ pub trait Keystore: Send + Sync {
 		msg: &[u8; 32],
 	) -> Result<Option<ecdsa::Signature>, Error>;
 
-	#[cfg(feature = "bls_non_production")]
+	#[cfg(feature = "bls-experimental")]
 	/// Returns all bls12-381 public keys for the given key type.
 	fn bls381_public_keys(&self, id: KeyTypeId) -> Vec<bls381::Public>;
 
-	#[cfg(feature = "bls_non_production")]
+	#[cfg(feature = "bls-experimental")]
 	/// Returns all bls12-377 public keys for the given key type.
 	fn bls377_public_keys(&self, id: KeyTypeId) -> Vec<bls377::Public>;
 
-	#[cfg(feature = "bls_non_production")]
+	#[cfg(feature = "bls-experimental")]
 	/// Generate a new bls381 key pair for the given key type and an optional seed.
 	///
 	/// Returns an `bls381::Public` key of the generated key pair or an `Err` if
@@ -182,7 +182,7 @@ pub trait Keystore: Send + Sync {
 		seed: Option<&str>,
 	) -> Result<bls381::Public, Error>;
 
-	#[cfg(feature = "bls_non_production")]
+	#[cfg(feature = "bls-experimental")]
 	/// Generate a new bls377 key pair for the given key type and an optional seed.
 	///
 	/// Returns an `bls377::Public` key of the generated key pair or an `Err` if
@@ -193,7 +193,7 @@ pub trait Keystore: Send + Sync {
 		seed: Option<&str>,
 	) -> Result<bls377::Public, Error>;
 
-	#[cfg(feature = "bls_non_production")]
+	#[cfg(feature = "bls-experimental")]
 	/// Generate a bls381 signature for a given message.
 	///
 	/// Receives [`KeyTypeId`] and a [`bls381::Public`] key to be able to map
@@ -209,7 +209,7 @@ pub trait Keystore: Send + Sync {
 		msg: &[u8],
 	) -> Result<Option<bls381::Signature>, Error>;
 
-	#[cfg(feature = "bls_non_production")]
+	#[cfg(feature = "bls-experimental")]
 	/// Generate a bls377 signature for a given message.
 	///
 	/// Receives [`KeyTypeId`] and a [`bls377::Public`] key to be able to map
@@ -277,15 +277,16 @@ pub trait Keystore: Send + Sync {
 			ecdsa::CRYPTO_ID => {
 				let public = ecdsa::Public::from_slice(public)
 					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;
+
 				self.ecdsa_sign(id, &public, msg)?.map(|s| s.encode())
 			},
-			#[cfg(feature = "bls_non_production")]
+			#[cfg(feature = "bls-experimental")]
 			bls381::CRYPTO_ID => {
 				let public = bls381::Public::from_slice(public)
 					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;
 				self.bls381_sign(id, &public, msg)?.map(|s| s.encode())
 			},
-			#[cfg(feature = "bls_non_production")]
+			#[cfg(feature = "bls-experimental")]
 			bls377::CRYPTO_ID => {
 				let public = bls377::Public::from_slice(public)
 					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;

@@ -19,7 +19,7 @@
 
 use crate::{Error, Keystore, KeystorePtr};
 
-#[cfg(feature = "bls_non_production")]
+#[cfg(feature = "bls-experimental")]
 use sp_core::{bls377, bls381};
 use sp_core::{
 	crypto::{ByteArray, KeyTypeId, Pair, VrfSigner},
@@ -195,12 +195,12 @@ impl Keystore for MemoryKeystore {
 		Ok(sig)
 	}
 
-	#[cfg(feature = "bls_non_production")]
+	#[cfg(feature = "bls-experimental")]
 	fn bls381_public_keys(&self, key_type: KeyTypeId) -> Vec<bls381::Public> {
 		self.public_keys::<bls381::Pair>(key_type)
 	}
 
-	#[cfg(feature = "bls_non_production")]
+	#[cfg(feature = "bls-experimental")]
 	fn bls381_generate_new(
 		&self,
 		key_type: KeyTypeId,
@@ -209,7 +209,7 @@ impl Keystore for MemoryKeystore {
 		self.generate_new::<bls381::Pair>(key_type, seed)
 	}
 
-	#[cfg(feature = "bls_non_production")]
+	#[cfg(feature = "bls-experimental")]
 	fn bls381_sign(
 		&self,
 		key_type: KeyTypeId,
@@ -219,12 +219,12 @@ impl Keystore for MemoryKeystore {
 		self.sign::<bls381::Pair>(key_type, public, msg)
 	}
 
-	#[cfg(feature = "bls_non_production")]
+	#[cfg(feature = "bls-experimental")]
 	fn bls377_public_keys(&self, key_type: KeyTypeId) -> Vec<bls377::Public> {
 		self.public_keys::<bls377::Pair>(key_type)
 	}
 
-	#[cfg(feature = "bls_non_production")]
+	#[cfg(feature = "bls-experimental")]
 	fn bls377_generate_new(
 		&self,
 		key_type: KeyTypeId,
@@ -233,7 +233,7 @@ impl Keystore for MemoryKeystore {
 		self.generate_new::<bls377::Pair>(key_type, seed)
 	}
 
-	#[cfg(feature = "bls_non_production")]
+	#[cfg(feature = "bls-experimental")]
 	fn bls377_sign(
 		&self,
 		key_type: KeyTypeId,
