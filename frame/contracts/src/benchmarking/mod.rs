@@ -237,10 +237,30 @@ benchmarks! {
 
 	// This benchmarks the v9 migration cost.
 	#[pov_mode = Measured]
-	v9_translate_wasm_module {
+	v9_migration_step {
 		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
 		migration::v9::store_old_dummy_code::<T>(c as usize);
 		let mut migration = migration::v9::Migration::<T>::default();
+	}: {
+		migration.step();
+	}
+
+	#[pov_mode = Measured]
+	v10_migration_step {
+		let account = account::<T::AccountId>("account", 0, 0);
+		let code = WasmModule::<T>::dummy_with_bytes(0);
+		let info = Contract::<T>::new(code, vec![])?.info()?;
+		migration::v10::store_old_contrat_info::<T>(account, info);
+		let mut migration = migration::v10::Migration::<T>::default();
+	}: {
+		migration.step();
+	}
+
+	#[pov_mode = Measured]
+	v11_migration_step {
+		let k in 0 .. 1024;
+		migration::v11::fill_old_queue::<T>(k as usize);
+		let mut migration = migration::v11::Migration::<T>::default();
 	}: {
 		migration.step();
 	}

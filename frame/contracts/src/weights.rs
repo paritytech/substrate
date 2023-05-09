@@ -53,7 +53,7 @@ pub trait WeightInfo {
 	fn on_process_deletion_queue_batch() -> Weight;
 	fn on_initialize_per_trie_key(k: u32, ) -> Weight;
 	fn reinstrument(c: u32, ) -> Weight;
-	fn v9_translate_wasm_module(c: u32, ) -> Weight;
+	fn v9_migration_step(c: u32, ) -> Weight;
 	fn migrate() -> Weight;
 	fn call_with_code_per_byte(c: u32, ) -> Weight;
 	fn instantiate_with_code(c: u32, i: u32, s: u32, ) -> Weight;
@@ -222,7 +222,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Contracts CodeStorage (r:2 w:1)
 	/// Proof: Contracts CodeStorage (max_values: None, max_size: Some(126001), added: 128476, mode: Measured)
 	/// The range of component `c` is `[0, 61717]`.
-	fn v9_translate_wasm_module(c: u32, ) -> Weight {
+	fn v9_migration_step(c: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `178 + c * (1 ±0)`
 		//  Estimated: `6114 + c * (1 ±0)`
@@ -2341,7 +2341,7 @@ impl WeightInfo for () {
 	/// Storage: Contracts CodeStorage (r:2 w:1)
 	/// Proof: Contracts CodeStorage (max_values: None, max_size: Some(126001), added: 128476, mode: Measured)
 	/// The range of component `c` is `[0, 61717]`.
-	fn v9_translate_wasm_module(c: u32, ) -> Weight {
+	fn v9_migration_step(c: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `178 + c * (1 ±0)`
 		//  Estimated: `6114 + c * (1 ±0)`

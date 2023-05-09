@@ -15,12 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod v10;
-mod v11;
-#[cfg(feature = "runtime-benchmarks")]
+// TODO gate
+pub mod v10;
+pub mod v11;
 pub mod v9;
-#[cfg(not(feature = "runtime-benchmarks"))]
-mod v9;
 
 use crate::{Config, Error, MigrationInProgress, Pallet, Weight, LOG_TARGET};
 use codec::{Codec, Decode};
@@ -43,6 +41,7 @@ fn invalid_version(version: StorageVersion) -> ! {
 }
 
 pub type Cursor = BoundedVec<u8, ConstU32<1024>>;
+
 type Migrations<T> = (v9::Migration<T>, v10::Migration<T>, v11::Migration<T>);
 
 /// IsFinished describes whether a migration is finished or not.
