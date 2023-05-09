@@ -90,16 +90,19 @@ use frame_support::{
 	},
 	storage::{self, StorageStreamIter},
 	traits::{
-		ConstU32, Contains, EnsureOrigin, GenesisBuild, Get, HandleLifetime, OnKilledAccount,
-		OnNewAccount, OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
+		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
+		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
 	},
 	Parameter,
 };
 use scale_info::TypeInfo;
 use sp_core::storage::well_known_keys;
+use sp_weights::{RuntimeDbWeight, Weight};
+
+#[cfg(feature = "std")]
+use frame_support::traits::GenesisBuild;
 #[cfg(any(feature = "std", test))]
 use sp_io::TestExternalities;
-use sp_weights::{RuntimeDbWeight, Weight};
 
 pub mod limits;
 #[cfg(test)]

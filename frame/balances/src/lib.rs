@@ -166,6 +166,8 @@ mod types;
 pub mod weights;
 
 use codec::{Codec, MaxEncodedLen};
+#[cfg(feature = "std")]
+use frame_support::traits::GenesisBuild;
 use frame_support::{
 	ensure,
 	pallet_prelude::DispatchResult,
@@ -176,7 +178,7 @@ use frame_support::{
 			Preservation::{Expendable, Preserve, Protect},
 			WithdrawConsequence,
 		},
-		Currency, Defensive, GenesisBuild, Get, OnUnbalanced, ReservableCurrency, StoredMap,
+		Currency, Defensive, Get, OnUnbalanced, ReservableCurrency, StoredMap,
 	},
 	BoundedSlice, WeakBoundedVec,
 };
