@@ -396,6 +396,7 @@ where
 		max_payload_in_mb: config.rpc_max_request_size,
 		max_payload_out_mb: config.rpc_max_response_size,
 		max_subs_per_conn: config.rpc_max_subs_per_conn,
+		message_buffer_capacity: config.rpc_message_buffer_capacity,
 		rpc_api: gen_rpc_module(deny_unsafe(addr, &config.rpc_methods))?,
 		metrics,
 		id_provider: rpc_id_provider,

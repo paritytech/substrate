@@ -61,6 +61,8 @@ pub struct Config<'a, M: Send + Sync + 'static> {
 	pub max_payload_out_mb: u32,
 	/// Metrics.
 	pub metrics: Option<RpcMetrics>,
+	/// Message buffer size
+	pub message_buffer_capacity: u32,
 	/// RPC API.
 	pub rpc_api: RpcModule<M>,
 	/// Subscription ID provider.
@@ -81,6 +83,7 @@ pub async fn start_server<M: Send + Sync + 'static>(
 		max_connections,
 		max_subs_per_conn,
 		metrics,
+		message_buffer_capacity,
 		id_provider,
 		tokio_handle,
 		rpc_api,
@@ -101,6 +104,7 @@ pub async fn start_server<M: Send + Sync + 'static>(
 		.ping_interval(std::time::Duration::from_secs(30))
 		.set_host_filtering(host_filter)
 		.set_middleware(middleware)
+		.set_message_buffer_capacity(message_buffer_capacity)
 		.custom_tokio_runtime(tokio_handle);
 
 	if let Some(provider) = id_provider {
