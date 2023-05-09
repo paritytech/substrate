@@ -3199,6 +3199,7 @@ macro_rules! __check_reserved_fn_name {
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
+#[allow(deprecated)]
 mod tests {
 	use super::*;
 	use crate::{
