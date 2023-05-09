@@ -807,7 +807,7 @@ where
 		Box::new(DefaultBlockAnnounceValidator)
 	};
 
-	let block_request_protocol_config = {
+	let (block_request_protocol_config, block_request_protocol_name) = {
 		// Allow both outgoing and incoming requests.
 		let (handler, protocol_config) = BlockRequestHandler::new(
 			&protocol_id,
@@ -816,11 +816,12 @@ where
 			net_config.network_config.default_peers_set.in_peers as usize +
 				net_config.network_config.default_peers_set.out_peers as usize,
 		);
+		let config_name = protocol_config.name.clone();
 		spawn_handle.spawn("block-request-handler", Some("networking"), handler.run());
-		protocol_config
+		(protocol_config, config_name)
 	};
 
-	let state_request_protocol_config = {
+	let (state_request_protocol_config, state_request_protocol_name) = {
 		// Allow both outgoing and incoming requests.
 		let (handler, protocol_config) = StateRequestHandler::new(
 			&protocol_id,
@@ -828,11 +829,13 @@ where
 			client.clone(),
 			net_config.network_config.default_peers_set_num_full as usize,
 		);
+		let config_name = protocol_config.name.clone();
+
 		spawn_handle.spawn("state-request-handler", Some("networking"), handler.run());
-		protocol_config
+		(protocol_config, config_name)
 	};
 
-	let warp_sync_protocol_config = match warp_sync_params.as_ref() {
+	let (warp_sync_protocol_config, warp_request_protocol_name) = match warp_sync_params.as_ref() {
 		Some(WarpSyncParams::WithProvider(warp_with_provider)) => {
 			// Allow both outgoing and incoming requests.
 			let (handler, protocol_config) = WarpSyncRequestHandler::new(
@@ -845,10 +848,12 @@ where
 				config.chain_spec.fork_id(),
 				warp_with_provider.clone(),
 			);
+			let config_name = protocol_config.name.clone();
+
 			spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
-			Some(protocol_config)
+			(Some(protocol_config), Some(config_name))
 		},
-		_ => None,
+		_ => (None, None),
 	};
 
 	let light_client_request_protocol_config = {
@@ -861,27 +866,6 @@ where
 		spawn_handle.spawn("light-client-request-handler", Some("networking"), handler.run());
 		protocol_config
 	};
-
-	let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
-	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
-	let (engine, sync_service, block_announce_config) = SyncingEngine::new(
-		Roles::from(&config.role),
-		client.clone(),
-		config.prometheus_config.as_ref().map(|config| config.registry.clone()).as_ref(),
-		&net_config,
-		protocol_id.clone(),
-		&config.chain_spec.fork_id().map(ToOwned::to_owned),
-		block_announce_validator,
-		warp_sync_params,
-		chain_sync_network_handle,
-		import_queue.service(),
-		block_request_protocol_config.name.clone(),
-		state_request_protocol_config.name.clone(),
-		warp_sync_protocol_config.as_ref().map(|config| config.name.clone()),
-		rx,
-	)?;
-	let sync_service_import_queue = sync_service.clone();
-	let sync_service = Arc::new(sync_service);
 
 	// install request handlers to `FullNetworkConfiguration`
 	net_config.add_request_response_protocol(block_request_protocol_config);
@@ -909,6 +893,27 @@ where
 		config.chain_spec.fork_id(),
 	);
 	net_config.add_notification_protocol(transactions_handler_proto.set_config());
+
+	let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
+	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
+	let (engine, sync_service, block_announce_config) = SyncingEngine::new(
+		Roles::from(&config.role),
+		client.clone(),
+		config.prometheus_config.as_ref().map(|config| config.registry.clone()).as_ref(),
+		&net_config,
+		protocol_id.clone(),
+		&config.chain_spec.fork_id().map(ToOwned::to_owned),
+		block_announce_validator,
+		warp_sync_params,
+		chain_sync_network_handle,
+		import_queue.service(),
+		block_request_protocol_name,
+		state_request_protocol_name,
+		warp_request_protocol_name,
+		rx,
+	)?;
+	let sync_service_import_queue = sync_service.clone();
+	let sync_service = Arc::new(sync_service);
 
 	let genesis_hash = client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
 	let network_params = sc_network::config::Params::<TBl> {
