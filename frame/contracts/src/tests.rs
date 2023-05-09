@@ -2264,36 +2264,6 @@ fn lazy_removal_does_no_run_on_low_remaining_weight() {
 }
 
 #[test]
-fn print_stuff() {
-	let (code, _hash) = compile_module::<Test>("self_destruct").unwrap();
-
-	let mut ext = ExtBuilder::default().existential_deposit(50).build();
-
-	ext.execute_with(|| {
-		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
-
-		let addr = Contracts::bare_instantiate(
-			ALICE,
-			min_balance * 100,
-			GAS_LIMIT,
-			None,
-			Code::Upload(code),
-			vec![],
-			vec![],
-			false,
-		)
-		.result
-		.unwrap()
-		.account_id;
-
-		let info = get_contract(&addr);
-		println!("len trie_id: {:?}", info.trie_id.len());
-		println!("info: {:?}", info.encoded_size());
-	});
-}
-
-#[test]
 fn lazy_removal_does_not_use_all_weight() {
 	let (code, _hash) = compile_module::<Test>("self_destruct").unwrap();
 
