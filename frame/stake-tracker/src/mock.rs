@@ -252,13 +252,15 @@ impl StakingInterface for StakingMock {
 		unreachable!();
 	}
 
-	fn status(who: &Self::AccountId) -> Option<pallet_staking::StakerStatus<Self::AccountId>> {
+	fn status(
+		who: &Self::AccountId,
+	) -> Result<pallet_staking::StakerStatus<Self::AccountId>, DispatchError> {
 		if TestNominators::get().contains_key(who) {
-			Some(pallet_staking::StakerStatus::Nominator(Default::default()))
+			Ok(pallet_staking::StakerStatus::Nominator(Default::default()))
 		} else if TestValidators::get().contains_key(who) {
-			Some(pallet_staking::StakerStatus::Validator)
+			Ok(pallet_staking::StakerStatus::Validator)
 		} else {
-			None
+			Err("NotStaker".into())
 		}
 	}
 
