@@ -432,7 +432,7 @@ impl ExtBuilder {
 				(2, 20 * self.balance_factor),
 				(3, 300 * self.balance_factor),
 				(4, 400 * self.balance_factor),
-				// controllers
+				// controllers (still used in some tests. Soon to be deprecated).
 				(10, self.balance_factor),
 				(20, self.balance_factor),
 				(30, self.balance_factor),

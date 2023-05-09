@@ -439,7 +439,7 @@ impl Default for BalancesExtBuilder {
 			(2, 20),
 			(3, 300),
 			(4, 400),
-			// controllers
+			// controllers (still used in some tests. Soon to be deprecated).
 			(10, 100),
 			(20, 100),
 			(30, 100),

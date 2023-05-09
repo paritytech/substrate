@@ -259,7 +259,7 @@ impl ExtBuilder {
 
 		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![
-				//controllers
+				// controllers (still used in some tests. Soon to be deprecated).
 				(10, self.balance_factor * 50),
 				(20, self.balance_factor * 50),
 				(30, self.balance_factor * 50),
