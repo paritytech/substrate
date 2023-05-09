@@ -320,6 +320,30 @@ fn can_add_liquidity() {
 		assert_eq!(balance(user, token_1), ed);
 		assert_eq!(balance(user, token_3), 1000 - 10);
 		assert_eq!(pool_balance(user, lp_token2), 216);
+
+		// validate liquidity provision fee
+		LiquidityProvisionFee::set(&1000);
+		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user, 10000 + 1000 + ed));
+		assert_ok!(AssetConversion::add_liquidity(
+			RuntimeOrigin::signed(user),
+			token_3,
+			token_1,
+			10,
+			10000,
+			1,
+			1,
+			user,
+		));
+		assert!(events().contains(&Event::<Test>::LiquidityAdded {
+			who: user,
+			mint_to: user,
+			pool_id,
+			amount1_provided: 10000,
+			amount2_provided: 9,
+			lp_token: lp_token2,
+			lp_token_minted: 284,
+		}));
+		assert_eq!(balance(user, token_1), ed);
 	});
 }
 

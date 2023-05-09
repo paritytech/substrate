@@ -174,6 +174,10 @@ pub mod pallet {
 		/// An account that receives the pool setup fee.
 		type PoolSetupFeeReceiver: Get<Self::AccountId>;
 
+		/// A fee to provide the liquidity.
+		#[pallet::constant]
+		type LiquidityProvisionFee: Get<Self::Balance>;
+
 		/// The minimum LP token amount that could be minted. Ameliorates rounding errors.
 		#[pallet::constant]
 		type MintMinLiquidity: Get<Self::AssetBalance>;
@@ -469,8 +473,16 @@ pub mod pallet {
 
 			let amount1: AssetBalanceOf<T>;
 			let amount2: AssetBalanceOf<T>;
-
 			let pool_account = Self::get_pool_account(pool_id);
+
+			// pay the provision fee
+			T::Currency::transfer(
+				&sender,
+				&pool_account,
+				T::LiquidityProvisionFee::get(),
+				Preserve,
+			)?;
+
 			let reserve1 = Self::get_balance(&pool_account, asset1)?;
 			let reserve2 = Self::get_balance(&pool_account, asset2)?;
 
