@@ -234,11 +234,11 @@ impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			unexposed: vec![
-				(1, 2, 7 + 100),
-				(3, 4, 7 + 100),
-				(5, 6, 7 + 100),
-				(7, 8, 7 + 100),
-				(9, 10, 7 + 100),
+				(1, 1, 7 + 100),
+				(3, 3, 7 + 100),
+				(5, 5, 7 + 100),
+				(7, 7, 7 + 100),
+				(9, 9, 7 + 100),
 			],
 		}
 	}
@@ -290,12 +290,6 @@ impl ExtBuilder {
 				.clone()
 				.into_iter()
 				.map(|(stash, _, balance)| (stash, balance * 2))
-				.chain(
-					self.unexposed
-						.clone()
-						.into_iter()
-						.map(|(_, ctrl, balance)| (ctrl, balance * 2)),
-				)
 				.chain(validators_range.clone().map(|x| (x, 7 + 100)))
 				.chain(nominators_range.clone().map(|x| (x, 7 + 100)))
 				.collect::<Vec<_>>(),
