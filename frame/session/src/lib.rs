@@ -404,9 +404,10 @@ pub mod pallet {
 		/// Handler for managing new session.
 		type SessionManager: SessionManager<Self::ValidatorId>;
 
-		/// Handler when a session has changed.
+		/// Handler when a session has changed for specific key ids.
 		type SessionHandler: SessionHandler<Self::ValidatorId>;
 
+		/// Handler when a session has changed.
 		type SessionChangeListener: SessionChangeListener;
 
 		/// The keys.

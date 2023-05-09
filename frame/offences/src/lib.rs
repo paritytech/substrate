@@ -17,7 +17,24 @@
 
 //! # Offences Pallet
 //!
-//! Tracks reported offences
+//! The offences pallet tracks reported offences using 3 key storage types:
+//!
+//! - [Reports]: A storage map of a report hash to its details
+//! - [ConcurrentReportsIndex]: A storage double map that stores a vector of reports
+//! 	for a specific [Kind] and [OpaqueTimeSlot]
+//! - [SessionReports]: A storage value that keeps a vector of report info sorted by [SessionIndex].
+//!
+//! When a new offence is reported using [ReportOffence::report_offence], its `session_index` is
+//! first compared against the current `session_index`.
+//!
+//! If older than [Config::MaxSessionReportAge], the report is rejected right away.
+//!
+//! Else, all concurrent reports are loaded to determine the slash fraction and updated.
+//! The report is also inserted in [SessionReports] at this time.
+//! Finally, [Config::OnOffenceHandler] is called for to handle any actions for this report.
+//!
+//! On the start of a new session, `clear_obsolete_reports` clears all reports
+//! that are older than [Config::MaxSessionReportAge].
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -69,9 +86,12 @@ pub mod pallet {
 		/// A handler called for every offence report.
 		type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple, Weight>;
 
+		/// Number of sessions for which a report is stored.
+		/// Once it gets older than this value, it gets cleaned up at the start of a new session.
 		#[pallet::constant]
 		type MaxSessionReportAge: Get<EraIndex>;
 
+		/// A trait that provides information about the current session
 		type SessionInfoProvider: SessionInfoProvider;
 	}
 
