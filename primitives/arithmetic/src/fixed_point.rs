@@ -931,14 +931,12 @@ macro_rules! implement_fixed {
 			}
 		}
 
-		#[cfg(feature = "serde")]
 		impl sp_std::fmt::Display for $name {
 			fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 				write!(f, "{}", self.0)
 			}
 		}
 
-		#[cfg(feature = "serde")]
 		impl sp_std::str::FromStr for $name {
 			type Err = &'static str;
 
