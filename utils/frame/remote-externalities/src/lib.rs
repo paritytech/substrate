@@ -20,6 +20,7 @@
 //! An equivalent of `sp_io::TestExternalities` that can load its state from a remote substrate
 //! based chain, or a local state snapshot file.
 
+mod on_demand_backend;
 use async_recursion::async_recursion;
 use codec::{Decode, Encode};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -28,6 +29,7 @@ use jsonrpsee::{
 	http_client::{HttpClient, HttpClientBuilder},
 };
 use log::*;
+use on_demand_backend::OnDemandBackend;
 use serde::de::DeserializeOwned;
 use sp_core::{
 	hashing::twox_128,
@@ -36,7 +38,7 @@ use sp_core::{
 		well_known_keys::{is_default_child_storage_key, DEFAULT_CHILD_STORAGE_KEY_PREFIX},
 		ChildInfo, ChildType, PrefixedStorageKey, StorageData, StorageKey,
 	},
-	H256,
+	Blake2Hasher, H256,
 };
 pub use sp_io::TestExternalities;
 use sp_runtime::{traits::Block as BlockT, StateVersion};
@@ -72,6 +74,8 @@ pub struct RemoteExternalities<B: BlockT> {
 	pub inner_ext: TestExternalities,
 	/// The block hash it which we created this externality env.
 	pub block_hash: B::Hash,
+	/// On-demand backend. Trying to mirror behavior of inner_ext for now.
+	pub on_demand_backend: Option<OnDemandBackend<Blake2Hasher>>,
 }
 
 impl<B: BlockT> Deref for RemoteExternalities<B> {
@@ -927,7 +931,13 @@ where
 		self.init_remote_client().await?;
 		let block_hash = self.as_online().at_expected();
 		let inner_ext = self.load_remote_and_maybe_save().await?;
-		Ok(RemoteExternalities { block_hash, inner_ext })
+		let on_demand_backend =
+			OnDemandBackend::<Blake2Hasher>::new("http://localhost:9944".to_owned(), None)?;
+		Ok(RemoteExternalities {
+			block_hash,
+			inner_ext,
+			on_demand_backend: Some(on_demand_backend),
+		})
 	}
 
 	fn do_load_offline(
@@ -947,7 +957,7 @@ where
 		inner_ext.from_raw_snapshot(raw_storage, storage_root);
 		sp.stop_with_message(format!("✅ Loaded snapshot ({:.2}s)", start.elapsed().as_secs_f32()));
 
-		Ok(RemoteExternalities { inner_ext, block_hash })
+		Ok(RemoteExternalities { inner_ext, block_hash, on_demand_backend: None })
 	}
 
 	pub(crate) async fn pre_build(mut self) -> Result<RemoteExternalities<B>, &'static str> {

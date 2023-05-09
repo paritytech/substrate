@@ -20,6 +20,9 @@ frame-support = { version = "4.0.0-dev", optional = true, path = "../../../frame
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
+sp-state-machine = { version = "0.13.0", path = "../../../primitives/state-machine" }
+hash-db = "0.16.0"
 tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread"] }
 substrate-rpc-client = { path = "../rpc/client" }
 futures = "0.3"
