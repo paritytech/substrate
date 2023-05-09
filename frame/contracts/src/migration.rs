@@ -149,7 +149,7 @@ pub struct Migration<T: Config, M: MigrateSequence = Migrations<T>>(PhantomData<
 
 /// Custom migration for running runtime-benchmarks.
 #[cfg(feature = "runtime-benchmarks")]
-pub struct Migration<T: Config, M: MigrateSequence = (NoopMigration<1>, NoopMigration<2>)>(
+pub struct Migration<T: Config, M: MigrateSequence = (NoopMigration<3>, NoopMigration<4>)>(
 	PhantomData<(T, M)>,
 );
 

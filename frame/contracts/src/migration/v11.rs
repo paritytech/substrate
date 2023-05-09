@@ -19,12 +19,13 @@
 
 use crate::{
 	migration::{IsFinished, Migrate},
+	weights::WeightInfo,
 	Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
+
 use codec::{Decode, Encode};
 use frame_support::{codec, pallet_prelude::*, storage_alias, DefaultNoBound};
-use sp_std::marker::PhantomData;
-
+use sp_std::{marker::PhantomData, prelude::*};
 mod old {
 	use super::*;
 
@@ -48,7 +49,7 @@ pub struct DeletionQueueManager<T: Config> {
 #[cfg(feature = "runtime-benchmarks")]
 pub fn fill_old_queue<T: Config>(len: usize) {
 	let queue: Vec<old::DeletedContract> =
-		std::iter::repeat_with(|| old::DeletedContract { trie_id: Default::default() })
+		core::iter::repeat_with(|| old::DeletedContract { trie_id: Default::default() })
 			.take(len)
 			.collect();
 	old::DeletionQueue::<T>::set(Some(queue));
@@ -72,11 +73,12 @@ impl<T: Config> Migrate for Migration<T> {
 	// but in practice the queue is always empty, so 128 is isa good enough approximation for not
 	// underestimating the weight of our migration.
 	fn max_step_weight() -> Weight {
-		Weight::zero() // TODO fix
+		T::WeightInfo::v11_migration_step(128)
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
 		let Some(old_queue) = old::DeletionQueue::<T>::take() else { return (IsFinished::Yes, Weight::zero()) };
+		let len = old_queue.len();
 
 		log::debug!(
 			target: LOG_TARGET,
@@ -94,6 +96,6 @@ impl<T: Config> Migrate for Migration<T> {
 			<DeletionQueueCounter<T>>::set(queue);
 		}
 
-		(IsFinished::Yes, Weight::zero())
+		(IsFinished::Yes, T::WeightInfo::v11_migration_step(len as u32))
 	}
 }

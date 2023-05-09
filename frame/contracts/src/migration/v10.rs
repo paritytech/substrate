@@ -17,15 +17,15 @@
 
 //! Update `CodeStorage` with the new `determinism` field.
 
-use core::cmp::{max, min};
-
 use crate::{
 	address::AddressGenerator,
 	exec::AccountIdOf,
 	migration::{IsFinished, Migrate},
+	weights::WeightInfo,
 	BalanceOf, CodeHash, Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode};
+use core::cmp::{max, min};
 use frame_support::{
 	codec,
 	pallet_prelude::*,
@@ -117,7 +117,7 @@ impl<T: Config> Migrate for Migration<T> {
 	const VERSION: u16 = 10;
 
 	fn max_step_weight() -> Weight {
-		Weight::zero() // TODO fix
+		T::WeightInfo::v10_migration_step()
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
@@ -200,12 +200,12 @@ impl<T: Config> Migrate for Migration<T> {
 				storage_item_deposit: ratio.mul_ceil(contract.storage_item_deposit),
 				storage_base_deposit: new_base_deposit,
 			};
-			ContractInfoOf::<T>::insert(&account, new_contract_info);
 
-			(IsFinished::No, Weight::zero())
+			ContractInfoOf::<T>::insert(&account, new_contract_info);
+			(IsFinished::No, T::WeightInfo::v10_migration_step())
 		} else {
 			log::debug!(target: LOG_TARGET, "Done Migrating contract info");
-			(IsFinished::Yes, Weight::zero())
+			(IsFinished::Yes, T::WeightInfo::v10_migration_step())
 		}
 	}
 }

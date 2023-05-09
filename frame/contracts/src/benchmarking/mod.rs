@@ -271,13 +271,26 @@ benchmarks! {
 		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
 
 		// Execute a (noop) migration a step from 0 -> 1
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 0);
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
 		MigrationInProgress::<T>::set(Some(Default::default()));
 
 	}:  {
 		<Contracts<T>>::migrate(origin.into(), Weight::MAX).unwrap_or_default()
 	} verify {
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 3);
+	}
+
+	// This benchmarks the base weight of dispatching a noop migrate call.
+	#[pov_mode = Measured]
+	on_runtime_upgrade {
+		// Execute a (noop) migration a step from 0 -> 1
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+		MigrationInProgress::<T>::set(Some(Default::default()));
+
+	}:  {
+		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
+	} verify {
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 3);
 	}
 
 	// This benchmarks the overhead of loading a code of size `c` byte from storage and into
