@@ -16,7 +16,6 @@
 // limitations under the License.
 
 #![recursion_limit = "128"]
-#![allow(deprecated)]
 
 use codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen};
 use frame_support::{
@@ -44,8 +43,6 @@ pub trait Currency {}
 // * No default instance
 // * Origin, Inherent, Event
 mod module1 {
-	#![allow(deprecated)]
-
 	use super::*;
 	use sp_std::ops::Add;
 
@@ -153,7 +150,6 @@ mod module1 {
 // * default instance
 // * use of no_genesis_config_phantom_data
 mod module2 {
-	#![allow(deprecated)]
 	use super::*;
 
 	pub trait Config<I = DefaultInstance>: system::Config {
@@ -222,8 +218,6 @@ mod module2 {
 // Test for:
 // * Depends on multiple instances of a module with instances
 mod module3 {
-	#![allow(deprecated)]
-
 	use super::*;
 
 	pub trait Config:

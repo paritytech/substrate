@@ -18,7 +18,6 @@
 //! RuntimeOrigin tests for construct_runtime macro
 
 #![recursion_limit = "128"]
-#![allow(deprecated)]
 
 use codec::MaxEncodedLen;
 use frame_support::traits::{Contains, OriginTrait};
@@ -32,7 +31,6 @@ mod nested {
 	use super::*;
 
 	pub mod module {
-		#![allow(deprecated)]
 
 		use super::*;
 
@@ -76,8 +74,6 @@ mod nested {
 }
 
 pub mod module {
-	#![allow(deprecated)]
-
 	use super::*;
 
 	pub trait Config: system::Config {}

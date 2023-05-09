@@ -3206,8 +3206,6 @@ macro_rules! __check_reserved_fn_name {
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
-	#![allow(deprecated)]
-
 	use super::*;
 	use crate::{
 		dispatch::{DispatchClass, DispatchInfo, Pays},
@@ -3544,8 +3542,6 @@ mod tests {
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod weight_tests {
-	#![allow(deprecated)]
-
 	use super::*;
 	use sp_core::{parameter_types, Get};
 	use sp_weights::RuntimeDbWeight;

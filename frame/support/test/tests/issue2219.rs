@@ -15,8 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(deprecated)]
-
 use frame_support::{
 	codec::{Decode, Encode},
 	scale_info::TypeInfo,
@@ -31,8 +29,6 @@ use sp_core::{sr25519, H256};
 mod system;
 
 mod module {
-	#![allow(deprecated)]
-
 	use super::*;
 
 	pub type Request<T> =

@@ -25,8 +25,6 @@ use sp_io::{
 };
 
 mod no_instance {
-	#![allow(deprecated)]
-
 	pub trait Config: frame_support_test::Config {}
 
 	frame_support::decl_module! {
@@ -51,8 +49,6 @@ mod no_instance {
 }
 
 mod instance {
-	#![allow(deprecated)]
-
 	pub trait Config<I = DefaultInstance>: frame_support_test::Config {}
 
 	frame_support::decl_module! {

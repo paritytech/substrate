@@ -37,8 +37,6 @@ pub use value::StorageValue;
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
-	#![allow(deprecated)]
-
 	use crate::{
 		assert_noop, assert_ok,
 		storage::{generator::StorageValue, unhashed, IterableStorageMap},

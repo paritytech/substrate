@@ -57,8 +57,6 @@ pub mod pallet {
 }
 
 pub mod decl_pallet {
-	#![allow(deprecated)]
-
 	pub trait Config: frame_system::Config {}
 
 	frame_support::decl_module! {
@@ -269,7 +267,6 @@ fn storage_layer_in_pallet_call() {
 
 #[test]
 fn storage_layer_in_decl_pallet_call() {
-	#![allow(deprecated)]
 	TestExternalities::default().execute_with(|| {
 		use frame_support::StorageValue;
 		use sp_runtime::traits::Dispatchable;

@@ -21,7 +21,6 @@
 // Make sure we fail compilation on warnings
 #![warn(missing_docs)]
 #![deny(warnings)]
-#![allow(deprecated)]
 
 /// The configuration trait
 pub trait Config: 'static {

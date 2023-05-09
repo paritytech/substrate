@@ -22,8 +22,6 @@
 use frame_support::traits::{ConstU32, ConstU64};
 
 mod pallet_old {
-	#![allow(deprecated)]
-
 	use frame_support::{
 		decl_error, decl_event, decl_module, decl_storage, traits::Get, weights::Weight, Parameter,
 	};

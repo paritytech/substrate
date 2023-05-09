@@ -826,8 +826,6 @@ pub use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 pub mod tests {
-	#![allow(deprecated)]
-
 	use super::*;
 	use crate::metadata_ir::{
 		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,

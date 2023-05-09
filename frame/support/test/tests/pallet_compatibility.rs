@@ -29,8 +29,6 @@ impl SomeAssociation for u64 {
 }
 
 mod pallet_old {
-	#![allow(deprecated)]
-
 	use super::SomeAssociation;
 	use frame_support::{
 		decl_error, decl_event, decl_module, decl_storage, traits::Get, weights::Weight, Parameter,
