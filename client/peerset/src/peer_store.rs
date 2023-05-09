@@ -90,8 +90,10 @@ impl PeerStoreProvider for PeerStoreHandle {
 
 impl PeerStoreHandle {
 	/// Get the number of known peers.
+	///
+	/// This number might not include some connected peers in rare cases when their reputation
+	/// was not updated for one hour, because their entries in [`PeerStore`] were dropped.
 	pub fn num_known_peers(&self) -> usize {
-		// FIXME: how do we use this info? May be better ask for numbers from protocol controllers?
 		self.inner.lock().unwrap().peers.len()
 	}
 
