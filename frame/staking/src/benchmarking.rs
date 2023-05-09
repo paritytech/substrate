@@ -68,14 +68,12 @@ pub fn add_slashing_spans<T: Config>(who: &T::AccountId, spans: u32) {
 // This function clears all existing validators and nominators from the set, and generates one new
 // validator being nominated by n nominators, and returns the validator stash account and the
 // nominators' stash and controller. It also starts an era and creates pending payouts.
-//
-// TODO: duplicate the creation functions used here and replace them to have the unique controller
-// scenario.
 pub fn create_validator_with_nominators<T: Config>(
 	n: u32,
 	upper_bound: u32,
-	dead: bool,
+	dead_controller: bool,
 	unique_controller: bool,
+	destination: RewardDestination<T::AccountId>,
 ) -> Result<(T::AccountId, Vec<(T::AccountId, T::AccountId)>), &'static str> {
 	// Clean up any existing state.
 	clear_validators_and_nominators::<T>();
@@ -83,9 +81,9 @@ pub fn create_validator_with_nominators<T: Config>(
 	let mut points_individual = Vec::new();
 
 	let (v_stash, v_controller) = if unique_controller {
-		create_unique_stash_controller::<T>(0, 100, RewardDestination::Staked)?
+		create_unique_stash_controller::<T>(0, 100, destination.clone(), false)?
 	} else {
-		create_stash_controller::<T>(0, 100, RewardDestination::Staked)?
+		create_stash_controller::<T>(0, 100, destination.clone())?
 	};
 
 	let validator_prefs =
@@ -101,10 +99,10 @@ pub fn create_validator_with_nominators<T: Config>(
 
 	// Give the validator n nominators, but keep total users in the system the same.
 	for i in 0..upper_bound {
-		let (n_stash, n_controller) = if !dead {
-			create_stash_controller::<T>(u32::MAX - i, 100, RewardDestination::Staked)?
+		let (n_stash, n_controller) = if !dead_controller {
+			create_stash_controller::<T>(u32::MAX - i, 100, destination.clone())?
 		} else {
-			create_stash_and_dead_payee::<T>(u32::MAX - i, 100)?
+			create_unique_stash_controller::<T>(u32::MAX - i, 100, destination.clone(), true)?
 		};
 		if i < n {
 			Staking::<T>::nominate(
@@ -476,7 +474,7 @@ benchmarks! {
 	}
 
 	set_controller {
-		let (stash, ctlr) = create_unique_stash_controller::<T>(9000, 100, Default::default())?;
+		let (stash, ctlr) = create_unique_stash_controller::<T>(9000, 100, Default::default(), false)?;
 		// ensure `ctlr` is the currently stored controller.
 		assert!(!Ledger::<T>::contains_key(&stash));
 		assert!(Ledger::<T>::contains_key(&ctlr));
@@ -561,6 +559,7 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			true,
 			true,
+			RewardDestination::Controller,
 		)?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
@@ -577,6 +576,14 @@ benchmarks! {
 	}: payout_stakers(RawOrigin::Signed(caller), validator, current_era)
 	verify {
 		let balance_after = T::Currency::free_balance(&validator_controller);
+		println!("{:?}", balance_before);
+		println!("{:?}", balance_after);
+
+
+		ensure!(
+			balance_before < balance_after,
+			"Balance of validator controller should have increased after payout.",
+		);
 		ensure!(
 			balance_before < balance_after,
 			"Balance of validator controller should have increased after payout.",
@@ -594,6 +601,7 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			false,
 			true,
+			RewardDestination::Staked,
 		)?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
@@ -988,6 +996,7 @@ mod tests {
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
 				false,
+				RewardDestination::Staked,
 			)
 			.unwrap();
 
@@ -1017,6 +1026,7 @@ mod tests {
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
 				false,
+				RewardDestination::Staked,
 			)
 			.unwrap();
 
