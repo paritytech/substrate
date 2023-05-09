@@ -18,8 +18,11 @@
 //! Integration tests for sr25519
 
 use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::sr25519::{AppPair, AppPublic};
-use sp_core::{crypto::Pair, testing::SR25519};
+use sp_application_crypto::sr25519::AppPair;
+use sp_core::{
+	crypto::{ByteArray, Pair},
+	testing::SR25519,
+};
 use sp_keystore::{testing::MemoryKeystore, Keystore};
 use std::sync::Arc;
 use substrate_test_runtime_client::{
@@ -36,6 +39,6 @@ fn sr25519_works_in_runtime() {
 		.expect("Tests `sr25519` crypto.");
 
 	let supported_keys = keystore.keys(SR25519).unwrap();
-	assert!(supported_keys.contains(&public.clone().into()));
-	assert!(AppPair::verify(&signature, "sr25519", &AppPublic::from(public)));
+	assert!(supported_keys.contains(&public.to_raw_vec()));
+	assert!(AppPair::verify(&signature, "sr25519", &public));
 }

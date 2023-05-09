@@ -31,6 +31,7 @@ mod config;
 mod error;
 mod params;
 mod runner;
+mod signals;
 
 pub use arg_enums::*;
 pub use clap;
@@ -41,6 +42,7 @@ pub use params::*;
 pub use runner::*;
 pub use sc_service::{ChainSpec, Role};
 pub use sc_tracing::logging::LoggerBuilder;
+pub use signals::Signals;
 pub use sp_version::RuntimeVersion;
 
 /// Substrate client CLI

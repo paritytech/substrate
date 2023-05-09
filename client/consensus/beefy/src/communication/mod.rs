@@ -29,7 +29,7 @@ pub(crate) mod beefy_protocol_name {
 	use sc_network::ProtocolName;
 
 	/// BEEFY votes gossip protocol name suffix.
-	const GOSSIP_NAME: &str = "/beefy/1";
+	const GOSSIP_NAME: &str = "/beefy/2";
 	/// BEEFY justifications protocol name suffix.
 	const JUSTIFICATIONS_NAME: &str = "/beefy/justifications/1";
 
@@ -73,6 +73,39 @@ pub fn beefy_peers_set_config(
 	cfg
 }
 
+// cost scalars for reporting peers.
+mod cost {
+	use sc_network::ReputationChange as Rep;
+	// Message that's for an outdated round.
+	pub(super) const OUTDATED_MESSAGE: Rep = Rep::new(-50, "BEEFY: Past message");
+	// Message that's from the future relative to our current set-id.
+	pub(super) const FUTURE_MESSAGE: Rep = Rep::new(-100, "BEEFY: Future message");
+	// Vote message containing bad signature.
+	pub(super) const BAD_SIGNATURE: Rep = Rep::new(-100, "BEEFY: Bad signature");
+	// Message received with vote from voter not in validator set.
+	pub(super) const UNKNOWN_VOTER: Rep = Rep::new(-150, "BEEFY: Unknown voter");
+	// A message received that cannot be evaluated relative to our current state.
+	pub(super) const OUT_OF_SCOPE_MESSAGE: Rep = Rep::new(-500, "BEEFY: Out-of-scope message");
+	// Message containing invalid proof.
+	pub(super) const INVALID_PROOF: Rep = Rep::new(-5000, "BEEFY: Invalid commit");
+	// Reputation cost per signature checked for invalid proof.
+	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
+	// Reputation cost per byte for un-decodable message.
+	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
+	// On-demand request was refused by peer.
+	pub(super) const REFUSAL_RESPONSE: Rep = Rep::new(-100, "BEEFY: Proof request refused");
+	// On-demand request for a proof that can't be found in the backend.
+	pub(super) const UNKOWN_PROOF_REQUEST: Rep = Rep::new(-150, "BEEFY: Unknown proof request");
+}
+
+// benefit scalars for reporting peers.
+mod benefit {
+	use sc_network::ReputationChange as Rep;
+	pub(super) const VOTE_MESSAGE: Rep = Rep::new(100, "BEEFY: Round vote message");
+	pub(super) const KNOWN_VOTE_MESSAGE: Rep = Rep::new(50, "BEEFY: Known vote");
+	pub(super) const VALIDATED_PROOF: Rep = Rep::new(100, "BEEFY: Justification");
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -86,7 +119,7 @@ mod tests {
 		let genesis_hash = H256::random();
 		let genesis_hex = array_bytes::bytes2hex("", genesis_hash.as_ref());
 
-		let expected_gossip_name = format!("/{}/beefy/1", genesis_hex);
+		let expected_gossip_name = format!("/{}/beefy/2", genesis_hex);
 		let gossip_proto_name = gossip_protocol_name(&genesis_hash, None);
 		assert_eq!(gossip_proto_name.to_string(), expected_gossip_name);
 
@@ -101,7 +134,7 @@ mod tests {
 		];
 		let genesis_hex = "32043c7b3a6ad8f6c2bc8bc121d4caab09377b5e082b0cfbbb39ad13bc4acd93";
 
-		let expected_gossip_name = format!("/{}/beefy/1", genesis_hex);
+		let expected_gossip_name = format!("/{}/beefy/2", genesis_hex);
 		let gossip_proto_name = gossip_protocol_name(&genesis_hash, None);
 		assert_eq!(gossip_proto_name.to_string(), expected_gossip_name);
 

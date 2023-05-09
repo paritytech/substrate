@@ -5461,7 +5461,7 @@ fn proportional_ledger_slash_works() {
 	ledger.active = unit;
 	ledger.total = unit * 4 + value;
 	// When
-	assert_eq!(ledger.slash(slash, 0, 0), slash - 5);
+	assert_eq!(ledger.slash(slash, 0, 0), slash);
 	// Then
 	// The amount slashed out of `unit`
 	let affected_balance = value + unit * 4;
@@ -5477,12 +5477,12 @@ fn proportional_ledger_slash_works() {
 		value - value_slash
 	};
 	assert_eq!(ledger.active, unit_slashed);
-	assert_eq!(ledger.unlocking, vec![c(5, value_slashed)]);
-	assert_eq!(ledger.total, value_slashed);
+	assert_eq!(ledger.unlocking, vec![c(5, value_slashed), c(7, 32)]);
+	assert_eq!(ledger.total, value_slashed + 32);
 	assert_eq!(LedgerSlashPerEra::get().0, 0);
 	assert_eq!(
 		LedgerSlashPerEra::get().1,
-		BTreeMap::from([(4, 0), (5, value_slashed), (6, 0), (7, 0)])
+		BTreeMap::from([(4, 0), (5, value_slashed), (6, 0), (7, 32)])
 	);
 }
 
@@ -5823,5 +5823,28 @@ mod staking_interface {
 				num_slashing_spans as u32
 			));
 		});
+	}
+
+	#[test]
+	fn status() {
+		ExtBuilder::default().build_and_execute(|| {
+			// stash of a validator is identified as a validator
+			assert_eq!(Staking::status(&11).unwrap(), StakerStatus::Validator);
+			// .. but not the controller.
+			assert!(Staking::status(&10).is_err());
+
+			// stash of nominator is identified as a nominator
+			assert_eq!(Staking::status(&101).unwrap(), StakerStatus::Nominator(vec![11, 21]));
+			// .. but not the controller.
+			assert!(Staking::status(&100).is_err());
+
+			// stash of chilled is identified as a chilled
+			assert_eq!(Staking::status(&41).unwrap(), StakerStatus::Idle);
+			// .. but not the controller.
+			assert!(Staking::status(&40).is_err());
+
+			// random other account.
+			assert!(Staking::status(&42).is_err());
+		})
 	}
 }

@@ -55,8 +55,8 @@ use sc_network::{
 	},
 	request_responses::ProtocolConfig as RequestResponseConfig,
 	types::ProtocolName,
-	Multiaddr, NetworkBlock, NetworkEventStream, NetworkService, NetworkStateInfo,
-	NetworkSyncForkRequest, NetworkWorker,
+	Multiaddr, NetworkBlock, NetworkService, NetworkStateInfo, NetworkSyncForkRequest,
+	NetworkWorker,
 };
 use sc_network_common::{
 	role::Roles,
@@ -83,17 +83,15 @@ use sp_core::H256;
 use sp_runtime::{
 	codec::{Decode, Encode},
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
 	Justification, Justifications,
 };
 use substrate_test_runtime_client::AccountKeyring;
 pub use substrate_test_runtime_client::{
-	runtime::{Block, Extrinsic, Hash, Header, Transfer},
+	runtime::{Block, ExtrinsicBuilder, Hash, Header, Transfer},
 	TestClient, TestClientBuilder, TestClientBuilderExt,
 };
 use tokio::time::timeout;
-
-type AuthorityId = sp_consensus_babe::AuthorityId;
 
 /// A Verifier that accepts all blocks and passes them on with the configured
 /// finality to be imported.
@@ -474,7 +472,7 @@ where
 						amount: 1,
 						nonce,
 					};
-					builder.push(transfer.into_signed_tx()).unwrap();
+					builder.push(transfer.into_unchecked_extrinsic()).unwrap();
 					nonce += 1;
 					builder.build().unwrap().block
 				},
@@ -495,16 +493,6 @@ where
 				ForkChoiceStrategy::LongestChain,
 			)
 		}
-	}
-
-	pub fn push_authorities_change_block(
-		&mut self,
-		new_authorities: Vec<AuthorityId>,
-	) -> Vec<H256> {
-		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
-			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
-			builder.build().unwrap().block
-		})
 	}
 
 	/// Get a reference to the client.
@@ -896,6 +884,7 @@ where
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
 
+		let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
 		let (engine, sync_service, block_announce_config) =
 			sc_network_sync::engine::SyncingEngine::new(
 				Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
@@ -911,22 +900,26 @@ where
 				block_request_protocol_config.name.clone(),
 				state_request_protocol_config.name.clone(),
 				Some(warp_protocol_config.name.clone()),
+				rx,
 			)
 			.unwrap();
 		let sync_service_import_queue = Box::new(sync_service.clone());
 		let sync_service = Arc::new(sync_service.clone());
 
+		let genesis_hash =
+			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: Box::new(|f| {
 				tokio::spawn(f);
 			}),
 			network_config,
-			chain: client.clone(),
+			genesis_hash,
 			protocol_id,
 			fork_id,
 			metrics_registry: None,
 			block_announce_config,
+			tx,
 			request_response_protocol_configs: [
 				block_request_protocol_config,
 				state_request_protocol_config,
@@ -948,9 +941,8 @@ where
 			import_queue.run(sync_service_import_queue).await;
 		});
 
-		let service = network.service().clone();
 		tokio::spawn(async move {
-			engine.run(service.event_stream("syncing")).await;
+			engine.run().await;
 		});
 
 		self.mut_peers(move |peers| {
