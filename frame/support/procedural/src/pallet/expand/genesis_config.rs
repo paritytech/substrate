@@ -97,11 +97,21 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 			attrs.push(syn::parse_quote!(
 				#[cfg_attr(feature = "std", derive(#frame_support::Serialize, #frame_support::Deserialize))]
 			));
-			attrs.push(syn::parse_quote!( #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))] ));
-			attrs.push(syn::parse_quote!( #[cfg_attr(feature = "std", serde(deny_unknown_fields))] ));
-			attrs.push(syn::parse_quote!( #[cfg_attr(feature = "std", serde(bound(serialize = "")))] ));
-			attrs.push(syn::parse_quote!( #[cfg_attr(feature = "std", serde(bound(deserialize = "")))] ));
-			attrs.push(syn::parse_quote!( #[cfg_attr(feature = "std", serde(crate = #serde_crate))] ));
+			attrs.push(
+				syn::parse_quote!( #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))] ),
+			);
+			attrs.push(
+				syn::parse_quote!( #[cfg_attr(feature = "std", serde(deny_unknown_fields))] ),
+			);
+			attrs.push(
+				syn::parse_quote!( #[cfg_attr(feature = "std", serde(bound(serialize = "")))] ),
+			);
+			attrs.push(
+				syn::parse_quote!( #[cfg_attr(feature = "std", serde(bound(deserialize = "")))] ),
+			);
+			attrs.push(
+				syn::parse_quote!( #[cfg_attr(feature = "std", serde(crate = #serde_crate))] ),
+			);
 		},
 		_ => unreachable!("Checked by genesis_config parser"),
 	}
