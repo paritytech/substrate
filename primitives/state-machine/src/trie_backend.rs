@@ -243,8 +243,18 @@ where
 	}
 
 	/// Get backend storage reference.
+	pub fn backend_storage_mut(&mut self) -> &mut S {
+		self.essence.backend_storage_mut()
+	}
+
+	/// Get backend storage reference.
 	pub fn backend_storage(&self) -> &S {
 		self.essence.backend_storage()
+	}
+
+	/// Set trie root.
+	pub fn set_root(&mut self, root: H::Out) {
+		self.essence.set_root(root)
 	}
 
 	/// Get trie root.
