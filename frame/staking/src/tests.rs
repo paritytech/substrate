@@ -808,7 +808,7 @@ fn double_controlling_attempt_should_fail() {
 		)
 		.unwrap();
 
-		// Note that 2 controller (same as stash) is reused => no-op.
+		// Note that controller (same as stash) is reused => no-op.
 		assert_noop!(
 			Staking::bond(
 				RuntimeOrigin::signed(stash),

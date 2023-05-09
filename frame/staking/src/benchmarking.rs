@@ -580,10 +580,6 @@ benchmarks! {
 			balance_before < balance_after,
 			"Balance of validator controller should have increased after payout.",
 		);
-		ensure!(
-			balance_before < balance_after,
-			"Balance of validator controller should have increased after payout.",
-		);
 		for (_, controller) in &nominators {
 			let balance = T::Currency::free_balance(controller);
 			ensure!(!balance.is_zero(), "Payout not given to controller.");
