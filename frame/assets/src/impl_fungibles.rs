@@ -95,7 +95,7 @@ impl<T: Config<I>, I: 'static> fungibles::Mutate<<T as SystemConfig>::AccountId>
 		target: &<T as SystemConfig>::AccountId,
 		balance: Self::Balance,
 	) {
-		Self::deposit_event(Event::Burned { asset_id, owner: target.clone(), balance: actual });
+		Self::deposit_event(Event::Burned { asset_id, owner: target.clone(), balance });
 	}
 
 	fn done_transfer(
@@ -112,6 +112,7 @@ impl<T: Config<I>, I: 'static> fungibles::Mutate<<T as SystemConfig>::AccountId>
 		});
 	}
 }
+
 impl<T: Config<I>, I: 'static> fungibles::Balanced<<T as SystemConfig>::AccountId>
 	for Pallet<T, I>
 {
