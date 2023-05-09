@@ -1895,6 +1895,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
+name = "docify"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00b469cf6e58cc46d7f038c7f9a9c2ed85ae05e3bb65ad165b2b941f41758e57"
+dependencies = [
+ "docify_macros",
+]
+
+[[package]]
+name = "docify_macros"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58fd5476bf7e08fb686a7ec8c8f4d0cfb0baa2ab66b151fd6328981b101153da"
+dependencies = [
+ "derive-syn-parse",
+ "prettyplease 0.2.4",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.14",
+]
+
+[[package]]
 name = "downcast"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6277,6 +6299,7 @@ dependencies = [
 name = "pallet-fast-unstake"
 version = "4.0.0-dev"
 dependencies = [
+ "docify",
  "frame-benchmarking",
  "frame-election-provider-support",
  "frame-support",
@@ -7739,6 +7762,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "prettyplease"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ceca8aaf45b5c46ec7ed39fff75f57290368c1846d33d24a122ca81416ab058"
+dependencies = [
+ "proc-macro2",
+ "syn 2.0.14",
+]
+
+[[package]]
 name = "primitive-types"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7865,7 +7898,7 @@ dependencies = [
  "log",
  "multimap",
  "petgraph",
- "prettyplease",
+ "prettyplease 0.1.23",
  "prost",
  "prost-types",
  "regex",

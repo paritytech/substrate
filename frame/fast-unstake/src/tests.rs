@@ -303,6 +303,7 @@ mod on_idle {
 		});
 	}
 
+	#[docify::export]
 	#[test]
 	fn successful_multi_queue() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -694,6 +695,7 @@ mod on_idle {
 	}
 
 	#[test]
+	#[docify::export]
 	fn exposed_nominator_cannot_unstake() {
 		ExtBuilder::default().build_and_execute(|| {
 			ErasToCheckPerBlock::<T>::put(1);

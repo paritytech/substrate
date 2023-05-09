@@ -15,6 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Fast Unstake Pallet
+//!
+//! ## Overview
+//!
 //! A pallet that's designed to JUST do the following:
 //!
 //! If a nominator is not exposed in any `ErasStakers` (i.e. "has not actively backed any
@@ -27,16 +31,16 @@
 //! Nominator" role explained in the
 //! [February Staking Update](https://polkadot.network/blog/staking-update-february-2022/).
 //!
-//! This pallet works off the basis of `on_idle`, meaning that it provides no guarantee about when
-//! it will succeed, if at all. Moreover, the queue implementation is unordered. In case of
-//! congestion, no FIFO ordering is provided.
+//! This pallet works off the basis of `on_idle`, meaning that it
+//! provides no guarantee about when it will succeed, if at all. Moreover, the queue implementation
+//! is unordered. In case of congestion, no FIFO ordering is provided.
 //!
 //! Stakers who are certain about NOT being exposed can register themselves with
-//! [`Call::register_fast_unstake`]. This will chill, and fully unbond the staker, and place them in
-//! the queue to be checked.
+//! [`Pallet::register_fast_unstake`]. This will chill, and fully unbond the staker, and place them
+//! in the queue to be checked.
 //!
 //! Once queued, but not being actively processed, stakers can withdraw their request via
-//! [`Call::deregister`].
+//! [`Pallet::deregister`].
 //!
 //! Once queued, a staker wishing to unbond can perform no further action in pallet-staking. This is
 //! to prevent them from accidentally exposing themselves behind a validator etc.
@@ -46,16 +50,29 @@
 //!
 //! If unsuccessful, meaning that the staker was exposed sometime in the last `BondingDuration` eras
 //! they will end up being slashed for the amount of wasted work they have inflicted on the chian.
+//!
+//! ## Details
+//!
+//! See [`pallet`] module for more information.
+//!
+//! ## Examples
+//!
+//! 1. Fast-unstake with multiple participants in the queue.
+#![doc = docify::embed!("./frame/fast-unstake/src/tests.rs", successful_multi_queue)]
+//!
+//! 2. Fast unstake failing because a nominator is exposed.
+#![doc = docify::embed!("./frame/fast-unstake/src/tests.rs", exposed_nominator_cannot_unstake)]
+//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use pallet::*;
 
 #[cfg(test)]
-mod mock;
+pub mod mock;
 
 #[cfg(test)]
-mod tests;
+pub mod tests;
 
 // NOTE: enable benchmarking in tests as well.
 #[cfg(feature = "runtime-benchmarks")]
@@ -91,23 +108,15 @@ pub mod pallet {
 	use sp_std::{prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
 
-	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
-	#[codec(mel_bound(T: Config))]
-	#[scale_info(skip_type_params(T))]
-	pub struct MaxChecking<T: Config>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> frame_support::traits::Get<u32> for MaxChecking<T> {
-		fn get() -> u32 {
-			T::Staking::bonding_duration() + 1
-		}
-	}
-
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
+	#[doc(alias = "FastUnstakePallet")] // TODO: expand in macro, although it is not super useful. https://github.com/paritytech/substrate/issues/13818
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
+	#[doc(alias = "FastUnstakeConfig")]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>>
@@ -122,7 +131,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type Deposit: Get<BalanceOf<Self>>;
 
-		/// The origin that can control this pallet.
+		/// The origin that can control this pallet, in other words invoke [`Pallet::control`].
 		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Batch size.
@@ -133,12 +142,14 @@ pub mod pallet {
 		/// The access to staking functionality.
 		type Staking: StakingInterface<Balance = BalanceOf<Self>, AccountId = Self::AccountId>;
 
+		/// Maximum value for `ErasToCheckPerBlock`, checked in [`Pallet::control`].
+		///
+		/// This should be as close as possible, but more than the actual value, in order to have
+		/// accurate benchmarks.
+		type MaxErasToCheckPerBlock: Get<u32>;
+
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
-
-		/// Maximum value for `ErasToCheckPerBlock`. This should be as close as possible, but more
-		/// than the actual value, in order to have accurate benchmarks.
-		type MaxErasToCheckPerBlock: Get<u32>;
 
 		/// Use only for benchmarking.
 		#[cfg(feature = "runtime-benchmarks")]
@@ -146,27 +157,29 @@ pub mod pallet {
 	}
 
 	/// The current "head of the queue" being unstaked.
+	///
+	/// The head in itself can be a batch of up to [`Config::BatchSize`] stakers.
 	#[pallet::storage]
 	pub type Head<T: Config> = StorageValue<_, UnstakeRequest<T>, OptionQuery>;
 
 	/// The map of all accounts wishing to be unstaked.
 	///
 	/// Keeps track of `AccountId` wishing to unstake and it's corresponding deposit.
-	///
-	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
+	// Hasher: Twox safe since `AccountId` is a secure hash.
 	#[pallet::storage]
 	pub type Queue<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, BalanceOf<T>>;
 
 	/// Number of eras to check per block.
 	///
-	/// If set to 0, this pallet does absolutely nothing.
+	/// If set to 0, this pallet does absolutely nothing. Cannot be set to more than
+	/// [`Config::MaxErasToCheckPerBlock`].
 	///
-	/// Based on the amount of weight available at `on_idle`, up to this many eras of a single
-	/// nominator might be checked.
+	/// Based on the amount of weight available at [`Pallet::on_idle`], up to this many eras of a
+	/// [`UnstakeRequest`], stored in [`Head`] might be checked.
 	#[pallet::storage]
+	#[pallet::getter(fn eras_to_check_per_block)]
 	pub type ErasToCheckPerBlock<T: Config> = StorageValue<_, u32, ValueQuery>;
 
-	/// The events of this pallet.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -244,8 +257,13 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Register oneself for fast-unstake.
 		///
-		/// The dispatch origin of this call must be signed by the controller account, similar to
-		/// `staking::unbond`.
+		///
+		/// ## Dispatch Origin
+		///
+		/// The dispatch origin of this call must be *signed* by the whoever is permitted by to call
+		/// unbond funds by the staking system. See [`Config::Staking`].
+		///
+		/// ## Details
 		///
 		/// The stash associated with the origin must have no ongoing unlocking chunks. If
 		/// successful, this will fully unbond and chill the stash. Then, it will enqueue the stash
@@ -285,11 +303,18 @@ pub mod pallet {
 
 		/// Deregister oneself from the fast-unstake.
 		///
+		/// ## Dispatch Origin
+		///
+		/// The dispatch origin of this call must be *signed* by the whoever is permitted by to call
+		/// unbond funds by the staking system. See [`Config::Staking`].
+		///
+		/// ## Details
+		///
 		/// This is useful if one is registered, they are still waiting, and they change their mind.
 		///
 		/// Note that the associated stash is still fully unbonded and chilled as a consequence of
-		/// calling `register_fast_unstake`. This should probably be followed by a call to
-		/// `Staking::rebond`.
+		/// calling [`Pallet::register_fast_unstake`]. THerefore, this should probably be followed
+		/// by a call to `rebond` in the staking system.
 		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config>::WeightInfo::deregister())]
 		pub fn deregister(origin: OriginFor<T>) -> DispatchResult {
@@ -315,7 +340,13 @@ pub mod pallet {
 
 		/// Control the operation of this pallet.
 		///
-		/// Dispatch origin must be signed by the [`Config::ControlOrigin`].
+		/// ## Dispatch Origin
+		///
+		/// The dispatch origin of this call must be [`Config::ControlOrigin`].
+		///
+		/// ## Details
+		///
+		/// Can set the number of eras to check per block, and potentially other admin work.
 		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config>::WeightInfo::control())]
 		pub fn control(origin: OriginFor<T>, eras_to_check: EraIndex) -> DispatchResult {
