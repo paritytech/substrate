@@ -57,7 +57,8 @@ benchmarks! {
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
 			<T as pallet_staking::Config>::MaxNominations::get(),
-			false
+			false,
+			true
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
 
@@ -73,7 +74,8 @@ benchmarks! {
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
 			<T as pallet_staking::Config>::MaxNominations::get(),
-			false
+			false,
+			true,
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::decode(&mut TrailingZeroInput::zeroes()).unwrap();

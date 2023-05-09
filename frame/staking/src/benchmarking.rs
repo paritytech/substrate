@@ -75,13 +75,19 @@ pub fn create_validator_with_nominators<T: Config>(
 	n: u32,
 	upper_bound: u32,
 	dead: bool,
+	unique_controller: bool,
 ) -> Result<(T::AccountId, Vec<(T::AccountId, T::AccountId)>), &'static str> {
 	// Clean up any existing state.
 	clear_validators_and_nominators::<T>();
 	let mut points_total = 0;
 	let mut points_individual = Vec::new();
 
-	let (v_stash, v_controller) = create_stash_controller::<T>(0, 100, RewardDestination::Staked)?;
+	let (v_stash, v_controller) = if unique_controller {
+		create_unique_stash_controller::<T>(0, 100, RewardDestination::Staked)?
+	} else {
+		create_stash_controller::<T>(0, 100, RewardDestination::Staked)?
+	};
+
 	let validator_prefs =
 		ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 	Staking::<T>::validate(RawOrigin::Signed(v_controller).into(), validator_prefs)?;
@@ -470,16 +476,8 @@ benchmarks! {
 	}
 
 	set_controller {
-		let (stash, ctlr) = create_stash_controller_inc::<T>(9000, 100, Default::default())?;
-
-		// update ledger to be a *different* controller to stash
-		if let Some(l) = Ledger::<T>::take(&stash) {
-			<Ledger<T>>::insert(&ctlr, l);
-		}
-		// update bonded account to be unique controller
-		<Bonded<T>>::insert(&stash, &ctlr);
-
-		// ensure `ctlr` is the currently stored controller
+		let (stash, ctlr) = create_unique_stash_controller::<T>(9000, 100, Default::default())?;
+		// ensure `ctlr` is the currently stored controller.
 		assert!(!Ledger::<T>::contains_key(&stash));
 		assert!(Ledger::<T>::contains_key(&ctlr));
 		assert_eq!(Bonded::<T>::get(&stash), Some(ctlr.clone()));
@@ -561,7 +559,8 @@ benchmarks! {
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
-			true
+			true,
+			true,
 		)?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
@@ -593,7 +592,8 @@ benchmarks! {
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
-			false
+			false,
+			true,
 		)?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
@@ -987,6 +987,7 @@ mod tests {
 				n,
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
+				false,
 			)
 			.unwrap();
 
@@ -1014,6 +1015,7 @@ mod tests {
 			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
 				n,
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
+				false,
 				false,
 			)
 			.unwrap();
