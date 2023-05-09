@@ -1234,7 +1234,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// (Re-)sets the controller of a stash to the stash itself.
+		/// (Re-)sets the controller of a stash to the stash itself. This function previously accepted a
+		/// `controller` argument to set the controller to an account other than the stash itself. This
+		/// functionality has now been removed, now only setting the controller to the stash, if it is
+		/// not already.
 		///
 		/// Effects will be felt instantly (as soon as this function is completed successfully).
 		///
