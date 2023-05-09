@@ -42,6 +42,12 @@ pub trait Extension: Send + Any {
 	fn as_mut_any(&mut self) -> &mut dyn Any;
 }
 
+impl Extension for Box<dyn Extension> {
+	fn as_mut_any(&mut self) -> &mut dyn Any {
+		(**self).as_mut_any()
+	}
+}
+
 /// Macro for declaring an extension that usable with [`Extensions`].
 ///
 /// The extension will be an unit wrapper struct that implements [`Extension`], `Deref` and

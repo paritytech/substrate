@@ -54,6 +54,7 @@ use sp_runtime::{
 	traits::{self, Header},
 };
 use threadpool::ThreadPool;
+use sp_externalities::Extension;
 
 mod api;
 
@@ -97,7 +98,7 @@ impl offchain::OffchainStorage for NoOffchainStorage {
 }
 
 /// Options for [`OffchainWorkers`]
-pub struct OffchainWorkerOptions<RA, Block: traits::Block, Storage> {
+pub struct OffchainWorkerOptions<RA, Block: traits::Block, Storage, CE> {
 	/// Provides access to the runtime api.
 	pub runtime_api_provider: Arc<RA>,
 	/// Provides access to the keystore.
@@ -116,6 +117,20 @@ pub struct OffchainWorkerOptions<RA, Block: traits::Block, Storage> {
 	///
 	/// If not enabled, any http request will panic.
 	pub enable_http_requests: bool,
+	/// Callback to create custom [`Extension`]s that should be registered for the
+	/// `offchain_worker` runtime call.
+	///
+	/// These [`Extension`]s are registered along-side the default extensions and are accessible in
+	/// the host functions.
+	///
+	/// # Example:
+	///
+	/// ```nocompile
+	/// custom_extensions: |block_hash| {
+	///     vec![MyCustomExtension::new()]
+	/// }
+	/// ```
+	pub custom_extensions: CE,
 }
 
 /// An offchain workers manager.
@@ -129,11 +144,12 @@ pub struct OffchainWorkers<RA, Block: traits::Block, Storage> {
 	transaction_pool: Option<Arc<dyn OffchainSubmitTransaction<Block>>>,
 	network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 	is_validator: bool,
+	custom_extensions: Box<dyn Fn(Block::Hash) -> Vec<Box<dyn Extension>>>,
 }
 
 impl<RA, Block: traits::Block, Storage> OffchainWorkers<RA, Block, Storage> {
 	/// Creates new [`OffchainWorkers`].
-	pub fn new(
+	pub fn new<CE: Fn(Block::Hash) -> Vec<Box<dyn Extension>> + 'static>(
 		OffchainWorkerOptions {
 			runtime_api_provider,
 			keystore,
@@ -142,7 +158,8 @@ impl<RA, Block: traits::Block, Storage> OffchainWorkers<RA, Block, Storage> {
 			network_provider,
 			is_validator,
 			enable_http_requests,
-		}: OffchainWorkerOptions<RA, Block, Storage>,
+			custom_extensions,
+		}: OffchainWorkerOptions<RA, Block, Storage, CE>,
 	) -> Self {
 		Self {
 			runtime_api_provider,
@@ -157,6 +174,7 @@ impl<RA, Block: traits::Block, Storage> OffchainWorkers<RA, Block, Storage> {
 			transaction_pool,
 			is_validator,
 			network_provider,
+			custom_extensions: Box::new(custom_extensions),
 		}
 	}
 }
@@ -247,6 +265,7 @@ where
 			let keystore = self.keystore.clone();
 			let db = self.offchain_db.clone();
 			let tx_pool = self.transaction_pool.clone();
+			let custom_extensions = (*self.custom_extensions)(hash);
 
 			self.spawn_worker(move || {
 				let mut runtime = client.runtime_api();
@@ -272,6 +291,8 @@ where
 				runtime.register_extension(offchain::OffchainWorkerExt::new(
 					offchain::LimitedExternalities::new(capabilities, api),
 				));
+
+				custom_extensions.into_iter().for_each(|ext| runtime.register_extension(ext));
 
 				let run = if version == 2 {
 					runtime.offchain_worker(hash, &header)
@@ -483,6 +504,7 @@ mod tests {
 			network_provider: network,
 			is_validator: false,
 			enable_http_requests: false,
+			custom_extensions: |_| Vec::new(),
 		});
 		futures::executor::block_on(offchain.on_block_imported(&header));
 

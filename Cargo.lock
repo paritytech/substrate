@@ -9519,6 +9519,7 @@ dependencies = [
  "sp-api",
  "sp-consensus",
  "sp-core",
+ "sp-externalities",
  "sp-keystore",
  "sp-offchain",
  "sp-runtime",
