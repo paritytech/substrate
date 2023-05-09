@@ -42,7 +42,7 @@ use sc_client_api::{
 use sc_rpc::utils::SubscriptionResponse;
 use sp_api::CallApiAt;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
-use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys, traits::CallContext};
+use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys, traits::CallContext, Bytes};
 use sp_runtime::traits::Block as BlockT;
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 
@@ -303,11 +303,9 @@ where
 		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResponse<ChainHeadEvent<Option<String>>> {
 		let mut pending = MaybePendingSubscription::new(pending);
-		let Ok(key) = parse_hex_param(&mut pending, key).await else {
+		let Ok(key) = parse_hex_param(&mut pending, key).await.map(|k| StorageKey(k)) else {
 			return SubscriptionResponse::Closed;
 		};
-
-		let key = StorageKey(key);
 
 		let child_key = match child_key {
 			Some(k) => {
@@ -323,7 +321,12 @@ where
 		let subscriptions = self.subscriptions.clone();
 
 		let block_guard = match subscriptions.lock_block(&follow_subscription, hash) {
-			Ok(block) => block,
+			Ok(block) => {
+				if pending.accept().await.is_err() {
+					return SubscriptionResponse::Closed
+				}
+				block
+			},
 			Err(SubscriptionManagementError::SubscriptionAbsent) => {
 				let _sink = pending.accept().await;
 				// Invalid invalid subscription ID.
@@ -408,12 +411,17 @@ where
 	) -> SubscriptionResponse<ChainHeadEvent<String>> {
 		let mut pending = MaybePendingSubscription::new(pending);
 
+		let Ok(call_parameters) = parse_hex_param(&mut pending, call_parameters).await.map(|b| Bytes::from(b)) else {
+			return SubscriptionResponse::Closed
+		};
+
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
 
 		let block_guard = match subscriptions.lock_block(&follow_subscription, hash) {
 			Ok(block) => block,
 			Err(SubscriptionManagementError::SubscriptionAbsent) => {
+				let _ = pending.accept().await;
 				// Invalid invalid subscription ID.
 				return SubscriptionResponse::Event(ChainHeadEvent::Disjoint)
 			},
@@ -422,10 +430,12 @@ where
 				pending.reject(ChainHeadRpcError::InvalidBlock).await;
 				return SubscriptionResponse::Closed
 			},
-			Err(error) =>
+			Err(error) => {
+				let _ = pending.accept().await;
 				return SubscriptionResponse::Event(ChainHeadEvent::Error(ErrorEvent {
 					error: error.to_string(),
-				})),
+				}))
+			},
 		};
 
 		let fut = async move {
@@ -448,7 +458,7 @@ where
 				.call(
 					hash,
 					&function,
-					call_parameters.as_bytes(),
+					&call_parameters,
 					client.execution_extensions().strategies().other,
 					CallContext::Offchain,
 				)

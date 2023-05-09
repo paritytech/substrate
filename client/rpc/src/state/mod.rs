@@ -339,7 +339,7 @@ where
 	) {
 		if keys.is_none() {
 			if let Err(err) = self.deny_unsafe.check_if_safe() {
-				let _ = pending.reject(ErrorObject::from(err)).await;
+				pending.reject(ErrorObject::from(err)).await;
 				return
 			}
 		}

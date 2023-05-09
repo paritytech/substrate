@@ -419,7 +419,7 @@ where
 		let stream = match self.client.storage_changes_notification_stream(keys.as_deref(), None) {
 			Ok(stream) => stream,
 			Err(blockchain_err) => {
-				let _ = pending.reject(Error::Client(Box::new(blockchain_err))).await;
+				pending.reject(Error::Client(Box::new(blockchain_err))).await;
 				return
 			},
 		};

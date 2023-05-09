@@ -426,7 +426,7 @@ async fn call_runtime() {
 		Error::Call(err) if err.code() == 2001 && err.message() == "Invalid block hash"
 	);
 
-	// Pass an invalid parameters that cannot be decode.
+	// Pass invalid parameters that cannot be decoded.
 	let err = api
 		.subscribe_unbounded(
 			"chainHead_unstable_call",
