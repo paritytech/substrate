@@ -161,7 +161,8 @@ pub mod pallet {
 		/// the assets.
 		type PoolAssets: Inspect<Self::AccountId, AssetId = Self::PoolAssetId, Balance = Self::AssetBalance>
 			+ Create<Self::AccountId>
-			+ Mutate<Self::AccountId>;
+			+ Mutate<Self::AccountId>
+			+ AccountTouch<Self::PoolAssetId, Self::AccountId>;
 
 		/// A % the liquidity providers will take of every swap. Represents 10ths of a percent.
 		#[pallet::constant]
@@ -421,6 +422,7 @@ pub mod pallet {
 			NextPoolAssetId::<T>::set(Some(next_lp_token_id));
 
 			T::PoolAssets::create(lp_token, pool_account.clone(), false, 1u32.into())?;
+			T::PoolAssets::touch(lp_token, pool_account.clone(), sender.clone())?;
 
 			let pool_info = PoolInfo { lp_token };
 			Pools::<T>::insert(pool_id, pool_info);

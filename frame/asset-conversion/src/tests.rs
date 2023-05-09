@@ -1372,3 +1372,54 @@ fn validate_pool_id_sorting() {
 		assert!(Native < Asset(1));
 	});
 }
+
+#[test]
+fn cannot_block_pool_creation() {
+	new_test_ext().execute_with(|| {
+		// User 1 is the pool creator
+		let user = 1;
+		// User 2 is the attacker
+		let attacker = 2;
+
+		let ed = get_ed();
+		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), attacker, 10000 + ed));
+
+		// The target pool the user wants to create is Native <=> Asset(2)
+		let token_1 = NativeOrAssetId::Native;
+		let token_2 = NativeOrAssetId::Asset(2);
+
+		// Attacker computes the still non-existing pool account for the target pair
+		let pool_account =
+			AssetConversion::get_pool_account(AssetConversion::get_pool_id(token_2, token_1));
+		// And transfers the ED to that pool account
+		assert_ok!(Balances::transfer(RuntimeOrigin::signed(attacker), pool_account, ed));
+		// Then, the attacker creates 14 tokens and sends one of each to the pool account
+		for i in 10..25 {
+			create_tokens(attacker, vec![NativeOrAssetId::Asset(i)]);
+			assert_ok!(Assets::mint(RuntimeOrigin::signed(attacker), i, attacker, 1000));
+			assert_ok!(Assets::transfer(RuntimeOrigin::signed(attacker), i, pool_account, 1));
+		}
+
+		// User can still create the pool
+		create_tokens(user, vec![token_2]);
+		assert_ok!(AssetConversion::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
+
+		// User has to transfer one Asset(2) token to the pool account (otherwise add_liquidity will
+		// fail with `AssetTwoDepositDidNotMeetMinimum`)
+		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user, 10000 + ed));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 10000));
+		assert_ok!(Assets::transfer(RuntimeOrigin::signed(user), 2, pool_account, 1));
+
+		// add_liquidity shouldn't fail because of the number of consumers
+		assert_ok!(AssetConversion::add_liquidity(
+			RuntimeOrigin::signed(user),
+			token_1,
+			token_2,
+			10000,
+			100,
+			10000,
+			10,
+			user,
+		));
+	});
+}
