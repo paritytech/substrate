@@ -255,10 +255,7 @@ fn change_controller_works() {
 			Staking::validate(RuntimeOrigin::signed(controller), ValidatorPrefs::default()),
 			Error::<Test>::NotController,
 		);
-		assert_ok!(Staking::validate(
-			RuntimeOrigin::signed(stash),
-			ValidatorPrefs::default()
-		));
+		assert_ok!(Staking::validate(RuntimeOrigin::signed(stash), ValidatorPrefs::default()));
 	})
 }
 
