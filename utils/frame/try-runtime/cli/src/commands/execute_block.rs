@@ -129,7 +129,7 @@ where
 	let payload = (block.clone(), state_root_check, signature_check, command.try_state).encode();
 
 	let _ = state_machine_call_with_proof::<Block, HostFns>(
-		&ext,
+		&ext.inner_ext,
 		&executor,
 		"TryRuntime_execute_block",
 		&payload,

@@ -20,8 +20,8 @@
 //! An equivalent of `sp_io::TestExternalities` that can load its state from a remote substrate
 //! based chain, or a local state snapshot file.
 
-mod on_demand_backend;
-mod on_demand_ext;
+pub mod on_demand_backend;
+pub mod on_demand_ext;
 use async_recursion::async_recursion;
 use codec::{Decode, Encode};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -48,7 +48,6 @@ use spinners::{Spinner, Spinners};
 use std::{
 	cmp::max,
 	fs,
-	ops::{Deref, DerefMut},
 	path::{Path, PathBuf},
 	time::{Duration, Instant},
 };
@@ -80,18 +79,18 @@ pub struct RemoteExternalities<B: BlockT> {
 	pub on_demand_ext: Option<OnDemandExt<Blake2Hasher>>,
 }
 
-impl<B: BlockT> Deref for RemoteExternalities<B> {
-	type Target = TestExternalities;
-	fn deref(&self) -> &Self::Target {
-		&self.inner_ext
-	}
-}
+// impl<B: BlockT> Deref for RemoteExternalities<B> {
+// 	type Target = TestExternalities;
+// 	fn deref(&self) -> &Self::Target {
+// 		&self.inner_ext
+// 	}
+// }
 
-impl<B: BlockT> DerefMut for RemoteExternalities<B> {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.inner_ext
-	}
-}
+// impl<B: BlockT> DerefMut for RemoteExternalities<B> {
+// 	fn deref_mut(&mut self) -> &mut Self::Target {
+// 		&mut self.inner_ext
+// 	}
+// }
 
 /// The execution mode.
 #[derive(Clone)]
@@ -886,8 +885,10 @@ where
 		);
 
 		// Load data from the remote into `pending_ext`.
-		let top_kv = self.load_top_remote(&mut pending_ext).await?;
-		self.load_child_remote(&top_kv, &mut pending_ext).await?;
+
+		// ~~ disable pending_ext storage for this PoC ~~
+		// let top_kv = self.load_top_remote(&mut pending_ext).await?;
+		// self.load_child_remote(&top_kv, &mut pending_ext).await?;
 
 		// If we need to save a snapshot, save the raw storage and root hash to the snapshot.
 		if let Some(path) = self.as_online().state_snapshot.clone().map(|c| c.path) {
@@ -962,7 +963,7 @@ where
 	}
 
 	pub(crate) async fn pre_build(mut self) -> Result<RemoteExternalities<B>, &'static str> {
-		let mut ext = match self.mode.clone() {
+		let ext = match self.mode.clone() {
 			Mode::Offline(config) => self.do_load_offline(config)?,
 			Mode::Online(_) => self.do_load_remote().await?,
 			Mode::OfflineOrElseOnline(offline_config, _) => {
@@ -974,26 +975,26 @@ where
 		};
 
 		// inject manual key values.
-		if !self.hashed_key_values.is_empty() {
-			log::info!(
-				target: LOG_TARGET,
-				"extending externalities with {} manually injected key-values",
-				self.hashed_key_values.len()
-			);
-			ext.batch_insert(self.hashed_key_values.into_iter().map(|(k, v)| (k.0, v.0)));
-		}
+		// if !self.hashed_key_values.is_empty() {
+		// 	log::info!(
+		// 		target: LOG_TARGET,
+		// 		"extending externalities with {} manually injected key-values",
+		// 		self.hashed_key_values.len()
+		// 	);
+		// 	ext.batch_insert(self.hashed_key_values.into_iter().map(|(k, v)| (k.0, v.0)));
+		// }
 
-		// exclude manual key values.
-		if !self.hashed_blacklist.is_empty() {
-			log::info!(
-				target: LOG_TARGET,
-				"excluding externalities from {} keys",
-				self.hashed_blacklist.len()
-			);
-			for k in self.hashed_blacklist {
-				ext.execute_with(|| sp_io::storage::clear(&k));
-			}
-		}
+		// // exclude manual key values.
+		// if !self.hashed_blacklist.is_empty() {
+		// 	log::info!(
+		// 		target: LOG_TARGET,
+		// 		"excluding externalities from {} keys",
+		// 		self.hashed_blacklist.len()
+		// 	);
+		// 	for k in self.hashed_blacklist {
+		// 		ext.execute_with(|| sp_io::storage::clear(&k));
+		// 	}
+		// }
 
 		Ok(ext)
 	}
@@ -1038,330 +1039,330 @@ where
 	}
 
 	pub async fn build(self) -> Result<RemoteExternalities<B>, &'static str> {
-		let mut ext = self.pre_build().await?;
-		ext.commit_all().unwrap();
+		let ext = self.pre_build().await?;
+		// ext.commit_all().unwrap();
 
 		info!(
 			target: LOG_TARGET,
-			"initialized state externalities with storage root {:?} and state_version {:?}",
-			ext.as_backend().root(),
-			ext.state_version
+			"initialized state externalities",
+			// ext.on_demand_ext.backend.root(),
+			// ext.state_version
 		);
 
 		Ok(ext)
 	}
 }
 
-#[cfg(test)]
-mod test_prelude {
-	use tracing_subscriber::EnvFilter;
+// #[cfg(test)]
+// mod test_prelude {
+// 	use tracing_subscriber::EnvFilter;
 
-	pub(crate) use super::*;
-	pub(crate) use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper, H256 as Hash};
-	pub(crate) type Block = RawBlock<ExtrinsicWrapper<Hash>>;
+// 	pub(crate) use super::*;
+// 	pub(crate) use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper, H256 as Hash};
+// 	pub(crate) type Block = RawBlock<ExtrinsicWrapper<Hash>>;
 
-	pub(crate) fn init_logger() {
-		let _ = tracing_subscriber::fmt()
-			.with_env_filter(EnvFilter::from_default_env())
-			.with_level(true)
-			.try_init();
-	}
-}
+// 	pub(crate) fn init_logger() {
+// 		let _ = tracing_subscriber::fmt()
+// 			.with_env_filter(EnvFilter::from_default_env())
+// 			.with_level(true)
+// 			.try_init();
+// 	}
+// }
 
-#[cfg(test)]
-mod tests {
-	use super::test_prelude::*;
+// #[cfg(test)]
+// mod tests {
+// 	use super::test_prelude::*;
 
-	#[tokio::test]
-	async fn can_load_state_snapshot() {
-		init_logger();
-		Builder::<Block>::new()
-			.mode(Mode::Offline(OfflineConfig {
-				state_snapshot: SnapshotConfig::new("test_data/proxy_test"),
-			}))
-			.build()
-			.await
-			.unwrap()
-			.execute_with(|| {});
-	}
+// 	#[tokio::test]
+// 	async fn can_load_state_snapshot() {
+// 		init_logger();
+// 		Builder::<Block>::new()
+// 			.mode(Mode::Offline(OfflineConfig {
+// 				state_snapshot: SnapshotConfig::new("test_data/proxy_test"),
+// 			}))
+// 			.build()
+// 			.await
+// 			.unwrap()
+// 			.execute_with(|| {});
+// 	}
 
-	#[tokio::test]
-	async fn can_exclude_from_snapshot() {
-		init_logger();
+// 	#[tokio::test]
+// 	async fn can_exclude_from_snapshot() {
+// 		init_logger();
 
-		// get the first key from the snapshot file.
-		let some_key = Builder::<Block>::new()
-			.mode(Mode::Offline(OfflineConfig {
-				state_snapshot: SnapshotConfig::new("test_data/proxy_test"),
-			}))
-			.build()
-			.await
-			.expect("Can't read state snapshot file")
-			.execute_with(|| {
-				let key =
-					sp_io::storage::next_key(&[]).expect("some key must exist in the snapshot");
-				assert!(sp_io::storage::get(&key).is_some());
-				key
-			});
+// 		// get the first key from the snapshot file.
+// 		let some_key = Builder::<Block>::new()
+// 			.mode(Mode::Offline(OfflineConfig {
+// 				state_snapshot: SnapshotConfig::new("test_data/proxy_test"),
+// 			}))
+// 			.build()
+// 			.await
+// 			.expect("Can't read state snapshot file")
+// 			.execute_with(|| {
+// 				let key =
+// 					sp_io::storage::next_key(&[]).expect("some key must exist in the snapshot");
+// 				assert!(sp_io::storage::get(&key).is_some());
+// 				key
+// 			});
 
-		Builder::<Block>::new()
-			.mode(Mode::Offline(OfflineConfig {
-				state_snapshot: SnapshotConfig::new("test_data/proxy_test"),
-			}))
-			.blacklist_hashed_key(&some_key)
-			.build()
-			.await
-			.expect("Can't read state snapshot file")
-			.execute_with(|| assert!(sp_io::storage::get(&some_key).is_none()));
-	}
-}
+// 		Builder::<Block>::new()
+// 			.mode(Mode::Offline(OfflineConfig {
+// 				state_snapshot: SnapshotConfig::new("test_data/proxy_test"),
+// 			}))
+// 			.blacklist_hashed_key(&some_key)
+// 			.build()
+// 			.await
+// 			.expect("Can't read state snapshot file")
+// 			.execute_with(|| assert!(sp_io::storage::get(&some_key).is_none()));
+// 	}
+// }
 
-#[cfg(all(test, feature = "remote-test"))]
-mod remote_tests {
-	use super::test_prelude::*;
-	use std::os::unix::fs::MetadataExt;
+// #[cfg(all(test, feature = "remote-test"))]
+// mod remote_tests {
+// 	use super::test_prelude::*;
+// 	use std::os::unix::fs::MetadataExt;
 
-	#[tokio::test]
-	async fn state_version_is_kept_and_can_be_altered() {
-		const CACHE: &'static str = "state_version_is_kept_and_can_be_altered";
-		init_logger();
+// 	#[tokio::test]
+// 	async fn state_version_is_kept_and_can_be_altered() {
+// 		const CACHE: &'static str = "state_version_is_kept_and_can_be_altered";
+// 		init_logger();
 
-		// first, build a snapshot.
-		let ext = Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				pallets: vec!["Proxy".to_owned()],
-				child_trie: false,
-				state_snapshot: Some(SnapshotConfig::new(CACHE)),
-				..Default::default()
-			}))
-			.build()
-			.await
-			.unwrap();
+// 		// first, build a snapshot.
+// 		let ext = Builder::<Block>::new()
+// 			.mode(Mode::Online(OnlineConfig {
+// 				pallets: vec!["Proxy".to_owned()],
+// 				child_trie: false,
+// 				state_snapshot: Some(SnapshotConfig::new(CACHE)),
+// 				..Default::default()
+// 			}))
+// 			.build()
+// 			.await
+// 			.unwrap();
 
-		// now re-create the same snapshot.
-		let cached_ext = Builder::<Block>::new()
-			.mode(Mode::Offline(OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) }))
-			.build()
-			.await
-			.unwrap();
+// 		// now re-create the same snapshot.
+// 		let cached_ext = Builder::<Block>::new()
+// 			.mode(Mode::Offline(OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) }))
+// 			.build()
+// 			.await
+// 			.unwrap();
 
-		assert_eq!(ext.state_version, cached_ext.state_version);
+// 		assert_eq!(ext.state_version, cached_ext.state_version);
 
-		// now overwrite it
-		let other = match ext.state_version {
-			StateVersion::V0 => StateVersion::V1,
-			StateVersion::V1 => StateVersion::V0,
-		};
-		let cached_ext = Builder::<Block>::new()
-			.mode(Mode::Offline(OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) }))
-			.overwrite_state_version(other)
-			.build()
-			.await
-			.unwrap();
+// 		// now overwrite it
+// 		let other = match ext.state_version {
+// 			StateVersion::V0 => StateVersion::V1,
+// 			StateVersion::V1 => StateVersion::V0,
+// 		};
+// 		let cached_ext = Builder::<Block>::new()
+// 			.mode(Mode::Offline(OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) }))
+// 			.overwrite_state_version(other)
+// 			.build()
+// 			.await
+// 			.unwrap();
 
-		assert_eq!(cached_ext.state_version, other);
-	}
+// 		assert_eq!(cached_ext.state_version, other);
+// 	}
 
-	#[tokio::test]
-	async fn snapshot_block_hash_works() {
-		const CACHE: &'static str = "snapshot_block_hash_works";
-		init_logger();
+// 	#[tokio::test]
+// 	async fn snapshot_block_hash_works() {
+// 		const CACHE: &'static str = "snapshot_block_hash_works";
+// 		init_logger();
 
-		// first, build a snapshot.
-		let ext = Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				pallets: vec!["Proxy".to_owned()],
-				child_trie: false,
-				state_snapshot: Some(SnapshotConfig::new(CACHE)),
-				..Default::default()
-			}))
-			.build()
-			.await
-			.unwrap();
+// 		// first, build a snapshot.
+// 		let ext = Builder::<Block>::new()
+// 			.mode(Mode::Online(OnlineConfig {
+// 				pallets: vec!["Proxy".to_owned()],
+// 				child_trie: false,
+// 				state_snapshot: Some(SnapshotConfig::new(CACHE)),
+// 				..Default::default()
+// 			}))
+// 			.build()
+// 			.await
+// 			.unwrap();
 
-		// now re-create the same snapshot.
-		let cached_ext = Builder::<Block>::new()
-			.mode(Mode::Offline(OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) }))
-			.build()
-			.await
-			.unwrap();
+// 		// now re-create the same snapshot.
+// 		let cached_ext = Builder::<Block>::new()
+// 			.mode(Mode::Offline(OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) }))
+// 			.build()
+// 			.await
+// 			.unwrap();
 
-		assert_eq!(ext.block_hash, cached_ext.block_hash);
-	}
+// 		assert_eq!(ext.block_hash, cached_ext.block_hash);
+// 	}
 
-	#[tokio::test]
-	async fn offline_else_online_works() {
-		const CACHE: &'static str = "offline_else_online_works_data";
-		init_logger();
-		// this shows that in the second run, we use the remote and create a snapshot.
-		Builder::<Block>::new()
-			.mode(Mode::OfflineOrElseOnline(
-				OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) },
-				OnlineConfig {
-					pallets: vec!["Proxy".to_owned()],
-					child_trie: false,
-					state_snapshot: Some(SnapshotConfig::new(CACHE)),
-					..Default::default()
-				},
-			))
-			.build()
-			.await
-			.unwrap()
-			.execute_with(|| {});
+// 	#[tokio::test]
+// 	async fn offline_else_online_works() {
+// 		const CACHE: &'static str = "offline_else_online_works_data";
+// 		init_logger();
+// 		// this shows that in the second run, we use the remote and create a snapshot.
+// 		Builder::<Block>::new()
+// 			.mode(Mode::OfflineOrElseOnline(
+// 				OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) },
+// 				OnlineConfig {
+// 					pallets: vec!["Proxy".to_owned()],
+// 					child_trie: false,
+// 					state_snapshot: Some(SnapshotConfig::new(CACHE)),
+// 					..Default::default()
+// 				},
+// 			))
+// 			.build()
+// 			.await
+// 			.unwrap()
+// 			.execute_with(|| {});
 
-		// this shows that in the second run, we are not using the remote
-		Builder::<Block>::new()
-			.mode(Mode::OfflineOrElseOnline(
-				OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) },
-				OnlineConfig {
-					transport: "ws://non-existent:666".to_owned().into(),
-					..Default::default()
-				},
-			))
-			.build()
-			.await
-			.unwrap()
-			.execute_with(|| {});
+// 		// this shows that in the second run, we are not using the remote
+// 		Builder::<Block>::new()
+// 			.mode(Mode::OfflineOrElseOnline(
+// 				OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) },
+// 				OnlineConfig {
+// 					transport: "ws://non-existent:666".to_owned().into(),
+// 					..Default::default()
+// 				},
+// 			))
+// 			.build()
+// 			.await
+// 			.unwrap()
+// 			.execute_with(|| {});
 
-		let to_delete = std::fs::read_dir(Path::new("."))
-			.unwrap()
-			.into_iter()
-			.map(|d| d.unwrap())
-			.filter(|p| p.path().file_name().unwrap_or_default() == CACHE)
-			.collect::<Vec<_>>();
+// 		let to_delete = std::fs::read_dir(Path::new("."))
+// 			.unwrap()
+// 			.into_iter()
+// 			.map(|d| d.unwrap())
+// 			.filter(|p| p.path().file_name().unwrap_or_default() == CACHE)
+// 			.collect::<Vec<_>>();
 
-		assert!(to_delete.len() == 1);
-		std::fs::remove_file(to_delete[0].path()).unwrap();
-	}
+// 		assert!(to_delete.len() == 1);
+// 		std::fs::remove_file(to_delete[0].path()).unwrap();
+// 	}
 
-	#[tokio::test]
-	async fn can_build_one_small_pallet() {
-		init_logger();
-		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				pallets: vec!["Proxy".to_owned()],
-				child_trie: false,
-				..Default::default()
-			}))
-			.build()
-			.await
-			.unwrap()
-			.execute_with(|| {});
-	}
+// 	#[tokio::test]
+// 	async fn can_build_one_small_pallet() {
+// 		init_logger();
+// 		Builder::<Block>::new()
+// 			.mode(Mode::Online(OnlineConfig {
+// 				pallets: vec!["Proxy".to_owned()],
+// 				child_trie: false,
+// 				..Default::default()
+// 			}))
+// 			.build()
+// 			.await
+// 			.unwrap()
+// 			.execute_with(|| {});
+// 	}
 
-	#[tokio::test]
-	async fn can_build_few_pallet() {
-		init_logger();
-		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				pallets: vec!["Proxy".to_owned(), "Multisig".to_owned()],
-				child_trie: false,
-				..Default::default()
-			}))
-			.build()
-			.await
-			.unwrap()
-			.execute_with(|| {});
-	}
+// 	#[tokio::test]
+// 	async fn can_build_few_pallet() {
+// 		init_logger();
+// 		Builder::<Block>::new()
+// 			.mode(Mode::Online(OnlineConfig {
+// 				pallets: vec!["Proxy".to_owned(), "Multisig".to_owned()],
+// 				child_trie: false,
+// 				..Default::default()
+// 			}))
+// 			.build()
+// 			.await
+// 			.unwrap()
+// 			.execute_with(|| {});
+// 	}
 
-	#[tokio::test(flavor = "multi_thread")]
-	async fn can_create_snapshot() {
-		const CACHE: &'static str = "can_create_snapshot";
-		init_logger();
+// 	#[tokio::test(flavor = "multi_thread")]
+// 	async fn can_create_snapshot() {
+// 		const CACHE: &'static str = "can_create_snapshot";
+// 		init_logger();
 
-		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				state_snapshot: Some(SnapshotConfig::new(CACHE)),
-				pallets: vec!["Proxy".to_owned()],
-				child_trie: false,
-				..Default::default()
-			}))
-			.build()
-			.await
-			.unwrap()
-			.execute_with(|| {});
+// 		Builder::<Block>::new()
+// 			.mode(Mode::Online(OnlineConfig {
+// 				state_snapshot: Some(SnapshotConfig::new(CACHE)),
+// 				pallets: vec!["Proxy".to_owned()],
+// 				child_trie: false,
+// 				..Default::default()
+// 			}))
+// 			.build()
+// 			.await
+// 			.unwrap()
+// 			.execute_with(|| {});
 
-		let to_delete = std::fs::read_dir(Path::new("."))
-			.unwrap()
-			.into_iter()
-			.map(|d| d.unwrap())
-			.filter(|p| p.path().file_name().unwrap_or_default() == CACHE)
-			.collect::<Vec<_>>();
+// 		let to_delete = std::fs::read_dir(Path::new("."))
+// 			.unwrap()
+// 			.into_iter()
+// 			.map(|d| d.unwrap())
+// 			.filter(|p| p.path().file_name().unwrap_or_default() == CACHE)
+// 			.collect::<Vec<_>>();
 
-		let snap: Snapshot<Block> = Builder::<Block>::new().load_snapshot(CACHE.into()).unwrap();
-		assert!(matches!(snap, Snapshot { raw_storage, .. } if raw_storage.len() > 0));
+// 		let snap: Snapshot<Block> = Builder::<Block>::new().load_snapshot(CACHE.into()).unwrap();
+// 		assert!(matches!(snap, Snapshot { raw_storage, .. } if raw_storage.len() > 0));
 
-		assert!(to_delete.len() == 1);
-		let to_delete = to_delete.first().unwrap();
-		assert!(std::fs::metadata(to_delete.path()).unwrap().size() > 1);
-		std::fs::remove_file(to_delete.path()).unwrap();
-	}
+// 		assert!(to_delete.len() == 1);
+// 		let to_delete = to_delete.first().unwrap();
+// 		assert!(std::fs::metadata(to_delete.path()).unwrap().size() > 1);
+// 		std::fs::remove_file(to_delete.path()).unwrap();
+// 	}
 
-	#[tokio::test]
-	async fn can_create_child_snapshot() {
-		const CACHE: &'static str = "can_create_child_snapshot";
-		init_logger();
-		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				state_snapshot: Some(SnapshotConfig::new(CACHE)),
-				pallets: vec!["Crowdloan".to_owned()],
-				child_trie: true,
-				..Default::default()
-			}))
-			.build()
-			.await
-			.unwrap()
-			.execute_with(|| {});
+// 	#[tokio::test]
+// 	async fn can_create_child_snapshot() {
+// 		const CACHE: &'static str = "can_create_child_snapshot";
+// 		init_logger();
+// 		Builder::<Block>::new()
+// 			.mode(Mode::Online(OnlineConfig {
+// 				state_snapshot: Some(SnapshotConfig::new(CACHE)),
+// 				pallets: vec!["Crowdloan".to_owned()],
+// 				child_trie: true,
+// 				..Default::default()
+// 			}))
+// 			.build()
+// 			.await
+// 			.unwrap()
+// 			.execute_with(|| {});
 
-		let to_delete = std::fs::read_dir(Path::new("."))
-			.unwrap()
-			.into_iter()
-			.map(|d| d.unwrap())
-			.filter(|p| p.path().file_name().unwrap_or_default() == CACHE)
-			.collect::<Vec<_>>();
+// 		let to_delete = std::fs::read_dir(Path::new("."))
+// 			.unwrap()
+// 			.into_iter()
+// 			.map(|d| d.unwrap())
+// 			.filter(|p| p.path().file_name().unwrap_or_default() == CACHE)
+// 			.collect::<Vec<_>>();
 
-		let snap: Snapshot<Block> = Builder::<Block>::new().load_snapshot(CACHE.into()).unwrap();
-		assert!(matches!(snap, Snapshot { raw_storage, .. } if raw_storage.len() > 0));
+// 		let snap: Snapshot<Block> = Builder::<Block>::new().load_snapshot(CACHE.into()).unwrap();
+// 		assert!(matches!(snap, Snapshot { raw_storage, .. } if raw_storage.len() > 0));
 
-		assert!(to_delete.len() == 1);
-		let to_delete = to_delete.first().unwrap();
-		assert!(std::fs::metadata(to_delete.path()).unwrap().size() > 1);
-		std::fs::remove_file(to_delete.path()).unwrap();
-	}
+// 		assert!(to_delete.len() == 1);
+// 		let to_delete = to_delete.first().unwrap();
+// 		assert!(std::fs::metadata(to_delete.path()).unwrap().size() > 1);
+// 		std::fs::remove_file(to_delete.path()).unwrap();
+// 	}
 
-	#[tokio::test]
-	async fn can_build_big_pallet() {
-		if std::option_env!("TEST_WS").is_none() {
-			return
-		}
-		init_logger();
-		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				transport: std::option_env!("TEST_WS").unwrap().to_owned().into(),
-				pallets: vec!["Staking".to_owned()],
-				child_trie: false,
-				..Default::default()
-			}))
-			.build()
-			.await
-			.unwrap()
-			.execute_with(|| {});
-	}
+// 	#[tokio::test]
+// 	async fn can_build_big_pallet() {
+// 		if std::option_env!("TEST_WS").is_none() {
+// 			return
+// 		}
+// 		init_logger();
+// 		Builder::<Block>::new()
+// 			.mode(Mode::Online(OnlineConfig {
+// 				transport: std::option_env!("TEST_WS").unwrap().to_owned().into(),
+// 				pallets: vec!["Staking".to_owned()],
+// 				child_trie: false,
+// 				..Default::default()
+// 			}))
+// 			.build()
+// 			.await
+// 			.unwrap()
+// 			.execute_with(|| {});
+// 	}
 
-	#[tokio::test]
-	async fn can_fetch_all() {
-		if std::option_env!("TEST_WS").is_none() {
-			return
-		}
-		init_logger();
-		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				transport: std::option_env!("TEST_WS").unwrap().to_owned().into(),
-				..Default::default()
-			}))
-			.build()
-			.await
-			.unwrap()
-			.execute_with(|| {});
-	}
-}
+// 	#[tokio::test]
+// 	async fn can_fetch_all() {
+// 		if std::option_env!("TEST_WS").is_none() {
+// 			return
+// 		}
+// 		init_logger();
+// 		Builder::<Block>::new()
+// 			.mode(Mode::Online(OnlineConfig {
+// 				transport: std::option_env!("TEST_WS").unwrap().to_owned().into(),
+// 				..Default::default()
+// 			}))
+// 			.build()
+// 			.await
+// 			.unwrap()
+// 			.execute_with(|| {});
+// 	}
+// }

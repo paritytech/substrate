@@ -147,7 +147,7 @@ where
 			maybe_state_ext.as_mut().expect("state_ext either existed or was just created");
 
 		let result = state_machine_call_with_proof::<Block, HostFns>(
-			state_ext,
+			&state_ext.inner_ext,
 			&executor,
 			"TryRuntime_execute_block",
 			(block, command.state_root_check, true, command.try_state.clone())
@@ -177,16 +177,16 @@ where
 
 		let storage_changes = changes
 			.drain_storage_changes(
-				&state_ext.backend,
+				&state_ext.inner_ext.backend,
 				&mut Default::default(),
 				// Note that in case a block contains a runtime upgrade, state version could
 				// potentially be incorrect here, this is very niche and would only result in
 				// unaligned roots, so this use case is ignored for now.
-				state_ext.state_version,
+				state_ext.inner_ext.state_version,
 			)
 			.unwrap();
 
-		state_ext.backend.apply_transaction(
+		state_ext.inner_ext.backend.apply_transaction(
 			storage_changes.transaction_storage_root,
 			storage_changes.transaction,
 		);
@@ -196,7 +196,7 @@ where
 			"executed block {}, consumed weight {}, new storage root {:?}",
 			number,
 			consumed_weight,
-			state_ext.as_backend().root(),
+			state_ext.inner_ext.as_backend().root(),
 		);
 	}
 

@@ -11,11 +11,11 @@ where
 	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
 {
 	/// Changed storage overlay
-	overlay: OverlayedChanges,
-	storage_transaction_cache:
+	pub overlay: OverlayedChanges,
+	pub storage_transaction_cache:
 		StorageTransactionCache<<OnDemandBackend<H> as Backend<H>>::Transaction, H>,
 	/// Our on-demand backend
-	backend: OnDemandBackend<H>,
+	pub backend: OnDemandBackend<H>,
 	/// Extensions.
 	pub extensions: Extensions,
 	/// State version.

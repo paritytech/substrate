@@ -20,12 +20,12 @@ use crate::{
 	rpc_err_handler, state_machine_call, BlockT, LiveState, SharedParams, State,
 };
 use parity_scale_codec::{Decode, Encode};
+use remote_externalities::RemoteExternalities;
 use sc_cli::Result;
 use sc_executor::{sp_wasm_interface::HostFunctions, WasmExecutor};
 use serde::de::DeserializeOwned;
 use sp_core::H256;
 use sp_inherents::{InherentData, InherentDataProvider};
-use sp_io::TestExternalities;
 use sp_runtime::{
 	traits::{Header, NumberFor, One},
 	Digest,
@@ -93,13 +93,13 @@ where
 
 /// Call `method` with `data` and return the result. `externalities` will not change.
 async fn dry_run<T: Decode, Block: BlockT, HostFns: HostFunctions>(
-	externalities: &TestExternalities,
+	externalities: &mut RemoteExternalities<Block>,
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
 ) -> Result<T> {
-	let (_, result) = state_machine_call::<Block, HostFns>(
-		externalities,
+	let result = state_machine_call::<Block, HostFns>(
+		&mut externalities.on_demand_ext.as_mut().unwrap(),
 		executor,
 		method,
 		data,
@@ -111,27 +111,29 @@ async fn dry_run<T: Decode, Block: BlockT, HostFns: HostFunctions>(
 
 /// Call `method` with `data` and actually save storage changes to `externalities`.
 async fn run<Block: BlockT, HostFns: HostFunctions>(
-	externalities: &mut TestExternalities,
+	externalities: &mut RemoteExternalities<Block>,
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
 ) -> Result<()> {
-	let (mut changes, _) = state_machine_call::<Block, HostFns>(
-		externalities,
+	let on_demand_ext = externalities.on_demand_ext.as_mut().unwrap();
+	state_machine_call::<Block, HostFns>(
+		on_demand_ext,
 		executor,
 		method,
 		data,
 		full_extensions(executor.clone()),
 	)?;
 
-	let storage_changes = changes.drain_storage_changes(
-		&externalities.backend,
+	let storage_changes = on_demand_ext.overlay.drain_storage_changes(
+		&on_demand_ext.backend,
 		&mut Default::default(),
-		externalities.state_version,
+		on_demand_ext.state_version,
 	)?;
 
-	externalities
+	on_demand_ext
 		.backend
+		.cache
 		.apply_transaction(storage_changes.transaction_storage_root, storage_changes.transaction);
 
 	Ok(())
@@ -143,7 +145,7 @@ async fn next_empty_block<
 	HostFns: HostFunctions,
 	BBIP: BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>>,
 >(
-	externalities: &mut TestExternalities,
+	externalities: &mut RemoteExternalities<Block>,
 	executor: &WasmExecutor<HostFns>,
 	parent_height: NumberFor<Block>,
 	parent_hash: Block::Hash,
@@ -220,18 +222,18 @@ where
 	BBIP: BlockBuildingInfoProvider<Block, Option<(InherentData, Digest)>>,
 {
 	let executor = build_executor::<HostFns>(&shared);
-	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
+	let mut ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 
 	let mut last_block_hash = ext.block_hash;
 	let mut last_block_number =
 		get_block_number::<Block>(last_block_hash, command.block_ws_uri()).await?;
 	let mut prev_block_building_info = None;
 
-	let mut ext = ext.inner_ext;
+	// let mut ext = ext.inner_ext;
 
 	for _ in 1..=command.n_blocks.unwrap_or(u64::MAX) {
 		// We are saving state before we overwrite it while producing new block.
-		let backend = ext.as_backend();
+		let backend = ext.inner_ext.as_backend();
 
 		log::info!("Producing new empty block at height {:?}", last_block_number + One::one());
 
@@ -248,7 +250,7 @@ where
 		log::info!("Produced a new block: {:?}", next_block.header());
 
 		// And now we restore previous state.
-		ext.backend = backend;
+		ext.inner_ext.backend = backend;
 
 		let state_root_check = true;
 		let signature_check = true;

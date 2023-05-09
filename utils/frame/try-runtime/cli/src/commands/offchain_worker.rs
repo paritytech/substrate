@@ -93,7 +93,7 @@ where
 	let payload = header.encode();
 
 	let _ = state_machine_call::<Block, HostFns>(
-		&ext,
+		&mut ext.on_demand_ext.unwrap(),
 		&executor,
 		"OffchainWorkerApi_offchain_worker",
 		&payload,

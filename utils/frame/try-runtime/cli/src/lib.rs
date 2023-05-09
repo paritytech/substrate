@@ -348,8 +348,8 @@
 use crate::block_building_info::BlockBuildingInfoProvider;
 use parity_scale_codec::Decode;
 use remote_externalities::{
-	Builder, Mode, OfflineConfig, OnlineConfig, RemoteExternalities, SnapshotConfig,
-	TestExternalities,
+	on_demand_ext::OnDemandExt, Builder, Mode, OfflineConfig, OnlineConfig, RemoteExternalities,
+	SnapshotConfig, TestExternalities,
 };
 use sc_cli::{
 	execution_method_from_cli, CliConfiguration, RuntimeVersion, WasmExecutionMethod,
@@ -359,7 +359,7 @@ use sc_cli::{
 use sc_executor::{
 	sp_wasm_interface::HostFunctions, HeapAllocStrategy, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY,
 };
-use sp_api::HashT;
+use sp_api::{HashT, StateBackend};
 use sp_core::{
 	hexdisplay::HexDisplay,
 	offchain::{
@@ -368,9 +368,9 @@ use sp_core::{
 	},
 	storage::well_known_keys,
 	traits::{CallContext, ReadRuntimeVersion, ReadRuntimeVersionExt},
-	twox_128, H256,
+	twox_128, Blake2Hasher, H256,
 };
-use sp_externalities::Extensions;
+use sp_externalities::{Extensions, Externalities};
 use sp_inherents::InherentData;
 use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
@@ -668,18 +668,27 @@ impl State {
 
 		// build the main ext.
 		let mut ext = builder.build().await?;
+		let mut on_demand_ext = ext.on_demand_ext.as_mut().unwrap();
 
 		// actually replace the code if needed.
 		if let Some(new_code) = maybe_code_to_overwrite {
-			let original_code = ext
-				.execute_with(|| sp_io::storage::get(well_known_keys::CODE))
-				.expect("':CODE:' is always downloaded in try-runtime-cli; qed");
+			let original_code = on_demand_ext
+				.backend
+				.storage(well_known_keys::CODE)
+				.expect("':CODE:' must be set in the underlying backend; qed")
+				.expect("':CODE:' must be set in the underlying backend; qed");
 
 			// NOTE: see the impl notes of `read_runtime_version`, the ext is almost not used here,
 			// only as a backup.
-			ext.insert(well_known_keys::CODE.to_vec(), new_code.clone());
+
+			on_demand_ext.backend.cache.insert(
+				vec![(None, vec![(well_known_keys::CODE.to_vec(), Some(new_code.clone()))])],
+				StateVersion::V1,
+			);
 			let old_version = <RuntimeVersion as Decode>::decode(
-				&mut &*executor.read_runtime_version(&original_code, &mut ext.ext()).unwrap(),
+				&mut &*executor
+					.read_runtime_version(&original_code, &mut on_demand_ext.ext())
+					.unwrap(),
 			)
 			.unwrap();
 			log::info!(
@@ -690,7 +699,7 @@ impl State {
 				HexDisplay::from(BlakeTwo256::hash(&original_code).as_fixed_bytes()),
 			);
 			let new_version = <RuntimeVersion as Decode>::decode(
-				&mut &*executor.read_runtime_version(&new_code, &mut ext.ext()).unwrap(),
+				&mut &*executor.read_runtime_version(&new_code, &mut on_demand_ext.ext()).unwrap(),
 			)
 			.unwrap();
 			log::info!(
@@ -708,7 +717,7 @@ impl State {
 
 		// whatever runtime we have in store now must have been compiled with try-runtime feature.
 		if try_runtime_check {
-			if !ensure_try_runtime::<Block, HostFns>(&executor, &mut ext) {
+			if !ensure_try_runtime::<Block, HostFns>(&executor, &mut on_demand_ext) {
 				return Err("given runtime is NOT compiled with try-runtime feature!".into())
 			}
 		}
@@ -833,12 +842,17 @@ pub(crate) fn build_executor<H: HostFunctions>(shared: &SharedParams) -> WasmExe
 /// Ensure that the given `ext` is compiled with `try-runtime`
 fn ensure_try_runtime<Block: BlockT, HostFns: HostFunctions>(
 	executor: &WasmExecutor<HostFns>,
-	ext: &mut TestExternalities,
+	// ext: &Ext<Blake2Hasher, OnDemandBackend<Blake2Hasher>>,
+	ext: &mut OnDemandExt<Blake2Hasher>,
 ) -> bool {
 	use sp_api::RuntimeApiInfo;
 	let final_code = ext
-		.execute_with(|| sp_io::storage::get(well_known_keys::CODE))
-		.expect("':CODE:' is always downloaded in try-runtime-cli; qed");
+		.ext()
+		.storage(well_known_keys::CODE)
+		.expect("':CODE:' must be set in the underlying backend; qed");
+	// let final_code = ext
+	// 	.execute_with(|| sp_io::storage::get(well_known_keys::CODE))
+	// 	.expect("':CODE:' is always downloaded in try-runtime-cli; qed");
 	let final_version = <RuntimeVersion as Decode>::decode(
 		&mut &*executor.read_runtime_version(&final_code, &mut ext.ext()).unwrap(),
 	)
@@ -851,16 +865,16 @@ fn ensure_try_runtime<Block: BlockT, HostFns: HostFunctions>(
 /// Execute the given `method` and `data` on top of `ext`, returning the results (encoded) and the
 /// state `changes`.
 pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
-	ext: &TestExternalities,
+	ext: &mut OnDemandExt<Blake2Hasher>,
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
 	extensions: Extensions,
-) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
-	let mut changes = Default::default();
+) -> sc_cli::Result<Vec<u8>> {
+	// let mut changes = Default::default();
 	let encoded_results = StateMachine::new(
 		&ext.backend,
-		&mut changes,
+		&mut ext.overlay,
 		executor,
 		method,
 		data,
@@ -872,7 +886,7 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 	.map_err(|e| format!("failed to execute '{}': {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
-	Ok((changes, encoded_results))
+	Ok(encoded_results)
 }
 
 /// Same as [`state_machine_call`], but it also computes and prints the storage proof in different
@@ -911,7 +925,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	.map_err(|e| format!("failed to execute {}: {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
-	let proof = proving_backend
+	let proof = backend
 		.extract_proof()
 		.expect("A recorder was set and thus, a storage proof can be extracted; qed");
 

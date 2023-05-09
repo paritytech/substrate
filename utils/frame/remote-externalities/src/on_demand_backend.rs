@@ -1,15 +1,18 @@
 use core::fmt::Debug;
 
+use async_std;
 use codec::{Decode, Encode};
 use hash_db::Hasher;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
-use log::debug;
+use log;
 use serde::{de::DeserializeOwned, Serialize};
 use sp_core::storage::{ChildInfo, StateVersion};
 use sp_state_machine::{
 	backend::AsTrieBackend, Backend, ChildStorageCollection, DefaultError, InMemoryBackend,
-	StateMachineStats, StorageCollection, StorageIterator, StorageKey, StorageValue, UsageInfo,
+	MemoryDB, StateMachineStats, StorageCollection, StorageIterator, StorageKey, StorageValue,
+	TrieBackend, UsageInfo,
 };
+use sp_trie::HashKey;
 use tokio::runtime::Runtime;
 
 pub(crate) const LOG_TARGET: &str = "on-demand-backend";
@@ -19,10 +22,10 @@ where
 	H: Hasher + 'static,
 	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
 {
+	// TODO: make this an LRU cache
+	pub cache: InMemoryBackend<H>,
 	http_client: HttpClient,
-	pub backend_cache: InMemoryBackend<H>,
 	at: Option<H::Out>,
-	rt: Runtime,
 }
 
 impl<H> Debug for OnDemandBackend<H>
@@ -41,7 +44,6 @@ where
 	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
 {
 	pub fn new(rpc_uri: String, at: Option<H::Out>) -> Result<Self, &'static str> {
-		let rt = tokio::runtime::Runtime::new().unwrap();
 		let http_client = HttpClientBuilder::default()
 			.max_request_body_size(u32::MAX)
 			.request_timeout(std::time::Duration::from_secs(60 * 5))
@@ -51,19 +53,19 @@ where
 				"failed to build http client"
 			})?;
 
-		Ok(Self { http_client, backend_cache: InMemoryBackend::default(), at, rt })
+		Ok(Self { http_client, cache: InMemoryBackend::default(), at })
 	}
 
 	fn storage_remote(&self, key: &[u8]) -> Result<Option<StorageValue>, DefaultError> {
-		debug!(target: LOG_TARGET, "fetching key {:?} from remote.", key);
-		self.rt
-			.block_on(substrate_rpc_client::StateApi::<H::Out>::storage(
-				&self.http_client,
-				sp_core::storage::StorageKey(key.to_vec()),
-				self.at.clone(),
-			))
-			.map(|r| r.map(|x| x.0))
-			.map_err(|e| format!("{:?}", e))
+		// TODO: figure out how to do this without spawning a new thread each remote storage req :')
+		log::info!("fetching key from backend!!!!!!!!!!!!!!!!!!!!!");
+		async_std::task::block_on(substrate_rpc_client::StateApi::<H::Out>::storage(
+			&self.http_client,
+			sp_core::storage::StorageKey(key.to_vec()),
+			self.at.clone(),
+		))
+		.map(|r| r.map(|x| x.0))
+		.map_err(|e| format!("{:?}", e))
 	}
 }
 
@@ -82,11 +84,11 @@ where
 	}
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
-		self.backend_cache.storage(key).map(|opt| {
+		self.cache.storage(key).map(|opt| {
 			opt.or_else(|| {
 				self.storage_remote(key).unwrap().map(|v| {
 					let inner = unsafe {
-						let x = &self.backend_cache as *const InMemoryBackend<H>;
+						let x = &self.cache as *const InMemoryBackend<H>;
 						let y = x as *mut InMemoryBackend<H>;
 						&mut *y
 					};
@@ -138,17 +140,21 @@ where
 	}
 
 	/// Return the next key in storage in lexicographic order or `None` if there is no value.
-	fn next_storage_key(&self, _key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
-		todo!("check local, else check remote")
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
+		// question: Kian's TODO said to check remote for the next storage key. is this necessary?
+		// i don't really know what the storage keys are used for.
+		self.cache.next_storage_key(key)
 	}
 
 	/// Return the next key in child storage in lexicographic order or `None` if there is no value.
 	fn next_child_storage_key(
 		&self,
-		_child_info: &ChildInfo,
-		_key: &[u8],
+		child_info: &ChildInfo,
+		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
-		todo!("check local, else check remote")
+		// question: Kian's TODO said to check remote for the next storage key. is this necessary?
+		// i don't really know what the storage keys are used for.
+		self.cache.next_child_storage_key(child_info, key)
 	}
 
 	/// Calculate the storage root, with given delta over what is already stored in the backend, and
@@ -163,7 +169,8 @@ where
 	where
 		<H as Hasher>::Out: Ord + Decode + Encode,
 	{
-		todo!();
+		// PLACEHOLDER IMPLEMENTATION
+		(self.cache.root().clone(), Default::default())
 	}
 
 	/// Calculate the child storage root, with given delta over what is already stored in the
@@ -239,7 +246,7 @@ where
 	///
 	/// By default nothing is registered.
 	fn register_overlay_stats(&self, _stats: &StateMachineStats) {
-		todo!();
+		// todo!();
 	}
 
 	/// Query backend usage statistics (i/o, memory)
@@ -304,14 +311,14 @@ where
 	type Error = <InMemoryBackend<H> as Backend<H>>::Error;
 
 	fn next_key(&mut self, backend: &Self::Backend) -> Option<Result<StorageKey, Self::Error>> {
-		self.inner.next_key(&backend.backend_cache)
+		self.inner.next_key(&backend.cache)
 	}
 
 	fn next_pair(
 		&mut self,
 		backend: &Self::Backend,
 	) -> Option<Result<(StorageKey, StorageValue), Self::Error>> {
-		self.inner.next_pair(&backend.backend_cache)
+		self.inner.next_pair(&backend.cache)
 	}
 
 	fn was_complete(&self) -> bool {
@@ -333,6 +340,6 @@ where
 		H,
 		sp_trie::cache::LocalTrieCache<H>,
 	> {
-		&self.backend_cache
+		&self.cache
 	}
 }

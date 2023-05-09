@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{build_executor, state_machine_call_with_proof, SharedParams, State, LOG_TARGET};
+use crate::{build_executor, state_machine_call, SharedParams, State, LOG_TARGET};
 use frame_try_runtime::UpgradeCheckSelect;
 use parity_scale_codec::{Decode, Encode};
 use sc_executor::sp_wasm_interface::HostFunctions;
@@ -64,13 +64,12 @@ where
 	let executor = build_executor(&shared);
 	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 
-	let (_, encoded_result) = state_machine_call_with_proof::<Block, HostFns>(
-		&ext,
+	let encoded_result = state_machine_call::<Block, HostFns>(
+		&mut ext.on_demand_ext.unwrap(),
 		&executor,
 		"TryRuntime_on_runtime_upgrade",
 		command.checks.encode().as_ref(),
 		Default::default(), // we don't really need any extensions here.
-		shared.export_proof,
 	)?;
 
 	let (weight, total_weight) = <(Weight, Weight) as Decode>::decode(&mut &*encoded_result)

@@ -54,7 +54,7 @@ where
 		.await
 		.unwrap();
 
-	ext.execute_with(|| {
+	ext.inner_ext.execute_with(|| {
 		use frame_election_provider_support::ElectionDataProvider;
 		log::info!(
 			target: crate::LOG_TARGET,

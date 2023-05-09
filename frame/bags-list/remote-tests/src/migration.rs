@@ -43,7 +43,7 @@ pub async fn execute<Runtime, Block>(
 		.await
 		.unwrap();
 
-	ext.execute_with(|| {
+	ext.inner_ext.execute_with(|| {
 		// get the nominator & validator count prior to migrating; these should be invariant.
 		let pre_migrate_nominator_count = <Nominators<Runtime>>::iter().count() as u32;
 		log::info!(target: LOG_TARGET, "Nominator count: {}", pre_migrate_nominator_count);
