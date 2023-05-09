@@ -1,9 +1,9 @@
-/// The kitchen-sink catalog of the the FRAME macros.
+/// The kitchen-sink catalog of the the FRAME macros and their various syntax options.
 ///
-/// This example does not focus on pallet instancing, and does nto include any where clauses on `T`.
-///
-/// This has all the possibly functionalities that a pallet can have in the normal mode (except
-/// `dev_mode`).
+/// This example does not focus on pallet instancing, `dev_mode`, and does nto include any 'where'
+/// clauses on `T`. These will both incur additional complexity to the syntax, but are not discussed
+/// here.
+// TODO: link to a particular example pallet that highlights each of these. https://github.com/paritytech/substrate/issues/13951
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -18,12 +18,13 @@ pub mod pallet {
 	/// [`frame_support::traits::Get`]. These are all types that the pallet is delegating to the top
 	/// level runtime to provide to it.
 	///
-	/// The `FRAME`-specific functionality are:
+	/// The `FRAME`-specific syntax are:
 	///
-	/// * the use of `#[pallet::constant]`, which places a `Get` implementation in the metadata.
+	/// * the use of `#[pallet::constant]`([`frame_support::procedural`]), which places a `Get`
+	///   implementation in the metadata.
 	/// * `type RuntimeEvent`, which is mandatory if your pallet has events. See TODO.
-	/// * Needless to say, because `Config` is bounded by `frame_system::Config`, you can use all
-	///   the items from `frame_system::Config` as well, such as `AccountId`.
+	/// * Needless to say, because [`Config`] is bounded by [`frame_system::Config`], you can use
+	///   all the items from [`frame_system::Config`] as well, such as `AccountId`.
 	/// * `#[pallet::disable_frame_system_supertrait_check]` would remove the need for
 	///   `frame_system::Config` to exist, which you should almost never need.
 	#[pallet::config]
