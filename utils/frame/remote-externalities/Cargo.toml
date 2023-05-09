@@ -24,6 +24,8 @@ tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread"] }
 substrate-rpc-client = { path = "../rpc/client" }
 futures = "0.3"
 async-recursion = "1.0.4"
+indicatif = "0.17.3"
+spinners = "4.1.0"
 
 [dev-dependencies]
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }

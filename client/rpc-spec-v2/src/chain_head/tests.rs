@@ -12,7 +12,9 @@ use jsonrpsee::{
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::ChildInfo;
-use sc_rpc::testing::test_executor;
+use sc_rpc::testing::{test_executor, TokioTestExecutor};
+use sc_service::client::new_in_mem;
+use sp_api::BlockT;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
 use sp_core::{
@@ -20,15 +22,17 @@ use sp_core::{
 	storage::well_known_keys::{self, CODE},
 };
 use sp_version::RuntimeVersion;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use substrate_test_runtime::Transfer;
 use substrate_test_runtime_client::{
-	prelude::*, runtime, Backend, BlockBuilderExt, Client, ClientBlockImportExt,
+	prelude::*, runtime, runtime::RuntimeApi, Backend, BlockBuilderExt, Client,
+	ClientBlockImportExt, GenesisInit,
 };
 
 type Header = substrate_test_runtime_client::runtime::Header;
 type Block = substrate_test_runtime_client::runtime::Block;
 const MAX_PINNED_BLOCKS: usize = 32;
+const MAX_PINNED_SECS: u64 = 60;
 const CHAIN_GENESIS: [u8; 32] = [0; 32];
 const INVALID_HASH: [u8; 32] = [1; 32];
 const KEY: &[u8] = b":mock";
@@ -73,9 +77,15 @@ async fn setup_api() -> (
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		test_executor(),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
+	)
+	.into_rpc();
 
 	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [true]).await.unwrap();
 	let sub_id = sub.subscription_id();
@@ -107,9 +117,15 @@ async fn follow_subscription_produces_blocks() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		test_executor(),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
+	)
+	.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
 	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
@@ -159,9 +175,15 @@ async fn follow_with_runtime() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		test_executor(),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
+	)
+	.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
 	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [true]).await.unwrap();
@@ -169,12 +191,13 @@ async fn follow_with_runtime() {
 	// Initialized must always be reported first.
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
 
+	// it is basically json-encoded substrate_test_runtime_client::runtime::VERSION
 	let runtime_str = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
 		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",4],\
 		[\"0x37e397fc7c91f5e4\",2],[\"0xd2bc9897eed08f15\",3],[\"0x40fe3ad401f8959a\",6],\
-		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",2],\
-		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
-		\"transactionVersion\":1,\"stateVersion\":1}";
+		[\"0xbc9d89904f5b923f\",1],[\"0xc6e9a76309f39b09\",2],[\"0xdd718d5cc53262d4\",1],\
+		[\"0xcbca25e39f142387\",2],[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],\
+		[\"0xed99c5acb25eedf5\",3]],\"transactionVersion\":1,\"stateVersion\":1}";
 	let runtime: RuntimeVersion = serde_json::from_str(runtime_str).unwrap();
 
 	let finalized_block_runtime =
@@ -259,9 +282,15 @@ async fn get_genesis() {
 	let backend = builder.backend();
 	let client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		test_executor(),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
+	)
+	.into_rpc();
 
 	let genesis: String =
 		api.call("chainHead_unstable_genesisHash", EmptyParams::new()).await.unwrap();
@@ -446,9 +475,15 @@ async fn call_runtime_without_flag() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		test_executor(),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
+	)
+	.into_rpc();
 
 	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 	let sub_id = sub.subscription_id();
@@ -626,9 +661,15 @@ async fn follow_generates_initial_blocks() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		test_executor(),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
+	)
+	.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
 
@@ -748,7 +789,15 @@ async fn follow_exceeding_pinned_blocks() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, 2).into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		test_executor(),
+		CHAIN_GENESIS,
+		2,
+		Duration::from_secs(MAX_PINNED_SECS),
+	)
+	.into_rpc();
 
 	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 
@@ -793,7 +842,15 @@ async fn follow_with_unpin() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, 2).into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		test_executor(),
+		CHAIN_GENESIS,
+		2,
+		Duration::from_secs(MAX_PINNED_SECS),
+	)
+	.into_rpc();
 
 	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 	let sub_id = sub.subscription_id();
@@ -866,9 +923,15 @@ async fn follow_prune_best_block() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		test_executor(),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
+	)
+	.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
 	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
@@ -1017,9 +1080,15 @@ async fn follow_forks_pruned_block() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		test_executor(),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
+	)
+	.into_rpc();
 
 	// Block tree before the subscription:
 	//
@@ -1125,9 +1194,15 @@ async fn follow_report_multiple_pruned_block() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		test_executor(),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
+	)
+	.into_rpc();
 
 	// Block tree:
 	//
@@ -1297,6 +1372,137 @@ async fn follow_report_multiple_pruned_block() {
 }
 
 #[tokio::test]
+async fn pin_block_references() {
+	// Manually construct an in-memory backend and client.
+	let backend = Arc::new(sc_client_api::in_mem::Backend::new());
+	let executor = substrate_test_runtime_client::new_native_or_wasm_executor();
+	let client_config = sc_service::ClientConfig::default();
+
+	let genesis_block_builder = sc_service::GenesisBlockBuilder::new(
+		&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+		!client_config.no_genesis,
+		backend.clone(),
+		executor.clone(),
+	)
+	.unwrap();
+
+	let mut client = Arc::new(
+		new_in_mem::<_, Block, _, RuntimeApi>(
+			backend.clone(),
+			executor,
+			genesis_block_builder,
+			None,
+			None,
+			None,
+			Box::new(TokioTestExecutor::new()),
+			client_config,
+		)
+		.unwrap(),
+	);
+
+	let api = ChainHead::new(
+		client.clone(),
+		backend.clone(),
+		test_executor(),
+		CHAIN_GENESIS,
+		3,
+		Duration::from_secs(MAX_PINNED_SECS),
+	)
+	.into_rpc();
+
+	async fn wait_pinned_references<Block: BlockT>(
+		backend: &Arc<sc_client_api::in_mem::Backend<Block>>,
+		hash: &Block::Hash,
+		target: i64,
+	) {
+		// Retry for at most 2 minutes.
+		let mut retries = 120;
+		while backend.pin_refs(hash).unwrap() != target {
+			if retries == 0 {
+				panic!("Expected target={} pinned references for hash={:?}", target, hash);
+			}
+			retries -= 1;
+
+			tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+		}
+	}
+
+	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
+	let sub_id = sub.subscription_id();
+	let sub_id = serde_json::to_string(&sub_id).unwrap();
+
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let hash = block.header.hash();
+	let block_hash = format!("{:?}", hash);
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+	// Ensure the imported block is propagated for this subscription.
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::Initialized(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::NewBlock(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::BestBlockChanged(_)
+	);
+
+	// We need to wait a bit for:
+	// 1. `NewBlock` and `BestBlockChanged` notifications to propagate to the chainHead
+	// subscription. (pin_refs == 2)
+	// 2. The chainHead to call `pin_blocks` only once for the `NewBlock`
+	// notification (pin_refs == 3)
+	// 3. Both notifications to go out of scope (pin_refs ==  1 (total 3 - dropped 2)).
+	wait_pinned_references(&backend, &hash, 1).await;
+
+	// To not exceed the number of pinned blocks, we need to unpin before the next import.
+	let _res: () = api.call("chainHead_unstable_unpin", [&sub_id, &block_hash]).await.unwrap();
+
+	// Make sure unpin clears out the reference.
+	let refs = backend.pin_refs(&hash).unwrap();
+	assert_eq!(refs, 0);
+
+	// Add another 2 blocks and make sure we drop the subscription with the blocks pinned.
+	let mut hashes = Vec::new();
+	for _ in 0..2 {
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		let hash = block.header.hash();
+		client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+		// Ensure the imported block is propagated for this subscription.
+		assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut sub).await,
+			FollowEvent::NewBlock(_)
+		);
+		assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut sub).await,
+			FollowEvent::BestBlockChanged(_)
+		);
+
+		hashes.push(hash);
+	}
+
+	// Make sure the pin was propagated.
+	for hash in &hashes {
+		wait_pinned_references(&backend, hash, 1).await;
+	}
+
+	// Drop the subscription and expect the pinned blocks to be released.
+	drop(sub);
+	// The `chainHead` detects the subscription was terminated when it tries
+	// to send another block.
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+	for hash in &hashes {
+		wait_pinned_references(&backend, &hash, 0).await;
+	}
+}
+
+#[tokio::test]
 async fn follow_finalized_before_new_block() {
 	let builder = TestClientBuilder::new();
 	let backend = builder.backend();
@@ -1310,6 +1516,7 @@ async fn follow_finalized_before_new_block() {
 		test_executor(),
 		CHAIN_GENESIS,
 		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECS),
 	)
 	.into_rpc();
 

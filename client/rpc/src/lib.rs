@@ -36,6 +36,7 @@ pub mod chain;
 pub mod dev;
 pub mod offchain;
 pub mod state;
+pub mod statement;
 pub mod system;
 
 #[cfg(any(test, feature = "test-helpers"))]
@@ -119,6 +120,9 @@ pub mod utils {
 	/// Subscription response type for substrate.
 	pub enum SubscriptionResponse<T> {
 		/// The subscription was closed, no further message is sent.
+		///
+		/// This is used to exit from subscription without any additional message.
+		/// May be used if the subscription was closed or the subscription was already rejected.
 		Closed,
 		/// Send out a notification.
 		Event(T),

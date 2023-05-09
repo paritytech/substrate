@@ -63,7 +63,8 @@ fn first_block_epoch_zero_start() {
 
 	ext.execute_with(|| {
 		let genesis_slot = Slot::from(100);
-		let (vrf_signature, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+		let (vrf_signature, vrf_randomness) =
+			make_vrf_signature_and_randomness(genesis_slot, &pairs[0]);
 
 		let pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_signature);
 
@@ -111,7 +112,8 @@ fn current_slot_is_processed_on_initialization() {
 
 	ext.execute_with(|| {
 		let genesis_slot = Slot::from(10);
-		let (vrf_signature, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+		let (vrf_signature, vrf_randomness) =
+			make_vrf_signature_and_randomness(genesis_slot, &pairs[0]);
 		let pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_signature);
 
 		System::reset_events();
@@ -140,7 +142,8 @@ where
 
 	ext.execute_with(|| {
 		let genesis_slot = Slot::from(10);
-		let (vrf_signature, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+		let (vrf_signature, vrf_randomness) =
+			make_vrf_signature_and_randomness(genesis_slot, &pairs[0]);
 		let pre_digest = make_pre_digest(0, genesis_slot, vrf_signature);
 
 		System::reset_events();
