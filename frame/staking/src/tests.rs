@@ -4193,11 +4193,7 @@ fn payout_creates_controller() {
 		assert_ok!(Staking::nominate(RuntimeOrigin::signed(controller), vec![11]));
 
 		// kill controller
-		assert_ok!(Balances::transfer_allow_death(
-			RuntimeOrigin::signed(controller),
-			stash,
-			100
-		));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(controller), stash, 100));
 		assert_eq!(Balances::free_balance(controller), 0);
 
 		mock::start_active_era(1);
