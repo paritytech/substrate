@@ -240,7 +240,7 @@ fn change_controller_works() {
 		.unwrap();
 
 		// ensure `stash` and `controller` are bonded as stash controller pair.
-		assert_eq!(Staking::bonded(&stash), Some(controller.clone()));
+		assert_eq!(Staking::bonded(&stash), Some(controller));
 
 		// `controller` can control `stash` who is initially a validator.
 		assert_ok!(Staking::chill(RuntimeOrigin::signed(controller)));
@@ -792,7 +792,7 @@ fn double_staking_should_fail() {
 			Error::<Test>::NotController
 		);
 		// controller => nominating should work.
-		assert_ok!(Staking::nominate(RuntimeOrigin::signed(controller.clone()), vec![1]));
+		assert_ok!(Staking::nominate(RuntimeOrigin::signed(controller), vec![1]));
 	});
 }
 
@@ -4190,25 +4190,25 @@ fn payout_creates_controller() {
 			false,
 		)
 		.unwrap();
-		assert_ok!(Staking::nominate(RuntimeOrigin::signed(controller.clone()), vec![11]));
+		assert_ok!(Staking::nominate(RuntimeOrigin::signed(controller), vec![11]));
 
 		// kill controller
 		assert_ok!(Balances::transfer_allow_death(
-			RuntimeOrigin::signed(controller.clone()),
+			RuntimeOrigin::signed(controller),
 			stash,
 			100
 		));
-		assert_eq!(Balances::free_balance(controller.clone()), 0);
+		assert_eq!(Balances::free_balance(controller), 0);
 
 		mock::start_active_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
 		mock::start_active_era(2);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(controller.clone()), 11, 1));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(controller), 11, 1));
 
 		// Controller is created
-		assert!(Balances::free_balance(controller.clone()) > 0);
+		assert!(Balances::free_balance(controller) > 0);
 	})
 }
 
