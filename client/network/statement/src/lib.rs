@@ -35,10 +35,10 @@ use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network::{
 	config::{NonDefaultSetConfig, NonReservedPeerMode, SetConfig},
 	error,
-	event::Event,
+	service::traits::{NotificationEvent, NotificationService, ValidationResult},
 	types::ProtocolName,
 	utils::{interval, LruHashSet},
-	NetworkEventStream, NetworkNotification, NetworkPeers, NotificationService,
+	NetworkEventStream, NetworkNotification, NetworkPeers,
 };
 use sc_network_common::{
 	role::ObservedRole,
@@ -150,7 +150,6 @@ impl StatementHandlerPrototype {
 		metrics_registry: Option<&Registry>,
 		executor: impl Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send,
 	) -> error::Result<StatementHandler<N, S>> {
-		let net_event_stream = network.event_stream("statement-handler-net");
 		let sync_event_stream = sync.event_stream("statement-handler-sync");
 		let (queue_sender, mut queue_receiver) = async_channel::bounded(100_000);
 
@@ -187,7 +186,6 @@ impl StatementHandlerPrototype {
 			pending_statements_peers: HashMap::new(),
 			network,
 			sync,
-			net_event_stream: net_event_stream.fuse(),
 			sync_event_stream: sync_event_stream.fuse(),
 			peers: HashMap::new(),
 			statement_store,
@@ -223,8 +221,6 @@ pub struct StatementHandler<
 	network: N,
 	/// Syncing service.
 	sync: S,
-	/// Stream of networking events.
-	net_event_stream: stream::Fuse<Pin<Box<dyn Stream<Item = Event> + Send>>>,
 	/// Receiver for syncing-related events.
 	sync_event_stream: stream::Fuse<Pin<Box<dyn Stream<Item = SyncEvent> + Send>>>,
 	/// Notification service.
@@ -267,20 +263,20 @@ where
 						log::warn!(target: LOG_TARGET, "Inconsistent state, no peers for pending statement!");
 					}
 				},
-				network_event = self.net_event_stream.next() => {
-					if let Some(network_event) = network_event {
-						self.handle_network_event(network_event).await;
-					} else {
-						// Networking has seemingly closed. Closing as well.
-						return;
-					}
-				},
 				sync_event = self.sync_event_stream.next() => {
 					if let Some(sync_event) = sync_event {
 						self.handle_sync_event(sync_event);
 					} else {
 						// Syncing has seemingly closed. Closing as well.
 						return;
+					}
+				}
+				event = self.notification_service.next_event().fuse() => {
+					if let Some(event) = event {
+						self.handle_notification_event(event)
+					} else {
+						// `Notifications` has seemingly closed. Closing as well.
+						return
 					}
 				}
 			}
@@ -309,14 +305,14 @@ where
 		}
 	}
 
-	async fn handle_network_event(&mut self, event: Event) {
+	fn handle_notification_event(&mut self, event: NotificationEvent) {
 		match event {
-			Event::Dht(_) => {},
-			Event::NotificationStreamOpened { remote, protocol, role, .. }
-				if protocol == self.protocol_name =>
-			{
+			NotificationEvent::ValidateInboundSubstream { result_tx, .. } => {
+				let _ = result_tx.send(ValidationResult::Accept);
+			},
+			NotificationEvent::NotificationStreamOpened { peer, role, .. } => {
 				let _was_in = self.peers.insert(
-					remote,
+					peer,
 					Peer {
 						known_statements: LruHashSet::new(
 							NonZeroUsize::new(MAX_KNOWN_STATEMENTS).expect("Constant is nonzero"),
@@ -326,39 +322,26 @@ where
 				);
 				debug_assert!(_was_in.is_none());
 			},
-			Event::NotificationStreamClosed { remote, protocol }
-				if protocol == self.protocol_name =>
-			{
-				let _peer = self.peers.remove(&remote);
+			NotificationEvent::NotificationStreamClosed { peer } => {
+				let _peer = self.peers.remove(&peer);
 				debug_assert!(_peer.is_some());
 			},
+			NotificationEvent::NotificationReceived { peer, notification } => {
+				// Accept statements only when node is not major syncing
+				if self.sync.is_major_syncing() {
+					log::trace!(
+						target: LOG_TARGET,
+						"{peer}: Ignoring statements while major syncing or offline"
+					);
+					return
+				}
 
-			Event::NotificationsReceived { remote, messages } => {
-				for (protocol, message) in messages {
-					if protocol != self.protocol_name {
-						continue
-					}
-					// Accept statements only when node is not major syncing
-					if self.sync.is_major_syncing() {
-						log::trace!(
-							target: LOG_TARGET,
-							"{remote}: Ignoring statements while major syncing or offline"
-						);
-						continue
-					}
-					if let Ok(statements) = <Statements as Decode>::decode(&mut message.as_ref()) {
-						self.on_statements(remote, statements);
-					} else {
-						log::debug!(
-							target: LOG_TARGET,
-							"Failed to decode statement list from {remote}"
-						);
-					}
+				if let Ok(statements) = <Statements as Decode>::decode(&mut notification.as_ref()) {
+					self.on_statements(peer, statements);
+				} else {
+					log::debug!(target: LOG_TARGET, "Failed to decode statement list from {peer}");
 				}
 			},
-
-			// Not our concern.
-			Event::NotificationStreamOpened { .. } | Event::NotificationStreamClosed { .. } => {},
 		}
 	}
 

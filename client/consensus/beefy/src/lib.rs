@@ -181,7 +181,7 @@ pub struct BeefyNetworkParams<B: Block, N, S> {
 	/// Syncing service implementing a sync oracle and an event stream for peers.
 	pub sync: Arc<S>,
 	/// Handle for receiving notification events.
-	pub notification_handle: Box<dyn NotificationService>,
+	pub notification_service: Box<dyn NotificationService>,
 	/// Chain specific BEEFY gossip protocol name. See
 	/// [`communication::beefy_protocol_name::gossip_protocol_name`].
 	pub gossip_protocol_name: ProtocolName,
@@ -247,7 +247,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 	let BeefyNetworkParams {
 		network,
 		sync,
-		notification_handle,
+		notification_service,
 		gossip_protocol_name,
 		justifications_protocol_name,
 		..
@@ -262,7 +262,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 	let mut gossip_engine = GossipEngine::new(
 		network.clone(),
 		sync.clone(),
-		notification_handle,
+		notification_service,
 		gossip_protocol_name,
 		gossip_validator.clone(),
 		None,

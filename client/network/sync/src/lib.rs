@@ -1420,7 +1420,7 @@ where
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
 	) -> Result<(Self, NonDefaultSetConfig, Box<dyn NotificationService>), ClientError> {
-		let (block_announce_config, notification_handle) = Self::get_block_announce_proto_config(
+		let (block_announce_config, notification_service) = Self::get_block_announce_proto_config(
 			protocol_id,
 			fork_id,
 			roles,
@@ -1476,7 +1476,7 @@ where
 		};
 
 		sync.reset_sync_start_point()?;
-		Ok((sync, block_announce_config, notification_handle))
+		Ok((sync, block_announce_config, notification_service))
 	}
 
 	/// Returns the median seen block number.

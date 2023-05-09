@@ -124,7 +124,7 @@ pub struct TransactionsHandlerPrototype {
 	protocol_name: ProtocolName,
 
 	/// Handle that is used to communicate with `sc_network::Notifications`.
-	notification_handle: Box<dyn NotificationService>,
+	notification_service: Box<dyn NotificationService>,
 }
 
 impl TransactionsHandlerPrototype {
@@ -141,7 +141,7 @@ impl TransactionsHandlerPrototype {
 			format!("/{}/transactions/1", array_bytes::bytes2hex("", genesis_hash))
 		}
 		.into();
-		let (config, notification_handle) = NonDefaultSetConfig::new(
+		let (config, notification_service) = NonDefaultSetConfig::new(
 			protocol_name.clone(),
 			vec![format!("/{}/transactions/1", protocol_id.as_ref()).into()],
 			MAX_TRANSACTIONS_SIZE,
@@ -154,7 +154,7 @@ impl TransactionsHandlerPrototype {
 			},
 		);
 
-		(Self { protocol_name, notification_handle }, config)
+		(Self { protocol_name, notification_service }, config)
 	}
 
 	/// Turns the prototype into the actual handler. Returns a controller that allows controlling
@@ -179,7 +179,7 @@ impl TransactionsHandlerPrototype {
 
 		let handler = TransactionsHandler {
 			protocol_name: self.protocol_name,
-			notification_handle: self.notification_handle,
+			notification_service: self.notification_service,
 			propagate_timeout: (Box::pin(interval(PROPAGATE_TIMEOUT))
 				as Pin<Box<dyn Stream<Item = ()> + Send>>)
 				.fuse(),
@@ -262,7 +262,7 @@ pub struct TransactionsHandler<
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
 	/// Handle that is used to communicate with `sc_network::Notifications`.
-	notification_handle: Box<dyn NotificationService>,
+	notification_service: Box<dyn NotificationService>,
 }
 
 /// Peer information
@@ -309,7 +309,7 @@ where
 						ToHandler::PropagateTransactions => self.propagate_transactions(),
 					}
 				},
-				event = self.notification_handle.next_event().fuse() => {
+				event = self.notification_service.next_event().fuse() => {
 					if let Some(event) = event {
 						self.handle_notification_event(event)
 					} else {
@@ -468,7 +468,7 @@ where
 				}
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), who);
 				// TODO: don't ignore error
-				let _ = self.notification_handle.send_sync_notification(who, to_send.encode());
+				let _ = self.notification_service.send_sync_notification(who, to_send.encode());
 			}
 		}
 

@@ -240,7 +240,7 @@ pub struct Peer<D, BlockImport> {
 	imported_blocks_stream: Pin<Box<dyn Stream<Item = BlockImportNotification<Block>> + Send>>,
 	finality_notification_stream: Pin<Box<dyn Stream<Item = FinalityNotification<Block>> + Send>>,
 	listen_addr: Multiaddr,
-	notification_handles: HashMap<ProtocolName, Box<dyn NotificationService>>,
+	notification_services: HashMap<ProtocolName, Box<dyn NotificationService>>,
 }
 
 impl<D, B> Peer<D, B>
@@ -512,11 +512,11 @@ where
 	}
 
 	/// Take notification handle for enabled protocol.
-	pub fn take_notification_handle(
+	pub fn take_notification_service(
 		&mut self,
 		protocol: &ProtocolName,
 	) -> Option<Box<dyn NotificationService>> {
-		self.notification_handles.remove(protocol)
+		self.notification_services.remove(protocol)
 	}
 
 	/// Get a reference to the network worker.
@@ -985,7 +985,7 @@ where
 				backend: Some(backend),
 				imported_blocks_stream,
 				finality_notification_stream,
-				notification_handles: HashMap::from_iter(notif_handles.into_iter()),
+				notification_services: HashMap::from_iter(notif_handles.into_iter()),
 				block_import,
 				verifier,
 				network,

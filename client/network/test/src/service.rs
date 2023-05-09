@@ -24,8 +24,8 @@ use sc_network::{
 	config::{self, FullNetworkConfiguration, MultiaddrWithPeerId, ProtocolId, TransportConfig},
 	event::Event,
 	service::traits::{NotificationEvent, ValidationResult},
-	NetworkEventStream, NetworkNotification, NetworkPeers, NetworkService, NetworkStateInfo,
-	NetworkWorker, NotificationService,
+	NetworkEventStream, NetworkPeers, NetworkService, NetworkStateInfo, NetworkWorker,
+	NotificationService,
 };
 use sc_network_common::role::Roles;
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
@@ -116,7 +116,7 @@ impl TestNetworkBuilder {
 		self
 	}
 
-	pub fn build(mut self) -> (TestNetwork, Box<dyn NotificationService>) {
+	pub fn build(mut self) -> (TestNetwork, Option<Box<dyn NotificationService>>) {
 		let client = self.client.as_mut().map_or(
 			Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0),
 			|v| v.clone(),
@@ -199,10 +199,11 @@ impl TestNetworkBuilder {
 		.unwrap();
 		let mut link = self.link.unwrap_or(Box::new(chain_sync_service.clone()));
 
-		if !self.notification_protocols.is_empty() {
+		let handle = if !self.notification_protocols.is_empty() {
 			for config in self.notification_protocols {
 				full_net_config.add_notification_protocol(config);
 			}
+			None
 		} else {
 			let (config, handle) = config::NonDefaultSetConfig::new(
 				PROTOCOL_NAME.into(),
@@ -212,7 +213,8 @@ impl TestNetworkBuilder {
 				self.set_config.unwrap_or_default(),
 			);
 			full_net_config.add_notification_protocol(config);
-		}
+			Some(handle)
+		};
 
 		for config in [
 			block_request_protocol_config,
@@ -266,9 +268,9 @@ impl TestNetworkBuilder {
 /// The nodes are connected together and have the `PROTOCOL_NAME` protocol registered.
 fn build_nodes_one_proto() -> (
 	Arc<TestNetworkService>,
-	Box<dyn NotificationService>,
+	Option<Box<dyn NotificationService>>,
 	Arc<TestNetworkService>,
-	Box<dyn NotificationService>,
+	Option<Box<dyn NotificationService>>,
 ) {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
@@ -297,7 +299,8 @@ async fn notifications_state_consistent() {
 	// Runs two nodes and ensures that events are propagated out of the API in a consistent
 	// correct order, which means no notification received on a closed substream.
 
-	let (node1, mut handle1, node2, mut handle2) = build_nodes_one_proto();
+	let (node1, handle1, node2, handle2) = build_nodes_one_proto();
+	let (mut handle1, mut handle2) = (handle1.unwrap(), handle2.unwrap());
 
 	// Write some initial notifications that shouldn't get through.
 	for _ in 0..(rand::random::<u8>() % 5) {
@@ -416,10 +419,11 @@ async fn lots_of_incoming_peers_works() {
 	sp_tracing::try_init_simple();
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
-	let (main_node, mut handle1) = TestNetworkBuilder::new()
+	let (main_node, handle1) = TestNetworkBuilder::new()
 		.with_listen_addresses(vec![listen_addr.clone()])
 		.with_set_config(config::SetConfig { in_peers: u32::MAX, ..Default::default() })
 		.build();
+	let mut handle1 = handle1.unwrap();
 	let (main_node, _) = main_node.start_network();
 
 	let main_node_peer_id = main_node.local_peer_id();
@@ -437,7 +441,7 @@ async fn lots_of_incoming_peers_works() {
 	let mut background_tasks_to_wait = Vec::new();
 
 	for _ in 0..32 {
-		let (dialing_node, mut handle) = TestNetworkBuilder::new()
+		let (dialing_node, handle) = TestNetworkBuilder::new()
 			.with_set_config(config::SetConfig {
 				reserved_nodes: vec![MultiaddrWithPeerId {
 					multiaddr: listen_addr.clone(),
@@ -446,6 +450,7 @@ async fn lots_of_incoming_peers_works() {
 				..Default::default()
 			})
 			.build();
+		let mut handle = handle.unwrap();
 		let (_, _) = dialing_node.start_network();
 
 		background_tasks_to_wait.push(tokio::spawn(async move {
@@ -480,69 +485,63 @@ async fn lots_of_incoming_peers_works() {
 	future::join_all(background_tasks_to_wait).await;
 }
 
-// #[tokio::test]
-// async fn notifications_back_pressure() {
-// 	// Node 1 floods node 2 with notifications. Random sleeps are done on node 2 to simulate the
-// 	// node being busy. We make sure that all notifications are received.
+#[tokio::test]
+async fn notifications_back_pressure() {
+	// Node 1 floods node 2 with notifications. Random sleeps are done on node 2 to simulate the
+	// node being busy. We make sure that all notifications are received.
 
-// 	const TOTAL_NOTIFS: usize = 10_000;
+	const TOTAL_NOTIFS: usize = 10_000;
 
-// 	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
-// 	let node2_id = node2.local_peer_id();
+	let (node1, handle1, node2, handle2) = build_nodes_one_proto();
+	let (mut handle1, mut handle2) = (handle1.unwrap(), handle2.unwrap());
+	let node2_id = node2.local_peer_id();
 
-// 	let receiver = tokio::spawn(async move {
-// 		let mut received_notifications = 0;
-// 		let mut sync_protocol_name = None;
+	let receiver = tokio::spawn(async move {
+		let mut received_notifications = 0;
+		// let mut sync_protocol_name = None;
 
-// 		while received_notifications < TOTAL_NOTIFS {
-// 			match events_stream2.next().await.unwrap() {
-// 				Event::NotificationStreamOpened { protocol, .. } => {
-// 					if let None = sync_protocol_name {
-// 						sync_protocol_name = Some(protocol);
-// 					}
-// 				},
-// 				Event::NotificationStreamClosed { protocol, .. } => {
-// 					if Some(&protocol) != sync_protocol_name.as_ref() {
-// 						panic!()
-// 					}
-// 				},
-// 				Event::NotificationsReceived { messages, .. } => {
-// 					for message in messages {
-// 						assert_eq!(message.0, PROTOCOL_NAME.into());
-// 						assert_eq!(message.1, format!("hello #{}", received_notifications));
-// 						received_notifications += 1;
-// 					}
-// 				},
-// 				_ => {},
-// 			};
+		while received_notifications < TOTAL_NOTIFS {
+			match handle2.next_event().await.unwrap() {
+				NotificationEvent::ValidateInboundSubstream { result_tx, .. } => {
+					result_tx.send(ValidationResult::Accept).unwrap();
+				},
+				NotificationEvent::NotificationReceived { notification, .. } => {
+					assert_eq!(
+						notification,
+						format!("hello #{}", received_notifications).into_bytes()
+					);
+					received_notifications += 1;
+				},
+				_ => {},
+			}
 
-// 			if rand::random::<u8>() < 2 {
-// 				tokio::time::sleep(Duration::from_millis(rand::random::<u64>() % 750)).await;
-// 			}
-// 		}
-// 	});
+			if rand::random::<u8>() < 2 {
+				tokio::time::sleep(Duration::from_millis(rand::random::<u64>() % 750)).await;
+			}
+		}
+	});
 
-// 	// Wait for the `NotificationStreamOpened`.
-// 	loop {
-// 		match events_stream1.next().await.unwrap() {
-// 			Event::NotificationStreamOpened { .. } => break,
-// 			_ => {},
-// 		};
-// 	}
+	// Wait for the `NotificationStreamOpened`.
+	loop {
+		match handle1.next_event().await.unwrap() {
+			NotificationEvent::ValidateInboundSubstream { result_tx, .. } => {
+				result_tx.send(ValidationResult::Accept).unwrap();
+			},
+			NotificationEvent::NotificationStreamOpened { .. } => break,
+			_ => {},
+		};
+	}
 
-// 	// Sending!
-// 	for num in 0..TOTAL_NOTIFS {
-// 		let notif = node1.notification_sender(node2_id, PROTOCOL_NAME.into()).unwrap();
-// 		notif
-// 			.ready()
-// 			.await
-// 			.unwrap()
-// 			.send(format!("hello #{}", num).into_bytes())
-// 			.unwrap();
-// 	}
+	// Sending!
+	for num in 0..TOTAL_NOTIFS {
+		handle1
+			.send_async_notification(&node2_id, format!("hello #{}", num).into_bytes())
+			.await
+			.unwrap();
+	}
 
-// 	receiver.await.unwrap();
-// }
+	receiver.await.unwrap();
+}
 
 #[tokio::test]
 async fn fallback_name_working() {
@@ -559,15 +558,8 @@ async fn fallback_name_working() {
 		None,
 		Default::default(),
 	);
-	// <<<<<<< HEAD
-	let (node1, mut events_stream1) = TestNetworkBuilder::new()
+	let (network1, _) = TestNetworkBuilder::new()
 		.with_notification_protocol(config)
-		// ||||||| parent of 6114a5d425 (Validate inbound substream before emitting
-		// `NotificationStreamOpened`) 	let (node1, mut events_stream1) = TestNetworkBuilder::new()
-		// =======
-		// 	let (network1, _) = TestNetworkBuilder::new()
-		// >>>>>>> 6114a5d425 (Validate inbound substream before emitting
-		// `NotificationStreamOpened`)
 		.with_config(config::NetworkConfiguration {
 			listen_addresses: vec![listen_addr.clone()],
 			transport: TransportConfig::MemoryOnly,
@@ -577,7 +569,7 @@ async fn fallback_name_working() {
 
 	let (node1, _) = network1.start_network();
 
-	let (network2, mut handle2) = TestNetworkBuilder::new()
+	let (network2, handle2) = TestNetworkBuilder::new()
 		.with_set_config(config::SetConfig {
 			reserved_nodes: vec![MultiaddrWithPeerId {
 				multiaddr: listen_addr,
@@ -586,6 +578,7 @@ async fn fallback_name_working() {
 			..Default::default()
 		})
 		.build();
+	let mut handle2 = handle2.unwrap();
 	let _ = network2.start_network();
 
 	let receiver = tokio::spawn(async move {

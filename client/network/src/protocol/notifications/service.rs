@@ -227,10 +227,10 @@ impl NotificationService for NotificationHandle {
 		}
 	}
 
+	// Clone [`NotificationService`]
 	fn clone(&mut self) -> Result<Box<dyn NotificationService>, ()> {
 		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
-		let (event_tx, event_rx) =
-			tracing_unbounded("mpsc-notification-to-protocol-clonable", 100_000);
+		let (event_tx, event_rx) = tracing_unbounded("mpsc-notification-to-protocol", 100_000);
 		subscribers.push(event_tx);
 
 		Ok(Box::new(NotificationHandle {
@@ -242,6 +242,7 @@ impl NotificationService for NotificationHandle {
 		}))
 	}
 
+	/// Get protocol name.
 	fn protocol(&self) -> &ProtocolName {
 		&self.protocol
 	}

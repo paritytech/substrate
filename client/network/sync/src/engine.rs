@@ -245,7 +245,7 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	metrics: Option<Metrics>,
 
 	/// Handle that is used to communicate with `sc_network::Notifications`.
-	notification_handle: Box<dyn NotificationService>,
+	notification_service: Box<dyn NotificationService>,
 }
 
 impl<B: BlockT, Client> SyncingEngine<B, Client>
@@ -341,7 +341,7 @@ where
 			total.saturating_sub(net_config.network_config.default_peers_set_num_full) as usize
 		};
 
-		let (chain_sync, block_announce_config, notification_handle) = ChainSync::new(
+		let (chain_sync, block_announce_config, notification_service) = ChainSync::new(
 			mode,
 			client.clone(),
 			protocol_id,
@@ -390,7 +390,7 @@ where
 				default_peers_set_num_full,
 				default_peers_set_num_light,
 				event_streams: Vec::new(),
-				notification_handle,
+				notification_service,
 				tick_timeout: Delay::new(TICK_TIMEOUT),
 				metrics: if let Some(r) = metrics_registry {
 					match Metrics::register(r, is_major_syncing.clone()) {
@@ -592,7 +592,7 @@ where
 				};
 
 				peer.last_notification_sent = Instant::now();
-				let _ = self.notification_handle.send_sync_notification(who, message.encode());
+				let _ = self.notification_service.send_sync_notification(who, message.encode());
 			}
 		}
 	}
@@ -728,7 +728,7 @@ where
 		}
 
 		loop {
-			let Poll::Ready(Some(event)) = self.notification_handle.next_event().poll_unpin(cx) else {
+			let Poll::Ready(Some(event)) = self.notification_service.next_event().poll_unpin(cx) else {
 				break;
 			};
 

@@ -369,7 +369,7 @@ async fn voter_init_setup(
 	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
 		net.peer(0).network_service().clone(),
 		net.peer(0).sync_service().clone(),
-		net.peer(0).take_notification_handle(&beefy_gossip_proto_name()).unwrap(),
+		net.peer(0).take_notification_service(&beefy_gossip_proto_name()).unwrap(),
 		"/beefy/whatever",
 		gossip_validator,
 		None,
@@ -390,11 +390,11 @@ where
 {
 	let tasks = FuturesUnordered::new();
 
-	let mut notification_handles = peers
+	let mut notification_services = peers
 		.iter()
 		.map(|(peer_id, _, _)| {
 			let peer = &mut net.peers[*peer_id];
-			(*peer_id, peer.take_notification_handle(&beefy_gossip_proto_name()).unwrap())
+			(*peer_id, peer.take_notification_service(&beefy_gossip_proto_name()).unwrap())
 		})
 		.collect::<std::collections::HashMap<_, _>>();
 
@@ -415,7 +415,7 @@ where
 		let network_params = crate::BeefyNetworkParams {
 			network: peer.network_service().clone(),
 			sync: peer.sync_service().clone(),
-			notification_handle: notification_handles.remove(&peer_id).unwrap(),
+			notification_service: notification_services.remove(&peer_id).unwrap(),
 			gossip_protocol_name: beefy_gossip_proto_name(),
 			justifications_protocol_name: on_demand_justif_handler.protocol_name(),
 			_phantom: PhantomData,
@@ -1289,7 +1289,7 @@ async fn gossipped_finality_proofs() {
 	let mut charlie_gossip_engine = sc_network_gossip::GossipEngine::new(
 		charlie.network_service().clone(),
 		charlie.sync_service().clone(),
-		charlie.take_notification_handle(&beefy_gossip_proto_name()).unwrap(),
+		charlie.take_notification_service(&beefy_gossip_proto_name()).unwrap(),
 		beefy_gossip_proto_name(),
 		charlie_gossip_validator.clone(),
 		None,

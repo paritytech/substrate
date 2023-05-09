@@ -169,7 +169,7 @@ pub fn run_grandpa_observer<BE, Block: BlockT, Client, N, S, SC>(
 	link: LinkHalf<Block, Client, SC>,
 	network: N,
 	sync: S,
-	notification_handle: Box<dyn NotificationService>,
+	notification_service: Box<dyn NotificationService>,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Send>
 where
 	BE: Backend<Block> + Unpin + 'static,
@@ -191,7 +191,7 @@ where
 	let network = NetworkBridge::new(
 		network,
 		sync,
-		notification_handle,
+		notification_service,
 		config.clone(),
 		persistent_data.set_state.clone(),
 		None,

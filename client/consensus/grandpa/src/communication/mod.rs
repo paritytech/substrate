@@ -247,7 +247,7 @@ impl<B: BlockT, N: Network<B>, S: Syncing<B>> NetworkBridge<B, N, S> {
 	pub(crate) fn new(
 		service: N,
 		sync: S,
-		notification_handle: Box<dyn NotificationService>,
+		notification_service: Box<dyn NotificationService>,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		prometheus_registry: Option<&Registry>,
@@ -261,7 +261,7 @@ impl<B: BlockT, N: Network<B>, S: Syncing<B>> NetworkBridge<B, N, S> {
 		let gossip_engine = Arc::new(Mutex::new(GossipEngine::new(
 			service.clone(),
 			sync.clone(),
-			notification_handle,
+			notification_service,
 			protocol,
 			validator.clone(),
 			prometheus_registry,

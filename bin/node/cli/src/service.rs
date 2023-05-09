@@ -349,7 +349,7 @@ pub fn new_full_base(
 		&client.block_hash(0).ok().flatten().expect("Genesis block exists; qed"),
 		&config.chain_spec,
 	);
-	let (grandpa_protocol_config, grandpa_notification_handle) =
+	let (grandpa_protocol_config, grandpa_notification_service) =
 		grandpa::grandpa_peers_set_config(grandpa_protocol_name.clone());
 	net_config.add_notification_protocol(grandpa_protocol_config);
 
@@ -550,7 +550,7 @@ pub fn new_full_base(
 			link: grandpa_link,
 			network: network.clone(),
 			sync: Arc::new(sync_service.clone()),
-			notification_handle: grandpa_notification_handle,
+			notification_service: grandpa_notification_service,
 			telemetry: telemetry.as_ref().map(|x| x.handle()),
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry: prometheus_registry.clone(),

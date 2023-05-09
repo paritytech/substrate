@@ -681,7 +681,7 @@ pub struct GrandpaParams<Block: BlockT, C, N, S, SC, VR> {
 	/// Event stream for syncing-related events.
 	pub sync: S,
 	/// Handle for interacting with `Notifications`.
-	pub notification_handle: Box<dyn NotificationService>,
+	pub notification_service: Box<dyn NotificationService>,
 	/// A voting rule used to potentially restrict target votes.
 	pub voting_rule: VR,
 	/// The prometheus metrics registry.
@@ -735,7 +735,7 @@ where
 		link,
 		network,
 		sync,
-		notification_handle,
+		notification_service,
 		voting_rule,
 		prometheus_registry,
 		shared_voter_state,
@@ -761,7 +761,7 @@ where
 	let network = NetworkBridge::new(
 		network,
 		sync,
-		notification_handle,
+		notification_service,
 		config.clone(),
 		persistent_data.set_state.clone(),
 		prometheus_registry.as_ref(),

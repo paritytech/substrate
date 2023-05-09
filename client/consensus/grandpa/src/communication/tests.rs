@@ -272,6 +272,10 @@ impl NotificationService for TestNotificationService {
 	fn clone(&mut self) -> Result<Box<dyn NotificationService>, ()> {
 		unimplemented!();
 	}
+
+	fn protocol(&self) -> &ProtocolName {
+		unimplemented!();
+	}
 }
 
 pub(crate) struct Tester {
@@ -345,7 +349,7 @@ pub(crate) fn make_test_network() -> (impl Future<Output = Tester>, TestNetwork)
 	let (tx, rx) = tracing_unbounded("test", 100_000);
 	let (notification_tx, notification_rx) = tracing_unbounded("test-notification", 100_000);
 
-	let notification_handle = TestNotificationService { rx: notification_rx };
+	let notification_service = TestNotificationService { rx: notification_rx };
 	let net = TestNetwork { sender: tx };
 	let sync = TestSync {};
 
@@ -363,7 +367,7 @@ pub(crate) fn make_test_network() -> (impl Future<Output = Tester>, TestNetwork)
 	let bridge = super::NetworkBridge::new(
 		net.clone(),
 		sync,
-		Box::new(notification_handle),
+		Box::new(notification_service),
 		config(),
 		voter_set_state(),
 		None,

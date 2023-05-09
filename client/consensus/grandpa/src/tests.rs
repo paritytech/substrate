@@ -313,8 +313,8 @@ fn initialize_grandpa(
 			(net.peers[peer_id].network_service().clone(), link)
 		};
 		let sync = net.peers[peer_id].sync_service().clone();
-		let notification_handle = net.peers[peer_id]
-			.take_notification_handle(&grandpa_protocol_name::NAME.into())
+		let notification_service = net.peers[peer_id]
+			.take_notification_service(&grandpa_protocol_name::NAME.into())
 			.unwrap();
 
 		let grandpa_params = GrandpaParams {
@@ -331,7 +331,7 @@ fn initialize_grandpa(
 			link,
 			network: net_service,
 			sync,
-			notification_handle,
+			notification_service,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
@@ -466,8 +466,8 @@ async fn finalize_3_voters_1_full_observer() {
 		let net_service = net.peers[peer_id].network_service().clone();
 		let sync = net.peers[peer_id].sync_service().clone();
 		let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
-		let notification_handle = net.peers[peer_id]
-			.take_notification_handle(&grandpa_protocol_name::NAME.into())
+		let notification_service = net.peers[peer_id]
+			.take_notification_service(&grandpa_protocol_name::NAME.into())
 			.unwrap();
 
 		let grandpa_params = GrandpaParams {
@@ -484,7 +484,7 @@ async fn finalize_3_voters_1_full_observer() {
 			link,
 			network: net_service,
 			sync,
-			notification_handle,
+			notification_service,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
@@ -552,7 +552,7 @@ async fn transition_3_voters_twice_1_full_observer() {
 	for (peer_id, local_key) in all_peers.clone().into_iter().enumerate() {
 		let keystore = create_keystore(local_key);
 
-		let (net_service, link, sync, notification_handle) = {
+		let (net_service, link, sync, notification_service) = {
 			let mut net = net.lock();
 			let link =
 				net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
@@ -561,7 +561,7 @@ async fn transition_3_voters_twice_1_full_observer() {
 				link,
 				net.peers[peer_id].sync_service().clone(),
 				net.peers[peer_id]
-					.take_notification_handle(&grandpa_protocol_name::NAME.into())
+					.take_notification_service(&grandpa_protocol_name::NAME.into())
 					.unwrap(),
 			)
 		};
@@ -580,7 +580,7 @@ async fn transition_3_voters_twice_1_full_observer() {
 			link,
 			network: net_service,
 			sync,
-			notification_handle,
+			notification_service,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
@@ -1016,7 +1016,7 @@ async fn voter_persists_its_votes() {
 			net.peers[1].network_service().clone(),
 			net.peers[1].sync_service().clone(),
 			net.peers[1]
-				.take_notification_handle(&grandpa_protocol_name::NAME.into())
+				.take_notification_service(&grandpa_protocol_name::NAME.into())
 				.unwrap(),
 			config.clone(),
 			set_state,
@@ -1036,8 +1036,8 @@ async fn voter_persists_its_votes() {
 			(net.peers[0].network_service().clone(), link)
 		};
 		let sync = net.peers[0].sync_service().clone();
-		let notification_handle = net.peers[0]
-			.take_notification_handle(&grandpa_protocol_name::NAME.into())
+		let notification_service = net.peers[0]
+			.take_notification_service(&grandpa_protocol_name::NAME.into())
 			.unwrap();
 
 		let grandpa_params = GrandpaParams {
@@ -1054,7 +1054,7 @@ async fn voter_persists_its_votes() {
 			link,
 			network: net_service,
 			sync,
-			notification_handle,
+			notification_service,
 			voting_rule: VotingRulesBuilder::default().build(),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
@@ -1076,8 +1076,8 @@ async fn voter_persists_its_votes() {
 		net.add_authority_peer();
 		let net_service = net.peers[2].network_service().clone();
 		let sync = net.peers[2].sync_service().clone();
-		let notification_handle = net.peers[2]
-			.take_notification_handle(&grandpa_protocol_name::NAME.into())
+		let notification_service = net.peers[2]
+			.take_notification_service(&grandpa_protocol_name::NAME.into())
 			.unwrap();
 		// but we'll reuse the client from the first peer (alice_voter1)
 		// since we want to share the same database, so that we can
@@ -1101,7 +1101,7 @@ async fn voter_persists_its_votes() {
 			link,
 			network: net_service,
 			sync,
-			notification_handle,
+			notification_service,
 			voting_rule: VotingRulesBuilder::default().build(),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
@@ -1251,7 +1251,7 @@ async fn finalize_3_voters_1_light_observer() {
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 1);
 	let voters = initialize_grandpa(&mut net, authorities);
 	let notification_service = net.peers[3]
-		.take_notification_handle(&grandpa_protocol_name::NAME.into())
+		.take_notification_service(&grandpa_protocol_name::NAME.into())
 		.unwrap();
 	let observer = observer::run_grandpa_observer(
 		Config {
@@ -1316,9 +1316,9 @@ async fn voter_catches_up_to_latest_round_when_behind() {
 			link,
 			network: net.peer(peer_id).network_service().clone(),
 			sync: net.peer(peer_id).sync_service().clone(),
-			notification_handle: net
+			notification_service: net
 				.peer(peer_id)
-				.take_notification_handle(&grandpa_protocol_name::NAME.into())
+				.take_notification_service(&grandpa_protocol_name::NAME.into())
 				.unwrap(),
 			voting_rule: (),
 			prometheus_registry: None,
@@ -1494,7 +1494,7 @@ async fn grandpa_environment_respects_voting_rules() {
 	let network_service = peer.network_service().clone();
 	let sync_service = peer.sync_service().clone();
 	let mut notification_service =
-		peer.take_notification_handle(&grandpa_protocol_name::NAME.into()).unwrap();
+		peer.take_notification_service(&grandpa_protocol_name::NAME.into()).unwrap();
 	let link = peer.data.lock().take().unwrap();
 
 	// add 21 blocks
@@ -1622,7 +1622,7 @@ async fn grandpa_environment_passes_actual_best_block_to_voting_rules() {
 	let network_service = peer.network_service().clone();
 	let sync_service = peer.sync_service().clone();
 	let notification_service =
-		peer.take_notification_handle(&grandpa_protocol_name::NAME.into()).unwrap();
+		peer.take_notification_service(&grandpa_protocol_name::NAME.into()).unwrap();
 	let link = peer.data.lock().take().unwrap();
 	let client = peer.client().as_client().clone();
 	let select_chain = MockSelectChain::default();
@@ -1686,7 +1686,7 @@ async fn grandpa_environment_checks_if_best_block_is_descendent_of_finality_targ
 	let network_service = peer.network_service().clone();
 	let sync_service = peer.sync_service().clone();
 	let notification_service =
-		peer.take_notification_handle(&grandpa_protocol_name::NAME.into()).unwrap();
+		peer.take_notification_service(&grandpa_protocol_name::NAME.into()).unwrap();
 	let link = peer.data.lock().take().unwrap();
 	let client = peer.client().as_client().clone();
 	let select_chain = MockSelectChain::default();
@@ -1800,7 +1800,7 @@ async fn grandpa_environment_never_overwrites_round_voter_state() {
 	let network_service = peer.network_service().clone();
 	let sync_service = peer.sync_service().clone();
 	let notification_service =
-		peer.take_notification_handle(&grandpa_protocol_name::NAME.into()).unwrap();
+		peer.take_notification_service(&grandpa_protocol_name::NAME.into()).unwrap();
 	let link = peer.data.lock().take().unwrap();
 
 	let keystore = create_keystore(peers[0]);
@@ -2014,7 +2014,7 @@ async fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 		let network_service = peer.network_service().clone();
 		let sync_service = peer.sync_service().clone();
 		let notification_service =
-			peer.take_notification_handle(&grandpa_protocol_name::NAME.into()).unwrap();
+			peer.take_notification_service(&grandpa_protocol_name::NAME.into()).unwrap();
 		let link = peer.data.lock().take().unwrap();
 		let keystore = create_keystore(alice);
 		test_environment(

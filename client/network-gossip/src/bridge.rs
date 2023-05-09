@@ -56,7 +56,7 @@ pub struct GossipEngine<B: BlockT> {
 	/// Incoming events from the syncing service.
 	sync_event_stream: Pin<Box<dyn Stream<Item = SyncEvent> + Send>>,
 	/// Handle for polling notification-related events.
-	notification_handle: Box<dyn NotificationService>,
+	notification_service: Box<dyn NotificationService>,
 	/// Outgoing events to the consumer.
 	message_sinks: HashMap<B::Hash, Vec<Sender<TopicNotification>>>,
 	/// Buffered messages (see [`ForwardingState`]).
@@ -86,7 +86,7 @@ impl<B: BlockT> GossipEngine<B> {
 	pub fn new<N, S>(
 		network: N,
 		sync: S,
-		notification_handle: Box<dyn NotificationService>,
+		notification_service: Box<dyn NotificationService>,
 		protocol: impl Into<ProtocolName>,
 		validator: Arc<dyn Validator<B>>,
 		metrics_registry: Option<&Registry>,
@@ -103,7 +103,7 @@ impl<B: BlockT> GossipEngine<B> {
 			state_machine: ConsensusGossip::new(validator, protocol.clone(), metrics_registry),
 			network: Box::new(network),
 			sync: Box::new(sync),
-			notification_handle,
+			notification_service,
 			periodic_maintenance_interval: futures_timer::Delay::new(PERIODIC_MAINTENANCE_INTERVAL),
 			protocol,
 
@@ -189,7 +189,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 		'outer: loop {
 			match &mut this.forwarding_state {
 				ForwardingState::Idle => {
-					let next_notification = this.notification_handle.next_event().poll_unpin(cx);
+					let next_notification = this.notification_service.next_event().poll_unpin(cx);
 					let sync_event_stream = this.sync_event_stream.poll_next_unpin(cx);
 
 					if next_notification.is_pending() && sync_event_stream.is_pending() {
@@ -552,6 +552,10 @@ mod tests {
 		}
 
 		fn clone(&mut self) -> Result<Box<dyn NotificationService>, ()> {
+			unimplemented!();
+		}
+
+		fn protocol(&self) -> &ProtocolName {
 			unimplemented!();
 		}
 	}
