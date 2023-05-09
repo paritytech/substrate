@@ -19,5 +19,3 @@ glob = "0.2"
 tar = "0.4"
 tempfile = "3"
 toml = "0.4"
-
-[workspace]
