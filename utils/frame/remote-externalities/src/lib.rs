@@ -21,6 +21,7 @@
 //! based chain, or a local state snapshot file.
 
 mod on_demand_backend;
+mod on_demand_ext;
 use async_recursion::async_recursion;
 use codec::{Decode, Encode};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -30,6 +31,7 @@ use jsonrpsee::{
 };
 use log::*;
 use on_demand_backend::OnDemandBackend;
+use on_demand_ext::OnDemandExt;
 use serde::de::DeserializeOwned;
 use sp_core::{
 	hashing::twox_128,
@@ -75,7 +77,7 @@ pub struct RemoteExternalities<B: BlockT> {
 	/// The block hash it which we created this externality env.
 	pub block_hash: B::Hash,
 	/// On-demand backend. Trying to mirror behavior of inner_ext for now.
-	pub on_demand_backend: Option<OnDemandBackend<Blake2Hasher>>,
+	pub on_demand_ext: Option<OnDemandExt<Blake2Hasher>>,
 }
 
 impl<B: BlockT> Deref for RemoteExternalities<B> {
@@ -931,13 +933,12 @@ where
 		self.init_remote_client().await?;
 		let block_hash = self.as_online().at_expected();
 		let inner_ext = self.load_remote_and_maybe_save().await?;
-		let on_demand_backend =
-			OnDemandBackend::<Blake2Hasher>::new("http://localhost:9944".to_owned(), None)?;
-		Ok(RemoteExternalities {
-			block_hash,
-			inner_ext,
-			on_demand_backend: Some(on_demand_backend),
-		})
+		let on_demand_ext = OnDemandExt::<Blake2Hasher>::new(
+			"http://localhost:9944".to_owned(),
+			None,
+			StateVersion::V1,
+		)?;
+		Ok(RemoteExternalities { block_hash, inner_ext, on_demand_ext: Some(on_demand_ext) })
 	}
 
 	fn do_load_offline(
@@ -957,7 +958,7 @@ where
 		inner_ext.from_raw_snapshot(raw_storage, storage_root);
 		sp.stop_with_message(format!("✅ Loaded snapshot ({:.2}s)", start.elapsed().as_secs_f32()));
 
-		Ok(RemoteExternalities { inner_ext, block_hash, on_demand_backend: None })
+		Ok(RemoteExternalities { inner_ext, block_hash, on_demand_ext: None })
 	}
 
 	pub(crate) async fn pre_build(mut self) -> Result<RemoteExternalities<B>, &'static str> {

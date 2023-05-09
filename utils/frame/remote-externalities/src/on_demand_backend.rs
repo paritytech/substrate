@@ -4,7 +4,7 @@ use codec::{Decode, Encode};
 use hash_db::Hasher;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use log::debug;
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Serialize};
 use sp_core::storage::{ChildInfo, StateVersion};
 use sp_state_machine::{
 	backend::AsTrieBackend, Backend, ChildStorageCollection, DefaultError, InMemoryBackend,
@@ -14,23 +14,31 @@ use tokio::runtime::Runtime;
 
 pub(crate) const LOG_TARGET: &str = "on-demand-backend";
 
-pub struct OnDemandBackend<H: Hasher> {
+pub struct OnDemandBackend<H>
+where
+	H: Hasher + 'static,
+	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
+{
 	http_client: HttpClient,
-	backend_cache: InMemoryBackend<H>,
+	pub backend_cache: InMemoryBackend<H>,
 	at: Option<H::Out>,
 	rt: Runtime,
 }
 
-impl<H: Hasher> Debug for OnDemandBackend<H> {
+impl<H> Debug for OnDemandBackend<H>
+where
+	H: Hasher + 'static,
+	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
+{
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		write!(f, "OnDemandBackend")
 	}
 }
 
-impl<H: Hasher> OnDemandBackend<H>
+impl<H> OnDemandBackend<H>
 where
-	<H as Hasher>::Out:
-		Ord + Decode + Encode + serde::Serialize + DeserializeOwned + Send + Sync + Clone + 'static,
+	H: Hasher + 'static,
+	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
 {
 	pub fn new(rpc_uri: String, at: Option<H::Out>) -> Result<Self, &'static str> {
 		let rt = tokio::runtime::Runtime::new().unwrap();
@@ -59,11 +67,10 @@ where
 	}
 }
 
-impl<H: Hasher + serde::Serialize + DeserializeOwned + Send + Sync + Clone + 'static> Backend<H>
-	for OnDemandBackend<H>
+impl<H> Backend<H> for OnDemandBackend<H>
 where
-	<H as Hasher>::Out:
-		Ord + Decode + Encode + serde::Serialize + DeserializeOwned + Send + Sync + Clone + 'static,
+	H: Hasher + 'static,
+	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
 {
 	type Error = <InMemoryBackend<H> as Backend<H>>::Error;
 	type Transaction = <InMemoryBackend<H> as Backend<H>>::Transaction;
@@ -280,16 +287,18 @@ where
 	}
 }
 
-pub struct RawIter<H: Hasher>
+pub struct RawIter<H>
 where
-	<H as Hasher>::Out: Ord + Decode + Encode,
+	H: Hasher + 'static,
+	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
 {
 	inner: <InMemoryBackend<H> as Backend<H>>::RawIter,
 }
 
-impl<H: Hasher> StorageIterator<H> for RawIter<H>
+impl<H> StorageIterator<H> for RawIter<H>
 where
-	<H as Hasher>::Out: Ord + Decode + Encode,
+	H: Hasher + 'static,
+	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
 {
 	type Backend = OnDemandBackend<H>;
 	type Error = <InMemoryBackend<H> as Backend<H>>::Error;
@@ -310,9 +319,10 @@ where
 	}
 }
 
-impl<H: Hasher> AsTrieBackend<H> for OnDemandBackend<H>
+impl<H> AsTrieBackend<H> for OnDemandBackend<H>
 where
-	<H as Hasher>::Out: Ord + Decode + Encode,
+	H: Hasher + 'static,
+	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
 {
 	type TrieBackendStorage = <InMemoryBackend<H> as Backend<H>>::TrieBackendStorage;
 
