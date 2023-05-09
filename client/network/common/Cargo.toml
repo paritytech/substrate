@@ -37,7 +37,7 @@ sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/cons
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 thiserror = "1.0"
-zeroize = "1.4.3"
+zeroize = "1.6.0"
 
 [dev-dependencies]
 tempfile = "3.1.0"
