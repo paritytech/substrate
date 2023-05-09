@@ -113,11 +113,9 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	#[doc(alias = "FastUnstakePallet")] // TODO: expand in macro, although it is not super useful. https://github.com/paritytech/substrate/issues/13818
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	#[doc(alias = "FastUnstakeConfig")]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>>
