@@ -44,7 +44,6 @@ std = [
 serde = [
 	"dep:serde",
 	"scale-info/serde",
-	"serde/alloc",
 ]
 
 [[bench]]
