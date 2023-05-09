@@ -218,6 +218,7 @@ impl ProtocolController {
 		let (actions_tx, actions_rx) = tracing_unbounded("mpsc_api_protocol", 10_000);
 		let (events_tx, events_rx) = tracing_unbounded("mpsc_notifications_protocol", 10_000);
 		let handle = ProtocolHandle { actions_tx, events_tx };
+		peer_store.register_protocol(handle.clone());
 		let reserved_nodes =
 			config.reserved_nodes.iter().map(|p| (*p, PeerState::NotConnected)).collect();
 		let controller = ProtocolController {
@@ -696,7 +697,7 @@ impl ProtocolController {
 
 #[cfg(test)]
 mod tests {
-	use super::{Direction, PeerState, ProtocolController};
+	use super::{Direction, PeerState, ProtocolController, ProtocolHandle};
 	use crate::{
 		peer_store::PeerStoreProvider, IncomingIndex, Message, ReputationChange, SetConfig, SetId,
 	};
@@ -710,6 +711,7 @@ mod tests {
 
 		impl PeerStoreProvider for PeerStoreHandle {
 			fn is_banned(&self, peer_id: &PeerId) -> bool;
+			fn register_protocol(&self, protocol_handle: ProtocolHandle);
 			fn report_disconnect(&mut self, peer_id: PeerId);
 			fn report_peer(&mut self, peer_id: PeerId, change: ReputationChange);
 			fn peer_reputation(&self, peer_id: &PeerId) -> i32;

@@ -28,7 +28,7 @@ use std::{
 };
 use wasm_timer::Delay;
 
-use crate::{ReputationChange, LOG_TARGET};
+use crate::{protocol_controller::ProtocolHandle, ReputationChange, LOG_TARGET};
 
 /// We don't accept nodes whose reputation is under this value.
 pub const BANNED_THRESHOLD: i32 = 82 * (i32::MIN / 100);
@@ -47,6 +47,9 @@ const FORGET_AFTER: Duration = Duration::from_secs(3600);
 pub trait PeerStoreProvider: Debug + Send {
 	/// Check whether the peer is banned.
 	fn is_banned(&self, peer_id: &PeerId) -> bool;
+
+	/// Register a protocol handle to disconnect peers whose reputation drops below the threshold.
+	fn register_protocol(&self, protocol_handle: ProtocolHandle);
 
 	/// Report peer disconnection for reputation adjustment.
 	fn report_disconnect(&mut self, peer_id: PeerId);
@@ -69,6 +72,10 @@ pub struct PeerStoreHandle {
 impl PeerStoreProvider for PeerStoreHandle {
 	fn is_banned(&self, peer_id: &PeerId) -> bool {
 		self.inner.lock().unwrap().is_banned(peer_id)
+	}
+
+	fn register_protocol(&self, protocol_handle: ProtocolHandle) {
+		self.inner.lock().unwrap().register_protocol(protocol_handle);
 	}
 
 	fn report_disconnect(&mut self, peer_id: PeerId) {
@@ -173,11 +180,16 @@ impl PeerInfo {
 #[derive(Debug)]
 struct PeerStoreInner {
 	peers: HashMap<PeerId, PeerInfo>,
+	protocols: Vec<ProtocolHandle>,
 }
 
 impl PeerStoreInner {
 	fn is_banned(&self, peer_id: &PeerId) -> bool {
 		self.peers.get(peer_id).map_or(false, |info| info.is_banned())
+	}
+
+	fn register_protocol(&mut self, protocol_handle: ProtocolHandle) {
+		self.protocols.push(protocol_handle);
 	}
 
 	fn report_disconnect(&mut self, peer_id: PeerId) {
@@ -197,14 +209,27 @@ impl PeerStoreInner {
 		let peer_info = self.peers.entry(peer_id).or_default();
 		peer_info.add_reputation(change.value);
 
-		log::trace!(
-			target: LOG_TARGET,
-			"Report {}: {:+} to {}. Reason: {}.",
-			peer_id,
-			change.value,
-			peer_info.reputation,
-			change.reason,
-		);
+		if peer_info.reputation < BANNED_THRESHOLD {
+			self.protocols.iter().for_each(|handle| handle.disconnect_peer(peer_id));
+
+			log::trace!(
+				target: LOG_TARGET,
+				"Report {}: {:+} to {}. Reason: {}. Banned, disconnecting.",
+				peer_id,
+				change.value,
+				peer_info.reputation,
+				change.reason,
+			);
+		} else {
+			log::trace!(
+				target: LOG_TARGET,
+				"Report {}: {:+} to {}. Reason: {}.",
+				peer_id,
+				change.value,
+				peer_info.reputation,
+				change.reason,
+			);
+		}
 	}
 
 	fn peer_reputation(&self, peer_id: &PeerId) -> i32 {
@@ -273,6 +298,7 @@ impl PeerStore {
 					.into_iter()
 					.map(|peer_id| (peer_id, PeerInfo::default()))
 					.collect(),
+				protocols: Vec::new(),
 			})),
 		}
 	}
