@@ -66,18 +66,16 @@ use tokio::{
 pub fn start_node() -> (Child, String) {
 	let port = 45789;
 
-	let child = Command::new(cargo_bin("node-template"))
+	let child = Command::new(cargo_bin("substrate"))
+		.env("RUST_LOG", "runtime=trace")
 		.stdout(process::Stdio::piped())
 		.stderr(process::Stdio::piped())
-		// Revert this back once we have resolve this issue:
-		// https://github.com/paritytech/substrate/issues/13969
-		// .args(&[
-		// 	"--dev",
-		// 	"--tmp",
-		// 	format!("--ws-port={}", port).as_str(),
-		// 	"--no-hardware-benchmarks",
-		// ])
-		.args(&["--dev", "--ws-port=45789"])
+		.args(&[
+			"--dev",
+			"--tmp",
+			format!("--ws-port={}", port).as_str(),
+			"--no-hardware-benchmarks",
+		])
 		.kill_on_drop(true)
 		.spawn()
 		.unwrap();
