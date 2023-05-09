@@ -379,24 +379,6 @@ pub fn new_full_base(
 			warp_sync_params: Some(WarpSyncParams::WithProvider(warp_sync)),
 		})?;
 
-	if config.offchain_worker.enabled {
-		task_manager.spawn_handle().spawn(
-			"offchain-workers-runner",
-			"offchain-work",
-			sc_offchain::OffchainWorkers::new(sc_offchain::OffchainWorkerOptions {
-				runtime_api_provider: client.clone(),
-				keystore: Some(keystore_container.keystore()),
-				offchain_db: backend.offchain_storage(),
-				transaction_pool: Some(transaction_pool.clone()),
-				network_provider: network.clone(),
-				is_validator: config.role.is_authority(),
-				enable_http_requests: true,
-			})
-			.run(client.clone(), task_manager.spawn_handle())
-			.boxed(),
-		);
-	}
-
 	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
 	let backoff_authoring_blocks =
@@ -404,10 +386,11 @@ pub fn new_full_base(
 	let name = config.network.node_name.clone();
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
+	let enable_offchain_worker = config.offchain_worker.enabled;
 
 	let rpc_handlers = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 		config,
-		backend,
+		backend: backend.clone(),
 		client: client.clone(),
 		keystore: keystore_container.keystore(),
 		network: network.clone(),
@@ -532,14 +515,14 @@ pub fn new_full_base(
 	// need a keystore, regardless of which protocol we use below.
 	let keystore = if role.is_authority() { Some(keystore_container.keystore()) } else { None };
 
-	let config = grandpa::Config {
+	let grandpa_config = grandpa::Config {
 		// FIXME #1578 make this available through chainspec
 		gossip_duration: std::time::Duration::from_millis(333),
 		justification_period: 512,
 		name: Some(name),
 		observer_enabled: false,
 		keystore,
-		local_role: role,
+		local_role: role.clone(),
 		telemetry: telemetry.as_ref().map(|x| x.handle()),
 		protocol_name: grandpa_protocol_name,
 	};
@@ -552,7 +535,7 @@ pub fn new_full_base(
 		// been tested extensively yet and having most nodes in a network run it
 		// could lead to finality stalls.
 		let grandpa_config = grandpa::GrandpaParams {
-			config,
+			config: grandpa_config,
 			link: grandpa_link,
 			network: network.clone(),
 			sync: Arc::new(sync_service.clone()),
@@ -590,6 +573,27 @@ pub fn new_full_base(
 		Some("networking"),
 		statement_handler.run(),
 	);
+
+	if enable_offchain_worker {
+		task_manager.spawn_handle().spawn(
+			"offchain-workers-runner",
+			"offchain-work",
+			sc_offchain::OffchainWorkers::new(sc_offchain::OffchainWorkerOptions {
+				runtime_api_provider: client.clone(),
+				keystore: Some(keystore_container.keystore()),
+				offchain_db: backend.offchain_storage(),
+				transaction_pool: Some(transaction_pool.clone()),
+				network_provider: network.clone(),
+				is_validator: role.is_authority(),
+				enable_http_requests: true,
+				custom_extensions: move |_| {
+					vec![Box::new(statement_store.clone().as_statement_store_ext()) as Box<_>]
+				},
+			})
+			.run(client.clone(), task_manager.spawn_handle())
+			.boxed(),
+		);
+	}
 
 	network_starter.start_network();
 	Ok(NewFullBase {

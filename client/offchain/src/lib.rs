@@ -48,13 +48,13 @@ use sc_network::{NetworkPeers, NetworkStateInfo};
 use sc_transaction_pool_api::OffchainSubmitTransaction;
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_core::{offchain, traits::SpawnNamed};
+use sp_externalities::Extension;
 use sp_keystore::{KeystoreExt, KeystorePtr};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{self, Header},
 };
 use threadpool::ThreadPool;
-use sp_externalities::Extension;
 
 mod api;
 
@@ -144,12 +144,12 @@ pub struct OffchainWorkers<RA, Block: traits::Block, Storage> {
 	transaction_pool: Option<Arc<dyn OffchainSubmitTransaction<Block>>>,
 	network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 	is_validator: bool,
-	custom_extensions: Box<dyn Fn(Block::Hash) -> Vec<Box<dyn Extension>>>,
+	custom_extensions: Box<dyn Fn(Block::Hash) -> Vec<Box<dyn Extension>> + Send>,
 }
 
 impl<RA, Block: traits::Block, Storage> OffchainWorkers<RA, Block, Storage> {
 	/// Creates new [`OffchainWorkers`].
-	pub fn new<CE: Fn(Block::Hash) -> Vec<Box<dyn Extension>> + 'static>(
+	pub fn new<CE: Fn(Block::Hash) -> Vec<Box<dyn Extension>> + Send + 'static>(
 		OffchainWorkerOptions {
 			runtime_api_provider,
 			keystore,
