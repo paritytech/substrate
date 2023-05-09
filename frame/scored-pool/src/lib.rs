@@ -254,7 +254,6 @@ pub mod pallet {
 		pub member_count: u32,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self { pool: Default::default(), member_count: Default::default() }

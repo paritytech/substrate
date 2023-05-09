@@ -113,7 +113,6 @@ pub mod pallet {
 		pub nodes: Vec<(PeerId, T::AccountId)>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self { nodes: Vec::new() }

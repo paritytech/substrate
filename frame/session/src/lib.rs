@@ -418,7 +418,6 @@ pub mod pallet {
 		pub keys: Vec<(T::AccountId, T::ValidatorId, T::Keys)>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self { keys: Default::default() }

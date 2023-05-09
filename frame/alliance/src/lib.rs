@@ -407,7 +407,6 @@ pub mod pallet {
 		pub phantom: PhantomData<(T, I)>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self { fellows: Vec::new(), allies: Vec::new(), phantom: Default::default() }

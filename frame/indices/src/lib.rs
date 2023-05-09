@@ -267,7 +267,6 @@ pub mod pallet {
 		pub indices: Vec<(T::AccountIndex, T::AccountId)>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self { indices: Default::default() }

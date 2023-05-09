@@ -236,7 +236,6 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig;
 
-	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
 			Self

@@ -625,7 +625,6 @@ pub mod pallet {
 	}
 
 	// The default value for the genesis config type.
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self { dummy: Default::default(), bar: Default::default(), foo: Default::default() }

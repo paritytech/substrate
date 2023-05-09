@@ -133,7 +133,6 @@ pub mod pallet {
 		pub authorities: Vec<T::AuthorityId>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self { authorities: Vec::new() }

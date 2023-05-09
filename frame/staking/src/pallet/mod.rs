@@ -594,7 +594,6 @@ pub mod pallet {
 		pub max_nominator_count: Option<u32>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			GenesisConfig {
