@@ -246,8 +246,8 @@ fn change_controller_works() {
 		assert_ok!(Staking::chill(RuntimeOrigin::signed(controller)));
 
 		// sets controller back to `stash`.
-		assert_ok!(Staking::set_controller(RuntimeOrigin::signed(stash.clone())));
-		assert_eq!(Staking::bonded(&stash), Some(stash.clone()));
+		assert_ok!(Staking::set_controller(RuntimeOrigin::signed(stash)));
+		assert_eq!(Staking::bonded(&stash), Some(stash));
 		mock::start_active_era(1);
 
 		// `controller` is no longer in control. `stash` is now controller.
@@ -256,7 +256,7 @@ fn change_controller_works() {
 			Error::<Test>::NotController,
 		);
 		assert_ok!(Staking::validate(
-			RuntimeOrigin::signed(stash.clone()),
+			RuntimeOrigin::signed(stash),
 			ValidatorPrefs::default()
 		));
 	})
@@ -780,7 +780,7 @@ fn double_staking_should_fail() {
 		// 4 = not used so far,  stash => not allowed.
 		assert_noop!(
 			Staking::bond(
-				RuntimeOrigin::signed(stash.clone()),
+				RuntimeOrigin::signed(stash),
 				arbitrary_value.into(),
 				RewardDestination::default()
 			),
@@ -788,7 +788,7 @@ fn double_staking_should_fail() {
 		);
 		// stash => attempting to nominate should fail.
 		assert_noop!(
-			Staking::nominate(RuntimeOrigin::signed(stash.clone()), vec![1]),
+			Staking::nominate(RuntimeOrigin::signed(stash), vec![1]),
 			Error::<Test>::NotController
 		);
 		// controller => nominating should work.
@@ -814,7 +814,7 @@ fn double_controlling_attempt_should_fail() {
 		// Note that 2 controller (same as stash) is reused => no-op.
 		assert_noop!(
 			Staking::bond(
-				RuntimeOrigin::signed(stash.clone()),
+				RuntimeOrigin::signed(stash),
 				arbitrary_value.into(),
 				RewardDestination::default()
 			),
