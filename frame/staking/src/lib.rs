@@ -313,6 +313,7 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, StaticLookup, Zero},
 	Perbill, RuntimeDebug,
 };
+pub use sp_staking::StakerStatus;
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
 	EraIndex, SessionIndex,
@@ -321,7 +322,6 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};
-pub use sp_staking::StakerStatus;
 
 pub(crate) const LOG_TARGET: &str = "runtime::staking";
 

@@ -318,8 +318,7 @@ pub mod pallet {
 	///
 	/// This should never be accessed directly.
 	#[pallet::storage]
-	pub(crate) type Ledger<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<T>>;
+	pub type Ledger<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<T>>;
 
 	/// Where the reward payment should be made. Keyed by stash.
 	///

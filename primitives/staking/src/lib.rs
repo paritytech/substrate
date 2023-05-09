@@ -37,15 +37,15 @@ pub type SessionIndex = u32;
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
 
-/// Indicates the initial status of the staker.
+/// Representation of the status of a staker.
 #[derive(RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Clone))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone))]
 pub enum StakerStatus<AccountId> {
 	/// Chilling.
 	Idle,
-	/// Declared desire in validating or already participating in it.
+	/// Declaring desire in validate, i.e author blocks.
 	Validator,
-	/// Nominating for a group of other stakers.
+	/// Declaring desire to nominate, delegate, or generally approve of the given set of others.
 	Nominator(Vec<AccountId>),
 }
 
@@ -135,10 +135,10 @@ pub trait OnStakingUpdate<I: StakingInterface> {
 	fn on_validator_update(who: &I::AccountId);
 
 	/// Fired when someone removes their intention to validate, either due to chill or nominating.
-	fn on_validator_remove(who: &I::AccountId); // only fire this event when this is an actual Validator
+	fn on_validator_remove(who: &I::AccountId);
 
 	/// fired when someone is fully unstaked.
-	fn on_unstake(who: &I::AccountId); // -> basically `kill_stash`
+	fn on_unstake(who: &I::AccountId);
 }
 
 /// A generic representation of a staking implementation.
@@ -188,21 +188,25 @@ pub trait StakingInterface {
 	/// This should be the latest planned era that the staking system knows about.
 	fn current_era() -> EraIndex;
 
-	/// Returns the stake of `who`.
+	/// Returns the [`Stake`] of `who`.
 	fn stake(who: &Self::AccountId) -> Result<Stake<Self::Balance>, DispatchError>;
 
+	/// Total stake of a staker, `Err` if not a staker.
 	fn total_stake(who: &Self::AccountId) -> Result<Self::Balance, DispatchError> {
 		Self::stake(who).map(|s| s.total)
 	}
 
+	/// Total active portion of a staker's [`Stake`], `Err` if not a staker.
 	fn active_stake(who: &Self::AccountId) -> Result<Self::Balance, DispatchError> {
 		Self::stake(who).map(|s| s.active)
 	}
 
+	/// Returns whether a staker is unbonding, `Err` if not a staker at all.
 	fn is_unbonding(who: &Self::AccountId) -> Result<bool, DispatchError> {
 		Self::stake(who).map(|s| s.active != s.total)
 	}
 
+	/// Returns whether a staker is FULLY unbonding, `Err` if not a staker at all.
 	fn fully_unbond(who: &Self::AccountId) -> DispatchResult {
 		Self::unbond(who, Self::stake(who)?.active)
 	}
@@ -254,7 +258,7 @@ pub trait StakingInterface {
 	fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool;
 
 	/// Return the status of the given staker, `None` if not staked at all.
-	fn status(who: &Self::AccountId) -> Option<StakerStatus<Self::AccountId>>;
+	fn status(who: &Self::AccountId) -> Result<StakerStatus<Self::AccountId>, DispatchError>;
 
 	/// Checks whether or not this is a validator account.
 	fn is_validator(who: &Self::AccountId) -> bool {
@@ -264,7 +268,7 @@ pub trait StakingInterface {
 	/// Get the nominations of a stash, if they are a nominator, `None` otherwise.
 	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
 		match Self::status(who) {
-			Some(StakerStatus::Nominator(t)) => Some(t),
+			Ok(StakerStatus::Nominator(t)) => Some(t),
 			_ => None,
 		}
 	}

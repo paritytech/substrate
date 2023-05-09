@@ -7,7 +7,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{traits::Zero, Perquintill, Rounding, Saturating};
 use sp_staking::{EraIndex, OnStakingUpdate};
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{log, BalanceOf, Config, Ledger, STAKING_ID};
 
