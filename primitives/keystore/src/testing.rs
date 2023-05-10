@@ -19,6 +19,8 @@
 
 use crate::{Error, Keystore, KeystorePtr};
 
+#[cfg(feature = "bls-experimental")]
+use sp_core::{bls377, bls381};
 use sp_core::{
 	crypto::{ByteArray, KeyTypeId, Pair, VrfSecret},
 	ecdsa, ed25519, sr25519,
@@ -210,6 +212,54 @@ impl Keystore for MemoryKeystore {
 	) -> Result<Option<ecdsa::Signature>, Error> {
 		let sig = self.pair::<ecdsa::Pair>(key_type, public).map(|pair| pair.sign_prehashed(msg));
 		Ok(sig)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_public_keys(&self, key_type: KeyTypeId) -> Vec<bls381::Public> {
+		self.public_keys::<bls381::Pair>(key_type)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls381::Public, Error> {
+		self.generate_new::<bls381::Pair>(key_type, seed)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bls381::Public,
+		msg: &[u8],
+	) -> Result<Option<bls381::Signature>, Error> {
+		self.sign::<bls381::Pair>(key_type, public, msg)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_public_keys(&self, key_type: KeyTypeId) -> Vec<bls377::Public> {
+		self.public_keys::<bls377::Pair>(key_type)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls377::Public, Error> {
+		self.generate_new::<bls377::Pair>(key_type, seed)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bls377::Public,
+		msg: &[u8],
+	) -> Result<Option<bls377::Signature>, Error> {
+		self.sign::<bls377::Pair>(key_type, public, msg)
 	}
 
 	fn insert(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
