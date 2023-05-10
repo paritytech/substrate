@@ -852,6 +852,14 @@ pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 		.collect()
 }
 
+pub(crate) fn voter_list_events() -> Vec<pallet_bags_list::Event<Test, VoterBagsListInstance>> {
+	System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let RuntimeEvent::VoterBagsList(inner) = e { Some(inner) } else { None })
+		.collect()
+}
+
 parameter_types! {
 	static StakingEventsIndex: usize = 0;
 }

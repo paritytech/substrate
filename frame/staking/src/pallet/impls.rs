@@ -904,19 +904,24 @@ impl<T: Config> Pallet<T> {
 		);
 	}
 
-	/// This function will remove a nominator from the `Nominators` storage map,
-	/// and `VoterList`.
+	/// This function will remove a nominator from the `Nominators` storage map, and `VoterList`.
 	///
 	/// Returns true if `who` was removed from `Nominators`, otherwise false.
 	///
 	/// NOTE: you must ALWAYS use this function to remove a nominator from the system. Any access to
-	/// `Nominators` or `VoterList` outside of this function is almost certainly
-	/// wrong.
+	/// `Nominators` or `VoterList` outside of this function is almost certainly wrong.
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
-		if let Some(nominations) = Self::nominations(who) {
+		if Nominators::<T>::contains_key(who) {
 			let _ = T::VoterList::on_remove(who).defensive();
+			// correctly. Note that this is only to make some tests work, but we don't fully handle
+			// un-decodable nominators yet.
+			let nominations = Nominators::<T>::get(who);
 			Nominators::<T>::remove(who);
-			T::EventListeners::on_nominator_remove(who, nominations);
+			T::EventListeners::on_nominator_remove(
+				who,
+				// we don't really try to handle un-decodable nominators in here.
+				nominations.map(|n| n.targets).unwrap_or_default().into_inner(),
+			);
 			return true
 		}
 		false
@@ -927,8 +932,7 @@ impl<T: Config> Pallet<T> {
 	/// If the validator already exists, their preferences will be updated.
 	///
 	/// NOTE: you must ALWAYS use this function to add a validator to the system. Any access to
-	/// `Validators` or `VoterList` outside of this function is almost certainly
-	/// wrong.
+	/// `Validators` or `VoterList` outside of this function is almost certainly wrong.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
 		let validator_exists = Validators::<T>::contains_key(who);
 
@@ -1691,13 +1695,13 @@ impl<T: Config> Pallet<T> {
 
 	fn check_count() -> Result<(), &'static str> {
 		ensure!(
-			<T as Config>::VoterList::count() ==
-				Nominators::<T>::count() + Validators::<T>::count(),
-			"wrong external count"
+			dbg!(<T as Config>::VoterList::count()) ==
+				dbg!(Nominators::<T>::count()) + dbg!(Validators::<T>::count()),
+			"wrong external count for voters"
 		);
 		ensure!(
 			<T as Config>::TargetList::count() == Validators::<T>::count(),
-			"wrong external count"
+			"wrong external count for targets"
 		);
 		ensure!(
 			ValidatorCount::<T>::get() <=
