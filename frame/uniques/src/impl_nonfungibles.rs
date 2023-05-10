@@ -94,12 +94,16 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId> for Pallet
 		admin: &T::AccountId,
 	) -> DispatchResult {
 		Self::do_create_collection(
-			*collection,
+			collection.clone(),
 			who.clone(),
 			admin.clone(),
 			T::CollectionDeposit::get(),
 			false,
-			Event::Created { collection: *collection, creator: who.clone(), owner: admin.clone() },
+			Event::Created {
+				collection: collection.clone(),
+				creator: who.clone(),
+				owner: admin.clone(),
+			},
 		)
 	}
 }
@@ -126,7 +130,7 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet
 		item: &Self::ItemId,
 		who: &T::AccountId,
 	) -> DispatchResult {
-		Self::do_mint(*collection, *item, who.clone(), |_| Ok(()))
+		Self::do_mint(collection.clone(), *item, who.clone(), |_| Ok(()))
 	}
 
 	fn burn(
@@ -134,7 +138,7 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet
 		item: &Self::ItemId,
 		maybe_check_owner: Option<&T::AccountId>,
 	) -> DispatchResult {
-		Self::do_burn(*collection, *item, |_, d| {
+		Self::do_burn(collection.clone(), *item, |_, d| {
 			if let Some(check_owner) = maybe_check_owner {
 				if &d.owner != check_owner {
 					return Err(Error::<T, I>::NoPermission.into())
@@ -151,7 +155,7 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 		item: &Self::ItemId,
 		destination: &T::AccountId,
 	) -> DispatchResult {
-		Self::do_transfer(*collection, *item, destination.clone(), |_, _| Ok(()))
+		Self::do_transfer(collection.clone(), *item, destination.clone(), |_, _| Ok(()))
 	}
 }
 

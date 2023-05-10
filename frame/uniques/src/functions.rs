@@ -37,7 +37,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let collection_details =
 			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 		ensure!(!collection_details.is_frozen, Error::<T, I>::Frozen);
-		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::Locked);
+		ensure!(!T::Locker::is_locked(collection.clone(), item), Error::<T, I>::Locked);
 
 		let mut details =
 			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
@@ -74,12 +74,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		free_holding: bool,
 		event: Event<T, I>,
 	) -> DispatchResult {
-		ensure!(!Collection::<T, I>::contains_key(collection), Error::<T, I>::InUse);
+		ensure!(!Collection::<T, I>::contains_key(collection.clone()), Error::<T, I>::InUse);
 
 		T::Currency::reserve(&owner, deposit)?;
 
 		Collection::<T, I>::insert(
-			collection,
+			collection.clone(),
 			CollectionDetails {
 				owner: owner.clone(),
 				issuer: admin.clone(),
@@ -104,7 +104,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		witness: DestroyWitness,
 		maybe_check_owner: Option<T::AccountId>,
 	) -> Result<DestroyWitness, DispatchError> {
-		Collection::<T, I>::try_mutate_exists(collection, |maybe_details| {
+		Collection::<T, I>::try_mutate_exists(collection.clone(), |maybe_details| {
 			let collection_details =
 				maybe_details.take().ok_or(Error::<T, I>::UnknownCollection)?;
 			if let Some(check_owner) = maybe_check_owner {
@@ -147,7 +147,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		owner: T::AccountId,
 		with_details: impl FnOnce(&CollectionDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
-		ensure!(!Item::<T, I>::contains_key(collection, item), Error::<T, I>::AlreadyExists);
+		ensure!(
+			!Item::<T, I>::contains_key(collection.clone(), item),
+			Error::<T, I>::AlreadyExists
+		);
 
 		Collection::<T, I>::try_mutate(
 			&collection,
@@ -189,7 +192,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		item: T::ItemId,
 		with_details: impl FnOnce(&CollectionDetailsFor<T, I>, &ItemDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
-		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::Locked);
+		ensure!(!T::Locker::is_locked(collection.clone(), item), Error::<T, I>::Locked);
 		let owner = Collection::<T, I>::try_mutate(
 			&collection,
 			|maybe_collection_details| -> Result<T::AccountId, DispatchError> {
@@ -268,7 +271,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let old_owner = details.owner.clone();
 
-		Self::do_transfer(collection, item, buyer.clone(), |_, _| Ok(()))?;
+		Self::do_transfer(collection.clone(), item, buyer.clone(), |_, _| Ok(()))?;
 
 		Self::deposit_event(Event::ItemBought {
 			collection,
