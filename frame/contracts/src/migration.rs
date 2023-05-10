@@ -227,11 +227,14 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 pub enum MigrateResult {
 	/// No migration was performed
 	NoMigrationPerformed,
+	/// A migration is in progress
 	InProgress,
+	/// All migrations are completed
 	Completed,
 }
 
 impl<T: Config, M: MigrateSequence> Migration<T, M> {
+	/// Verify that each migration's step of the MigrateSequence fits into `Cursor`.
 	pub(crate) fn integrity_test() {
 		M::integrity_test()
 	}
@@ -250,7 +253,7 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 
 		MigrationInProgress::<T>::mutate_exists(|progress| {
 			let Some(cursor_before) = progress.as_mut() else {
-				return (MigrateResult::NoMigrationPerformed, weight_limit.saturating_sub(weight_left))
+				return (MigrateResult::NoMigrationPerformed, T::WeightInfo::migrate_noop())
 			};
 
 			// if a migration is running it is always upgrading to the next version
@@ -269,8 +272,7 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 					// ongoing
 					Some(cursor) => {
 						// refund as we did not update the storage version
-						weight_left
-							.saturating_accrue(T::WeightInfo::migrate_update_storage_version());
+						weight_left.saturating_accrue(T::WeightInfo::bump_storage_version());
 						// we still have a cursor which keeps the pallet disabled
 						Some(cursor)
 					},

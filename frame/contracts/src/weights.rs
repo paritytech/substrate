@@ -169,6 +169,7 @@ pub trait WeightInfo {
 	fn instr_i64shru(r: u32, ) -> Weight;
 	fn instr_i64rotl(r: u32, ) -> Weight;
 	fn instr_i64rotr(r: u32, ) -> Weight;
+	fn bump_storage_version() -> Weight { Weight::zero() }
 	fn migrate() -> Weight { Weight::zero() }
 	fn migrate_noop() -> Weight { Weight::zero() }
 	fn migrate_update_storage_version() -> Weight { Weight::zero() }
