@@ -20,16 +20,9 @@
 //! The idea is that we can later change the implementation
 //! to something more compact, but for now we're using JSON.
 
-#![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
-#[cfg(feature = "std")]
-pub use serde_json::from_reader;
-
-pub use serde_json::{from_slice, from_str, Error, Result};
-
-#[cfg(not(feature = "std"))]
-use sp_std::{alloc::string::String, vec::Vec};
+pub use serde_json::{from_reader, from_slice, from_str, Error, Result};
 
 const PROOF: &str = "Serializers are infallible; qed";
 
@@ -44,7 +37,6 @@ pub fn encode<T: serde::Serialize + ?Sized>(value: &T) -> Vec<u8> {
 }
 
 /// Serialize the given data structure as JSON into the IO stream.
-#[cfg(feature = "std")]
 pub fn to_writer<W: ::std::io::Write, T: serde::Serialize + ?Sized>(
 	writer: W,
 	value: &T,
