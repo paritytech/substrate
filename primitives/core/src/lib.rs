@@ -397,7 +397,7 @@ macro_rules! impl_maybe_marker {
 /// # Example
 ///
 /// ```
-/// sp_core::impl_maybe_marker_serde! {
+/// sp_core::impl_maybe_marker_std_or_serde! {
 ///     /// A marker for a type that implements `Debug` when `feature = serde` or `feature = std`.
 ///     trait MaybeDebug: std::fmt::Debug;
 ///     /// A marker for a type that implements `Debug + Display` when `feature = serde` or `feature = std`.
@@ -405,7 +405,7 @@ macro_rules! impl_maybe_marker {
 /// }
 /// ```
 #[macro_export]
-macro_rules! impl_maybe_marker_serde {
+macro_rules! impl_maybe_marker_std_or_serde {
 	(
 		$(
 			$(#[$doc:meta] )+
