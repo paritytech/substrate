@@ -139,17 +139,10 @@ impl serde::Serialize for RuntimeString {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<'de> serde::Deserialize<'de> for RuntimeString {
 	fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
-		String::deserialize(de).map(Self::Owned)
-	}
-}
-
-#[cfg(all(not(feature = "std"), feature = "serde"))]
-impl<'de> serde::Deserialize<'de> for RuntimeString {
-	fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
-		Vec::<u8>::deserialize(de).map(Self::Owned)
+		Ok(Self::Owned(serde::Deserialize::deserialize(de)?))
 	}
 }
 
