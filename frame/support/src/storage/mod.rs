@@ -170,8 +170,6 @@ pub trait StoragePagedList<V: FullCodec> {
 pub trait IterableStorageList<V: FullCodec> {
 	type Iterator: Iterator<Item = V>;
 
-	/// Enumerate all elements in the map in lexicographical order of the encoded key. If you
-	/// alter the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
 
 	fn drain() -> Self::Iterator;
