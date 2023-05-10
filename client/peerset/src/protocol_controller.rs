@@ -47,7 +47,7 @@ use log::{error, trace, warn};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_arithmetic::traits::SaturatedConversion;
 use std::{
-	collections::{HashMap, HashSet},
+	collections::{HashMap, HashSet, VecDeque},
 	time::{Duration, Instant},
 };
 use wasm_timer::Delay;
@@ -78,6 +78,28 @@ enum Event {
 	IncomingConnection(PeerId, IncomingIndex),
 	/// Connection with the peer dropped.
 	Dropped(PeerId),
+}
+
+impl Action {
+	fn peer_id(&self) -> Option<&PeerId> {
+		match self {
+			Self::AddReservedPeer(peer_id) => Some(peer_id),
+			Self::RemoveReservedPeer(peer_id) => Some(peer_id),
+			Self::SetReservedPeers(_) => None,
+			Self::SetReservedOnly(_) => None,
+			Self::DisconnectPeer(peer_id) => Some(peer_id),
+			Self::GetReservedPeers(_) => None,
+		}
+	}
+}
+
+impl Event {
+	fn peer_id(&self) -> &PeerId {
+		match self {
+			Self::IncomingConnection(peer_id, _) => peer_id,
+			Self::Dropped(peer_id) => peer_id,
+		}
+	}
 }
 
 /// Shared handle to [`ProtocolController`]. Distributed around the code outside of the
@@ -173,6 +195,34 @@ impl Default for PeerState {
 	}
 }
 
+/// Outstanding events and actions for a peer that we can't process because we are waiting
+/// for an ACK.
+#[derive(Debug, Default)]
+struct Outstanding {
+	pending_ack: Option<oneshot::Receiver<()>>,
+	events: VecDeque<Event>,
+	actions: VecDeque<Action>,
+}
+
+impl Outstanding {
+	fn try_resolve_ack(&mut self) -> bool {
+		match self.pending_ack {
+			Some(ref mut pending_ack) =>
+				if pending_ack.try_recv().ok().flatten().is_some() {
+					self.pending_ack = None;
+					true
+				} else {
+					false
+				},
+			None => true,
+		}
+	}
+
+	fn is_empty(&self) -> bool {
+		self.pending_ack.is_none() && self.events.is_empty() && self.actions.is_empty()
+	}
+}
+
 /// Side of [`ProtocolHandle`] responsible for all the logic. Currently all instances are
 /// owned by [`crate::Peerset`], but they should eventually be moved to corresponding protocols.
 #[derive(Debug)]
@@ -205,6 +255,12 @@ pub struct ProtocolController {
 	/// `PeerStore` handle for checking peer reputation values and getting connection candidates
 	/// with highest reputation.
 	peer_store: Box<dyn PeerStoreProvider>,
+	/// Pending ACKS
+	/// Outstanding events and actions per peer.
+	outstanding: HashMap<PeerId, Outstanding>,
+	/// If we have outstanding (global) `SetReservedOnly` action. It's processed once we receive
+	/// all pending ACKs.
+	outstanding_set_reserved_only: Option<bool>,
 }
 
 impl ProtocolController {
@@ -235,6 +291,8 @@ impl ProtocolController {
 			next_periodic_alloc_slots: Instant::now(),
 			to_notifications,
 			peer_store,
+			outstanding: HashMap::new(),
+			outstanding_set_reserved_only: None,
 		};
 		(handle, controller)
 	}
@@ -251,16 +309,29 @@ impl ProtocolController {
 	pub async fn next_action(&mut self) -> bool {
 		// Perform tasks prioritizing connection events processing
 		// (see the module documentation for details).
-		let either = loop {
-			if let Some(event) = self.events_rx.next().now_or_never() {
-				match event {
-					None => return false,
-					Some(event) => break Either::Left(event),
+		let mut emptied_outstanding = None;
+		let either = 'outer: loop {
+			// Receive ACKs from `Notifications` and process outstanding events & actions.
+			for (peer_id, outstanding) in self.outstanding.iter_mut() {
+				if outstanding.try_resolve_ack() {
+					if let Some(event) = outstanding.events.pop_front() {
+						emptied_outstanding = outstanding.is_empty().then_some(*peer_id);
+						break 'outer Either::Left(event)
+					}
+					if let Some(action) = outstanding.actions.pop_front() {
+						emptied_outstanding = outstanding.is_empty().then_some(*peer_id);
+						break 'outer Either::Right(action)
+					}
 				}
 			}
 
+			// If we have received some ACKs, we might be able to remove some obsolete entries.
+			self.outstanding.retain(|_, outstanding| !outstanding.is_empty());
+
 			let mut next_alloc_slots = Delay::new_at(self.next_periodic_alloc_slots).fuse();
-			futures::select! {
+
+			// See the module doc for why we use `select_biased!`.
+			futures::select_biased! {
 				event = self.events_rx.next() => match event {
 					Some(event) => break Either::Left(event),
 					None => return false,
@@ -276,6 +347,9 @@ impl ProtocolController {
 			}
 		};
 
+		// Remove outstanding entry that became empty.
+		emptied_outstanding.map(|peer_id| self.outstanding.remove(&peer_id));
+
 		match either {
 			Either::Left(event) => self.process_event(event),
 			Either::Right(action) => self.process_action(action),
@@ -286,20 +360,37 @@ impl ProtocolController {
 
 	/// Process connection event.
 	fn process_event(&mut self, event: Event) {
-		match event {
-			Event::IncomingConnection(peer_id, index) =>
-				self.on_incoming_connection(peer_id, index),
-			Event::Dropped(peer_id) => self.on_peer_dropped(peer_id),
+		if let Some(outstanding) = self.outstanding.get_mut(event.peer_id()) {
+			outstanding.events.push_back(event);
+		} else {
+			match event {
+				Event::IncomingConnection(peer_id, index) =>
+					self.on_incoming_connection(peer_id, index),
+				Event::Dropped(peer_id) => self.on_peer_dropped(peer_id),
+			}
 		}
 	}
 
 	/// Process action command.
 	fn process_action(&mut self, action: Action) {
+		if let Some(peer_id) = action.peer_id() {
+			if let Some(outstanding) = self.outstanding.get_mut(peer_id) {
+				outstanding.actions.push_back(action);
+				return
+			}
+		}
+
 		match action {
 			Action::AddReservedPeer(peer_id) => self.on_add_reserved_peer(peer_id),
 			Action::RemoveReservedPeer(peer_id) => self.on_remove_reserved_peer(peer_id),
-			Action::SetReservedPeers(peer_ids) => self.on_set_reserved_peers(peer_ids),
-			Action::SetReservedOnly(reserved_only) => self.on_set_reserved_only(reserved_only),
+			Action::SetReservedPeers(peer_ids) => {
+				todo!("Decompose into individual peer actions if `self.outstanding` is not empty.");
+				self.on_set_reserved_peers(peer_ids);
+			},
+			Action::SetReservedOnly(reserved_only) => {
+				todo!("Postpone operation if `self.outstanding` is not empty.");
+				self.on_set_reserved_only(reserved_only);
+			},
 			Action::DisconnectPeer(peer_id) => self.on_disconnect_peer(peer_id),
 			Action::GetReservedPeers(pending_response) =>
 				self.on_get_reserved_peers(pending_response),
