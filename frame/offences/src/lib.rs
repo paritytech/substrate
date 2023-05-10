@@ -145,6 +145,11 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// This is called at the start of each new session. Hence, only one session becomes
+	/// obsolete in this call, whose data gets cleared up here.
+	/// 
+	/// For example, if the `current_session_index` is 10 and `MaxSessionReportAge` is 6,
+	/// this clears all reports for `obsolete_session_index` 4.
 	fn clear_obsolete_reports(current_session_index: SessionIndex) {
 		if current_session_index <= T::MaxSessionReportAge::get() {
 			return
