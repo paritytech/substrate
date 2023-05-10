@@ -234,13 +234,8 @@ pub mod pallet {
 		StorageValue<_, BoundedVec<ProposalIndex, T::MaxApprovals>, ValueQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(Default)]
 	pub struct GenesisConfig;
-
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self
-		}
-	}
 
 	#[cfg(feature = "std")]
 	impl GenesisConfig {
