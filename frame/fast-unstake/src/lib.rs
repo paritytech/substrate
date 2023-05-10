@@ -68,6 +68,8 @@
 //! If unsuccessful, meaning that the staker was exposed, the aforementioned deposit will be slashed
 //! for the amount of wasted work they have inflicted on the chian.
 //!
+//! All in all, this pallet is meant to provide an easy off-ramp for some stakers.
+//!
 //! ### Example
 //!
 //! 1. Fast-unstake with multiple participants in the queue.
@@ -114,10 +116,10 @@
 pub use pallet::*;
 
 #[cfg(test)]
-pub mod mock;
+mod mock;
 
 #[cfg(test)]
-pub mod tests;
+mod tests;
 
 // NOTE: enable benchmarking in tests as well.
 #[cfg(feature = "runtime-benchmarks")]

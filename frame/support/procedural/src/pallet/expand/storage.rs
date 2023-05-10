@@ -436,7 +436,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 			let cfg_attrs = &storage.cfg_attrs;
 
-			// If the storage item is public, just link to it, rather than
+			// If the storage item is public, just link to it, rather than copy-pasting the docs.
 			let getter_doc_line = if matches!(storage.vis, syn::Visibility::Public(_)) {
 				format!("An auto-generated getter for [`{}`].", storage.ident)
 			} else {
