@@ -57,7 +57,7 @@ impl From<Error> for ErrorObjectOwned {
 			Error::NotHealthy(ref h) =>
 				ErrorObject::owned(NOT_HEALTHY_ERROR, e.to_string(), Some(h)),
 			Error::MalformattedPeerArg(e) =>
-				ErrorObject::owned(MALFORMATTED_PEER_ARG_ERROR + 2, e, None::<()>),
+				ErrorObject::owned(MALFORMATTED_PEER_ARG_ERROR, e, None::<()>),
 			Error::UnsafeRpcCalled(e) => e.into(),
 			Error::Internal(e) =>
 				ErrorObjectOwned::owned(ErrorCode::InternalError.code(), e, None::<()>),

@@ -913,8 +913,8 @@ async fn follow_with_unpin() {
 	let block3 = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	client.import(BlockOrigin::Own, block3.clone()).await.unwrap();
 
-	//assert_matches!(get_next_event::<FollowEvent<String>>(&mut sub).await, FollowEvent::Stop);
-	//assert!(sub.next::<FollowEvent<String>>().await.is_none());
+	assert_matches!(get_next_event::<FollowEvent<String>>(&mut sub).await, FollowEvent::Stop);
+	assert!(sub.next::<FollowEvent<String>>().await.is_none());
 }
 
 #[tokio::test]
