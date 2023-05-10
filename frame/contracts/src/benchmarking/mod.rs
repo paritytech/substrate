@@ -266,6 +266,19 @@ benchmarks! {
 		migration.step();
 	}
 
+
+	// This benchmarks the base weight of dispatching a noop migrate call.
+	#[pov_mode = Measured]
+	migrate {
+		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+		MigrationInProgress::<T>::set(Some(Default::default()));
+	}:  {
+		<Contracts<T>>::migrate(origin.into(), Weight::MAX).unwrap_or_default()
+	} verify {
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 3);
+	}
+
 	// This benchmarks the base weight of dispatching a noop migrate call.
 	#[pov_mode = Measured]
 	migrate_noop {
@@ -278,14 +291,13 @@ benchmarks! {
 
 	// This benchmarks the base weight of dispatching a noop migrate call.
 	#[pov_mode = Measured]
-	migrate {
-		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
-		MigrationInProgress::<T>::set(Some(Default::default()));
+	migrate_update_storage_version {
+		StorageVersion::new(0).put::<Pallet<T>>();
+		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade();
 	}:  {
-		<Contracts<T>>::migrate(origin.into(), Weight::MAX).unwrap_or_default()
+		Migration::<T>::migrate(Weight::MAX);
 	} verify {
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 3);
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
 	}
 
 	// This benchmarks the base weight of dispatching a noop migrate call.

@@ -78,7 +78,7 @@ impl<const N: u16> Migrate for NoopMigration<N> {
 		Weight::zero()
 	}
 	fn step(&mut self) -> (IsFinished, Weight) {
-		log::debug!(target: LOG_TARGET, "No migration for version {}", N);
+		log::debug!(target: LOG_TARGET, "Noop migration for version {}", N);
 		(IsFinished::Yes, Weight::zero())
 	}
 }
@@ -175,27 +175,10 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 			"Upgrading storage from {storage_version:?} to {latest_version:?}.",
 		);
 
-		let mut weight = T::WeightInfo::on_runtime_upgrade();
 		let cursor = M::new(storage_version + 1);
 		MigrationInProgress::<T>::set(Some(cursor));
-		weight.saturating_accrue(T::DbWeight::get().writes(1));
 
-		// drive the migration to completion when running try-runtime
-		#[cfg(all(feature = "try-runtime", not(test)))]
-		loop {
-			use MigrateResult::*;
-			match Self::migrate(Weight::MAX) {
-				(InProgress, w) => {
-					weight.saturating_add(w);
-				},
-				(NoMigrationPerformed | Completed, w) => {
-					weight.saturating_add(w);
-					break
-				},
-			}
-		}
-
-		return weight
+		return T::WeightInfo::on_runtime_upgrade()
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -216,6 +199,26 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 			);
 			Err("New runtime does not contain the required migrations to perform this upgrade.")
 		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+		let mut weight = Weight::zero();
+		loop {
+			use MigrateResult::*;
+			match Self::migrate(Weight::MAX) {
+				(InProgress, w) => {
+					weight.saturating_add(w);
+				},
+				(NoMigrationPerformed | Completed, w) => {
+					weight.saturating_add(w);
+					break
+				},
+			}
+		}
+
+		log::info!(target: LOG_TARGET, "Migration steps weight = {}", weight);
+		Ok(())
 	}
 }
 
@@ -238,13 +241,16 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 	pub(crate) fn migrate(weight_limit: Weight) -> (MigrateResult, Weight) {
 		let mut weight_left = weight_limit;
 
-		if weight_left.checked_reduce(T::WeightInfo::migrate_noop()).is_none() {
+		if weight_left
+			.checked_reduce(T::WeightInfo::migrate_update_storage_version())
+			.is_none()
+		{
 			return (MigrateResult::NoMigrationPerformed, Weight::zero())
 		}
 
 		MigrationInProgress::<T>::mutate_exists(|progress| {
 			let Some(cursor_before) = progress.as_mut() else {
-				return (MigrateResult::NoMigrationPerformed,weight_limit.saturating_sub(weight_left))
+				return (MigrateResult::NoMigrationPerformed, weight_limit.saturating_sub(weight_left))
 			};
 
 			// if a migration is running it is always upgrading to the next version
@@ -263,7 +269,8 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 					// ongoing
 					Some(cursor) => {
 						// refund as we did not update the storage version
-						weight_left.saturating_accrue(T::DbWeight::get().writes(1));
+						weight_left
+							.saturating_accrue(T::WeightInfo::migrate_update_storage_version());
 						// we still have a cursor which keeps the pallet disabled
 						Some(cursor)
 					},
