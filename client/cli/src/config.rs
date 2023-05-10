@@ -53,7 +53,7 @@ pub const RPC_DEFAULT_MAX_SUBS_PER_CONN: u32 = 1024;
 pub const RPC_DEFAULT_MAX_REQUEST_SIZE_MB: u32 = 15;
 /// The default max response size in MB.
 pub const RPC_DEFAULT_MAX_RESPONSE_SIZE_MB: u32 = 15;
-/// The default number of connections.
+/// The default concurrent connection limit.
 pub const RPC_DEFAULT_MAX_CONNECTIONS: u32 = 100;
 /// The default number of messages the RPC server
 /// is allowed to keep in memory per connection.
