@@ -248,7 +248,6 @@ pub fn make_slot_vrf_transcript(randomness: &Randomness, slot: Slot, epoch: u64)
 /// Make ticket VRF transcript data container.
 ///
 /// Input randomness is current epoch randomness.
-#[cfg(feature = "std")]
 pub fn make_ticket_vrf_transcript(
 	randomness: &Randomness,
 	attempt: u32,

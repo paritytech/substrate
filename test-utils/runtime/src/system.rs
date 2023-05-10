@@ -303,7 +303,6 @@ fn execute_read(read: u32, panic_at_end: bool) -> ApplyExtrinsicResult {
 		panic!("BYE")
 	} else {
 		Ok(Ok(()))
->>>>>>> master
 	}
 }
 

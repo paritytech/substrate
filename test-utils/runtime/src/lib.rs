@@ -1019,7 +1019,11 @@ cfg_if! {
 					epoch
 				}
 
-				fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::Ticket> {
+				fn slot_ticket_id(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::TicketId> {
+					<pallet_sassafras::Pallet<Runtime>>::slot_ticket_id(slot)
+				}
+
+				fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<(sp_consensus_sassafras::TicketId, sp_consensus_sassafras::TicketData)> {
 					<pallet_sassafras::Pallet<Runtime>>::slot_ticket(slot)
 				}
 
@@ -1371,7 +1375,11 @@ cfg_if! {
 					epoch
 				}
 
-				fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::Ticket> {
+				fn slot_ticket_id(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::TicketId> {
+					<pallet_sassafras::Pallet<Runtime>>::slot_ticket_id(slot)
+				}
+
+				fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<(sp_consensus_sassafras::TicketId, sp_consensus_sassafras::TicketData)> {
 					<pallet_sassafras::Pallet<Runtime>>::slot_ticket(slot)
 				}
 

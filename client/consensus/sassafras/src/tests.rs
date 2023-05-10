@@ -34,7 +34,7 @@ use sc_network_test::*;
 use sp_application_crypto::key_types::SASSAFRAS;
 use sp_blockchain::Error as TestError;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
-use sp_consensus_sassafras::{inherents::InherentDataProvider, vrf::make_slot_transcript_data};
+use sp_consensus_sassafras::{inherents::InherentDataProvider, make_slot_vrf_transcript};
 use sp_keyring::Sr25519Keyring;
 use sp_keystore::{testing::MemoryKeystore, Keystore};
 use sp_runtime::{Digest, DigestItem};
@@ -42,7 +42,7 @@ use sp_timestamp::Timestamp;
 
 use substrate_test_runtime_client::{runtime::Block as TestBlock, Backend as TestBackend};
 
-// Monomorphization of generic structures for test context.
+// Specialization of generic structures for test context.
 
 type TestHeader = <TestBlock as BlockT>::Header;
 
@@ -337,21 +337,15 @@ impl TestContext {
 		});
 
 		let epoch = self.epoch_data(&parent_hash, parent_number, slot);
-		let transcript_data =
-			make_slot_transcript_data(&self.link.genesis_config.randomness, slot, epoch.epoch_idx);
-		let signature = self
+		let transcript =
+			make_slot_vrf_transcript(&self.link.genesis_config.randomness, slot, epoch.epoch_idx);
+		let vrf_signature = self
 			.keystore
-			.sr25519_vrf_sign(SASSAFRAS, &public, transcript_data)
+			.sr25519_vrf_sign(SASSAFRAS, &public, &transcript)
 			.unwrap()
 			.unwrap();
 
-		let pre_digest = PreDigest {
-			slot,
-			authority_idx: 0,
-			vrf_output: VRFOutput(signature.output),
-			vrf_proof: VRFProof(signature.proof),
-			ticket_aux: None,
-		};
+		let pre_digest = PreDigest { slot, authority_idx: 0, vrf_signature, ticket_claim: None };
 		let digest = sp_runtime::generic::Digest {
 			logs: vec![DigestItem::sassafras_pre_digest(pre_digest)],
 		};
@@ -436,7 +430,7 @@ fn claim_secondary_slots_works() {
 			{
 				assert_eq!(claim.authority_idx as usize, auth_idx);
 				assert_eq!(claim.slot, Slot::from(slot));
-				assert_eq!(claim.ticket_aux, None);
+				assert_eq!(claim.ticket_claim, None);
 				assert_eq!(auth_id.public(), auth_id2.into());
 
 				// Check that this slot has not been assigned before
@@ -468,34 +462,38 @@ fn claim_primary_slots_works() {
 
 	let keystore = create_test_keystore(Sr25519Keyring::Alice);
 
-	// Success if we have ticket data and the key in our keystore
+	// Success if we have ticket aux data and the authority key in our keystore
+	// 	ticket-aux: OK , authority-key: OK => SUCCESS
 
 	let authority_idx = 0u32;
-	let ticket: Ticket = [0u8; 32].try_into().unwrap();
-	let ticket_proof: VRFProof = [0u8; 64].try_into().unwrap();
-	let ticket_aux = TicketAux { attempt: 0, proof: ticket_proof };
-	epoch.tickets_aux.insert(ticket, (authority_idx, ticket_aux));
+	let ticket_id = 123;
+	let ticket_data =
+		TicketData { attempt_idx: 0, erased_public: [0; 32], revealed_public: [0; 32] };
+	let ticket_secret = TicketSecret { attempt_idx: 0, erased_secret: [0; 32] };
+	epoch.tickets_aux.insert(ticket_id, (authority_idx, ticket_secret.clone()));
 
 	let (pre_digest, auth_id) =
-		authorship::claim_slot(0.into(), &epoch, Some(ticket), &keystore).unwrap();
+		authorship::claim_slot(0.into(), &epoch, Some((ticket_id, ticket_data.clone())), &keystore)
+			.unwrap();
 
 	assert_eq!(pre_digest.authority_idx, authority_idx);
 	assert_eq!(auth_id, Sr25519Keyring::Alice.public().into());
 
-	// Fail if we don't have aux data for some ticket
+	// Fail if we have authority key in our keystore but not ticket aux data
+	// 	ticket-aux: KO , authority-key: OK => FAIL
 
-	let ticket: Ticket = [1u8; 32].try_into().unwrap();
-	let claim = authorship::claim_slot(0.into(), &epoch, Some(ticket), &keystore);
+	let ticket_id = 321;
+	let claim =
+		authorship::claim_slot(0.into(), &epoch, Some((ticket_id, ticket_data.clone())), &keystore);
 	assert!(claim.is_none());
 
-	// Fail if we don't have the key for the ticket owner in our keystore
-	// (even though we have associated data, it doesn't matter)
+	// Fail if we have ticket aux data but not the authority key in out keystore
+	// 	ticket-aux: OK , authority-key: KO => FAIL
 
-	let authority_idx = 1u32;
-	let ticket_proof: VRFProof = [0u8; 64].try_into().unwrap();
-	let ticket_aux = TicketAux { attempt: 0, proof: ticket_proof };
-	epoch.tickets_aux.insert(ticket, (authority_idx, ticket_aux));
-	let claim = authorship::claim_slot(0.into(), &epoch, Some(ticket), &keystore);
+	let authority_idx = 1u32; // we don't have this key
+	let ticket_id = 666;
+	epoch.tickets_aux.insert(ticket_id, (authority_idx, ticket_secret));
+	let claim = authorship::claim_slot(0.into(), &epoch, Some((ticket_id, ticket_data)), &keystore);
 	assert!(claim.is_none());
 }
 
@@ -794,12 +792,12 @@ fn verify_block_claimed_via_secondary_method() {
 	let _out_params = env.verify_block(in_params);
 }
 
-//=================================================================================================
-// More complex tests involving communication between multiple nodes.
-//
-// These tests are performed via a specially crafted test network.
-// Closer to integration test than unit tests...
-//=================================================================================================
+// //=================================================================================================
+// // More complex tests involving communication between multiple nodes.
+// //
+// // These tests are performed via a specially crafted test network.
+// // Closer to integration test than unit tests...
+// //=================================================================================================
 
 impl Environment<TestBlock> for TestContext {
 	type CreateProposer = future::Ready<Result<TestProposer, TestError>>;

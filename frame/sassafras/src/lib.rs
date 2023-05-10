@@ -797,12 +797,12 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Returns ticket data associated to the given `slot`.
+	/// Returns ticket id and data associated to the given `slot`.
 	///
 	/// Refer to the `slot_ticket_id` documentation for the slot-ticket association
 	/// criteria.
-	pub fn slot_ticket(slot: Slot) -> Option<TicketData> {
-		Self::slot_ticket_id(slot).map(|id| TicketsData::<T>::get(id))
+	pub fn slot_ticket(slot: Slot) -> Option<(TicketId, TicketData)> {
+		Self::slot_ticket_id(slot).map(|id| (id, TicketsData::<T>::get(id)))
 	}
 
 	// Lexicographically sort the tickets who belongs to the next epoch.
