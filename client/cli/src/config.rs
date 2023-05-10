@@ -349,7 +349,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(RPC_DEFAULT_MAX_SUBS_PER_CONN)
 	}
 
-	/// Get maximum number of subscriptions per connection.
+	/// The number of messages the RPC server is allowed to keep in memory per connection.
 	fn rpc_buffer_capacity_per_connection(&self) -> Result<u32> {
 		Ok(RPC_DEFAULT_MESSAGE_CAPACITY_PER_CONN)
 	}
