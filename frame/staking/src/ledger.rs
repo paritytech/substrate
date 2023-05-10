@@ -51,7 +51,8 @@ impl<T: Config> Into<sp_staking::Stake<BalanceOf<T>>> for StakingLedger<T> {
 
 impl<T: Config> Into<sp_staking::Stake<BalanceOf<T>>> for StakingLedgerInterface<T> {
 	fn into(self) -> sp_staking::Stake<BalanceOf<T>> {
-		self.inner.into()
+		// TODO: fishy clone, why?
+		self.inner.clone().into()
 	}
 }
 
@@ -63,17 +64,31 @@ pub(crate) struct StakingLedgerInterface<T: Config> {
 	pub(crate) payee: RewardDestination<T::AccountId>,
 	pub(crate) inner: StakingLedger<T>,
 	pub(crate) controller: T::AccountId,
+	removed: bool,
 }
 
+// #[cfg(test)]
+// impl<T: Config> Drop for StakingLedgerInterface<T> {
+// 	fn drop(&mut self) {
+// 		self.assert_put();
+// 	}
+// }
+
 impl<T: Config> StakingLedgerInterface<T> {
+	// #[cfg(test)]
+	// pub(crate) fn assert_put(&self) {
+	// 	if !self.removed {
+	// 		let in_storage = Self::get_controller(&self.controller);
+	// 		assert_eq!(in_storage, Some(self.clone()));
+	// 	}
+	// }
+
 	pub(crate) fn new(
 		stash: T::AccountId,
 		stake: BalanceOf<T>,
 		controller: T::AccountId,
 		payee: RewardDestination<T::AccountId>,
 	) -> Self {
-		// TODO: this must be followed-up by a `put` call otherwise we would have a dangling
-		// set-lock. We can verify this with a drop impl.
 		let inner = StakingLedger {
 			stash,
 			total: stake,
@@ -81,7 +96,7 @@ impl<T: Config> StakingLedgerInterface<T> {
 			unlocking: Default::default(),
 			claimed_rewards: Default::default(),
 		};
-		Self { inner, controller, payee }
+		Self { inner, controller, payee, removed: false }
 	}
 
 	pub(crate) fn take_controller(controller: &T::AccountId) -> Option<Self> {
@@ -90,7 +105,12 @@ impl<T: Config> StakingLedgerInterface<T> {
 				let payee = Payee::<T>::take(&inner.stash);
 				(inner, payee)
 			})
-			.map(|(inner, payee)| Self { inner, controller: controller.clone(), payee });
+			.map(|(inner, payee)| Self {
+				inner,
+				controller: controller.clone(),
+				payee,
+				removed: true,
+			});
 
 		if let Some(l) = maybe_self.as_ref() {
 			let _stored_controller = Bonded::<T>::take(&l.inner.stash);
@@ -108,7 +128,12 @@ impl<T: Config> StakingLedgerInterface<T> {
 				let payee = Payee::<T>::get(&inner.stash);
 				(inner, payee)
 			})
-			.map(|(inner, payee)| Self { inner, controller: controller.clone(), payee });
+			.map(|(inner, payee)| Self {
+				inner,
+				controller: controller.clone(),
+				payee,
+				removed: false,
+			});
 
 		debug_assert!(maybe_self
 			.as_ref()
@@ -134,18 +159,19 @@ impl<T: Config> StakingLedgerInterface<T> {
 		let stash = self.inner.stash.clone();
 		let prev_ledger = Ledger::<T>::get(&self.controller);
 
-		Ledger::<T>::insert(self.controller, &self.inner);
-		if prev_ledger != Some(self.inner) {
+		Ledger::<T>::insert(&self.controller, &self.inner);
+		if prev_ledger.as_ref() != Some(&self.inner) {
 			T::EventListeners::on_stake_update(&stash, prev_ledger.map(Into::into));
 		}
 	}
 
-	pub(crate) fn remove(self) {
+	pub(crate) fn remove(mut self) {
 		T::Currency::remove_lock(STAKING_ID, &self.stash);
 		Bonded::<T>::remove(&self.stash);
 		Payee::<T>::remove(&self.stash);
 		Ledger::<T>::remove(&self.controller);
 		T::EventListeners::on_unstake(&self.stash);
+		self.removed = true;
 	}
 }
 

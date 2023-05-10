@@ -1063,14 +1063,16 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
 			panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 		});
-		StakingLedger::<T>::new(voter.clone(), stake).put_by_controller(&voter);
+		StakingLedgerInterface::<T>::new(voter.clone(), stake, voter.clone(), Default::default())
+			.put();
 		Self::do_add_nominator(&voter, Nominations { targets, submitted_in: 0, suppressed: false });
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_target(target: T::AccountId) {
 		let stake = MinValidatorBond::<T>::get() * 100u32.into();
-		StakingLedger::<T>::new(target.clone(), stake).put_by_controller(&target);
+		StakingLedgerInterface::<T>::new(target.clone(), stake, target.clone(), Default::default())
+			.put();
 		Self::do_add_validator(
 			&target,
 			ValidatorPrefs { commission: Perbill::zero(), blocked: false },
@@ -1103,7 +1105,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			let stake: BalanceOf<T> = target_stake
 				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
 				.unwrap_or_else(|| MinNominatorBond::<T>::get() * 100u32.into());
-			StakingLedger::<T>::new(v.clone(), stake).put_by_controller(&v);
+			StakingLedgerInterface::<T>::new(v.clone(), stake, v.clone(), Default::default()).put();
 			Self::do_add_validator(
 				&v,
 				ValidatorPrefs { commission: Perbill::zero(), blocked: false },
@@ -1114,7 +1116,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			let stake = <BalanceOf<T>>::try_from(s).unwrap_or_else(|_| {
 				panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 			});
-			StakingLedger::<T>::new(v.clone(), stake).put_by_controller(&v);
+			StakingLedgerInterface::<T>::new(v.clone(), stake, v.clone(), Default::default()).put();
 			Self::do_add_nominator(
 				&v,
 				Nominations { targets: t, submitted_in: 0, suppressed: false },
@@ -1364,13 +1366,20 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 		// benchmark.
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
 		let mut ledger = match Self::ledger(who) {
-			None => StakingLedger::default_from(who.clone()),
+			None => StakingLedgerInterface::new(
+				who.clone(),
+				Default::default(),
+				who.clone(),
+				Default::default(),
+			),
 			Some(l) => l,
 		};
 		ledger.active = active;
 
-		<Ledger<T>>::insert(who, ledger);
-		<Bonded<T>>::insert(who, who);
+		// TODO: scan and remove all instances of this.
+		// <Ledger<T>>::insert(who, ledger);
+		// <Bonded<T>>::insert(who, who);
+		ledger.put();
 
 		// also, we play a trick to make sure that a issuance based-`CurrencyToVote` behaves well:
 		// This will make sure that total issuance is zero, thus the currency to vote will be a 1-1
@@ -1695,8 +1704,8 @@ impl<T: Config> Pallet<T> {
 
 	fn check_count() -> Result<(), &'static str> {
 		ensure!(
-			dbg!(<T as Config>::VoterList::count()) ==
-				dbg!(Nominators::<T>::count()) + dbg!(Validators::<T>::count()),
+			<T as Config>::VoterList::count() ==
+				Nominators::<T>::count() + Validators::<T>::count(),
 			"wrong external count for voters"
 		);
 		ensure!(
