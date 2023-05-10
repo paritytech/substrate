@@ -36,7 +36,7 @@ use sp_std::{
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(all(not(feature = "std"), feature = "serde"))]
-use sp_std::alloc::{string::String, string::ToString};
+use sp_std::alloc::string::{String, ToString};
 
 /// Integer types that can be used to interact with `FixedPointNumber` implementations.
 pub trait FixedPointOperand:
