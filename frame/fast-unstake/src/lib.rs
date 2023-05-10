@@ -48,7 +48,7 @@
 //! in the queue to be checked.
 //!
 //! A successful registration implies being fully unbonded and chilled in the staking system. These
-//! effects persis, even if the fast-unstake registration is retracted (see [`Pallet::deregister`]
+//! effects persist, even if the fast-unstake registration is retracted (see [`Pallet::deregister`]
 //! and further).
 //!
 //! Once registered as a fast-unstaker, the staker will be queued and checked by the system. This
