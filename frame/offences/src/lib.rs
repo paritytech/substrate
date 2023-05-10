@@ -57,7 +57,7 @@ use sp_std::prelude::*;
 pub use pallet::*;
 
 /// A binary blob which represents a SCALE codec-encoded `O::TimeSlot`.
-type OpaqueTimeSlot = Vec<u8>;
+pub type OpaqueTimeSlot = Vec<u8>;
 
 /// A type alias for a report identifier.
 type ReportIdOf<T> = <T as frame_system::Config>::Hash;
