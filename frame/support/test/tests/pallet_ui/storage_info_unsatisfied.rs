@@ -1,4 +1,4 @@
-i#[frame_support::pallet]
+#[frame_support::pallet]
 mod pallet {
 	use frame_support::pallet_prelude::{Hooks, StorageValue};
 	use frame_system::pallet_prelude::BlockNumberFor;

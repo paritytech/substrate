@@ -173,6 +173,8 @@ pub trait IterableStorageList<V: FullCodec> {
 	/// Enumerate all elements in the map in lexicographical order of the encoded key. If you
 	/// alter the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
+
+	fn drain() -> Self::Iterator;
 }
 
 /// A strongly-typed map in storage.
