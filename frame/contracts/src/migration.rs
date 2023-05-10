@@ -25,7 +25,7 @@ use codec::{Codec, Decode};
 use frame_support::{
 	codec,
 	pallet_prelude::*,
-	traits::{ConstU32, Get, OnRuntimeUpgrade},
+	traits::{ConstU32, OnRuntimeUpgrade},
 };
 use sp_std::marker::PhantomData;
 
@@ -42,6 +42,8 @@ fn invalid_version(version: StorageVersion) -> ! {
 
 pub type Cursor = BoundedVec<u8, ConstU32<1024>>;
 
+// In benchmark we use noop migrations, to compute the weight of the migration framework itself.
+// #[cfg(not(feature = "runtime-benchmarks"))]
 type Migrations<T> = (v9::Migration<T>, v10::Migration<T>, v11::Migration<T>);
 
 /// IsFinished describes whether a migration is finished or not.
@@ -65,6 +67,18 @@ pub trait Migrate: Codec + MaxEncodedLen + Default {
 	///
 	/// Returns whether the migration is finished and the weight consumed.
 	fn step(&mut self) -> (IsFinished, Weight);
+
+	/// Execute some pre-checks prior to running this step.
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade_step() -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	/// Execute some post-checks after running this step
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade_step() -> Result<(), &'static str> {
+		Ok(())
+	}
 }
 
 /// A noop migration that can be used when there is no migration to be done for a given version.
@@ -114,6 +128,16 @@ pub trait MigrateSequence: private::Sealed {
 
 	/// Returns the default cursor for the given version.
 	fn new(version: StorageVersion) -> Cursor;
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade_step(_version: StorageVersion) -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade_step(_version: StorageVersion) -> Result<(), &'static str> {
+		Ok(())
+	}
 
 	/// Execute the migration step until the weight limit is reached.
 	///
@@ -188,7 +212,7 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 		// over our migrations.
 		let storage_version = <Pallet<T>>::on_chain_storage_version();
 		let target_version = <Pallet<T>>::current_storage_version();
-		if M::is_upgrade_supported(storage_version, target_version) {
+		if !M::is_upgrade_supported(storage_version, target_version) {
 			Ok(Vec::new())
 		} else {
 			log::error!(
@@ -202,18 +226,16 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
 		let mut weight = Weight::zero();
 		loop {
-			use MigrateResult::*;
-			match Self::migrate(Weight::MAX) {
-				(InProgress, w) => {
-					weight.saturating_add(w);
-				},
-				(NoMigrationPerformed | Completed, w) => {
-					weight.saturating_add(w);
-					break
-				},
+			let in_progress_version = <Pallet<T>>::on_chain_storage_version() + 1;
+			M::pre_upgrade_step(in_progress_version)?;
+			let (status, w) = Self::migrate(Weight::MAX);
+			weight.saturating_accrue(w);
+			M::post_upgrade_step(in_progress_version)?;
+			if matches!(status, MigrateResult::Completed) {
+				break
 			}
 		}
 
@@ -286,6 +308,7 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 								"Next migration is {:?},",
 								in_progress_version + 1,
 							);
+
 							Some(M::new(in_progress_version + 1))
 						} else {
 							// enable pallet by removing the storage item
@@ -347,6 +370,32 @@ impl MigrateSequence for Tuple {
 			#(
 				if version == Tuple::VERSION {
 					return Tuple::default().encode().try_into().expect(PROOF_ENCODE)
+				}
+			)*
+		);
+		invalid_version(version)
+	}
+
+	#[cfg(feature = "try-runtime")]
+	/// Execute the pre-checks of the step associated with this version.
+	fn pre_upgrade_step(version: StorageVersion) -> Result<(), &'static str> {
+		for_tuples!(
+			#(
+				if version == Tuple::VERSION {
+					return Tuple::pre_upgrade_step()
+				}
+			)*
+		);
+		invalid_version(version)
+	}
+
+	#[cfg(feature = "try-runtime")]
+	/// Execute the post-checks of the step associated with this version.
+	fn post_upgrade_step(version: StorageVersion) -> Result<(), &'static str> {
+		for_tuples!(
+			#(
+				if version == Tuple::VERSION {
+					return Tuple::post_upgrade_step()
 				}
 			)*
 		);

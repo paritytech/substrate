@@ -738,10 +738,6 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::migrate().saturating_add(*weight_limit))]
 		pub fn migrate(origin: OriginFor<T>, weight_limit: Weight) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
-			ensure!(
-				weight_limit.any_gt(T::WeightInfo::migrate().saturating_mul(10)),
-				Error::<T>::MigrateWeightLimitTooLow
-			);
 
 			let (result, weight) = Migration::<T>::migrate(weight_limit);
 			let weight = weight.saturating_add(T::WeightInfo::migrate());
