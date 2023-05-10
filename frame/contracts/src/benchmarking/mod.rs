@@ -288,7 +288,7 @@ benchmarks! {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
 	}
 
-	// This benchmarks the weight of bumping the storage version
+	// This benchmarks the weight of bumping the storage version.
 	#[pov_mode = Measured]
 	bump_storage_version {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
@@ -299,7 +299,7 @@ benchmarks! {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 3);
 	}
 
-	// This benchmarks the weight of executing Migration::migrate that execute a noop migration that bump the storage version.
+	// This benchmarks the weight of executing Migration::migrate to execute a noop migration that bump the storage version.
 	#[pov_mode = Measured]
 	migrate_update_storage_version {
 		StorageVersion::new(0).put::<Pallet<T>>();
