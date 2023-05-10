@@ -26,7 +26,7 @@
 //! # Fast Unstake Pallet
 //!
 //! A pallet to allow participants of the staking system (represented by [`Config::Staking`], being
-//! [`StakingInterface`]) to unstake quicker, if and only if they meed the condition of not being
+//! [`StakingInterface`]) to unstake quicker, if and only if they meet the condition of not being
 //! exposed to any slashes.
 //!
 //! ## High Level / End-User Details
