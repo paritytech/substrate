@@ -18,7 +18,6 @@
 
 #![cfg(unix)]
 
-// #[cfg(feature = "try-runtime")]
 mod tests {
 	use assert_cmd::cargo::cargo_bin;
 	use regex::Regex;
