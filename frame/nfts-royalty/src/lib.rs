@@ -134,6 +134,12 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	// Storage for multiple royalty recipients and the percentage of the royalty they receive.
+	#[pallet::storage]
+	#[pallet::getter(fn royalty_recipients)]
+	pub type RoyaltyRecipients<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::NftCollectionId, Vec<(T::AccountId, Permill)>>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -172,6 +178,11 @@ pub mod pallet {
 			royalty_amount_paid: BalanceOf<T>,
 			royalty_recipient: T::AccountId,
 		},
+		/// The royalty recipients for a collection have been set.
+		RoyaltyRecipientsCreated {
+			nft_collection: T::NftCollectionId,
+			royalty_recipients: Vec<(T::AccountId, Permill)>,
+		},
 	}
 
 	#[pallet::error]
@@ -187,7 +198,11 @@ pub mod pallet {
 		/// The NFT is not for sale.
 		NotForSale,
 		/// NFT collection does not exist.
-		CollectionDoesNotExist
+		CollectionDoesNotExist,
+		/// The royalty recipient already exists.
+		RoyaltyRecipientsAlreadyExist,
+		/// The royalty percentage is invalid.
+		InvalidRoyaltyPercentage
 	}
 
 	#[pallet::call]
@@ -462,6 +477,53 @@ pub mod pallet {
 				nft: item_id,
 				royalty_amount_paid: royalty_amount_to_pay,
 				royalty_recipient: item_royalty.royalty_recipient,
+			});
+
+			Ok(())
+		}
+
+		/// Create royalty recipients for an existing collection.
+		///
+		/// Origin must be Signed and must not be the owner of the `collection`.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `recipients`: The recipients of the royalties.
+		///
+		/// Emits `RoyaltyRecipientsCreated`.
+		///
+		#[pallet::call_index(6)]
+		#[pallet::weight(0)]
+		pub fn set_royalty_recipients(
+			origin: OriginFor<T>,
+			collection_id: T::NftCollectionId,
+			recipients: Vec<(T::AccountId, Permill)>,
+		) -> DispatchResult {
+			let _origin = ensure_signed(origin)?;
+
+			// TODO: Ensure that the collection exists
+
+			// TODO: Ensure that the sender is the owner of the collection
+
+			// Should we do this? Or should we allow to overwrite the recipients that way we have only one extrinsic for creating recipients and updating them.
+			// Ensure that the collection does not have any royalty recipients yet
+			ensure!(
+				!RoyaltyRecipients::<T>::contains_key(&collection_id),
+				Error::<T>::RoyaltyRecipientsAlreadyExist
+			);
+
+			// Ensure that the sum of the percentages is 100%
+			let mut sum = Permill::zero();
+			for (_, percentage) in recipients.iter() {
+				sum = sum + *percentage;
+			}
+			ensure!(sum == Permill::one(), Error::<T>::InvalidRoyaltyPercentage);
+
+			// Create royalty recipients
+			RoyaltyRecipients::<T>::insert(&collection_id, recipients.clone());
+
+			Self::deposit_event(Event::RoyaltyRecipientsCreated {
+				nft_collection: collection_id,
+				royalty_recipients: recipients.clone(),
 			});
 
 			Ok(())
