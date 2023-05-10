@@ -70,13 +70,13 @@ pub trait Migrate: Codec + MaxEncodedLen + Default {
 
 	/// Execute some pre-checks prior to running this step.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade_step() -> Result<(), &'static str> {
-		Ok(())
+	fn pre_upgrade_step() -> Result<Vec<u8>, &'static str> {
+		Ok(Vec::new())
 	}
 
 	/// Execute some post-checks after running this step
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade_step() -> Result<(), &'static str> {
+	fn post_upgrade_step(_state: Vec<u8>) -> Result<(), &'static str> {
 		Ok(())
 	}
 }
@@ -130,12 +130,12 @@ pub trait MigrateSequence: private::Sealed {
 	fn new(version: StorageVersion) -> Cursor;
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade_step(_version: StorageVersion) -> Result<(), &'static str> {
-		Ok(())
+	fn pre_upgrade_step(_version: StorageVersion) -> Result<Vec<u8>, &'static str> {
+		Ok(Vec::new())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade_step(_version: StorageVersion) -> Result<(), &'static str> {
+	fn post_upgrade_step(_version: StorageVersion, _state: Vec<u8>) -> Result<(), &'static str> {
 		Ok(())
 	}
 
@@ -230,10 +230,10 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 		let mut weight = Weight::zero();
 		loop {
 			let in_progress_version = <Pallet<T>>::on_chain_storage_version() + 1;
-			M::pre_upgrade_step(in_progress_version)?;
+			let state = M::pre_upgrade_step(in_progress_version)?;
 			let (status, w) = Self::migrate(Weight::MAX);
 			weight.saturating_accrue(w);
-			M::post_upgrade_step(in_progress_version)?;
+			M::post_upgrade_step(in_progress_version, state)?;
 			if matches!(status, MigrateResult::Completed) {
 				break
 			}
@@ -378,7 +378,7 @@ impl MigrateSequence for Tuple {
 
 	#[cfg(feature = "try-runtime")]
 	/// Execute the pre-checks of the step associated with this version.
-	fn pre_upgrade_step(version: StorageVersion) -> Result<(), &'static str> {
+	fn pre_upgrade_step(version: StorageVersion) -> Result<Vec<u8>, &'static str> {
 		for_tuples!(
 			#(
 				if version == Tuple::VERSION {
@@ -391,11 +391,11 @@ impl MigrateSequence for Tuple {
 
 	#[cfg(feature = "try-runtime")]
 	/// Execute the post-checks of the step associated with this version.
-	fn post_upgrade_step(version: StorageVersion) -> Result<(), &'static str> {
+	fn post_upgrade_step(version: StorageVersion, state: Vec<u8>) -> Result<(), &'static str> {
 		for_tuples!(
 			#(
 				if version == Tuple::VERSION {
-					return Tuple::post_upgrade_step()
+					return Tuple::post_upgrade_step(state)
 				}
 			)*
 		);

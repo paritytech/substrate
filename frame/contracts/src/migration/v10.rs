@@ -208,4 +208,14 @@ impl<T: Config> Migrate for Migration<T> {
 			(IsFinished::Yes, T::WeightInfo::v10_migration_step())
 		}
 	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade_step() -> Result<Vec<u8>, &'static str> {
+		Ok(Vec::new())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade_step(_state: Vec<u8>) -> Result<(), &'static str> {
+		Ok(())
+	}
 }

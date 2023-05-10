@@ -113,4 +113,9 @@ impl<T: Config> Migrate for Migration<T> {
 			(IsFinished::Yes, T::WeightInfo::v9_migration_step(0))
 		}
 	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade_step(_state: Vec<u8>) -> Result<(), &'static str> {
+		Ok(())
+	}
 }
