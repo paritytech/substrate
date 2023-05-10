@@ -73,9 +73,9 @@ pub mod utils {
 		pipe_from_stream(sink, stream, executor).await
 	}
 
-	/// Feed items to the subscription from the underlying stream
-	/// if the subscription can't keep up with the underlying stream
-	/// it's dropped
+	/// Feed items to the subscription from the underlying stream.
+	/// If the subscription can't keep up with the underlying stream
+	/// then it's dropped.
 	///
 	/// This is simply a way to keep previous behaviour with unbounded streams
 	/// and should be replaced by specific RPC endpoint behaviour.
