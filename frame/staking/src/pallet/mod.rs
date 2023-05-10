@@ -853,13 +853,13 @@ pub mod pallet {
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
-			let controller = stash.clone();
+			let controller_to_be_deprecated = stash.clone();
 
 			if <Bonded<T>>::contains_key(&stash) {
 				return Err(Error::<T>::AlreadyBonded.into())
 			}
 
-			if <Ledger<T>>::contains_key(&controller) {
+			if <Ledger<T>>::contains_key(&controller_to_be_deprecated) {
 				return Err(Error::<T>::AlreadyPaired.into())
 			}
 
@@ -894,7 +894,7 @@ pub mod pallet {
 					// satisfied.
 					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			};
-			Self::update_ledger(&controller, &item);
+			Self::update_ledger(&controller_to_be_deprecated, &item);
 			Ok(())
 		}
 
