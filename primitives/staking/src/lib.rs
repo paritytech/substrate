@@ -20,6 +20,8 @@
 //! A crate which contains primitives that are useful for implementation that uses staking
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
 
+use scale_info::TypeInfo;
+use sp_core::RuntimeDebug;
 use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
@@ -30,6 +32,18 @@ pub type SessionIndex = u32;
 
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
+
+/// Indicates the initial status of the staker.
+#[derive(RuntimeDebug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Clone))]
+pub enum StakerStatus<AccountId> {
+	/// Chilling.
+	Idle,
+	/// Declared desire in validating or already participating in it.
+	Validator,
+	/// Nominating for a group of other stakers.
+	Nominator(Vec<AccountId>),
+}
 
 /// Trait describing something that implements a hook for any operations to perform when a staker is
 /// slashed.
@@ -57,9 +71,8 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 
 /// A struct that reflects stake that an account has in the staking system. Provides a set of
 /// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
-pub struct Stake<T: StakingInterface + ?Sized> {
-	/// The stash account whose balance is actually locked and at stake.
-	pub stash: T::AccountId,
+#[derive(RuntimeDebug, Clone, Copy, Eq, PartialEq, Default)]
+pub struct Stake<Balance> {
 	/// The total stake that `stash` has in the staking system. This includes the
 	/// `active` stake, and any funds currently in the process of unbonding via
 	/// [`StakingInterface::unbond`].
@@ -69,10 +82,58 @@ pub struct Stake<T: StakingInterface + ?Sized> {
 	/// This is only guaranteed to reflect the amount locked by the staking system. If there are
 	/// non-staking locks on the bonded pair's balance this amount is going to be larger in
 	/// reality.
-	pub total: T::Balance,
+	pub total: Balance,
 	/// The total amount of the stash's balance that will be at stake in any forthcoming
 	/// rounds.
-	pub active: T::Balance,
+	pub active: Balance,
+}
+
+/// A generic staking event listener.
+///
+/// Note that the interface is designed in a way that the events are fired post-action, so any
+/// pre-action data that is needed needs to be passed to interface methods. The rest of the data can
+/// be retrieved by using `StakingInterface`.
+#[impl_trait_for_tuples::impl_for_tuples(10)]
+pub trait OnStakingUpdate<AccountId, Balance> {
+	/// Fired when the stake amount of someone updates.
+	///
+	/// This is effectively any changes to the bond amount, such as bonding more funds, and
+	/// unbonding.
+	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<Balance>>);
+
+	/// Fired when someone sets their intention to nominate.
+	///
+	/// This should never be fired for for existing nominators.
+	fn on_nominator_add(who: &AccountId);
+
+	/// Fired when an existing nominator updates their nominations.
+	///
+	/// Note that this is not fired when a nominator changes their stake. For that,
+	/// `on_stake_update` should be used, followed by querying whether `who` was a validator or a
+	/// nominator.
+	fn on_nominator_update(who: &AccountId, prev_nominations: Vec<AccountId>);
+
+	/// Fired when someone removes their intention to nominate, either due to chill or validating.
+	///
+	/// The set of nominations at the time of removal is provided as it can no longer be fetched in
+	/// any way.
+	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>);
+
+	/// Fired when someone sets their intention to validate.
+	///
+	/// Note validator preference changes are not communicated, but could be added if needed.
+	fn on_validator_add(who: &AccountId);
+
+	/// Fired when an existing validator updates their preferences.
+	///
+	/// Note validator preference changes are not communicated, but could be added if needed.
+	fn on_validator_update(who: &AccountId);
+
+	/// Fired when someone removes their intention to validate, either due to chill or nominating.
+	fn on_validator_remove(who: &AccountId);
+
+	/// fired when someone is fully unstaked.
+	fn on_unstake(who: &AccountId);
 }
 
 /// A generic representation of a staking implementation.
@@ -112,7 +173,7 @@ pub trait StakingInterface {
 	fn current_era() -> EraIndex;
 
 	/// Returns the stake of `who`.
-	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError>;
+	fn stake(who: &Self::AccountId) -> Result<Stake<Self::Balance>, DispatchError>;
 
 	fn total_stake(who: &Self::AccountId) -> Result<Self::Balance, DispatchError> {
 		Self::stake(who).map(|s| s.total)
@@ -176,9 +237,21 @@ pub trait StakingInterface {
 	/// Checks whether an account `staker` has been exposed in an era.
 	fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool;
 
+	/// Return the status of the given staker, `None` if not staked at all.
+	fn status(who: &Self::AccountId) -> Result<StakerStatus<Self::AccountId>, DispatchError>;
+
+	/// Checks whether or not this is a validator account.
+	fn is_validator(who: &Self::AccountId) -> bool {
+		Self::status(who).map(|s| matches!(s, StakerStatus::Validator)).unwrap_or(false)
+	}
+
 	/// Get the nominations of a stash, if they are a nominator, `None` otherwise.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn nominations(who: Self::AccountId) -> Option<Vec<Self::AccountId>>;
+	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
+		match Self::status(who) {
+			Ok(StakerStatus::Nominator(t)) => Some(t),
+			_ => None,
+		}
+	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_era_stakers(
@@ -191,4 +264,8 @@ pub trait StakingInterface {
 	fn set_current_era(era: EraIndex);
 }
 
-sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);
+sp_core::generate_feature_enabled_macro!(
+	runtime_benchmarks_enabled,
+	feature = "runtime-benchmarks",
+	$
+);

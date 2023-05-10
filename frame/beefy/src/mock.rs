@@ -108,18 +108,98 @@ impl pallet_session::Config for Test {
 
 pub struct MockSessionManager;
 
-impl pallet_session::SessionManager<u64> for MockSessionManager {
-	fn end_session(_: sp_staking::SessionIndex) {}
-	fn start_session(_: sp_staking::SessionIndex) {}
-	fn new_session(idx: sp_staking::SessionIndex) -> Option<Vec<u64>> {
-		if idx == 0 || idx == 1 {
-			Some(vec![1, 2])
-		} else if idx == 2 {
-			Some(vec![3, 4])
-		} else {
-			None
-		}
-	}
+impl pallet_authorship::Config for Test {
+	type FindAuthor = ();
+	type EventHandler = ();
+}
+
+impl pallet_balances::Config for Test {
+	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
+	type Balance = u128;
+	type DustRemoval = ();
+	type RuntimeEvent = RuntimeEvent;
+	type ExistentialDeposit = ConstU128<1>;
+	type AccountStore = System;
+	type WeightInfo = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+}
+
+impl pallet_timestamp::Config for Test {
+	type Moment = u64;
+	type OnTimestampSet = ();
+	type MinimumPeriod = ConstU64<3>;
+	type WeightInfo = ();
+}
+
+pallet_staking_reward_curve::build! {
+	const REWARD_CURVE: PiecewiseLinear<'static> = curve!(
+		min_inflation: 0_025_000u64,
+		max_inflation: 0_100_000,
+		ideal_stake: 0_500_000,
+		falloff: 0_050_000,
+		max_piece_count: 40,
+		test_precision: 0_005_000,
+	);
+}
+
+parameter_types! {
+	pub const SessionsPerEra: SessionIndex = 3;
+	pub const BondingDuration: EraIndex = 3;
+	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
+	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
+}
+
+pub struct OnChainSeqPhragmen;
+impl onchain::Config for OnChainSeqPhragmen {
+	type System = Test;
+	type Solver = SequentialPhragmen<u64, Perbill>;
+	type DataProvider = Staking;
+	type WeightInfo = ();
+	type MaxWinners = ConstU32<100>;
+	type VotersBound = ConstU32<{ u32::MAX }>;
+	type TargetsBound = ConstU32<{ u32::MAX }>;
+}
+
+impl pallet_staking::Config for Test {
+	type MaxNominations = ConstU32<16>;
+	type RewardRemainder = ();
+	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
+	type Slash = ();
+	type Reward = ();
+	type SessionsPerEra = SessionsPerEra;
+	type BondingDuration = BondingDuration;
+	type SlashDeferDuration = ();
+	type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type SessionInterface = Self;
+	type UnixTime = pallet_timestamp::Pallet<Test>;
+	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
+	type MaxNominatorRewardedPerValidator = ConstU32<64>;
+	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
+	type NextNewSession = Session;
+	type ElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
+	type GenesisElectionProvider = Self::ElectionProvider;
+	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
+	type TargetList = pallet_staking::UseValidatorsMap<Self>;
+	type MaxUnlockingChunks = ConstU32<32>;
+	type HistoryDepth = ConstU32<84>;
+	type OnStakerSlash = ();
+	type EventListeners = ();
+	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
+	type WeightInfo = ();
+}
+
+impl pallet_offences::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
+	type OnOffenceHandler = Staking;
 }
 
 // Note, that we can't use `UintAuthorityId` here. Reason is that the implementation
