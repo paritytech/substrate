@@ -211,11 +211,54 @@ impl<T: Config> Migrate for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade_step() -> Result<Vec<u8>, &'static str> {
-		Ok(Vec::new())
+		let sample: Vec<_> = old::ContractInfoOf::<T>::iter()
+			.take(100)
+			.map(|(account, contract)| {
+				let old_deposit = min(
+					T::Currency::reserved_balance(&account),
+					contract
+						.storage_byte_deposit
+						.saturating_add(contract.storage_item_deposit)
+						.saturating_add(contract.storage_base_deposit),
+				);
+
+				(account, contract, old_deposit)
+			})
+			.collect();
+
+		log::debug!(target: LOG_TARGET, "Taking sample of {} contracts", sample.len());
+		Ok(sample.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade_step(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade_step(state: Vec<u8>) -> Result<(), &'static str> {
+		let sample = <Vec<(T::AccountId, old::ContractInfo<T>, BalanceOf<T>)> as Decode>::decode(
+			&mut &state[..],
+		)
+		.unwrap();
+
+		log::debug!(target: LOG_TARGET, "Validating sample of {} contracts", sample.len());
+		for (account, old_contract, old_deposit) in sample {
+			let contract = ContractInfoOf::<T>::get(&account).unwrap();
+			assert_eq!(old_contract.trie_id, contract.trie_id);
+			assert_eq!(old_contract.code_hash, contract.code_hash);
+			assert_eq!(old_contract.storage_bytes, contract.storage_bytes);
+			assert_eq!(old_contract.storage_items, contract.storage_items);
+
+			let deposit =
+				<<T as Config>::Currency as frame_support::traits::Currency<_>>::total_balance(
+					&contract.deposit_account,
+				);
+			assert_eq!(old_deposit, deposit);
+			assert_eq!(
+				deposit,
+				contract
+					.storage_byte_deposit
+					.saturating_add(contract.storage_item_deposit)
+					.saturating_add(contract.storage_base_deposit),
+			)
+		}
+
 		Ok(())
 	}
 }

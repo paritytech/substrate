@@ -115,7 +115,31 @@ impl<T: Config> Migrate for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade_step(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn pre_upgrade_step() -> Result<Vec<u8>, &'static str> {
+		let sample: Vec<_> = old::CodeStorage::<T>::iter()
+			.take(10)
+			.collect();
+
+		log::debug!(target: LOG_TARGET, "Taking sample of {} contract codes", sample.len());
+		Ok(sample.encode())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade_step(state: Vec<u8>) -> Result<(), &'static str> {
+		let sample = <Vec<(CodeHash<T>, old::PrefabWasmModule)> as Decode>::decode(
+			&mut &state[..],
+		)
+		.unwrap();
+
+		log::debug!(target: LOG_TARGET, "Validating sample of {} contract codes", sample.len());
+		for (code_hash, old) in sample {
+			let module = CodeStorage::<T>::get(&code_hash).unwrap();
+			assert_eq!(module.instruction_weights_version, old.instruction_weights_version);
+			assert_eq!(module.initial, old.initial);
+			assert_eq!(module.maximum, old.maximum);
+			assert_eq!(module.code, old.code);
+		}
+
 		Ok(())
 	}
 }
