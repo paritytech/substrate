@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Update `CodeStorage` with the new `determinism` field.
+//! Don't rely on reserved balances keeping an account alive
+//! see https://github.com/paritytech/substrate/pull/13370
 
 use crate::{
 	address::AddressGenerator,
@@ -31,15 +32,14 @@ use frame_support::{
 	pallet_prelude::*,
 	storage_alias,
 	traits::{
+		fungible::Inspect,
 		tokens::{Fortitude::Polite, Preservation::Preserve},
 		Currency, ExistenceRequirement, ReservableCurrency,
 	},
 	DefaultNoBound,
 };
-
-use frame_support::traits::fungible::Inspect;
 use sp_runtime::{Perbill, Saturating};
-use sp_std::{marker::PhantomData, ops::Deref};
+use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
 mod old {
 	use super::*;
 

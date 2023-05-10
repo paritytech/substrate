@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Update `CodeStorage` with the new `determinism` field.
+//! Overflowing bounded DeletionQueue.
+//! See https://github.com/paritytech/substrate/pull/13702
 
 use crate::{
 	migration::{IsFinished, Migrate},
