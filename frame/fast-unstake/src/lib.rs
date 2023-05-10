@@ -17,45 +17,49 @@
 
 //! # Fast Unstake Pallet
 //!
-//! ## Overview
+//! A pallet to allow participants of the staking system (represented by [`Config::Staking`]) to
+//! unstake quicker, if and only if they meed the condition of not being exposed to any slashes.
 //!
-//! A pallet that's designed to JUST do the following:
+//! ## High Level / End-User Details
 //!
-//! If a nominator is not exposed in any `ErasStakers` (i.e. "has not actively backed any
-//! validators in the last `BondingDuration` days"), then they can register themselves in this
-//! pallet, unstake faster than having to wait an entire bonding duration.
+//! This pallet that's designed to JUST do the following:
 //!
-//! Appearing in the exposure of a validator means being exposed equal to that validator from the
-//! point of view of the staking system. This usually means earning rewards with the validator, and
-//! also being at the risk of slashing with the validator. This is equivalent to the "Active
-//! Nominator" role explained in the
-//! [February Staking Update](https://polkadot.network/blog/staking-update-february-2022/).
+//! If a nominator is not exposed anywhere in the staking system, checked via
+//! [`T::Staking::is_exposed_in_era`] (i.e. "has not actively backed any validators in the last
+//! [`T::Staking::bonding_duration`] days"), then they can register themselves in this pallet,
+//! unstake faster than having to wait an entire bonding duration.
 //!
-//! This pallet works off the basis of `on_idle`, meaning that it
-//! provides no guarantee about when it will succeed, if at all. Moreover, the queue implementation
-//! is unordered. In case of congestion, no FIFO ordering is provided.
+//! *Being exposed with validator* from the point of view of the staking system means earning
+//! rewards with the validator, and also being at the risk of slashing with the validator. This is
+//! equivalent to the "Active Nominator" role explained in
+//! [here](https://polkadot.network/blog/staking-update-february-2022/).
 //!
 //! Stakers who are certain about NOT being exposed can register themselves with
 //! [`Pallet::register_fast_unstake`]. This will chill, and fully unbond the staker, and place them
 //! in the queue to be checked.
 //!
-//! Once queued, but not being actively processed, stakers can withdraw their request via
-//! [`Pallet::deregister`].
+//! A successful registration implies being fully unbonded and chilled in the staking system. These
+//! effects persis, even if the fast-unstake registration is retracted (see [`Pallet::deregister`]
+//! and further).
 //!
-//! Once queued, a staker wishing to unbond can perform no further action in pallet-staking. This is
-//! to prevent them from accidentally exposing themselves behind a validator etc.
+//! Once registered as a fast-unstaker, the staker will be queued and checked by the system. This
+//! can take a variable number of blocks based on demand, but will almost certainly be "faster" (as
+//! the name suggest) than waiting the standard bonding duration.
+//!
+//! A fast-unstaker is either in [`Queue`], or actively being checked, at which point it lives in
+//! [`Head`]. Once in [`Head`], the request cannot retracted anymore. But, once in [`Queue`], it
+//! can, via [`Pallet::deregister`].
+//!
+//! A deposit, equal to [`Config::Deposit`] is collected for this process, and is returned in case a
+//! successful unstake occurs (`Event::Unstaked` signals that).
 //!
 //! Once processed, if successful, no additional fee for the checking process is taken, and the
 //! staker is instantly unbonded.
 //!
-//! If unsuccessful, meaning that the staker was exposed sometime in the last `BondingDuration` eras
-//! they will end up being slashed for the amount of wasted work they have inflicted on the chian.
+//! If unsuccessful, meaning that the staker was exposed, the aforementioned deposit will be
+//! slashed for the amount of wasted work they have inflicted on the chian.
 //!
-//! ## Details
-//!
-//! See [`pallet`] module for more information.
-//!
-//! ## Examples
+//! ### Example
 //!
 //! 1. Fast-unstake with multiple participants in the queue.
 #![doc = docify::embed!("./frame/fast-unstake/src/tests.rs", successful_multi_queue)]
@@ -63,6 +67,38 @@
 //! 2. Fast unstake failing because a nominator is exposed.
 #![doc = docify::embed!("./frame/fast-unstake/src/tests.rs", exposed_nominator_cannot_unstake)]
 //!
+//! ## Code Details
+//!
+//! See [`pallet`] module for more information.
+//!
+//! ## Low Level / Implementation Details
+//!
+//! This pallet works off the basis of `on_idle`, meaning that it provides no guarantee about when
+//! it will succeed, if at all. Moreover, the queue implementation is unordered. In case of
+//! congestion, no FIFO ordering is provided.
+//!
+//! A few important considerations can be concluded based on the `on_idle`-based implementation:
+//!
+//! * It is crucial for the weights of this pallet to be correct. The code inside
+//! [`Pallet::on_idle`] MUST be able to measure itself and report the remaining weight correctly
+//! after execution.
+//!
+//! * If the weight measurement is incorrect, it can lead to perpetual overweight (consequently
+//!   slow) blocks.
+//!
+//! * The amount of weight that `on_idle` consumes is a direct function of [`ErasToCheckPerBlock`].
+//!
+//! * Thus, a correct value of [`ErasToCheckPerBlock`] (which can be set via [`Pallet::control`])
+//!   should be chosen, such that a reasonable amount of weight is used `on_idle`. If
+//!   [`ErasToCheckPerBlock`] is too large, `on_idle` will always conclude that it has not enough
+//!   weight to proceed, and will early-return. Nonetheless, this should also be *safe* as long as
+//!   the benchmarking/weights are *accurate*.
+//!
+//! * See the inline code-comments on `do_on_idle` (private) for more details.
+//!
+//! * For further safety, in case of any unforeseen errors, the pallet will emit
+//!   [`Event::InternalError`] and set [`ErasToCheckPerBlock`] back to 0, which essentially means
+//!   the pallet will halt/disable itself.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -81,9 +117,9 @@ pub mod migrations;
 pub mod types;
 pub mod weights;
 
+/// The logging target of this pallet.
 pub const LOG_TARGET: &'static str = "runtime::fast-unstake";
 
-// syntactic sugar for logging.
 #[macro_export]
 macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
