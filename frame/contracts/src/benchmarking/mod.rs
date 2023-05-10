@@ -21,7 +21,6 @@
 
 mod code;
 mod sandbox;
-
 use self::{
 	code::{
 		body::{self, DynInstr::*},
@@ -296,19 +295,31 @@ benchmarks! {
 	}:  {
 		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
 	} verify {
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+		assert!(MigrationInProgress::<T>::get().is_none());
+	}
+
+	// This benchmarks the base weight of dispatching a noop migrate call.
+	#[pov_mode = Measured]
+	on_runtime_upgrade_in_progress {
+		StorageVersion::new(0).put::<Pallet<T>>();
+		let v = vec![42u8].try_into().ok();
+		MigrationInProgress::<T>::set(v.clone());
+
+	}:  {
+		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
+	} verify {
+		assert!(MigrationInProgress::<T>::get().is_some());
+		assert_eq!(MigrationInProgress::<T>::get(), v);
 	}
 
 	// This benchmarks the base weight of dispatching a noop migrate call.
 	#[pov_mode = Measured]
 	on_runtime_upgrade {
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
-		MigrationInProgress::<T>::set(Some(Default::default()));
-
+		StorageVersion::new(0).put::<Pallet<T>>();
 	}:  {
 		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
 	} verify {
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 3);
+		assert!(MigrationInProgress::<T>::get().is_some());
 	}
 
 	// This benchmarks the overhead of loading a code of size `c` byte from storage and into

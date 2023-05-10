@@ -39,7 +39,7 @@ use frame_support::{
 	storage::child,
 	traits::{
 		ConstU32, ConstU64, Contains, Currency, ExistenceRequirement, LockableCurrency, OnIdle,
-		OnInitialize, WithdrawReasons,
+		OnInitialize, StorageVersion, WithdrawReasons,
 	},
 	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
@@ -438,10 +438,11 @@ pub const GAS_LIMIT: Weight = Weight::from_parts(100_000_000_000, 3 * 1024 * 102
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
+	storage_version: Option<StorageVersion>,
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self { existential_deposit: ExistentialDeposit::get() }
+		Self { existential_deposit: ExistentialDeposit::get(), storage_version: None }
 	}
 }
 impl ExtBuilder {
@@ -451,6 +452,10 @@ impl ExtBuilder {
 	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
+	}
+	pub fn set_storage_version(mut self, version: u16) -> Self {
+		self.storage_version = Some(StorageVersion::new(version));
+		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		use env_logger::{Builder, Env};
@@ -463,7 +468,15 @@ impl ExtBuilder {
 			.unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
 		ext.register_extension(KeystoreExt::new(MemoryKeystore::new()));
-		ext.execute_with(|| System::set_block_number(1));
+		ext.execute_with(|| {
+			use frame_support::traits::OnGenesis;
+
+			Pallet::<Test>::on_genesis();
+			if let Some(storage_version) = self.storage_version {
+				storage_version.put::<Pallet<Test>>();
+			}
+			System::set_block_number(1)
+		});
 		ext
 	}
 }
