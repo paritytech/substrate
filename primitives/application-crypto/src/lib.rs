@@ -352,9 +352,7 @@ macro_rules! app_crypto_public_common_if_serde {
 				D: $crate::serde::Deserializer<'de>,
 			{
 				#[cfg(not(feature = "std"))]
-				extern crate alloc;
-				#[cfg(not(feature = "std"))]
-				use alloc::{format, string::String};
+				use sp_std::alloc::{format, string::String};
 				use $crate::Ss58Codec;
 
 				Public::from_ss58check(&String::deserialize(deserializer)?)
