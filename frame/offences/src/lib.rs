@@ -147,7 +147,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// This is called at the start of each new session. Hence, only one session becomes
 	/// obsolete in this call, whose data gets cleared up here.
-	/// 
+	///
 	/// For example, if the `current_session_index` is 10 and `MaxSessionReportAge` is 6,
 	/// this clears all reports for `obsolete_session_index` 4.
 	fn clear_obsolete_reports(current_session_index: SessionIndex) {
@@ -159,10 +159,8 @@ impl<T: Config> Pallet<T> {
 
 		let session_reports = SessionReports::<T>::take(obsolete_session_index);
 		let session_reports =
-			Vec::<(Kind, OpaqueTimeSlot, ReportIdOf<T>)>::decode(
-				&mut &session_reports[..],
-			)
-			.unwrap_or_default();
+			Vec::<(Kind, OpaqueTimeSlot, ReportIdOf<T>)>::decode(&mut &session_reports[..])
+				.unwrap_or_default();
 
 		for (kind, time_slot, report_id) in &session_reports {
 			ConcurrentReportsIndex::<T>::remove(kind, time_slot);
@@ -314,22 +312,22 @@ impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 
 		let session_reports = SessionReports::<T>::get(session_index);
 		let session_reports =
-			Vec::<(Kind, OpaqueTimeSlot, ReportIdOf<T>)>::decode(
-				&mut &session_reports[..],
-			)
-			.unwrap_or_default();
+			Vec::<(Kind, OpaqueTimeSlot, ReportIdOf<T>)>::decode(&mut &session_reports[..])
+				.unwrap_or_default();
 
 		let concurrent_reports = <ConcurrentReportsIndex<T>>::get(&O::ID, &opaque_time_slot);
 
-		Self { opaque_time_slot, session_index, concurrent_reports, session_reports, _phantom: Default::default() }
+		Self {
+			opaque_time_slot,
+			session_index,
+			concurrent_reports,
+			session_reports,
+			_phantom: Default::default(),
+		}
 	}
 
 	/// Insert a new report to the index.
-	fn insert(
-		&mut self,
-		report_id: ReportIdOf<T>,
-		time_slot: &O::TimeSlot,
-	) {
+	fn insert(&mut self, report_id: ReportIdOf<T>, time_slot: &O::TimeSlot) {
 		let opaque_time_slot = time_slot.encode();
 		self.session_reports.push((O::ID, opaque_time_slot, report_id));
 

@@ -324,7 +324,7 @@ fn should_properly_store_offences() {
 
 		// then
 		let prev_session_reports = Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>::decode(
-			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index-1)[..],
+			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index - 1)[..],
 		)
 		.unwrap();
 		assert_eq!(
@@ -345,7 +345,7 @@ fn should_properly_store_offences() {
 		);
 
 		let next_session_reports = Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>::decode(
-			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index+1)[..],
+			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index + 1)[..],
 		)
 		.unwrap();
 		assert_eq!(
@@ -398,26 +398,24 @@ fn should_properly_clear_obsolete_offences() {
 		Offences::report_offence(vec![], offence3).unwrap();
 		Offences::report_offence(vec![], offence4).unwrap();
 
-		assert_eq!(offence_reports(KIND, time_slot-1), vec![
-			OffenceDetails { offender: 3, reporters: vec![] }
-		]);
+		assert_eq!(
+			offence_reports(KIND, time_slot - 1),
+			vec![OffenceDetails { offender: 3, reporters: vec![] }]
+		);
 
 		Offences::clear_obsolete_reports(session_index + 5);
 
-		assert_eq!(offence_reports(KIND, time_slot-1), vec![]);
+		assert_eq!(offence_reports(KIND, time_slot - 1), vec![]);
 
 		// then
 		let obsolete_session_reports = Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>::decode(
-			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index-1)[..],
+			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index - 1)[..],
 		)
 		.unwrap_or_default();
-		assert_eq!(
-			obsolete_session_reports,
-			vec![]
-		);
+		assert_eq!(obsolete_session_reports, vec![]);
 
 		let session_reports = Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>::decode(
-			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index+1)[..],
+			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index + 1)[..],
 		)
 		.unwrap();
 		assert_eq!(
