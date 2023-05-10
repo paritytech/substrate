@@ -1658,27 +1658,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	}
 
 	sp_staking::runtime_benchmarks_enabled! {
-		fn nominations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
-			Nominators::<T>::get(who).map(|n| n.targets.into_inner())
-		}
-
-		let is_validator = Validators::<T>::contains_key(&who);
-		let is_nominator = Nominators::<T>::get(&who);
-
-		match (is_validator, is_nominator.is_some()) {
-			(false, false) => Some(StakerStatus::Idle),
-			(true, false) => Some(StakerStatus::Validator),
-			(false, true) => Some(StakerStatus::Nominator(
-				is_nominator.expect("is checked above; qed").targets.into_inner(),
-			)),
-			(true, true) => {
-				defensive!("cannot be both validators and nominator");
-				None
-			},
-		}
-	}
-
-	sp_staking::runtime_benchmarks_enabled! {
 		fn add_era_stakers(
 			current_era: &EraIndex,
 			stash: &T::AccountId,

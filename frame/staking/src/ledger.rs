@@ -51,7 +51,7 @@ pub struct StakingLedger<T: Config> {
 	controller: Option<T::AccountId>,
 }
 
-// #[cfg(test)]
+#[cfg(test)]
 #[derive(DebugNoBound, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct StakingLedgerInspect<T: Config> {
 	pub stash: T::AccountId,
@@ -63,7 +63,7 @@ pub struct StakingLedgerInspect<T: Config> {
 	pub claimed_rewards: BoundedVec<EraIndex, T::HistoryDepth>,
 }
 
-// #[cfg(test)]
+#[cfg(test)]
 impl<T: Config> PartialEq<StakingLedgerInspect<T>> for StakingLedger<T> {
 	fn eq(&self, other: &StakingLedgerInspect<T>) -> bool {
 		self.stash == other.stash &&
