@@ -493,7 +493,7 @@ pub mod pallet {
 		///
 		#[pallet::call_index(6)]
 		#[pallet::weight(0)]
-		pub fn set_royalty_recipients(
+		pub fn set_collection_royalty_recipients(
 			origin: OriginFor<T>,
 			collection_id: T::NftCollectionId,
 			recipients: Vec<(T::AccountId, Permill)>,
