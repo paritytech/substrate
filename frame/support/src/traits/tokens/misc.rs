@@ -141,6 +141,8 @@ pub enum DepositConsequence {
 	Overflow,
 	/// Account continued in existence.
 	Success,
+	/// Account cannot receive the assets.
+	Blocked,
 }
 
 impl DepositConsequence {
@@ -152,6 +154,7 @@ impl DepositConsequence {
 			CannotCreate => TokenError::CannotCreate.into(),
 			UnknownAsset => TokenError::UnknownAsset.into(),
 			Overflow => ArithmeticError::Overflow.into(),
+			Blocked => TokenError::Blocked.into(),
 			Success => return Ok(()),
 		})
 	}
