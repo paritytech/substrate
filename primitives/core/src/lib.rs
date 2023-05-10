@@ -55,6 +55,8 @@ pub mod crypto;
 pub mod hexdisplay;
 pub use paste;
 
+#[cfg(feature = "bls-experimental")]
+pub mod bls;
 pub mod defer;
 pub mod ecdsa;
 #[cfg(feature = "std")]
@@ -69,6 +71,9 @@ pub mod testing;
 #[cfg(feature = "std")]
 pub mod traits;
 pub mod uint;
+
+#[cfg(feature = "bls-experimental")]
+pub use bls::{bls377, bls381};
 
 pub use self::{
 	hash::{convert_hash, H160, H256, H512},

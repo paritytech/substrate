@@ -18,21 +18,23 @@
 use frame_support::{
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, UnfilteredDispatchable},
 	pallet_prelude::ValueQuery,
+	parameter_types,
 	storage::unhashed,
 	traits::{ConstU32, GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
+	weights::Weight,
 };
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
 use sp_runtime::{DispatchError, ModuleError};
+use sp_std::any::TypeId;
 
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
-	use codec::MaxEncodedLen;
-	use frame_support::{pallet_prelude::*, parameter_types, scale_info};
+	use super::*;
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_std::any::TypeId;
 
 	type BalanceOf<T, I> = <T as Config<I>>::Balance;
 
@@ -345,8 +347,6 @@ frame_support::construct_runtime!(
 		Instance1Example2: pallet2::<Instance1>,
 	}
 );
-
-use frame_support::weights::Weight;
 
 #[test]
 fn call_expand() {

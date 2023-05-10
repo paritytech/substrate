@@ -15,17 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub trait Config: frame_support_test::Config {}
+//! BLS12-381 crypto applications.
 
-frame_support::decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=frame_support_test {}
+pub use sp_core::bls::bls381::*;
+
+mod app {
+	crate::app_crypto!(super, sp_core::testing::BLS381);
 }
 
-frame_support::decl_storage!{
-	trait Store for Module<T: Config> as FinalKeysNone {
-		pub Value get(fn value) config(): u32;
-		pub Value2 get(fn value) config(): u32;
-	}
-}
-
-fn main() {}
+#[cfg(feature = "full_crypto")]
+pub use app::Pair as AppPair;
+pub use app::{Public as AppPublic, Signature as AppSignature};

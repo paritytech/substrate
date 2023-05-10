@@ -64,7 +64,7 @@ pub fn start_node() -> Child {
 	Command::new(cargo_bin("substrate"))
 		.stdout(process::Stdio::piped())
 		.stderr(process::Stdio::piped())
-		.args(&["--dev", "--tmp", "--ws-port=45789", "--no-hardware-benchmarks"])
+		.args(&["--dev", "--tmp", "--rpc-port=45789", "--no-hardware-benchmarks"])
 		.spawn()
 		.unwrap()
 }
