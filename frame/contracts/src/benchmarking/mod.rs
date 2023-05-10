@@ -266,7 +266,6 @@ benchmarks! {
 		migration.step();
 	}
 
-
 	// This benchmarks the base weight of dispatching a noop migrate call.
 	#[pov_mode = Measured]
 	migrate {
