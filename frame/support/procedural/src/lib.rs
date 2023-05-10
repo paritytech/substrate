@@ -818,15 +818,63 @@ pub fn config(_: TokenStream, _: TokenStream) -> TokenStream {
 /// The `#[pallet::constant]` attribute can be used to add an associated type trait bounded by `Get`
 /// from [`pallet::config`](`macro@config`) into metadata, e.g.:
 ///
-/// ```ignore
-/// #[pallet::config]
-/// pub trait Config: frame_system::Config {
-/// 	#[pallet::constant]
-/// 	type Foo: Get<u32>;
+/// ## Example:
+///
+/// ```
+/// #[frame_support::pallet]
+/// mod pallet {
+///     use frame_support::pallet_prelude::*;
+///
+///     # #[pallet::pallet]
+///     # pub struct Pallet<T>(_);
+///
+///     #[pallet::config]
+///     pub trait Config: frame_system::Config {
+/// 		/// This is like a normal `Get` trait, but it will be added into metadata.
+/// 		#[pallet::constant]
+/// 		type Foo: Get<u32>;
+/// 	}
 /// }
 /// ```
 #[proc_macro_attribute]
 pub fn constant(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// Declares an implementation block to be the dispatchable portion of a pallet. In other words,
+/// each function in the implementation block of this section is an extrinsic that can be called
+/// externally.
+///
+/// Other than than the `fn` attached to `Pallet`, this block will also generate an `enum Call`
+/// which encapsulates the different functions, alongside their arguments, except for `origin`.
+/// [`sp_runtime::traits::Dispatchable`] is then implemented for `enum Call`.
+///
+/// ## Example:
+///
+/// ```
+/// #[frame_support::pallet]
+/// mod pallet {
+///     use frame_support::pallet_prelude::*;
+///
+///     #[pallet::config]
+///     pub trait Config: frame_system::Config { }
+///
+///     #[pallet::pallet]
+///     pub struct Pallet<T>(_);
+///
+/// 	#[pallet::call]
+/// 	impl<T: Config> Pallet<T> {
+/// 		fn do_stuff(_origin: OriginFor<T>, arg: u32) {
+/// 			unimplemented!()
+/// 		}
+/// 	}
+/// }
+/// ```
+///
+/// TODO: once we have default pallet config, it would also be easy to create types in the example
+/// that implement `Config`.
+#[proc_macro_attribute]
+pub fn call(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
@@ -880,6 +928,11 @@ pub fn generate_store(_: TokenStream, _: TokenStream) -> TokenStream {
 /// and value types must be bound by `MaxEncodedLen`. Individual storages can opt-out from this
 /// constraint by using [`#[pallet::unbounded]`](`macro@unbounded`) (see
 /// [`#[pallet::storage]`](`macro@storage`) for more info).
+#[proc_macro_attribute]
+pub fn generate_storage_info(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 #[proc_macro_attribute]
 pub fn generate_storage_info(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
@@ -1018,6 +1071,11 @@ pub fn call_index(_: TokenStream, _: TokenStream) -> TokenStream {
 /// The macro add some extra constants to pallet constant metadata.
 #[proc_macro_attribute]
 pub fn extra_constants(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+#[proc_macro_attribute]
+pub fn constant_name(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
