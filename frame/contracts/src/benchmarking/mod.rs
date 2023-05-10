@@ -266,7 +266,7 @@ benchmarks! {
 		migration.step();
 	}
 
-	// This benchmarks the weight of dispatching a migrate call that perform a migration step.
+	// This benchmarks the weight of dispatching a migrate call that perform a noop migration step.
 	#[pov_mode = Measured]
 	migrate {
 		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
@@ -278,8 +278,7 @@ benchmarks! {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
 	}
 
-	// This benchmarks the weight of executing Migration::migrate when there are no migration in
-	// progress.
+	// This benchmarks the weight of executing Migration::migrate when there are no migration in progress.
 	#[pov_mode = Measured]
 	migrate_noop {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
@@ -290,7 +289,6 @@ benchmarks! {
 	}
 
 	// This benchmarks the weight of bumping the storage version
-	// progress.
 	#[pov_mode = Measured]
 	bump_storage_version {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
@@ -301,8 +299,7 @@ benchmarks! {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 3);
 	}
 
-	// This benchmarks the weight of executing Migration::migrate when a noop migration step bump
-	// the storage version.
+	// This benchmarks the weight of executing Migration::migrate that execute a noop migration that bump the storage version.
 	#[pov_mode = Measured]
 	migrate_update_storage_version {
 		StorageVersion::new(0).put::<Pallet<T>>();
@@ -313,7 +310,7 @@ benchmarks! {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
 	}
 
-	// This benchmarks the base weight of dispatching a noop migrate call.
+	// This benchmarks the weight of running on_runtime_upgrade when there are no migration in progress.
 	#[pov_mode = Measured]
 	on_runtime_upgrade_noop {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
@@ -323,7 +320,7 @@ benchmarks! {
 		assert!(MigrationInProgress::<T>::get().is_none());
 	}
 
-	// This benchmarks the base weight of dispatching a noop migrate call.
+	// This benchmarks the weight of running on_runtime_upgrade when there is a migration in progress.
 	#[pov_mode = Measured]
 	on_runtime_upgrade_in_progress {
 		StorageVersion::new(0).put::<Pallet<T>>();
@@ -337,7 +334,7 @@ benchmarks! {
 		assert_eq!(MigrationInProgress::<T>::get(), v);
 	}
 
-	// This benchmarks the base weight of dispatching a noop migrate call.
+	// This benchmarks the weight of running on_runtime_upgrade when there is a migration to process.
 	#[pov_mode = Measured]
 	on_runtime_upgrade {
 		StorageVersion::new(0).put::<Pallet<T>>();
