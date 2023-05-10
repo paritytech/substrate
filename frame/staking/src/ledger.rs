@@ -1,14 +1,15 @@
-use codec::{Decode, Encode, EncodeLike, HasCompact, MaxEncodedLen};
+use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use frame_support::{
 	traits::{Defensive, Get, LockableCurrency, WithdrawReasons},
-	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound,
+	BoundedVec, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound, RuntimeDebug,
+	RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{traits::Zero, Perquintill, Rounding, Saturating};
 use sp_staking::{EraIndex, OnStakingUpdate};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
-use crate::{log, BalanceOf, Config, Ledger, STAKING_ID};
+use crate::{log, BalanceOf, Bonded, Config, Ledger, Pallet, Payee, RewardDestination, STAKING_ID};
 
 /// The ledger of a (bonded) stash.
 #[derive(
@@ -48,38 +49,120 @@ impl<T: Config> Into<sp_staking::Stake<BalanceOf<T>>> for StakingLedger<T> {
 	}
 }
 
-impl<T: Config> StakingLedger<T> {
-	pub fn new(stash: T::AccountId, stake: BalanceOf<T>) -> Self {
-		T::Currency::set_lock(STAKING_ID, &stash, stake, WithdrawReasons::all());
-		Self {
+impl<T: Config> Into<sp_staking::Stake<BalanceOf<T>>> for StakingLedgerInterface<T> {
+	fn into(self) -> sp_staking::Stake<BalanceOf<T>> {
+		self.inner.into()
+	}
+}
+
+#[derive(
+	CloneNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, DebugNoBound, TypeInfo, MaxEncodedLen,
+)]
+#[scale_info(skip_type_params(T))]
+pub(crate) struct StakingLedgerInterface<T: Config> {
+	pub(crate) payee: RewardDestination<T::AccountId>,
+	pub(crate) inner: StakingLedger<T>,
+	pub(crate) controller: T::AccountId,
+}
+
+impl<T: Config> StakingLedgerInterface<T> {
+	pub(crate) fn new(
+		stash: T::AccountId,
+		stake: BalanceOf<T>,
+		controller: T::AccountId,
+		payee: RewardDestination<T::AccountId>,
+	) -> Self {
+		// TODO: this must be followed-up by a `put` call otherwise we would have a dangling
+		// set-lock. We can verify this with a drop impl.
+		let inner = StakingLedger {
 			stash,
 			total: stake,
 			active: stake,
 			unlocking: Default::default(),
 			claimed_rewards: Default::default(),
+		};
+		Self { inner, controller, payee }
+	}
+
+	pub(crate) fn take_controller(controller: &T::AccountId) -> Option<Self> {
+		let maybe_self = Ledger::<T>::take(controller)
+			.map(|inner| {
+				let payee = Payee::<T>::take(&inner.stash);
+				(inner, payee)
+			})
+			.map(|(inner, payee)| Self { inner, controller: controller.clone(), payee });
+
+		if let Some(l) = maybe_self.as_ref() {
+			let _stored_controller = Bonded::<T>::take(&l.inner.stash);
+			debug_assert!(maybe_self
+				.as_ref()
+				.map_or(true, |l| _stored_controller.unwrap() == l.controller));
 		}
+
+		maybe_self
 	}
 
-	pub fn get_by_controller<A: EncodeLike<T::AccountId>>(controller: A) -> Option<Self> {
-		Ledger::<T>::get(controller)
+	pub(crate) fn get_controller(controller: &T::AccountId) -> Option<Self> {
+		let maybe_self = Ledger::<T>::get(controller)
+			.map(|inner| {
+				let payee = Payee::<T>::get(&inner.stash);
+				(inner, payee)
+			})
+			.map(|(inner, payee)| Self { inner, controller: controller.clone(), payee });
+
+		debug_assert!(maybe_self
+			.as_ref()
+			.map_or(true, |l| Bonded::<T>::get(&l.inner.stash).unwrap() == l.controller));
+		maybe_self
 	}
 
-	pub fn remove(self, controller: &T::AccountId) {
-		T::Currency::remove_lock(STAKING_ID, &self.stash);
-		Ledger::<T>::remove(controller);
-		T::EventListeners::on_unstake(&self.stash);
+	pub(crate) fn get_stash(stash: &T::AccountId) -> Option<Self> {
+		Pallet::<T>::bonded(stash).and_then(|ctrl| Self::get_controller(&ctrl))
 	}
 
-	pub fn put_by_controller(self, controller: &T::AccountId) {
-		T::Currency::set_lock(STAKING_ID, &self.stash, self.total, WithdrawReasons::all());
-		let stash = self.stash.clone();
-		let prev_ledger = Self::get_by_controller(controller);
-		Ledger::<T>::insert(controller, &self);
-		if prev_ledger != Some(self) {
+	pub(crate) fn put(self) {
+		T::Currency::set_lock(
+			STAKING_ID,
+			&self.inner.stash,
+			self.inner.total,
+			WithdrawReasons::all(),
+		);
+
+		Payee::<T>::insert(&self.inner.stash, &self.payee);
+		Bonded::<T>::insert(&self.inner.stash, &self.controller);
+
+		let stash = self.inner.stash.clone();
+		let prev_ledger = Ledger::<T>::get(&self.controller);
+
+		Ledger::<T>::insert(self.controller, &self.inner);
+		if prev_ledger != Some(self.inner) {
 			T::EventListeners::on_stake_update(&stash, prev_ledger.map(Into::into));
 		}
 	}
 
+	pub(crate) fn remove(self) {
+		T::Currency::remove_lock(STAKING_ID, &self.stash);
+		Bonded::<T>::remove(&self.stash);
+		Payee::<T>::remove(&self.stash);
+		Ledger::<T>::remove(&self.controller);
+		T::EventListeners::on_unstake(&self.stash);
+	}
+}
+
+impl<T: Config> sp_std::ops::Deref for StakingLedgerInterface<T> {
+	type Target = StakingLedger<T>;
+	fn deref(&self) -> &Self::Target {
+		&self.inner
+	}
+}
+
+impl<T: Config> sp_std::ops::DerefMut for StakingLedgerInterface<T> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.inner
+	}
+}
+
+impl<T: Config> StakingLedger<T> {
 	/// Initializes the default object using the given `validator`.
 	pub fn default_from(stash: T::AccountId) -> Self {
 		Self {
@@ -93,11 +176,11 @@ impl<T: Config> StakingLedger<T> {
 
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
-	pub(crate) fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
+	pub(crate) fn consolidate_unlocked(&mut self, current_era: EraIndex) {
 		let mut total = self.total;
 		let unlocking: BoundedVec<_, _> = self
 			.unlocking
-			.into_iter()
+			.iter()
 			.filter(|chunk| {
 				if chunk.era > current_era {
 					true
@@ -106,25 +189,20 @@ impl<T: Config> StakingLedger<T> {
 					false
 				}
 			})
+			.cloned()
 			.collect::<Vec<_>>()
 			.try_into()
 			.expect(
 				"filtering items from a bounded vec always leaves length less than bounds. qed",
 			);
-
-		Self {
-			stash: self.stash,
-			total,
-			active: self.active,
-			unlocking,
-			claimed_rewards: self.claimed_rewards,
-		}
+		self.unlocking = unlocking;
+		self.total = total;
 	}
 
 	/// Re-bond funds that were scheduled for unlocking.
 	///
-	/// Returns the updated ledger, and the amount actually rebonded.
-	pub(crate) fn rebond(mut self, value: BalanceOf<T>) -> (Self, BalanceOf<T>) {
+	/// Returns the the amount actually rebonded.
+	pub(crate) fn rebond(&mut self, value: BalanceOf<T>) -> BalanceOf<T> {
 		let mut unlocking_balance = BalanceOf::<T>::zero();
 
 		while let Some(last) = self.unlocking.last_mut() {
@@ -145,7 +223,7 @@ impl<T: Config> StakingLedger<T> {
 			}
 		}
 
-		(self, unlocking_balance)
+		unlocking_balance
 	}
 
 	/// Slash the staker for a given amount of balance.

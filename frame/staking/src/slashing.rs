@@ -57,7 +57,7 @@ use crate::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
-	traits::{Currency, Defensive, Get, Imbalance, OnUnbalanced},
+	traits::{Currency, Get, Imbalance, OnUnbalanced},
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -597,12 +597,7 @@ pub fn do_slash<T: Config>(
 	slashed_imbalance: &mut NegativeImbalanceOf<T>,
 	slash_era: EraIndex,
 ) {
-	let controller = match <Pallet<T>>::bonded(stash).defensive() {
-		None => return,
-		Some(c) => c,
-	};
-
-	let mut ledger = match <Pallet<T>>::ledger(&controller) {
+	let mut ledger = match <Pallet<T>>::ledger_by_stash(&stash) {
 		Some(ledger) => ledger,
 		None => return, // nothing to do.
 	};
@@ -618,7 +613,7 @@ pub fn do_slash<T: Config>(
 			*reward_payout = reward_payout.saturating_sub(missing);
 		}
 
-		ledger.put_by_controller(&controller);
+		ledger.put();
 
 		// trigger the event
 		<Pallet<T>>::deposit_event(super::Event::<T>::Slashed {

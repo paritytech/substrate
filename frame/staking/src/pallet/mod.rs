@@ -53,7 +53,7 @@ use crate::{
 pub mod pallet {
 	use frame_election_provider_support::ElectionDataProvider;
 
-	use crate::BenchmarkingConfig;
+	use crate::{ledger::StakingLedgerInterface, BenchmarkingConfig};
 
 	use super::*;
 
@@ -872,11 +872,6 @@ pub mod pallet {
 
 			frame_system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
 
-			// You're auto-bonded forever, here. We might improve this by only bonding when
-			// you actually validate/nominate and remove once you unbond __everything__.
-			<Bonded<T>>::insert(&stash, &controller);
-			<Payee<T>>::insert(&stash, payee);
-
 			let current_era = CurrentEra::<T>::get().unwrap_or(0);
 			let history_depth = T::HistoryDepth::get();
 			let last_reward_era = current_era.saturating_sub(history_depth);
@@ -885,14 +880,14 @@ pub mod pallet {
 			let value = value.min(stash_balance);
 			Self::deposit_event(Event::<T>::Bonded { stash: stash.clone(), amount: value });
 
-			let mut ledger = StakingLedger::<T>::new(stash, value);
+			let mut ledger = StakingLedgerInterface::<T>::new(stash, value, controller, payee);
 			ledger.claimed_rewards = (last_reward_era..current_era)
 				.try_collect()
 				// Since last_reward_era is calculated as `current_era -
 				// HistoryDepth`, following bound is always expected to be
 				// satisfied.
 				.defensive_map_err(|_| Error::<T>::BoundNotMet)?;
-			ledger.put_by_controller(&controller);
+			ledger.put();
 
 			Ok(())
 		}
@@ -919,8 +914,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 
-			let controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
-			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let mut ledger = Self::ledger_by_stash(&stash).ok_or(Error::<T>::NotController)?;
 
 			let stash_balance = T::Currency::free_balance(&stash);
 			if let Some(extra) = stash_balance.checked_sub(&ledger.total) {
@@ -933,7 +927,8 @@ pub mod pallet {
 					Error::<T>::InsufficientBond
 				);
 
-				ledger.put_by_controller(&controller);
+				ledger.put();
+
 				Self::deposit_event(Event::<T>::Bonded { stash, amount: extra });
 			}
 			Ok(())
@@ -1031,7 +1026,7 @@ pub mod pallet {
 				};
 
 				let stash = ledger.stash.clone();
-				ledger.put_by_controller(&controller);
+				ledger.put();
 				Self::deposit_event(Event::<T>::Unbonded { stash, amount: value });
 			}
 
@@ -1103,7 +1098,10 @@ pub mod pallet {
 
 			Self::do_remove_nominator(stash);
 			Self::do_add_validator(stash, prefs.clone());
-			Self::deposit_event(Event::<T>::ValidatorPrefsSet { stash: ledger.stash, prefs });
+			Self::deposit_event(Event::<T>::ValidatorPrefsSet {
+				stash: ledger.stash.clone(),
+				prefs,
+			});
 
 			Ok(())
 		}
@@ -1214,9 +1212,9 @@ pub mod pallet {
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			let stash = &ledger.stash;
-			<Payee<T>>::insert(stash, payee);
+			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			ledger.payee = payee;
+			ledger.put();
 			Ok(())
 		}
 
@@ -1244,9 +1242,9 @@ pub mod pallet {
 				return Err(Error::<T>::AlreadyPaired.into())
 			}
 			if controller != old_controller {
-				<Bonded<T>>::insert(&stash, &controller);
-				if let Some(l) = <Ledger<T>>::take(&old_controller) {
-					<Ledger<T>>::insert(&controller, l);
+				if let Some(mut l) = StakingLedgerInterface::<T>::take_controller(&old_controller) {
+					l.controller = controller;
+					l.put();
 				}
 			}
 			Ok(())
@@ -1483,11 +1481,11 @@ pub mod pallet {
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
 			let initial_unlocking = ledger.unlocking.len() as u32;
-			let (ledger, rebonded_value) = ledger.rebond(value);
+			let rebonded_value = ledger.rebond(value);
 			// Last check: the new active amount of ledger must be more than ED.
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
@@ -1496,12 +1494,12 @@ pub mod pallet {
 				amount: rebonded_value,
 			});
 
-			let unlocking = ledger.unlocking.len() as u32;
-			ledger.put_by_controller(&controller);
+			let unlocking_len = ledger.unlocking.len() as u32;
+			ledger.put();
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
 				.saturating_add(initial_unlocking)
-				.saturating_sub(unlocking);
+				.saturating_sub(unlocking_len);
 			Ok(Some(T::WeightInfo::rebond(removed_chunks)).into())
 		}
 
@@ -1663,7 +1661,7 @@ pub mod pallet {
 			// Anyone can call this function.
 			let caller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			let stash = ledger.stash;
+			let stash = ledger.stash.clone();
 
 			// In order for one user to chill another user, the following conditions must be met:
 			//
