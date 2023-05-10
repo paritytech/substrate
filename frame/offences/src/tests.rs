@@ -282,10 +282,8 @@ fn should_properly_count_offences() {
 	});
 }
 
-/// We insert offences in sorted order using the time slot in the `session_reports`.
-/// This test ensures that it works as expected.
 #[test]
-fn should_properly_sort_offences() {
+fn should_properly_store_offences() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
@@ -325,32 +323,37 @@ fn should_properly_sort_offences() {
 		Offences::report_offence(vec![], offence4).unwrap();
 
 		// then
-		let session_reports = Vec::<(u32, Vec<(Kind, OpaqueTimeSlot, sp_core::H256)>)>::decode(
-			&mut &crate::SessionReports::<crate::mock::Runtime>::get()[..],
+		let prev_session_reports = Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>::decode(
+			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index-1)[..],
+		)
+		.unwrap();
+		assert_eq!(
+			prev_session_reports,
+			vec![(KIND, (time_slot - 1).encode(), report_id(time_slot - 1, 3)),]
+		);
+
+		let session_reports = Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>::decode(
+			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index)[..],
 		)
 		.unwrap();
 		assert_eq!(
 			session_reports,
 			vec![
-				(
-					session_index - 1,
-					vec![(KIND, (time_slot - 1).encode(), report_id(time_slot - 1, 3)),]
-				),
-				(
-					session_index,
-					vec![
-						(KIND, time_slot.encode(), report_id(time_slot, 5)),
-						(KIND, (time_slot + 1).encode(), report_id(time_slot + 1, 4)),
-					]
-				),
-				(
-					session_index + 1,
-					vec![
-						(KIND, (time_slot + 1).encode(), report_id(time_slot + 1, 6)),
-						(KIND, (time_slot + 1).encode(), report_id(time_slot + 1, 7)),
-					]
-				),
-			],
+				(KIND, time_slot.encode(), report_id(time_slot, 5)),
+				(KIND, (time_slot + 1).encode(), report_id(time_slot + 1, 4)),
+			]
+		);
+
+		let next_session_reports = Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>::decode(
+			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index+1)[..],
+		)
+		.unwrap();
+		assert_eq!(
+			next_session_reports,
+			vec![
+				(KIND, (time_slot + 1).encode(), report_id(time_slot + 1, 6)),
+				(KIND, (time_slot + 1).encode(), report_id(time_slot + 1, 7)),
+			]
 		);
 	});
 }
@@ -373,7 +376,7 @@ fn should_properly_clear_obsolete_offences() {
 		};
 		let offence3 = Offence {
 			validator_set_count: 5,
-			session_index: session_index + 7,
+			session_index: session_index + 1,
 			time_slot: time_slot + 5,
 			offenders: vec![6, 7],
 		};
@@ -395,25 +398,35 @@ fn should_properly_clear_obsolete_offences() {
 		Offences::report_offence(vec![], offence3).unwrap();
 		Offences::report_offence(vec![], offence4).unwrap();
 
-		Offences::clear_obsolete_reports(session_index + 10);
+		assert_eq!(offence_reports(KIND, time_slot-1), vec![
+			OffenceDetails { offender: 3, reporters: vec![] }
+		]);
+
+		Offences::clear_obsolete_reports(session_index + 5);
+
+		assert_eq!(offence_reports(KIND, time_slot-1), vec![]);
 
 		// then
-		let session_reports = Vec::<(u32, Vec<(Kind, OpaqueTimeSlot, sp_core::H256)>)>::decode(
-			&mut &crate::SessionReports::<crate::mock::Runtime>::get()[..],
+		let obsolete_session_reports = Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>::decode(
+			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index-1)[..],
+		)
+		.unwrap_or_default();
+		assert_eq!(
+			obsolete_session_reports,
+			vec![]
+		);
+
+		let session_reports = Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>::decode(
+			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index+1)[..],
 		)
 		.unwrap();
 		assert_eq!(
 			session_reports,
-			vec![(
-				session_index + 7,
-				vec![
-					(KIND, (time_slot + 5).encode(), report_id(time_slot + 5, 6)),
-					(KIND, (time_slot + 5).encode(), report_id(time_slot + 5, 7)),
-				]
-			),],
+			vec![
+				(KIND, (time_slot + 5).encode(), report_id(time_slot + 5, 6)),
+				(KIND, (time_slot + 5).encode(), report_id(time_slot + 5, 7)),
+			]
 		);
-
-		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		assert_eq!(
 			offence_reports(KIND, time_slot + 5),
