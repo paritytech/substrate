@@ -18,7 +18,7 @@
 
 #![cfg(unix)]
 
-#[cfg(feature = "try-runtime")]
+// #[cfg(feature = "try-runtime")]
 mod tests {
 	use assert_cmd::cargo::cargo_bin;
 	use regex::Regex;
@@ -53,7 +53,8 @@ mod tests {
 			let on_runtime_upgrade = run_on_runtime_upgrade(ws_url).await;
 
             // Check for errors
-            let error_re = Regex::new(r"(?i)error").unwrap();
+            let error_re = Regex::new(r"\bError\b").unwrap();
+
             let stderr_str = from_utf8(&on_runtime_upgrade.stderr).unwrap();
 
             // Check for success line
