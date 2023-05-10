@@ -15,19 +15,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! > Made with *Substrate*, for *Polkadot*.
+//!
+//! [![github]](https://github.com/paritytech/substrate/frame/fast-unstake) -
+//! [![polkadot]](https://polkadot.network)
+//!
+//! [polkadot]: https://img.shields.io/badge/polkadot-E6007A?style=for-the-badge&logo=polkadot&logoColor=white
+//! [github]: https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github
+//!
 //! # Fast Unstake Pallet
 //!
-//! A pallet to allow participants of the staking system (represented by [`Config::Staking`]) to
-//! unstake quicker, if and only if they meed the condition of not being exposed to any slashes.
+//! A pallet to allow participants of the staking system (represented by [`Config::Staking`], being
+//! [`StakingInterface`]) to unstake quicker, if and only if they meed the condition of not being
+//! exposed to any slashes.
 //!
 //! ## High Level / End-User Details
 //!
 //! This pallet that's designed to JUST do the following:
 //!
 //! If a nominator is not exposed anywhere in the staking system, checked via
-//! [`T::Staking::is_exposed_in_era`] (i.e. "has not actively backed any validators in the last
-//! [`T::Staking::bonding_duration`] days"), then they can register themselves in this pallet,
-//! unstake faster than having to wait an entire bonding duration.
+//! [`StakingInterface::is_exposed_in_era`] (i.e. "has not actively backed any validators in the
+//! last [`StakingInterface::bonding_duration`] days"), then they can register themselves in this
+//! pallet, unstake faster than having to wait an entire bonding duration.
 //!
 //! *Being exposed with validator* from the point of view of the staking system means earning
 //! rewards with the validator, and also being at the risk of slashing with the validator. This is
@@ -56,8 +65,8 @@
 //! Once processed, if successful, no additional fee for the checking process is taken, and the
 //! staker is instantly unbonded.
 //!
-//! If unsuccessful, meaning that the staker was exposed, the aforementioned deposit will be
-//! slashed for the amount of wasted work they have inflicted on the chian.
+//! If unsuccessful, meaning that the staker was exposed, the aforementioned deposit will be slashed
+//! for the amount of wasted work they have inflicted on the chian.
 //!
 //! ### Example
 //!
@@ -116,6 +125,12 @@ mod benchmarking;
 pub mod migrations;
 pub mod types;
 pub mod weights;
+
+// some extra imports for docs to link properly.
+#[cfg(doc)]
+pub use frame_support::traits::Hooks;
+#[cfg(doc)]
+pub use sp_staking::StakingInterface;
 
 /// The logging target of this pallet.
 pub const LOG_TARGET: &'static str = "runtime::fast-unstake";
@@ -221,8 +236,6 @@ pub mod pallet {
 		Unstaked { stash: T::AccountId, result: DispatchResult },
 		/// A staker was slashed for requesting fast-unstake whilst being exposed.
 		Slashed { stash: T::AccountId, amount: BalanceOf<T> },
-		/// An internal error happened. Operations will be paused now.
-		InternalError,
 		/// A batch was partially checked for the given eras, but the process did not finish.
 		BatchChecked { eras: Vec<EraIndex> },
 		/// A batch of a given size was terminated.
@@ -230,6 +243,8 @@ pub mod pallet {
 		/// This is always follows by a number of `Unstaked` or `Slashed` events, marking the end
 		/// of the batch. A new batch will be created upon next block.
 		BatchFinished { size: u32 },
+		/// An internal error happened. Operations will be paused now.
+		InternalError,
 	}
 
 	#[pallet::error]
@@ -291,7 +306,6 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Register oneself for fast-unstake.
 		///
-		///
 		/// ## Dispatch Origin
 		///
 		/// The dispatch origin of this call must be *signed* by the whoever is permitted by to call
@@ -312,6 +326,10 @@ pub mod pallet {
 		/// If the check fails, the stash remains chilled and waiting for being unbonded as in with
 		/// the normal staking system, but they lose part of their unbonding chunks due to consuming
 		/// the chain's resources.
+		///
+		/// ## Events
+		///
+		/// Some events from the staking and currency system might be emitted.
 		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::register_fast_unstake())]
 		pub fn register_fast_unstake(origin: OriginFor<T>) -> DispatchResult {
@@ -349,6 +367,10 @@ pub mod pallet {
 		/// Note that the associated stash is still fully unbonded and chilled as a consequence of
 		/// calling [`Pallet::register_fast_unstake`]. THerefore, this should probably be followed
 		/// by a call to `rebond` in the staking system.
+		///
+		/// ## Events
+		///
+		/// Some events from the staking and currency system might be emitted.
 		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config>::WeightInfo::deregister())]
 		pub fn deregister(origin: OriginFor<T>) -> DispatchResult {
@@ -381,6 +403,10 @@ pub mod pallet {
 		/// ## Details
 		///
 		/// Can set the number of eras to check per block, and potentially other admin work.
+		///
+		/// ## Events
+		///
+		/// No events are emitted from this dispatch.
 		#[pallet::call_index(2)]
 		#[pallet::weight(<T as Config>::WeightInfo::control())]
 		pub fn control(origin: OriginFor<T>, eras_to_check: EraIndex) -> DispatchResult {
