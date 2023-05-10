@@ -31,7 +31,7 @@
 //!
 //! Else, all concurrent reports are loaded to determine the slash fraction and updated.
 //! The report is also inserted in [SessionReports] at this time.
-//! Finally, [Config::OnOffenceHandler] is called for to handle any actions for this report.
+//! Finally, [Config::OnOffenceHandler] is called to handle any actions for this report.
 //!
 //! On the start of a new session, `clear_obsolete_reports` clears all reports
 //! that are older than [Config::MaxSessionReportAge].
@@ -129,7 +129,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		SessionIndex,
-		Vec<u8>, // Vec<(Kind, OpaqueTimeSlot, ReportIdOf<T>)
+		Vec<u8>, // Vec<(Kind, OpaqueTimeSlot, ReportIdOf<T>)>
 		ValueQuery,
 	>;
 
