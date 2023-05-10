@@ -15,32 +15,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{
-	codec::{Decode, Encode},
-	scale_info::TypeInfo,
-	sp_runtime::{
-		generic,
-		traits::{BlakeTwo256, Verify},
-	},
+use sp_core::{sr25519, ConstU64};
+use sp_runtime::{
+	generic,
+	traits::{BlakeTwo256, Verify},
 };
-use serde::{Deserialize, Serialize};
-use sp_core::{sr25519, H256};
 
-mod system;
-
+#[frame_support::pallet]
 mod module {
 	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_support_test as frame_system;
 
 	pub type Request<T> =
-		(<T as system::Config>::AccountId, Role, <T as system::Config>::BlockNumber);
+		(<T as frame_system::Config>::AccountId, Role, <T as frame_system::Config>::BlockNumber);
 	pub type Requests<T> = Vec<Request<T>>;
 
-	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug, TypeInfo)]
+	#[derive(Copy, Clone, Eq, PartialEq, Debug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 	pub enum Role {
 		Storage,
 	}
 
-	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug, TypeInfo)]
+	#[derive(Copy, Clone, Eq, PartialEq, Debug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 	pub struct RoleParameters<T: Config> {
 		// minimum actors to maintain - if role is unstaking
 		// and remaining actors would be less that this value - prevent or punish for unstaking
@@ -83,102 +79,108 @@ mod module {
 		}
 	}
 
-	pub trait Config: system::Config + TypeInfo {}
+	#[pallet::pallet]
+	pub struct Pallet<T>(PhantomData<T>);
 
-	frame_support::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=system {}
+	#[pallet::config]
+	pub trait Config: frame_system::Config + TypeInfo {}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {}
+
+	/// requirements to enter and maintain status in roles
+	#[pallet::storage]
+	#[pallet::getter(fn parameters)]
+	pub type Parameters<T: Config> =
+		StorageMap<_, Blake2_128Concat, Role, RoleParameters<T>, OptionQuery>;
+
+	/// the roles members can enter into
+	#[pallet::storage]
+	#[pallet::getter(fn available_roles)]
+	#[pallet::unbounded]
+	pub type AvailableRoles<T: Config> = StorageValue<_, Vec<Role>, ValueQuery>;
+
+	/// Actors list
+	#[pallet::storage]
+	#[pallet::getter(fn actor_account_ids)]
+	#[pallet::unbounded]
+	pub type ActorAccountIds<T: Config> = StorageValue<_, Vec<T::AccountId>>;
+
+	/// actor accounts associated with a role
+	#[pallet::storage]
+	#[pallet::getter(fn account_ids_by_role)]
+	#[pallet::unbounded]
+	pub type AccountIdsByRole<T: Config> = StorageMap<_, Blake2_128Concat, Role, Vec<T::AccountId>>;
+
+	/// tokens locked until given block number
+	#[pallet::storage]
+	#[pallet::getter(fn bondage)]
+	pub type Bondage<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber>;
+
+	/// First step before enter a role is registering intent with a new account/key.
+	/// This is done by sending a role_entry_request() from the new account.
+	/// The member must then send a stake() transaction to approve the request and enter the desired
+	/// role. The account making the request will be bonded and must have
+	/// sufficient balance to cover the minimum stake for the role.
+	/// Bonding only occurs after successful entry into a role.
+	#[pallet::storage]
+	#[pallet::getter(fn role_entry_requests)]
+	#[pallet::unbounded]
+	pub type RoleEntryRequests<T: Config> = StorageValue<_, Requests<T>>;
+
+	/// Entry request expires after this number of blocks
+	#[pallet::storage]
+	#[pallet::getter(fn request_life_time)]
+	pub type RequestLifeTime<T: Config> = StorageValue<_, u64, ValueQuery, ConstU64<0>>;
+
+	#[pallet::genesis_config]
+	#[derive(Default)]
+	pub struct GenesisConfig {
+		pub enable_storage_role: bool,
+		pub request_life_time: u64,
 	}
 
-	#[derive(Encode, Decode, Copy, Clone, Serialize, Deserialize)]
-	pub struct Data<T: Config> {
-		pub data: T::BlockNumber,
-	}
-
-	impl<T: Config> Default for Data<T> {
-		fn default() -> Self {
-			Self { data: T::BlockNumber::default() }
-		}
-	}
-
-	frame_support::decl_storage! {
-		trait Store for Module<T: Config> as Actors {
-			/// requirements to enter and maintain status in roles
-			pub Parameters get(fn parameters) build(|config: &GenesisConfig| {
-				if config.enable_storage_role {
-					let storage_params: RoleParameters<T> = Default::default();
-					vec![(Role::Storage, storage_params)]
-				} else {
-					vec![]
-				}
-			}): map hasher(blake2_128_concat) Role => Option<RoleParameters<T>>;
-
-			/// the roles members can enter into
-			pub AvailableRoles get(fn available_roles) build(|config: &GenesisConfig| {
-				if config.enable_storage_role {
-					vec![(Role::Storage)]
-				} else {
-					vec![]
-				}
-			}): Vec<Role>;
-
-			/// Actors list
-			pub ActorAccountIds get(fn actor_account_ids) : Vec<T::AccountId>;
-
-			/// actor accounts associated with a role
-			pub AccountIdsByRole get(fn account_ids_by_role):
-				map hasher(blake2_128_concat) Role => Vec<T::AccountId>;
-
-			/// tokens locked until given block number
-			pub Bondage get(fn bondage):
-				map hasher(blake2_128_concat) T::AccountId => T::BlockNumber;
-
-			/// First step before enter a role is registering intent with a new account/key.
-			/// This is done by sending a role_entry_request() from the new account.
-			/// The member must then send a stake() transaction to approve the request and enter the desired role.
-			/// The account making the request will be bonded and must have
-			/// sufficient balance to cover the minimum stake for the role.
-			/// Bonding only occurs after successful entry into a role.
-			pub RoleEntryRequests get(fn role_entry_requests) : Requests<T>;
-
-			/// Entry request expires after this number of blocks
-			pub RequestLifeTime get(fn request_life_time) config(request_life_time) : u64 = 0;
-		}
-		add_extra_genesis {
-			config(enable_storage_role): bool;
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		fn build(&self) {
+			if self.enable_storage_role {
+				<Parameters<T>>::insert(Role::Storage, <RoleParameters<T>>::default());
+				<AvailableRoles<T>>::put(vec![Role::Storage]);
+			}
+			<RequestLifeTime<T>>::put(self.request_life_time);
 		}
 	}
 }
 
+pub type BlockNumber = u64;
 pub type Signature = sr25519::Signature;
 pub type AccountId = <Signature as Verify>::Signer;
-pub type BlockNumber = u64;
-pub type Index = u64;
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
-pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
-impl system::Config for Runtime {
-	type BaseCallFilter = frame_support::traits::Everything;
-	type Hash = H256;
-	type RuntimeOrigin = RuntimeOrigin;
+impl frame_support_test::Config for Runtime {
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
+	type BaseCallFilter = frame_support::traits::Everything;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type RuntimeCall = RuntimeCall;
 	type DbWeight = ();
 }
 
 impl module::Config for Runtime {}
 
 frame_support::construct_runtime!(
-	pub struct Runtime where
+	pub struct Runtime
+	where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: system::{Pallet, Call, Event<T>},
-		Module: module::{Pallet, Call, Storage, Config},
+		System: frame_support_test,
+		Module: module,
 	}
 );
 
