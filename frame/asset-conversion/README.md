@@ -7,7 +7,7 @@ The pallet based is based on [Uniswap V2](https://github.com/Uniswap/v2-core) lo
 
 ### Overview
 
-This pallet allows to:
+This pallet allows you to:
 
   - create a liquidity pool for 2 assets
   - provide the liquidity and receive back an LP token
