@@ -788,11 +788,8 @@ pub mod pallet {
 			code_hash: CodeHash<T>,
 		},
 
-		StorageDepositHeld {
-			who: T::AccountId,
-			amount: BalanceOf<T>,
-			// reason: <T::Currency as InspectHold<T::AccountId>>::Reason,
-		},
+		/// Some funds has been held as storage deposit.
+		StorageDepositHeld { who: T::AccountId, amount: BalanceOf<T> },
 	}
 
 	#[pallet::error]
@@ -1228,20 +1225,6 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 		}
 	}
 }
-
-// pub trait StorageDepositHold<AccountId>: MutateHold<AccountId> {
-// 	fn done_hold<T: Config>(reason: &Self::Reason, who: &T::AccountId, amount: Self::Balance) {
-// 		// let reason = HoldReason::StorageDepositReserve;
-// 		<Pallet<T>>::deposit_event(
-// 			vec![
-// 				T::Hashing::hash_of(who),
-// 				T::Hashing::hash_of(&amount),
-// 				T::Hashing::hash_of(&reason),
-// 			],
-// 			Event::Held { who: who.clone() },
-// 		);
-// 	}
-// }
 
 impl<T: Config> Pallet<T> {
 	/// Perform a call to a specified contract.
