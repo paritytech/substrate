@@ -26,7 +26,7 @@ use sp_consensus_sassafras::{
 	TicketData, TicketEnvelope, VrfSignature,
 };
 use sp_core::{
-	crypto::{Pair, VrfSigner},
+	crypto::{Pair, VrfSecret},
 	H256, U256,
 };
 use sp_runtime::{
@@ -157,7 +157,7 @@ fn make_ticket(slot: Slot, attempt: u32, pair: &AuthorityPair) -> TicketEnvelope
 
 	// TODO DAVXY: NOT REQUIRED ONCE WE HAVE THE NEW API...
 	// (i.e. we just require the preout)
-	let signature = pair.as_ref().vrf_sign(&transcript);
+	let signature = pair.as_ref().vrf_sign(&transcript.into());
 
 	// TODO DAVXY: use some well known valid test keys...
 	let data =
@@ -187,7 +187,7 @@ fn slot_claim_vrf_signature(slot: Slot, pair: &AuthorityPair) -> VrfSignature {
 	}
 
 	let transcript = sp_consensus_sassafras::make_slot_vrf_transcript(&randomness, slot, epoch);
-	pair.as_ref().vrf_sign(&transcript)
+	pair.as_ref().vrf_sign(&transcript.into())
 }
 
 /// Produce a `PreDigest` instance for the given parameters.

@@ -19,7 +19,7 @@
 
 use super::{
 	currency, substrate_test_pallet, wasm_binary_unwrap, AccountId, AuthorityId, Balance,
-	GenesisConfig,
+	GenesisConfig, SassafrasId,
 };
 use codec::Encode;
 use sc_service::construct_genesis_block;
@@ -114,11 +114,19 @@ impl GenesisStorageBuilder {
 				epoch_config: Some(crate::TEST_RUNTIME_BABE_EPOCH_CONFIGURATION),
 			},
 			sassafras: pallet_sassafras::GenesisConfig {
-				authorities: self.authorities.clone().into_iter().map(|x| (x, 1)).collect(),
-				epoch_config: Some(sp_consensus_sassafras::SassafrasEpochConfiguration {
+				authorities: self
+					.authorities
+					.clone()
+					.into_iter()
+					.map(|x| {
+						let inner: sr25519::Public = x.into();
+						(SassafrasId::from(inner), 1)
+					})
+					.collect(),
+				epoch_config: sp_consensus_sassafras::SassafrasEpochConfiguration {
 					redundancy_factor: 1,
 					attempts_number: 32,
-				}),
+				},
 			},
 			substrate_test: substrate_test_pallet::GenesisConfig {
 				authorities: self.authorities.clone(),
