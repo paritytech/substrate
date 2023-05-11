@@ -181,6 +181,7 @@ pub enum Message {
 	/// Request to open a connection to the given peer. From the point of view of the PSM, we are
 	/// immediately connected.
 	Connect {
+		/// Set id to connect on.
 		set_id: SetId,
 		/// Peer to connect to.
 		peer_id: PeerId,
@@ -188,6 +189,7 @@ pub enum Message {
 
 	/// Drop the connection to the given peer, or cancel the connection attempt after a `Connect`.
 	Drop {
+		/// Set id to disconnect on.
 		set_id: SetId,
 		/// Peer to disconnect from.
 		peer_id: PeerId,
@@ -198,6 +200,18 @@ pub enum Message {
 
 	/// Equivalent to `Drop` for the peer corresponding to this incoming index.
 	Reject(IncomingIndex),
+}
+
+/// Message with oneshot ACK channel.
+#[derive(Debug)]
+pub struct AckedMessage(Message, oneshot::Sender<()>);
+
+#[cfg(test)]
+impl AckedMessage {
+	fn take(self) -> Message {
+		let _ = self.1.send(());
+		self.0
+	}
 }
 
 /// Opaque identifier for an incoming connection. Allocated by the network.
@@ -257,7 +271,7 @@ pub struct Peerset {
 	protocol_controller_futures: JoinAll<BoxFuture<'static, ()>>,
 	/// Commands sent from protocol controllers to `Notifications`. The size of this vector never
 	/// changes.
-	from_controllers: TracingUnboundedReceiver<Message>,
+	from_controllers: TracingUnboundedReceiver<AckedMessage>,
 	/// Receiver for messages from the `PeersetHandle` and from `to_self`.
 	from_handle: TracingUnboundedReceiver<Action>,
 	/// Sending side of `from_handle`.
@@ -361,7 +375,10 @@ impl Stream for Peerset {
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		if let Poll::Ready(msg) = self.from_controllers.poll_next_unpin(cx) {
-			if let Some(msg) = msg {
+			if let Some(AckedMessage(msg, tx_ack)) = msg {
+				// `Peerset` is polled directly by `Notifications`, so we can already send ACK here.
+				// Once `Peerset` is eliminated, ACKs must be sent by `Notifications`.
+				let _ = tx_ack.send(());
 				return Poll::Ready(Some(msg))
 			} else {
 				debug!(
