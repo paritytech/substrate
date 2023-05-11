@@ -130,8 +130,9 @@ where
 
 		log::debug!(
 			target: LOG_TARGET,
-			"fetching key from remote. prefix: {:?}, start_key: {:?}, at: {}",
+			"fetching key from remote. prefix: {:?}, count: {}, start_key: {:?}, at: {}",
 			prefix.map(|s| HexDisplay::from(&s).to_string()),
+			count,
 			start_key.map(|s| HexDisplay::from(&s).to_string()),
 			HexDisplay::from(&self.at.unwrap().encode().as_slice()).to_string()
 		);
@@ -217,8 +218,9 @@ where
 	prefix: Option<Vec<u8>>,
 	last_key: Option<Vec<u8>>,
 	child_info: Option<ChildInfo>,
-	_stop_on_incomplete_database: bool, // TODO: how to handle this?
 	complete: bool,
+	next_keys_cache: Vec<Vec<u8>>,
+	_stop_on_incomplete_database: bool, // TODO: handle this?
 	_phantom: std::marker::PhantomData<H>,
 }
 
@@ -227,6 +229,8 @@ where
 	H: Hasher + 'static,
 	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
 {
+	const NEXT_KEYS_CACHE_PAGE_SIZE: u32 = 1000;
+
 	pub fn new(
 		prefix: Option<&[u8]>,
 		child_info: Option<ChildInfo>,
@@ -239,6 +243,7 @@ where
 			last_key: start_at.map(|slice| slice.to_vec()),
 			_stop_on_incomplete_database: stop_on_incomplete_database,
 			complete: false,
+			next_keys_cache: Vec::new(),
 			_phantom: Default::default(),
 		}
 	}
@@ -257,22 +262,19 @@ where
 			log::debug!(target: LOG_TARGET, "complete");
 			return None
 		}
-		// TODO: optimistically fetch future keys here, so we don't need to go to the node every
-		// single key
-		// TODO: cleaner child key handling
-		log::debug!(
-			target: LOG_TARGET,
-			"last key: {}",
-			self.last_key
-				.clone()
-				.map(|s| HexDisplay::from(&s.as_slice()).to_string())
-				.unwrap_or("None".to_string())
-		);
-		let binding = match &self.child_info {
+
+		// If we have a next key in the cache, pop it from there
+		if let Some(next_key) = self.next_keys_cache.pop() {
+			log::debug!(target: LOG_TARGET, "next key from cache: {}", HexDisplay::from(&next_key).to_string());
+			return Some(Ok(next_key))
+		}
+
+		// No keys in cache, fetch next page
+		let mut page = match &self.child_info {
 			None => backend
 				.storage_keys_paged_remote(
 					self.prefix.as_ref().map(|v| v.as_slice()).clone(),
-					1,
+					RawIter::<H>::NEXT_KEYS_CACHE_PAGE_SIZE,
 					self.last_key.as_ref().map(|v| v.as_slice()).clone(),
 				)
 				.unwrap(), // TODO: handle error
@@ -280,28 +282,31 @@ where
 				.storage_child_keys_paged_remote(
 					child_info,
 					self.prefix.as_ref().map(|v| v.as_slice()).clone(),
-					1,
+					RawIter::<H>::NEXT_KEYS_CACHE_PAGE_SIZE,
 					self.last_key.as_ref().map(|v| v.as_slice()).clone(),
 				)
 				.unwrap(), // TODO: handle error
 		};
-		let key = match binding.get(0) {
+		// Reverse the order, so we can pop next items off the front of the vec
+		page.reverse();
+
+		// Save the final key of this page that'll be consumed, so we can use it as `start_key` when
+		// we next fetch a page
+		self.last_key = page.first().clone().map(|s| s.0.clone());
+
+		let next_key = match page.pop() {
 			Some(key) => key,
 			None => {
+				// No more keys in this iter!
 				self.complete = true;
 				return None
 			},
 		};
-		self.last_key = Some(key.0.clone());
-		log::debug!(
-			target: LOG_TARGET,
-			"set last key to: {}",
-			self.last_key
-				.clone()
-				.map(|s| HexDisplay::from(&s.as_slice()).to_string())
-				.unwrap_or("None".to_string())
-		);
-		Some(Ok(key.clone().0))
+
+		// Save the new page in storage
+		self.next_keys_cache = page.into_iter().map(|s| s.0).collect::<Vec<_>>();
+
+		Some(Ok(next_key.clone().0))
 	}
 
 	fn next_pair(&mut self, backend: &Self::Backend) -> Option<Result<(Vec<u8>, Vec<u8>), String>> {
@@ -459,24 +464,6 @@ where
 	{
 		self.cache.child_storage_root(child_info, delta, state_version)
 	}
-
-	// fn pairs<'a>(
-	// 	&'a self,
-	// 	_args: sp_state_machine::IterArgs,
-	// ) -> Result<sp_state_machine::PairsIter<'a, H, Self::RawIter>, Self::Error> {
-	// 	self.cache.pairs(args)
-	// 	todo!()
-	// }
-
-	/// Get all keys with given prefix
-	// fn keys<'a>(
-	// 	&'a self,
-	// 	args: sp_state_machine::IterArgs,
-	// ) -> Result<sp_state_machine::KeysIter<'a, H, Self::RawIter>, Self::Error> {
-	// 	let vec_args = args.into_iter().collect::<Vec<_>>();
-	// 	let keys = self.keys_remote(args.collect());
-	// 	todo!()
-	// }
 
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
