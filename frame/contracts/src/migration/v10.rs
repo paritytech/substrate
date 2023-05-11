@@ -153,7 +153,7 @@ impl<T: Config> Migrate for Migration<T> {
 				log::warn!(target: LOG_TARGET, "Partially unreserved {:?} out of {:?} asked", unreserved_deposit, old_deposit);
 			}
 
-			// Attempt to transfer it to the deposit account.
+			// Attempt to transfer the old deposit to the deposit account.
 			let new_deposit = T::Currency::transfer(
 				&account,
 				&deposit_account,
@@ -166,7 +166,7 @@ impl<T: Config> Migrate for Migration<T> {
 			})
 			// If it fails, we try to transfer the account reducible balance instead.
 			.or_else(|err| {
-				log::error!( target: LOG_TARGET, "Failed to transfer deposit {:?} from {:?} to {:?}, reason: {:?}", old_deposit, account, deposit_account, err);
+				log::error!( target: LOG_TARGET, "Failed to transfer deposit ({:?}), reason: {:?}", old_deposit,  err);
 				let deposit = T::Currency::reducible_balance(&account, Preserve, Polite);
 				T::Currency::transfer(
 					&account,
@@ -181,7 +181,7 @@ impl<T: Config> Migrate for Migration<T> {
 			})
 			// If it fails we fallback to minting the ED.
 			.unwrap_or_else(|err| {
-				log::error!(target: LOG_TARGET, "Failed to transfer ED from {:?} to {:?}, reason: {:?}", account, deposit_account, err);
+				log::error!(target: LOG_TARGET, "Failed to transfer ED, reason: {:?}", err);
 				T::Currency::deposit_creating(&deposit_account, min_balance);
 				min_balance
 			});
