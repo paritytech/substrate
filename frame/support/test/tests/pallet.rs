@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use frame_support::{
 	assert_ok,
 	dispatch::{
@@ -1704,6 +1706,32 @@ fn metadata_ir_pallet_runtime_docs() {
 }
 
 #[test]
+fn extrinsic_metadata_ir_types() {
+	let ir = Runtime::extrinsic_metadata_ir();
+
+	// `TestXt` used to construct the runtime exposes only the `Call` and `Extra` types.
+	// In contrast, substrate chains expose: `Address`, `Call`, `Signature` and `Extra` types.
+	// Any missing type is populated with the tuple type.
+	let params: HashMap<_, _> = ir
+		.ty
+		.type_info()
+		.type_params
+		.iter()
+		.map(|ty_param| (ty_param.name, ty_param.ty.expect("Type params are populated")))
+		.collect();
+
+	assert!(params.get("Address").is_none());
+	let call_ty = params.get("Call").expect("Type `Call` must be present in the extrinsic");
+	assert!(params.get("Signature").is_none());
+	let extra_ty = params.get("Extra").expect("Type `Extra` must be present in the extrinsic");
+
+	assert_eq!(meta_type::<()>(), ir.address_ty);
+	assert_eq!(call_ty, &ir.call_ty);
+	assert_eq!(meta_type::<()>(), ir.signature_ty);
+	assert_eq!(extra_ty, &ir.extra_ty);
+}
+
+#[test]
 fn test_pallet_runtime_docs() {
 	let docs = crate::pallet::Pallet::<Runtime>::pallet_documentation_metadata();
 	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
@@ -1716,7 +1744,6 @@ fn test_pallet_info_access() {
 	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::name(), "System");
 	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::name(), "Example");
 	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::name(), "Example2");
-
 	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::index(), 0);
 	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::index(), 1);
 	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::index(), 2);
