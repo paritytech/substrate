@@ -2,14 +2,8 @@ use async_std;
 use codec::{Decode, Encode};
 use core::fmt::Debug;
 use hash_db::Hasher;
-use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use log;
-use reqwest::{
-	blocking::{Client, Response},
-	Error,
-};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_json::json;
 use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{ChildInfo, StateVersion, StorageData, StorageKey},
@@ -19,7 +13,11 @@ use sp_state_machine::{
 	backend::AsTrieBackend, Backend, ChildStorageCollection, DefaultError, InMemoryBackend,
 	IterArgs, StateMachineStats, StorageCollection, StorageIterator, StorageValue, UsageInfo,
 };
-use std::{sync::mpsc, thread, time::Duration};
+use std::{
+	sync::{mpsc, Arc},
+	time::Duration,
+};
+use substrate_rpc_client::{WsClient, WsClientBuilder};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct StorageJsonRpcResponse {
@@ -33,29 +31,6 @@ struct KeysJsonRpcResponse {
 
 pub(crate) const LOG_TARGET: &str = "on-demand-backend";
 
-fn blocking_reqwest_retry(
-	payload: serde_json::Value,
-	max_retries: u32,
-	retry_delay_ms: u32,
-) -> Result<Response, Error> {
-	let url = "http://localhost:9944";
-	let mut num_failures = 0;
-	let client = Client::new();
-	loop {
-		match client.post(url).json(&payload).send() {
-			Ok(json_body) => return Ok(json_body),
-			Err(some_error) => {
-				num_failures += 1;
-				log::debug!("{}", num_failures);
-				thread::sleep(Duration::from_millis(retry_delay_ms.into()));
-				if num_failures == max_retries {
-					return Err(some_error)
-				}
-			},
-		}
-	}
-}
-
 pub struct OnDemandBackend<H>
 where
 	H: Hasher + 'static,
@@ -63,9 +38,12 @@ where
 {
 	// TODO: make this an LRU cache
 	pub cache: InMemoryBackend<H>,
-	http_client: HttpClient,
+	ws_client: Arc<WsClient>,
 	// TODO: make this a generic type
-	at: Option<H256>,
+	at: Arc<Option<H256>>,
+	// TODO: we still create a new Runtime inside the thread each time we use it,
+	// there's probably a cleaner way to do the async handling.
+	pool: rayon::ThreadPool,
 }
 
 impl<H> Debug for OnDemandBackend<H>
@@ -84,69 +62,62 @@ where
 	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
 {
 	pub fn new(rpc_uri: String, at: Option<H256>) -> Result<Self, &'static str> {
-		let http_client = HttpClientBuilder::default()
-			.max_request_body_size(u32::MAX)
-			.request_timeout(std::time::Duration::from_secs(60 * 5))
-			.build(rpc_uri)
-			.map_err(|e| {
-				log::error!(target: LOG_TARGET, "error: {:?}", e);
-				"failed to build http client"
-			})?;
+		let ws_client = async_std::task::block_on(
+			WsClientBuilder::default()
+				.max_request_body_size(u32::MAX)
+				.connection_timeout(Duration::from_secs(5))
+				.build(rpc_uri),
+		)
+		.unwrap(); // TODO: Handle error
 
-		Ok(Self { http_client, cache: InMemoryBackend::default(), at })
+		let pool = rayon::ThreadPoolBuilder::new().num_threads(1).build().unwrap(); // TODO: Handle error
+		Ok(Self {
+			ws_client: Arc::new(ws_client),
+			cache: InMemoryBackend::default(),
+			at: Arc::new(at),
+			pool,
+		})
 	}
 
 	fn storage_remote(&self, key: &[u8]) -> Result<Option<StorageData>, DefaultError> {
-		// TODO: figure out how to do this without spawning a new thread each remote storage req :')
-		let key_str = HexDisplay::from(&key).to_string();
-		let at_str = HexDisplay::from(&self.at.unwrap().encode().as_slice()).to_string();
-		log::debug!("~~~~~~~~~~~fetching storage from backend~~~~~~~~~~~");
-		log::debug!("key: {}", key_str);
-		log::debug!("at: {}", at_str);
-		log::debug!("sending req");
+		// TODO: better error handling
+
+		log::debug!(
+			target: LOG_TARGET,
+			"fetching storage from remote. key: {:?}, at: {}",
+			HexDisplay::from(&key).to_string(),
+			HexDisplay::from(&self.at.unwrap().encode().as_slice()).to_string()
+		);
+
+		let ws_client = self.ws_client.clone();
+		let at = self.at.clone();
+		let key = key.to_vec();
 
 		let (tx, rx) = mpsc::channel();
-		thread::spawn(move || {
-			let payload = json!({
-				"jsonrpc": "2.0",
-				"id": 1,
-				"method": "state_getStorage",
-				"params": [key_str, at_str]
-			});
-			log::debug!("payload: {}", payload);
-			let result = blocking_reqwest_retry(payload, 50, 1000)
-				.unwrap()
-				.json::<StorageJsonRpcResponse>()
-				.unwrap()
-				.result;
+		self.pool.spawn(move || {
+			let rt = tokio::runtime::Runtime::new().unwrap();
+			let result = rt
+				.block_on(substrate_rpc_client::StateApi::<H256>::storage(
+					ws_client.as_ref(),
+					StorageKey(key),
+					at.as_ref().clone(),
+				))
+				.unwrap();
+
 			tx.send(result).unwrap();
 		});
 
-		match rx.recv().unwrap() {
-			Some(data_str) => {
-				let data_bytes = sp_core::bytes::from_hex(data_str.as_str()).unwrap();
-				Ok(Some(StorageData(data_bytes)))
+		let result = match rx.recv().unwrap() {
+			Some(storage_data) => {
+				log::debug!(target: LOG_TARGET, "got result: {:?}", HexDisplay::from(&storage_data.0));
+				return Ok(Some(storage_data))
 			},
-			None => Ok(None),
-		}
-		// let data_bytes = sp_core::bytes::from_hex(data_str.as_str()).unwrap();
-
-		// Ok(Some(StorageData(data_bytes)))
-
-		// ~~~ Disabling this and using reqwest instead because of weird issue where block_on does
-		// not return after making a bunch of requests, blocking main thread forever ~~~
-		// let res = async_std::task::block_on((|| {
-		// 	let res = substrate_rpc_client::StateApi::<H256>::storage(
-		// 		&self.http_client,
-		// 		StorageKey(key.to_vec()),
-		// 		self.at.clone(),
-		// 	);
-		// 	log::info!("got res"); <----- gets here
-		// 	res
-		// })());
-		// log::info!("we outta here"); <------- never gets here, stuck
-
-		// res.map_err(|e| format!("{:?}", e))
+			None => {
+				log::debug!(target: LOG_TARGET, "got result: None");
+				Ok(None)
+			},
+		};
+		result
 	}
 
 	fn storage_keys_paged_remote(
@@ -155,59 +126,40 @@ where
 		count: u32,
 		start_key: Option<&[u8]>,
 	) -> Result<Vec<StorageKey>, DefaultError> {
-		let prefix_str = match prefix {
-			Some(prefix) => Some(HexDisplay::from(&prefix).to_string()),
-			None => None,
-		};
-		let start_key_str = match start_key {
-			Some(start_key) => Some(HexDisplay::from(&start_key).to_string()),
-			None => None,
-		};
-		let at_str = HexDisplay::from(&self.at.unwrap().encode().as_slice()).to_string();
+		// TODO: better error handling
 
-		log::debug!("~~~~~~~~~~~fetching key from backend~~~~~~~~~~~");
-		log::debug!("prefix: {:?}", prefix_str);
-		log::debug!("start_key: {:?}", start_key_str);
-		log::debug!("at: {}", at_str);
-		log::debug!("sending req");
+		log::debug!(
+			target: LOG_TARGET,
+			"fetching key from remote. prefix: {:?}, start_key: {:?}, at: {}",
+			prefix.map(|s| HexDisplay::from(&s).to_string()),
+			start_key.map(|s| HexDisplay::from(&s).to_string()),
+			HexDisplay::from(&self.at.unwrap().encode().as_slice()).to_string()
+		);
+
+		let ws_client = self.ws_client.clone();
+		let prefix = prefix.map(|p| StorageKey(p.to_vec()));
+		let start_key = start_key.map(|p| StorageKey(p.to_vec()));
+		let at = self.at.clone();
 
 		let (tx, rx) = mpsc::channel();
-		thread::spawn(move || {
-			let payload = json!({
-				"jsonrpc": "2.0",
-				"id": 1,
-				"method": "state_getKeysPaged",
-				"params": [prefix_str, count, start_key_str, at_str]
-			});
-			log::debug!("payload: {}", payload);
-			let result = blocking_reqwest_retry(payload, 50, 1000)
-				.unwrap()
-				.json::<KeysJsonRpcResponse>()
-				.unwrap()
-				.result;
+		self.pool.spawn(move || {
+			let rt = tokio::runtime::Runtime::new().unwrap();
+			let result = rt
+				.block_on(substrate_rpc_client::StateApi::<H256>::storage_keys_paged(
+					ws_client.as_ref(),
+					prefix,
+					count,
+					start_key,
+					at.as_ref().clone(),
+				))
+				.unwrap();
+
 			tx.send(result).unwrap();
 		});
 
-		match rx.recv().unwrap() {
-			Some(data_vec) => Ok(data_vec
-				.into_iter()
-				.map(|s| StorageKey(sp_core::bytes::from_hex(s.as_str()).unwrap()))
-				.collect::<Vec<_>>()),
-			None => Ok(vec![]),
-		}
-
-		// async_std::task::block_on((|| {
-		// 	let res = substrate_rpc_client::StateApi::<H256>::storage_keys_paged(
-		// 		&self.http_client,
-		// 		prefix.map(|slice| StorageKey(slice.to_vec())),
-		// 		count,
-		// 		start_key.map(|slice| StorageKey(slice.to_vec())),
-		// 		self.at.clone(),
-		// 	);
-		// 	log::info!("got res");
-		// 	res
-		// })())
-		// .map_err(|e| format!("{:?}", e))
+		let result = rx.recv().unwrap();
+		log::debug!(target: LOG_TARGET, "got result: {:?}", result.iter().map(|s| HexDisplay::from(s).to_string()).collect::<Vec<_>>());
+		Ok(result)
 	}
 
 	fn storage_child_keys_paged_remote(
@@ -217,17 +169,43 @@ where
 		count: u32,
 		start_key: Option<&[u8]>,
 	) -> Result<Vec<StorageKey>, DefaultError> {
-		// TODO: figure out how to do this without spawning a new thread each remote storage req :')
-		log::debug!("~~~~~~~~~~~fetching child key from backend~~~~~~~~~~~");
-		async_std::task::block_on(substrate_rpc_client::ChildStateApi::<H256>::storage_keys_paged(
-			&self.http_client,
+		// TODO: better error handling
+
+		log::debug!(
+			target: LOG_TARGET,
+			"fetching child key from remote. child_info_prefixed_storage_key: {:?} prefix: {:?}, start_key: {:?}, at: {}",
 			child_info.prefixed_storage_key(),
-			prefix.map(|slice| StorageKey(slice.to_vec())),
-			count,
-			start_key.map(|slice| StorageKey(slice.to_vec())),
-			self.at.clone(),
-		))
-		.map_err(|e| format!("{:?}", e))
+			prefix.map(|s| HexDisplay::from(&s).to_string()),
+			start_key.map(|s| HexDisplay::from(&s).to_string()),
+			HexDisplay::from(&self.at.unwrap().encode().as_slice()).to_string()
+		);
+
+		let ws_client = self.ws_client.clone();
+		let prefix = prefix.map(|p| StorageKey(p.to_vec()));
+		let start_key = start_key.map(|p| StorageKey(p.to_vec()));
+		let at = self.at.clone();
+		let child_info_prefixed_storage_key = child_info.prefixed_storage_key().clone();
+
+		let (tx, rx) = mpsc::channel();
+		self.pool.spawn(move || {
+			let rt = tokio::runtime::Runtime::new().unwrap();
+			let result = rt
+				.block_on(substrate_rpc_client::ChildStateApi::<H256>::storage_keys_paged(
+					ws_client.as_ref(),
+					child_info_prefixed_storage_key,
+					prefix,
+					count,
+					start_key,
+					at.as_ref().clone(),
+				))
+				.unwrap();
+
+			tx.send(result).unwrap();
+		});
+
+		let result = rx.recv().unwrap();
+		log::debug!(target: LOG_TARGET, "got result: {:?}", result.iter().map(|s| HexDisplay::from(s).to_string()));
+		Ok(result)
 	}
 }
 
@@ -239,7 +217,7 @@ where
 	prefix: Option<Vec<u8>>,
 	last_key: Option<Vec<u8>>,
 	child_info: Option<ChildInfo>,
-	stop_on_incomplete_database: bool,
+	_stop_on_incomplete_database: bool, // TODO: how to handle this?
 	complete: bool,
 	_phantom: std::marker::PhantomData<H>,
 }
@@ -259,7 +237,7 @@ where
 			prefix: prefix.map(|slice| slice.to_vec()),
 			child_info,
 			last_key: start_at.map(|slice| slice.to_vec()),
-			stop_on_incomplete_database,
+			_stop_on_incomplete_database: stop_on_incomplete_database,
 			complete: false,
 			_phantom: Default::default(),
 		}
@@ -276,14 +254,14 @@ where
 
 	fn next_key(&mut self, backend: &Self::Backend) -> Option<Result<Vec<u8>, Self::Error>> {
 		if self.complete {
-			log::debug!("complete");
+			log::debug!(target: LOG_TARGET, "complete");
 			return None
 		}
-		// TODO: make this more efficient than needing to go to the remote every key.
-		// maybe fetch N keys at a time, caching the results so we can return from the cache
-		// TODO: handle these errs better
+		// TODO: optimistically fetch future keys here, so we don't need to go to the node every
+		// single key
 		// TODO: cleaner child key handling
 		log::debug!(
+			target: LOG_TARGET,
 			"last key: {}",
 			self.last_key
 				.clone()
@@ -305,7 +283,7 @@ where
 					1,
 					self.last_key.as_ref().map(|v| v.as_slice()).clone(),
 				)
-				.unwrap(),
+				.unwrap(), // TODO: handle error
 		};
 		let key = match binding.get(0) {
 			Some(key) => key,
@@ -316,6 +294,7 @@ where
 		};
 		self.last_key = Some(key.0.clone());
 		log::debug!(
+			target: LOG_TARGET,
 			"set last key to: {}",
 			self.last_key
 				.clone()
@@ -326,10 +305,9 @@ where
 	}
 
 	fn next_pair(&mut self, backend: &Self::Backend) -> Option<Result<(Vec<u8>, Vec<u8>), String>> {
-		// TODO: handle these errors better, and fetch N pairs at a time from the backend so we
-		// don't need to go to it every time
-		// TODO: handle these errs better
-		// TODO: handle child keys
+		// TODO: optimistically fetch future pairs here, so we don't need to go to the node every
+		// single key
+		// TODO: better err handling
 		let key = match self.next_key(backend) {
 			Some(Ok(key)) => key,
 			Some(Err(e)) => return Some(Err(format!("{:?}", e))),
@@ -373,7 +351,7 @@ where
 			opt.or_else(|| {
 				// todo: remove this unwrap
 				self.storage_remote(key).unwrap().map(|v| {
-					log::debug!("got value: {:?}", HexDisplay::from(&v.0.as_slice()));
+					log::debug!(target: LOG_TARGET, "got value: {:?}", HexDisplay::from(&v.0.as_slice()));
 					// TODO: cache value here
 					let inner = unsafe {
 						let x = &self.cache as *const InMemoryBackend<H>;
@@ -434,7 +412,7 @@ where
 		// every 1000
 		let binding = self.storage_keys_paged_remote(None, 1, Some(key)).unwrap();
 		let next = binding.get(0).expect("count is 1, 0th index must exist. qed.");
-		log::debug!("got next: {}", HexDisplay::from(&next.0.as_slice()));
+		log::debug!(target: LOG_TARGET, "got next: {}", HexDisplay::from(&next.0.as_slice()));
 		Ok(Some(next.0.clone()))
 	}
 

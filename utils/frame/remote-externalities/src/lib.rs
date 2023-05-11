@@ -935,7 +935,7 @@ where
 		let block_hash = self.as_online().at_expected();
 		let inner_ext = self.load_remote_and_maybe_save().await?;
 		let on_demand_ext = OnDemandExt::<Blake2Hasher>::new(
-			"http://localhost:9944".to_owned(),
+			"ws://localhost:9944".to_owned(),
 			Some(H256(block_hash.encode().as_slice().try_into().unwrap())),
 			StateVersion::V1,
 		)?;
