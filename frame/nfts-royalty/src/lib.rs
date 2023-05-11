@@ -123,7 +123,7 @@ pub mod pallet {
 	/// The storage for NFT items with a royalty.
 	#[pallet::storage]
 	#[pallet::getter(fn nft_with_royalty)]
-	pub type NftWithRoyalty<T: Config> = StorageMap<
+	pub type NftItemWithRoyalty<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
 		(T::NftCollectionId, T::NftItemId),
@@ -294,11 +294,11 @@ pub mod pallet {
 
 			// Check whether the item has already a royalty, if so do not allow to set it again
 			ensure!(
-				<NftWithRoyalty<T>>::get((collection_id, item_id)).is_none(),
+				<NftItemWithRoyalty<T>>::get((collection_id, item_id)).is_none(),
 				Error::<T>::RoyaltyAlreadyExists
 			);
 
-			NftWithRoyalty::<T>::insert(
+			NftItemWithRoyalty::<T>::insert(
 				(collection_id, item_id),
 				RoyaltyDetails::<T::AccountId> {
 					royalty_percentage,
@@ -371,11 +371,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 
-			let item_royalties = <NftWithRoyalty<T>>::take((collection_id, item_id))
+			let item_royalties = <NftItemWithRoyalty<T>>::take((collection_id, item_id))
 				.ok_or(Error::<T>::NoRoyaltyExists)?;
 			ensure!(item_royalties.royalty_recipient == caller, Error::<T>::NoPermission);
 
-			NftWithRoyalty::<T>::insert(
+			NftItemWithRoyalty::<T>::insert(
 				(collection_id, item_id),
 				RoyaltyDetails::<T::AccountId> {
 					royalty_percentage: item_royalties.royalty_percentage,
@@ -418,7 +418,7 @@ pub mod pallet {
 			T::Nfts::buy_item(&collection_id, &item_id, &origin, &bid_price)?;
 
 			// Pay the royalty to the royalty owner
-			let item_royalty = <NftWithRoyalty<T>>::get((collection_id, item_id))
+			let item_royalty = <NftItemWithRoyalty<T>>::get((collection_id, item_id))
 				.ok_or(Error::<T>::NoRoyaltyExists)?;
 
 			let royalty_amount_to_pay = item_royalty.royalty_percentage * item_price;

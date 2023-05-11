@@ -18,7 +18,7 @@
 //! Tests for the NFTs Royalty pallet.
 
 use super::Event as NftsRoyaltyEvent;
-use crate::{mock::*, Error, NftCollectionWithRoyalty, NftWithRoyalty};
+use crate::{mock::*, Error, NftCollectionWithRoyalty, NftItemWithRoyalty};
 use frame_support::{assert_noop, assert_ok, traits::Currency};
 
 use pallet_nfts::{
@@ -167,7 +167,7 @@ fn nft_set_item_royalty_should_work() {
 		items.sort();
 		assert_eq!(items, vec![(account(1), 0, mint_id)]);
 		// Read royalty pallet's storage.
-		let nft_with_royalty = NftWithRoyalty::<Test>::get((0, mint_id)).unwrap();
+		let nft_with_royalty = NftItemWithRoyalty::<Test>::get((0, mint_id)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
 		// Check the event was emitted
@@ -319,7 +319,7 @@ fn transfer_item_royalty_should_work() {
 			account(1)
 		));
 		// Read royalty pallet's storage.
-		let nft_with_royalty = NftWithRoyalty::<Test>::get((0, 42)).unwrap();
+		let nft_with_royalty = NftItemWithRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
 
@@ -330,7 +330,7 @@ fn transfer_item_royalty_should_work() {
 			account(2)
 		));
 		// Read royalty pallet's storage.
-		let nft_with_royalty = NftWithRoyalty::<Test>::get((0, 42)).unwrap();
+		let nft_with_royalty = NftItemWithRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(2));
 		// Check if the event has been emitted.
@@ -358,7 +358,7 @@ fn transfer_item_royalty_should_fail_if_no_royalty_recipient() {
 			account(1)
 		));
 		// Read royalty pallet's storage.
-		let nft_with_royalty = NftWithRoyalty::<Test>::get((0, 42)).unwrap();
+		let nft_with_royalty = NftItemWithRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
 
@@ -372,7 +372,7 @@ fn transfer_item_royalty_should_fail_if_no_royalty_recipient() {
 			Error::<Test>::NoPermission
 		);
 		// Read royalty pallet's storage to check that the royalty has not changed.
-		let nft_with_royalty = NftWithRoyalty::<Test>::get((0, 42)).unwrap();
+		let nft_with_royalty = NftItemWithRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
 	});
