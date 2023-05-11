@@ -14,7 +14,6 @@
           rustup
           clang
           protobuf
-          rustfmt
         ];
 
         LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
