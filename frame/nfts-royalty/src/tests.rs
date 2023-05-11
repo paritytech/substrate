@@ -17,7 +17,7 @@
 
 //! Tests for the NFTs Royalty pallet.
 
-use crate::{mock::*, Error, NftWithRoyalty};
+use crate::{mock::*, Error, NftWithRoyalty, NftCollectionWithRoyalty};
 use frame_support::{
 	assert_noop, assert_ok, 
 	traits::{
@@ -80,6 +80,84 @@ fn set_up_balances(initial_balance: u64){
 	Balances::make_free_balance_be(&account(1), initial_balance);
 	Balances::make_free_balance_be(&account(2), initial_balance);
 	Balances::make_free_balance_be(&account(3), initial_balance);
+}
+
+#[test]
+fn nft_set_collection_royalty_should_work() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		assert_ok!(NftsRoyalty::set_collection_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			Permill::from_percent(5),
+			account(1)
+		));
+		// Read royalty pallet's storage.
+		let nft_with_royalty = NftCollectionWithRoyalty::<Test>::get(0).unwrap();
+		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
+		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
+		// Check the event was emitted
+		assert_eq!(
+			last_event(),
+			NftsRoyaltyEvent::RoyaltyForCollectionSet { 
+				nft_collection: 0, 
+				royalty_percentage: Permill::from_percent(5), 
+				royalty_recipient: account(1) }
+		);
+	});
+}
+
+#[test]
+fn nft_set_collection_royalty_fail_item_not_exist() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			NftsRoyalty::set_collection_royalty(
+				RuntimeOrigin::signed(account(1)),
+				0,
+				Permill::from_percent(5),
+				account(1)
+			),
+			Error::<Test>::CollectionDoesNotExist
+		);
+	});
+}
+
+#[test]
+fn nft_set_collection_royalty_fail_no_permission() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		assert_noop!(
+			NftsRoyalty::set_collection_royalty(
+				RuntimeOrigin::signed(account(2)),
+				0,
+				Permill::from_percent(5),
+				account(2)
+			),
+			Error::<Test>::NoPermission
+		);
+	});
+}
+
+#[test]
+fn nft_set_collection_royalty_fail_ovewrite() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		assert_ok!(NftsRoyalty::set_collection_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			Permill::from_percent(5),
+			account(1)
+		));
+		assert_noop!(
+			NftsRoyalty::set_collection_royalty(
+				RuntimeOrigin::signed(account(1)),
+				0,
+				Permill::from_percent(15),
+				account(1)
+			),
+			Error::<Test>::RoyaltyAlreadyExists
+		);
+	});
 }
 
 #[test]
