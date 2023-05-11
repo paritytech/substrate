@@ -21,7 +21,7 @@
 //!
 //! ## Overview
 //!
-//! This pallet allows to:
+//! This pallet allows you to:
 //!
 //!  - [create a liquidity pool](`Pallet::create_pool()`) for 2 assets
 //!  - [provide the liquidity](`Pallet::add_liquidity()`) and receive back an LP token
@@ -139,8 +139,8 @@ pub mod pallet {
 			+ TryInto<Self::Balance>;
 
 		/// Identifier for the class of non-native asset.
-		/// Note: A `From<u32>` bound here would prevent MultiLocation from being used as an
-		/// AssetId.
+		/// Note: A `From<u32>` bound here would prevent `MultiLocation` from being used as an
+		/// `AssetId`.
 		type AssetId: AssetId + PartialOrd;
 
 		/// Type that identifies either the native currency or a token class from `Assets`.
@@ -149,7 +149,7 @@ pub mod pallet {
 		/// Type to convert an `AssetId` into `MultiAssetId`.
 		type MultiAssetIdConverter: MultiAssetIdConverter<Self::MultiAssetId, Self::AssetId>;
 
-		/// Asset id to address the lp tokens by.
+		/// `AssetId` to address the lp tokens by.
 		type PoolAssetId: AssetId + PartialOrd + Incrementable + From<u32>;
 
 		/// Registry for the assets.
@@ -203,7 +203,7 @@ pub mod pallet {
 		type BenchmarkHelper: BenchmarkHelper<Self::AssetId>;
 	}
 
-	/// Map from PoolAssetId to PoolInfo. This establishes if a pool has been officially created
+	/// Map from `PoolAssetId` to `PoolInfo`. This establishes whether a pool has been officially created
 	/// rather than people sending tokens directly to a pool's public account.
 	#[pallet::storage]
 	pub type Pools<T: Config> =
@@ -301,10 +301,10 @@ pub mod pallet {
 		PoolExists,
 		/// Desired amount can't be zero.
 		WrongDesiredAmount,
-		/// Provided amount should be greater or equal to the existential deposit/asset's minimal
+		/// Provided amount should be greater than or equal to the existential deposit/asset's minimal
 		/// amount.
 		AmountLessThanMinimal,
-		/// Reserve needs to always be greater or equal to the existential deposit/asset's minimal
+		/// Reserve needs to always be greater than or equal to the existential deposit/asset's minimal
 		/// amount.
 		ReserveLeftLessThanMinimal,
 		/// Desired amount can't be equal to the pool reserve.
@@ -325,7 +325,7 @@ pub mod pallet {
 		OptimalAmountLessThanDesired,
 		/// Insufficient liquidity minted.
 		InsufficientLiquidityMinted,
-		/// Asked liquidity can't be zero.
+		/// Requested liquidity can't be zero.
 		ZeroLiquidity,
 		/// Amount can't be zero.
 		ZeroAmount,
@@ -434,8 +434,8 @@ pub mod pallet {
 
 		/// Provide liquidity into the pool of `asset1` and `asset2`.
 		/// NOTE: an optimal amount of asset1 and asset2 will be calculated and
-		/// might be different to provided `amount1_desired`/`amount2_desired`
-		/// thus it's needed to provide the min amount you're happy to provide.
+		/// might be different than the provided `amount1_desired`/`amount2_desired`
+		/// thus you should provide the min amount you're happy to provide.
 		/// Params `amount1_min`/`amount2_min` represent that.
 		/// `mint_to` will be sent the liquidity tokens that represent this share of the pool.
 		///
@@ -556,7 +556,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Allows to remove the liquidity by providing an lp token.
+		/// Allows you to remove liquidity by providing an lp token.
 		/// With the usage of `amount1_min_receive`/`amount2_min_receive` it's possible to control
 		/// the min amount of returned tokens you're happy with.
 		#[pallet::call_index(2)]
@@ -629,7 +629,7 @@ pub mod pallet {
 		}
 
 		/// Swap the exact amount of `asset1` into `asset2`.
-		/// `amount_out_min` param allows to specify the min amount of the `asset2`
+		/// `amount_out_min` param allows you to specify the min amount of the `asset2`
 		/// you're happy to receive.
 		///
 		/// [`AssetConversionApi::quote_price_exact_tokens_for_tokens`] runtime call can be called
