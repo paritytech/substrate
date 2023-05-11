@@ -38,7 +38,7 @@ use frame_support::{
 	},
 	DefaultNoBound,
 };
-use sp_runtime::{Perbill, Saturating};
+use sp_runtime::{traits::Zero, Perbill, Saturating};
 use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
 mod old {
 	use super::*;
@@ -140,17 +140,17 @@ impl<T: Config> Migrate for Migration<T> {
 
 			// Calculate the existing deposit, that should be reserved on the contract account
 			let old_deposit = contract
-				.storage_byte_deposit
+				.storage_base_deposit
 				.saturating_add(contract.storage_item_deposit)
-				.saturating_add(contract.storage_base_deposit);
+				.saturating_add(contract.storage_byte_deposit);
 
 			log::debug!(target: LOG_TARGET, "Balance of {:?} {:?}", &account, T::Currency::balance(&account));
 
 			// Unreserve the existing deposit, so we can transfer it to the deposit account.
 			// Note we can't use repatriate_reserve, because it only works with existing accounts
-			let unreserved_deposit = T::Currency::unreserve(&account, old_deposit);
-			if unreserved_deposit != old_deposit {
-				log::warn!(target: LOG_TARGET, "Partially unreserved {:?} out of {:?} asked", unreserved_deposit, old_deposit);
+			let remaining = T::Currency::unreserve(&account, old_deposit);
+			if !remaining.is_zero() {
+				log::warn!(target: LOG_TARGET, "Partially unreserved. Remaining {:?} out of {:?} asked", remaining, old_deposit);
 			}
 
 			// Attempt to transfer the old deposit to the deposit account.
@@ -225,13 +225,10 @@ impl<T: Config> Migrate for Migration<T> {
 		let sample: Vec<_> = old::ContractInfoOf::<T>::iter()
 			.take(10)
 			.map(|(account, contract)| {
-				let old_deposit = min(
-					T::Currency::reserved_balance(&account),
-					contract
-						.storage_byte_deposit
-						.saturating_add(contract.storage_item_deposit)
-						.saturating_add(contract.storage_base_deposit),
-				);
+				let old_deposit = contract
+					.storage_byte_deposit
+					.saturating_add(contract.storage_item_deposit)
+					.saturating_add(contract.storage_base_deposit);
 
 				(account, contract, old_deposit)
 			})
