@@ -61,7 +61,7 @@ variables:
 
   NEXTEST_FAILURE_OUTPUT: immediate-final
   NEXTEST_SUCCESS_OUTPUT: final
-  ZOMBIENET_IMAGE: "docker.io/paritytech/zombienet:v1.3.48"
+  ZOMBIENET_IMAGE: "docker.io/paritytech/zombienet:v1.3.52"
 
 default:
   retry:
