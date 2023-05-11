@@ -63,7 +63,7 @@ pub(crate) mod beefy_protocol_name {
 }
 
 /// Returns the configuration value to put in
-/// [`sc_network::config::NetworkConfiguration::extra_sets`].
+/// [`sc_network::config::FullNetworkConfiguration`].
 /// For standard protocol name see [`beefy_protocol_name::gossip_protocol_name`].
 pub fn beefy_peers_set_config(
 	gossip_protocol_name: sc_network::ProtocolName,
