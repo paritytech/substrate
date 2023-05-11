@@ -42,7 +42,7 @@ fn main() {
 fn drain_append_work(ops: Vec<Op>, page_size: u8) {
 	use mock::*;
 	if page_size == 0 {
-		return;
+		return
 	}
 
 	TestExternalities::default().execute_with(|| {
