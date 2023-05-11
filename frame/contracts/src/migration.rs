@@ -267,7 +267,7 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 		let mut weight_left = weight_limit;
 
 		if weight_left
-			.checked_reduce(T::WeightInfo::migrate_update_storage_version())
+			.checked_reduce(T::WeightInfo::migration())
 			.is_none()
 		{
 			return (MigrateResult::NoMigrationPerformed, Weight::zero())
@@ -275,7 +275,7 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 
 		MigrationInProgress::<T>::mutate_exists(|progress| {
 			let Some(cursor_before) = progress.as_mut() else {
-				return (MigrateResult::NoMigrationPerformed, T::WeightInfo::migrate_noop())
+				return (MigrateResult::NoMigrationPerformed, T::WeightInfo::migration_noop())
 			};
 
 			// if a migration is running it is always upgrading to the next version

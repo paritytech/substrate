@@ -266,7 +266,7 @@ benchmarks! {
 		migration.step();
 	}
 
-	// This benchmarks the weight of dispatching a migrate call that perform a noop migration step.
+	// This benchmarks the weight of dispatching a migrate call that perform a migration step.
 	#[pov_mode = Measured]
 	migrate {
 		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
@@ -278,14 +278,12 @@ benchmarks! {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
 	}
 
-	// This benchmarks the weight of executing Migration::migrate when there are no migration in progress.
+	// This benchmarks the weight of dispatching a migrate call that does nothing
 	#[pov_mode = Measured]
 	migrate_noop {
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
 	}:  {
-		Migration::<T>::migrate(Weight::MAX);
-	} verify {
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+		<Contracts<T>>::migrate(origin.into(), Weight::zero()).is_err()
 	}
 
 	// This benchmarks the weight of bumping the storage version.
@@ -299,9 +297,19 @@ benchmarks! {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 3);
 	}
 
-	// This benchmarks the weight of executing Migration::migrate to execute a noop migration that bump the storage version.
+	// This benchmarks the weight of executing Migration::migrate when there are no migration in progress.
 	#[pov_mode = Measured]
-	migrate_update_storage_version {
+	migration_noop {
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+	}:  {
+		Migration::<T>::migrate(Weight::MAX);
+	} verify {
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+	}
+
+	// This benchmarks the weight of executing Migration::migrate to execute a migration that bump the storage version.
+	#[pov_mode = Measured]
+	migration {
 		StorageVersion::new(0).put::<Pallet<T>>();
 		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade();
 	}:  {

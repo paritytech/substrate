@@ -737,11 +737,13 @@ pub mod pallet {
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::migrate().saturating_add(*weight_limit))]
 		pub fn migrate(origin: OriginFor<T>, weight_limit: Weight) -> DispatchResultWithPostInfo {
+			use migration::MigrateResult::*;
 			ensure_signed(origin)?;
 
+			let weight_limit = weight_limit.saturating_add(T::WeightInfo::migration());
 			let (result, weight) = Migration::<T>::migrate(weight_limit);
+			let weight = weight.saturating_add(T::WeightInfo::migrate_noop());
 
-			use migration::MigrateResult::*;
 			match result {
 				InProgress | Completed =>
 					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
