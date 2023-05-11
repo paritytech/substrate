@@ -76,6 +76,65 @@ pub fn expand_runtime_metadata(
 
 	quote! {
 		impl #runtime {
+			fn extrinsic_metadata_ir() -> #scrate::metadata_ir::ExtrinsicMetadataIR {
+				let ty = #scrate::scale_info::meta_type::<#extrinsic>();
+
+				// Inspect the extrinsic type parameters for the following types needed to
+				// decode extrinsics.
+				const ADDRESS: &str = "Address";
+				const CALL: &str = "Call";
+				const SIGNATURE: &str = "Signature";
+				const EXTRA: &str = "Extra";
+
+				let mut address_ty = None;
+				let mut call_ty = None;
+				let mut signature_ty = None;
+				let mut extra_ty = None;
+
+				for ty_param in &ty.type_info().type_params {
+					let name = ty_param.name;
+
+					if name == ADDRESS {
+						address_ty = ty_param.ty;
+					}
+					if name == CALL {
+						call_ty = ty_param.ty;
+					}
+					if name == SIGNATURE {
+						signature_ty = ty_param.ty;
+					}
+					if name == EXTRA {
+						extra_ty = ty_param.ty;
+					}
+				}
+
+				let address_ty = address_ty.unwrap_or_else(|| #scrate::scale_info::meta_type::<()>());
+				let call_ty = call_ty.unwrap_or_else(|| #scrate::scale_info::meta_type::<()>());
+				let signature_ty = signature_ty.unwrap_or_else(|| #scrate::scale_info::meta_type::<()>());
+				let extra_ty = extra_ty.unwrap_or_else(|| #scrate::scale_info::meta_type::<()>());
+
+				#scrate::metadata_ir::ExtrinsicMetadataIR {
+					ty,
+					version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
+					address_ty,
+					call_ty,
+					signature_ty,
+					extra_ty,
+					signed_extensions: <
+							<
+								#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata
+							>::SignedExtensions as #scrate::sp_runtime::traits::SignedExtension
+						>::metadata()
+							.into_iter()
+							.map(|meta| #scrate::metadata_ir::SignedExtensionMetadataIR {
+								identifier: meta.identifier,
+								ty: meta.ty,
+								additional_signed: meta.additional_signed,
+							})
+							.collect(),
+				}
+			}
+
 			fn metadata_ir() -> #scrate::metadata_ir::MetadataIR {
 				// Each runtime must expose the `runtime_metadata()` to fetch the runtime API metadata.
 				// The function is implemented by calling `impl_runtime_apis!`.
@@ -97,22 +156,7 @@ pub fn expand_runtime_metadata(
 
 				#scrate::metadata_ir::MetadataIR {
 					pallets: #scrate::sp_std::vec![ #(#pallets),* ],
-					extrinsic: #scrate::metadata_ir::ExtrinsicMetadataIR {
-						ty: #scrate::scale_info::meta_type::<#extrinsic>(),
-						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
-						signed_extensions: <
-								<
-									#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata
-								>::SignedExtensions as #scrate::sp_runtime::traits::SignedExtension
-							>::metadata()
-								.into_iter()
-								.map(|meta| #scrate::metadata_ir::SignedExtensionMetadataIR {
-									identifier: meta.identifier,
-									ty: meta.ty,
-									additional_signed: meta.additional_signed,
-								})
-								.collect(),
-					},
+					extrinsic: #runtime::extrinsic_metadata_ir(),
 					ty: #scrate::scale_info::meta_type::<#runtime>(),
 					apis: (&rt).runtime_metadata(),
 				}
