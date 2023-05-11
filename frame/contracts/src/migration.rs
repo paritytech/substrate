@@ -163,7 +163,7 @@ pub trait MigrateSequence: private::Sealed {
 			return false
 		};
 
-		in_storage == first_supported && target == high
+		in_storage >= first_supported && target == high
 	}
 }
 
@@ -212,7 +212,7 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 		// over our migrations.
 		let storage_version = <Pallet<T>>::on_chain_storage_version();
 		let target_version = <Pallet<T>>::current_storage_version();
-		if !M::is_upgrade_supported(storage_version, target_version) {
+		if M::is_upgrade_supported(storage_version, target_version) {
 			Ok(Vec::new())
 		} else {
 			log::error!(
@@ -476,9 +476,9 @@ mod test {
 
 	#[test]
 	fn is_upgrade_supported_works() {
-		type M = (MockMigration<7>, MockMigration<8>, MockMigration<9>);
+		type M = (MockMigration<9>, MockMigration<10>, MockMigration<11>);
 
-		[(1, 1), (6, 9)].into_iter().for_each(|(from, to)| {
+		[(1, 1), (8, 11), (9, 11)].into_iter().for_each(|(from, to)| {
 			assert!(
 				M::is_upgrade_supported(StorageVersion::new(from), StorageVersion::new(to)),
 				"{} -> {} is supported",
@@ -487,7 +487,7 @@ mod test {
 			)
 		});
 
-		[(1, 0), (0, 3), (5, 9), (7, 10)].into_iter().for_each(|(from, to)| {
+		[(1, 0), (0, 3), (7, 11), (8, 10)].into_iter().for_each(|(from, to)| {
 			assert!(
 				!M::is_upgrade_supported(StorageVersion::new(from), StorageVersion::new(to)),
 				"{} -> {} is not supported",
