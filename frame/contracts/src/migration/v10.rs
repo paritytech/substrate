@@ -167,7 +167,7 @@ impl<T: Config> Migrate for Migration<T> {
 				T::Currency::transfer(
 					&account,
 					&deposit_account,
-					T::Currency::reducible_balance(&account, Preserve, Polite),
+					deposit,
 					ExistenceRequirement::KeepAlive,
 				)
 				.map(|_| deposit)
@@ -179,12 +179,16 @@ impl<T: Config> Migrate for Migration<T> {
 				min_balance
 			});
 
-			// Calculate the new base_deposit
+			// Calculate the new base_deposit:
+			// Ideally, it should be the same as the original `base_deposit`.
+			// Ideally, it should be at least 2xED (for the contract and deposit account).
+			// It can't be more than the `new_deposit`.
 			let new_base_deposit = min(
 				max(contract.storage_base_deposit, min_balance.saturating_add(min_balance)),
 				new_deposit,
 			);
 
+			// Calculate the ratio to adjust storage_byte and storage_item deposits.
 			let new_deposit_without_base = new_deposit.saturating_sub(new_base_deposit);
 			let old_deposit_without_base =
 				old_deposit.saturating_sub(contract.storage_base_deposit);
