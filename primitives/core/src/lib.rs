@@ -56,6 +56,8 @@ pub mod hexdisplay;
 pub use paste;
 
 pub mod bandersnatch;
+#[cfg(feature = "bls-experimental")]
+pub mod bls;
 pub mod defer;
 pub mod ecdsa;
 pub mod ed25519;
@@ -68,6 +70,9 @@ pub mod testing;
 #[cfg(feature = "std")]
 pub mod traits;
 pub mod uint;
+
+#[cfg(feature = "bls-experimental")]
+pub use bls::{bls377, bls381};
 
 pub use self::{
 	hash::{convert_hash, H160, H256, H512},

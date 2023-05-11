@@ -236,6 +236,7 @@ members = [
 	"primitives/version/proc-macro",
 	"primitives/wasm-interface",
 	"primitives/weights",
+	"scripts/ci/node-template-release",
 	"test-utils",
 	"test-utils/client",
 	"test-utils/derive",

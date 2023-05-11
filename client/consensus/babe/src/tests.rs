@@ -71,15 +71,12 @@ const SLOT_DURATION_MS: u64 = 1000;
 struct DummyFactory {
 	client: Arc<TestClient>,
 	epoch_changes: SharedEpochChanges<TestBlock, Epoch>,
-	config: BabeConfiguration,
 	mutator: Mutator,
 }
 
 struct DummyProposer {
 	factory: DummyFactory,
 	parent_hash: Hash,
-	parent_number: u64,
-	parent_slot: Slot,
 }
 
 impl Environment<TestBlock> for DummyFactory {
@@ -88,15 +85,9 @@ impl Environment<TestBlock> for DummyFactory {
 	type Error = Error;
 
 	fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header) -> Self::CreateProposer {
-		let parent_slot = crate::find_pre_digest::<TestBlock>(parent_header)
-			.expect("parent header has a pre-digest")
-			.slot();
-
 		future::ready(Ok(DummyProposer {
 			factory: self.clone(),
 			parent_hash: parent_header.hash(),
-			parent_number: *parent_header.number(),
-			parent_slot,
 		}))
 	}
 }
@@ -122,39 +113,6 @@ impl DummyProposer {
 			Ok(b) => b.block,
 			Err(e) => return future::ready(Err(e)),
 		};
-
-		let this_slot = crate::find_pre_digest::<TestBlock>(block.header())
-			.expect("baked block has valid pre-digest")
-			.slot();
-
-		// figure out if we should add a consensus digest, since the test runtime
-		// doesn't.
-		let epoch_changes = self.factory.epoch_changes.shared_data();
-		let epoch = epoch_changes
-			.epoch_data_for_child_of(
-				descendent_query(&*self.factory.client),
-				&self.parent_hash,
-				self.parent_number,
-				this_slot,
-				|slot| Epoch::genesis(&self.factory.config, slot),
-			)
-			.expect("client has data to find epoch")
-			.expect("can compute epoch for baked block");
-
-		let first_in_epoch = self.parent_slot < epoch.start_slot;
-		if first_in_epoch {
-			// push a `Consensus` digest signalling next change.
-			// we just reuse the same randomness and authorities as the prior
-			// epoch. this will break when we add light client support, since
-			// that will re-check the randomness logic off-chain.
-			let digest_data = ConsensusLog::NextEpochData(NextEpochDescriptor {
-				authorities: epoch.authorities.clone(),
-				randomness: epoch.randomness,
-			})
-			.encode();
-			let digest = DigestItem::Consensus(BABE_ENGINE_ID, digest_data);
-			block.header.digest_mut().push(digest)
-		}
 
 		// mutate the block header according to the mutator.
 		(self.factory.mutator)(&mut block.header, Stage::PreSeal);
@@ -351,7 +309,7 @@ impl TestNetFactory for BabeTestNet {
 }
 
 #[tokio::test]
-#[should_panic]
+#[should_panic(expected = "No BABE pre-runtime digest found")]
 async fn rejects_empty_block() {
 	sp_tracing::try_init_simple();
 	let mut net = BabeTestNet::new(3);
@@ -398,7 +356,6 @@ async fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + '
 
 		let environ = DummyFactory {
 			client: client.clone(),
-			config: data.link.config.clone(),
 			epoch_changes: data.link.epoch_changes.clone(),
 			mutator: mutator.clone(),
 		};
@@ -483,7 +440,7 @@ async fn authoring_blocks() {
 }
 
 #[tokio::test]
-#[should_panic]
+#[should_panic(expected = "valid babe headers must contain a predigest")]
 async fn rejects_missing_inherent_digest() {
 	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::take(&mut header.digest_mut().logs);
@@ -496,7 +453,7 @@ async fn rejects_missing_inherent_digest() {
 }
 
 #[tokio::test]
-#[should_panic]
+#[should_panic(expected = "has a bad seal")]
 async fn rejects_missing_seals() {
 	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::take(&mut header.digest_mut().logs);
@@ -509,7 +466,7 @@ async fn rejects_missing_seals() {
 }
 
 #[tokio::test]
-#[should_panic]
+#[should_panic(expected = "Expected epoch change to happen")]
 async fn rejects_missing_consensus_digests() {
 	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::take(&mut header.digest_mut().logs);
@@ -770,7 +727,6 @@ async fn importing_block_one_sets_genesis_epoch() {
 
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
-		config: data.link.config.clone(),
 		epoch_changes: data.link.epoch_changes.clone(),
 		mutator: Arc::new(|_, _| ()),
 	};
@@ -814,7 +770,6 @@ async fn revert_prunes_epoch_changes_and_removes_weights() {
 
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
-		config: data.link.config.clone(),
 		epoch_changes: data.link.epoch_changes.clone(),
 		mutator: Arc::new(|_, _| ()),
 	};
@@ -902,7 +857,6 @@ async fn revert_not_allowed_for_finalized() {
 
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
-		config: data.link.config.clone(),
 		epoch_changes: data.link.epoch_changes.clone(),
 		mutator: Arc::new(|_, _| ()),
 	};
@@ -943,7 +897,6 @@ async fn importing_epoch_change_block_prunes_tree() {
 
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
-		config: data.link.config.clone(),
 		epoch_changes: data.link.epoch_changes.clone(),
 		mutator: Arc::new(|_, _| ()),
 	};
@@ -1030,7 +983,7 @@ async fn importing_epoch_change_block_prunes_tree() {
 }
 
 #[tokio::test]
-#[should_panic]
+#[should_panic(expected = "Slot number must increase: parent slot: 999, this slot: 999")]
 async fn verify_slots_are_strictly_increasing() {
 	let mut net = BabeTestNet::new(1);
 
@@ -1042,7 +995,6 @@ async fn verify_slots_are_strictly_increasing() {
 
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
-		config: data.link.config.clone(),
 		epoch_changes: data.link.epoch_changes.clone(),
 		mutator: Arc::new(|_, _| ()),
 	};
@@ -1082,7 +1034,6 @@ async fn obsolete_blocks_aux_data_cleanup() {
 
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
-		config: data.link.config.clone(),
 		epoch_changes: data.link.epoch_changes.clone(),
 		mutator: Arc::new(|_, _| ()),
 	};
@@ -1168,7 +1119,6 @@ async fn allows_skipping_epochs() {
 
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
-		config: data.link.config.clone(),
 		epoch_changes: data.link.epoch_changes.clone(),
 		mutator: Arc::new(|_, _| ()),
 	};
@@ -1298,7 +1248,6 @@ async fn allows_skipping_epochs_on_some_forks() {
 
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
-		config: data.link.config.clone(),
 		epoch_changes: data.link.epoch_changes.clone(),
 		mutator: Arc::new(|_, _| ()),
 	};
