@@ -18,9 +18,9 @@
 
 //! Types and functions related to block verification.
 
-use sp_application_crypto::Wraps;
-
 use super::*;
+use sp_application_crypto::Wraps;
+use sp_core::crypto::VrfPublic;
 
 // Allowed slot drift.
 const MAX_SLOT_DRIFT: u64 = 1;
@@ -82,9 +82,11 @@ fn check_header<B: BlockT + Sized>(
 	// it would be just redundant and we can just push the block header hash within
 	// the slot-vrf-transcript
 
-	use sp_core::crypto::VrfVerifier;
 	let transcript = make_slot_vrf_transcript(&config.randomness, pre_digest.slot, epoch.epoch_idx);
-	if !authority_id.as_inner_ref().vrf_verify(&transcript, &pre_digest.vrf_signature) {
+	if !authority_id
+		.as_inner_ref()
+		.vrf_verify(&transcript.into(), &pre_digest.vrf_signature)
+	{
 		return Err(sassafras_err(Error::VrfVerificationFailed))
 	}
 

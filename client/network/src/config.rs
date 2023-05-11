@@ -32,15 +32,16 @@ pub use crate::{
 use codec::Encode;
 use libp2p::{identity::Keypair, multiaddr, Multiaddr, PeerId};
 use prometheus_endpoint::Registry;
+use zeroize::Zeroize;
+
 pub use sc_network_common::{
 	role::{Role, Roles},
 	sync::warp::WarpSyncProvider,
 	ExHashT,
 };
 use sc_utils::mpsc::TracingUnboundedSender;
-use zeroize::Zeroize;
-
 use sp_runtime::traits::Block as BlockT;
+
 use std::{
 	error::Error,
 	fmt, fs,
@@ -564,9 +565,6 @@ pub struct NetworkConfiguration {
 	/// The node key configuration, which determines the node's network identity keypair.
 	pub node_key: NodeKeyConfig,
 
-	/// List of request-response protocols that the node supports.
-	pub request_response_protocols: Vec<RequestResponseConfig>,
-
 	/// Configuration for the default set of nodes used for block syncing and transactions.
 	pub default_peers_set: SetConfig,
 
@@ -575,9 +573,6 @@ pub struct NetworkConfiguration {
 	///
 	/// This value is implicitly capped to `default_set.out_peers + default_set.in_peers`.
 	pub default_peers_set_num_full: u32,
-
-	/// Configuration for extra sets of nodes.
-	pub extra_sets: Vec<NonDefaultSetConfig>,
 
 	/// Client identifier. Sent over the wire for debugging purposes.
 	pub client_version: String,
@@ -649,10 +644,8 @@ impl NetworkConfiguration {
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
 			node_key,
-			request_response_protocols: Vec::new(),
 			default_peers_set_num_full: default_peers_set.in_peers + default_peers_set.out_peers,
 			default_peers_set,
-			extra_sets: Vec::new(),
 			client_version: client_version.into(),
 			node_name: node_name.into(),
 			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ip: true },
@@ -707,7 +700,7 @@ pub struct Params<Block: BlockT> {
 	pub executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
 
 	/// Network layer configuration.
-	pub network_config: NetworkConfiguration,
+	pub network_config: FullNetworkConfiguration,
 
 	/// Legacy name of the protocol to use on the wire. Should be different for each chain.
 	pub protocol_id: ProtocolId,
@@ -727,9 +720,44 @@ pub struct Params<Block: BlockT> {
 
 	/// TX channel for direct communication with `SyncingEngine` and `Protocol`.
 	pub tx: TracingUnboundedSender<crate::event::SyncEvent<Block>>,
+}
 
-	/// Request response protocol configurations
-	pub request_response_protocol_configs: Vec<RequestResponseConfig>,
+/// Full network configuration.
+pub struct FullNetworkConfiguration {
+	/// Installed notification protocols.
+	pub(crate) notification_protocols: Vec<NonDefaultSetConfig>,
+
+	/// List of request-response protocols that the node supports.
+	pub(crate) request_response_protocols: Vec<RequestResponseConfig>,
+
+	/// Network configuration.
+	pub network_config: NetworkConfiguration,
+}
+
+impl FullNetworkConfiguration {
+	/// Create new [`FullNetworkConfiguration`].
+	pub fn new(network_config: &NetworkConfiguration) -> Self {
+		Self {
+			notification_protocols: Vec::new(),
+			request_response_protocols: Vec::new(),
+			network_config: network_config.clone(),
+		}
+	}
+
+	/// Add a notification protocol.
+	pub fn add_notification_protocol(&mut self, config: NonDefaultSetConfig) {
+		self.notification_protocols.push(config);
+	}
+
+	/// Get reference to installed notification protocols.
+	pub fn notification_protocols(&self) -> &Vec<NonDefaultSetConfig> {
+		&self.notification_protocols
+	}
+
+	/// Add a request-response protocol.
+	pub fn add_request_response_protocol(&mut self, config: RequestResponseConfig) {
+		self.request_response_protocols.push(config);
+	}
 }
 
 #[cfg(test)]

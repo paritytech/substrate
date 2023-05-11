@@ -102,6 +102,7 @@ impl<B: BlockT> Protocol<B> {
 	pub fn new(
 		roles: Roles,
 		network_config: &config::NetworkConfiguration,
+		notification_protocols: Vec<config::NonDefaultSetConfig>,
 		block_announces_protocol: config::NonDefaultSetConfig,
 		tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
 	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
@@ -109,7 +110,7 @@ impl<B: BlockT> Protocol<B> {
 
 		let (peerset, peerset_handle) = {
 			let mut sets =
-				Vec::with_capacity(NUM_HARDCODED_PEERSETS + network_config.extra_sets.len());
+				Vec::with_capacity(NUM_HARDCODED_PEERSETS + notification_protocols.len());
 
 			let mut default_sets_reserved = HashSet::new();
 			for reserved in network_config.default_peers_set.reserved_nodes.iter() {
@@ -135,7 +136,7 @@ impl<B: BlockT> Protocol<B> {
 					NonReservedPeerMode::Deny,
 			});
 
-			for set_cfg in &network_config.extra_sets {
+			for set_cfg in &notification_protocols {
 				let mut reserved_nodes = HashSet::new();
 				for reserved in set_cfg.set_config.reserved_nodes.iter() {
 					reserved_nodes.insert(reserved.peer_id);
@@ -169,7 +170,7 @@ impl<B: BlockT> Protocol<B> {
 					handshake: block_announces_protocol.handshake.as_ref().unwrap().to_vec(),
 					max_notification_size: block_announces_protocol.max_notification_size,
 				})
-				.chain(network_config.extra_sets.iter().map(|s| notifications::ProtocolConfig {
+				.chain(notification_protocols.iter().map(|s| notifications::ProtocolConfig {
 					name: s.notifications_protocol.clone(),
 					fallback_names: s.fallback_names.clone(),
 					handshake: s.handshake.as_ref().map_or(roles.encode(), |h| (*h).to_vec()),
@@ -182,7 +183,7 @@ impl<B: BlockT> Protocol<B> {
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
 			notification_protocols: iter::once(block_announces_protocol.notifications_protocol)
-				.chain(network_config.extra_sets.iter().map(|s| s.notifications_protocol.clone()))
+				.chain(notification_protocols.iter().map(|s| s.notifications_protocol.clone()))
 				.collect(),
 			bad_handshake_substreams: Default::default(),
 			peers: HashMap::new(),

@@ -285,10 +285,10 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 		// Genesis block doesn't contain a pre digest so let's generate a
 		// dummy one to not break any invariants in the rest of the code
 		use sp_consensus_sassafras::VrfTranscript;
-		use sp_core::crypto::VrfSigner;
+		use sp_core::crypto::VrfSecret;
 		let pair = sp_consensus_sassafras::AuthorityPair::from_seed(&[0u8; 32]);
 		let transcript = VrfTranscript::new(b"", &[]);
-		let vrf_signature = pair.as_ref().vrf_sign(&transcript);
+		let vrf_signature = pair.as_ref().vrf_sign(&transcript.into());
 		return Ok(PreDigest { authority_idx: 0, slot: 0.into(), ticket_claim: None, vrf_signature })
 	}
 

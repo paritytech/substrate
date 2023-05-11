@@ -392,7 +392,11 @@ impl_runtime_apis! {
 			Sassafras::submit_tickets_unsigned_extrinsic(tickets)
 		}
 
-		fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::Ticket> {
+		fn slot_ticket_id(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::TicketId> {
+			Sassafras::slot_ticket_id(slot)
+		}
+
+		fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<(sp_consensus_sassafras::TicketId, sp_consensus_sassafras::TicketData)> {
 			Sassafras::slot_ticket(slot)
 		}
 
