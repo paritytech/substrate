@@ -48,7 +48,7 @@ pub mod pallet {
 	use super::*;
 	// TODO: Probably a better way to do this than importing from pallet_nfts.
 	use frame_system::pallet_prelude::*;
-	use pallet_nfts::{ItemConfig};
+	use pallet_nfts::ItemConfig;
 	use sp_std::fmt::Display;
 
 	use frame_support::{
@@ -56,13 +56,14 @@ pub mod pallet {
 		sp_runtime::Permill,
 		traits::{
 			tokens::nonfungibles_v2::{
-				Inspect as NonFungiblesInspect, InspectEnumerable as NonFungiblesInspectEnumerable,
-				Mutate as NonFungiblesMutate, Buy as NonFungiblesBuy
+				Buy as NonFungiblesBuy, Inspect as NonFungiblesInspect,
+				InspectEnumerable as NonFungiblesInspectEnumerable, Mutate as NonFungiblesMutate,
 			},
-			ReservableCurrency, Currency, ExistenceRequirement
+			Currency, ExistenceRequirement, ReservableCurrency,
 		},
 	};
-	pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
+	pub type BalanceOf<T> =
+		<<T as Config>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 	pub type ItemPrice<T> = BalanceOf<T>;
 
 	/// The current storage version.
@@ -100,8 +101,7 @@ pub mod pallet {
 				Self::AccountId,
 				ItemId = Self::NftItemId,
 				CollectionId = Self::NftCollectionId,
-			> 
-			+ NonFungiblesBuy<
+			> + NonFungiblesBuy<
 				Self::AccountId,
 				ItemPrice<Self>,
 				ItemId = Self::NftItemId,
@@ -140,8 +140,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
+		/// The royalty recipient of an NFT collection has changed.
+		RecipientCollectionRoyaltyChanged {
+			nft_collection: T::NftCollectionId,
+			new_royalty_recipient: T::AccountId,
+		},
 		/// The royalty recipient of an NFT item has changed.
-		RecipientChanged {
+		RecipientItemRoyaltyChanged {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftItemId,
 			new_royalty_recipient: T::AccountId,
@@ -190,21 +195,20 @@ pub mod pallet {
 		/// The royalty recipient already exists.
 		RoyaltyRecipientsAlreadyExist,
 		/// The royalty percentage is invalid.
-		InvalidRoyaltyPercentage
+		InvalidRoyaltyPercentage,
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Set the royalty for an existing collection.
 		///
-		/// The origin must be the actual owner of the `item`.
+		/// The origin must be the actual owner of the `collection`.
 		///
 		/// - `collection`: The NFT collection.
 		/// - `royalty_percentage`: Royalty percentage to be set.
 		/// - `royalty_recipient`: Account into which the royalty will be sent to.
 		///
 		/// Emits `RoyaltySet`.
-		///
 		#[pallet::call_index(0)]
 		#[pallet::weight(0)]
 		pub fn set_collection_royalty(
@@ -229,7 +233,8 @@ pub mod pallet {
 				);
 			}
 
-			// Check whether the collection has already a royalty, if so do not allow to set it again
+			// Check whether the collection has already a royalty, if so do not allow to set it
+			// again
 			ensure!(
 				<NftCollectionWithRoyalty<T>>::get(collection_id).is_none(),
 				Error::<T>::RoyaltyAlreadyExists
@@ -262,7 +267,6 @@ pub mod pallet {
 		/// - `royalty_recipient`: Account into which the item royalties will be transfered.
 		///
 		/// Emits `RoyaltySet`.
-		///
 		#[pallet::call_index(1)]
 		#[pallet::weight(0)]
 		pub fn set_item_royalty(
@@ -312,6 +316,42 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Transfer the royalties associated to a collection to another royalty_recipient.
+		///
+		/// The origin must be the actual royalty_recipient of the `collection`.
+		///
+		/// - `collection`: The collection of the item to be burned.
+		/// - `new_royalty_recipient`: Account into which the item royalties will be transfered.
+		///
+		/// Emits `RecipientCollectionRoyaltyChanged`.
+		#[pallet::call_index(2)]
+		#[pallet::weight(0)]
+		pub fn transfer_collection_royalty_recipient(
+			origin: OriginFor<T>,
+			collection_id: T::NftCollectionId,
+			new_royalty_recipient: T::AccountId,
+		) -> DispatchResult {
+			let caller = ensure_signed(origin)?;
+
+			let item_royalties = <NftCollectionWithRoyalty<T>>::take(collection_id)
+				.ok_or(Error::<T>::NoRoyaltyExists)?;
+			ensure!(item_royalties.royalty_recipient == caller, Error::<T>::NoPermission);
+
+			NftCollectionWithRoyalty::<T>::insert(
+				collection_id,
+				RoyaltyDetails::<T::AccountId> {
+					royalty_percentage: item_royalties.royalty_percentage,
+					royalty_recipient: new_royalty_recipient.clone(),
+				},
+			);
+			Self::deposit_event(Event::RecipientCollectionRoyaltyChanged {
+				nft_collection: collection_id,
+				new_royalty_recipient,
+			});
+
+			Ok(())
+		}
+
 		/// Transfer the royalties associated to an item to another royalty_recipient.
 		///
 		/// The origin must be the actual royalty_recipient of the `item`.
@@ -320,11 +360,10 @@ pub mod pallet {
 		/// - `item`: The item to be burned.
 		/// - `new_royalty_recipient`: Account into which the item royalties will be transfered.
 		///
-		/// Emits `RecipientChanged`.
-		///
-		#[pallet::call_index(2)]
+		/// Emits `RecipientItemRoyaltyChanged`.
+		#[pallet::call_index(3)]
 		#[pallet::weight(0)]
-		pub fn transfer_royalty_recipient(
+		pub fn transfer_item_royalty_recipient(
 			origin: OriginFor<T>,
 			collection_id: T::NftCollectionId,
 			item_id: T::NftItemId,
@@ -343,7 +382,7 @@ pub mod pallet {
 					royalty_recipient: new_royalty_recipient.clone(),
 				},
 			);
-			Self::deposit_event(Event::RecipientChanged {
+			Self::deposit_event(Event::RecipientItemRoyaltyChanged {
 				nft_collection: collection_id,
 				nft: item_id,
 				new_royalty_recipient,
@@ -361,8 +400,7 @@ pub mod pallet {
 		/// - `bid_price`: The price the sender is willing to pay.
 		///
 		/// Emits `RoyaltyPaid`.
-		///
-		#[pallet::call_index(3)]
+		#[pallet::call_index(4)]
 		#[pallet::weight(0)]
 		pub fn buy(
 			origin: OriginFor<T>,
@@ -373,7 +411,8 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 
 			// Retrieve price of the item
-			let item_price = T::Nfts::item_price(&collection_id, &item_id).ok_or(Error::<T>::NotForSale)?;
+			let item_price =
+				T::Nfts::item_price(&collection_id, &item_id).ok_or(Error::<T>::NotForSale)?;
 
 			// Buy the item within NFT pallet
 			T::Nfts::buy_item(&collection_id, &item_id, &origin, &bid_price)?;
@@ -409,8 +448,7 @@ pub mod pallet {
 		/// - `recipients`: The recipients of the royalties.
 		///
 		/// Emits `RoyaltyRecipientsCreated`.
-		///
-		#[pallet::call_index(4)]
+		#[pallet::call_index(5)]
 		#[pallet::weight(0)]
 		pub fn set_collection_royalty_recipients(
 			origin: OriginFor<T>,
@@ -423,8 +461,9 @@ pub mod pallet {
 
 			// TODO: Ensure that the sender is the owner of the collection
 
-			// Should we do this? Or should we allow to overwrite the recipients that way we have only one extrinsic for creating recipients and updating them.
-			// Ensure that the collection does not have any royalty recipients yet
+			// Should we do this? Or should we allow to overwrite the recipients that way we have
+			// only one extrinsic for creating recipients and updating them. Ensure that the
+			// collection does not have any royalty recipients yet
 			ensure!(
 				!RoyaltyRecipients::<T>::contains_key(&collection_id),
 				Error::<T>::RoyaltyRecipientsAlreadyExist

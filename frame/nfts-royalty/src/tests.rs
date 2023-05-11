@@ -17,18 +17,13 @@
 
 //! Tests for the NFTs Royalty pallet.
 
-use crate::{mock::*, Error, NftWithRoyalty, NftCollectionWithRoyalty};
-use frame_support::{
-	assert_noop, assert_ok, 
-	traits::{
-		Currency,
-	},
-};
 use super::Event as NftsRoyaltyEvent;
+use crate::{mock::*, Error, NftCollectionWithRoyalty, NftWithRoyalty};
+use frame_support::{assert_noop, assert_ok, traits::Currency};
 
 use pallet_nfts::{
 	Account, CollectionAccount, CollectionConfig, CollectionSetting, CollectionSettings,
-	ItemSettings, MintSettings, ItemConfig
+	ItemConfig, ItemSettings, MintSettings,
 };
 
 pub use sp_runtime::{DispatchError, ModuleError, Permill};
@@ -40,11 +35,11 @@ fn account(id: u8) -> AccountIdOf<Test> {
 
 fn last_event() -> NftsRoyaltyEvent<Test> {
 	System::events()
-	.into_iter()
-	.map(|r| r.event)
-	.filter_map(|e| if let RuntimeEvent::NftsRoyalty(inner) = e { Some(inner) } else { None })
-	.last()
-	.unwrap()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let RuntimeEvent::NftsRoyalty(inner) = e { Some(inner) } else { None })
+		.last()
+		.unwrap()
 }
 
 // Create a collection calling directly the NFTs pallet
@@ -63,20 +58,14 @@ fn create_collection() {
 	assert_eq!(collections, vec![(account(1), 0)]);
 }
 
-fn mint_item() -> u32{
+fn mint_item() -> u32 {
 	let item_id = 42;
-	assert_ok!(Nfts::mint(
-		RuntimeOrigin::signed(account(1)),
-		0,
-		item_id,
-		account(1),
-		None,
-	));
+	assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(1)), 0, item_id, account(1), None,));
 	item_id
 }
 
 // Set up balances for testing
-fn set_up_balances(initial_balance: u64){
+fn set_up_balances(initial_balance: u64) {
 	Balances::make_free_balance_be(&account(1), initial_balance);
 	Balances::make_free_balance_be(&account(2), initial_balance);
 	Balances::make_free_balance_be(&account(3), initial_balance);
@@ -99,10 +88,11 @@ fn nft_set_collection_royalty_should_work() {
 		// Check the event was emitted
 		assert_eq!(
 			last_event(),
-			NftsRoyaltyEvent::RoyaltyForCollectionSet { 
-				nft_collection: 0, 
-				royalty_percentage: Permill::from_percent(5), 
-				royalty_recipient: account(1) }
+			NftsRoyaltyEvent::RoyaltyForCollectionSet {
+				nft_collection: 0,
+				royalty_percentage: Permill::from_percent(5),
+				royalty_recipient: account(1)
+			}
 		);
 	});
 }
@@ -183,11 +173,12 @@ fn nft_set_item_royalty_should_work() {
 		// Check the event was emitted
 		assert_eq!(
 			last_event(),
-			NftsRoyaltyEvent::RoyaltySet { 
-				nft_collection: 0, 
-				nft: mint_id, 
-				royalty_percentage: Permill::from_percent(5), 
-				royalty_recipient: account(1) }
+			NftsRoyaltyEvent::RoyaltySet {
+				nft_collection: 0,
+				nft: mint_id,
+				royalty_percentage: Permill::from_percent(5),
+				royalty_recipient: account(1)
+			}
 		);
 	});
 }
@@ -250,10 +241,73 @@ fn nft_set_item_royalty_fail_ovewrite() {
 		);
 	});
 }
+#[test]
+fn transfer_collection_royalty_should_work() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		assert_ok!(NftsRoyalty::set_collection_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			Permill::from_percent(5),
+			account(1)
+		));
+		// Read royalty pallet's storage.
+		let nft_with_royalty = NftCollectionWithRoyalty::<Test>::get(0).unwrap();
+		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
+		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
 
+		assert_ok!(NftsRoyalty::transfer_collection_royalty_recipient(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			account(2)
+		));
+		// Read royalty pallet's storage.
+		let nft_with_royalty = NftCollectionWithRoyalty::<Test>::get(0).unwrap();
+		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
+		assert_eq!(nft_with_royalty.royalty_recipient, account(2));
+		// Check if the event has been emitted.
+		assert_eq!(
+			last_event(),
+			NftsRoyaltyEvent::RecipientCollectionRoyaltyChanged {
+				nft_collection: 0,
+				new_royalty_recipient: account(2),
+			}
+		);
+	});
+}
 
 #[test]
-fn transfer_royalty_should_work() {
+fn transfer_collection_royalty_should_fail_if_no_royalty_recipient() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		assert_ok!(NftsRoyalty::set_collection_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			Permill::from_percent(5),
+			account(1)
+		));
+		// Read royalty pallet's storage.
+		let nft_with_royalty = NftCollectionWithRoyalty::<Test>::get(0).unwrap();
+		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
+		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
+
+		assert_noop!(
+			NftsRoyalty::transfer_collection_royalty_recipient(
+				RuntimeOrigin::signed(account(2)),
+				0,
+				account(2)
+			),
+			Error::<Test>::NoPermission
+		);
+		// Read royalty pallet's storage to check that the royalty has not changed.
+		let nft_with_royalty = NftCollectionWithRoyalty::<Test>::get(0).unwrap();
+		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
+		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
+	});
+}
+
+#[test]
+fn transfer_item_royalty_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		let mint_id = mint_item();
@@ -269,7 +323,7 @@ fn transfer_royalty_should_work() {
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
 
-		assert_ok!(NftsRoyalty::transfer_royalty_recipient(
+		assert_ok!(NftsRoyalty::transfer_item_royalty_recipient(
 			RuntimeOrigin::signed(account(1)),
 			0,
 			42,
@@ -280,16 +334,19 @@ fn transfer_royalty_should_work() {
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_recipient, account(2));
 		// Check if the event has been emitted.
-		assert_eq!(last_event(), NftsRoyaltyEvent::RecipientChanged {
-			nft_collection: 0,
-			nft: 42,
-			new_royalty_recipient: account(2),
-		});
+		assert_eq!(
+			last_event(),
+			NftsRoyaltyEvent::RecipientItemRoyaltyChanged {
+				nft_collection: 0,
+				nft: 42,
+				new_royalty_recipient: account(2),
+			}
+		);
 	});
 }
 
 #[test]
-fn transfer_royalty_should_fail_if_no_royalty_recipient() {
+fn transfer_item_royalty_should_fail_if_no_royalty_recipient() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		let mint_id = mint_item();
@@ -306,7 +363,7 @@ fn transfer_royalty_should_fail_if_no_royalty_recipient() {
 		assert_eq!(nft_with_royalty.royalty_recipient, account(1));
 
 		assert_noop!(
-			NftsRoyalty::transfer_royalty_recipient(
+			NftsRoyalty::transfer_item_royalty_recipient(
 				RuntimeOrigin::signed(account(2)),
 				0,
 				42,
@@ -323,8 +380,8 @@ fn transfer_royalty_should_fail_if_no_royalty_recipient() {
 
 #[test]
 fn buy_should_work() {
-    new_test_ext().execute_with(|| {
-        create_collection();
+	new_test_ext().execute_with(|| {
+		create_collection();
 		let initial_balance = 100;
 		set_up_balances(initial_balance);
 
@@ -336,20 +393,9 @@ fn buy_should_work() {
 			Permill::from_percent(10),
 			account(1)
 		));
-		assert_ok!(Nfts::set_price(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			42,
-			Some(50),
-			None,
-		));
+		assert_ok!(Nfts::set_price(RuntimeOrigin::signed(account(1)), 0, 42, Some(50), None,));
 
-		assert_ok!(NftsRoyalty::buy(
-			RuntimeOrigin::signed(account(2)),
-			0,
-			42,
-			60
-		));
+		assert_ok!(NftsRoyalty::buy(RuntimeOrigin::signed(account(2)), 0, 42, 60));
 		// Get the items directly from the NFTs pallet, to see if the owner has changed
 		let mut items: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
 		items.sort();
@@ -360,55 +406,44 @@ fn buy_should_work() {
 		assert_eq!(Balances::total_balance(&account(2)), initial_balance - 50 - 5);
 		assert_eq!(
 			last_event(),
-			NftsRoyaltyEvent::RoyaltyPaid { 
-				nft_collection: 0, 
+			NftsRoyaltyEvent::RoyaltyPaid {
+				nft_collection: 0,
 				nft: 42,
 				royalty_amount_paid: 5,
-				royalty_recipient: account(1) 
+				royalty_recipient: account(1)
 			}
 		);
-    });
+	});
 }
 
 #[test]
 fn error_if_no_royalty_on_item_to_buy() {
-    new_test_ext().execute_with(|| {
-        create_collection();
+	new_test_ext().execute_with(|| {
+		create_collection();
 		let initial_balance = 100;
 		set_up_balances(initial_balance);
 
 		assert_ok!(Nfts::force_mint(
-            RuntimeOrigin::signed(account(1)),
-            0,
-            42,
-            account(1),
-            ItemConfig { settings: ItemSettings::all_enabled() }
-        ));
-
-		assert_ok!(Nfts::set_price(
 			RuntimeOrigin::signed(account(1)),
 			0,
 			42,
-			Some(50),
-			None,
+			account(1),
+			ItemConfig { settings: ItemSettings::all_enabled() }
 		));
 
+		assert_ok!(Nfts::set_price(RuntimeOrigin::signed(account(1)), 0, 42, Some(50), None,));
+
 		assert_noop!(
-			NftsRoyalty::buy(
-				RuntimeOrigin::signed(account(2)),
-				0,
-				42,
-				50
-			),
+			NftsRoyalty::buy(RuntimeOrigin::signed(account(2)), 0, 42, 50),
 			Error::<Test>::NoRoyaltyExists
 		);
-    });
+	});
 }
 
 #[test]
 fn error_if_buy_item_not_on_sale() {
-    new_test_ext().execute_with(|| {
-        create_collection();
+	new_test_ext().execute_with(|| {
+		create_collection();
 		let initial_balance = 100;
 		set_up_balances(initial_balance);
 
@@ -422,13 +457,8 @@ fn error_if_buy_item_not_on_sale() {
 		));
 
 		assert_noop!(
-			NftsRoyalty::buy(
-				RuntimeOrigin::signed(account(2)),
-				0,
-				42,
-				50
-			),
+			NftsRoyalty::buy(RuntimeOrigin::signed(account(2)), 0, 42, 50),
 			Error::<Test>::NotForSale
 		);
-    });
+	});
 }
