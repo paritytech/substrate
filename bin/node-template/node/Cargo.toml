@@ -23,6 +23,7 @@ futures = { version = "0.3.21", features = ["thread-pool"]}
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
+sc-network = { version = "0.10.0-dev", path = "../../../client/network" }
 sc-service = { version = "0.10.0-dev", path = "../../../client/service" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
