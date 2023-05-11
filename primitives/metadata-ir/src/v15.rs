@@ -182,6 +182,9 @@ impl From<ExtrinsicMetadataIR> for ExtrinsicMetadata {
 		ExtrinsicMetadata {
 			ty: ir.ty,
 			version: ir.version,
+			address_ty: ir.address_ty,
+			call_ty: ir.call_ty,
+			signature_ty: ir.signature_ty,
 			signed_extensions: ir.signed_extensions.into_iter().map(Into::into).collect(),
 		}
 	}
