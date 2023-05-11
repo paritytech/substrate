@@ -4967,7 +4967,7 @@ fn capped_stakers_works() {
 			some_existing_nominator = controller;
 		}
 
-		// one more is too many
+		// one more is too many.
 		let (_, last_nominator) = testing_utils::create_stash_controller::<Test>(
 			30_000_000,
 			100,
