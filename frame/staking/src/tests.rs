@@ -4967,7 +4967,7 @@ fn capped_stakers_works() {
 			some_existing_nominator = controller;
 		}
 
-		// one more is too many.
+		// one more is too many
 		let (_, last_nominator) = testing_utils::create_stash_controller::<Test>(
 			30_000_000,
 			100,
@@ -4979,7 +4979,7 @@ fn capped_stakers_works() {
 			Error::<Test>::TooManyNominators
 		);
 
-		// Re-nominate works fine.
+		// Re-nominate works fine
 		assert_ok!(Staking::nominate(RuntimeOrigin::signed(some_existing_nominator), vec![1]));
 		// Re-validate works fine
 		assert_ok!(Staking::validate(
