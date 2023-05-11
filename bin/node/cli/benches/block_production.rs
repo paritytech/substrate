@@ -92,6 +92,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		rpc_max_response_size: Default::default(),
 		rpc_id_provider: Default::default(),
 		rpc_max_subs_per_conn: Default::default(),
+		rpc_port: 9944,
 		prometheus_config: None,
 		telemetry_endpoints: None,
 		default_heap_pages: None,
@@ -104,7 +105,8 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		max_runtime_instances: 8,
 		runtime_cache_size: 2,
 		announce_block: true,
-		base_path: Some(base_path),
+		data_path: base_path.path().into(),
+		base_path,
 		informant_output_format: Default::default(),
 		wasm_runtime_overrides: None,
 	};

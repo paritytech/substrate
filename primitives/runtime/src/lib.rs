@@ -628,6 +628,8 @@ pub enum TokenError {
 	CannotCreateHold,
 	/// Withdrawal would cause unwanted loss of account.
 	NotExpendable,
+	/// Account cannot receive the assets.
+	Blocked,
 }
 
 impl From<TokenError> for &'static str {
@@ -643,6 +645,7 @@ impl From<TokenError> for &'static str {
 			TokenError::CannotCreateHold =>
 				"Account cannot be created for recording amount on hold",
 			TokenError::NotExpendable => "Account that is desired to remain would die",
+			TokenError::Blocked => "Account cannot receive the assets",
 		}
 	}
 }
