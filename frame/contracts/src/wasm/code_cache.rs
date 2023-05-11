@@ -99,7 +99,6 @@ pub fn store<T: Config>(mut module: PrefabWasmModule<T>, instantiated: bool) -> 
 					&T::HoldReason::get(),
 					&new_owner_info.owner,
 					new_owner_info.deposit,
-					// )?;
 				)
 				.map_err(|e| match e {
 					DispatchError::Token(TokenError::FundsUnavailable) =>

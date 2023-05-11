@@ -203,7 +203,7 @@ pub mod pallet {
 		/// The currency in which fees are paid and contract balances are held.
 		type Currency: Inspect<Self::AccountId>
 			+ Mutate<Self::AccountId>
-			+ MutateHold<Self::AccountId>;
+			+ StorageDepositHold<Self::AccountId>;
 
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -787,6 +787,12 @@ pub mod pallet {
 			/// The code hash that was delegate called.
 			code_hash: CodeHash<T>,
 		},
+
+		Held {
+			who: T::AccountId,
+			// amount: BalanceOf<T>,
+			// reason: <T::Currency as InspectHold<T::AccountId>>::Reason,
+		},
 	}
 
 	#[pallet::error]
@@ -1220,6 +1226,20 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 			Origin::Signed(_) => Ok(()),
 			Origin::Root => Err(DispatchError::RootNotAllowed),
 		}
+	}
+}
+
+pub trait StorageDepositHold<AccountId>: MutateHold<AccountId> {
+	fn done_hold<T: Config>(reason: &Self::Reason, who: &T::AccountId, amount: Self::Balance) {
+		// let reason = HoldReason::StorageDepositReserve;
+		<Pallet<T>>::deposit_event(
+			vec![
+				T::Hashing::hash_of(who),
+				T::Hashing::hash_of(&amount),
+				T::Hashing::hash_of(&reason),
+			],
+			Event::Held { who: who.clone() },
+		);
 	}
 }
 
