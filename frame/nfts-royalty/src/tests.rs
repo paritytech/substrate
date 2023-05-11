@@ -28,7 +28,7 @@ use super::Event as NftsRoyaltyEvent;
 
 use pallet_nfts::{
 	Account, CollectionAccount, CollectionConfig, CollectionSetting, CollectionSettings,
-	Error as NftErrors, ItemSettings, MintSettings, ItemConfig
+	ItemSettings, MintSettings, ItemConfig
 };
 
 pub use sp_runtime::{DispatchError, ModuleError, Permill};
@@ -161,11 +161,11 @@ fn nft_set_collection_royalty_fail_ovewrite() {
 }
 
 #[test]
-fn nft_set_royalty_should_work() {
+fn nft_set_item_royalty_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		let mint_id = mint_item();
-		assert_ok!(NftsRoyalty::set_royalty(
+		assert_ok!(NftsRoyalty::set_item_royalty(
 			RuntimeOrigin::signed(account(1)),
 			0,
 			mint_id,
@@ -193,10 +193,10 @@ fn nft_set_royalty_should_work() {
 }
 
 #[test]
-fn nft_set_royalty_fail_item_not_exist() {
+fn nft_set_item_royalty_fail_item_not_exist() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			NftsRoyalty::set_royalty(
+			NftsRoyalty::set_item_royalty(
 				RuntimeOrigin::signed(account(1)),
 				0,
 				42,
@@ -209,12 +209,12 @@ fn nft_set_royalty_fail_item_not_exist() {
 }
 
 #[test]
-fn nft_set_royalty_fail_no_permission() {
+fn nft_set_item_royalty_fail_no_permission() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		let mint_id = mint_item();
 		assert_noop!(
-			NftsRoyalty::set_royalty(
+			NftsRoyalty::set_item_royalty(
 				RuntimeOrigin::signed(account(2)),
 				0,
 				mint_id,
@@ -227,11 +227,11 @@ fn nft_set_royalty_fail_no_permission() {
 }
 
 #[test]
-fn nft_set_royalty_fail_ovewrite() {
+fn nft_set_item_royalty_fail_ovewrite() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		let mint_id = mint_item();
-		assert_ok!(NftsRoyalty::set_royalty(
+		assert_ok!(NftsRoyalty::set_item_royalty(
 			RuntimeOrigin::signed(account(1)),
 			0,
 			mint_id,
@@ -239,7 +239,7 @@ fn nft_set_royalty_fail_ovewrite() {
 			account(1)
 		));
 		assert_noop!(
-			NftsRoyalty::set_royalty(
+			NftsRoyalty::set_item_royalty(
 				RuntimeOrigin::signed(account(1)),
 				0,
 				mint_id,
@@ -257,7 +257,7 @@ fn transfer_royalty_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		let mint_id = mint_item();
-		assert_ok!(NftsRoyalty::set_royalty(
+		assert_ok!(NftsRoyalty::set_item_royalty(
 			RuntimeOrigin::signed(account(1)),
 			0,
 			mint_id,
@@ -293,7 +293,7 @@ fn transfer_royalty_should_fail_if_no_royalty_recipient() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		let mint_id = mint_item();
-		assert_ok!(NftsRoyalty::set_royalty(
+		assert_ok!(NftsRoyalty::set_item_royalty(
 			RuntimeOrigin::signed(account(1)),
 			0,
 			mint_id,
@@ -329,7 +329,7 @@ fn buy_should_work() {
 		set_up_balances(initial_balance);
 
 		let mint_id = mint_item();
-		assert_ok!(NftsRoyalty::set_royalty(
+		assert_ok!(NftsRoyalty::set_item_royalty(
 			RuntimeOrigin::signed(account(1)),
 			0,
 			mint_id,
@@ -413,7 +413,7 @@ fn error_if_buy_item_not_on_sale() {
 		set_up_balances(initial_balance);
 
 		let mint_id = mint_item();
-		assert_ok!(NftsRoyalty::set_royalty(
+		assert_ok!(NftsRoyalty::set_item_royalty(
 			RuntimeOrigin::signed(account(1)),
 			0,
 			mint_id,

@@ -38,20 +38,17 @@ mod tests;
 use frame_system::Config as SystemConfig;
 pub use pallet::*;
 pub use scale_info::Type;
-use sp_runtime::traits::StaticLookup;
 pub use types::*;
 
 /// The log target of this pallet.
 pub const LOG_TARGET: &'static str = "runtime::nfts-royalty";
-
-type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
 	// TODO: Probably a better way to do this than importing from pallet_nfts.
 	use frame_system::pallet_prelude::*;
-	use pallet_nfts::{ItemConfig, ItemSettings};
+	use pallet_nfts::{ItemConfig};
 	use sp_std::fmt::Display;
 
 	use frame_support::{
@@ -268,7 +265,7 @@ pub mod pallet {
 		///
 		#[pallet::call_index(1)]
 		#[pallet::weight(0)]
-		pub fn set_royalty(
+		pub fn set_item_royalty(
 			origin: OriginFor<T>,
 			collection_id: T::NftCollectionId,
 			item_id: T::NftItemId,
