@@ -2752,6 +2752,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-support-storage-fuzzer"
+version = "0.1.0"
+dependencies = [
+ "arbitrary",
+ "frame-support",
+ "honggfuzz",
+ "sp-io",
+]
+
+[[package]]
 name = "frame-support-test"
 version = "3.0.0"
 dependencies = [

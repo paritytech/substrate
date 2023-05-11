@@ -158,6 +158,7 @@ members = [
 	"frame/support/procedural",
 	"frame/support/procedural/tools",
 	"frame/support/procedural/tools/derive",
+	"frame/support/storage-fuzzer",
 	"frame/support/test",
 	"frame/support/test/compile_pass",
 	"frame/support/test/pallet",

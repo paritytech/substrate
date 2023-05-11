@@ -21,13 +21,14 @@
 #![allow(unused_imports)] // FAIL-CI
 
 use crate::{
-	defensive,
+	assert_storage_noop, defensive,
 	storage::{KeyLenOf, StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend},
 	traits::{Defensive, Get, GetDefault, StorageInfo, StorageInstance},
 	CloneNoBound, DebugNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, StorageHasher,
 	StorageNoopGuard, Twox128,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
+use core::iter::Peekable;
 use sp_arithmetic::traits::{SaturatedConversion, Saturating};
 use sp_std::prelude::*;
 
@@ -58,6 +59,22 @@ pub struct StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage> {
 	_phantom: core::marker::PhantomData<(Prefix, Value, Hasher, ValuesPerPage)>,
 }
 
+impl<Prefix, Value, Hasher, ValuesPerPage> crate::storage::StorageAppendix<Value>
+	for StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage>
+where
+	Prefix: StorageInstance,
+	Value: FullCodec,
+	Hasher: StorageHasher,
+	ValuesPerPage: Get<u32>,
+{
+	fn append<EncodeLikeValue>(&mut self, item: EncodeLikeValue)
+	where
+		EncodeLikeValue: EncodeLike<Value>,
+	{
+		self.append_one(item);
+	}
+}
+
 impl<Prefix, Value, Hasher, ValuesPerPage>
 	StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage>
 where
@@ -68,17 +85,21 @@ where
 {
 	pub fn from_storage() -> Option<Self> {
 		let key = Self::key();
-		let raw = sp_io::storage::get(key.as_ref()).unwrap_or_default();
-		Self::decode(&mut &raw[..]).ok()
+
+		if let Some(raw) = sp_io::storage::get(key.as_ref()) {
+			Self::decode(&mut &raw[..]).ok()
+		} else {
+			None
+		}
 	}
 
 	pub fn key() -> Hasher::Output {
 		(Prefix::STORAGE_PREFIX, b"paged_list_state").using_encoded(Hasher::hash)
 	}
 
-	pub fn append<EncodeLikeItem>(&mut self, item: EncodeLikeItem)
+	pub fn append_one<EncodeLikeValue>(&mut self, item: EncodeLikeValue)
 	where
-		EncodeLikeItem: EncodeLike<Value>,
+		EncodeLikeValue: EncodeLike<Value>,
 	{
 		// Note: we use >= here in case someone decreased it in a runtime upgrade.
 		if self.current_value >= ValuesPerPage::get() {
@@ -99,7 +120,11 @@ where
 		self.using_encoded(|encoded| sp_io::storage::set(key.as_ref(), encoded));
 	}
 
-	// only good for testing.
+	pub fn reset(&mut self) {
+		*self = Default::default();
+		Self::clear();
+	}
+
 	pub fn clear() {
 		let key = Self::key();
 		sp_io::storage::clear(key.as_ref());
@@ -219,33 +244,31 @@ where
 		}
 
 		let Some(mut page) = Page::from_storage::<Prefix, Hasher>(page.index.saturating_add(1)) else {
+			self.page = None;
 			if self.drain {
-				// All is gone - back to zero.
-				self.meta = StoragePagedListMeta::default();
-				self.meta.store();
+				self.meta.reset();
 			}
-			// No more pages, this is fine.
 			return None;
 		};
 
 		if let Some(val) = page.next() {
+			self.page = Some(page);
 			if self.drain {
 				self.meta.first_value.saturating_inc();
 				self.meta.store();
 			}
-			self.page = Some(page);
 			return Some(val)
 		}
 
 		defensive!("StoragePagedListIterator: empty pages do not exist: storage corrupted");
-		self.meta = StoragePagedListMeta::default();
-		self.meta.store();
+		// Put the storage back into a consistent state.
+		self.meta.reset();
 		self.page = None;
 		None
 	}
 }
 
-impl<Prefix, Hasher, Value, ValuesPerPage, MaxPages> crate::storage::IterableStorageList<Value>
+impl<Prefix, Hasher, Value, ValuesPerPage, MaxPages> crate::storage::StoragePagedList<Value>
 	for StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
 where
 	Prefix: StorageInstance,
@@ -255,6 +278,7 @@ where
 	MaxPages: Get<Option<u32>>,
 {
 	type Iterator = StoragePagedListIterator<Prefix, Value, Hasher, ValuesPerPage>;
+	type Appendix = StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage>;
 
 	fn iter() -> Self::Iterator {
 		StoragePagedListIterator::from_meta(Self::read_meta(), false)
@@ -262,6 +286,31 @@ where
 
 	fn drain() -> Self::Iterator {
 		StoragePagedListIterator::from_meta(Self::read_meta(), true)
+	}
+
+	fn appendix() -> Self::Appendix {
+		Self::appendix()
+	}
+}
+
+#[cfg(feature = "std")]
+impl<Prefix, Hasher, Value, ValuesPerPage, MaxPages> crate::storage::TestingStoragePagedList<Value>
+	for StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
+where
+	Prefix: StorageInstance,
+	Value: FullCodec + Clone,
+	Hasher: StorageHasher,
+	ValuesPerPage: Get<u32>,
+	MaxPages: Get<Option<u32>>,
+{
+	type Metadata = StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage>;
+
+	fn read_meta() -> Option<Self::Metadata> {
+		Self::Metadata::from_storage()
+	}
+
+	fn clear_meta() {
+		Self::Metadata::clear()
 	}
 }
 
@@ -285,25 +334,39 @@ where
 	pub fn appendix() -> StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage> {
 		Self::read_meta()
 	}
+
+	// convenience stuff for tests
+	#[cfg(feature = "std")]
+	pub fn as_vec() -> Vec<Value> {
+		<Self as crate::storage::StoragePagedList<_>>::iter().collect()
+	}
+
+	// convenience stuff for tests
+	#[cfg(feature = "std")]
+	pub fn drain_as_vec() -> Vec<Value> {
+		<Self as crate::storage::StoragePagedList<_>>::drain().collect()
+	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::{
+/// Prelude for doc-tests.
+#[cfg(feature = "std")]
+#[allow(dead_code)]
+pub(crate) mod test_predlude {
+	pub use super::*;
+	pub use crate::{
 		hash::*,
 		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
 		parameter_types,
-		storage::{types::ValueQuery, IterableStorageList},
+		storage::{types::ValueQuery, StoragePagedList as _},
 	};
-	use sp_io::{hashing::twox_128, TestExternalities};
+	pub use sp_io::{hashing::twox_128, TestExternalities};
 
 	parameter_types! {
 		pub const ValuesPerPage: u32 = 5;
 		pub const MaxPages: Option<u32> = Some(20);
 	}
 
-	struct Prefix;
+	pub struct Prefix;
 	impl StorageInstance for Prefix {
 		fn pallet_prefix() -> &'static str {
 			"test"
@@ -311,21 +374,18 @@ mod tests {
 		const STORAGE_PREFIX: &'static str = "foo";
 	}
 
-	type List = StoragePagedList<Prefix, Blake2_128Concat, u32, ValuesPerPage, MaxPages>;
+	pub type List = StoragePagedList<Prefix, Blake2_128Concat, u32, ValuesPerPage, MaxPages>;
+}
+
+#[cfg(test)]
+mod tests {
+	use super::test_predlude::*;
 
 	#[test]
 	fn append_works() {
 		TestExternalities::default().execute_with(|| {
-			let mut append_iter = List::appendix();
-			for i in 0..1000 {
-				append_iter.append(i);
-			}
-
-			let vals = List::iter().collect::<Vec<_>>();
-			assert_eq!(vals, (0..1000).collect::<Vec<_>>());
-
-			let meta = List::read_meta();
-			assert_eq!(meta.first_page, 0);
+			List::append_many(0..1000);
+			assert_eq!(List::as_vec(), (0..1000).collect::<Vec<_>>());
 		});
 	}
 
@@ -334,19 +394,14 @@ mod tests {
 	fn simple_drain_works() {
 		TestExternalities::default().execute_with(|| {
 			let _g = StorageNoopGuard::default(); // All in all a No-Op
-			let mut append_iter = List::appendix();
-			for i in 0..1000 {
-				append_iter.append(i);
-			}
+			List::append_many(0..1000);
 
-			let vals = List::drain().collect::<Vec<_>>();
-			assert_eq!(vals, (0..1000).collect::<Vec<_>>());
+			assert_eq!(List::drain_as_vec(), (0..1000).collect::<Vec<_>>());
 
 			assert_eq!(List::read_meta(), Default::default());
 
 			// all gone
-			let vals = List::iter().collect::<Vec<_>>();
-			assert_eq!(vals, Vec::<u32>::new());
+			assert_eq!(List::as_vec(), Vec::<u32>::new());
 			// Need to delete the metadata manually.
 			StoragePagedListMeta::<Prefix, u32, Blake2_128Concat, ValuesPerPage>::clear();
 		});
@@ -356,10 +411,7 @@ mod tests {
 	#[test]
 	fn partial_drain_works() {
 		TestExternalities::default().execute_with(|| {
-			let mut append_iter = List::appendix();
-			for i in 0..100 {
-				append_iter.append(i);
-			}
+			List::append_many(0..100);
 
 			let vals = List::drain().take(50).collect::<Vec<_>>();
 			assert_eq!(vals, (0..50).collect::<Vec<_>>());
@@ -369,8 +421,7 @@ mod tests {
 			assert_eq!((meta.first_page, meta.first_value), (9, 5));
 
 			// 50 gone, 50 to go
-			let vals = List::iter().collect::<Vec<_>>();
-			assert_eq!(vals, (50..100).collect::<Vec<_>>());
+			assert_eq!(List::as_vec(), (50..100).collect::<Vec<_>>());
 		});
 	}
 
@@ -381,17 +432,28 @@ mod tests {
 
 		TestExternalities::default().execute_with(|| {
 			for r in 1..=100 {
-				log::warn!("round {}", r);
-				let mut appendix = List::appendix();
-				(0..12).for_each(|i| appendix.append(i));
-				(0..12).for_each(|i| appendix.append(i));
+				List::append_many(0..12);
+				List::append_many(0..12);
 
 				let dropped = List::drain().take(12).collect::<Vec<_>>();
 				assert_eq!(dropped, (0..12).collect::<Vec<_>>());
 
-				let all = List::iter().collect::<Vec<_>>();
-				assert_eq!(all, (0..12).cycle().take(r * 12).collect::<Vec<_>>());
+				assert_eq!(List::as_vec(), (0..12).cycle().take(r * 12).collect::<Vec<_>>());
 			}
+		});
+	}
+
+	#[test]
+	fn peekable_drain_also_deletes() {
+		sp_tracing::try_init_simple();
+
+		TestExternalities::default().execute_with(|| {
+			List::append_many(0..10);
+
+			let mut iter = List::drain().peekable();
+			assert_eq!(iter.peek(), Some(&0));
+			// `peek` does remove one element...
+			assert_eq!(List::iter().count(), 9);
 		});
 	}
 }

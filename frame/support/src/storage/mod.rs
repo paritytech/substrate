@@ -161,18 +161,70 @@ pub trait StorageValue<T: FullCodec> {
 }
 
 pub trait StoragePagedList<V: FullCodec> {
-	fn append<Item, EncodeLikeItem>(item: EncodeLikeItem)
-	where
-		Item: Encode,
-		EncodeLikeItem: EncodeLike<Item>;
-}
-
-pub trait IterableStorageList<V: FullCodec> {
 	type Iterator: Iterator<Item = V>;
+	type Appendix: StorageAppendix<V>;
 
+	/// List all elements in append order.
 	fn iter() -> Self::Iterator;
 
+	/// Drain the elements.
+	///
+	/// Note that this drains all inspected values. For example `take_while(|_| false)` will drain
+	/// the first element. This also applies to `peek()`.
 	fn drain() -> Self::Iterator;
+
+	/// A fast append iterator.
+	fn appendix() -> Self::Appendix;
+
+	/// Append a single element.
+	///
+	/// Should not be called repeatedly; use `append_many` instead.
+	fn append_one<EncodeLikeValue>(item: EncodeLikeValue)
+	where
+		EncodeLikeValue: EncodeLike<V>,
+	{
+		Self::append_many(core::iter::once(item));
+	}
+
+	/// Append many elements.
+	///
+	/// Should not be called repeatedly; use `appendix` instead.
+	fn append_many<EncodeLikeValue, I>(items: I)
+	where
+		EncodeLikeValue: EncodeLike<V>,
+		I: IntoIterator<Item = EncodeLikeValue>,
+	{
+		let mut ap = Self::appendix();
+		ap.append_many(items);
+	}
+}
+
+#[cfg(feature = "std")]
+pub trait TestingStoragePagedList<V: FullCodec> {
+	type Metadata;
+
+	fn read_meta() -> Option<Self::Metadata>;
+	fn clear_meta();
+}
+
+/// A fast append iterator.
+///
+/// Makes sense in situations where appending does not have constant time complexity.
+pub trait StorageAppendix<V: FullCodec> {
+	fn append<EncodeLikeValue>(&mut self, item: EncodeLikeValue)
+	where
+		EncodeLikeValue: EncodeLike<V>;
+
+	// Note: this has a default impl, as an `Appendix` is already assumed to be fast for appending.
+	fn append_many<EncodeLikeValue, I>(&mut self, items: I)
+	where
+		EncodeLikeValue: EncodeLike<V>,
+		I: IntoIterator<Item = EncodeLikeValue>,
+	{
+		for item in items.into_iter() {
+			self.append(item);
+		}
+	}
 }
 
 /// A strongly-typed map in storage.
