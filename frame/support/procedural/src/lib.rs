@@ -296,6 +296,8 @@ fn counter_prefix(prefix: &str) -> String {
 /// }
 /// ```
 #[proc_macro]
+#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead.
+	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::decl_storage_impl(input)
 }
@@ -928,11 +930,6 @@ pub fn generate_store(_: TokenStream, _: TokenStream) -> TokenStream {
 /// and value types must be bound by `MaxEncodedLen`. Individual storages can opt-out from this
 /// constraint by using [`#[pallet::unbounded]`](`macro@unbounded`) (see
 /// [`#[pallet::storage]`](`macro@storage`) for more info).
-#[proc_macro_attribute]
-pub fn generate_storage_info(_: TokenStream, _: TokenStream) -> TokenStream {
-	pallet_macro_stub()
-}
-
 #[proc_macro_attribute]
 pub fn generate_storage_info(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()

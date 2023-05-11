@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::helper;
+use super::{helper, InheritedCallWeightAttr};
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 use std::collections::HashMap;
@@ -46,6 +46,23 @@ pub struct CallDef {
 	pub attr_span: proc_macro2::Span,
 	/// Docs, specified on the impl Block.
 	pub docs: Vec<syn::Expr>,
+	/// The optional `weight` attribute on the `pallet::call`.
+	pub inherited_call_weight: Option<InheritedCallWeightAttr>,
+}
+
+/// The weight of a call.
+#[derive(Clone)]
+pub enum CallWeightDef {
+	/// Explicitly set on the call itself with `#[pallet::weight(…)]`. This value is used.
+	Immediate(syn::Expr),
+
+	/// The default value that should be set for dev-mode pallets. Usually zero.
+	DevModeDefault,
+
+	/// Inherits whatever value is configured on the pallet level.
+	///
+	/// The concrete value is not known at this point.
+	Inherited,
 }
 
 /// Definition of dispatchable typically: `#[weight...] fn foo(origin .., param1: ...) -> ..`
@@ -55,8 +72,8 @@ pub struct CallVariantDef {
 	pub name: syn::Ident,
 	/// Information on args: `(is_compact, name, type)`
 	pub args: Vec<(bool, syn::Ident, Box<syn::Type>)>,
-	/// Weight formula.
-	pub weight: syn::Expr,
+	/// Weight for the call.
+	pub weight: CallWeightDef,
 	/// Call index of the dispatchable.
 	pub call_index: u8,
 	/// Whether an explicit call index was specified.
@@ -151,6 +168,7 @@ impl CallDef {
 		index: usize,
 		item: &mut syn::Item,
 		dev_mode: bool,
+		inherited_call_weight: Option<InheritedCallWeightAttr>,
 	) -> syn::Result<Self> {
 		let item_impl = if let syn::Item::Impl(item) = item {
 			item
@@ -228,17 +246,23 @@ impl CallDef {
 					weight_attrs.push(FunctionAttr::Weight(empty_weight));
 				}
 
-				if weight_attrs.len() != 1 {
-					let msg = if weight_attrs.is_empty() {
-						"Invalid pallet::call, requires weight attribute i.e. `#[pallet::weight($expr)]`"
-					} else {
-						"Invalid pallet::call, too many weight attributes given"
-					};
-					return Err(syn::Error::new(method.sig.span(), msg))
-				}
-				let weight = match weight_attrs.pop().unwrap() {
-					FunctionAttr::Weight(w) => w,
-					_ => unreachable!("checked during creation of the let binding"),
+				let weight = match weight_attrs.len() {
+					0 if inherited_call_weight.is_some() => CallWeightDef::Inherited,
+					0 if dev_mode => CallWeightDef::DevModeDefault,
+					0 => return Err(syn::Error::new(
+						method.sig.span(),
+						"A pallet::call requires either a concrete `#[pallet::weight($expr)]` or an 
+						inherited weight from the `#[pallet:call(weight($type))]` attribute, but 
+						none were given.",
+					)),
+					1 => match weight_attrs.pop().unwrap() {
+						FunctionAttr::Weight(w) => CallWeightDef::Immediate(w),
+						_ => unreachable!("checked during creation of the let binding"),
+					},
+					_ => {
+						let msg = "Invalid pallet::call, too many weight attributes given";
+						return Err(syn::Error::new(method.sig.span(), msg))
+					},
 				};
 
 				if call_idx_attrs.len() > 1 {
@@ -321,6 +345,7 @@ impl CallDef {
 			methods,
 			where_clause: item_impl.generics.where_clause.clone(),
 			docs: get_doc_literals(&item_impl.attrs),
+			inherited_call_weight,
 		})
 	}
 }
