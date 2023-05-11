@@ -216,7 +216,6 @@ test-linux-stable:
     - rusty-cachier snapshot create
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     # tests are partitioned by nextest and executed in parallel on $CI_NODE_TOTAL runners
-    # node-cli is excluded until https://github.com/paritytech/substrate/issues/11321 fixed
     - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
     - time cargo nextest run --workspace
       --locked
@@ -224,7 +223,6 @@ test-linux-stable:
       --verbose
       --features runtime-benchmarks
       --manifest-path ./bin/node/cli/Cargo.toml
-      --exclude node-cli
       --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
     # we need to update cache only from one job
     - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi

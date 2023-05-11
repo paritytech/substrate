@@ -1,11 +1,3 @@
-error[E0599]: no variant or associated item named `new_call_variant_thing` found for enum `frame_support_test::Call` in the current scope
- --> tests/benchmark_ui/invalid_origin.rs:6:1
-  |
-6 | #[benchmarks]
-  | ^^^^^^^^^^^^^ variant or associated item not found in `Call<T>`
-  |
-  = note: this error originates in the attribute macro `benchmarks` (in Nightly builds, run with -Z macro-backtrace for more info)
-
 error[E0277]: the trait bound `<T as frame_support_test::Config>::RuntimeOrigin: From<{integer}>` is not satisfied
  --> tests/benchmark_ui/invalid_origin.rs:6:1
   |
