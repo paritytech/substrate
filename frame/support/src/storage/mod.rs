@@ -199,12 +199,27 @@ pub trait StoragePagedList<V: FullCodec> {
 	}
 }
 
+/// Convenience trait for testing.
 #[cfg(feature = "std")]
-pub trait TestingStoragePagedList<V: FullCodec> {
+pub trait TestingStoragePagedList<V: FullCodec>: StoragePagedList<V> {
+	/// Expose the metadata of the list. Normally this is inaccessible.
 	type Metadata;
 
+	/// Read the metadata of the list from storage.
 	fn read_meta() -> Option<Self::Metadata>;
+
+	/// Clear the metadata of the list from storage.
 	fn clear_meta();
+
+	/// Return the elements of the list.
+	fn as_vec() -> Vec<V> {
+		<Self as crate::storage::StoragePagedList<_>>::iter().collect()
+	}
+
+	/// Remove and return all elements of the list.
+	fn as_drained_vec() -> Vec<V> {
+		<Self as crate::storage::StoragePagedList<_>>::drain().collect()
+	}
 }
 
 /// A fast append iterator.

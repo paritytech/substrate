@@ -15,48 +15,58 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Storage map type. Implements StorageMap, StorageIterableMap, StoragePrefixedMap traits and their
-//! methods directly.
-
-#![allow(unused_imports)] // FAIL-CI
+// links are better than no links - even when they refer to private stuff.
+#![allow(rustdoc::private_intra_doc_links)]
 
 use crate::{
-	assert_storage_noop, defensive,
-	storage::{KeyLenOf, StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend},
-	traits::{Defensive, Get, GetDefault, StorageInfo, StorageInstance},
+	defensive,
+	traits::{Get, GetDefault, StorageInstance},
 	CloneNoBound, DebugNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, StorageHasher,
-	StorageNoopGuard, Twox128,
 };
-use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
-use core::iter::Peekable;
-use sp_arithmetic::traits::{SaturatedConversion, Saturating};
+use codec::{Decode, Encode, EncodeLike, FullCodec};
+use core::marker::PhantomData;
+use sp_arithmetic::traits::Saturating;
 use sp_std::prelude::*;
 
 pub type PageIndex = u32;
 pub type ValueIndex = u32;
 
-/// A paginated storage list that packs multiple elements per page.
+/// A paginated list that encodes multiple elements per page.
 ///
-/// The map is lined by a storage lookup of `(prefix, page_index)`. See [`StoragePagedListMeta`].
-///
-/// Supported APIs are iteration and appending.
+/// The pages are indexed by a storage lookup of `(prefix, page_index)` done by
+/// `Page::from_storage`. The state is managed by [`StoragePagedListMeta`].
 pub struct StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages = GetDefault> {
-	_phantom: core::marker::PhantomData<(Prefix, Hasher, Value, ValuesPerPage, MaxPages)>,
+	_phantom: PhantomData<(Prefix, Hasher, Value, ValuesPerPage, MaxPages)>,
 }
 
-/// State info for book-keeping. Can be used as append-only iterator.
+/// The state of a [`StoragePagedList`].
+///
+/// This struct doubles as [`crate::storage::StoragePagedList::Appendix`].
 #[derive(
 	Encode, Decode, CloneNoBound, PartialEqNoBound, EqNoBound, DebugNoBound, DefaultNoBound,
 )]
 // todo ignore scale bounds
 pub struct StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage> {
-	first_page: PageIndex,   // can be >0 when pages were delete.
-	first_value: ValueIndex, // inside `first_page`
+	/// The first page that contains a value.
+	///
+	/// Can be >0 when pages were deleted.
+	first_page: PageIndex,
+	/// The first value inside `first_page` that contains a value.
+	///
+	/// Can be >0 when values were deleted.
+	first_value: ValueIndex,
 
-	current_page: PageIndex,   // next one is free, always >= first_page
-	current_value: ValueIndex, // inside `current_page`
+	/// The last page that could contain data.
+	///
+	/// Iteration starts at this page index.
+	last_page: PageIndex,
+	/// The last value inside `last_page` that could contain a value.
+	///
+	/// Iteration starts at this index. If the page does not hold a value at this index, then the
+	/// whole list is empty. The only case where this can happen is when both are `0`.
+	last_value: ValueIndex,
 
-	_phantom: core::marker::PhantomData<(Prefix, Value, Hasher, ValuesPerPage)>,
+	_phantom: PhantomData<(Prefix, Value, Hasher, ValuesPerPage)>,
 }
 
 impl<Prefix, Value, Hasher, ValuesPerPage> crate::storage::StorageAppendix<Value>
@@ -102,13 +112,13 @@ where
 		EncodeLikeValue: EncodeLike<Value>,
 	{
 		// Note: we use >= here in case someone decreased it in a runtime upgrade.
-		if self.current_value >= ValuesPerPage::get() {
-			self.current_value = 0;
-			self.current_page.saturating_inc();
+		if self.last_value >= ValuesPerPage::get() {
+			self.last_value = 0;
+			self.last_page.saturating_inc();
 		}
-		let key = page_key::<Prefix, Hasher>(self.current_page);
-		self.current_value.saturating_inc();
-		log::info!("Appending to page/val {}/{}", self.current_page, self.current_value);
+		let key = page_key::<Prefix, Hasher>(self.last_page);
+		self.last_value.saturating_inc();
+		log::info!("Appending to page/val {}/{}", self.last_page, self.last_value);
 		// Pages are `Vec` and therefore appendable.
 		sp_io::storage::append(key.as_ref(), item.encode());
 		self.store();
@@ -131,40 +141,44 @@ where
 	}
 }
 
-// invariant: empty pages do not exist
 pub struct Page<V> {
-	current: PageIndex, // current value for iteration
+	next: ValueIndex,
 	index: PageIndex,
+	// invariant: this is **never** empty
 	values: sp_std::vec::Vec<V>,
 }
 
 impl<V: FullCodec> Page<V> {
-	fn from_storage<Prefix: StorageInstance, Hasher: StorageHasher>(
+	/// Decode a page with `index` from storage.
+	pub fn from_storage<Prefix: StorageInstance, Hasher: StorageHasher>(
 		index: PageIndex,
 	) -> Option<Self> {
 		let key = page_key::<Prefix, Hasher>(index);
 		let values = sp_io::storage::get(key.as_ref())
-			.map(|raw| sp_std::vec::Vec::<V>::decode(&mut &raw[..]).ok())
-			.flatten();
+			.and_then(|raw| sp_std::vec::Vec::<V>::decode(&mut &raw[..]).ok());
 		let values = values.unwrap_or_default();
 		if values.is_empty() {
 			None
 		} else {
-			Some(Self { current: 0, index, values })
+			Some(Self { next: 0, index, values })
 		}
 	}
 
+	/// Delete this page from storage.
 	pub fn delete<Prefix: StorageInstance, Hasher: StorageHasher>(&self) {
 		delete_page::<Prefix, Hasher>(self.index);
 	}
 }
 
+/// Delete a page with `index` from storage.
+// Does not live under `Page` since it does not require the `Value` generic.
 pub(crate) fn delete_page<Prefix: StorageInstance, Hasher: StorageHasher>(index: PageIndex) {
 	let key = page_key::<Prefix, Hasher>(index);
 	sp_io::storage::clear(key.as_ref());
 }
 
-// Note: does not live under `Page` since it does not require `Value`.
+/// Storage key of a page with `index`.
+// Does not live under `Page` since it does not require the `Value` generic.
 pub(crate) fn page_key<Prefix: StorageInstance, Hasher: StorageHasher>(
 	index: PageIndex,
 ) -> Hasher::Output {
@@ -175,12 +189,15 @@ impl<V: Clone> Iterator for Page<V> {
 	type Item = V;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let val = self.values.get(self.current as usize).cloned();
-		self.current.saturating_inc();
+		let val = self.values.get(self.next as usize).cloned();
+		self.next.saturating_inc();
 		val
 	}
 }
 
+/// Iterates over values of a [`StoragePagedList`].
+///
+/// Can optionally drain the iterated values.
 pub struct StoragePagedListIterator<Prefix, Value, Hasher, ValuesPerPage> {
 	// Design: we put the Page into the iterator to have fewer storage look-ups. Yes, these
 	// look-ups would be cached anyway, but bugging the overlay on each `.next` call still seems
@@ -200,6 +217,7 @@ where
 	Hasher: StorageHasher,
 	ValuesPerPage: Get<u32>,
 {
+	/// Read self from the storage.
 	pub fn from_meta(
 		meta: StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage>,
 		drain: bool,
@@ -207,7 +225,7 @@ where
 		let mut page = Page::<Value>::from_storage::<Prefix, Hasher>(meta.first_page);
 
 		if let Some(ref mut page) = page {
-			page.current = meta.first_value;
+			page.next = meta.first_value;
 		}
 
 		Self { page, drain, meta }
@@ -322,7 +340,7 @@ where
 	ValuesPerPage: Get<u32>,
 	MaxPages: Get<Option<u32>>,
 {
-	pub(crate) fn read_meta() -> StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage> {
+	fn read_meta() -> StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage> {
 		// Use default here to not require a setup migration.
 		StoragePagedListMeta::from_storage().unwrap_or_default()
 	}
@@ -330,33 +348,22 @@ where
 	/// Provides a fast append iterator.
 	///
 	/// The list should not be modified while appending. Also don't call it recursively.
-	pub fn appendix() -> StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage> {
+	fn appendix() -> StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage> {
 		Self::read_meta()
-	}
-
-	// convenience stuff for tests
-	#[cfg(feature = "std")]
-	pub fn as_vec() -> Vec<Value> {
-		<Self as crate::storage::StoragePagedList<_>>::iter().collect()
-	}
-
-	// convenience stuff for tests
-	#[cfg(feature = "std")]
-	pub fn drain_as_vec() -> Vec<Value> {
-		<Self as crate::storage::StoragePagedList<_>>::drain().collect()
 	}
 }
 
 /// Prelude for doc-tests.
 #[cfg(feature = "std")]
 #[allow(dead_code)]
-pub(crate) mod test_predlude {
+pub(crate) mod mock {
 	pub use super::*;
 	pub use crate::{
 		hash::*,
 		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
 		parameter_types,
-		storage::{types::ValueQuery, StoragePagedList as _},
+		storage::{types::ValueQuery, StoragePagedList as _, TestingStoragePagedList},
+		StorageNoopGuard,
 	};
 	pub use sp_io::{hashing::twox_128, TestExternalities};
 
@@ -378,7 +385,7 @@ pub(crate) mod test_predlude {
 
 #[cfg(test)]
 mod tests {
-	use super::test_predlude::*;
+	use super::mock::*;
 
 	#[test]
 	fn append_works() {
@@ -395,7 +402,7 @@ mod tests {
 			let _g = StorageNoopGuard::default(); // All in all a No-Op
 			List::append_many(0..1000);
 
-			assert_eq!(List::drain_as_vec(), (0..1000).collect::<Vec<_>>());
+			assert_eq!(List::as_drained_vec(), (0..1000).collect::<Vec<_>>());
 
 			assert_eq!(List::read_meta(), Default::default());
 
