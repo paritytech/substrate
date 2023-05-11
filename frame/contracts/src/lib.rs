@@ -740,7 +740,6 @@ pub mod pallet {
 			ensure_signed(origin)?;
 
 			let (result, weight) = Migration::<T>::migrate(weight_limit);
-			let weight = weight.saturating_add(T::WeightInfo::migrate());
 
 			use migration::MigrateResult::*;
 			match result {
