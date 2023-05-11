@@ -103,7 +103,7 @@ mod mock {
 	pub use frame_support::{
 		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
 		parameter_types,
-		storage::{types::StoragePagedList, StoragePagedList as _, TestingStoragePagedList as _},
+		storage::{types::StoragePagedList, StorageList as _, TestingStoragePagedList as _},
 		traits::StorageInstance,
 		Blake2_128Concat, StorageNoopGuard,
 	};

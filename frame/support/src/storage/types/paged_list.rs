@@ -19,6 +19,9 @@
 
 // links are better than no links - even when they refer to private stuff.
 #![allow(rustdoc::private_intra_doc_links)]
+#![deny(rustdoc::broken_intra_doc_links)]
+#![deny(missing_docs)]
+#![deny(unsafe_code)]
 
 use crate::{
 	defensive,
@@ -51,7 +54,7 @@ pub type ValueIndex = u32;
 /// Each [`Page`] holds at most `ValuesPerPage` values in its `values` vector. The last page is the
 /// only one that could have less than `ValuesPerPage` values.  
 /// **Iteration** happens by starting
-/// at[`StoragePagedListMeta::first_page`]/[`StoragePagedListMeta::first_value`] and incrementing
+/// at [`first_page`][StoragePagedListMeta::first_page]/[`first_value`][StoragePagedListMeta::first_value] and incrementing
 /// these indices as long as there are elements in the page and there are pages in storage. All
 /// elements of a page are loaded once a page is read from storage. Iteration then happens on the
 /// cached elements. This reduces the storage `read` calls on the overlay.  
@@ -134,15 +137,13 @@ where
 	pub fn from_storage() -> Option<Self> {
 		let key = Self::key();
 
-		if let Some(raw) = sp_io::storage::get(key.as_ref()) {
+		sp_io::storage::get(key.as_ref()).and_then(|raw| {
 			Self::decode(&mut &raw[..]).ok()
-		} else {
-			None
-		}
+		})
 	}
 
 	pub fn key() -> Hasher::Output {
-		(Prefix::STORAGE_PREFIX, b"paged_list_state").using_encoded(Hasher::hash)
+		(Prefix::STORAGE_PREFIX, b"meta").using_encoded(Hasher::hash)
 	}
 
 	pub fn append_one<EncodeLikeValue>(&mut self, item: EncodeLikeValue)
@@ -220,7 +221,7 @@ pub(crate) fn delete_page<Prefix: StorageInstance, Hasher: StorageHasher>(index:
 pub(crate) fn page_key<Prefix: StorageInstance, Hasher: StorageHasher>(
 	index: PageIndex,
 ) -> Hasher::Output {
-	(Prefix::STORAGE_PREFIX, index).using_encoded(Hasher::hash)
+	(Prefix::STORAGE_PREFIX, b"page", index).using_encoded(Hasher::hash)
 }
 
 impl<V: Clone> Iterator for Page<V> {
@@ -267,6 +268,10 @@ where
 		}
 
 		Self { page, drain, meta }
+	}
+
+	fn next_in_page() -> Option<Value> {
+		todo!()
 	}
 }
 

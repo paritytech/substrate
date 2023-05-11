@@ -206,9 +206,10 @@ pub trait StorageList<V: FullCodec> {
 	}
 }
 
-/// Convenience trait for testing.
+/// Convenience trait for testing internal details of [`types::StoragePagedList`].
+// FAIL-CI I am not sure if this is such a good idea, but dont see another way to allow external white-box testing the metadata.
 #[cfg(feature = "std")]
-pub trait TestingStoragePagedList<V: FullCodec> {
+pub trait TestingStoragePagedList<V: FullCodec>: StorageList<V> {
 	/// Expose the metadata of the list. It is otherwise inaccessible.
 	type Metadata;
 
@@ -220,12 +221,12 @@ pub trait TestingStoragePagedList<V: FullCodec> {
 
 	/// Return the elements of the list.
 	fn as_vec() -> Vec<V> {
-		<Self as crate::storage::StoragePagedList<_>>::iter().collect()
+		<Self as crate::storage::StorageList<_>>::iter().collect()
 	}
 
 	/// Remove and return all elements of the list.
 	fn as_drained_vec() -> Vec<V> {
-		<Self as crate::storage::StoragePagedList<_>>::drain().collect()
+		<Self as crate::storage::StorageList<_>>::drain().collect()
 	}
 }
 
