@@ -788,8 +788,11 @@ pub mod pallet {
 			code_hash: CodeHash<T>,
 		},
 
-		/// Some funds has been held as storage deposit.
+		/// Some funds have been held as storage deposit.
 		StorageDepositHeld { who: T::AccountId, amount: BalanceOf<T> },
+
+		/// Some funds have been released from storage deposit.
+		StorageDepositReleased { who: T::AccountId, amount: BalanceOf<T> },
 	}
 
 	#[pallet::error]

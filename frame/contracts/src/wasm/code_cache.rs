@@ -169,6 +169,16 @@ pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> D
 				owner_info.deposit,
 				BestEffort,
 			)?;
+			<Pallet<T>>::deposit_event(
+				vec![
+					T::Hashing::hash_of(&owner_info.owner),
+					T::Hashing::hash_of(&owner_info.deposit),
+				],
+				Event::StorageDepositReleased {
+					who: owner_info.owner.clone(),
+					amount: owner_info.deposit,
+				},
+			);
 			*existing = None;
 			<PristineCode<T>>::remove(&code_hash);
 			<CodeStorage<T>>::remove(&code_hash);

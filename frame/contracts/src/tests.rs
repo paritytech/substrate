@@ -3316,6 +3316,8 @@ fn upload_code_works() {
 		// Drop previous events
 		initialize_block(2);
 
+		let deposit_amount = 173;
+
 		assert!(!<CodeStorage<Test>>::contains_key(code_hash));
 		assert_ok!(Contracts::upload_code(
 			RuntimeOrigin::signed(ALICE),
@@ -3330,11 +3332,11 @@ fn upload_code_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Contracts(pallet_contracts::Event::StorageDepositHeld {
 						who: ALICE,
-						amount: 173,
+						amount: deposit_amount,
 					}),
-					topics: vec![],
+					topics: vec![hash(&ALICE), hash(&deposit_amount)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3404,6 +3406,8 @@ fn remove_code_works() {
 		// Drop previous events
 		initialize_block(2);
 
+		let deposit_amount = 173;
+
 		assert_ok!(Contracts::upload_code(
 			RuntimeOrigin::signed(ALICE),
 			wasm,
@@ -3420,11 +3424,11 @@ fn remove_code_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Contracts(pallet_contracts::Event::StorageDepositHeld {
 						who: ALICE,
-						amount: 173,
+						amount: deposit_amount,
 					}),
-					topics: vec![],
+					topics: vec![hash(&ALICE), hash(&deposit_amount)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3433,11 +3437,13 @@ fn remove_code_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Unreserved {
-						who: ALICE,
-						amount: 173,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositReleased {
+							who: ALICE,
+							amount: deposit_amount,
+						}
+					),
+					topics: vec![hash(&ALICE), hash(&deposit_amount)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3459,6 +3465,8 @@ fn remove_code_wrong_origin() {
 		// Drop previous events
 		initialize_block(2);
 
+		let deposit_amount = 173;
+
 		assert_ok!(Contracts::upload_code(
 			RuntimeOrigin::signed(ALICE),
 			wasm,
@@ -3476,11 +3484,11 @@ fn remove_code_wrong_origin() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Contracts(pallet_contracts::Event::StorageDepositHeld {
 						who: ALICE,
-						amount: 173,
+						amount: deposit_amount,
 					}),
-					topics: vec![],
+					topics: vec![hash(&ALICE), hash(&deposit_amount)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3549,6 +3557,8 @@ fn instantiate_with_zero_balance_works() {
 
 		// Drop previous events
 		initialize_block(2);
+
+		let deposit_amount = 173;
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -3627,11 +3637,11 @@ fn instantiate_with_zero_balance_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Contracts(pallet_contracts::Event::StorageDepositHeld {
 						who: ALICE,
-						amount: 173,
+						amount: deposit_amount,
 					}),
-					topics: vec![],
+					topics: vec![hash(&ALICE), hash(&deposit_amount)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3660,6 +3670,8 @@ fn instantiate_with_below_existential_deposit_works() {
 
 		// Drop previous events
 		initialize_block(2);
+
+		let deposit_amount = 173;
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -3747,11 +3759,11 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Contracts(pallet_contracts::Event::StorageDepositHeld {
 						who: ALICE,
-						amount: 173,
+						amount: deposit_amount,
 					}),
-					topics: vec![],
+					topics: vec![hash(&ALICE), hash(&deposit_amount)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
