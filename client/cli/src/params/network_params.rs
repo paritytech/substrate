@@ -221,8 +221,6 @@ impl NetworkParams {
 			default_peers_set_num_full: self.in_peers + self.out_peers,
 			listen_addresses,
 			public_addresses,
-			extra_sets: Vec::new(),
-			request_response_protocols: Vec::new(),
 			node_key,
 			node_name: node_name.to_string(),
 			client_version: client_id.to_string(),
