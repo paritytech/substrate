@@ -143,15 +143,6 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// An NFT with royalty has been successfully minted.
-		Minted {
-			nft_collection: T::NftCollectionId,
-			nft: T::NftItemId,
-			royalty_percentage: Permill,
-			royalty_recipient: T::AccountId,
-		},
-		/// An NFT item was destroyed.
-		Burned { nft_collection: T::NftCollectionId, nft: T::NftItemId },
 		/// The royalty recipient of an NFT item has changed.
 		RecipientChanged {
 			nft_collection: T::NftCollectionId,
@@ -207,33 +198,47 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Mint an item of a particular collection with a royalty.
+		/// Set the royalties associated to an already existing item.
 		///
-		/// The origin must be Signed and the sender must comply with the `mint_settings` rules.
+		/// The origin must be the actual owner of the `item`.
 		///
-		/// - `collection`: The collection of the item to be minted.
-		/// - `item`: An identifier of the new item.
-		/// - `mint_to`: Account into which the item will be minted.
-		/// - `item_settings`: The item's settings.
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item to set the royalty.
+		/// - `royalty_percentage`: Royalty percentage to be set.
+		/// - `royalty_recipient`: Account into which the item royalties will be transfered.
 		///
+		/// Emits `RoyaltySet`.
 		///
-		/// Emits `Minted` event when successful.
 		#[pallet::call_index(0)]
 		#[pallet::weight(0)]
-		pub fn mint(
+		pub fn set_royalty(
 			origin: OriginFor<T>,
 			collection_id: T::NftCollectionId,
 			item_id: T::NftItemId,
-			mint_to: AccountIdLookupOf<T>,
-			item_settings: ItemSettings,
 			royalty_percentage: Permill,
 			royalty_recipient: T::AccountId,
 		) -> DispatchResult {
-			ensure_signed(origin)?;
-			let mint_to = T::Lookup::lookup(mint_to)?;
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 
-			let item_config = ItemConfig { settings: item_settings };
-			T::Nfts::mint_into(&collection_id, &item_id, &mint_to, &item_config, false)?;
+			ensure!(
+				T::Nfts::items(&collection_id).any(|id| id == item_id),
+				Error::<T>::NftDoesNotExist
+			);
+
+			if let Some(check_origin) = maybe_check_origin {
+				ensure!(
+					T::Nfts::owner(&collection_id, &item_id) == Some(check_origin),
+					Error::<T>::NoPermission
+				);
+			}
+
+			// Check whether the item has already a royalty, if so do not allow to set it again
+			ensure!(
+				<NftWithRoyalty<T>>::get((collection_id, item_id)).is_none(),
+				Error::<T>::RoyaltyAlreadyExists
+			);
 
 			NftWithRoyalty::<T>::insert(
 				(collection_id, item_id),
@@ -243,7 +248,7 @@ pub mod pallet {
 				},
 			);
 
-			Self::deposit_event(Event::Minted {
+			Self::deposit_event(Event::RoyaltySet {
 				nft_collection: collection_id,
 				nft: item_id,
 				royalty_percentage,
@@ -253,36 +258,47 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Destroy a single item and delete the royalties associated to it.
+		/// Set the royalty for an existing collection.
 		///
-		/// The origin must conform to `ForceOrigin` or must be Signed and the signing account must
-		/// be the owner of the `item`.
+		/// The origin must be the actual owner of the `item`.
 		///
-		/// - `collection`: The collection of the item to be burned.
-		/// - `item`: The item to be burned.
+		/// - `collection`: The NFT collection.
+		/// - `royalty_percentage`: Royalty percentage to be set.
+		/// - `royalty_recipient`: Account into which the royalty will be sent to.
 		///
-		/// Emits `Burned`.
+		/// Emits `RoyaltySet`.
 		///
 		#[pallet::call_index(1)]
 		#[pallet::weight(0)]
-		pub fn burn(
+		pub fn set_collection_royalty(
 			origin: OriginFor<T>,
 			collection_id: T::NftCollectionId,
-			item_id: T::NftItemId,
+			royalty_percentage: Permill,
+			royalty_recipient: T::AccountId,
 		) -> DispatchResult {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?
-				.unwrap();
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 
-			<NftWithRoyalty<T>>::take((collection_id, item_id))
-				.ok_or(Error::<T>::NoRoyaltyExists)?;
+			if let Some(check_origin) = maybe_check_origin {
+				todo!("Ensure owner of collection");
+			}
 
-			T::Nfts::burn(&collection_id, &item_id, Some(&maybe_check_origin))?;
+			todo!("Ensure collection exists");
 
-			Self::deposit_event(Event::Burned {
+			// Set a royalty for the entire collection
+			NftCollectionWithRoyalty::<T>::insert(
+				collection_id,
+				RoyaltyDetails::<T::AccountId> {
+					royalty_percentage,
+					royalty_recipient: royalty_recipient.clone(),
+				},
+			);
+
+			Self::deposit_event(Event::RoyaltyForCollectionSet {
 				nft_collection: collection_id,
-				nft: item_id,
+				royalty_percentage,
+				royalty_recipient: royalty_recipient.clone(),
 			});
 
 			Ok(())
@@ -327,112 +343,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set the royalties associated to an already existing item.
-		///
-		/// The origin must be the actual owner of the `item`.
-		///
-		/// - `collection`: The collection of the item.
-		/// - `item`: The item to set the royalty.
-		/// - `royalty_percentage`: Royalty percentage to be set.
-		/// - `royalty_recipient`: Account into which the item royalties will be transfered.
-		///
-		/// Emits `RoyaltySet`.
-		///
-		#[pallet::call_index(3)]
-		#[pallet::weight(0)]
-		pub fn set_royalty(
-			origin: OriginFor<T>,
-			collection_id: T::NftCollectionId,
-			item_id: T::NftItemId,
-			royalty_percentage: Permill,
-			royalty_recipient: T::AccountId,
-		) -> DispatchResult {
-			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
-				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-
-			if let Some(check_origin) = maybe_check_origin {
-				ensure!(
-					T::Nfts::owner(&collection_id, &item_id) == Some(check_origin),
-					Error::<T>::NoPermission
-				);
-			}
-
-			ensure!(
-				T::Nfts::items(&collection_id).any(|id| id == item_id),
-				Error::<T>::NftDoesNotExist
-			);
-
-			// Check whether the item has already a royalty, if so do not allow to set it again
-			ensure!(
-				<NftWithRoyalty<T>>::get((collection_id, item_id)).is_none(),
-				Error::<T>::RoyaltyAlreadyExists
-			);
-
-			NftWithRoyalty::<T>::insert(
-				(collection_id, item_id),
-				RoyaltyDetails::<T::AccountId> {
-					royalty_percentage,
-					royalty_recipient: royalty_recipient.clone(),
-				},
-			);
-
-			Self::deposit_event(Event::RoyaltySet {
-				nft_collection: collection_id,
-				nft: item_id,
-				royalty_percentage,
-				royalty_recipient: royalty_recipient.clone(),
-			});
-
-			Ok(())
-		}
-
-		/// Set the royalty for an existing collection.
-		///
-		/// The origin must be the actual owner of the `item`.
-		///
-		/// - `collection`: The NFT collection.
-		/// - `royalty_percentage`: Royalty percentage to be set.
-		/// - `royalty_recipient`: Account into which the royalty will be sent to.
-		///
-		/// Emits `RoyaltySet`.
-		///
-		#[pallet::call_index(4)]
-		#[pallet::weight(0)]
-		pub fn set_collection_royalty(
-			origin: OriginFor<T>,
-			collection_id: T::NftCollectionId,
-			royalty_percentage: Permill,
-			royalty_recipient: T::AccountId,
-		) -> DispatchResult {
-			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
-				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-
-			if let Some(check_origin) = maybe_check_origin {
-				todo!("Ensure owner of collection");
-			}
-
-			todo!("Ensure collection exists");
-
-			// Set a royalty for the entire collection
-			NftCollectionWithRoyalty::<T>::insert(
-				collection_id,
-				RoyaltyDetails::<T::AccountId> {
-					royalty_percentage,
-					royalty_recipient: royalty_recipient.clone(),
-				},
-			);
-
-			Self::deposit_event(Event::RoyaltyForCollectionSet {
-				nft_collection: collection_id,
-				royalty_percentage,
-				royalty_recipient: royalty_recipient.clone(),
-			});
-
-			Ok(())
-		}
-
 		/// Allows to buy an item if it's up for sale and pays the royalties associated to it.
 		///
 		/// Origin must be Signed and must not be the owner of the `item`.
@@ -443,7 +353,7 @@ pub mod pallet {
 		///
 		/// Emits `RoyaltyPaid`.
 		///
-		#[pallet::call_index(5)]
+		#[pallet::call_index(3)]
 		#[pallet::weight(0)]
 		pub fn buy(
 			origin: OriginFor<T>,
@@ -491,7 +401,7 @@ pub mod pallet {
 		///
 		/// Emits `RoyaltyRecipientsCreated`.
 		///
-		#[pallet::call_index(6)]
+		#[pallet::call_index(4)]
 		#[pallet::weight(0)]
 		pub fn set_collection_royalty_recipients(
 			origin: OriginFor<T>,
