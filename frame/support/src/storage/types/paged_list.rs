@@ -184,12 +184,11 @@ impl<V: Clone> Iterator for Page<V> {
 pub struct StoragePagedListIterator<Prefix, Value, Hasher, ValuesPerPage> {
 	// Design: we put the Page into the iterator to have fewer storage look-ups. Yes, these
 	// look-ups would be cached anyway, but bugging the overlay on each `.next` call still seems
-	// like a poor trade-off than caching it in the iterator directly. Note: if Page is empty then
+	// like a poor trade-off than caching it in the iterator directly. Iterating and modifying is not allowed at the same time anyway, just like with maps. Note: if Page is empty then
 	// the iterator did not find any data upon setup or ran out of pages.
 	page: Option<Page<Value>>,
 	drain: bool,
 	meta: StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage>,
-	_phantom: core::marker::PhantomData<(Prefix, Value, Hasher, ValuesPerPage)>,
 }
 
 impl<Prefix, Value, Hasher, ValuesPerPage>
@@ -225,9 +224,8 @@ where
 	type Item = Value;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let Some(ref mut page) = self.page else {
-			return None;
-		};
+		let page = self.page.as_mut()?;
+
 		if let Some(val) = page.next() {
 			if self.drain {
 				self.meta.first_value.saturating_inc();
