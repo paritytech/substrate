@@ -41,6 +41,7 @@ use frame_support::{
 	traits::{fungible::MutateHold, tokens::Precision::BestEffort, Get},
 	WeakBoundedVec,
 };
+use sp_api::HashT;
 use sp_runtime::{traits::BadOrigin, TokenError};
 use sp_std::vec;
 
@@ -105,6 +106,16 @@ pub fn store<T: Config>(mut module: PrefabWasmModule<T>, instantiated: bool) -> 
 						<Error<T>>::StorageDepositNotEnoughFunds.into(),
 					_ => e,
 				})?;
+				<Pallet<T>>::deposit_event(
+					vec![
+						T::Hashing::hash_of(&new_owner_info.owner),
+						T::Hashing::hash_of(&new_owner_info.deposit),
+					],
+					Event::StorageDepositHeld {
+						who: new_owner_info.owner.clone(),
+						amount: new_owner_info.deposit.clone(),
+					},
+				);
 				new_owner_info.refcount = if instantiated { 1 } else { 0 };
 				<PristineCode<T>>::insert(&code_hash, orig_code);
 				<CodeStorage<T>>::insert(&code_hash, module);
