@@ -29,7 +29,7 @@
 
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
-	config::{MultiaddrWithPeerId, Params, TransportConfig},
+	config::{FullNetworkConfiguration, MultiaddrWithPeerId, Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	event::{DhtEvent, Event},
@@ -147,25 +147,24 @@ where
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(mut params: Params<B>) -> Result<Self, Error> {
+	pub fn new(params: Params<B>) -> Result<Self, Error> {
+		let FullNetworkConfiguration {
+			notification_protocols,
+			request_response_protocols,
+			mut network_config,
+		} = params.network_config;
+
 		// Private and public keys configuration.
-		let local_identity = params.network_config.node_key.clone().into_keypair()?;
+		let local_identity = network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.to_peer_id();
 
-		params
-			.network_config
-			.request_response_protocols
-			.extend(params.request_response_protocol_configs);
-
-		params.network_config.boot_nodes = params
-			.network_config
+		network_config.boot_nodes = network_config
 			.boot_nodes
 			.into_iter()
 			.filter(|boot_node| boot_node.peer_id != local_peer_id)
 			.collect();
-		params.network_config.default_peers_set.reserved_nodes = params
-			.network_config
+		network_config.default_peers_set.reserved_nodes = network_config
 			.default_peers_set
 			.reserved_nodes
 			.into_iter()
@@ -185,36 +184,31 @@ where
 
 		// Ensure the listen addresses are consistent with the transport.
 		ensure_addresses_consistent_with_transport(
-			params.network_config.listen_addresses.iter(),
-			&params.network_config.transport,
+			network_config.listen_addresses.iter(),
+			&network_config.transport,
 		)?;
 		ensure_addresses_consistent_with_transport(
-			params.network_config.boot_nodes.iter().map(|x| &x.multiaddr),
-			&params.network_config.transport,
+			network_config.boot_nodes.iter().map(|x| &x.multiaddr),
+			&network_config.transport,
 		)?;
 		ensure_addresses_consistent_with_transport(
-			params
-				.network_config
-				.default_peers_set
-				.reserved_nodes
-				.iter()
-				.map(|x| &x.multiaddr),
-			&params.network_config.transport,
+			network_config.default_peers_set.reserved_nodes.iter().map(|x| &x.multiaddr),
+			&network_config.transport,
 		)?;
-		for extra_set in &params.network_config.extra_sets {
+		for notification_protocol in &notification_protocols {
 			ensure_addresses_consistent_with_transport(
-				extra_set.set_config.reserved_nodes.iter().map(|x| &x.multiaddr),
-				&params.network_config.transport,
+				notification_protocol.set_config.reserved_nodes.iter().map(|x| &x.multiaddr),
+				&network_config.transport,
 			)?;
 		}
 		ensure_addresses_consistent_with_transport(
-			params.network_config.public_addresses.iter(),
-			&params.network_config.transport,
+			network_config.public_addresses.iter(),
+			&network_config.transport,
 		)?;
 
 		let (to_worker, from_service) = tracing_unbounded("mpsc_network_worker", 100_000);
 
-		if let Some(path) = &params.network_config.net_config_path {
+		if let Some(path) = &network_config.net_config_path {
 			fs::create_dir_all(path)?;
 		}
 
@@ -224,9 +218,58 @@ where
 			local_peer_id.to_base58(),
 		);
 
+		let (transport, bandwidth) = {
+			let config_mem = match network_config.transport {
+				TransportConfig::MemoryOnly => true,
+				TransportConfig::Normal { .. } => false,
+			};
+
+			// The yamux buffer size limit is configured to be equal to the maximum frame size
+			// of all protocols. 10 bytes are added to each limit for the length prefix that
+			// is not included in the upper layer protocols limit but is still present in the
+			// yamux buffer. These 10 bytes correspond to the maximum size required to encode
+			// a variable-length-encoding 64bits number. In other words, we make the
+			// assumption that no notification larger than 2^64 will ever be sent.
+			let yamux_maximum_buffer_size = {
+				let requests_max = request_response_protocols
+					.iter()
+					.map(|cfg| usize::try_from(cfg.max_request_size).unwrap_or(usize::MAX));
+				let responses_max = request_response_protocols
+					.iter()
+					.map(|cfg| usize::try_from(cfg.max_response_size).unwrap_or(usize::MAX));
+				let notifs_max = notification_protocols
+					.iter()
+					.map(|cfg| usize::try_from(cfg.max_notification_size).unwrap_or(usize::MAX));
+
+				// A "default" max is added to cover all the other protocols: ping, identify,
+				// kademlia, block announces, and transactions.
+				let default_max = cmp::max(
+					1024 * 1024,
+					usize::try_from(protocol::BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE)
+						.unwrap_or(usize::MAX),
+				);
+
+				iter::once(default_max)
+					.chain(requests_max)
+					.chain(responses_max)
+					.chain(notifs_max)
+					.max()
+					.expect("iterator known to always yield at least one element; qed")
+					.saturating_add(10)
+			};
+
+			transport::build_transport(
+				local_identity.clone(),
+				config_mem,
+				network_config.yamux_window_size,
+				yamux_maximum_buffer_size,
+			)
+		};
+
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			From::from(&params.role),
-			&params.network_config,
+			&network_config,
+			notification_protocols,
 			params.block_announce_config,
 			params.tx,
 		)?;
@@ -235,7 +278,7 @@ where
 		let mut boot_node_ids = HashSet::new();
 
 		// Process the bootnodes.
-		for bootnode in params.network_config.boot_nodes.iter() {
+		for bootnode in network_config.boot_nodes.iter() {
 			boot_node_ids.insert(bootnode.peer_id);
 			known_addresses.push((bootnode.peer_id, bootnode.multiaddr.clone()));
 		}
@@ -243,9 +286,8 @@ where
 		let boot_node_ids = Arc::new(boot_node_ids);
 
 		// Check for duplicate bootnodes.
-		params.network_config.boot_nodes.iter().try_for_each(|bootnode| {
-			if let Some(other) = params
-				.network_config
+		network_config.boot_nodes.iter().try_for_each(|bootnode| {
+			if let Some(other) = network_config
 				.boot_nodes
 				.iter()
 				.filter(|o| o.multiaddr == bootnode.multiaddr)
@@ -265,29 +307,25 @@ where
 
 		// Build the swarm.
 		let (mut swarm, bandwidth): (Swarm<Behaviour<B>>, _) = {
-			let user_agent = format!(
-				"{} ({})",
-				params.network_config.client_version, params.network_config.node_name
-			);
+			let user_agent =
+				format!("{} ({})", network_config.client_version, network_config.node_name);
 
 			let discovery_config = {
 				let mut config = DiscoveryConfig::new(local_public.clone());
 				config.with_permanent_addresses(known_addresses);
-				config.discovery_limit(
-					u64::from(params.network_config.default_peers_set.out_peers) + 15,
-				);
+				config.discovery_limit(u64::from(network_config.default_peers_set.out_peers) + 15);
 				config.with_kademlia(
 					params.genesis_hash,
 					params.fork_id.as_deref(),
 					&params.protocol_id,
 				);
-				config.with_dht_random_walk(params.network_config.enable_dht_random_walk);
-				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
+				config.with_dht_random_walk(network_config.enable_dht_random_walk);
+				config.allow_non_globals_in_dht(network_config.allow_non_globals_in_dht);
 				config.use_kademlia_disjoint_query_paths(
-					params.network_config.kademlia_disjoint_query_paths,
+					network_config.kademlia_disjoint_query_paths,
 				);
 
-				match params.network_config.transport {
+				match network_config.transport {
 					TransportConfig::MemoryOnly => {
 						config.with_mdns(false);
 						config.allow_private_ip(false);
@@ -305,64 +343,13 @@ where
 				config
 			};
 
-			let (transport, bandwidth) = {
-				let config_mem = match params.network_config.transport {
-					TransportConfig::MemoryOnly => true,
-					TransportConfig::Normal { .. } => false,
-				};
-
-				// The yamux buffer size limit is configured to be equal to the maximum frame size
-				// of all protocols. 10 bytes are added to each limit for the length prefix that
-				// is not included in the upper layer protocols limit but is still present in the
-				// yamux buffer. These 10 bytes correspond to the maximum size required to encode
-				// a variable-length-encoding 64bits number. In other words, we make the
-				// assumption that no notification larger than 2^64 will ever be sent.
-				let yamux_maximum_buffer_size = {
-					let requests_max = params
-						.network_config
-						.request_response_protocols
-						.iter()
-						.map(|cfg| usize::try_from(cfg.max_request_size).unwrap_or(usize::MAX));
-					let responses_max =
-						params.network_config.request_response_protocols.iter().map(|cfg| {
-							usize::try_from(cfg.max_response_size).unwrap_or(usize::MAX)
-						});
-					let notifs_max = params.network_config.extra_sets.iter().map(|cfg| {
-						usize::try_from(cfg.max_notification_size).unwrap_or(usize::MAX)
-					});
-
-					// A "default" max is added to cover all the other protocols: ping, identify,
-					// kademlia, block announces, and transactions.
-					let default_max = cmp::max(
-						1024 * 1024,
-						usize::try_from(protocol::BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE)
-							.unwrap_or(usize::MAX),
-					);
-
-					iter::once(default_max)
-						.chain(requests_max)
-						.chain(responses_max)
-						.chain(notifs_max)
-						.max()
-						.expect("iterator known to always yield at least one element; qed")
-						.saturating_add(10)
-				};
-
-				transport::build_transport(
-					local_identity.clone(),
-					config_mem,
-					params.network_config.yamux_window_size,
-					yamux_maximum_buffer_size,
-				)
-			};
-
 			let behaviour = {
 				let result = Behaviour::new(
 					protocol,
 					user_agent,
 					local_public,
 					discovery_config,
-					params.network_config.request_response_protocols,
+					request_response_protocols,
 					peerset_handle.clone(),
 				);
 
@@ -416,14 +403,14 @@ where
 		};
 
 		// Listen on multiaddresses.
-		for addr in &params.network_config.listen_addresses {
+		for addr in &network_config.listen_addresses {
 			if let Err(err) = Swarm::<Behaviour<B>>::listen_on(&mut swarm, addr.clone()) {
 				warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
 			}
 		}
 
 		// Add external addresses.
-		for addr in &params.network_config.public_addresses {
+		for addr in &network_config.public_addresses {
 			Swarm::<Behaviour<B>>::add_external_address(
 				&mut swarm,
 				addr.clone(),

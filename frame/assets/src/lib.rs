@@ -82,6 +82,10 @@
 //! * `approve_transfer`: Create or increase an delegated transfer.
 //! * `cancel_approval`: Rescind a previous approval.
 //! * `transfer_approved`: Transfer third-party's assets to another account.
+//! * `touch`: Create an asset account for non-provider assets. Caller must place a deposit.
+//! * `refund`: Return the deposit (if any) of the caller's asset account or a consumer reference
+//!   (if any) of the caller's account.
+//! * `refund_other`: Return the deposit (if any) of a specified asset account.
 //!
 //! ### Permissioned Functions
 //!
@@ -98,12 +102,16 @@
 //! * `burn`: Decreases the asset balance of an account; called by the asset class's Admin.
 //! * `force_transfer`: Transfers between arbitrary accounts; called by the asset class's Admin.
 //! * `freeze`: Disallows further `transfer`s from an account; called by the asset class's Freezer.
-//! * `thaw`: Allows further `transfer`s from an account; called by the asset class's Admin.
+//! * `thaw`: Allows further `transfer`s to and from an account; called by the asset class's Admin.
 //! * `transfer_ownership`: Changes an asset class's Owner; called by the asset class's Owner.
 //! * `set_team`: Changes an asset class's Admin, Freezer and Issuer; called by the asset class's
 //!   Owner.
 //! * `set_metadata`: Set the metadata of an asset class; called by the asset class's Owner.
 //! * `clear_metadata`: Remove the metadata of an asset class; called by the asset class's Owner.
+//! * `touch_other`: Create an asset account for specified account. Caller must place a deposit;
+//!   called by the asset class's Freezer or Admin.
+//! * `block`: Disallows further `transfer`s to and from an account; called by the asset class's
+//!   Freezer.
 //!
 //! Please refer to the [`Call`] enum and its associated variants for documentation on each
 //! function.
@@ -194,7 +202,7 @@ impl<AssetId, AccountId> AssetsCallback<AssetId, AccountId> for () {}
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::AccountTouch};
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
@@ -519,6 +527,10 @@ pub mod pallet {
 		AssetStatusChanged { asset_id: T::AssetId },
 		/// The min_balance of an asset has been updated by the asset owner.
 		AssetMinBalanceChanged { asset_id: T::AssetId, new_min_balance: T::Balance },
+		/// Some account `who` was created with a deposit from `depositor`.
+		Touched { asset_id: T::AssetId, who: T::AccountId, depositor: T::AccountId },
+		/// Some account `who` was blocked.
+		Blocked { asset_id: T::AssetId, who: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -911,7 +923,9 @@ pub mod pallet {
 			Self::do_transfer(id, &source, &dest, amount, Some(origin), f).map(|_| ())
 		}
 
-		/// Disallow further unprivileged transfers from an account.
+		/// Disallow further unprivileged transfers of an asset `id` from an account `who`. `who`
+		/// must already exist as an entry in `Account`s of the asset. If you want to freeze an
+		/// account that does not have an entry, use `touch_other` first.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
 		///
@@ -939,7 +953,8 @@ pub mod pallet {
 			let who = T::Lookup::lookup(who)?;
 
 			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
-				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.is_frozen = true;
+				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.status =
+					AccountStatus::Frozen;
 				Ok(())
 			})?;
 
@@ -947,7 +962,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Allow unprivileged transfers from an account again.
+		/// Allow unprivileged transfers to and from an account again.
 		///
 		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
 		///
@@ -975,7 +990,8 @@ pub mod pallet {
 			let who = T::Lookup::lookup(who)?;
 
 			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
-				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.is_frozen = false;
+				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.status =
+					AccountStatus::Liquid;
 				Ok(())
 			})?;
 
@@ -1471,22 +1487,25 @@ pub mod pallet {
 		///
 		/// Emits `Touched` event when successful.
 		#[pallet::call_index(26)]
-		#[pallet::weight(T::WeightInfo::mint())]
+		#[pallet::weight(T::WeightInfo::touch())]
 		pub fn touch(origin: OriginFor<T>, id: T::AssetIdParameter) -> DispatchResult {
+			let who = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
-			Self::do_touch(id, ensure_signed(origin)?)
+			Self::do_touch(id, who.clone(), who, false)
 		}
 
-		/// Return the deposit (if any) of an asset account.
+		/// Return the deposit (if any) of an asset account or a consumer reference (if any) of an
+		/// account.
 		///
 		/// The origin must be Signed.
 		///
-		/// - `id`: The identifier of the asset for the account to be created.
+		/// - `id`: The identifier of the asset for which the caller would like the deposit
+		///   refunded.
 		/// - `allow_burn`: If `true` then assets may be destroyed in order to complete the refund.
 		///
 		/// Emits `Refunded` event when successful.
 		#[pallet::call_index(27)]
-		#[pallet::weight(T::WeightInfo::mint())]
+		#[pallet::weight(T::WeightInfo::refund())]
 		pub fn refund(
 			origin: OriginFor<T>,
 			id: T::AssetIdParameter,
@@ -1540,6 +1559,104 @@ pub mod pallet {
 				new_min_balance: min_balance,
 			});
 			Ok(())
+		}
+
+		/// Create an asset account for `who`.
+		///
+		/// A deposit will be taken from the signer account.
+		///
+		/// - `origin`: Must be Signed by `Freezer` or `Admin` of the asset `id`; the signer account
+		///   must have sufficient funds for a deposit to be taken.
+		/// - `id`: The identifier of the asset for the account to be created.
+		/// - `who`: The account to be created.
+		///
+		/// Emits `Touched` event when successful.
+		#[pallet::call_index(29)]
+		#[pallet::weight(T::WeightInfo::touch_other())]
+		pub fn touch_other(
+			origin: OriginFor<T>,
+			id: T::AssetIdParameter,
+			who: AccountIdLookupOf<T>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let who = T::Lookup::lookup(who)?;
+			let id: T::AssetId = id.into();
+			Self::do_touch(id, who, origin, true)
+		}
+
+		/// Return the deposit (if any) of a target asset account. Useful if you are the depositor.
+		///
+		/// The origin must be Signed and either the account owner, depositor, or asset `Admin`. In
+		/// order to burn a non-zero balance of the asset, the caller must be the account and should
+		/// use `refund`.
+		///
+		/// - `id`: The identifier of the asset for the account holding a deposit.
+		/// - `who`: The account to refund.
+		///
+		/// Emits `Refunded` event when successful.
+		#[pallet::call_index(30)]
+		#[pallet::weight(T::WeightInfo::refund_other())]
+		pub fn refund_other(
+			origin: OriginFor<T>,
+			id: T::AssetIdParameter,
+			who: AccountIdLookupOf<T>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let who = T::Lookup::lookup(who)?;
+			let id: T::AssetId = id.into();
+			Self::do_refund_other(id, &who, &origin)
+		}
+
+		/// Disallow further unprivileged transfers of an asset `id` to and from an account `who`.
+		///
+		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
+		///
+		/// - `id`: The identifier of the account's asset.
+		/// - `who`: The account to be unblocked.
+		///
+		/// Emits `Blocked`.
+		///
+		/// Weight: `O(1)`
+		#[pallet::call_index(31)]
+		pub fn block(
+			origin: OriginFor<T>,
+			id: T::AssetIdParameter,
+			who: AccountIdLookupOf<T>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let id: T::AssetId = id.into();
+
+			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(
+				d.status == AssetStatus::Live || d.status == AssetStatus::Frozen,
+				Error::<T, I>::AssetNotLive
+			);
+			ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
+			let who = T::Lookup::lookup(who)?;
+
+			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
+				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.status =
+					AccountStatus::Blocked;
+				Ok(())
+			})?;
+
+			Self::deposit_event(Event::<T, I>::Blocked { asset_id: id, who });
+			Ok(())
+		}
+	}
+
+	/// Implements [AccountTouch] trait.
+	/// Note that a depositor can be any account, without any specific privilege.
+	/// This implementation is supposed to be used only for creation of system accounts.
+	impl<T: Config<I>, I: 'static> AccountTouch<T::AssetId, T::AccountId> for Pallet<T, I> {
+		type Balance = DepositBalanceOf<T, I>;
+
+		fn deposit_required() -> Self::Balance {
+			T::AssetAccountDeposit::get()
+		}
+
+		fn touch(asset: T::AssetId, who: T::AccountId, depositor: T::AccountId) -> DispatchResult {
+			Self::do_touch(asset, who, depositor, false)
 		}
 	}
 }
