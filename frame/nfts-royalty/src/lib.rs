@@ -107,7 +107,7 @@ pub mod pallet {
 				ItemId = Self::NftItemId,
 				CollectionId = Self::NftCollectionId,
 			>;
-		
+
 		/// The maximum number of royalty recipients.
 		#[pallet::constant]
 		type MaxRecipients: Get<u32>;
@@ -138,8 +138,12 @@ pub mod pallet {
 	// Storage for multiple royalty recipients and the percentage of the royalty they receive.
 	#[pallet::storage]
 	#[pallet::getter(fn royalty_recipients)]
-	pub type RoyaltyRecipients<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::NftCollectionId, BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients>>;
+	pub type RoyaltyRecipients<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::NftCollectionId,
+		BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients>,
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -201,7 +205,7 @@ pub mod pallet {
 		/// The royalty percentage is invalid.
 		InvalidRoyaltyPercentage,
 		/// The list of recipients has reach its limit
-        MaxRecipientsLimit,
+		MaxRecipientsLimit,
 	}
 
 	#[pallet::call]
@@ -479,7 +483,7 @@ pub mod pallet {
 			}
 			// Ensure that it not pass the limit of recipients
 			let royalties_recipients: BoundedVec<_, T::MaxRecipients> =
-                recipients.try_into().map_err(|_| Error::<T>::MaxRecipientsLimit)?;
+				recipients.try_into().map_err(|_| Error::<T>::MaxRecipientsLimit)?;
 
 			// Should we do this? Or should we allow to overwrite the recipients that way we have
 			// only one extrinsic for creating recipients and updating them. Ensure that the

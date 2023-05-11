@@ -18,7 +18,9 @@
 //! Tests for the NFTs Royalty pallet.
 
 use super::Event as NftsRoyaltyEvent;
-use crate::{mock::*, Error, NftCollectionWithRoyalty, NftItemWithRoyalty, RoyaltyRecipients, RoyaltyDetails};
+use crate::{
+	mock::*, Error, NftCollectionWithRoyalty, NftItemWithRoyalty, RoyaltyDetails, RoyaltyRecipients,
+};
 use frame_support::{assert_noop, assert_ok, traits::Currency};
 
 use pallet_nfts::{
@@ -463,7 +465,6 @@ fn error_if_buy_item_not_on_sale() {
 	});
 }
 
-
 #[test]
 fn nft_set_collection_royalty_recipients_should_work() {
 	new_test_ext().execute_with(|| {
@@ -471,7 +472,10 @@ fn nft_set_collection_royalty_recipients_should_work() {
 		assert_ok!(NftsRoyalty::set_collection_royalty_recipients(
 			RuntimeOrigin::signed(account(1)),
 			0,
-			vec![ RoyaltyDetails { royalty_recipient: account(1), royalty_percentage: Permill::from_percent(100) }],
+			vec![RoyaltyDetails {
+				royalty_recipient: account(1),
+				royalty_percentage: Permill::from_percent(100)
+			}],
 		));
 		// Read royalty pallet's storage.
 		let nft_with_royalty = RoyaltyRecipients::<Test>::get(0).unwrap();
@@ -484,6 +488,121 @@ fn nft_set_collection_royalty_recipients_should_work() {
 				nft_collection: 0,
 				royalty_recipients: nft_with_royalty,
 			}
+		);
+	});
+}
+
+#[test]
+fn nft_set_collection_royalty_recipients_fail_item_not_exist() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			NftsRoyalty::set_collection_royalty_recipients(
+				RuntimeOrigin::signed(account(1)),
+				0,
+				vec![RoyaltyDetails {
+					royalty_recipient: account(1),
+					royalty_percentage: Permill::from_percent(100)
+				}],
+			),
+			Error::<Test>::CollectionDoesNotExist
+		);
+	});
+}
+
+#[test]
+fn nft_set_collection_royalty_recipients_fail_no_permission() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		assert_noop!(
+			NftsRoyalty::set_collection_royalty_recipients(
+				RuntimeOrigin::signed(account(2)),
+				0,
+				vec![RoyaltyDetails {
+					royalty_recipient: account(2),
+					royalty_percentage: Permill::from_percent(100)
+				}],
+			),
+			Error::<Test>::NoPermission
+		);
+	});
+}
+#[test]
+fn nft_set_collection_royalty_recipients_fail_limit_recipients() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		assert_noop!(
+			NftsRoyalty::set_collection_royalty_recipients(
+				RuntimeOrigin::signed(account(1)),
+				0,
+				vec![
+					RoyaltyDetails {
+						royalty_recipient: account(1),
+						royalty_percentage: Permill::from_percent(25)
+					},
+					RoyaltyDetails {
+						royalty_recipient: account(2),
+						royalty_percentage: Permill::from_percent(25)
+					},
+					RoyaltyDetails {
+						royalty_recipient: account(3),
+						royalty_percentage: Permill::from_percent(25)
+					},
+					RoyaltyDetails {
+						royalty_recipient: account(4),
+						royalty_percentage: Permill::from_percent(25)
+					}
+				],
+			),
+			Error::<Test>::MaxRecipientsLimit
+		);
+	});
+}
+
+#[test]
+fn nft_set_collection_royalty_recipients_fail_ovewrite() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		assert_ok!(NftsRoyalty::set_collection_royalty_recipients(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			vec![RoyaltyDetails {
+				royalty_recipient: account(1),
+				royalty_percentage: Permill::from_percent(100)
+			}],
+		));
+		assert_noop!(
+			NftsRoyalty::set_collection_royalty_recipients(
+				RuntimeOrigin::signed(account(1)),
+				0,
+				vec![RoyaltyDetails {
+					royalty_recipient: account(1),
+					royalty_percentage: Permill::from_percent(100)
+				}],
+			),
+			Error::<Test>::RoyaltyRecipientsAlreadyExist
+		);
+	});
+}
+#[test]
+fn nft_set_collection_royalty_recipients_fail_invalid_percentage() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		assert_noop!(
+			NftsRoyalty::set_collection_royalty_recipients(
+				RuntimeOrigin::signed(account(1)),
+				0,
+				vec![
+					RoyaltyDetails {
+						royalty_recipient: account(1),
+						royalty_percentage: Permill::from_percent(25)
+					},
+					RoyaltyDetails {
+						royalty_recipient: account(2),
+						royalty_percentage: Permill::from_percent(25)
+					},
+				],
+			),
+			Error::<Test>::InvalidRoyaltyPercentage
 		);
 	});
 }
