@@ -160,17 +160,21 @@ pub trait StorageValue<T: FullCodec> {
 	}
 }
 
-pub trait StoragePagedList<V: FullCodec> {
+/// A non-continuous container type.
+pub trait StorageList<V: FullCodec> {
+	/// Iterator for normal and draining iteration.
 	type Iterator: Iterator<Item = V>;
+
+	/// Append iterator for fast append operations.
 	type Appendix: StorageAppendix<V>;
 
-	/// List all elements in append order.
+	/// List the elements in append order.
 	fn iter() -> Self::Iterator;
 
-	/// Drain the elements.
+	/// Drain the elements in append order.
 	///
-	/// Note that this drains all inspected values. For example `take_while(|_| false)` will drain
-	/// the first element. This also applies to `peek()`.
+	/// Note that this drains a value as soon as it is being inspected. For example `take_while(|_|
+	/// false)` still drains the first element. This also applies to `peek()`.
 	fn drain() -> Self::Iterator;
 
 	/// A fast append iterator.
@@ -178,7 +182,8 @@ pub trait StoragePagedList<V: FullCodec> {
 
 	/// Append a single element.
 	///
-	/// Should not be called repeatedly; use `append_many` instead.
+	/// Should not be called repeatedly; use `append_many` instead.  
+	/// Worst case linear `O(len)` with `len` being the number if elements in the list.
 	fn append_one<EncodeLikeValue>(item: EncodeLikeValue)
 	where
 		EncodeLikeValue: EncodeLike<V>,
@@ -188,7 +193,9 @@ pub trait StoragePagedList<V: FullCodec> {
 
 	/// Append many elements.
 	///
-	/// Should not be called repeatedly; use `appendix` instead.
+	/// Should not be called repeatedly; use `appendix` instead.  
+	/// Worst case linear `O(len + items.count())` with `len` beings the number if elements in the
+	/// list.
 	fn append_many<EncodeLikeValue, I>(items: I)
 	where
 		EncodeLikeValue: EncodeLike<V>,
@@ -201,8 +208,8 @@ pub trait StoragePagedList<V: FullCodec> {
 
 /// Convenience trait for testing.
 #[cfg(feature = "std")]
-pub trait TestingStoragePagedList<V: FullCodec>: StoragePagedList<V> {
-	/// Expose the metadata of the list. Normally this is inaccessible.
+pub trait TestingStoragePagedList<V: FullCodec> {
+	/// Expose the metadata of the list. It is otherwise inaccessible.
 	type Metadata;
 
 	/// Read the metadata of the list from storage.
@@ -222,15 +229,18 @@ pub trait TestingStoragePagedList<V: FullCodec>: StoragePagedList<V> {
 	}
 }
 
-/// A fast append iterator.
+/// Append iterator to append values to a storage struct.
 ///
-/// Makes sense in situations where appending does not have constant time complexity.
+/// Can be used in situations where appending does not have constant time complexity.
 pub trait StorageAppendix<V: FullCodec> {
+	/// Append a single item in constant time `O(1)`.
 	fn append<EncodeLikeValue>(&mut self, item: EncodeLikeValue)
 	where
 		EncodeLikeValue: EncodeLike<V>;
 
-	// Note: this has a default impl, as an `Appendix` is already assumed to be fast for appending.
+	/// Append many items in linear time `O(items.count())`.
+	// Note: a default impl is provided since `Self` is already assumed to be optimal for single
+	// append operations.
 	fn append_many<EncodeLikeValue, I>(&mut self, items: I)
 	where
 		EncodeLikeValue: EncodeLike<V>,

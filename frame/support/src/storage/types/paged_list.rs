@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Paged storage list.
+
 // links are better than no links - even when they refer to private stuff.
 #![allow(rustdoc::private_intra_doc_links)]
 
@@ -31,17 +33,53 @@ use sp_std::prelude::*;
 pub type PageIndex = u32;
 pub type ValueIndex = u32;
 
-/// A paginated list that encodes multiple elements per page.
+/// A paginated storage list.
 ///
-/// The pages are indexed by a storage lookup of `(prefix, page_index)` done by
-/// `Page::from_storage`. The state is managed by [`StoragePagedListMeta`].
+/// # Motivation
+///
+/// This type replaces `StorageValue<Vec<V>>` in situations where only iteration and appending is
+/// needed. There are a few places where this is the case. A paginated structure reduces the memory
+/// usage when a storage transactions needs to be rolled back. The main motivation is therefore a
+/// reduction of runtime memory on storage transaction rollback. Should be configured such that the
+/// size of a page is about 64KiB. This can only be ensured when `V` implements `MaxEncodedLen`.
+///
+/// # Implementation
+///
+/// The metadata of this struct is stored in [`StoragePagedListMeta`]. The data is stored in
+/// [`Page`]s.
+///
+/// Each [`Page`] holds at most `ValuesPerPage` values in its `values` vector. The last page is the
+/// only one that could have less than `ValuesPerPage` values.  
+/// **Iteration** happens by starting
+/// at[`StoragePagedListMeta::first_page`]/[`StoragePagedListMeta::first_value`] and incrementing
+/// these indices as long as there are elements in the page and there are pages in storage. All
+/// elements of a page are loaded once a page is read from storage. Iteration then happens on the
+/// cached elements. This reduces the storage `read` calls on the overlay.  
+/// **Appending** to the list happens by appending to the last page by utilizing
+/// [`sp_io::storage::append`]. It allows to directly extend the elements of `values` vector of the
+/// page without loading the whole vector from storage. A new page is instanced once [`Page::next`]
+/// overflows `ValuesPerPage`. Its vector will also be created through [`sp_io::storage::append`].  
+/// **Draining** advances the internal indices identical to Iteration. It additionally persists the
+/// increments to storage and thereby 'drains' elements. Completely drained pages are deleted from
+/// storage.
+///
+/// # Further Observations
+///
+/// - The encoded layout of a page is exactly its [`Page::values`]. The [`Page::next`] offset is
+///   stored in the [`StoragePagedListMeta`] instead. There is no particular reason for this,
+///   besides having all management state handy in one location.
+/// - The PoV complexity of iterating compared to a `StorageValue<Vec<V>>` is improved for
+///   "shortish" iterations and worse for total iteration. The append complexity is identical in the
+///   asymptotic case when using an `Appendix`, and worse in all. For example when appending just
+///   one value.
+/// - It does incur a read overhead on the host side as compared to a `StorageValue<Vec<V>>`.
 pub struct StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages = GetDefault> {
 	_phantom: PhantomData<(Prefix, Hasher, Value, ValuesPerPage, MaxPages)>,
 }
 
 /// The state of a [`StoragePagedList`].
 ///
-/// This struct doubles as [`crate::storage::StoragePagedList::Appendix`].
+/// This struct doubles as [`crate::storage::StorageList::Appendix`].
 #[derive(
 	Encode, Decode, CloneNoBound, PartialEqNoBound, EqNoBound, DebugNoBound, DefaultNoBound,
 )]
@@ -285,7 +323,7 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Value, ValuesPerPage, MaxPages> crate::storage::StoragePagedList<Value>
+impl<Prefix, Hasher, Value, ValuesPerPage, MaxPages> crate::storage::StorageList<Value>
 	for StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
 where
 	Prefix: StorageInstance,
@@ -362,7 +400,7 @@ pub(crate) mod mock {
 		hash::*,
 		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
 		parameter_types,
-		storage::{types::ValueQuery, StoragePagedList as _, TestingStoragePagedList},
+		storage::{types::ValueQuery, StorageList as _, TestingStoragePagedList},
 		StorageNoopGuard,
 	};
 	pub use sp_io::{hashing::twox_128, TestExternalities};
