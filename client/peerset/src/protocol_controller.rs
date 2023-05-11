@@ -325,8 +325,17 @@ impl ProtocolController {
 				}
 			}
 
-			// If we have received some ACKs, we might be able to remove some obsolete entries.
+			// If we have received some ACKs, we might be able to remove obsolete entries.
 			self.outstanding.retain(|_, outstanding| !outstanding.is_empty());
+
+			// Apply postponed `SetReservedOnly` action
+			// TODO: we might need to do it after all events processing.
+			if self.outstanding.is_empty() {
+				if let Some(reserved_only) = self.outstanding_set_reserved_only.take() {
+					self.on_set_reserved_only(reserved_only);
+					return true
+				}
+			}
 
 			let mut next_alloc_slots = Delay::new_at(self.next_periodic_alloc_slots).fuse();
 
@@ -383,14 +392,18 @@ impl ProtocolController {
 		match action {
 			Action::AddReservedPeer(peer_id) => self.on_add_reserved_peer(peer_id),
 			Action::RemoveReservedPeer(peer_id) => self.on_remove_reserved_peer(peer_id),
-			Action::SetReservedPeers(peer_ids) => {
-				todo!("Decompose into individual peer actions if `self.outstanding` is not empty.");
-				self.on_set_reserved_peers(peer_ids);
-			},
-			Action::SetReservedOnly(reserved_only) => {
-				todo!("Postpone operation if `self.outstanding` is not empty.");
-				self.on_set_reserved_only(reserved_only);
-			},
+			Action::SetReservedPeers(peer_ids) => self.on_set_reserved_peers(peer_ids),
+			Action::SetReservedOnly(reserved_only) =>
+				if !self.outstanding.is_empty() {
+					// we need to postpone the action if there are outstanding events/actions.
+					if reserved_only == self.reserved_only {
+						self.outstanding_set_reserved_only = None;
+					} else {
+						self.outstanding_set_reserved_only = Some(reserved_only);
+					}
+				} else {
+					self.on_set_reserved_only(reserved_only);
+				},
 			Action::DisconnectPeer(peer_id) => self.on_disconnect_peer(peer_id),
 			Action::GetReservedPeers(pending_response) =>
 				self.on_get_reserved_peers(pending_response),
@@ -522,12 +535,30 @@ impl ProtocolController {
 		let to_insert = peer_ids.difference(&current).cloned().collect::<Vec<_>>();
 		let to_remove = current.difference(&peer_ids).cloned().collect::<Vec<_>>();
 
-		for node in to_insert {
-			self.on_add_reserved_peer(node);
-		}
-
-		for node in to_remove {
-			self.on_remove_reserved_peer(node);
+		if self.outstanding.is_empty() {
+			// Process peers immediately if we have no oustanding events/actions.
+			for peer_id in to_insert {
+				self.on_add_reserved_peer(peer_id);
+			}
+			for peer_id in to_remove {
+				self.on_remove_reserved_peer(peer_id);
+			}
+		} else {
+			// Push actions to outstanding queues if there are outstanding events/actions.
+			for peer_id in to_insert {
+				self.outstanding
+					.entry(peer_id)
+					.or_default()
+					.actions
+					.push_back(Action::AddReservedPeer(peer_id));
+			}
+			for peer_id in to_remove {
+				self.outstanding
+					.entry(peer_id)
+					.or_default()
+					.actions
+					.push_back(Action::RemoveReservedPeer(peer_id));
+			}
 		}
 	}
 
