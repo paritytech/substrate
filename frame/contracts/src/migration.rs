@@ -266,10 +266,7 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 	pub(crate) fn migrate(weight_limit: Weight) -> (MigrateResult, Weight) {
 		let mut weight_left = weight_limit;
 
-		if weight_left
-			.checked_reduce(T::WeightInfo::migration())
-			.is_none()
-		{
+		if weight_left.checked_reduce(T::WeightInfo::migration()).is_none() {
 			return (MigrateResult::NoMigrationPerformed, Weight::zero())
 		}
 
@@ -500,18 +497,20 @@ mod test {
 		});
 	}
 
-	// #[test]
-	// fn steps_works() {
-	// 	type M = (MockMigration<1>, MockMigration<2>);
-	// 	let version = StorageVersion::new(1);
-	// 	let cursor = M::new(version);
-	//
-	// 	let mut weight = Weight::MAX;
-	// 	let cursor = M::steps(version, &cursor, &mut weight).unwrap();
-	// 	assert_eq!(cursor.to_vec(), vec![1u8, 0]);
-	//
-	// 	assert!(M::steps(version, &cursor, &mut weight).is_none());
-	// }
+	#[test]
+	fn steps_works() {
+		type M = (MockMigration<2>, MockMigration<3>);
+		let version = StorageVersion::new(2);
+		let cursor = M::new(version);
+
+		let mut weight = Weight::from_all(2);
+		let cursor = M::steps(version, &cursor, &mut weight).unwrap();
+		assert_eq!(cursor.to_vec(), vec![1u8, 0]);
+		assert_eq!(weight, Weight::from_all(1));
+
+		let mut weight = Weight::from_all(2);
+		assert!(M::steps(version, &cursor, &mut weight).is_none());
+	}
 
 	#[test]
 	fn no_migration_performed_works() {
