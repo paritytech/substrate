@@ -1,6 +1,6 @@
 use crate::OnDemandBackend;
 use serde::{de::DeserializeOwned, Serialize};
-use sp_core::Hasher;
+use sp_core::{Hasher, H256};
 use sp_externalities::Extensions;
 use sp_runtime::StateVersion;
 use sp_state_machine::{Backend, Ext, OverlayedChanges, StorageTransactionCache};
@@ -29,7 +29,7 @@ where
 {
 	pub fn new(
 		rpc_uri: String,
-		at: Option<H::Out>,
+		at: Option<H256>,
 		state_version: StateVersion,
 	) -> Result<Self, &'static str> {
 		let backend = OnDemandBackend::new(rpc_uri, at)?;
