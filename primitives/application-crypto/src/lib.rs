@@ -45,6 +45,7 @@ pub use traits::*;
 
 mod traits;
 
+#[cfg(feature = "bandersnatch-experimental")]
 pub mod bandersnatch;
 #[cfg(feature = "bls-experimental")]
 pub mod bls377;
