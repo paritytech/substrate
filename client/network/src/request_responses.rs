@@ -1068,7 +1068,7 @@ mod tests {
 
 		let transport = MemoryTransport::new()
 			.upgrade(upgrade::Version::V1)
-			.authenticate(noise::NoiseConfig::new(&keypair).unwrap())
+			.authenticate(noise::Config::new(&keypair).unwrap())
 			.multiplex(libp2p::yamux::Config::default())
 			.boxed();
 
