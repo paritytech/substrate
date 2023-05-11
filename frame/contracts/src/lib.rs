@@ -735,7 +735,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(9)]
-		#[pallet::weight(T::WeightInfo::migrate().saturating_add(*weight_limit))]
+		#[pallet::weight(T::WeightInfo::migrate_noop().saturating_add(T::WeightInfo::migration()).saturating_add(*weight_limit))]
 		pub fn migrate(origin: OriginFor<T>, weight_limit: Weight) -> DispatchResultWithPostInfo {
 			use migration::MigrateResult::*;
 			ensure_signed(origin)?;
