@@ -19,6 +19,8 @@
 
 use parking_lot::RwLock;
 use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
+#[cfg(feature = "bls-experimental")]
+use sp_core::{bls377, bls381};
 use sp_core::{
 	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSecret},
 	ecdsa, ed25519, sr25519,
@@ -134,7 +136,7 @@ impl Keystore for LocalKeystore {
 
 	/// Generate a new pair compatible with the 'ed25519' signature scheme.
 	///
-	/// If the `[seed]` is `Some` then the key will be ephemeral and stored in memory.
+	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn sr25519_generate_new(
 		&self,
 		key_type: KeyTypeId,
@@ -176,7 +178,7 @@ impl Keystore for LocalKeystore {
 
 	/// Generate a new pair compatible with the 'sr25519' signature scheme.
 	///
-	/// If the `[seed]` is `Some` then the key will be ephemeral and stored in memory.
+	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn ed25519_generate_new(
 		&self,
 		key_type: KeyTypeId,
@@ -200,7 +202,7 @@ impl Keystore for LocalKeystore {
 
 	/// Generate a new pair compatible with the 'ecdsa' signature scheme.
 	///
-	/// If the `[seed]` is `Some` then the key will be ephemeral and stored in memory.
+	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn ecdsa_generate_new(
 		&self,
 		key_type: KeyTypeId,
@@ -230,6 +232,60 @@ impl Keystore for LocalKeystore {
 			.key_pair_by_type::<ecdsa::Pair>(public, key_type)?
 			.map(|pair| pair.sign_prehashed(msg));
 		Ok(sig)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_public_keys(&self, key_type: KeyTypeId) -> Vec<bls381::Public> {
+		self.public_keys::<bls381::Pair>(key_type)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	/// Generate a new pair compatible with the 'bls381' signature scheme.
+	///
+	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
+	fn bls381_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<bls381::Public, TraitError> {
+		self.generate_new::<bls381::Pair>(key_type, seed)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bls381::Public,
+		msg: &[u8],
+	) -> std::result::Result<Option<bls381::Signature>, TraitError> {
+		self.sign::<bls381::Pair>(key_type, public, msg)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_public_keys(&self, key_type: KeyTypeId) -> Vec<bls377::Public> {
+		self.public_keys::<bls377::Pair>(key_type)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	/// Generate a new pair compatible with the 'bls377' signature scheme.
+	///
+	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
+	fn bls377_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<bls377::Public, TraitError> {
+		self.generate_new::<bls377::Pair>(key_type, seed)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bls377::Public,
+		msg: &[u8],
+	) -> std::result::Result<Option<bls377::Signature>, TraitError> {
+		self.sign::<bls377::Pair>(key_type, public, msg)
 	}
 
 	fn insert(

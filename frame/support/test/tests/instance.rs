@@ -17,111 +17,111 @@
 
 #![recursion_limit = "128"]
 
-use codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen};
 use frame_support::{
 	inherent::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent},
 	metadata_ir::{
 		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
 		StorageEntryTypeIR, StorageHasherIR,
 	},
-	traits::{ConstU32, Get},
-	Parameter, StorageDoubleMap, StorageMap, StorageValue,
+	traits::ConstU32,
 };
-use scale_info::TypeInfo;
-use sp_core::{sr25519, H256};
+use sp_core::sr25519;
 use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, Verify},
 	BuildStorage,
 };
 
-mod system;
-
 pub trait Currency {}
 
 // Test for:
 // * No default instance
 // * Origin, Inherent, Event
+#[frame_support::pallet(dev_mode)]
 mod module1 {
+	use self::frame_system::pallet_prelude::*;
 	use super::*;
-	use sp_std::ops::Add;
+	use frame_support::pallet_prelude::*;
+	use frame_support_test as frame_system;
 
-	pub trait Config<I>: system::Config
-	where
-		<Self as system::Config>::BlockNumber: From<u32>,
-	{
-		type RuntimeEvent: From<Event<Self, I>> + Into<<Self as system::Config>::RuntimeEvent>;
+	#[pallet::pallet]
+	pub struct Pallet<T, I = ()>(_);
+
+	#[pallet::config]
+	pub trait Config<I: 'static = ()>: frame_system::Config {
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		type RuntimeOrigin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
-		type GenericType: Default + Clone + Codec + EncodeLike + TypeInfo;
+		type GenericType: Parameter + Member + MaybeSerializeDeserialize + Default + MaxEncodedLen;
 	}
 
-	frame_support::decl_module! {
-		pub struct Module<T: Config<I>, I: Instance> for enum Call where
-			origin: <T as system::Config>::RuntimeOrigin,
-			system = system,
-			T::BlockNumber: From<u32>
-		{
-			fn offchain_worker() {}
-
-			fn deposit_event() = default;
-
-			#[weight = 0]
-			fn one(origin) {
-				system::ensure_root(origin)?;
-				Self::deposit_event(RawEvent::AnotherVariant(3));
-			}
+	#[pallet::call]
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		#[pallet::weight(0)]
+		pub fn one(origin: OriginFor<T>) -> DispatchResult {
+			ensure_root(origin)?;
+			Self::deposit_event(Event::AnotherVariant(3));
+			Ok(())
 		}
 	}
 
-	frame_support::decl_storage! {
-		trait Store for Module<T: Config<I>, I: Instance> as Module1 where
-			T::BlockNumber: From<u32> + std::fmt::Display
-		{
-			pub Value config(value): T::GenericType;
-			pub Map: map hasher(identity) u32 => u64;
-		}
+	#[pallet::storage]
+	#[pallet::getter(fn value)]
+	pub type Value<T: Config<I>, I: 'static = ()> = StorageValue<_, T::GenericType, ValueQuery>;
 
-		add_extra_genesis {
-			config(test) : T::BlockNumber;
-			build(|config: &Self| {
-				println!("{}", config.test);
-			});
+	#[pallet::storage]
+	#[pallet::getter(fn map)]
+	pub type Map<T: Config<I>, I: 'static = ()> = StorageMap<_, Identity, u32, u64, ValueQuery>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		pub value: <T as Config<I>>::GenericType,
+		pub test: <T as frame_system::Config>::BlockNumber,
+	}
+
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			Self { value: Default::default(), test: Default::default() }
 		}
 	}
 
-	frame_support::decl_error! {
-		pub enum Error for Module<T: Config<I>, I: Instance> where
-			T::BlockNumber: From<u32>,
-			T::BlockNumber: Add,
-			T::AccountId: AsRef<[u8]>,
-		{
-			/// Test
-			Test,
-		}
-	}
-
-	frame_support::decl_event! {
-		pub enum Event<T, I> where Phantom = std::marker::PhantomData<T> {
-			_Phantom(Phantom),
-			AnotherVariant(u32),
-		}
-	}
-
-	#[derive(
-		PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen,
-	)]
-	pub enum Origin<T: Config<I>, I>
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I>
 	where
-		T::BlockNumber: From<u32>,
+		T::BlockNumber: std::fmt::Display,
 	{
+		fn build(&self) {
+			<Value<T, I>>::put(self.value.clone());
+			println!("{}", self.test);
+		}
+	}
+
+	#[pallet::error]
+	pub enum Error<T, I = ()> {
+		/// Test
+		Test,
+	}
+
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config<I>, I: 'static = ()> {
+		_Phantom(PhantomData<T>),
+		AnotherVariant(u32),
+	}
+
+	#[pallet::origin]
+	#[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
+	#[scale_info(skip_type_params(I))]
+	pub enum Origin<T, I = ()> {
 		Members(u32),
-		_Phantom(std::marker::PhantomData<(T, I)>),
+		_Phantom(PhantomData<(T, I)>),
 	}
 
 	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
 
-	impl<T: Config<I>, I: Instance> ProvideInherent for Module<T, I>
+	#[pallet::inherent]
+	impl<T: Config<I>, I: 'static> ProvideInherent for Pallet<T, I>
 	where
 		T::BlockNumber: From<u32>,
 	{
@@ -133,10 +133,7 @@ mod module1 {
 			unimplemented!();
 		}
 
-		fn check_inherent(
-			_: &Self::Call,
-			_: &InherentData,
-		) -> std::result::Result<(), Self::Error> {
+		fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
 			unimplemented!();
 		}
 
@@ -149,51 +146,88 @@ mod module1 {
 // Test for:
 // * default instance
 // * use of no_genesis_config_phantom_data
+#[frame_support::pallet]
 mod module2 {
 	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_support_test as frame_system;
 
-	pub trait Config<I = DefaultInstance>: system::Config {
-		type Amount: Parameter + Default;
-		type RuntimeEvent: From<Event<Self, I>> + Into<<Self as system::Config>::RuntimeEvent>;
+	#[pallet::pallet]
+	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
+
+	#[pallet::config]
+	pub trait Config<I: 'static = ()>: frame_system::Config {
+		type Amount: Parameter + MaybeSerializeDeserialize + Default + MaxEncodedLen;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		type RuntimeOrigin: From<Origin<Self, I>>;
 	}
 
-	impl<T: Config<I>, I: Instance> Currency for Module<T, I> {}
+	impl<T: Config<I>, I: 'static> Currency for Pallet<T, I> {}
 
-	frame_support::decl_module! {
-		pub struct Module<T: Config<I>, I: Instance=DefaultInstance> for enum Call where
-			origin: <T as system::Config>::RuntimeOrigin,
-			system = system
-		{
-			fn deposit_event() = default;
+	#[pallet::call]
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {}
+
+	#[pallet::storage]
+	pub type Value<T: Config<I>, I: 'static = ()> = StorageValue<_, T::Amount, ValueQuery>;
+
+	#[pallet::storage]
+	pub type Map<T: Config<I>, I: 'static = ()> = StorageMap<_, Identity, u64, u64, ValueQuery>;
+
+	#[pallet::storage]
+	pub type DoubleMap<T: Config<I>, I: 'static = ()> =
+		StorageDoubleMap<_, Identity, u64, Identity, u64, u64, ValueQuery>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		pub value: T::Amount,
+		pub map: Vec<(u64, u64)>,
+		pub double_map: Vec<(u64, u64, u64)>,
+	}
+
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			Self {
+				value: Default::default(),
+				map: Default::default(),
+				double_map: Default::default(),
+			}
 		}
 	}
 
-	frame_support::decl_storage! {
-		trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Module2 {
-			pub Value config(value): T::Amount;
-			pub Map config(map): map hasher(identity) u64 => u64;
-			pub DoubleMap config(double_map): double_map hasher(identity) u64, hasher(identity) u64 => u64;
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I>
+	where
+		T::BlockNumber: std::fmt::Display,
+	{
+		fn build(&self) {
+			<Value<T, I>>::put(self.value.clone());
+			for (k, v) in &self.map {
+				<Map<T, I>>::insert(k, v);
+			}
+			for (k1, k2, v) in &self.double_map {
+				<DoubleMap<T, I>>::insert(k1, k2, v);
+			}
 		}
 	}
 
-	frame_support::decl_event! {
-		pub enum Event<T, I=DefaultInstance> where Amount = <T as Config<I>>::Amount {
-			Variant(Amount),
-		}
+	#[pallet::event]
+	pub enum Event<T: Config<I>, I: 'static = ()> {
+		Variant(T::Amount),
 	}
 
-	#[derive(
-		PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen,
-	)]
-	pub enum Origin<T: Config<I>, I = DefaultInstance> {
+	#[pallet::origin]
+	#[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
+	#[scale_info(skip_type_params(I))]
+	pub enum Origin<T, I = ()> {
 		Members(u32),
-		_Phantom(std::marker::PhantomData<(T, I)>),
+		_Phantom(PhantomData<(T, I)>),
 	}
 
 	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
 
-	impl<T: Config<I>, I: Instance> ProvideInherent for Module<T, I> {
+	#[pallet::inherent]
+	impl<T: Config<I>, I: 'static> ProvideInherent for Pallet<T, I> {
 		type Call = Call<T, I>;
 		type Error = MakeFatalError<()>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
@@ -202,10 +236,7 @@ mod module2 {
 			unimplemented!();
 		}
 
-		fn check_inherent(
-			_call: &Self::Call,
-			_data: &InherentData,
-		) -> std::result::Result<(), Self::Error> {
+		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> Result<(), Self::Error> {
 			unimplemented!();
 		}
 
@@ -217,19 +248,70 @@ mod module2 {
 
 // Test for:
 // * Depends on multiple instances of a module with instances
+#[frame_support::pallet]
 mod module3 {
 	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_support_test as frame_system;
 
-	pub trait Config:
-		module2::Config + module2::Config<module2::Instance1> + system::Config
+	#[pallet::pallet]
+	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
+
+	#[pallet::config]
+	pub trait Config<I: 'static = ()>:
+		frame_system::Config + module2::Config<I> + module2::Config<module2::Instance1>
 	{
 		type Currency: Currency;
 		type Currency2: Currency;
 	}
 
-	frame_support::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: <T as system::Config>::RuntimeOrigin, system=system {}
+	#[pallet::call]
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {}
+}
+
+pub type BlockNumber = u32;
+pub type Signature = sr25519::Signature;
+pub type AccountId = <Signature as Verify>::Signer;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+
+frame_support::construct_runtime!(
+	pub enum Runtime where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic
+	{
+		System: frame_support_test::{Pallet, Call, Event<T>},
+		Module1_1: module1::<Instance1>::{
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+		},
+		Module1_2: module1::<Instance2>::{
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+		},
+		Module2: module2::{Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent},
+		Module2_1: module2::<Instance1>::{
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+		},
+		Module2_2: module2::<Instance2>::{
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+		},
+		Module2_3: module2::<Instance3>::{
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+		},
+		Module3: module3::{Pallet, Call},
 	}
+);
+
+impl frame_support_test::Config for Runtime {
+	type BlockNumber = BlockNumber;
+	type AccountId = AccountId;
+	type BaseCallFilter = frame_support::traits::Everything;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
+	type PalletInfo = PalletInfo;
+	type DbWeight = ();
 }
 
 impl module1::Config<module1::Instance1> for Runtime {
@@ -269,54 +351,6 @@ impl module3::Config for Runtime {
 	type Currency2 = Module2_3;
 }
 
-pub type Signature = sr25519::Signature;
-pub type AccountId = <Signature as Verify>::Signer;
-pub type BlockNumber = u64;
-pub type Index = u64;
-
-impl system::Config for Runtime {
-	type BaseCallFilter = frame_support::traits::Everything;
-	type Hash = H256;
-	type RuntimeOrigin = RuntimeOrigin;
-	type BlockNumber = BlockNumber;
-	type AccountId = AccountId;
-	type RuntimeEvent = RuntimeEvent;
-	type PalletInfo = PalletInfo;
-	type RuntimeCall = RuntimeCall;
-	type DbWeight = ();
-}
-
-frame_support::construct_runtime!(
-	pub struct Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
-	{
-		System: system::{Pallet, Call, Event<T>},
-		Module1_1: module1::<Instance1>::{
-			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
-		},
-		Module1_2: module1::<Instance2>::{
-			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
-		},
-		Module2: module2::{Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent},
-		Module2_1: module2::<Instance1>::{
-			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
-		},
-		Module2_2: module2::<Instance2>::{
-			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
-		},
-		Module2_3: module2::<Instance3>::{
-			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
-		},
-		Module3: module3::{Pallet, Call},
-	}
-);
-
-pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
-pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
-
 fn new_test_ext() -> sp_io::TestExternalities {
 	GenesisConfig {
 		module_1_1: module1::GenesisConfig { value: 3, test: 2 },
@@ -350,14 +384,14 @@ fn storage_instance_independence() {
 		module2::Value::<Runtime, module2::Instance1>::put(0);
 		module2::Value::<Runtime, module2::Instance2>::put(0);
 		module2::Value::<Runtime, module2::Instance3>::put(0);
-		module2::Map::<module2::DefaultInstance>::insert(0, 0);
-		module2::Map::<module2::Instance1>::insert(0, 0);
-		module2::Map::<module2::Instance2>::insert(0, 0);
-		module2::Map::<module2::Instance3>::insert(0, 0);
-		module2::DoubleMap::<module2::DefaultInstance>::insert(&0, &0, &0);
-		module2::DoubleMap::<module2::Instance1>::insert(&0, &0, &0);
-		module2::DoubleMap::<module2::Instance2>::insert(&0, &0, &0);
-		module2::DoubleMap::<module2::Instance3>::insert(&0, &0, &0);
+		module2::Map::<Runtime>::insert(0, 0);
+		module2::Map::<Runtime, module2::Instance1>::insert(0, 0);
+		module2::Map::<Runtime, module2::Instance2>::insert(0, 0);
+		module2::Map::<Runtime, module2::Instance3>::insert(0, 0);
+		module2::DoubleMap::<Runtime>::insert(&0, &0, &0);
+		module2::DoubleMap::<Runtime, module2::Instance1>::insert(&0, &0, &0);
+		module2::DoubleMap::<Runtime, module2::Instance2>::insert(&0, &0, &0);
+		module2::DoubleMap::<Runtime, module2::Instance3>::insert(&0, &0, &0);
 	});
 	// 12 storage values.
 	assert_eq!(storage.top.len(), 12);
@@ -367,8 +401,8 @@ fn storage_instance_independence() {
 fn storage_with_instance_basic_operation() {
 	new_test_ext().execute_with(|| {
 		type Value = module2::Value<Runtime, module2::Instance1>;
-		type Map = module2::Map<module2::Instance1>;
-		type DoubleMap = module2::DoubleMap<module2::Instance1>;
+		type Map = module2::Map<Runtime, module2::Instance1>;
+		type DoubleMap = module2::DoubleMap<Runtime, module2::Instance1>;
 
 		assert_eq!(Value::exists(), true);
 		assert_eq!(Value::get(), 4);
@@ -412,7 +446,7 @@ fn storage_with_instance_basic_operation() {
 
 fn expected_metadata() -> PalletStorageMetadataIR {
 	PalletStorageMetadataIR {
-		prefix: "Instance2Module2",
+		prefix: "Module2_2",
 		entries: vec![
 			StorageEntryMetadataIR {
 				name: "Value",

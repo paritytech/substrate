@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use frame_support::{
-	assert_noop, assert_ok, dispatch::DispatchResult, pallet_prelude::ConstU32,
+	assert_noop, assert_ok, dispatch::DispatchResult, ensure, pallet_prelude::ConstU32,
 	storage::with_storage_layer,
 };
 use pallet::*;
@@ -24,7 +24,8 @@ use sp_io::TestExternalities;
 
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
-	use frame_support::{ensure, pallet_prelude::*};
+	use super::*;
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -56,48 +57,29 @@ pub mod pallet {
 	}
 }
 
-pub mod decl_pallet {
-	pub trait Config: frame_system::Config {}
-
-	frame_support::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
-			#[weight = 0]
-			pub fn set_value(_origin, value: u32) {
-				DeclValue::put(value);
-				frame_support::ensure!(value != 1, "Revert!");
-			}
-		}
-	}
-
-	frame_support::decl_storage! {
-		trait Store for Module<T: Config> as StorageTransactions {
-			pub DeclValue: u32;
-		}
-	}
-}
-
-pub type BlockNumber = u64;
+pub type BlockNumber = u32;
 pub type Index = u64;
-pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
-pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+pub type AccountId = u64;
+pub type Header = sp_runtime::generic::Header<BlockNumber, sp_runtime::traits::BlakeTwo256>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
+pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 
 impl frame_system::Config for Runtime {
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type DbWeight = ();
-	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u32;
 	type RuntimeCall = RuntimeCall;
+	type Index = Index;
+	type BlockNumber = BlockNumber;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU32<250>;
+	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -109,19 +91,17 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = ConstU32<16>;
 }
 
-impl pallet::Config for Runtime {}
-
-impl decl_pallet::Config for Runtime {}
+impl Config for Runtime {}
 
 frame_support::construct_runtime!(
-	pub struct Runtime where
+	pub struct Runtime
+	where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
 		MyPallet: pallet,
-		DeclPallet: decl_pallet::{Call, Storage},
 	}
 );
 
@@ -262,25 +242,5 @@ fn storage_layer_in_pallet_call() {
 
 		let call2 = RuntimeCall::MyPallet(pallet::Call::set_value { value: 1 });
 		assert_noop!(call2.dispatch(RuntimeOrigin::signed(0)), Error::<Runtime>::Revert);
-	});
-}
-
-#[test]
-fn storage_layer_in_decl_pallet_call() {
-	TestExternalities::default().execute_with(|| {
-		use frame_support::StorageValue;
-		use sp_runtime::traits::Dispatchable;
-
-		let call1 = RuntimeCall::DeclPallet(decl_pallet::Call::set_value { value: 2 });
-		assert_ok!(call1.dispatch(RuntimeOrigin::signed(0)));
-		assert_eq!(decl_pallet::DeclValue::get(), 2);
-
-		let call2 = RuntimeCall::DeclPallet(decl_pallet::Call::set_value { value: 1 });
-		assert_noop!(call2.dispatch(RuntimeOrigin::signed(0)), "Revert!");
-		// Calling the function directly also works with storage layers.
-		assert_noop!(
-			decl_pallet::Module::<Runtime>::set_value(RuntimeOrigin::signed(1), 1),
-			"Revert!"
-		);
 	});
 }

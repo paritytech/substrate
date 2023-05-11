@@ -15,18 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[rustversion::attr(not(stable), ignore)]
-#[cfg(not(feature = "disable-ui-tests"))]
-#[test]
-fn decl_storage_ui() {
-	// Only run the ui tests when `RUN_UI_TESTS` is set.
-	if std::env::var("RUN_UI_TESTS").is_err() {
-		return
-	}
+//! BLS12-377 crypto applications.
 
-	// As trybuild is using `cargo check`, we don't need the real WASM binaries.
-	std::env::set_var("SKIP_WASM_BUILD", "1");
+pub use sp_core::bls::bls377::*;
 
-	let t = trybuild::TestCases::new();
-	t.compile_fail("tests/decl_storage_ui/*.rs");
+mod app {
+	crate::app_crypto!(super, sp_core::testing::BLS377);
 }
+
+#[cfg(feature = "full_crypto")]
+pub use app::Pair as AppPair;
+pub use app::{Public as AppPublic, Signature as AppSignature};

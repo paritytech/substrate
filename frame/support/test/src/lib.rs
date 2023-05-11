@@ -15,46 +15,111 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test crate for frame_support. Allow to make use of `frame_support::decl_storage`.
-//! See tests directory.
+//! Minimal pallet without `frame_system::Config`-super trait.
 
 // Make sure we fail compilation on warnings
 #![warn(missing_docs)]
 #![deny(warnings)]
 
-/// The configuration trait
-pub trait Config: 'static {
-	/// The runtime origin type.
-	type RuntimeOrigin: codec::Codec + codec::EncodeLike + Default + scale_info::TypeInfo;
-	/// The block number type.
-	type BlockNumber: codec::Codec + codec::EncodeLike + Default + scale_info::TypeInfo;
-	/// The information about the pallet setup in the runtime.
-	type PalletInfo: frame_support::traits::PalletInfo;
-	/// The db weights.
-	type DbWeight: frame_support::traits::Get<frame_support::weights::RuntimeDbWeight>;
+pub use frame_support::dispatch::RawOrigin;
+
+pub use self::pallet::*;
+
+#[frame_support::pallet(dev_mode)]
+pub mod pallet {
+	use super::*;
+	use crate::{self as frame_system, pallet_prelude::*};
+	use frame_support::pallet_prelude::*;
+
+	#[pallet::pallet]
+	pub struct Pallet<T>(_);
+
+	/// The configuration trait
+	#[pallet::config]
+	#[pallet::disable_frame_system_supertrait_check]
+	pub trait Config: 'static + Eq + Clone {
+		/// The block number type.
+		type BlockNumber: Parameter + Member + Default + MaybeSerializeDeserialize + MaxEncodedLen;
+		/// The account type.
+		type AccountId: Parameter + Member + MaxEncodedLen;
+		/// The basic call filter to use in Origin.
+		type BaseCallFilter: frame_support::traits::Contains<Self::RuntimeCall>;
+		/// The runtime origin type.
+		type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, Self::RuntimeOrigin>>
+			+ From<RawOrigin<Self::AccountId>>;
+		/// The runtime call type.
+		type RuntimeCall;
+		/// The runtime event type.
+		type RuntimeEvent: Parameter
+			+ Member
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>
+			+ From<Event<Self>>;
+		/// The information about the pallet setup in the runtime.
+		type PalletInfo: frame_support::traits::PalletInfo;
+		/// The db weights.
+		type DbWeight: Get<frame_support::weights::RuntimeDbWeight>;
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		/// A noop call.
+		pub fn noop(_origin: OriginFor<T>) -> DispatchResult {
+			Ok(())
+		}
+	}
+
+	impl<T: Config> Pallet<T> {
+		/// A empty method.
+		pub fn deposit_event(_event: impl Into<T::RuntimeEvent>) {}
+	}
+
+	/// The origin type.
+	#[pallet::origin]
+	pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
+
+	/// The error type.
+	#[pallet::error]
+	pub enum Error<T> {
+		/// Test error documentation
+		TestError,
+		/// Error documentation
+		/// with multiple lines
+		AnotherError,
+		/// Required by construct_runtime
+		CallFiltered,
+	}
+
+	/// The event type.
+	#[pallet::event]
+	pub enum Event<T: Config> {
+		/// The extrinsic is successful
+		ExtrinsicSuccess,
+		/// The extrinsic is failed
+		ExtrinsicFailed,
+		/// The ignored error
+		Ignore(<T as Config>::BlockNumber),
+	}
 }
 
-frame_support::decl_module! {
-	/// Some test module
-	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {}
+/// Ensure that the origin `o` represents the root. Returns `Ok` or an `Err` otherwise.
+pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
+where
+	OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>,
+{
+	o.into().map(|_| ()).map_err(|_| "bad origin: expected to be a root origin")
 }
 
-/// A PalletInfo implementation which just panics.
-pub struct PanicPalletInfo;
+/// Same semantic as [`frame_system`].
+// Note: we cannot use [`frame_system`] here since the pallet does not depend on
+// [`frame_system::Config`].
+pub mod pallet_prelude {
+	pub use crate::ensure_root;
 
-impl frame_support::traits::PalletInfo for PanicPalletInfo {
-	fn index<P: 'static>() -> Option<usize> {
-		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
-	}
-	fn name<P: 'static>() -> Option<&'static str> {
-		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
-	}
-	fn module_name<P: 'static>() -> Option<&'static str> {
-		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
-	}
-	fn crate_version<P: 'static>() -> Option<frame_support::traits::CrateVersion> {
-		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
-	}
+	/// Type alias for the `Origin` associated type of system config.
+	pub type OriginFor<T> = <T as crate::Config>::RuntimeOrigin;
+
+	/// Type alias for the `BlockNumber` associated type of system config.
+	pub type BlockNumberFor<T> = <T as super::Config>::BlockNumber;
 }
 
 /// Provides an implementation of [`frame_support::traits::Randomness`] that should only be used in
