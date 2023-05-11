@@ -128,7 +128,7 @@ impl<T: Config> Migrate for Migration<T> {
 		};
 
 		if let Some((account, contract)) = iter.next() {
-			log::debug!(target: LOG_TARGET, "Migrating contract info for account {:?}", account);
+			log::debug!(target: LOG_TARGET, "\nMigrating contract info for account {:?}", account);
 			let min_balance = Pallet::<T>::min_balance();
 
 			// Store last key for next migration step
@@ -144,9 +144,14 @@ impl<T: Config> Migrate for Migration<T> {
 				.saturating_add(contract.storage_item_deposit)
 				.saturating_add(contract.storage_base_deposit);
 
+			log::debug!(target: LOG_TARGET, "Balance of {:?} {:?}", &account, T::Currency::balance(&account));
+
 			// Unreserve the existing deposit, so we can transfer it to the deposit account.
 			// Note we can't use repatriate_reserve, because it only works with existing accounts
-			T::Currency::unreserve(&account, old_deposit);
+			let unreserved_deposit = T::Currency::unreserve(&account, old_deposit);
+			if unreserved_deposit != old_deposit {
+				log::warn!(target: LOG_TARGET, "Partially unreserved {:?} out of {:?} asked", unreserved_deposit, old_deposit);
+			}
 
 			// Attempt to transfer it to the deposit account.
 			let new_deposit = T::Currency::transfer(
@@ -155,14 +160,13 @@ impl<T: Config> Migrate for Migration<T> {
 				old_deposit,
 				ExistenceRequirement::KeepAlive,
 			)
-			.map(|_| old_deposit)
+			.map(|_| {
+				log::debug!( target: LOG_TARGET, "Transferred original deposit ({:?}) to deposit account", old_deposit);
+				old_deposit
+			})
 			// If it fails, we try to transfer the account reducible balance instead.
-			.or_else(|_| {
-				log::error!(
-					target: LOG_TARGET,
-					"Failed to transfer deposit for account {:?}",
-					account
-				);
+			.or_else(|err| {
+				log::error!( target: LOG_TARGET, "Failed to transfer deposit {:?} from {:?} to {:?}, reason: {:?}", old_deposit, account, deposit_account, err);
 				let deposit = T::Currency::reducible_balance(&account, Preserve, Polite);
 				T::Currency::transfer(
 					&account,
@@ -170,11 +174,14 @@ impl<T: Config> Migrate for Migration<T> {
 					deposit,
 					ExistenceRequirement::KeepAlive,
 				)
-				.map(|_| deposit)
+				.map(|_| {
+					log::debug!( target: LOG_TARGET, "Transferred reducible balance ({:?}) to deposit account", deposit);
+					deposit
+				})
 			})
 			// If it fails we fallback to minting the ED.
-			.unwrap_or_else(|_| {
-				log::error!(target: LOG_TARGET, "Failed to transfer ED for account {:?}", account);
+			.unwrap_or_else(|err| {
+				log::error!(target: LOG_TARGET, "Failed to transfer ED from {:?} to {:?}, reason: {:?}", account, deposit_account, err);
 				T::Currency::deposit_creating(&deposit_account, min_balance);
 				min_balance
 			});
@@ -216,7 +223,7 @@ impl<T: Config> Migrate for Migration<T> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade_step() -> Result<Vec<u8>, &'static str> {
 		let sample: Vec<_> = old::ContractInfoOf::<T>::iter()
-			.take(100)
+			.take(10)
 			.map(|(account, contract)| {
 				let old_deposit = min(
 					T::Currency::reserved_balance(&account),

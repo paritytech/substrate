@@ -1,5 +1,3 @@
-// This file is part of Substrate.
-
 // Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -30,7 +28,7 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
-	migration::Migrate,
+	migration::{Migrate, v9, v10, v11},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -234,36 +232,37 @@ benchmarks! {
 		Contracts::<T>::reinstrument_module(&mut module, &schedule)?;
 	}
 
-	// This benchmarks the v9 migration step.
+	// This benchmarks the v9 migration step. (update codeStorage)
 	#[pov_mode = Measured]
 	v9_migration_step {
 		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
-		migration::v9::store_old_dummy_code::<T>(c as usize);
-		let mut migration = migration::v9::Migration::<T>::default();
+		v9::store_old_dummy_code::<T>(c as usize);
+		let mut m = v9::Migration::<T>::default();
 	}: {
-		migration.step();
+		m.step();
 	}
 
-	// This benchmarks the v10 migration step.
+	// This benchmarks the v10 migration step. (use dedicated deposit_account)
 	#[pov_mode = Measured]
 	v10_migration_step {
-		let account = account::<T::AccountId>("account", 0, 0);
-		let code = WasmModule::<T>::dummy_with_bytes(0);
-		let info = Contract::<T>::new(code, vec![])?.info()?;
-		migration::v10::store_old_contrat_info::<T>(account, info);
-		let mut migration = migration::v10::Migration::<T>::default();
+		let contract = <Contract<T>>::with_caller(
+			whitelisted_caller(), WasmModule::dummy(), vec![],
+		)?;
+
+		v10::store_old_contrat_info::<T>(contract.account_id.clone(), contract.info()?);
+		let mut m = v10::Migration::<T>::default();
 	}: {
-		migration.step();
+		m.step();
 	}
 
 	// This benchmarks the v11 migration step.
 	#[pov_mode = Measured]
 	v11_migration_step {
 		let k in 0 .. 1024;
-		migration::v11::fill_old_queue::<T>(k as usize);
-		let mut migration = migration::v11::Migration::<T>::default();
+		v11::fill_old_queue::<T>(k as usize);
+		let mut m = v11::Migration::<T>::default();
 	}: {
-		migration.step();
+		m.step();
 	}
 
 	// This benchmarks the weight of dispatching a migrate call that does nothing
