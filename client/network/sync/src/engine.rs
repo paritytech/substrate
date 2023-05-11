@@ -37,7 +37,7 @@ use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
 use sc_network::{
 	config::{
-		NetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
+		FullNetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
 	},
 	utils::LruHashSet,
 	NotificationsSink, ProtocolName,
@@ -260,7 +260,7 @@ where
 		roles: Roles,
 		client: Arc<Client>,
 		metrics_registry: Option<&Registry>,
-		network_config: &NetworkConfiguration,
+		net_config: &FullNetworkConfiguration,
 		protocol_id: ProtocolId,
 		fork_id: &Option<String>,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
@@ -272,52 +272,56 @@ where
 		warp_sync_protocol_name: Option<ProtocolName>,
 		rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent<B>>,
 	) -> Result<(Self, SyncingService<B>, NonDefaultSetConfig), ClientError> {
-		let mode = match network_config.sync_mode {
+		let mode = match net_config.network_config.sync_mode {
 			SyncOperationMode::Full => SyncMode::Full,
 			SyncOperationMode::Fast { skip_proofs, storage_chain_mode } =>
 				SyncMode::LightState { skip_proofs, storage_chain_mode },
 			SyncOperationMode::Warp => SyncMode::Warp,
 		};
-		let max_parallel_downloads = network_config.max_parallel_downloads;
-		let max_blocks_per_request = if network_config.max_blocks_per_request >
+		let max_parallel_downloads = net_config.network_config.max_parallel_downloads;
+		let max_blocks_per_request = if net_config.network_config.max_blocks_per_request >
 			crate::MAX_BLOCKS_IN_RESPONSE as u32
 		{
 			log::info!(target: "sync", "clamping maximum blocks per request to {}", crate::MAX_BLOCKS_IN_RESPONSE);
 			crate::MAX_BLOCKS_IN_RESPONSE as u32
 		} else {
-			network_config.max_blocks_per_request
+			net_config.network_config.max_blocks_per_request
 		};
 		let cache_capacity = NonZeroUsize::new(
-			(network_config.default_peers_set.in_peers as usize +
-				network_config.default_peers_set.out_peers as usize)
+			(net_config.network_config.default_peers_set.in_peers as usize +
+				net_config.network_config.default_peers_set.out_peers as usize)
 				.max(1),
 		)
 		.expect("cache capacity is not zero");
 		let important_peers = {
 			let mut imp_p = HashSet::new();
-			for reserved in &network_config.default_peers_set.reserved_nodes {
+			for reserved in &net_config.network_config.default_peers_set.reserved_nodes {
 				imp_p.insert(reserved.peer_id);
 			}
-			for reserved in network_config
-				.extra_sets
-				.iter()
-				.flat_map(|s| s.set_config.reserved_nodes.iter())
-			{
-				imp_p.insert(reserved.peer_id);
+			for config in net_config.notification_protocols() {
+				let peer_ids = config
+					.set_config
+					.reserved_nodes
+					.iter()
+					.map(|info| info.peer_id)
+					.collect::<Vec<PeerId>>();
+				imp_p.extend(peer_ids);
 			}
+
 			imp_p.shrink_to_fit();
 			imp_p
 		};
 		let boot_node_ids = {
 			let mut list = HashSet::new();
-			for node in &network_config.boot_nodes {
+			for node in &net_config.network_config.boot_nodes {
 				list.insert(node.peer_id);
 			}
 			list.shrink_to_fit();
 			list
 		};
 		let default_peers_set_no_slot_peers = {
-			let mut no_slot_p: HashSet<PeerId> = network_config
+			let mut no_slot_p: HashSet<PeerId> = net_config
+				.network_config
 				.default_peers_set
 				.reserved_nodes
 				.iter()
@@ -326,11 +330,12 @@ where
 			no_slot_p.shrink_to_fit();
 			no_slot_p
 		};
-		let default_peers_set_num_full = network_config.default_peers_set_num_full as usize;
+		let default_peers_set_num_full =
+			net_config.network_config.default_peers_set_num_full as usize;
 		let default_peers_set_num_light = {
-			let total = network_config.default_peers_set.out_peers +
-				network_config.default_peers_set.in_peers;
-			total.saturating_sub(network_config.default_peers_set_num_full) as usize
+			let total = net_config.network_config.default_peers_set.out_peers +
+				net_config.network_config.default_peers_set.in_peers;
+			total.saturating_sub(net_config.network_config.default_peers_set_num_full) as usize
 		};
 
 		let (chain_sync, block_announce_config) = ChainSync::new(
