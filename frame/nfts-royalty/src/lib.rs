@@ -46,9 +46,7 @@ pub const LOG_TARGET: &'static str = "runtime::nfts-royalty";
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
-	// TODO: Probably a better way to do this than importing from pallet_nfts.
 	use frame_system::pallet_prelude::*;
-	use pallet_nfts::ItemConfig;
 	use sp_std::fmt::Display;
 
 	use frame_support::{
@@ -57,7 +55,7 @@ pub mod pallet {
 		traits::{
 			tokens::nonfungibles_v2::{
 				Buy as NonFungiblesBuy, Inspect as NonFungiblesInspect,
-				InspectEnumerable as NonFungiblesInspectEnumerable, Mutate as NonFungiblesMutate,
+				InspectEnumerable as NonFungiblesInspectEnumerable,
 			},
 			Currency, ExistenceRequirement, ReservableCurrency,
 		},
@@ -96,8 +94,7 @@ pub mod pallet {
 				Self::AccountId,
 				ItemId = Self::NftItemId,
 				CollectionId = Self::NftCollectionId,
-			> + NonFungiblesMutate<Self::AccountId, ItemConfig>
-			+ NonFungiblesInspectEnumerable<
+			> + NonFungiblesInspectEnumerable<
 				Self::AccountId,
 				ItemId = Self::NftItemId,
 				CollectionId = Self::NftCollectionId,
