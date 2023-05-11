@@ -378,8 +378,8 @@ impl NodeKeyConfig {
 						None
 					}
 				}) {
-					Some(s) => ed25519::SecretKey::from_bytes(s),
-					_ => ed25519::SecretKey::from_bytes(&mut b),
+					Some(s) => ed25519::SecretKey::try_from_bytes(s),
+					_ => ed25519::SecretKey::try_from_bytes(&mut b),
 				},
 				ed25519::SecretKey::generate,
 				|b| b.as_ref().to_vec(),
@@ -743,7 +743,7 @@ mod tests {
 	}
 
 	fn secret_bytes(kp: Keypair) -> Vec<u8> {
-		kp.into_ed25519()
+		kp.try_into_ed25519()
 			.expect("ed25519 keypair")
 			.secret()
 			.as_ref()

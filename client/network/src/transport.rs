@@ -78,28 +78,9 @@ pub fn build_transport(
 		Either::Right(OptionalTransport::some(libp2p::core::transport::MemoryTransport::default()))
 	};
 
-	let authentication_config =
-		{
-			// For more information about these two panics, see in "On the Importance of
-			// Checking Cryptographic Protocols for Faults" by Dan Boneh, Richard A. DeMillo,
-			// and Richard J. Lipton.
-			let noise_keypair = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair)
-			.expect("can only fail in case of a hardware bug; since this signing is performed only \
-				once and at initialization, we're taking the bet that the inconvenience of a very \
-				rare panic here is basically zero");
-
-			// Legacy noise configurations for backward compatibility.
-			#[allow(deprecated)]
-			let noise_legacy = noise::LegacyConfig { recv_legacy_handshake: true, ..Default::default() };
-
-			let mut xx_config = noise::NoiseConfig::xx(noise_keypair);
-			#[allow(deprecated)]
-			xx_config.set_legacy_config(noise_legacy);
-			xx_config.into_authenticated()
-		};
-
+	let authentication_config = noise::Config::new(&keypair).expect("Can create noise config. qed");
 	let multiplexing_config = {
-		let mut yamux_config = libp2p::yamux::YamuxConfig::default();
+		let mut yamux_config = libp2p::yamux::Config::default();
 		// Enable proper flow-control: window updates are only sent when
 		// buffered data has been consumed.
 		yamux_config.set_window_update_mode(libp2p::yamux::WindowUpdateMode::on_read());

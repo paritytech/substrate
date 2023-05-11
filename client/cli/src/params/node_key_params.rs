@@ -101,7 +101,7 @@ fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
 /// Parse a Ed25519 secret key from a hex string into a `sc_network::Secret`.
 fn parse_ed25519_secret(hex: &str) -> error::Result<sc_network::config::Ed25519Secret> {
 	H256::from_str(hex).map_err(invalid_node_key).and_then(|bytes| {
-		ed25519::SecretKey::from_bytes(bytes)
+		ed25519::SecretKey::try_from_bytes(bytes)
 			.map(sc_network::config::Secret::Input)
 			.map_err(invalid_node_key)
 	})
@@ -154,7 +154,7 @@ mod tests {
 				.into_keypair()
 				.expect("Creates node key pair");
 
-			if let Some(pair) = node_key.into_ed25519() {
+			if let Ok(pair) = node_key.try_into_ed25519() {
 				if pair.secret().as_ref() != key.as_ref() {
 					panic!("Invalid key")
 				}

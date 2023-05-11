@@ -56,12 +56,9 @@ use libp2p::{
 	core::{Endpoint, Multiaddr},
 	kad::{
 		handler::KademliaHandler,
-		record::{
-			self,
-			store::{MemoryStore, RecordStore},
-		},
+		record::store::{MemoryStore, RecordStore},
 		GetClosestPeersError, GetRecordOk, Kademlia, KademliaBucketInserts, KademliaConfig,
-		KademliaEvent, QueryId, QueryResult, Quorum, Record,
+		KademliaEvent, QueryId, QueryResult, Quorum, Record, RecordKey,
 	},
 	mdns::{self, tokio::Behaviour as TokioMdns},
 	multiaddr::Protocol,
@@ -375,7 +372,7 @@ impl DiscoveryBehaviour {
 	/// Start fetching a record from the DHT.
 	///
 	/// A corresponding `ValueFound` or `ValueNotFound` event will later be generated.
-	pub fn get_value(&mut self, key: record::Key) {
+	pub fn get_value(&mut self, key: RecordKey) {
 		if let Some(k) = self.kademlia.as_mut() {
 			k.get_record(key.clone());
 		}
@@ -385,7 +382,7 @@ impl DiscoveryBehaviour {
 	/// `get_value`.
 	///
 	/// A corresponding `ValuePut` or `ValuePutFailed` event will later be generated.
-	pub fn put_value(&mut self, key: record::Key, value: Vec<u8>) {
+	pub fn put_value(&mut self, key: RecordKey, value: Vec<u8>) {
 		if let Some(k) = self.kademlia.as_mut() {
 			if let Err(e) = k.put_record(Record::new(key.clone(), value.clone()), Quorum::All) {
 				warn!(target: "sub-libp2p", "Libp2p => Failed to put record: {:?}", e);
@@ -461,22 +458,22 @@ pub enum DiscoveryOut {
 	/// The DHT yielded results for the record request.
 	///
 	/// Returning the result grouped in (key, value) pairs as well as the request duration.
-	ValueFound(Vec<(record::Key, Vec<u8>)>, Duration),
+	ValueFound(Vec<(RecordKey, Vec<u8>)>, Duration),
 
 	/// The record requested was not found in the DHT.
 	///
 	/// Returning the corresponding key as well as the request duration.
-	ValueNotFound(record::Key, Duration),
+	ValueNotFound(RecordKey, Duration),
 
 	/// The record with a given key was successfully inserted into the DHT.
 	///
 	/// Returning the corresponding key as well as the request duration.
-	ValuePut(record::Key, Duration),
+	ValuePut(RecordKey, Duration),
 
 	/// Inserting a value into the DHT failed.
 	///
 	/// Returning the corresponding key as well as the request duration.
-	ValuePutFailed(record::Key, Duration),
+	ValuePutFailed(RecordKey, Duration),
 
 	/// Started a random Kademlia query.
 	///
@@ -980,13 +977,10 @@ mod tests {
 			.map(|i| {
 				let keypair = Keypair::generate_ed25519();
 
-				let noise_keys =
-					noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair).unwrap();
-
 				let transport = MemoryTransport::new()
 					.upgrade(upgrade::Version::V1)
-					.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-					.multiplex(yamux::YamuxConfig::default())
+					.authenticate(noise::Config::new(&keypair).unwrap())
+					.multiplex(yamux::Config::default())
 					.boxed();
 
 				let behaviour = {

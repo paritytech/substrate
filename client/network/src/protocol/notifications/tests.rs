@@ -58,13 +58,10 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 	for index in 0..2 {
 		let keypair = keypairs[index].clone();
 
-		let noise_keys =
-			noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair).unwrap();
-
 		let transport = MemoryTransport::new()
 			.upgrade(upgrade::Version::V1)
-			.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-			.multiplex(yamux::YamuxConfig::default())
+			.authenticate(noise::Config::new(&keypair).unwrap())
+			.multiplex(yamux::Config::default())
 			.timeout(Duration::from_secs(20))
 			.boxed();
 
