@@ -107,6 +107,10 @@ pub mod pallet {
 				ItemId = Self::NftItemId,
 				CollectionId = Self::NftCollectionId,
 			>;
+		
+		/// The maximum number of royalty recipients.
+		#[pallet::constant]
+		type MaxRecipients: Get<u32>;
 	}
 
 	/// The storage for NFT collections with a royalty
@@ -135,7 +139,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn royalty_recipients)]
 	pub type RoyaltyRecipients<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::NftCollectionId, Vec<(T::AccountId, Permill)>>;
+		StorageMap<_, Blake2_128Concat, T::NftCollectionId, BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -174,7 +178,7 @@ pub mod pallet {
 		/// The royalty recipients for a collection have been set.
 		RoyaltyRecipientsCreated {
 			nft_collection: T::NftCollectionId,
-			royalty_recipients: Vec<(T::AccountId, Permill)>,
+			royalty_recipients: BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients>,
 		},
 	}
 
@@ -196,6 +200,8 @@ pub mod pallet {
 		RoyaltyRecipientsAlreadyExist,
 		/// The royalty percentage is invalid.
 		InvalidRoyaltyPercentage,
+		/// The list of recipients has reach its limit
+        MaxRecipientsLimit,
 	}
 
 	#[pallet::call]
@@ -453,13 +459,27 @@ pub mod pallet {
 		pub fn set_collection_royalty_recipients(
 			origin: OriginFor<T>,
 			collection_id: T::NftCollectionId,
-			recipients: Vec<(T::AccountId, Permill)>,
+			recipients: Vec<RoyaltyDetails<T::AccountId>>,
 		) -> DispatchResult {
-			let _origin = ensure_signed(origin)?;
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 
-			// TODO: Ensure that the collection exists
-
-			// TODO: Ensure that the sender is the owner of the collection
+			// Ensure that the collection exists
+			ensure!(
+				T::Nfts::collections().any(|id| id == collection_id),
+				Error::<T>::CollectionDoesNotExist
+			);
+			// Ensure that the sender is the owner of the collection
+			if let Some(check_origin) = maybe_check_origin {
+				ensure!(
+					T::Nfts::collection_owner(&collection_id) == Some(check_origin),
+					Error::<T>::NoPermission
+				);
+			}
+			// Ensure that it not pass the limit of recipients
+			let royalties_recipients: BoundedVec<_, T::MaxRecipients> =
+                recipients.try_into().map_err(|_| Error::<T>::MaxRecipientsLimit)?;
 
 			// Should we do this? Or should we allow to overwrite the recipients that way we have
 			// only one extrinsic for creating recipients and updating them. Ensure that the
@@ -471,17 +491,17 @@ pub mod pallet {
 
 			// Ensure that the sum of the percentages is 100%
 			let mut sum = Permill::zero();
-			for (_, percentage) in recipients.iter() {
-				sum = sum + *percentage;
+			for recipient in royalties_recipients.iter() {
+				sum = sum + recipient.royalty_percentage;
 			}
 			ensure!(sum == Permill::one(), Error::<T>::InvalidRoyaltyPercentage);
 
 			// Create royalty recipients
-			RoyaltyRecipients::<T>::insert(&collection_id, recipients.clone());
+			RoyaltyRecipients::<T>::insert(&collection_id, royalties_recipients.clone());
 
 			Self::deposit_event(Event::RoyaltyRecipientsCreated {
 				nft_collection: collection_id,
-				royalty_recipients: recipients.clone(),
+				royalty_recipients: royalties_recipients,
 			});
 
 			Ok(())
