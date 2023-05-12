@@ -27,6 +27,8 @@ use std::{
 
 const LOG_TARGET: &str = "storage-monitor";
 
+pub type Result<T> = std::result::Result<T, Error>;
+
 /// Error type used in this crate.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -66,7 +68,7 @@ impl StorageMonitorService {
 		parameters: StorageMonitorParams,
 		database: DatabaseSource,
 		spawner: &impl SpawnEssentialNamed,
-	) -> Result<(), Error> {
+	) -> Result<()> {
 		Ok(match (parameters.threshold, database.path()) {
 			(0, _) => {
 				log::info!(
@@ -116,14 +118,14 @@ impl StorageMonitorService {
 	}
 
 	/// Returns free space in MB, or error if statvfs failed.
-	fn free_space(path: &Path) -> Result<u64, Error> {
+	fn free_space(path: &Path) -> Result<u64> {
 		Ok(fs4::available_space(path).map(|s| s / 1024 / 1024)?)
 	}
 
 	/// Checks if the amount of free space for given `path` is above given `threshold` in MB.
 	/// If it dropped below, error is returned.
 	/// System errors are silently ignored.
-	fn check_free_space(path: &Path, threshold: u64) -> Result<(), Error> {
+	fn check_free_space(path: &Path, threshold: u64) -> Result<()> {
 		match StorageMonitorService::free_space(path) {
 			Ok(available_space) => {
 				log::trace!(
