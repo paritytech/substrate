@@ -127,25 +127,23 @@ fn test_once() {
 
 	let (mut peerset, peerset_handle) = Peerset::from_config(PeersetConfig {
 		sets: vec![SetConfig {
-			// bootnodes: (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
-			// 	.map(|_| {
-			// 		let id = PeerId::random();
-			// 		known_nodes.insert(id, State::Disconnected);
-			// 		id
-			// 	})
-			// 	.collect(),
-			// reserved_nodes: {
-			// 	(0..Uniform::new_inclusive(0, 2).sample(&mut rng))
-			// 		.map(|_| {
-			// 			let id = PeerId::random();
-			// 			known_nodes.insert(id, State::Disconnected);
-			// 			reserved_nodes.insert(id);
-			// 			id
-			// 		})
-			// 		.collect()
-			// },
-			bootnodes: Vec::new(),
-			reserved_nodes: HashSet::new(),
+			bootnodes: (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
+				.map(|_| {
+					let id = PeerId::random();
+					known_nodes.insert(id, State::Disconnected);
+					id
+				})
+				.collect(),
+			reserved_nodes: {
+				(0..Uniform::new_inclusive(0, 2).sample(&mut rng))
+					.map(|_| {
+						let id = PeerId::random();
+						known_nodes.insert(id, State::Disconnected);
+						reserved_nodes.insert(id);
+						id
+					})
+					.collect()
+			},
 			in_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
 			out_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
 			reserved_only: Uniform::new_inclusive(0, 10).sample(&mut rng) == 0,
@@ -168,7 +166,7 @@ fn test_once() {
 
 		// Perform a certain number of actions while checking that the state is consistent. If we
 		// reach the end of the loop, the run has succeeded.
-		for _ in 0..2500 {
+		for _ in 0..25000 {
 			// Peer we are working with.
 			let mut current_peer = None;
 			// Current event for event bigrams validation.
@@ -291,9 +289,9 @@ fn test_once() {
 
 				// If we generate 1, discover a new node.
 				1 => {
-					// let new_id = PeerId::random();
-					// known_nodes.insert(new_id, State::Disconnected);
-					// peerset_handle.add_known_peer(new_id);
+					let new_id = PeerId::random();
+					known_nodes.insert(new_id, State::Disconnected);
+					peerset_handle.add_known_peer(new_id);
 				},
 
 				// If we generate 2, adjust a random reputation.

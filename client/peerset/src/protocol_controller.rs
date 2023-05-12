@@ -310,26 +310,18 @@ impl ProtocolController {
 	///
 	/// Intended for tests only. Use `run` for driving [`ProtocolController`].
 	pub async fn next_action(&mut self) -> bool {
-		// Perform tasks prioritizing connection events processing
-		// (see the module documentation for details).
-		let mut emptied_outstanding = None;
-		let either = 'outer: loop {
-			// Receive ACKs from `Notifications` and process outstanding events & actions.
-			for (peer_id, outstanding) in self.outstanding.iter_mut() {
-				if outstanding.try_resolve_ack() {
-					if let Some(event) = outstanding.events.pop_front() {
-						emptied_outstanding = outstanding.is_empty().then_some(*peer_id);
-						break 'outer Either::Left(event)
-					}
-					if let Some(action) = outstanding.actions.pop_front() {
-						emptied_outstanding = outstanding.is_empty().then_some(*peer_id);
-						break 'outer Either::Right(action)
-					}
-				}
-			}
+		let either = loop {
+			log::debug!(target: LOG_TARGET, "Outstanding: {:?}", self.outstanding);
 
-			// If we have received some ACKs, we might be able to remove obsolete entries.
-			self.outstanding.retain(|_, outstanding| !outstanding.is_empty());
+			// Resolve ACKs & process outstanding events/actions. We might want to do this after
+			// `alloc_slots`
+			if let Some(either) = self.resolve_acks_once() {
+				match either {
+					Either::Left(event) => self.process_event(event),
+					Either::Right(action) => self.process_action(action),
+				}
+				return true
+			}
 
 			// Apply postponed `SetReservedOnly` action
 			// TODO: we might need to do it after all events processing.
@@ -359,32 +351,70 @@ impl ProtocolController {
 			}
 		};
 
-		// Remove outstanding entry that became empty.
-		emptied_outstanding.map(|peer_id| self.outstanding.remove(&peer_id));
-
 		match either {
-			Either::Left(event) => self.process_event(event),
-			Either::Right(action) => self.process_action(action),
+			Either::Left(event) => self.push_event(event),
+			Either::Right(action) => self.push_action(action),
 		}
 
 		true
 	}
 
-	/// Process connection event.
-	fn process_event(&mut self, event: Event) {
+	/// Receive ACKs from `Notifications` and process outstanding events & actions.
+	/// This function must be called repeatedly intil it yields `None`.
+	fn resolve_acks_once(&mut self) -> Option<Either<Event, Action>> {
+		let mut result = None;
+		let mut emptied_entries = Vec::new();
+
+		for (peer_id, outstanding) in self.outstanding.iter_mut() {
+			if outstanding.try_resolve_ack() {
+				if let Some(event) = outstanding.events.pop_front() {
+					if outstanding.is_empty() {
+						emptied_entries.push(*peer_id);
+					}
+					result = Some(Either::Left(event));
+					break
+				}
+
+				if let Some(action) = outstanding.actions.pop_front() {
+					if outstanding.is_empty() {
+						emptied_entries.push(*peer_id);
+					}
+					result = Some(Either::Right(action));
+					break
+				}
+
+				emptied_entries.push(*peer_id);
+			}
+		}
+
+		// Remove outstanding entries that became empty.
+		emptied_entries.iter().for_each(|peer_id| {
+			self.outstanding.remove(&peer_id);
+		});
+
+		result
+	}
+
+	/// Push connection event for processing
+	fn push_event(&mut self, event: Event) {
 		if let Some(outstanding) = self.outstanding.get_mut(event.peer_id()) {
 			outstanding.events.push_back(event);
 		} else {
-			match event {
-				Event::IncomingConnection(peer_id, index) =>
-					self.on_incoming_connection(peer_id, index),
-				Event::Dropped(peer_id) => self.on_peer_dropped(peer_id),
-			}
+			self.process_event(event);
 		}
 	}
 
-	/// Process action command.
-	fn process_action(&mut self, action: Action) {
+	/// Process connection event.
+	fn process_event(&mut self, event: Event) {
+		match event {
+			Event::IncomingConnection(peer_id, index) =>
+				self.on_incoming_connection(peer_id, index),
+			Event::Dropped(peer_id) => self.on_peer_dropped(peer_id),
+		}
+	}
+
+	/// Push action command for processing
+	fn push_action(&mut self, action: Action) {
 		if let Some(peer_id) = action.peer_id() {
 			if let Some(outstanding) = self.outstanding.get_mut(peer_id) {
 				outstanding.actions.push_back(action);
@@ -392,6 +422,11 @@ impl ProtocolController {
 			}
 		}
 
+		self.process_action(action);
+	}
+
+	/// Process action command.
+	fn process_action(&mut self, action: Action) {
 		match action {
 			Action::AddReservedPeer(peer_id) => self.on_add_reserved_peer(peer_id),
 			Action::RemoveReservedPeer(peer_id) => self.on_remove_reserved_peer(peer_id),
@@ -438,9 +473,10 @@ impl ProtocolController {
 		trace!(target: LOG_TARGET, "Connecting to {peer_id}.");
 
 		let tx_ack = self.insert_outstanding_ack(peer_id);
-		let _ = self
-			.to_notifications
-			.unbounded_send(AckedMessage(Message::Connect { set_id: self.set_id, peer_id }, tx_ack));
+		let _ = self.to_notifications.unbounded_send(AckedMessage(
+			Message::Connect { set_id: self.set_id, peer_id },
+			tx_ack,
+		));
 	}
 
 	/// Send "drop" message to `Notifications`.
@@ -928,6 +964,9 @@ mod tests {
 		assert_eq!(controller.num_out, 0);
 		assert_eq!(controller.num_in, 0);
 
+		// Resolve ACKs before manually injecting more events for the same peers.
+		assert!(controller.resolve_acks_once().is_none());
+
 		// Drop connections to be able to accept reserved nodes.
 		controller.on_peer_dropped(reserved1);
 		controller.on_peer_dropped(reserved2);
@@ -1039,6 +1078,9 @@ mod tests {
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+
+		// Resolve ACKs before manually injecting more events for the same peers.
+		assert!(controller.resolve_acks_once().is_none());
 
 		// Drop both reserved nodes.
 		controller.on_peer_dropped(reserved1);
@@ -1393,6 +1435,9 @@ mod tests {
 		assert_eq!(controller.num_out, 1);
 		assert_eq!(controller.num_in, 1);
 
+		// Resolve ACKs before manually injecting more events for the same peers.
+		assert!(controller.resolve_acks_once().is_none());
+
 		// Switch to reserved-only mode.
 		controller.on_set_reserved_only(true);
 
@@ -1477,6 +1522,9 @@ mod tests {
 		assert!(controller.reserved_nodes.contains_key(&reserved1));
 		assert!(controller.reserved_nodes.contains_key(&reserved2));
 		assert!(controller.nodes.is_empty());
+
+		// Resolve ACKs before manually injecting more events for the same peers.
+		assert!(controller.resolve_acks_once().is_none());
 
 		// Remove reserved node
 		controller.on_remove_reserved_peer(reserved1);
@@ -1620,6 +1668,9 @@ mod tests {
 		assert!(matches!(controller.nodes.get(&peer2), Some(Direction::Inbound)));
 		assert_eq!(controller.num_in, 1);
 		assert_eq!(controller.num_out, 1);
+
+		// Resolve ACKs before manually injecting more events for the same peers.
+		assert!(controller.resolve_acks_once().is_none());
 
 		controller.on_disconnect_peer(peer1);
 		assert_eq!(
@@ -1797,6 +1848,9 @@ mod tests {
 			Some(PeerState::Connected(Direction::Outbound))
 		));
 
+		// Resolve ACKs before manually injecting more events for the same peers.
+		assert!(controller.resolve_acks_once().is_none());
+
 		// Incoming request for `reserved1`.
 		controller.on_incoming_connection(reserved1, IncomingIndex(2));
 		assert_eq!(rx.try_recv().ok().unwrap().take(), Message::Accept(IncomingIndex(2)));
@@ -1856,6 +1910,9 @@ mod tests {
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(matches!(controller.nodes.get(&regular2).unwrap(), Direction::Inbound,));
 
+		// Resolve ACKs before manually injecting more events for the same peers.
+		assert!(controller.resolve_acks_once().is_none());
+
 		// Incoming request for `regular1`.
 		controller.on_incoming_connection(regular1, IncomingIndex(1));
 		assert_eq!(rx.try_recv().ok().unwrap().take(), Message::Accept(IncomingIndex(1)));
@@ -1909,6 +1966,9 @@ mod tests {
 		assert_eq!(rx.try_recv().ok().unwrap().take(), Message::Accept(IncomingIndex(0)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(matches!(controller.nodes.get(&regular2).unwrap(), Direction::Inbound,));
+
+		// Resolve ACKs before manually injecting more events for the same peers.
+		assert!(controller.resolve_acks_once().is_none());
 
 		// Incoming request for `regular1`.
 		controller.on_incoming_connection(regular1, IncomingIndex(1));
@@ -1964,6 +2024,9 @@ mod tests {
 		assert!(matches!(controller.nodes.get(&regular2).unwrap(), Direction::Inbound,));
 
 		controller.max_in = 0;
+
+		// Resolve ACKs before manually injecting more events for the same peers.
+		assert!(controller.resolve_acks_once().is_none());
 
 		// Incoming request for `regular1`.
 		controller.on_incoming_connection(regular1, IncomingIndex(1));
