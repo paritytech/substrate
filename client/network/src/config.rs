@@ -29,18 +29,20 @@ pub use crate::{
 	types::ProtocolName,
 };
 
+pub use libp2p::{identity::Keypair, multiaddr, Multiaddr, PeerId};
+
 use codec::Encode;
-use libp2p::{identity::Keypair, multiaddr, Multiaddr, PeerId};
 use prometheus_endpoint::Registry;
+use zeroize::Zeroize;
+
 pub use sc_network_common::{
 	role::{Role, Roles},
 	sync::warp::WarpSyncProvider,
 	ExHashT,
 };
 use sc_utils::mpsc::TracingUnboundedSender;
-use zeroize::Zeroize;
-
 use sp_runtime::traits::Block as BlockT;
+
 use std::{
 	error::Error,
 	fmt, fs,
@@ -366,7 +368,7 @@ impl NodeKeyConfig {
 		match self {
 			Ed25519(Secret::New) => Ok(Keypair::generate_ed25519()),
 
-			Ed25519(Secret::Input(k)) => Ok(Keypair::Ed25519(k.into())),
+			Ed25519(Secret::Input(k)) => Ok(ed25519::Keypair::from(k).into()),
 
 			Ed25519(Secret::File(f)) => get_secret(
 				f,
@@ -377,14 +379,14 @@ impl NodeKeyConfig {
 						None
 					}
 				}) {
-					Some(s) => ed25519::SecretKey::from_bytes(s),
-					_ => ed25519::SecretKey::from_bytes(&mut b),
+					Some(s) => ed25519::SecretKey::try_from_bytes(s),
+					_ => ed25519::SecretKey::try_from_bytes(&mut b),
 				},
 				ed25519::SecretKey::generate,
 				|b| b.as_ref().to_vec(),
 			)
 			.map(ed25519::Keypair::from)
-			.map(Keypair::Ed25519),
+			.map(Keypair::from),
 		}
 	}
 }
@@ -564,9 +566,6 @@ pub struct NetworkConfiguration {
 	/// The node key configuration, which determines the node's network identity keypair.
 	pub node_key: NodeKeyConfig,
 
-	/// List of request-response protocols that the node supports.
-	pub request_response_protocols: Vec<RequestResponseConfig>,
-
 	/// Configuration for the default set of nodes used for block syncing and transactions.
 	pub default_peers_set: SetConfig,
 
@@ -575,9 +574,6 @@ pub struct NetworkConfiguration {
 	///
 	/// This value is implicitly capped to `default_set.out_peers + default_set.in_peers`.
 	pub default_peers_set_num_full: u32,
-
-	/// Configuration for extra sets of nodes.
-	pub extra_sets: Vec<NonDefaultSetConfig>,
 
 	/// Client identifier. Sent over the wire for debugging purposes.
 	pub client_version: String,
@@ -649,10 +645,8 @@ impl NetworkConfiguration {
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
 			node_key,
-			request_response_protocols: Vec::new(),
 			default_peers_set_num_full: default_peers_set.in_peers + default_peers_set.out_peers,
 			default_peers_set,
-			extra_sets: Vec::new(),
 			client_version: client_version.into(),
 			node_name: node_name.into(),
 			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ip: true },
@@ -707,7 +701,7 @@ pub struct Params<Block: BlockT> {
 	pub executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
 
 	/// Network layer configuration.
-	pub network_config: NetworkConfiguration,
+	pub network_config: FullNetworkConfiguration,
 
 	/// Legacy name of the protocol to use on the wire. Should be different for each chain.
 	pub protocol_id: ProtocolId,
@@ -727,9 +721,44 @@ pub struct Params<Block: BlockT> {
 
 	/// TX channel for direct communication with `SyncingEngine` and `Protocol`.
 	pub tx: TracingUnboundedSender<crate::event::SyncEvent<Block>>,
+}
 
-	/// Request response protocol configurations
-	pub request_response_protocol_configs: Vec<RequestResponseConfig>,
+/// Full network configuration.
+pub struct FullNetworkConfiguration {
+	/// Installed notification protocols.
+	pub(crate) notification_protocols: Vec<NonDefaultSetConfig>,
+
+	/// List of request-response protocols that the node supports.
+	pub(crate) request_response_protocols: Vec<RequestResponseConfig>,
+
+	/// Network configuration.
+	pub network_config: NetworkConfiguration,
+}
+
+impl FullNetworkConfiguration {
+	/// Create new [`FullNetworkConfiguration`].
+	pub fn new(network_config: &NetworkConfiguration) -> Self {
+		Self {
+			notification_protocols: Vec::new(),
+			request_response_protocols: Vec::new(),
+			network_config: network_config.clone(),
+		}
+	}
+
+	/// Add a notification protocol.
+	pub fn add_notification_protocol(&mut self, config: NonDefaultSetConfig) {
+		self.notification_protocols.push(config);
+	}
+
+	/// Get reference to installed notification protocols.
+	pub fn notification_protocols(&self) -> &Vec<NonDefaultSetConfig> {
+		&self.notification_protocols
+	}
+
+	/// Add a request-response protocol.
+	pub fn add_request_response_protocol(&mut self, config: RequestResponseConfig) {
+		self.request_response_protocols.push(config);
+	}
 }
 
 #[cfg(test)]
@@ -741,9 +770,14 @@ mod tests {
 		tempfile::Builder::new().prefix(prefix).tempdir().unwrap()
 	}
 
-	fn secret_bytes(kp: &Keypair) -> Vec<u8> {
-		let Keypair::Ed25519(p) = kp;
-		p.secret().as_ref().iter().cloned().collect()
+	fn secret_bytes(kp: Keypair) -> Vec<u8> {
+		kp.try_into_ed25519()
+			.expect("ed25519 keypair")
+			.secret()
+			.as_ref()
+			.iter()
+			.cloned()
+			.collect()
 	}
 
 	#[test]
@@ -753,7 +787,7 @@ mod tests {
 		let file = tmp.path().join("x").to_path_buf();
 		let kp1 = NodeKeyConfig::Ed25519(Secret::File(file.clone())).into_keypair().unwrap();
 		let kp2 = NodeKeyConfig::Ed25519(Secret::File(file.clone())).into_keypair().unwrap();
-		assert!(file.is_file() && secret_bytes(&kp1) == secret_bytes(&kp2))
+		assert!(file.is_file() && secret_bytes(kp1) == secret_bytes(kp2))
 	}
 
 	#[test]
@@ -761,13 +795,13 @@ mod tests {
 		let sk = ed25519::SecretKey::generate();
 		let kp1 = NodeKeyConfig::Ed25519(Secret::Input(sk.clone())).into_keypair().unwrap();
 		let kp2 = NodeKeyConfig::Ed25519(Secret::Input(sk)).into_keypair().unwrap();
-		assert!(secret_bytes(&kp1) == secret_bytes(&kp2));
+		assert!(secret_bytes(kp1) == secret_bytes(kp2));
 	}
 
 	#[test]
 	fn test_secret_new() {
 		let kp1 = NodeKeyConfig::Ed25519(Secret::New).into_keypair().unwrap();
 		let kp2 = NodeKeyConfig::Ed25519(Secret::New).into_keypair().unwrap();
-		assert!(secret_bytes(&kp1) != secret_bytes(&kp2));
+		assert!(secret_bytes(kp1) != secret_bytes(kp2));
 	}
 }
