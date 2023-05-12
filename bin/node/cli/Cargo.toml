@@ -107,7 +107,7 @@ serde_json = "1.0.85"
 
 [dev-dependencies]
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
-sc-client-db = { version = "0.10.0-dev", default-features=false, path = "../../../client/db" }
+sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../../../client/db" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/babe" }
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../../../client/consensus/epochs" }
