@@ -45,19 +45,19 @@ pub struct StorageMonitorParams {
 	#[arg(long = "db-storage-threshold", value_name = "MB", default_value_t = 1000)]
 	pub threshold: u64,
 
-	/// How often available space is polled.
+	/// How often available space is polled in seconds.
 	#[arg(long = "db-storage-polling-period", value_name = "SECONDS", default_value_t = 5, value_parser = clap::value_parser!(u32).range(1..))]
 	pub polling_period: u32,
 }
 
-/// Storage monitor service: checks the available space for the filesystem for fiven path.
+/// Storage monitor service: checks the available space for the filesystem for given path.
 pub struct StorageMonitorService {
 	/// watched path
 	path: PathBuf,
 	/// number of megabytes that shall be free on the filesystem for watched path
 	threshold: u64,
-	/// storage space polling period (seconds)
-	polling_period: u32,
+	/// storage space polling period
+	polling_period: Duration,
 }
 
 impl StorageMonitorService {
@@ -92,7 +92,7 @@ impl StorageMonitorService {
 				let storage_monitor_service = StorageMonitorService {
 					path: path.to_path_buf(),
 					threshold,
-					polling_period: parameters.polling_period,
+					polling_period: Duration::from_secs(parameters.polling_period.into()),
 				};
 
 				spawner.spawn_essential(
@@ -108,7 +108,7 @@ impl StorageMonitorService {
 	/// below threshold.
 	async fn run(self) {
 		loop {
-			tokio::time::sleep(Duration::from_secs(self.polling_period.into())).await;
+			tokio::time::sleep(self.polling_period).await;
 			if Self::check_free_space(&self.path, self.threshold).is_err() {
 				break
 			};
@@ -117,10 +117,10 @@ impl StorageMonitorService {
 
 	/// Returns free space in MB, or error if statvfs failed.
 	fn free_space(path: &Path) -> Result<u64, Error> {
-		Ok(fs4::available_space(path).map(|s| s / 1_000_000)?)
+		Ok(fs4::available_space(path).map(|s| s / 1024 / 1024)?)
 	}
 
-	/// Checks if the amount of free space for given `path` is above given `threshold`.
+	/// Checks if the amount of free space for given `path` is above given `threshold` in MB.
 	/// If it dropped below, error is returned.
 	/// System errors are silently ignored.
 	fn check_free_space(path: &Path, threshold: u64) -> Result<(), Error> {
@@ -139,7 +139,7 @@ impl StorageMonitorService {
 				}
 			},
 			Err(e) => {
-				log::error!(target: LOG_TARGET, "Could not read available space: {:?}.", e);
+				log::error!(target: LOG_TARGET, "Could not read available space: {e:?}.");
 				Err(e)
 			},
 		}
