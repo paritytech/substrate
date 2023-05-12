@@ -449,21 +449,42 @@ pub mod pallet {
 				item_royalty = <NftCollectionWithRoyalty<T>>::get(collection_id).ok_or(Error::<T>::NoRoyaltyExists)?;
 			}
 
-			let royalty_amount_to_pay = item_royalty.royalty_percentage * item_price;
+			// Transfer royalty to the royalty recipient or recipients, by default just the recipiend
+			let mut royalties_recipients: BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients> = 
+				[
+					RoyaltyDetails {
+						royalty_percentage: Permill::one(),
+						royalty_recipient: item_royalty.royalty_recipient
+					}
+				].to_vec().try_into().unwrap();
+			//Get the item royalty recipients
+			if let Some(recipients) = <ItemRoyaltyRecipients<T>>::get((collection_id, item_id))  {
+				royalties_recipients = recipients;
+			}
+			//if no check if collection has royalty recipients
+			else if let Some(recipients) = <CollectionRoyaltyRecipients<T>>::get(collection_id)  {
+				royalties_recipients = recipients;
+			}
+			let royalty_amount_to_pay =  item_royalty.royalty_percentage * item_price;
 
-			T::Currency::transfer(
-				&origin,
-				&item_royalty.royalty_recipient,
-				royalty_amount_to_pay,
-				ExistenceRequirement::KeepAlive,
-			)?;
+			// Iterate to transfer to all the recipients
+			for royalty_detail in royalties_recipients.iter_mut() {
+				let individual_royalty_amount_to_pay =  royalty_detail.royalty_percentage * royalty_amount_to_pay;
+				let royalty_recipient = &royalty_detail.royalty_recipient;
+				T::Currency::transfer(
+					&origin,
+					royalty_recipient,
+					individual_royalty_amount_to_pay,
+					ExistenceRequirement::KeepAlive,
+				)?;
 
-			Self::deposit_event(Event::RoyaltyPaid {
-				nft_collection: collection_id,
-				nft: item_id,
-				royalty_amount_paid: royalty_amount_to_pay,
-				royalty_recipient: item_royalty.royalty_recipient,
-			});
+				Self::deposit_event(Event::RoyaltyPaid {
+					nft_collection: collection_id,
+					nft: item_id,
+					royalty_amount_paid: individual_royalty_amount_to_pay,
+					royalty_recipient: royalty_recipient.clone(),
+				});
+			}
 
 			Ok(())
 		}

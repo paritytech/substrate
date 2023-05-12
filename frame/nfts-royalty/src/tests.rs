@@ -71,6 +71,7 @@ fn set_up_balances(initial_balance: u64) {
 	Balances::make_free_balance_be(&account(1), initial_balance);
 	Balances::make_free_balance_be(&account(2), initial_balance);
 	Balances::make_free_balance_be(&account(3), initial_balance);
+	Balances::make_free_balance_be(&account(4), initial_balance);
 }
 
 #[test]
@@ -494,6 +495,141 @@ fn buy_should_work_on_collection_royalty_without_item() {
 				nft: 42,
 				royalty_amount_paid: 5,
 				royalty_recipient: account(1)
+			}
+		);
+	});
+}
+
+#[test]
+fn buy_should_work_with_multiple_recipients_at_collection_level() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		let initial_balance = 100;
+		set_up_balances(initial_balance);
+
+		let mint_id = mint_item();
+		assert_ok!(NftsRoyalty::set_item_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			mint_id,
+			Permill::from_percent(10),
+			account(1)
+		));
+		assert_ok!(NftsRoyalty::set_collection_royalty_recipients(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			vec![
+				RoyaltyDetails {
+					royalty_recipient: account(1),
+					royalty_percentage: Permill::from_percent(20)
+				},
+				RoyaltyDetails {
+					royalty_recipient: account(2),
+					royalty_percentage: Permill::from_percent(60)
+				},
+				RoyaltyDetails {
+					royalty_recipient: account(3),
+					royalty_percentage: Permill::from_percent(20)
+				}
+			],
+		));
+		assert_ok!(Nfts::set_price(RuntimeOrigin::signed(account(1)), 0, 42, Some(50), None,));
+
+		assert_ok!(NftsRoyalty::buy(RuntimeOrigin::signed(account(4)), 0, 42, 60));
+		// Get the items directly from the NFTs pallet, to see if the owner has changed
+		let mut items: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
+		items.sort();
+		assert_eq!(items, vec![(account(4), 0, 42)]);
+		// Check the balance of royalties recipients -> initial balance + price item + royalty.
+		assert_eq!(Balances::total_balance(&account(1)), initial_balance + 50 + 1);
+		assert_eq!(Balances::total_balance(&account(2)), initial_balance + 3);
+		assert_eq!(Balances::total_balance(&account(3)), initial_balance + 1);
+		// Check the balance of buyer -> initial balance - price item - royalty.
+		assert_eq!(Balances::total_balance(&account(4)), initial_balance - 50 - 5);
+		assert_eq!(
+			last_event(),
+			NftsRoyaltyEvent::RoyaltyPaid {
+				nft_collection: 0,
+				nft: 42,
+				royalty_amount_paid: 1,
+				royalty_recipient: account(3)
+			}
+		);
+	});
+}
+
+#[test]
+fn buy_should_work_with_multiple_recipients_at_item_level() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		let initial_balance = 100;
+		set_up_balances(initial_balance);
+
+		let mint_id = mint_item();
+		assert_ok!(NftsRoyalty::set_item_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			mint_id,
+			Permill::from_percent(10),
+			account(1)
+		));
+		assert_ok!(NftsRoyalty::set_collection_royalty_recipients(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			vec![
+				RoyaltyDetails {
+					royalty_recipient: account(1),
+					royalty_percentage: Permill::from_percent(50)
+				},
+				RoyaltyDetails {
+					royalty_recipient: account(2),
+					royalty_percentage: Permill::from_percent(25)
+				},
+				RoyaltyDetails {
+					royalty_recipient: account(3),
+					royalty_percentage: Permill::from_percent(25)
+				}
+			],
+		));
+		assert_ok!(NftsRoyalty::set_item_royalty_recipients(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			mint_id,
+			vec![
+				RoyaltyDetails {
+					royalty_recipient: account(1),
+					royalty_percentage: Permill::from_percent(20)
+				},
+				RoyaltyDetails {
+					royalty_recipient: account(2),
+					royalty_percentage: Permill::from_percent(60)
+				},
+				RoyaltyDetails {
+					royalty_recipient: account(3),
+					royalty_percentage: Permill::from_percent(20)
+				}
+			],
+		));
+		assert_ok!(Nfts::set_price(RuntimeOrigin::signed(account(1)), 0, 42, Some(50), None,));
+
+		assert_ok!(NftsRoyalty::buy(RuntimeOrigin::signed(account(4)), 0, 42, 60));
+		// Get the items directly from the NFTs pallet, to see if the owner has changed
+		let mut items: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
+		items.sort();
+		assert_eq!(items, vec![(account(4), 0, 42)]);
+		// Check the balance of royalties recipients -> initial balance + price item + royalty.
+		assert_eq!(Balances::total_balance(&account(1)), initial_balance + 50 + 1);
+		assert_eq!(Balances::total_balance(&account(2)), initial_balance + 3);
+		assert_eq!(Balances::total_balance(&account(3)), initial_balance + 1);
+		// Check the balance of buyer -> initial balance - price item - royalty.
+		assert_eq!(Balances::total_balance(&account(4)), initial_balance - 50 - 5);
+		assert_eq!(
+			last_event(),
+			NftsRoyaltyEvent::RoyaltyPaid {
+				nft_collection: 0,
+				nft: 42,
+				royalty_amount_paid: 1,
+				royalty_recipient: account(3)
 			}
 		);
 	});

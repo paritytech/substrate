@@ -22,7 +22,7 @@ use crate as pallet_nfts_royalty;
 
 use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
+	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64}
 };
 use pallet_nfts::PalletFeatures;
 use sp_core::H256;
