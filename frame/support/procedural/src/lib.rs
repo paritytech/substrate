@@ -869,24 +869,6 @@ pub fn generate_store(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
-/// To generate the full storage info (used for PoV calculation) use the attribute
-/// `#[pallet::generate_storage_info]`, e.g.:
-///
-/// ```ignore
-/// #[pallet::pallet]
-/// #[pallet::generate_storage_info]
-/// pub struct Pallet<T>(_);
-/// ```
-///
-/// This requires all storage items to implement the trait `StorageInfoTrait`, thus all keys
-/// and value types must be bound by `MaxEncodedLen`. Individual storages can opt-out from this
-/// constraint by using [`#[pallet::unbounded]`](`macro@unbounded`) (see
-/// [`#[pallet::storage]`](`macro@storage`) for more info).
-#[proc_macro_attribute]
-pub fn generate_storage_info(_: TokenStream, _: TokenStream) -> TokenStream {
-	pallet_macro_stub()
-}
-
 /// Because the `pallet::pallet` macro implements `GetStorageVersion`, the current storage
 /// version needs to be communicated to the macro. This can be done by using the
 /// `pallet::storage_version` attribute:

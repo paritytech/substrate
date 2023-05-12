@@ -1597,7 +1597,6 @@ pub mod pallet_prelude {
 /// * [`pallet::constant`](#palletconstant)
 /// * [`pallet::disable_frame_system_supertrait_check`](#disable_supertrait_check)
 /// * [`pallet::generate_store($vis trait Store)`](#palletgenerate_storevis-trait-store)
-/// * [`pallet::generate_storage_info`](#palletgenerate_storage_info)
 /// * [`pallet::storage_version`](#palletstorage_version)
 /// * [`pallet::hooks`](#hooks-pallethooks-optional)
 /// * [`pallet::call`](#call-palletcall-optional)
@@ -1800,24 +1799,6 @@ pub mod pallet_prelude {
 /// definition.
 ///
 /// Also see [`pallet::generate_store`](`frame_support::pallet_macros::generate_store`).
-///
-/// # `pallet::generate_storage_info`
-///
-/// To generate the full storage info (used for PoV calculation) use the attribute
-/// `#[pallet::generate_storage_info]`, e.g.:
-///
-/// ```ignore
-/// #[pallet::pallet]
-/// #[pallet::generate_storage_info]
-/// pub struct Pallet<T>(_);
-/// ```
-///
-/// This requires all storage items to implement the trait [`traits::StorageInfoTrait`], thus
-/// all keys and value types must be bound by [`pallet_prelude::MaxEncodedLen`]. Individual
-/// storages can opt-out from this constraint by using `#[pallet::unbounded]` (see
-/// `#[pallet::storage]` for more info).
-///
-/// Also see [`pallet::generate_storage_info`](`frame_support::pallet_macros::generate_storage_info`)
 ///
 /// # `pallet::storage_version`
 ///
@@ -2903,9 +2884,9 @@ pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, composite_enum, config, constant,
 		disable_frame_system_supertrait_check, error, event, extra_constants, generate_deposit,
-		generate_storage_info, generate_store, genesis_build, genesis_config, getter, hooks,
-		inherent, origin, storage, storage_prefix, storage_version, type_value, unbounded,
-		validate_unsigned, weight, whitelist_storage,
+		generate_store, genesis_build, genesis_config, getter, hooks, inherent, origin, storage,
+		storage_prefix, storage_version, type_value, unbounded, validate_unsigned, weight,
+		whitelist_storage,
 	};
 }
 
