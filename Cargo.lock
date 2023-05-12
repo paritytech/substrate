@@ -5522,9 +5522,10 @@ dependencies = [
  "fs_extra",
  "git2",
  "glob",
+ "itertools",
  "tar",
  "tempfile",
- "toml 0.7.3",
+ "toml_edit",
 ]
 
 [[package]]
