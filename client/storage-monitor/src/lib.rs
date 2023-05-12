@@ -35,7 +35,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
 	#[error("IO Error")]
 	IOError(#[from] io::Error),
-	#[error("Out of storage space: available {0}MB, required {1}MB")]
+	#[error("Out of storage space: available {0}MiB, required {1}MiB")]
 	StorageOutOfSpace(u64, u64),
 }
 
@@ -45,11 +45,11 @@ pub struct StorageMonitorParams {
 	/// Required available space on database storage. If available space for DB storage drops below
 	/// the given threshold, node will be gracefully terminated. If `0` is given monitoring will be
 	/// disabled.
-	#[arg(long = "db-storage-threshold", value_name = "MB", default_value_t = 1000)]
+	#[arg(long = "db-storage-threshold", value_name = "MiB", default_value_t = 1000)]
 	pub threshold: u64,
 
 	/// How often available space is polled in seconds.
-	#[arg(long = "db-storage-polling-period", value_name = "SECONDS", default_value_t = 5, value_parser = clap::value_parser!(u32).range(1..))]
+	#[arg(long = "db-storage-polling-period", value_name = "SECONDS", default_value_t = 6, value_parser = clap::value_parser!(u32).range(1..))]
 	pub polling_period: u32,
 }
 
@@ -86,8 +86,7 @@ impl StorageMonitorService {
 			(threshold, Some(path)) => {
 				log::debug!(
 					target: LOG_TARGET,
-					"Initializing StorageMonitorService for db path: {:?}",
-					path,
+					"Initializing StorageMonitorService for db path: {path:?}",
 				);
 
 				Self::check_free_space(&path, threshold)?;
@@ -118,12 +117,12 @@ impl StorageMonitorService {
 		}
 	}
 
-	/// Returns free space in MB, or error if statvfs failed.
+	/// Returns free space in MiB, or error if statvfs failed.
 	fn free_space(path: &Path) -> Result<u64> {
 		Ok(fs4::available_space(path).map(|s| s / 1024 / 1024)?)
 	}
 
-	/// Checks if the amount of free space for given `path` is above given `threshold` in MB.
+	/// Checks if the amount of free space for given `path` is above given `threshold` in MiB.
 	/// If it dropped below, error is returned.
 	/// System errors are silently ignored.
 	fn check_free_space(path: &Path, threshold: u64) -> Result<()> {
@@ -135,7 +134,7 @@ impl StorageMonitorService {
 				);
 
 				if available_space < threshold {
-					log::error!(target: LOG_TARGET, "Available space {available_space}MB for path `{}` dropped below threshold: {threshold}MB , terminating...", path.display());
+					log::error!(target: LOG_TARGET, "Available space {available_space}MiB for path `{}` dropped below threshold: {threshold}MiB , terminating...", path.display());
 					Err(Error::StorageOutOfSpace(available_space, threshold))
 				} else {
 					Ok(())
