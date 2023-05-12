@@ -38,7 +38,6 @@ sp_api::decl_runtime_apis! {
 		/// Instantiate default `GenesisConfig` and put it to storage. Typically this will be done by means of `GenesisBuild::build` function.
 		fn build_default_config();
 
-		// fn default_config_as_json() -> serde_json::Result<Vec<u8>>;
 		/// Instantiate default `GenesisConfig` and serializes it to json blob.
 		fn default_config_as_json() -> sp_std::vec::Vec<u8>;
 
