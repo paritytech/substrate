@@ -19,7 +19,7 @@
 
 use super::Event as NftsRoyaltyEvent;
 use crate::{
-	mock::*, Error, NftCollectionWithRoyalty, NftItemWithRoyalty, RoyaltyDetails, RoyaltyRecipients,
+	mock::*, Error, NftCollectionWithRoyalty, NftItemWithRoyalty, RoyaltyDetails, CollectionRoyaltyRecipients, ItemRoyaltyRecipients,
 };
 use frame_support::{assert_noop, assert_ok, traits::Currency};
 
@@ -559,13 +559,13 @@ fn nft_set_collection_royalty_recipients_should_work() {
 			}],
 		));
 		// Read royalty pallet's storage.
-		let nft_with_royalty = RoyaltyRecipients::<Test>::get(0).unwrap();
+		let nft_with_royalty = CollectionRoyaltyRecipients::<Test>::get(0).unwrap();
 		assert_eq!(nft_with_royalty[0].royalty_percentage, Permill::from_percent(100));
 		assert_eq!(nft_with_royalty[0].royalty_recipient, account(1));
 		// Check the event was emitted
 		assert_eq!(
 			last_event(),
-			NftsRoyaltyEvent::RoyaltyRecipientsCreated {
+			NftsRoyaltyEvent::CollectionRoyaltyRecipientsCreated {
 				nft_collection: 0,
 				royalty_recipients: nft_with_royalty,
 			}
@@ -672,6 +672,162 @@ fn nft_set_collection_royalty_recipients_fail_invalid_percentage() {
 			NftsRoyalty::set_collection_royalty_recipients(
 				RuntimeOrigin::signed(account(1)),
 				0,
+				vec![
+					RoyaltyDetails {
+						royalty_recipient: account(1),
+						royalty_percentage: Permill::from_percent(25)
+					},
+					RoyaltyDetails {
+						royalty_recipient: account(2),
+						royalty_percentage: Permill::from_percent(25)
+					},
+				],
+			),
+			Error::<Test>::InvalidRoyaltyPercentage
+		);
+	});
+}
+
+#[test]
+fn nft_set_item_royalty_recipients_should_work() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		let mint_id = mint_item();
+		assert_ok!(NftsRoyalty::set_item_royalty_recipients(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			mint_id,
+			vec![RoyaltyDetails {
+				royalty_recipient: account(1),
+				royalty_percentage: Permill::from_percent(100)
+			}],
+		));
+		// Read royalty pallet's storage.
+		let nft_with_royalty = ItemRoyaltyRecipients::<Test>::get((0, mint_id)).unwrap();
+		assert_eq!(nft_with_royalty[0].royalty_percentage, Permill::from_percent(100));
+		assert_eq!(nft_with_royalty[0].royalty_recipient, account(1));
+		// Check the event was emitted
+		assert_eq!(
+			last_event(),
+			NftsRoyaltyEvent::ItemRoyaltyRecipientsCreated {
+				nft_collection: 0,
+				nft: mint_id,
+				royalty_recipients: nft_with_royalty,
+			}
+		);
+	});
+}
+
+#[test]
+fn nft_set_item_royalty_recipients_fail_item_not_exist() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		assert_noop!(
+			NftsRoyalty::set_item_royalty_recipients(
+				RuntimeOrigin::signed(account(1)),
+				0,
+				32,
+				vec![RoyaltyDetails {
+					royalty_recipient: account(1),
+					royalty_percentage: Permill::from_percent(100)
+				}],
+			),
+			Error::<Test>::NftDoesNotExist
+		);
+	});
+}
+
+#[test]
+fn nft_set_item_royalty_recipients_fail_no_permission() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		let mint_id = mint_item();
+		assert_noop!(
+			NftsRoyalty::set_item_royalty_recipients(
+				RuntimeOrigin::signed(account(2)),
+				0,
+				mint_id,
+				vec![RoyaltyDetails {
+					royalty_recipient: account(2),
+					royalty_percentage: Permill::from_percent(100)
+				}],
+			),
+			Error::<Test>::NoPermission
+		);
+	});
+}
+#[test]
+fn nft_set_item_royalty_recipients_fail_limit_recipients() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		let mint_id = mint_item();
+		assert_noop!(
+			NftsRoyalty::set_item_royalty_recipients(
+				RuntimeOrigin::signed(account(1)),
+				0,
+				mint_id,
+				vec![
+					RoyaltyDetails {
+						royalty_recipient: account(1),
+						royalty_percentage: Permill::from_percent(25)
+					},
+					RoyaltyDetails {
+						royalty_recipient: account(2),
+						royalty_percentage: Permill::from_percent(25)
+					},
+					RoyaltyDetails {
+						royalty_recipient: account(3),
+						royalty_percentage: Permill::from_percent(25)
+					},
+					RoyaltyDetails {
+						royalty_recipient: account(4),
+						royalty_percentage: Permill::from_percent(25)
+					}
+				],
+			),
+			Error::<Test>::MaxRecipientsLimit
+		);
+	});
+}
+
+#[test]
+fn nft_set_item_royalty_recipients_fail_ovewrite() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		let mint_id = mint_item();
+		assert_ok!(NftsRoyalty::set_item_royalty_recipients(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			mint_id,
+			vec![RoyaltyDetails {
+				royalty_recipient: account(1),
+				royalty_percentage: Permill::from_percent(100)
+			}],
+		));
+		assert_noop!(
+			NftsRoyalty::set_item_royalty_recipients(
+				RuntimeOrigin::signed(account(1)),
+				0,
+				mint_id,
+				vec![RoyaltyDetails {
+					royalty_recipient: account(1),
+					royalty_percentage: Permill::from_percent(100)
+				}],
+			),
+			Error::<Test>::RoyaltyRecipientsAlreadyExist
+		);
+	});
+}
+#[test]
+fn nft_set_item_royalty_recipients_fail_invalid_percentage() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		let mint_id = mint_item();
+		assert_noop!(
+			NftsRoyalty::set_item_royalty_recipients(
+				RuntimeOrigin::signed(account(1)),
+				0,
+				mint_id,
 				vec![
 					RoyaltyDetails {
 						royalty_recipient: account(1),

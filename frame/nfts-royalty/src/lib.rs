@@ -132,13 +132,23 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	// Storage for multiple royalty recipients and the percentage of the royalty they receive.
+	// Storage for multiple royalty recipients and the percentage of the royalty they receive for a collection.
 	#[pallet::storage]
-	#[pallet::getter(fn royalty_recipients)]
-	pub type RoyaltyRecipients<T: Config> = StorageMap<
+	#[pallet::getter(fn collection_royalty_recipients)]
+	pub type CollectionRoyaltyRecipients<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
 		T::NftCollectionId,
+		BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients>,
+	>;
+
+	// Storage for multiple royalty recipients and the percentage of the royalty they receive for an item.
+	#[pallet::storage]
+	#[pallet::getter(fn item_royalty_recipients)]
+	pub type ItemRoyaltyRecipients<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		(T::NftCollectionId, T::NftItemId),
 		BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients>,
 	>;
 
@@ -177,8 +187,14 @@ pub mod pallet {
 			royalty_recipient: T::AccountId,
 		},
 		/// The royalty recipients for a collection have been set.
-		RoyaltyRecipientsCreated {
+		CollectionRoyaltyRecipientsCreated {
 			nft_collection: T::NftCollectionId,
+			royalty_recipients: BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients>,
+		},
+		/// The royalty recipients for an item have been set.
+		ItemRoyaltyRecipientsCreated {
+			nft_collection: T::NftCollectionId,
+			nft: T::NftItemId,
 			royalty_recipients: BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients>,
 		},
 	}
@@ -459,7 +475,7 @@ pub mod pallet {
 		/// - `collection`: The collection of the item.
 		/// - `recipients`: The recipients of the royalties.
 		///
-		/// Emits `RoyaltyRecipientsCreated`.
+		/// Emits `CollectionRoyaltyRecipientsCreated`.
 		#[pallet::call_index(5)]
 		#[pallet::weight(0)]
 		pub fn set_collection_royalty_recipients(
@@ -491,7 +507,7 @@ pub mod pallet {
 			// only one extrinsic for creating recipients and updating them. Ensure that the
 			// collection does not have any royalty recipients yet
 			ensure!(
-				!RoyaltyRecipients::<T>::contains_key(&collection_id),
+				!CollectionRoyaltyRecipients::<T>::contains_key(&collection_id),
 				Error::<T>::RoyaltyRecipientsAlreadyExist
 			);
 
@@ -503,16 +519,82 @@ pub mod pallet {
 			ensure!(sum == Permill::one(), Error::<T>::InvalidRoyaltyPercentage);
 
 			// Create royalty recipients
-			RoyaltyRecipients::<T>::insert(&collection_id, royalties_recipients.clone());
+			CollectionRoyaltyRecipients::<T>::insert(&collection_id, royalties_recipients.clone());
 
-			Self::deposit_event(Event::RoyaltyRecipientsCreated {
+			Self::deposit_event(Event::CollectionRoyaltyRecipientsCreated {
 				nft_collection: collection_id,
 				royalty_recipients: royalties_recipients,
 			});
 
 			Ok(())
 		}
+
+		/// Create royalty recipients for an existing item.
+		///
+		/// Origin must be Signed and must not be the owner of the `collection`.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `item`: The id of the item.
+		/// - `recipients`: The recipients of the royalties.
+		///
+		/// Emits `ItemRoyaltyRecipientsCreated`.
+		#[pallet::call_index(6)]
+		#[pallet::weight(0)]
+		pub fn set_item_royalty_recipients(
+			origin: OriginFor<T>,
+			collection_id: T::NftCollectionId,
+			item_id: T::NftItemId,
+			recipients: Vec<RoyaltyDetails<T::AccountId>>,
+		) -> DispatchResult {
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
+
+			// Ensure that the item exists
+			ensure!(
+				T::Nfts::items(&collection_id).any(|id| id == item_id),
+				Error::<T>::NftDoesNotExist
+			);
+			// Ensure that the sender is the owner of the item
+			if let Some(check_origin) = maybe_check_origin {
+				ensure!(
+					T::Nfts::owner(&collection_id, &item_id) == Some(check_origin),
+					Error::<T>::NoPermission
+				);
+			}
+
+			// Ensure that it not pass the limit of recipients
+			let royalties_recipients: BoundedVec<_, T::MaxRecipients> =
+				recipients.try_into().map_err(|_| Error::<T>::MaxRecipientsLimit)?;
+
+			// Check whether the item has already a a list of royalty recipients, if so do not allow to set it again
+			ensure!(
+				!ItemRoyaltyRecipients::<T>::contains_key((&collection_id, &item_id)),
+				Error::<T>::RoyaltyRecipientsAlreadyExist
+			);
+
+
+			// Ensure that the sum of the percentages is 100%
+			let mut sum = Permill::zero();
+			for recipient in royalties_recipients.iter() {
+				sum = sum + recipient.royalty_percentage;
+			}
+			ensure!(sum == Permill::one(), Error::<T>::InvalidRoyaltyPercentage);
+
+			// Create royalty recipients
+			ItemRoyaltyRecipients::<T>::insert((&collection_id, &item_id), royalties_recipients.clone());
+
+			Self::deposit_event(Event::ItemRoyaltyRecipientsCreated {
+				nft_collection: collection_id,
+				nft: item_id,
+				royalty_recipients: royalties_recipients,
+			});
+
+			Ok(())
+		}
 	}
+
+	
 
 	impl<T: Config> Pallet<T> {
 		// private functions
