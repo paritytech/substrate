@@ -91,10 +91,7 @@ const SLOT_DURATION: u64 = 1000;
 
 struct TestProposer {
 	client: Arc<TestClient>,
-	link: SassafrasLink,
 	parent_hash: Hash,
-	parent_number: u64,
-	parent_slot: Slot,
 }
 
 impl TestProposer {
@@ -122,45 +119,10 @@ impl Proposer<TestBlock> for TestProposer {
 		let block_builder =
 			self.client.new_block_at(self.parent_hash, inherent_digests, false).unwrap();
 
-		let mut block = match block_builder.build().map_err(|e| e.into()) {
+		let block = match block_builder.build().map_err(|e| e.into()) {
 			Ok(b) => b.block,
 			Err(e) => return future::ready(Err(e)),
 		};
-
-		// Currently the test runtime doesn't invoke each pallet Hooks such as `on_initialize` and
-		// `on_finalize`. Thus we have to manually figure out if we should add a consensus digest.
-
-		let this_slot = crate::find_pre_digest::<TestBlock>(block.header())
-			.expect("baked block has valid pre-digest")
-			.slot;
-
-		let epoch_changes = self.link.epoch_changes.shared_data();
-		let epoch = epoch_changes
-			.epoch_data_for_child_of(
-				descendent_query(&*self.client),
-				&self.parent_hash,
-				self.parent_number,
-				this_slot,
-				|slot| Epoch::genesis(&self.link.genesis_config, slot),
-			)
-			.expect("client has data to find epoch")
-			.expect("can compute epoch for baked block");
-
-		let first_in_epoch = self.parent_slot < epoch.start_slot;
-		if first_in_epoch {
-			// push a `Consensus` digest signalling next change.
-			// we just reuse the same randomness and authorities as the prior
-			// epoch. this will break when we add light client support, since
-			// that will re-check the randomness logic off-chain.
-			let digest_data = ConsensusLog::NextEpochData(NextEpochDescriptor {
-				authorities: epoch.config.authorities.clone(),
-				randomness: epoch.config.randomness,
-				config: None,
-			})
-			.encode();
-			let digest = DigestItem::Consensus(SASSAFRAS_ENGINE_ID, digest_data);
-			block.header.digest_mut().push(digest)
-		}
 
 		future::ready(Ok(Proposal { block, proof: (), storage_changes: Default::default() }))
 	}
@@ -341,7 +303,7 @@ impl TestContext {
 			make_slot_vrf_transcript(&self.link.genesis_config.randomness, slot, epoch.epoch_idx);
 		let vrf_signature = self
 			.keystore
-			.sr25519_vrf_sign(SASSAFRAS, &public, &transcript)
+			.sr25519_vrf_sign(SASSAFRAS, &public, &transcript.into())
 			.unwrap()
 			.unwrap();
 
@@ -805,16 +767,9 @@ impl Environment<TestBlock> for TestContext {
 	type Error = TestError;
 
 	fn init(&mut self, parent_header: &TestHeader) -> Self::CreateProposer {
-		let parent_slot = crate::find_pre_digest::<TestBlock>(parent_header)
-			.expect("parent header has a pre-digest")
-			.slot;
-
 		future::ready(Ok(TestProposer {
 			client: self.client.clone(),
-			link: self.link.clone(),
 			parent_hash: parent_header.hash(),
-			parent_number: *parent_header.number(),
-			parent_slot,
 		}))
 	}
 }

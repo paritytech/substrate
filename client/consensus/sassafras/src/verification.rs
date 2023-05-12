@@ -45,8 +45,8 @@ struct VerificationParams<'a, B: 'a + BlockT> {
 struct VerifiedHeaderInfo {
 	/// Authority index.
 	authority_id: AuthorityId,
-	// /// Seal found within the header.
-	// seal: DigestItem,
+	/// Seal found within the header.
+	seal: DigestItem,
 }
 
 /// Check a header has been signed by the right key. If the slot is too far in
@@ -61,11 +61,18 @@ struct VerifiedHeaderInfo {
 fn check_header<B: BlockT + Sized>(
 	params: VerificationParams<B>,
 ) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo>, Error<B>> {
-	let VerificationParams { header, pre_digest, slot_now, epoch, origin, maybe_ticket } = params;
+	let VerificationParams { mut header, pre_digest, slot_now, epoch, origin, maybe_ticket } =
+		params;
 	let config = &epoch.config;
+
+	let seal = header
+		.digest_mut()
+		.pop()
+		.ok_or_else(|| sassafras_err(Error::HeaderUnsealed(header.hash())))?;
 
 	// Check that the slot is not in the future, with some drift being allowed.
 	if pre_digest.slot > slot_now + MAX_SLOT_DRIFT {
+		header.digest_mut().push(seal);
 		return Ok(CheckedHeader::Deferred(header, pre_digest.slot))
 	}
 
@@ -89,11 +96,6 @@ fn check_header<B: BlockT + Sized>(
 	{
 		return Err(sassafras_err(Error::VrfVerificationFailed))
 	}
-
-	// let seal = header
-	// 	.digest_mut()
-	// 	.pop()
-	// 	.ok_or_else(|| sassafras_err(Error::HeaderUnsealed(header.hash())))?;
 
 	// let signature = seal
 	// 	.as_sassafras_seal()
@@ -132,7 +134,7 @@ fn check_header<B: BlockT + Sized>(
 			},
 	}
 
-	let info = VerifiedHeaderInfo { authority_id };
+	let info = VerifiedHeaderInfo { authority_id, seal };
 
 	Ok(CheckedHeader::Checked(header, info))
 }
@@ -440,7 +442,7 @@ where
 				block.header = pre_header;
 				block.post_hash = Some(hash);
 				// TODO DAVXY: seal required???
-				// block.post_digests.push(verified_info.seal);
+				block.post_digests.push(verified_info.seal);
 				block.insert_intermediate(
 					INTERMEDIATE_KEY,
 					SassafrasIntermediate::<Block> { epoch_descriptor },

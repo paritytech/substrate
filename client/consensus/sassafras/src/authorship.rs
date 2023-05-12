@@ -294,6 +294,9 @@ where
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		ConsensusError,
 	> {
+		// TODO DAVXY SASS-32: this seal may be revisited.
+		// We already have a VRF signature, this could be completelly redundant.
+		// The header.hash() can be added to the VRF signed data.
 		let signature = self
 			.keystore
 			.sign_with(
