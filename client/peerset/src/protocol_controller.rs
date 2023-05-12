@@ -311,8 +311,6 @@ impl ProtocolController {
 	/// Intended for tests only. Use `run` for driving [`ProtocolController`].
 	pub async fn next_action(&mut self) -> bool {
 		let either = loop {
-			log::debug!(target: LOG_TARGET, "Outstanding: {:?}", self.outstanding);
-
 			// Resolve ACKs & process outstanding events/actions. We might want to do this after
 			// `alloc_slots`
 			if let Some(either) = self.resolve_acks_once() {
