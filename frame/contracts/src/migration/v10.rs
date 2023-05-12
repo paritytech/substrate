@@ -149,7 +149,6 @@ impl<T: Config> Migrate for Migration<T> {
 			// Unreserve the existing deposit
 			// Note we can't use repatriate_reserve, because it only works with existing accounts
 			let remaining = T::Currency::unreserve(&account, old_deposit);
-
 			if !remaining.is_zero() {
 				log::warn!(target: LOG_TARGET, "Partially unreserved. Remaining {:?} out of {:?} asked", remaining, old_deposit);
 			}
