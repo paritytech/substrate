@@ -41,6 +41,10 @@ pub use serde;
 #[doc(hidden)]
 pub use sp_std::{ops::Deref, vec::Vec};
 
+#[cfg(feature = "bls-experimental")]
+pub mod bls377;
+#[cfg(feature = "bls-experimental")]
+pub mod bls381;
 pub mod ecdsa;
 pub mod ed25519;
 pub mod sr25519;
@@ -309,6 +313,13 @@ macro_rules! app_crypto_public_common {
 				<$public>::try_from(data).map(Into::into)
 			}
 		}
+
+		impl Public {
+			/// Convert into wrapped generic public key type.
+			pub fn into_inner(self) -> $public {
+				self.0
+			}
+		}
 	};
 }
 
@@ -468,6 +479,13 @@ macro_rules! app_crypto_signature_common {
 
 			fn try_from(data: $crate::Vec<u8>) -> Result<Self, Self::Error> {
 				Self::try_from(&data[..])
+			}
+		}
+
+		impl Signature {
+			/// Convert into wrapped generic signature type.
+			pub fn into_inner(self) -> $sig {
+				self.0
 			}
 		}
 	};

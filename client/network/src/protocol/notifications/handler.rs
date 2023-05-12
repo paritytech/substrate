@@ -72,11 +72,12 @@ use futures::{
 	prelude::*,
 };
 use libp2p::{
-	core::{ConnectedPoint, PeerId},
+	core::ConnectedPoint,
 	swarm::{
-		handler::ConnectionEvent, ConnectionHandler, ConnectionHandlerEvent, IntoConnectionHandler,
-		KeepAlive, NegotiatedSubstream, SubstreamProtocol,
+		handler::ConnectionEvent, ConnectionHandler, ConnectionHandlerEvent, KeepAlive,
+		NegotiatedSubstream, SubstreamProtocol,
 	},
+	PeerId,
 };
 use log::error;
 use parking_lot::{Mutex, RwLock};
@@ -105,19 +106,6 @@ const OPEN_TIMEOUT: Duration = Duration::from_secs(10);
 /// open substreams.
 const INITIAL_KEEPALIVE_TIME: Duration = Duration::from_secs(5);
 
-/// Implements the `IntoConnectionHandler` trait of libp2p.
-///
-/// Every time a connection with a remote starts, an instance of this struct is created and
-/// sent to a background task dedicated to this connection. Once the connection is established,
-/// it is turned into a [`NotifsHandler`].
-///
-/// See the documentation at the module level for more information.
-pub struct NotifsHandlerProto {
-	/// Name of protocols, prototypes for upgrades for inbound substreams, and the message we
-	/// send or respond with in the handshake.
-	protocols: Vec<ProtocolConfig>,
-}
-
 /// The actual handler once the connection has been established.
 ///
 /// See the documentation at the module level for more information.
@@ -138,6 +126,30 @@ pub struct NotifsHandler {
 	events_queue: VecDeque<
 		ConnectionHandlerEvent<NotificationsOut, usize, NotifsHandlerOut, NotifsHandlerError>,
 	>,
+}
+
+impl NotifsHandler {
+	/// Creates new [`NotifsHandler`].
+	pub fn new(peer_id: PeerId, endpoint: ConnectedPoint, protocols: Vec<ProtocolConfig>) -> Self {
+		Self {
+			protocols: protocols
+				.into_iter()
+				.map(|config| {
+					let in_upgrade = NotificationsIn::new(
+						config.name.clone(),
+						config.fallback_names.clone(),
+						config.max_notification_size,
+					);
+
+					Protocol { config, in_upgrade, state: State::Closed { pending_opening: false } }
+				})
+				.collect(),
+			peer_id,
+			endpoint,
+			when_connection_open: Instant::now(),
+			events_queue: VecDeque::with_capacity(16),
+		}
+	}
 }
 
 /// Configuration for a notifications protocol.
@@ -221,45 +233,6 @@ enum State {
 		/// was an idle substream.
 		in_substream: Option<NotificationsInSubstream<NegotiatedSubstream>>,
 	},
-}
-
-impl IntoConnectionHandler for NotifsHandlerProto {
-	type Handler = NotifsHandler;
-
-	fn inbound_protocol(&self) -> UpgradeCollec<NotificationsIn> {
-		self.protocols
-			.iter()
-			.map(|cfg| {
-				NotificationsIn::new(
-					cfg.name.clone(),
-					cfg.fallback_names.clone(),
-					cfg.max_notification_size,
-				)
-			})
-			.collect::<UpgradeCollec<_>>()
-	}
-
-	fn into_handler(self, peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
-		NotifsHandler {
-			protocols: self
-				.protocols
-				.into_iter()
-				.map(|config| {
-					let in_upgrade = NotificationsIn::new(
-						config.name.clone(),
-						config.fallback_names.clone(),
-						config.max_notification_size,
-					);
-
-					Protocol { config, in_upgrade, state: State::Closed { pending_opening: false } }
-				})
-				.collect(),
-			peer_id: *peer_id,
-			endpoint: connected_point.clone(),
-			when_connection_open: Instant::now(),
-			events_queue: VecDeque::with_capacity(16),
-		}
-	}
 }
 
 /// Event that can be received by a `NotifsHandler`.
@@ -459,18 +432,6 @@ impl<'a> Ready<'a> {
 pub enum NotifsHandlerError {
 	#[error("Channel of synchronous notifications is full.")]
 	SyncNotificationsClogged,
-}
-
-impl NotifsHandlerProto {
-	/// Builds a new handler.
-	///
-	/// `list` is a list of notification protocols names, the message to send as part of the
-	/// handshake, and the maximum allowed size of a notification. At the moment, the message
-	/// is always the same whether we open a substream ourselves or respond to handshake from
-	/// the remote.
-	pub fn new(list: impl Into<Vec<ProtocolConfig>>) -> Self {
-		Self { protocols: list.into() }
-	}
 }
 
 impl ConnectionHandler for NotifsHandler {
@@ -954,7 +915,6 @@ pub mod tests {
 			.await
 		}
 	}
-
 	struct MockSubstream {
 		pub rx: mpsc::Receiver<Vec<u8>>,
 		pub tx: mpsc::Sender<Vec<u8>>,

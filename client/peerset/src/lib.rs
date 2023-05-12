@@ -53,7 +53,7 @@ use std::{
 	task::{Context, Poll},
 };
 
-pub use libp2p::PeerId;
+pub use libp2p_identity::PeerId;
 
 pub use peer_store::BANNED_THRESHOLD;
 
@@ -449,7 +449,7 @@ mod tests {
 		BANNED_THRESHOLD,
 	};
 	use futures::prelude::*;
-	use libp2p::PeerId;
+	use libp2p_identity::PeerId;
 	use std::{pin::Pin, task::Poll, thread, time::Duration};
 
 	fn assert_messages(mut peerset: Peerset, messages: Vec<Message>) -> Peerset {

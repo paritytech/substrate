@@ -42,7 +42,7 @@
 //! command for a peer that was previously dropped.
 
 use futures::{channel::oneshot, future::Either, FutureExt, StreamExt};
-use libp2p::PeerId;
+use libp2p_identity::PeerId;
 use log::{error, trace, warn};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -901,7 +901,7 @@ mod tests {
 		peer_store::PeerStoreProvider, AckedMessage, IncomingIndex, Message, ReputationChange,
 		SetConfig, SetId,
 	};
-	use libp2p::PeerId;
+	use libp2p_identity::PeerId;
 	use sc_utils::mpsc::{tracing_unbounded, TryRecvError};
 	use std::collections::HashSet;
 

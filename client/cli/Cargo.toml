@@ -15,10 +15,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 array-bytes = "4.1"
 chrono = "0.4.10"
-clap = { version = "4.0.9", features = ["derive", "string"] }
+clap = { version = "4.2.5", features = ["derive", "string"] }
 fdlimit = "0.2.1"
 futures = "0.3.21"
-libp2p = "0.50.0"
+libp2p-identity = { version = "0.1.2", features = ["peerid", "ed25519"]}
 log = "0.4.17"
 names = { version = "0.13.0", default-features = false }
 parity-scale-codec = "3.2.2"

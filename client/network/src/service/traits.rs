@@ -33,7 +33,7 @@ use sc_peerset::ReputationChange;
 
 use std::{collections::HashSet, future::Future, pin::Pin, sync::Arc};
 
-pub use libp2p::{identity::error::SigningError, kad::record::Key as KademliaKey};
+pub use libp2p::{identity::SigningError, kad::record::Key as KademliaKey};
 
 /// Signer with network identity
 pub trait NetworkSigner {

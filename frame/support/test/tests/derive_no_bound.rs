@@ -50,6 +50,23 @@ struct StructNamed<T: Config, U, V> {
 	phantom: core::marker::PhantomData<(U, V)>,
 }
 
+#[rustversion::attr(not(stable), ignore)]
+#[cfg(not(feature = "disable-ui-tests"))]
+#[test]
+fn test_struct_named_debug_print() {
+	let a_1 = StructNamed::<Runtime, ImplNone, ImplNone> {
+		a: 1,
+		b: 2,
+		c: 3,
+		phantom: Default::default(),
+	};
+
+	assert_eq!(
+		format!("{:?}", a_1),
+		String::from("StructNamed { a: 1, b: 2, c: 3, phantom: PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)> }")
+	);
+}
+
 #[test]
 fn test_struct_named() {
 	let a_1 = StructNamed::<Runtime, ImplNone, ImplNone> {
@@ -70,10 +87,6 @@ fn test_struct_named() {
 	assert_eq!(a_2.b, 2);
 	assert_eq!(a_2.c, 3);
 	assert_eq!(a_2, a_1);
-	assert_eq!(
-		format!("{:?}", a_1),
-		String::from("StructNamed { a: 1, b: 2, c: 3, phantom: PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)> }")
-	);
 
 	let b = StructNamed::<Runtime, ImplNone, ImplNone> {
 		a: 1,
@@ -87,6 +100,14 @@ fn test_struct_named() {
 
 #[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
 struct StructUnnamed<T: Config, U, V>(u32, u64, T::C, core::marker::PhantomData<(U, V)>);
+
+#[rustversion::attr(not(stable), ignore)]
+#[cfg(not(feature = "disable-ui-tests"))]
+#[test]
+fn test_struct_unnamed_debug_print() {
+	let a_1 = StructUnnamed::<Runtime, ImplNone, ImplNone>(1, 2, 3, Default::default());
+	assert_eq!(format!("{:?}", a_1), String::from("StructUnnamed(1, 2, 3, PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)>)"));
+}
 
 #[test]
 fn test_struct_unnamed() {
@@ -103,7 +124,6 @@ fn test_struct_unnamed() {
 	assert_eq!(a_2.1, 2);
 	assert_eq!(a_2.2, 3);
 	assert_eq!(a_2, a_1);
-	assert_eq!(format!("{:?}", a_1), String::from("StructUnnamed(1, 2, 3, PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)>)"));
 
 	let b = StructUnnamed::<Runtime, ImplNone, ImplNone>(1, 2, 4, Default::default());
 
@@ -169,6 +189,28 @@ enum Enum3<T: Config> {
 	VariantUnit2,
 }
 
+#[rustversion::attr(not(stable), ignore)]
+#[cfg(not(feature = "disable-ui-tests"))]
+#[test]
+fn test_enum_debug_print() {
+	type TestEnum = Enum<Runtime, ImplNone, ImplNone>;
+	let variant_0 = TestEnum::VariantUnnamed(1, 2, 3, Default::default());
+	let variant_1 = TestEnum::VariantNamed { a: 1, b: 2, c: 3, phantom: Default::default() };
+	let variant_2 = TestEnum::VariantUnit;
+	let variant_3 = TestEnum::VariantUnit2;
+
+	assert_eq!(
+		format!("{:?}", variant_0),
+		String::from("Enum::VariantUnnamed(1, 2, 3, PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)>)"),
+	);
+	assert_eq!(
+		format!("{:?}", variant_1),
+		String::from("Enum::VariantNamed { a: 1, b: 2, c: 3, phantom: PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)> }"),
+	);
+	assert_eq!(format!("{:?}", variant_2), String::from("Enum::VariantUnit"));
+	assert_eq!(format!("{:?}", variant_3), String::from("Enum::VariantUnit2"));
+}
+
 #[test]
 fn test_enum() {
 	type TestEnum = Enum<Runtime, ImplNone, ImplNone>;
@@ -208,15 +250,4 @@ fn test_enum() {
 	assert!(variant_1.clone() == variant_1);
 	assert!(variant_2.clone() == variant_2);
 	assert!(variant_3.clone() == variant_3);
-
-	assert_eq!(
-		format!("{:?}", variant_0),
-		String::from("Enum::VariantUnnamed(1, 2, 3, PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)>)"),
-	);
-	assert_eq!(
-		format!("{:?}", variant_1),
-		String::from("Enum::VariantNamed { a: 1, b: 2, c: 3, phantom: PhantomData<(derive_no_bound::ImplNone, derive_no_bound::ImplNone)> }"),
-	);
-	assert_eq!(format!("{:?}", variant_2), String::from("Enum::VariantUnit"));
-	assert_eq!(format!("{:?}", variant_3), String::from("Enum::VariantUnit2"));
 }
