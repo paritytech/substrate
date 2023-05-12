@@ -31,7 +31,7 @@ use sp_std::{fmt::Debug, vec::Vec};
 /// Typically, the implementers of this trait are its associated types themselves.
 /// This provides a convenient way to access generic information about the scheme
 /// given any of the associated types.
-pub trait AppCrypto: 'static + Send + Sync + Sized + CryptoType + Clone {
+pub trait AppCrypto: 'static + Send + Sized + CryptoType + Clone {
 	/// Identifier for application-specific key type.
 	const ID: KeyTypeId;
 

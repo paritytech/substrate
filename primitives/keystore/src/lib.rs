@@ -19,6 +19,8 @@
 
 pub mod testing;
 
+#[cfg(feature = "bandersnatch-experimental")]
+use sp_core::bandersnatch;
 #[cfg(feature = "bls-experimental")]
 use sp_core::{bls377, bls381};
 use sp_core::{
@@ -174,6 +176,36 @@ pub trait Keystore: Send + Sync {
 		msg: &[u8; 32],
 	) -> Result<Option<ecdsa::Signature>, Error>;
 
+	#[cfg(feature = "bandersnatch-experimental")]
+	/// DAVXY TODO
+	fn bandersnatch_public_keys(&self, key_type: KeyTypeId) -> Vec<bandersnatch::Public>;
+
+	#[cfg(feature = "bandersnatch-experimental")]
+	/// DAVXY TODO
+	fn bandersnatch_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bandersnatch::Public, Error>;
+
+	#[cfg(feature = "bandersnatch-experimental")]
+	/// DAVXY TODO
+	fn bandersnatch_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		msg: &[u8],
+	) -> Result<Option<bandersnatch::Signature>, Error>;
+
+	#[cfg(feature = "bandersnatch-experimental")]
+	/// DAVXY TODO
+	fn bandersnatch_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		input: &bandersnatch::vrf::VrfSignData,
+	) -> Result<Option<bandersnatch::vrf::VrfSignature>, Error>;
+
 	#[cfg(feature = "bls-experimental")]
 	/// Returns all bls12-381 public keys for the given key type.
 	fn bls381_public_keys(&self, id: KeyTypeId) -> Vec<bls381::Public>;
@@ -258,6 +290,7 @@ pub trait Keystore: Send + Sync {
 	/// - sr25519
 	/// - ed25519
 	/// - ecdsa
+	/// - bandersnatch
 	/// - bls381
 	/// - bls377
 	///
@@ -290,6 +323,12 @@ pub trait Keystore: Send + Sync {
 					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;
 
 				self.ecdsa_sign(id, &public, msg)?.map(|s| s.encode())
+			},
+			#[cfg(feature = "bandersnatch-experimental")]
+			bandersnatch::CRYPTO_ID => {
+				let public = bandersnatch::Public::from_slice(public)
+					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;
+				self.bandersnatch_sign(id, &public, msg)?.map(|s| s.encode())
 			},
 			#[cfg(feature = "bls-experimental")]
 			bls381::CRYPTO_ID => {

@@ -19,6 +19,8 @@
 
 use crate::{Error, Keystore, KeystorePtr};
 
+#[cfg(feature = "bandersnatch-experimental")]
+use sp_core::bandersnatch;
 #[cfg(feature = "bls-experimental")]
 use sp_core::{bls377, bls381};
 use sp_core::{
@@ -212,6 +214,40 @@ impl Keystore for MemoryKeystore {
 	) -> Result<Option<ecdsa::Signature>, Error> {
 		let sig = self.pair::<ecdsa::Pair>(key_type, public).map(|pair| pair.sign_prehashed(msg));
 		Ok(sig)
+	}
+
+	#[cfg(feature = "bandersnatch-experimental")]
+	fn bandersnatch_public_keys(&self, key_type: KeyTypeId) -> Vec<bandersnatch::Public> {
+		self.public_keys::<bandersnatch::Pair>(key_type)
+	}
+
+	#[cfg(feature = "bandersnatch-experimental")]
+	fn bandersnatch_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bandersnatch::Public, Error> {
+		self.generate_new::<bandersnatch::Pair>(key_type, seed)
+	}
+
+	#[cfg(feature = "bandersnatch-experimental")]
+	fn bandersnatch_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		msg: &[u8],
+	) -> Result<Option<bandersnatch::Signature>, Error> {
+		self.sign::<bandersnatch::Pair>(key_type, public, msg)
+	}
+
+	#[cfg(feature = "bandersnatch-experimental")]
+	fn bandersnatch_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		data: &bandersnatch::vrf::VrfSignData,
+	) -> Result<Option<bandersnatch::vrf::VrfSignature>, Error> {
+		self.vrf_sign::<bandersnatch::Pair>(key_type, public, data)
 	}
 
 	#[cfg(feature = "bls-experimental")]

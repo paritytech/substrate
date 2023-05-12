@@ -13,6 +13,8 @@ documentation = "https://docs.rs/sp-core"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+bandersnatch_vrfs = { git = "https://github.com/w3f/ring-vrf", default-features = false, optional = true }
+arrayvec = { version = "0.7.2", default-features = false }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive","max-encoded-len"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 log = { version = "0.4.17", default-features = false }
@@ -73,12 +75,14 @@ bench = false
 [features]
 default = ["std"]
 std = [
+	"arrayvec/std",
 	"merlin/std",
 	"full_crypto",
 	"log/std",
 	"thiserror",
 	"lazy_static",
 	"parking_lot",
+	"bandersnatch_vrfs/getrandom",
 	"bounded-collections/std",
 	"primitive-types/std",
 	"primitive-types/serde",
@@ -132,3 +136,8 @@ full_crypto = [
 # This feature adds BLS crypto primitives. It should not be used in production since
 # the BLS implementation and interface may still be subject to significant change.
 bls-experimental = ["w3f-bls"]
+
+# This feature adds bandernatch-vrf crypto primitive.
+# It should not be used in production since the implementation and interface
+# may still be subject to significant change.
+bandersnatch-experimental = ["bandersnatch_vrfs"]

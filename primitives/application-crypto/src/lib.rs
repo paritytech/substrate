@@ -41,6 +41,12 @@ pub use serde;
 #[doc(hidden)]
 pub use sp_std::{ops::Deref, vec::Vec};
 
+pub use traits::*;
+
+mod traits;
+
+#[cfg(feature = "bandersnatch-experimental")]
+pub mod bandersnatch;
 #[cfg(feature = "bls-experimental")]
 pub mod bls377;
 #[cfg(feature = "bls-experimental")]
@@ -48,9 +54,6 @@ pub mod bls381;
 pub mod ecdsa;
 pub mod ed25519;
 pub mod sr25519;
-mod traits;
-
-pub use traits::*;
 
 /// Declares `Public`, `Pair` and `Signature` types which are functionally equivalent
 /// to the corresponding types defined by `$module` but are new application-specific
