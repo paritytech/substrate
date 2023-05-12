@@ -47,7 +47,7 @@ pub struct DeletionQueueManager<T: Config> {
 	_phantom: PhantomData<T>,
 }
 
-#[cfg(feature = "runtime-benchmarks")]
+#[cfg(any(feature = "runtime-benchmarks", feature = "try-runtime"))]
 pub fn fill_old_queue<T: Config>(len: usize) {
 	let queue: Vec<old::DeletedContract> =
 		core::iter::repeat_with(|| old::DeletedContract { trie_id: Default::default() })
@@ -98,5 +98,28 @@ impl<T: Config> Migrate for Migration<T> {
 		}
 
 		(IsFinished::Yes, T::WeightInfo::v11_migration_step(len as u32))
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade_step() -> Result<Vec<u8>, &'static str> {
+		let old_queue = old::DeletionQueue::<T>::take().unwrap_or_default();
+
+		if old_queue.is_empty() {
+			let len = 10u32;
+			log::debug!( target: LOG_TARGET, "Injecting {len} entries to deletion queue to test migration");
+			fill_old_queue::<T>(len as usize);
+			return Ok(len.encode())
+		}
+
+		Ok((old_queue.len() as u32).encode())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade_step(state: Vec<u8>) -> Result<(), &'static str> {
+		let len = <u32 as Decode>::decode(&mut &state[..]).unwrap();
+		let counter = <DeletionQueueCounter<T>>::get();
+		assert_eq!(counter.insert_counter, len);
+		assert_eq!(counter.delete_counter, len);
+		Ok(())
 	}
 }
