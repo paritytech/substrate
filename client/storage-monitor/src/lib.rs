@@ -48,7 +48,7 @@ pub struct StorageMonitorParams {
 	#[arg(long = "db-storage-threshold", value_name = "MiB", default_value_t = 1000)]
 	pub threshold: u64,
 
-	/// How often available space is polled in seconds.
+	/// How often available space is polled.
 	#[arg(long = "db-storage-polling-period", value_name = "SECONDS", default_value_t = 6, value_parser = clap::value_parser!(u32).range(1..))]
 	pub polling_period: u32,
 }
