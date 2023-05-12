@@ -40,6 +40,7 @@ use frame_support::{
 };
 use sp_runtime::{traits::Zero, Perbill, Saturating};
 use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
+
 mod old {
 	use super::*;
 
@@ -128,7 +129,6 @@ impl<T: Config> Migrate for Migration<T> {
 		};
 
 		if let Some((account, contract)) = iter.next() {
-			log::debug!(target: LOG_TARGET, "\nMigrating contract info for account {:?}", account);
 			let min_balance = Pallet::<T>::min_balance();
 
 			// Store last key for next migration step
@@ -144,25 +144,26 @@ impl<T: Config> Migrate for Migration<T> {
 				.saturating_add(contract.storage_item_deposit)
 				.saturating_add(contract.storage_byte_deposit);
 
-			log::debug!(target: LOG_TARGET, "Balance of {:?} {:?}", &account, T::Currency::balance(&account));
-
-			// Unreserve the existing deposit, so we can transfer it to the deposit account.
+			// Unreserve the existing deposit
 			// Note we can't use repatriate_reserve, because it only works with existing accounts
 			let remaining = T::Currency::unreserve(&account, old_deposit);
+
 			if !remaining.is_zero() {
 				log::warn!(target: LOG_TARGET, "Partially unreserved. Remaining {:?} out of {:?} asked", remaining, old_deposit);
 			}
 
 			// Attempt to transfer the old deposit to the deposit account.
+			// We just want to leave the minimum balance on the contract account
+			let amount = old_deposit.saturating_sub(min_balance);
 			let new_deposit = T::Currency::transfer(
 				&account,
 				&deposit_account,
-				old_deposit,
+				amount,
 				ExistenceRequirement::KeepAlive,
 			)
 			.map(|_| {
-				log::debug!( target: LOG_TARGET, "Transferred original deposit ({:?}) to deposit account", old_deposit);
-				old_deposit
+				log::debug!( target: LOG_TARGET, "Transferred deposit ({:?}) to deposit account", amount);
+				amount
 			})
 			// If it fails, we try to transfer the account reducible balance instead.
 			.or_else(|err| {
@@ -186,8 +187,8 @@ impl<T: Config> Migrate for Migration<T> {
 				min_balance
 			});
 
-			// Calculate the new base_deposit:
-			// Ideally, it should be the same as the original `base_deposit`.
+			// Calculate the new base_deposit to store in the contract:
+			// Ideally: it should be the same as the old one
 			// Ideally, it should be at least 2xED (for the contract and deposit account).
 			// It can't be more than the `new_deposit`.
 			let new_base_deposit = min(
@@ -201,15 +202,25 @@ impl<T: Config> Migrate for Migration<T> {
 				old_deposit.saturating_sub(contract.storage_base_deposit);
 			let ratio = Perbill::from_rational(new_deposit_without_base, old_deposit_without_base);
 
+			// Calculate the new storage deposits based on the ratio
+			let storage_byte_deposit = ratio.mul_ceil(contract.storage_byte_deposit);
+			let storage_item_deposit = ratio.mul_ceil(contract.storage_item_deposit);
+
+			// Recalculate the new base deposit, instead of using new_base_deposit to avoid rounding
+			// errors
+			let storage_base_deposit = new_deposit
+				.saturating_sub(storage_byte_deposit)
+				.saturating_sub(storage_item_deposit);
+
 			let new_contract_info = ContractInfo {
 				trie_id: contract.trie_id,
 				deposit_account,
 				code_hash: contract.code_hash,
 				storage_bytes: contract.storage_bytes,
 				storage_items: contract.storage_items,
-				storage_byte_deposit: ratio.mul_ceil(contract.storage_byte_deposit),
-				storage_item_deposit: ratio.mul_ceil(contract.storage_item_deposit),
-				storage_base_deposit: new_base_deposit,
+				storage_byte_deposit,
+				storage_item_deposit,
+				storage_base_deposit,
 			};
 
 			ContractInfoOf::<T>::insert(&account, new_contract_info);
@@ -225,12 +236,12 @@ impl<T: Config> Migrate for Migration<T> {
 		let sample: Vec<_> = old::ContractInfoOf::<T>::iter()
 			.take(10)
 			.map(|(account, contract)| {
-				let old_deposit = contract
-					.storage_byte_deposit
-					.saturating_add(contract.storage_item_deposit)
-					.saturating_add(contract.storage_base_deposit);
-
-				(account, contract, old_deposit)
+				let total_balance = <<T as Config>::Currency as frame_support::traits::Currency<
+					_,
+				>>::total_balance(&account);
+				let min_balance = Pallet::<T>::min_balance();
+				log::debug!(target: LOG_TARGET, "Old amount {:?} min {:?}", total_balance, min_balance);
+				(account, contract, total_balance)
 			})
 			.collect();
 
@@ -246,8 +257,9 @@ impl<T: Config> Migrate for Migration<T> {
 		.unwrap();
 
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contracts", sample.len());
-		for (account, old_contract, old_deposit) in sample {
+		for (account, old_contract, old_account_balance) in sample {
 			let contract = ContractInfoOf::<T>::get(&account).unwrap();
+			let min_balance = Pallet::<T>::min_balance();
 			assert_eq!(old_contract.trie_id, contract.trie_id);
 			assert_eq!(old_contract.code_hash, contract.code_hash);
 			assert_eq!(old_contract.storage_bytes, contract.storage_bytes);
@@ -257,14 +269,19 @@ impl<T: Config> Migrate for Migration<T> {
 				<<T as Config>::Currency as frame_support::traits::Currency<_>>::total_balance(
 					&contract.deposit_account,
 				);
-			assert_eq!(old_deposit, deposit);
+			assert_eq!(
+				deposit,
+				old_account_balance.saturating_sub(min_balance),
+				"deposit account balance mismatch"
+			);
 			assert_eq!(
 				deposit,
 				contract
-					.storage_byte_deposit
+					.storage_base_deposit
 					.saturating_add(contract.storage_item_deposit)
-					.saturating_add(contract.storage_base_deposit),
-			)
+					.saturating_add(contract.storage_byte_deposit),
+				"deposit mismatch"
+			);
 		}
 
 		Ok(())

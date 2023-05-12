@@ -177,30 +177,55 @@ pub struct Migration<T: Config, M: MigrateSequence = (NoopMigration<1>, NoopMigr
 	PhantomData<(T, M)>,
 );
 
+#[cfg(feature = "try-runtime")]
+impl<T: Config, M: MigrateSequence> Migration<T, M> {
+	fn run_all_steps() -> Result<(), &'static str> {
+		let mut weight = Weight::zero();
+		loop {
+			let in_progress_version = <Pallet<T>>::on_chain_storage_version() + 1;
+			let state = M::pre_upgrade_step(in_progress_version)?;
+			let (status, w) = Self::migrate(Weight::MAX);
+			weight.saturating_accrue(w);
+			M::post_upgrade_step(in_progress_version, state)?;
+			if matches!(status, MigrateResult::Completed) {
+				break
+			}
+		}
+
+		let name = <Pallet<T>>::name();
+		log::info!(target: LOG_TARGET, "{name}: Migration steps weight = {}", weight);
+		Ok(())
+	}
+}
+
 impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 	fn on_runtime_upgrade() -> Weight {
+		let name = <Pallet<T>>::name();
 		let latest_version = <Pallet<T>>::current_storage_version();
 		let storage_version = <Pallet<T>>::on_chain_storage_version();
 
 		if storage_version == latest_version {
-			log::warn!(target: LOG_TARGET, "No Migration performed storage_version = latest_version = {:?}", &storage_version);
+			log::warn!(target: LOG_TARGET, "{name}: No Migration performed storage_version = latest_version = {:?}", &storage_version);
 			return T::WeightInfo::on_runtime_upgrade_noop()
 		}
 
 		// In case a migration is already in progress we create the next migration
 		// (if any) right when the current one finishes.
 		if Self::in_progress() {
-			log::warn!( target: LOG_TARGET, "Migration already in progress {:?}", &storage_version);
+			log::warn!( target: LOG_TARGET, "{name}: Migration already in progress {:?}", &storage_version);
 			return T::WeightInfo::on_runtime_upgrade_in_progress()
 		}
 
 		log::info!(
 			target: LOG_TARGET,
-			"Upgrading storage from {storage_version:?} to {latest_version:?}.",
+			"{name}: Upgrading storage from {storage_version:?} to {latest_version:?}.",
 		);
 
 		let cursor = M::new(storage_version + 1);
 		MigrationInProgress::<T>::set(Some(cursor));
+
+		#[cfg(feature = "try-runtime")]
+		Self::run_all_steps().unwrap();
 
 		return T::WeightInfo::on_runtime_upgrade()
 	}
@@ -215,32 +240,15 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 		if M::is_upgrade_supported(storage_version, target_version) {
 			Ok(Vec::new())
 		} else {
+			let name = <Pallet<T>>::name();
 			log::error!(
 				target: LOG_TARGET,
-				"Range supported {:?}, range requested {:?}",
+				"{name}: Range supported {:?}, range requested {:?}",
 				M::VERSION_RANGE,
 				(storage_version, target_version)
 			);
 			Err("New runtime does not contain the required migrations to perform this upgrade.")
 		}
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
-		let mut weight = Weight::zero();
-		loop {
-			let in_progress_version = <Pallet<T>>::on_chain_storage_version() + 1;
-			let state = M::pre_upgrade_step(in_progress_version)?;
-			let (status, w) = Self::migrate(Weight::MAX);
-			weight.saturating_accrue(w);
-			M::post_upgrade_step(in_progress_version, state)?;
-			if matches!(status, MigrateResult::Completed) {
-				break
-			}
-		}
-
-		log::info!(target: LOG_TARGET, "Migration steps weight = {}", weight);
-		Ok(())
 	}
 }
 
@@ -264,6 +272,7 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 	/// Migrate
 	/// Return the weight used and whether or not a migration is in progress
 	pub(crate) fn migrate(weight_limit: Weight) -> (MigrateResult, Weight) {
+		let name = <Pallet<T>>::name();
 		let mut weight_left = weight_limit;
 
 		if weight_left.checked_reduce(T::WeightInfo::migration()).is_none() {
@@ -281,7 +290,7 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 
 			log::info!(
 				target: LOG_TARGET,
-				"Migrating from {:?} to {:?},",
+				"{name}: Migrating from {:?} to {:?},",
 				storage_version,
 				in_progress_version,
 			);
@@ -302,7 +311,7 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 							// chain the next migration
 							log::info!(
 								target: LOG_TARGET,
-								"Next migration is {:?},",
+								"{name}: Next migration is {:?},",
 								in_progress_version + 1,
 							);
 
@@ -311,7 +320,7 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 							// enable pallet by removing the storage item
 							log::info!(
 								target: LOG_TARGET,
-								"All migrations done. At version {:?},",
+								"{name}: All migrations done. At version {:?},",
 								in_progress_version,
 							);
 							None
