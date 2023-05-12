@@ -27,7 +27,7 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		tokens::fungible, ConstU32, ConstU64, ConstU8, Imbalance as ImbalanceT, OnUnbalanced,
-		StorageMapShim, StoredMap,
+		StorageMapShim, StoredMap, WhitelistedStorageKeys,
 	},
 	weights::{IdentityFee, Weight},
 	RuntimeDebug,
@@ -35,13 +35,14 @@ use frame_support::{
 use frame_system::{self as system, RawOrigin};
 use pallet_transaction_payment::{ChargeTransactionPayment, CurrencyAdapter, Multiplier};
 use scale_info::TypeInfo;
-use sp_core::H256;
+use sp_core::{hexdisplay::HexDisplay, H256};
 use sp_io;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, IdentityLookup, SignedExtension, Zero},
 	ArithmeticError, DispatchError, DispatchResult, FixedPointNumber, TokenError,
 };
+use std::collections::BTreeSet;
 
 mod currency_tests;
 mod dispatchable_tests;
@@ -303,4 +304,26 @@ fn weights_sane() {
 
 	let info = crate::Call::<Test>::force_unreserve { who: 10, amount: 4 }.get_dispatch_info();
 	assert_eq!(<() as crate::WeightInfo>::force_unreserve(), info.weight);
+}
+
+#[test]
+fn check_whitelist() {
+	let whitelist: BTreeSet<String> = AllPalletsWithSystem::whitelisted_storage_keys()
+		.iter()
+		.map(|e| HexDisplay::from(&e.key).to_string())
+		.collect();
+	// Inactive Issuance
+	assert!(whitelist.contains("c2261276cc9d1f8598ea4b6a74b15c2f1ccde6872881f893a21de93dfe970cd5"));
+	// Total Issuance
+	assert!(whitelist.contains("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80"));
+	// Block Number
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac"));
+	// Execution Phase
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a"));
+	// Event Count
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850"));
+	// System Events
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7"));
+	// System BlockWeight
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef734abf5cb34d6244378cddbf18e849d96"));
 }
