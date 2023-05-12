@@ -34,7 +34,7 @@ use sp_runtime::{
 fn check_whitelist() {
 	let whitelist: BTreeSet<String> = AllPalletsWithSystem::whitelisted_storage_keys()
 		.iter()
-		.map(|e| HexDisplay::from(&e.key).to_string())
+		.map(|s| HexDisplay::from(&s.key).to_string())
 		.collect();
 
 	// Block Number
