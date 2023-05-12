@@ -40,6 +40,7 @@ exceptions = [
     { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "node-bench" },
     { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "node-cli" },
     { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "node-inspect" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "node-template-release" },
     { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "node-testing" },
     { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-authority-discovery" },
     { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-basic-authorship" },

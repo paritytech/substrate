@@ -626,6 +626,7 @@ fn generate_storage_instance(
 
 	// Implement `StorageInstance` trait.
 	let code = quote! {
+		#[allow(non_camel_case_types)]
 		#visibility struct #name< #impl_generics >(
 			#crate_::sp_std::marker::PhantomData<(#type_generics)>
 		) #where_clause;

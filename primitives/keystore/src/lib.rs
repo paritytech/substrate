@@ -19,10 +19,13 @@
 
 pub mod testing;
 
+#[cfg(feature = "bls-experimental")]
+use sp_core::{bls377, bls381};
 use sp_core::{
 	crypto::{ByteArray, CryptoTypeId, KeyTypeId},
 	ecdsa, ed25519, sr25519,
 };
+
 use std::sync::Arc;
 
 /// Keystore error
@@ -171,6 +174,68 @@ pub trait Keystore: Send + Sync {
 		msg: &[u8; 32],
 	) -> Result<Option<ecdsa::Signature>, Error>;
 
+	#[cfg(feature = "bls-experimental")]
+	/// Returns all bls12-381 public keys for the given key type.
+	fn bls381_public_keys(&self, id: KeyTypeId) -> Vec<bls381::Public>;
+
+	#[cfg(feature = "bls-experimental")]
+	/// Returns all bls12-377 public keys for the given key type.
+	fn bls377_public_keys(&self, id: KeyTypeId) -> Vec<bls377::Public>;
+
+	#[cfg(feature = "bls-experimental")]
+	/// Generate a new bls381 key pair for the given key type and an optional seed.
+	///
+	/// Returns an `bls381::Public` key of the generated key pair or an `Err` if
+	/// something failed during key generation.
+	fn bls381_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls381::Public, Error>;
+
+	#[cfg(feature = "bls-experimental")]
+	/// Generate a new bls377 key pair for the given key type and an optional seed.
+	///
+	/// Returns an `bls377::Public` key of the generated key pair or an `Err` if
+	/// something failed during key generation.
+	fn bls377_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls377::Public, Error>;
+
+	#[cfg(feature = "bls-experimental")]
+	/// Generate a bls381 signature for a given message.
+	///
+	/// Receives [`KeyTypeId`] and a [`bls381::Public`] key to be able to map
+	/// them to a private key that exists in the keystore.
+	///
+	/// Returns an [`bls381::Signature`] or `None` in case the given `key_type`
+	/// and `public` combination doesn't exist in the keystore.
+	/// An `Err` will be returned if generating the signature itself failed.
+	fn bls381_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bls381::Public,
+		msg: &[u8],
+	) -> Result<Option<bls381::Signature>, Error>;
+
+	#[cfg(feature = "bls-experimental")]
+	/// Generate a bls377 signature for a given message.
+	///
+	/// Receives [`KeyTypeId`] and a [`bls377::Public`] key to be able to map
+	/// them to a private key that exists in the keystore.
+	///
+	/// Returns an [`bls377::Signature`] or `None` in case the given `key_type`
+	/// and `public` combination doesn't exist in the keystore.
+	/// An `Err` will be returned if generating the signature itself failed.
+	fn bls377_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bls377::Public,
+		msg: &[u8],
+	) -> Result<Option<bls377::Signature>, Error>;
+
 	/// Insert a new secret key.
 	fn insert(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()>;
 
@@ -189,7 +254,13 @@ pub trait Keystore: Send + Sync {
 	///
 	/// The message is signed using the cryptographic primitive specified by `crypto_id`.
 	///
-	/// Schemes supported by the default trait implementation: sr25519, ed25519 and ecdsa.
+	/// Schemes supported by the default trait implementation:
+	/// - sr25519
+	/// - ed25519
+	/// - ecdsa
+	/// - bls381
+	/// - bls377
+	///
 	/// To support more schemes you can overwrite this method.
 	///
 	/// Returns the SCALE encoded signature if key is found and supported, `None` if the key doesn't
@@ -217,7 +288,20 @@ pub trait Keystore: Send + Sync {
 			ecdsa::CRYPTO_ID => {
 				let public = ecdsa::Public::from_slice(public)
 					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;
+
 				self.ecdsa_sign(id, &public, msg)?.map(|s| s.encode())
+			},
+			#[cfg(feature = "bls-experimental")]
+			bls381::CRYPTO_ID => {
+				let public = bls381::Public::from_slice(public)
+					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;
+				self.bls381_sign(id, &public, msg)?.map(|s| s.encode())
+			},
+			#[cfg(feature = "bls-experimental")]
+			bls377::CRYPTO_ID => {
+				let public = bls377::Public::from_slice(public)
+					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;
+				self.bls377_sign(id, &public, msg)?.map(|s| s.encode())
 			},
 			_ => return Err(Error::KeyNotSupported(id)),
 		};
