@@ -27,7 +27,6 @@ fn h2b<const N: usize>(hex: &str) -> [u8; N] {
 	array_bytes::hex2array_unchecked(hex)
 }
 
-#[allow(unused)]
 fn b2h<const N: usize>(bytes: [u8; N]) -> String {
 	array_bytes::bytes2hex("", &bytes)
 }
@@ -147,9 +146,10 @@ fn on_first_block_after_genesis() {
 		assert_eq!(Sassafras::current_slot_index(), 0);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
+		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("ad57850fef75c0d256889233a5b1e6994af8b994fa6fb17759ff3906307f675d"),
+			h2b("c3bcc82b9636bf12a9ba858ea6855b0b5a7a57803370e57cd87223f9d8d1a896"),
 		);
 
 		// Header data check
@@ -198,9 +198,10 @@ fn on_normal_block() {
 		assert_eq!(Sassafras::current_slot_index(), 1);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
+		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("ad57850fef75c0d256889233a5b1e6994af8b994fa6fb17759ff3906307f675d"),
+			h2b("c3bcc82b9636bf12a9ba858ea6855b0b5a7a57803370e57cd87223f9d8d1a896"),
 		);
 
 		let header = finalize_block(end_block);
@@ -215,9 +216,10 @@ fn on_normal_block() {
 		assert_eq!(Sassafras::current_slot_index(), 1);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
+		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("0bc8cce9f44a6dd90d9abd4486dfc36023a81839fac93d035ff01ef5c7a62ba8"),
+			h2b("a44c15061d80d1f1b58abb3e002b9bd2d7135b3c8bef95a3af2ae5079a901135"),
 		);
 
 		// Header data check
@@ -252,13 +254,15 @@ fn produce_epoch_change_digest() {
 		assert_eq!(Sassafras::current_epoch_start(), start_slot + epoch_duration);
 		assert_eq!(Sassafras::current_slot_index(), 0);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
+		println!("{}", b2h(NextRandomness::<Test>::get()));
 		assert_eq!(
 			NextRandomness::<Test>::get(),
-			h2b("72801624ceaf56c6d07a07e683643d92e91eadd09e06cb4cbe0ffe1edf6e94a1"),
+			h2b("fec42ab12d7497cc8863b078774560790a5f1ee38d2b3a6b7448c4cc318c6e24"),
 		);
+		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("eb9f571fa1e2f428b81ddb33d428051cb8793227934ed50469d4ad2a84997820"),
+			h2b("ba92c7ea134d29bd4c663e9a5811c0c76972606acbfdad354ab3cc9d400f756c"),
 		);
 
 		let header = finalize_block(end_block);
@@ -272,13 +276,15 @@ fn produce_epoch_change_digest() {
 		assert_eq!(Sassafras::current_epoch_start(), start_slot + epoch_duration);
 		assert_eq!(Sassafras::current_slot_index(), 0);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
+		println!("{}", b2h(NextRandomness::<Test>::get()));
 		assert_eq!(
 			NextRandomness::<Test>::get(),
-			h2b("72801624ceaf56c6d07a07e683643d92e91eadd09e06cb4cbe0ffe1edf6e94a1"),
+			h2b("fec42ab12d7497cc8863b078774560790a5f1ee38d2b3a6b7448c4cc318c6e24"),
 		);
+		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("d4b9d766b937902735d6423b10f3783bb384d738dd2b8d61031de406301fff8e"),
+			h2b("cea876f919ae1f6cdc8a93e91199d75bd162fb0b930df7168a66cdafc3ddd23c"),
 		);
 
 		// Header data check
@@ -353,7 +359,7 @@ fn submit_segments_works() {
 
 		// Tweak the epoch config to discard some of the tickets
 		let mut config = EpochConfig::<Test>::get();
-		config.redundancy_factor = 1;
+		config.redundancy_factor = 2;
 		EpochConfig::<Test>::set(config);
 
 		// Populate the segments via the `submit_tickets`
@@ -372,11 +378,11 @@ fn submit_segments_works() {
 		assert_eq!(meta.segments_count, segments_count);
 		assert_eq!(meta.tickets_count, [0, 0]);
 		let seg = NextTicketsSegments::<Test>::get(0);
-		assert_eq!(seg.len(), 3);
+		assert_eq!(seg.len(), 5);
 		let seg = NextTicketsSegments::<Test>::get(1);
-		assert_eq!(seg.len(), 1);
+		assert_eq!(seg.len(), 6);
 		let seg = NextTicketsSegments::<Test>::get(2);
-		assert_eq!(seg.len(), 2);
+		assert_eq!(seg.len(), 4);
 	})
 }
 

@@ -23,6 +23,9 @@ use scale_info::TypeInfo;
 use sp_consensus_slots::Slot;
 use sp_core::sr25519::vrf::{VrfInput, VrfOutput};
 
+/// VRF context used for ticket-id generation.
+const TICKET_ID_VRF_CONTEXT: &[u8] = b"SassafrasTicketIdVRFContext";
+
 /// Ticket identifier.
 ///
 /// Within the algorithm this is also used as a ticket score applied to bound
@@ -106,12 +109,13 @@ pub fn ticket_id_vrf_input(randomness: &Randomness, attempt: u32, epoch: u64) ->
 ///
 /// Input generally obtained via `ticket_id_vrf_input`.
 /// Output can be obtained directly using the vrf secret key or from the signature.
-// TODO DAVXY temporary way to generate id... use io.make_bytes()
-pub fn ticket_id(_in: &VrfInput, out: &VrfOutput) -> TicketId {
-	let preout = out;
-	let mut raw: [u8; 16] = [0; 16];
-	raw.copy_from_slice(&preout.0 .0[0..16]);
-	u128::from_le_bytes(raw)
+// TODO DAVXY: with new VRF authority-id is not necessary
+pub fn ticket_id(vrf_input: &VrfInput, vrf_output: &VrfOutput) -> TicketId {
+	let public = sp_core::sr25519::Public::from_raw([0; 32]);
+	vrf_output
+		.make_bytes::<16>(TICKET_ID_VRF_CONTEXT, vrf_input, &public)
+		.map(|bytes| u128::from_le_bytes(bytes))
+		.unwrap_or(u128::MAX)
 }
 
 /// Computes the threshold for a given epoch as T = (x*s)/(a*v), where:

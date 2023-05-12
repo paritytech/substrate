@@ -56,7 +56,7 @@ use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
 	AuthorityId, Epoch, EquivocationProof, Randomness, SassafrasAuthorityWeight,
 	SassafrasConfiguration, SassafrasEpochConfiguration, Slot, TicketData, TicketEnvelope,
-	TicketId, SASSAFRAS_ENGINE_ID,
+	TicketId, RANDOMNESS_LENGTH, RANDOMNESS_VRF_CONTEXT, SASSAFRAS_ENGINE_ID,
 };
 use sp_io::hashing;
 use sp_runtime::{
@@ -301,9 +301,33 @@ pub mod pallet {
 			let pre_digest = Initialized::<T>::take()
 				.expect("Finalization is called after initialization; qed.");
 
-			// TODO-SASS-P3 DAVXY: use make-bytes!!!
-			// let bytes = .... ; for the moment we just use the pre-output
-			Self::deposit_randomness(pre_digest.vrf_signature.output.0.as_bytes());
+			// TODO DAVXY P32: probably with the new vrf we don't need the authority id
+			// `inout` is sufficent
+			let authority_idx = pre_digest.authority_idx;
+			let authorities = Authorities::<T>::get();
+			let authority_id = authorities
+				.get(authority_idx as usize)
+				.expect("Authority should be valid at this point; qed");
+
+			// TODO DAVXY: check if is a disabled validator
+
+			let vrf_input = sp_consensus_sassafras::slot_claim_vrf_input(
+				&Self::randomness(),
+				CurrentSlot::<T>::get(),
+				EpochIndex::<T>::get(),
+			);
+
+			let vrf_preout = &pre_digest.vrf_signature.output;
+
+			let randomness = vrf_preout
+				.make_bytes::<RANDOMNESS_LENGTH>(
+					RANDOMNESS_VRF_CONTEXT,
+					&vrf_input,
+					authority_id.0.as_ref(),
+				)
+				.expect("Can't fail? TODO DAVXY");
+
+			Self::deposit_randomness(&randomness);
 
 			// If we are in the epoch's second half, we start sorting the next epoch tickets.
 			let epoch_duration = T::EpochDuration::get();
