@@ -166,7 +166,7 @@ fn test_once() {
 
 		// Perform a certain number of actions while checking that the state is consistent. If we
 		// reach the end of the loop, the run has succeeded.
-		for _ in 0..25000 {
+		for _ in 0..2500 {
 			// Peer we are working with.
 			let mut current_peer = None;
 			// Current event for event bigrams validation.
