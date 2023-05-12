@@ -20,13 +20,15 @@
 //!
 //! This Runtime API allows to construct `GenesisConfig`, in particular:
 //! - serialize the runtime default `GenesisConfig` struct into json format,
-//! - put the GenesisConfig struct into the storage. Internally this operation calls `GenesisBuild::build` function
+//! - put the GenesisConfig struct into the storage. Internally this operation calls
+//!   `GenesisBuild::build` function
 //! for all runtime pallets, which is typically by pallet's author.
-//! - deserialize the GenesisConfig from given json blob and put GenesisConfig into the state storage. Allows to build
+//! - deserialize the GenesisConfig from given json blob and put GenesisConfig into the state
+//!   storage. Allows to build
 //! customized configuration.
 //!
-//! Providing externalities with empty storage and putting GenesisConfig into storage allows to catch and build the raw
-//! storage of `GenesisConfig` which is the foundation for genesis block. 
+//! Providing externalities with empty storage and putting GenesisConfig into storage allows to
+//! catch and build the raw storage of `GenesisConfig` which is the foundation for genesis block.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
