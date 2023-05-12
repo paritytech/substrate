@@ -17,7 +17,6 @@
 
 mod call;
 mod config;
-mod event;
 mod freeze_reason;
 mod hold_reason;
 mod inherent;
@@ -30,7 +29,6 @@ mod unsigned;
 
 pub use call::expand_outer_dispatch;
 pub use config::expand_outer_config;
-pub use event::expand_outer_event;
 pub use freeze_reason::expand_outer_freeze_reason;
 pub use hold_reason::expand_outer_hold_reason;
 pub use inherent::expand_outer_inherent;
