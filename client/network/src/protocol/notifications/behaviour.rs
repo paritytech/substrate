@@ -697,7 +697,7 @@ impl Notifications {
 			st @ PeerState::Incoming { .. } => {
 				info!(
 					target: "sub-libp2p",
-					"PSM => Connect({}, {:?}): Ignoring obsolete connect, we are awaiting for accept/reject.",
+					"PSM => Connect({}, {:?}): Ignoring obsolete connect, we are awaiting accept/reject.",
 					occ_entry.key().0, set_id
 				);
 				*occ_entry.into_mut() = st;
@@ -828,7 +828,7 @@ impl Notifications {
 			st @ PeerState::Incoming { .. } => {
 				info!(
 					target: "sub-libp2p",
-					"PSM => Drop({}, {:?}): Ignoring obsolete disconnect, we are awaiting for accept/reject.",
+					"PSM => Drop({}, {:?}): Ignoring obsolete disconnect, we are awaiting accept/reject.",
 					entry.key().0, set_id,
 				);
 				*entry.into_mut() = st;
@@ -4014,7 +4014,7 @@ mod tests {
 		let (mut notif, _peerset) = development_notifs();
 		let peer = PeerId::random();
 		let set_id = sc_peerset::SetId::from(0);
-		let conn = ConnectionId::new(0usize);
+		let conn = ConnectionId::new_unchecked(0);
 		let connected = ConnectedPoint::Listener {
 			local_addr: Multiaddr::empty(),
 			send_back_addr: Multiaddr::empty(),
