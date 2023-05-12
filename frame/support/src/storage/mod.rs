@@ -1265,6 +1265,20 @@ impl<T> Iterator for ChildTriePrefixIterator<T> {
 	}
 }
 
+/// Trait for storage types that store all its value after a unique prefix.
+pub trait StoragePrefixContainer {
+	/// Module prefix. Used for generating final key.
+	fn module_prefix() -> &'static [u8];
+
+	/// Storage prefix. Used for generating final key.
+	fn storage_prefix() -> &'static [u8];
+
+	/// Final full prefix that prefixes all keys.
+	fn final_prefix() -> [u8; 32] {
+		crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix())
+	}
+}
+
 /// Trait for maps that store all its value after a unique prefix.
 ///
 /// By default the final prefix is:
@@ -1273,7 +1287,7 @@ impl<T> Iterator for ChildTriePrefixIterator<T> {
 /// ```
 pub trait StoragePrefixedMap<Value: FullCodec> {
 	/// Module prefix. Used for generating final key.
-	fn module_prefix() -> &'static [u8];
+	fn module_prefix() -> &'static [u8]; // TODO move to StoragePrefixedContainer
 
 	/// Storage prefix. Used for generating final key.
 	fn storage_prefix() -> &'static [u8];

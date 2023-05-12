@@ -1538,6 +1538,7 @@ pub mod pallet_prelude {
 				CountedStorageMap, Key as NMapKey, OptionQuery, ResultQuery, StorageDoubleMap,
 				StorageMap, StorageNMap, StorageValue, ValueQuery,
 			},
+			StorageList,
 		},
 		traits::{
 			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,

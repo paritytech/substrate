@@ -91,21 +91,21 @@ pub struct StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage> {
 	/// The first page that contains a value.
 	///
 	/// Can be >0 when pages were deleted.
-	first_page: PageIndex,
+	pub first_page: PageIndex,
 	/// The first value inside `first_page` that contains a value.
 	///
 	/// Can be >0 when values were deleted.
-	first_value: ValueIndex,
+	pub first_value: ValueIndex,
 
 	/// The last page that could contain data.
 	///
 	/// Iteration starts at this page index.
-	last_page: PageIndex,
+	pub last_page: PageIndex,
 	/// The last value inside `last_page` that could contain a value.
 	///
 	/// Iteration starts at this index. If the page does not hold a value at this index, then the
 	/// whole list is empty. The only case where this can happen is when both are `0`.
-	last_value: ValueIndex,
+	pub last_value: ValueIndex,
 
 	_phantom: PhantomData<(Prefix, Value, Hasher, ValuesPerPage)>,
 }
@@ -349,6 +349,7 @@ where
 	}
 }
 
+
 #[cfg(feature = "std")]
 impl<Prefix, Hasher, Value, ValuesPerPage, MaxPages> crate::storage::TestingStoragePagedList<Value>
 	for StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
@@ -473,8 +474,6 @@ mod tests {
 	/// Draining, appending and iterating work together.
 	#[test]
 	fn drain_append_iter_works() {
-		sp_tracing::try_init_simple();
-
 		TestExternalities::default().execute_with(|| {
 			for r in 1..=100 {
 				List::append_many(0..12);
@@ -490,8 +489,6 @@ mod tests {
 
 	#[test]
 	fn peekable_drain_also_deletes() {
-		sp_tracing::try_init_simple();
-
 		TestExternalities::default().execute_with(|| {
 			List::append_many(0..10);
 
