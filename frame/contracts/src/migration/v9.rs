@@ -116,7 +116,7 @@ impl<T: Config> Migrate for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade_step() -> Result<Vec<u8>, &'static str> {
-		let sample: Vec<_> = old::CodeStorage::<T>::iter().take(10).collect();
+		let sample: Vec<_> = old::CodeStorage::<T>::iter().take(100).collect();
 
 		log::debug!(target: LOG_TARGET, "Taking sample of {} contract codes", sample.len());
 		Ok(sample.encode())
