@@ -424,9 +424,14 @@ pub mod pallet {
 			// Buy the item within NFT pallet
 			T::Nfts::buy_item(&collection_id, &item_id, &origin, &bid_price)?;
 
-			// Pay the royalty to the royalty owner
-			let item_royalty = <NftItemWithRoyalty<T>>::get((collection_id, item_id))
-				.ok_or(Error::<T>::NoRoyaltyExists)?;
+			// Check first if it has royalty set and item level and at collection after
+			let item_royalty: RoyaltyDetails<T::AccountId>;
+			if let Some(nft_item_royalty) = <NftItemWithRoyalty<T>>::get((collection_id, item_id))  {
+				item_royalty = nft_item_royalty;
+			}
+			else{
+				item_royalty = <NftCollectionWithRoyalty<T>>::get(collection_id).ok_or(Error::<T>::NoRoyaltyExists)?;
+			}
 
 			let royalty_amount_to_pay = item_royalty.royalty_percentage * item_price;
 
