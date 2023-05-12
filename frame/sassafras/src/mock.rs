@@ -152,17 +152,13 @@ fn make_ticket(slot: Slot, attempt: u32, pair: &AuthorityPair) -> TicketEnvelope
 		randomness = crate::NextRandomness::<Test>::get();
 	}
 
-	let transcript =
-		sp_consensus_sassafras::make_ticket_vrf_transcript(&randomness, attempt, epoch);
-
-	// TODO DAVXY: NOT REQUIRED ONCE WE HAVE THE NEW API...
-	// (i.e. we just require the preout)
-	let signature = pair.as_ref().vrf_sign(&transcript.into());
+	let vrf_input = sp_consensus_sassafras::ticket_id_vrf_input(&randomness, attempt, epoch);
+	let vrf_preout = pair.as_ref().vrf_output(&vrf_input.into());
 
 	// TODO DAVXY: use some well known valid test keys...
 	let data =
 		TicketData { attempt_idx: attempt, erased_public: [0; 32], revealed_public: [0; 32] };
-	TicketEnvelope { data, vrf_preout: signature.output, ring_proof: () }
+	TicketEnvelope { data, vrf_preout, ring_proof: () }
 }
 
 /// Construct at most `attempts` tickets for the given `slot`.
@@ -186,8 +182,8 @@ fn slot_claim_vrf_signature(slot: Slot, pair: &AuthorityPair) -> VrfSignature {
 		randomness = crate::NextRandomness::<Test>::get();
 	}
 
-	let transcript = sp_consensus_sassafras::make_slot_vrf_transcript(&randomness, slot, epoch);
-	pair.as_ref().vrf_sign(&transcript.into())
+	let vrf_input = sp_consensus_sassafras::slot_claim_vrf_input(&randomness, slot, epoch);
+	pair.as_ref().vrf_sign(&vrf_input.into())
 }
 
 /// Produce a `PreDigest` instance for the given parameters.

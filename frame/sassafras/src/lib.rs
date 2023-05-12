@@ -345,7 +345,7 @@ pub mod pallet {
 			let epoch_config = EpochConfig::<T>::get();
 			// Current slot should be less than half of epoch duration.
 			let epoch_duration = T::EpochDuration::get();
-			let threshold = sp_consensus_sassafras::compute_ticket_id_threshold(
+			let ticket_threshold = sp_consensus_sassafras::ticket_id_threshold(
 				epoch_config.redundancy_factor,
 				epoch_duration as u32,
 				epoch_config.attempts_number,
@@ -357,15 +357,17 @@ pub mod pallet {
 
 			let mut segment = BoundedVec::with_max_capacity();
 			for ticket in tickets.iter() {
-				let input = sp_consensus_sassafras::make_ticket_vrf_transcript(
+				let vrf_input = sp_consensus_sassafras::ticket_id_vrf_input(
 					&randomness,
 					ticket.data.attempt_idx,
 					epoch_idx,
 				);
-				let id = sp_consensus_sassafras::make_ticket_value(&input, &ticket.vrf_preout);
-				if id < threshold {
-					TicketsData::<T>::set(id, ticket.data.clone());
-					segment.try_push(id).expect("has same length as bounded input vector; qed");
+				let ticket_id = sp_consensus_sassafras::ticket_id(&vrf_input, &ticket.vrf_preout);
+				if ticket_id < ticket_threshold {
+					TicketsData::<T>::set(ticket_id, ticket.data.clone());
+					segment
+						.try_push(ticket_id)
+						.expect("has same length as bounded input vector; qed");
 				}
 			}
 

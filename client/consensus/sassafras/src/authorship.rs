@@ -20,10 +20,9 @@
 
 use super::*;
 
-use sp_application_crypto::Wraps;
 use sp_consensus_sassafras::{
-	digests::PreDigest, make_slot_vrf_transcript, make_ticket_vrf_transcript, AuthorityId, Slot,
-	TicketClaim, TicketData, TicketEnvelope, TicketId,
+	digests::PreDigest, ticket_id, ticket_id_threshold, AuthorityId, Slot, TicketClaim, TicketData,
+	TicketEnvelope, TicketId,
 };
 use sp_core::{twox_64, ByteArray};
 
@@ -77,9 +76,9 @@ pub(crate) fn claim_slot(
 
 	let authority_id = config.authorities.get(authority_idx as usize).map(|auth| &auth.0)?;
 
-	let transcript = make_slot_vrf_transcript(&config.randomness, slot, epoch.epoch_idx);
+	let vrf_input = slot_claim_vrf_input(&config.randomness, slot, epoch.epoch_idx);
 	let vrf_signature = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &transcript.into())
+		.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &vrf_input.into())
 		.ok()
 		.flatten()?;
 
@@ -97,7 +96,7 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 	let redundancy_factor = config.threshold_params.redundancy_factor;
 	let mut tickets = Vec::new();
 
-	let threshold = sp_consensus_sassafras::compute_ticket_id_threshold(
+	let threshold = ticket_id_threshold(
 		redundancy_factor,
 		config.epoch_duration as u32,
 		max_attempts,
@@ -113,26 +112,13 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 		}
 
 		let make_ticket = |attempt_idx| {
-			// DAVXY TODO: we don't have to sign this but we need to sign later using pedersen vrf.
-			// This transcript use used only to get the ticket `preout`
-			// Requires the new keystore VRF interface...
-			let transcript =
-				make_ticket_vrf_transcript(&config.randomness, attempt_idx, epoch.epoch_idx);
+			let vrf_input = ticket_id_vrf_input(&config.randomness, attempt_idx, epoch.epoch_idx);
 
-			let signature = keystore
-				.sr25519_vrf_sign(
-					AuthorityId::ID,
-					authority_id.as_ref(),
-					&transcript.clone().into(),
-				)
+			let vrf_preout = keystore
+				.sr25519_vrf_output(AuthorityId::ID, authority_id.as_ref(), &vrf_input)
 				.ok()??;
 
-			let ticket_id = authority_id
-				.as_inner_ref()
-				.make_bytes::<16>(b"context", &transcript, &signature.output)
-				.map(|bytes| u128::from_le_bytes(bytes))
-				.ok()?;
-
+			let ticket_id = ticket_id(&vrf_input, &vrf_preout);
 			if ticket_id >= threshold {
 				return None
 			}
@@ -141,12 +127,11 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 			let erased_secret = [0; 32];
 			let erased_public = [0; 32];
 			let revealed_public = [0; 32];
-			let ticket_data = TicketData { attempt_idx, erased_public, revealed_public };
+			let data = TicketData { attempt_idx, erased_public, revealed_public };
 
 			// TODO DAVXY: placeholder
 			let ring_proof = ();
-			let ticket_envelope =
-				TicketEnvelope { data: ticket_data, vrf_preout: signature.output, ring_proof };
+			let ticket_envelope = TicketEnvelope { data, vrf_preout, ring_proof };
 
 			let ticket_secret = TicketSecret { attempt_idx, erased_secret };
 

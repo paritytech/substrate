@@ -18,10 +18,10 @@
 
 //! Sassafras client tests
 
-// TODO-SASS-P2
-// Missing interesting tests:
+// TODO-SASS-P3
+// Missing tests
 // - verify block claimed via primary method
-
+// - tests using tickets to claim slots. Curret tests just doesn't register any on-chain ticket
 use super::*;
 
 use futures::executor::block_on;
@@ -34,7 +34,7 @@ use sc_network_test::*;
 use sp_application_crypto::key_types::SASSAFRAS;
 use sp_blockchain::Error as TestError;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
-use sp_consensus_sassafras::{inherents::InherentDataProvider, make_slot_vrf_transcript};
+use sp_consensus_sassafras::{inherents::InherentDataProvider, slot_claim_vrf_input};
 use sp_keyring::Sr25519Keyring;
 use sp_keystore::{testing::MemoryKeystore, Keystore};
 use sp_runtime::{Digest, DigestItem};
@@ -299,11 +299,11 @@ impl TestContext {
 		});
 
 		let epoch = self.epoch_data(&parent_hash, parent_number, slot);
-		let transcript =
-			make_slot_vrf_transcript(&self.link.genesis_config.randomness, slot, epoch.epoch_idx);
+		let vrf_input =
+			slot_claim_vrf_input(&self.link.genesis_config.randomness, slot, epoch.epoch_idx);
 		let vrf_signature = self
 			.keystore
-			.sr25519_vrf_sign(SASSAFRAS, &public, &transcript.into())
+			.sr25519_vrf_sign(SASSAFRAS, &public, &vrf_input.into())
 			.unwrap()
 			.unwrap();
 

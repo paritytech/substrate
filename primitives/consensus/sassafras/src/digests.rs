@@ -18,8 +18,8 @@
 //! Private implementation details of Sassafras digests.
 
 use super::{
-	AuthorityId, AuthorityIndex, AuthoritySignature, Randomness, SassafrasAuthorityWeight,
-	SassafrasEpochConfiguration, Slot, TicketClaim, SASSAFRAS_ENGINE_ID,
+	ticket::TicketClaim, AuthorityId, AuthorityIndex, AuthoritySignature, Randomness,
+	SassafrasAuthorityWeight, SassafrasEpochConfiguration, Slot, SASSAFRAS_ENGINE_ID,
 };
 
 use scale_codec::{Decode, Encode, MaxEncodedLen};

@@ -32,10 +32,16 @@ use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
 
 pub use sp_consensus_slots::{Slot, SlotDuration};
-pub use sp_core::sr25519::vrf::{VrfOutput, VrfProof, VrfSignature, VrfTranscript};
+pub use sp_core::sr25519::vrf::{VrfInput, VrfOutput, VrfProof, VrfSignData, VrfSignature};
 
 pub mod digests;
 pub mod inherents;
+pub mod ticket;
+
+pub use ticket::{
+	slot_claim_vrf_input, ticket_id, ticket_id_threshold, ticket_id_vrf_input, TicketClaim,
+	TicketData, TicketEnvelope, TicketId, TicketSecret,
+};
 
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::SASSAFRAS, sr25519};
@@ -128,87 +134,6 @@ pub struct SassafrasEpochConfiguration {
 	pub attempts_number: u32,
 }
 
-/// Ticket identifier.
-pub type TicketId = u128;
-
-/// TODO DAVXY
-/// input obtained via `make_vrf_input_transcript`
-pub fn make_ticket_value(_in: &VrfTranscript, out: &VrfOutput) -> TicketId {
-	// TODO DAVXY temporary way to generate id... use io.make_bytes()
-	let preout = out;
-	let mut raw: [u8; 16] = [0; 16];
-	raw.copy_from_slice(&preout.0 .0[0..16]);
-	u128::from_le_bytes(raw)
-}
-
-/// Ticket value.
-// TODO: potentially this can be opaque to separate the protocol from the application
-#[derive(Debug, Default, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct TicketData {
-	/// Attempt index.
-	pub attempt_idx: u32,
-	/// Ed25519 public key which gets erased when claiming the ticket.
-	pub erased_public: [u8; 32],
-	/// Ed25519 public key which gets exposed when claiming the ticket.
-	pub revealed_public: [u8; 32],
-}
-
-/// Ticket ZK commitment proof.
-/// TODO-SASS-P3: this is a placeholder.
-pub type TicketRingProof = ();
-
-/// Ticket envelope used on submission.
-// TODO-SASS-P3: we are currently using Shnorrkel structures as placeholders.
-// Should switch to new RVRF primitive soon.
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct TicketEnvelope {
-	/// VRF output.
-	pub data: TicketData,
-	/// VRF pre-output used to generate the ticket id.
-	pub vrf_preout: VrfOutput,
-	// /// Pedersen VRF signature
-	// pub ped_signature: (),
-	/// Ring VRF proof.
-	pub ring_proof: TicketRingProof,
-}
-
-/// Ticket private auxiliary information.
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct TicketSecret {
-	/// Attempt index.
-	pub attempt_idx: u32,
-	/// Ed25519 used to claim ticket ownership.
-	pub erased_secret: [u8; 32],
-}
-
-/// Ticket claim information filled by the block author.
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct TicketClaim {
-	pub erased_signature: [u8; 64],
-}
-
-/// Computes the threshold for a given epoch as T = (x*s)/(a*v), where:
-/// - x: redundancy factor;
-/// - s: number of slots in epoch;
-/// - a: max number of attempts;
-/// - v: number of validator in epoch.
-/// The parameters should be chosen such that T <= 1.
-/// If `attempts * validators` is zero then we fallback to T = 0
-// TODO-SASS-P3: this formula must be double-checked...
-pub fn compute_ticket_id_threshold(
-	redundancy: u32,
-	slots: u32,
-	attempts: u32,
-	validators: u32,
-) -> TicketId {
-	let den = attempts as u64 * validators as u64;
-	let num = redundancy as u64 * slots as u64;
-	TicketId::max_value()
-		.checked_div(den.into())
-		.unwrap_or_default()
-		.saturating_mul(num.into())
-}
-
 /// An opaque type used to represent the key ownership proof at the runtime API boundary.
 /// The inner value is an encoded representation of the actual key ownership proof which will be
 /// parameterized when defining the runtime. At the runtime API boundary this type is unknown and
@@ -216,53 +141,6 @@ pub fn compute_ticket_id_threshold(
 /// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
 #[derive(Decode, Encode, PartialEq, TypeInfo)]
 pub struct OpaqueKeyOwnershipProof(Vec<u8>);
-
-// impl OpaqueKeyOwnershipProof {
-// 	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded representation.
-// 	pub fn new(inner: Vec<u8>) -> OpaqueKeyOwnershipProof {
-// 		OpaqueKeyOwnershipProof(inner)
-// 	}
-
-// 	/// Try to decode this `OpaqueKeyOwnershipProof` into the given concrete key
-// 	/// ownership proof type.
-// 	pub fn decode<T: Decode>(self) -> Option<T> {
-// 		Decode::decode(&mut &self.0[..]).ok()
-// 	}
-// }
-
-/// Make per slot randomness VRF input transcript.
-///
-/// Input randomness is current epoch randomness.
-pub fn make_slot_vrf_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfTranscript {
-	VrfTranscript::new(
-		&SASSAFRAS_ENGINE_ID,
-		&[
-			(b"type", b"slot-transcript"),
-			(b"slot", &slot.to_le_bytes()),
-			(b"epoch", &epoch.to_le_bytes()),
-			(b"randomness", randomness),
-		],
-	)
-}
-
-/// Make ticket VRF transcript data container.
-///
-/// Input randomness is current epoch randomness.
-pub fn make_ticket_vrf_transcript(
-	randomness: &Randomness,
-	attempt: u32,
-	epoch: u64,
-) -> VrfTranscript {
-	VrfTranscript::new(
-		&SASSAFRAS_ENGINE_ID,
-		&[
-			(b"type", b"ticket-transcript"),
-			(b"attempt", &attempt.to_le_bytes()),
-			(b"epoch", &epoch.to_le_bytes()),
-			(b"randomness", randomness),
-		],
-	)
-}
 
 // Runtime API.
 sp_api::decl_runtime_apis! {

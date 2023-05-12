@@ -85,14 +85,10 @@ fn check_header<B: BlockT + Sized>(
 
 	// Check slot-vrf proof
 
-	// TODO DAVXY: probably there is not need to also add an explicit `Seal`
-	// it would be just redundant and we can just push the block header hash within
-	// the slot-vrf-transcript
-
-	let transcript = make_slot_vrf_transcript(&config.randomness, pre_digest.slot, epoch.epoch_idx);
+	let vrf_input = slot_claim_vrf_input(&config.randomness, pre_digest.slot, epoch.epoch_idx);
 	if !authority_id
 		.as_inner_ref()
-		.vrf_verify(&transcript.into(), &pre_digest.vrf_signature)
+		.vrf_verify(&vrf_input.into(), &pre_digest.vrf_signature)
 	{
 		return Err(sassafras_err(Error::VrfVerificationFailed))
 	}

@@ -27,6 +27,11 @@ fn h2b<const N: usize>(hex: &str) -> [u8; N] {
 	array_bytes::hex2array_unchecked(hex)
 }
 
+#[allow(unused)]
+fn b2h<const N: usize>(bytes: [u8; N]) -> String {
+	array_bytes::bytes2hex("", &bytes)
+}
+
 #[test]
 fn genesis_values_assumptions_check() {
 	new_test_ext(4).execute_with(|| {
@@ -144,7 +149,7 @@ fn on_first_block_after_genesis() {
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("5c1e465b22951f401a05154f7f7fe29e18aaa8b9b2a7bda81cbe75c58193f057"),
+			h2b("ad57850fef75c0d256889233a5b1e6994af8b994fa6fb17759ff3906307f675d"),
 		);
 
 		// Header data check
@@ -195,7 +200,7 @@ fn on_normal_block() {
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("5c1e465b22951f401a05154f7f7fe29e18aaa8b9b2a7bda81cbe75c58193f057"),
+			h2b("ad57850fef75c0d256889233a5b1e6994af8b994fa6fb17759ff3906307f675d"),
 		);
 
 		let header = finalize_block(end_block);
@@ -212,7 +217,7 @@ fn on_normal_block() {
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("abc64d3d643e7d6895e7ea136d9c3507ea1e66f8ccbc0a74b0ea76f39a7a6131"),
+			h2b("0bc8cce9f44a6dd90d9abd4486dfc36023a81839fac93d035ff01ef5c7a62ba8"),
 		);
 
 		// Header data check
@@ -249,11 +254,11 @@ fn produce_epoch_change_digest() {
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(
 			NextRandomness::<Test>::get(),
-			h2b("83b92b55cc8ccfb55d783a9d327132b0b39a0876e75c6f3968f5252ea338688c"),
+			h2b("72801624ceaf56c6d07a07e683643d92e91eadd09e06cb4cbe0ffe1edf6e94a1"),
 		);
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("15e5ec5a96e997e7ddb5074790cea20b01978b596fee381c0ae38664c6c4a549"),
+			h2b("eb9f571fa1e2f428b81ddb33d428051cb8793227934ed50469d4ad2a84997820"),
 		);
 
 		let header = finalize_block(end_block);
@@ -269,11 +274,11 @@ fn produce_epoch_change_digest() {
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(
 			NextRandomness::<Test>::get(),
-			h2b("83b92b55cc8ccfb55d783a9d327132b0b39a0876e75c6f3968f5252ea338688c"),
+			h2b("72801624ceaf56c6d07a07e683643d92e91eadd09e06cb4cbe0ffe1edf6e94a1"),
 		);
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("5ede4f8481c8392a0d4444e244c0ab63b72e224860752277a8b838497b7f18fa"),
+			h2b("d4b9d766b937902735d6423b10f3783bb384d738dd2b8d61031de406301fff8e"),
 		);
 
 		// Header data check
@@ -348,7 +353,7 @@ fn submit_segments_works() {
 
 		// Tweak the epoch config to discard some of the tickets
 		let mut config = EpochConfig::<Test>::get();
-		config.redundancy_factor = 3;
+		config.redundancy_factor = 1;
 		EpochConfig::<Test>::set(config);
 
 		// Populate the segments via the `submit_tickets`
@@ -367,11 +372,11 @@ fn submit_segments_works() {
 		assert_eq!(meta.segments_count, segments_count);
 		assert_eq!(meta.tickets_count, [0, 0]);
 		let seg = NextTicketsSegments::<Test>::get(0);
-		assert_eq!(seg.len(), 4);
+		assert_eq!(seg.len(), 3);
 		let seg = NextTicketsSegments::<Test>::get(1);
-		assert_eq!(seg.len(), 6);
+		assert_eq!(seg.len(), 1);
 		let seg = NextTicketsSegments::<Test>::get(2);
-		assert_eq!(seg.len(), 4);
+		assert_eq!(seg.len(), 2);
 	})
 }
 
@@ -510,18 +515,18 @@ fn submit_enact_claim_tickets() {
 			TicketsMetadata { segments_count: 0, tickets_count: [0, 6] },
 		);
 
-		// Compute and sort the ids (aka ticket scores)
+		// Compute and sort the tickets ids (aka tickets scores)
 		let mut expected_ids: Vec<_> = tickets
 			.iter()
 			.map(|t| {
 				let epoch_idx = Sassafras::epoch_index();
 				let randomness = Sassafras::randomness();
-				let input = sp_consensus_sassafras::make_ticket_vrf_transcript(
+				let vrf_input = sp_consensus_sassafras::ticket_id_vrf_input(
 					&randomness,
 					t.data.attempt_idx,
 					epoch_idx,
 				);
-				sp_consensus_sassafras::make_ticket_value(&input, &t.vrf_preout)
+				sp_consensus_sassafras::ticket_id(&vrf_input, &t.vrf_preout)
 			})
 			.collect();
 		expected_ids.sort();

@@ -77,10 +77,10 @@ use sp_runtime::{
 pub use sp_consensus_sassafras::{
 	digests::{CompatibleDigestItem, ConsensusLog, NextEpochDescriptor, PreDigest},
 	inherents::SassafrasInherentData,
-	make_slot_vrf_transcript, make_ticket_vrf_transcript, AuthorityId, AuthorityIndex,
-	AuthorityPair, AuthoritySignature, SassafrasApi, SassafrasAuthorityWeight,
-	SassafrasConfiguration, SassafrasEpochConfiguration, TicketClaim, TicketData, TicketEnvelope,
-	TicketId, TicketSecret, SASSAFRAS_ENGINE_ID,
+	slot_claim_vrf_input, ticket_id_vrf_input, AuthorityId, AuthorityIndex, AuthorityPair,
+	AuthoritySignature, SassafrasApi, SassafrasAuthorityWeight, SassafrasConfiguration,
+	SassafrasEpochConfiguration, TicketClaim, TicketData, TicketEnvelope, TicketId, TicketSecret,
+	RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID,
 };
 
 mod authorship;
@@ -284,11 +284,11 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 	if header.number().is_zero() {
 		// Genesis block doesn't contain a pre digest so let's generate a
 		// dummy one to not break any invariants in the rest of the code
-		use sp_consensus_sassafras::VrfTranscript;
+		use sp_consensus_sassafras::VrfInput;
 		use sp_core::crypto::VrfSecret;
 		let pair = sp_consensus_sassafras::AuthorityPair::from_seed(&[0u8; 32]);
-		let transcript = VrfTranscript::new(b"", &[]);
-		let vrf_signature = pair.as_ref().vrf_sign(&transcript.into());
+		let input = VrfInput::new(b"", &[]);
+		let vrf_signature = pair.as_ref().vrf_sign(&input.into());
 		return Ok(PreDigest { authority_idx: 0, slot: 0.into(), ticket_claim: None, vrf_signature })
 	}
 
