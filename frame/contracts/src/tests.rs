@@ -38,9 +38,9 @@ use frame_support::{
 	parameter_types,
 	storage::child,
 	traits::{
-		fungible::{BalancedHold, Inspect, InspectHold, Mutate, MutateHold},
+		fungible::{BalancedHold, Inspect, InspectHold, Mutate, MutateFreeze, MutateHold},
 		tokens::Preservation,
-		ConstU32, ConstU64, Contains, LockableCurrency, OnIdle, OnInitialize, WithdrawReasons,
+		ConstU32, ConstU64, Contains, OnIdle, OnInitialize,
 	},
 	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
@@ -94,7 +94,6 @@ pub mod test_utils {
 	use crate::{exec::AccountIdOf, CodeHash, Config, ContractInfo, ContractInfoOf, Nonce};
 	use codec::Encode;
 	use frame_support::traits::fungible::{Inspect, Mutate};
-	// use frame_support::traits::Currency;
 
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
 		let nonce = <Nonce<Test>>::mutate(|counter| {
@@ -4069,8 +4068,8 @@ fn set_code_extrinsic() {
 #[test]
 fn slash_cannot_kill_account() {
 	let (wasm, _code_hash) = compile_module::<Test>("dummy").unwrap();
-	let ed = 200;
-	ExtBuilder::default().existential_deposit(ed).build().execute_with(|| {
+	const ED: u64 = 200;
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 		let value = 700;
 		let balance_held = 500;
 		let _ = Balances::set_balance(&ALICE, 1_000_000);
@@ -4093,7 +4092,7 @@ fn slash_cannot_kill_account() {
 		// Drop previous events
 		initialize_block(2);
 
-		let _ = Balances::hold(&HoldIdentifier::StorageDepositReserve, &addr, balance_held);
+		Balances::hold(&HoldIdentifier::StorageDepositReserve, &addr, balance_held).unwrap();
 
 		assert_eq!(Balances::total_balance_on_hold(&addr), balance_held);
 
@@ -4107,7 +4106,7 @@ fn slash_cannot_kill_account() {
 		);
 
 		// Slash only removed the balance held.
-		assert_eq!(Balances::total_balance(&addr), value + ed - balance_held,);
+		assert_eq!(Balances::total_balance(&addr), value + ED - balance_held,);
 	});
 }
 
@@ -4769,9 +4768,11 @@ fn deposit_limit_in_nested_instantiate() {
 #[test]
 fn deposit_limit_honors_liquidity_restrictions() {
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
-	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+	const ED: u64 = 200;
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		let bobs_balance = 1_000;
 		let _ = Balances::set_balance(&ALICE, 1_000_000);
-		let _ = Balances::set_balance(&BOB, 1_000);
+		let _ = Balances::set_balance(&BOB, bobs_balance);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 
 		// Instantiate the BOB contract.
@@ -4794,8 +4795,8 @@ fn deposit_limit_honors_liquidity_restrictions() {
 		assert_eq!(get_contract(&addr).total_deposit(), min_balance);
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance);
 
-		// check that the lock ins honored
-		Balances::set_lock([0; 8], &BOB, 1_000, WithdrawReasons::TRANSFER);
+		// check that the hold is honored
+		Balances::hold(&HoldIdentifier::StorageDepositReserve, &BOB, bobs_balance - ED).unwrap();
 		assert_err_ignore_postinfo!(
 			Contracts::call(
 				RuntimeOrigin::signed(BOB),
@@ -4807,7 +4808,7 @@ fn deposit_limit_honors_liquidity_restrictions() {
 			),
 			<Error<Test>>::StorageDepositNotEnoughFunds,
 		);
-		assert_eq!(Balances::free_balance(&BOB), 1_000);
+		assert_eq!(Balances::free_balance(&BOB), ED);
 	});
 }
 
