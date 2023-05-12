@@ -27,6 +27,7 @@ use std::{
 
 const LOG_TARGET: &str = "storage-monitor";
 
+/// Result type used in this crate.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type used in this crate.
