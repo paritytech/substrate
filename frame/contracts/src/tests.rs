@@ -4107,7 +4107,7 @@ fn slash_cannot_kill_account() {
 			Balances::total_balance(&addr),
 		);
 
-		// Slash only removed the balance held.
+		// Slashing only removed the balance held.
 		assert_eq!(Balances::total_balance(&addr), value + ED - balance_held,);
 	});
 }
