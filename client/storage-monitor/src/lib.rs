@@ -45,11 +45,11 @@ pub struct StorageMonitorParams {
 	/// Required available space on database storage. If available space for DB storage drops below
 	/// the given threshold, node will be gracefully terminated. If `0` is given monitoring will be
 	/// disabled.
-	#[arg(long = "db-storage-threshold", value_name = "MiB", default_value_t = 1000)]
+	#[arg(long = "db-storage-threshold", value_name = "MiB", default_value_t = 1024)]
 	pub threshold: u64,
 
 	/// How often available space is polled.
-	#[arg(long = "db-storage-polling-period", value_name = "SECONDS", default_value_t = 6, value_parser = clap::value_parser!(u32).range(1..))]
+	#[arg(long = "db-storage-polling-period", value_name = "SECONDS", default_value_t = 5, value_parser = clap::value_parser!(u32).range(1..))]
 	pub polling_period: u32,
 }
 
