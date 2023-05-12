@@ -4092,6 +4092,8 @@ fn slash_cannot_kill_account() {
 		// Drop previous events
 		initialize_block(2);
 
+		// We need to hold some balances in order to have something to slash. As slashing can only
+		// affect balances held under certain HoldIdentifier.
 		Balances::hold(&HoldIdentifier::StorageDepositReserve, &addr, balance_held).unwrap();
 
 		assert_eq!(Balances::total_balance_on_hold(&addr), balance_held);
