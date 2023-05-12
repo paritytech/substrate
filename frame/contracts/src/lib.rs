@@ -791,7 +791,7 @@ pub mod pallet {
 		/// Some funds have been held as storage deposit.
 		StorageDepositHeld { who: T::AccountId, amount: BalanceOf<T> },
 
-		/// Some funds have been released from storage deposit.
+		/// Some funds have been released as storage deposit.
 		StorageDepositReleased { who: T::AccountId, amount: BalanceOf<T> },
 	}
 
