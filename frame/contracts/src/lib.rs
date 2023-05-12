@@ -326,11 +326,12 @@ pub mod pallet {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
 			use migration::MigrateResult::*;
 
-			let remaining_weight = match Migration::<T>::migrate(remaining_weight) {
-				(InProgress, weight) => return remaining_weight.saturating_sub(weight),
-				(NoMigrationPerformed | Completed, weight) =>
-					remaining_weight.saturating_sub(weight),
-			};
+			let (result, weight) = Migration::<T>::migrate(remaining_weight);
+			let remaining_weight = remaining_weight.saturating_sub(weight);
+
+			if !matches!(result, Completed | NoMigrationInProgress) {
+				return weight
+			}
 
 			ContractInfo::<T>::process_deletion_queue_batch(remaining_weight)
 				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
@@ -735,21 +736,21 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(9)]
-		#[pallet::weight(T::WeightInfo::migrate_noop().saturating_add(T::WeightInfo::migration()).saturating_add(*weight_limit))]
+		#[pallet::weight(T::WeightInfo::migrate().saturating_add(*weight_limit))]
 		pub fn migrate(origin: OriginFor<T>, weight_limit: Weight) -> DispatchResultWithPostInfo {
 			use migration::MigrateResult::*;
 			ensure_signed(origin)?;
 
-			let weight_limit = weight_limit.saturating_add(T::WeightInfo::migration());
+			let weight_limit = weight_limit.saturating_add(T::WeightInfo::migrate());
 			let (result, weight) = Migration::<T>::migrate(weight_limit);
-			let weight = weight.saturating_add(T::WeightInfo::migrate_noop());
 
 			match result {
-				InProgress | Completed =>
-					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
-				NoMigrationPerformed => {
+				Completed => Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
+				InProgress { steps_done, .. } if steps_done > 0 => Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
+				InProgress {  .. } => Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::Yes }),
+				NoMigrationInProgress | NoMigrationPerformed => {
 					let err: DispatchError = <Error<T>>::NoMigrationPerformed.into();
-					Err(err.with_weight(weight))
+					Err(err.with_weight(T::WeightInfo::migrate()))
 				},
 			}
 		}

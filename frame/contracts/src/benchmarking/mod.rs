@@ -28,7 +28,7 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
-	migration::{Migrate, v9, v10, v11},
+	migration::{v10, v11, v9, Migrate},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -265,42 +265,24 @@ benchmarks! {
 		m.step();
 	}
 
-	// This benchmarks the weight of dispatching a migrate call that does nothing
-	#[pov_mode = Measured]
-	migrate_noop {
-		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
-	}:  {
-		<Contracts<T>>::migrate(origin.into(), Weight::zero()).is_err()
-	}
-
-	// This benchmarks the weight of bumping the storage version.
-	#[pov_mode = Measured]
-	bump_storage_version {
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
-		let new_version = StorageVersion::new(3);
-	}:  {
-		new_version.put::<Pallet<T>>();
-	} verify {
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 3);
-	}
-
-	// This benchmarks the weight of executing Migration::migrate when there are no migration in progress.
+	// This benchmarks the weight of executing Migration::migrate to execute a noop migration.
 	#[pov_mode = Measured]
 	migration_noop {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
 	}:  {
-		Migration::<T>::migrate(Weight::MAX);
+		Migration::<T>::migrate(Weight::MAX)
 	} verify {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
 	}
 
-	// This benchmarks the weight of executing Migration::migrate to execute a migration that bump the storage version.
+	// This benchmarks the weight of executing Migration::migrate when there are no migration in progress.
 	#[pov_mode = Measured]
-	migration {
+	migrate {
 		StorageVersion::new(0).put::<Pallet<T>>();
 		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade();
-	}:  {
-		Migration::<T>::migrate(Weight::MAX);
+		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
+	}: {
+		<Contracts<T>>::migrate(origin.into(), Weight::MAX).unwrap()
 	} verify {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
 	}
@@ -321,7 +303,6 @@ benchmarks! {
 		StorageVersion::new(0).put::<Pallet<T>>();
 		let v = vec![42u8].try_into().ok();
 		MigrationInProgress::<T>::set(v.clone());
-
 	}:  {
 		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
 	} verify {

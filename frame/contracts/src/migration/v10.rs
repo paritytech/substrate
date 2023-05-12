@@ -38,6 +38,7 @@ use frame_support::{
 	},
 	DefaultNoBound,
 };
+use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::{traits::Zero, Perbill, Saturating};
 use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
 
@@ -130,6 +131,7 @@ impl<T: Config> Migrate for Migration<T> {
 
 		if let Some((account, contract)) = iter.next() {
 			let min_balance = Pallet::<T>::min_balance();
+			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
 
 			// Store last key for next migration step
 			self.last_key = Some(iter.last_raw_key().to_vec().try_into().unwrap());
@@ -154,7 +156,9 @@ impl<T: Config> Migrate for Migration<T> {
 
 			// Attempt to transfer the old deposit to the deposit account.
 			// We just want to leave the minimum balance on the contract account
-			let amount = old_deposit.saturating_sub(min_balance);
+			let amount = old_deposit
+				.saturating_sub(min_balance)
+				.min(T::Currency::reducible_balance(&account, Preserve, Polite));
 			let new_deposit = T::Currency::transfer(
 				&account,
 				&deposit_account,
@@ -164,21 +168,6 @@ impl<T: Config> Migrate for Migration<T> {
 			.map(|_| {
 				log::debug!( target: LOG_TARGET, "Transferred deposit ({:?}) to deposit account", amount);
 				amount
-			})
-			// If it fails, we try to transfer the account reducible balance instead.
-			.or_else(|err| {
-				log::error!( target: LOG_TARGET, "Failed to transfer deposit ({:?}), reason: {:?}", old_deposit,  err);
-				let deposit = T::Currency::reducible_balance(&account, Preserve, Polite);
-				T::Currency::transfer(
-					&account,
-					&deposit_account,
-					deposit,
-					ExistenceRequirement::KeepAlive,
-				)
-				.map(|_| {
-					log::debug!( target: LOG_TARGET, "Transferred reducible balance ({:?}) to deposit account", deposit);
-					deposit
-				})
 			})
 			// If it fails we fallback to minting the ED.
 			.unwrap_or_else(|err| {
@@ -233,17 +222,7 @@ impl<T: Config> Migrate for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade_step() -> Result<Vec<u8>, &'static str> {
-		let sample: Vec<_> = old::ContractInfoOf::<T>::iter()
-			.take(10)
-			.map(|(account, contract)| {
-				let total_balance = <<T as Config>::Currency as frame_support::traits::Currency<
-					_,
-				>>::total_balance(&account);
-				let min_balance = Pallet::<T>::min_balance();
-				log::debug!(target: LOG_TARGET, "Old amount {:?} min {:?}", total_balance, min_balance);
-				(account, contract, total_balance)
-			})
-			.collect();
+		let sample: Vec<_> = old::ContractInfoOf::<T>::iter().take(10).collect();
 
 		log::debug!(target: LOG_TARGET, "Taking sample of {} contracts", sample.len());
 		Ok(sample.encode())
@@ -257,7 +236,9 @@ impl<T: Config> Migrate for Migration<T> {
 		.unwrap();
 
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contracts", sample.len());
-		for (account, old_contract, old_account_balance) in sample {
+		for (account, old_contract) in sample {
+			log::debug!(target: LOG_TARGET, "===");
+			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
 			let contract = ContractInfoOf::<T>::get(&account).unwrap();
 			let min_balance = Pallet::<T>::min_balance();
 			assert_eq!(old_contract.trie_id, contract.trie_id);
@@ -269,11 +250,6 @@ impl<T: Config> Migrate for Migration<T> {
 				<<T as Config>::Currency as frame_support::traits::Currency<_>>::total_balance(
 					&contract.deposit_account,
 				);
-			assert_eq!(
-				deposit,
-				old_account_balance.saturating_sub(min_balance),
-				"deposit account balance mismatch"
-			);
 			assert_eq!(
 				deposit,
 				contract
