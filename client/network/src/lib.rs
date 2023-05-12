@@ -243,8 +243,8 @@
 //! More precise usage details are still being worked on and will likely change in the future.
 
 mod behaviour;
-mod service;
 mod protocol;
+mod service;
 
 pub mod config;
 pub mod discovery;
