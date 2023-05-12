@@ -106,7 +106,10 @@ impl<T: Config> Migrate for Migration<T> {
 
 		if old_queue.is_empty() {
 			let len = 10u32;
-			log::debug!( target: LOG_TARGET, "Injecting {len} entries to deletion queue to test migration");
+			log::debug!(
+				target: LOG_TARGET,
+				"Injecting {len} entries to deletion queue to test migration"
+			);
 			fill_old_queue::<T>(len as usize);
 			return Ok(len.encode())
 		}

@@ -184,7 +184,12 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 			let state = M::pre_upgrade_step(in_progress_version)?;
 			let (status, w) = Self::migrate(Weight::MAX);
 			weight.saturating_accrue(w);
-			log::info!(target: LOG_TARGET, "{name}: Migration step {:?} weight = {}", in_progress_version, weight);
+			log::info!(
+				target: LOG_TARGET,
+				"{name}: Migration step {:?} weight = {}",
+				in_progress_version,
+				weight
+			);
 			M::post_upgrade_step(in_progress_version, state)?;
 			if matches!(status, MigrateResult::Completed) {
 				break
@@ -204,14 +209,22 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 		let storage_version = <Pallet<T>>::on_chain_storage_version();
 
 		if storage_version == latest_version {
-			log::warn!(target: LOG_TARGET, "{name}: No Migration performed storage_version = latest_version = {:?}", &storage_version);
+			log::warn!(
+				target: LOG_TARGET,
+				"{name}: No Migration performed storage_version = latest_version = {:?}",
+				&storage_version
+			);
 			return T::WeightInfo::on_runtime_upgrade_noop()
 		}
 
 		// In case a migration is already in progress we create the next migration
 		// (if any) right when the current one finishes.
 		if Self::in_progress() {
-			log::warn!( target: LOG_TARGET, "{name}: Migration already in progress {:?}", &storage_version);
+			log::warn!(
+				target: LOG_TARGET,
+				"{name}: Migration already in progress {:?}",
+				&storage_version
+			);
 			return T::WeightInfo::on_runtime_upgrade_in_progress()
 		}
 
@@ -303,28 +316,33 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 				in_progress_version,
 			);
 
-			let result = match M::steps(
-				in_progress_version,
-				cursor_before.as_ref(),
-				&mut weight_left,
-			) {
-				StepResult::InProgress { cursor, steps_done } => {
-					*progress = Some(cursor);
-					MigrateResult::InProgress { steps_done }
-				},
-				StepResult::Completed { steps_done } => {
-					in_progress_version.put::<Pallet<T>>();
-					if <Pallet<T>>::current_storage_version() != in_progress_version {
-						log::info!( target: LOG_TARGET, "{name}: Next migration is {:?},", in_progress_version + 1);
-						*progress = Some(M::new(in_progress_version + 1));
+			let result =
+				match M::steps(in_progress_version, cursor_before.as_ref(), &mut weight_left) {
+					StepResult::InProgress { cursor, steps_done } => {
+						*progress = Some(cursor);
 						MigrateResult::InProgress { steps_done }
-					} else {
-						log::info!( target: LOG_TARGET, "{name}: All migrations done. At version {:?},", in_progress_version);
-						*progress = None;
-						MigrateResult::Completed
-					}
-				},
-			};
+					},
+					StepResult::Completed { steps_done } => {
+						in_progress_version.put::<Pallet<T>>();
+						if <Pallet<T>>::current_storage_version() != in_progress_version {
+							log::info!(
+								target: LOG_TARGET,
+								"{name}: Next migration is {:?},",
+								in_progress_version + 1
+							);
+							*progress = Some(M::new(in_progress_version + 1));
+							MigrateResult::InProgress { steps_done }
+						} else {
+							log::info!(
+								target: LOG_TARGET,
+								"{name}: All migrations done. At version {:?},",
+								in_progress_version
+							);
+							*progress = None;
+							MigrateResult::Completed
+						}
+					},
+				};
 
 			(result, weight_limit.saturating_sub(weight_left))
 		})

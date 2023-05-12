@@ -229,7 +229,7 @@ impl OnRuntimeUpgrade for Tuple {
 				);
 			});
 
-			return Err("Detected multiple errors while executing `try_on_runtime_upgrade`, check the logs!")
+			return Err("Detected multiple errors while executing `try_on_runtime_upgrade`, check the logs!");
 		}
 
 		Ok(weight)

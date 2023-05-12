@@ -150,7 +150,12 @@ impl<T: Config> Migrate for Migration<T> {
 			// Note we can't use repatriate_reserve, because it only works with existing accounts
 			let remaining = T::Currency::unreserve(&account, old_deposit);
 			if !remaining.is_zero() {
-				log::warn!(target: LOG_TARGET, "Partially unreserved. Remaining {:?} out of {:?} asked", remaining, old_deposit);
+				log::warn!(
+					target: LOG_TARGET,
+					"Partially unreserved. Remaining {:?} out of {:?} asked",
+					remaining,
+					old_deposit
+				);
 			}
 
 			// Attempt to transfer the old deposit to the deposit account.
@@ -165,7 +170,11 @@ impl<T: Config> Migrate for Migration<T> {
 				ExistenceRequirement::KeepAlive,
 			)
 			.map(|_| {
-				log::debug!( target: LOG_TARGET, "Transferred deposit ({:?}) to deposit account", amount);
+				log::debug!(
+					target: LOG_TARGET,
+					"Transferred deposit ({:?}) to deposit account",
+					amount
+				);
 				amount
 			})
 			// If it fails we fallback to minting the ED.
