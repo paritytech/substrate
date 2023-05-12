@@ -2,6 +2,7 @@ use async_std;
 use codec::{Decode, Encode};
 use core::fmt::Debug;
 use hash_db::Hasher;
+use jsonrpsee::rpc_params;
 use log;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_core::{
@@ -14,10 +15,11 @@ use sp_state_machine::{
 	IterArgs, StateMachineStats, StorageCollection, StorageIterator, StorageValue, UsageInfo,
 };
 use std::{
+	collections::HashMap,
 	sync::{mpsc, Arc},
 	time::Duration,
 };
-use substrate_rpc_client::{WsClient, WsClientBuilder};
+use substrate_rpc_client::{BatchRequestBuilder, ClientT, WsClient, WsClientBuilder};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct StorageJsonRpcResponse {
@@ -44,6 +46,10 @@ where
 	// TODO: we still create a new Runtime inside the thread each time we use it,
 	// there's probably a cleaner way to do the async handling.
 	pool: rayon::ThreadPool,
+	// Use a RawIter (which uses optimistic fetching) to handle calls for next_storage_key
+	// TODO: cap the size of this Map, so it doesn't exhaust memory in extreme scenarios
+	next_storage_key_iters: HashMap<Vec<u8>, RawIter<H>>,
+	// TODO: create an iter for next_child_stroage_key
 }
 
 impl<H> Debug for OnDemandBackend<H>
@@ -65,7 +71,7 @@ where
 		let ws_client = async_std::task::block_on(
 			WsClientBuilder::default()
 				.max_request_body_size(u32::MAX)
-				.connection_timeout(Duration::from_secs(5))
+				.connection_timeout(Duration::from_secs(15))
 				.build(rpc_uri),
 		)
 		.unwrap(); // TODO: Handle error
@@ -76,48 +82,47 @@ where
 			cache: InMemoryBackend::default(),
 			at: Arc::new(at),
 			pool,
+			next_storage_key_iters: HashMap::new(),
 		})
 	}
 
-	fn storage_remote(&self, key: &[u8]) -> Result<Option<StorageData>, DefaultError> {
+	// TODO: implement batch_remote for child storage
+	fn batch_storage_remote(
+		&self,
+		keys: Vec<Vec<u8>>,
+	) -> Result<Vec<Option<StorageData>>, DefaultError> {
 		// TODO: better error handling
-
-		log::debug!(
-			target: LOG_TARGET,
-			"fetching storage from remote. key: {:?}, at: {}",
-			HexDisplay::from(&key).to_string(),
-			HexDisplay::from(&self.at.unwrap().encode().as_slice()).to_string()
-		);
 
 		let ws_client = self.ws_client.clone();
 		let at = self.at.clone();
-		let key = key.to_vec();
 
 		let (tx, rx) = mpsc::channel();
 		self.pool.spawn(move || {
+			// Build the batch request
+			let mut batch = BatchRequestBuilder::new();
+			for k in keys.into_iter() {
+				batch
+					.insert("state_getStorage", rpc_params![StorageKey(k), at.as_ref().clone()])
+					.expect("params are valid, qed.");
+			}
+
 			let rt = tokio::runtime::Runtime::new().unwrap();
-			let result = rt
-				.block_on(substrate_rpc_client::StateApi::<H256>::storage(
-					ws_client.as_ref(),
-					StorageKey(key),
-					at.as_ref().clone(),
-				))
-				.unwrap();
+			let result = rt.block_on(ws_client.batch_request::<Option<StorageData>>(batch));
 
 			tx.send(result).unwrap();
 		});
 
-		let result = match rx.recv().unwrap() {
-			Some(storage_data) => {
-				log::debug!(target: LOG_TARGET, "got result: {:?}", HexDisplay::from(&storage_data.0));
-				return Ok(Some(storage_data))
+		match rx.recv().unwrap() {
+			Ok(storage_data) => {
+				// TODO: remove unwrap
+				let storage_data = storage_data.into_iter().map(|r| r.unwrap()).collect::<Vec<_>>();
+				return Ok(storage_data)
 			},
-			None => {
-				log::debug!(target: LOG_TARGET, "got result: None");
-				Ok(None)
+			Err(e) => {
+				log::error!(target: LOG_TARGET, "error: {}", e);
+				panic!("batch_storage_remote error");
 			},
-		};
-		result
+		}
 	}
 
 	fn storage_keys_paged_remote(
@@ -208,6 +213,21 @@ where
 		log::debug!(target: LOG_TARGET, "got result: {:?}", result.iter().map(|s| HexDisplay::from(s).to_string()));
 		Ok(result)
 	}
+
+	fn eagerly_cache_key_values(&self, keys: Vec<Vec<u8>>) {
+		let values = self.batch_storage_remote(keys.clone()).unwrap();
+		let key_values = keys
+			.into_iter()
+			.zip(values.into_iter().map(|v| v.map(|v| v.0)))
+			.collect::<Vec<_>>();
+
+		let inner = unsafe {
+			let x = &self.cache as *const InMemoryBackend<H>;
+			let y = x as *mut InMemoryBackend<H>;
+			&mut *y
+		};
+		inner.insert(vec![(None, key_values)], StateVersion::V1);
+	}
 }
 
 pub struct RawIter<H>
@@ -266,6 +286,7 @@ where
 		// If we have a next key in the cache, pop it from there
 		if let Some(next_key) = self.next_keys_cache.pop() {
 			log::debug!(target: LOG_TARGET, "next key from cache: {}", HexDisplay::from(&next_key).to_string());
+			self.last_key = Some(next_key.clone());
 			return Some(Ok(next_key))
 		}
 
@@ -287,13 +308,11 @@ where
 				)
 				.unwrap(), // TODO: handle error
 		};
-		// Reverse the order, so we can pop next items off the front of the vec
+		// Reverse the order, so we can pop next items off the back of the vec
 		page.reverse();
+		let mut page = page.into_iter().map(|k| k.0).collect::<Vec<_>>();
 
-		// Save the final key of this page that'll be consumed, so we can use it as `start_key` when
-		// we next fetch a page
-		self.last_key = page.first().clone().map(|s| s.0.clone());
-
+		// Get the next key from the page
 		let next_key = match page.pop() {
 			Some(key) => key,
 			None => {
@@ -303,10 +322,15 @@ where
 			},
 		};
 
-		// Save the new page in storage
-		self.next_keys_cache = page.into_iter().map(|s| s.0).collect::<Vec<_>>();
+		// Cache the remaining keys and eagerly fetch their values: if they're being iterated on,
+		// it's highly likely that the values will be needed.
+		if page.len() > 0 {
+			backend.eagerly_cache_key_values(page.clone());
+		}
+		self.next_keys_cache = page;
 
-		Some(Ok(next_key.clone().0))
+		self.last_key = Some(next_key.clone());
+		Some(Ok(next_key))
 	}
 
 	fn next_pair(&mut self, backend: &Self::Backend) -> Option<Result<(Vec<u8>, Vec<u8>), String>> {
@@ -352,23 +376,26 @@ where
 	}
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
+		// TODO: if the key is in the cache but it's None, we actually want to return that rather
+		// than go the the remote. it may have been deleted intentionally.
 		self.cache.storage(key).map(|opt| {
 			opt.or_else(|| {
-				// todo: remove this unwrap
-				self.storage_remote(key).unwrap().map(|v| {
-					log::debug!(target: LOG_TARGET, "got value: {:?}", HexDisplay::from(&v.0.as_slice()));
-					// TODO: cache value here
-					let inner = unsafe {
-						let x = &self.cache as *const InMemoryBackend<H>;
-						let y = x as *mut InMemoryBackend<H>;
-						&mut *y
-					};
-					inner.insert(
-						vec![(None, vec![(key.to_vec(), Some(v.0.clone()))])],
-						StateVersion::V1,
-					);
-					v.0
-				})
+				// todo: handle this unwrap
+				let v = self
+					.batch_storage_remote(vec![key.to_vec()])
+					.unwrap()
+					.get(0)
+					.expect("passed 1 key, must have 1 response")
+					.as_ref()
+					.map(|v| v.clone().0);
+
+				let inner = unsafe {
+					let x = &self.cache as *const InMemoryBackend<H>;
+					let y = x as *mut InMemoryBackend<H>;
+					&mut *y
+				};
+				inner.insert(vec![(None, vec![(key.to_vec(), v.clone())])], StateVersion::V1);
+				v
 			})
 		})
 	}
@@ -413,12 +440,33 @@ where
 	/// Return the next key in storage (excluding this key) in lexicographic order or `None` if
 	/// there is no value.
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		// TODO: query these in like groups of 1000 so we only need to go to the backend once
-		// every 1000
-		let binding = self.storage_keys_paged_remote(None, 1, Some(key)).unwrap();
-		let next = binding.get(0).expect("count is 1, 0th index must exist. qed.");
-		log::debug!(target: LOG_TARGET, "got next: {}", HexDisplay::from(&next.0.as_slice()));
-		Ok(Some(next.0.clone()))
+		let next_storage_key_iters = unsafe {
+			let x = &self.next_storage_key_iters as *const HashMap<Vec<u8>, RawIter<H>>;
+			let y = x as *mut HashMap<Vec<u8>, RawIter<H>>;
+			&mut *y
+		};
+
+		let new_iter_binding = Self::RawIter::new(None, None, Some(key), false);
+		// Get the existing iter for this sequence, or use the new one we just created.
+		// .remove takes ownership of the iter.
+		let mut iter = match next_storage_key_iters.remove(key) {
+			Some(iter) => iter,
+			None => new_iter_binding,
+		};
+
+		// New iter sequence. Create a new iter and return the first key.
+		match iter.next_key(&self) {
+			// Found a next_key. Update our map and return the next_key.
+			Some(Ok(next_key)) => {
+				next_storage_key_iters.insert(next_key.clone(), iter);
+				return Ok(Some(next_key))
+			},
+			None => {
+				// Iter is exhausted.
+				return Ok(None)
+			},
+			Some(Err(e)) => return Err(e),
+		};
 	}
 
 	/// Return the next key in child storage in lexicographic order or `None` if there is no value.
