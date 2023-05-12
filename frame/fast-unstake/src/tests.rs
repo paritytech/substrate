@@ -37,7 +37,7 @@ fn register_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		ErasToCheckPerBlock::<T>::put(1);
 		// Controller account registers for fast unstake.
-		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
+		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
 		// Ensure stash is in the queue.
 		assert_ne!(Queue::<T>::get(1), None);
 	});
@@ -52,7 +52,7 @@ fn register_insufficient_funds_fails() {
 
 		// Controller account registers for fast unstake.
 		assert_noop!(
-			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)),
+			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)),
 			BalancesError::<T, _>::InsufficientBalance,
 		);
 
@@ -65,7 +65,7 @@ fn register_insufficient_funds_fails() {
 fn register_disabled_fails() {
 	ExtBuilder::default().build_and_execute(|| {
 		assert_noop!(
-			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)),
+			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)),
 			Error::<T>::CallNotAllowed
 		);
 	});
@@ -81,7 +81,7 @@ fn cannot_register_if_not_bonded() {
 		}
 		// Attempt to fast unstake.
 		assert_noop!(
-			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)),
+			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)),
 			Error::<T>::NotController
 		);
 	});
@@ -95,7 +95,7 @@ fn cannot_register_if_in_queue() {
 		Queue::<T>::insert(1, 10);
 		// Cannot re-register, already in queue
 		assert_noop!(
-			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)),
+			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)),
 			Error::<T>::AlreadyQueued
 		);
 	});
@@ -112,7 +112,7 @@ fn cannot_register_if_head() {
 		});
 		// Controller attempts to regsiter
 		assert_noop!(
-			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)),
+			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)),
 			Error::<T>::AlreadyHead
 		);
 	});
@@ -123,10 +123,10 @@ fn cannot_register_if_has_unlocking_chunks() {
 	ExtBuilder::default().build_and_execute(|| {
 		ErasToCheckPerBlock::<T>::put(1);
 		// Start unbonding half of staked tokens
-		assert_ok!(Staking::unbond(RuntimeOrigin::signed(2), 50_u128));
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(1), 50_u128));
 		// Cannot register for fast unstake with unlock chunks active
 		assert_noop!(
-			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)),
+			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)),
 			Error::<T>::NotFullyBonded
 		);
 	});
@@ -140,11 +140,11 @@ fn deregister_works() {
 		assert_eq!(<T as Config>::Currency::reserved_balance(&1), 0);
 
 		// Controller account registers for fast unstake.
-		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
+		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
 		assert_eq!(<T as Config>::Currency::reserved_balance(&1), Deposit::get());
 
 		// Controller then changes mind and deregisters.
-		assert_ok!(FastUnstake::deregister(RuntimeOrigin::signed(2)));
+		assert_ok!(FastUnstake::deregister(RuntimeOrigin::signed(1)));
 		assert_eq!(<T as Config>::Currency::reserved_balance(&1), 0);
 
 		// Ensure stash no longer exists in the queue.
@@ -156,9 +156,9 @@ fn deregister_works() {
 fn deregister_disabled_fails() {
 	ExtBuilder::default().build_and_execute(|| {
 		ErasToCheckPerBlock::<T>::put(1);
-		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
+		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
 		ErasToCheckPerBlock::<T>::put(0);
-		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(2)), Error::<T>::CallNotAllowed);
+		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(1)), Error::<T>::CallNotAllowed);
 	});
 }
 
@@ -166,10 +166,10 @@ fn deregister_disabled_fails() {
 fn cannot_deregister_if_not_controller() {
 	ExtBuilder::default().build_and_execute(|| {
 		ErasToCheckPerBlock::<T>::put(1);
-		// Controller account registers for fast unstake.
-		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-		// Stash tries to deregister.
-		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(1)), Error::<T>::NotController);
+		// Controller (same as stash) account registers for fast unstake.
+		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
+		// Another account tries to deregister.
+		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(2)), Error::<T>::NotController);
 	});
 }
 
@@ -178,7 +178,7 @@ fn cannot_deregister_if_not_queued() {
 	ExtBuilder::default().build_and_execute(|| {
 		ErasToCheckPerBlock::<T>::put(1);
 		// Controller tries to deregister without first registering
-		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(2)), Error::<T>::NotQueued);
+		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(1)), Error::<T>::NotQueued);
 	});
 }
 
@@ -187,14 +187,14 @@ fn cannot_deregister_already_head() {
 	ExtBuilder::default().build_and_execute(|| {
 		ErasToCheckPerBlock::<T>::put(1);
 		// Controller attempts to register, should fail
-		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
+		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
 		// Insert some Head item for stash.
 		Head::<T>::put(UnstakeRequest {
 			stashes: bounded_vec![(1, Deposit::get())],
 			checked: bounded_vec![],
 		});
 		// Controller attempts to deregister
-		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(2)), Error::<T>::AlreadyHead);
+		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(1)), Error::<T>::AlreadyHead);
 	});
 }
 
@@ -210,7 +210,7 @@ fn control_works() {
 fn control_must_be_control_origin() {
 	ExtBuilder::default().build_and_execute(|| {
 		// account without control (root) origin wants to only check 1 era per block.
-		assert_noop!(FastUnstake::control(RuntimeOrigin::signed(1), 1_u32), BadOrigin);
+		assert_noop!(FastUnstake::control(RuntimeOrigin::signed(2), 1_u32), BadOrigin);
 	});
 }
 
@@ -224,7 +224,7 @@ mod on_idle {
 			CurrentEra::<T>::put(BondingDuration::get());
 
 			// set up Queue item
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
 			assert_eq!(Queue::<T>::get(1), Some(Deposit::get()));
 
 			// call on_idle with no remaining weight
@@ -245,11 +245,11 @@ mod on_idle {
 			// given
 			assert_eq!(<T as Config>::Currency::reserved_balance(&1), 0);
 
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(4)));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(6)));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(8)));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(10)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(3)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(5)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(7)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(9)));
 
 			assert_eq!(<T as Config>::Currency::reserved_balance(&1), Deposit::get());
 
@@ -310,9 +310,9 @@ mod on_idle {
 			CurrentEra::<T>::put(BondingDuration::get());
 
 			// register multi accounts for fast unstake
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
 			assert_eq!(Queue::<T>::get(1), Some(Deposit::get()));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(4)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(3)));
 			assert_eq!(Queue::<T>::get(3), Some(Deposit::get()));
 
 			// assert 2 queue items are in Queue & None in Head to start with
@@ -363,7 +363,7 @@ mod on_idle {
 			CurrentEra::<T>::put(BondingDuration::get());
 
 			// register for fast unstake
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
 			assert_eq!(Queue::<T>::get(1), Some(Deposit::get()));
 
 			// process on idle
@@ -405,7 +405,7 @@ mod on_idle {
 			Balances::make_free_balance_be(&2, 100);
 
 			// register for fast unstake
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
 			assert_eq!(Queue::<T>::get(1), Some(Deposit::get()));
 
 			// process on idle
@@ -446,7 +446,7 @@ mod on_idle {
 			CurrentEra::<T>::put(BondingDuration::get());
 
 			// register for fast unstake
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
 			assert_eq!(Queue::<T>::get(1), Some(Deposit::get()));
 
 			// process on idle
@@ -524,7 +524,7 @@ mod on_idle {
 			CurrentEra::<T>::put(BondingDuration::get());
 
 			// register for fast unstake
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
 			assert_eq!(Queue::<T>::get(1), Some(Deposit::get()));
 
 			next_block(true);
@@ -605,7 +605,7 @@ mod on_idle {
 			CurrentEra::<T>::put(BondingDuration::get());
 
 			// register for fast unstake
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
 
 			// process 2 blocks
 			next_block(true);
@@ -812,7 +812,7 @@ mod on_idle {
 
 			// create a new validator that 100% not exposed.
 			Balances::make_free_balance_be(&42, 100 + Deposit::get());
-			assert_ok!(Staking::bond(RuntimeOrigin::signed(42), 42, 10, RewardDestination::Staked));
+			assert_ok!(Staking::bond(RuntimeOrigin::signed(42), 10, RewardDestination::Staked));
 			assert_ok!(Staking::validate(RuntimeOrigin::signed(42), Default::default()));
 
 			// let them register:
@@ -851,10 +851,10 @@ mod batched {
 			ErasToCheckPerBlock::<T>::put(BondingDuration::get() + 1);
 			CurrentEra::<T>::put(BondingDuration::get());
 
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(4)));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(6)));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(8)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(3)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(5)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(7)));
 
 			assert_eq!(Queue::<T>::count(), 4);
 			assert_eq!(Head::<T>::get(), None);
@@ -902,10 +902,10 @@ mod batched {
 			ErasToCheckPerBlock::<T>::put(2);
 			CurrentEra::<T>::put(BondingDuration::get());
 
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(4)));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(6)));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(8)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(3)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(5)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(7)));
 
 			assert_eq!(Queue::<T>::count(), 4);
 			assert_eq!(Head::<T>::get(), None);
@@ -969,8 +969,8 @@ mod batched {
 			CurrentEra::<T>::put(BondingDuration::get());
 
 			// register two good ones.
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(4)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(3)));
 			create_exposed_nominator(666, 1);
 			create_exposed_nominator(667, 3);
 
@@ -1045,8 +1045,8 @@ mod batched {
 			next_block(true);
 
 			// ..and register two good ones.
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(4)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(1)));
+			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(3)));
 
 			// then one of the bad ones is reaped.
 			assert_eq!(

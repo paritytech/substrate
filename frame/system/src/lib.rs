@@ -373,7 +373,6 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Make some on-chain remark.
 		///
-		/// ## Complexity
 		/// - `O(1)`
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
@@ -393,31 +392,26 @@ pub mod pallet {
 		}
 
 		/// Set the new runtime code.
-		///
-		/// ## Complexity
-		/// - `O(C + S)` where `C` length of `code` and `S` complexity of `can_set_code`
 		#[pallet::call_index(2)]
-		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		#[pallet::weight((T::SystemWeightInfo::set_code(), DispatchClass::Operational))]
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
 			T::OnSetCode::set_code(code)?;
-			Ok(().into())
+			// consume the rest of the block to prevent further transactions
+			Ok(Some(T::BlockWeights::get().max_block).into())
 		}
 
 		/// Set the new runtime code without doing any checks of the given `code`.
-		///
-		/// ## Complexity
-		/// - `O(C)` where `C` length of `code`
 		#[pallet::call_index(3)]
-		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		#[pallet::weight((T::SystemWeightInfo::set_code(), DispatchClass::Operational))]
 		pub fn set_code_without_checks(
 			origin: OriginFor<T>,
 			code: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			T::OnSetCode::set_code(code)?;
-			Ok(().into())
+			Ok(Some(T::BlockWeights::get().max_block).into())
 		}
 
 		/// Set some items of storage.
@@ -1414,9 +1408,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Deposits a log and ensures it matches the block's log data.
-	///
-	/// ## Complexity
-	/// - `O(1)`
 	pub fn deposit_log(item: generic::DigestItem) {
 		<Digest<T>>::append(item);
 	}
@@ -1622,15 +1613,23 @@ impl<T: Config> Pallet<T> {
 			.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
 			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
 
-		if new_version.spec_name != current_version.spec_name {
-			return Err(Error::<T>::InvalidSpecName.into())
-		}
+		cfg_if::cfg_if! {
+			 if #[cfg(all(feature = "runtime-benchmarks", not(test)))] {
+					// Let's ensure the compiler doesn't optimize our fetching of the runtime version away.
+					core::hint::black_box((new_version, current_version));
+					Ok(())
+			  } else {
+				  if new_version.spec_name != current_version.spec_name {
+					  return Err(Error::<T>::InvalidSpecName.into())
+				   }
 
-		if new_version.spec_version <= current_version.spec_version {
-			return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
-		}
+				   if new_version.spec_version <= current_version.spec_version {
+						return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
+				   }
 
-		Ok(())
+				   Ok(())
+			  }
+		}
 	}
 }
 
