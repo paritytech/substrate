@@ -10900,7 +10900,6 @@ dependencies = [
  "sp-debug-derive",
  "sp-externalities",
  "sp-runtime-interface",
- "sp-serializer",
  "sp-std",
  "sp-storage",
  "ss58-registry",
