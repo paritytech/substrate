@@ -1651,7 +1651,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	) -> DispatchResult {
 		Self::bond(
 			RawOrigin::Signed(who.clone()).into(),
-			T::Lookup::unlookup(who.clone()),
 			value,
 			RewardDestination::Account(payee.clone()),
 		)

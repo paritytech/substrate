@@ -645,7 +645,6 @@ pub mod pallet {
 				);
 				frame_support::assert_ok!(<Pallet<T>>::bond(
 					T::RuntimeOrigin::from(Some(stash.clone()).into()),
-					T::Lookup::unlookup(controller.clone()),
 					balance,
 					RewardDestination::Staked,
 				));
@@ -850,19 +849,17 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::bond())]
 		pub fn bond(
 			origin: OriginFor<T>,
-			controller: AccountIdLookupOf<T>,
 			#[pallet::compact] value: BalanceOf<T>,
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
+			let controller_to_be_deprecated = stash.clone();
 
 			if <Bonded<T>>::contains_key(&stash) {
 				return Err(Error::<T>::AlreadyBonded.into())
 			}
 
-			let controller = T::Lookup::lookup(controller)?;
-
-			if <Ledger<T>>::contains_key(&controller) {
+			if <Ledger<T>>::contains_key(&controller_to_be_deprecated) {
 				return Err(Error::<T>::AlreadyPaired.into())
 			}
 
@@ -875,7 +872,7 @@ pub mod pallet {
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
-			<Bonded<T>>::insert(&stash, &controller);
+			<Bonded<T>>::insert(&stash, &stash);
 			<Payee<T>>::insert(&stash, payee);
 
 			let current_era = CurrentEra::<T>::get().unwrap_or(0);
@@ -886,7 +883,7 @@ pub mod pallet {
 			let value = value.min(stash_balance);
 			Self::deposit_event(Event::<T>::Bonded { stash: stash.clone(), amount: value });
 			let item = StakingLedger {
-				stash,
+				stash: stash.clone(),
 				total: value,
 				active: value,
 				unlocking: Default::default(),
@@ -897,7 +894,7 @@ pub mod pallet {
 					// satisfied.
 					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			};
-			Self::update_ledger(&controller, &item);
+			Self::update_ledger(&controller_to_be_deprecated, &item);
 			Ok(())
 		}
 
@@ -1237,7 +1234,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// (Re-)set the controller of a stash.
+		/// (Re-)sets the controller of a stash to the stash itself. This function previously
+		/// accepted a `controller` argument to set the controller to an account other than the
+		/// stash itself. This functionality has now been removed, now only setting the controller
+		/// to the stash, if it is not already.
 		///
 		/// Effects will be felt instantly (as soon as this function is completed successfully).
 		///
@@ -1250,20 +1250,17 @@ pub mod pallet {
 		/// - Writes are limited to the `origin` account key.
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::set_controller())]
-		pub fn set_controller(
-			origin: OriginFor<T>,
-			controller: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn set_controller(origin: OriginFor<T>) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
-			let controller = T::Lookup::lookup(controller)?;
-			if <Ledger<T>>::contains_key(&controller) {
+
+			if <Ledger<T>>::contains_key(&stash) {
 				return Err(Error::<T>::AlreadyPaired.into())
 			}
-			if controller != old_controller {
-				<Bonded<T>>::insert(&stash, &controller);
+			if old_controller != stash {
+				<Bonded<T>>::insert(&stash, &stash);
 				if let Some(l) = <Ledger<T>>::take(&old_controller) {
-					<Ledger<T>>::insert(&controller, l);
+					<Ledger<T>>::insert(&stash, l);
 				}
 			}
 			Ok(())
