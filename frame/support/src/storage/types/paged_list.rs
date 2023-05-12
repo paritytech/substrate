@@ -269,10 +269,6 @@ where
 
 		Self { page, drain, meta }
 	}
-
-	fn next_in_page() -> Option<Value> {
-		todo!()
-	}
 }
 
 impl<Prefix, Value, Hasher, ValuesPerPage> Iterator
