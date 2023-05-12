@@ -745,9 +745,12 @@ pub mod pallet {
 			let (result, weight) = Migration::<T>::migrate(weight_limit);
 
 			match result {
-				Completed => Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
-				InProgress { steps_done, .. } if steps_done > 0 => Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
-				InProgress {  .. } => Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::Yes }),
+				Completed =>
+					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
+				InProgress { steps_done, .. } if steps_done > 0 =>
+					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
+				InProgress { .. } =>
+					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::Yes }),
 				NoMigrationInProgress | NoMigrationPerformed => {
 					let err: DispatchError = <Error<T>>::NoMigrationPerformed.into();
 					Err(err.with_weight(T::WeightInfo::migrate()))
