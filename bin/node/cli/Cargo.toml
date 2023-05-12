@@ -154,7 +154,6 @@ cli = [
 	"sc-cli",
 	"frame-benchmarking-cli",
 	"substrate-frame-cli",
-	"sc-service",
 	"clap",
 	"clap_complete",
 	"substrate-build-script-utils",
