@@ -131,6 +131,7 @@ impl<T: Config> Migrate for Migration<T> {
 		for (code_hash, old) in sample {
 			let module = CodeStorage::<T>::get(&code_hash).unwrap();
 			assert_eq!(module.instruction_weights_version, old.instruction_weights_version);
+			assert_eq!(module.determinism, Determinism::Enforced);
 			assert_eq!(module.initial, old.initial);
 			assert_eq!(module.maximum, old.maximum);
 			assert_eq!(module.code, old.code);

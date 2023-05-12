@@ -230,17 +230,14 @@ impl<T: Config> Migrate for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), &'static str> {
-		let sample = <Vec<(T::AccountId, old::ContractInfo<T>, BalanceOf<T>)> as Decode>::decode(
-			&mut &state[..],
-		)
-		.unwrap();
+		let sample =
+			<Vec<(T::AccountId, old::ContractInfo<T>)> as Decode>::decode(&mut &state[..]).unwrap();
 
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contracts", sample.len());
 		for (account, old_contract) in sample {
 			log::debug!(target: LOG_TARGET, "===");
 			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
 			let contract = ContractInfoOf::<T>::get(&account).unwrap();
-			let min_balance = Pallet::<T>::min_balance();
 			assert_eq!(old_contract.trie_id, contract.trie_id);
 			assert_eq!(old_contract.code_hash, contract.code_hash);
 			assert_eq!(old_contract.storage_bytes, contract.storage_bytes);

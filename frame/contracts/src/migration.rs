@@ -15,7 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO gate
 pub mod v10;
 pub mod v11;
 pub mod v9;
@@ -179,11 +178,13 @@ pub struct Migration<T: Config, M: MigrateSequence = (NoopMigration<1>, NoopMigr
 impl<T: Config, M: MigrateSequence> Migration<T, M> {
 	fn run_all_steps() -> Result<(), &'static str> {
 		let mut weight = Weight::zero();
+		let name = <Pallet<T>>::name();
 		loop {
 			let in_progress_version = <Pallet<T>>::on_chain_storage_version() + 1;
 			let state = M::pre_upgrade_step(in_progress_version)?;
 			let (status, w) = Self::migrate(Weight::MAX);
 			weight.saturating_accrue(w);
+			log::info!(target: LOG_TARGET, "{name}: Migration step {:?} weight = {}", in_progress_version, weight);
 			M::post_upgrade_step(in_progress_version, state)?;
 			if matches!(status, MigrateResult::Completed) {
 				break
