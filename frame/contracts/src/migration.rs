@@ -68,13 +68,13 @@ pub trait Migrate: Codec + MaxEncodedLen + Default {
 	/// Returns whether the migration is finished and the weight consumed.
 	fn step(&mut self) -> (IsFinished, Weight);
 
-	/// Execute some pre-checks prior to running this step.
+	/// Execute some pre-checks prior to running the first step of this migration.
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade_step() -> Result<Vec<u8>, &'static str> {
 		Ok(Vec::new())
 	}
 
-	/// Execute some post-checks after running this step
+	/// Execute some post-checks after running the last step of this migration.
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(_state: Vec<u8>) -> Result<(), &'static str> {
 		Ok(())
