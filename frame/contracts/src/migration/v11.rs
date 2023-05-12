@@ -119,7 +119,7 @@ impl<T: Config> Migrate for Migration<T> {
 		let len = <u32 as Decode>::decode(&mut &state[..]).unwrap();
 		let counter = <DeletionQueueCounter<T>>::get();
 		assert_eq!(counter.insert_counter, len);
-		assert_eq!(counter.delete_counter, len);
+		assert_eq!(counter.delete_counter, 0);
 		Ok(())
 	}
 }
