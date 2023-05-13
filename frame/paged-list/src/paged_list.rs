@@ -89,7 +89,7 @@ pub struct StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages = Get
 	Encode, Decode, CloneNoBound, PartialEqNoBound, EqNoBound, DebugNoBound, DefaultNoBound,
 )]
 // todo ignore scale bounds
-pub struct StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage> {
+pub struct StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage> {
 	/// The first page that contains a value.
 	///
 	/// Can be >0 when pages were deleted.
@@ -109,13 +109,13 @@ pub struct StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage> {
 	/// whole list is empty. The only case where this can happen is when both are `0`.
 	pub last_value: ValueIndex,
 
-	_phantom: PhantomData<(Prefix, Value, Hasher, ValuesPerPage)>,
+	_phantom: PhantomData<(Prefix, Hasher, Value, ValuesPerPage)>,
 }
 
-impl<Prefix, Value, Hasher, ValuesPerPage> 
+impl<Prefix, Hasher, Value, ValuesPerPage> 
 	frame_support::storage::StorageAppendix<Value>
 for
-	StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage>
+	StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
@@ -130,8 +130,8 @@ where
 	}
 }
 
-impl<Prefix, Value, Hasher, ValuesPerPage>
-	StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage>
+impl<Prefix, Hasher, Value, ValuesPerPage>
+	StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
@@ -239,7 +239,7 @@ impl<V: Clone> Iterator for Page<V> {
 /// Iterates over values of a [`StoragePagedList`].
 ///
 /// Can optionally drain the iterated values.
-pub struct StoragePagedListIterator<Prefix, Value, Hasher, ValuesPerPage> {
+pub struct StoragePagedListIterator<Prefix, Hasher, Value, ValuesPerPage> {
 	// Design: we put the Page into the iterator to have fewer storage look-ups. Yes, these
 	// look-ups would be cached anyway, but bugging the overlay on each `.next` call still seems
 	// like a poor trade-off than caching it in the iterator directly. Iterating and modifying is
@@ -247,11 +247,11 @@ pub struct StoragePagedListIterator<Prefix, Value, Hasher, ValuesPerPage> {
 	// the iterator did not find any data upon setup or ran out of pages.
 	page: Option<Page<Value>>,
 	drain: bool,
-	meta: StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage>,
+	meta: StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage>,
 }
 
-impl<Prefix, Value, Hasher, ValuesPerPage>
-	StoragePagedListIterator<Prefix, Value, Hasher, ValuesPerPage>
+impl<Prefix, Hasher, Value, ValuesPerPage>
+	StoragePagedListIterator<Prefix, Hasher, Value, ValuesPerPage>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec + Clone,
@@ -260,7 +260,7 @@ where
 {
 	/// Read self from the storage.
 	pub fn from_meta(
-		meta: StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage>,
+		meta: StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage>,
 		drain: bool,
 	) -> Self {
 		let mut page = Page::<Value>::from_storage::<Prefix, Hasher>(meta.first_page);
@@ -273,8 +273,8 @@ where
 	}
 }
 
-impl<Prefix, Value, Hasher, ValuesPerPage> Iterator
-	for StoragePagedListIterator<Prefix, Value, Hasher, ValuesPerPage>
+impl<Prefix, Hasher, Value, ValuesPerPage> Iterator
+	for StoragePagedListIterator<Prefix, Hasher, Value, ValuesPerPage>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec + Clone,
@@ -337,8 +337,8 @@ where
 	ValuesPerPage: Get<u32>,
 	MaxPages: Get<Option<u32>>,
 {
-	type Iterator = StoragePagedListIterator<Prefix, Value, Hasher, ValuesPerPage>;
-	type Appendix = StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage>;
+	type Iterator = StoragePagedListIterator<Prefix, Hasher, Value, ValuesPerPage>;
+	type Appendix = StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage>;
 
 	fn iter() -> Self::Iterator {
 		StoragePagedListIterator::from_meta(Self::read_meta(), false)
@@ -362,7 +362,7 @@ where
 	ValuesPerPage: Get<u32>,
 	MaxPages: Get<Option<u32>>,
 {
-	fn read_meta() -> StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage> {
+	fn read_meta() -> StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage> {
 		// Use default here to not require a setup migration.
 		StoragePagedListMeta::from_storage().unwrap_or_default()
 	}
@@ -370,7 +370,7 @@ where
 	/// Provides a fast append iterator.
 	///
 	/// The list should not be modified while appending. Also don't call it recursively.
-	fn appendix() -> StoragePagedListMeta<Prefix, Value, Hasher, ValuesPerPage> {
+	fn appendix() -> StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage> {
 		Self::read_meta()
 	}
 
@@ -485,7 +485,7 @@ mod tests {
 			// all gone
 			assert_eq!(List::as_vec(), Vec::<u32>::new());
 			// Need to delete the metadata manually.
-			StoragePagedListMeta::<Prefix, u32, Blake2_128Concat, ValuesPerPage>::clear();
+			StoragePagedListMeta::<Prefix, Blake2_128Concat, u32, ValuesPerPage>::clear();
 		});
 	}
 

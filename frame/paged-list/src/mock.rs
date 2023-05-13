@@ -87,14 +87,14 @@ impl crate::Config<crate::Instance2> for Test {
 	type MaxPages = MaxPages;
 }
 
+pub type MetaOf<T, I> = StoragePagedListMeta<
+	ListPrefix<T, I>,
+	Blake2_128Concat,
+	<T as Config>::Value,
+	<T as Config>::ValuesPerPage,
+>;
+
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
-
-pub type MetaOf<T, I> = StoragePagedListMeta<
-	ListPrefix<T, I>,
-	<T as Config>::Value,
-	Blake2_128Concat,
-	<T as Config>::ValuesPerPage,
->;
