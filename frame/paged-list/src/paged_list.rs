@@ -23,15 +23,15 @@
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
 
-use frame_support::{
-	defensive,
-	Blake2_128Concat,
-	traits::{Get, GetDefault, StorageInstance},
-	CloneNoBound, DebugNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, StorageHasher,
-};
-use frame_support::storage::StoragePrefixedContainer;
 use codec::{Decode, Encode, EncodeLike, FullCodec};
 use core::marker::PhantomData;
+use frame_support::{
+	defensive,
+	storage::StoragePrefixedContainer,
+	traits::{Get, GetDefault, StorageInstance},
+	Blake2_128Concat, CloneNoBound, DebugNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound,
+	StorageHasher,
+};
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -56,17 +56,17 @@ pub type ValueIndex = u32;
 /// Each [`Page`] holds at most `ValuesPerPage` values in its `values` vector. The last page is the
 /// only one that could have less than `ValuesPerPage` values.  
 /// **Iteration** happens by starting
-/// at [`first_page`][StoragePagedListMeta::first_page]/[`first_value`][StoragePagedListMeta::first_value] and incrementing
-/// these indices as long as there are elements in the page and there are pages in storage. All
-/// elements of a page are loaded once a page is read from storage. Iteration then happens on the
-/// cached elements. This reduces the storage `read` calls on the overlay.  
-/// **Appending** to the list happens by appending to the last page by utilizing
-/// [`sp_io::storage::append`]. It allows to directly extend the elements of `values` vector of the
-/// page without loading the whole vector from storage. A new page is instanced once [`Page::next`]
-/// overflows `ValuesPerPage`. Its vector will also be created through [`sp_io::storage::append`].  
-/// **Draining** advances the internal indices identical to Iteration. It additionally persists the
-/// increments to storage and thereby 'drains' elements. Completely drained pages are deleted from
-/// storage.
+/// at [`first_page`][StoragePagedListMeta::first_page]/
+/// [`first_value`][StoragePagedListMeta::first_value] and incrementing these indices as long as
+/// there are elements in the page and there are pages in storage. All elements of a page are loaded
+/// once a page is read from storage. Iteration then happens on the cached elements. This reduces
+/// the storage `read` calls on the overlay. **Appending** to the list happens by appending to the
+/// last page by utilizing [`sp_io::storage::append`]. It allows to directly extend the elements of
+/// `values` vector of the page without loading the whole vector from storage. A new page is
+/// instanced once [`Page::next`] overflows `ValuesPerPage`. Its vector will also be created through
+/// [`sp_io::storage::append`]. **Draining** advances the internal indices identical to Iteration.
+/// It additionally persists the increments to storage and thereby 'drains' elements. Completely
+/// drained pages are deleted from storage.
 ///
 /// # Further Observations
 ///
@@ -112,10 +112,8 @@ pub struct StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage> {
 	_phantom: PhantomData<(Prefix, Hasher, Value, ValuesPerPage)>,
 }
 
-impl<Prefix, Hasher, Value, ValuesPerPage> 
-	frame_support::storage::StorageAppendix<Value>
-for
-	StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage>
+impl<Prefix, Hasher, Value, ValuesPerPage> frame_support::storage::StorageAppendix<Value>
+	for StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
@@ -141,9 +139,7 @@ where
 	pub fn from_storage() -> Option<Self> {
 		let key = Self::key();
 
-		sp_io::storage::get(key.as_ref()).and_then(|raw| {
-			Self::decode(&mut &raw[..]).ok()
-		})
+		sp_io::storage::get(key.as_ref()).and_then(|raw| Self::decode(&mut &raw[..]).ok())
 	}
 
 	pub fn key() -> Hasher::Output {
@@ -326,10 +322,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
-	frame_support::storage::StorageList<Value>
-for
-	StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
+impl<Prefix, Hasher, Value, ValuesPerPage, MaxPages> frame_support::storage::StorageList<Value>
+	for StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec + Clone,
@@ -391,13 +385,13 @@ where
 
 /// Provides the final prefix for a [`StoragePagedList`].
 ///
-/// It solely exists so that when re-using it from the iterator and meta struct, none of the un-used generics bleed through. Otherwise when only having the `StoragePrefixedContainer` implementation on the list directly, the iterator and metadata need to muster *all* generics, even the ones that are completely useless for prefix calculation.
+/// It solely exists so that when re-using it from the iterator and meta struct, none of the un-used
+/// generics bleed through. Otherwise when only having the `StoragePrefixedContainer` implementation
+/// on the list directly, the iterator and metadata need to muster *all* generics, even the ones
+/// that are completely useless for prefix calculation.
 struct StoragePagedListPrefix<Prefix>(PhantomData<Prefix>);
 
-impl<Prefix>
-	frame_support::storage::StoragePrefixedContainer
-for
-	StoragePagedListPrefix<Prefix>
+impl<Prefix> frame_support::storage::StoragePrefixedContainer for StoragePagedListPrefix<Prefix>
 where
 	Prefix: StorageInstance,
 {
@@ -412,8 +406,7 @@ where
 
 impl<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
 	frame_support::storage::StoragePrefixedContainer
-for
-	StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
+	for StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec + Clone,

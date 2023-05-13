@@ -16,8 +16,8 @@
 // limitations under the License.
 
 //! # Running
-//! Running this fuzzer can be done with `cargo hfuzz run pallet-paged-list`. `honggfuzz` CLI options can
-//! be used by setting `HFUZZ_RUN_ARGS`, such as `-n 4` to use 4 threads.
+//! Running this fuzzer can be done with `cargo hfuzz run pallet-paged-list`. `honggfuzz` CLI
+//! options can be used by setting `HFUZZ_RUN_ARGS`, such as `-n 4` to use 4 threads.
 //!
 //! # Debugging a panic
 //! Once a panic is found, it can be debugged with
@@ -30,9 +30,9 @@
 use arbitrary::Arbitrary;
 use honggfuzz::fuzz;
 
-use frame_support::{StorageNoopGuard, storage::StorageList};
+use frame_support::{storage::StorageList, StorageNoopGuard};
+use pallet_paged_list::mock::{PagedList1 as List, *};
 use sp_io::TestExternalities;
-use pallet_paged_list::mock::{*, PagedList1 as List};
 type Meta = MetaOf<Test, ()>;
 
 fn main() {

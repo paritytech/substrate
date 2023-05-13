@@ -17,13 +17,16 @@
 
 #![cfg(feature = "std")]
 
-use frame_support::{Blake2_128Concat, traits::{ConstU16, ConstU64}};
+use crate::{paged_list::StoragePagedListMeta, Config, ListPrefix};
+use frame_support::{
+	traits::{ConstU16, ConstU64},
+	Blake2_128Concat,
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use crate::{Config, ListPrefix, paged_list::StoragePagedListMeta};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
