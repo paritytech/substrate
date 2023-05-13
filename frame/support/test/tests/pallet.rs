@@ -2112,7 +2112,8 @@ fn post_runtime_upgrade_detects_storage_version_issues() {
 		// The version isn't changed, we should detect it.
 		assert!(
 			Executive::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost).unwrap_err() ==
-				"On chain and current storage version do not match".into()
+				"On chain and current storage version do not match. Missing runtime upgrade?"
+					.into()
 		);
 	});
 
@@ -2141,7 +2142,9 @@ fn post_runtime_upgrade_detects_storage_version_issues() {
 		// any storage version "enabled".
 		assert!(
 			ExecutiveWithUpgradePallet4::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost)
-				.unwrap_err() == "On chain storage version set, while the pallet doesn't".into()
+				.unwrap_err() == "On chain storage version set, while the pallet \
+				doesn't have the `#[pallet::storage_version(VERSION)]` attribute."
+				.into()
 		);
 	});
 }
