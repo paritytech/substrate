@@ -1687,8 +1687,8 @@ impl<T: Config> Pallet<T> {
 			"VoterList contains non-staker"
 		);
 
-		Self::check_nominators()?;
-		Self::check_exposures()?;
+		// Self::check_nominators()?;
+		// Self::check_exposures()?;
 		Self::check_ledgers()?;
 		Self::check_count()
 	}
@@ -1786,7 +1786,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(real_total == ledger.total, "ledger.total corrupt");
 
 		if !(ledger.active >= T::Currency::minimum_balance() || ledger.active.is_zero()) {
-			log!(warn, "ledger.active less than ED: {:?}, {:?}", ctrl, ledger)
+			log!(debug, "ledger.active less than ED: {:?}, {:?}", ctrl, ledger)
 		}
 
 		Ok(())

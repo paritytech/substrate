@@ -148,7 +148,9 @@ where
 			state_ext,
 			&executor,
 			"TryRuntime_execute_block",
-			(block, command.state_root_check, command.try_state.clone()).encode().as_ref(),
+			(block, command.state_root_check, true, command.try_state.clone())
+				.encode()
+				.as_ref(),
 			full_extensions(),
 			shared
 				.export_proof

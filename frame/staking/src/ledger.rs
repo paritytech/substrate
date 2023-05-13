@@ -57,7 +57,14 @@ impl<T: Config> Into<sp_staking::Stake<BalanceOf<T>>> for StakingLedgerInterface
 }
 
 #[derive(
-	CloneNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, DebugNoBound, TypeInfo, MaxEncodedLen,
+	CloneNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	RuntimeDebugNoBound,
+	TypeInfo,
+	MaxEncodedLen,
 )]
 #[scale_info(skip_type_params(T))]
 pub(crate) struct StakingLedgerInterface<T: Config> {
