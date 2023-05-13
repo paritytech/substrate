@@ -674,7 +674,7 @@ pub fn derive_runtime_debug_no_bound(input: TokenStream) -> TokenStream {
 		.into()
 	}
 
-	#[cfg(feature = "std")]
+	#[cfg(any(feature = "std", feature = "try-runtime"))]
 	{
 		debug_no_bound::derive_debug_no_bound(input)
 	}
