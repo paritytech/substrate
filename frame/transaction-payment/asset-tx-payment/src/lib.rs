@@ -59,9 +59,6 @@ use sp_runtime::{
 	FixedPointOperand,
 };
 
-#[cfg(feature = "try-runtime")]
-use frame_support::dispatch::DispatchError;
-
 #[cfg(test)]
 mod mock;
 #[cfg(test)]

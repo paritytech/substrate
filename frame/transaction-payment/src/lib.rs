@@ -70,9 +70,6 @@ use frame_support::{
 	weights::{Weight, WeightToFee},
 };
 
-#[cfg(feature = "try-runtime")]
-use frame_support::dispatch::DispatchError;
-
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
