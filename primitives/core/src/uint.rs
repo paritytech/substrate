@@ -42,7 +42,10 @@ mod tests {
 				];
 
 				for (number, expected) in tests {
-					assert_eq!(format!("{:?}", expected), serde_json::to_string_pretty(&number).expect("Json pretty print failed"));
+					assert_eq!(
+						format!("{:?}", expected),
+						serde_json::to_string_pretty(&number).expect("Json pretty print failed")
+					);
 					assert_eq!(number, serde_json::from_str(&format!("{:?}", expected)).unwrap());
 				}
 
