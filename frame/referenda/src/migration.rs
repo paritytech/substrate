@@ -23,7 +23,7 @@ use frame_support::{pallet_prelude::*, storage_alias, traits::OnRuntimeUpgrade};
 use log;
 
 #[cfg(feature = "try-runtime")]
-use sp_runtime::{TryRuntimeError, TryRuntimeResult};
+use sp_runtime::TryRuntimeError;
 
 /// Initial version of storage types.
 pub mod v0 {
@@ -150,7 +150,7 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> TryRuntimeResult {
+		fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
 			let onchain_version = Pallet::<T, I>::on_chain_storage_version();
 			ensure!(onchain_version == 1, "must upgrade from version 0 to 1.");
 			let pre_referendum_count: u32 = Decode::decode(&mut &state[..])

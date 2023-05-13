@@ -105,7 +105,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 					current_version,
 				);
 
-				return Err("On chain and current storage version do not match. Missing runtime upgrade?");
+				return Err("On chain and current storage version do not match. Missing runtime upgrade?".into());
 			}
 		}
 	} else {
@@ -128,7 +128,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				);
 
 				return Err("On chain storage version set, while the pallet doesn't \
-							have the `#[pallet::storage_version(VERSION)]` attribute.");
+							have the `#[pallet::storage_version(VERSION)]` attribute.".into());
 			}
 		}
 	};

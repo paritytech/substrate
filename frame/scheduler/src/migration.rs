@@ -21,7 +21,7 @@ use super::*;
 use frame_support::traits::OnRuntimeUpgrade;
 
 #[cfg(feature = "try-runtime")]
-use sp_runtime::{TryRuntimeError, TryRuntimeResult};
+use sp_runtime::TryRuntimeError;
 
 /// The log target.
 const TARGET: &'static str = "runtime::scheduler::migration";
@@ -172,7 +172,7 @@ pub mod v3 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> TryRuntimeResult {
+		fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
 			ensure!(StorageVersion::get::<Pallet<T>>() == 4, "Must upgrade");
 
 			// Check that everything decoded fine.
@@ -288,7 +288,7 @@ pub mod v4 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> TryRuntimeResult {
+		fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
 			ensure!(StorageVersion::get::<Pallet<T>>() == 4, "Version must not change");
 
 			let (old_agendas, non_empty_agendas): (u32, u32) =

@@ -379,7 +379,7 @@ use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
 
 #[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
-use sp_runtime::TryRuntimeResult;
+use sp_runtime::TryRuntimeError;
 
 /// The log target of this pallet.
 pub const LOG_TARGET: &str = "runtime::nomination-pools";
@@ -2630,7 +2630,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: BlockNumberFor<T>) -> TryRuntimeResult {
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 			Self::do_try_state(u8::MAX)
 		}
 
@@ -3059,7 +3059,7 @@ impl<T: Config> Pallet<T> {
 	/// multiple `level`s, where the higher the level, the more checks we performs. So,
 	/// `try_state(255)` is the strongest sanity check, and `0` performs no checks.
 	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
-	pub fn do_try_state(level: u8) -> TryRuntimeResult {
+	pub fn do_try_state(level: u8) -> Result<(), TryRuntimeError> {
 		if level.is_zero() {
 			return Ok(())
 		}
@@ -3104,7 +3104,7 @@ impl<T: Config> Pallet<T> {
 		let mut pools_members = BTreeMap::<PoolId, u32>::new();
 		let mut pools_members_pending_rewards = BTreeMap::<PoolId, BalanceOf<T>>::new();
 		let mut all_members = 0u32;
-		PoolMembers::<T>::iter().try_for_each(|(_, d)| -> TryRuntimeResult {
+		PoolMembers::<T>::iter().try_for_each(|(_, d)| -> Result<(), TryRuntimeError> {
 			let bonded_pool = BondedPools::<T>::get(d.pool_id).unwrap();
 			ensure!(!d.total_points().is_zero(), "No member should have zero points");
 			*pools_members.entry(d.pool_id).or_default() += 1;
@@ -3123,7 +3123,7 @@ impl<T: Config> Pallet<T> {
 			Ok(())
 		})?;
 
-		RewardPools::<T>::iter_keys().try_for_each(|id| -> TryRuntimeResult {
+		RewardPools::<T>::iter_keys().try_for_each(|id| -> Result<(), TryRuntimeError> {
 			// the sum of the pending rewards must be less than the leftover balance. Since the
 			// reward math rounds down, we might accumulate some dust here.
 			log!(
@@ -3141,7 +3141,7 @@ impl<T: Config> Pallet<T> {
 			Ok(())
 		})?;
 
-		BondedPools::<T>::iter().try_for_each(|(id, inner)| -> TryRuntimeResult {
+		BondedPools::<T>::iter().try_for_each(|(id, inner)| -> Result<(), TryRuntimeError> {
 			let bonded_pool = BondedPool { id, inner };
 			ensure!(
 				pools_members.get(&id).copied().unwrap_or_default() ==

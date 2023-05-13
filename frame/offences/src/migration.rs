@@ -30,7 +30,7 @@ use sp_std::vec::Vec;
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
 #[cfg(feature = "try-runtime")]
-use sp_runtime::{TryRuntimeError, TryRuntimeResult};
+use sp_runtime::TryRuntimeError;
 
 mod v0 {
 	use super::*;
@@ -83,7 +83,7 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_state: Vec<u8>) -> TryRuntimeResult {
+		fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 			let onchain = Pallet::<T>::on_chain_storage_version();
 			ensure!(onchain == 1, "pallet_offences::MigrateToV1 needs to be run");
 			ensure!(

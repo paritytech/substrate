@@ -28,7 +28,7 @@ pub mod v1 {
 	#[cfg(feature = "try-runtime")]
 	use frame_support::ensure;
 	#[cfg(feature = "try-runtime")]
-	use sp_runtime::{TryRuntimeError, TryRuntimeResult};
+	use sp_runtime::TryRuntimeError;
 
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
@@ -79,7 +79,7 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: Vec<u8>) -> TryRuntimeResult {
+		fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
 			ensure!(
 				Pallet::<T>::on_chain_storage_version() == 1,
 				"The onchain version must be updated after the migration."

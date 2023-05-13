@@ -133,7 +133,7 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> sp_runtime::TryRuntimeResult {
+		fn post_upgrade(state: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
 			ensure!(StorageVersion::get::<Pallet<T>>() == 1, "must upgrade");
 
 			let (old_props_count, old_ref_count): (u32, u32) =

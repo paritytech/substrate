@@ -92,7 +92,7 @@ pub mod pallet {
 	pub use weights::WeightInfo;
 
 	#[cfg(feature = "try-runtime")]
-	use sp_runtime::TryRuntimeResult;
+	use sp_runtime::TryRuntimeError;
 
 	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
 	#[codec(mel_bound(T: Config))]
@@ -231,7 +231,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> TryRuntimeResult {
+		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
 			// ensure that the value of `ErasToCheckPerBlock` is less than
 			// `T::MaxErasToCheckPerBlock`.
 			ensure!(

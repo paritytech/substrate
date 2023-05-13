@@ -54,7 +54,7 @@ use super::{pallet::*, STAKING_ID};
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
 #[cfg(any(test, feature = "try-runtime"))]
-use sp_runtime::TryRuntimeResult;
+use sp_runtime::TryRuntimeError;
 
 /// The maximum number of iterations that we do whilst iterating over `T::VoterList` in
 /// `get_npos_voters`.
@@ -1472,7 +1472,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		0
 	}
 	#[cfg(feature = "try-runtime")]
-	fn try_state() -> TryRuntimeResult {
+	fn try_state() -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 
@@ -1549,7 +1549,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn try_state() -> TryRuntimeResult {
+	fn try_state() -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 
@@ -1718,7 +1718,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 
 #[cfg(any(test, feature = "try-runtime"))]
 impl<T: Config> Pallet<T> {
-	pub(crate) fn do_try_state(_: BlockNumberFor<T>) -> TryRuntimeResult {
+	pub(crate) fn do_try_state(_: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 		ensure!(
 			T::VoterList::iter()
 				.all(|x| <Nominators<T>>::contains_key(&x) || <Validators<T>>::contains_key(&x)),
@@ -1731,7 +1731,7 @@ impl<T: Config> Pallet<T> {
 		Self::check_count()
 	}
 
-	fn check_count() -> TryRuntimeResult {
+	fn check_count() -> Result<(), TryRuntimeError> {
 		ensure!(
 			<T as Config>::VoterList::count() ==
 				Nominators::<T>::count() + Validators::<T>::count(),
@@ -1749,14 +1749,14 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn check_ledgers() -> TryRuntimeResult {
+	fn check_ledgers() -> Result<(), TryRuntimeError> {
 		Bonded::<T>::iter()
 			.map(|(_, ctrl)| Self::ensure_ledger_consistent(ctrl))
 			.collect::<Result<Vec<_>, _>>()?;
 		Ok(())
 	}
 
-	fn check_exposures() -> TryRuntimeResult {
+	fn check_exposures() -> Result<(), TryRuntimeError> {
 		// a check per validator to ensure the exposure struct is always sane.
 		let era = Self::active_era().unwrap().index;
 		ErasStakers::<T>::iter_prefix_values(era)
@@ -1772,10 +1772,10 @@ impl<T: Config> Pallet<T> {
 				);
 				Ok(())
 			})
-			.collect::<TryRuntimeResult>()
+			.collect::<Result<(), TryRuntimeError>>()
 	}
 
-	fn check_nominators() -> TryRuntimeResult {
+	fn check_nominators() -> Result<(), TryRuntimeError> {
 		// a check per nominator to ensure their entire stake is correctly distributed. Will only
 		// kick-in if the nomination was submitted before the current era.
 		let era = Self::active_era().unwrap().index;
@@ -1789,14 +1789,14 @@ impl<T: Config> Pallet<T> {
 					}
 				},
 			)
-			.map(|nominator| -> TryRuntimeResult {
+			.map(|nominator| -> Result<(), TryRuntimeError> {
 				// must be bonded.
 				Self::ensure_is_stash(&nominator)?;
 				let mut sum = BalanceOf::<T>::zero();
 				T::SessionInterface::validators()
 					.iter()
 					.map(|v| Self::eras_stakers(era, v))
-					.map(|e| -> TryRuntimeResult {
+					.map(|e| -> Result<(), TryRuntimeError> {
 						let individual =
 							e.others.iter().filter(|e| e.who == nominator).collect::<Vec<_>>();
 						let len = individual.len();
@@ -1823,7 +1823,7 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn ensure_ledger_consistent(ctrl: T::AccountId) -> TryRuntimeResult {
+	fn ensure_ledger_consistent(ctrl: T::AccountId) -> Result<(), TryRuntimeError> {
 		// ensures ledger.total == ledger.active + sum(ledger.unlocking).
 		let ledger = Self::ledger(ctrl.clone()).ok_or("Not a controller.")?;
 		let real_total: BalanceOf<T> =

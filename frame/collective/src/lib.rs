@@ -61,7 +61,7 @@ use frame_support::{
 };
 
 #[cfg(any(feature = "try-runtime", test))]
-use sp_runtime::TryRuntimeResult;
+use sp_runtime::TryRuntimeError;
 
 #[cfg(test)]
 mod tests;
@@ -355,7 +355,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: BlockNumberFor<T>) -> TryRuntimeResult {
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 			Self::do_try_state()
 		}
 	}
@@ -975,14 +975,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Looking at prime account:
 	/// * The prime account must be a member of the collective.
 	#[cfg(any(feature = "try-runtime", test))]
-	fn do_try_state() -> TryRuntimeResult {
-		Self::proposals().into_iter().try_for_each(|proposal| -> TryRuntimeResult {
-			ensure!(
-				Self::proposal_of(proposal).is_some(),
-				"Proposal hash from `Proposals` is not found inside the `ProposalOf` mapping."
-			);
-			Ok(())
-		})?;
+	fn do_try_state() -> Result<(), TryRuntimeError> {
+		Self::proposals()
+			.into_iter()
+			.try_for_each(|proposal| -> Result<(), TryRuntimeError> {
+				ensure!(
+					Self::proposal_of(proposal).is_some(),
+					"Proposal hash from `Proposals` is not found inside the `ProposalOf` mapping."
+				);
+				Ok(())
+			})?;
 
 		ensure!(
 			Self::proposals().into_iter().count() <= Self::proposal_count() as usize,
@@ -993,39 +995,45 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			"Proposal count inside `Proposals` is not equal to the proposal count in `ProposalOf`"
 		);
 
-		Self::proposals().into_iter().try_for_each(|proposal| -> TryRuntimeResult {
-			if let Some(votes) = Self::voting(proposal) {
-				let ayes = votes.ayes.len();
-				let nays = votes.nays.len();
+		Self::proposals()
+			.into_iter()
+			.try_for_each(|proposal| -> Result<(), TryRuntimeError> {
+				if let Some(votes) = Self::voting(proposal) {
+					let ayes = votes.ayes.len();
+					let nays = votes.nays.len();
 
-				ensure!(
-					ayes.saturating_add(nays) <= T::MaxMembers::get() as usize,
-					"The sum of ayes and nays is greater than `MaxMembers`"
-				);
-			}
-			Ok(())
-		})?;
+					ensure!(
+						ayes.saturating_add(nays) <= T::MaxMembers::get() as usize,
+						"The sum of ayes and nays is greater than `MaxMembers`"
+					);
+				}
+				Ok(())
+			})?;
 
 		let mut proposal_indices = vec![];
-		Self::proposals().into_iter().try_for_each(|proposal| -> TryRuntimeResult {
-			if let Some(votes) = Self::voting(proposal) {
-				let proposal_index = votes.index;
-				ensure!(
-					!proposal_indices.contains(&proposal_index),
-					"The proposal index is not unique."
-				);
-				proposal_indices.push(proposal_index);
-			}
-			Ok(())
-		})?;
+		Self::proposals()
+			.into_iter()
+			.try_for_each(|proposal| -> Result<(), TryRuntimeError> {
+				if let Some(votes) = Self::voting(proposal) {
+					let proposal_index = votes.index;
+					ensure!(
+						!proposal_indices.contains(&proposal_index),
+						"The proposal index is not unique."
+					);
+					proposal_indices.push(proposal_index);
+				}
+				Ok(())
+			})?;
 
-		<Voting<T, I>>::iter_keys().try_for_each(|proposal_hash| -> TryRuntimeResult {
-			ensure!(
-				Self::proposals().contains(&proposal_hash),
-				"`Proposals` doesn't contain the proposal hash from the `Voting` storage map."
-			);
-			Ok(())
-		})?;
+		<Voting<T, I>>::iter_keys().try_for_each(
+			|proposal_hash| -> Result<(), TryRuntimeError> {
+				ensure!(
+					Self::proposals().contains(&proposal_hash),
+					"`Proposals` doesn't contain the proposal hash from the `Voting` storage map."
+				);
+				Ok(())
+			},
+		)?;
 
 		ensure!(
 			Self::members().len() <= T::MaxMembers::get() as usize,

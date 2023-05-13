@@ -60,7 +60,7 @@ use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded, StaticLookup};
 use sp_std::prelude::*;
 
 #[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
-use sp_runtime::TryRuntimeResult;
+use sp_runtime::TryRuntimeError;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
@@ -270,7 +270,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_: BlockNumberFor<T>) -> TryRuntimeResult {
+		fn try_state(_: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 			<Self as SortedListProvider<T::AccountId>>::try_state()
 		}
 	}
@@ -278,7 +278,7 @@ pub mod pallet {
 
 #[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn do_try_state() -> TryRuntimeResult {
+	pub fn do_try_state() -> Result<(), TryRuntimeError> {
 		List::<T, I>::do_try_state()
 	}
 }
@@ -358,7 +358,7 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn try_state() -> TryRuntimeResult {
+	fn try_state() -> Result<(), TryRuntimeError> {
 		Self::do_try_state()
 	}
 

@@ -42,7 +42,7 @@ use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 
 #[cfg(feature = "try-runtime")]
-use sp_runtime::{TryRuntimeError, TryRuntimeResult};
+use sp_runtime::TryRuntimeError;
 
 thread_local! {
 	/// A global counter, can be used to generate a relatively unique identifier.

@@ -29,7 +29,7 @@ use sp_runtime::traits::Saturating;
 use sp_std::{marker::PhantomData, prelude::*};
 
 #[cfg(feature = "try-runtime")]
-use sp_runtime::{TryRuntimeError, TryRuntimeResult};
+use sp_runtime::TryRuntimeError;
 
 /// Performs all necessary migrations based on `StorageVersion`.
 pub struct Migration<T: Config>(PhantomData<T>);
@@ -80,7 +80,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> TryRuntimeResult {
+	fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		let version = Decode::decode(&mut state.as_ref()).map_err(|_| "Cannot decode version")?;
 		post_checks::post_upgrade::<T>(version)
 	}
@@ -421,7 +421,7 @@ mod post_checks {
 	type ContractInfoOf<T: Config, V> =
 		StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, V>;
 
-	pub fn post_upgrade<T: Config>(old_version: StorageVersion) -> TryRuntimeResult {
+	pub fn post_upgrade<T: Config>(old_version: StorageVersion) -> Result<(), TryRuntimeError> {
 		if old_version < 7 {
 			return Ok(())
 		}
@@ -437,7 +437,7 @@ mod post_checks {
 		Ok(())
 	}
 
-	fn v8<T: Config>() -> TryRuntimeResult {
+	fn v8<T: Config>() -> Result<(), TryRuntimeError> {
 		use frame_support::traits::ReservableCurrency;
 		for (key, value) in ContractInfoOf::<T, ContractInfo<T>>::iter() {
 			let reserved = T::Currency::reserved_balance(&key);
@@ -464,7 +464,7 @@ mod post_checks {
 		Ok(())
 	}
 
-	fn v9<T: Config>() -> TryRuntimeResult {
+	fn v9<T: Config>() -> Result<(), TryRuntimeError> {
 		for value in CodeStorage::<T>::iter_values() {
 			ensure!(
 				value.determinism == Determinism::Enforced,

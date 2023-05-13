@@ -23,7 +23,7 @@ use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
 #[cfg(feature = "try-runtime")]
-use sp_runtime::{TryRuntimeError, TryRuntimeResult};
+use sp_runtime::TryRuntimeError;
 
 /// The block initialization trait.
 ///
@@ -185,7 +185,7 @@ pub trait OnRuntimeUpgrade {
 	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
 	/// inaccurate.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> TryRuntimeResult {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 }
@@ -227,12 +227,12 @@ impl OnRuntimeUpgrade for Tuple {
 			errors.iter().for_each(|err| {
 				log::error!(
 					target: "try-runtime",
-					"{}",
+					"{:?}",
 					err
 				);
 			});
 
-			return Err("Detected multiple errors while executing `try_on_runtime_upgrade`, check the logs!")
+			return Err("Detected multiple errors while executing `try_on_runtime_upgrade`, check the logs!".into())
 		}
 
 		Ok(weight)
@@ -308,7 +308,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// This hook should not alter any storage.
 	#[cfg(feature = "try-runtime")]
-	fn try_state(_n: BlockNumber) -> TryRuntimeResult {
+	fn try_state(_n: BlockNumber) -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 
@@ -332,7 +332,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> TryRuntimeResult {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 
@@ -420,7 +420,7 @@ mod tests {
 					}
 
 					#[cfg(feature = "try-runtime")]
-					fn post_upgrade(_: Vec<u8>) -> TryRuntimeResult {
+					fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
 						Post::mutate(|s| s.push(stringify!($name)));
 						Ok(())
 					}

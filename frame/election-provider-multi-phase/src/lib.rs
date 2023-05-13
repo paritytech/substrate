@@ -258,7 +258,7 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 #[cfg(feature = "try-runtime")]
-use sp_runtime::TryRuntimeResult;
+use sp_runtime::TryRuntimeError;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -886,7 +886,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> TryRuntimeResult {
+		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
 			Self::do_try_state()
 		}
 	}
@@ -1582,7 +1582,7 @@ impl<T: Config> Pallet<T> {
 
 #[cfg(feature = "try-runtime")]
 impl<T: Config> Pallet<T> {
-	fn do_try_state() -> TryRuntimeResult {
+	fn do_try_state() -> Result<(), TryRuntimeError> {
 		Self::try_state_snapshot()?;
 		Self::try_state_signed_submissions_map()?;
 		Self::try_state_phase_off()
@@ -1591,7 +1591,7 @@ impl<T: Config> Pallet<T> {
 	// [`Snapshot`] state check. Invariants:
 	// - [`DesiredTargets`] exists if and only if [`Snapshot`] is present.
 	// - [`SnapshotMetadata`] exist if and only if [`Snapshot`] is present.
-	fn try_state_snapshot() -> TryRuntimeResult {
+	fn try_state_snapshot() -> Result<(), TryRuntimeError> {
 		if <Snapshot<T>>::exists() &&
 			<SnapshotMetadata<T>>::exists() &&
 			<DesiredTargets<T>>::exists()
@@ -1611,7 +1611,7 @@ impl<T: Config> Pallet<T> {
 	// - All [`SignedSubmissionIndices`] are present in [`SignedSubmissionsMap`], and no more;
 	// - [`SignedSubmissionNextIndex`] is not present in [`SignedSubmissionsMap`];
 	// - [`SignedSubmissionIndices`] is sorted by election score.
-	fn try_state_signed_submissions_map() -> TryRuntimeResult {
+	fn try_state_signed_submissions_map() -> Result<(), TryRuntimeError> {
 		let mut last_score: ElectionScore = Default::default();
 		let indices = <SignedSubmissionIndices<T>>::get();
 
@@ -1657,7 +1657,7 @@ impl<T: Config> Pallet<T> {
 
 	// [`Phase::Off`] state check. Invariants:
 	// - If phase is `Phase::Off`, [`Snapshot`] must be none.
-	fn try_state_phase_off() -> TryRuntimeResult {
+	fn try_state_phase_off() -> Result<(), TryRuntimeError> {
 		match Self::current_phase().is_off() {
 			false => Ok(()),
 			true =>
