@@ -24,7 +24,6 @@ use kitchensink_runtime::{constants::currency::*, BalancesCall, SudoCall};
 use node_cli::service::{create_extrinsic, fetch_nonce, FullClient, TransactionPool};
 use node_primitives::AccountId;
 use sc_client_api::execution_extensions::ExecutionStrategies;
-use sc_executor::WasmtimeInstantiationStrategy;
 use sc_service::{
 	config::{
 		BlocksPruning, DatabaseSource, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
