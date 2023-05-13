@@ -33,9 +33,9 @@ stages:
   - test
   - build
   - publish
+  - notify
   - zombienet
   - deploy
-  - notify
 
 workflow:
   rules:
@@ -46,18 +46,22 @@ variables:
   GIT_STRATEGY: fetch
   GIT_DEPTH: 100
   CARGO_INCREMENTAL: 0
-  DOCKER_OS: "debian:stretch"
+  DOCKER_OS: "debian:bullseye"
   ARCH: "x86_64"
   CI_IMAGE: "paritytech/ci-linux:production"
   BUILDAH_IMAGE: "quay.io/buildah/stable:v1.29"
   BUILDAH_COMMAND: "buildah --storage-driver overlay2"
   RELENG_SCRIPTS_BRANCH: "master"
+
   RUSTY_CACHIER_SINGLE_BRANCH: master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
+  RUSTY_CACHIER_MINIO_ALIAS: rustycachier_gcs
+  RUSTY_CACHIER_MINIO_BUCKET: parity-build-rusty-cachier
   RUSTY_CACHIER_COMPRESSION_METHOD: zstd
+
   NEXTEST_FAILURE_OUTPUT: immediate-final
   NEXTEST_SUCCESS_OUTPUT: final
-  ZOMBIENET_IMAGE: "docker.io/paritytech/zombienet:v1.3.43"
+  ZOMBIENET_IMAGE: "docker.io/paritytech/zombienet:v1.3.52"
 
 default:
   retry:
@@ -141,7 +145,7 @@ default:
   after_script:
     - !reference [.rusty-cachier, after_script]
   tags:
-    - linux-docker
+    - linux-docker-vm-c2
 
 # rusty-cachier's hidden job. Parts of this job are used to instrument the pipeline's other real jobs with rusty-cachier
 # Description of the commands is available here - https://gitlab.parity.io/parity/infrastructure/ci_cd/rusty-cachier/client#description

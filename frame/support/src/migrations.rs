@@ -18,7 +18,7 @@
 #[cfg(feature = "try-runtime")]
 use crate::storage::unhashed::contains_prefixed_key;
 use crate::{
-	traits::{GetStorageVersion, PalletInfoAccess},
+	traits::{GetStorageVersion, NoStorageVersionSet, PalletInfoAccess, StorageVersion},
 	weights::{RuntimeDbWeight, Weight},
 };
 use impl_trait_for_tuples::impl_for_tuples;
@@ -28,12 +28,38 @@ use sp_std::marker::PhantomData;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+/// Can store the current pallet version in storage.
+pub trait StoreCurrentStorageVersion<T: GetStorageVersion + PalletInfoAccess> {
+	/// Write the current storage version to the storage.
+	fn store_current_storage_version();
+}
+
+impl<T: GetStorageVersion<CurrentStorageVersion = StorageVersion> + PalletInfoAccess>
+	StoreCurrentStorageVersion<T> for StorageVersion
+{
+	fn store_current_storage_version() {
+		let version = <T as GetStorageVersion>::current_storage_version();
+		version.put::<T>();
+	}
+}
+
+impl<T: GetStorageVersion<CurrentStorageVersion = NoStorageVersionSet> + PalletInfoAccess>
+	StoreCurrentStorageVersion<T> for NoStorageVersionSet
+{
+	fn store_current_storage_version() {
+		StorageVersion::default().put::<T>();
+	}
+}
+
 /// Trait used by [`migrate_from_pallet_version_to_storage_version`] to do the actual migration.
 pub trait PalletVersionToStorageVersionHelper {
 	fn migrate(db_weight: &RuntimeDbWeight) -> Weight;
 }
 
-impl<T: GetStorageVersion + PalletInfoAccess> PalletVersionToStorageVersionHelper for T {
+impl<T: GetStorageVersion + PalletInfoAccess> PalletVersionToStorageVersionHelper for T
+where
+	T::CurrentStorageVersion: StoreCurrentStorageVersion<T>,
+{
 	fn migrate(db_weight: &RuntimeDbWeight) -> Weight {
 		const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
 
@@ -43,8 +69,8 @@ impl<T: GetStorageVersion + PalletInfoAccess> PalletVersionToStorageVersionHelpe
 
 		sp_io::storage::clear(&pallet_version_key(<T as PalletInfoAccess>::name()));
 
-		let version = <T as GetStorageVersion>::current_storage_version();
-		version.put::<T>();
+		<T::CurrentStorageVersion as StoreCurrentStorageVersion<T>>::store_current_storage_version(
+		);
 
 		db_weight.writes(2)
 	}
