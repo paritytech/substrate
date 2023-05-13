@@ -15,14 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![cfg(test)]
+#![cfg(feature = "std")]
 
-use frame_support::traits::{ConstU16, ConstU64};
+use frame_support::{Blake2_128Concat, traits::{ConstU16, ConstU64}};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+use crate::{Config, ListPrefix, paged_list::StoragePagedListMeta};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -68,7 +69,7 @@ impl frame_system::Config for Test {
 }
 
 frame_support::parameter_types! {
-	pub const ValuesPerPage: u32 = 5;
+	pub storage ValuesPerPage: u32 = 5;
 	pub const MaxPages: Option<u32> = Some(20);
 }
 
@@ -90,3 +91,10 @@ impl crate::Config<crate::Instance2> for Test {
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
+
+pub type MetaOf<T, I> = StoragePagedListMeta<
+	ListPrefix<T, I>,
+	<T as Config>::Value,
+	Blake2_128Concat,
+	<T as Config>::ValuesPerPage,
+>;

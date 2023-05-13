@@ -16,12 +16,12 @@
 // limitations under the License.
 
 //! # Running
-//! Running this fuzzer can be done with `cargo hfuzz run paged-list`. `honggfuzz` CLI options can
+//! Running this fuzzer can be done with `cargo hfuzz run pallet-paged-list`. `honggfuzz` CLI options can
 //! be used by setting `HFUZZ_RUN_ARGS`, such as `-n 4` to use 4 threads.
 //!
 //! # Debugging a panic
 //! Once a panic is found, it can be debugged with
-//! `cargo hfuzz run-debug paged-list hfuzz_workspace/paged-list/*.fuzz`.
+//! `cargo hfuzz run-debug pallet-paged-list hfuzz_workspace/pallet-paged-list/*.fuzz`.
 //!
 //! # More information
 //! More information about `honggfuzz` can be found
@@ -29,6 +29,11 @@
 
 use arbitrary::Arbitrary;
 use honggfuzz::fuzz;
+
+use frame_support::{StorageNoopGuard, storage::StorageList};
+use sp_io::TestExternalities;
+use pallet_paged_list::mock::{*, PagedList1 as List};
+type Meta = MetaOf<Test, ()>;
 
 fn main() {
 	loop {
@@ -40,7 +45,6 @@ fn main() {
 
 /// Appends and drains random number of elements in random order and checks storage invariants.
 fn drain_append_work(ops: Vec<Op>, page_size: u8) {
-	use mock::*;
 	if page_size == 0 {
 		return
 	}
@@ -59,7 +63,7 @@ fn drain_append_work(ops: Vec<Op>, page_size: u8) {
 			// We have the assumption that the queue removes the metadata when being empty.
 			if total == 0 {
 				assert_eq!(List::drain().count(), 0);
-				assert_eq!(List::read_meta().unwrap_or_default(), Default::default());
+				assert_eq!(Meta::from_storage().unwrap_or_default(), Default::default());
 			}
 		}
 
@@ -85,8 +89,6 @@ impl Arbitrary<'_> for Op {
 
 impl Op {
 	pub fn exec(self) -> i64 {
-		use mock::*;
-
 		match self {
 			Op::Append(v) => {
 				let l = v.len();
@@ -96,31 +98,4 @@ impl Op {
 			Op::Drain(v) => -(List::drain().take(v as usize).count() as i64),
 		}
 	}
-}
-
-#[allow(dead_code)]
-mod mock {
-	pub use frame_support::{
-		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
-		parameter_types,
-		storage::{types::StoragePagedList, StorageList as _, TestingStoragePagedList as _},
-		traits::StorageInstance,
-		Blake2_128Concat, StorageNoopGuard,
-	};
-	pub use sp_io::TestExternalities;
-
-	parameter_types! {
-		pub storage ValuesPerPage: u32 = 10;
-		pub const MaxPages: Option<u32> = Some(20);
-	}
-
-	pub struct Prefix;
-	impl StorageInstance for Prefix {
-		fn pallet_prefix() -> &'static str {
-			"test"
-		}
-		const STORAGE_PREFIX: &'static str = "foo";
-	}
-
-	pub type List = StoragePagedList<Prefix, Blake2_128Concat, u32, ValuesPerPage, MaxPages>;
 }

@@ -2753,16 +2753,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "frame-support-storage-fuzzer"
-version = "0.1.0"
-dependencies = [
- "arbitrary",
- "frame-support",
- "honggfuzz",
- "sp-io",
-]
-
-[[package]]
 name = "frame-support-test"
 version = "3.0.0"
 dependencies = [
@@ -6921,6 +6911,17 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-paged-list-fuzzer"
+version = "0.1.0"
+dependencies = [
+ "arbitrary",
+ "frame-support",
+ "honggfuzz",
+ "pallet-paged-list",
+ "sp-io",
 ]
 
 [[package]]
