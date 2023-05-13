@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A minimal wrapper around the [`frame_support::storage::StoragePagedList`].
+//! A minimal wrapper around the [`paged_list::StoragePagedList`].
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
@@ -23,33 +23,37 @@
 pub use pallet::*;
 
 mod mock;
+mod paged_list;
 mod tests;
 
 use codec::FullCodec;
-use frame_support::traits::StorageInstance;
-use frame_support::traits::PalletInfoAccess;
-use frame_support::pallet_prelude::StorageList;
+use frame_support::{
+	pallet_prelude::StorageList,
+	traits::{PalletInfoAccess, StorageInstance},
+};
+pub use paged_list::StoragePagedList;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, storage::types::StoragePagedList};
+	use frame_support::pallet_prelude::*;
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(_);
+	pub struct Pallet<T, I = ()>(_);
 
 	/// This type alias is what FRAME normally get us.
-	pub type List<T> = StoragePagedList<
-		ListPrefix<T>,
+	pub type List<T, I> = StoragePagedList<
+		ListPrefix<T, I>,
 		Blake2_128Concat,
-		<T as Config>::Value,
-		<T as Config>::ValuesPerPage,
-		<T as Config>::MaxPages,
+		<T as Config<I>>::Value,
+		<T as Config<I>>::ValuesPerPage,
+		<T as Config<I>>::MaxPages,
 	>;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+	pub trait Config<I: 'static = ()>: frame_system::Config {
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		type Value: FullCodec + Clone + MaxEncodedLen;
 
@@ -61,36 +65,39 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	pub enum Event<T: Config> {}
+	pub enum Event<T: Config<I>, I: 'static = ()> {}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {}
 }
 
-/// The storage prefix for the list.
-pub struct ListPrefix<T>(core::marker::PhantomData<T>);
-
-impl<T: Config> StorageInstance for ListPrefix<T> {
-	fn pallet_prefix() -> &'static str {
-		crate::Pallet::<T>::module_name() // TODO double check
-	}
-	const STORAGE_PREFIX: &'static str = "list";
-}
-
-// Pass everything through to the underlying list.
-impl<T: Config> StorageList<T::Value> for Pallet<T> {
-	type Iterator = <List<T> as StorageList<T::Value>>::Iterator;
-	type Appendix = <List<T> as StorageList<T::Value>>::Appendix;
+// This exposes the list functionality to other pallets.
+impl<T: Config<I>, I: 'static> StorageList<T::Value> for Pallet<T, I> {
+	type Iterator = <List<T, I> as StorageList<T::Value>>::Iterator;
+	type Appendix = <List<T, I> as StorageList<T::Value>>::Appendix;
 
 	fn iter() -> Self::Iterator {
-		List::<T>::iter()
+		List::<T, I>::iter()
 	}
 
 	fn drain() -> Self::Iterator {
-		List::<T>::drain()
+		List::<T, I>::drain()
 	}
 
 	fn appendix() -> Self::Appendix {
-		List::<T>::appendix()
+		List::<T, I>::appendix()
 	}
+}
+
+/// The storage prefix for the list.
+///
+/// Unique for each instance.
+pub struct ListPrefix<T, I>(core::marker::PhantomData<(T, I)>);
+
+impl<T: Config<I>, I: 'static> StorageInstance for ListPrefix<T, I> {
+	fn pallet_prefix() -> &'static str {
+		crate::Pallet::<T, I>::name()
+	}
+
+	const STORAGE_PREFIX: &'static str = "paged_list";
 }

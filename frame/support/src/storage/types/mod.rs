@@ -27,7 +27,6 @@ mod double_map;
 mod key;
 mod map;
 mod nmap;
-mod paged_list;
 mod value;
 
 pub use counted_map::{CountedStorageMap, CountedStorageMapInstance};
@@ -38,7 +37,6 @@ pub use key::{
 };
 pub use map::StorageMap;
 pub use nmap::StorageNMap;
-pub use paged_list::StoragePagedList;
 pub use value::StorageValue;
 
 /// Trait implementing how the storage optional value is converted into the queried type.

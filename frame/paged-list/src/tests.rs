@@ -17,17 +17,29 @@
 
 #![cfg(test)]
 
-use crate::{mock::*, Pallet};
-use frame_support::{storage::StorageList};
+use crate::{mock::*, *};
+use frame_support::storage::{StorageList, StoragePrefixedContainer};
 
 #[test]
-fn iter_works() {
+fn iter_independent_works() {
 	new_test_ext().execute_with(|| {
-		Pallet::<Test>::append_many(0..1000);
+		PagedList1::append_many(0..1000);
+		PagedList2::append_many(0..1000);
 
-		assert_eq!(Pallet::<Test>::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
+		assert_eq!(PagedList1::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
+		assert_eq!(PagedList1::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
+
 		// drain
-		assert_eq!(Pallet::<Test>::drain().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
-		assert_eq!(Pallet::<Test>::iter().count(), 0);
+		assert_eq!(PagedList1::drain().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
+		assert_eq!(PagedList2::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
+
+		assert_eq!(PagedList1::iter().count(), 0);
 	});
+}
+
+#[test]
+fn prefix_distinct() {
+	let p1 = List::<Test, ()>::final_prefix();
+	let p2 = List::<Test, crate::Instance2>::final_prefix();
+	assert_ne!(p1, p2);
 }

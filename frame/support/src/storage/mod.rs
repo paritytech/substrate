@@ -206,30 +206,6 @@ pub trait StorageList<V: FullCodec> {
 	}
 }
 
-/// Convenience trait for testing internal details of [`types::StoragePagedList`].
-// FAIL-CI I am not sure if this is such a good idea, but dont see another way to allow external white-box testing the metadata.
-#[cfg(feature = "std")]
-pub trait TestingStoragePagedList<V: FullCodec>: StorageList<V> {
-	/// Expose the metadata of the list. It is otherwise inaccessible.
-	type Metadata;
-
-	/// Read the metadata of the list from storage.
-	fn read_meta() -> Option<Self::Metadata>;
-
-	/// Clear the metadata of the list from storage.
-	fn clear_meta();
-
-	/// Return the elements of the list.
-	fn as_vec() -> Vec<V> {
-		<Self as crate::storage::StorageList<_>>::iter().collect()
-	}
-
-	/// Remove and return all elements of the list.
-	fn as_drained_vec() -> Vec<V> {
-		<Self as crate::storage::StorageList<_>>::drain().collect()
-	}
-}
-
 /// Append iterator to append values to a storage struct.
 ///
 /// Can be used in situations where appending does not have constant time complexity.
@@ -1266,7 +1242,7 @@ impl<T> Iterator for ChildTriePrefixIterator<T> {
 }
 
 /// Trait for storage types that store all its value after a unique prefix.
-pub trait StoragePrefixContainer {
+pub trait StoragePrefixedContainer {
 	/// Module prefix. Used for generating final key.
 	fn module_prefix() -> &'static [u8];
 
