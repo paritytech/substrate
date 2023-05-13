@@ -652,7 +652,7 @@ pub fn derive_debug_no_bound(input: TokenStream) -> TokenStream {
 /// This behaviour is useful to prevent bloating the runtime WASM blob from unneeded code.
 #[proc_macro_derive(RuntimeDebugNoBound)]
 pub fn derive_runtime_debug_no_bound(input: TokenStream) -> TokenStream {
-	#[cfg(not(feature = "std"))]
+	#[cfg(not(any(feature = "std", feature = "try-runtime")))]
 	{
 		let input: syn::DeriveInput = match syn::parse(input) {
 			Ok(input) => input,
