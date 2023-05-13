@@ -1,0 +1,46 @@
+[package]
+name = "frame"
+version = "0.0.1-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "The single package to get you started with FRAME"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+# external deps
+parity-scale-codec = { version = "3.2.2", default-features = false, features = ["derive"]}
+scale-info = {  version = "2.6.0", default-features = false, features = ["derive"]}
+
+# primitive deps
+sp-api = { default-features = false, path = "../primitives/api" }
+sp-runtime = { default-features = false, path = "../primitives/runtime" }
+sp-std = { default-features = false, path = "../primitives/std" }
+sp-keyring = { default-features = false, path = "../primitives/keyring" }
+sp-io = { default-features = false, path = "../primitives/io" }
+sp-core = { default-features = false, path = "../primitives/core" }
+sp-arithmetic = { default-features = false, path = "../primitives/arithmetic" }
+
+# frame deps
+frame-support = { default-features = false,  path = "./support" }
+frame-system = { default-features = false,  path = "./system" }
+
+[features]
+default = [ "std" ]
+std = [
+	"parity-scale-codec/std",
+	"scale-info/std",
+
+	"sp-api/std",
+	"sp-runtime/std",
+	"sp-std/std",
+
+	"frame-support/std",
+]
+try-runtime = [
+	"frame-support/try-runtime",
+]
