@@ -16,6 +16,9 @@
 // limitations under the License.
 
 //! Implementations for the `Currency` family of traits.
+//!
+//! Note that `WithdrawReasons` are intentionally not used for anything in this implementation and
+//! are expected to be removed in the near future, once migration to `fungible::*` traits is done.
 
 use super::*;
 use frame_support::{
@@ -487,7 +490,9 @@ where
 			return true
 		}
 		Self::account(who).free.checked_sub(&value).map_or(false, |new_balance| {
-			Self::ensure_can_withdraw(who, value, WithdrawReasons::RESERVE, new_balance).is_ok()
+			new_balance >= T::ExistentialDeposit::get() &&
+				Self::ensure_can_withdraw(who, value, WithdrawReasons::RESERVE, new_balance)
+					.is_ok()
 		})
 	}
 

@@ -20,14 +20,13 @@
 
 use crate::error::Error;
 use array_bytes::{hex2bytes, hex_bytes2hex_str};
-use clap::Parser;
+use clap::Args;
 use std::io::BufRead;
 
 /// Params to configure how a message should be passed into a command.
-#[derive(Parser, Debug, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct MessageParams {
 	/// Message to process. Will be read from STDIN otherwise.
-	///
 	/// The message is assumed to be raw bytes per default. Use `--hex` for hex input. Can
 	/// optionally be prefixed with `0x` in the hex case.
 	#[arg(long)]
