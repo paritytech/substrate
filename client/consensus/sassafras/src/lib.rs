@@ -287,7 +287,7 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 		use sp_consensus_sassafras::VrfInput;
 		use sp_core::crypto::VrfSecret;
 		let pair = sp_consensus_sassafras::AuthorityPair::from_seed(&[0u8; 32]);
-		let input = VrfInput::new(b"", &[]);
+		let input = VrfInput::new(b"", &[], &[]).expect("0 is less than max inputs; qed");
 		let vrf_signature = pair.as_ref().vrf_sign(&input.into());
 		return Ok(PreDigest { authority_idx: 0, slot: 0.into(), ticket_claim: None, vrf_signature })
 	}

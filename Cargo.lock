@@ -11159,7 +11159,7 @@ name = "sp-consensus-sassafras"
 version = "0.3.2-dev"
 dependencies = [
  "async-trait",
- "merlin",
+ "merlin 2.0.1",
  "parity-scale-codec",
  "scale-info",
  "serde",

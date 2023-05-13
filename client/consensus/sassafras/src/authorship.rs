@@ -78,7 +78,7 @@ pub(crate) fn claim_slot(
 
 	let vrf_input = slot_claim_vrf_input(&config.randomness, slot, epoch.epoch_idx);
 	let vrf_signature = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &vrf_input.into())
+		.bandersnatch_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &vrf_input.into())
 		.ok()
 		.flatten()?;
 
@@ -115,7 +115,7 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 			let vrf_input = ticket_id_vrf_input(&config.randomness, attempt_idx, epoch.epoch_idx);
 
 			let vrf_preout = keystore
-				.sr25519_vrf_output(AuthorityId::ID, authority_id.as_ref(), &vrf_input)
+				.bandersnatch_vrf_output(AuthorityId::ID, authority_id.as_ref(), &vrf_input)
 				.ok()??;
 
 			let ticket_id = ticket_id(&vrf_input, &vrf_preout);

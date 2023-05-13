@@ -250,6 +250,16 @@ impl Keystore for MemoryKeystore {
 		self.vrf_sign::<bandersnatch::Pair>(key_type, public, data)
 	}
 
+	#[cfg(feature = "bandersnatch-experimental")]
+	fn bandersnatch_vrf_output(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		input: &bandersnatch::vrf::VrfInput,
+	) -> Result<Option<bandersnatch::vrf::VrfOutput>, Error> {
+		self.vrf_output::<bandersnatch::Pair>(key_type, public, input)
+	}
+
 	#[cfg(feature = "bls-experimental")]
 	fn bls381_public_keys(&self, key_type: KeyTypeId) -> Vec<bls381::Public> {
 		self.public_keys::<bls381::Pair>(key_type)

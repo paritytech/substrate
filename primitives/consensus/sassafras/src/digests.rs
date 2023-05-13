@@ -19,13 +19,12 @@
 
 use super::{
 	ticket::TicketClaim, AuthorityId, AuthorityIndex, AuthoritySignature, Randomness,
-	SassafrasAuthorityWeight, SassafrasEpochConfiguration, Slot, SASSAFRAS_ENGINE_ID,
+	SassafrasAuthorityWeight, SassafrasEpochConfiguration, Slot, VrfSignature, SASSAFRAS_ENGINE_ID,
 };
 
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
-use sp_core::sr25519::vrf::VrfSignature;
 use sp_runtime::{DigestItem, RuntimeDebug};
 use sp_std::vec::Vec;
 

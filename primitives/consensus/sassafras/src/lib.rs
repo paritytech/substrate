@@ -32,20 +32,20 @@ use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
 
 pub use sp_consensus_slots::{Slot, SlotDuration};
-pub use sp_core::sr25519::vrf::{VrfInput, VrfOutput, VrfProof, VrfSignData, VrfSignature};
+pub use sp_core::bandersnatch::vrf::{VrfInput, VrfOutput, VrfSignData, VrfSignature};
 
 pub mod digests;
 pub mod inherents;
 pub mod ticket;
 
 pub use ticket::{
-	slot_claim_vrf_input, ticket_id, ticket_id_threshold, ticket_id_vrf_input, TicketClaim,
-	TicketData, TicketEnvelope, TicketId, TicketSecret,
+	slot_claim_sign_data, slot_claim_vrf_input, ticket_id, ticket_id_threshold,
+	ticket_id_vrf_input, TicketClaim, TicketData, TicketEnvelope, TicketId, TicketSecret,
 };
 
 mod app {
-	use sp_application_crypto::{app_crypto, key_types::SASSAFRAS, sr25519};
-	app_crypto!(sr25519, SASSAFRAS);
+	use sp_application_crypto::{app_crypto, bandersnatch, key_types::SASSAFRAS};
+	app_crypto!(bandersnatch, SASSAFRAS);
 }
 
 /// Key type for Sassafras protocol.
@@ -53,9 +53,6 @@ pub const KEY_TYPE: KeyTypeId = sp_application_crypto::key_types::SASSAFRAS;
 
 /// Consensus engine identifier.
 pub const SASSAFRAS_ENGINE_ID: ConsensusEngineId = *b"SASS";
-
-/// VRF context used for per-slot randomness generation.
-pub const RANDOMNESS_VRF_CONTEXT: &[u8] = b"SassafrasRandomnessVRFContext";
 
 /// VRF output length for per-slot randomness.
 pub const RANDOMNESS_LENGTH: usize = 32;
