@@ -11218,14 +11218,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-serializer"
-version = "4.0.0-dev"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "sp-session"
 version = "4.0.0-dev"
 dependencies = [
