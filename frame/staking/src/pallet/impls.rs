@@ -990,14 +990,14 @@ impl<T: Config> Pallet<T> {
 				let total_issuance = T::Currency::total_issuance();
 				let staked_as_percent = Perquintill::from_rational(staked, total_issuance);
 				// NOTE: The JavaScript implemenation considers 2 parameters, `auction_max` and
-				// `auction_adjust` in the following calculation: 
+				// `auction_adjust` in the following calculation:
 				//
 				// Math.min(auction_max, numAuctions.toNumber()) * auction_adjust;
 				//
 				// `auction_max` is always 0 on PJS Apps and Staking Dashboard. This calculation is
 				// therefore being ignored for now.
 				let ideal_interest = max_inflation / ideal_stake;
-				
+
 				println!("Active era: {:?}", active_era.index);
 				println!("Staked: {:?}", staked);
 				println!("Total issuance: {:?}", total_issuance);
@@ -1017,8 +1017,8 @@ impl<T: Config> Pallet<T> {
 					let curve_multiplier = curve_power.int_mul(2);
 					curve_base * curve_multiplier
 				};
-				
-				let reward_rate =	min_inflation + curve.int_mul(100);
+
+				let reward_rate = min_inflation + curve.int_mul(100);
 				println!("Reward rate: {:?}", reward_rate);
 				reward_rate
 			},
