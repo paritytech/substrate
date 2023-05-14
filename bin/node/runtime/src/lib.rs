@@ -538,7 +538,8 @@ impl pallet_session::historical::Config for Runtime {
 	type FullIdentificationOf = pallet_staking::ExposureOf<Runtime>;
 }
 
-// NOTE: Changes to `ideal_stake` and `falloff` must also be applied in constants::inflation.
+// NOTE: Changes to `min_inflation, `max_inflation`, `ideal_stake` and `falloff` must also be
+// applied in constants::inflation.
 pallet_staking_reward_curve::build! {
 	const REWARD_CURVE: PiecewiseLinear<'static> = curve!(
 		min_inflation: 0_025_000,

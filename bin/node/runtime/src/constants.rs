@@ -37,6 +37,8 @@ pub mod inflation {
 	// `pallet_staking_reward_curve::build!`.
 	pub const IDEAL_STAKE_BASE: Perquintill = Perquintill::from_percent(75);
 	pub const FALLOFF: Perquintill = Perquintill::from_percent(5);
+	pub const MIN_INFLATION: Perquintill = Perquintill::from_perthousand(2_500); // 2.5%
+	pub const MAX_INFLATION: Perquintill = Perquintill::from_percent(10);
 }
 
 /// Time.
