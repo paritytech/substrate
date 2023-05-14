@@ -29,7 +29,7 @@ sp_api::decl_runtime_apis! {
 			Balance: Codec,
 	{
 		/// Returns the current staking reward rate.
-		fn inflation_rate() -> Perquintill;
+		fn reward_rate() -> Perquintill;
 
 		/// Returns the nominations quota for a nominator with a given balance.
 		fn nominations_quota(balance: Balance) -> u32;
