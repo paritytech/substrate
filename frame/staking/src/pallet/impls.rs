@@ -981,7 +981,7 @@ impl<T: Config> Pallet<T> {
 	pub fn api_reward_rate(
 		min_inflation: Perquintill,
 		max_inflation: Perquintill,
-		stake_target: Perquintill,
+		ideal_stake: Perquintill,
 		falloff: Perquintill,
 	) -> Perquintill {
 		match ActiveEra::<T>::get() {
@@ -996,8 +996,7 @@ impl<T: Config> Pallet<T> {
 				//
 				// `auction_max` is always 0 on PJS Apps and Staking Dashboard. This calculation is
 				// therefore being ignored for now.
-				let ideal_stake: Perquintill = stake_target;
-				let ideal_interest: Perquintill = max_inflation / stake_target;
+				let ideal_interest = max_inflation / ideal_stake;
 				
 				println!("Active era: {:?}", active_era.index);
 				println!("Staked: {:?}", staked);
