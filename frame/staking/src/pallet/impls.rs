@@ -996,46 +996,24 @@ impl<T: Config> Pallet<T> {
 				// Math.min(auctionMax, numAuctions.toNumber()) * auctionAdjust;
 				//
 				// `auctionMax` is always 0 on PJS Apps and Staking Dashboard. This calculation is
-				// therefore being ignored for now.
+				// therefore being ignored here for now.
 				let ideal_interest = max_inflation / ideal_stake;
-
-				println!("Active era: {:?}", active_era.index);
-				println!("Staked: {:?}", staked);
-				println!("Total issuance: {:?}", total_issuance);
-				println!("Staked as a percentage: {:?}", staked_as_percent);
-				println!("min inflation: {:?}", min_inflation);
-				println!("max inflation: {:?}", max_inflation);
-				println!("ideal stake: {:?}", ideal_stake);
-				println!("ideal_interest: {:?}", ideal_interest);
-
 				let curve = if staked_as_percent <= ideal_stake {
-					println!("stake is less than or equal to ideal");
 					(ideal_interest.saturating_sub(min_inflation / ideal_stake))
 						.saturating_mul(staked_as_percent)
 				} else {
-					println!("stake is more than ideal.");
 					let curve_base =
 						ideal_interest.saturating_mul(ideal_stake).saturating_sub(min_inflation);
-					println!("curve base: {:?}", curve_base);
 					let curve_power = (staked_as_percent - ideal_stake).int_div(falloff);
-					println!("{:?} divided by {:?}", staked_as_percent - ideal_stake, falloff);
-					println!("curve power: {:?}", curve_power);
 					let curve_multiplier = Perquintill::from_percent(1) /
 						Perquintill::from_percent(2u64.pow(curve_power as u32));
-					println!("curve multiplier: {:?}", curve_multiplier);
-					println!("final curve: {:?} * {:?}", curve_base, curve_multiplier);
 					curve_base.saturating_mul(curve_multiplier)
 				};
 
-				println!("CURVE: {:?}", curve);
 				let reward_rate = min_inflation + curve;
-				println!("Reward rate: {:?}", reward_rate);
 				reward_rate
 			},
-			None => {
-				println!("No ative era");
-				Perquintill::zero()
-			},
+			None => Perquintill::zero(),
 		}
 	}
 
