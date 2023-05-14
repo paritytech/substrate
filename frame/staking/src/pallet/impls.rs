@@ -974,11 +974,11 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Returns the current inflation rate.
+	/// Returns the current staking reward rate.
 	///
 	/// The staked amount as a PerThing is calculated and provided to `compute_inflation` alongside
 	/// the provided `ideal_staked` and `falloff` values.
-	pub fn api_inflation_rate(ideal_staked: Perquintill, falloff: Perquintill) -> Perquintill {
+	pub fn api_reward_rate(ideal_staked: Perquintill, falloff: Perquintill) -> Perquintill {
 		match ActiveEra::<T>::get() {
 			Some(active_era) => {
 				let staked = ErasTotalStake::<T>::get(active_era.index);
