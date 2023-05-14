@@ -24,7 +24,6 @@ use prometheus::{
 	Error as PrometheusError, Registry,
 };
 
-#[cfg(feature = "metered")]
 use prometheus::{core::GenericCounterVec, Opts};
 
 lazy_static! {
@@ -36,7 +35,6 @@ lazy_static! {
 			.expect("Creating of statics doesn't fail. qed");
 }
 
-#[cfg(feature = "metered")]
 lazy_static! {
 	pub static ref UNBOUNDED_CHANNELS_COUNTER : GenericCounterVec<AtomicU64> = GenericCounterVec::new(
 		Opts::new("substrate_unbounded_channel_len", "Items in each mpsc::unbounded instance"),
@@ -49,8 +47,6 @@ lazy_static! {
 pub fn register_globals(registry: &Registry) -> Result<(), PrometheusError> {
 	registry.register(Box::new(TOKIO_THREADS_ALIVE.clone()))?;
 	registry.register(Box::new(TOKIO_THREADS_TOTAL.clone()))?;
-
-	#[cfg(feature = "metered")]
 	registry.register(Box::new(UNBOUNDED_CHANNELS_COUNTER.clone()))?;
 
 	Ok(())

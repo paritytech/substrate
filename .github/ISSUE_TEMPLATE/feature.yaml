@@ -1,7 +1,9 @@
 name: Feature Request
 description: Submit your requests and suggestions to improve!
+labels: ["J0-enhancement"]
 body:
   - type: checkboxes
+    id: existing
     attributes:
       label: Is there an existing issue?
       description: Please search to see if an issue already exists and leave a comment that you also experienced this issue or add your specifics that are related to an existing issue.
@@ -9,6 +11,7 @@ body:
         - label: I have searched the existing issues
           required: true
   - type: checkboxes
+    id: stackexchange
     attributes:
       label: Experiencing problems? Have you tried our Stack Exchange first?
       description: Please search <https://substrate.stackexchange.com> to see if an post already exists, and ask if not. Please do not file support issues here.
@@ -16,7 +19,7 @@ body:
         - label: This is not a support question.
           required: true
   - type: textarea
-    id: content
+    id: motivation
     attributes:
       label: Motivation
       description: Please give precedence as to what lead you to file this issue.
@@ -24,7 +27,7 @@ body:
     validations:
       required: false
   - type: textarea
-    id: content
+    id: request
     attributes:
       label: Request
       description: Please describe what is needed.
@@ -32,7 +35,7 @@ body:
     validations:
       required: true
   - type: textarea
-    id: content
+    id: solution
     attributes:
       label: Solution
       description: If possible, please describe what a solution could be.

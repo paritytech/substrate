@@ -32,7 +32,6 @@ use sp_runtime::{
 	DigestItem,
 };
 use std::{
-	collections::HashMap,
 	pin::Pin,
 	sync::{
 		atomic::{AtomicUsize, Ordering},
@@ -203,7 +202,7 @@ where
 		let header = import_block.post_header();
 		let mut block_import = self.block_import.lock();
 
-		match block_import.import_block(import_block, HashMap::default()).await {
+		match block_import.import_block(import_block).await {
 			Ok(res) => {
 				res.handle_justification(
 					&header.hash(),

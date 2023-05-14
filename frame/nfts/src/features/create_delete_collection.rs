@@ -38,6 +38,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				owner_deposit: deposit,
 				items: 0,
 				item_metadatas: 0,
+				item_configs: 0,
 				attributes: 0,
 			},
 		);
@@ -71,24 +72,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if let Some(check_owner) = maybe_check_owner {
 				ensure!(collection_details.owner == check_owner, Error::<T, I>::NoPermission);
 			}
-			ensure!(collection_details.items == witness.items, Error::<T, I>::BadWitness);
+			ensure!(collection_details.items == 0, Error::<T, I>::CollectionNotEmpty);
+			ensure!(collection_details.attributes == witness.attributes, Error::<T, I>::BadWitness);
 			ensure!(
 				collection_details.item_metadatas == witness.item_metadatas,
 				Error::<T, I>::BadWitness
 			);
-			ensure!(collection_details.attributes == witness.attributes, Error::<T, I>::BadWitness);
+			ensure!(
+				collection_details.item_configs == witness.item_configs,
+				Error::<T, I>::BadWitness
+			);
 
-			for (item, details) in Item::<T, I>::drain_prefix(&collection) {
-				Account::<T, I>::remove((&details.owner, &collection, &item));
-				T::Currency::unreserve(&details.deposit.account, details.deposit.amount);
-			}
 			for (_, metadata) in ItemMetadataOf::<T, I>::drain_prefix(&collection) {
 				if let Some(depositor) = metadata.deposit.account {
 					T::Currency::unreserve(&depositor, metadata.deposit.amount);
 				}
 			}
-			let _ = ItemPriceOf::<T, I>::clear_prefix(&collection, witness.items, None);
-			let _ = PendingSwapOf::<T, I>::clear_prefix(&collection, witness.items, None);
+
 			CollectionMetadataOf::<T, I>::remove(&collection);
 			Self::clear_roles(&collection)?;
 
@@ -103,15 +103,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			CollectionAccount::<T, I>::remove(&collection_details.owner, &collection);
 			T::Currency::unreserve(&collection_details.owner, collection_details.owner_deposit);
 			CollectionConfigOf::<T, I>::remove(&collection);
-			let _ = ItemConfigOf::<T, I>::clear_prefix(&collection, witness.items, None);
-			let _ =
-				ItemAttributesApprovalsOf::<T, I>::clear_prefix(&collection, witness.items, None);
+			let _ = ItemConfigOf::<T, I>::clear_prefix(&collection, witness.item_configs, None);
 
 			Self::deposit_event(Event::Destroyed { collection });
 
 			Ok(DestroyWitness {
-				items: collection_details.items,
 				item_metadatas: collection_details.item_metadatas,
+				item_configs: collection_details.item_configs,
 				attributes: collection_details.attributes,
 			})
 		})

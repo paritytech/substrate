@@ -37,13 +37,13 @@ pub trait WeightInfo {
 }
 
 impl WeightInfo for () {
-	fn add_well_known_node() -> Weight { Weight::from_ref_time(50_000_000) }
-	fn remove_well_known_node() -> Weight { Weight::from_ref_time(50_000_000) }
-	fn swap_well_known_node() -> Weight { Weight::from_ref_time(50_000_000) }
-	fn reset_well_known_nodes() -> Weight { Weight::from_ref_time(50_000_000) }
-	fn claim_node() -> Weight { Weight::from_ref_time(50_000_000) }
-	fn remove_claim() -> Weight { Weight::from_ref_time(50_000_000) }
-	fn transfer_node() -> Weight { Weight::from_ref_time(50_000_000) }
-	fn add_connections() -> Weight { Weight::from_ref_time(50_000_000) }
-	fn remove_connections() -> Weight { Weight::from_ref_time(50_000_000) }
+	fn add_well_known_node() -> Weight { Weight::from_parts(50_000_000, 0) }
+	fn remove_well_known_node() -> Weight { Weight::from_parts(50_000_000, 0) }
+	fn swap_well_known_node() -> Weight { Weight::from_parts(50_000_000, 0) }
+	fn reset_well_known_nodes() -> Weight { Weight::from_parts(50_000_000, 0) }
+	fn claim_node() -> Weight { Weight::from_parts(50_000_000, 0) }
+	fn remove_claim() -> Weight { Weight::from_parts(50_000_000, 0) }
+	fn transfer_node() -> Weight { Weight::from_parts(50_000_000, 0) }
+	fn add_connections() -> Weight { Weight::from_parts(50_000_000, 0) }
+	fn remove_connections() -> Weight { Weight::from_parts(50_000_000, 0) }
 }

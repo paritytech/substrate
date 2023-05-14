@@ -66,8 +66,6 @@ negotiated and applied. The exact handshake protocol is experimental and is subj
 
 The following multiplexing protocols are supported:
 
-- [Mplex](https://github.com/libp2p/specs/tree/master/mplex). Support for mplex will likely
-be deprecated in the future.
 - [Yamux](https://github.com/hashicorp/yamux/blob/master/spec.md).
 
 ## Substreams
@@ -190,7 +188,7 @@ The API of `sc-network` allows one to register user-defined notification protoco
 `sc-network` automatically tries to open a substream towards each node for which the legacy
 Substream substream is open. The handshake is then performed automatically.
 
-For example, the `sc-finality-grandpa` crate registers the `/paritytech/grandpa/1`
+For example, the `sc-consensus-grandpa` crate registers the `/paritytech/grandpa/1`
 notifications protocol.
 
 At the moment, for backwards-compatibility, notification protocols are tied to the legacy
@@ -223,7 +221,7 @@ For each peer the sync maintains the number of our common best block with that p
 whenever peer announce new blocks or our best block advances. This allows to keep track of peers that have new
 block data and request new information as soon as it is announced. In keep-up mode, we also track peers that
 announce blocks on all branches and not just the best branch. The sync algorithm tries to be greedy and download
-All data that's announced.
+all data that's announced.
 
 ## Fast sync
 
@@ -262,8 +260,8 @@ After the latest state has been imported the node is fully operational, but is s
 data. I.e. it is unable to serve bock bodies and headers other than the most recent one. To make sure all
 nodes have block history available, a background sync process is started that downloads all the missing blocks.
 It is run in parallel with the keep-up sync and does not interfere with downloading of the recent blocks.
-During this download we also import GRANPA justifications for blocks with authority set changes, so that
-The warp-synced node has all the data to serve for other nodes nodes that might want to sync from it with
+During this download we also import GRANDPA justifications for blocks with authority set changes, so that
+the warp-synced node has all the data to serve for other nodes nodes that might want to sync from it with
 any method.
 
 # Usage

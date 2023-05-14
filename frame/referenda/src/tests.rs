@@ -190,6 +190,8 @@ fn queueing_works() {
 				set_balance_proposal_bounded(i),
 				DispatchTime::After(0),
 			));
+		}
+		for i in [1, 2, 4] {
 			assert_ok!(Referenda::place_decision_deposit(RuntimeOrigin::signed(i), i as u32));
 			// TODO: decision deposit after some initial votes with a non-highest voted coming
 			// first.
@@ -282,6 +284,24 @@ fn alarm_interval_works() {
 			let (actual, _) = Referenda::set_alarm(call.clone(), when).unwrap();
 			assert!(actual >= when);
 			assert!(actual - interval <= when);
+		}
+	});
+}
+
+#[test]
+fn decision_time_is_correct() {
+	new_test_ext().execute_with(|| {
+		let decision_time = |since: u64| {
+			Pallet::<Test>::decision_time(
+				&DecidingStatus { since: since.into(), confirming: None },
+				&Tally { ayes: 100, nays: 5 },
+				TestTracksInfo::tracks()[0].0,
+				&TestTracksInfo::tracks()[0].1,
+			)
+		};
+
+		for i in 0u64..=100 {
+			assert!(decision_time(i) > i, "The decision time should be delayed by the curve");
 		}
 	});
 }

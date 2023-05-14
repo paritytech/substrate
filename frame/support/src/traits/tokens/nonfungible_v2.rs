@@ -25,7 +25,10 @@
 //! use.
 
 use super::nonfungibles_v2 as nonfungibles;
-use crate::{dispatch::DispatchResult, traits::Get};
+use crate::{
+	dispatch::{DispatchResult, Parameter},
+	traits::Get,
+};
 use codec::{Decode, Encode};
 use sp_runtime::TokenError;
 use sp_std::prelude::*;
@@ -33,7 +36,7 @@ use sp_std::prelude::*;
 /// Trait for providing an interface to a read-only NFT-like item.
 pub trait Inspect<AccountId> {
 	/// Type for identifying an item.
-	type ItemId;
+	type ItemId: Parameter;
 
 	/// Returns the owner of `item`, or `None` if the item doesn't exist or has no
 	/// owner.

@@ -67,7 +67,7 @@
 #![warn(missing_docs)]
 
 use std::{
-	collections::{HashMap, HashSet},
+	collections::HashSet,
 	future::Future,
 	pin::Pin,
 	sync::Arc,
@@ -86,11 +86,10 @@ use futures::{
 use log::{debug, info, log, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
-use schnorrkel::SignatureError;
 
 use sc_client_api::{
-	backend::AuxStore, AuxDataOperations, Backend as BackendT, BlockchainEvents,
-	FinalityNotification, PreCommitActions, ProvideUncles, UsageProvider,
+	backend::AuxStore, AuxDataOperations, Backend as BackendT, FinalityNotification,
+	PreCommitActions, UsageProvider,
 };
 use sc_consensus::{
 	block_import::{
@@ -108,20 +107,18 @@ use sc_consensus_slots::{
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
 use sp_api::{ApiExt, ProvideRuntimeApi};
-use sp_application_crypto::AppKey;
+use sp_application_crypto::AppCrypto;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{
 	Backend as _, BlockStatus, Error as ClientError, ForkBackend, HeaderBackend, HeaderMetadata,
 	Result as ClientResult,
 };
-use sp_consensus::{
-	BlockOrigin, CacheKeyId, Environment, Error as ConsensusError, Proposer, SelectChain,
-};
+use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
-use sp_core::{crypto::ByteArray, ExecutionContext};
+use sp_core::ExecutionContext;
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
 	traits::{Block as BlockT, Header, NumberFor, SaturatedConversion, Zero},
@@ -136,7 +133,7 @@ pub use sp_consensus_babe::{
 		PrimaryPreDigest, SecondaryPlainPreDigest,
 	},
 	AuthorityId, AuthorityPair, AuthoritySignature, BabeApi, BabeAuthorityWeight, BabeBlockWeight,
-	BabeConfiguration, BabeEpochConfiguration, ConsensusLog, BABE_ENGINE_ID, VRF_OUTPUT_LENGTH,
+	BabeConfiguration, BabeEpochConfiguration, ConsensusLog, Randomness, BABE_ENGINE_ID,
 };
 
 pub use aux_schema::load_block_weight as block_weight;
@@ -151,6 +148,12 @@ mod tests;
 
 const LOG_TARGET: &str = "babe";
 
+/// VRF context used for slots claiming lottery.
+const AUTHORING_SCORE_VRF_CONTEXT: &[u8] = b"substrate-babe-vrf";
+
+/// VRF output length for slots claiming lottery.
+const AUTHORING_SCORE_LENGTH: usize = 16;
+
 /// BABE epoch information
 #[derive(Decode, Encode, PartialEq, Eq, Clone, Debug, scale_info::TypeInfo)]
 pub struct Epoch {
@@ -163,7 +166,7 @@ pub struct Epoch {
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch.
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	pub randomness: Randomness,
 	/// Configuration of the epoch.
 	pub config: BabeEpochConfiguration,
 }
@@ -276,7 +279,7 @@ pub enum Error<B: BlockT> {
 	MultipleConfigChangeDigests,
 	/// Could not extract timestamp and slot
 	#[error("Could not extract timestamp and slot: {0}")]
-	Extraction(sp_consensus::Error),
+	Extraction(ConsensusError),
 	/// Could not fetch epoch
 	#[error("Could not fetch epoch at {0:?}")]
 	FetchEpoch(B::Hash),
@@ -310,12 +313,12 @@ pub enum Error<B: BlockT> {
 	/// No secondary author expected.
 	#[error("No secondary author expected.")]
 	NoSecondaryAuthorExpected,
-	/// VRF verification of block by author failed
-	#[error("VRF verification of block by author {0:?} failed: threshold {1} exceeded")]
-	VRFVerificationOfBlockFailed(AuthorityId, u128),
 	/// VRF verification failed
-	#[error("VRF verification failed: {0:?}")]
-	VRFVerificationFailed(SignatureError),
+	#[error("VRF verification failed")]
+	VrfVerificationFailed,
+	/// Primary slot threshold too low
+	#[error("VRF output rejected, threshold {0} exceeded")]
+	VrfThresholdExceeded(u128),
 	/// Could not fetch parent header
 	#[error("Could not fetch parent header: {0}")]
 	FetchParentHeader(sp_blockchain::Error),
@@ -340,6 +343,9 @@ pub enum Error<B: BlockT> {
 	/// Create inherents error.
 	#[error("Creating inherents failed: {0}")]
 	CreateInherents(sp_inherents::Error),
+	/// Background worker is not running and therefore requests cannot be answered.
+	#[error("Background worker is not running")]
+	BackgroundWorkerTerminated,
 	/// Client error
 	#[error(transparent)]
 	Client(sp_blockchain::Error),
@@ -406,7 +412,7 @@ where
 /// Parameters for BABE.
 pub struct BabeParams<B: BlockT, C, SC, E, I, SO, L, CIDP, BS> {
 	/// The keystore that manages the keys of the node.
-	pub keystore: SyncCryptoStorePtr,
+	pub keystore: KeystorePtr,
 
 	/// The client to use
 	pub client: Arc<C>,
@@ -473,13 +479,10 @@ pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, L, Error>(
 		max_block_proposal_slot_portion,
 		telemetry,
 	}: BabeParams<B, C, SC, E, I, SO, L, CIDP, BS>,
-) -> Result<BabeWorker<B>, sp_consensus::Error>
+) -> Result<BabeWorker<B>, ConsensusError>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B>
-		+ ProvideUncles<B>
-		+ BlockchainEvents<B>
-		+ PreCommitActions<B>
 		+ HeaderBackend<B>
 		+ HeaderMetadata<B, Error = ClientError>
 		+ Send
@@ -500,8 +503,6 @@ where
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
-	const HANDLE_BUFFER_SIZE: usize = 1024;
-
 	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
 
 	let worker = BabeSlotWorker {
@@ -531,17 +532,7 @@ where
 		create_inherent_data_providers,
 	);
 
-	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
-
-	let answer_requests =
-		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes);
-
-	let inner = future::select(Box::pin(slot_worker), Box::pin(answer_requests));
-	Ok(BabeWorker {
-		inner: Box::pin(inner.map(|_| ())),
-		slot_notification_sinks,
-		handle: BabeWorkerHandle(worker_tx),
-	})
+	Ok(BabeWorker { inner: Box::pin(slot_worker), slot_notification_sinks })
 }
 
 // Remove obsolete block's weight data by leveraging finality notifications.
@@ -558,8 +549,9 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block> + HeaderBackend<Block>, Block: B
 		Ok(meta) => {
 			hashes.insert(meta.parent);
 		},
-		Err(err) =>
-			warn!(target: LOG_TARGET, "Failed to lookup metadata for block `{:?}`: {}", first, err,),
+		Err(err) => {
+			warn!(target: LOG_TARGET, "Failed to lookup metadata for block `{:?}`: {}", first, err,)
+		},
 	}
 
 	// Cleans data for finalized block's ancestors
@@ -594,42 +586,26 @@ async fn answer_requests<B: BlockT, C>(
 	client: Arc<C>,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 ) where
-	C: ProvideRuntimeApi<B>
-		+ ProvideUncles<B>
-		+ BlockchainEvents<B>
-		+ HeaderBackend<B>
-		+ HeaderMetadata<B, Error = ClientError>
-		+ Send
-		+ Sync
-		+ 'static,
+	C: HeaderBackend<B> + HeaderMetadata<B, Error = ClientError>,
 {
 	while let Some(request) = request_rx.next().await {
 		match request {
-			BabeRequest::EpochForChild(parent_hash, parent_number, slot_number, response) => {
+			BabeRequest::EpochData(response) => {
+				let _ = response.send(epoch_changes.shared_data().clone());
+			},
+			BabeRequest::EpochDataForChildOf(parent_hash, parent_number, slot, response) => {
 				let lookup = || {
 					let epoch_changes = epoch_changes.shared_data();
-					let epoch_descriptor = epoch_changes
-						.epoch_descriptor_for_child_of(
+					epoch_changes
+						.epoch_data_for_child_of(
 							descendent_query(&*client),
 							&parent_hash,
 							parent_number,
-							slot_number,
+							slot,
+							|slot| Epoch::genesis(&config, slot),
 						)
 						.map_err(|e| Error::<B>::ForkTree(Box::new(e)))?
-						.ok_or(Error::<B>::FetchEpoch(parent_hash))?;
-
-					let viable_epoch = epoch_changes
-						.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&config, slot))
-						.ok_or(Error::<B>::FetchEpoch(parent_hash))?;
-
-					Ok(sp_consensus_babe::Epoch {
-						epoch_index: viable_epoch.as_ref().epoch_index,
-						start_slot: viable_epoch.as_ref().start_slot,
-						duration: viable_epoch.as_ref().duration,
-						authorities: viable_epoch.as_ref().authorities.clone(),
-						randomness: viable_epoch.as_ref().randomness,
-						config: viable_epoch.as_ref().config.clone(),
-					})
+						.ok_or(Error::<B>::FetchEpoch(parent_hash))
 				};
 
 				let _ = response.send(lookup());
@@ -639,17 +615,13 @@ async fn answer_requests<B: BlockT, C>(
 }
 
 /// Requests to the BABE service.
-#[non_exhaustive]
-pub enum BabeRequest<B: BlockT> {
+enum BabeRequest<B: BlockT> {
+	/// Request all available epoch data.
+	EpochData(oneshot::Sender<EpochChangesFor<B, Epoch>>),
 	/// Request the epoch that a child of the given block, with the given slot number would have.
 	///
 	/// The parent block is identified by its hash and number.
-	EpochForChild(
-		B::Hash,
-		NumberFor<B>,
-		Slot,
-		oneshot::Sender<Result<sp_consensus_babe::Epoch, Error<B>>>,
-	),
+	EpochDataForChildOf(B::Hash, NumberFor<B>, Slot, oneshot::Sender<Result<Epoch, Error<B>>>),
 }
 
 /// A handle to the BABE worker for issuing requests.
@@ -657,11 +629,41 @@ pub enum BabeRequest<B: BlockT> {
 pub struct BabeWorkerHandle<B: BlockT>(Sender<BabeRequest<B>>);
 
 impl<B: BlockT> BabeWorkerHandle<B> {
-	/// Send a request to the BABE service.
-	pub async fn send(&mut self, request: BabeRequest<B>) {
-		// Failure to send means that the service is down.
-		// This will manifest as the receiver of the request being dropped.
-		let _ = self.0.send(request).await;
+	async fn send_request(&self, request: BabeRequest<B>) -> Result<(), Error<B>> {
+		match self.0.clone().send(request).await {
+			Err(err) if err.is_disconnected() => return Err(Error::BackgroundWorkerTerminated),
+			Err(err) => warn!(
+				target: LOG_TARGET,
+				"Unhandled error when sending request to worker: {:?}", err
+			),
+			_ => {},
+		}
+
+		Ok(())
+	}
+
+	/// Fetch all available epoch data.
+	pub async fn epoch_data(&self) -> Result<EpochChangesFor<B, Epoch>, Error<B>> {
+		let (tx, rx) = oneshot::channel();
+		self.send_request(BabeRequest::EpochData(tx)).await?;
+
+		rx.await.or(Err(Error::BackgroundWorkerTerminated))
+	}
+
+	/// Fetch the epoch that a child of the given block, with the given slot number would have.
+	///
+	/// The parent block is identified by its hash and number.
+	pub async fn epoch_data_for_child_of(
+		&self,
+		parent_hash: B::Hash,
+		parent_number: NumberFor<B>,
+		slot: Slot,
+	) -> Result<Epoch, Error<B>> {
+		let (tx, rx) = oneshot::channel();
+		self.send_request(BabeRequest::EpochDataForChildOf(parent_hash, parent_number, slot, tx))
+			.await?;
+
+		rx.await.or(Err(Error::BackgroundWorkerTerminated))?
 	}
 }
 
@@ -670,7 +672,6 @@ impl<B: BlockT> BabeWorkerHandle<B> {
 pub struct BabeWorker<B: BlockT> {
 	inner: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
-	handle: BabeWorkerHandle<B>,
 }
 
 impl<B: BlockT> BabeWorker<B> {
@@ -684,11 +685,6 @@ impl<B: BlockT> BabeWorker<B> {
 		let (sink, stream) = channel(CHANNEL_BUFFER_SIZE);
 		self.slot_notification_sinks.lock().push(sink);
 		stream
-	}
-
-	/// Get a handle to the worker.
-	pub fn handle(&self) -> BabeWorkerHandle<B> {
-		self.handle.clone()
 	}
 }
 
@@ -713,7 +709,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 	justification_sync_link: L,
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: BabeConfiguration,
@@ -741,7 +737,7 @@ where
 	type SyncOracle = SO;
 	type JustificationSyncLink = L;
 	type CreateProposer =
-		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>;
+		Pin<Box<dyn Future<Output = Result<E::Proposer, ConsensusError>> + Send + 'static>>;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
 	type AuxData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
@@ -764,7 +760,7 @@ where
 				slot,
 			)
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
-			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
+			.ok_or(ConsensusError::InvalidAuthoritiesSet)
 	}
 
 	fn authorities_len(&self, epoch_descriptor: &Self::AuxData) -> Option<usize> {
@@ -829,31 +825,21 @@ where
 		(_, public): Self::Claim,
 		epoch_descriptor: Self::AuxData,
 	) -> Result<
-		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
-		sp_consensus::Error,
+		BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
+		ConsensusError,
 	> {
-		// sign the pre-sealed hash of the block and then
-		// add it to a digest item.
-		let public_type_pair = public.clone().into();
-		let public = public.to_raw_vec();
-		let signature = SyncCryptoStore::sign_with(
-			&*self.keystore,
-			<AuthorityId as AppKey>::ID,
-			&public_type_pair,
-			header_hash.as_ref(),
-		)
-		.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
-		.ok_or_else(|| {
-			sp_consensus::Error::CannotSign(
-				public.clone(),
-				"Could not find key in keystore.".into(),
-			)
-		})?;
-		let signature: AuthoritySignature = signature
-			.clone()
-			.try_into()
-			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
-		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature);
+		let signature = self
+			.keystore
+			.sr25519_sign(<AuthorityId as AppCrypto>::ID, public.as_ref(), header_hash.as_ref())
+			.map_err(|e| ConsensusError::CannotSign(format!("{}. Key: {:?}", e, public)))?
+			.ok_or_else(|| {
+				ConsensusError::CannotSign(format!(
+					"Could not find key in keystore. Key: {:?}",
+					public
+				))
+			})?;
+
+		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
 
 		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 		import_block.post_digests.push(digest_item);
@@ -896,11 +882,7 @@ where
 	}
 
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
-		Box::pin(
-			self.env
-				.init(block)
-				.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e))),
-		)
+		Box::pin(self.env.init(block).map_err(|e| ConsensusError::ClientImport(e.to_string())))
 	}
 
 	fn telemetry(&self) -> Option<TelemetryHandle> {
@@ -1131,9 +1113,6 @@ where
 	}
 }
 
-type BlockVerificationResult<Block> =
-	Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
-
 #[async_trait::async_trait]
 impl<Block, Client, SelectChain, CIDP> Verifier<Block>
 	for BabeVerifier<Block, Client, SelectChain, CIDP>
@@ -1153,7 +1132,7 @@ where
 	async fn verify(
 		&mut self,
 		mut block: BlockImportParams<Block, ()>,
-	) -> BlockVerificationResult<Block> {
+	) -> Result<BlockImportParams<Block, ()>, String> {
 		trace!(
 			target: LOG_TARGET,
 			"Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
@@ -1177,7 +1156,7 @@ where
 			//    read it from the state after import. We also skip all verifications
 			//    because there's no parent state and we trust the sync module to verify
 			//    that the state is correct and finalized.
-			return Ok((block, Default::default()))
+			return Ok(block)
 		}
 
 		debug!(
@@ -1190,7 +1169,7 @@ where
 			.create_inherent_data_providers
 			.create_inherent_data_providers(parent_hash, ())
 			.await
-			.map_err(|e| Error::<Block>::Client(sp_consensus::Error::from(e).into()))?;
+			.map_err(|e| Error::<Block>::Client(ConsensusError::from(e).into()))?;
 
 		let slot_now = create_inherent_data_providers.slot();
 
@@ -1296,7 +1275,7 @@ where
 				);
 				block.post_hash = Some(hash);
 
-				Ok((block, Default::default()))
+				Ok(block)
 			},
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: LOG_TARGET, "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
@@ -1368,7 +1347,6 @@ where
 	async fn import_state(
 		&mut self,
 		mut block: BlockImportParams<Block, sp_api::TransactionFor<Client, Block>>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, ConsensusError> {
 		let hash = block.post_hash();
 		let parent_hash = *block.header.parent_hash();
@@ -1383,7 +1361,7 @@ where
 		});
 
 		// First make the client import the state.
-		let import_result = self.inner.import_block(block, new_cache).await;
+		let import_result = self.inner.import_block(block).await;
 		let aux = match import_result {
 			Ok(ImportResult::Imported(aux)) => aux,
 			Ok(r) =>
@@ -1433,7 +1411,6 @@ where
 	async fn import_block(
 		&mut self,
 		mut block: BlockImportParams<Block, Self::Transaction>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
@@ -1454,11 +1431,11 @@ where
 			// In case of initial sync intermediates should not be present...
 			let _ = block.remove_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY);
 			block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
-			return self.inner.import_block(block, new_cache).await.map_err(Into::into)
+			return self.inner.import_block(block).await.map_err(Into::into)
 		}
 
 		if block.with_state() {
-			return self.import_state(block, new_cache).await
+			return self.import_state(block).await
 		}
 
 		let pre_digest = find_pre_digest::<Block>(&block.header).expect(
@@ -1694,7 +1671,7 @@ where
 			epoch_changes.release_mutex()
 		};
 
-		let import_result = self.inner.import_block(block, new_cache).await;
+		let import_result = self.inner.import_block(block).await;
 
 		// revert to the original epoch changes in case there's an error
 		// importing the block
@@ -1810,7 +1787,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CIDP>(
 	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
 	telemetry: Option<TelemetryHandle>,
-) -> ClientResult<DefaultImportQueue<Block, Client>>
+) -> ClientResult<(DefaultImportQueue<Block, Client>, BabeWorkerHandle<Block>)>
 where
 	Inner: BlockImport<
 			Block,
@@ -1831,16 +1808,28 @@ where
 	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
 {
+	const HANDLE_BUFFER_SIZE: usize = 1024;
+
 	let verifier = BabeVerifier {
 		select_chain,
 		create_inherent_data_providers,
-		config: babe_link.config,
-		epoch_changes: babe_link.epoch_changes,
+		config: babe_link.config.clone(),
+		epoch_changes: babe_link.epoch_changes.clone(),
 		telemetry,
-		client,
+		client: client.clone(),
 	};
 
-	Ok(BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry))
+	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
+
+	let answer_requests =
+		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes);
+
+	spawner.spawn_essential("babe-worker", Some("babe"), answer_requests.boxed());
+
+	Ok((
+		BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry),
+		BabeWorkerHandle(worker_tx),
+	))
 }
 
 /// Reverts protocol aux data to at most the last finalized block.

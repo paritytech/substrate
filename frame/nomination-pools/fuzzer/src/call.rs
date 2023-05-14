@@ -33,11 +33,11 @@ use pallet_nomination_pools::{
 	mock::*,
 	pallet as pools,
 	pallet::{BondedPools, Call as PoolsCall, Event as PoolsEvents, PoolMembers},
-	BondExtra, BondedPool, LastPoolId, MaxPoolMembers, MaxPoolMembersPerPool, MaxPools,
-	MinCreateBond, MinJoinBond, PoolId,
+	BondExtra, BondedPool, GlobalMaxCommission, LastPoolId, MaxPoolMembers, MaxPoolMembersPerPool,
+	MaxPools, MinCreateBond, MinJoinBond, PoolId,
 };
 use rand::{seq::SliceRandom, Rng};
-use sp_runtime::{assert_eq_error_rate, Perquintill};
+use sp_runtime::{assert_eq_error_rate, Perbill, Perquintill};
 
 const ERA: BlockNumber = 1000;
 const MAX_ED_MULTIPLE: Balance = 10_000;
@@ -224,6 +224,7 @@ fn main() {
 		MaxPoolMembers::<T>::set(Some(10_000));
 		MaxPoolMembersPerPool::<T>::set(Some(1000));
 		MaxPools::<T>::set(Some(1_000));
+		GlobalMaxCommission::<T>::set(Some(Perbill::from_percent(25)));
 
 		MinCreateBond::<T>::set(10 * ExistentialDeposit::get());
 		MinJoinBond::<T>::set(5 * ExistentialDeposit::get());

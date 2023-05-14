@@ -320,3 +320,12 @@ pub fn knit(queue: &MessageOrigin) {
 pub fn unknit(queue: &MessageOrigin) {
 	super::mock_helpers::unknit::<Test>(queue);
 }
+
+pub fn num_overweight_enqueued_events() -> u32 {
+	frame_system::Pallet::<Test>::events()
+		.into_iter()
+		.filter(|e| {
+			matches!(e.event, RuntimeEvent::MessageQueue(crate::Event::OverweightEnqueued { .. }))
+		})
+		.count() as u32
+}

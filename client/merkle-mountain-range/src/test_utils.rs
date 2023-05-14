@@ -265,6 +265,10 @@ impl BlockchainEvents<Block> for MockClient {
 		unimplemented!()
 	}
 
+	fn every_import_notification_stream(&self) -> ImportNotifications<Block> {
+		unimplemented!()
+	}
+
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
 		self.client.lock().finality_notification_stream()
 	}

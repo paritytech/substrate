@@ -47,13 +47,12 @@
 mod block_rules;
 mod call_executor;
 mod client;
-pub mod genesis;
 mod wasm_override;
 mod wasm_substitutes;
 
 pub use self::{
 	call_executor::LocalCallExecutor,
-	client::{resolve_state_version_from_wasm, Client, ClientConfig},
+	client::{Client, ClientConfig},
 };
 
 #[cfg(feature = "test-helpers")]

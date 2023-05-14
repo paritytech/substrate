@@ -77,8 +77,13 @@ Wasm builder requires the following prerequisites for building the Wasm binary:
 
 - rust nightly + `wasm32-unknown-unknown` toolchain
 
-If a specific rust nightly is installed with `rustup`, it is important that the wasm target is installed
-as well. For example if installing the rust nightly from 20.02.2020 using `rustup install nightly-2020-02-20`,
-the wasm target needs to be installed as well `rustup target add wasm32-unknown-unknown --toolchain nightly-2020-02-20`.
+or
+
+- rust stable and version at least 1.68.0 + `wasm32-unknown-unknown` toolchain
+
+If a specific rust is installed with `rustup`, it is important that the wasm target is
+installed as well. For example if installing the rust from 20.02.2020 using `rustup
+install nightly-2020-02-20`, the wasm target needs to be installed as well `rustup target add
+wasm32-unknown-unknown --toolchain nightly-2020-02-20`.
 
 License: Apache-2.0

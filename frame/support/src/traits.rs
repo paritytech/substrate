@@ -36,7 +36,7 @@ pub use members::{AllowAll, DenyAll, Filter};
 pub use members::{
 	AsContains, ChangeMembers, Contains, ContainsLengthBound, ContainsPair, Everything,
 	EverythingBut, FromContainsPair, InitializeMembers, InsideBoth, IsInVec, Nothing,
-	SortedMembers, TheseExcept,
+	RankedMembers, SortedMembers, TheseExcept,
 };
 
 mod validation;
@@ -55,8 +55,8 @@ pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter
 mod misc;
 pub use misc::{
 	defensive_prelude::{self, *},
-	Backing, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16,
-	ConstU32, ConstU64, ConstU8, DefensiveMax, DefensiveMin, DefensiveSaturating,
+	AccountTouch, Backing, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128,
+	ConstU16, ConstU32, ConstU64, ConstU8, DefensiveMax, DefensiveMin, DefensiveSaturating,
 	DefensiveTruncateFrom, EnsureInherentsAreFirst, EqualPrivilegeOnly, EstimateCallFee,
 	ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime, IsSubType, IsType,
 	Len, OffchainWorker, OnKilledAccount, OnNewAccount, PrivilegeCmp, SameOrOther, Time,
@@ -74,9 +74,9 @@ pub use randomness::Randomness;
 
 mod metadata;
 pub use metadata::{
-	CallMetadata, CrateVersion, GetCallMetadata, GetCallName, GetStorageVersion, PalletInfo,
-	PalletInfoAccess, PalletInfoData, PalletsInfoAccess, StorageVersion,
-	STORAGE_VERSION_STORAGE_KEY_POSTFIX,
+	CallMetadata, CrateVersion, GetCallIndex, GetCallMetadata, GetCallName, GetStorageVersion,
+	NoStorageVersionSet, PalletInfo, PalletInfoAccess, PalletInfoData, PalletsInfoAccess,
+	StorageVersion, STORAGE_VERSION_STORAGE_KEY_POSTFIX,
 };
 
 mod hooks;

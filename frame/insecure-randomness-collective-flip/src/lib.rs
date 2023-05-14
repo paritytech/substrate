@@ -17,7 +17,7 @@
 
 //! # DO NOT USE IN PRODUCTION
 //!
-//! The produced values do not fulfill the cryptographic requirements for random numbers.  
+//! The produced values do not fulfill the cryptographic requirements for random numbers.
 //! Should not be used for high-stake production use-cases.
 //!
 //! # Randomness Pallet
@@ -51,7 +51,6 @@
 //!     use frame_system::pallet_prelude::*;
 //!
 //!     #[pallet::pallet]
-//!     #[pallet::generate_store(pub(super) trait Store)]
 //!     pub struct Pallet<T>(_);
 //!
 //!     #[pallet::config]
@@ -94,7 +93,6 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]

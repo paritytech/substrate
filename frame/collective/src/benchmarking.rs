@@ -646,5 +646,5 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::Disapproved { proposal_hash: last_hash }.into());
 	}
 
-	impl_benchmark_test_suite!(Collective, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Collective, crate::tests::ExtBuilder::default().build(), crate::tests::Test);
 }
