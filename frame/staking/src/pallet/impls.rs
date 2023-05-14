@@ -1013,12 +1013,18 @@ impl<T: Config> Pallet<T> {
 				} else {
 					println!("stake is more than ideal.");
 					let curve_base = ideal_interest * ideal_stake - min_inflation;
-					let curve_power = (staked_as_percent - ideal_stake) * falloff;
-					let curve_multiplier = curve_power.int_mul(2);
-					curve_base * curve_multiplier
+					println!("curve base: {:?}", curve_base);
+					let curve_power= (staked_as_percent - ideal_stake).int_div(falloff);
+					println!("{:?} divided by {:?}", staked_as_percent - ideal_stake, falloff);
+					println!("curve power: {:?}", curve_power);
+					let curve_multiplier = Perquintill::from_percent(1) / Perquintill::from_percent(2u64.pow(curve_power as u32));
+					println!("curve multiplier: {:?}", curve_multiplier);
+					println!("final curve: {:?} * {:?}", curve_base, curve_multiplier);
+					curve_base.saturating_mul(curve_multiplier)
 				};
 
-				let reward_rate = min_inflation + curve.int_mul(100);
+				println!("CURVE: {:?}", curve);
+				let reward_rate = min_inflation + curve;
 				println!("Reward rate: {:?}", reward_rate);
 				reward_rate
 			},
