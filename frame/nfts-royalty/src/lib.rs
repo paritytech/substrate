@@ -60,6 +60,7 @@ pub mod pallet {
 			Currency, ExistenceRequirement, ReservableCurrency,
 		},
 	};
+
 	pub type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 	pub type ItemPrice<T> = BalanceOf<T>;
@@ -111,6 +112,7 @@ pub mod pallet {
 	}
 
 	/// The storage for NFT collections with a royalty
+	/// This will be the royalty used for all items in the collection unless overridden in `ItemWithRoyalty`
 	#[pallet::storage]
 	#[pallet::getter(fn nft_collection_with_royalty)]
 	pub type CollectionWithRoyalty<T: Config> = StorageMap<
@@ -122,6 +124,7 @@ pub mod pallet {
 	>;
 
 	/// The storage for NFT items with a royalty.
+	/// Setting the royalty in this storage will override the royalty set in `CollectionWithRoyalty` only for the specific item.
 	#[pallet::storage]
 	#[pallet::getter(fn nft_with_royalty)]
 	pub type ItemWithRoyalty<T: Config> = StorageMap<
@@ -132,7 +135,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	// Storage for multiple royalty recipients and the percentage of the royalty they receive for a collection.
+	/// The storage for royalty recipient(s) and the percentage of the total royalty each will receive.
 	#[pallet::storage]
 	#[pallet::getter(fn collection_royalty_recipients)]
 	pub type CollectionRoyaltyRecipients<T: Config> = StorageMap<
@@ -142,7 +145,8 @@ pub mod pallet {
 		BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients>,
 	>;
 
-	// Storage for multiple royalty recipients and the percentage of the royalty they receive for an item.
+	/// The storage for royalty recipient(s) and the percentage of the total royalty each will receive.
+	/// Setting the recipients in this storage will override the recipient(s) set in `CollectionRoyaltyRecipients` only for the specific item.
 	#[pallet::storage]
 	#[pallet::getter(fn item_royalty_recipients)]
 	pub type ItemRoyaltyRecipients<T: Config> = StorageMap<
@@ -256,14 +260,13 @@ pub mod pallet {
 				);
 			}
 
-			// Check whether the collection has already a royalty, if so do not allow to set it
-			// again
+			// The collection royalty can only be set once
 			ensure!(
 				<CollectionWithRoyalty<T>>::get(collection_id).is_none(),
 				Error::<T>::RoyaltyAlreadyExists
 			);
 
-			// Set a royalty for the entire collection
+			// Set royalty for all items on the "collection level"
 			CollectionWithRoyalty::<T>::insert(
 				collection_id,
 				RoyaltyDetails::<T::AccountId> {
@@ -280,7 +283,8 @@ pub mod pallet {
 
 			Ok(())
 		}
-		/// Set the royalties associated to an already existing item.
+
+		/// Set the royalty for an existing item.
 		///
 		/// The origin must be the actual owner of the `item`.
 		///
