@@ -404,7 +404,7 @@ fn api_reward_rate_works() {
 		assert_eq!(
 			Pallet::<Test>::api_reward_rate(
 				Perquintill::from_perthousand(25),
-				Perquintill::from_percent(100),
+				Perquintill::from_percent(10),
 				Perquintill::from_percent(75),
 				Perquintill::from_percent(5)
 			),

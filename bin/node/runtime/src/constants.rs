@@ -38,7 +38,7 @@ pub mod inflation {
 	pub const IDEAL_STAKE_BASE: Perquintill = Perquintill::from_percent(75);
 	pub const FALLOFF: Perquintill = Perquintill::from_percent(5);
 	pub const MIN_INFLATION: Perquintill = Perquintill::from_perthousand(25);
-	pub const MAX_INFLATION: Perquintill = Perquintill::from_percent(100);
+	pub const MAX_INFLATION: Perquintill = Perquintill::from_percent(10);
 }
 
 /// Time.
