@@ -2104,7 +2104,7 @@ impl_runtime_apis! {
 
 	impl pallet_staking_runtime_api::StakingApi<Block, Balance> for Runtime {
 		fn reward_rate() -> Perquintill {
-			Staking::api_reward_rate(IDEAL_STAKE_BASE, FALLOFF)
+			Staking::api_reward_rate(MIN_INFLATION, MAX_INFLATION, IDEAL_STAKE_BASE, FALLOFF)
 		}
 		fn nominations_quota(balance: Balance) -> u32 {
 			Staking::api_nominations_quota(balance)

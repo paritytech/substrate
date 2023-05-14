@@ -978,29 +978,61 @@ impl<T: Config> Pallet<T> {
 	///
 	/// The staked amount as a PerThing is calculated and provided to `compute_inflation` alongside
 	/// the provided `ideal_staked` and `falloff` values.
-	pub fn api_reward_rate(ideal_staked: Perquintill, falloff: Perquintill) -> Perquintill {
+	pub fn api_reward_rate(
+		min_inflation: Perquintill,
+		max_inflation: Perquintill,
+		stake_target: Perquintill,
+		falloff: Perquintill,
+	) -> Perquintill {
 		match ActiveEra::<T>::get() {
 			Some(active_era) => {
+				println!("Active era: {:?}", active_era.index);
+
 				let staked = ErasTotalStake::<T>::get(active_era.index);
 				let total_issuance = T::Currency::total_issuance();
 				let staked_as_percent = Perquintill::from_rational(staked, total_issuance);
 
-				/* TODO: calculation in JS:
-				const inflation = 100 * (minInflation + (
-					stakedFraction <= idealStake
-						? (stakedFraction * (idealInterest - (minInflation / idealStake)))
-						: (((idealInterest * idealStake) - minInflation) * Math.pow(2, (idealStake - stakedFraction) / falloff))
-				));
-				*/
-				pallet_staking_reward_fn::compute_inflation(
-					staked_as_percent,
-					ideal_staked,
-					falloff,
-				)
+				println!("Staked: {:?}", staked);
+				println!("Total issuance: {:?}", total_issuance);
+				println!("Staked as a percentage: {:?}", staked_as_percent);
+				println!("min inflation: {:?}", min_inflation);
+				println!("max inflation: {:?}", max_inflation);
+
+				// NOTE: The Javascript implemenation considers 2 parameters, `auction_max` and
+				// `auction_adjust` in the following calculation: 
+				//
+				// Math.min(auction_max, numAuctions.toNumber()) * auction_adjust;
+				//
+				// But both these values are 0 on PJS Apps and Staking Dashboard.
+				let ideal_stake: Perquintill = stake_target;
+				let ideal_interest: Perquintill = max_inflation / stake_target;
+				
+				println!("ideal stake: {:?}", ideal_stake);
+				println!("ideal_interest: {:?}", ideal_interest);
+
+				// TODO: test and fix breakages from here.
+				let curve = if staked_as_percent <= ideal_stake {
+					println!("stake is less than or equal to ideal");
+
+					Perquintill::from_percent((ideal_interest.saturating_sub(min_inflation) / ideal_stake) * (staked_as_percent * 100))
+				} else {
+					println!("stake is more than ideal");
+					let multiplier_subject = ideal_interest * ideal_stake - min_inflation;
+					let multiplier_power = (ideal_stake - staked_as_percent / falloff) * 100_u64;
+					
+					Perquintill::from_percent(multiplier_subject * (2_u64.pow(multiplier_power as u32)))
+				};
+				
+				println!("reward rate after curve: {:?}", curve);
+				Perquintill::from_percent((min_inflation + curve) * 100)
 			},
-			None => Perquintill::zero(),
+			None => {
+				println!("No ative era");
+				Perquintill::zero()
+			},
 		}
 	}
+
 	/// Returns the current nominations quota for nominators.
 	///
 	/// Used by the runtime API.

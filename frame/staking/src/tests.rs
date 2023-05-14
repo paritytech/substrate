@@ -399,6 +399,21 @@ fn rewards_should_work() {
 }
 
 #[test]
+fn api_reward_rate_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		assert_eq!(
+			Pallet::<Test>::api_reward_rate(
+				Perquintill::from_perthousand(25),
+				Perquintill::from_percent(100),
+				Perquintill::from_percent(75),
+				Perquintill::from_percent(5)
+			),
+			Perquintill::from_percent(5)
+		);
+	})
+}
+
+#[test]
 fn staking_should_work() {
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		// remember + compare this along with the test.
