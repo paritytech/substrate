@@ -989,6 +989,7 @@ impl<T: Config> Pallet<T> {
 				let staked = ErasTotalStake::<T>::get(active_era.index);
 				let total_issuance = T::Currency::total_issuance();
 				let staked_as_percent = Perquintill::from_rational(staked, total_issuance);
+
 				// NOTE: The JavaScript implemenation considers 2 parameters, `auctionMax` and
 				// `auctionAdjust` in the following calculation:
 				//
@@ -1009,10 +1010,12 @@ impl<T: Config> Pallet<T> {
 
 				let curve = if staked_as_percent <= ideal_stake {
 					println!("stake is less than or equal to ideal");
-					(ideal_interest.saturating_sub(min_inflation / ideal_stake)) * staked_as_percent
+					(ideal_interest.saturating_sub(min_inflation / ideal_stake))
+						.saturating_mul(staked_as_percent)
 				} else {
 					println!("stake is more than ideal.");
-					let curve_base = ideal_interest * ideal_stake - min_inflation;
+					let curve_base =
+						ideal_interest.saturating_mul(ideal_stake).saturating_sub(min_inflation);
 					println!("curve base: {:?}", curve_base);
 					let curve_power = (staked_as_percent - ideal_stake).int_div(falloff);
 					println!("{:?} divided by {:?}", staked_as_percent - ideal_stake, falloff);
