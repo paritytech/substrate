@@ -991,7 +991,7 @@ impl<T: Config> Pallet<T> {
 				let staked = ErasTotalStake::<T>::get(active_era.index);
 				let total_issuance = T::Currency::total_issuance();
 				let staked_as_percent = Perquintill::from_rational(staked, total_issuance);
-
+				
 				println!("Staked: {:?}", staked);
 				println!("Total issuance: {:?}", total_issuance);
 				println!("Staked as a percentage: {:?}", staked_as_percent);
@@ -1010,21 +1010,25 @@ impl<T: Config> Pallet<T> {
 				println!("ideal stake: {:?}", ideal_stake);
 				println!("ideal_interest: {:?}", ideal_interest);
 
-				// TODO: test and fix breakages from here.
 				let curve = if staked_as_percent <= ideal_stake {
 					println!("stake is less than or equal to ideal");
-
-					Perquintill::from_percent((ideal_interest.saturating_sub(min_inflation) / ideal_stake) * (staked_as_percent * 100))
+					println!("{:?} - {:?} / {:?} * {:?} * 100", ideal_interest , min_inflation, ideal_stake, (staked_as_percent));
+					(ideal_interest.saturating_sub(min_inflation / ideal_stake)) * staked_as_percent
 				} else {
-					println!("stake is more than ideal");
+					
+					// TODO: test and fix breakages from here.
+					println!("stake is more than ideal.");
 					let multiplier_subject = ideal_interest * ideal_stake - min_inflation;
 					let multiplier_power = (ideal_stake - staked_as_percent / falloff) * 100_u64;
-					
+				
 					Perquintill::from_percent(multiplier_subject * (2_u64.pow(multiplier_power as u32)))
 				};
-				
 				println!("reward rate after curve: {:?}", curve);
-				Perquintill::from_percent((min_inflation + curve) * 100)
+
+				let reward_rate =	Perquintill::from_percent((min_inflation + curve) * 100);
+				println!("reward rate: {:?}", reward_rate);
+				
+				reward_rate
 			},
 			None => {
 				println!("No ative era");
