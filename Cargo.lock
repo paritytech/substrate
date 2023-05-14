@@ -10900,7 +10900,6 @@ dependencies = [
  "sp-debug-derive",
  "sp-externalities",
  "sp-runtime-interface",
- "sp-serializer",
  "sp-std",
  "sp-storage",
  "ss58-registry",
@@ -11216,14 +11215,6 @@ dependencies = [
  "sp-runtime-interface",
  "sp-std",
  "substrate-wasm-builder",
-]
-
-[[package]]
-name = "sp-serializer"
-version = "4.0.0-dev"
-dependencies = [
- "serde",
- "serde_json",
 ]
 
 [[package]]
