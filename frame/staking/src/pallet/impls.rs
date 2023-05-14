@@ -986,55 +986,41 @@ impl<T: Config> Pallet<T> {
 	) -> Perquintill {
 		match ActiveEra::<T>::get() {
 			Some(active_era) => {
-				println!("Active era: {:?}", active_era.index);
-
 				let staked = ErasTotalStake::<T>::get(active_era.index);
 				let total_issuance = T::Currency::total_issuance();
-				// let staked_as_percent = Perquintill::from_rational(staked, total_issuance);
-
-				// TEST VALUES
-				let staked_as_percent = Perquintill::from_perthousand(800);
-
+				let staked_as_percent = Perquintill::from_rational(staked, total_issuance);
+				// NOTE: The JavaScript implemenation considers 2 parameters, `auction_max` and
+				// `auction_adjust` in the following calculation: 
+				//
+				// Math.min(auction_max, numAuctions.toNumber()) * auction_adjust;
+				//
+				// `auction_max` is always 0 on PJS Apps and Staking Dashboard. This calculation is
+				// therefore being ignored for now.
+				let ideal_stake: Perquintill = stake_target;
+				let ideal_interest: Perquintill = max_inflation / stake_target;
+				
+				println!("Active era: {:?}", active_era.index);
 				println!("Staked: {:?}", staked);
 				println!("Total issuance: {:?}", total_issuance);
 				println!("Staked as a percentage: {:?}", staked_as_percent);
 				println!("min inflation: {:?}", min_inflation);
 				println!("max inflation: {:?}", max_inflation);
-
-				// NOTE: The Javascript implemenation considers 2 parameters, `auction_max` and
-				// `auction_adjust` in the following calculation: 
-				//
-				// Math.min(auction_max, numAuctions.toNumber()) * auction_adjust;
-				//
-				// But both these values are 0 on PJS Apps and Staking Dashboard.
-				let ideal_stake: Perquintill = stake_target;
-				let ideal_interest: Perquintill = max_inflation / stake_target;
-				
 				println!("ideal stake: {:?}", ideal_stake);
 				println!("ideal_interest: {:?}", ideal_interest);
 
 				let curve = if staked_as_percent <= ideal_stake {
 					println!("stake is less than or equal to ideal");
-					println!("{:?} - {:?} / {:?} * {:?} * 100", ideal_interest , min_inflation, ideal_stake, (staked_as_percent));
 					(ideal_interest.saturating_sub(min_inflation / ideal_stake)) * staked_as_percent
 				} else {
-					
-					// TODO:  Don't use floats.
 					println!("stake is more than ideal.");
 					let curve_base = ideal_interest * ideal_stake - min_inflation;
-					let curve_power = ((ideal_stake * 100_u64) as f64 - (staked_as_percent * 100_u64) as f64) / (falloff * 100_u64) as f64;
-
-					let curve_multiplier = if curve_power < 0.0 {
-						curve_power.abs() as f64 / 2_f64
-					} else {
-						2_f64.powf(curve_power as f64)
-					};
-					
-					// TODO: amend and fix breakages.
-					println!("should match JS: result: {:?}", curve_multiplier);
-					Perquintill::from_float((curve_base * 100_u64) as f64 * curve_multiplier)
+					let curve_power = (staked_as_percent - ideal_stake) * falloff;
+					let curve_multiplier = curve_power.int_mul(2);
+					curve_base * curve_multiplier
 				};
-				let reward_rate =	Perquintill::from_percent((min_inflation + curve) * 100);
+				
+				let reward_rate =	min_inflation + curve.int_mul(100);
+				println!("Reward rate: {:?}", reward_rate);
 				reward_rate
 			},
 			None => {

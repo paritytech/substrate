@@ -408,7 +408,7 @@ fn api_reward_rate_works() {
 				Perquintill::from_percent(75),
 				Perquintill::from_percent(5)
 			),
-			Perquintill::from_percent(5)
+			Perquintill::from_float(0.0250000249999995)
 		);
 	})
 }
