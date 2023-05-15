@@ -961,12 +961,20 @@ pub trait Extrinsic: Sized {
 	/// The function call.
 	type Call;
 
-	/// The payload we carry for signed extrinsics.
+	/// The type of the address that signed the extrinsic.
 	///
-	/// Usually it will contain a `Signature` and
-	/// may include some additional data that are specific to signed
-	/// extrinsics.
-	type SignaturePayload;
+	/// Particular to a signed extrinsic.
+	type SignatureAddress;
+
+	/// The signature type of the extrinsic.
+	///
+	/// Particular to a signed extrinsic.
+	type Signature;
+
+	/// The additional data that is specific to the signed extrinsic.
+	///
+	/// Particular to a signed extrinsic.
+	type SignatureExtra;
 
 	/// Is this `Extrinsic` signed?
 	/// If no information are available about signed/unsigned, `None` should be returned.
@@ -980,7 +988,10 @@ pub trait Extrinsic: Sized {
 	/// 1. Inherents (no signature; created by validators during block production)
 	/// 2. Unsigned Transactions (no signature; represent "system calls" or other special kinds of
 	/// calls) 3. Signed Transactions (with signature; a regular transactions with known origin)
-	fn new(_call: Self::Call, _signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
+	fn new(
+		_call: Self::Call,
+		_signed_data: Option<(Self::SignatureAddress, Self::Signature, Self::SignatureExtra)>,
+	) -> Option<Self> {
 		None
 	}
 }
