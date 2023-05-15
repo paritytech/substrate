@@ -30,6 +30,7 @@ use sp_arithmetic::{
 	Rational128, Rounding,
 };
 use sp_std::prelude::*;
+use sp_std::vec;
 
 /// The denominator used for loads. Since votes are collected as u64, the smallest ratio that we
 /// might collect is `1/approval_stake` where approval stake is the sum of votes. Hence, some number
