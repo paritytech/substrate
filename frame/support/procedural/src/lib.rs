@@ -648,7 +648,7 @@ pub fn derive_debug_no_bound(input: TokenStream) -> TokenStream {
 }
 
 /// Derive [`Debug`], if `std` is enabled it uses `frame_support::DebugNoBound`, if `std` is not
-/// enabled it just returns `"<stripped>"`.
+/// enabled it just returns `"<wasm:stripped>"`.
 /// This behaviour is useful to prevent bloating the runtime WASM blob from unneeded code.
 #[proc_macro_derive(RuntimeDebugNoBound)]
 pub fn derive_runtime_debug_no_bound(input: TokenStream) -> TokenStream {
