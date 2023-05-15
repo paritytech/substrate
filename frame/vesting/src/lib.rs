@@ -664,8 +664,8 @@ impl<T: Config> Pallet<T> {
 	/// * The `per_block` amount left to be claimed is equal to the
 	/// total balance currently locked.
 	///
-	/// *`total_per_block` is the total amount left to be unlocked after the starting block.
-	/// *`total_locked` is the total amount locked.
+	/// *`total_to_vest` the total amount left to vest over all remaining blocks.
+	/// *`total_locked` the total amount locked.
 	///
 	/// * `one_extra` accounts for the extra block that
 	/// will be added to the vesting schedule if `per_block` is bigger than `locked`.
@@ -673,19 +673,19 @@ impl<T: Config> Pallet<T> {
 	pub fn do_try_state() -> Result<(), &'static str> {
 		Vesting::<T>::iter().for_each(|(_, d)| {
 			let vesting = d.to_vec();
-			let mut total_per_block: BalanceOf<T> = Zero::zero();
+			let mut total_to_vest: BalanceOf<T> = Zero::zero();
 			let mut total_locked: BalanceOf<T> = Zero::zero();
 			for info in vesting.iter() {
 				// get the number of remaining vesting blocks<>balance
 				let amount_left: BalanceOf<T> =
 					info.ending_block_as_balance::<T::BlockNumberToBalance>();
-				total_per_block += info.per_block().saturating_mul(amount_left);
+				total_to_vest += info.per_block().saturating_mul(amount_left);
 				// get the total block<>balance still locked.
 				total_locked += info
 					.locked_at::<T::BlockNumberToBalance>(<frame_system::Pallet<T>>::block_number());
 			}
-			let one_extra = total_per_block.saturating_sub(total_locked);
-			assert_eq!(total_per_block, total_locked.saturating_add(one_extra));
+			let one_extra = total_to_vest.saturating_sub(total_locked);
+			assert_eq!(total_to_vest, total_locked.saturating_add(one_extra));
 		});
 		Ok(())
 	}

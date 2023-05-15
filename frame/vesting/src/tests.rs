@@ -75,6 +75,7 @@ fn check_vesting_status() {
 		// Account 12 has only their illiquid funds locked
 		assert_eq!(Vesting::vesting_balance(&12), Some(user12_free_balance - ED * 5));
 
+		assert_ok!(Vesting::do_try_state());
 		System::set_block_number(10);
 		assert_eq!(System::block_number(), 10);
 
@@ -85,6 +86,7 @@ fn check_vesting_status() {
 		// Account 12 has started vesting by block 10
 		assert_eq!(Vesting::vesting_balance(&12), Some(user12_free_balance - ED * 5));
 
+		assert_ok!(Vesting::do_try_state());
 		System::set_block_number(30);
 		assert_eq!(System::block_number(), 30);
 
@@ -139,6 +141,7 @@ fn check_vesting_status_for_multi_schedule_account() {
 		);
 		assert_ok!(Vesting::vested_transfer(Some(4).into(), 2, sched2));
 
+		assert_ok!(Vesting::do_try_state());
 		System::set_block_number(9);
 		// Free balance is equal to the 3 existing schedules total amount.
 		let free_balance = Balances::free_balance(&2);
@@ -149,6 +152,7 @@ fn check_vesting_status_for_multi_schedule_account() {
 			Some(free_balance - sched1.per_block() * 9 - sched2.per_block() * 4)
 		);
 
+		assert_ok!(Vesting::do_try_state());
 		System::set_block_number(20);
 		// At block #20 sched1 is fully unlocked while sched2 and sched0 are partially unlocked.
 		assert_eq!(
@@ -158,6 +162,7 @@ fn check_vesting_status_for_multi_schedule_account() {
 			)
 		);
 
+		assert_ok!(Vesting::do_try_state());
 		System::set_block_number(30);
 		// At block #30 sched0 and sched1 are fully unlocked while sched2 is partially unlocked.
 		assert_eq!(
@@ -166,6 +171,7 @@ fn check_vesting_status_for_multi_schedule_account() {
 		);
 
 		// At block #35 sched2 fully unlocks and thus all schedules funds are unlocked.
+		assert_ok!(Vesting::do_try_state());
 		System::set_block_number(35);
 		assert_eq!(Vesting::vesting_balance(&2), Some(0));
 		// Since we have not called any extrinsics that would unlock funds the schedules
@@ -337,12 +343,14 @@ fn vested_transfer_works() {
 		// Account 4 has 5 * 256 locked.
 		assert_eq!(Vesting::vesting_balance(&4), Some(256 * 5));
 
+		assert_ok!(Vesting::do_try_state());
 		System::set_block_number(20);
 		assert_eq!(System::block_number(), 20);
 
 		// Account 4 has 5 * 64 units vested by block 20.
 		assert_eq!(Vesting::vesting_balance(&4), Some(10 * 64));
 
+		assert_ok!(Vesting::do_try_state());
 		System::set_block_number(30);
 		assert_eq!(System::block_number(), 30);
 
@@ -432,6 +440,7 @@ fn vested_transfer_allows_max_schedules() {
 		assert_eq!(Balances::free_balance(&4), user_4_free_balance);
 
 		// Account 4 has fully vested when all the schedules end,
+		assert_ok!(Vesting::do_try_state());
 		System::set_block_number(
 			<Test as Config>::MinVestedTransfer::get() + sched.starting_block(),
 		);
@@ -478,12 +487,14 @@ fn force_vested_transfer_works() {
 		// Account 4 has 5 * ED locked.
 		assert_eq!(Vesting::vesting_balance(&4), Some(ED * 5));
 
+		assert_ok!(Vesting::do_try_state());
 		System::set_block_number(20);
 		assert_eq!(System::block_number(), 20);
 
 		// Account 4 has 5 * 64 units vested by block 20.
 		assert_eq!(Vesting::vesting_balance(&4), Some(10 * 64));
 
+		assert_ok!(Vesting::do_try_state());
 		System::set_block_number(30);
 		assert_eq!(System::block_number(), 30);
 
@@ -577,6 +588,7 @@ fn force_vested_transfer_allows_max_schedules() {
 		assert_eq!(Balances::free_balance(&4), user_4_free_balance);
 
 		// Account 4 has fully vested when all the schedules end,
+		assert_ok!(Vesting::do_try_state());
 		System::set_block_number(<Test as Config>::MinVestedTransfer::get() + 10);
 		assert_eq!(Vesting::vesting_balance(&4), Some(0));
 		// and after unlocking its schedules are removed from storage.
@@ -601,6 +613,7 @@ fn merge_schedules_that_have_not_started() {
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched0]);
 		assert_eq!(Balances::usable_balance(&2), 0);
 		assert_ok!(Vesting::merge_schedules(Some(2).into(), 0, 1));
+		assert_ok!(Vesting::do_try_state());
 
 		// Since we merged identical schedules, the new schedule finishes at the same
 		// time as the original, just with double the amount.
@@ -644,6 +657,7 @@ fn merge_ongoing_schedules() {
 		assert_eq!(Balances::usable_balance(&2), 0);
 
 		assert_ok!(Vesting::merge_schedules(Some(2).into(), 0, 1));
+		assert_ok!(Vesting::do_try_state());
 
 		// Merging schedules un-vests all pre-existing schedules prior to merging, which is
 		// reflected in account 2's updated usable balance.
@@ -668,6 +682,7 @@ fn merge_ongoing_schedules() {
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched2]);
 
 		// And just to double check, we assert the new merged schedule we be cleaned up as expected.
+		assert_ok!(Vesting::do_try_state());
 		System::set_block_number(30);
 		vest_and_assert_no_vesting::<Test>(2);
 	});
@@ -714,6 +729,7 @@ fn merging_shifts_other_schedules_index() {
 		assert_eq!(usable_balance, Balances::usable_balance(&3));
 
 		assert_ok!(Vesting::merge_schedules(Some(3).into(), 0, 2));
+		assert_ok!(Vesting::do_try_state());
 
 		// Create the merged schedule of sched0 & sched2.
 		// The merged schedule will have the max possible starting block,
@@ -767,6 +783,7 @@ fn merge_ongoing_and_yet_to_be_started_schedules() {
 		assert_eq!(Balances::usable_balance(&2), usable_balance);
 
 		// Go forward a block.
+		assert_ok!(Vesting::do_try_state());
 		cur_block += 1;
 		System::set_block_number(cur_block);
 
@@ -780,6 +797,7 @@ fn merge_ongoing_and_yet_to_be_started_schedules() {
 
 		// Merge the schedules before sched1 starts.
 		assert_ok!(Vesting::merge_schedules(Some(2).into(), 0, 1));
+		assert_ok!(Vesting::do_try_state());
 		// After merging, the usable balance only changes by the amount sched0 vested since we
 		// last called `vest` (which is just 1 block). The usable balance is not affected by
 		// sched1 because it has not started yet.
@@ -799,6 +817,7 @@ fn merge_ongoing_and_yet_to_be_started_schedules() {
 		let sched2_per_block = sched2_locked / sched2_duration;
 
 		let sched2 = VestingInfo::new(sched2_locked, sched2_per_block, sched2_start);
+		assert_ok!(Vesting::do_try_state());
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched2]);
 	});
 }
@@ -839,11 +858,13 @@ fn merge_finished_and_ongoing_schedules() {
 		let cur_block = sched0.ending_block_as_balance::<Identity>();
 		System::set_block_number(cur_block);
 		assert_eq!(System::block_number(), 30);
+		assert_ok!(Vesting::do_try_state());
 
 		// Prior to `merge_schedules` and with no vest/vest_other called the user has no usable
 		// balance.
 		assert_eq!(Balances::usable_balance(&2), 0);
 		assert_ok!(Vesting::merge_schedules(Some(2).into(), 0, 1));
+		assert_ok!(Vesting::do_try_state());
 
 		// sched2 is now the first, since sched0 & sched1 get filtered out while "merging".
 		// sched1 gets treated like the new merged schedule by getting pushed onto back
@@ -893,6 +914,7 @@ fn merge_finishing_schedules_does_not_create_a_new_one() {
 
 		assert_eq!(all_scheds_end, 40);
 		System::set_block_number(all_scheds_end);
+		assert_ok!(Vesting::do_try_state());
 
 		// Prior to merge_schedules and with no vest/vest_other called the user has no usable
 		// balance.
@@ -900,6 +922,7 @@ fn merge_finishing_schedules_does_not_create_a_new_one() {
 
 		// Merge schedule 0 and 1.
 		assert_ok!(Vesting::merge_schedules(Some(2).into(), 0, 1));
+		assert_ok!(Vesting::do_try_state());
 		// The user no longer has any more vesting schedules because they both ended at the
 		// block they where merged,
 		assert!(!<VestingStorage<Test>>::contains_key(&2));
@@ -927,6 +950,7 @@ fn merge_finished_and_yet_to_be_started_schedules() {
 		);
 		assert_ok!(Vesting::vested_transfer(Some(13).into(), 2, sched1));
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched1]);
+		assert_ok!(Vesting::do_try_state());
 
 		let sched2 = VestingInfo::new(
 			ED * 40,
@@ -936,8 +960,10 @@ fn merge_finished_and_yet_to_be_started_schedules() {
 		// Add a 3rd schedule to demonstrate how sched1 shifts.
 		assert_ok!(Vesting::vested_transfer(Some(13).into(), 2, sched2));
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched1, sched2]);
+		assert_ok!(Vesting::do_try_state());
 
 		System::set_block_number(30);
+		assert_ok!(Vesting::do_try_state());
 
 		// At block 30, sched0 has finished unlocking while sched1 and sched2 are still fully
 		// locked,
@@ -947,6 +973,7 @@ fn merge_finished_and_yet_to_be_started_schedules() {
 
 		// Merge schedule 0 and 1.
 		assert_ok!(Vesting::merge_schedules(Some(2).into(), 0, 1));
+		assert_ok!(Vesting::do_try_state());
 
 		// sched0 is removed since it finished, and sched1 is removed and then pushed on the back
 		// because it is treated as the merged schedule
