@@ -2660,6 +2660,8 @@ dependencies = [
  "async-recursion",
  "frame-support",
  "futures",
+ "futures-util",
+ "hyper",
  "indicatif",
  "jsonrpsee",
  "log",
@@ -2672,6 +2674,7 @@ dependencies = [
  "spinners",
  "substrate-rpc-client",
  "tokio",
+ "tower",
  "tracing-subscriber 0.3.17",
 ]
 
@@ -12343,6 +12346,7 @@ dependencies = [
  "futures-util",
  "pin-project",
  "pin-project-lite 0.2.9",
+ "tokio",
  "tower-layer",
  "tower-service",
  "tracing",

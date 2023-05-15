@@ -26,6 +26,9 @@ futures = "0.3"
 async-recursion = "1.0.4"
 indicatif = "0.17.3"
 spinners = "4.1.0"
+tower = { version = "0.4.13", features = ["retry"] }
+futures-util = "0.3.28"
+hyper = "0.14.26"
 
 [dev-dependencies]
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }

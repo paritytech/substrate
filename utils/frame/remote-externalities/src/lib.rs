@@ -22,10 +22,12 @@
 
 use async_recursion::async_recursion;
 use codec::{Decode, Encode};
+use futures_util::future;
+use hyper::Request;
 use indicatif::{ProgressBar, ProgressStyle};
 use jsonrpsee::{
 	core::params::ArrayParams,
-	http_client::{HttpClient, HttpClientBuilder},
+	http_client::{transport::HttpBackend, HttpClient, HttpClientBuilder},
 };
 use log::*;
 use serde::de::DeserializeOwned;
@@ -43,12 +45,15 @@ use sp_runtime::{traits::Block as BlockT, StateVersion};
 use spinners::{Spinner, Spinners};
 use std::{
 	cmp::max,
+	fmt::Debug,
 	fs,
 	ops::{Deref, DerefMut},
 	path::{Path, PathBuf},
 	time::{Duration, Instant},
 };
 use substrate_rpc_client::{rpc_params, BatchRequestBuilder, ChainApi, ClientT, StateApi};
+use tokio::runtime::Runtime;
+use tower::retry::{Policy, Retry, RetryLayer};
 
 type KeyValue = (StorageKey, StorageData);
 type TopKeyValues = Vec<KeyValue>;
@@ -119,11 +124,61 @@ pub enum Transport {
 	/// Use the `URI` to open a new WebSocket connection.
 	Uri(String),
 	/// Use HTTP connection.
-	RemoteClient(HttpClient),
+	RemoteClient(HttpClient<Retry<RetryPolicy, HttpBackend>>),
+}
+
+#[derive(Debug, Clone)]
+pub struct RetryPolicy(usize);
+
+type Req = hyper::Request<hyper::body::Body>;
+type Res = hyper::Response<hyper::body::Body>;
+
+impl<E: Debug> Policy<Req, Res, E> for RetryPolicy {
+	type Future = future::Ready<Self>;
+
+	fn retry(&self, req: &Req, result: Result<&Res, &E>) -> Option<Self::Future> {
+		match result {
+			Ok(_) => {
+				log::info!("inside retry policy: Ok");
+				// Treat all `Response`s as success,
+				// so don't retry...
+				None
+			},
+			Err(e) => {
+				log::info!("inside retry policy: Err");
+				log::info!("{:?}", e);
+				// Treat all errors as failures...
+				// But we limit the number of attempts...
+				if self.0 > 0 {
+					// Try again!
+					Some(future::ready(RetryPolicy(self.0 - 1)))
+				} else {
+					// Used all our attempts, no retry...
+					None
+				}
+			},
+		}
+	}
+
+	fn clone_request(&self, req: &Req) -> Option<Req> {
+		let (parts, body) = req.into_parts();
+		let rt = Runtime::new().unwrap();
+		let body_bytes = match rt.block_on(hyper::body::to_bytes(body)) {
+			Ok(bytes) => bytes,
+			Err(_) => {
+				log::warn!("RetryPolicy failed to clone request and cannot retry.");
+				return None
+			},
+		};
+
+		let cloned_req = Request::from_parts(parts, body_bytes.into());
+
+		Some(cloned_req)
+	}
 }
 
 impl Transport {
-	fn as_client(&self) -> Option<&HttpClient> {
+	fn as_client(&self) -> Option<&HttpClient<Retry<RetryPolicy, HttpBackend>>> {
 		match self {
 			Self::RemoteClient(client) => Some(client),
 			_ => None,
@@ -150,7 +205,10 @@ impl Transport {
 			} else {
 				uri.clone()
 			};
+
+			let middleware = tower::ServiceBuilder::new().layer(RetryLayer::new(RetryPolicy(5)));
 			let http_client = HttpClientBuilder::default()
+				.set_middleware(middleware)
 				.max_request_size(u32::MAX)
 				.max_response_size(u32::MAX)
 				.request_timeout(std::time::Duration::from_secs(60 * 5))
@@ -173,8 +231,8 @@ impl From<String> for Transport {
 	}
 }
 
-impl From<HttpClient> for Transport {
-	fn from(client: HttpClient) -> Self {
+impl From<HttpClient<Retry<RetryPolicy, HttpBackend>>> for Transport {
+	fn from(client: HttpClient<Retry<RetryPolicy, HttpBackend>>) -> Self {
 		Transport::RemoteClient(client)
 	}
 }
@@ -204,7 +262,7 @@ pub struct OnlineConfig<B: BlockT> {
 
 impl<B: BlockT> OnlineConfig<B> {
 	/// Return rpc (http) client reference.
-	fn rpc_client(&self) -> &HttpClient {
+	fn rpc_client(&self) -> &HttpClient<Retry<RetryPolicy, HttpBackend>> {
 		self.transport
 			.as_client()
 			.expect("http client must have been initialized by now; qed.")
@@ -317,7 +375,7 @@ where
 	const PARALLEL_REQUESTS: usize = 4;
 	const BATCH_SIZE_INCREASE_FACTOR: f32 = 1.10;
 	const BATCH_SIZE_DECREASE_FACTOR: f32 = 0.50;
-	const INITIAL_BATCH_SIZE: usize = 5000;
+	const INITIAL_BATCH_SIZE: usize = 50000;
 	// NOTE: increasing this value does not seem to impact speed all that much.
 	const DEFAULT_KEY_DOWNLOAD_PAGE: u32 = 1000;
 
@@ -440,7 +498,7 @@ where
 	/// ```
 	#[async_recursion]
 	async fn get_storage_data_dynamic_batch_size(
-		client: &HttpClient,
+		client: &HttpClient<Retry<RetryPolicy, HttpBackend>>,
 		payloads: Vec<(String, ArrayParams)>,
 		batch_size: usize,
 		bar: &ProgressBar,
@@ -470,6 +528,7 @@ where
 		let batch_response = match client.batch_request::<Option<StorageData>>(batch).await {
 			Ok(batch_response) => batch_response,
 			Err(e) => {
+				log::info!("error");
 				if batch_size < 2 {
 					return Err(e.to_string())
 				}
@@ -608,7 +667,7 @@ where
 
 	/// Get the values corresponding to `child_keys` at the given `prefixed_top_key`.
 	pub(crate) async fn rpc_child_get_storage_paged(
-		client: &HttpClient,
+		client: &HttpClient<Retry<RetryPolicy, HttpBackend>>,
 		prefixed_top_key: &StorageKey,
 		child_keys: Vec<StorageKey>,
 		at: B::Hash,
@@ -661,7 +720,7 @@ where
 	}
 
 	pub(crate) async fn rpc_child_get_keys(
-		client: &HttpClient,
+		client: &HttpClient<Retry<RetryPolicy, HttpBackend>>,
 		prefixed_top_key: &StorageKey,
 		child_prefix: StorageKey,
 		at: B::Hash,
