@@ -257,7 +257,7 @@ fn set_validation_intention_after_chilled() {
 			assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![11]);
 
 			// validator sets intention to stake again in the same era it was chilled.
-			assert_ok!(Staking::validate(RuntimeOrigin::signed(10), ValidatorPrefs::default()));
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(10), Default::default()));
 
 			// progress era and check that the slashed validator is still part of the validator
 			// set.
