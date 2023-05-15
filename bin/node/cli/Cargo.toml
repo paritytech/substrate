@@ -36,7 +36,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # third-party dependencies
 array-bytes = "4.1"
-clap = { version = "4.0.9", features = ["derive"], optional = true }
+clap = { version = "4.2.5", features = ["derive"], optional = true }
 codec = { package = "parity-scale-codec", version = "3.2.2" }
 serde = { version = "1.0.136", features = ["derive"] }
 jsonrpsee = { version = "0.16.2", features = ["server"] }
@@ -66,9 +66,11 @@ sc-chain-spec = { version = "4.0.0-dev", path = "../../../client/chain-spec" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
+sc-statement-store = { version = "4.0.0-dev", path = "../../../client/statement-store" }
 sc-network = { version = "0.10.0-dev", path = "../../../client/network" }
 sc-network-common = { version = "0.10.0-dev", path = "../../../client/network/common" }
 sc-network-sync = { version = "0.10.0-dev", path = "../../../client/network/sync" }
+sc-network-statement = { version = "0.10.0-dev", path = "../../../client/network/statement" }
 sc-consensus-slots = { version = "0.10.0-dev", path = "../../../client/consensus/slots" }
 sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/babe" }
 grandpa = { version = "0.10.0-dev", package = "sc-consensus-grandpa", path = "../../../client/consensus/grandpa" }
@@ -130,7 +132,7 @@ pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 substrate-cli-test-utils = { path = "../../../test-utils/cli" }
 
 [build-dependencies]
-clap = { version = "4.0.9", optional = true }
+clap = { version = "4.2.5", optional = true }
 clap_complete = { version = "4.0.2", optional = true }
 node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }

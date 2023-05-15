@@ -4,7 +4,7 @@ error[E0053]: method `test` has an incompatible type for trait
 19 |         fn test(data: String) {}
    |                       ^^^^^^
    |                       |
-   |                       expected `u64`, found struct `String`
+   |                       expected `u64`, found `std::string::String`
    |                       help: change the parameter type to match the trait: `u64`
    |
 note: type in trait
@@ -21,7 +21,7 @@ error[E0308]: mismatched types
 17 | / sp_api::impl_runtime_apis! {
 18 | |     impl self::Api<Block> for Runtime {
 19 | |         fn test(data: String) {}
-   | |                 ^^^^ expected `u64`, found struct `String`
+   | |                 ^^^^ expected `u64`, found `String`
 20 | |     }
 ...  |
 32 | |     }

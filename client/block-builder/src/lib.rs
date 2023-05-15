@@ -313,7 +313,7 @@ mod tests {
 	use sp_core::Blake2Hasher;
 	use sp_state_machine::Backend;
 	use substrate_test_runtime_client::{
-		runtime::Extrinsic, DefaultTestClientBuilderExt, TestClientBuilderExt,
+		runtime::ExtrinsicBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
 	};
 
 	#[test]
@@ -322,9 +322,11 @@ mod tests {
 		let backend = builder.backend();
 		let client = builder.build();
 
+		let genesis_hash = client.info().best_hash;
+
 		let block = BlockBuilder::new(
 			&client,
-			client.info().best_hash,
+			genesis_hash,
 			client.info().best_number,
 			RecordProof::Yes,
 			Default::default(),
@@ -335,12 +337,11 @@ mod tests {
 		.unwrap();
 
 		let proof = block.proof.expect("Proof is build on request");
+		let genesis_state_root = client.header(genesis_hash).unwrap().unwrap().state_root;
 
-		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
-			block.storage_changes.transaction_storage_root,
-			proof,
-		)
-		.unwrap();
+		let backend =
+			sp_state_machine::create_proof_check_backend::<Blake2Hasher>(genesis_state_root, proof)
+				.unwrap();
 
 		assert!(backend
 			.storage(&sp_core::storage::well_known_keys::CODE)
@@ -364,7 +365,7 @@ mod tests {
 		)
 		.unwrap();
 
-		block_builder.push(Extrinsic::ReadAndPanic(8)).unwrap_err();
+		block_builder.push(ExtrinsicBuilder::new_read_and_panic(8).build()).unwrap_err();
 
 		let block = block_builder.build().unwrap();
 
@@ -380,7 +381,7 @@ mod tests {
 		)
 		.unwrap();
 
-		block_builder.push(Extrinsic::Read(8)).unwrap();
+		block_builder.push(ExtrinsicBuilder::new_read(8).build()).unwrap();
 
 		let block = block_builder.build().unwrap();
 
