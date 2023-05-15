@@ -35,7 +35,7 @@ use libp2p::{
 	},
 	PeerId,
 };
-use log::{error, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use parking_lot::RwLock;
 use rand::distributions::{Distribution as _, Uniform};
 use sc_peerset::DropReason;
@@ -695,7 +695,7 @@ impl Notifications {
 			},
 			// Incoming => Incoming
 			st @ PeerState::Incoming { .. } => {
-				info!(
+				debug!(
 					target: "sub-libp2p",
 					"PSM => Connect({}, {:?}): Ignoring obsolete connect, we are awaiting accept/reject.",
 					occ_entry.key().0, set_id
@@ -705,25 +705,22 @@ impl Notifications {
 
 			// Other states are kept as-is.
 			st @ PeerState::Enabled { .. } => {
-				warn!(target: "sub-libp2p",
+				debug!(target: "sub-libp2p",
 					"PSM => Connect({}, {:?}): Already connected.",
 					occ_entry.key().0, set_id);
 				*occ_entry.into_mut() = st;
-				debug_assert!(false);
 			},
 			st @ PeerState::DisabledPendingEnable { .. } => {
-				warn!(target: "sub-libp2p",
+				debug!(target: "sub-libp2p",
 					"PSM => Connect({}, {:?}): Already pending enabling.",
 					occ_entry.key().0, set_id);
 				*occ_entry.into_mut() = st;
-				debug_assert!(false);
 			},
 			st @ PeerState::Requested { .. } | st @ PeerState::PendingRequest { .. } => {
-				warn!(target: "sub-libp2p",
+				debug!(target: "sub-libp2p",
 					"PSM => Connect({}, {:?}): Duplicate request.",
 					occ_entry.key().0, set_id);
 				*occ_entry.into_mut() = st;
-				debug_assert!(false);
 			},
 
 			PeerState::Poisoned => {

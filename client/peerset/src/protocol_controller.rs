@@ -402,8 +402,8 @@ impl ProtocolController {
 		if let Some(outstanding) = self.outstanding.get_mut(event.peer_id()) {
 			if outstanding.events.len() == OUTSTANDING_QUEUE_WARNING {
 				// The following warning means that either `ProtocolController` is not fast enough
-				// to process network events, or `Notifications` is not fast enough to ACK connection
-				// messages.
+				// to process network events, or `Notifications` is not fast enough to ACK
+				// connection messages.
 				warn!(
 					target: LOG_TARGET,
 					"Number of oustanding connection events for peer {} exceeded {}.",
