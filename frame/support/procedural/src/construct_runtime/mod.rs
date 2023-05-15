@@ -236,9 +236,6 @@ fn construct_runtime_final_expansion(
 		))
 	}
 
-	// The path to the `System` pallet.
-	let system_path = &system_pallet.path;
-
 	let features = pallets
 		.iter()
 		.filter_map(|decl| {
