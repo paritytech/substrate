@@ -156,6 +156,8 @@ impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	/// The block type for the runtime.
 	type Block = Block;
+	/// The block type for the node.
+	type NodeBlock = Block;
 	/// Block & extrinsics weights: base values and limits.
 	type BlockWeights = BlockWeights;
 	/// The maximum length of a block (in bytes).
@@ -280,7 +282,6 @@ impl pallet_template::Config for Runtime {
 construct_runtime!(
 	pub struct Runtime
 	where
-		NodeBlock = opaque::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,

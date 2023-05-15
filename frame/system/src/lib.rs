@@ -208,8 +208,11 @@ pub mod pallet {
 		/// except Root.
 		type BaseCallFilter: Contains<Self::RuntimeCall>;
 
-		/// The Block type used by the runtime
+		/// The Block type used by the runtime.
 		type Block: Block;
+
+		/// The Block type used by the node.
+		type NodeBlock: Block;
 
 		/// Block & extrinsics weights: base values and limits.
 		#[pallet::constant]
