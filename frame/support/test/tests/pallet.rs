@@ -906,7 +906,7 @@ fn inherent_expand() {
 		),
 		vec![UncheckedExtrinsic {
 			call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
-			signature: Some((1, Default::default())),
+			signature: Some((1, (), Default::default())),
 		}],
 	);
 
@@ -977,7 +977,7 @@ fn inherent_expand() {
 			},
 			UncheckedExtrinsic {
 				call: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
-				signature: Some((1, Default::default())),
+				signature: Some((1, (), Default::default())),
 			},
 			UncheckedExtrinsic {
 				call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
@@ -1707,7 +1707,7 @@ fn metadata_ir_pallet_runtime_docs() {
 
 #[test]
 fn extrinsic_metadata_ir_types() {
-	let ir = Runtime::extrinsic_metadata_ir();
+	let ir = Runtime::metadata_ir().extrinsic;
 
 	// `TestXt` used to construct the runtime exposes only the `Call` and `Extra` types.
 	// In contrast, substrate chains expose: `Address`, `Call`, `Signature` and `Extra` types.
