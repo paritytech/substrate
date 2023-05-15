@@ -306,8 +306,10 @@ fn construct_runtime_final_expansion(
 			// The `RuntimeCall` must be defined for all runtimes.
 			type RuntimeCall = <#name as #system_path::Config>::RuntimeCall;
 			// The associated type `RuntimeEvent` is present in the `frame_system::Config` trait
-			// if and only if the `#[pallet::event]` is declared.
-			type RuntimeEvent = <#name as #system_path::Config>::RuntimeEvent;
+			// if and only if the `#[pallet::event]` is declared. However, fallback to our
+			// generated outer `RuntimeEvent` enum to ensure consistency with pallets that don't
+			// emit events.
+			type RuntimeEvent = RuntimeEvent;
 			type RuntimeError = RuntimeError;
 		}
 
