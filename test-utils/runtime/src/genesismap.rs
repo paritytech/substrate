@@ -103,9 +103,9 @@ impl GenesisStorageBuilder {
 		self
 	}
 
-	/// Builds the `GenesisConfig` and returns its storage.
-	pub fn build_storage(&mut self) -> Storage {
-		let genesis_config = GenesisConfig {
+	/// A `GenesisConfig` from internal configuration
+	pub fn genesis_config(&self) -> GenesisConfig {
+		GenesisConfig {
 			system: frame_system::GenesisConfig {
 				code: self.wasm_code.clone().unwrap_or(wasm_binary_unwrap().to_vec()),
 			},
@@ -117,7 +117,12 @@ impl GenesisStorageBuilder {
 				authorities: self.authorities.clone(),
 			},
 			balances: pallet_balances::GenesisConfig { balances: self.balances.clone() },
-		};
+		}
+	}
+
+	/// Builds the `GenesisConfig` and returns its storage.
+	pub fn build_storage(&mut self) -> Storage {
+		let genesis_config = self.genesis_config();
 
 		let mut storage = genesis_config
 			.build_storage()
