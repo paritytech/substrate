@@ -56,7 +56,7 @@ pub enum Error {
 	ParsingMultiaddress(#[from] libp2p::core::multiaddr::Error),
 
 	#[error("Failed to parse a libp2p key.")]
-	ParsingLibp2pIdentity(#[from] libp2p::identity::error::DecodingError),
+	ParsingLibp2pIdentity(#[from] libp2p::identity::DecodingError),
 
 	#[error("Failed to sign: {0}.")]
 	CannotSign(String),
