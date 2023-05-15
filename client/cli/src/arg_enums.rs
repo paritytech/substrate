@@ -78,7 +78,7 @@ pub fn execution_method_from_cli(
 ) -> sc_service::config::WasmExecutionMethod {
 	if let WasmExecutionMethod::Interpreted = execution_method {
 		log::warn!(
-			"Interpreted execution for wasm is deprecated. Compiled execution is used by default"
+			"`interpreted-i-know-what-i-do` is deprecated and will be removed in the future. Defaults to `compiled` execution mode."
 		);
 	}
 
