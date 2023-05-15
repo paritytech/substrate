@@ -125,14 +125,10 @@ impl pallet_balances::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type MaxHolds = ConstU32<1>;
-	type MaxFreezes = ();
+	type MaxFreezes = traits::ConstU32<1>;
 	type HoldIdentifier = ();
 	type FreezeIdentifier = ();
 	type WeightInfo = ();
-	type HoldIdentifier = ();
-	type FreezeIdentifier = ();
-	type MaxHolds = traits::ConstU32<1>;
-	type MaxFreezes = traits::ConstU32<1>;
 }
 
 impl pallet_timestamp::Config for Runtime {
