@@ -143,7 +143,7 @@ pub use crate::wasm::api_doc;
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;
 type BalanceOf<T> =
-	<<T as Config>::Currency as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
+	<<T as Config>::Fungible as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
 type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
@@ -200,8 +200,8 @@ pub mod pallet {
 		/// to supply a dummy implementation for this type (because it is never used).
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
-		/// The currency in which fees are paid and contract balances are held.
-		type Currency: Inspect<Self::AccountId>
+		/// The fungible in which fees are paid and contract balances are held.
+		type Fungible: Inspect<Self::AccountId>
 			+ Mutate<Self::AccountId>
 			+ MutateHold<Self::AccountId>;
 
@@ -315,7 +315,7 @@ pub mod pallet {
 
 		/// The identifier of the hold reason.
 		#[pallet::constant]
-		type HoldReason: Get<<Self::Currency as InspectHold<Self::AccountId>>::Reason>;
+		type HoldReason: Get<<Self::Fungible as InspectHold<Self::AccountId>>::Reason>;
 	}
 
 	#[pallet::hooks]
@@ -1429,9 +1429,9 @@ impl<T: Config> Pallet<T> {
 		)
 	}
 
-	/// Return the existential deposit of [`Config::Currency`].
+	/// Return the existential deposit of [`Config::Fungible`].
 	fn min_balance() -> BalanceOf<T> {
-		<T::Currency as Inspect<AccountIdOf<T>>>::minimum_balance()
+		<T::Fungible as Inspect<AccountIdOf<T>>>::minimum_balance()
 	}
 
 	/// Convert gas_limit from 1D Weight to a 2D Weight.

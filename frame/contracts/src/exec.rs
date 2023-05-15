@@ -1068,7 +1068,7 @@ where
 		value: BalanceOf<T>,
 	) -> DispatchResult {
 		if !value.is_zero() {
-			T::Currency::transfer(from, to, value, preservation)
+			T::Fungible::transfer(from, to, value, preservation)
 				.map_err(|_| Error::<T>::TransferFailed)?;
 		}
 		Ok(())
@@ -1253,7 +1253,7 @@ where
 			Preservation::Expendable,
 			&frame.account_id,
 			beneficiary,
-			T::Currency::reducible_balance(&frame.account_id, Preservation::Expendable, Polite),
+			T::Fungible::reducible_balance(&frame.account_id, Preservation::Expendable, Polite),
 		)?;
 		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
@@ -1332,7 +1332,7 @@ where
 	}
 
 	fn balance(&self) -> BalanceOf<T> {
-		T::Currency::balance(&self.top_frame().account_id)
+		T::Fungible::balance(&self.top_frame().account_id)
 	}
 
 	fn value_transferred(&self) -> BalanceOf<T> {
@@ -1348,7 +1348,7 @@ where
 	}
 
 	fn minimum_balance(&self) -> BalanceOf<T> {
-		T::Currency::minimum_balance()
+		T::Fungible::minimum_balance()
 	}
 
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
@@ -1952,7 +1952,7 @@ mod tests {
 		// This one tests passing the input data into a contract via instantiate.
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable =
 				MockExecutable::from_storage(input_data_ch, &schedule, &mut gas_meter).unwrap();
@@ -2399,7 +2399,7 @@ mod tests {
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable =
 				MockExecutable::from_storage(dummy_ch, &schedule, &mut gas_meter).unwrap();
@@ -2445,7 +2445,7 @@ mod tests {
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable =
 				MockExecutable::from_storage(dummy_ch, &schedule, &mut gas_meter).unwrap();
@@ -2490,7 +2490,7 @@ mod tests {
 						Weight::zero(),
 						BalanceOf::<Test>::zero(),
 						dummy_ch,
-						<Test as Config>::Currency::minimum_balance(),
+						<Test as Config>::Fungible::minimum_balance(),
 						vec![],
 						&[48, 49, 50],
 					)
@@ -2503,7 +2503,7 @@ mod tests {
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			set_balance(&ALICE, min_balance * 100);
 			place_contract(&BOB, instantiator_ch);
 			let contract_origin = Origin::from_account_id(ALICE);
@@ -2559,7 +2559,7 @@ mod tests {
 						Weight::zero(),
 						BalanceOf::<Test>::zero(),
 						dummy_ch,
-						<Test as Config>::Currency::minimum_balance(),
+						<Test as Config>::Fungible::minimum_balance(),
 						vec![],
 						&[],
 					),
@@ -2717,7 +2717,7 @@ mod tests {
 		// This one tests passing the input data into a contract via instantiate.
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable = MockExecutable::from_storage(code, &schedule, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 10_000);
@@ -2751,7 +2751,7 @@ mod tests {
 		let mut debug_buffer = DebugBufferVec::<Test>::try_from(Vec::new()).unwrap();
 
 		ExtBuilder::default().build().execute_with(|| {
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
@@ -2787,7 +2787,7 @@ mod tests {
 		let mut debug_buffer = DebugBufferVec::<Test>::try_from(Vec::new()).unwrap();
 
 		ExtBuilder::default().build().execute_with(|| {
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
@@ -2827,7 +2827,7 @@ mod tests {
 
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule: Schedule<Test> = <Test as Config>::Schedule::get();
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
@@ -2954,7 +2954,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
@@ -3041,7 +3041,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
@@ -3141,7 +3141,7 @@ mod tests {
 
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let fail_executable =
 				MockExecutable::from_storage(fail_code, &schedule, &mut gas_meter).unwrap();
@@ -3258,7 +3258,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 1000);
@@ -3386,7 +3386,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 1000);
@@ -3426,7 +3426,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 1000);
@@ -3466,7 +3466,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 1000);
@@ -3523,7 +3523,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 1000);
@@ -3580,7 +3580,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 1000);
@@ -3677,7 +3677,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let min_balance = <Test as Config>::Fungible::minimum_balance();
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 1000);

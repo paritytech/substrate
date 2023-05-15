@@ -39,7 +39,7 @@ use sp_runtime::{
 };
 use sp_std::{marker::PhantomData, vec::Vec};
 
-/// Deposit that uses the native currency's balance type.
+/// Deposit that uses the native fungible's balance type.
 pub type DepositOf<T> = Deposit<BalanceOf<T>>;
 
 /// A production root storage meter that actually charges from its origin.
@@ -91,7 +91,7 @@ pub trait Ext<T: Config> {
 
 /// This [`Ext`] is used for actual on-chain execution when balance needs to be charged.
 ///
-/// It uses [`ReservableCurrency`] in order to do accomplish the reserves.
+/// It uses [`Mutate`] in order to do accomplish the reserves.
 pub enum ReservingExt {}
 
 /// Used to implement a type state pattern for the meter.
@@ -449,7 +449,7 @@ where
 		System::<T>::inc_consumers(info.deposit_account())?;
 
 		// We also need to make sure that the contract's account itself exists.
-		T::Currency::transfer(origin, contract, ed, Preservation::Protect)?;
+		T::Fungible::transfer(origin, contract, ed, Preservation::Protect)?;
 		System::<T>::inc_consumers(contract)?;
 
 		Ok(deposit)
@@ -513,14 +513,14 @@ impl<T: Config> Ext<T> for ReservingExt {
 		// We are sending the `min_leftover` and the `min_balance` from the origin
 		// account as part of a contract call. Hence origin needs to have those left over
 		// as free balance after accounting for all deposits.
-		let max = T::Currency::reducible_balance(origin, Preservation::Protect, Polite)
+		let max = T::Fungible::reducible_balance(origin, Preservation::Protect, Polite)
 			.saturating_sub(min_leftover)
 			.saturating_sub(Pallet::<T>::min_balance());
 		let default = max.min(T::DefaultDepositLimit::get());
 		let limit = limit.unwrap_or(default);
 		ensure!(
 			limit <= max &&
-				matches!(T::Currency::can_withdraw(origin, limit), WithdrawConsequence::Success),
+				matches!(T::Fungible::can_withdraw(origin, limit), WithdrawConsequence::Success),
 			<Error<T>>::StorageDepositNotEnoughFunds,
 		);
 		Ok(limit)
@@ -534,14 +534,14 @@ impl<T: Config> Ext<T> for ReservingExt {
 	) -> Result<(), DispatchError> {
 		match amount {
 			Deposit::Charge(amount) => {
-				T::Currency::transfer(origin, deposit_account, *amount, Preservation::Protect)?;
+				T::Fungible::transfer(origin, deposit_account, *amount, Preservation::Protect)?;
 				Ok(())
 			},
 			Deposit::Refund(amount) => {
 				if terminated {
 					System::<T>::dec_consumers(&deposit_account);
 				}
-				T::Currency::transfer(
+				T::Fungible::transfer(
 					deposit_account,
 					origin,
 					*amount,
