@@ -975,9 +975,6 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> Pallet<T> {
 	/// Returns the current staking reward rate.
-	///
-	/// The staked amount as a PerThing is calculated and provided to `compute_inflation` alongside
-	/// the provided `ideal_staked` and `falloff` values.
 	pub fn api_reward_rate(
 		min_inflation: Perquintill,
 		max_inflation: Perquintill,
@@ -988,7 +985,7 @@ impl<T: Config> Pallet<T> {
 			Some(active_era) => {
 				let staked = ErasTotalStake::<T>::get(active_era.index);
 				let total_issuance = T::Currency::total_issuance();
-				let staked_as_percent = Perquintill::from_rational(staked, total_issuance);
+				let staked_percent = Perquintill::from_rational(staked, total_issuance);
 
 				// NOTE: The JavaScript implemenation considers 2 parameters, `auctionMax` and
 				// `auctionAdjust` in the following calculation:
@@ -998,13 +995,13 @@ impl<T: Config> Pallet<T> {
 				// `auctionMax` is always 0 on PJS Apps and Staking Dashboard. This calculation is
 				// therefore being ignored here for now.
 				let ideal_interest = max_inflation / ideal_stake;
-				let curve = if staked_as_percent <= ideal_stake {
+				let curve = if staked_percent <= ideal_stake {
 					(ideal_interest.saturating_sub(min_inflation / ideal_stake))
-						.saturating_mul(staked_as_percent)
+						.saturating_mul(staked_percent)
 				} else {
 					let curve_base =
 						ideal_interest.saturating_mul(ideal_stake).saturating_sub(min_inflation);
-					let curve_power = (staked_as_percent - ideal_stake).int_div(falloff);
+					let curve_power = (staked_percent - ideal_stake).int_div(falloff);
 					let curve_multiplier = Perquintill::from_percent(1) /
 						Perquintill::from_percent(2u64.pow(curve_power as u32));
 					curve_base.saturating_mul(curve_multiplier)
