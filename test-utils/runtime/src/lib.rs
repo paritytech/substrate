@@ -1087,7 +1087,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000 * currency::DOLLARS,
 		)
-		.build_storage()
+		.build()
 		.into()
 	}
 
@@ -1095,7 +1095,7 @@ mod tests {
 	fn validate_storage_keys() {
 		assert_eq!(
 			genesismap::GenesisStorageBuilder::default()
-				.build_storage()
+				.build()
 				.top
 				.keys()
 				.cloned()
