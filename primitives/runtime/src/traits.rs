@@ -1379,6 +1379,23 @@ pub trait GetNodeBlockType {
 	type NodeBlock: self::Block;
 }
 
+/// A marker trait for something that knows the type of the runtime's
+/// outer Call, Event and Error enums.
+///
+/// The `RuntimeCall` and `RuntimeEvent` are configurable via the system's
+/// pallet `Config` trait. While the `RuntimeError` is currently generated
+/// by the `construct_runtime` macro.
+///
+/// This trait is implemented by the `construct_runtime!` macro for all runtimes.
+pub trait GetRuntimeOuterEnumTypes: Sized {
+	/// The `RuntimeCall` outer enum.
+	type RuntimeCall: Codec + TypeInfo;
+	/// The `RuntimeEvent` outer enum.
+	type RuntimeEvent: Codec + TypeInfo;
+	/// The `RuntimeError` outer enum.
+	type RuntimeError: Codec + TypeInfo;
+}
+
 /// Provide validation for unsigned extrinsics.
 ///
 /// This trait provides two functions [`pre_dispatch`](Self::pre_dispatch) and

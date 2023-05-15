@@ -236,6 +236,9 @@ fn construct_runtime_final_expansion(
 		))
 	}
 
+	// The path to the `System` pallet.
+	let system_path = &system_pallet.path;
+
 	let features = pallets
 		.iter()
 		.filter_map(|decl| {
@@ -297,6 +300,12 @@ fn construct_runtime_final_expansion(
 		}
 		impl #scrate::sp_runtime::traits::GetRuntimeBlockType for #name {
 			type RuntimeBlock = #block;
+		}
+		// The outer enums are generated in this scope with the following names.
+		impl #scrate::sp_runtime::traits::GetRuntimeOuterEnumTypes for #name {
+			type RuntimeCall = <#name as #system_path::Config>::RuntimeCall;
+			type RuntimeEvent = <#name as #system_path::Config>::RuntimeEvent;
+			type RuntimeError = RuntimeError;
 		}
 
 		// Each runtime must expose the `runtime_metadata()` to fetch the runtime API metadata.
