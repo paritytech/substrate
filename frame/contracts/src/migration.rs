@@ -81,6 +81,29 @@ pub trait Migrate: Codec + MaxEncodedLen + Default {
 	/// Returns whether the migration is finished and the weight consumed.
 	fn step(&mut self) -> (IsFinished, Weight);
 
+	/// Verify that the migration step fits into `Cursor`, and that `max_step_weight` is not greater
+	/// than `max_block_weight`.
+	fn integrity_test(max_block_weight: Weight) {
+		if Self::max_step_weight().any_gt(max_block_weight) {
+			panic!(
+				"Invalid max_step_weight for Migration {}. Value should be lower than {}",
+				Self::VERSION,
+				max_block_weight
+			);
+		}
+
+		let len = <Self as MaxEncodedLen>::max_encoded_len();
+		let max = Cursor::bound();
+		if len > max {
+			panic!(
+				"Migration {} has size {} which is bigger than the maximum of {}",
+				Self::VERSION,
+				len,
+				max,
+			);
+		}
+	}
+
 	/// Execute some pre-checks prior to running the first step of this migration.
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade_step() -> Result<Vec<u8>, &'static str> {
@@ -155,8 +178,9 @@ pub trait MigrateSequence: private::Sealed {
 	/// Execute the migration step until the weight limit is reached.
 	fn steps(version: StorageVersion, cursor: &[u8], weight_left: &mut Weight) -> StepResult;
 
-	/// Verify that each migration's cursor fits into `Cursor`.
-	fn integrity_test();
+	/// Verify that the migration step fits into `Cursor`, and that `max_step_weight` is not greater
+	/// than `max_block_weight`.
+	fn integrity_test(max_block_weight: Weight);
 
 	/// Returns whether migrating from `in_storage` to `target` is supported.
 	///
@@ -301,7 +325,8 @@ pub enum StepResult {
 impl<T: Config, M: MigrateSequence> Migration<T, M> {
 	/// Verify that each migration's step of the MigrateSequence fits into `Cursor`.
 	pub(crate) fn integrity_test() {
-		M::integrity_test()
+		let max_weight = <T as frame_system::Config>::BlockWeights::get().max_block;
+		M::integrity_test(max_weight)
 	}
 
 	/// Migrate
@@ -456,18 +481,10 @@ impl MigrateSequence for Tuple {
 		invalid_version(version)
 	}
 
-	fn integrity_test() {
+	fn integrity_test(max_block_weight: Weight) {
 		for_tuples!(
 			#(
-				let len = <Tuple as MaxEncodedLen>::max_encoded_len();
-				let max = Cursor::bound();
-				if len > max {
-					let version = Tuple::VERSION;
-					panic!(
-						"Migration {} has size {} which is bigger than the maximum of {}",
-						version, len, max,
-					);
-				}
+				Tuple::integrity_test(max_block_weight);
 			)*
 		);
 	}
