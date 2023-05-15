@@ -356,7 +356,7 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 		}
 	}
 
-	fn in_progress() -> bool {
+	pub(crate) fn in_progress() -> bool {
 		MigrationInProgress::<T>::exists()
 	}
 }

@@ -109,21 +109,6 @@ pub enum ContractAccessError {
 	MigrationInProgress,
 }
 
-impl<T, B: Zero, EventRecord> From<DispatchError>
-	for ContractResult<Result<T, DispatchError>, B, EventRecord>
-{
-	fn from(error: DispatchError) -> Self {
-		ContractResult {
-			gas_consumed: Zero::zero(),
-			gas_required: Zero::zero(),
-			storage_deposit: Default::default(),
-			debug_message: Vec::new(),
-			result: Err(error),
-			events: None,
-		}
-	}
-}
-
 bitflags! {
 	/// Flags used by a contract to customize exit behaviour.
 	#[derive(Encode, Decode, TypeInfo)]

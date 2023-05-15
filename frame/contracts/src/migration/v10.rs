@@ -159,10 +159,10 @@ impl<T: Config> Migrate for Migration<T> {
 			}
 
 			// Attempt to transfer the old deposit to the deposit account.
-			// We just want to leave the minimum balance on the contract account
 			let amount = old_deposit
 				.saturating_sub(min_balance)
 				.min(T::Currency::reducible_balance(&account, Preserve, Polite));
+
 			let new_deposit = T::Currency::transfer(
 				&account,
 				&deposit_account,

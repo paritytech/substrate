@@ -123,12 +123,12 @@ use frame_support::{
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, EventRecord, Pallet as System};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
-	ContractInstantiateResult, ExecReturnValue, GetStorageResult, InstantiateReturnValue,
-	StorageDeposit,
+	ContractInstantiateResult, ContractResult, ExecReturnValue, GetStorageResult,
+	InstantiateReturnValue, StorageDeposit,
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
-use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
+use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, Zero};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
@@ -1268,6 +1268,21 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 	}
 }
 
+macro_rules! ensure_no_migration_in_progress {
+	() => {
+		if Migration::<T>::in_progress() {
+			return ContractResult {
+				gas_consumed: Zero::zero(),
+				gas_required: Zero::zero(),
+				storage_deposit: Default::default(),
+				debug_message: Vec::new(),
+				result: Err(Error::<T>::MigrationInProgress.into()),
+				events: None,
+			}
+		}
+	};
+}
+
 impl<T: Config> Pallet<T> {
 	/// Perform a call to a specified contract.
 	///
@@ -1292,9 +1307,7 @@ impl<T: Config> Pallet<T> {
 		collect_events: CollectEvents,
 		determinism: Determinism,
 	) -> ContractExecResult<BalanceOf<T>, EventRecordOf<T>> {
-		if let Err(err) = Migration::<T>::ensure_migrated() {
-			return err.into()
-		}
+		ensure_no_migration_in_progress!();
 
 		let mut debug_message = if matches!(debug, DebugInfo::UnsafeDebug) {
 			Some(DebugBufferVec::<T>::default())
@@ -1352,9 +1365,7 @@ impl<T: Config> Pallet<T> {
 		debug: DebugInfo,
 		collect_events: CollectEvents,
 	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>, EventRecordOf<T>> {
-		if let Err(err) = Migration::<T>::ensure_migrated() {
-			return err.into()
-		}
+		ensure_no_migration_in_progress!();
 
 		let mut debug_message = if debug == DebugInfo::UnsafeDebug {
 			Some(DebugBufferVec::<T>::default())
