@@ -22,24 +22,23 @@
 //! update peer reputation values and sends commands to `Notifications`.
 //!
 //! Due to asynchronous nature of communication between `ProtocolController` and `Notifications`,
-//! `ProtocolController` has an imperfect view of the states of the peers. This can lead to sending
-//! confusing commands to `Notifications`. To mitigate this issue, the following measures are taken:
+//! `ProtocolController` has an imperfect view of the states of the peers. To reduce this
+//! desynchronization, the following measures are taken:
 //!
-//! 1. `Notifications` ignores all commands from `ProtocolController` after sending "incoming"
-//!    request, except the answer to this "incoming" request.
-//! 2. `ProtocolController` does not modify the peers state after a command to `Notifications`
-//!    was sent, but before ACK for this command was heard back.
-//! 3. Network peer events from `Notifictions` are prioritized over actions from external API and
+//! 1. Network peer events from `Notifictions` are prioritized over actions from external API and
 //!    internal actions by `ProtocolController` (like slot allocation).
+//! 2. `Notifications` ignores all commands from `ProtocolController` after sending "incoming"
+//!    request until receiving the answer to this "incoming" request.
+//! 3. After sending a "connect" message, `ProtocolController` switchs the state of the peer from
+//!    `Outbound` to `Inbound` if receives an "incoming" request from `Notifications` for this peer.
 //!
-//! Even though the fuzz test from the crate does not reveal any inconsistencies in peer states
-//! observed by `Notifications`, measures above do not provide 100% guarantee against confusing
-//! commands from `ProtocolController`. This might happen, for example, if a network state event
-//! from `Notifications` is processed after an external API action sent at the same time.
-//! For this reason, `Notifications` must employ defensive  programming and behave in a defined way
-//! if seemingly impossible sequences of commands are received. For example, `Notifications` must
-//! correctly handle a "connect" command for the peer it thinks is already connected, and a "drop"
-//! command for a peer that was previously dropped.
+//! These measures do not eliminate confusing commands from `ProtocolController` completely,
+//! so `Notifications` must correctly handle seemingly inconsistent commands, like a "connect"
+//! command for the peer it thinks is already connected, and a "drop" command for a peer that
+//! was previously dropped.
+//!
+//! Even though this does not guarantee that `ProtocolController` and `Notifications` have the same
+//! view of the peers' states at any given moment, the eventual consistency is maintained.
 
 use futures::{channel::oneshot, future::Either, FutureExt, StreamExt};
 use libp2p_identity::PeerId;
