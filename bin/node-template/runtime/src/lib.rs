@@ -158,6 +158,8 @@ impl frame_system::Config for Runtime {
 	type Block = Block;
 	/// The block type for the node.
 	type NodeBlock = Block;
+	/// The UncheckedExtrinsic type for the runtime.
+	type UncheckedExtrinsic = UncheckedExtrinsic;
 	/// Block & extrinsics weights: base values and limits.
 	type BlockWeights = BlockWeights;
 	/// The maximum length of a block (in bytes).
@@ -281,8 +283,6 @@ impl pallet_template::Config for Runtime {
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub struct Runtime
-	where
-		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
 		Timestamp: pallet_timestamp,

@@ -151,7 +151,6 @@ use frame_support_procedural_tools::{
 use itertools::Itertools;
 use parse::{
 	ExplicitRuntimeDeclaration, ImplicitRuntimeDeclaration, Pallet, RuntimeDeclaration,
-	WhereSection,
 };
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -216,7 +215,6 @@ fn construct_runtime_final_expansion(
 ) -> Result<TokenStream2> {
 	let ExplicitRuntimeDeclaration {
 		name,
-		where_section: WhereSection { unchecked_extrinsic },
 		pallets,
 		pallets_token,
 	} = definition;
@@ -259,6 +257,7 @@ fn construct_runtime_final_expansion(
 	let frame_system = generate_crate_access_2018("frame-system")?;
 	let block = quote!(<#name as #frame_system::Config>::Block);
 	let node_block = quote!(<#name as #frame_system::Config>::NodeBlock);
+	let unchecked_extrinsic = quote!(<#name as #frame_system::Config>::UncheckedExtrinsic);
 
 	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate)?;
 

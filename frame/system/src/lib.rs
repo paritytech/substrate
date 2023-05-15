@@ -72,7 +72,7 @@ use sp_runtime::{
 	generic,
 	traits::{
 		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, Block, BlockNumberProvider, Bounded,
-		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay,
+		CheckEqual, Dispatchable, Extrinsic, Hash, Lookup, LookupError, MaybeDisplay,
 		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
 	DispatchError, RuntimeDebug,
@@ -213,6 +213,9 @@ pub mod pallet {
 
 		/// The Block type used by the node.
 		type NodeBlock: Block;
+
+		/// The UncheckedExtrinsic type used by the runtime.
+		type UncheckedExtrinsic: Extrinsic;
 
 		/// Block & extrinsics weights: base values and limits.
 		#[pallet::constant]
