@@ -211,13 +211,17 @@ fn continous_slashes_below_offending_threshold() {
 /// the slashed validator should not be considered in the next validator set. However, if the
 /// slashed validator sets its intention to validate again in the same era when it was slashed and
 /// chilled, the validator may not be removed from the active validator set across eras, provided
-/// it is selected in the subsequent era after slashed. Nominations of the slashed validator will
-/// also through the slash and chilling process, as expected, and they will be active after the
-/// validator re-set the intention to be validating again.
+/// it would selected in the subsequent era if there was no slash. Nominators of the slashed
+/// validator will also be slashed and chilled, as expected, but the nomination intentions will
+/// remain after the validator re-set the intention to be validating again.
+///
+/// This behaviour is due to removing implicit chill upon slash
+/// <https://github.com/paritytech/substrate/pull/12420>.
+///
 /// Related to <https://github.com/paritytech/substrate/issues/13714>.
 fn set_validation_intention_after_chilled() {
 	use frame_election_provider_support::SortedListProvider;
-	use pallet_staking::{Event, Forcing, Nominators, ValidatorPrefs};
+	use pallet_staking::{Event, Forcing, Nominators};
 
 	let staking_builder = StakingExtBuilder::default();
 	let epm_builder = EpmExtBuilder::default();
