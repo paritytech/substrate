@@ -137,7 +137,8 @@ impl GenesisStorageBuilder {
 
 	/// Builds the `GenesisConfig` and returns its storage.
 	pub fn build(self) -> Storage {
-		let mut storage = self.genesis_config()
+		let mut storage = self
+			.genesis_config()
 			.build_storage()
 			.expect("Build storage from substrate-test-runtime GenesisConfig");
 
