@@ -1318,7 +1318,7 @@ impl<T: Config> Pallet<T> {
 		ExecutionPhase::<T>::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 		let entropy = (b"frame_system::initialize", parent_hash).using_encoded(blake2_256);
-		storage::unhashed::put(well_known_keys::INTRABLOCK_ENTROPY, &entropy[..]);
+		storage::unhashed::put_raw(well_known_keys::INTRABLOCK_ENTROPY, &entropy[..]);
 		<Number<T>>::put(number);
 		<Digest<T>>::put(digest);
 		<ParentHash<T>>::put(parent_hash);
