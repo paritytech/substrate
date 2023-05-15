@@ -4533,7 +4533,7 @@ mod election_data_provider {
 			assert_eq!(MinNominatorBond::<Test>::get(), 1);
 			assert_eq!(<Test as Config>::VoterList::count(), 4);
 
-			assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 5, Default::default(),));
+			assert_ok!(Staking::bond(RuntimeOrigin::signed(4), 5, Default::default(),));
 			assert_ok!(Staking::nominate(RuntimeOrigin::signed(4), vec![1]));
 			assert_eq!(<Test as Config>::VoterList::count(), 5);
 
@@ -4560,16 +4560,16 @@ mod election_data_provider {
 		ExtBuilder::default()
 			.has_stakers(true)
 			.nominate(true)
-			.add_staker(61, 60, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.add_staker(61, 61, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.build_and_execute(|| {
 				assert_eq!(Staking::weight_of(&101), 500);
 				let voters = <Staking as ElectionDataProvider>::electing_voters(None).unwrap();
 				assert_eq!(voters.len(), 5);
 				assert_eq!(MinimumActiveStake::<Test>::get(), 500);
 
-				assert_ok!(Staking::unbond(RuntimeOrigin::signed(100), 200));
+				assert_ok!(Staking::unbond(RuntimeOrigin::signed(101), 200));
 				start_active_era(10);
-				assert_ok!(Staking::unbond(RuntimeOrigin::signed(100), 100));
+				assert_ok!(Staking::unbond(RuntimeOrigin::signed(101), 100));
 				start_active_era(20);
 
 				// corrupt ledger state by lowering max unlocking chunks bounds.
