@@ -35,6 +35,7 @@ mod keyword {
 	syn::custom_keyword!(Call);
 	syn::custom_keyword!(Storage);
 	syn::custom_keyword!(Event);
+	syn::custom_keyword!(Error);
 	syn::custom_keyword!(Config);
 	syn::custom_keyword!(Origin);
 	syn::custom_keyword!(Inherent);
@@ -371,6 +372,7 @@ pub enum PalletPartKeyword {
 	Call(keyword::Call),
 	Storage(keyword::Storage),
 	Event(keyword::Event),
+	Error(keyword::Error),
 	Config(keyword::Config),
 	Origin(keyword::Origin),
 	Inherent(keyword::Inherent),
@@ -393,6 +395,8 @@ impl Parse for PalletPartKeyword {
 			Ok(Self::Storage(input.parse()?))
 		} else if lookahead.peek(keyword::Event) {
 			Ok(Self::Event(input.parse()?))
+		} else if lookahead.peek(keyword::Error) {
+			Ok(Self::Error(input.parse()?))
 		} else if lookahead.peek(keyword::Config) {
 			Ok(Self::Config(input.parse()?))
 		} else if lookahead.peek(keyword::Origin) {
@@ -423,6 +427,7 @@ impl PalletPartKeyword {
 			Self::Call(_) => "Call",
 			Self::Storage(_) => "Storage",
 			Self::Event(_) => "Event",
+			Self::Error(_) => "Error",
 			Self::Config(_) => "Config",
 			Self::Origin(_) => "Origin",
 			Self::Inherent(_) => "Inherent",
@@ -441,7 +446,7 @@ impl PalletPartKeyword {
 
 	/// Returns the names of all pallet parts that allow to have a generic argument.
 	fn all_generic_arg() -> &'static [&'static str] {
-		&["Event", "Origin", "Config"]
+		&["Event", "Error", "Origin", "Config"]
 	}
 }
 
@@ -452,6 +457,7 @@ impl ToTokens for PalletPartKeyword {
 			Self::Call(inner) => inner.to_tokens(tokens),
 			Self::Storage(inner) => inner.to_tokens(tokens),
 			Self::Event(inner) => inner.to_tokens(tokens),
+			Self::Error(inner) => inner.to_tokens(tokens),
 			Self::Config(inner) => inner.to_tokens(tokens),
 			Self::Origin(inner) => inner.to_tokens(tokens),
 			Self::Inherent(inner) => inner.to_tokens(tokens),
