@@ -147,6 +147,9 @@ pub type SignedPayload = sp_runtime::generic::SignedPayload<RuntimeCall, SignedE
 pub type Extrinsic =
 	sp_runtime::generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
 
+#[cfg(all(not(feature = "std")))]
+use sp_std::vec;
+
 /// An identifier for an account on this system.
 pub type AccountId = <Signature as Verify>::Signer;
 /// A simple hash type for all our hashing.
@@ -467,6 +470,62 @@ pub(crate) const TEST_RUNTIME_BABE_EPOCH_CONFIGURATION: BabeEpochConfiguration =
 		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};
 
+////////////////////////////////////////////////////////////////////////////////
+// todo: to be moved to some shared utils
+
+use frame_support::traits::GenesisBuild;
+use serde_json::Value;
+
+pub struct GenesisBuilderHelper<R, GC>(sp_std::marker::PhantomData<(R, GC)>);
+
+impl<R, GC> GenesisBuilderHelper<R, GC>
+where
+	GC: Default + GenesisBuild<R>,
+{
+	fn merge(a: &mut Value, b: Value) {
+		match (a, b) {
+			(Value::Object(a), Value::Object(b)) =>
+				for (k, v) in b {
+					if v.is_null() {
+						a.remove(&k);
+					} else {
+						Self::merge(a.entry(k).or_insert(Value::Null), v);
+					}
+				},
+			(a, b) => *a = b,
+		};
+	}
+
+	pub fn get_default_as_json() -> sp_std::vec::Vec<u8> {
+		serde_json::to_string(&GC::default())
+			.expect("serialization to json is expected to work. qed.")
+			.into_bytes()
+	}
+
+	pub fn build_from_json(json: sp_std::vec::Vec<u8>) {
+		let gc = serde_json::from_slice::<GC>(&json)
+			.expect("provided json blob is expected to be valid. qed.");
+		<GC as GenesisBuild<R>>::build(&gc);
+	}
+
+	fn build_with_patch(patch_json: sp_std::vec::Vec<u8>) {
+		let mut json = serde_json::to_value(&GC::default())
+			.expect("serialization to json is expected to work. qed.");
+
+		let patch: Value = serde_json::from_slice(&patch_json)
+			.expect("provided json patch is expected to be valid. qed.");
+
+		Self::merge(&mut json, patch);
+
+		let gc = serde_json::from_value::<GC>(json)
+			.expect("patched default config json is expected to be valid. qed.");
+
+		<GC as GenesisBuild<R>>::build(&gc);
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
@@ -710,6 +769,22 @@ impl_runtime_apis! {
 			None
 		}
 	}
+
+	#[cfg(feature = "genesis-config")]
+	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
+		fn get_default_as_json() -> Vec<u8> {
+			GenesisBuilderHelper::<Runtime, RuntimeGenesisConfig>::get_default_as_json()
+		}
+
+		fn build_from_json(json: sp_std::vec::Vec<u8>) {
+			GenesisBuilderHelper::<Runtime, RuntimeGenesisConfig>::build_from_json(json)
+		}
+
+		fn build_with_patch(patch_json: sp_application_crypto::Vec<u8>) {
+			GenesisBuilderHelper::<Runtime, RuntimeGenesisConfig>::build_with_patch(patch_json);
+		}
+
+	}
 }
 
 fn test_ed25519_crypto() -> (ed25519::AppSignature, ed25519::AppPublic) {
@@ -833,6 +908,17 @@ pub mod storage_key_generator {
 		sp_core::hashing::twox_64(x).iter().chain(x.iter()).cloned().collect::<Vec<_>>()
 	}
 
+	pub fn get_storage_version_hashed_keys() -> Vec<String> {
+		let keys: Vec<Vec<&[u8]>> = vec![
+			vec![b"Babe", b":__STORAGE_VERSION__:"],
+			vec![b"Balances", b":__STORAGE_VERSION__:"],
+			vec![b"SubstrateTest", b":__STORAGE_VERSION__:"],
+			vec![b"System", b":__STORAGE_VERSION__:"],
+		];
+
+		keys.iter().map(concat_hashes).collect::<Vec<String>>()
+	}
+
 	/// Generate the hashed storage keys from the raw literals. These keys are expected to be be in
 	/// storage with given substrate-test runtime.
 	pub fn generate_expected_storage_hashed_keys() -> Vec<String> {
@@ -843,20 +929,17 @@ pub mod storage_key_generator {
 			vec![b"Babe", b"EpochConfig"],
 			vec![b"Babe", b"NextAuthorities"],
 			vec![b"Babe", b"SegmentIndex"],
-			vec![b"Babe", b":__STORAGE_VERSION__:"],
-			vec![b"Balances", b":__STORAGE_VERSION__:"],
 			vec![b"Balances", b"TotalIssuance"],
 			vec![b"SubstrateTest", b"Authorities"],
-			vec![b"SubstrateTest", b":__STORAGE_VERSION__:"],
 			vec![b"System", b"LastRuntimeUpgrade"],
 			vec![b"System", b"ParentHash"],
-			vec![b"System", b":__STORAGE_VERSION__:"],
 			vec![b"System", b"UpgradedToTripleRefCount"],
 			vec![b"System", b"UpgradedToU32RefCount"],
 		];
 
 		let mut expected_keys = keys.iter().map(concat_hashes).collect::<Vec<String>>();
 
+		expected_keys.extend(get_storage_version_hashed_keys());
 		expected_keys.extend(literals.into_iter().map(hex));
 
 		let balances_map_keys = (0..16_usize)
@@ -898,7 +981,7 @@ pub mod storage_key_generator {
 	/// origin.
 	pub fn get_expected_storage_hashed_keys() -> Vec<String> {
 		[
-			//System|:__STORAGE_VERSION__:
+			//SubstrateTest|:__STORAGE_VERSION__:
 			"00771836bebdd29870ff246d305c578c4e7b9012096b41c4eb3aaf947f6ea429",
 			//SubstrateTest|Authorities
 			"00771836bebdd29870ff246d305c578c5e0621c4869aa60c02be9adcc98a0d1d",
@@ -1178,5 +1261,271 @@ mod tests {
 				false
 			);
 		})
+	}
+
+	#[cfg(feature = "genesis-config")]
+	mod genesis_config_tests {
+		use super::*;
+		use crate::genesismap::GenesisStorageBuilder;
+		use sc_executor::{error::Result, NativeElseWasmExecutor, WasmExecutor};
+		use serde_json::{json, Value};
+		use sp_application_crypto::Ss58Codec;
+		use sp_core::traits::{CallContext, CodeExecutor, Externalities, RuntimeCode};
+		use sp_state_machine::BasicExternalities;
+		use std::{env, fs, io::Write};
+		use storage_key_generator::hex;
+
+		pub struct LocalExecutorDispatch;
+
+		impl sc_executor::NativeExecutionDispatch for LocalExecutorDispatch {
+			type ExtendHostFunctions = ();
+
+			fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+				api::dispatch(method, data)
+			}
+
+			fn native_version() -> sc_executor::NativeVersion {
+				native_version()
+			}
+		}
+
+		pub fn executor_call(
+			// t: &mut TestExternalities<BlakeTwo256>,
+			t: &mut dyn Externalities,
+			method: &str,
+			data: &[u8],
+		) -> (Result<Vec<u8>>, bool) {
+			let code = wasm_binary_unwrap();
+			let runtime_code = RuntimeCode {
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(code.into()),
+				hash: sp_core::blake2_256(&code).to_vec(),
+				heap_pages: Some(1024),
+			};
+			let use_native = false;
+			NativeElseWasmExecutor::<LocalExecutorDispatch>::new_with_wasm_executor(
+				WasmExecutor::builder().build(),
+			)
+				.call(t, &runtime_code, method, data, use_native, CallContext::Offchain)
+		}
+
+		#[test]
+		fn build_minimal_genesis_config_works() {
+			sp_tracing::try_init_simple();
+			let default_minimal_json = r#"{"system":{"code":"0x"},"babe":{"authorities":[],"epochConfig":{"c": [ 3, 10 ],"allowed_slots":"PrimaryAndSecondaryPlainSlots"}},"substrateTest":{"authorities":[]},"balances":{"balances":[]}}"#;
+			let mut t = BasicExternalities::new_empty();
+
+			executor_call(&mut t, "GenesisBuilder_build_from_json", &default_minimal_json.encode())
+				.0
+				.unwrap();
+
+			let mut keys = t.into_storages().top.keys().cloned().map(hex).collect::<Vec<String>>();
+			keys.sort();
+
+			let expected = [
+				//SubstrateTest|Authorities
+				"00771836bebdd29870ff246d305c578c5e0621c4869aa60c02be9adcc98a0d1d",
+				//Babe|SegmentIndex
+				"1cb6f36e027abb2091cfb5110ab5087f66e8f035c8adbe7f1547b43c51e6f8a4",
+				//Babe|EpochConfig
+				"1cb6f36e027abb2091cfb5110ab5087fdc6b171b77304263c292cc3ea5ed31ef",
+				//System|UpgradedToU32RefCount
+				"26aa394eea5630e07c48ae0c9558cef75684a022a34dd8bfa2baaf44f172b710",
+				//System|ParentHash
+				"26aa394eea5630e07c48ae0c9558cef78a42f33323cb5ced3b44dd825fda9fcc",
+				//System::BlockHash|0
+				"26aa394eea5630e07c48ae0c9558cef7a44704b568d21667356a5a050c118746bb1bdbcacd6ac9340000000000000000",
+				//System|UpgradedToTripleRefCount
+				"26aa394eea5630e07c48ae0c9558cef7a7fd6c28836b9a28522dc924110cf439",
+
+				// System|LastRuntimeUpgrade
+				"26aa394eea5630e07c48ae0c9558cef7f9cce9c888469bb1a0dceaa129672ef8",
+				// :code
+				"3a636f6465",
+				// :extrinsic_index
+				"3a65787472696e7369635f696e646578",
+				// Balances|TotalIssuance
+				"c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80",
+				].into_iter().map(String::from).collect::<Vec<_>>();
+
+			assert_eq!(keys, expected);
+		}
+
+		#[test]
+		fn default_config_as_json_works() {
+			sp_tracing::try_init_simple();
+			let mut t = BasicExternalities::new_empty();
+			let r = executor_call(&mut t, "GenesisBuilder_get_default_as_json", &vec![]).0.unwrap();
+			let r = Vec::<u8>::decode(&mut &r[..]).unwrap();
+			let json = String::from_utf8(r.into()).expect("returned value is json. qed.");
+
+			let expected = r#"{"system":{"code":"0x"},"babe":{"authorities":[],"epochConfig":null},"substrateTest":{"authorities":[]},"balances":{"balances":[]}}"#;
+			assert_eq!(expected.to_string(), json);
+		}
+
+		#[test]
+		fn build_genesis_config_from_json_works() {
+			sp_tracing::try_init_simple();
+			let j = include_str!("test_json/default_genesis_config.json");
+
+			let mut t = BasicExternalities::new_empty();
+			executor_call(&mut t, "GenesisBuilder_build_from_json", &j.encode()).0.unwrap();
+
+			let mut keys = t.into_storages().top.keys().cloned().map(hex).collect::<Vec<String>>();
+
+			// following keys are not placed during `<RuntimeGenesisConfig as GenesisBuild>::build`
+			// process, add them `keys` to assert against known keys.
+			keys.extend(storage_key_generator::get_storage_version_hashed_keys());
+			keys.push(hex(b":heappages"));
+			keys.sort();
+
+			assert_eq!(keys, storage_key_generator::get_expected_storage_hashed_keys());
+		}
+
+		fn build_genesis_config_from_invalid_json() -> Result<Vec<u8>> {
+			let j = include_str!("test_json/default_genesis_config_invalid.json");
+			let mut t = BasicExternalities::new_empty();
+			executor_call(&mut t, "GenesisBuilder_build_from_json", &j.encode()).0
+		}
+
+		#[test]
+		fn build_genesis_config_from_invalid_json_panics() {
+			let call_result = build_genesis_config_from_invalid_json();
+			assert!(matches!(call_result, Err(sc_executor::error::Error::AbortedDueToTrap(_))));
+		}
+
+		#[test]
+		fn build_genesis_config_from_invalid_json_logs_parser_error() {
+			if env::var("RUN_TEST").is_ok() {
+				sp_tracing::try_init_simple();
+				let _ = build_genesis_config_from_invalid_json();
+			} else {
+				let executable = std::env::current_exe().unwrap();
+				let output = std::process::Command::new(executable)
+					.env("RUN_TEST", "1")
+					.env("RUST_LOG", "error")
+					.args(&["--nocapture", "build_genesis_config_from_invalid_json_logs_parser_error"])
+					.output()
+					.unwrap();
+
+				let output = String::from_utf8(output.stderr).unwrap();
+				assert!(output.contains("unknown field `renamed_authorities`"));
+			}
+		}
+
+		#[test]
+		fn write_default_config_to_tmp_file() {
+			if std::env::var("WRITE_DEFAULT_JSON_FOR_SRT_GC").is_ok() {
+				sp_tracing::try_init_simple();
+				let mut file = fs::OpenOptions::new()
+					.create(true)
+					.write(true)
+					.open("/tmp/default_genesis_config.json")
+					.unwrap();
+
+				let j = serde_json::to_string(&GenesisStorageBuilder::default().genesis_config())
+					.unwrap()
+					.into_bytes();
+				file.write_all(&j).unwrap();
+			}
+		}
+
+		#[test]
+		fn patching_config_works() {
+			sp_tracing::try_init_simple();
+
+			// Patch default json with some custom values:
+			let patch = json!({
+				"babe": {
+					"epochConfig": {
+						"c": [
+							7,
+							10
+						],
+						"allowed_slots": "PrimaryAndSecondaryPlainSlots"
+					}
+				},
+				"substrateTest": {
+					"authorities": [
+						AccountKeyring::Ferdie.public().to_ss58check(),
+						AccountKeyring::Alice.public().to_ss58check()
+					],
+				}
+			});
+
+			// Build genesis config using custom json:
+			let mut t = BasicExternalities::new_empty();
+			executor_call(&mut t, "GenesisBuilder_build_with_patch", &patch.to_string().encode())
+				.0
+				.unwrap();
+
+			// Ensure that custom values are in the genesis storage:
+			let storage = t.into_storages();
+			//SubstrateTest|Authorities
+			let value: Vec<u8> = storage
+				.top
+				.get(
+					&array_bytes::hex2bytes(
+						"00771836bebdd29870ff246d305c578c5e0621c4869aa60c02be9adcc98a0d1d",
+					)
+					.unwrap(),
+				)
+				.unwrap()
+				.clone();
+			let authority_key_vec = Vec::<sp_core::sr25519::Public>::decode(&mut &value[..]).unwrap();
+			assert_eq!(authority_key_vec.len(), 2);
+			assert_eq!(authority_key_vec[0], sp_keyring::AccountKeyring::Ferdie.public());
+			assert_eq!(authority_key_vec[1], sp_keyring::AccountKeyring::Alice.public());
+
+			//Babe|Authorities
+			let value: Vec<u8> = storage
+				.top
+				.get(
+					&array_bytes::hex2bytes(
+						"1cb6f36e027abb2091cfb5110ab5087fdc6b171b77304263c292cc3ea5ed31ef",
+					)
+					.unwrap(),
+				)
+				.unwrap()
+				.clone();
+			assert_eq!(
+				BabeEpochConfiguration::decode(&mut &value[..]).unwrap(),
+				BabeEpochConfiguration {
+					c: (7, 10),
+					allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots
+				}
+			);
+
+			// Ensure that some values are default ones:
+			// Balances|TotalIssuance
+			let value: Vec<u8> = storage
+				.top
+				.get(
+					&array_bytes::hex2bytes(
+						"c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80",
+					)
+					.unwrap(),
+				)
+				.unwrap()
+				.clone();
+			assert_eq!(u64::decode(&mut &value[..]).unwrap(), 0);
+
+			// :code
+			let value: Vec<u8> =
+				storage.top.get(&array_bytes::hex2bytes("3a636f6465").unwrap()).unwrap().clone();
+			assert!(Vec::<u8>::decode(&mut &value[..]).is_err());
+
+			//System|ParentHash
+			let value: Vec<u8> = storage
+				.top
+				.get(
+					&array_bytes::hex2bytes(
+						"26aa394eea5630e07c48ae0c9558cef78a42f33323cb5ced3b44dd825fda9fcc",
+					)
+					.unwrap(),
+				)
+				.unwrap()
+				.clone();
+			assert_eq!(H256::decode(&mut &value[..]).unwrap(), [69u8; 32].into());
+		}
 	}
 }
