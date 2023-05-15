@@ -64,13 +64,12 @@ use sp_runtime::{
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use sp_consensus_babe::{AllowedSlots, AuthorityId, BabeEpochConfiguration, Slot};
+pub use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot};
 
 pub use pallet_balances::Call as BalancesCall;
 
 // Ensure Babe, Sassafras and Aura use the same crypto to simplify things a bit.
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
-pub type SassafrasId = sp_consensus_sassafras::AuthorityId;
 
 #[cfg(feature = "std")]
 pub use extrinsic::{ExtrinsicBuilder, Transfer};
@@ -135,20 +134,6 @@ pub struct TransferData {
 	pub amount: Balance,
 	pub nonce: Index,
 }
-// TODO DAVXY
-// impl From<pallet_sassafras::Call<Runtime>> for Extrinsic {
-// 	fn from(call: pallet_sassafras::Call<Runtime>) -> Self {
-// 		use pallet_sassafras::Call;
-// 		match call {
-// 			Call::submit_tickets { tickets: _ } => Extrinsic::Sassafras,
-// 			Call::plan_config_change { config: _ } => Extrinsic::Sassafras,
-// 			Call::report_equivocation_unsigned { equivocation_proof: _ } => Extrinsic::Sassafras,
-// 			_ => panic!(
-// 				"Unexpected Sassafras call type: {:?}, unable to converto to Extrinsic",
-// 				call
-// 			),
-// 		}
-// 	}
 
 /// The address format for describing accounts.
 pub type Address = sp_core::sr25519::Public;
@@ -650,10 +635,7 @@ impl_runtime_apis! {
 		}
 
 		fn authorities() -> Vec<AuraId> {
-			SubstrateTest::authorities().into_iter().map(|a| {
-				let authority: sr25519::Public = a.into();
-				AuraId::from(authority)
-			}).collect()
+			SubstrateTest::authorities().into_iter().map(|auth| AuraId::from(auth)).collect()
 		}
 	}
 
@@ -664,10 +646,9 @@ impl_runtime_apis! {
 				slot_duration: Babe::slot_duration(),
 				epoch_length: EpochDuration::get(),
 				c: epoch_config.c,
-				authorities: SubstrateTest::authorities()
-					.into_iter().map(|x|(x, 1)).collect(),
-					randomness: Babe::randomness(),
-					allowed_slots: epoch_config.allowed_slots,
+				authorities: Babe::authorities().to_vec(),
+				randomness: Babe::randomness(),
+				allowed_slots: epoch_config.allowed_slots,
 			}
 		}
 
@@ -1162,7 +1143,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000 * currency::DOLLARS,
 		)
-		.build_storage()
+		.build()
 		.into()
 	}
 
@@ -1170,7 +1151,7 @@ mod tests {
 	fn validate_storage_keys() {
 		assert_eq!(
 			genesismap::GenesisStorageBuilder::default()
-				.build_storage()
+				.build()
 				.top
 				.keys()
 				.cloned()

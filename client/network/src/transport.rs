@@ -16,20 +16,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use either::Either;
 use libp2p::{
-	bandwidth,
 	core::{
-		self,
-		either::EitherTransport,
 		muxing::StreamMuxerBox,
 		transport::{Boxed, OptionalTransport},
 		upgrade,
 	},
-	dns, identity, mplex, noise, tcp, websocket, PeerId, Transport,
+	dns, identity, noise, tcp, websocket, PeerId, Transport, TransportExt,
 };
 use std::{sync::Arc, time::Duration};
 
-pub use self::bandwidth::BandwidthSinks;
+pub use libp2p::bandwidth::BandwidthSinks;
 
 /// Builds the transport that serves as a common ground for all connections.
 ///
@@ -59,7 +57,7 @@ pub fn build_transport(
 		let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
 		let dns_init = dns::TokioDnsConfig::system(tcp_trans);
 
-		EitherTransport::Left(if let Ok(dns) = dns_init {
+		Either::Left(if let Ok(dns) = dns_init {
 			// WS + WSS transport
 			//
 			// Main transport can't be used for `/wss` addresses because WSS transport needs
@@ -68,47 +66,21 @@ pub fn build_transport(
 			let tcp_trans = tcp::tokio::Transport::new(tcp_config);
 			let dns_for_wss = dns::TokioDnsConfig::system(tcp_trans)
 				.expect("same system_conf & resolver to work");
-			EitherTransport::Left(websocket::WsConfig::new(dns_for_wss).or_transport(dns))
+			Either::Left(websocket::WsConfig::new(dns_for_wss).or_transport(dns))
 		} else {
 			// In case DNS can't be constructed, fallback to TCP + WS (WSS won't work)
 			let tcp_trans = tcp::tokio::Transport::new(tcp_config.clone());
 			let desktop_trans = websocket::WsConfig::new(tcp_trans)
 				.or_transport(tcp::tokio::Transport::new(tcp_config));
-			EitherTransport::Right(desktop_trans)
+			Either::Right(desktop_trans)
 		})
 	} else {
-		EitherTransport::Right(OptionalTransport::some(
-			libp2p::core::transport::MemoryTransport::default(),
-		))
+		Either::Right(OptionalTransport::some(libp2p::core::transport::MemoryTransport::default()))
 	};
 
-	let (transport, bandwidth) = bandwidth::BandwidthLogging::new(transport);
-
-	let authentication_config =
-		{
-			// For more information about these two panics, see in "On the Importance of
-			// Checking Cryptographic Protocols for Faults" by Dan Boneh, Richard A. DeMillo,
-			// and Richard J. Lipton.
-			let noise_keypair = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair)
-			.expect("can only fail in case of a hardware bug; since this signing is performed only \
-				once and at initialization, we're taking the bet that the inconvenience of a very \
-				rare panic here is basically zero");
-
-			// Legacy noise configurations for backward compatibility.
-			let noise_legacy =
-				noise::LegacyConfig { recv_legacy_handshake: true, ..Default::default() };
-
-			let mut xx_config = noise::NoiseConfig::xx(noise_keypair);
-			xx_config.set_legacy_config(noise_legacy);
-			xx_config.into_authenticated()
-		};
-
+	let authentication_config = noise::Config::new(&keypair).expect("Can create noise config. qed");
 	let multiplexing_config = {
-		let mut mplex_config = mplex::MplexConfig::new();
-		mplex_config.set_max_buffer_behaviour(mplex::MaxBufferBehaviour::Block);
-		mplex_config.set_max_buffer_size(usize::MAX);
-
-		let mut yamux_config = libp2p::yamux::YamuxConfig::default();
+		let mut yamux_config = libp2p::yamux::Config::default();
 		// Enable proper flow-control: window updates are only sent when
 		// buffered data has been consumed.
 		yamux_config.set_window_update_mode(libp2p::yamux::WindowUpdateMode::on_read());
@@ -118,7 +90,7 @@ pub fn build_transport(
 			yamux_config.set_receive_window_size(yamux_window_size);
 		}
 
-		core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
+		yamux_config
 	};
 
 	let transport = transport
@@ -128,5 +100,5 @@ pub fn build_transport(
 		.timeout(Duration::from_secs(20))
 		.boxed();
 
-	(transport, bandwidth)
+	transport.with_bandwidth_logging()
 }

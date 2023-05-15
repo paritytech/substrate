@@ -202,7 +202,10 @@ impl<AssetId, AccountId> AssetsCallback<AssetId, AccountId> for () {}
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::AccountTouch};
+	use frame_support::{
+		pallet_prelude::*,
+		traits::{AccountTouch, ContainsPair},
+	};
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
@@ -1645,7 +1648,7 @@ pub mod pallet {
 		}
 	}
 
-	/// Implements [AccountTouch] trait.
+	/// Implements [`AccountTouch`] trait.
 	/// Note that a depositor can be any account, without any specific privilege.
 	/// This implementation is supposed to be used only for creation of system accounts.
 	impl<T: Config<I>, I: 'static> AccountTouch<T::AssetId, T::AccountId> for Pallet<T, I> {
@@ -1657,6 +1660,14 @@ pub mod pallet {
 
 		fn touch(asset: T::AssetId, who: T::AccountId, depositor: T::AccountId) -> DispatchResult {
 			Self::do_touch(asset, who, depositor, false)
+		}
+	}
+
+	/// Implements [`ContainsPair`] trait for a pair of asset and account IDs.
+	impl<T: Config<I>, I: 'static> ContainsPair<T::AssetId, T::AccountId> for Pallet<T, I> {
+		/// Check if an account with the given asset ID and account address exists.
+		fn contains(asset: &T::AssetId, who: &T::AccountId) -> bool {
+			Account::<T, I>::contains_key(asset, who)
 		}
 	}
 }

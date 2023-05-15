@@ -26,10 +26,10 @@ use bytes::Bytes;
 use codec::{DecodeAll, Encode};
 use futures::{channel::oneshot, stream::FuturesUnordered, StreamExt};
 use libp2p::{
-	core::connection::ConnectionId,
+	core::Endpoint,
 	swarm::{
-		behaviour::FromSwarm, ConnectionHandler, IntoConnectionHandler, NetworkBehaviour,
-		NetworkBehaviourAction, PollParameters,
+		behaviour::FromSwarm, ConnectionDenied, ConnectionId, NetworkBehaviour, PollParameters,
+		THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
 	},
 	Multiaddr, PeerId,
 };
@@ -378,14 +378,46 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = CustomMessageOutcome;
 
-	fn new_handler(&mut self) -> Self::ConnectionHandler {
-		self.behaviour.new_handler()
+	fn handle_established_inbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		peer: PeerId,
+		local_addr: &Multiaddr,
+		remote_addr: &Multiaddr,
+	) -> Result<THandler<Self>, ConnectionDenied> {
+		self.behaviour.handle_established_inbound_connection(
+			connection_id,
+			peer,
+			local_addr,
+			remote_addr,
+		)
 	}
 
-	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {
-		// Only `Discovery::addresses_of_peer` must be returning addresses to ensure that we
-		// don't return unwanted addresses.
-		Vec::new()
+	fn handle_established_outbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		peer: PeerId,
+		addr: &Multiaddr,
+		role_override: Endpoint,
+	) -> Result<THandler<Self>, ConnectionDenied> {
+		self.behaviour.handle_established_outbound_connection(
+			connection_id,
+			peer,
+			addr,
+			role_override,
+		)
+	}
+
+	fn handle_pending_outbound_connection(
+		&mut self,
+		_connection_id: ConnectionId,
+		_maybe_peer: Option<PeerId>,
+		_addresses: &[Multiaddr],
+		_effective_role: Endpoint,
+	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
+		// Only `Discovery::handle_pending_outbound_connection` must be returning addresses to
+		// ensure that we don't return unwanted addresses.
+		Ok(Vec::new())
 	}
 
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
@@ -396,8 +428,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		&mut self,
 		peer_id: PeerId,
 		connection_id: ConnectionId,
-		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
-		ConnectionHandler>::OutEvent,
+		event: THandlerOutEvent<Self>,
 	) {
 		self.behaviour.on_connection_handler_event(peer_id, connection_id, event);
 	}
@@ -406,7 +437,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		&mut self,
 		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
 		while let Poll::Ready(Some(validation_result)) =
 			self.sync_substream_validations.poll_next_unpin(cx)
 		{
@@ -426,19 +457,14 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 
 		let event = match self.behaviour.poll(cx, params) {
 			Poll::Pending => return Poll::Pending,
-			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
-			Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }) =>
-				return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }),
-			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
-				return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-					peer_id,
-					handler,
-					event,
-				}),
-			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
-				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
-			Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
-				return Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }),
+			Poll::Ready(ToSwarm::GenerateEvent(ev)) => ev,
+			Poll::Ready(ToSwarm::Dial { opts }) => return Poll::Ready(ToSwarm::Dial { opts }),
+			Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }) =>
+				return Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }),
+			Poll::Ready(ToSwarm::ReportObservedAddr { address, score }) =>
+				return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
+			Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }) =>
+				return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
 		};
 
 		let outcome = match event {
@@ -634,7 +660,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		};
 
 		if !matches!(outcome, CustomMessageOutcome::None) {
-			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome))
+			return Poll::Ready(ToSwarm::GenerateEvent(outcome))
 		}
 
 		// This block can only be reached if an event was pulled from the behaviour and that
