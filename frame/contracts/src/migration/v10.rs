@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! Don't rely on reserved balances keeping an account alive
-//! see https://github.com/paritytech/substrate/pull/13370
+//! See <https://github.com/paritytech/substrate/pull/13370>.
 
 use crate::{
 	address::AddressGenerator,

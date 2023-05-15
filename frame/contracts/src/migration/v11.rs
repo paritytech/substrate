@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! Overflowing bounded DeletionQueue.
-//! See https://github.com/paritytech/substrate/pull/13702
+//! See <https://github.com/paritytech/substrate/pull/13702>.
 
 use crate::{
 	migration::{IsFinished, Migrate},
