@@ -1968,6 +1968,9 @@ pub mod pallet_prelude {
 /// The generic `T` must not bound anything and a `where` clause is not allowed. That said,
 /// bounds and/or a where clause should not needed for any use-case.
 ///
+/// The name `RuntimeError` is reserved for generating an outer enum containing the errors
+/// of all pallets.
+///
 /// Also see: [`pallet::error`](`frame_support::pallet_macros::error`)
 ///
 /// # Event: `#[pallet::event]` (optional)

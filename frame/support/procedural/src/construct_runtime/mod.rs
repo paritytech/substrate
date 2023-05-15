@@ -303,7 +303,10 @@ fn construct_runtime_final_expansion(
 		}
 		// The outer enums are generated in this scope with the following names.
 		impl #scrate::sp_runtime::traits::GetRuntimeOuterEnumTypes for #name {
+			// The `RuntimeCall` must be defined for all runtimes.
 			type RuntimeCall = <#name as #system_path::Config>::RuntimeCall;
+			// The associated type `RuntimeEvent` is present in the `frame_system::Config` trait
+			// if and only if the `#[pallet::event]` is declared.
 			type RuntimeEvent = <#name as #system_path::Config>::RuntimeEvent;
 			type RuntimeError = RuntimeError;
 		}
