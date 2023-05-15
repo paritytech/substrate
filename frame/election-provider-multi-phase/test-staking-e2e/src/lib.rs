@@ -239,7 +239,7 @@ fn set_validation_intention_after_chilled() {
 			// current era, the validator is still part of the active validator set.
 			add_slash(&11);
 			assert!(Session::validators().contains(&11));
-			assert!(<Runtime as pallet_staking::Config>::VoterList::contains(&11) == false);
+			assert!(!<Runtime as pallet_staking::Config>::VoterList::contains(&11));
 			assert_eq!(
 				staking_events(),
 				[
