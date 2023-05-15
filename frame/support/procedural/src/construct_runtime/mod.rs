@@ -216,7 +216,7 @@ fn construct_runtime_final_expansion(
 ) -> Result<TokenStream2> {
 	let ExplicitRuntimeDeclaration {
 		name,
-		where_section: WhereSection { block, node_block, unchecked_extrinsic },
+		where_section: WhereSection { node_block, unchecked_extrinsic },
 		pallets,
 		pallets_token,
 	} = definition;
@@ -255,6 +255,9 @@ fn construct_runtime_final_expansion(
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(hidden_crate_name, "frame-support");
 	let scrate_decl = generate_hidden_includes(hidden_crate_name, "frame-support");
+
+	let frame_system = generate_crate_access_2018("frame-system")?;
+	let block = quote!(<#name as #frame_system::Config>::Block);
 
 	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate)?;
 

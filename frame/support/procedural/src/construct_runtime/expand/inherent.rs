@@ -23,7 +23,7 @@ use syn::{Ident, TypePath};
 
 pub fn expand_outer_inherent(
 	runtime: &Ident,
-	block: &TypePath,
+	block: &TokenStream,
 	unchecked_extrinsic: &TypePath,
 	pallet_decls: &[Pallet],
 	scrate: &TokenStream,

@@ -112,7 +112,6 @@ impl Parse for RuntimeDeclaration {
 
 #[derive(Debug)]
 pub struct WhereSection {
-	pub block: syn::TypePath,
 	pub node_block: syn::TypePath,
 	pub unchecked_extrinsic: syn::TypePath,
 }
@@ -132,7 +131,6 @@ impl Parse for WhereSection {
 			}
 			input.parse::<Token![,]>()?;
 		}
-		let block = remove_kind(input, WhereKind::Block, &mut definitions)?.value;
 		let node_block = remove_kind(input, WhereKind::NodeBlock, &mut definitions)?.value;
 		let unchecked_extrinsic =
 			remove_kind(input, WhereKind::UncheckedExtrinsic, &mut definitions)?.value;
@@ -143,7 +141,7 @@ impl Parse for WhereSection {
 			);
 			return Err(Error::new(*kind_span, msg))
 		}
-		Ok(Self { block, node_block, unchecked_extrinsic })
+		Ok(Self { node_block, unchecked_extrinsic })
 	}
 }
 

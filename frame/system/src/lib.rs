@@ -71,7 +71,7 @@ use sp_runtime::traits::TrailingZeroInput;
 use sp_runtime::{
 	generic,
 	traits::{
-		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
+		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, Block, BlockNumberProvider, Bounded,
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay,
 		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
@@ -207,6 +207,9 @@ pub mod pallet {
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
 		type BaseCallFilter: Contains<Self::RuntimeCall>;
+
+		/// The Block type used by the runtime
+		type Block: Block;
 
 		/// Block & extrinsics weights: base values and limits.
 		#[pallet::constant]
