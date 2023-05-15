@@ -64,13 +64,11 @@ use sp_runtime::{
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-// Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub use sp_consensus_babe::{AllowedSlots, AuthorityId, BabeEpochConfiguration, Slot};
+pub use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot};
 
 pub use pallet_balances::Call as BalancesCall;
 
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
-
 #[cfg(feature = "std")]
 pub use extrinsic::{ExtrinsicBuilder, Transfer};
 
@@ -630,10 +628,9 @@ impl_runtime_apis! {
 				slot_duration: Babe::slot_duration(),
 				epoch_length: EpochDuration::get(),
 				c: epoch_config.c,
-				authorities: SubstrateTest::authorities()
-					.into_iter().map(|x|(x, 1)).collect(),
-					randomness: Babe::randomness(),
-					allowed_slots: epoch_config.allowed_slots,
+				authorities: Babe::authorities().to_vec(),
+				randomness: Babe::randomness(),
+				allowed_slots: epoch_config.allowed_slots,
 			}
 		}
 

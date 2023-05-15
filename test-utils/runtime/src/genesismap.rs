@@ -113,7 +113,7 @@ impl GenesisStorageBuilder {
 			.authorities
 			.clone()
 			.into_iter()
-			.map(|id| sr25519::Public::from(id).into())
+			.map(|id| sr25519::Public::from(id))
 			.collect();
 
 		let genesis_config = GenesisConfig {
@@ -121,7 +121,11 @@ impl GenesisStorageBuilder {
 				code: self.wasm_code.clone().unwrap_or(wasm_binary_unwrap().to_vec()),
 			},
 			babe: pallet_babe::GenesisConfig {
-				authorities: authorities_sr25519.clone().into_iter().map(|x| (x, 1)).collect(),
+				authorities: authorities_sr25519
+					.clone()
+					.into_iter()
+					.map(|x| (x.into(), 1))
+					.collect(),
 				epoch_config: Some(crate::TEST_RUNTIME_BABE_EPOCH_CONFIGURATION),
 			},
 			substrate_test: substrate_test_pallet::GenesisConfig {
