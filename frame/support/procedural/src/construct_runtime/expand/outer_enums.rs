@@ -139,11 +139,14 @@ pub fn expand_outer_enum(
 		}
 	}
 
+	let extra_derives =
+		if enum_ty == OuterEnumType::Event { quote!(Clone, PartialEq, Eq,) } else { quote!() };
+
 	Ok(quote! {
 		#( #query_enum_part_macros )*
 
 		#[derive(
-			Clone, PartialEq, Eq,
+			#extra_derives
 			#scrate::codec::Encode,
 			#scrate::codec::Decode,
 			#scrate::scale_info::TypeInfo,
