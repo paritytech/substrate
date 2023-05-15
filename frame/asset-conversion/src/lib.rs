@@ -99,7 +99,7 @@ pub mod pallet {
 				Precision::Exact,
 				Preservation::{Expendable, Preserve},
 			},
-			AccountTouch,
+			AccountTouch, ContainsPair,
 		},
 		BoundedBTreeSet, PalletId,
 	};
@@ -155,7 +155,8 @@ pub mod pallet {
 		/// Registry for the assets.
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
 			+ Mutate<Self::AccountId>
-			+ AccountTouch<Self::AssetId, Self::AccountId>;
+			+ AccountTouch<Self::AssetId, Self::AccountId>
+			+ ContainsPair<Self::AssetId, Self::AccountId>;
 
 		/// Registry for the lp tokens. Ideally only this pallet should have create permissions on
 		/// the assets.
@@ -203,8 +204,8 @@ pub mod pallet {
 		type BenchmarkHelper: BenchmarkHelper<Self::AssetId>;
 	}
 
-	/// Map from `PoolAssetId` to `PoolInfo`. This establishes whether a pool has been officially created
-	/// rather than people sending tokens directly to a pool's public account.
+	/// Map from `PoolAssetId` to `PoolInfo`. This establishes whether a pool has been officially
+	/// created rather than people sending tokens directly to a pool's public account.
 	#[pallet::storage]
 	pub type Pools<T: Config> =
 		StorageMap<_, Blake2_128Concat, PoolIdOf<T>, PoolInfo<T::PoolAssetId>, OptionQuery>;
@@ -301,11 +302,11 @@ pub mod pallet {
 		PoolExists,
 		/// Desired amount can't be zero.
 		WrongDesiredAmount,
-		/// Provided amount should be greater than or equal to the existential deposit/asset's minimal
-		/// amount.
+		/// Provided amount should be greater than or equal to the existential deposit/asset's
+		/// minimal amount.
 		AmountLessThanMinimal,
-		/// Reserve needs to always be greater than or equal to the existential deposit/asset's minimal
-		/// amount.
+		/// Reserve needs to always be greater than or equal to the existential deposit/asset's
+		/// minimal amount.
 		ReserveLeftLessThanMinimal,
 		/// Desired amount can't be equal to the pool reserve.
 		AmountOutTooHigh,
@@ -407,12 +408,12 @@ pub mod pallet {
 			)?;
 
 			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(asset1) {
-				if T::Assets::balance(asset, &pool_account).is_zero() {
+				if !T::Assets::contains(&asset, &pool_account) {
 					T::Assets::touch(asset, pool_account.clone(), sender.clone())?;
 				}
 			}
 			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(asset2) {
-				if T::Assets::balance(asset, &pool_account).is_zero() {
+				if !T::Assets::contains(&asset, &pool_account) {
 					T::Assets::touch(asset, pool_account.clone(), sender.clone())?;
 				}
 			}
