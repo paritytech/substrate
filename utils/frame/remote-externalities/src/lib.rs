@@ -22,10 +22,11 @@
 
 use async_recursion::async_recursion;
 use codec::{Decode, Encode};
+use futures_util::future;
 use indicatif::{ProgressBar, ProgressStyle};
 use jsonrpsee::{
 	core::params::ArrayParams,
-	http_client::{HttpClient, HttpClientBuilder},
+	http_client::{transport::HttpBackend, HttpClient, HttpClientBuilder},
 };
 use log::*;
 use serde::de::DeserializeOwned;
@@ -48,7 +49,8 @@ use std::{
 	path::{Path, PathBuf},
 	time::{Duration, Instant},
 };
-use substrate_rpc_client::{rpc_params, BatchRequestBuilder, ChainApi, ClientT, StateApi};
+use substrate_rpc_client::{rpc_params, BatchRequestBuilder, ChainApi, StateApi};
+use tower::retry::{Policy, Retry, RetryLayer};
 
 type KeyValue = (StorageKey, StorageData);
 type TopKeyValues = Vec<KeyValue>;
@@ -119,11 +121,48 @@ pub enum Transport {
 	/// Use the `URI` to open a new WebSocket connection.
 	Uri(String),
 	/// Use HTTP connection.
-	RemoteClient(HttpClient),
+	RemoteClient(HttpClient<Retry<RetryPolicy, HttpBackend>>),
+}
+
+#[derive(Debug, Clone)]
+struct RetryPolicy(usize);
+
+type Req = hyper::Request<hyper::body::Body>;
+type Res = hyper::Response<hyper::body::Body>;
+
+impl<E> Policy<Req, Res, E> for RetryPolicy {
+	type Future = future::Ready<Self>;
+
+	fn retry(&self, req: &Req, result: Result<&Res, &E>) -> Option<Self::Future> {
+		match result {
+			Ok(_) => {
+				// Treat all `Response`s as success,
+				// so don't retry...
+				None
+			},
+			Err(_) => {
+				// Treat all errors as failures...
+				// But we limit the number of attempts...
+				if self.0 > 0 {
+					// Try again!
+					Some(future::ready(RetryPolicy(self.0 - 1)))
+				} else {
+					// Used all our attempts, no retry...
+					None
+				}
+			},
+		}
+	}
+
+	fn clone_request(&self, req: &Req) -> Option<Req> {
+		None
+		// TODO: enable cloning the req
+		// Some(req.clone())
+	}
 }
 
 impl Transport {
-	fn as_client(&self) -> Option<&HttpClient> {
+	fn as_client(&self) -> Option<&HttpClient<Retry<RetryPolicy, HttpBackend>>> {
 		match self {
 			Self::RemoteClient(client) => Some(client),
 			_ => None,
@@ -150,8 +189,12 @@ impl Transport {
 			} else {
 				uri.clone()
 			};
+			let middleware = tower::ServiceBuilder::new().layer(RetryLayer::new(RetryPolicy(5)));
+
 			let http_client = HttpClientBuilder::default()
-				.max_request_body_size(u32::MAX)
+				.set_middleware(middleware)
+				.max_request_size(u32::MAX)
+				.max_response_size(u32::MAX)
 				.request_timeout(std::time::Duration::from_secs(60 * 5))
 				.build(uri)
 				.map_err(|e| {
@@ -172,8 +215,8 @@ impl From<String> for Transport {
 	}
 }
 
-impl From<HttpClient> for Transport {
-	fn from(client: HttpClient) -> Self {
+impl From<HttpClient<Retry<RetryPolicy, HttpBackend>>> for Transport {
+	fn from(client: HttpClient<Retry<RetryPolicy, HttpBackend>>) -> Self {
 		Transport::RemoteClient(client)
 	}
 }
@@ -203,7 +246,7 @@ pub struct OnlineConfig<B: BlockT> {
 
 impl<B: BlockT> OnlineConfig<B> {
 	/// Return rpc (http) client reference.
-	fn rpc_client(&self) -> &HttpClient {
+	fn rpc_client(&self) -> &HttpClient<Retry<RetryPolicy, HttpBackend>> {
 		self.transport
 			.as_client()
 			.expect("http client must have been initialized by now; qed.")
@@ -439,7 +482,7 @@ where
 	/// ```
 	#[async_recursion]
 	async fn get_storage_data_dynamic_batch_size(
-		client: &HttpClient,
+		client: &HttpClient<Retry<RetryPolicy, HttpBackend>>,
 		payloads: Vec<(String, ArrayParams)>,
 		batch_size: usize,
 		bar: &ProgressBar,
@@ -607,7 +650,7 @@ where
 
 	/// Get the values corresponding to `child_keys` at the given `prefixed_top_key`.
 	pub(crate) async fn rpc_child_get_storage_paged(
-		client: &HttpClient,
+		client: &HttpClient<Retry<RetryPolicy, HttpBackend>>,
 		prefixed_top_key: &StorageKey,
 		child_keys: Vec<StorageKey>,
 		at: B::Hash,
@@ -660,7 +703,7 @@ where
 	}
 
 	pub(crate) async fn rpc_child_get_keys(
-		client: &HttpClient,
+		client: &HttpClient<Retry<RetryPolicy, HttpBackend>>,
 		prefixed_top_key: &StorageKey,
 		child_prefix: StorageKey,
 		at: B::Hash,
