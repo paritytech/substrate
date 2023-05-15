@@ -15,10 +15,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod v10;
-pub mod v11;
-pub mod v9;
+//! Migration framework for pallets.
 
+/// Macro to include all migration modules.
+/// We only want to make these modules public when `try-runtime` is
+/// enabled, so we can use them in pre and post upgrade try-runtime methods.
+macro_rules! use_modules {
+    ($($module:ident),*) => {
+        $(
+            #[cfg(feature = "try-runtime")]
+            pub mod $module;
+            #[cfg(not(feature = "try-runtime"))]
+            mod $module;
+        )*
+    };
+}
+
+use_modules!(v9, v10, v11);
 use crate::{weights::WeightInfo, Config, Error, MigrationInProgress, Pallet, Weight, LOG_TARGET};
 use codec::{Codec, Decode};
 use frame_support::{
