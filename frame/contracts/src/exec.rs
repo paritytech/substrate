@@ -1067,7 +1067,7 @@ where
 		to: &T::AccountId,
 		value: BalanceOf<T>,
 	) -> DispatchResult {
-		if !value.is_zero() {
+		if !value.is_zero() && from != to {
 			T::Fungible::transfer(from, to, value, preservation)
 				.map_err(|_| Error::<T>::TransferFailed)?;
 		}
