@@ -236,6 +236,9 @@ fn construct_runtime_final_expansion(
 		))
 	}
 
+	// The path to the `System` pallet.
+	let system_path = &system_pallet.path;
+
 	let features = pallets
 		.iter()
 		.filter_map(|decl| {
@@ -301,9 +304,7 @@ fn construct_runtime_final_expansion(
 		// The outer enums are generated in this scope with the following names.
 		impl #scrate::sp_runtime::traits::GetRuntimeOuterEnumTypes for #name {
 			// The `RuntimeCall` must be defined for all runtimes.
-			// Use our generated `RuntimeCall` to not depind on frame_system being
-			// available in the path.
-			type RuntimeCall = RuntimeCall;
+			type RuntimeCall = <#name as #system_path::Config>::RuntimeCall;
 			// The associated type `RuntimeEvent` is present in the `frame_system::Config` trait
 			// if and only if the `#[pallet::event]` is declared. However, fallback to our
 			// generated outer `RuntimeEvent` enum to ensure consistency with pallets that don't
