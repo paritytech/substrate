@@ -21,7 +21,7 @@
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
 
 use sp_runtime::{DispatchError, DispatchResult};
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec, vec};
 
 pub mod offence;
 
