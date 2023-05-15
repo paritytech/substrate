@@ -52,6 +52,7 @@ fn invalid_version(version: StorageVersion) -> ! {
 	panic!("Required migration {version:?} not supported by this runtime. This is a bug.");
 }
 
+/// The cursor used to store the state of the current migration step.
 pub type Cursor = BoundedVec<u8, ConstU32<1024>>;
 
 // In benchmark and tests we use noop migrations, to test and bench the migration framework itself.
