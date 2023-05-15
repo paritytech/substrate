@@ -204,7 +204,9 @@ pub struct ExtrinsicWrapper<Xt>(Xt);
 
 impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
 	type Call = ();
-	type SignaturePayload = ();
+	type SignatureAddress = ();
+	type Signature = ();
+	type SignatureExtra = ();
 
 	fn is_signed(&self) -> Option<bool> {
 		None
@@ -286,14 +288,14 @@ where
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub struct TestXt<Call, Extra> {
 	/// Signature of the extrinsic.
-	pub signature: Option<(u64, Extra)>,
+	pub signature: Option<(u64, (), Extra)>,
 	/// Call of the extrinsic.
 	pub call: Call,
 }
 
 impl<Call, Extra> TestXt<Call, Extra> {
 	/// Create a new `TextXt`.
-	pub fn new(call: Call, signature: Option<(u64, Extra)>) -> Self {
+	pub fn new(call: Call, signature: Option<(u64, (), Extra)>) -> Self {
 		Self { call, signature }
 	}
 }
@@ -333,13 +335,18 @@ impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Ca
 
 impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra> {
 	type Call = Call;
-	type SignaturePayload = (u64, Extra);
+	type SignatureAddress = u64;
+	type Signature = ();
+	type SignatureExtra = Extra;
 
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
 	}
 
-	fn new(c: Call, sig: Option<Self::SignaturePayload>) -> Option<Self> {
+	fn new(
+		c: Call,
+		sig: Option<(Self::SignatureAddress, Self::Signature, Self::SignatureExtra)>,
+	) -> Option<Self> {
 		Some(TestXt { signature: sig, call: c })
 	}
 }
@@ -376,7 +383,7 @@ where
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
-		if let Some((ref id, ref extra)) = self.signature {
+		if let Some((ref id, _, ref extra)) = self.signature {
 			Extra::validate(extra, id, &self.call, info, len)
 		} else {
 			let valid = Extra::validate_unsigned(&self.call, info, len)?;
@@ -392,7 +399,7 @@ where
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> ApplyExtrinsicResultWithInfo<PostDispatchInfoOf<Self::Call>> {
-		let maybe_who = if let Some((who, extra)) = self.signature {
+		let maybe_who = if let Some((who, _, extra)) = self.signature {
 			Extra::pre_dispatch(extra, &who, &self.call, info, len)?;
 			Some(who)
 		} else {

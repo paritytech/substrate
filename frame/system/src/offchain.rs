@@ -86,7 +86,11 @@ where
 	/// Submit transaction onchain by providing the call and an optional signature
 	pub fn submit_transaction(
 		call: <T as SendTransactionTypes<LocalCall>>::OverarchingCall,
-		signature: Option<<T::Extrinsic as ExtrinsicT>::SignaturePayload>,
+		signature: Option<(
+			<T::Extrinsic as ExtrinsicT>::SignatureAddress,
+			<T::Extrinsic as ExtrinsicT>::Signature,
+			<T::Extrinsic as ExtrinsicT>::SignatureExtra,
+		)>,
 	) -> Result<(), ()> {
 		let xt = T::Extrinsic::new(call, signature).ok_or(())?;
 		sp_io::offchain::submit_transaction(xt.encode())
@@ -487,7 +491,14 @@ pub trait CreateSignedTransaction<LocalCall>:
 		public: Self::Public,
 		account: Self::AccountId,
 		nonce: Self::Index,
-	) -> Option<(Self::OverarchingCall, <Self::Extrinsic as ExtrinsicT>::SignaturePayload)>;
+	) -> Option<(
+		Self::OverarchingCall,
+		(
+			<Self::Extrinsic as ExtrinsicT>::SignatureAddress,
+			<Self::Extrinsic as ExtrinsicT>::Signature,
+			<Self::Extrinsic as ExtrinsicT>::SignatureExtra,
+		),
+	)>;
 }
 
 /// A message signer.

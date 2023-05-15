@@ -46,7 +46,9 @@ impl serde::Serialize for Extrinsic {
 
 impl ExtrinsicT for Extrinsic {
 	type Call = Extrinsic;
-	type SignaturePayload = ();
+	type SignatureAddress = ();
+	type Signature = ();
+	type SignatureExtra = ();
 
 	fn is_signed(&self) -> Option<bool> {
 		if let Extrinsic::IncludeData(_) = *self {
@@ -56,7 +58,10 @@ impl ExtrinsicT for Extrinsic {
 		}
 	}
 
-	fn new(call: Self::Call, _signature_payload: Option<Self::SignaturePayload>) -> Option<Self> {
+	fn new(
+		call: Self::Call,
+		_signature_payload: Option<(Self::SignatureAddress, Self::Signature, Self::SignatureExtra)>,
+	) -> Option<Self> {
 		Some(call)
 	}
 }

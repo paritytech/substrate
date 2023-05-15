@@ -106,13 +106,20 @@ impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
 {
 	type Call = Call;
 
-	type SignaturePayload = (Address, Signature, Extra);
+	type SignatureAddress = Address;
+
+	type Signature = Signature;
+
+	type SignatureExtra = Extra;
 
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
 	}
 
-	fn new(function: Call, signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
+	fn new(
+		function: Call,
+		signed_data: Option<(Self::SignatureAddress, Self::Signature, Self::SignatureExtra)>,
+	) -> Option<Self> {
 		Some(if let Some((address, signature, extra)) = signed_data {
 			Self::new_signed(function, address, signature, extra)
 		} else {
