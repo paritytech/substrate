@@ -64,13 +64,11 @@ use sp_runtime::{
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-// Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub use sp_consensus_babe::{AllowedSlots, AuthorityId, BabeEpochConfiguration, Slot};
+pub use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot};
 
 pub use pallet_balances::Call as BalancesCall;
 
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
-
 #[cfg(feature = "std")]
 pub use extrinsic::{ExtrinsicBuilder, Transfer};
 
@@ -616,10 +614,7 @@ impl_runtime_apis! {
 		}
 
 		fn authorities() -> Vec<AuraId> {
-			SubstrateTest::authorities().into_iter().map(|a| {
-				let authority: sr25519::Public = a.into();
-				AuraId::from(authority)
-			}).collect()
+			SubstrateTest::authorities().into_iter().map(|auth| AuraId::from(auth)).collect()
 		}
 	}
 
@@ -630,10 +625,9 @@ impl_runtime_apis! {
 				slot_duration: Babe::slot_duration(),
 				epoch_length: EpochDuration::get(),
 				c: epoch_config.c,
-				authorities: SubstrateTest::authorities()
-					.into_iter().map(|x|(x, 1)).collect(),
-					randomness: Babe::randomness(),
-					allowed_slots: epoch_config.allowed_slots,
+				authorities: Babe::authorities().to_vec(),
+				randomness: Babe::randomness(),
+				allowed_slots: epoch_config.allowed_slots,
 			}
 		}
 
@@ -1087,7 +1081,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000 * currency::DOLLARS,
 		)
-		.build_storage()
+		.build()
 		.into()
 	}
 
@@ -1095,7 +1089,7 @@ mod tests {
 	fn validate_storage_keys() {
 		assert_eq!(
 			genesismap::GenesisStorageBuilder::default()
-				.build_storage()
+				.build()
 				.top
 				.keys()
 				.cloned()
