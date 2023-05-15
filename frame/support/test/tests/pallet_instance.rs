@@ -420,6 +420,21 @@ fn error_expand() {
 }
 
 #[test]
+fn runtime_error_outer_enum_expand() {
+	// assert that all variants of the Example pallet are included into the
+	// RuntimeError definition.
+	match RuntimeError::Example(pallet::Error::InsufficientProposersBalance) {
+		RuntimeError::Example(example) => match example {
+			pallet::Error::InsufficientProposersBalance => (),
+			pallet::Error::NonExistentStorageValue => (),
+			// Extra pattern added by `construct_runtime`.
+			pallet::Error::__Ignore(_, _) => (),
+		},
+		_ => (),
+	};
+}
+
+#[test]
 fn instance_expand() {
 	// assert same type
 	let _: pallet::__InherentHiddenInstance = ();
