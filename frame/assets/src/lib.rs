@@ -369,6 +369,7 @@ pub mod pallet {
 	>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		/// Genesis assets: id, owner, is_sufficient, min_balance
 		pub assets: Vec<(T::AssetId, T::AccountId, bool, T::Balance)>,
@@ -376,17 +377,6 @@ pub mod pallet {
 		pub metadata: Vec<(T::AssetId, Vec<u8>, Vec<u8>, u8)>,
 		/// Genesis accounts: id, account_id, balance
 		pub accounts: Vec<(T::AssetId, T::AccountId, T::Balance)>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
-		fn default() -> Self {
-			Self {
-				assets: Default::default(),
-				metadata: Default::default(),
-				accounts: Default::default(),
-			}
-		}
 	}
 
 	#[pallet::genesis_build]
