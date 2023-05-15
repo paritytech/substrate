@@ -1240,9 +1240,11 @@ mod tests {
 		})
 	}
 
+	use crate::genesismap::GenesisStorageBuilder;
 	use sc_executor::{error::Result, NativeElseWasmExecutor, WasmExecutor};
-	use sp_core::traits::{CallContext, CodeExecutor, RuntimeCode};
-	use sp_state_machine::TestExternalities;
+	use sp_core::traits::{CallContext, CodeExecutor, Externalities, RuntimeCode};
+	use sp_state_machine::BasicExternalities;
+	use std::{fs, io::Write};
 	use storage_key_generator::hex;
 
 	pub struct LocalExecutorDispatch;
@@ -1259,7 +1261,6 @@ mod tests {
 		}
 	}
 
-	use sp_core::traits::Externalities;
 	pub fn executor_call(
 		// t: &mut TestExternalities<BlakeTwo256>,
 		t: &mut dyn Externalities,
@@ -1278,9 +1279,6 @@ mod tests {
 		)
 		.call(t, &runtime_code, method, data, use_native, CallContext::Offchain)
 	}
-
-	use sp_state_machine::BasicExternalities;
-	use std::{fs, io::Write};
 
 	#[test]
 	fn build_minimal_genesis_config_works() {
@@ -1330,11 +1328,9 @@ mod tests {
 
 	#[test]
 	fn default_config_as_json_works() {
-		use std::{fs, io::Write};
-
 		sp_tracing::try_init_simple();
 		let mut t = BasicExternalities::new_empty();
-		let mut r = executor_call(&mut t, "GenesisBuilder_default_config_as_json", &vec![])
+		let r = executor_call(&mut t, "GenesisBuilder_default_config_as_json", &vec![])
 			.0
 			.unwrap();
 		let r = Vec::<u8>::decode(&mut &r[..]).unwrap();
@@ -1344,7 +1340,6 @@ mod tests {
 		assert_eq!(expected.to_string(), json);
 	}
 
-	use crate::genesismap::GenesisStorageBuilder;
 	#[test]
 	fn write_default_config_to_tmp_file() {
 		if std::env::var("WRITE_DEFAULT_JSON_FOR_SRT_GC").is_ok() {
@@ -1358,7 +1353,7 @@ mod tests {
 			let j = json::to_string(&GenesisStorageBuilder::default().genesis_config())
 				.unwrap()
 				.into_bytes();
-			file.write_all(&j);
+			file.write_all(&j).unwrap();
 		}
 	}
 
@@ -1369,10 +1364,9 @@ mod tests {
 
 		let mut t = BasicExternalities::new_empty();
 		//build_genesis_config_from_json
-		let mut r =
-			executor_call(&mut t, "GenesisBuilder_build_genesis_config_from_json", &j.encode())
-				.0
-				.unwrap();
+		executor_call(&mut t, "GenesisBuilder_build_genesis_config_from_json", &j.encode())
+			.0
+			.unwrap();
 
 		let mut keys = t.into_storages().top.keys().cloned().map(hex).collect::<Vec<String>>();
 
