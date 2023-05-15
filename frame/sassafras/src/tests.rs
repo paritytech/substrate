@@ -149,7 +149,7 @@ fn on_first_block_after_genesis() {
 		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("c3bcc82b9636bf12a9ba858ea6855b0b5a7a57803370e57cd87223f9d8d1a896"),
+			h2b("eb169de47822691578f74204ace5bc57c38f86f97e15a8abf71114541e7ca9e8"),
 		);
 
 		// Header data check
@@ -201,7 +201,7 @@ fn on_normal_block() {
 		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("c3bcc82b9636bf12a9ba858ea6855b0b5a7a57803370e57cd87223f9d8d1a896"),
+			h2b("eb169de47822691578f74204ace5bc57c38f86f97e15a8abf71114541e7ca9e8"),
 		);
 
 		let header = finalize_block(end_block);
@@ -219,7 +219,7 @@ fn on_normal_block() {
 		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("a44c15061d80d1f1b58abb3e002b9bd2d7135b3c8bef95a3af2ae5079a901135"),
+			h2b("c5e06d78bf5351b3a740c6838976e571ee14c595a206278f3f4ce0157f538318"),
 		);
 
 		// Header data check
@@ -257,12 +257,12 @@ fn produce_epoch_change_digest() {
 		println!("{}", b2h(NextRandomness::<Test>::get()));
 		assert_eq!(
 			NextRandomness::<Test>::get(),
-			h2b("fec42ab12d7497cc8863b078774560790a5f1ee38d2b3a6b7448c4cc318c6e24"),
+			h2b("a7abdd705eb72383f60f6f093dea4bbfb65a1992099b4928ca30076f71a73682"),
 		);
 		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("ba92c7ea134d29bd4c663e9a5811c0c76972606acbfdad354ab3cc9d400f756c"),
+			h2b("a9d8fc258ba0274d7815664b4e153904c44d2e850e98cffc0ba03ea018611348"),
 		);
 
 		let header = finalize_block(end_block);
@@ -279,12 +279,12 @@ fn produce_epoch_change_digest() {
 		println!("{}", b2h(NextRandomness::<Test>::get()));
 		assert_eq!(
 			NextRandomness::<Test>::get(),
-			h2b("fec42ab12d7497cc8863b078774560790a5f1ee38d2b3a6b7448c4cc318c6e24"),
+			h2b("a7abdd705eb72383f60f6f093dea4bbfb65a1992099b4928ca30076f71a73682"),
 		);
 		println!("{}", b2h(RandomnessAccumulator::<Test>::get()));
 		assert_eq!(
 			RandomnessAccumulator::<Test>::get(),
-			h2b("cea876f919ae1f6cdc8a93e91199d75bd162fb0b930df7168a66cdafc3ddd23c"),
+			h2b("53b4e087baba183a2973552ba57b6c8f489959c8e5f838d59884d37c6d494e2f"),
 		);
 
 		// Header data check
@@ -378,11 +378,11 @@ fn submit_segments_works() {
 		assert_eq!(meta.segments_count, segments_count);
 		assert_eq!(meta.tickets_count, [0, 0]);
 		let seg = NextTicketsSegments::<Test>::get(0);
-		assert_eq!(seg.len(), 5);
+		assert_eq!(seg.len(), 3);
 		let seg = NextTicketsSegments::<Test>::get(1);
-		assert_eq!(seg.len(), 6);
+		assert_eq!(seg.len(), 5);
 		let seg = NextTicketsSegments::<Test>::get(2);
-		assert_eq!(seg.len(), 4);
+		assert_eq!(seg.len(), 5);
 	})
 }
 
@@ -525,8 +525,8 @@ fn submit_enact_claim_tickets() {
 		let mut expected_ids: Vec<_> = tickets
 			.iter()
 			.map(|t| {
-				let epoch_idx = Sassafras::epoch_index();
-				let randomness = Sassafras::randomness();
+				let epoch_idx = Sassafras::epoch_index() + 1;
+				let randomness = Sassafras::next_randomness();
 				let vrf_input = sp_consensus_sassafras::ticket_id_vrf_input(
 					&randomness,
 					t.data.attempt_idx,
