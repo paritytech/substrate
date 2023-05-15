@@ -9361,6 +9361,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-genesis-builder"
+version = "0.1.0-dev"
+dependencies = [
+ "sp-api",
+ "sp-std",
+]
+
+[[package]]
 name = "sc-informant"
 version = "0.10.0-dev"
 dependencies = [
@@ -11770,9 +11778,11 @@ dependencies = [
  "parity-scale-codec",
  "sc-block-builder",
  "sc-executor",
+ "sc-genesis-builder",
  "sc-service",
  "scale-info",
  "serde",
+ "serde_json",
  "sp-api",
  "sp-application-crypto",
  "sp-block-builder",
