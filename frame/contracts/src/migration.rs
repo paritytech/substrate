@@ -18,14 +18,14 @@
 //! Migration framework for pallets.
 
 /// Macro to include all migration modules.
-/// We only want to make these modules public when `try-runtime` is
-/// enabled, so we can use them in pre and post upgrade try-runtime methods.
+/// We only want to make these modules public when `runtime-benchmarks` is
+/// enabled, so we can access migration code in benchmarks.
 macro_rules! use_modules {
     ($($module:ident),*) => {
         $(
-            #[cfg(feature = "try-runtime")]
+            #[cfg(feature = "runtime-benchmarks")]
             pub mod $module;
-            #[cfg(not(feature = "try-runtime"))]
+            #[cfg(not(feature = "runtime-benchmarks"))]
             mod $module;
         )*
     };
