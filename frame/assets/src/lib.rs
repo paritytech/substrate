@@ -1651,7 +1651,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> AccountTouch<T::AssetId, T::AccountId> for Pallet<T, I> {
 		type Balance = DepositBalanceOf<T, I>;
 
-		fn deposit_required() -> Self::Balance {
+		fn deposit_required(_: T::AssetId) -> Self::Balance {
 			T::AssetAccountDeposit::get()
 		}
 
