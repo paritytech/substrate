@@ -85,11 +85,8 @@ fn check_header<B: BlockT + Sized>(
 
 	// Check slot-vrf proof
 
-	let vrf_input = slot_claim_vrf_input(&config.randomness, pre_digest.slot, epoch.epoch_idx);
-	if !authority_id
-		.as_inner_ref()
-		.vrf_verify(&vrf_input.into(), &pre_digest.vrf_signature)
-	{
+	let data = slot_claim_sign_data(&config.randomness, pre_digest.slot, epoch.epoch_idx);
+	if !authority_id.as_inner_ref().vrf_verify(&data, &pre_digest.vrf_signature) {
 		return Err(sassafras_err(Error::VrfVerificationFailed))
 	}
 

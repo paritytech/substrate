@@ -36,7 +36,7 @@ sp-consensus-sassafras = { version = "0.3.2-dev", path = "../../../primitives/co
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore", features = ["bandersnatch-experimental"] }
+sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]

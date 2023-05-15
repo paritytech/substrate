@@ -33,20 +33,21 @@ impl RuntimePublic for Public {
 	type Signature = Signature;
 
 	fn all(_key_type: KeyTypeId) -> Vec<Self> {
-		Vec::new()
-	}
-
-	fn generate_pair(_key_type: KeyTypeId, _seed: Option<Vec<u8>>) -> Self {
-		// sp_io::crypto::ecdsa_generate(key_type, seed)
+		// sp_io::crypto::bandersnatch_public_keys(key_type)
 		unimplemented!()
 	}
 
+	fn generate_pair(key_type: KeyTypeId, seed: Option<Vec<u8>>) -> Self {
+		sp_io::crypto::bandersnatch_generate(key_type, seed)
+	}
+
 	fn sign<M: AsRef<[u8]>>(&self, _key_type: KeyTypeId, _msg: &M) -> Option<Self::Signature> {
-		None
+		// sp_io::crypto::bandersnatch_sign(key_type, self, msg.as_ref())
+		unimplemented!()
 	}
 
 	fn verify<M: AsRef<[u8]>>(&self, _msg: &M, _signature: &Self::Signature) -> bool {
-		// sp_io::crypto::ecdsa_verify(signature, msg.as_ref(), self)
+		// sp_io::crypto::bandersnatch_verify(signature, msg.as_ref(), self)
 		unimplemented!()
 	}
 

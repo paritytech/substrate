@@ -44,7 +44,3 @@ full_crypto = [
 	"sp-io/disable_panic_handler",
 	"sp-io/disable_oom",
 ]
-
-bandersnatch-experimental = [
-	"sp-core/bandersnatch-experimental",
-]

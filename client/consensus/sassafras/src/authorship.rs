@@ -21,8 +21,8 @@
 use super::*;
 
 use sp_consensus_sassafras::{
-	digests::PreDigest, ticket_id, ticket_id_threshold, AuthorityId, Slot, TicketClaim, TicketData,
-	TicketEnvelope, TicketId,
+	digests::PreDigest, slot_claim_sign_data, ticket_id, ticket_id_threshold, AuthorityId, Slot,
+	TicketClaim, TicketData, TicketEnvelope, TicketId,
 };
 use sp_core::{twox_64, ByteArray};
 
@@ -53,12 +53,11 @@ pub(crate) fn claim_slot(
 
 	let (authority_idx, ticket_claim) = match maybe_ticket {
 		Some((ticket_id, ticket_data)) => {
-			log::debug!(target: LOG_TARGET, "[TRY PRIMARY]");
+			log::debug!(target: LOG_TARGET, "[TRY PRIMARY (slot {slot}, tkt = {ticket_id:16x})]");
 			let (authority_idx, ticket_secret) = epoch.tickets_aux.get(&ticket_id)?.clone();
 			log::debug!(
 				target: LOG_TARGET,
-				"Ticket = [ticket: {:x?}, auth: {}, attempt: {}]",
-				ticket_id,
+				"   got ticket: auth: {}, attempt: {}",
 				authority_idx,
 				ticket_data.attempt_idx
 			);
@@ -69,16 +68,16 @@ pub(crate) fn claim_slot(
 			(authority_idx, Some(claim))
 		},
 		None => {
-			log::debug!(target: LOG_TARGET, "[TRY SECONDARY]");
+			log::debug!(target: LOG_TARGET, "[TRY SECONDARY (slot {slot})]");
 			(secondary_authority_index(slot, config), None)
 		},
 	};
 
 	let authority_id = config.authorities.get(authority_idx as usize).map(|auth| &auth.0)?;
 
-	let vrf_input = slot_claim_vrf_input(&config.randomness, slot, epoch.epoch_idx);
+	let data = slot_claim_sign_data(&config.randomness, slot, epoch.epoch_idx);
 	let vrf_signature = keystore
-		.bandersnatch_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &vrf_input.into())
+		.bandersnatch_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &data)
 		.ok()
 		.flatten()?;
 
@@ -103,7 +102,8 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 		config.authorities.len() as u32,
 	);
 	// TODO-SASS-P4 remove me
-	log::debug!(target: LOG_TARGET, "Tickets threshold: {:016x}", threshold);
+	log::debug!(target: LOG_TARGET, "Generating tickets for epoch {} @ slot {}", epoch.epoch_idx, epoch.start_slot);
+	log::debug!(target: LOG_TARGET, "    threshold: {threshold:016x}");
 
 	let authorities = config.authorities.iter().enumerate().map(|(index, a)| (index, &a.0));
 	for (authority_idx, authority_id) in authorities {
@@ -140,6 +140,7 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 
 		for attempt in 0..max_attempts {
 			if let Some((envelope, ticket_id, ticket_secret)) = make_ticket(attempt) {
+				log::debug!(target: LOG_TARGET, "    → {ticket_id:016x}");
 				epoch
 					.tickets_aux
 					.insert(ticket_id, (authority_idx as AuthorityIndex, ticket_secret));
@@ -220,14 +221,9 @@ where
 		slot: Slot,
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) -> Option<Self::Claim> {
-		debug!(target: LOG_TARGET, "Attempting to claim slot {}", slot);
-
 		// Get the next slot ticket from the runtime.
 		let maybe_ticket =
 			self.client.runtime_api().slot_ticket(parent_header.hash(), slot).ok()?;
-
-		// TODO-SASS-P2: remove me
-		debug!(target: LOG_TARGET, "parent {}", parent_header.hash());
 
 		let claim = authorship::claim_slot(
 			slot,

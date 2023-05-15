@@ -704,48 +704,24 @@ impl_runtime_apis! {
 		fn submit_tickets_unsigned_extrinsic(
 			tickets: Vec<sp_consensus_sassafras::TicketEnvelope>
 		) -> bool {
-			<pallet_sassafras::Pallet<Runtime>>::submit_tickets_unsigned_extrinsic(tickets)
+			Sassafras::submit_tickets_unsigned_extrinsic(tickets)
 		}
 
 		fn current_epoch() -> sp_consensus_sassafras::Epoch {
-			let authorities = SubstrateTest::authorities().into_iter().map(|a| {
-				let authority: sr25519::Public = a.into();
-				(SassafrasId::from(authority), 1)
-			}).collect();
-			// DAVXY TODO: why are we patching this?
-			// maybe we should configure it in the genesis
-			// (same beloe for next epoch...)
-			let params = sp_consensus_sassafras::SassafrasEpochConfiguration {
-				redundancy_factor: 1,
-				attempts_number: 32,
-			};
-			let mut epoch = <pallet_sassafras::Pallet<Runtime>>::current_epoch();
-			epoch.config.authorities = authorities;
-			epoch.config.threshold_params = params;
-			epoch
+			Sassafras::current_epoch()
 		}
 
 		fn next_epoch() -> sp_consensus_sassafras::Epoch {
-			let authorities = SubstrateTest::authorities().into_iter().map(|a| {
-				let authority: sr25519::Public = a.into();
-				(SassafrasId::from(authority), 1)
-			}).collect();
-			let params = sp_consensus_sassafras::SassafrasEpochConfiguration {
-				redundancy_factor: 1,
-				attempts_number: 32,
-			};
-			let mut epoch = <pallet_sassafras::Pallet<Runtime>>::next_epoch();
-			epoch.config.authorities = authorities;
-			epoch.config.threshold_params = params;
-			epoch
+			Sassafras::next_epoch()
 		}
 
 		fn slot_ticket_id(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::TicketId> {
-			<pallet_sassafras::Pallet<Runtime>>::slot_ticket_id(slot)
+			Sassafras::slot_ticket_id(slot)
 		}
 
-		fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<(sp_consensus_sassafras::TicketId,
-	sp_consensus_sassafras::TicketData)> { 		<pallet_sassafras::Pallet<Runtime>>::slot_ticket(slot)
+		fn slot_ticket(slot: sp_consensus_sassafras::Slot)
+			-> Option<(sp_consensus_sassafras::TicketId, sp_consensus_sassafras::TicketData)> {
+			Sassafras::slot_ticket(slot)
 		}
 
 		fn generate_key_ownership_proof(

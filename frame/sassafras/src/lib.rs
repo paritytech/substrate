@@ -80,7 +80,7 @@ pub mod session;
 // Re-export pallet symbols.
 pub use pallet::*;
 
-const LOG_TARGET: &str = "runtime::sassafras 🌳";
+const LOG_TARGET: &str = "sassafras::runtime 🌳";
 
 const RANDOMNESS_VRF_CONTEXT: &[u8] = b"SassafrasRandomness";
 
@@ -353,7 +353,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_none(origin)?;
 
-			log::debug!(target: LOG_TARGET, "@@@@@@@@@@ received {} tickets", tickets.len());
+			log::debug!(target: LOG_TARGET, "Received {} tickets", tickets.len());
 
 			// Check tickets score
 			let next_auth = NextAuthorities::<T>::get();
@@ -367,8 +367,9 @@ pub mod pallet {
 				next_auth.len() as u32,
 			);
 
-			let epoch_idx = EpochIndex::<T>::get();
-			let randomness = CurrentRandomness::<T>::get();
+			// Get next epoch params
+			let randomness = NextRandomness::<T>::get();
+			let epoch_idx = EpochIndex::<T>::get() + 1;
 
 			let mut segment = BoundedVec::with_max_capacity();
 			for ticket in tickets.iter() {
@@ -387,7 +388,8 @@ pub mod pallet {
 			}
 
 			if !segment.is_empty() {
-				log::debug!(target: LOG_TARGET, "@@@@@@@@@@ appending segment with {} tickets", segment.len());
+				log::debug!(target: LOG_TARGET, "Appending segment with {} tickets", segment.len());
+				segment.iter().for_each(|t| log::debug!(target: LOG_TARGET, "  + {t:16x}"));
 				let mut metadata = TicketsMeta::<T>::get();
 				NextTicketsSegments::<T>::insert(metadata.segments_count, segment);
 				metadata.segments_count += 1;
