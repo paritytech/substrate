@@ -39,6 +39,12 @@ pub struct MetadataIR<T: Form = MetaForm> {
 	pub ty: T::Type,
 	/// Metadata of the Runtime API.
 	pub apis: Vec<RuntimeApiMetadataIR<T>>,
+	/// The type of the outer `RuntimeCall` enum.
+	pub call_enum_ty: T::Type,
+	/// The type of the outer `RuntimeEvent` enum.
+	pub event_enum_ty: T::Type,
+	/// The type of the outer `RuntimeError` enum.
+	pub error_enum_ty: T::Type,
 }
 
 /// Metadata of a runtime trait.

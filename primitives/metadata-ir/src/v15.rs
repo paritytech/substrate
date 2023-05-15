@@ -40,6 +40,9 @@ impl From<MetadataIR> for RuntimeMetadataV15 {
 			ir.extrinsic.into(),
 			ir.ty,
 			ir.apis.into_iter().map(Into::into).collect(),
+			ir.call_enum_ty,
+			ir.event_enum_ty,
+			ir.error_enum_ty,
 		)
 	}
 }

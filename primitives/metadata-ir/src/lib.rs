@@ -85,6 +85,9 @@ mod test {
 			},
 			ty: meta_type::<()>(),
 			apis: vec![],
+			call_enum_ty: meta_type::<()>(),
+			event_enum_ty: meta_type::<()>(),
+			error_enum_ty: meta_type::<()>(),
 		}
 	}
 
