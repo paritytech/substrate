@@ -202,18 +202,6 @@ pub enum Message {
 	Reject(IncomingIndex),
 }
 
-/// Message with oneshot ACK channel.
-#[derive(Debug)]
-pub struct AckedMessage(Message, oneshot::Sender<()>);
-
-#[cfg(test)]
-impl AckedMessage {
-	fn take(self) -> Message {
-		let _ = self.1.send(());
-		self.0
-	}
-}
-
 /// Opaque identifier for an incoming connection. Allocated by the network.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct IncomingIndex(pub u64);
@@ -271,7 +259,7 @@ pub struct Peerset {
 	protocol_controller_futures: JoinAll<BoxFuture<'static, ()>>,
 	/// Commands sent from protocol controllers to `Notifications`. The size of this vector never
 	/// changes.
-	from_controllers: TracingUnboundedReceiver<AckedMessage>,
+	from_controllers: TracingUnboundedReceiver<Message>,
 	/// Receiver for messages from the `PeersetHandle` and from `to_self`.
 	from_handle: TracingUnboundedReceiver<Action>,
 	/// Sending side of `from_handle`.
@@ -375,10 +363,7 @@ impl Stream for Peerset {
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		if let Poll::Ready(msg) = self.from_controllers.poll_next_unpin(cx) {
-			if let Some(AckedMessage(msg, tx_ack)) = msg {
-				// `Peerset` is polled directly by `Notifications`, so we can already send ACK here.
-				// Once `Peerset` is eliminated, ACKs must be sent by `Notifications`.
-				let _ = tx_ack.send(());
+			if let Some(msg) = msg {
 				return Poll::Ready(Some(msg))
 			} else {
 				debug!(

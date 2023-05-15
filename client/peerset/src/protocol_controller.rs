@@ -47,19 +47,12 @@ use log::{error, trace, warn};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_arithmetic::traits::SaturatedConversion;
 use std::{
-	collections::{HashMap, HashSet, VecDeque},
+	collections::{HashMap, HashSet},
 	time::{Duration, Instant},
 };
 use wasm_timer::Delay;
 
-use crate::{
-	peer_store::PeerStoreProvider, AckedMessage, IncomingIndex, Message, SetConfig, SetId,
-	LOG_TARGET,
-};
-
-/// Queueing that many outstanding events means that `Notifications` and `ProtocolController`
-/// are significantly out of sync.
-const OUTSTANDING_QUEUE_WARNING: usize = 10;
+use crate::{peer_store::PeerStoreProvider, IncomingIndex, Message, SetConfig, SetId, LOG_TARGET};
 
 /// External API actions.
 #[derive(Debug)]
@@ -85,28 +78,6 @@ enum Event {
 	IncomingConnection(PeerId, IncomingIndex),
 	/// Connection with the peer dropped.
 	Dropped(PeerId),
-}
-
-impl Action {
-	fn peer_id(&self) -> Option<&PeerId> {
-		match self {
-			Self::AddReservedPeer(peer_id) => Some(peer_id),
-			Self::RemoveReservedPeer(peer_id) => Some(peer_id),
-			Self::SetReservedPeers(_) => None,
-			Self::SetReservedOnly(_) => None,
-			Self::DisconnectPeer(peer_id) => Some(peer_id),
-			Self::GetReservedPeers(_) => None,
-		}
-	}
-}
-
-impl Event {
-	fn peer_id(&self) -> &PeerId {
-		match self {
-			Self::IncomingConnection(peer_id, _) => peer_id,
-			Self::Dropped(peer_id) => peer_id,
-		}
-	}
 }
 
 /// Shared handle to [`ProtocolController`]. Distributed around the code outside of the
@@ -202,34 +173,6 @@ impl Default for PeerState {
 	}
 }
 
-/// Outstanding events and actions for a peer that we can't process because we are waiting
-/// for an ACK.
-#[derive(Debug, Default)]
-struct Outstanding {
-	pending_ack: Option<oneshot::Receiver<()>>,
-	events: VecDeque<Event>,
-	actions: VecDeque<Action>,
-}
-
-impl Outstanding {
-	fn try_resolve_ack(&mut self) -> bool {
-		match self.pending_ack {
-			Some(ref mut pending_ack) =>
-				if pending_ack.try_recv().ok().flatten().is_some() {
-					self.pending_ack = None;
-					true
-				} else {
-					false
-				},
-			None => true,
-		}
-	}
-
-	fn is_empty(&self) -> bool {
-		self.pending_ack.is_none() && self.events.is_empty() && self.actions.is_empty()
-	}
-}
-
 /// Side of [`ProtocolHandle`] responsible for all the logic. Currently all instances are
 /// owned by [`crate::Peerset`], but they should eventually be moved to corresponding protocols.
 #[derive(Debug)]
@@ -258,16 +201,10 @@ pub struct ProtocolController {
 	/// Next time to allocate slots. This is done once per second.
 	next_periodic_alloc_slots: Instant,
 	/// Outgoing channel for messages to `Notifications`.
-	to_notifications: TracingUnboundedSender<AckedMessage>,
+	to_notifications: TracingUnboundedSender<Message>,
 	/// `PeerStore` handle for checking peer reputation values and getting connection candidates
 	/// with highest reputation.
 	peer_store: Box<dyn PeerStoreProvider>,
-	/// Pending ACKS
-	/// Outstanding events and actions per peer.
-	outstanding: HashMap<PeerId, Outstanding>,
-	/// If we have outstanding (global) `SetReservedOnly` action. It's processed once we receive
-	/// all pending ACKs.
-	outstanding_set_reserved_only: Option<bool>,
 }
 
 impl ProtocolController {
@@ -275,7 +212,7 @@ impl ProtocolController {
 	pub fn new(
 		set_id: SetId,
 		config: SetConfig,
-		to_notifications: TracingUnboundedSender<AckedMessage>,
+		to_notifications: TracingUnboundedSender<Message>,
 		peer_store: Box<dyn PeerStoreProvider>,
 	) -> (ProtocolHandle, ProtocolController) {
 		let (actions_tx, actions_rx) = tracing_unbounded("mpsc_api_protocol", 10_000);
@@ -298,8 +235,6 @@ impl ProtocolController {
 			next_periodic_alloc_slots: Instant::now(),
 			to_notifications,
 			peer_store,
-			outstanding: HashMap::new(),
-			outstanding_set_reserved_only: None,
 		};
 		(handle, controller)
 	}
@@ -315,25 +250,6 @@ impl ProtocolController {
 	/// Intended for tests only. Use `run` for driving [`ProtocolController`].
 	pub async fn next_action(&mut self) -> bool {
 		let either = loop {
-			// Resolve ACKs & process outstanding events/actions. We might want to do this after
-			// `alloc_slots`
-			if let Some(either) = self.resolve_acks_once() {
-				match either {
-					Either::Left(event) => self.process_event(event),
-					Either::Right(action) => self.process_action(action),
-				}
-				return true
-			}
-
-			// Apply postponed `SetReservedOnly` action
-			// TODO: we might need to do it after all events processing.
-			if self.outstanding.is_empty() {
-				if let Some(reserved_only) = self.outstanding_set_reserved_only.take() {
-					self.on_set_reserved_only(reserved_only);
-					return true
-				}
-			}
-
 			let mut next_alloc_slots = Delay::new_at(self.next_periodic_alloc_slots).fuse();
 
 			// See the module doc for why we use `select_biased!`.
@@ -354,68 +270,11 @@ impl ProtocolController {
 		};
 
 		match either {
-			Either::Left(event) => self.push_event(event),
-			Either::Right(action) => self.push_action(action),
+			Either::Left(event) => self.process_event(event),
+			Either::Right(action) => self.process_action(action),
 		}
 
 		true
-	}
-
-	/// Receive ACKs from `Notifications` and process outstanding events & actions.
-	/// This function must be called repeatedly intil it yields `None`.
-	fn resolve_acks_once(&mut self) -> Option<Either<Event, Action>> {
-		let mut result = None;
-		let mut emptied_entries = Vec::new();
-
-		for (peer_id, outstanding) in self.outstanding.iter_mut() {
-			if outstanding.try_resolve_ack() {
-				if let Some(event) = outstanding.events.pop_front() {
-					if outstanding.is_empty() {
-						emptied_entries.push(*peer_id);
-					}
-					result = Some(Either::Left(event));
-					break
-				}
-
-				if let Some(action) = outstanding.actions.pop_front() {
-					if outstanding.is_empty() {
-						emptied_entries.push(*peer_id);
-					}
-					result = Some(Either::Right(action));
-					break
-				}
-
-				emptied_entries.push(*peer_id);
-			}
-		}
-
-		// Remove outstanding entries that became empty.
-		emptied_entries.iter().for_each(|peer_id| {
-			self.outstanding.remove(&peer_id);
-		});
-
-		result
-	}
-
-	/// Push connection event for processing
-	fn push_event(&mut self, event: Event) {
-		if let Some(outstanding) = self.outstanding.get_mut(event.peer_id()) {
-			if outstanding.events.len() == OUTSTANDING_QUEUE_WARNING {
-				// The following warning means that either `ProtocolController` is not fast enough
-				// to process network events, or `Notifications` is not fast enough to ACK
-				// connection messages.
-				warn!(
-					target: LOG_TARGET,
-					"Number of oustanding connection events for peer {} exceeded {}.",
-					event.peer_id(),
-					OUTSTANDING_QUEUE_WARNING,
-				);
-			}
-
-			outstanding.events.push_back(event);
-		} else {
-			self.process_event(event);
-		}
 	}
 
 	/// Process connection event.
@@ -427,48 +286,13 @@ impl ProtocolController {
 		}
 	}
 
-	/// Push action command for processing
-	fn push_action(&mut self, action: Action) {
-		if let Some(peer_id) = action.peer_id() {
-			if let Some(outstanding) = self.outstanding.get_mut(peer_id) {
-				if outstanding.actions.len() == OUTSTANDING_QUEUE_WARNING {
-					// The following warning means that either `ProtocolController` is not fast
-					// enough to process outer API actions, or `Notifications` is not fast enough
-					// to ACK connection messages.
-					warn!(
-						target: LOG_TARGET,
-						"Number of oustanding connection actions for peer {} exceeded {}.",
-						peer_id,
-						OUTSTANDING_QUEUE_WARNING,
-					);
-				}
-
-				outstanding.actions.push_back(action);
-
-				return
-			}
-		}
-
-		self.process_action(action);
-	}
-
 	/// Process action command.
 	fn process_action(&mut self, action: Action) {
 		match action {
 			Action::AddReservedPeer(peer_id) => self.on_add_reserved_peer(peer_id),
 			Action::RemoveReservedPeer(peer_id) => self.on_remove_reserved_peer(peer_id),
 			Action::SetReservedPeers(peer_ids) => self.on_set_reserved_peers(peer_ids),
-			Action::SetReservedOnly(reserved_only) =>
-				if !self.outstanding.is_empty() {
-					// we need to postpone the action if there are outstanding events/actions.
-					if reserved_only == self.reserved_only {
-						self.outstanding_set_reserved_only = None;
-					} else {
-						self.outstanding_set_reserved_only = Some(reserved_only);
-					}
-				} else {
-					self.on_set_reserved_only(reserved_only);
-				},
+			Action::SetReservedOnly(reserved_only) => self.on_set_reserved_only(reserved_only),
 			Action::DisconnectPeer(peer_id) => self.on_disconnect_peer(peer_id),
 			Action::GetReservedPeers(pending_response) =>
 				self.on_get_reserved_peers(pending_response),
@@ -476,58 +300,35 @@ impl ProtocolController {
 	}
 
 	/// Send "accept" message to `Notifications`.
-	fn accept_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
+	fn accept_connection(&mut self, incoming_index: IncomingIndex) {
 		trace!(target: LOG_TARGET, "Accepting {incoming_index:?}.");
 
-		let tx_ack = self.insert_outstanding_ack(peer_id);
-		let _ = self
-			.to_notifications
-			.unbounded_send(AckedMessage(Message::Accept(incoming_index), tx_ack));
+		let _ = self.to_notifications.unbounded_send(Message::Accept(incoming_index));
 	}
 
 	/// Send "reject" message to `Notifications`.
-	fn reject_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
+	fn reject_connection(&mut self, incoming_index: IncomingIndex) {
 		trace!(target: LOG_TARGET, "Rejecting {incoming_index:?}.");
 
-		let tx_ack = self.insert_outstanding_ack(peer_id);
-		let _ = self
-			.to_notifications
-			.unbounded_send(AckedMessage(Message::Reject(incoming_index), tx_ack));
+		let _ = self.to_notifications.unbounded_send(Message::Reject(incoming_index));
 	}
 
 	/// Send "connect" message to `Notifications`.
 	fn start_connection(&mut self, peer_id: PeerId) {
 		trace!(target: LOG_TARGET, "Connecting to {peer_id}.");
 
-		let tx_ack = self.insert_outstanding_ack(peer_id);
-		let _ = self.to_notifications.unbounded_send(AckedMessage(
-			Message::Connect { set_id: self.set_id, peer_id },
-			tx_ack,
-		));
+		let _ = self
+			.to_notifications
+			.unbounded_send(Message::Connect { set_id: self.set_id, peer_id });
 	}
 
 	/// Send "drop" message to `Notifications`.
 	fn drop_connection(&mut self, peer_id: PeerId) {
 		trace!(target: LOG_TARGET, "Dropping {peer_id}.");
 
-		let tx_ack = self.insert_outstanding_ack(peer_id);
 		let _ = self
 			.to_notifications
-			.unbounded_send(AckedMessage(Message::Drop { set_id: self.set_id, peer_id }, tx_ack));
-	}
-
-	/// Insert outstanding entry and/or initialize oneshot channel for ACK.
-	fn insert_outstanding_ack(&mut self, peer_id: PeerId) -> oneshot::Sender<()> {
-		let outstanding = self.outstanding.entry(peer_id).or_default();
-		debug_assert!(
-			outstanding.pending_ack.is_none(),
-			"Discarding previous pending ACK channel before it was received."
-		);
-
-		let (tx, rx) = oneshot::channel();
-		outstanding.pending_ack = Some(rx);
-
-		tx
+			.unbounded_send(Message::Drop { set_id: self.set_id, peer_id });
 	}
 
 	/// Report peer disconnect event to `PeerStore` for it to update peer's reputation accordingly.
@@ -627,30 +428,12 @@ impl ProtocolController {
 		let to_insert = peer_ids.difference(&current).cloned().collect::<Vec<_>>();
 		let to_remove = current.difference(&peer_ids).cloned().collect::<Vec<_>>();
 
-		if self.outstanding.is_empty() {
-			// Process peers immediately if we have no oustanding events/actions.
-			for peer_id in to_insert {
-				self.on_add_reserved_peer(peer_id);
-			}
-			for peer_id in to_remove {
-				self.on_remove_reserved_peer(peer_id);
-			}
-		} else {
-			// Push actions to outstanding queues if there are outstanding events/actions.
-			for peer_id in to_insert {
-				self.outstanding
-					.entry(peer_id)
-					.or_default()
-					.actions
-					.push_back(Action::AddReservedPeer(peer_id));
-			}
-			for peer_id in to_remove {
-				self.outstanding
-					.entry(peer_id)
-					.or_default()
-					.actions
-					.push_back(Action::RemoveReservedPeer(peer_id));
-			}
+		for node in to_insert {
+			self.on_add_reserved_peer(node);
+		}
+
+		for node in to_remove {
+			self.on_remove_reserved_peer(node);
 		}
 	}
 
@@ -726,7 +509,7 @@ impl ProtocolController {
 		trace!(target: LOG_TARGET, "Incoming connection from peer {peer_id} ({incoming_index:?}).",);
 
 		if self.reserved_only && !self.reserved_nodes.contains_key(&peer_id) {
-			self.reject_connection(peer_id, incoming_index);
+			self.reject_connection(incoming_index);
 			return
 		}
 
@@ -737,15 +520,15 @@ impl ProtocolController {
 					// We are accepting an incoming connection, so ensure the direction is inbound.
 					// (See the note above.)
 					*direction = Direction::Inbound;
-					self.accept_connection(peer_id, incoming_index);
+					self.accept_connection(incoming_index);
 				},
 				PeerState::NotConnected => {
 					// FIXME: unable to call `self.is_banned()` because of borrowed `self`.
 					if self.peer_store.is_banned(&peer_id) {
-						self.reject_connection(peer_id, incoming_index);
+						self.reject_connection(incoming_index);
 					} else {
 						*state = PeerState::Connected(Direction::Inbound);
-						self.accept_connection(peer_id, incoming_index);
+						self.accept_connection(incoming_index);
 					}
 				},
 			}
@@ -768,18 +551,18 @@ impl ProtocolController {
 		}
 
 		if self.num_in >= self.max_in {
-			self.reject_connection(peer_id, incoming_index);
+			self.reject_connection(incoming_index);
 			return
 		}
 
 		if self.is_banned(&peer_id) {
-			self.reject_connection(peer_id, incoming_index);
+			self.reject_connection(incoming_index);
 			return
 		}
 
 		self.num_in += 1;
 		self.nodes.insert(peer_id, Direction::Inbound);
-		self.accept_connection(peer_id, incoming_index);
+		self.accept_connection(incoming_index);
 	}
 
 	/// Indicate that a connection with the peer was dropped.
@@ -851,10 +634,7 @@ impl ProtocolController {
 		self.reserved_nodes
 			.iter_mut()
 			.filter_map(|(peer_id, state)| {
-				(!state.is_connected() &&
-					!self.peer_store.is_banned(peer_id) &&
-					!self.outstanding.contains_key(peer_id))
-				.then(|| {
+				(!state.is_connected() && !self.peer_store.is_banned(peer_id)).then(|| {
 					*state = PeerState::Connected(Direction::Outbound);
 					peer_id
 				})
@@ -882,9 +662,6 @@ impl ProtocolController {
 			.collect::<HashSet<&PeerId>>()
 			.union(&self.nodes.keys().collect::<HashSet<&PeerId>>())
 			.cloned()
-			.collect::<HashSet<&PeerId>>()
-			.union(&self.outstanding.keys().collect::<HashSet<&PeerId>>())
-			.cloned()
 			.collect();
 
 		let candidates = self
@@ -892,18 +669,16 @@ impl ProtocolController {
 			.outgoing_candidates(available_slots, ignored)
 			.into_iter()
 			.filter_map(|peer_id| {
-				(!self.reserved_nodes.contains_key(&peer_id) &&
-					!self.nodes.contains_key(&peer_id) &&
-					!self.outstanding.contains_key(&peer_id))
-				.then_some(peer_id)
-				.or_else(|| {
-					error!(
-						target: LOG_TARGET,
-						"`PeerStore` returned a node we asked to ignore: {peer_id}.",
-					);
-					debug_assert!(false, "`PeerStore` returned a node we asked to ignore.");
-					None
-				})
+				(!self.reserved_nodes.contains_key(&peer_id) && !self.nodes.contains_key(&peer_id))
+					.then_some(peer_id)
+					.or_else(|| {
+						error!(
+							target: LOG_TARGET,
+							"`PeerStore` returned a node we asked to ignore: {peer_id}.",
+						);
+						debug_assert!(false, "`PeerStore` returned a node we asked to ignore.");
+						None
+					})
 			})
 			.collect::<Vec<_>>();
 
@@ -927,8 +702,7 @@ impl ProtocolController {
 mod tests {
 	use super::{Direction, PeerState, ProtocolController, ProtocolHandle};
 	use crate::{
-		peer_store::PeerStoreProvider, AckedMessage, IncomingIndex, Message, ReputationChange,
-		SetConfig, SetId,
+		peer_store::PeerStoreProvider, IncomingIndex, Message, ReputationChange, SetConfig, SetId,
 	};
 	use libp2p_identity::PeerId;
 	use sc_utils::mpsc::{tracing_unbounded, TryRecvError};
@@ -979,9 +753,8 @@ mod tests {
 		controller.alloc_slots();
 
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
@@ -991,9 +764,6 @@ mod tests {
 		assert_eq!(controller.num_out, 0);
 		assert_eq!(controller.num_in, 0);
 
-		// Resolve ACKs before manually injecting more events for the same peers.
-		assert!(controller.resolve_acks_once().is_none());
-
 		// Drop connections to be able to accept reserved nodes.
 		controller.on_peer_dropped(reserved1);
 		controller.on_peer_dropped(reserved2);
@@ -1001,13 +771,13 @@ mod tests {
 		// Incoming connection from `reserved1`.
 		let incoming1 = IncomingIndex(1);
 		controller.on_incoming_connection(reserved1, incoming1);
-		assert_eq!(rx.try_recv().unwrap().take(), Message::Accept(incoming1));
+		assert_eq!(rx.try_recv().unwrap(), Message::Accept(incoming1));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
 		// Incoming connection from `reserved2`.
 		let incoming2 = IncomingIndex(2);
 		controller.on_incoming_connection(reserved2, incoming2);
-		assert_eq!(rx.try_recv().unwrap().take(), Message::Accept(incoming2));
+		assert_eq!(rx.try_recv().unwrap(), Message::Accept(incoming2));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
 		// Reserved peers do not occupy slots.
@@ -1053,13 +823,13 @@ mod tests {
 		// Incoming connection from `reserved1`.
 		let incoming1 = IncomingIndex(1);
 		controller.on_incoming_connection(reserved1, incoming1);
-		assert_eq!(rx.try_recv().unwrap().take(), Message::Reject(incoming1));
+		assert_eq!(rx.try_recv().unwrap(), Message::Reject(incoming1));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
 		// Incoming connection from `reserved2`.
 		let incoming2 = IncomingIndex(2);
 		controller.on_incoming_connection(reserved2, incoming2);
-		assert_eq!(rx.try_recv().unwrap().take(), Message::Reject(incoming2));
+		assert_eq!(rx.try_recv().unwrap(), Message::Reject(incoming2));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
 		// No slots occupied.
@@ -1097,17 +867,13 @@ mod tests {
 		controller.alloc_slots();
 
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
-
-		// Resolve ACKs before manually injecting more events for the same peers.
-		assert!(controller.resolve_acks_once().is_none());
 
 		// Drop both reserved nodes.
 		controller.on_peer_dropped(reserved1);
@@ -1117,9 +883,8 @@ mod tests {
 		controller.alloc_slots();
 
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 
 		assert_eq!(messages.len(), 2);
@@ -1158,9 +923,8 @@ mod tests {
 		controller.alloc_slots();
 
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 
 		// Only first two peers are connected (we only have 2 slots).
@@ -1211,9 +975,8 @@ mod tests {
 		controller.alloc_slots();
 
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 		assert_eq!(messages.len(), 4);
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
@@ -1255,9 +1018,8 @@ mod tests {
 		controller.alloc_slots();
 
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 
 		// Only first two peers are connected (we only have 2 slots).
@@ -1289,9 +1051,8 @@ mod tests {
 		controller.alloc_slots();
 
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 
 		// Peers are connected.
@@ -1353,9 +1114,8 @@ mod tests {
 		controller.on_incoming_connection(peer, incoming_index);
 
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 
 		// Peer is rejected.
@@ -1400,9 +1160,8 @@ mod tests {
 		controller.on_set_reserved_only(false);
 
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 
 		assert_eq!(messages.len(), 2);
@@ -1443,9 +1202,8 @@ mod tests {
 		controller.alloc_slots();
 
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 		assert_eq!(messages.len(), 3);
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
@@ -1457,21 +1215,17 @@ mod tests {
 		// Connect `regular2` as inbound.
 		let incoming_index = IncomingIndex(1);
 		controller.on_incoming_connection(regular2, incoming_index);
-		assert_eq!(rx.try_recv().unwrap().take(), Message::Accept(incoming_index));
+		assert_eq!(rx.try_recv().unwrap(), Message::Accept(incoming_index));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert_eq!(controller.num_out, 1);
 		assert_eq!(controller.num_in, 1);
-
-		// Resolve ACKs before manually injecting more events for the same peers.
-		assert!(controller.resolve_acks_once().is_none());
 
 		// Switch to reserved-only mode.
 		controller.on_set_reserved_only(true);
 
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Drop { set_id: SetId(0), peer_id: regular1 }));
@@ -1538,9 +1292,8 @@ mod tests {
 		// Initiate connections.
 		controller.alloc_slots();
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
@@ -1550,15 +1303,9 @@ mod tests {
 		assert!(controller.reserved_nodes.contains_key(&reserved2));
 		assert!(controller.nodes.is_empty());
 
-		// Resolve ACKs before manually injecting more events for the same peers.
-		assert!(controller.resolve_acks_once().is_none());
-
 		// Remove reserved node
 		controller.on_remove_reserved_peer(reserved1);
-		assert_eq!(
-			rx.try_recv().unwrap().take(),
-			Message::Drop { set_id: SetId(0), peer_id: reserved1 }
-		);
+		assert_eq!(rx.try_recv().unwrap(), Message::Drop { set_id: SetId(0), peer_id: reserved1 });
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert_eq!(controller.reserved_nodes.len(), 1);
 		assert!(controller.reserved_nodes.contains_key(&reserved2));
@@ -1591,9 +1338,8 @@ mod tests {
 		controller.on_incoming_connection(peer1, IncomingIndex(1));
 		controller.alloc_slots();
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
@@ -1639,9 +1385,8 @@ mod tests {
 		controller.alloc_slots();
 		controller.on_incoming_connection(peer2, IncomingIndex(1));
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
@@ -1683,9 +1428,8 @@ mod tests {
 		controller.alloc_slots();
 		controller.on_incoming_connection(peer2, IncomingIndex(1));
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
@@ -1696,14 +1440,8 @@ mod tests {
 		assert_eq!(controller.num_in, 1);
 		assert_eq!(controller.num_out, 1);
 
-		// Resolve ACKs before manually injecting more events for the same peers.
-		assert!(controller.resolve_acks_once().is_none());
-
 		controller.on_disconnect_peer(peer1);
-		assert_eq!(
-			rx.try_recv().unwrap().take(),
-			Message::Drop { set_id: SetId(0), peer_id: peer1 }
-		);
+		assert_eq!(rx.try_recv().unwrap(), Message::Drop { set_id: SetId(0), peer_id: peer1 });
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert_eq!(controller.nodes.len(), 1);
 		assert!(!controller.nodes.contains_key(&peer1));
@@ -1711,10 +1449,7 @@ mod tests {
 		assert_eq!(controller.num_out, 0);
 
 		controller.on_disconnect_peer(peer2);
-		assert_eq!(
-			rx.try_recv().unwrap().take(),
-			Message::Drop { set_id: SetId(0), peer_id: peer2 }
-		);
+		assert_eq!(rx.try_recv().unwrap(), Message::Drop { set_id: SetId(0), peer_id: peer2 });
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert_eq!(controller.nodes.len(), 0);
 		assert_eq!(controller.num_in, 0);
@@ -1747,9 +1482,8 @@ mod tests {
 		controller.on_incoming_connection(reserved1, IncomingIndex(1));
 		controller.alloc_slots();
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
@@ -1806,9 +1540,8 @@ mod tests {
 		controller.alloc_slots();
 		controller.on_incoming_connection(peer2, IncomingIndex(1));
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
@@ -1859,9 +1592,8 @@ mod tests {
 		controller.on_incoming_connection(reserved1, IncomingIndex(1));
 		controller.alloc_slots();
 		let mut messages = Vec::new();
-		while let Some(AckedMessage(message, tx_ack)) = rx.try_recv().ok() {
+		while let Some(message) = rx.try_recv().ok() {
 			messages.push(message);
-			let _ = tx_ack.send(());
 		}
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
@@ -1875,12 +1607,9 @@ mod tests {
 			Some(PeerState::Connected(Direction::Outbound))
 		));
 
-		// Resolve ACKs before manually injecting more events for the same peers.
-		assert!(controller.resolve_acks_once().is_none());
-
 		// Incoming request for `reserved1`.
 		controller.on_incoming_connection(reserved1, IncomingIndex(2));
-		assert_eq!(rx.try_recv().ok().unwrap().take(), Message::Accept(IncomingIndex(2)));
+		assert_eq!(rx.try_recv().ok().unwrap(), Message::Accept(IncomingIndex(2)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(matches!(
 			controller.reserved_nodes.get(&reserved1),
@@ -1889,7 +1618,7 @@ mod tests {
 
 		// Incoming request for `reserved2`.
 		controller.on_incoming_connection(reserved2, IncomingIndex(3));
-		assert_eq!(rx.try_recv().ok().unwrap().take(), Message::Accept(IncomingIndex(3)));
+		assert_eq!(rx.try_recv().ok().unwrap(), Message::Accept(IncomingIndex(3)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(matches!(
 			controller.reserved_nodes.get(&reserved2),
@@ -1925,7 +1654,7 @@ mod tests {
 		// Connect `regular1` as outbound.
 		controller.alloc_slots();
 		assert_eq!(
-			rx.try_recv().ok().unwrap().take(),
+			rx.try_recv().ok().unwrap(),
 			Message::Connect { set_id: SetId(0), peer_id: regular1 }
 		);
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
@@ -1933,22 +1662,19 @@ mod tests {
 
 		// Connect `regular2` as inbound.
 		controller.on_incoming_connection(regular2, IncomingIndex(0));
-		assert_eq!(rx.try_recv().ok().unwrap().take(), Message::Accept(IncomingIndex(0)));
+		assert_eq!(rx.try_recv().ok().unwrap(), Message::Accept(IncomingIndex(0)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(matches!(controller.nodes.get(&regular2).unwrap(), Direction::Inbound,));
 
-		// Resolve ACKs before manually injecting more events for the same peers.
-		assert!(controller.resolve_acks_once().is_none());
-
 		// Incoming request for `regular1`.
 		controller.on_incoming_connection(regular1, IncomingIndex(1));
-		assert_eq!(rx.try_recv().ok().unwrap().take(), Message::Accept(IncomingIndex(1)));
+		assert_eq!(rx.try_recv().ok().unwrap(), Message::Accept(IncomingIndex(1)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(matches!(controller.nodes.get(&regular1).unwrap(), Direction::Inbound,));
 
 		// Incoming request for `regular2`.
 		controller.on_incoming_connection(regular2, IncomingIndex(2));
-		assert_eq!(rx.try_recv().ok().unwrap().take(), Message::Accept(IncomingIndex(2)));
+		assert_eq!(rx.try_recv().ok().unwrap(), Message::Accept(IncomingIndex(2)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(matches!(controller.nodes.get(&regular2).unwrap(), Direction::Inbound,));
 	}
@@ -1982,7 +1708,7 @@ mod tests {
 		// Connect `regular1` as outbound.
 		controller.alloc_slots();
 		assert_eq!(
-			rx.try_recv().ok().unwrap().take(),
+			rx.try_recv().ok().unwrap(),
 			Message::Connect { set_id: SetId(0), peer_id: regular1 }
 		);
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
@@ -1990,22 +1716,19 @@ mod tests {
 
 		// Connect `regular2` as inbound.
 		controller.on_incoming_connection(regular2, IncomingIndex(0));
-		assert_eq!(rx.try_recv().ok().unwrap().take(), Message::Accept(IncomingIndex(0)));
+		assert_eq!(rx.try_recv().ok().unwrap(), Message::Accept(IncomingIndex(0)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(matches!(controller.nodes.get(&regular2).unwrap(), Direction::Inbound,));
 
-		// Resolve ACKs before manually injecting more events for the same peers.
-		assert!(controller.resolve_acks_once().is_none());
-
 		// Incoming request for `regular1`.
 		controller.on_incoming_connection(regular1, IncomingIndex(1));
-		assert_eq!(rx.try_recv().ok().unwrap().take(), Message::Reject(IncomingIndex(1)));
+		assert_eq!(rx.try_recv().ok().unwrap(), Message::Reject(IncomingIndex(1)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(!controller.nodes.contains_key(&regular1));
 
 		// Incoming request for `regular2`.
 		controller.on_incoming_connection(regular2, IncomingIndex(2));
-		assert_eq!(rx.try_recv().ok().unwrap().take(), Message::Reject(IncomingIndex(2)));
+		assert_eq!(rx.try_recv().ok().unwrap(), Message::Reject(IncomingIndex(2)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(!controller.nodes.contains_key(&regular2));
 	}
@@ -2038,7 +1761,7 @@ mod tests {
 		// Connect `regular1` as outbound.
 		controller.alloc_slots();
 		assert_eq!(
-			rx.try_recv().ok().unwrap().take(),
+			rx.try_recv().ok().unwrap(),
 			Message::Connect { set_id: SetId(0), peer_id: regular1 }
 		);
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
@@ -2046,24 +1769,21 @@ mod tests {
 
 		// Connect `regular2` as inbound.
 		controller.on_incoming_connection(regular2, IncomingIndex(0));
-		assert_eq!(rx.try_recv().ok().unwrap().take(), Message::Accept(IncomingIndex(0)));
+		assert_eq!(rx.try_recv().ok().unwrap(), Message::Accept(IncomingIndex(0)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(matches!(controller.nodes.get(&regular2).unwrap(), Direction::Inbound,));
 
 		controller.max_in = 0;
 
-		// Resolve ACKs before manually injecting more events for the same peers.
-		assert!(controller.resolve_acks_once().is_none());
-
 		// Incoming request for `regular1`.
 		controller.on_incoming_connection(regular1, IncomingIndex(1));
-		assert_eq!(rx.try_recv().ok().unwrap().take(), Message::Reject(IncomingIndex(1)));
+		assert_eq!(rx.try_recv().ok().unwrap(), Message::Reject(IncomingIndex(1)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(!controller.nodes.contains_key(&regular1));
 
 		// Incoming request for `regular2`.
 		controller.on_incoming_connection(regular2, IncomingIndex(2));
-		assert_eq!(rx.try_recv().ok().unwrap().take(), Message::Reject(IncomingIndex(2)));
+		assert_eq!(rx.try_recv().ok().unwrap(), Message::Reject(IncomingIndex(2)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(!controller.nodes.contains_key(&regular2));
 	}
@@ -2091,12 +1811,12 @@ mod tests {
 
 		// Connect `peer1` as inbound.
 		controller.on_incoming_connection(peer1, IncomingIndex(1));
-		assert_eq!(rx.try_recv().unwrap().take(), Message::Accept(IncomingIndex(1)));
+		assert_eq!(rx.try_recv().unwrap(), Message::Accept(IncomingIndex(1)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
 		// Incoming requests for `peer2`.
 		controller.on_incoming_connection(peer2, IncomingIndex(2));
-		assert_eq!(rx.try_recv().unwrap().take(), Message::Reject(IncomingIndex(2)));
+		assert_eq!(rx.try_recv().unwrap(), Message::Reject(IncomingIndex(2)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 	}
 
@@ -2122,7 +1842,7 @@ mod tests {
 
 		// Incoming request.
 		controller.on_incoming_connection(peer1, IncomingIndex(1));
-		assert_eq!(rx.try_recv().unwrap().take(), Message::Reject(IncomingIndex(1)));
+		assert_eq!(rx.try_recv().unwrap(), Message::Reject(IncomingIndex(1)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 	}
 
@@ -2149,7 +1869,7 @@ mod tests {
 
 		// Incoming request.
 		controller.on_incoming_connection(reserved1, IncomingIndex(1));
-		assert_eq!(rx.try_recv().unwrap().take(), Message::Reject(IncomingIndex(1)));
+		assert_eq!(rx.try_recv().unwrap(), Message::Reject(IncomingIndex(1)));
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 	}
 
