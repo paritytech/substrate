@@ -614,10 +614,7 @@ impl_runtime_apis! {
 		}
 
 		fn authorities() -> Vec<AuraId> {
-			SubstrateTest::authorities().into_iter().map(|a| {
-				let authority: sr25519::Public = a.into();
-				AuraId::from(authority)
-			}).collect()
+			SubstrateTest::authorities().into_iter().map(|auth| AuraId::from(auth)).collect()
 		}
 	}
 
