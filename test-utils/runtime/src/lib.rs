@@ -70,6 +70,7 @@ pub use pallet_balances::Call as BalancesCall;
 
 // Ensure Babe, Sassafras and Aura use the same crypto to simplify things a bit.
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
+pub type SassafrasId = sp_consensus_sassafras::AuthorityId;
 
 #[cfg(feature = "std")]
 pub use extrinsic::{ExtrinsicBuilder, Transfer};
@@ -700,8 +701,9 @@ impl_runtime_apis! {
 			Sassafras::slot_ticket_id(slot)
 		}
 
-		fn slot_ticket(slot: sp_consensus_sassafras::Slot)
-			-> Option<(sp_consensus_sassafras::TicketId, sp_consensus_sassafras::TicketData)> {
+		fn slot_ticket(
+			slot: sp_consensus_sassafras::Slot
+		) -> Option<(sp_consensus_sassafras::TicketId, sp_consensus_sassafras::TicketData)> {
 			Sassafras::slot_ticket(slot)
 		}
 
