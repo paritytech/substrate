@@ -107,11 +107,15 @@ fn test_once() {
 		),
 		(
 			BareState::Inbound,
-			[Event::Disconnected, Event::PsmDrop].into_iter().collect::<HashSet<_>>(),
+			[Event::Disconnected, Event::PsmDrop, Event::PsmConnect /* must be ignored */]
+				.into_iter()
+				.collect::<HashSet<_>>(),
 		),
 		(
 			BareState::Outbound,
-			[Event::Disconnected, Event::PsmDrop].into_iter().collect::<HashSet<_>>(),
+			[Event::Disconnected, Event::PsmDrop, Event::PsmConnect /* must be ignored */]
+				.into_iter()
+				.collect::<HashSet<_>>(),
 		),
 	]
 	.into_iter()
@@ -166,6 +170,8 @@ fn test_once() {
 
 		// Perform a certain number of actions while checking that the state is consistent. If we
 		// reach the end of the loop, the run has succeeded.
+		// Note that with the ACKing and event postponing mechanism in `ProtocolController`
+		// the test time grows quadratically with the number of iterations below.
 		for _ in 0..2500 {
 			// Peer we are working with.
 			let mut current_peer = None;
@@ -192,9 +198,14 @@ fn test_once() {
 						}
 
 						last_state = Some(*state);
-						*state = State::Outbound;
 
-						assert!(connected_nodes.insert(peer_id));
+						if *state != State::Inbound {
+							*state = State::Outbound;
+						}
+
+						if !connected_nodes.insert(peer_id) {
+							log::info!("Request to connect to an already connected node {peer_id}");
+						}
 
 						current_peer = Some(peer_id);
 						current_event = Some(Event::PsmConnect);

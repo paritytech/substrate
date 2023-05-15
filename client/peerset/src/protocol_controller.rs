@@ -57,6 +57,10 @@ use crate::{
 	LOG_TARGET,
 };
 
+/// Queueing that many outstanding events means that `Notifications` and `ProtocolController`
+/// are significantly out of sync.
+const OUTSTANDING_QUEUE_WARNING: usize = 10;
+
 /// External API actions.
 #[derive(Debug)]
 enum Action {
@@ -396,6 +400,18 @@ impl ProtocolController {
 	/// Push connection event for processing
 	fn push_event(&mut self, event: Event) {
 		if let Some(outstanding) = self.outstanding.get_mut(event.peer_id()) {
+			if outstanding.events.len() == OUTSTANDING_QUEUE_WARNING {
+				// The following warning means that either `ProtocolController` is not fast enough
+				// to process network events, or `Notifications` is not fast enough to ACK connection
+				// messages.
+				warn!(
+					target: LOG_TARGET,
+					"Number of oustanding connection events for peer {} exceeded {}.",
+					event.peer_id(),
+					OUTSTANDING_QUEUE_WARNING,
+				);
+			}
+
 			outstanding.events.push_back(event);
 		} else {
 			self.process_event(event);
@@ -415,7 +431,20 @@ impl ProtocolController {
 	fn push_action(&mut self, action: Action) {
 		if let Some(peer_id) = action.peer_id() {
 			if let Some(outstanding) = self.outstanding.get_mut(peer_id) {
+				if outstanding.actions.len() == OUTSTANDING_QUEUE_WARNING {
+					// The following warning means that either `ProtocolController` is not fast
+					// enough to process outer API actions, or `Notifications` is not fast enough
+					// to ACK connection messages.
+					warn!(
+						target: LOG_TARGET,
+						"Number of oustanding connection actions for peer {} exceeded {}.",
+						peer_id,
+						OUTSTANDING_QUEUE_WARNING,
+					);
+				}
+
 				outstanding.actions.push_back(action);
+
 				return
 			}
 		}
