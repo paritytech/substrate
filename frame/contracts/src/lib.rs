@@ -1433,7 +1433,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Query storage of a specified contract under a specified key.
 	pub fn get_storage(address: T::AccountId, key: Vec<u8>) -> GetStorageResult {
-		if let Err(_) = Migration::<T>::ensure_migrated() {
+		if Migration::<T>::in_progress() {
 			return Err(ContractAccessError::MigrationInProgress)
 		}
 		let contract_info =
