@@ -128,7 +128,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount: T::Balance,
 		increase_supply: bool,
 	) -> DepositConsequence {
-		let details = match Asset::<T, I>::get(id) {
+		let details = match Asset::<T, I>::get(id.clone()) {
 			Some(details) => details,
 			None => return DepositConsequence::UnknownAsset,
 		};
@@ -219,10 +219,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		who: &T::AccountId,
 		keep_alive: bool,
 	) -> Result<T::Balance, DispatchError> {
-		let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		let details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 
-		let account = Account::<T, I>::get(id, who).ok_or(Error::<T, I>::NoAccount)?;
+		let account = Account::<T, I>::get(&id, who).ok_or(Error::<T, I>::NoAccount)?;
 		ensure!(!account.status.is_frozen(), Error::<T, I>::Frozen);
 
 		let amount = if let Some(frozen) = T::Freezer::frozen_balance(id, who) {
@@ -320,7 +320,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		depositor: T::AccountId,
 		check_depositor: bool,
 	) -> DispatchResult {
-		ensure!(!Account::<T, I>::contains_key(id, &who), Error::<T, I>::AlreadyExists);
+		ensure!(!Account::<T, I>::contains_key(&id, &who), Error::<T, I>::AlreadyExists);
 		let deposit = T::AssetAccountDeposit::get();
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
@@ -332,7 +332,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		T::Currency::reserve(&depositor, deposit)?;
 		Asset::<T, I>::insert(&id, details);
 		Account::<T, I>::insert(
-			id,
+			id.clone(),
 			&who,
 			AssetAccountOf::<T, I> {
 				balance: Zero::zero(),
@@ -350,7 +350,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(super) fn do_refund(id: T::AssetId, who: T::AccountId, allow_burn: bool) -> DispatchResult {
 		use AssetStatus::*;
 		use ExistenceReason::*;
-		let mut account = Account::<T, I>::get(id, &who).ok_or(Error::<T, I>::NoDeposit)?;
+		let mut account = Account::<T, I>::get(&id, &who).ok_or(Error::<T, I>::NoDeposit)?;
 		ensure!(matches!(account.reason, Consumer | DepositHeld(..)), Error::<T, I>::NoDeposit);
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(matches!(details.status, Live | Frozen), Error::<T, I>::IncorrectStatus);
@@ -380,7 +380,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		who: &T::AccountId,
 		caller: &T::AccountId,
 	) -> DispatchResult {
-		let mut account = Account::<T, I>::get(id, &who).ok_or(Error::<T, I>::NoDeposit)?;
+		let mut account = Account::<T, I>::get(&id, &who).ok_or(Error::<T, I>::NoDeposit)?;
 		let (depositor, deposit) =
 			account.reason.take_deposit_from().ok_or(Error::<T, I>::NoDeposit)?;
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
@@ -392,11 +392,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		T::Currency::unreserve(&depositor, deposit);
 
 		if let Remove = Self::dead_account(&who, &mut details, &account.reason, false) {
-			Account::<T, I>::remove(id, &who);
+			Account::<T, I>::remove(&id, &who);
 		} else {
 			debug_assert!(false, "refund did not result in dead account?!");
 			// deposit may have been refunded, need to update `Account`
-			Account::<T, I>::insert(id, &who, account);
+			Account::<T, I>::insert(&id, &who, account);
 			return Ok(())
 		}
 		Asset::<T, I>::insert(&id, details);
@@ -1004,7 +1004,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns all the non-zero balances for all assets of the given `account`.
 	pub fn account_balances(account: T::AccountId) -> Vec<(T::AssetId, T::Balance)> {
 		Asset::<T, I>::iter_keys()
-			.filter_map(|id| Self::maybe_balance(id, account.clone()).map(|balance| (id, balance)))
+			.filter_map(|id| {
+				Self::maybe_balance(id.clone(), account.clone()).map(|balance| (id, balance))
+			})
 			.collect::<Vec<_>>()
 	}
 }

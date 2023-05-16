@@ -250,7 +250,7 @@ pub mod pallet {
 		type RemoveItemsLimit: Get<u32>;
 
 		/// Identifier for the class of asset.
-		type AssetId: Member + Parameter + Copy + MaybeSerializeDeserialize + MaxEncodedLen;
+		type AssetId: Member + Parameter + Clone + MaybeSerializeDeserialize + MaxEncodedLen;
 
 		/// Wrapper around `Self::AssetId` to use in dispatchable call signatures. Allows the use
 		/// of compact encoding in instances of the pallet, which will prevent breaking changes
@@ -955,7 +955,7 @@ pub mod pallet {
 			ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
 
-			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
+			Account::<T, I>::try_mutate(&id, &who, |maybe_account| -> DispatchResult {
 				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.status =
 					AccountStatus::Frozen;
 				Ok(())
@@ -992,7 +992,7 @@ pub mod pallet {
 			ensure!(origin == details.admin, Error::<T, I>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
 
-			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
+			Account::<T, I>::try_mutate(&id, &who, |maybe_account| -> DispatchResult {
 				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.status =
 					AccountStatus::Liquid;
 				Ok(())
@@ -1389,15 +1389,15 @@ pub mod pallet {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
 			let id: T::AssetId = id.into();
-			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			let mut d = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 
-			let approval =
-				Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
+			let approval = Approvals::<T, I>::take((id.clone(), &owner, &delegate))
+				.ok_or(Error::<T, I>::Unknown)?;
 			T::Currency::unreserve(&owner, approval.deposit);
 
 			d.approvals.saturating_dec();
-			Asset::<T, I>::insert(id, d);
+			Asset::<T, I>::insert(id.clone(), d);
 
 			Self::deposit_event(Event::ApprovalCancelled { asset_id: id, owner, delegate });
 			Ok(())
@@ -1424,7 +1424,7 @@ pub mod pallet {
 			delegate: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let id: T::AssetId = id.into();
-			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			let mut d = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
@@ -1539,7 +1539,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
 
-			let mut details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(origin == details.owner, Error::<T, I>::NoPermission);
 
 			let old_min_balance = details.min_balance;
@@ -1629,7 +1629,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let id: T::AssetId = id.into();
 
-			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			let d = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(
 				d.status == AssetStatus::Live || d.status == AssetStatus::Frozen,
 				Error::<T, I>::AssetNotLive
@@ -1637,7 +1637,7 @@ pub mod pallet {
 			ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
 
-			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
+			Account::<T, I>::try_mutate(&id, &who, |maybe_account| -> DispatchResult {
 				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.status =
 					AccountStatus::Blocked;
 				Ok(())
