@@ -19,7 +19,7 @@
 
 use crate::Error;
 use clap::Parser;
-use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
+use libp2p_identity::{ed25519, Keypair};
 use std::{
 	fs,
 	io::{self, Write},
@@ -48,7 +48,7 @@ pub struct GenerateNodeKeyCmd {
 impl GenerateNodeKeyCmd {
 	/// Run the command
 	pub fn run(&self) -> Result<(), Error> {
-		let keypair = libp2p_ed25519::Keypair::generate();
+		let keypair = ed25519::Keypair::generate();
 
 		let secret = keypair.secret();
 
@@ -63,7 +63,7 @@ impl GenerateNodeKeyCmd {
 			None => io::stdout().lock().write_all(&file_data)?,
 		}
 
-		eprintln!("{}", PublicKey::Ed25519(keypair.public()).to_peer_id());
+		eprintln!("{}", Keypair::from(keypair).public().to_peer_id());
 
 		Ok(())
 	}
