@@ -36,7 +36,7 @@ sp_api::decl_runtime_apis! {
 	/// API to interact with GenesisConfig for the runtime
 	pub trait GenesisBuilder {
 		/// Instantiate default `GenesisConfig` and serializes it to json blob.
-		fn default_config_as_json() -> sp_std::vec::Vec<u8>;
+		fn default_genesis_config_as_json() -> sp_std::vec::Vec<u8>;
 
 		/// Deserialize the `GenesisConfig` from given json blob and put it into the storage.
 		fn build_genesis_config_from_json(json: sp_std::vec::Vec<u8>);
