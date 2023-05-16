@@ -366,7 +366,7 @@ macro_rules! app_crypto_public_common_if_serde {
 				D: $crate::serde::Deserializer<'de>,
 			{
 				use $crate::Ss58Codec;
-				#[cfg(not(feature = "std"))]
+				#[cfg(all(not(feature = "std"), feature = "serde"))]
 				use $crate::{format, String};
 
 				Public::from_ss58check(&String::deserialize(deserializer)?)
