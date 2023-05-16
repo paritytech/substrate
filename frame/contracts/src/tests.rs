@@ -576,11 +576,11 @@ fn migration_in_progress_works() {
 			Error::<Test>::MigrationInProgress,
 		);
 		assert_err!(
-			Contracts::remove_code(RuntimeOrigin::signed(ALICE), code_hash.clone()),
+			Contracts::remove_code(RuntimeOrigin::signed(ALICE), code_hash),
 			Error::<Test>::MigrationInProgress,
 		);
 		assert_err!(
-			Contracts::set_code(RuntimeOrigin::signed(ALICE), BOB.clone(), code_hash.clone()),
+			Contracts::set_code(RuntimeOrigin::signed(ALICE), BOB.clone(), code_hash),
 			Error::<Test>::MigrationInProgress,
 		);
 		assert_err_ignore_postinfo!(
