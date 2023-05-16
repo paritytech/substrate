@@ -11117,7 +11117,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-core",
- "sp-std",
 ]
 
 [[package]]
