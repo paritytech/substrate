@@ -740,8 +740,54 @@ impl OverlayedChangeSet {
 						} else {
 							debug_assert!(!*from_parent);
 						}
+						*overlayed.value_mut() = dropped_tx.value;
+					} else {
+						let removed = sp_std::mem::replace(overlayed.value_mut(), dropped_tx.value);
+						if let StorageEntry::Append {
+							from_parent,
+							mut data,
+							materialized: current_materialized,
+							..
+						} = removed
+						{
+							if from_parent {
+								// TODO factor
+								let transactions = overlayed.transactions.len();
+
+								let parent = overlayed
+									.transactions
+									.get_mut(transactions - 2)
+									.expect("from parent true");
+								match &mut parent.value {
+									StorageEntry::Append {
+										data: parent_data,
+										moved_size,
+										nb_append: _,
+										materialized,
+										from_parent: _,
+									} => {
+										debug_assert!(parent_data.is_empty());
+										let delta = StorageAppend::diff_materialized(
+											*materialized,
+											current_materialized,
+										);
+
+										data.truncate(
+											delta +
+												moved_size
+													.take()
+													.expect("append in new layer store size in previous; qed"),
+										);
+										*parent_data = data;
+										*materialized = current_materialized;
+									},
+									_ => {
+										// No value or a simple value, no need to restore
+									},
+								}
+							}
+						}
 					}
-					*overlayed.value_mut() = dropped_tx.value;
 					overlayed.transaction_extrinsics_mut().extend(dropped_tx.extrinsics);
 				}
 			}
