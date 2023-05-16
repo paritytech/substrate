@@ -278,6 +278,10 @@ where
 		// TODO DAVXY SASS-32: this seal may be revisited.
 		// We already have a VRF signature, this could be completelly redundant.
 		// The header.hash() can be added to the VRF signed data.
+		// OR maybe we can maintain this seal but compute it using some of the data in the
+		// pre-digest
+		// Another option is to not recompute this signature and push (reuse) the one in the
+		// pre-digest as the seal
 		let signature = self
 			.keystore
 			.sign_with(

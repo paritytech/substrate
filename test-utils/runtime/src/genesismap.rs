@@ -23,11 +23,11 @@ use super::{
 use codec::Encode;
 use sc_service::construct_genesis_block;
 use sp_core::{
-	sr25519,
+	bandersnatch, sr25519,
 	storage::{well_known_keys, StateVersion, Storage},
 	Pair,
 };
-use sp_keyring::{AccountKeyring, Sr25519Keyring};
+use sp_keyring::AccountKeyring;
 use sp_runtime::{
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT},
 	BuildStorage,
@@ -54,9 +54,9 @@ impl Default for GenesisStorageBuilder {
 	fn default() -> Self {
 		Self::new(
 			vec![
-				Sr25519Keyring::Alice.into(),
-				Sr25519Keyring::Bob.into(),
-				Sr25519Keyring::Charlie.into(),
+				AccountKeyring::Alice.into(),
+				AccountKeyring::Bob.into(),
+				AccountKeyring::Charlie.into(),
 			],
 			(0..16_usize)
 				.into_iter()
