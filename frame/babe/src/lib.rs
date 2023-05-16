@@ -357,12 +357,12 @@ pub mod pallet {
 					);
 				}
 
-				if let Some(vrf_signature) = pre_digest.vrf_signature() {
+				if let Some(signature) = pre_digest.vrf_signature() {
 					let randomness: Option<BabeRandomness> = Authorities::<T>::get()
 						.get(authority_index as usize)
 						.and_then(|(authority, _)| {
 							let public = authority.as_inner_ref();
-							let transcript = sp_consensus_babe::make_transcript(
+							let transcript = sp_consensus_babe::make_vrf_transcript(
 								&Self::randomness(),
 								CurrentSlot::<T>::get(),
 								EpochIndex::<T>::get(),
@@ -372,16 +372,12 @@ pub mod pallet {
 							// execution. We don't run the verification again here to avoid slowing
 							// down the runtime.
 							debug_assert!({
-								use sp_core::crypto::VrfVerifier;
-								public.vrf_verify(&transcript, &vrf_signature)
+								use sp_core::crypto::VrfPublic;
+								public.vrf_verify(&transcript.clone().into_sign_data(), &signature)
 							});
 
 							public
-								.make_bytes(
-									RANDOMNESS_VRF_CONTEXT,
-									&transcript,
-									&vrf_signature.output,
-								)
+								.make_bytes(RANDOMNESS_VRF_CONTEXT, &transcript, &signature.output)
 								.ok()
 						});
 

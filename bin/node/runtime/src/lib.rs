@@ -324,7 +324,8 @@ impl InstanceFilter<RuntimeCall> for ProxyType {
 					RuntimeCall::Elections(..) |
 					RuntimeCall::Treasury(..)
 			),
-			ProxyType::Staking => matches!(c, RuntimeCall::Staking(..)),
+			ProxyType::Staking =>
+				matches!(c, RuntimeCall::Staking(..) | RuntimeCall::FastUnstake(..)),
 		}
 	}
 	fn is_superset(&self, o: &Self) -> bool {
@@ -1250,6 +1251,7 @@ impl pallet_contracts::Config for Runtime {
 impl pallet_sudo::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
+	type WeightInfo = pallet_sudo::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -1789,6 +1791,26 @@ impl frame_benchmarking_pallet_pov::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 }
 
+parameter_types! {
+	pub StatementCost: Balance = 1 * DOLLARS;
+	pub StatementByteCost: Balance = 100 * MILLICENTS;
+	pub const MinAllowedStatements: u32 = 4;
+	pub const MaxAllowedStatements: u32 = 10;
+	pub const MinAllowedBytes: u32 = 1024;
+	pub const MaxAllowedBytes: u32 = 4096;
+}
+
+impl pallet_statement::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type StatementCost = StatementCost;
+	type ByteCost = StatementByteCost;
+	type MinAllowedStatements = MinAllowedStatements;
+	type MaxAllowedStatements = MaxAllowedStatements;
+	type MinAllowedBytes = MinAllowedBytes;
+	type MaxAllowedBytes = MaxAllowedBytes;
+}
+
 construct_runtime!(
 	pub struct Runtime where
 		Block = Block,
@@ -1861,6 +1883,7 @@ construct_runtime!(
 		FastUnstake: pallet_fast_unstake,
 		MessageQueue: pallet_message_queue,
 		Pov: frame_benchmarking_pallet_pov,
+		Statement: pallet_statement,
 	}
 );
 
@@ -1914,6 +1937,11 @@ type Migrations = (
 	pallet_alliance::migration::Migration<Runtime>,
 	pallet_contracts::Migration<Runtime>,
 );
+
+type EventRecord = frame_system::EventRecord<
+	<Runtime as frame_system::Config>::RuntimeEvent,
+	<Runtime as frame_system::Config>::Hash,
+>;
 
 /// MMR helper types.
 mod mmr {
@@ -1970,6 +1998,7 @@ mod benches {
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_staking, Staking]
 		[pallet_state_trie_migration, StateTrieMigration]
+		[pallet_sudo, Sudo]
 		[frame_system, SystemBench::<Runtime>]
 		[pallet_timestamp, Timestamp]
 		[pallet_tips, Tips]
@@ -2039,6 +2068,15 @@ impl_runtime_apis! {
 			block_hash: <Block as BlockT>::Hash,
 		) -> TransactionValidity {
 			Executive::validate_transaction(source, tx, block_hash)
+		}
+	}
+
+	impl sp_statement_store::runtime_api::ValidateStatement<Block> for Runtime {
+		fn validate_statement(
+			source: sp_statement_store::runtime_api::StatementSource,
+			statement: sp_statement_store::Statement,
+		) -> Result<sp_statement_store::runtime_api::ValidStatement, sp_statement_store::runtime_api::InvalidStatement> {
+			Statement::validate_statement(source, statement)
 		}
 	}
 
@@ -2177,7 +2215,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_contracts::ContractsApi<Block, AccountId, Balance, BlockNumber, Hash> for Runtime
+	impl pallet_contracts::ContractsApi<Block, AccountId, Balance, BlockNumber, Hash, EventRecord> for Runtime
 	{
 		fn call(
 			origin: AccountId,
@@ -2186,7 +2224,7 @@ impl_runtime_apis! {
 			gas_limit: Option<Weight>,
 			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
-		) -> pallet_contracts_primitives::ContractExecResult<Balance> {
+		) -> pallet_contracts_primitives::ContractExecResult<Balance, EventRecord> {
 			let gas_limit = gas_limit.unwrap_or(RuntimeBlockWeights::get().max_block);
 			Contracts::bare_call(
 				origin,
@@ -2195,7 +2233,8 @@ impl_runtime_apis! {
 				gas_limit,
 				storage_deposit_limit,
 				input_data,
-				true,
+				pallet_contracts::DebugInfo::UnsafeDebug,
+				pallet_contracts::CollectEvents::UnsafeCollect,
 				pallet_contracts::Determinism::Enforced,
 			)
 		}
@@ -2208,7 +2247,7 @@ impl_runtime_apis! {
 			code: pallet_contracts_primitives::Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
-		) -> pallet_contracts_primitives::ContractInstantiateResult<AccountId, Balance>
+		) -> pallet_contracts_primitives::ContractInstantiateResult<AccountId, Balance, EventRecord>
 		{
 			let gas_limit = gas_limit.unwrap_or(RuntimeBlockWeights::get().max_block);
 			Contracts::bare_instantiate(
@@ -2219,7 +2258,8 @@ impl_runtime_apis! {
 				code,
 				data,
 				salt,
-				true
+				pallet_contracts::DebugInfo::UnsafeDebug,
+				pallet_contracts::CollectEvents::UnsafeCollect,
 			)
 		}
 
