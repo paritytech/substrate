@@ -2373,6 +2373,7 @@ pub mod fuzzing {
 					if self.transaction_depth == 0 {
 						return
 					}
+					self.transaction_depth -= 1;
 					self.reference.rollback_transaction();
 					ext.storage_rollback_transaction().unwrap();
 				},
@@ -2380,6 +2381,7 @@ pub mod fuzzing {
 					if self.transaction_depth == 0 {
 						return
 					}
+					self.transaction_depth -= 1;
 					self.reference.commit_transaction();
 					ext.storage_commit_transaction().unwrap();
 				},
@@ -2398,10 +2400,18 @@ pub mod fuzzing {
 	#[test]
 	fn fuzz_scenarii() {
 		assert_eq!(codec::Compact(5u16).encode()[0], DataValue::EasyBug as u8);
-		let scenarii = vec![(
-			vec![FuzzAppendItem::StartTransaction],
-			Some((DataValue::EasyBug, DataLength::Zero)),
-		)];
+		let scenarii = vec![
+			(
+				vec![
+					FuzzAppendItem::StartTransaction,
+					FuzzAppendItem::RollbackTransaction,
+					FuzzAppendItem::RollbackTransaction,
+					FuzzAppendItem::Append(DataValue::A, DataLength::Zero),
+				],
+				None,
+			),
+			(vec![FuzzAppendItem::StartTransaction], Some((DataValue::EasyBug, DataLength::Zero))),
+		];
 
 		for (scenario, init) in scenarii.into_iter() {
 			fuzz_append::<BlakeTwo256>(FuzzAppendPayload(scenario, init));
