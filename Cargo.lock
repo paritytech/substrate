@@ -482,6 +482,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-scale"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d028cd1025d002fa88c10cd644d29028a7b40806579b608c6ba843b937bbb23"
+dependencies = [
+ "ark-ec",
+ "ark-serialize",
+ "ark-std",
+ "parity-scale-codec",
+]
+
+[[package]]
 name = "ark-serialize"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10785,7 +10797,7 @@ dependencies = [
  "ark-bls12-377",
  "ark-ff",
  "ark-r1cs-std",
- "ark-scale",
+ "ark-scale 0.0.2",
  "ark-std",
  "parity-scale-codec",
  "sp-ark-models",
@@ -10798,7 +10810,7 @@ source = "git+https://github.com/paritytech/ark-substrate#d1451fb5926a587f6f267f
 dependencies = [
  "ark-bls12-381",
  "ark-ff",
- "ark-scale",
+ "ark-scale 0.0.2",
  "ark-serialize",
  "ark-std",
  "parity-scale-codec",
@@ -10812,7 +10824,7 @@ source = "git+https://github.com/paritytech/ark-substrate#d1451fb5926a587f6f267f
 dependencies = [
  "ark-bw6-761",
  "ark-ff",
- "ark-scale",
+ "ark-scale 0.0.2",
  "ark-std",
  "parity-scale-codec",
  "sp-ark-models",
@@ -10826,7 +10838,7 @@ dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ff",
  "ark-r1cs-std",
- "ark-scale",
+ "ark-scale 0.0.2",
  "ark-serialize",
  "ark-std",
  "parity-scale-codec",
@@ -10842,7 +10854,7 @@ dependencies = [
  "ark-ed-on-bls12-381-bandersnatch",
  "ark-ff",
  "ark-r1cs-std",
- "ark-scale",
+ "ark-scale 0.0.2",
  "ark-std",
  "parity-scale-codec",
  "sp-ark-bls12-381",
@@ -10877,7 +10889,7 @@ dependencies = [
  "ark-ed-on-bls12-377",
  "ark-ed-on-bls12-381-bandersnatch",
  "ark-ff",
- "ark-scale",
+ "ark-scale 0.0.3",
  "ark-serialize",
  "ark-std",
  "parity-scale-codec",
