@@ -3861,7 +3861,6 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
 	#[cfg(debug_assertions)]
 	fn peerset_report_connect_with_disabled_pending_enable_peer() {
 		let (mut notif, _peerset) = development_notifs();
@@ -3899,11 +3898,15 @@ mod tests {
 			Some(&PeerState::DisabledPendingEnable { .. })
 		));
 
+		// duplicate "connect" must not change the state
 		notif.peerset_report_connect(peer, set_id);
+		assert!(std::matches!(
+			notif.peers.get(&(peer, set_id)),
+			Some(&PeerState::DisabledPendingEnable { .. })
+		));
 	}
 
 	#[test]
-	#[should_panic]
 	#[cfg(debug_assertions)]
 	fn peerset_report_connect_with_requested_peer() {
 		let (mut notif, _peerset) = development_notifs();
@@ -3914,11 +3917,12 @@ mod tests {
 		notif.peerset_report_connect(peer, set_id);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Requested)));
 
+		// Duplicate "connect" must not change the state.
 		notif.peerset_report_connect(peer, set_id);
+		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Requested)));
 	}
 
 	#[test]
-	#[should_panic]
 	#[cfg(debug_assertions)]
 	fn peerset_report_connect_with_pending_requested() {
 		let (mut notif, _peerset) = development_notifs();
@@ -3967,7 +3971,12 @@ mod tests {
 			Some(&PeerState::PendingRequest { .. })
 		));
 
+		// duplicate "connect" must not change the state
 		notif.peerset_report_connect(peer, set_id);
+		assert!(std::matches!(
+			notif.peers.get(&(peer, set_id)),
+			Some(&PeerState::PendingRequest { .. })
+		));
 	}
 
 	#[test]
