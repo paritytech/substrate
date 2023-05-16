@@ -149,6 +149,12 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Generic identity information to be defined by the implementor.
+		///
+		/// For backwards compatibility or convenience you can map the
+		/// `pallet_identity::IdentityInfo<>` struct to this type.
+		type IdentityInfo;
 	}
 
 	#[pallet::pallet]

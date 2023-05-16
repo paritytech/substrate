@@ -115,6 +115,7 @@ impl pallet_identity::Config for Test {
 	type RegistrarOrigin = EnsureOneOrRoot;
 	type ForceOrigin = EnsureTwoOrRoot;
 	type WeightInfo = ();
+	type IdentityInfo = pallet_identity::IdentityInfo<MaxAdditionalFields>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

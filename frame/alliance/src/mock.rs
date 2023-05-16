@@ -146,6 +146,7 @@ impl pallet_identity::Config for Test {
 	type RegistrarOrigin = EnsureOneOrRoot;
 	type ForceOrigin = EnsureTwoOrRoot;
 	type WeightInfo = ();
+	type IdentityInfo = pallet_identity::IdentityInfo<MaxAdditionalFields>;
 }
 
 pub struct AllianceIdentityVerifier;
