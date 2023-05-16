@@ -2205,30 +2205,22 @@ mod tests {
 	}
 }
 
+/// state machine fuzzing implementation, behind `fuzzing` feature.
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod fuzzing {
-	use super::{backend::AsTrieBackend, ext::Ext, *};
-	use crate::{
-		execution::CallResult, ext::StorageAppend, in_memory_backend::new_in_mem_hash_key,
-	};
+	use super::{ext::Ext, *};
+	use crate::ext::StorageAppend;
 	use arbitrary::Arbitrary;
-	use assert_matches::assert_matches;
+	#[cfg(test)]
 	use codec::Encode;
-	use sp_core::{
-		map,
-		storage::{ChildInfo, StateVersion},
-		traits::{CallContext, CodeExecutor, Externalities, RuntimeCode},
-		H256,
-	};
+	use hash_db::Hasher;
+	use sp_core::{storage::StateVersion, traits::Externalities};
+	#[cfg(test)]
 	use sp_runtime::traits::BlakeTwo256;
-	use sp_trie::{
-		trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1},
-		KeySpacedDBMut, PrefixedMemoryDB,
-	};
-	use std::collections::{BTreeMap, HashMap};
+	use std::collections::BTreeMap;
 
 	#[derive(Arbitrary, Debug, Clone)]
-	pub enum DataLength {
+	enum DataLength {
 		Zero = 0,
 		Small = 1,
 		Medium = 3,
@@ -2237,7 +2229,7 @@ pub mod fuzzing {
 
 	#[derive(Arbitrary, Debug, Clone)]
 	#[repr(u8)]
-	pub enum DataValue {
+	enum DataValue {
 		A = 'a' as u8,
 		B = 'b' as u8,
 		C = 'c' as u8,
@@ -2247,7 +2239,7 @@ pub mod fuzzing {
 
 	/// Action to fuzz
 	#[derive(Arbitrary, Debug, Clone)]
-	pub enum FuzzAppendItem {
+	enum FuzzAppendItem {
 		Append(DataValue, DataLength),
 		Insert(DataValue, DataLength),
 		StartTransaction,
@@ -2257,7 +2249,9 @@ pub mod fuzzing {
 		Remove,
 	}
 
-	pub type FuzzAppendPayload = (Vec<FuzzAppendItem>, Option<(DataValue, DataLength)>);
+	/// Arbitrary payload for fuzzing append.
+	#[derive(Arbitrary, Debug, Clone)]
+	pub struct FuzzAppendPayload(Vec<FuzzAppendItem>, Option<(DataValue, DataLength)>);
 
 	struct SimpleOverlay {
 		data: Vec<BTreeMap<Vec<u8>, Option<Vec<u8>>>>,
@@ -2274,13 +2268,16 @@ pub mod fuzzing {
 			self.data.last_mut().expect("always at least one item").insert(key, value);
 		}
 
-		fn append(
+		fn append<H>(
 			&mut self,
 			key: Vec<u8>,
 			value: Vec<u8>,
-			backend: &mut TrieBackend<MemoryDB<BlakeTwo256>, BlakeTwo256>,
-		) {
-			let mut current_value = self
+			backend: &mut TrieBackend<MemoryDB<H>, H>,
+		) where
+			H: Hasher,
+			H::Out: codec::Decode + codec::Encode + 'static,
+		{
+			let current_value = self
 				.data
 				.last_mut()
 				.expect("always at least one item")
@@ -2315,15 +2312,14 @@ pub mod fuzzing {
 		}
 	}
 
-	#[derive(Default)]
-	struct FuzzAppendState {
+	struct FuzzAppendState<H: Hasher> {
 		key: Vec<u8>,
 
 		// reference simple implementation
 		reference: SimpleOverlay,
 
 		// trie backend
-		backend: TrieBackend<MemoryDB<BlakeTwo256>, BlakeTwo256>,
+		backend: TrieBackend<MemoryDB<H>, H>,
 		// Standard Overlay
 		overlay: OverlayedChanges,
 
@@ -2331,7 +2327,11 @@ pub mod fuzzing {
 		transaction_depth: usize,
 	}
 
-	impl FuzzAppendState {
+	impl<H> FuzzAppendState<H>
+	where
+		H: Hasher,
+		H::Out: codec::Decode + codec::Encode + 'static,
+	{
 		fn process_item(&mut self, item: FuzzAppendItem) {
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut self.overlay, &mut cache, &mut self.backend, None);
@@ -2365,22 +2365,24 @@ pub mod fuzzing {
 						return
 					}
 					let _ = self.reference.data.pop();
-					ext.storage_rollback_transaction();
+					ext.storage_rollback_transaction().unwrap();
 				},
 				FuzzAppendItem::CommitTransaction => {
 					if self.transaction_depth == 0 {
 						return
 					}
 					let _ = self.reference.commit_transaction();
-					ext.storage_commit_transaction();
+					ext.storage_commit_transaction().unwrap();
 				},
 			}
 		}
 
 		fn check_final_state(&mut self) {
-				let left = ext.storage(self.key.as_slice());
-				let right = self.reference.get(self.key.as_slice());
-				assert_eq!(left.as_ref(), right);
+			let mut cache = StorageTransactionCache::default();
+			let mut ext = Ext::new(&mut self.overlay, &mut cache, &mut self.backend, None);
+			let left = ext.storage(self.key.as_slice());
+			let right = self.reference.get(self.key.as_slice());
+			assert_eq!(left.as_ref(), right);
 		}
 	}
 
@@ -2389,12 +2391,21 @@ pub mod fuzzing {
 		assert_eq!(codec::Compact(5u16).encode()[0], DataValue::EasyBug as u8);
 		let scenarii = [vec![]];
 
-		for (i, scenario) in scenarii.iter().enumerate() {
-			fuzz_append((scenario.clone(), Some((DataValue::A, DataLength::Small))));
+		for scenario in scenarii.iter() {
+			fuzz_append::<BlakeTwo256>(FuzzAppendPayload(
+				scenario.clone(),
+				Some((DataValue::A, DataLength::Small)),
+			));
 		}
 	}
 
-	fn fuzz_append((to_fuzz, initial): FuzzAppendPayload) {
+	/// Test append operation for a given fuzzing payload.
+	pub fn fuzz_append<H>(payload: FuzzAppendPayload)
+	where
+		H: Hasher,
+		H::Out: codec::Decode + codec::Encode + 'static,
+	{
+		let FuzzAppendPayload(to_fuzz, initial) = payload;
 		let key = b"k".to_vec();
 		let mut reference = SimpleOverlay::default();
 		let initial: BTreeMap<_, _> = initial
@@ -2404,14 +2415,18 @@ pub mod fuzzing {
 		for (k, v) in initial.iter() {
 			reference.data[0].insert(k.clone(), Some(v.clone()));
 		}
-		let mut overlay = OverlayedChanges::default();
+		let overlay = OverlayedChanges::default();
 
-		let mut state = FuzzAppendState {
+		let mut state = FuzzAppendState::<H> {
 			key,
 			reference,
 			overlay,
 			backend: (initial, StateVersion::default()).into(),
 			transaction_depth: 0,
 		};
+		for item in to_fuzz {
+			state.process_item(item);
+		}
+		state.check_final_state();
 	}
 }

@@ -9,10 +9,11 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+sp-runtime = { version = "7.0.0", path = "../../runtime" }
 
 [dependencies.sp-state-machine]
 path = ".."
-feature = ["fuzzing"]
+features = ["fuzzing"]
 
 # Prevent this from interfering with workspaces
 [workspace]
