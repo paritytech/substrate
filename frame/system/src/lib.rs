@@ -1618,21 +1618,21 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
 
 		cfg_if::cfg_if! {
-			 if #[cfg(all(feature = "runtime-benchmarks", not(test)))] {
+			if #[cfg(all(feature = "runtime-benchmarks", not(test)))] {
 					// Let's ensure the compiler doesn't optimize our fetching of the runtime version away.
 					core::hint::black_box((new_version, current_version));
 					Ok(())
-			  } else {
-				  if new_version.spec_name != current_version.spec_name {
-					  return Err(Error::<T>::InvalidSpecName.into())
-				   }
+			} else {
+				if new_version.spec_name != current_version.spec_name {
+					return Err(Error::<T>::InvalidSpecName.into())
+				}
 
-				   if new_version.spec_version <= current_version.spec_version {
-						return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
-				   }
+				if new_version.spec_version <= current_version.spec_version {
+					return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
+				}
 
-				   Ok(())
-			  }
+				Ok(())
+			}
 		}
 	}
 }
@@ -1643,7 +1643,7 @@ pub fn unique(entropy: impl Encode) -> [u8; 32] {
 	let mut last = [0u8; 32];
 	sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut last[..], 0);
 	let next = (b"frame_system::unique", entropy, last).using_encoded(blake2_256);
-	sp_io::storage::set(well_known_keys::INTRABLOCK_ENTROPY, &next.encode());
+	sp_io::storage::set(well_known_keys::INTRABLOCK_ENTROPY, &next);
 	next
 }
 
