@@ -5357,7 +5357,6 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-statement-store",
- "sp-std",
  "sp-tracing",
  "sp-trie",
  "wat",
