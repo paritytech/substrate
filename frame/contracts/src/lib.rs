@@ -735,6 +735,10 @@ pub mod pallet {
 			)
 		}
 
+		/// When a migration is in progress, this dispatchable can be used to run migration steps.
+		/// Calls that contribute to advancing the migration have their fees waived, as it's helpful
+		/// for the chain. Note that while the migration is in progress, the pallet will also
+		/// leverage the `on_idle` hooks to run migration steps.
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::migrate().saturating_add(*weight_limit))]
 		pub fn migrate(origin: OriginFor<T>, weight_limit: Weight) -> DispatchResultWithPostInfo {
@@ -913,8 +917,6 @@ pub mod pallet {
 		MigrationInProgress,
 		/// Migrate dispatch call was attempted but no migration was performed.
 		NoMigrationPerformed,
-		/// The weight limit for a migration dispatch call was too low.
-		MigrateWeightLimitTooLow,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
