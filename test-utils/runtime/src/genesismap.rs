@@ -109,11 +109,18 @@ impl GenesisStorageBuilder {
 
 	/// Builds the `GenesisConfig` and returns its storage.
 	pub fn build(self) -> Storage {
-		let authorities_sr25519: Vec<_> = self
+		let authorities_sr25519: Vec<sr25519::Public> =
+			self.authorities.clone().into_iter().map(|id| id.into()).collect();
+
+		let authorities_bandersnatch: Vec<bandersnatch::Public> = self
 			.authorities
-			.clone()
-			.into_iter()
-			.map(|id| sr25519::Public::from(id))
+			.iter()
+			.map(|id| {
+				use sp_keyring::bandersnatch::Keyring as BandersnatchKeyring;
+				use std::str::FromStr;
+				let seed: &'static str = AccountKeyring::from_public(id).unwrap().into();
+				BandersnatchKeyring::from_str(&seed).unwrap().into()
+			})
 			.collect();
 
 		let genesis_config = GenesisConfig {
@@ -129,8 +136,7 @@ impl GenesisStorageBuilder {
 				epoch_config: Some(crate::TEST_RUNTIME_BABE_EPOCH_CONFIGURATION),
 			},
 			sassafras: pallet_sassafras::GenesisConfig {
-				// DAVXY: FIXME
-				authorities: vec![],
+				authorities: authorities_bandersnatch.into_iter().map(|x| (x.into(), 1)).collect(),
 				epoch_config: sp_consensus_sassafras::SassafrasEpochConfiguration {
 					redundancy_factor: 1,
 					attempts_number: 32,
