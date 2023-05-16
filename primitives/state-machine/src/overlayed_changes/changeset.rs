@@ -111,7 +111,7 @@ pub enum StorageEntry {
 		//
 		// This does not include the size of the compact 32 encoded number of appends.
 		//
-		// This value is only define on the last state of a transaction, iff `data`
+		// This value is only define in the state of a transaction, iff `data`
 		// has been sent forward to next transaction (and thus `data` is empty).
 		moved_size: Option<usize>,
 		// Current number of appended elements.
@@ -320,6 +320,7 @@ impl OverlayedEntry<StorageEntry> {
 						data.truncate(
 							delta +
 								moved_size
+									.take()
 									.expect("append in new layer store size in previous; qed"),
 						);
 						*parent_data = data;
