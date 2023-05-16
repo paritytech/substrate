@@ -34,11 +34,9 @@ use futures::{channel::mpsc, future, stream::Fuse, FutureExt, Stream, StreamExt}
 use addr_cache::AddrCache;
 use codec::{Decode, Encode};
 use ip_network::IpNetwork;
-use libp2p::{
-	core::multiaddr,
-	multihash::{Multihash, MultihashDigest},
-	Multiaddr, PeerId,
-};
+use libp2p::{core::multiaddr, identity::PublicKey, multihash::Multihash, Multiaddr, PeerId};
+use multihash::{Code, MultihashDigest};
+
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
@@ -551,10 +549,8 @@ where
 				// properly signed by the owner of the PeerId
 
 				if let Some(peer_signature) = peer_signature {
-					let public_key = libp2p::identity::PublicKey::from_protobuf_encoding(
-						&peer_signature.public_key,
-					)
-					.map_err(Error::ParsingLibp2pIdentity)?;
+					let public_key = PublicKey::try_decode_protobuf(&peer_signature.public_key)
+						.map_err(Error::ParsingLibp2pIdentity)?;
 					let signature = Signature { public_key, bytes: peer_signature.signature };
 
 					if !signature.verify(record, &remote_peer_id) {
@@ -625,7 +621,7 @@ pub trait NetworkProvider: NetworkDHTProvider + NetworkStateInfo + NetworkSigner
 impl<T> NetworkProvider for T where T: NetworkDHTProvider + NetworkStateInfo + NetworkSigner {}
 
 fn hash_authority_id(id: &[u8]) -> KademliaKey {
-	KademliaKey::new(&libp2p::multihash::Code::Sha2_256.digest(id).digest())
+	KademliaKey::new(&Code::Sha2_256.digest(id).digest())
 }
 
 // Makes sure all values are the same and returns it
@@ -662,7 +658,7 @@ fn sign_record_with_peer_id(
 	let signature = network
 		.sign_with_local_identity(serialized_record)
 		.map_err(|e| Error::CannotSign(format!("{} (network packet)", e)))?;
-	let public_key = signature.public_key.to_protobuf_encoding();
+	let public_key = signature.public_key.encode_protobuf();
 	let signature = signature.bytes;
 	Ok(schema::PeerSignature { signature, public_key })
 }
