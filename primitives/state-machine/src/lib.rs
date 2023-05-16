@@ -2310,6 +2310,15 @@ pub mod fuzzing {
 				}
 			}
 		}
+
+		fn rollback_transaction(&mut self) {
+			let _ = self.data.pop();
+		}
+
+		fn start_transaction(&mut self) {
+			let cloned = self.data.last().expect("always at least one item").clone();
+			self.data.push(cloned);
+		}
 	}
 
 	struct FuzzAppendState<H: Hasher> {
@@ -2357,21 +2366,21 @@ pub mod fuzzing {
 				},
 				FuzzAppendItem::StartTransaction => {
 					self.transaction_depth += 1;
-					self.reference.data.push(BTreeMap::new());
+					self.reference.start_transaction();
 					ext.storage_start_transaction();
 				},
 				FuzzAppendItem::RollbackTransaction => {
 					if self.transaction_depth == 0 {
 						return
 					}
-					let _ = self.reference.data.pop();
+					self.reference.rollback_transaction();
 					ext.storage_rollback_transaction().unwrap();
 				},
 				FuzzAppendItem::CommitTransaction => {
 					if self.transaction_depth == 0 {
 						return
 					}
-					let _ = self.reference.commit_transaction();
+					self.reference.commit_transaction();
 					ext.storage_commit_transaction().unwrap();
 				},
 			}
@@ -2389,13 +2398,13 @@ pub mod fuzzing {
 	#[test]
 	fn fuzz_scenarii() {
 		assert_eq!(codec::Compact(5u16).encode()[0], DataValue::EasyBug as u8);
-		let scenarii = [vec![]];
+		let scenarii = vec![(
+			vec![FuzzAppendItem::StartTransaction],
+			Some((DataValue::EasyBug, DataLength::Zero)),
+		)];
 
-		for scenario in scenarii.iter() {
-			fuzz_append::<BlakeTwo256>(FuzzAppendPayload(
-				scenario.clone(),
-				Some((DataValue::A, DataLength::Small)),
-			));
+		for (scenario, init) in scenarii.into_iter() {
+			fuzz_append::<BlakeTwo256>(FuzzAppendPayload(scenario, init));
 		}
 	}
 
@@ -2415,6 +2424,7 @@ pub mod fuzzing {
 		for (k, v) in initial.iter() {
 			reference.data[0].insert(k.clone(), Some(v.clone()));
 		}
+		reference.start_transaction(); // level 0 is backend, keep it untouched.
 		let overlay = OverlayedChanges::default();
 
 		let mut state = FuzzAppendState::<H> {
