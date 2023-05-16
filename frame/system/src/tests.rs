@@ -35,6 +35,27 @@ fn origin_works() {
 }
 
 #[test]
+fn unique_datum_works() {
+	new_test_ext().execute_with(|| {
+		System::initialize(&1, &[0u8; 32].into(), &Default::default());
+		assert!(sp_io::storage::exists(well_known_keys::INTRABLOCK_ENTROPY));
+
+		let h1 = unique(b"");
+		let h2 = unique(b"");
+		assert_ne!(h1, h2);
+
+		let h3 = unique(b"Hello");
+		assert_ne!(h2, h3);
+
+		let h4 = unique(b"Hello");
+		assert_ne!(h3, h4);
+
+		System::finalize();
+		assert!(!sp_io::storage::exists(well_known_keys::INTRABLOCK_ENTROPY));
+	});
+}
+
+#[test]
 fn stored_map_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(System::inc_providers(&0), IncRefStatus::Created);

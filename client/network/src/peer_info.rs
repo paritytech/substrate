@@ -16,6 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! [`PeerInfoBehaviour`] is implementation of `NetworkBehaviour` that holds information about peers
+//! in cache.
+
 use crate::utils::interval;
 use either::Either;
 
