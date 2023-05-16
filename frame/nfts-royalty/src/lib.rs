@@ -114,7 +114,6 @@ pub mod pallet {
 	/// The storage for NFT collections with a royalty
 	/// This will be the royalty used for all items in the collection unless overridden in `ItemWithRoyalty`
 	#[pallet::storage]
-	#[pallet::getter(fn nft_collection_with_royalty)]
 	pub type CollectionWithRoyalty<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -126,7 +125,6 @@ pub mod pallet {
 	/// The storage for NFT items with a royalty.
 	/// Setting the royalty in this storage will override the royalty set in `CollectionWithRoyalty` only for the specific item.
 	#[pallet::storage]
-	#[pallet::getter(fn nft_with_royalty)]
 	pub type ItemWithRoyalty<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -137,7 +135,6 @@ pub mod pallet {
 
 	/// The storage for royalty recipient(s) and the percentage of the total royalty each will receive.
 	#[pallet::storage]
-	#[pallet::getter(fn collection_royalty_recipients)]
 	pub type CollectionRoyaltyRecipients<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -148,7 +145,6 @@ pub mod pallet {
 	/// The storage for royalty recipient(s) and the percentage of the total royalty each will receive.
 	/// Setting the recipients in this storage will override the recipient(s) set in `CollectionRoyaltyRecipients` only for the specific item.
 	#[pallet::storage]
-	#[pallet::getter(fn item_royalty_recipients)]
 	pub type ItemRoyaltyRecipients<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
