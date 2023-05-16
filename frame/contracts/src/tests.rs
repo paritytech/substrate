@@ -28,7 +28,8 @@ use crate::{
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, CollectEvents, Config, ContractInfo, ContractInfoOf, DebugInfo,
-	DefaultAddressGenerator, DeletionQueueCounter, Error, Origin, Pallet, Schedule,
+	DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress, Origin, Pallet,
+	Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -553,6 +554,62 @@ fn calling_plain_account_fails() {
 					pays_fee: Default::default(),
 				},
 			})
+		);
+	});
+}
+
+#[test]
+fn migration_in_progress_works() {
+	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		MigrationInProgress::<Test>::set(Some(Default::default()));
+
+		assert_err!(
+			Contracts::upload_code(
+				RuntimeOrigin::signed(ALICE),
+				vec![],
+				None,
+				Determinism::Enforced
+			),
+			Error::<Test>::MigrationInProgress,
+		);
+		assert_err!(
+			Contracts::remove_code(RuntimeOrigin::signed(ALICE), code_hash.clone()),
+			Error::<Test>::MigrationInProgress,
+		);
+		assert_err!(
+			Contracts::set_code(RuntimeOrigin::signed(ALICE), BOB.clone(), code_hash.clone()),
+			Error::<Test>::MigrationInProgress,
+		);
+		assert_err_ignore_postinfo!(
+			Contracts::call(RuntimeOrigin::signed(ALICE), BOB, 0, GAS_LIMIT, None, vec![],),
+			Error::<Test>::MigrationInProgress,
+		);
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate_with_code(
+				RuntimeOrigin::signed(ALICE),
+				100_000,
+				GAS_LIMIT,
+				None,
+				wasm,
+				vec![],
+				vec![],
+			),
+			Error::<Test>::MigrationInProgress,
+		);
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate(
+				RuntimeOrigin::signed(ALICE),
+				100_000,
+				GAS_LIMIT,
+				None,
+				code_hash,
+				vec![],
+				vec![],
+			),
+			Error::<Test>::MigrationInProgress,
 		);
 	});
 }
