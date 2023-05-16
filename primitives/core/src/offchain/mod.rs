@@ -259,6 +259,7 @@ impl Timestamp {
 
 bitflags::bitflags! {
 	/// Execution context extra capabilities.
+	#[derive(Debug)]
 	pub struct Capabilities: u32 {
 		/// Access to transaction pool.
 		const TRANSACTION_POOL = 0b0000_0000_0001;
