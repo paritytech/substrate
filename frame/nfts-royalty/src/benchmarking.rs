@@ -7,6 +7,7 @@ use crate::Pallet as NftsRoyalty;
 use frame_benchmarking::v2::*;
 use frame_system::RawOrigin;
 use frame_support::{
+    pallet_prelude::*,
     assert_ok,
 	traits::{
 		tokens::nonfungibles_v2::{Create, Mutate},
@@ -65,6 +66,7 @@ mod benchmarks {
         (caller, 0.into())
     }
 
+
 	#[benchmark]
 	fn set_collection_royalty() {
 		let caller: T::AccountId = whitelisted_caller();
@@ -93,6 +95,96 @@ mod benchmarks {
 		set_item_royalty(RawOrigin::Signed(caller), collection_id,item_id, Permill::from_percent(10), item_owner.clone());
         let royaltiy_details = RoyaltyDetails {
             royalty_recipient: item_owner,
+            royalty_percentage: Permill::from_percent(10)
+        };
+
+		assert_eq!(ItemWithRoyalty::<T>::get((collection_id, item_id)), Some(royaltiy_details));
+	}
+
+    #[benchmark]
+	fn set_collection_royalty_recipients() {
+		let caller: T::AccountId = whitelisted_caller();
+
+        let (_collection_owner, collection_id) = create_nft_collection::<T>();
+        let recipients = vec![
+				RoyaltyDetails {
+					royalty_recipient: account::<T::AccountId>("member A", 2, 2),
+					royalty_percentage: Permill::from_percent(50)
+				},
+				RoyaltyDetails {
+					royalty_recipient:account::<T::AccountId>("member B", 1, 1),
+					royalty_percentage: Permill::from_percent(25)
+				},
+		];
+
+		#[extrinsic_call]
+		set_collection_royalty_recipients(RawOrigin::Signed(caller), collection_id, recipients.clone());
+        let bounded_vec: BoundedVec<_, T::MaxRecipients> = recipients.try_into().unwrap();
+
+		assert_eq!(CollectionRoyaltyRecipients::<T>::get(collection_id), Some(bounded_vec));
+	}
+
+    #[benchmark]
+    fn set_item_royalty_recipients() {
+		let caller: T::AccountId = whitelisted_caller();
+
+        let (_collection_owner, collection_id) = create_nft_collection::<T>();
+        let item_id = 0.into();
+        mint_nft::<T>(collection_id, item_id);
+
+        let recipients = vec![
+				RoyaltyDetails {
+					royalty_recipient: account::<T::AccountId>("member A", 2, 2),
+					royalty_percentage: Permill::from_percent(50)
+				},
+				RoyaltyDetails {
+					royalty_recipient:account::<T::AccountId>("member B", 1, 1),
+					royalty_percentage: Permill::from_percent(25)
+				},
+		];
+
+		#[extrinsic_call]
+		set_item_royalty_recipients(RawOrigin::Signed(caller), collection_id, item_id, recipients.clone());
+        let bounded_vec: BoundedVec<_, T::MaxRecipients> = recipients.try_into().unwrap();
+
+		assert_eq!(ItemRoyaltyRecipients::<T>::get((collection_id, item_id)), Some(bounded_vec));
+	}
+
+    #[benchmark]
+	fn transfer_collection_royalty_recipient() {
+		let caller: T::AccountId = whitelisted_caller();
+
+        let (collection_owner, collection_id) = create_nft_collection::<T>();
+        assert_ok!(NftsRoyalty::<T>::set_collection_royalty(RawOrigin::Signed(caller.clone()).into(), collection_id, Permill::from_percent(10), collection_owner.clone()));
+
+        let new_recipient = account::<T::AccountId>("member A", 2, 2);
+		#[extrinsic_call]
+        transfer_collection_royalty_recipient(RawOrigin::Signed(caller), collection_id, new_recipient.clone());
+		
+        let royaltiy_details = RoyaltyDetails {
+            royalty_recipient: new_recipient,
+            royalty_percentage: Permill::from_percent(10)
+        };
+
+		assert_eq!(CollectionWithRoyalty::<T>::get(collection_id), Some(royaltiy_details));
+	}
+
+    #[benchmark]
+	fn transfer_item_royalty_recipient() {
+		let caller: T::AccountId = whitelisted_caller();
+
+        let (_collection_owner, collection_id) = create_nft_collection::<T>();
+        let item_id = 0.into();
+        let item_owner = mint_nft::<T>(collection_id, item_id);
+        
+        assert_ok!(NftsRoyalty::<T>::set_item_royalty(RawOrigin::Signed(caller.clone()).into(), collection_id, item_id, Permill::from_percent(10), item_owner.clone()));
+
+        let new_recipient = account::<T::AccountId>("member A", 2, 2);
+		#[extrinsic_call]
+        transfer_item_royalty_recipient(RawOrigin::Signed(caller), collection_id, item_id, new_recipient.clone());
+		
+        let royaltiy_details = RoyaltyDetails {
+            royalty_recipient: new_recipient,
             royalty_percentage: Permill::from_percent(10)
         };
 
