@@ -61,9 +61,10 @@ pub(crate) fn claim_slot(
 				authority_idx,
 				ticket_data.attempt_idx
 			);
-			// TODO DAVXY : using ticket_secret
-			let _ = ticket_secret;
-			let erased_signature = [0; 64];
+			let erased_pair = sp_core::ed25519::Pair::from_seed(&ticket_secret.erased_secret);
+			// TODO DAVXY : sign proper data...
+			let data_to_sign = b"dummy";
+			let erased_signature: [u8; 64] = *erased_pair.sign(data_to_sign).as_ref();
 			let claim = TicketClaim { erased_signature };
 			(authority_idx, Some(claim))
 		},
@@ -124,8 +125,9 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 			}
 
 			// TODO DAVXY: compute proper erased_secret/public and revealed_public
-			let erased_secret = [0; 32];
-			let erased_public = [0; 32];
+			let (erased_pair, erased_seed) = sp_core::ed25519::Pair::generate();
+
+			let erased_public: [u8; 32] = *erased_pair.public().as_ref();
 			let revealed_public = [0; 32];
 			let data = TicketData { attempt_idx, erased_public, revealed_public };
 
@@ -133,7 +135,7 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 			let ring_proof = ();
 			let ticket_envelope = TicketEnvelope { data, vrf_preout, ring_proof };
 
-			let ticket_secret = TicketSecret { attempt_idx, erased_secret };
+			let ticket_secret = TicketSecret { attempt_idx, erased_secret: erased_seed };
 
 			Some((ticket_envelope, ticket_id, ticket_secret))
 		};

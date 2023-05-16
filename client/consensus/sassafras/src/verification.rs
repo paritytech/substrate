@@ -90,11 +90,12 @@ fn check_header<B: BlockT + Sized>(
 		return Err(sassafras_err(Error::VrfVerificationFailed))
 	}
 
+	// TODO DAVXY: we should decide what to do with this...
 	// let signature = seal
 	// 	.as_sassafras_seal()
 	// 	.ok_or_else(|| sassafras_err(Error::HeaderBadSeal(header.hash())))?;
 
-	// let pre_hash = header.hash();
+	let pre_hash = header.hash();
 	// if !AuthorityPair::verify(&signature, &pre_hash, &authority_id) {
 	// 	return Err(sassafras_err(Error::BadSignature(pre_hash)))
 	// }
@@ -104,9 +105,14 @@ fn check_header<B: BlockT + Sized>(
 	match (&maybe_ticket, &pre_digest.ticket_claim) {
 		(Some((_ticket_id, ticket_data)), Some(ticket_claim)) => {
 			log::debug!(target: LOG_TARGET, "checking primary");
-			// TODO DAVXY: check erased_signature
-			let _public = ticket_data.erased_public;
-			let _signature = ticket_claim.erased_signature;
+			let erased_public = sp_core::ed25519::Public::from_raw(ticket_data.erased_public);
+			let erased_signature =
+				sp_core::ed25519::Signature::from_raw(ticket_claim.erased_signature);
+			// TODO DAVXY: check proper data
+			let dummy_data = b"dummy";
+			if !sp_core::ed25519::Pair::verify(&erased_signature, &dummy_data, &erased_public) {
+				return Err(sassafras_err(Error::BadSignature(pre_hash)))
+			}
 		},
 		(None, None) => {
 			log::debug!(target: LOG_TARGET, "checking secondary");
