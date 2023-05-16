@@ -326,11 +326,10 @@ mod tests {
 	use sp_consensus::BlockOrigin;
 	use sp_consensus_grandpa::GRANDPA_ENGINE_ID;
 	use sp_keyring::Ed25519Keyring;
-	use sp_runtime::traits::Header as _;
 	use std::sync::Arc;
 	use substrate_test_runtime_client::{
-		ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt, TestClientBuilder,
-		TestClientBuilderExt,
+		BlockBuilderExt, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt,
+		TestClientBuilder, TestClientBuilderExt,
 	};
 
 	#[test]
@@ -348,8 +347,7 @@ mod tests {
 		let mut authority_set_changes = Vec::new();
 
 		for n in 1..=100 {
-			let mut block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-
+			let mut builder = client.new_block(Default::default()).unwrap();
 			let mut new_authorities = None;
 
 			// we will trigger an authority set change every 10 blocks
@@ -376,8 +374,10 @@ mod tests {
 					.encode(),
 				);
 
-				block.header.digest_mut().logs.push(digest);
+				builder.push_deposit_log_digest_item(digest).unwrap();
 			}
+
+			let block = builder.build().unwrap().block;
 
 			futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 

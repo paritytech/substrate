@@ -148,6 +148,7 @@ impl logger::Config for Test {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
+	type WeightInfo = ();
 }
 
 // New types for dispatchable functions.
@@ -161,4 +162,9 @@ pub fn new_test_ext(root_key: u64) -> sp_io::TestExternalities {
 		.assimilate_storage(&mut t)
 		.unwrap();
 	t.into()
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+pub fn new_bench_ext() -> sp_io::TestExternalities {
+	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }

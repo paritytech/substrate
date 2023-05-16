@@ -22,15 +22,15 @@ pub mod meter;
 use crate::{
 	exec::{AccountIdOf, Key},
 	weights::WeightInfo,
-	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, Pallet,
-	TrieId, SENTINEL,
+	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue,
+	DeletionQueueCounter, Error, Pallet, TrieId, SENTINEL,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
+	dispatch::DispatchError,
 	storage::child::{self, ChildInfo},
 	weights::Weight,
-	RuntimeDebugNoBound,
+	DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_io::KillStorageResult;
@@ -38,7 +38,7 @@ use sp_runtime::{
 	traits::{Hash, Saturating, Zero},
 	RuntimeDebug,
 };
-use sp_std::{ops::Deref, prelude::*};
+use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
@@ -204,27 +204,21 @@ impl<T: Config> ContractInfo<T> {
 	/// Push a contract's trie to the deletion queue for lazy removal.
 	///
 	/// You must make sure that the contract is also removed when queuing the trie for deletion.
-	pub fn queue_trie_for_deletion(&self) -> DispatchResult {
-		<DeletionQueue<T>>::try_append(DeletedContract { trie_id: self.trie_id.clone() })
-			.map_err(|_| <Error<T>>::DeletionQueueFull.into())
+	pub fn queue_trie_for_deletion(&self) {
+		DeletionQueueManager::<T>::load().insert(self.trie_id.clone());
 	}
 
 	/// Calculates the weight that is necessary to remove one key from the trie and how many
-	/// of those keys can be deleted from the deletion queue given the supplied queue length
-	/// and weight limit.
-	pub fn deletion_budget(queue_len: usize, weight_limit: Weight) -> (Weight, u32) {
+	/// of those keys can be deleted from the deletion queue given the supplied weight limit.
+	pub fn deletion_budget(weight_limit: Weight) -> (Weight, u32) {
 		let base_weight = T::WeightInfo::on_process_deletion_queue_batch();
-		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
-			T::WeightInfo::on_initialize_per_queue_item(0);
 		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
 			T::WeightInfo::on_initialize_per_trie_key(0);
-		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as u64);
 
 		// `weight_per_key` being zero makes no sense and would constitute a failure to
 		// benchmark properly. We opt for not removing any keys at all in this case.
 		let key_budget = weight_limit
 			.saturating_sub(base_weight)
-			.saturating_sub(decoding_weight)
 			.checked_div_per_component(&weight_per_key)
 			.unwrap_or(0) as u32;
 
@@ -235,13 +229,13 @@ impl<T: Config> ContractInfo<T> {
 	///
 	/// It returns the amount of weight used for that task.
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
-		let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
-		if queue_len == 0 {
+		let mut queue = <DeletionQueueManager<T>>::load();
+
+		if queue.is_empty() {
 			return Weight::zero()
 		}
 
-		let (weight_per_key, mut remaining_key_budget) =
-			Self::deletion_budget(queue_len, weight_limit);
+		let (weight_per_key, mut remaining_key_budget) = Self::deletion_budget(weight_limit);
 
 		// We want to check whether we have enough weight to decode the queue before
 		// proceeding. Too little weight for decoding might happen during runtime upgrades
@@ -250,30 +244,25 @@ impl<T: Config> ContractInfo<T> {
 			return weight_limit
 		}
 
-		let mut queue = <DeletionQueue<T>>::get();
+		while remaining_key_budget > 0 {
+			let Some(entry) = queue.next() else { break };
 
-		while !queue.is_empty() && remaining_key_budget > 0 {
-			// Cannot panic due to loop condition
-			let trie = &mut queue[0];
 			#[allow(deprecated)]
 			let outcome = child::kill_storage(
-				&ChildInfo::new_default(&trie.trie_id),
+				&ChildInfo::new_default(&entry.trie_id),
 				Some(remaining_key_budget),
 			);
-			let keys_removed = match outcome {
+
+			match outcome {
 				// This happens when our budget wasn't large enough to remove all keys.
-				KillStorageResult::SomeRemaining(c) => c,
-				KillStorageResult::AllRemoved(c) => {
-					// We do not care to preserve order. The contract is deleted already and
-					// no one waits for the trie to be deleted.
-					queue.swap_remove(0);
-					c
+				KillStorageResult::SomeRemaining(_) => return weight_limit,
+				KillStorageResult::AllRemoved(keys_removed) => {
+					entry.remove();
+					remaining_key_budget = remaining_key_budget.saturating_sub(keys_removed);
 				},
 			};
-			remaining_key_budget = remaining_key_budget.saturating_sub(keys_removed);
 		}
 
-		<DeletionQueue<T>>::put(queue);
 		weight_limit.saturating_sub(weight_per_key.saturating_mul(u64::from(remaining_key_budget)))
 	}
 
@@ -281,25 +270,9 @@ impl<T: Config> ContractInfo<T> {
 	pub fn load_code_hash(account: &AccountIdOf<T>) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).map(|i| i.code_hash)
 	}
-
-	/// Fill up the queue in order to exercise the limits during testing.
-	#[cfg(test)]
-	pub fn fill_queue_with_dummies() {
-		use frame_support::{traits::Get, BoundedVec};
-		let queue: Vec<DeletedContract> = (0..T::DeletionQueueDepth::get())
-			.map(|_| DeletedContract { trie_id: TrieId::default() })
-			.collect();
-		let bounded: BoundedVec<_, _> = queue.try_into().map_err(|_| ()).unwrap();
-		<DeletionQueue<T>>::put(bounded);
-	}
 }
 
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct DeletedContract {
-	pub(crate) trie_id: TrieId,
-}
-
-/// Information about what happended to the pre-existing value when calling [`ContractInfo::write`].
+/// Information about what happened to the pre-existing value when calling [`ContractInfo::write`].
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum WriteOutcome {
 	/// No value existed at the specified key.
@@ -350,5 +323,86 @@ impl<T: Config> Deref for DepositAccount<T> {
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
+	}
+}
+
+/// Manage the removal of contracts storage that are marked for deletion.
+///
+/// When a contract is deleted by calling `seal_terminate` it becomes inaccessible
+/// immediately, but the deletion of the storage items it has accumulated is performed
+/// later by pulling the contract from the queue in the `on_idle` hook.
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, DefaultNoBound, Clone)]
+#[scale_info(skip_type_params(T))]
+pub struct DeletionQueueManager<T: Config> {
+	/// Counter used as a key for inserting a new deleted contract in the queue.
+	/// The counter is incremented after each insertion.
+	insert_counter: u32,
+	/// The index used to read the next element to be deleted in the queue.
+	/// The counter is incremented after each deletion.
+	delete_counter: u32,
+
+	_phantom: PhantomData<T>,
+}
+
+/// View on a contract that is marked for deletion.
+struct DeletionQueueEntry<'a, T: Config> {
+	/// the trie id of the contract to delete.
+	trie_id: TrieId,
+
+	/// A mutable reference on the queue so that the contract can be removed, and none can be added
+	/// or read in the meantime.
+	queue: &'a mut DeletionQueueManager<T>,
+}
+
+impl<'a, T: Config> DeletionQueueEntry<'a, T> {
+	/// Remove the contract from the deletion queue.
+	fn remove(self) {
+		<DeletionQueue<T>>::remove(self.queue.delete_counter);
+		self.queue.delete_counter = self.queue.delete_counter.wrapping_add(1);
+		<DeletionQueueCounter<T>>::set(self.queue.clone());
+	}
+}
+
+impl<T: Config> DeletionQueueManager<T> {
+	/// Load the `DeletionQueueCounter`, so we can perform read or write operations on the
+	/// DeletionQueue storage.
+	fn load() -> Self {
+		<DeletionQueueCounter<T>>::get()
+	}
+
+	/// Returns `true` if the queue contains no elements.
+	fn is_empty(&self) -> bool {
+		self.insert_counter.wrapping_sub(self.delete_counter) == 0
+	}
+
+	/// Insert a contract in the deletion queue.
+	fn insert(&mut self, trie_id: TrieId) {
+		<DeletionQueue<T>>::insert(self.insert_counter, trie_id);
+		self.insert_counter = self.insert_counter.wrapping_add(1);
+		<DeletionQueueCounter<T>>::set(self.clone());
+	}
+
+	/// Fetch the next contract to be deleted.
+	///
+	/// Note:
+	/// we use the delete counter to get the next value to read from the queue and thus don't pay
+	/// the cost of an extra call to `sp_io::storage::next_key` to lookup the next entry in the map
+	fn next(&mut self) -> Option<DeletionQueueEntry<T>> {
+		if self.is_empty() {
+			return None
+		}
+
+		let entry = <DeletionQueue<T>>::get(self.delete_counter);
+		entry.map(|trie_id| DeletionQueueEntry { trie_id, queue: self })
+	}
+}
+
+#[cfg(test)]
+impl<T: Config> DeletionQueueManager<T> {
+	pub fn from_test_values(insert_counter: u32, delete_counter: u32) -> Self {
+		Self { insert_counter, delete_counter, _phantom: Default::default() }
+	}
+	pub fn as_test_tuple(&self) -> (u32, u32) {
+		(self.insert_counter, self.delete_counter)
 	}
 }

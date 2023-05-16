@@ -35,6 +35,27 @@ fn origin_works() {
 }
 
 #[test]
+fn unique_datum_works() {
+	new_test_ext().execute_with(|| {
+		System::initialize(&1, &[0u8; 32].into(), &Default::default());
+		assert!(sp_io::storage::exists(well_known_keys::INTRABLOCK_ENTROPY));
+
+		let h1 = unique(b"");
+		let h2 = unique(b"");
+		assert_ne!(h1, h2);
+
+		let h3 = unique(b"Hello");
+		assert_ne!(h2, h3);
+
+		let h4 = unique(b"Hello");
+		assert_ne!(h3, h4);
+
+		System::finalize();
+		assert!(!sp_io::storage::exists(well_known_keys::INTRABLOCK_ENTROPY));
+	});
+}
+
+#[test]
 fn stored_map_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(System::inc_providers(&0), IncRefStatus::Created);
@@ -236,17 +257,23 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 			.get(DispatchClass::Normal)
 			.base_extrinsic;
 		let pre_info = DispatchInfo { weight: Weight::from_parts(1000, 0), ..Default::default() };
-		System::note_applied_extrinsic(&Ok(Some(300).into()), pre_info);
-		System::note_applied_extrinsic(&Ok(Some(1000).into()), pre_info);
+		System::note_applied_extrinsic(&Ok(from_actual_ref_time(Some(300))), pre_info);
+		System::note_applied_extrinsic(&Ok(from_actual_ref_time(Some(1000))), pre_info);
 		System::note_applied_extrinsic(
 			// values over the pre info should be capped at pre dispatch value
-			&Ok(Some(1200).into()),
+			&Ok(from_actual_ref_time(Some(1200))),
 			pre_info,
 		);
-		System::note_applied_extrinsic(&Ok((Some(2_500_000), Pays::Yes).into()), pre_info);
+		System::note_applied_extrinsic(
+			&Ok(from_post_weight_info(Some(2_500_000), Pays::Yes)),
+			pre_info,
+		);
 		System::note_applied_extrinsic(&Ok(Pays::No.into()), pre_info);
-		System::note_applied_extrinsic(&Ok((Some(2_500_000), Pays::No).into()), pre_info);
-		System::note_applied_extrinsic(&Ok((Some(500), Pays::No).into()), pre_info);
+		System::note_applied_extrinsic(
+			&Ok(from_post_weight_info(Some(2_500_000), Pays::No)),
+			pre_info,
+		);
+		System::note_applied_extrinsic(&Ok(from_post_weight_info(Some(500), Pays::No)), pre_info);
 		System::note_applied_extrinsic(
 			&Err(DispatchError::BadOrigin.with_weight(Weight::from_parts(999, 0))),
 			pre_info,
@@ -289,7 +316,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 			class: DispatchClass::Operational,
 			..Default::default()
 		};
-		System::note_applied_extrinsic(&Ok(Some(300).into()), pre_info);
+		System::note_applied_extrinsic(&Ok(from_actual_ref_time(Some(300))), pre_info);
 
 		let got = System::events();
 		let want = vec![
@@ -544,7 +571,12 @@ fn set_code_checks_works() {
 		("test", 1, 2, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test", 1, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test2", 1, 1, Err(Error::<Test>::InvalidSpecName)),
-		("test", 2, 1, Ok(PostDispatchInfo::default())),
+		(
+			"test",
+			2,
+			1,
+			Ok(Some(<mock::Test as pallet::Config>::BlockWeights::get().max_block).into()),
+		),
 		("test", 0, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test", 1, 0, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 	];
@@ -583,7 +615,7 @@ fn assert_runtime_updated_digest(num: usize) {
 
 #[test]
 fn set_code_with_real_wasm_blob() {
-	let executor = substrate_test_runtime_client::new_native_executor();
+	let executor = substrate_test_runtime_client::new_native_or_wasm_executor();
 	let mut ext = new_test_ext();
 	ext.register_extension(sp_core::traits::ReadRuntimeVersionExt::new(executor));
 	ext.execute_with(|| {
@@ -607,7 +639,7 @@ fn set_code_with_real_wasm_blob() {
 
 #[test]
 fn runtime_upgraded_with_set_storage() {
-	let executor = substrate_test_runtime_client::new_native_executor();
+	let executor = substrate_test_runtime_client::new_native_or_wasm_executor();
 	let mut ext = new_test_ext();
 	ext.register_extension(sp_core::traits::ReadRuntimeVersionExt::new(executor));
 	ext.execute_with(|| {
@@ -690,4 +722,15 @@ fn ensure_signed_stuff_works() {
 				.expect("EnsureSignedBy has no successful origin required for the test");
 		assert_ok!(EnsureSignedBy::<Members, _>::try_origin(successful_origin));
 	}
+}
+
+pub fn from_actual_ref_time(ref_time: Option<u64>) -> PostDispatchInfo {
+	PostDispatchInfo {
+		actual_weight: ref_time.map(|t| Weight::from_all(t)),
+		pays_fee: Default::default(),
+	}
+}
+
+pub fn from_post_weight_info(ref_time: Option<u64>, pays_fee: Pays) -> PostDispatchInfo {
+	PostDispatchInfo { actual_weight: ref_time.map(|t| Weight::from_all(t)), pays_fee }
 }
