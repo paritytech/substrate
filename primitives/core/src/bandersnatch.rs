@@ -68,6 +68,12 @@ impl UncheckedFrom<[u8; PUBLIC_SERIALIZED_LEN]> for Public {
 	}
 }
 
+impl AsRef<[u8; PUBLIC_SERIALIZED_LEN]> for Public {
+	fn as_ref(&self) -> &[u8; PUBLIC_SERIALIZED_LEN] {
+		&self.0
+	}
+}
+
 impl AsRef<[u8]> for Public {
 	fn as_ref(&self) -> &[u8] {
 		&self.0[..]
