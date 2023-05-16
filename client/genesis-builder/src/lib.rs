@@ -22,7 +22,7 @@
 //! - serialize the runtime default `GenesisConfig` struct into json format,
 //! - put the GenesisConfig struct into the storage. Internally this operation calls
 //!   `GenesisBuild::build` function
-//! for all runtime pallets, which is typically by pallet's author.
+//! for all runtime pallets, which is typically provided by pallet's author.
 //! - deserialize the GenesisConfig from given json blob and put GenesisConfig into the state
 //!   storage. Allows to build
 //! customized configuration.
