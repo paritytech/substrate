@@ -2403,6 +2403,21 @@ pub mod fuzzing {
 		let scenarii = vec![
 			(
 				vec![
+					FuzzAppendItem::Append(DataValue::B, DataLength::Small),
+					FuzzAppendItem::StartTransaction,
+					FuzzAppendItem::Append(DataValue::A, DataLength::Small),
+					FuzzAppendItem::StartTransaction,
+					FuzzAppendItem::Remove,
+					FuzzAppendItem::StartTransaction,
+					FuzzAppendItem::Append(DataValue::A, DataLength::Zero),
+					FuzzAppendItem::CommitTransaction,
+					FuzzAppendItem::CommitTransaction,
+					FuzzAppendItem::Remove,
+				],
+				Some((DataValue::EasyBug, DataLength::Small)),
+			),
+			(
+				vec![
 					FuzzAppendItem::Append(DataValue::A, DataLength::Small),
 					FuzzAppendItem::StartTransaction,
 					FuzzAppendItem::Append(DataValue::A, DataLength::Medium),

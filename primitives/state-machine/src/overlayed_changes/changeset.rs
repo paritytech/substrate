@@ -731,15 +731,19 @@ impl OverlayedChangeSet {
 				// the previous transaction or a value committed without any open transaction.
 				if has_predecessor {
 					let mut dropped_tx = overlayed.pop_transaction();
+					let mut do_same_append = false;
 					// consecutive appends need to keep past `from_parent` value.
 					if let StorageEntry::Append { from_parent, .. } = &mut dropped_tx.value {
-						if let StorageEntry::Append { from_parent: keep_me, .. } =
-							overlayed.value_mut()
-						{
-							*from_parent = *keep_me;
-						} else {
-							debug_assert!(!*from_parent);
+						if *from_parent {
+							if let StorageEntry::Append { from_parent: keep_me, .. } =
+								overlayed.value_mut()
+							{
+								*from_parent = *keep_me;
+								do_same_append = true
+							}
 						}
+					}
+					if do_same_append {
 						*overlayed.value_mut() = dropped_tx.value;
 					} else {
 						let removed = sp_std::mem::replace(overlayed.value_mut(), dropped_tx.value);
