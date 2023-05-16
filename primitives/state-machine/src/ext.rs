@@ -848,7 +848,7 @@ impl<'a> StorageAppend<'a> {
 	/// Append the given `value` to the storage item.
 	///
 	/// If appending fails, `[value]` is stored in the storage item and we return false.
-	#[cfg(test)]
+	#[cfg(any(test, feature = "fuzzing"))]
 	pub fn append(&mut self, value: Vec<u8>) -> bool {
 		use codec::EncodeAppend;
 		let mut result = true;
