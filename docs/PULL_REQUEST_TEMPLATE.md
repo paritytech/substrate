@@ -14,6 +14,8 @@ Thank you for your Pull Request! 🙏 Please make sure it follows the CONTRIBUTI
 
 Fixes # (issue number, *if applicable*) 
 
+Closes # (issue number, *if applicable*) 
+
 Polkadot companion: (*if applicable*)
 
 Cumulus companion: (*if applicable*)
