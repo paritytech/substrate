@@ -2247,6 +2247,8 @@ pub mod fuzzing {
 		CommitTransaction,
 		Read,
 		Remove,
+		// To go ever 256 items easily (different compact size then).
+		Append50(DataValue, DataLength),
 	}
 
 	/// Arbitrary payload for fuzzing append.
@@ -2350,6 +2352,15 @@ pub mod fuzzing {
 					ext.storage_append(self.key.clone(), value.clone());
 					self.reference.append(self.key.clone(), value, &mut self.backend);
 				},
+				FuzzAppendItem::Append50(value, length) => {
+					let value = vec![value as u8; length as usize];
+					for _ in 0..50 {
+						let mut ext =
+							Ext::new(&mut self.overlay, &mut cache, &mut self.backend, None);
+						ext.storage_append(self.key.clone(), value.clone());
+						self.reference.append(self.key.clone(), value.clone(), &mut self.backend);
+					}
+				},
 				FuzzAppendItem::Insert(value, length) => {
 					let value = vec![value as u8; length as usize];
 					ext.set_storage(self.key.clone(), value.clone());
@@ -2401,6 +2412,29 @@ pub mod fuzzing {
 	fn fuzz_scenarii() {
 		assert_eq!(codec::Compact(5u16).encode()[0], DataValue::EasyBug as u8);
 		let scenarii = vec![
+			(
+				vec![
+					FuzzAppendItem::Append(DataValue::A, DataLength::Big),
+					FuzzAppendItem::Read,
+					FuzzAppendItem::RollbackTransaction,
+					FuzzAppendItem::StartTransaction,
+					FuzzAppendItem::StartTransaction,
+					FuzzAppendItem::Read,
+					FuzzAppendItem::Read,
+					FuzzAppendItem::Append50(DataValue::D, DataLength::Small),
+					FuzzAppendItem::Read,
+					FuzzAppendItem::Append(DataValue::B, DataLength::Small),
+					FuzzAppendItem::RollbackTransaction,
+					FuzzAppendItem::StartTransaction,
+					FuzzAppendItem::StartTransaction,
+					FuzzAppendItem::Append(DataValue::D, DataLength::Small),
+					FuzzAppendItem::Read,
+					FuzzAppendItem::RollbackTransaction,
+					FuzzAppendItem::Append50(DataValue::EasyBug, DataLength::Big),
+					FuzzAppendItem::RollbackTransaction,
+				],
+				Some((DataValue::D, DataLength::Small)),
+			),
 			(
 				vec![
 					FuzzAppendItem::Append(DataValue::B, DataLength::Small),
