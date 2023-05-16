@@ -170,7 +170,7 @@ impl frame_system::Config for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
+	type SystemWeightInfo = frame_system::weights::SubstrateWeight<Test>;
 	type SS58Prefix = ();
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
@@ -916,12 +916,16 @@ fn batch_all_works_with_council_origin() {
 #[test]
 fn with_weight_works() {
 	new_test_ext().execute_with(|| {
+		use frame_system::WeightInfo;
 		let upgrade_code_call =
 			Box::new(RuntimeCall::System(frame_system::Call::set_code_without_checks {
 				code: vec![],
 			}));
 		// Weight before is max.
-		assert_eq!(upgrade_code_call.get_dispatch_info().weight, Weight::MAX);
+		assert_eq!(
+			upgrade_code_call.get_dispatch_info().weight,
+			<Test as frame_system::Config>::SystemWeightInfo::set_code()
+		);
 		assert_eq!(
 			upgrade_code_call.get_dispatch_info().class,
 			frame_support::dispatch::DispatchClass::Operational
