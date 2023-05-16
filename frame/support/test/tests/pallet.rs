@@ -15,8 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use frame_support::{
 	assert_ok,
 	dispatch::{
@@ -38,7 +36,7 @@ use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::{DispatchError, ModuleError};
+use sp_runtime::{traits::Extrinsic as ExtrinsicT, DispatchError, ModuleError};
 
 parameter_types! {
 	/// Used to control if the storage version should be updated.
@@ -1709,26 +1707,17 @@ fn metadata_ir_pallet_runtime_docs() {
 fn extrinsic_metadata_ir_types() {
 	let ir = Runtime::metadata_ir().extrinsic;
 
-	// `TestXt` used to construct the runtime exposes only the `Call` and `Extra` types.
-	// In contrast, substrate chains expose: `Address`, `Call`, `Signature` and `Extra` types.
-	// Any missing type is populated with the tuple type.
-	let params: HashMap<_, _> = ir
-		.ty
-		.type_info()
-		.type_params
-		.iter()
-		.map(|ty_param| (ty_param.name, ty_param.ty.expect("Type params are populated")))
-		.collect();
+	assert_eq!(meta_type::<<UncheckedExtrinsic as ExtrinsicT>::SignatureAddress>(), ir.address_ty);
+	assert_eq!(meta_type::<u64>(), ir.address_ty);
 
-	assert!(params.get("Address").is_none());
-	let call_ty = params.get("Call").expect("Type `Call` must be present in the extrinsic");
-	assert!(params.get("Signature").is_none());
-	let extra_ty = params.get("Extra").expect("Type `Extra` must be present in the extrinsic");
+	assert_eq!(meta_type::<<UncheckedExtrinsic as ExtrinsicT>::Call>(), ir.call_ty);
+	assert_eq!(meta_type::<RuntimeCall>(), ir.call_ty);
 
-	assert_eq!(meta_type::<()>(), ir.address_ty);
-	assert_eq!(call_ty, &ir.call_ty);
+	assert_eq!(meta_type::<<UncheckedExtrinsic as ExtrinsicT>::Signature>(), ir.signature_ty);
 	assert_eq!(meta_type::<()>(), ir.signature_ty);
-	assert_eq!(extra_ty, &ir.extra_ty);
+
+	assert_eq!(meta_type::<<UncheckedExtrinsic as ExtrinsicT>::SignatureExtra>(), ir.extra_ty);
+	assert_eq!(meta_type::<frame_system::CheckNonZeroSender<Runtime>>(), ir.extra_ty);
 }
 
 #[test]
