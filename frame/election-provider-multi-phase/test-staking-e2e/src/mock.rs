@@ -124,6 +124,10 @@ impl pallet_balances::Config for Runtime {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type MaxHolds = ConstU32<1>;
+	type MaxFreezes = traits::ConstU32<1>;
+	type HoldIdentifier = ();
+	type FreezeIdentifier = ();
 	type WeightInfo = ();
 }
 
@@ -368,19 +372,19 @@ impl Default for StakingExtBuilder {
 		let stakers = vec![
 			// (stash, ctrl, stake, status)
 			// these two will be elected in the default test where we elect 2.
-			(11, 10, 1000, StakerStatus::<AccountId>::Validator),
-			(21, 20, 1000, StakerStatus::<AccountId>::Validator),
-			// loser validatos if validator_count() is default.
-			(31, 30, 500, StakerStatus::<AccountId>::Validator),
-			(41, 40, 500, StakerStatus::<AccountId>::Validator),
-			(51, 50, 500, StakerStatus::<AccountId>::Validator),
-			(61, 60, 500, StakerStatus::<AccountId>::Validator),
-			(71, 70, 500, StakerStatus::<AccountId>::Validator),
-			(81, 80, 500, StakerStatus::<AccountId>::Validator),
-			(91, 90, 500, StakerStatus::<AccountId>::Validator),
-			(101, 100, 500, StakerStatus::<AccountId>::Validator),
+			(11, 11, 1000, StakerStatus::<AccountId>::Validator),
+			(21, 21, 1000, StakerStatus::<AccountId>::Validator),
+			// loser validators if validator_count() is default.
+			(31, 31, 500, StakerStatus::<AccountId>::Validator),
+			(41, 41, 1500, StakerStatus::<AccountId>::Validator),
+			(51, 51, 1500, StakerStatus::<AccountId>::Validator),
+			(61, 61, 1500, StakerStatus::<AccountId>::Validator),
+			(71, 71, 1500, StakerStatus::<AccountId>::Validator),
+			(81, 81, 1500, StakerStatus::<AccountId>::Validator),
+			(91, 91, 1500, StakerStatus::<AccountId>::Validator),
+			(101, 101, 500, StakerStatus::<AccountId>::Validator),
 			// an idle validator
-			(201, 200, 1000, StakerStatus::<AccountId>::Idle),
+			(201, 201, 1000, StakerStatus::<AccountId>::Idle),
 		];
 
 		Self {
@@ -435,7 +439,7 @@ impl Default for BalancesExtBuilder {
 			(2, 20),
 			(3, 300),
 			(4, 400),
-			// controllers
+			// controllers (still used in some tests. Soon to be deprecated).
 			(10, 100),
 			(20, 100),
 			(30, 100),
@@ -776,4 +780,12 @@ pub(crate) fn set_minimum_election_score(
 	)
 	.map(|_| ())
 	.map_err(|_| ())
+}
+
+pub(crate) fn staking_events() -> Vec<pallet_staking::Event<Runtime>> {
+	System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let RuntimeEvent::Staking(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>()
 }

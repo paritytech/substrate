@@ -37,10 +37,11 @@ use sp_core::{
 	H256,
 };
 use sp_keystore::{testing::MemoryKeystore, Keystore};
+use sp_runtime::Perbill;
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	self,
-	runtime::{Block, Extrinsic, SessionKeys, Transfer},
+	runtime::{Block, Extrinsic, ExtrinsicBuilder, SessionKeys, Transfer},
 	AccountKeyring, Backend, Client, DefaultTestClientBuilderExt, TestClientBuilderExt,
 };
 
@@ -51,7 +52,7 @@ fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 		from: sender.into(),
 		to: AccountKeyring::Bob.into(),
 	};
-	tx.into_signed_tx()
+	ExtrinsicBuilder::new_transfer(tx).build()
 }
 
 type FullTransactionPool = BasicPool<FullChainApi<Client<Backend>, Block>, Block>;
@@ -111,7 +112,13 @@ async fn author_submit_transaction_should_not_cause_error() {
 #[tokio::test]
 async fn author_should_watch_extrinsic() {
 	let api = TestSetup::into_rpc();
-	let xt = to_hex(&uxt(AccountKeyring::Alice, 0).encode(), true);
+	let xt = to_hex(
+		&ExtrinsicBuilder::new_call_with_priority(0)
+			.signer(AccountKeyring::Alice.into())
+			.build()
+			.encode(),
+		true,
+	);
 
 	let mut sub = api.subscribe("author_submitAndWatchExtrinsic", [xt]).await.unwrap();
 	let (tx, sub_id) = timeout_secs(10, sub.next::<TransactionStatus<H256, Block>>())
@@ -125,15 +132,11 @@ async fn author_should_watch_extrinsic() {
 
 	// Replace the extrinsic and observe the subscription is notified.
 	let (xt_replacement, xt_hash) = {
-		let tx = Transfer {
-			amount: 5,
-			nonce: 0,
-			from: AccountKeyring::Alice.into(),
-			to: AccountKeyring::Bob.into(),
-		};
-		let tx = tx.into_signed_tx().encode();
+		let tx = ExtrinsicBuilder::new_call_with_priority(1)
+			.signer(AccountKeyring::Alice.into())
+			.build()
+			.encode();
 		let hash = blake2_256(&tx);
-
 		(to_hex(&tx, true), hash)
 	};
 
@@ -152,10 +155,10 @@ async fn author_should_watch_extrinsic() {
 async fn author_should_return_watch_validation_error() {
 	const METHOD: &'static str = "author_submitAndWatchExtrinsic";
 
+	let invalid_xt = ExtrinsicBuilder::new_fill_block(Perbill::from_percent(100)).build();
+
 	let api = TestSetup::into_rpc();
-	let failed_sub = api
-		.subscribe(METHOD, [to_hex(&uxt(AccountKeyring::Alice, 179).encode(), true)])
-		.await;
+	let failed_sub = api.subscribe(METHOD, [to_hex(&invalid_xt.encode(), true)]).await;
 
 	assert_matches!(
 		failed_sub,

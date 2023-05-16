@@ -59,6 +59,7 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-insecure-randomness-collective-flip = { version = "4.0.0-dev", path = "../insecure-randomness-collective-flip" }
 pallet-utility = { version = "4.0.0-dev", path = "../utility" }
+pallet-proxy = { version = "4.0.0-dev", path = "../proxy" }
 sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
 
 [features]

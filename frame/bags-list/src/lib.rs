@@ -397,7 +397,7 @@ impl<T: Config<I>, I: 'static> ScoreProvider<T::AccountId> for Pallet<T, I> {
 		Node::<T, I>::get(id).map(|node| node.score()).unwrap_or_default()
 	}
 
-	frame_election_provider_support::runtime_benchmarks_or_fuzz_enabled! {
+	frame_election_provider_support::runtime_benchmarks_fuzz_or_std_enabled! {
 		fn set_score_of(id: &T::AccountId, new_score: T::Score) {
 			ListNodes::<T, I>::mutate(id, |maybe_node| {
 				if let Some(node) = maybe_node.as_mut() {

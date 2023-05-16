@@ -35,6 +35,27 @@ fn origin_works() {
 }
 
 #[test]
+fn unique_datum_works() {
+	new_test_ext().execute_with(|| {
+		System::initialize(&1, &[0u8; 32].into(), &Default::default());
+		assert!(sp_io::storage::exists(well_known_keys::INTRABLOCK_ENTROPY));
+
+		let h1 = unique(b"");
+		let h2 = unique(b"");
+		assert_ne!(h1, h2);
+
+		let h3 = unique(b"Hello");
+		assert_ne!(h2, h3);
+
+		let h4 = unique(b"Hello");
+		assert_ne!(h3, h4);
+
+		System::finalize();
+		assert!(!sp_io::storage::exists(well_known_keys::INTRABLOCK_ENTROPY));
+	});
+}
+
+#[test]
 fn stored_map_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(System::inc_providers(&0), IncRefStatus::Created);
@@ -550,7 +571,12 @@ fn set_code_checks_works() {
 		("test", 1, 2, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test", 1, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test2", 1, 1, Err(Error::<Test>::InvalidSpecName)),
-		("test", 2, 1, Ok(PostDispatchInfo::default())),
+		(
+			"test",
+			2,
+			1,
+			Ok(Some(<mock::Test as pallet::Config>::BlockWeights::get().max_block).into()),
+		),
 		("test", 0, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test", 1, 0, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 	];
