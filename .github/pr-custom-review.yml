@@ -8,11 +8,23 @@ rules:
     check_type: changed_files
     condition:
       include: .*
-      # excluding files from 'CI team' rules
-      exclude: ^\.gitlab-ci\.yml|^scripts/ci/.*|^\.github/.*|^\.config/nextest.toml
+      # excluding files from 'CI team' and 'FRAME coders' rules
+      exclude: ^\.gitlab-ci\.yml|^scripts/ci/.*|^\.github/.*|^\.config/nextest.toml|^frame/(?!.*(nfts/.*|uniques/.*|babe/.*|grandpa/.*|beefy|merkle-mountain-range/.*|contracts/.*|election|nomination-pools/.*|staking/.*|aura/.*))
     min_approvals: 2
     teams:
       - core-devs
+
+  - name: FRAME coders
+    check_type: changed_files
+    condition:
+      include: ^frame/(?!.*(nfts/.*|uniques/.*|babe/.*|grandpa/.*|beefy|merkle-mountain-range/.*|contracts/.*|election|nomination-pools/.*|staking/.*|aura/.*))
+    all:
+      - min_approvals: 2
+      teams:
+        - core-devs
+      - min_approvals: 1
+      teams:
+        - frame-coders
 
   - name: CI team
     check_type: changed_files
