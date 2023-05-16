@@ -16,6 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! Transport that serves as a common ground for all connections.
+
 use either::Either;
 use libp2p::{
 	core::{
