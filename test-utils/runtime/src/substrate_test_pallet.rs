@@ -21,8 +21,8 @@
 //! functioning runtime. Some calls are allowed to be submitted as unsigned extrinsics, however most
 //! of them requires signing. Refer to `pallet::Call` for further details.
 
-use crate::AuthorityId;
 use frame_support::{pallet_prelude::*, storage};
+use sp_core::sr25519::Public;
 use sp_runtime::transaction_validity::{
 	InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
 };
@@ -49,12 +49,12 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub type Authorities<T> = StorageValue<_, Vec<AuthorityId>, ValueQuery>;
+	pub type Authorities<T> = StorageValue<_, Vec<Public>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	#[cfg_attr(feature = "std", derive(Default))]
 	pub struct GenesisConfig {
-		pub authorities: Vec<AuthorityId>,
+		pub authorities: Vec<Public>,
 	}
 
 	#[pallet::genesis_build]
