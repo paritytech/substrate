@@ -128,7 +128,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount: T::Balance,
 		increase_supply: bool,
 	) -> DepositConsequence {
-		let details = match Asset::<T, I>::get(id.clone()) {
+		let details = match Asset::<T, I>::get(&id) {
 			Some(details) => details,
 			None => return DepositConsequence::UnknownAsset,
 		};
@@ -451,7 +451,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		Self::can_increase(id.clone(), beneficiary, amount, true).into_result()?;
-		Asset::<T, I>::try_mutate(id.clone(), |maybe_details| -> DispatchResult {
+		Asset::<T, I>::try_mutate(&id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 			ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 			check(details)?;
