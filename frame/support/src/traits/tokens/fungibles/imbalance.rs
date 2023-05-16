@@ -18,12 +18,11 @@
 //! The imbalance type and its associates, which handles keeps everything adding up properly with
 //! unbalanced operations.
 
-use super::{
-	balanced::Balanced,
-	fungibles::{AssetId, Balance},
-	*,
+use super::*;
+use crate::traits::{
+	misc::{SameOrOther, TryDrop},
+	tokens::{AssetId, Balance},
 };
-use crate::traits::misc::{SameOrOther, TryDrop};
 use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::marker::PhantomData;
 
@@ -160,7 +159,7 @@ impl<
 }
 
 /// Imbalance implying that the total_issuance value is less than the sum of all account balances.
-pub type DebtOf<AccountId, B> = Imbalance<
+pub type Debt<AccountId, B> = Imbalance<
 	<B as Inspect<AccountId>>::AssetId,
 	<B as Inspect<AccountId>>::Balance,
 	// This will generally be implemented by increasing the total_issuance value.
@@ -170,7 +169,7 @@ pub type DebtOf<AccountId, B> = Imbalance<
 
 /// Imbalance implying that the total_issuance value is greater than the sum of all account
 /// balances.
-pub type CreditOf<AccountId, B> = Imbalance<
+pub type Credit<AccountId, B> = Imbalance<
 	<B as Inspect<AccountId>>::AssetId,
 	<B as Inspect<AccountId>>::Balance,
 	// This will generally be implemented by decreasing the total_issuance value.

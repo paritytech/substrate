@@ -2,7 +2,7 @@ error[E0080]: evaluation of constant value failed
   --> tests/construct_runtime_ui/pallet_error_too_large.rs:74:1
    |
 74 | / construct_runtime! {
-75 | |     pub enum Runtime where
+75 | |     pub struct Runtime where
 76 | |         Block = Block,
 77 | |         NodeBlock = Block,
 ...  |

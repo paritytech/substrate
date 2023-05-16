@@ -130,7 +130,7 @@ impl SlotDuration {
 /// produces more than one block on the same slot. The proof of equivocation
 /// are the given distinct headers that were signed by the validator and which
 /// include the slot number.
-#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo, Eq)]
 pub struct EquivocationProof<Header, Id> {
 	/// Returns the authority id of the equivocator.
 	pub offender: Id,

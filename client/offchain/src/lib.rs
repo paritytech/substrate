@@ -42,7 +42,7 @@ use futures::{
 	prelude::*,
 };
 use parking_lot::Mutex;
-use sc_network_common::service::{NetworkPeers, NetworkStateInfo};
+use sc_network::{NetworkPeers, NetworkStateInfo};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_core::{offchain, traits::SpawnNamed, ExecutionContext};
 use sp_runtime::traits::{self, Header};
@@ -246,7 +246,7 @@ mod tests {
 	use libp2p::{Multiaddr, PeerId};
 	use sc_block_builder::BlockBuilderProvider as _;
 	use sc_client_api::Backend as _;
-	use sc_network_common::{config::MultiaddrWithPeerId, protocol::ProtocolName};
+	use sc_network::{config::MultiaddrWithPeerId, types::ProtocolName};
 	use sc_peerset::ReputationChange;
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
@@ -254,8 +254,10 @@ mod tests {
 	use sp_runtime::generic::BlockId;
 	use std::{collections::HashSet, sync::Arc};
 	use substrate_test_runtime_client::{
-		runtime::Block, ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient,
-		TestClientBuilderExt,
+		runtime::{
+			substrate_test_pallet::pallet::Call as PalletCall, Block, ExtrinsicBuilder, RuntimeCall,
+		},
+		ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient, TestClientBuilderExt,
 	};
 
 	struct TestNetwork();
@@ -385,7 +387,10 @@ mod tests {
 
 		// then
 		assert_eq!(pool.0.status().ready, 1);
-		assert_eq!(pool.0.ready().next().unwrap().is_propagable(), false);
+		assert!(matches!(
+			pool.0.ready().next().unwrap().data().function,
+			RuntimeCall::SubstrateTest(PalletCall::storage_change { .. })
+		));
 	}
 
 	#[test]
@@ -403,12 +408,8 @@ mod tests {
 		let key = &b"hello"[..];
 		let value = &b"world"[..];
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		block_builder
-			.push(substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexSet(
-				key.to_vec(),
-				value.to_vec(),
-			))
-			.unwrap();
+		let ext = ExtrinsicBuilder::new_offchain_index_set(key.to_vec(), value.to_vec()).build();
+		block_builder.push(ext).unwrap();
 
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
@@ -416,11 +417,8 @@ mod tests {
 		assert_eq!(value, &offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).unwrap());
 
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		block_builder
-			.push(substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexClear(
-				key.to_vec(),
-			))
-			.unwrap();
+		let ext = ExtrinsicBuilder::new_offchain_index_clear(key.to_vec()).nonce(1).build();
+		block_builder.push(ext).unwrap();
 
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();

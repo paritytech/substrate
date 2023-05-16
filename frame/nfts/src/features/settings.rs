@@ -57,7 +57,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub(crate) fn do_update_mint_settings(
-		maybe_check_owner: Option<T::AccountId>,
+		maybe_check_origin: Option<T::AccountId>,
 		collection: T::CollectionId,
 		mint_settings: MintSettings<
 			BalanceOf<T, I>,
@@ -65,10 +65,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			T::CollectionId,
 		>,
 	) -> DispatchResult {
-		let details =
-			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		if let Some(check_owner) = &maybe_check_owner {
-			ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
+		if let Some(check_origin) = &maybe_check_origin {
+			ensure!(
+				Self::has_role(&collection, &check_origin, CollectionRole::Issuer),
+				Error::<T, I>::NoPermission
+			);
 		}
 
 		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {

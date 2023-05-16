@@ -72,7 +72,7 @@ impl frame_system::Config for Runtime {
 }
 
 construct_runtime! {
-	pub enum Runtime where
+	pub struct Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic

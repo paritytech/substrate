@@ -218,7 +218,6 @@ pub mod pallet {
 	use sp_runtime::ArithmeticError;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	/// Configuration trait.

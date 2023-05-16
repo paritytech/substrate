@@ -88,6 +88,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 impl pallet_utility::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -124,7 +128,10 @@ impl InstanceFilter<RuntimeCall> for ProxyType {
 		match self {
 			ProxyType::Any => true,
 			ProxyType::JustTransfer => {
-				matches!(c, RuntimeCall::Balances(pallet_balances::Call::transfer { .. }))
+				matches!(
+					c,
+					RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death { .. })
+				)
 			},
 			ProxyType::JustUtility => matches!(c, RuntimeCall::Utility { .. }),
 		}
@@ -161,7 +168,7 @@ impl Config for Test {
 
 use super::{Call as ProxyCall, Event as ProxyEvent};
 use frame_system::Call as SystemCall;
-use pallet_balances::{Call as BalancesCall, Error as BalancesError, Event as BalancesEvent};
+use pallet_balances::{Call as BalancesCall, Event as BalancesEvent};
 use pallet_utility::{Call as UtilityCall, Event as UtilityEvent};
 
 type SystemError = frame_system::Error<Test>;
@@ -169,7 +176,7 @@ type SystemError = frame_system::Error<Test>;
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
+		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 3)],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
@@ -193,7 +200,7 @@ fn expect_events(e: Vec<RuntimeEvent>) {
 }
 
 fn call_transfer(dest: u64, value: u64) -> RuntimeCall {
-	RuntimeCall::Balances(BalancesCall::transfer { dest, value })
+	RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest, value })
 }
 
 #[test]
@@ -345,7 +352,7 @@ fn proxy_announced_removes_announcement_and_returns_deposit() {
 #[test]
 fn filtering_works() {
 	new_test_ext().execute_with(|| {
-		assert!(Balances::mutate_account(&1, |a| a.free = 1000).is_ok());
+		Balances::make_free_balance_be(&1, 1000);
 		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(1), 2, ProxyType::Any, 0));
 		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(1), 3, ProxyType::JustTransfer, 0));
 		assert_ok!(Proxy::add_proxy(RuntimeOrigin::signed(1), 4, ProxyType::JustUtility, 0));
@@ -361,7 +368,7 @@ fn filtering_works() {
 		);
 
 		let derivative_id = Utility::derivative_account_id(1, 0);
-		assert!(Balances::mutate_account(&derivative_id, |a| a.free = 1000).is_ok());
+		Balances::make_free_balance_be(&derivative_id, 1000);
 		let inner = Box::new(call_transfer(6, 1));
 
 		let call = Box::new(RuntimeCall::Utility(UtilityCall::as_derivative {
@@ -516,7 +523,7 @@ fn cannot_add_proxy_without_balance() {
 		assert_eq!(Balances::reserved_balance(5), 2);
 		assert_noop!(
 			Proxy::add_proxy(RuntimeOrigin::signed(5), 4, ProxyType::Any, 0),
-			BalancesError::<Test, _>::InsufficientBalance
+			DispatchError::ConsumerRemaining,
 		);
 	});
 }
@@ -564,6 +571,7 @@ fn proxying_works() {
 #[test]
 fn pure_works() {
 	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&1, 11); // An extra one for the ED.
 		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
 		let anon = Proxy::pure_account(&1, &ProxyType::Any, 0, None);
 		System::assert_last_event(
@@ -592,7 +600,7 @@ fn pure_works() {
 		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
 
 		let call = Box::new(call_transfer(6, 1));
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(3), anon, 5));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(3), anon, 5));
 		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(1), anon, None, call));
 		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Ok(()) }.into());
 		assert_eq!(Balances::free_balance(6), 1);
@@ -611,9 +619,9 @@ fn pure_works() {
 			Proxy::kill_pure(RuntimeOrigin::signed(1), 1, ProxyType::Any, 0, 1, 0),
 			Error::<Test>::NoPermission
 		);
-		assert_eq!(Balances::free_balance(1), 0);
+		assert_eq!(Balances::free_balance(1), 1);
 		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(1), anon, None, call.clone()));
-		assert_eq!(Balances::free_balance(1), 2);
+		assert_eq!(Balances::free_balance(1), 3);
 		assert_noop!(
 			Proxy::proxy(RuntimeOrigin::signed(1), anon, None, call.clone()),
 			Error::<Test>::NotProxy

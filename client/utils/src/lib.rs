@@ -18,17 +18,11 @@
 
 //! Utilities Primitives for Substrate
 //!
-//! # Features
+//! This crate provides `mpsc::tracing_unbounded` function that returns wrapper types to
+//! `async_channel::Sender<T>` and `async_channel::Receiver<T>`, which register every
+//! `send`/`received`/`dropped` action happened on the channel.
 //!
-//! ## metered
-//!
-//! This feature changes the behaviour of the function `mpsc::tracing_unbounded`.
-//! With the disabled feature this function is an alias to `futures::channel::mpsc::unbounded`.
-//! However, when the feature is enabled it creates wrapper types to `UnboundedSender<T>`
-//! and `UnboundedReceiver<T>` to register every `send`/`received`/`dropped` action happened on
-//! the channel.
-//!
-//! Also this feature creates and registers a prometheus vector with name `unbounded_channel_len`
+//! Also this wrapper creates and registers a prometheus vector with name `unbounded_channel_len`
 //! and labels:
 //!
 //! | Label        | Description                                   |

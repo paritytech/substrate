@@ -71,7 +71,7 @@ impl HooksDef {
 		}
 
 		let has_runtime_upgrade = item.items.iter().any(|i| match i {
-			syn::ImplItem::Method(method) => method.sig.ident == "on_runtime_upgrade",
+			syn::ImplItem::Fn(method) => method.sig.ident == "on_runtime_upgrade",
 			_ => false,
 		});
 

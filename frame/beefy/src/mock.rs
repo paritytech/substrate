@@ -40,7 +40,7 @@ use sp_staking::{EraIndex, SessionIndex};
 
 use crate as pallet_beefy;
 
-pub use beefy_primitives::{
+pub use sp_consensus_beefy::{
 	crypto::{AuthorityId as BeefyId, AuthoritySignature as BeefySignature},
 	ConsensusLog, EquivocationProof, BEEFY_ENGINE_ID,
 };
@@ -116,19 +116,13 @@ parameter_types! {
 
 impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
-	type KeyOwnerProofSystem = Historical;
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, BeefyId)>>::Proof;
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		BeefyId,
-	)>>::IdentificationTuple;
-	type HandleEquivocation =
-		super::EquivocationHandler<u64, Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 	type MaxAuthorities = ConstU32<100>;
 	type MaxSetIdSessionEntries = MaxSetIdSessionEntries;
 	type OnNewValidatorSet = ();
 	type WeightInfo = ();
+	type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, BeefyId)>>::Proof;
+	type EquivocationReportSystem =
+		super::EquivocationReportSystem<Self, Offences, Historical, ReportLongevity>;
 }
 
 parameter_types! {
@@ -167,6 +161,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU128<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
 }
 
 impl pallet_timestamp::Config for Test {
@@ -286,11 +284,9 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<BeefyId>) -> TestExternalit
 		.assimilate_storage(&mut t)
 		.unwrap();
 
-	// controllers are the index + 1000
+	// controllers are same as stash
 	let stakers: Vec<_> = (0..authorities.len())
-		.map(|i| {
-			(i as u64, i as u64 + 1000, 10_000, pallet_staking::StakerStatus::<u64>::Validator)
-		})
+		.map(|i| (i as u64, i as u64, 10_000, pallet_staking::StakerStatus::<u64>::Validator))
 		.collect();
 
 	let staking_config = pallet_staking::GenesisConfig::<Test> {

@@ -25,11 +25,11 @@
 use crate::schema;
 use codec::{self, Decode, Encode};
 use futures::{channel::mpsc, prelude::*};
-use libp2p::PeerId;
+use libp2p_identity::PeerId;
 use log::{debug, trace};
 use prost::Message;
 use sc_client_api::{BlockBackend, ProofProvider};
-use sc_network_common::{
+use sc_network::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
 };

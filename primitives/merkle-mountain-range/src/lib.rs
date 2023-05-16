@@ -422,6 +422,7 @@ impl Error {
 
 sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
+	#[api_version(2)]
 	pub trait MmrApi<Hash: codec::Codec, BlockNumber: codec::Codec> {
 		/// Return the on-chain MMR root hash.
 		fn mmr_root() -> Result<Hash, Error>;

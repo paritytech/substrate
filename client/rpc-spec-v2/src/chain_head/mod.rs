@@ -23,6 +23,8 @@
 //! Methods are prefixed by `chainHead`.
 
 #[cfg(test)]
+mod test_utils;
+#[cfg(test)]
 mod tests;
 
 pub mod api;
@@ -30,6 +32,7 @@ pub mod chain_head;
 pub mod error;
 pub mod event;
 
+mod chain_head_follow;
 mod subscription;
 
 pub use api::ChainHeadApiServer;

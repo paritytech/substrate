@@ -40,9 +40,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		if let Some(check_origin) = maybe_check_origin {
-			let is_admin = Self::has_role(&collection, &check_origin, CollectionRole::Admin);
-			let permitted = is_admin || check_origin == details.owner;
-			ensure!(permitted, Error::<T, I>::NoPermission);
+			ensure!(check_origin == details.owner, Error::<T, I>::NoPermission);
 		}
 
 		let now = frame_system::Pallet::<T>::block_number();
@@ -85,9 +83,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if !is_past_deadline {
 			if let Some(check_origin) = maybe_check_origin {
-				let is_admin = Self::has_role(&collection, &check_origin, CollectionRole::Admin);
-				let permitted = is_admin || check_origin == details.owner;
-				ensure!(permitted, Error::<T, I>::NoPermission);
+				ensure!(check_origin == details.owner, Error::<T, I>::NoPermission);
 			}
 		}
 
@@ -113,9 +109,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
 
 		if let Some(check_origin) = maybe_check_origin {
-			let is_admin = Self::has_role(&collection, &check_origin, CollectionRole::Admin);
-			let permitted = is_admin || check_origin == details.owner;
-			ensure!(permitted, Error::<T, I>::NoPermission);
+			ensure!(check_origin == details.owner, Error::<T, I>::NoPermission);
 		}
 
 		details.approvals.clear();

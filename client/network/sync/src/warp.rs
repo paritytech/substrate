@@ -34,7 +34,7 @@ use sc_network_common::sync::{
 	},
 };
 use sp_blockchain::HeaderBackend;
-use sp_finality_grandpa::{AuthorityList, SetId};
+use sp_consensus_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor, Zero};
 use std::{sync::Arc, task::Poll};
 

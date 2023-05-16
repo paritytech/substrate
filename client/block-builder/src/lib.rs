@@ -39,9 +39,8 @@ use sp_runtime::{
 	Digest,
 };
 
-pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
-
 use sc_client_api::backend;
+pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 /// Used as parameter to [`BlockBuilderProvider`] to express if proof recording should be enabled.
 ///
@@ -313,13 +312,80 @@ mod tests {
 	use sp_blockchain::HeaderBackend;
 	use sp_core::Blake2Hasher;
 	use sp_state_machine::Backend;
-	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
+	use substrate_test_runtime_client::{
+		runtime::ExtrinsicBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
+	};
 
 	#[test]
 	fn block_building_storage_proof_does_not_include_runtime_by_default() {
 		let builder = substrate_test_runtime_client::TestClientBuilder::new();
 		let backend = builder.backend();
 		let client = builder.build();
+
+		let genesis_hash = client.info().best_hash;
+
+		let block = BlockBuilder::new(
+			&client,
+			genesis_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		)
+		.unwrap()
+		.build()
+		.unwrap();
+
+		let proof = block.proof.expect("Proof is build on request");
+		let genesis_state_root = client.header(genesis_hash).unwrap().unwrap().state_root;
+
+		let backend =
+			sp_state_machine::create_proof_check_backend::<Blake2Hasher>(genesis_state_root, proof)
+				.unwrap();
+
+		assert!(backend
+			.storage(&sp_core::storage::well_known_keys::CODE)
+			.unwrap_err()
+			.contains("Database missing expected key"),);
+	}
+
+	#[test]
+	fn failing_extrinsic_rolls_back_changes_in_storage_proof() {
+		let builder = substrate_test_runtime_client::TestClientBuilder::new();
+		let backend = builder.backend();
+		let client = builder.build();
+
+		let mut block_builder = BlockBuilder::new(
+			&client,
+			client.info().best_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		)
+		.unwrap();
+
+		block_builder.push(ExtrinsicBuilder::new_read_and_panic(8).build()).unwrap_err();
+
+		let block = block_builder.build().unwrap();
+
+		let proof_with_panic = block.proof.expect("Proof is build on request").encoded_size();
+
+		let mut block_builder = BlockBuilder::new(
+			&client,
+			client.info().best_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		)
+		.unwrap();
+
+		block_builder.push(ExtrinsicBuilder::new_read(8).build()).unwrap();
+
+		let block = block_builder.build().unwrap();
+
+		let proof_without_panic = block.proof.expect("Proof is build on request").encoded_size();
 
 		let block = BlockBuilder::new(
 			&client,
@@ -333,17 +399,11 @@ mod tests {
 		.build()
 		.unwrap();
 
-		let proof = block.proof.expect("Proof is build on request");
+		let proof_empty_block = block.proof.expect("Proof is build on request").encoded_size();
 
-		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
-			block.storage_changes.transaction_storage_root,
-			proof,
-		)
-		.unwrap();
-
-		assert!(backend
-			.storage(&sp_core::storage::well_known_keys::CODE)
-			.unwrap_err()
-			.contains("Database missing expected key"),);
+		// Ensure that we rolled back the changes of the panicked transaction.
+		assert!(proof_without_panic > proof_with_panic);
+		assert!(proof_without_panic > proof_empty_block);
+		assert_eq!(proof_empty_block, proof_with_panic);
 	}
 }

@@ -40,16 +40,13 @@ pub enum Error {
 	Consensus(#[from] sp_consensus::Error),
 
 	#[error(transparent)]
-	Network(#[from] sc_network_common::error::Error),
+	Network(#[from] sc_network::error::Error),
 
 	#[error(transparent)]
 	Keystore(#[from] sc_keystore::Error),
 
 	#[error(transparent)]
 	Telemetry(#[from] sc_telemetry::Error),
-
-	#[error(transparent)]
-	Storage(#[from] sc_storage_monitor::Error),
 
 	#[error("Best chain selection strategy (SelectChain) is not provided.")]
 	SelectChainRequired,

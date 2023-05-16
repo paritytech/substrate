@@ -553,6 +553,8 @@ pub enum DispatchError {
 	Corruption,
 	/// Some resource (e.g. a preimage) is unavailable right now. This might fix itself later.
 	Unavailable,
+	/// Root origin is not allowed.
+	RootNotAllowed,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -606,9 +608,10 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum TokenError {
 	/// Funds are unavailable.
-	NoFunds,
-	/// Account that must exist would die.
-	WouldDie,
+	FundsUnavailable,
+	/// Some part of the balance gives the only provider reference to the account and thus cannot
+	/// be (re)moved.
+	OnlyProvider,
 	/// Account cannot exist with the funds that would be given.
 	BelowMinimum,
 	/// Account cannot be created.
@@ -619,18 +622,28 @@ pub enum TokenError {
 	Frozen,
 	/// Operation is not supported by the asset.
 	Unsupported,
+	/// Account cannot be created for a held balance.
+	CannotCreateHold,
+	/// Withdrawal would cause unwanted loss of account.
+	NotExpendable,
+	/// Account cannot receive the assets.
+	Blocked,
 }
 
 impl From<TokenError> for &'static str {
 	fn from(e: TokenError) -> &'static str {
 		match e {
-			TokenError::NoFunds => "Funds are unavailable",
-			TokenError::WouldDie => "Account that must exist would die",
+			TokenError::FundsUnavailable => "Funds are unavailable",
+			TokenError::OnlyProvider => "Account that must exist would die",
 			TokenError::BelowMinimum => "Account cannot exist with the funds that would be given",
 			TokenError::CannotCreate => "Account cannot be created",
 			TokenError::UnknownAsset => "The asset in question is unknown",
 			TokenError::Frozen => "Funds exist but are frozen",
 			TokenError::Unsupported => "Operation is not supported by the asset",
+			TokenError::CannotCreateHold =>
+				"Account cannot be created for recording amount on hold",
+			TokenError::NotExpendable => "Account that is desired to remain would die",
+			TokenError::Blocked => "Account cannot receive the assets",
 		}
 	}
 }
@@ -670,6 +683,7 @@ impl From<DispatchError> for &'static str {
 			Exhausted => "Resources exhausted",
 			Corruption => "State corrupt",
 			Unavailable => "Resource unavailable",
+			RootNotAllowed => "Root not allowed",
 		}
 	}
 }
@@ -716,6 +730,7 @@ impl traits::Printable for DispatchError {
 			Exhausted => "Resources exhausted".print(),
 			Corruption => "State corrupt".print(),
 			Unavailable => "Resource unavailable".print(),
+			RootNotAllowed => "Root not allowed".print(),
 		}
 	}
 }
@@ -896,40 +911,6 @@ pub fn print(print: impl traits::Printable) {
 	print.print();
 }
 
-/// Batching session.
-///
-/// To be used in runtime only. Outside of runtime, just construct
-/// `BatchVerifier` directly.
-#[must_use = "`verify()` needs to be called to finish batch signature verification!"]
-pub struct SignatureBatching(bool);
-
-impl SignatureBatching {
-	/// Start new batching session.
-	pub fn start() -> Self {
-		sp_io::crypto::start_batch_verify();
-		SignatureBatching(false)
-	}
-
-	/// Verify all signatures submitted during the batching session.
-	#[must_use]
-	pub fn verify(mut self) -> bool {
-		self.0 = true;
-		sp_io::crypto::finish_batch_verify()
-	}
-}
-
-impl Drop for SignatureBatching {
-	fn drop(&mut self) {
-		// Sanity check. If user forgets to actually call `verify()`.
-		//
-		// We should not panic if the current thread is already panicking,
-		// because Rust otherwise aborts the process.
-		if !self.0 && !sp_std::thread::panicking() {
-			panic!("Signature verification has not been called before `SignatureBatching::drop`")
-		}
-	}
-}
-
 /// Describes on what should happen with a storage transaction.
 pub enum TransactionOutcome<R> {
 	/// Commit the transaction.
@@ -954,7 +935,7 @@ mod tests {
 
 	use super::*;
 	use codec::{Decode, Encode};
-	use sp_core::crypto::{Pair, UncheckedFrom};
+	use sp_core::crypto::Pair;
 	use sp_io::TestExternalities;
 	use sp_state_machine::create_proof_check_backend;
 
@@ -994,8 +975,8 @@ mod tests {
 			Module(ModuleError { index: 2, error: [1, 0, 0, 0], message: None }),
 			ConsumerRemaining,
 			NoProviders,
-			Token(TokenError::NoFunds),
-			Token(TokenError::WouldDie),
+			Token(TokenError::FundsUnavailable),
+			Token(TokenError::OnlyProvider),
 			Token(TokenError::BelowMinimum),
 			Token(TokenError::CannotCreate),
 			Token(TokenError::UnknownAsset),
@@ -1035,36 +1016,6 @@ mod tests {
 
 		let multi_signer = MultiSigner::from(pair.public());
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
-	}
-
-	#[test]
-	#[should_panic(expected = "Signature verification has not been called")]
-	fn batching_still_finishes_when_not_called_directly() {
-		let mut ext = sp_state_machine::BasicExternalities::default();
-		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
-			sp_core::testing::TaskExecutor::new(),
-		));
-
-		ext.execute_with(|| {
-			let _batching = SignatureBatching::start();
-			let dummy = UncheckedFrom::unchecked_from([1; 32]);
-			let dummy_sig = UncheckedFrom::unchecked_from([1; 64]);
-			sp_io::crypto::sr25519_verify(&dummy_sig, &Vec::new(), &dummy);
-		});
-	}
-
-	#[test]
-	#[should_panic(expected = "Hey, I'm an error")]
-	fn batching_does_not_panic_while_thread_is_already_panicking() {
-		let mut ext = sp_state_machine::BasicExternalities::default();
-		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
-			sp_core::testing::TaskExecutor::new(),
-		));
-
-		ext.execute_with(|| {
-			let _batching = SignatureBatching::start();
-			panic!("Hey, I'm an error");
-		});
 	}
 
 	#[test]
@@ -1108,5 +1059,25 @@ mod tests {
 			assert_eq!(sp_io::storage::get(b"a").unwrap(), vec![1u8; 44]);
 			assert_eq!(sp_io::storage::get(b"b").unwrap(), vec![2u8; 33]);
 		});
+	}
+}
+
+// NOTE: we have to test the sp_core stuff also from a different crate to check that the macro
+// can access the sp_core crate.
+#[cfg(test)]
+mod sp_core_tests {
+	use super::*;
+
+	#[test]
+	#[should_panic]
+	fn generate_feature_enabled_macro_panics() {
+		sp_core::generate_feature_enabled_macro!(if_test, test, $);
+		if_test!(panic!("This should panic"));
+	}
+
+	#[test]
+	fn generate_feature_enabled_macro_works() {
+		sp_core::generate_feature_enabled_macro!(if_not_test, not(test), $);
+		if_not_test!(panic!("This should not panic"));
 	}
 }

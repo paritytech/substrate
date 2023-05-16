@@ -187,7 +187,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
@@ -325,6 +324,11 @@ pub mod pallet {
 				T::MaxVoters::get(),
 				T::MaxVotesPerVoter::get(),
 			);
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
+			Self::do_try_state()
 		}
 	}
 
@@ -894,7 +898,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Get the members' account ids.
-	fn members_ids() -> Vec<T::AccountId> {
+	pub(crate) fn members_ids() -> Vec<T::AccountId> {
 		Self::members().into_iter().map(|m| m.who).collect::<Vec<T::AccountId>>()
 	}
 
@@ -1193,6 +1197,104 @@ impl<T: Config> ContainsLengthBound for Pallet<T> {
 	}
 }
 
+#[cfg(any(feature = "try-runtime", test))]
+impl<T: Config> Pallet<T> {
+	fn do_try_state() -> Result<(), &'static str> {
+		Self::try_state_members()?;
+		Self::try_state_runners_up()?;
+		Self::try_state_candidates()?;
+		Self::try_state_candidates_runners_up_disjoint()?;
+		Self::try_state_members_disjoint()?;
+		Self::try_state_members_approval_stake()
+	}
+
+	/// [`Members`] state checks. Invariants:
+	///  - Members are always sorted based on account ID.
+	fn try_state_members() -> Result<(), &'static str> {
+		let mut members = Members::<T>::get().clone();
+		members.sort_by_key(|m| m.who.clone());
+
+		if Members::<T>::get() == members {
+			Ok(())
+		} else {
+			Err("try_state checks: Members must be always sorted by account ID")
+		}
+	}
+
+	// [`RunnersUp`] state checks. Invariants:
+	//  - Elements are sorted based on weight (worst to best).
+	fn try_state_runners_up() -> Result<(), &'static str> {
+		let mut sorted = RunnersUp::<T>::get();
+		// worst stake first
+		sorted.sort_by(|a, b| a.stake.cmp(&b.stake));
+
+		if RunnersUp::<T>::get() == sorted {
+			Ok(())
+		} else {
+			Err("try_state checks: Runners Up must always be sorted by stake (worst to best)")
+		}
+	}
+
+	// [`Candidates`] state checks. Invariants:
+	//  - Always sorted based on account ID.
+	fn try_state_candidates() -> Result<(), &'static str> {
+		let mut candidates = Candidates::<T>::get().clone();
+		candidates.sort_by_key(|(c, _)| c.clone());
+
+		if Candidates::<T>::get() == candidates {
+			Ok(())
+		} else {
+			Err("try_state checks: Candidates must be always sorted by account ID")
+		}
+	}
+	// [`Candidates`] and [`RunnersUp`] state checks. Invariants:
+	//  - Candidates and runners-ups sets are disjoint.
+	fn try_state_candidates_runners_up_disjoint() -> Result<(), &'static str> {
+		match Self::intersects(&Self::candidates_ids(), &Self::runners_up_ids()) {
+			true => Err("Candidates and runners up sets should always be disjoint"),
+			false => Ok(()),
+		}
+	}
+
+	// [`Members`], [`Candidates`] and [`RunnersUp`] state checks. Invariants:
+	//  - Members and candidates sets are disjoint;
+	//  - Members and runners-ups sets are disjoint.
+	fn try_state_members_disjoint() -> Result<(), &'static str> {
+		match Self::intersects(&Pallet::<T>::members_ids(), &Self::candidates_ids()) &&
+			Self::intersects(&Pallet::<T>::members_ids(), &Self::runners_up_ids())
+		{
+			true => Err("Members set should be disjoint from candidates and runners-up sets"),
+			false => Ok(()),
+		}
+	}
+
+	// [`Members`], [`RunnersUp`] and approval stake state checks. Invariants:
+	// - Selected members should have approval stake;
+	// - Selected RunnersUp should have approval stake.
+	fn try_state_members_approval_stake() -> Result<(), &'static str> {
+		match Members::<T>::get()
+			.iter()
+			.chain(RunnersUp::<T>::get().iter())
+			.all(|s| s.stake != BalanceOf::<T>::zero())
+		{
+			true => Ok(()),
+			false => Err("Members and RunnersUp must have approval stake"),
+		}
+	}
+
+	fn intersects<P: PartialEq>(a: &[P], b: &[P]) -> bool {
+		a.iter().any(|e| b.contains(e))
+	}
+
+	fn candidates_ids() -> Vec<T::AccountId> {
+		Pallet::<T>::candidates().iter().map(|(x, _)| x).cloned().collect::<Vec<_>>()
+	}
+
+	fn runners_up_ids() -> Vec<T::AccountId> {
+		Pallet::<T>::runners_up().into_iter().map(|r| r.who).collect::<Vec<_>>()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -1249,6 +1351,10 @@ mod tests {
 		type MaxReserves = ();
 		type ReserveIdentifier = [u8; 8];
 		type WeightInfo = ();
+		type FreezeIdentifier = ();
+		type MaxFreezes = ();
+		type HoldIdentifier = ();
+		type MaxHolds = ();
 	}
 
 	frame_support::parameter_types! {
@@ -1415,7 +1521,13 @@ mod tests {
 			.into();
 			ext.execute_with(pre_conditions);
 			ext.execute_with(test);
-			ext.execute_with(post_conditions)
+
+			#[cfg(feature = "try-runtime")]
+			ext.execute_with(|| {
+				assert_ok!(<Elections as frame_support::traits::Hooks<u64>>::try_state(
+					System::block_number()
+				));
+			});
 		}
 	}
 
@@ -1472,54 +1584,13 @@ mod tests {
 			.unwrap_or_default()
 	}
 
-	fn intersects<T: PartialEq>(a: &[T], b: &[T]) -> bool {
-		a.iter().any(|e| b.contains(e))
-	}
-
-	fn ensure_members_sorted() {
-		let mut members = Elections::members().clone();
-		members.sort_by_key(|m| m.who);
-		assert_eq!(Elections::members(), members);
-	}
-
-	fn ensure_candidates_sorted() {
-		let mut candidates = Elections::candidates().clone();
-		candidates.sort_by_key(|(c, _)| *c);
-		assert_eq!(Elections::candidates(), candidates);
-	}
-
 	fn locked_stake_of(who: &u64) -> u64 {
 		Voting::<Test>::get(who).stake
 	}
 
-	fn ensure_members_has_approval_stake() {
-		// we filter members that have no approval state. This means that even we have more seats
-		// than candidates, we will never ever chose a member with no votes.
-		assert!(Elections::members()
-			.iter()
-			.chain(Elections::runners_up().iter())
-			.all(|s| s.stake != u64::zero()));
-	}
-
-	fn ensure_member_candidates_runners_up_disjoint() {
-		// members, candidates and runners-up must always be disjoint sets.
-		assert!(!intersects(&members_ids(), &candidate_ids()));
-		assert!(!intersects(&members_ids(), &runners_up_ids()));
-		assert!(!intersects(&candidate_ids(), &runners_up_ids()));
-	}
-
 	fn pre_conditions() {
 		System::set_block_number(1);
-		ensure_members_sorted();
-		ensure_candidates_sorted();
-		ensure_member_candidates_runners_up_disjoint();
-	}
-
-	fn post_conditions() {
-		ensure_members_sorted();
-		ensure_candidates_sorted();
-		ensure_member_candidates_runners_up_disjoint();
-		ensure_members_has_approval_stake();
+		Elections::do_try_state().unwrap();
 	}
 
 	fn submit_candidacy(origin: RuntimeOrigin) -> sp_runtime::DispatchResult {
@@ -2122,7 +2193,8 @@ mod tests {
 			assert_ok!(submit_candidacy(RuntimeOrigin::signed(4)));
 
 			// User has 100 free and 50 reserved.
-			assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 100, 50));
+			assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 2, 150));
+			assert_ok!(Balances::reserve(&2, 50));
 			// User tries to vote with 150 tokens.
 			assert_ok!(vote(RuntimeOrigin::signed(2), vec![4, 5], 150));
 			// We truncate to only their free balance, after reserving additional for voting.
