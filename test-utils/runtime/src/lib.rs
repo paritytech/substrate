@@ -1321,6 +1321,27 @@ mod tests {
 	}
 
 	#[test]
+	fn build_genesis_config_from_json_works() {
+		sp_tracing::try_init_simple();
+		let j = include_str!("test_json/default_genesis_config.json");
+
+		let mut t = BasicExternalities::new_empty();
+		executor_call(&mut t, "GenesisBuilder_build_genesis_config_from_json", &j.encode())
+			.0
+			.unwrap();
+
+		let mut keys = t.into_storages().top.keys().cloned().map(hex).collect::<Vec<String>>();
+
+		// following keys are not placed during `<GenesisConfig as GenesisBuild>::build` process,
+		// add them `keys` to assert against known keys.
+		keys.extend(storage_key_generator::get_storage_version_hashed_keys());
+		keys.push(hex(b":heappages"));
+		keys.sort();
+
+		assert_eq!(keys, storage_key_generator::get_expected_storage_hashed_keys());
+	}
+
+	#[test]
 	fn write_default_config_to_tmp_file() {
 		if std::env::var("WRITE_DEFAULT_JSON_FOR_SRT_GC").is_ok() {
 			sp_tracing::try_init_simple();
@@ -1335,27 +1356,5 @@ mod tests {
 				.into_bytes();
 			file.write_all(&j).unwrap();
 		}
-	}
-
-	#[test]
-	fn build_genesis_config_from_json_works() {
-		sp_tracing::try_init_simple();
-		let j = include_str!("test_json/default_genesis_config.json");
-
-		let mut t = BasicExternalities::new_empty();
-		//build_genesis_config_from_json
-		executor_call(&mut t, "GenesisBuilder_build_genesis_config_from_json", &j.encode())
-			.0
-			.unwrap();
-
-		let mut keys = t.into_storages().top.keys().cloned().map(hex).collect::<Vec<String>>();
-
-		//following keys are not placed during `<GenesisConfig as GenesisBuild>::build` process,
-		// add them to match against known keys.
-		keys.extend(storage_key_generator::get_storage_version_hashed_keys());
-		keys.push(hex(b":heappages"));
-		keys.sort();
-
-		assert_eq!(keys, storage_key_generator::get_expected_storage_hashed_keys());
 	}
 }
