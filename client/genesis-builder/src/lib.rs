@@ -22,7 +22,7 @@
 //! - serialize the runtime default `GenesisConfig` struct into json format,
 //! - put the GenesisConfig struct into the storage. Internally this operation calls
 //!   `GenesisBuild::build` function
-//! for all runtime pallets, which is typically by pallet's author.
+//! for all runtime pallets, which is typically provided by pallet's author.
 //! - deserialize the GenesisConfig from given json blob and put GenesisConfig into the state
 //!   storage. Allows to build
 //! customized configuration.
@@ -35,11 +35,8 @@
 sp_api::decl_runtime_apis! {
 	/// API to interact with GenesisConfig for the runtime
 	pub trait GenesisBuilder {
-		/// Instantiate default `GenesisConfig` and put it to storage. Typically this will be done by means of `GenesisBuild::build` function.
-		fn build_default_config();
-
 		/// Instantiate default `GenesisConfig` and serializes it to json blob.
-		fn default_config_as_json() -> sp_std::vec::Vec<u8>;
+		fn default_genesis_config_as_json() -> sp_std::vec::Vec<u8>;
 
 		/// Deserialize the `GenesisConfig` from given json blob and put it into the storage.
 		fn build_genesis_config_from_json(json: sp_std::vec::Vec<u8>);
