@@ -22,7 +22,7 @@
 use super::*;
 use crate::mock::{
 	new_test_ext, offence_reports, report_id, with_on_offence_fractions, Offence, Offences,
-	RuntimeEvent, System, KIND,
+	RuntimeEvent, System, KIND, Runtime,
 };
 use frame_support::assert_noop;
 use frame_system::{EventRecord, Phase};
@@ -328,19 +328,13 @@ fn should_properly_store_offences() {
 		Offences::report_offence(vec![], offence4).unwrap();
 
 		// then
-		let prev_session_reports = Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>::decode(
-			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index - 1)[..],
-		)
-		.unwrap();
+		let prev_session_reports = get_session_reports::<Runtime>(session_index - 1);
 		assert_eq!(
 			prev_session_reports,
 			vec![(KIND, (time_slot - 1).encode(), report_id(time_slot - 1, 3)),]
 		);
 
-		let session_reports = Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>::decode(
-			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index)[..],
-		)
-		.unwrap();
+		let session_reports = get_session_reports::<Runtime>(session_index);
 		assert_eq!(
 			session_reports,
 			vec![
@@ -349,10 +343,7 @@ fn should_properly_store_offences() {
 			]
 		);
 
-		let next_session_reports = Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>::decode(
-			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index + 1)[..],
-		)
-		.unwrap();
+		let next_session_reports = get_session_reports::<Runtime>(session_index + 1);
 		assert_eq!(
 			next_session_reports,
 			vec![
@@ -391,7 +382,11 @@ fn should_properly_clear_obsolete_offences() {
 			time_slot: time_slot - 1,
 			offenders: vec![3],
 		};
+
+		// when
 		Offences::report_offence(vec![], offence1).unwrap();
+
+		// then
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
@@ -408,21 +403,15 @@ fn should_properly_clear_obsolete_offences() {
 			vec![OffenceDetails { offender: 3, reporters: vec![] }]
 		);
 
-		Offences::clear_obsolete_reports(session_index + 5);
+		<Offences as SessionChangeListener>::on_session_change(session_index + 5);
 
 		assert_eq!(offence_reports(KIND, time_slot - 1), vec![]);
 
 		// then
-		let obsolete_session_reports = Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>::decode(
-			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index - 1)[..],
-		)
-		.unwrap_or_default();
+		let obsolete_session_reports = get_session_reports::<Runtime>(session_index - 1);
 		assert_eq!(obsolete_session_reports, vec![]);
 
-		let session_reports = Vec::<(Kind, OpaqueTimeSlot, sp_core::H256)>::decode(
-			&mut &crate::SessionReports::<crate::mock::Runtime>::get(session_index + 1)[..],
-		)
-		.unwrap();
+		let session_reports = get_session_reports::<Runtime>(session_index + 1);
 		assert_eq!(
 			session_reports,
 			vec![

@@ -313,11 +313,7 @@ impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 	fn load(time_slot: &O::TimeSlot, session_index: SessionIndex) -> Self {
 		let opaque_time_slot = time_slot.encode();
 
-		let session_reports = SessionReports::<T>::get(session_index);
-		let session_reports =
-			Vec::<SessionReportOf<T>>::decode(&mut &session_reports[..])
-				.unwrap_or_default();
-
+		let session_reports = get_session_reports::<T>(session_index);
 		let concurrent_reports = <ConcurrentReportsIndex<T>>::get(&O::ID, &opaque_time_slot);
 
 		Self {
@@ -347,4 +343,10 @@ impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 			&self.concurrent_reports,
 		);
 	}
+}
+
+fn get_session_reports<T: Config>(session_index: SessionIndex) -> Vec<SessionReportOf<T>> {
+	let session_reports = SessionReports::<T>::get(session_index);
+	Vec::<SessionReportOf<T>>::decode(&mut &session_reports[..])
+		.unwrap_or_default()
 }
