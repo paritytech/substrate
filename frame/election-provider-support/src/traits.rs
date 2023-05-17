@@ -22,7 +22,6 @@ use codec::Encode;
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Bounded, UniqueSaturatedInto};
 use sp_npos_elections::{ElectionScore, Error, EvaluateSupport};
-use sp_runtime::{traits::Get, Percent};
 use sp_std::{fmt::Debug, prelude::*};
 
 /// An opaque index-based, NPoS solution type.
@@ -123,16 +122,4 @@ where
 		voter_at: impl Fn(Self::VoterIndex) -> Option<A>,
 		target_at: impl Fn(Self::TargetIndex) -> Option<A>,
 	) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
-}
-
-/// A type that calculates deposits for signed submissions.
-pub trait DepositCalculator<Balance> {
-	/// The fixed base deposit used to calculate the final deposit.
-	type BaseDeposit: Get<Balance>;
-
-	/// A percentage representing the increase factor of the base deposit, if any.
-	type IncreaseFactor: Get<Percent>;
-
-	/// Returns the value of the deposit base given a number of queued signed solutions.
-	fn calculate(queue_len: usize) -> Balance;
 }

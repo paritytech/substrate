@@ -25,7 +25,7 @@ use crate::{
 	SolutionOf, SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Decode, Encode, HasCompact};
-use frame_election_provider_support::{traits::DepositCalculator, NposSolution};
+use frame_election_provider_support::NposSolution;
 use frame_support::traits::{
 	defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency,
 };
@@ -33,7 +33,7 @@ use sp_arithmetic::traits::SaturatedConversion;
 use sp_core::bounded::BoundedVec;
 use sp_npos_elections::ElectionScore;
 use sp_runtime::{
-	traits::{Saturating, Zero},
+	traits::{Convert, Saturating, Zero},
 	FixedPointNumber, FixedU128, Percent, RuntimeDebug,
 };
 use sp_std::{
@@ -359,28 +359,20 @@ pub struct GeometricDepositBase<T> {
 	_marker: PhantomData<T>,
 }
 
-impl<T: Config> DepositCalculator<BalanceOf<T>> for GeometricDepositBase<T> {
-	/// The fixed deposit base upon which the geometric series is calculated.
-	type BaseDeposit = T::SignedFixedDepositBase;
-
-	/// Increase factor of the geometric progression, as a percentage.
-	///
-	/// The nth progression term will be `IncreaseFactor`% larger than the nth-1 term.
-	type IncreaseFactor = T::SignedDepositBaseIncreaseFactor;
-
-	/// Increase the base deposit as a geometric progression based on the number of signed
-	/// submissions.
-	///
-	/// The nth term is obtained by calculating `base * (1 + increase_factor)^nth`. Example: factor
-	/// 5, with initial deposit of 1000 and 10% of increase factor is 1000 * (1 + 0.1)^5.
-	fn calculate(queue_len: usize) -> BalanceOf<T> {
+impl<T: Config> Convert<usize, BalanceOf<T>> for GeometricDepositBase<T> {
+	// Calculates the base deposit as a geometric progression based on the number of signed
+	// su Calculates.
+	//
+	// The nth term is obtained by calculating `base * (1 + increase_factor)^nth`. Example: factor
+	// 5, with initial deposit of 1000 and 10% of increase factor is 1000 * (1 + 0.1)^5.
+	fn convert(queue_len: usize) -> BalanceOf<T> {
 		let increase_factor: FixedU128 =
-			<Percent as Into<FixedU128>>::into(Self::IncreaseFactor::get()) +
+			<Percent as Into<FixedU128>>::into(T::SignedDepositBaseIncreaseFactor::get()) +
 				sp_runtime::traits::One::one();
 
 		increase_factor
 			.saturating_pow(queue_len)
-			.saturating_mul_int(Self::BaseDeposit::get())
+			.saturating_mul_int(T::SignedFixedDepositBase::get())
 	}
 }
 
@@ -556,14 +548,14 @@ impl<T: Config> Pallet<T> {
 		size: SolutionOrSnapshotSize,
 	) -> BalanceOf<T> {
 		let encoded_len: u32 = raw_solution.encoded_size().saturated_into();
-		let encoded_len: BalanceOf<T> = encoded_len.into();
+		let encoded_len_balance: BalanceOf<T> = encoded_len.into();
 		let feasibility_weight = Self::solution_weight_of(raw_solution, size);
 
-		let len_deposit = T::SignedDepositByte::get().saturating_mul(encoded_len);
+		let len_deposit = T::SignedDepositByte::get().saturating_mul(encoded_len_balance);
 		let weight_deposit = T::SignedDepositWeight::get()
 			.saturating_mul(feasibility_weight.ref_time().saturated_into());
 
-		T::SignedDepositBase::calculate(Self::signed_submissions().len())
+		T::SignedDepositBase::convert(Self::signed_submissions().len())
 			.saturating_add(len_deposit)
 			.saturating_add(weight_deposit)
 	}

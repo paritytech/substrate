@@ -564,11 +564,10 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_election_provider_support::{
-		traits::DepositCalculator, InstantElectionProvider, NposSolver,
-	};
+	use frame_election_provider_support::{InstantElectionProvider, NposSolver};
 	use frame_support::{pallet_prelude::*, traits::EstimateCallFee};
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::traits::Convert;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
@@ -650,6 +649,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedFixedDepositBase: Get<BalanceOf<Self>>;
 
+		/// Increase factor of the geometric series for the base deposit computation.
+		///
+		/// If 0, then signed base deposit remains constant regardless of the submissions queue size
+		/// (and equal to `SignedFixedDepositBase`).
+		#[pallet::constant]
+		type SignedDepositBaseIncreaseFactor: Get<Percent>;
+
 		/// Per-byte deposit for a signed solution.
 		#[pallet::constant]
 		type SignedDepositByte: Get<BalanceOf<Self>>;
@@ -677,13 +683,7 @@ pub mod pallet {
 
 		/// Something that calculates the signed deposit base based on the signed submissions queue
 		/// size.
-		type SignedDepositBase: DepositCalculator<BalanceOf<Self>>;
-
-		/// Increase factor of the geometric series for the base deposit computation.
-		///
-		/// If 0, then signed base deposit remains constant regardless of the submissions queue size
-		/// (and equal to `SignedFixedDepositBase`).
-		type SignedDepositBaseIncreaseFactor: Get<Percent>;
+		type SignedDepositBase: Convert<usize, BalanceOf<Self>>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;

@@ -20,7 +20,6 @@ use crate::{self as multi_phase, signed::GeometricDepositBase, unsigned::MinerCo
 use frame_election_provider_support::{
 	data_provider,
 	onchain::{self},
-	traits::DepositCalculator,
 	ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
@@ -45,7 +44,7 @@ use sp_npos_elections::{
 };
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, Convert, IdentityLookup},
 	PerU16,
 };
 use std::sync::Arc;
@@ -422,17 +421,14 @@ impl crate::Config for Runtime {
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }
 
-impl DepositCalculator<BalanceOf<Runtime>> for Runtime {
-	type BaseDeposit = ();
-	type IncreaseFactor = ();
-
+impl Convert<usize, BalanceOf<Runtime>> for Runtime {
 	/// returns the geometric increase deposit fee if `EnableVariableDepositBase` is set, otherwise
 	/// the fee is `SignedFixedDepositBase`.
-	fn calculate(queue_len: usize) -> Balance {
+	fn convert(queue_len: usize) -> Balance {
 		if !EnableVariableDepositBase::get() {
 			SignedFixedDepositBase::get()
 		} else {
-			GeometricDepositBase::<Runtime>::calculate(queue_len)
+			GeometricDepositBase::<Runtime>::convert(queue_len)
 		}
 	}
 }
