@@ -67,7 +67,7 @@
 //!
 //! An account pair can become bonded using the [`bond`](Call::bond) call.
 //!
-//! Stash accounts can change their associated controller using the
+//! Stash accounts can update their associated controller back to the stash account using the
 //! [`set_controller`](Call::set_controller) call.
 //!
 //! There are three possible roles that any staked account pair can be in: `Validator`, `Nominator`
@@ -312,6 +312,7 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Saturating, StaticLookup, Zero},
 	Perbill, Perquintill, Rounding, RuntimeDebug,
 };
+pub use sp_staking::StakerStatus;
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
 	EraIndex, SessionIndex,
@@ -384,18 +385,6 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 	fn default() -> Self {
 		EraRewardPoints { total: Default::default(), individual: BTreeMap::new() }
 	}
-}
-
-/// Indicates the initial status of the staker.
-#[derive(RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Clone))]
-pub enum StakerStatus<AccountId> {
-	/// Chilling.
-	Idle,
-	/// Declared desire in validating or already participating in it.
-	Validator,
-	/// Nominating for a group of other stakers.
-	Nominator(Vec<AccountId>),
 }
 
 /// A destination account for payment.

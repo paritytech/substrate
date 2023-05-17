@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Testing pallet macro
+//! A basic pallet that can be used to test `construct_runtime!`.
 
 // Ensure docs are propagated properly by the macros.
 #![warn(missing_docs)]
@@ -24,10 +24,7 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-	#[allow(unused_imports)]
 	use frame_support::pallet_prelude::*;
-	#[allow(unused_imports)]
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -37,7 +34,7 @@ pub mod pallet {
 
 	/// I'm the documentation
 	#[pallet::storage]
-	pub type Value<T> = StorageValue<Value = u32>;
+	pub type Value<T> = StorageValue<_, u32>;
 
 	#[pallet::genesis_config]
 	#[cfg_attr(feature = "std", derive(Default))]

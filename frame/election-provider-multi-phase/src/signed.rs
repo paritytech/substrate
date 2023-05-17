@@ -554,6 +554,11 @@ mod tests {
 				MultiPhase::submit(RuntimeOrigin::signed(10), Box::new(solution)),
 				Error::<Runtime>::PreDispatchEarlySubmission,
 			);
+
+			// make sure invariants hold true and post-test try state checks to pass.
+			<crate::Snapshot<Runtime>>::kill();
+			<crate::SnapshotMetadata<Runtime>>::kill();
+			<crate::DesiredTargets<Runtime>>::kill();
 		})
 	}
 
