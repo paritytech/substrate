@@ -5,6 +5,4 @@ An example pallet demonstrating the ability to derive default testing configs vi
 
 Run `cargo doc --package pallet-default-config-example --open` to view this pallet's documentation.
 
-**Default testing configs are not meant to be used in production**
-
 License: MIT-0

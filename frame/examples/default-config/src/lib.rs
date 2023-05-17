@@ -16,16 +16,16 @@
 // limitations under the License.
 
 //! <!-- markdown-link-check-disable -->
-//! # Dev Mode Example Pallet
+//! # Default Config Pallet Example
 //!
-//! A simple example of a FRAME pallet demonstrating
-//! the ease of requirements for a pallet in dev mode.
+//! A simple example of a FRAME pallet that utilizes `derive_impl` to implement a `DefaultConfig`.
 //!
-//! Run `cargo doc --package pallet-dev-mode --open` to view this pallet's documentation.
+//! Run `cargo doc --package pallet-default-config-example --open` to view this pallet's
+//! documentation.
 //!
 //! **Default test configs are not meant to be used in production**
 
-// Ensure we're `no_std` when compiling for Wasm.
+// Ensure we're `no_std` when compiling for WASM.
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::dispatch::DispatchResult;
@@ -40,7 +40,6 @@ mod tests;
 /// A type alias for the balance type from this pallet's point of view.
 type BalanceOf<T> = <T as pallet_balances::Config>::Balance;
 
-/// Enable `dev_mode` for this pallet.
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
@@ -61,7 +60,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
-		/// No need to define a `weight` attribute here because of `dev_mode`.
 		pub fn add_dummy(origin: OriginFor<T>, id: T::AccountId) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -79,7 +77,6 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(1)]
-		/// No need to define a `weight` attribute here because of `dev_mode`.
 		pub fn set_bar(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,
@@ -102,17 +99,9 @@ pub mod pallet {
 		SetBar { account: T::AccountId, balance: BalanceOf<T> },
 	}
 
-	/// The MEL requirement for bounded pallets is skipped by `dev_mode`.
-	/// This means that all storages are marked as unbounded.
-	/// This is equivalent to specifying `#[pallet::unbounded]` on this type definitions.
-	/// When the dev_mode is removed, we would need to implement implement `MaxEncodedLen`.
 	#[pallet::storage]
 	pub type Dummy<T: Config> = StorageValue<_, Vec<T::AccountId>>;
 
-	/// The Hasher requirement is skipped by `dev_mode`. So, second parameter can be `_`
-	/// and `Blake2_128Concat` is used as a default.
-	/// When the dev_mode is removed, we would need to specify the hasher like so:
-	/// `pub type Bar<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance>;`.
 	#[pallet::storage]
 	pub type Bar<T: Config> = StorageMap<_, _, T::AccountId, T::Balance>;
 }

@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for pallet-dev-mode.
+//! Tests for pallet-default-config-example.
 
 use crate::*;
 use frame_support::{assert_ok, traits::ConstU64};
@@ -26,7 +26,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 // Reexport crate as its pallet name for construct_runtime.
-use crate as pallet_dev_mode;
+use crate as pallet_default_config_example;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -40,7 +40,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Example: pallet_dev_mode::{Pallet, Call, Storage, Event<T>},
+		Example: pallet_default_config_example::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
