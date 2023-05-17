@@ -27,33 +27,26 @@ by running the following command.
 	delete files/directories that are removed from the source. So you need to manually check and
 	remove them in the destination.
 
-3. There are actually three packages in the Node Template, `node-template` (the node),
-`node-template-runtime` (the runtime), and `pallet-template`, and each has its own `Cargo.toml`.
-Inside these three files, dependencies are listed in expanded form and linked to a certain git
-commit in Substrate remote repository, such as:
+3. There is a `Cargo.toml` file in the root directory. Inside, dependencies are listed form and
+linked to a certain git commit in Substrate remote repository, such as:
 
 	```toml
-	[dev-dependencies.sp-core]
-	default-features = false
-	git = 'https://github.com/paritytech/substrate.git'
-	rev = 'c1fe59d060600a10eebb4ace277af1fee20bad17'
-	version = '3.0.0'
+	sp-core = { version = "7.0.0", git = "https://github.com/paritytech/substrate.git", rev = "de80d0107336a9c7a2efdc0199015e4d67fcbdb5", default-features = false }
 	```
 
-	We will update each of them to the shortened form and link them to the Rust
-	[crate registry](https://crates.io/). After confirming the versioned package is published in
-	the crate, the above will become:
+	We will update each of them to link to the Rust	[crate registry](https://crates.io/).
+After confirming the versioned package is published in the crate, the above will become:
 
 	```toml
-	[dev-dependencies]
-	sp-core = { version = '3.0.0', default-features = false }
+	[workspace.dependencies]
+	sp-core = { version = "7.0.0", default-features = false }
 	```
 
 	P.S: This step can be automated if we update `node-template-release` package in
 	`scripts/ci/node-template-release`.
 
-4. Once the three `Cargo.toml`s are updated, compile and confirm that the Node Template builds. Then
-commit the changes to a new branch in [Substrate Node Template](https://github.com/substrate-developer-hub/substrate-node-template), and make a PR.
+4. Once the `Cargo.toml` is updated, compile and confirm that the Node Template builds. Then commit
+the changes to a new branch in [Substrate Node Template](https://github.com/substrate-developer-hub/substrate-node-template), and make a PR.
 
 	> Note that there is a chance the code in Substrate Node Template works with the linked Substrate git
 	commit but not with published packages due to the latest (as yet) unpublished features. In this case,
