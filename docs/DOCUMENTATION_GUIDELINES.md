@@ -151,7 +151,7 @@ The following is relevant to how to document parts of a crate that is a pallet.
 
 ### Top Level Pallet Docs (`lib.rs`)
 
-for the top-level pallet docs, consider the following template:
+For the top-level pallet docs, consider the following template:
 
 ```
 //! # <Pallet Name>
