@@ -116,7 +116,7 @@ You can certainly do parts of your documentation through your well-organized, pr
 The way you format your documents (newlines, heading and so on) do matter! Consider the below examples:
 
 ```rust
-/// This function works with input u32 x and multiples it by two. If
+/// This function works with input u32 x and multiplies it by two. If
 /// we optimize the other variant of it, we would be able to achieve more
 /// efficiency but I have to think about it. Probably can panic if the input
 /// overflows u32.
