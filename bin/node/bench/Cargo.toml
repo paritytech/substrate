@@ -13,7 +13,7 @@ publish = false
 
 [dependencies]
 array-bytes = "4.1"
-clap = { version = "4.0.9", features = ["derive"] }
+clap = { version = "4.2.5", features = ["derive"] }
 log = "0.4.17"
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-testing = { version = "3.0.0-dev", path = "../testing" }
@@ -25,7 +25,7 @@ serde = "1.0.136"
 serde_json = "1.0.85"
 derive_more = { version = "0.99.17", default-features = false, features = ["display"] }
 kvdb = "0.13.0"
-kvdb-rocksdb = "0.18.0"
+kvdb-rocksdb = "0.19.0"
 sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
@@ -38,7 +38,7 @@ tempfile = "3.1.0"
 fs_extra = "1"
 rand = { version = "0.8.5", features = ["small_rng"] }
 lazy_static = "1.4.0"
-parity-db = "0.4.6"
+parity-db = "0.4.8"
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 futures = { version = "0.3.21", features = ["thread-pool"] }

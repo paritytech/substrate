@@ -29,7 +29,7 @@ mod weight_v2;
 
 use codec::{CompactAs, Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use sp_arithmetic::{
@@ -69,8 +69,8 @@ pub mod constants {
 	MaxEncodedLen,
 	TypeInfo,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(transparent))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 #[deprecated(note = "Will be removed soon; use `Weight` instead.")]
 pub struct OldWeight(pub u64);
 

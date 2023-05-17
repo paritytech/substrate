@@ -45,6 +45,17 @@ pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
 /// The recommended open file descriptor limit to be configured for the process.
 const RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT: u64 = 10_000;
 
+/// The default port.
+pub const RPC_DEFAULT_PORT: u16 = 9944;
+/// The default max number of subscriptions per connection.
+pub const RPC_DEFAULT_MAX_SUBS_PER_CONN: u32 = 1024;
+/// The default max request size in MB.
+pub const RPC_DEFAULT_MAX_REQUEST_SIZE_MB: u32 = 15;
+/// The default max response size in MB.
+pub const RPC_DEFAULT_MAX_RESPONSE_SIZE_MB: u32 = 15;
+/// The default number of connection..
+pub const RPC_DEFAULT_MAX_CONNECTIONS: u32 = 100;
+
 /// Default configuration values used by Substrate
 ///
 /// These values will be used by [`CliConfiguration`] to set
@@ -57,18 +68,11 @@ pub trait DefaultConfigurationValues {
 		30333
 	}
 
-	/// The port Substrate should listen on for websocket connections.
+	/// The port Substrate should listen on for JSON-RPC connections.
 	///
 	/// By default this is `9944`.
-	fn rpc_ws_listen_port() -> u16 {
-		9944
-	}
-
-	/// The port Substrate should listen on for http connections.
-	///
-	/// By default this is `9933`.
-	fn rpc_http_listen_port() -> u16 {
-		9933
+	fn rpc_listen_port() -> u16 {
+		RPC_DEFAULT_PORT
 	}
 
 	/// The port Substrate should listen on for prometheus connections.
@@ -302,40 +306,22 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			.unwrap_or_default())
 	}
 
-	/// Get the RPC HTTP address (`None` if disabled).
-	///
-	/// By default this is `None`.
-	fn rpc_http(&self, _default_listen_port: u16) -> Result<Option<SocketAddr>> {
-		Ok(None)
-	}
-
-	/// Get the RPC IPC path (`None` if disabled).
-	///
-	/// By default this is `None`.
-	fn rpc_ipc(&self) -> Result<Option<String>> {
-		Ok(None)
-	}
-
-	/// Get the RPC websocket address (`None` if disabled).
-	///
-	/// By default this is `None`.
-	fn rpc_ws(&self, _default_listen_port: u16) -> Result<Option<SocketAddr>> {
+	/// Get the RPC address.
+	fn rpc_addr(&self, _default_listen_port: u16) -> Result<Option<SocketAddr>> {
 		Ok(None)
 	}
 
 	/// Returns the RPC method set to expose.
 	///
 	/// By default this is `RpcMethods::Auto` (unsafe RPCs are denied iff
-	/// `{rpc,ws}_external` returns true, respectively).
+	/// `rpc_external` returns true, respectively).
 	fn rpc_methods(&self) -> Result<RpcMethods> {
 		Ok(Default::default())
 	}
 
-	/// Get the RPC websockets maximum connections (`None` if unlimited).
-	///
-	/// By default this is `None`.
-	fn rpc_ws_max_connections(&self) -> Result<Option<usize>> {
-		Ok(None)
+	/// Get the maximum number of RPC server connections.
+	fn rpc_max_connections(&self) -> Result<u32> {
+		Ok(RPC_DEFAULT_MAX_CONNECTIONS)
 	}
 
 	/// Get the RPC cors (`None` if disabled)
@@ -345,29 +331,19 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(Some(Vec::new()))
 	}
 
-	/// Get maximum RPC payload.
-	fn rpc_max_payload(&self) -> Result<Option<usize>> {
-		Ok(None)
-	}
-
 	/// Get maximum RPC request payload size.
-	fn rpc_max_request_size(&self) -> Result<Option<usize>> {
-		Ok(None)
+	fn rpc_max_request_size(&self) -> Result<u32> {
+		Ok(RPC_DEFAULT_MAX_REQUEST_SIZE_MB)
 	}
 
 	/// Get maximum RPC response payload size.
-	fn rpc_max_response_size(&self) -> Result<Option<usize>> {
-		Ok(None)
+	fn rpc_max_response_size(&self) -> Result<u32> {
+		Ok(RPC_DEFAULT_MAX_RESPONSE_SIZE_MB)
 	}
 
 	/// Get maximum number of subscriptions per connection.
-	fn rpc_max_subscriptions_per_connection(&self) -> Result<Option<usize>> {
-		Ok(None)
-	}
-
-	/// Get maximum WS output buffer capacity.
-	fn ws_max_out_buffer_capacity(&self) -> Result<Option<usize>> {
-		Ok(None)
+	fn rpc_max_subscriptions_per_connection(&self) -> Result<u32> {
+		Ok(RPC_DEFAULT_MAX_SUBS_PER_CONN)
 	}
 
 	/// Get the prometheus configuration (`None` if disabled)
@@ -526,24 +502,22 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			)?,
 			keystore,
 			database: self.database_config(&config_dir, database_cache_size, database)?,
+			data_path: config_dir,
 			trie_cache_maximum_size: self.trie_cache_maximum_size()?,
 			state_pruning: self.state_pruning()?,
 			blocks_pruning: self.blocks_pruning()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
-			rpc_http: self.rpc_http(DCV::rpc_http_listen_port())?,
-			rpc_ws: self.rpc_ws(DCV::rpc_ws_listen_port())?,
-			rpc_ipc: self.rpc_ipc()?,
+			rpc_addr: self.rpc_addr(DCV::rpc_listen_port())?,
 			rpc_methods: self.rpc_methods()?,
-			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
+			rpc_max_connections: self.rpc_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
-			rpc_max_payload: self.rpc_max_payload()?,
 			rpc_max_request_size: self.rpc_max_request_size()?,
 			rpc_max_response_size: self.rpc_max_response_size()?,
 			rpc_id_provider: None,
 			rpc_max_subs_per_conn: self.rpc_max_subscriptions_per_connection()?,
-			ws_max_out_buffer_capacity: self.ws_max_out_buffer_capacity()?,
+			rpc_port: DCV::rpc_listen_port(),
 			prometheus_config: self
 				.prometheus_config(DCV::prometheus_listen_port(), &chain_spec)?,
 			telemetry_endpoints,
@@ -558,7 +532,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			max_runtime_instances,
 			announce_block: self.announce_block()?,
 			role,
-			base_path: Some(base_path),
+			base_path,
 			informant_output_format: Default::default(),
 			runtime_cache_size,
 		})
