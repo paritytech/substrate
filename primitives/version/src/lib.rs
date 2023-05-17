@@ -33,7 +33,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "std")]
 use std::collections::HashSet;
@@ -156,8 +156,8 @@ macro_rules! create_apis_vec {
 /// `authoring_version`, absolutely not `impl_version` since they change the semantics of the
 /// runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Default, sp_runtime::RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct RuntimeVersion {
 	/// Identifies the different Substrate runtimes. There'll be at least polkadot and node.
 	/// A different on-chain spec_name to that of the native runtime would normally result
@@ -190,7 +190,7 @@ pub struct RuntimeVersion {
 
 	/// List of supported API "features" along with their versions.
 	#[cfg_attr(
-		feature = "std",
+		feature = "serde",
 		serde(
 			serialize_with = "apis_serialize::serialize",
 			deserialize_with = "apis_serialize::deserialize",
@@ -389,11 +389,12 @@ impl<T: GetNativeVersion> GetNativeVersion for std::sync::Arc<T> {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 mod apis_serialize {
 	use super::*;
 	use impl_serde::serialize as bytes;
 	use serde::{de, ser::SerializeTuple, Serializer};
+	use sp_std::vec::Vec;
 
 	#[derive(Serialize)]
 	struct ApiId<'a>(#[serde(serialize_with = "serialize_bytesref")] &'a super::ApiId, &'a u32);
@@ -428,7 +429,7 @@ mod apis_serialize {
 		impl<'de> de::Visitor<'de> for Visitor {
 			type Value = ApisVec;
 
-			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+			fn expecting(&self, formatter: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 				formatter.write_str("a sequence of api id and version tuples")
 			}
 

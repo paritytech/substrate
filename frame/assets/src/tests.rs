@@ -52,9 +52,18 @@ fn transfer_should_never_burn() {
 
 		while System::inc_consumers(&2).is_ok() {}
 		let _ = System::dec_consumers(&2);
+		let _ = System::dec_consumers(&2);
 		// Exactly one consumer ref remaining.
+		assert_eq!(System::consumers(&2), 1);
 
 		let _ = <Assets as fungibles::Mutate<_>>::transfer(0, &1, &2, 50, Protect);
+		System::assert_has_event(RuntimeEvent::Assets(crate::Event::Transferred {
+			asset_id: 0,
+			from: 1,
+			to: 2,
+			amount: 50,
+		}));
+		assert_eq!(Assets::balance(0, 1), 50);
 		assert_eq!(Assets::balance(0, 1) + Assets::balance(0, 2), 100);
 	});
 }
@@ -65,11 +74,26 @@ fn basic_minting_should_work() {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 1, 1, true, 1));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
+		System::assert_last_event(RuntimeEvent::Assets(crate::Event::Issued {
+			asset_id: 0,
+			owner: 1,
+			amount: 100,
+		}));
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 2, 100));
+		System::assert_last_event(RuntimeEvent::Assets(crate::Event::Issued {
+			asset_id: 0,
+			owner: 2,
+			amount: 100,
+		}));
 		assert_eq!(Assets::balance(0, 2), 100);
 		assert_eq!(asset_ids(), vec![0, 1, 999]);
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 1, 1, 100));
+		System::assert_last_event(RuntimeEvent::Assets(crate::Event::Issued {
+			asset_id: 1,
+			owner: 1,
+			amount: 100,
+		}));
 		assert_eq!(Assets::account_balances(1), vec![(0, 100), (999, 100), (1, 100)]);
 	});
 }
@@ -1133,6 +1157,11 @@ fn burning_asset_balance_with_positive_balance_should_work() {
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_ok!(Assets::burn(RuntimeOrigin::signed(1), 0, 1, u64::MAX));
+		System::assert_last_event(RuntimeEvent::Assets(crate::Event::Burned {
+			asset_id: 0,
+			owner: 1,
+			balance: 100,
+		}));
 		assert_eq!(Assets::balance(0, 1), 0);
 	});
 }

@@ -110,6 +110,11 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+pub mod weights;
+pub use weights::WeightInfo;
+
 pub use extension::CheckOnlySudoAccount;
 pub use pallet::*;
 
@@ -130,6 +135,9 @@ pub mod pallet {
 		type RuntimeCall: Parameter
 			+ UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ GetDispatchInfo;
+
+		/// Type representing the weight of this pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -146,7 +154,10 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
-			(dispatch_info.weight, dispatch_info.class)
+			(
+				T::WeightInfo::sudo().saturating_add(dispatch_info.weight),
+				dispatch_info.class
+			)
 		})]
 		pub fn sudo(
 			origin: OriginFor<T>,
@@ -195,7 +206,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - O(1).
 		#[pallet::call_index(2)]
-		#[pallet::weight({0})] // FIXME
+		#[pallet::weight(T::WeightInfo::set_key())]
 		pub fn set_key(
 			origin: OriginFor<T>,
 			new: AccountIdLookupOf<T>,
@@ -222,9 +233,7 @@ pub mod pallet {
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
-				dispatch_info.weight
-					// AccountData for inner call origin accountdata.
-					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+				T::WeightInfo::sudo_as().saturating_add(dispatch_info.weight),
 				dispatch_info.class,
 			)
 		})]

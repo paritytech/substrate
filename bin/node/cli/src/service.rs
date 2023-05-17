@@ -316,7 +316,7 @@ pub struct NewFullBase {
 
 /// Creates a full service from the configuration.
 pub fn new_full_base(
-	mut config: Configuration,
+	config: Configuration,
 	disable_hardware_benchmarks: bool,
 	with_startup_data: impl FnOnce(
 		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
@@ -343,10 +343,15 @@ pub fn new_full_base(
 
 	let shared_voter_state = rpc_setup;
 	let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
+	let mut net_config = sc_network::config::FullNetworkConfiguration::new(&config.network);
+
 	let grandpa_protocol_name = grandpa::protocol_standard_name(
 		&client.block_hash(0).ok().flatten().expect("Genesis block exists; qed"),
 		&config.chain_spec,
 	);
+	net_config.add_notification_protocol(grandpa::grandpa_peers_set_config(
+		grandpa_protocol_name.clone(),
+	));
 
 	let statement_handler_proto = sc_network_statement::StatementHandlerPrototype::new(
 		client
@@ -356,12 +361,8 @@ pub fn new_full_base(
 			.expect("Genesis block exists; qed"),
 		config.chain_spec.fork_id(),
 	);
-	config.network.extra_sets.push(statement_handler_proto.set_config());
+	net_config.add_notification_protocol(statement_handler_proto.set_config());
 
-	config
-		.network
-		.extra_sets
-		.push(grandpa::grandpa_peers_set_config(grandpa_protocol_name.clone()));
 	let warp_sync = Arc::new(grandpa::warp_proof::NetworkProvider::new(
 		backend.clone(),
 		import_setup.1.shared_authority_set().clone(),
@@ -371,6 +372,7 @@ pub fn new_full_base(
 	let (network, system_rpc_tx, tx_handler_controller, network_starter, sync_service) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
+			net_config,
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
 			spawn_handle: task_manager.spawn_handle(),

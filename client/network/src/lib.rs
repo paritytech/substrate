@@ -87,8 +87,6 @@
 //!
 //! The following multiplexing protocols are supported:
 //!
-//! - [Mplex](https://github.com/libp2p/specs/tree/master/mplex). Support for mplex will likely
-//! be deprecated in the future.
 //! - [Yamux](https://github.com/hashicorp/yamux/blob/master/spec.md).
 //!
 //! ## Substreams
@@ -245,24 +243,24 @@
 //! More precise usage details are still being worked on and will likely change in the future.
 
 mod behaviour;
-mod discovery;
-mod peer_info;
 mod protocol;
 mod service;
-mod transport;
 
 pub mod config;
+pub mod discovery;
 pub mod error;
 pub mod event;
 pub mod network_state;
+pub mod peer_info;
 pub mod request_responses;
+pub mod transport;
 pub mod types;
 pub mod utils;
 
 pub use event::{DhtEvent, Event, SyncEvent};
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use request_responses::{IfDisconnected, RequestFailure, RequestResponseConfig};
+pub use request_responses::{Config, IfDisconnected, RequestFailure};
 pub use sc_network_common::{
 	role::ObservedRole,
 	sync::{
