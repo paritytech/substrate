@@ -876,11 +876,17 @@ impl<'a> StorageAppend<'a> {
 	}
 
 	/// Compare two size, return difference of encoding length.
-	/// Assert second size is bigger than first.
-	pub fn diff_materialized(previous: Option<u32>, new: Option<u32>) -> usize {
+	/// Bool indicate if first size is bigger than second (unusual case
+	/// where append does reduce materialized size: this can happen
+	/// under certain access and transaction conditions).
+	pub fn diff_materialized(previous: Option<u32>, new: Option<u32>) -> (usize, bool) {
 		let prev = previous.map(|l| Compact::<u32>::compact_len(&l)).unwrap_or(0);
 		let new = new.map(|l| Compact::<u32>::compact_len(&l)).unwrap_or(0);
-		new - prev
+		if new > prev {
+			(new - prev, false)
+		} else {
+			(prev - new, true)
+		}
 	}
 }
 

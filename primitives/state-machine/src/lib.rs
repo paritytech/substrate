@@ -2233,7 +2233,7 @@ pub mod fuzzing {
 		A = 'a' as u8,
 		B = 'b' as u8,
 		C = 'c' as u8,
-		D = 'd' as u8,
+		D = 'd' as u8,  // This can be read as a multiple byte compact length.
 		EasyBug = 20u8, // value compact len.
 	}
 
@@ -2414,23 +2414,14 @@ pub mod fuzzing {
 		let scenarii = vec![
 			(
 				vec![
-					FuzzAppendItem::Append(DataValue::A, DataLength::Big),
-					FuzzAppendItem::Read,
-					FuzzAppendItem::RollbackTransaction,
+					FuzzAppendItem::Append(DataValue::A, DataLength::Small),
 					FuzzAppendItem::StartTransaction,
-					FuzzAppendItem::StartTransaction,
-					FuzzAppendItem::Read,
-					FuzzAppendItem::Read,
 					FuzzAppendItem::Append50(DataValue::D, DataLength::Small),
 					FuzzAppendItem::Read,
-					FuzzAppendItem::Append(DataValue::B, DataLength::Small),
 					FuzzAppendItem::RollbackTransaction,
-					FuzzAppendItem::StartTransaction,
 					FuzzAppendItem::StartTransaction,
 					FuzzAppendItem::Append(DataValue::D, DataLength::Small),
 					FuzzAppendItem::Read,
-					FuzzAppendItem::RollbackTransaction,
-					FuzzAppendItem::Append50(DataValue::EasyBug, DataLength::Big),
 					FuzzAppendItem::RollbackTransaction,
 				],
 				Some((DataValue::D, DataLength::Small)),

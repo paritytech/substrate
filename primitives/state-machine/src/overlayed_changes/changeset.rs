@@ -314,15 +314,18 @@ impl OverlayedEntry<StorageEntry> {
 						from_parent: _,
 					} => {
 						debug_assert!(parent_data.is_empty());
-						let delta =
-							StorageAppend::diff_materialized(*materialized, current_materialized);
 
-						data.truncate(
-							delta +
-								moved_size
-									.take()
-									.expect("append in new layer store size in previous; qed"),
-						);
+						let mut moved_size = moved_size
+							.take()
+							.expect("append in new layer store size in previous; qed");
+						let (delta, decrease) =
+							StorageAppend::diff_materialized(*materialized, current_materialized);
+						if decrease {
+							moved_size -= delta;
+						} else {
+							moved_size += delta;
+						}
+						data.truncate(moved_size);
 						*parent_data = data;
 						*materialized = current_materialized;
 					},
@@ -691,14 +694,19 @@ impl OverlayedChangeSet {
 								debug_assert!(empty_data.is_empty());
 								debug_assert!(moved_size.is_some());
 								// restore move of data
-								let moved_size = moved_size
+								let mut moved_size = moved_size
 									.take()
 									.expect("append in new layer store size in previous; qed");
-								let delta = StorageAppend::diff_materialized(
+								let (delta, decrease) = StorageAppend::diff_materialized(
 									*materialized,
 									materialized_current,
 								);
-								data.truncate(delta + moved_size);
+								if decrease {
+									moved_size -= delta;
+								} else {
+									moved_size += delta;
+								}
+								data.truncate(moved_size);
 
 								*empty_data = data;
 								*materialized = materialized_current;
@@ -771,17 +779,21 @@ impl OverlayedChangeSet {
 										from_parent: _,
 									} => {
 										debug_assert!(parent_data.is_empty());
-										let delta = StorageAppend::diff_materialized(
+
+										let mut moved_size = moved_size.take().expect(
+											"append in new layer store size in previous; qed",
+										);
+
+										let (delta, decrease) = StorageAppend::diff_materialized(
 											*materialized,
 											current_materialized,
 										);
-
-										data.truncate(
-											delta +
-												moved_size
-													.take()
-													.expect("append in new layer store size in previous; qed"),
-										);
+										if decrease {
+											moved_size -= delta
+										} else {
+											moved_size += delta
+										}
+										data.truncate(moved_size);
 										*parent_data = data;
 										*materialized = current_materialized;
 									},
