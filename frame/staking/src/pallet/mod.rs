@@ -631,7 +631,7 @@ pub mod pallet {
 				MaxNominatorsCount::<T>::put(x);
 			}
 
-			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
+			for &(ref stash, _, balance, ref status) in &self.stakers {
 				crate::log!(
 					trace,
 					"inserting genesis staker: {:?} => {:?} => {:?}",
@@ -650,11 +650,11 @@ pub mod pallet {
 				));
 				frame_support::assert_ok!(match status {
 					crate::StakerStatus::Validator => <Pallet<T>>::validate(
-						T::RuntimeOrigin::from(Some(controller.clone()).into()),
+						T::RuntimeOrigin::from(Some(stash.clone()).into()),
 						Default::default(),
 					),
 					crate::StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
-						T::RuntimeOrigin::from(Some(controller.clone()).into()),
+						T::RuntimeOrigin::from(Some(stash.clone()).into()),
 						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
 					),
 					_ => Ok(()),
