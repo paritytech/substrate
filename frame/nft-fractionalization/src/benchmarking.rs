@@ -57,16 +57,16 @@ where
 
 fn mint_nft<T: Config>(nft_id: T::NftId) -> (T::AccountId, AccountIdLookupOf<T>)
 where
-	T::NftCollectionId: From<u32>,
-	T::Currency: Unbalanced<T::AccountId>,
 	T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, T::BlockNumber, T::NftCollectionId>>
 		+ Mutate<T::AccountId, ItemConfig>,
 {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
-	assert_ok!(T::Currency::set_balance(&caller, BalanceOf::<T>::max_value()));
+	T::Currency::set_total_issuance(BalanceOf::<T>::max_value());
+	assert_ok!(T::Currency::write_balance(&caller, BalanceOf::<T>::max_value()));
 	assert_ok!(T::Nfts::create_collection(&caller, &caller, &default_collection_config::<T>()));
-	assert_ok!(T::Nfts::mint_into(&0.into(), &nft_id, &caller, &ItemConfig::default(), true));
+	let collection = T::BenchmarkHelper::collection(0);
+	assert_ok!(T::Nfts::mint_into(&collection, &nft_id, &caller, &ItemConfig::default(), true));
 	(caller, caller_lookup)
 }
 
@@ -81,47 +81,48 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
 benchmarks! {
 	where_clause {
 		where
-			T::AssetBalance: From<u64>,
-			T::AssetId: From<u32>,
-			T::NftCollectionId: From<u32>,
-			T::NftId: From<u32>,
-			T::Currency: Unbalanced<T::AccountId>,
 			T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, T::BlockNumber, T::NftCollectionId>>
 				+ Mutate<T::AccountId, ItemConfig>,
 	}
 
 	fractionalize {
-		let (caller, caller_lookup) = mint_nft::<T>(0.into());
-	}: _(SystemOrigin::Signed(caller.clone()), 0.into(), 0.into(), 0.into(), caller_lookup, 1000u32.into())
+		let asset = T::BenchmarkHelper::asset(0);
+		let collection = T::BenchmarkHelper::collection(0);
+		let nft = T::BenchmarkHelper::nft(0);
+		let (caller, caller_lookup) = mint_nft::<T>(nft);
+	}: _(SystemOrigin::Signed(caller.clone()), collection, nft, asset, caller_lookup, 1000u32.into())
 	verify {
 		assert_last_event::<T>(
 			Event::NftFractionalized {
-				nft_collection: 0.into(),
-				nft: 0.into(),
+				nft_collection: collection,
+				nft,
 				fractions: 1000u32.into(),
-				asset: 0.into(),
+				asset,
 				beneficiary: caller,
 			}.into()
 		);
 	}
 
 	unify {
-		let (caller, caller_lookup) = mint_nft::<T>(0.into());
+		let asset = T::BenchmarkHelper::asset(0);
+		let collection = T::BenchmarkHelper::collection(0);
+		let nft = T::BenchmarkHelper::nft(0);
+		let (caller, caller_lookup) = mint_nft::<T>(nft);
 		NftFractionalization::<T>::fractionalize(
 			SystemOrigin::Signed(caller.clone()).into(),
-			0.into(),
-			0.into(),
-			0.into(),
+			collection,
+			nft,
+			asset,
 			caller_lookup.clone(),
 			1000u32.into(),
 		)?;
-	}: _(SystemOrigin::Signed(caller.clone()), 0.into(), 0.into(), 0.into(), caller_lookup)
+	}: _(SystemOrigin::Signed(caller.clone()), collection, nft, asset, caller_lookup)
 	verify {
 		assert_last_event::<T>(
 			Event::NftUnified {
-				nft_collection: 0.into(),
-				nft: 0.into(),
-				asset: 0.into(),
+				nft_collection: collection,
+				nft,
+				asset,
 				beneficiary: caller,
 			}.into()
 		);

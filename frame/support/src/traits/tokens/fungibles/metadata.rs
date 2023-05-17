@@ -40,7 +40,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	) -> DispatchResult;
 }
 
-pub trait CalcMetadataDeposit<DepositBalance> {
+pub trait MetadataDeposit<DepositBalance> {
 	// Returns the required deposit amount for a given metadata.
-	fn calc(name: &[u8], symbol: &[u8]) -> DepositBalance;
+	fn calc_metadata_deposit(name: &[u8], symbol: &[u8]) -> DepositBalance;
 }

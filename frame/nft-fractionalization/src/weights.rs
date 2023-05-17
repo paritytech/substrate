@@ -57,15 +57,15 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn fractionalize() -> Weight {
 		// Minimum execution time: 44_312 nanoseconds.
-		Weight::from_ref_time(44_871_000)
-			.saturating_add(T::DbWeight::get().reads(2))
-			.saturating_add(T::DbWeight::get().writes(5))
+		Weight::from_parts(25_147_000, 3549)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(5_u64))
 	}
 	fn unify() -> Weight {
 		// Minimum execution time: 31_654 nanoseconds.
-		Weight::from_ref_time(32_078_000)
-			.saturating_add(T::DbWeight::get().reads(2))
-			.saturating_add(T::DbWeight::get().writes(5))
+		Weight::from_parts(25_147_000, 3549)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(5_u64))
 	}
 }
 
@@ -73,14 +73,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	fn fractionalize() -> Weight {
 		// Minimum execution time: 44_312 nanoseconds.
-		Weight::from_ref_time(44_871_000)
-			.saturating_add(RocksDbWeight::get().reads(2))
-			.saturating_add(RocksDbWeight::get().writes(5))
+		Weight::from_parts(25_147_000, 3549)
+			.saturating_add(RocksDbWeight::get().reads(2_u64))
+			.saturating_add(RocksDbWeight::get().writes(5_u64))
 	}
 	fn unify() -> Weight {
 		// Minimum execution time: 31_654 nanoseconds.
-		Weight::from_ref_time(32_078_000)
-			.saturating_add(RocksDbWeight::get().reads(2))
-			.saturating_add(RocksDbWeight::get().writes(5))
+		Weight::from_parts(25_147_000, 3549)
+			.saturating_add(RocksDbWeight::get().reads(2_u64))
+			.saturating_add(RocksDbWeight::get().writes(5_u64))
 	}
 }

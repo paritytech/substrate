@@ -56,42 +56,37 @@ pub use weights::WeightInfo;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use frame_support::{
+		dispatch::DispatchResult,
+		ensure,
+		pallet_prelude::*,
+		sp_runtime::traits::{AccountIdConversion, StaticLookup},
+		traits::{
+			fungible::{
+				hold::{Inspect as HoldInspectFungible, Mutate as HoldMutateFungible},
+				Inspect as InspectFungible, Mutate as MutateFungible,
+			},
+			fungibles::{
+				metadata::{MetadataDeposit, Mutate as MutateMetadata},
+				Create, Destroy, Inspect, Mutate,
+			},
+			tokens::{
+				nonfungibles_v2::{Inspect as NonFungiblesInspect, LockableNonfungible, Transfer},
+				AssetId, Balance as AssetBalance,
+				Fortitude::Polite,
+				Precision::{BestEffort, Exact},
+				Preservation::Preserve,
+			},
+		},
+		BoundedVec, PalletId,
+	};
 	use frame_system::pallet_prelude::*;
 	use scale_info::prelude::{format, string::String};
 	use sp_runtime::traits::{One, Zero};
 	use sp_std::{fmt::Display, prelude::*};
 
-	use frame_support::{
-		dispatch::DispatchResult,
-		pallet_prelude::*,
-		sp_runtime::traits::{AccountIdConversion, StaticLookup},
-		traits::{
-			fungibles::{
-				metadata::{CalcMetadataDeposit, Mutate as MutateMetadata},
-				Create, Destroy, Inspect, Mutate,
-			},
-			tokens::{
-				nonfungibles_v2::{Inspect as NonFungiblesInspect, Transfer},
-				AssetId, Balance as AssetBalance,
-				Fortitude::Polite,
-				Precision::Exact,
-			},
-			Currency, ExistenceRequirement, ReservableCurrency,
-		},
-		BoundedVec, PalletId,
-	};
-
-	pub type AssetIdOf<T> =
-		<<T as Config>::Assets as Inspect<<T as SystemConfig>::AccountId>>::AssetId;
-	pub type AssetBalanceOf<T> =
-		<<T as Config>::Assets as Inspect<<T as SystemConfig>::AccountId>>::Balance;
-	pub type DepositOf<T> =
-		<<T as Config>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
-	pub type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
-
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(_);
+	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -99,15 +94,18 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency mechanism, used for paying for deposits.
-		type Currency: ReservableCurrency<Self::AccountId>;
+		type Currency: InspectFungible<Self::AccountId>
+			+ MutateFungible<Self::AccountId>
+			+ HoldInspectFungible<Self::AccountId>
+			+ HoldMutateFungible<Self::AccountId>;
+
+		#[pallet::constant]
+		type HoldReason: Get<<Self::Currency as HoldInspectFungible<Self::AccountId>>::Reason>;
 
 		/// The deposit paid by the user locking an NFT. The deposit is returned to the original NFT
 		/// owner when the asset is unified and the NFT is unlocked.
 		#[pallet::constant]
 		type Deposit: Get<DepositOf<Self>>;
-
-		#[pallet::constant]
-		type ExistentialDeposit: Get<DepositOf<Self>>;
 
 		/// Identifier for the collection of NFT.
 		type NftCollectionId: Member + Parameter + MaxEncodedLen + Copy + Display;
@@ -127,14 +125,15 @@ pub mod pallet {
 			+ Destroy<Self::AccountId>
 			+ Mutate<Self::AccountId>
 			+ MutateMetadata<Self::AccountId>
-			+ CalcMetadataDeposit<<Self::Currency as Currency<Self::AccountId>>::Balance>;
+			+ MetadataDeposit<DepositOf<Self>>;
 
 		/// Registry for minted NFTs.
 		type Nfts: NonFungiblesInspect<
 				Self::AccountId,
 				ItemId = Self::NftId,
 				CollectionId = Self::NftCollectionId,
-			> + Transfer<Self::AccountId>;
+			> + Transfer<Self::AccountId>
+			+ LockableNonfungible<Self::AccountId>;
 
 		/// The pallet's id, used for deriving its sovereign account ID.
 		#[pallet::constant]
@@ -151,6 +150,10 @@ pub mod pallet {
 		/// The maximum length of a name or symbol stored on-chain.
 		#[pallet::constant]
 		type StringLimit: Get<u32>;
+
+		/// A set of helper functions for benchmarking.
+		#[cfg(feature = "runtime-benchmarks")]
+		type BenchmarkHelper: BenchmarkHelper<Self::AssetId, Self::NftCollectionId, Self::NftId>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -237,7 +240,7 @@ pub mod pallet {
 
 			let pallet_account = Self::get_pallet_account();
 			let deposit = T::Deposit::get();
-			T::Currency::reserve(&nft_owner, deposit)?;
+			T::Currency::hold(&T::HoldReason::get(), &nft_owner, deposit)?;
 			Self::do_lock_nft(nft_collection_id, nft_id)?;
 			Self::do_create_asset(asset_id, pallet_account.clone())?;
 			Self::do_mint_asset(asset_id, &beneficiary, fractions)?;
@@ -295,7 +298,7 @@ pub mod pallet {
 				let asset_creator = details.asset_creator;
 				Self::do_burn_asset(asset_id, &who, details.fractions)?;
 				Self::do_unlock_nft(nft_collection_id, nft_id, &beneficiary)?;
-				T::Currency::unreserve(&asset_creator, deposit);
+				T::Currency::release(&T::HoldReason::get(), &asset_creator, deposit, BestEffort)?;
 
 				Self::deposit_event(Event::NftUnified {
 					nft_collection: nft_collection_id,
@@ -371,24 +374,15 @@ pub mod pallet {
 				String::from_utf8_lossy(&T::NewAssetName::get())
 			);
 			let symbol: &[u8] = &T::NewAssetSymbol::get();
-			let existential_deposit = T::ExistentialDeposit::get();
-			let pallet_account_balance = T::Currency::free_balance(&pallet_account);
+			let existential_deposit = T::Currency::minimum_balance();
+			let pallet_account_balance = T::Currency::balance(&pallet_account);
+
 			if pallet_account_balance < existential_deposit {
-				T::Currency::transfer(
-					&depositor,
-					&pallet_account,
-					existential_deposit,
-					ExistenceRequirement::KeepAlive,
-				)?;
-			}	
-			let deposit = T::Assets::calc(name.as_bytes(), symbol);
-			if deposit != Zero::zero() {
-				T::Currency::transfer(
-					&depositor,
-					&pallet_account,
-					deposit,
-					ExistenceRequirement::KeepAlive,
-				)?;
+				T::Currency::transfer(&depositor, &pallet_account, existential_deposit, Preserve)?;
+			}
+			let metadata_deposit = T::Assets::calc_metadata_deposit(name.as_bytes(), symbol);
+			if !metadata_deposit.is_zero() {
+				T::Currency::transfer(&depositor, &pallet_account, metadata_deposit, Preserve)?;
 			}
 			T::Assets::set(asset_id, &pallet_account, name.into(), symbol.into(), 0)
 		}

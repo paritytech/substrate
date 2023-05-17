@@ -33,7 +33,10 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		fungible::ItemOf,
-		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount},
+		tokens::{
+			nonfungibles_v2::{Inspect, LockableNonfungible},
+			GetSalary, PayFromAccount,
+		},
 		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
 		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
 		LockIdentifier, Locker, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
@@ -54,7 +57,7 @@ pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use pallet_election_provider_multi_phase::SolutionAccuracyOf;
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
-use pallet_nfts::{PalletFeatures, LOCKED_NFT_KEY};
+use pallet_nfts::PalletFeatures;
 use pallet_nis::WithMaximumOf;
 use pallet_session::historical as pallet_session_historical;
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
@@ -445,6 +448,8 @@ parameter_types! {
 pub enum HoldReason {
 	/// The NIS Pallet has reserved it for a non-fungible receipt.
 	Nis,
+	/// Used by the NFT Fractionalization Pallet.
+	NftFractionalization,
 }
 
 impl pallet_balances::Config for Runtime {
@@ -460,7 +465,7 @@ impl pallet_balances::Config for Runtime {
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
 	type HoldIdentifier = HoldReason;
-	type MaxHolds = ConstU32<1>;
+	type MaxHolds = ConstU32<2>;
 }
 
 parameter_types! {
@@ -1613,6 +1618,33 @@ impl pallet_core_fellowship::Config for Runtime {
 }
 
 parameter_types! {
+	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
+	pub NewAssetSymbol: BoundedVec<u8, StringLimit> = (*b"FRAC").to_vec().try_into().unwrap();
+	pub NewAssetName: BoundedVec<u8, StringLimit> = (*b"Frac").to_vec().try_into().unwrap();
+	pub const NftFractionalizationHoldReason: HoldReason = HoldReason::NftFractionalization;
+}
+
+impl pallet_nft_fractionalization::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Deposit = AssetDeposit;
+	type Currency = Balances;
+	type NewAssetSymbol = NewAssetSymbol;
+	type NewAssetName = NewAssetName;
+	type StringLimit = StringLimit;
+	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+	type NftId = <Self as pallet_nfts::Config>::ItemId;
+	type AssetBalance = <Self as pallet_balances::Config>::Balance;
+	type AssetId = <Self as pallet_assets::Config>::AssetId;
+	type Assets = Assets;
+	type Nfts = Nfts;
+	type PalletId = NftFractionalizationPalletId;
+	type WeightInfo = pallet_nft_fractionalization::weights::SubstrateWeight<Runtime>;
+	type HoldReason = NftFractionalizationHoldReason;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
+}
+
+parameter_types! {
 	pub Features: PalletFeatures = PalletFeatures::all_enabled();
 	pub const MaxAttributesPerCall: u32 = 10;
 }
@@ -1623,7 +1655,7 @@ type CollectionId = <Runtime as pallet_nfts::Config>::CollectionId;
 pub struct NftLocker;
 impl Locker<CollectionId, ItemId> for NftLocker {
 	fn is_locked(collection: CollectionId, item: ItemId) -> bool {
-		<Nfts as Inspect<AccountId>>::system_attribute(&collection, &item, LOCKED_NFT_KEY).is_some()
+		Nfts::is_locked(&collection, &item)
 	}
 }
 
@@ -1654,30 +1686,6 @@ impl pallet_nfts::Config for Runtime {
 	type Helper = ();
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
 	type Locker = NftLocker;
-}
-
-parameter_types! {
-	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
-	pub NewAssetSymbol: BoundedVec<u8, StringLimit> = (*b"FRAC").to_vec().try_into().unwrap();
-	pub NewAssetName: BoundedVec<u8, StringLimit> = (*b"Frac").to_vec().try_into().unwrap();
-}
-
-impl pallet_nft_fractionalization::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type Deposit = AssetDeposit;
-	type ExistentialDeposit = ExistentialDeposit;
-	type Currency = Balances;
-	type NewAssetSymbol = NewAssetSymbol;
-	type NewAssetName = NewAssetName;
-	type StringLimit = StringLimit;
-	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
-	type NftId = <Self as pallet_nfts::Config>::ItemId;
-	type AssetBalance = <Self as pallet_balances::Config>::Balance;
-	type AssetId = <Self as pallet_assets::Config>::AssetId;
-	type Assets = Assets;
-	type Nfts = Nfts;
-	type PalletId = NftFractionalizationPalletId;
-	type WeightInfo = pallet_nft_fractionalization::weights::SubstrateWeight<Runtime>;
 }
 
 impl pallet_transaction_storage::Config for Runtime {

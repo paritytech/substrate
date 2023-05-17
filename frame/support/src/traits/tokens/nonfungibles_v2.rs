@@ -330,7 +330,7 @@ pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 	}
 }
 
-/// Trait for transferring and locking/unlocking non-fungible sets of items.
+/// Trait for transferring non-fungible sets of items.
 pub trait Transfer<AccountId>: Inspect<AccountId> {
 	/// Transfer `item` of `collection` into `destination` account.
 	fn transfer(
@@ -338,6 +338,14 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		item: &Self::ItemId,
 		destination: &AccountId,
 	) -> DispatchResult;
+}
+
+/// Trait for locking/unlocking non-fungible sets of items.
+pub trait LockableNonfungible<AccountId>: Inspect<AccountId> {
+	/// Disable the `item` of `collection` transfer.
+	fn is_locked(_collection: &Self::CollectionId, _item: &Self::ItemId) -> bool {
+		false
+	}
 
 	/// Disable the `item` of `collection` transfer.
 	///

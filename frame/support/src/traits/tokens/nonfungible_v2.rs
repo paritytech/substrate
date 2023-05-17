@@ -173,10 +173,16 @@ pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 	}
 }
 
-/// Trait for transferring and locking/unlocking non-fungible sets of items.
+/// Trait for transferring non-fungible sets of items.
 pub trait Transfer<AccountId>: Inspect<AccountId> {
 	/// Transfer `item` into `destination` account.
 	fn transfer(item: &Self::ItemId, destination: &AccountId) -> DispatchResult;
+}
+
+/// Trait for locking/unlocking non-fungible sets of items.
+pub trait LockableNonfungible<AccountId>: Inspect<AccountId> {
+	/// Returns `true` if the `item`is locked.
+	fn is_locked(item: &Self::ItemId) -> bool;
 	/// Disable the `item` transfer.
 	fn lock(item: &Self::ItemId) -> DispatchResult;
 	/// Re-enable the `item` transfer.
@@ -316,10 +322,21 @@ impl<
 	fn transfer(item: &Self::ItemId, destination: &AccountId) -> DispatchResult {
 		<F as nonfungibles::Transfer<AccountId>>::transfer(&A::get(), item, destination)
 	}
+}
+
+impl<
+		F: nonfungibles::LockableNonfungible<AccountId>,
+		A: Get<<F as nonfungibles::Inspect<AccountId>>::CollectionId>,
+		AccountId,
+	> LockableNonfungible<AccountId> for ItemOf<F, A, AccountId>
+{
+	fn is_locked(item: &Self::ItemId) -> bool {
+		<F as nonfungibles::LockableNonfungible<AccountId>>::is_locked(&A::get(), item)
+	}
 	fn lock(item: &Self::ItemId) -> DispatchResult {
-		<F as nonfungibles::Transfer<AccountId>>::lock(&A::get(), item)
+		<F as nonfungibles::LockableNonfungible<AccountId>>::lock(&A::get(), item)
 	}
 	fn unlock(item: &Self::ItemId) -> DispatchResult {
-		<F as nonfungibles::Transfer<AccountId>>::unlock(&A::get(), item)
+		<F as nonfungibles::LockableNonfungible<AccountId>>::unlock(&A::get(), item)
 	}
 }

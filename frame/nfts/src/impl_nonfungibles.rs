@@ -322,7 +322,13 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 	) -> DispatchResult {
 		Self::do_transfer(*collection, *item, destination.clone(), |_, _| Ok(()))
 	}
+}
 
+impl<T: Config<I>, I: 'static> LockableNonfungible<T::AccountId> for Pallet<T, I> {
+	fn is_locked(collection: &Self::CollectionId, item: &Self::ItemId) -> bool {
+		<Self as Inspect<T::AccountId>>::system_attribute(&collection, &item, LOCKED_NFT_KEY)
+			.is_some()
+	}
 	fn lock(collection: &Self::CollectionId, item: &Self::ItemId) -> DispatchResult {
 		<Self as Mutate<T::AccountId, ItemConfig>>::set_attribute(
 			collection,
@@ -331,7 +337,6 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 			&[1],
 		)
 	}
-
 	fn unlock(collection: &Self::CollectionId, item: &Self::ItemId) -> DispatchResult {
 		<Self as Mutate<T::AccountId, ItemConfig>>::clear_attribute(
 			collection,

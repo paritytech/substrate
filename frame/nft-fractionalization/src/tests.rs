@@ -21,8 +21,8 @@ use crate::{mock::*, *};
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::{
+		fungible::{hold::Inspect as InspectHold, Mutate as MutateFungible},
 		fungibles::{metadata::Inspect, InspectEnumerable},
-		Currency,
 	},
 };
 use pallet_nfts::CollectionConfig;
@@ -66,8 +66,8 @@ fn fractionalize_should_work() {
 		let asset_id = 0;
 		let fractions = 1000;
 
-		Balances::make_free_balance_be(&account(1), 100);
-		Balances::make_free_balance_be(&account(2), 100);
+		Balances::set_balance(&account(1), 100);
+		Balances::set_balance(&account(2), 100);
 
 		assert_ok!(Nfts::force_create(
 			RuntimeOrigin::root(),
@@ -92,7 +92,7 @@ fn fractionalize_should_work() {
 		));
 		assert_eq!(assets(), vec![asset_id]);
 		assert_eq!(Assets::balance(asset_id, account(2)), fractions);
-		assert_eq!(Balances::reserved_balance(&account(1)), 2);
+		assert_eq!(Balances::total_balance_on_hold(&account(1)), 2);
 		assert_eq!(String::from_utf8(Assets::name(0)).unwrap(), "Frac 0-0");
 		assert_eq!(String::from_utf8(Assets::symbol(0)).unwrap(), "FRAC");
 		assert_eq!(Nfts::owner(nft_collection_id, nft_id), Some(account(1)));
@@ -164,8 +164,8 @@ fn unify_should_work() {
 		let asset_id = 0;
 		let fractions = 1000;
 
-		Balances::make_free_balance_be(&account(1), 100);
-		Balances::make_free_balance_be(&account(2), 100);
+		Balances::set_balance(&account(1), 100);
+		Balances::set_balance(&account(2), 100);
 
 		assert_ok!(Nfts::force_create(
 			RuntimeOrigin::root(),
