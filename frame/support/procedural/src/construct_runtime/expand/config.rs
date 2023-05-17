@@ -30,6 +30,7 @@ pub fn expand_outer_config(
 	let mut types = TokenStream::new();
 	let mut fields = TokenStream::new();
 	let mut build_storage_calls = TokenStream::new();
+	let mut genesis_build_calls = TokenStream::new();
 	let mut query_genesis_config_part_macros = Vec::new();
 
 	for decl in pallet_decls {
@@ -54,6 +55,8 @@ pub fn expand_outer_config(
 			fields.extend(quote!(#attr pub #field_name: #config,));
 			build_storage_calls
 				.extend(expand_config_build_storage_call(scrate, attr, runtime, decl, field_name));
+			genesis_build_calls
+				.extend(expand_config_genesis_build_call(&config, attr, runtime, decl, field_name));
 			query_genesis_config_part_macros.push(quote! {
 				#path::__substrate_genesis_config_check::is_genesis_config_defined!(#pallet_name);
 				#[cfg(feature = "std")]
@@ -89,6 +92,12 @@ pub fn expand_outer_config(
 				});
 
 				Ok(())
+			}
+		}
+
+		impl<T> ::frame_support::traits::GenesisBuild<T> for GenesisConfig {
+			fn build(&self) {
+				#genesis_build_calls
 			}
 		}
 	}
@@ -137,5 +146,25 @@ fn expand_config_build_storage_call(
 		#attr
 		#scrate::sp_runtime::BuildModuleGenesisStorage::
 			<#runtime, #instance>::build_module_genesis_storage(&self.#field_name, storage)?;
+	}
+}
+
+fn expand_config_genesis_build_call(
+	pallet_genesis_config: &Ident,
+	attr: &TokenStream,
+	runtime: &Ident,
+	decl: &Pallet,
+	field_name: &Ident,
+) -> TokenStream {
+	let path = &decl.path;
+	let instance = if let Some(inst) = decl.instance.as_ref() {
+		quote!(#path::#inst)
+	} else {
+		quote!(#path::__InherentHiddenInstance)
+	};
+
+	quote! {
+		#attr
+		<#pallet_genesis_config as ::frame_support::traits::GenesisBuild::<#runtime, #instance>>::build(&self.#field_name);
 	}
 }
