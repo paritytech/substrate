@@ -386,7 +386,7 @@ where
 		addr
 	};
 
-	let addr = config.rpc_addr.unwrap_or(([127, 0, 0, 1], 9944).into());
+	let addr = config.rpc_addr.unwrap_or_else(|| ([127, 0, 0, 1], config.rpc_port).into());
 	let backup_addr = backup_port(addr);
 	let metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
 
@@ -520,10 +520,9 @@ mod tests {
 	use futures::executor::block_on;
 	use sc_transaction_pool::BasicPool;
 	use sp_consensus::SelectChain;
-	use sp_runtime::traits::BlindCheckable;
 	use substrate_test_runtime_client::{
 		prelude::*,
-		runtime::{Extrinsic, Transfer},
+		runtime::{ExtrinsicBuilder, Transfer, TransferData},
 	};
 
 	#[test]
@@ -542,13 +541,13 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Bob.into(),
 		}
-		.into_signed_tx();
+		.into_unchecked_extrinsic();
 		block_on(pool.submit_one(&BlockId::hash(best.hash()), source, transaction.clone()))
 			.unwrap();
 		block_on(pool.submit_one(
 			&BlockId::hash(best.hash()),
 			source,
-			Extrinsic::IncludeData(vec![1]),
+			ExtrinsicBuilder::new_call_do_not_propagate().nonce(1).build(),
 		))
 		.unwrap();
 		assert_eq!(pool.status().ready, 2);
@@ -558,8 +557,6 @@ mod tests {
 
 		// then
 		assert_eq!(transactions.len(), 1);
-		assert!(transactions[0].1.clone().check().is_ok());
-		// this should not panic
-		let _ = transactions[0].1.transfer();
+		assert!(TransferData::try_from(&transactions[0].1).is_ok());
 	}
 }

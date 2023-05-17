@@ -10,7 +10,7 @@ mod benches {
 	#[benchmark]
 	fn bench() {
 		#[extrinsic_call]
-		thing(1);
+		noop(1);
 	}
 }
 
