@@ -50,8 +50,8 @@ use sc_consensus::{
 };
 use sc_network::{
 	config::{
-		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode,
-		ProtocolId, Role, SyncMode, TransportConfig,
+		FullNetworkConfiguration, MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig,
+		NonReservedPeerMode, ProtocolId, Role, SyncMode, TransportConfig,
 	},
 	request_responses::ProtocolConfig as RequestResponseConfig,
 	types::ProtocolName,
@@ -800,20 +800,6 @@ where
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
-		network_config
-			.request_response_protocols
-			.extend(config.request_response_protocols);
-		network_config.extra_sets = config
-			.notifications_protocols
-			.into_iter()
-			.map(|p| NonDefaultSetConfig {
-				notifications_protocol: p,
-				fallback_names: Vec::new(),
-				max_notification_size: 1024 * 1024,
-				handshake: None,
-				set_config: Default::default(),
-			})
-			.collect();
 		if let Some(connect_to) = config.connect_to_peers {
 			let addrs = connect_to
 				.iter()
@@ -826,6 +812,7 @@ where
 			network_config.default_peers_set.reserved_nodes = addrs;
 			network_config.default_peers_set.non_reserved_mode = NonReservedPeerMode::Deny;
 		}
+		let mut full_net_config = FullNetworkConfiguration::new(&network_config);
 
 		let protocol_id = ProtocolId::from("test-protocol-name");
 
@@ -890,7 +877,7 @@ where
 				Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
 				client.clone(),
 				None,
-				&network_config,
+				&full_net_config,
 				protocol_id.clone(),
 				&fork_id,
 				block_announce_validator,
@@ -906,6 +893,28 @@ where
 		let sync_service_import_queue = Box::new(sync_service.clone());
 		let sync_service = Arc::new(sync_service.clone());
 
+		for config in config.request_response_protocols {
+			full_net_config.add_request_response_protocol(config);
+		}
+		for config in [
+			block_request_protocol_config,
+			state_request_protocol_config,
+			light_client_request_protocol_config,
+			warp_protocol_config,
+		] {
+			full_net_config.add_request_response_protocol(config);
+		}
+
+		for protocol in config.notifications_protocols {
+			full_net_config.add_notification_protocol(NonDefaultSetConfig {
+				notifications_protocol: protocol,
+				fallback_names: Vec::new(),
+				max_notification_size: 1024 * 1024,
+				handshake: None,
+				set_config: Default::default(),
+			});
+		}
+
 		let genesis_hash =
 			client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
 		let network = NetworkWorker::new(sc_network::config::Params {
@@ -913,20 +922,13 @@ where
 			executor: Box::new(|f| {
 				tokio::spawn(f);
 			}),
-			network_config,
+			network_config: full_net_config,
 			genesis_hash,
 			protocol_id,
 			fork_id,
 			metrics_registry: None,
 			block_announce_config,
 			tx,
-			request_response_protocol_configs: [
-				block_request_protocol_config,
-				state_request_protocol_config,
-				light_client_request_protocol_config,
-				warp_protocol_config,
-			]
-			.to_vec(),
 		})
 		.unwrap();
 

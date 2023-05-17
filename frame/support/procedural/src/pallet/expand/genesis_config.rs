@@ -89,7 +89,7 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 				attrs.push(syn::parse_quote!(
 					#[doc = r"
 					Can be used to configure the
-					[genesis state](https://docs.substrate.io/v3/runtime/chain-specs#the-genesis-state)
+					[genesis state](https://docs.substrate.io/build/genesis-configuration/)
 					of this pallet.
 					"]
 				));
