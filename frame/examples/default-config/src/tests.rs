@@ -15,16 +15,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for pallet-default-config-example.
+//! This module tests the `pallet-default-config-example` and serves as a reference example for
+//! how to use [`derive_impl`] to vastly simplify declaring a `Test` config.
+//!
+//! See the comments on line 49 for a detailed explanation.
 
 use crate::*;
-use frame_support::{assert_ok, traits::ConstU64};
-use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
-};
+use frame_support::{assert_ok, macro_magic::use_attr, traits::ConstU64};
+use sp_runtime::{testing::Header, BuildStorage};
+
+// Because `derive_impl` is a [macro_magic](https://crates.io/crates/macro_magic) attribute
+// macro, [`#[use_attr]`](`frame_support::macro_magic::use_attr`) must be attached to any use
+// statement that brings it into scope.
+#[use_attr]
+use frame_support::derive_impl;
+
 // Reexport crate as its pallet name for construct_runtime.
 use crate as pallet_default_config_example;
 
@@ -44,31 +49,43 @@ frame_support::construct_runtime!(
 	}
 );
 
+/// Normally this impl statement would need have to have the areas that are commented out below
+/// be specified manually. Attaching the `derive_impl` attribute, specifying
+/// `frame_system::prelude::testing::TestDefaultConfig` as the `default_impl` and
+/// `frame_system::pallet::DefaultConfig` as the `disambiguation_path` allows us to bring in
+/// defaults for this impl from the `TestDefaultConfig` impl. This will fill in defaults for
+/// anything in the `default_impl` that isn't present in our local impl, allowing us to
+/// override the `default_impl` in any cases where we want to be explicit and differ from the
+/// `default_impl`.
+#[derive_impl(frame_system::prelude::testing::TestDefaultConfig as frame_system::pallet::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type BlockWeights = ();
-	type BlockLength = ();
-	type DbWeight = ();
+	// type BlockWeights = ();
+	// type BlockLength = ();
+	// type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
+	// type Index = u64;
 	type BlockNumber = u64;
-	type Hash = H256;
+	// type Hash = sp_core::H256;
 	type RuntimeCall = RuntimeCall;
-	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
+	// type Hashing = BlakeTwo256;
+	// type AccountId = u64;
+	// type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
-	type BlockHashCount = ConstU64<250>;
-	type Version = ();
+	// type BlockHashCount = ConstU64<250>;
+	// type Version = ();
 	type PalletInfo = PalletInfo;
+
+	/// we override `AccountData`, since we want a u64 not a u32.
 	type AccountData = pallet_balances::AccountData<u64>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
+
+	// type OnNewAccount = ();
+	// type OnKilledAccount = ();
+	// type SystemWeightInfo = ();
+	// type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	// type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 impl pallet_balances::Config for Test {

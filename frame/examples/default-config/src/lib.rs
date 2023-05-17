@@ -18,12 +18,15 @@
 //! <!-- markdown-link-check-disable -->
 //! # Default Config Pallet Example
 //!
-//! A simple example of a FRAME pallet that utilizes `derive_impl` to implement a `DefaultConfig`.
+//! A simple example of a FRAME pallet that utilizes [`frame_support::derive_impl`] to
+//! implement a `DefaultConfig` for testing purposes.
 //!
-//! Run `cargo doc --package pallet-default-config-example --open` to view this pallet's
-//! documentation.
+//! See the source code for `tests.rs` to see the relevant
+//! [`derive_impl`](`frame_support::derive_impl`) example.
 //!
-//! **Default test configs are not meant to be used in production**
+//! Note that this pallet makes use of `dev_mode` for ease of use, since the point of this
+//! example is the tests, not the pallet itself. See `pallet-dev-mode` for a more detailed
+//! example of the capabilities of `dev_mode`.
 
 // Ensure we're `no_std` when compiling for WASM.
 #![cfg_attr(not(feature = "std"), no_std)]

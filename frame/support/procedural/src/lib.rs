@@ -968,6 +968,9 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// `Test`), unless the trait item in the local trait impl is marked with
 /// [`#[pallet::no_default]`](`macro@default_config`), in which case it cannot be overridden,
 /// and any attempts to do so will result in a compiler error.
+///
+/// See `frame/examples/default-config/tests.rs` for a runnable end-to-end example pallet that
+/// makes use of `derive_impl` to derive its testing config.
 #[import_tokens_attr(frame_support::macro_magic)]
 #[with_custom_parsing(derive_impl::DeriveImplAttrArgs)]
 #[proc_macro_attribute]
