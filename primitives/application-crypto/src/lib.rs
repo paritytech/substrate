@@ -32,6 +32,9 @@ pub use sp_core::{
 	crypto::{ByteArray, CryptoType, Derive, IsWrappedBy, Public, UncheckedFrom, Wraps},
 	RuntimeDebug,
 };
+#[doc(hidden)]
+#[cfg(all(not(feature = "std"), feature = "serde"))]
+pub use sp_std::alloc::{format, string::String};
 
 #[doc(hidden)]
 pub use codec;
@@ -362,9 +365,9 @@ macro_rules! app_crypto_public_common_if_serde {
 			where
 				D: $crate::serde::Deserializer<'de>,
 			{
-				#[cfg(not(feature = "std"))]
-				use sp_std::alloc::{format, string::String};
 				use $crate::Ss58Codec;
+				#[cfg(all(not(feature = "std"), feature = "serde"))]
+				use $crate::{format, String};
 
 				Public::from_ss58check(&String::deserialize(deserializer)?)
 					.map_err(|e| $crate::serde::de::Error::custom(format!("{:?}", e)))

@@ -41,13 +41,29 @@ fn unique_datum_works() {
 		assert!(sp_io::storage::exists(well_known_keys::INTRABLOCK_ENTROPY));
 
 		let h1 = unique(b"");
+		assert_eq!(
+			32,
+			sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut [], 0).unwrap()
+		);
 		let h2 = unique(b"");
+		assert_eq!(
+			32,
+			sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut [], 0).unwrap()
+		);
 		assert_ne!(h1, h2);
 
 		let h3 = unique(b"Hello");
+		assert_eq!(
+			32,
+			sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut [], 0).unwrap()
+		);
 		assert_ne!(h2, h3);
 
 		let h4 = unique(b"Hello");
+		assert_eq!(
+			32,
+			sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut [], 0).unwrap()
+		);
 		assert_ne!(h3, h4);
 
 		System::finalize();

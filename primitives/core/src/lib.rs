@@ -396,8 +396,8 @@ macro_rules! impl_maybe_marker {
 
 /// Macro for creating `Maybe*` marker traits.
 ///
-/// Such a maybe-marker trait requires the given bound when `feature = std` or `feature =
-/// serde` but does not require the bound in `no_std` without `serde` activated.
+/// Such a maybe-marker trait requires the given bound when either `feature = std` or `feature =
+/// serde` is activated.
 ///
 /// # Example
 ///
