@@ -332,7 +332,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		T::Currency::reserve(&depositor, deposit)?;
 		Asset::<T, I>::insert(&id, details);
 		Account::<T, I>::insert(
-			id.clone(),
+			&id,
 			&who,
 			AssetAccountOf::<T, I> {
 				balance: Zero::zero(),
@@ -456,29 +456,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 			check(details)?;
 
-			Account::<T, I>::try_mutate(
-				id.clone(),
-				beneficiary,
-				|maybe_account| -> DispatchResult {
-					match maybe_account {
-						Some(ref mut account) => {
-							account.balance.saturating_accrue(amount);
-						},
-						maybe_account @ None => {
-							// Note this should never fail as it's already checked by
-							// `can_increase`.
-							ensure!(amount >= details.min_balance, TokenError::BelowMinimum);
-							*maybe_account = Some(AssetAccountOf::<T, I> {
-								balance: amount,
-								reason: Self::new_account(beneficiary, details, None)?,
-								status: AccountStatus::Liquid,
-								extra: T::Extra::default(),
-							});
-						},
-					}
-					Ok(())
-				},
-			)?;
+			Account::<T, I>::try_mutate(&id, beneficiary, |maybe_account| -> DispatchResult {
+				match maybe_account {
+					Some(ref mut account) => {
+						account.balance.saturating_accrue(amount);
+					},
+					maybe_account @ None => {
+						// Note this should never fail as it's already checked by
+						// `can_increase`.
+						ensure!(amount >= details.min_balance, TokenError::BelowMinimum);
+						*maybe_account = Some(AssetAccountOf::<T, I> {
+							balance: amount,
+							reason: Self::new_account(beneficiary, details, None)?,
+							status: AccountStatus::Liquid,
+							extra: T::Extra::default(),
+						});
+					},
+				}
+				Ok(())
+			})?;
 			Ok(())
 		})?;
 		Ok(())
@@ -547,11 +543,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let actual = Self::prep_debit(id.clone(), target, amount, f)?;
 		let mut target_died: Option<DeadConsequence> = None;
 
-		Asset::<T, I>::try_mutate(id.clone(), |maybe_details| -> DispatchResult {
+		Asset::<T, I>::try_mutate(&id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 			check(actual, details)?;
 
-			Account::<T, I>::try_mutate(id.clone(), target, |maybe_account| -> DispatchResult {
+			Account::<T, I>::try_mutate(&id, target, |maybe_account| -> DispatchResult {
 				let mut account = maybe_account.take().ok_or(Error::<T, I>::NoAccount)?;
 				debug_assert!(account.balance >= actual, "checked in prep; qed");
 
@@ -624,7 +620,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let (credit, maybe_burn) = Self::prep_credit(id.clone(), dest, amount, debit, f.burn_dust)?;
 
 		let mut source_account =
-			Account::<T, I>::get(id.clone(), &source).ok_or(Error::<T, I>::NoAccount)?;
+			Account::<T, I>::get(&id, &source).ok_or(Error::<T, I>::NoAccount)?;
 		let mut source_died: Option<DeadConsequence> = None;
 
 		Asset::<T, I>::try_mutate(&id, |maybe_details| -> DispatchResult {
@@ -652,7 +648,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			debug_assert!(source_account.balance >= debit, "checked in prep; qed");
 			source_account.balance = source_account.balance.saturating_sub(debit);
 
-			Account::<T, I>::try_mutate(id.clone(), &dest, |maybe_account| -> DispatchResult {
+			Account::<T, I>::try_mutate(&id, &dest, |maybe_account| -> DispatchResult {
 				match maybe_account {
 					Some(ref mut account) => {
 						// Calculate new balance; this will not saturate since it's already checked
@@ -681,11 +677,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				source_died =
 					Some(Self::dead_account(source, details, &source_account.reason, false));
 				if let Some(Remove) = source_died {
-					Account::<T, I>::remove(id.clone(), &source);
+					Account::<T, I>::remove(&id, &source);
 					return Ok(())
 				}
 			}
-			Account::<T, I>::insert(id.clone(), &source, &source_account);
+			Account::<T, I>::insert(&id, &source, &source_account);
 			Ok(())
 		})?;
 
@@ -716,7 +712,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(!min_balance.is_zero(), Error::<T, I>::MinBalanceZero);
 
 		Asset::<T, I>::insert(
-			id.clone(),
+			&id,
 			AssetDetails {
 				owner: owner.clone(),
 				issuer: owner.clone(),
@@ -765,14 +761,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<u32, DispatchError> {
 		let mut dead_accounts: Vec<T::AccountId> = vec![];
 		let mut remaining_accounts = 0;
-		let _ = Asset::<T, I>::try_mutate_exists(
-			id.clone(),
-			|maybe_details| -> Result<(), DispatchError> {
+		let _ =
+			Asset::<T, I>::try_mutate_exists(&id, |maybe_details| -> Result<(), DispatchError> {
 				let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				// Should only destroy accounts while the asset is in a destroying state
 				ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::IncorrectStatus);
 
-				for (who, v) in Account::<T, I>::drain_prefix(id.clone()) {
+				for (who, v) in Account::<T, I>::drain_prefix(&id) {
 					let _ = Self::dead_account(&who, &mut details, &v.reason, true);
 					dead_accounts.push(who);
 					if dead_accounts.len() >= (max_items as usize) {
@@ -781,8 +776,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 				remaining_accounts = details.accounts;
 				Ok(())
-			},
-		)?;
+			})?;
 
 		for who in &dead_accounts {
 			T::Freezer::died(id.clone(), &who);
@@ -888,7 +882,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Ok(())
 			},
 		)?;
-		Asset::<T, I>::insert(id.clone(), d);
+		Asset::<T, I>::insert(&id, d);
 		Self::deposit_event(Event::ApprovedTransfer {
 			asset_id: id,
 			source: owner.clone(),
