@@ -170,7 +170,7 @@ impl Polling<TallyOf<Test>> for TestPolls {
 pub struct MinRankOfClass<Delta>(PhantomData<Delta>);
 impl<Delta: Get<Rank>> Convert<Class, Rank> for MinRankOfClass<Delta> {
 	fn convert(a: Class) -> Rank {
-		a - Delta::get()
+		a.saturating_sub(Delta::get())
 	}
 }
 
