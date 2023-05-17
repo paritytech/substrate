@@ -29,6 +29,7 @@ use smallvec::SmallVec;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	hash::Hash,
+	vec::Vec,
 };
 
 const PROOF_OVERLAY_NON_EMPTY: &str = "\
