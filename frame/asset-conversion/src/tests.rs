@@ -18,7 +18,7 @@
 use crate::{mock::*, *};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{fungibles::InspectEnumerable, Currency, Get},
+	traits::{fungible::Inspect, fungibles::InspectEnumerable, Get},
 };
 use sp_runtime::{DispatchError, TokenError};
 

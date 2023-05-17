@@ -1120,7 +1120,7 @@ impl<T: Config>
 	> for Pallet<T>
 where
 	<T as pallet::Config>::Currency:
-		frame_support::traits::Currency<<T as frame_system::Config>::AccountId>,
+		frame_support::traits::tokens::fungible::Inspect<<T as frame_system::Config>::AccountId>,
 {
 	// If successful returns the amount in.
 	fn swap_tokens_for_exact_native(
