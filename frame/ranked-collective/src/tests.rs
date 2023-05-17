@@ -25,10 +25,10 @@ use frame_support::{
 	parameter_types,
 	traits::{ConstU16, ConstU32, ConstU64, EitherOf, Everything, MapSuccess, Polling},
 };
-use sp_core::H256;
+use sp_core::{Get, H256};
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, Identity, IdentityLookup, ReduceBy},
+	traits::{BlakeTwo256, IdentityLookup, ReduceBy},
 };
 
 use super::*;
@@ -36,6 +36,7 @@ use crate as pallet_ranked_collective;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+type Class = Rank;
 
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -95,7 +96,7 @@ impl Polling<TallyOf<Test>> for TestPolls {
 	type Index = u8;
 	type Votes = Votes;
 	type Moment = u64;
-	type Class = Rank;
+	type Class = Class;
 	fn classes() -> Vec<Self::Class> {
 		vec![0, 1, 2]
 	}
@@ -164,6 +165,19 @@ impl Polling<TallyOf<Test>> for TestPolls {
 	}
 }
 
+/// Convert the tally class into the minimum rank required to vote on the poll.
+/// MinRank(Class) = Class - Delta
+pub struct MinRankOfClass<Delta>(PhantomData<Delta>);
+impl<Delta: Get<Rank>> Convert<Class, Rank> for MinRankOfClass<Delta> {
+	fn convert(a: Class) -> Rank {
+		a.saturating_sub(Delta::get())
+	}
+}
+
+parameter_types! {
+	pub static MinRankOfClassDelta: Rank = 0;
+}
+
 impl Config for Test {
 	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
@@ -180,7 +194,7 @@ impl Config for Test {
 		MapSuccess<EnsureRanked<Test, (), 3>, ReduceBy<ConstU16<3>>>,
 	>;
 	type Polls = TestPolls;
-	type MinRankOfClass = Identity;
+	type MinRankOfClass = MinRankOfClass<MinRankOfClassDelta>;
 	type VoteWeight = Geometric;
 }
 
@@ -498,4 +512,44 @@ fn do_add_member_to_rank_works() {
 		}
 		assert_eq!(member_count(max_rank + 1), 0);
 	})
+}
+
+#[test]
+fn tally_support_correct() {
+	new_test_ext().execute_with(|| {
+		// add members,
+		// rank 1: accounts 1, 2, 3
+		// rank 2: accounts 2, 3
+		// rank 3: accounts 3.
+		assert_ok!(Club::add_member(RuntimeOrigin::root(), 1));
+		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 1));
+		assert_ok!(Club::add_member(RuntimeOrigin::root(), 2));
+		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 2));
+		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 2));
+		assert_ok!(Club::add_member(RuntimeOrigin::root(), 3));
+		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 3));
+		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 3));
+		assert_ok!(Club::promote_member(RuntimeOrigin::root(), 3));
+
+		// init tally with 1 aye vote.
+		let tally: TallyOf<Test> = Tally::from_parts(1, 1, 0);
+
+		// with minRank(Class) = Class
+		// for class 3, 100% support.
+		MinRankOfClassDelta::set(0);
+		assert_eq!(tally.support(3), Perbill::from_rational(1u32, 1));
+
+		// with minRank(Class) = (Class - 1)
+		// for class 3, ~50% support.
+		MinRankOfClassDelta::set(1);
+		assert_eq!(tally.support(3), Perbill::from_rational(1u32, 2));
+
+		// with minRank(Class) = (Class - 2)
+		// for class 3, ~33% support.
+		MinRankOfClassDelta::set(2);
+		assert_eq!(tally.support(3), Perbill::from_rational(1u32, 3));
+
+		// reset back.
+		MinRankOfClassDelta::set(0);
+	});
 }
