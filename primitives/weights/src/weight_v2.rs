@@ -25,7 +25,7 @@ use super::*;
 #[derive(
 	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Weight {
 	#[codec(compact)]
 	/// The weight of computational time used based on some reference hardware.
