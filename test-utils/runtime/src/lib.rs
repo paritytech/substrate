@@ -470,9 +470,6 @@ pub(crate) const TEST_RUNTIME_BABE_EPOCH_CONFIGURATION: BabeEpochConfiguration =
 		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};
 
-use frame_support::traits::GenesisBuild;
-use serde_json as json;
-
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
@@ -717,19 +714,14 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl sc_genesis_builder::GenesisBuilder<Block> for Runtime {
-		fn build_default_config() {
-			<GenesisConfig as GenesisBuild<Runtime>>::build(&Default::default());
-		}
-
-		fn default_config_as_json() -> Vec<u8> {
-			json::to_string(&GenesisConfig::default()).expect("xxx").into_bytes()
+	impl sc_genesis_builder::api::GenesisBuilder<Block> for Runtime {
+		fn default_genesis_config_as_json() -> Vec<u8> {
+			sc_genesis_builder::helper::GenesisBuilder::<Runtime, GenesisConfig>::default_genesis_config_as_json()
 		}
 
 		fn build_genesis_config_from_json(json: sp_std::vec::Vec<u8>) {
 			log::trace!("build_genesis_config_from_json: {:?}", json);
-			let gc = json::from_slice::<GenesisConfig>(&json).expect("xxx");
-			<GenesisConfig as GenesisBuild<Runtime>>::build(&gc);
+			sc_genesis_builder::helper::GenesisBuilder::<Runtime, GenesisConfig>::build_genesis_config_from_json(json)
 		}
 	}
 }
@@ -1318,7 +1310,7 @@ mod tests {
 	fn default_config_as_json_works() {
 		sp_tracing::try_init_simple();
 		let mut t = BasicExternalities::new_empty();
-		let r = executor_call(&mut t, "GenesisBuilder_default_config_as_json", &vec![])
+		let r = executor_call(&mut t, "GenesisBuilder_default_genesis_config_as_json", &vec![])
 			.0
 			.unwrap();
 		let r = Vec::<u8>::decode(&mut &r[..]).unwrap();
@@ -1338,7 +1330,7 @@ mod tests {
 				.open("/tmp/default_genesis_config.json")
 				.unwrap();
 
-			let j = json::to_string(&GenesisStorageBuilder::default().genesis_config())
+			let j = serde_json::to_string(&GenesisStorageBuilder::default().genesis_config())
 				.unwrap()
 				.into_bytes();
 			file.write_all(&j).unwrap();
