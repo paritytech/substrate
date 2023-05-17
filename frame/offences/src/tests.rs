@@ -24,6 +24,7 @@ use crate::mock::{
 	new_test_ext, offence_reports, report_id, with_on_offence_fractions, Offence, Offences,
 	RuntimeEvent, System, KIND,
 };
+use frame_support::assert_noop;
 use frame_system::{EventRecord, Phase};
 use sp_runtime::Perbill;
 
@@ -85,7 +86,7 @@ fn should_not_report_an_obsolete_offence() {
 
 		let offence =
 			Offence { validator_set_count: 5, session_index, time_slot, offenders: vec![5] };
-		assert_eq!(Offences::report_offence(vec![], offence), Err(OffenceError::ObsoleteReport));
+		assert_noop!(Offences::report_offence(vec![], offence), OffenceError::ObsoleteReport);
 
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![]);
@@ -310,7 +311,11 @@ fn should_properly_store_offences() {
 			time_slot: time_slot - 1,
 			offenders: vec![3],
 		};
+
+		// when
 		Offences::report_offence(vec![], offence1).unwrap();
+
+		// then
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();

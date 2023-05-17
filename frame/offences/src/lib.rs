@@ -19,22 +19,22 @@
 //!
 //! The offences pallet tracks reported offences using 3 key storage types:
 //!
-//! - [Reports]: A storage map of a report hash to its details
-//! - [ConcurrentReportsIndex]: A storage double map that stores a vector of reports
-//! 	for a specific [Kind] and [OpaqueTimeSlot]
-//! - [SessionReports]: A storage map that keeps a vector of active reports for a [SessionIndex].
+//! - [`Reports`]: A storage map of a report hash to its details
+//! - [`ConcurrentReportsIndex`]: A storage double map that stores a vector of reports
+//! 	for a specific [`Kind`] and [`OpaqueTimeSlot`]
+//! - [`SessionReports`]: A storage map that keeps a vector of active reports for a [`SessionIndex`].
 //!
-//! When a new offence is reported using [ReportOffence::report_offence], its `session_index` is
+//! When a new offence is reported using [`ReportOffence::report_offence`], its `session_index` is
 //! first compared against the current `session_index`.
 //!
-//! If older than [Config::MaxSessionReportAge], the report is rejected right away.
+//! If older than [`Config::MaxSessionReportAge`], the report is rejected right away.
 //!
 //! Else, all concurrent reports are loaded to determine the slash fraction and updated.
-//! The report is also inserted in [SessionReports] at this time.
-//! Finally, [Config::OnOffenceHandler] is called to handle any actions for this report.
+//! The report is also inserted in [`SessionReports`] at this time.
+//! Finally, [`Config::OnOffenceHandler`] is called to handle any actions for this report.
 //!
 //! On the start of a new session, `clear_obsolete_reports` clears all reports
-//! that are older than [Config::MaxSessionReportAge].
+//! that are older than [`Config::MaxSessionReportAge`].
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -45,7 +45,7 @@ mod tests;
 
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use frame_support::{traits::Get, weights::Weight};
+use frame_support::{traits::Get, weights::Weight, ensure};
 use sp_runtime::{traits::Hash, Perbill};
 use sp_session::{SessionChangeListener, SessionInfoProvider};
 use sp_staking::{
@@ -61,6 +61,9 @@ pub type OpaqueTimeSlot = Vec<u8>;
 
 /// A type alias for a report identifier.
 type ReportIdOf<T> = <T as frame_system::Config>::Hash;
+
+/// A type alias for the data stored for a report in each session.
+type SessionReportOf<T> = (Kind, OpaqueTimeSlot, ReportIdOf<T>);
 
 const LOG_TARGET: &str = "runtime::offences";
 
@@ -159,7 +162,7 @@ impl<T: Config> Pallet<T> {
 
 		let session_reports = SessionReports::<T>::take(obsolete_session_index);
 		let session_reports =
-			Vec::<(Kind, OpaqueTimeSlot, ReportIdOf<T>)>::decode(&mut &session_reports[..])
+			Vec::<SessionReportOf<T>>::decode(&mut &session_reports[..])
 				.unwrap_or_default();
 
 		for (kind, time_slot, report_id) in &session_reports {
@@ -187,11 +190,11 @@ where
 		let session_index = offence.session_index();
 		let current_session_index = T::SessionInfoProvider::current_session_index();
 
-		if current_session_index > T::MaxSessionReportAge::get() &&
-			session_index < current_session_index - T::MaxSessionReportAge::get()
-		{
-			return Err(OffenceError::ObsoleteReport)
-		}
+		ensure!(
+			current_session_index <= T::MaxSessionReportAge::get() ||
+			session_index >= current_session_index - T::MaxSessionReportAge::get(),
+			OffenceError::ObsoleteReport
+		);
 
 		// Go through all offenders in the offence report and find all offenders that were spotted
 		// in unique reports.
@@ -312,7 +315,7 @@ impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 
 		let session_reports = SessionReports::<T>::get(session_index);
 		let session_reports =
-			Vec::<(Kind, OpaqueTimeSlot, ReportIdOf<T>)>::decode(&mut &session_reports[..])
+			Vec::<SessionReportOf<T>>::decode(&mut &session_reports[..])
 				.unwrap_or_default();
 
 		let concurrent_reports = <ConcurrentReportsIndex<T>>::get(&O::ID, &opaque_time_slot);
