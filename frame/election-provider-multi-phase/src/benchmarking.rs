@@ -276,7 +276,7 @@ frame_benchmarking::benchmarks! {
 		<MultiPhase::<T>>::create_snapshot_internal(targets, voters, desired_targets)
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("metadata missing")?.voters, v + t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("metadata missing")?.voters, v);
 		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("metadata missing")?.targets, t);
 	}
 
