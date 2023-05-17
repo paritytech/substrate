@@ -338,26 +338,18 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		item: &Self::ItemId,
 		destination: &AccountId,
 	) -> DispatchResult;
-}
-
-/// Trait for locking/unlocking non-fungible sets of items.
-pub trait LockableNonfungible<AccountId>: Inspect<AccountId> {
-	/// Disable the `item` of `collection` transfer.
-	fn is_locked(_collection: &Self::CollectionId, _item: &Self::ItemId) -> bool {
-		false
-	}
 
 	/// Disable the `item` of `collection` transfer.
 	///
 	/// By default, this is not a supported operation.
-	fn lock(_collection: &Self::CollectionId, _item: &Self::ItemId) -> DispatchResult {
+	fn disable_transfer(_collection: &Self::CollectionId, _item: &Self::ItemId) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 
 	/// Re-enable the `item` of `collection` transfer.
 	///
 	/// By default, this is not a supported operation.
-	fn unlock(_collection: &Self::CollectionId, _item: &Self::ItemId) -> DispatchResult {
+	fn enable_transfer(_collection: &Self::CollectionId, _item: &Self::ItemId) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 }

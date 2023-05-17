@@ -71,7 +71,7 @@ pub mod pallet {
 				Create, Destroy, Inspect, Mutate,
 			},
 			tokens::{
-				nonfungibles_v2::{Inspect as NonFungiblesInspect, LockableNonfungible, Transfer},
+				nonfungibles_v2::{Inspect as NonFungiblesInspect, Transfer},
 				AssetId, Balance as AssetBalance,
 				Fortitude::Polite,
 				Precision::{BestEffort, Exact},
@@ -132,8 +132,7 @@ pub mod pallet {
 				Self::AccountId,
 				ItemId = Self::NftId,
 				CollectionId = Self::NftCollectionId,
-			> + Transfer<Self::AccountId>
-			+ LockableNonfungible<Self::AccountId>;
+			> + Transfer<Self::AccountId>;
 
 		/// The pallet's id, used for deriving its sovereign account ID.
 		#[pallet::constant]
@@ -323,7 +322,7 @@ pub mod pallet {
 
 		/// Transfer the NFT from the account holding that NFT to the pallet's account.
 		fn do_lock_nft(nft_collection_id: T::NftCollectionId, nft_id: T::NftId) -> DispatchResult {
-			T::Nfts::lock(&nft_collection_id, &nft_id)
+			T::Nfts::disable_transfer(&nft_collection_id, &nft_id)
 		}
 
 		/// Transfer the NFT to the account returning the tokens.
@@ -332,7 +331,7 @@ pub mod pallet {
 			nft_id: T::NftId,
 			account: &T::AccountId,
 		) -> DispatchResult {
-			T::Nfts::unlock(&nft_collection_id, &nft_id)?;
+			T::Nfts::enable_transfer(&nft_collection_id, &nft_id)?;
 			T::Nfts::transfer(&nft_collection_id, &nft_id, account)
 		}
 

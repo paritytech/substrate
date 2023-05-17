@@ -117,6 +117,10 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	///
 	/// Default implementation is that all items are transferable.
 	fn can_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> bool {
+		if Self::system_attribute(&collection, &item, LOCKED_NFT_KEY).is_some() {
+			return false
+		}
+
 		match (
 			CollectionConfigOf::<T, I>::get(collection),
 			ItemConfigOf::<T, I>::get(collection, item),
@@ -322,14 +326,8 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 	) -> DispatchResult {
 		Self::do_transfer(*collection, *item, destination.clone(), |_, _| Ok(()))
 	}
-}
 
-impl<T: Config<I>, I: 'static> LockableNonfungible<T::AccountId> for Pallet<T, I> {
-	fn is_locked(collection: &Self::CollectionId, item: &Self::ItemId) -> bool {
-		<Self as Inspect<T::AccountId>>::system_attribute(&collection, &item, LOCKED_NFT_KEY)
-			.is_some()
-	}
-	fn lock(collection: &Self::CollectionId, item: &Self::ItemId) -> DispatchResult {
+	fn disable_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> DispatchResult {
 		<Self as Mutate<T::AccountId, ItemConfig>>::set_attribute(
 			collection,
 			item,
@@ -337,7 +335,8 @@ impl<T: Config<I>, I: 'static> LockableNonfungible<T::AccountId> for Pallet<T, I
 			&[1],
 		)
 	}
-	fn unlock(collection: &Self::CollectionId, item: &Self::ItemId) -> DispatchResult {
+
+	fn enable_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> DispatchResult {
 		<Self as Mutate<T::AccountId, ItemConfig>>::clear_attribute(
 			collection,
 			item,

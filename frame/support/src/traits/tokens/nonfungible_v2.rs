@@ -173,20 +173,18 @@ pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 	}
 }
 
-/// Trait for transferring non-fungible sets of items.
+/// Trait for transferring and controlling the transfer of non-fungible sets of items.
 pub trait Transfer<AccountId>: Inspect<AccountId> {
 	/// Transfer `item` into `destination` account.
 	fn transfer(item: &Self::ItemId, destination: &AccountId) -> DispatchResult;
-}
-
-/// Trait for locking/unlocking non-fungible sets of items.
-pub trait LockableNonfungible<AccountId>: Inspect<AccountId> {
-	/// Returns `true` if the `item`is locked.
-	fn is_locked(item: &Self::ItemId) -> bool;
-	/// Disable the `item` transfer.
-	fn lock(item: &Self::ItemId) -> DispatchResult;
-	/// Re-enable the `item` transfer.
-	fn unlock(item: &Self::ItemId) -> DispatchResult;
+	/// Disable the `item` of `collection` transfer.
+	///
+	/// By default, this is not a supported operation.
+	fn disable_transfer(item: &Self::ItemId) -> DispatchResult;
+	/// Re-enable the `item` of `collection` transfer.
+	///
+	/// By default, this is not a supported operation.
+	fn enable_transfer(item: &Self::ItemId) -> DispatchResult;
 }
 
 /// Convert a `nonfungibles` trait implementation into a `nonfungible` trait implementation by
@@ -322,21 +320,10 @@ impl<
 	fn transfer(item: &Self::ItemId, destination: &AccountId) -> DispatchResult {
 		<F as nonfungibles::Transfer<AccountId>>::transfer(&A::get(), item, destination)
 	}
-}
-
-impl<
-		F: nonfungibles::LockableNonfungible<AccountId>,
-		A: Get<<F as nonfungibles::Inspect<AccountId>>::CollectionId>,
-		AccountId,
-	> LockableNonfungible<AccountId> for ItemOf<F, A, AccountId>
-{
-	fn is_locked(item: &Self::ItemId) -> bool {
-		<F as nonfungibles::LockableNonfungible<AccountId>>::is_locked(&A::get(), item)
+	fn disable_transfer(item: &Self::ItemId) -> DispatchResult {
+		<F as nonfungibles::Transfer<AccountId>>::disable_transfer(&A::get(), item)
 	}
-	fn lock(item: &Self::ItemId) -> DispatchResult {
-		<F as nonfungibles::LockableNonfungible<AccountId>>::lock(&A::get(), item)
-	}
-	fn unlock(item: &Self::ItemId) -> DispatchResult {
-		<F as nonfungibles::LockableNonfungible<AccountId>>::unlock(&A::get(), item)
+	fn enable_transfer(item: &Self::ItemId) -> DispatchResult {
+		<F as nonfungibles::Transfer<AccountId>>::enable_transfer(&A::get(), item)
 	}
 }

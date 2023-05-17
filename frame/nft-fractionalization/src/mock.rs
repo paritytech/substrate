@@ -23,10 +23,7 @@ use crate as pallet_nft_fractionalization;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{
-		tokens::nonfungibles_v2::LockableNonfungible, AsEnsureOriginWithArg, ConstU32, ConstU64,
-		Locker,
-	},
+	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
 	BoundedVec, PalletId,
 };
 use frame_system::EnsureSigned;
@@ -44,8 +41,6 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type Signature = MultiSignature;
 type AccountPublic = <Signature as Verify>::Signer;
 type AccountId = <AccountPublic as IdentifyAccount>::AccountId;
-type ItemId = <Test as pallet_nfts::Config>::ItemId;
-type CollectionId = <Test as pallet_nfts::Config>::CollectionId;
 
 // Configure a mock runtime to test the pallet.
 construct_runtime!(
@@ -139,14 +134,6 @@ parameter_types! {
 	pub storage Features: PalletFeatures = PalletFeatures::all_enabled();
 }
 
-// enables the NFTs locker
-pub struct TestLocker;
-impl Locker<CollectionId, ItemId> for TestLocker {
-	fn is_locked(collection: CollectionId, item: ItemId) -> bool {
-		Nfts::is_locked(&collection, &item)
-	}
-}
-
 impl pallet_nfts::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type CollectionId = u32;
@@ -154,7 +141,7 @@ impl pallet_nfts::Config for Test {
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
 	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
-	type Locker = TestLocker;
+	type Locker = ();
 	type CollectionDeposit = ConstU64<2>;
 	type ItemDeposit = ConstU64<1>;
 	type MetadataDepositBase = ConstU64<1>;

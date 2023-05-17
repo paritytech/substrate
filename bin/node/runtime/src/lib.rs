@@ -33,13 +33,10 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		fungible::ItemOf,
-		tokens::{
-			nonfungibles_v2::{Inspect, LockableNonfungible},
-			GetSalary, PayFromAccount,
-		},
+		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount},
 		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
 		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
-		LockIdentifier, Locker, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
+		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
 	},
 	weights::{
 		constants::{
@@ -1649,16 +1646,6 @@ parameter_types! {
 	pub const MaxAttributesPerCall: u32 = 10;
 }
 
-type ItemId = <Runtime as pallet_nfts::Config>::ItemId;
-type CollectionId = <Runtime as pallet_nfts::Config>::CollectionId;
-
-pub struct NftLocker;
-impl Locker<CollectionId, ItemId> for NftLocker {
-	fn is_locked(collection: CollectionId, item: ItemId) -> bool {
-		Nfts::is_locked(&collection, &item)
-	}
-}
-
 impl pallet_nfts::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type CollectionId = u32;
@@ -1685,7 +1672,7 @@ impl pallet_nfts::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-	type Locker = NftLocker;
+	type Locker = ();
 }
 
 impl pallet_transaction_storage::Config for Runtime {
