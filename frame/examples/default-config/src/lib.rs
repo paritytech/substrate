@@ -60,33 +60,33 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
-		pub fn add_dummy(origin: OriginFor<T>, id: T::AccountId) -> DispatchResult {
+		pub fn add_person(origin: OriginFor<T>, id: T::AccountId) -> DispatchResult {
 			ensure_root(origin)?;
 
-			if let Some(mut dummies) = Dummy::<T>::get() {
+			if let Some(mut dummies) = Person::<T>::get() {
 				dummies.push(id.clone());
-				Dummy::<T>::set(Some(dummies));
+				Person::<T>::set(Some(dummies));
 			} else {
-				Dummy::<T>::set(Some(vec![id.clone()]));
+				Person::<T>::set(Some(vec![id.clone()]));
 			}
 
 			// Let's deposit an event to let the outside world know this happened.
-			Self::deposit_event(Event::AddDummy { account: id });
+			Self::deposit_event(Event::AddPerson { account: id });
 
 			Ok(())
 		}
 
 		#[pallet::call_index(1)]
-		pub fn set_bar(
+		pub fn set_points(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			// Put the new value into storage.
-			<Bar<T>>::insert(&sender, new_value);
+			<Points<T>>::insert(&sender, new_value);
 
-			Self::deposit_event(Event::SetBar { account: sender, balance: new_value });
+			Self::deposit_event(Event::SetPoints { account: sender, balance: new_value });
 
 			Ok(())
 		}
@@ -95,13 +95,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		AddDummy { account: T::AccountId },
-		SetBar { account: T::AccountId, balance: BalanceOf<T> },
+		AddPerson { account: T::AccountId },
+		SetPoints { account: T::AccountId, balance: BalanceOf<T> },
 	}
 
 	#[pallet::storage]
-	pub type Dummy<T: Config> = StorageValue<_, Vec<T::AccountId>>;
+	pub type Person<T: Config> = StorageValue<_, Vec<T::AccountId>>;
 
 	#[pallet::storage]
-	pub type Bar<T: Config> = StorageMap<_, _, T::AccountId, T::Balance>;
+	pub type Points<T: Config> = StorageMap<_, _, T::AccountId, T::Balance>;
 }

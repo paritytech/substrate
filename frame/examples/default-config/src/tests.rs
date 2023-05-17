@@ -107,24 +107,24 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 #[test]
 fn it_works_for_optional_value() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Dummy::<Test>::get(), None);
+		assert_eq!(Person::<Test>::get(), None);
 
 		let val1 = 42;
-		assert_ok!(Example::add_dummy(RuntimeOrigin::root(), val1));
-		assert_eq!(Dummy::<Test>::get(), Some(vec![val1]));
+		assert_ok!(Example::add_person(RuntimeOrigin::root(), val1));
+		assert_eq!(Person::<Test>::get(), Some(vec![val1]));
 
-		// Check that accumulate works when we have Some value in Dummy already.
+		// Check that accumulate works when we have Some value in Person already.
 		let val2 = 27;
-		assert_ok!(Example::add_dummy(RuntimeOrigin::root(), val2));
-		assert_eq!(Dummy::<Test>::get(), Some(vec![val1, val2]));
+		assert_ok!(Example::add_person(RuntimeOrigin::root(), val2));
+		assert_eq!(Person::<Test>::get(), Some(vec![val1, val2]));
 	});
 }
 
 #[test]
-fn set_dummy_works() {
+fn set_person_works() {
 	new_test_ext().execute_with(|| {
 		let test_val = 133;
-		assert_ok!(Example::set_bar(RuntimeOrigin::signed(1), test_val.into()));
-		assert_eq!(Bar::<Test>::get(1), Some(test_val));
+		assert_ok!(Example::set_points(RuntimeOrigin::signed(1), test_val.into()));
+		assert_eq!(Points::<Test>::get(1), Some(test_val));
 	});
 }
