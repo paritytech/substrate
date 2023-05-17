@@ -16,7 +16,25 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#![cfg_attr(not(feature = "std"), no_std)]
+//! Generic implementation of genesis config builder
 
-pub mod api;
-pub mod helper;
+use frame_support::traits::GenesisBuild;
+
+pub struct GenesisBuilder<R, GC>(sp_std::marker::PhantomData<(R, GC)>);
+
+impl<R, GC> GenesisBuilder<R, GC>
+where
+	GC: Default + GenesisBuild<R>,
+{
+	pub fn default_genesis_config_as_json() -> sp_std::vec::Vec<u8> {
+		serde_json::to_string(&GC::default())
+			.expect("serialization to json is expected to work. qed.")
+			.into_bytes()
+	}
+
+	pub fn build_genesis_config_from_json(json: sp_std::vec::Vec<u8>) {
+		let gc = serde_json::from_slice::<GC>(&json)
+			.expect("provided json blob is expected to be valid. qed.");
+		<GC as GenesisBuild<R>>::build(&gc);
+	}
+}
