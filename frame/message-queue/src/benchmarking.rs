@@ -291,11 +291,8 @@ mod benchmarks {
 		// Remove the last message since `peek_index` has linear complexity.
 		let message_index = ((msgs - 1) as u32).into();
 
-		#[block]
-		{
-			MessageQueue::<T>::discard_overweight(origin, 0u32.into(), 0u32, message_index)
-				.unwrap();
-		}
+		#[extrinsic_call]
+		discard_overweight(origin as T::RuntimeOrigin, 0u32.into(), 0u32, message_index);
 
 		assert_last_event::<T>(
 			Event::OverweightDiscarded {
@@ -326,11 +323,8 @@ mod benchmarks {
 		BookStateFor::<T>::insert(&queue, &book);
 		let message_index = ((msgs - 1) as u32).into();
 
-		#[block]
-		{
-			MessageQueue::<T>::discard_overweight(origin, 0u32.into(), 0u32, message_index)
-				.unwrap();
-		}
+		#[extrinsic_call]
+		discard_overweight(origin as T::RuntimeOrigin, 0u32.into(), 0u32, message_index);
 
 		assert_last_event::<T>(
 			Event::OverweightDiscarded {
