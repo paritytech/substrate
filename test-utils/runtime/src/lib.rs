@@ -470,7 +470,9 @@ pub(crate) const TEST_RUNTIME_BABE_EPOCH_CONFIGURATION: BabeEpochConfiguration =
 		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};
 
+use frame_support::traits::GenesisBuild;
 use serde_json as json;
+
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
@@ -717,8 +719,7 @@ impl_runtime_apis! {
 
 	impl sc_genesis_builder::GenesisBuilder<Block> for Runtime {
 		fn build_default_config() {
-			let gc = GenesisConfig::default();
-			gc.buildxxx();
+			<GenesisConfig as GenesisBuild<Runtime>>::build(&Default::default());
 		}
 
 		fn default_config_as_json() -> Vec<u8> {
@@ -728,7 +729,7 @@ impl_runtime_apis! {
 		fn build_genesis_config_from_json(json: sp_std::vec::Vec<u8>) {
 			log::trace!("build_genesis_config_from_json: {:?}", json);
 			let gc = json::from_slice::<GenesisConfig>(&json).expect("xxx");
-			gc.buildxxx();
+			<GenesisConfig as GenesisBuild<Runtime>>::build(&gc);
 		}
 	}
 }
@@ -1011,19 +1012,6 @@ pub mod storage_key_generator {
 			storage_key_generator::get_expected_storage_hashed_keys(),
 			storage_key_generator::generate_expected_storage_hashed_keys(),
 		);
-	}
-}
-
-//todo: this will be macro-generated function
-use frame_support::traits::GenesisBuild;
-impl GenesisConfig {
-	pub fn buildxxx(&self) {
-		<frame_system::GenesisConfig as GenesisBuild<Runtime>>::build(&self.system);
-		<pallet_babe::GenesisConfig as GenesisBuild<Runtime>>::build(&self.babe);
-		<substrate_test_pallet::GenesisConfig as GenesisBuild<Runtime>>::build(
-			&self.substrate_test,
-		);
-		<pallet_balances::GenesisConfig<Runtime> as GenesisBuild<Runtime>>::build(&self.balances);
 	}
 }
 
