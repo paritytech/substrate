@@ -389,7 +389,7 @@ fn process_named_generics(
 				hasher: parsed
 					.remove("Hasher")
 					.map(|binding| binding.ty)
-					.unwrap_or(syn::Type::Verbatim(quote::quote! { Blake2_128Concat })),
+					.unwrap_or(syn::parse_quote!(Blake2_128Concat)),
 				key: parsed
 					.remove("Key")
 					.map(|binding| binding.ty)
@@ -463,7 +463,7 @@ fn process_named_generics(
 				hasher1: parsed
 					.remove("Hasher1")
 					.map(|binding| binding.ty)
-					.unwrap_or(syn::Type::Verbatim(quote::quote! { Blake2_128Concat })),
+					.unwrap_or(syn::parse_quote!(Blake2_128Concat)),
 				key1: parsed
 					.remove("Key1")
 					.map(|binding| binding.ty)
@@ -471,7 +471,7 @@ fn process_named_generics(
 				hasher2: parsed
 					.remove("Hasher2")
 					.map(|binding| binding.ty)
-					.unwrap_or(syn::Type::Verbatim(quote::quote! { Blake2_128Concat })),
+					.unwrap_or(syn::parse_quote!(Blake2_128Concat)),
 				key2: parsed
 					.remove("Key2")
 					.map(|binding| binding.ty)
