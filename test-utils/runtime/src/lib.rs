@@ -470,7 +470,6 @@ pub(crate) const TEST_RUNTIME_BABE_EPOCH_CONFIGURATION: BabeEpochConfiguration =
 		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};
 
-
 use frame_support::traits::GenesisBuild;
 
 pub struct GenesisBuilderHelper<R, GC>(sp_std::marker::PhantomData<(R, GC)>);
