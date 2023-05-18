@@ -1,5 +1,5 @@
 [package]
-name = "sc-genesis-builder"
+name = "sp-genesis-builder"
 version = "0.1.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
