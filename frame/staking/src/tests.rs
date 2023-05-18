@@ -1143,7 +1143,6 @@ fn reward_destination_works() {
 
 		// (era 2, page 0) is claimed
 		assert_eq!(Staking::claimed_rewards(2, &11), vec![0]);
-
 	});
 }
 
