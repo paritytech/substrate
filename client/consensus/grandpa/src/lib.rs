@@ -691,7 +691,7 @@ pub struct GrandpaParams<Block: BlockT, C, N, S, SC, VR> {
 }
 
 /// Returns the configuration value to put in
-/// [`sc_network::config::NetworkConfiguration::extra_sets`].
+/// [`sc_network::config::FullNetworkConfiguration`].
 /// For standard protocol name see [`crate::protocol_standard_name`].
 pub fn grandpa_peers_set_config(
 	protocol_name: ProtocolName,

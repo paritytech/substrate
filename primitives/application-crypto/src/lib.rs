@@ -23,24 +23,33 @@
 pub use sp_core::crypto::{key_types, CryptoTypeId, KeyTypeId};
 #[doc(hidden)]
 #[cfg(feature = "full_crypto")]
-pub use sp_core::crypto::{DeriveError, DeriveJunction, Pair, SecretStringError, Ss58Codec};
+pub use sp_core::crypto::{DeriveError, Pair, SecretStringError};
+#[cfg(any(feature = "full_crypto", feature = "serde"))]
+pub use sp_core::crypto::{DeriveJunction, Ss58Codec};
 #[doc(hidden)]
 pub use sp_core::{
 	self,
 	crypto::{ByteArray, CryptoType, Derive, IsWrappedBy, Public, UncheckedFrom, Wraps},
 	RuntimeDebug,
 };
+#[doc(hidden)]
+#[cfg(all(not(feature = "std"), feature = "serde"))]
+pub use sp_std::alloc::{format, string::String};
 
 #[doc(hidden)]
 pub use codec;
 #[doc(hidden)]
 pub use scale_info;
 #[doc(hidden)]
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 pub use serde;
 #[doc(hidden)]
 pub use sp_std::{ops::Deref, vec::Vec};
 
+#[cfg(feature = "bls-experimental")]
+pub mod bls377;
+#[cfg(feature = "bls-experimental")]
+pub mod bls381;
 pub mod ecdsa;
 pub mod ed25519;
 pub mod sr25519;
@@ -278,7 +287,7 @@ macro_rules! app_crypto_public_not_full_crypto {
 #[macro_export]
 macro_rules! app_crypto_public_common {
 	($public:ty, $sig:ty, $key_type:expr, $crypto_type:expr) => {
-		$crate::app_crypto_public_common_if_std!();
+		$crate::app_crypto_public_common_if_serde!();
 
 		impl AsRef<[u8]> for Public {
 			fn as_ref(&self) -> &[u8] {
@@ -309,14 +318,21 @@ macro_rules! app_crypto_public_common {
 				<$public>::try_from(data).map(Into::into)
 			}
 		}
+
+		impl Public {
+			/// Convert into wrapped generic public key type.
+			pub fn into_inner(self) -> $public {
+				self.0
+			}
+		}
 	};
 }
 
-/// Implements traits for the public key type if `feature = "std"` is enabled.
-#[cfg(feature = "std")]
+/// Implements traits for the public key type if `feature = "serde"` is enabled.
+#[cfg(feature = "serde")]
 #[doc(hidden)]
 #[macro_export]
-macro_rules! app_crypto_public_common_if_std {
+macro_rules! app_crypto_public_common_if_serde {
 	() => {
 		impl $crate::Derive for Public {
 			fn derive<Iter: Iterator<Item = $crate::DeriveJunction>>(
@@ -327,15 +343,15 @@ macro_rules! app_crypto_public_common_if_std {
 			}
 		}
 
-		impl std::fmt::Display for Public {
-			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		impl core::fmt::Display for Public {
+			fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
 				use $crate::Ss58Codec;
 				write!(f, "{}", self.0.to_ss58check())
 			}
 		}
 
 		impl $crate::serde::Serialize for Public {
-			fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+			fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
 			where
 				S: $crate::serde::Serializer,
 			{
@@ -345,11 +361,14 @@ macro_rules! app_crypto_public_common_if_std {
 		}
 
 		impl<'de> $crate::serde::Deserialize<'de> for Public {
-			fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+			fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
 			where
 				D: $crate::serde::Deserializer<'de>,
 			{
 				use $crate::Ss58Codec;
+				#[cfg(all(not(feature = "std"), feature = "serde"))]
+				use $crate::{format, String};
+
 				Public::from_ss58check(&String::deserialize(deserializer)?)
 					.map_err(|e| $crate::serde::de::Error::custom(format!("{:?}", e)))
 			}
@@ -357,10 +376,10 @@ macro_rules! app_crypto_public_common_if_std {
 	};
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(not(feature = "serde"))]
 #[doc(hidden)]
 #[macro_export]
-macro_rules! app_crypto_public_common_if_std {
+macro_rules! app_crypto_public_common_if_serde {
 	() => {
 		impl $crate::Derive for Public {}
 	};
@@ -468,6 +487,13 @@ macro_rules! app_crypto_signature_common {
 
 			fn try_from(data: $crate::Vec<u8>) -> Result<Self, Self::Error> {
 				Self::try_from(&data[..])
+			}
+		}
+
+		impl Signature {
+			/// Convert into wrapped generic signature type.
+			pub fn into_inner(self) -> $sig {
+				self.0
 			}
 		}
 	};

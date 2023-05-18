@@ -25,7 +25,7 @@
 use crate::schema;
 use codec::{self, Decode, Encode};
 use futures::{channel::mpsc, prelude::*};
-use libp2p::PeerId;
+use libp2p_identity::PeerId;
 use log::{debug, trace};
 use prost::Message;
 use sc_client_api::{BlockBackend, ProofProvider};

@@ -21,7 +21,7 @@ mod schema_v1 {
 }
 
 use super::*;
-use libp2p::{multiaddr::Multiaddr, PeerId};
+use libp2p::{identity::Keypair, multiaddr::Multiaddr, PeerId};
 use prost::Message;
 
 #[test]
@@ -55,7 +55,7 @@ fn v2_decodes_v1() {
 
 #[test]
 fn v1_decodes_v2() {
-	let peer_secret = libp2p::identity::Keypair::generate_ed25519();
+	let peer_secret = Keypair::generate_ed25519();
 	let peer_public = peer_secret.public();
 	let peer_id = peer_public.to_peer_id();
 	let multiaddress: Multiaddr =
@@ -67,7 +67,7 @@ fn v1_decodes_v2() {
 	let record_v2 = AuthorityRecord { addresses: vec_addresses.clone() };
 	let mut vec_record_v2 = vec![];
 	record_v2.encode(&mut vec_record_v2).unwrap();
-	let vec_peer_public = peer_public.to_protobuf_encoding();
+	let vec_peer_public = peer_public.encode_protobuf();
 	let peer_signature_v2 =
 		PeerSignature { public_key: vec_peer_public, signature: vec_peer_signature };
 	let signed_record_v2 = SignedAuthorityRecord {
