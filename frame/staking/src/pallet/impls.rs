@@ -1009,7 +1009,7 @@ impl<T: Config> Pallet<T> {
 		era: EraIndex,
 		account: &T::AccountId,
 	) -> Exposure<T::AccountId, BalanceOf<T>> {
-		EraInfo::<T>::get_full_exposure(era, &account)
+		EraInfo::<T>::get_full_exposure(era, account)
 	}
 }
 
