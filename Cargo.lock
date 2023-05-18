@@ -11331,6 +11331,7 @@ dependencies = [
  "sp-application-crypto",
  "sp-core",
  "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
