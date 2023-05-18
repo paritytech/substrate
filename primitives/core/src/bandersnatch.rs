@@ -382,19 +382,13 @@ pub mod vrf {
 		}
 
 		/// Appends a message to the transcript
-		pub fn push_transcript_data(
-			&mut self,
-			data: &[u8],
-		) {
+		pub fn push_transcript_data(&mut self, data: &[u8]) {
 			self.transcript.append_slice(data);
 		}
 
 		/// Appends a `VrfInput` to the vrf inputs to be signed.
 		/// On failure, returns the `VrfInput`.
-		pub fn push_vrf_input(
-			&mut self,
-			vrf_input: VrfInput,
-		) -> Result<(), VrfInput> {
+		pub fn push_vrf_input(&mut self, vrf_input: VrfInput) -> Result<(), VrfInput> {
 			self.vrf_inputs.try_push(vrf_input)
 		}
 
