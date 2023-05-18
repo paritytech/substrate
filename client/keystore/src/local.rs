@@ -19,14 +19,13 @@
 
 use parking_lot::RwLock;
 use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
-#[cfg(feature = "bandersnatch-experimental")]
-use sp_core::bandersnatch;
-#[cfg(feature = "bls-experimental")]
-use sp_core::{bls377, bls381};
 use sp_core::{
+	bandersnatch,
 	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSecret},
 	ecdsa, ed25519, sr25519,
 };
+#[cfg(feature = "bls-experimental")]
+use sp_core::{bls377, bls381};
 use sp_keystore::{Error as TraitError, Keystore, KeystorePtr};
 use std::{
 	collections::HashMap,
@@ -236,12 +235,10 @@ impl Keystore for LocalKeystore {
 		Ok(sig)
 	}
 
-	#[cfg(feature = "bandersnatch-experimental")]
 	fn bandersnatch_public_keys(&self, key_type: KeyTypeId) -> Vec<bandersnatch::Public> {
 		self.public_keys::<bandersnatch::Pair>(key_type)
 	}
 
-	#[cfg(feature = "bandersnatch-experimental")]
 	fn bandersnatch_generate_new(
 		&self,
 		key_type: KeyTypeId,
@@ -250,7 +247,6 @@ impl Keystore for LocalKeystore {
 		self.generate_new::<bandersnatch::Pair>(key_type, seed)
 	}
 
-	#[cfg(feature = "bandersnatch-experimental")]
 	fn bandersnatch_sign(
 		&self,
 		key_type: KeyTypeId,
@@ -263,7 +259,6 @@ impl Keystore for LocalKeystore {
 	// TODO DAVXY
 	// Maybe we can expose just this bandersnatch sign (the above one reduces to this with
 	// input len = 0)
-	#[cfg(feature = "bandersnatch-experimental")]
 	fn bandersnatch_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
@@ -271,6 +266,15 @@ impl Keystore for LocalKeystore {
 		data: &bandersnatch::vrf::VrfSignData,
 	) -> std::result::Result<Option<bandersnatch::vrf::VrfSignature>, TraitError> {
 		self.vrf_sign::<bandersnatch::Pair>(key_type, public, data)
+	}
+
+	fn bandersnatch_vrf_output(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		input: &bandersnatch::vrf::VrfInput,
+	) -> std::result::Result<Option<bandersnatch::vrf::VrfOutput>, TraitError> {
+		self.vrf_output::<bandersnatch::Pair>(key_type, public, input)
 	}
 
 	#[cfg(feature = "bls-experimental")]
