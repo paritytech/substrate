@@ -34,8 +34,8 @@ use sc_network_test::*;
 use sp_application_crypto::key_types::SASSAFRAS;
 use sp_blockchain::Error as TestError;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
-use sp_consensus_sassafras::{inherents::InherentDataProvider, slot_claim_vrf_input};
-use sp_keyring::Sr25519Keyring;
+use sp_consensus_sassafras::inherents::InherentDataProvider;
+use sp_keyring::BandersnatchKeyring as Keyring;
 use sp_keystore::{testing::MemoryKeystore, Keystore};
 use sp_runtime::{Digest, DigestItem};
 use sp_timestamp::Timestamp;
@@ -172,9 +172,11 @@ fn create_test_block_import(
 		.expect("can initialize block-import")
 }
 
-fn create_test_keystore(authority: Sr25519Keyring) -> KeystorePtr {
+fn create_test_keystore(authority: Keyring) -> KeystorePtr {
 	let keystore = MemoryKeystore::new();
-	keystore.sr25519_generate_new(SASSAFRAS, Some(&authority.to_seed())).unwrap();
+	keystore
+		.bandersnatch_generate_new(SASSAFRAS, Some(&authority.to_seed()))
+		.unwrap();
 	keystore.into()
 }
 
@@ -183,9 +185,9 @@ fn create_test_config() -> SassafrasConfiguration {
 		slot_duration: SLOT_DURATION,
 		epoch_duration: EPOCH_DURATION,
 		authorities: vec![
-			(Sr25519Keyring::Alice.public().into(), 1),
-			(Sr25519Keyring::Bob.public().into(), 1),
-			(Sr25519Keyring::Charlie.public().into(), 1),
+			(Keyring::Alice.public().into(), 1),
+			(Keyring::Bob.public().into(), 1),
+			(Keyring::Charlie.public().into(), 1),
 		],
 		randomness: [0; 32],
 		threshold_params: SassafrasEpochConfiguration { redundancy_factor: 1, attempts_number: 32 },
@@ -205,7 +207,7 @@ impl TestContext {
 		let (block_import, link) = create_test_block_import(client.clone(), config.clone());
 
 		// Create a keystore with default testing key
-		let keystore = create_test_keystore(Sr25519Keyring::Alice);
+		let keystore = create_test_keystore(Keyring::Alice);
 
 		let verifier = create_test_verifier(client.clone(), &link, config.clone());
 
@@ -289,7 +291,7 @@ impl TestContext {
 		let parent_header = self.client.header(parent_hash).unwrap().unwrap();
 		let parent_number = *parent_header.number();
 
-		let public = self.keystore.sr25519_public_keys(SASSAFRAS)[0];
+		let public = self.keystore.bandersnatch_public_keys(SASSAFRAS)[0];
 
 		let proposer = block_on(self.init(&parent_header)).unwrap();
 
@@ -298,14 +300,12 @@ impl TestContext {
 			parent_pre_digest.slot + 1
 		});
 
+		// TODO DAVXY: here maybe we can use the epoch.randomness???
 		let epoch = self.epoch_data(&parent_hash, parent_number, slot);
-		let vrf_input =
-			slot_claim_vrf_input(&self.link.genesis_config.randomness, slot, epoch.epoch_idx);
-		let vrf_signature = self
-			.keystore
-			.sr25519_vrf_sign(SASSAFRAS, &public, &vrf_input.into())
-			.unwrap()
-			.unwrap();
+		let data =
+			slot_claim_sign_data(&self.link.genesis_config.randomness, slot, epoch.epoch_idx);
+		let vrf_signature =
+			self.keystore.bandersnatch_vrf_sign(SASSAFRAS, &public, &data).unwrap().unwrap();
 
 		let pre_digest = PreDigest { slot, authority_idx: 0, vrf_signature, ticket_claim: None };
 		let digest = sp_runtime::generic::Digest {
@@ -320,7 +320,7 @@ impl TestContext {
 		let hash = block.header.hash();
 		let signature = self
 			.keystore
-			.sr25519_sign(SASSAFRAS, &public, hash.as_ref())
+			.bandersnatch_sign(SASSAFRAS, &public, hash.as_ref())
 			.unwrap()
 			.unwrap()
 			.try_into()
@@ -372,9 +372,9 @@ fn claim_secondary_slots_works() {
 	let mut config = create_test_config();
 	config.randomness = [2; 32];
 
-	let authorities = [Sr25519Keyring::Alice, Sr25519Keyring::Bob, Sr25519Keyring::Charlie];
+	let authorities = [Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 
-	let epoch = Epoch {
+	let mut epoch = Epoch {
 		epoch_idx: 1,
 		start_slot: 6.into(),
 		config: config.clone(),
@@ -388,7 +388,7 @@ fn claim_secondary_slots_works() {
 
 		for slot in 0..config.epoch_duration {
 			if let Some((claim, auth_id2)) =
-				authorship::claim_slot(slot.into(), &epoch, None, &keystore)
+				authorship::claim_slot(slot.into(), &mut epoch, None, &keystore)
 			{
 				assert_eq!(claim.authority_idx as usize, auth_idx);
 				assert_eq!(claim.slot, Slot::from(slot));
@@ -422,41 +422,44 @@ fn claim_primary_slots_works() {
 		tickets_aux: Default::default(),
 	};
 
-	let keystore = create_test_keystore(Sr25519Keyring::Alice);
+	let keystore = create_test_keystore(Keyring::Alice);
+	let alice_authority_idx = 0_u32;
 
-	// Success if we have ticket aux data and the authority key in our keystore
-	// 	ticket-aux: OK , authority-key: OK => SUCCESS
-
-	let authority_idx = 0u32;
 	let ticket_id = 123;
 	let ticket_data =
 		TicketData { attempt_idx: 0, erased_public: [0; 32], revealed_public: [0; 32] };
 	let ticket_secret = TicketSecret { attempt_idx: 0, erased_secret: [0; 32] };
-	epoch.tickets_aux.insert(ticket_id, (authority_idx, ticket_secret.clone()));
-
-	let (pre_digest, auth_id) =
-		authorship::claim_slot(0.into(), &epoch, Some((ticket_id, ticket_data.clone())), &keystore)
-			.unwrap();
-
-	assert_eq!(pre_digest.authority_idx, authority_idx);
-	assert_eq!(auth_id, Sr25519Keyring::Alice.public().into());
 
 	// Fail if we have authority key in our keystore but not ticket aux data
 	// 	ticket-aux: KO , authority-key: OK => FAIL
 
-	let ticket_id = 321;
 	let claim =
-		authorship::claim_slot(0.into(), &epoch, Some((ticket_id, ticket_data.clone())), &keystore);
+		authorship::claim_slot(0.into(), &mut epoch, Some((ticket_id, ticket_data.clone())), &keystore);
+
 	assert!(claim.is_none());
+	assert!(epoch.tickets_aux.is_empty());
+
+	// Success if we have ticket aux data and the authority key in our keystore
+	// 	ticket-aux: OK , authority-key: OK => SUCCESS
+
+	epoch.tickets_aux.insert(ticket_id, (alice_authority_idx, ticket_secret.clone()));
+
+	let (pre_digest, auth_id) =
+		authorship::claim_slot(0.into(), &mut epoch, Some((ticket_id, ticket_data.clone())), &keystore)
+			.unwrap();
+
+	assert!(epoch.tickets_aux.is_empty());
+	assert_eq!(pre_digest.authority_idx, alice_authority_idx);
+	assert_eq!(auth_id, Keyring::Alice.public().into());
 
 	// Fail if we have ticket aux data but not the authority key in out keystore
 	// 	ticket-aux: OK , authority-key: KO => FAIL
 
-	let authority_idx = 1u32; // we don't have this key
-	let ticket_id = 666;
-	epoch.tickets_aux.insert(ticket_id, (authority_idx, ticket_secret));
-	let claim = authorship::claim_slot(0.into(), &epoch, Some((ticket_id, ticket_data)), &keystore);
+	epoch.tickets_aux.insert(ticket_id, (alice_authority_idx + 1, ticket_secret));
+
+	let claim = authorship::claim_slot(0.into(), &mut epoch, Some((ticket_id, ticket_data)), &keystore);
 	assert!(claim.is_none());
+	assert!(epoch.tickets_aux.is_empty());
 }
 
 #[test]
@@ -839,7 +842,7 @@ async fn sassafras_network_progress() {
 	let net = SassafrasTestNet::new(3);
 	let net = Arc::new(Mutex::new(net));
 
-	let peers = [Sr25519Keyring::Alice, Sr25519Keyring::Bob, Sr25519Keyring::Charlie];
+	let peers = [Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 
 	let mut import_notifications = Vec::new();
 	let mut sassafras_workers = Vec::new();

@@ -56,7 +56,7 @@ use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
 	AuthorityId, Epoch, EquivocationProof, Randomness, SassafrasAuthorityWeight,
 	SassafrasConfiguration, SassafrasEpochConfiguration, Slot, TicketData, TicketEnvelope,
-	TicketId, RANDOMNESS_LENGTH, RANDOMNESS_VRF_CONTEXT, SASSAFRAS_ENGINE_ID,
+	TicketId, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID,
 };
 use sp_io::hashing;
 use sp_runtime::{
@@ -80,7 +80,9 @@ pub mod session;
 // Re-export pallet symbols.
 pub use pallet::*;
 
-const LOG_TARGET: &str = "runtime::sassafras 🌳";
+const LOG_TARGET: &str = "sassafras::runtime 🌳";
+
+const RANDOMNESS_VRF_CONTEXT: &[u8] = b"SassafrasRandomness";
 
 /// Tickets related metadata that is commonly used together.
 #[derive(Debug, Default, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy)]
@@ -294,22 +296,14 @@ pub mod pallet {
 
 		/// Block finalization
 		fn on_finalize(_now: BlockNumberFor<T>) {
+			// TODO DAVXY: check if is a disabled validator?
+
 			// At the end of the block, we can safely include the new VRF output from
 			// this block into the randomness accumulator. If we've determined
 			// that this block was the first in a new epoch, the changeover logic has
-			// already occurred at this point, so the
+			// already occurred at this point.
 			let pre_digest = Initialized::<T>::take()
 				.expect("Finalization is called after initialization; qed.");
-
-			// TODO DAVXY P32: probably with the new vrf we don't need the authority id
-			// `inout` is sufficent
-			let authority_idx = pre_digest.authority_idx;
-			let authorities = Authorities::<T>::get();
-			let authority_id = authorities
-				.get(authority_idx as usize)
-				.expect("Authority should be valid at this point; qed");
-
-			// TODO DAVXY: check if is a disabled validator
 
 			let vrf_input = sp_consensus_sassafras::slot_claim_vrf_input(
 				&Self::randomness(),
@@ -317,15 +311,12 @@ pub mod pallet {
 				EpochIndex::<T>::get(),
 			);
 
-			let vrf_preout = &pre_digest.vrf_signature.output;
-
-			let randomness = vrf_preout
-				.make_bytes::<RANDOMNESS_LENGTH>(
-					RANDOMNESS_VRF_CONTEXT,
-					&vrf_input,
-					authority_id.0.as_ref(),
-				)
-				.expect("Can't fail? TODO DAVXY");
+			let randomness = pre_digest
+				.vrf_signature
+				.vrf_outputs
+				.get(0)
+				.expect("vrf preout should have been already checked by the client; qed")
+				.make_bytes::<RANDOMNESS_LENGTH>(RANDOMNESS_VRF_CONTEXT, &vrf_input);
 
 			Self::deposit_randomness(&randomness);
 
@@ -362,7 +353,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_none(origin)?;
 
-			log::debug!(target: LOG_TARGET, "@@@@@@@@@@ received {} tickets", tickets.len());
+			log::debug!(target: LOG_TARGET, "Received {} tickets", tickets.len());
 
 			// Check tickets score
 			let next_auth = NextAuthorities::<T>::get();
@@ -376,8 +367,9 @@ pub mod pallet {
 				next_auth.len() as u32,
 			);
 
-			let epoch_idx = EpochIndex::<T>::get();
-			let randomness = CurrentRandomness::<T>::get();
+			// Get next epoch params
+			let randomness = NextRandomness::<T>::get();
+			let epoch_idx = EpochIndex::<T>::get() + 1;
 
 			let mut segment = BoundedVec::with_max_capacity();
 			for ticket in tickets.iter() {
@@ -396,7 +388,8 @@ pub mod pallet {
 			}
 
 			if !segment.is_empty() {
-				log::debug!(target: LOG_TARGET, "@@@@@@@@@@ appending segment with {} tickets", segment.len());
+				log::debug!(target: LOG_TARGET, "Appending segment with {} tickets", segment.len());
+				segment.iter().for_each(|t| log::debug!(target: LOG_TARGET, "  + {t:16x}"));
 				let mut metadata = TicketsMeta::<T>::get();
 				NextTicketsSegments::<T>::insert(metadata.segments_count, segment);
 				metadata.segments_count += 1;

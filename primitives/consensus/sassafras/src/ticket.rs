@@ -21,10 +21,7 @@ use super::{Randomness, SASSAFRAS_ENGINE_ID};
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_consensus_slots::Slot;
-use sp_core::sr25519::vrf::{VrfInput, VrfOutput};
-
-/// VRF context used for ticket-id generation.
-const TICKET_ID_VRF_CONTEXT: &[u8] = b"SassafrasTicketIdVRFContext";
+use sp_core::bandersnatch::vrf::{VrfInput, VrfOutput, VrfSignData};
 
 /// Ticket identifier.
 ///
@@ -82,12 +79,22 @@ pub fn slot_claim_vrf_input(randomness: &Randomness, slot: Slot, epoch: u64) -> 
 	VrfInput::new(
 		&SASSAFRAS_ENGINE_ID,
 		&[
-			(b"type", b"ticket-claim-transcript"),
+			(b"type", b"slot-claim"),
+			(b"randomness", randomness),
 			(b"slot", &slot.to_le_bytes()),
 			(b"epoch", &epoch.to_le_bytes()),
-			(b"randomness", randomness),
 		],
 	)
+}
+
+/// Signing-data to claim slot ownership during block production.
+///
+/// Input randomness is current epoch randomness.
+pub fn slot_claim_sign_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfSignData {
+	let vrf_input = slot_claim_vrf_input(randomness, slot, epoch);
+
+	VrfSignData::from_iter(&SASSAFRAS_ENGINE_ID, &[b"slot-claim-transcript"], [vrf_input])
+		.expect("can't fail; qed")
 }
 
 /// VRF input to generate the ticket id.
@@ -97,10 +104,10 @@ pub fn ticket_id_vrf_input(randomness: &Randomness, attempt: u32, epoch: u64) ->
 	VrfInput::new(
 		&SASSAFRAS_ENGINE_ID,
 		&[
-			(b"type", b"ticket-id-transcript"),
+			(b"type", b"ticket-id"),
+			(b"randomness", randomness),
 			(b"attempt", &attempt.to_le_bytes()),
 			(b"epoch", &epoch.to_le_bytes()),
-			(b"randomness", randomness),
 		],
 	)
 }
@@ -109,13 +116,9 @@ pub fn ticket_id_vrf_input(randomness: &Randomness, attempt: u32, epoch: u64) ->
 ///
 /// Input generally obtained via `ticket_id_vrf_input`.
 /// Output can be obtained directly using the vrf secret key or from the signature.
-// TODO DAVXY: with new VRF authority-id is not necessary
 pub fn ticket_id(vrf_input: &VrfInput, vrf_output: &VrfOutput) -> TicketId {
-	let public = sp_core::sr25519::Public::from_raw([0; 32]);
-	vrf_output
-		.make_bytes::<16>(TICKET_ID_VRF_CONTEXT, vrf_input, &public)
-		.map(|bytes| u128::from_le_bytes(bytes))
-		.unwrap_or(u128::MAX)
+	let bytes = vrf_output.make_bytes::<16>(b"vrf-out", vrf_input);
+	u128::from_le_bytes(bytes)
 }
 
 /// Computes the threshold for a given epoch as T = (x*s)/(a*v), where:

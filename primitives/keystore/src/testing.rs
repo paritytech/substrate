@@ -19,12 +19,13 @@
 
 use crate::{Error, Keystore, KeystorePtr};
 
-#[cfg(feature = "bls-experimental")]
-use sp_core::{bls377, bls381};
 use sp_core::{
+	bandersnatch,
 	crypto::{ByteArray, KeyTypeId, Pair, VrfSecret},
 	ecdsa, ed25519, sr25519,
 };
+#[cfg(feature = "bls-experimental")]
+use sp_core::{bls377, bls381};
 
 use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
@@ -212,6 +213,45 @@ impl Keystore for MemoryKeystore {
 	) -> Result<Option<ecdsa::Signature>, Error> {
 		let sig = self.pair::<ecdsa::Pair>(key_type, public).map(|pair| pair.sign_prehashed(msg));
 		Ok(sig)
+	}
+
+	fn bandersnatch_public_keys(&self, key_type: KeyTypeId) -> Vec<bandersnatch::Public> {
+		self.public_keys::<bandersnatch::Pair>(key_type)
+	}
+
+	fn bandersnatch_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bandersnatch::Public, Error> {
+		self.generate_new::<bandersnatch::Pair>(key_type, seed)
+	}
+
+	fn bandersnatch_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		msg: &[u8],
+	) -> Result<Option<bandersnatch::Signature>, Error> {
+		self.sign::<bandersnatch::Pair>(key_type, public, msg)
+	}
+
+	fn bandersnatch_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		data: &bandersnatch::vrf::VrfSignData,
+	) -> Result<Option<bandersnatch::vrf::VrfSignature>, Error> {
+		self.vrf_sign::<bandersnatch::Pair>(key_type, public, data)
+	}
+
+	fn bandersnatch_vrf_output(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		input: &bandersnatch::vrf::VrfInput,
+	) -> Result<Option<bandersnatch::vrf::VrfOutput>, Error> {
+		self.vrf_output::<bandersnatch::Pair>(key_type, public, input)
 	}
 
 	#[cfg(feature = "bls-experimental")]

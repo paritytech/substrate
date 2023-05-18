@@ -182,8 +182,8 @@ fn slot_claim_vrf_signature(slot: Slot, pair: &AuthorityPair) -> VrfSignature {
 		randomness = crate::NextRandomness::<Test>::get();
 	}
 
-	let vrf_input = sp_consensus_sassafras::slot_claim_vrf_input(&randomness, slot, epoch);
-	pair.as_ref().vrf_sign(&vrf_input.into())
+	let data = sp_consensus_sassafras::slot_claim_sign_data(&randomness, slot, epoch);
+	pair.as_ref().vrf_sign(&data)
 }
 
 /// Produce a `PreDigest` instance for the given parameters.

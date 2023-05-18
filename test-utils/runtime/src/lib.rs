@@ -135,20 +135,6 @@ pub struct TransferData {
 	pub amount: Balance,
 	pub nonce: Index,
 }
-// TODO DAVXY
-// impl From<pallet_sassafras::Call<Runtime>> for Extrinsic {
-// 	fn from(call: pallet_sassafras::Call<Runtime>) -> Self {
-// 		use pallet_sassafras::Call;
-// 		match call {
-// 			Call::submit_tickets { tickets: _ } => Extrinsic::Sassafras,
-// 			Call::plan_config_change { config: _ } => Extrinsic::Sassafras,
-// 			Call::report_equivocation_unsigned { equivocation_proof: _ } => Extrinsic::Sassafras,
-// 			_ => panic!(
-// 				"Unexpected Sassafras call type: {:?}, unable to converto to Extrinsic",
-// 				call
-// 			),
-// 		}
-// 	}
 
 /// The address format for describing accounts.
 pub type Address = sp_core::sr25519::Public;
@@ -715,8 +701,9 @@ impl_runtime_apis! {
 			Sassafras::slot_ticket_id(slot)
 		}
 
-		fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<(sp_consensus_sassafras::TicketId,
-	sp_consensus_sassafras::TicketData)> {
+		fn slot_ticket(
+			slot: sp_consensus_sassafras::Slot
+		) -> Option<(sp_consensus_sassafras::TicketId, sp_consensus_sassafras::TicketData)> {
 			Sassafras::slot_ticket(slot)
 		}
 
@@ -921,6 +908,10 @@ pub mod storage_key_generator {
 			vec![b"Babe", b"NextAuthorities"],
 			vec![b"Babe", b"SegmentIndex"],
 			vec![b"Babe", b":__STORAGE_VERSION__:"],
+			vec![b"Sassafras", b":__STORAGE_VERSION__:"],
+			vec![b"Sassafras", b"EpochConfig"],
+			vec![b"Sassafras", b"Authorities"],
+			vec![b"Sassafras", b"NextAuthorities"],
 			vec![b"Balances", b":__STORAGE_VERSION__:"],
 			vec![b"Balances", b"TotalIssuance"],
 			vec![b"SubstrateTest", b"Authorities"],
@@ -975,31 +966,30 @@ pub mod storage_key_generator {
 	/// origin.
 	pub fn get_expected_storage_hashed_keys() -> Vec<String> {
 		[
-			//System|:__STORAGE_VERSION__:
+			// System|:__STORAGE_VERSION__:
 			"00771836bebdd29870ff246d305c578c4e7b9012096b41c4eb3aaf947f6ea429",
-			//SubstrateTest|Authorities
+			// SubstrateTest|Authorities
 			"00771836bebdd29870ff246d305c578c5e0621c4869aa60c02be9adcc98a0d1d",
-			//Babe|:__STORAGE_VERSION__:
+			// Babe|:__STORAGE_VERSION__:
 			"1cb6f36e027abb2091cfb5110ab5087f4e7b9012096b41c4eb3aaf947f6ea429",
-			//Babe|Authorities
+			// Babe|Authorities
 			"1cb6f36e027abb2091cfb5110ab5087f5e0621c4869aa60c02be9adcc98a0d1d",
-			//Babe|SegmentIndex
+			// Babe|SegmentIndex
 			"1cb6f36e027abb2091cfb5110ab5087f66e8f035c8adbe7f1547b43c51e6f8a4",
-			//Babe|NextAuthorities
+			// Babe|NextAuthorities
 			"1cb6f36e027abb2091cfb5110ab5087faacf00b9b41fda7a9268821c2a2b3e4c",
-			//Babe|EpochConfig
+			// Babe|EpochConfig
 			"1cb6f36e027abb2091cfb5110ab5087fdc6b171b77304263c292cc3ea5ed31ef",
-			//System|:__STORAGE_VERSION__:
+			// System|:__STORAGE_VERSION__:
 			"26aa394eea5630e07c48ae0c9558cef74e7b9012096b41c4eb3aaf947f6ea429",
-			//System|UpgradedToU32RefCount
+			// System|UpgradedToU32RefCount
 			"26aa394eea5630e07c48ae0c9558cef75684a022a34dd8bfa2baaf44f172b710",
-			//System|ParentHash
+			// System|ParentHash
 			"26aa394eea5630e07c48ae0c9558cef78a42f33323cb5ced3b44dd825fda9fcc",
-			//System::BlockHash|0
+			// System::BlockHash|0
 			"26aa394eea5630e07c48ae0c9558cef7a44704b568d21667356a5a050c118746bb1bdbcacd6ac9340000000000000000",
-			//System|UpgradedToTripleRefCount
+			// System|UpgradedToTripleRefCount
 			"26aa394eea5630e07c48ae0c9558cef7a7fd6c28836b9a28522dc924110cf439",
-
 			// System|Account|blake2_128Concat("//11")
 			"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da901cae4e3edfbb32c91ed3f01ab964f4eeeab50338d8e5176d3141802d7b010a55dadcd5f23cf8aaafa724627e967e90e",
 			// System|Account|blake2_128Concat("//4")
@@ -1046,6 +1036,14 @@ pub mod storage_key_generator {
 			"3a65787472696e7369635f696e646578",
 			// :heappages
 			"3a686561707061676573",
+			// Sassafras|__STORAGE_VERSION__:
+			"be5e1f844c68e483aa815e45bbd9d3184e7b9012096b41c4eb3aaf947f6ea429",
+			// Sassafras|Authorities
+			"be5e1f844c68e483aa815e45bbd9d3185e0621c4869aa60c02be9adcc98a0d1d",
+			// Sassafras|NextAuthorities
+			"be5e1f844c68e483aa815e45bbd9d318aacf00b9b41fda7a9268821c2a2b3e4c",
+			// Sassafras|EpochConfig
+			"be5e1f844c68e483aa815e45bbd9d318dc6b171b77304263c292cc3ea5ed31ef",
 			// Balances|:__STORAGE_VERSION__:
 			"c2261276cc9d1f8598ea4b6a74b15c2f4e7b9012096b41c4eb3aaf947f6ea429",
 			// Balances|TotalIssuance
@@ -1078,6 +1076,32 @@ mod tests {
 		prelude::*, runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder,
 	};
 
+	fn babe_pre_digest() -> DigestItem {
+		use sp_consensus_babe::digests::{
+			CompatibleDigestItem, PreDigest, SecondaryPlainPreDigest,
+		};
+		DigestItem::babe_pre_digest(PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
+			authority_index: 0,
+			slot: 0.into(),
+		}))
+	}
+
+	fn sassafras_pre_digest() -> DigestItem {
+		use sp_consensus_sassafras::{
+			digests::{CompatibleDigestItem, PreDigest},
+			slot_claim_sign_data, AuthorityPair,
+		};
+		use sp_core::crypto::{Pair, VrfSecret};
+		let data = slot_claim_sign_data(&Default::default(), 0.into(), 0);
+		let vrf_signature = AuthorityPair::from_seed(&[0u8; 32]).as_ref().vrf_sign(&data);
+		DigestItem::sassafras_pre_digest(PreDigest {
+			authority_idx: 0,
+			slot: 0.into(),
+			vrf_signature,
+			ticket_claim: None,
+		})
+	}
+
 	#[test]
 	fn heap_pages_is_respected() {
 		// This tests that the on-chain `HEAP_PAGES` parameter is respected.
@@ -1102,7 +1126,8 @@ mod tests {
 		// Create a block that sets the `:heap_pages` to 32 pages of memory which corresponds to
 		// ~2048k of heap memory.
 		let (new_at_hash, block) = {
-			let mut builder = client.new_block(Default::default()).unwrap();
+			let digest = Digest { logs: vec![babe_pre_digest(), sassafras_pre_digest()] };
+			let mut builder = client.new_block(digest).unwrap();
 			builder.push_storage_change(HEAP_PAGES.to_vec(), Some(32u64.encode())).unwrap();
 			let block = builder.build().unwrap().block;
 			let hash = block.header.hash();

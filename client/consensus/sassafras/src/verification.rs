@@ -20,7 +20,7 @@
 
 use super::*;
 use sp_application_crypto::Wraps;
-use sp_core::crypto::VrfPublic;
+use sp_core::{crypto::VrfPublic, ed25519};
 
 // Allowed slot drift.
 const MAX_SLOT_DRIFT: u64 = 1;
@@ -81,35 +81,35 @@ fn check_header<B: BlockT + Sized>(
 		None => return Err(sassafras_err(Error::SlotAuthorNotFound)),
 	};
 
-	// Check header signature
+	// Check header signature (aka the Seal)
 
-	// Check slot-vrf proof
+	let signature = seal
+		.as_sassafras_seal()
+		.ok_or_else(|| sassafras_err(Error::HeaderBadSeal(header.hash())))?;
 
-	let vrf_input = slot_claim_vrf_input(&config.randomness, pre_digest.slot, epoch.epoch_idx);
-	if !authority_id
-		.as_inner_ref()
-		.vrf_verify(&vrf_input.into(), &pre_digest.vrf_signature)
-	{
-		return Err(sassafras_err(Error::VrfVerificationFailed))
+	let pre_hash = header.hash();
+	if !AuthorityPair::verify(&signature, &pre_hash, &authority_id) {
+		return Err(sassafras_err(Error::BadSignature(pre_hash)))
 	}
 
-	// let signature = seal
-	// 	.as_sassafras_seal()
-	// 	.ok_or_else(|| sassafras_err(Error::HeaderBadSeal(header.hash())))?;
+	// Optionally check ticket ownership
 
-	// let pre_hash = header.hash();
-	// if !AuthorityPair::verify(&signature, &pre_hash, &authority_id) {
-	// 	return Err(sassafras_err(Error::BadSignature(pre_hash)))
-	// }
-
-	// Check authorship method and claim
+	let mut vrf_sign_data = slot_claim_sign_data(&config.randomness, pre_digest.slot, epoch.epoch_idx);
 
 	match (&maybe_ticket, &pre_digest.ticket_claim) {
 		(Some((_ticket_id, ticket_data)), Some(ticket_claim)) => {
 			log::debug!(target: LOG_TARGET, "checking primary");
-			// TODO DAVXY: check erased_signature
-			let _public = ticket_data.erased_public;
-			let _signature = ticket_claim.erased_signature;
+
+			vrf_sign_data.push_transcript_data(&ticket_data.encode());
+			let challenge = vrf_sign_data.challenge::<32>();
+
+			let erased_public = ed25519::Public::from_raw(ticket_data.erased_public);
+			let erased_signature =
+				ed25519::Signature::from_raw(ticket_claim.erased_signature);
+
+			if !ed25519::Pair::verify(&erased_signature, &challenge, &erased_public) {
+				return Err(sassafras_err(Error::BadSignature(pre_hash)))
+			}
 		},
 		(None, None) => {
 			log::debug!(target: LOG_TARGET, "checking secondary");
@@ -128,6 +128,12 @@ fn check_header<B: BlockT + Sized>(
 				log::warn!(target: LOG_TARGET, "Unexpected primary authoring mechanism");
 				return Err(Error::UnexpectedAuthoringMechanism)
 			},
+	}
+
+	// Check per-slot vrf proof
+
+	if !authority_id.as_inner_ref().vrf_verify(&vrf_sign_data, &pre_digest.vrf_signature) {
+		return Err(sassafras_err(Error::VrfVerificationFailed))
 	}
 
 	let info = VerifiedHeaderInfo { authority_id, seal };

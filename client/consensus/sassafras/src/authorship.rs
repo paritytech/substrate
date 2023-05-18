@@ -21,10 +21,10 @@
 use super::*;
 
 use sp_consensus_sassafras::{
-	digests::PreDigest, ticket_id, ticket_id_threshold, AuthorityId, Slot, TicketClaim, TicketData,
-	TicketEnvelope, TicketId,
+	digests::PreDigest, slot_claim_sign_data, ticket_id, ticket_id_threshold, AuthorityId, Slot,
+	TicketClaim, TicketData, TicketEnvelope, TicketId,
 };
-use sp_core::{twox_64, ByteArray};
+use sp_core::{twox_64, ByteArray, ed25519};
 
 use std::pin::Pin;
 
@@ -41,7 +41,7 @@ pub(crate) fn secondary_authority_index(
 /// If ticket is `None`, then the slot should be claimed using the fallback mechanism.
 pub(crate) fn claim_slot(
 	slot: Slot,
-	epoch: &Epoch,
+	epoch: &mut Epoch,
 	maybe_ticket: Option<(TicketId, TicketData)>,
 	keystore: &KeystorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
@@ -51,34 +51,38 @@ pub(crate) fn claim_slot(
 		return None
 	}
 
+	let mut vrf_sign_data = slot_claim_sign_data(&config.randomness, slot, epoch.epoch_idx);
+
 	let (authority_idx, ticket_claim) = match maybe_ticket {
 		Some((ticket_id, ticket_data)) => {
-			log::debug!(target: LOG_TARGET, "[TRY PRIMARY]");
-			let (authority_idx, ticket_secret) = epoch.tickets_aux.get(&ticket_id)?.clone();
+			log::debug!(target: LOG_TARGET, "[TRY PRIMARY (slot {slot}, tkt = {ticket_id:16x})]");
+			let (authority_idx, ticket_secret) = epoch.tickets_aux.remove(&ticket_id)?.clone();
 			log::debug!(
 				target: LOG_TARGET,
-				"Ticket = [ticket: {:x?}, auth: {}, attempt: {}]",
-				ticket_id,
+				"   got ticket: auth: {}, attempt: {}",
 				authority_idx,
 				ticket_data.attempt_idx
 			);
-			// TODO DAVXY : using ticket_secret
-			let _ = ticket_secret;
-			let erased_signature = [0; 64];
+
+			vrf_sign_data.push_transcript_data(&ticket_data.encode());
+
+			let data = vrf_sign_data.challenge::<32>();
+			let erased_pair = ed25519::Pair::from_seed(&ticket_secret.erased_secret);
+			let erased_signature = *erased_pair.sign(&data).as_ref();
+
 			let claim = TicketClaim { erased_signature };
 			(authority_idx, Some(claim))
 		},
 		None => {
-			log::debug!(target: LOG_TARGET, "[TRY SECONDARY]");
+			log::debug!(target: LOG_TARGET, "[TRY SECONDARY (slot {slot})]");
 			(secondary_authority_index(slot, config), None)
 		},
 	};
 
 	let authority_id = config.authorities.get(authority_idx as usize).map(|auth| &auth.0)?;
 
-	let vrf_input = slot_claim_vrf_input(&config.randomness, slot, epoch.epoch_idx);
 	let vrf_signature = keystore
-		.sr25519_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &vrf_input.into())
+		.bandersnatch_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &vrf_sign_data)
 		.ok()
 		.flatten()?;
 
@@ -103,7 +107,8 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 		config.authorities.len() as u32,
 	);
 	// TODO-SASS-P4 remove me
-	log::debug!(target: LOG_TARGET, "Tickets threshold: {:016x}", threshold);
+	log::debug!(target: LOG_TARGET, "Generating tickets for epoch {} @ slot {}", epoch.epoch_idx, epoch.start_slot);
+	log::debug!(target: LOG_TARGET, "    threshold: {threshold:016x}");
 
 	let authorities = config.authorities.iter().enumerate().map(|(index, a)| (index, &a.0));
 	for (authority_idx, authority_id) in authorities {
@@ -115,7 +120,7 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 			let vrf_input = ticket_id_vrf_input(&config.randomness, attempt_idx, epoch.epoch_idx);
 
 			let vrf_preout = keystore
-				.sr25519_vrf_output(AuthorityId::ID, authority_id.as_ref(), &vrf_input)
+				.bandersnatch_vrf_output(AuthorityId::ID, authority_id.as_ref(), &vrf_input)
 				.ok()??;
 
 			let ticket_id = ticket_id(&vrf_input, &vrf_preout);
@@ -123,9 +128,9 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 				return None
 			}
 
-			// TODO DAVXY: compute proper erased_secret/public and revealed_public
-			let erased_secret = [0; 32];
-			let erased_public = [0; 32];
+			let (erased_pair, erased_seed) = ed25519::Pair::generate();
+
+			let erased_public: [u8; 32] = *erased_pair.public().as_ref();
 			let revealed_public = [0; 32];
 			let data = TicketData { attempt_idx, erased_public, revealed_public };
 
@@ -133,13 +138,14 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 			let ring_proof = ();
 			let ticket_envelope = TicketEnvelope { data, vrf_preout, ring_proof };
 
-			let ticket_secret = TicketSecret { attempt_idx, erased_secret };
+			let ticket_secret = TicketSecret { attempt_idx, erased_secret: erased_seed };
 
 			Some((ticket_envelope, ticket_id, ticket_secret))
 		};
 
 		for attempt in 0..max_attempts {
 			if let Some((envelope, ticket_id, ticket_secret)) = make_ticket(attempt) {
+				log::debug!(target: LOG_TARGET, "    → {ticket_id:016x}");
 				epoch
 					.tickets_aux
 					.insert(ticket_id, (authority_idx as AuthorityIndex, ticket_secret));
@@ -220,21 +226,16 @@ where
 		slot: Slot,
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) -> Option<Self::Claim> {
-		debug!(target: LOG_TARGET, "Attempting to claim slot {}", slot);
-
 		// Get the next slot ticket from the runtime.
 		let maybe_ticket =
 			self.client.runtime_api().slot_ticket(parent_header.hash(), slot).ok()?;
 
-		// TODO-SASS-P2: remove me
-		debug!(target: LOG_TARGET, "parent {}", parent_header.hash());
+		let mut epoch_changes = self.epoch_changes.shared_data_locked();
+		let mut epoch = epoch_changes.viable_epoch_mut(epoch_descriptor, |slot| Epoch::genesis(&self.genesis_config, slot))?;
 
 		let claim = authorship::claim_slot(
 			slot,
-			self.epoch_changes
-				.shared_data()
-				.viable_epoch(epoch_descriptor, |slot| Epoch::genesis(&self.genesis_config, slot))?
-				.as_ref(),
+			&mut epoch.as_mut(),
 			maybe_ticket,
 			&self.keystore,
 		);
@@ -282,6 +283,10 @@ where
 		// TODO DAVXY SASS-32: this seal may be revisited.
 		// We already have a VRF signature, this could be completelly redundant.
 		// The header.hash() can be added to the VRF signed data.
+		// OR maybe we can maintain this seal but compute it using some of the data in the
+		// pre-digest
+		// Another option is to not recompute this signature and push (reuse) the one in the
+		// pre-digest as the seal
 		let signature = self
 			.keystore
 			.sign_with(
