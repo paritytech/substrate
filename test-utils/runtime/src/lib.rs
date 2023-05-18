@@ -470,6 +470,28 @@ pub(crate) const TEST_RUNTIME_BABE_EPOCH_CONFIGURATION: BabeEpochConfiguration =
 		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};
 
+
+use frame_support::traits::GenesisBuild;
+
+pub struct GenesisBuilderHelper<R, GC>(sp_std::marker::PhantomData<(R, GC)>);
+
+impl<R, GC> GenesisBuilderHelper<R, GC>
+where
+	GC: Default + GenesisBuild<R>,
+{
+	pub fn default_genesis_config_as_json() -> sp_std::vec::Vec<u8> {
+		serde_json::to_string(&GC::default())
+			.expect("serialization to json is expected to work. qed.")
+			.into_bytes()
+	}
+
+	pub fn build_genesis_config_from_json(json: sp_std::vec::Vec<u8>) {
+		let gc = serde_json::from_slice::<GC>(&json)
+			.expect("provided json blob is expected to be valid. qed.");
+		<GC as GenesisBuild<R>>::build(&gc);
+	}
+}
+
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
@@ -714,14 +736,14 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl sp_genesis_builder::api::GenesisBuilder<Block> for Runtime {
+	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
 		fn default_genesis_config_as_json() -> Vec<u8> {
-			sp_genesis_builder::helper::GenesisBuilder::<Runtime, GenesisConfig>::default_genesis_config_as_json()
+			GenesisBuilderHelper::<Runtime, GenesisConfig>::default_genesis_config_as_json()
 		}
 
 		fn build_genesis_config_from_json(json: sp_std::vec::Vec<u8>) {
 			log::trace!("build_genesis_config_from_json: {:?}", json);
-			sp_genesis_builder::helper::GenesisBuilder::<Runtime, GenesisConfig>::build_genesis_config_from_json(json)
+			GenesisBuilderHelper::<Runtime, GenesisConfig>::build_genesis_config_from_json(json)
 		}
 	}
 }
