@@ -1711,6 +1711,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		ErasStakers::<T>::iter_prefix(era).any(|(validator, exposures)| {
 			validator == *who || exposures.others.iter().any(|i| i.who == *who)
 		})
+	}
 	fn status(
 		who: &Self::AccountId,
 	) -> Result<sp_staking::StakerStatus<Self::AccountId>, DispatchError> {

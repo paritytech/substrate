@@ -978,7 +978,7 @@ fn cannot_transfer_staked_balance() {
 		// Confirm account 11 has some free balance
 		assert_eq!(Balances::free_balance(11), 1000);
 		// Confirm account 11 (via controller) is totally staked
-		assert_eq!(Staking::eras_stakers(active_era(), 11).total, 1000);
+		assert_eq!(Staking::eras_stakers(active_era(), &11).total, 1000);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
 			Balances::transfer_allow_death(RuntimeOrigin::signed(11), 21, 1),
@@ -1003,7 +1003,7 @@ fn cannot_transfer_staked_balance_2() {
 		// Confirm account 21 has some free balance
 		assert_eq!(Balances::free_balance(21), 2000);
 		// Confirm account 21 (via controller) is totally staked
-		assert_eq!(Staking::eras_stakers(active_era(), 21).total, 1000);
+		assert_eq!(Staking::eras_stakers(active_era(), &21).total, 1000);
 		// Confirm account 21 can transfer at most 1000
 		assert_noop!(
 			Balances::transfer_allow_death(RuntimeOrigin::signed(21), 21, 1001),
@@ -1095,6 +1095,8 @@ fn reward_destination_works() {
 		assert_eq!(Staking::payee(&11), RewardDestination::Stash);
 		// Check that reward went to the stash account
 		assert_eq!(Balances::free_balance(11), 1000 + total_payout_0 + total_payout_1);
+		// Record this value
+		let recorded_stash_balance = 1000 + total_payout_0 + total_payout_1;
 		// Check that amount at stake is NOT increased
 		assert_eq!(
 			Staking::ledger(&11),
@@ -1126,7 +1128,7 @@ fn reward_destination_works() {
 		// Check that RewardDestination is Controller
 		assert_eq!(Staking::payee(&11), RewardDestination::Controller);
 		// Check that reward went to the controller account
-		assert_eq!(Balances::free_balance(11), 23150 + total_payout_2);
+		assert_eq!(Balances::free_balance(11), recorded_stash_balance + total_payout_2);
 		// Check that amount at stake is NOT increased
 		assert_eq!(
 			Staking::ledger(&11),
@@ -1142,8 +1144,6 @@ fn reward_destination_works() {
 		// (era 2, page 0) is claimed
 		assert_eq!(Staking::claimed_rewards(2, &11), vec![0]);
 
-		// Check that amount in staked account is NOT increased.
-		assert_eq!(Balances::free_balance(11), recorded_stash_balance);
 	});
 }
 
@@ -1775,8 +1775,8 @@ fn reward_to_stake_works() {
 			mock::start_active_era(1);
 			mock::make_all_reward_payment(0);
 
-			assert_eq!(Staking::eras_stakers(active_era(), 11).total, 1000);
-			assert_eq!(Staking::eras_stakers(active_era(), 21).total, 69);
+			assert_eq!(Staking::eras_stakers(active_era(), &11).total, 1000);
+			assert_eq!(Staking::eras_stakers(active_era(), &21).total, 2000);
 
 			let _11_balance = Balances::free_balance(&11);
 			assert_eq!(_11_balance, 1000 + total_payout_0 / 2);
@@ -1786,7 +1786,7 @@ fn reward_to_stake_works() {
 
 			// -- new infos
 			assert_eq!(Staking::eras_stakers(active_era(), &11).total, 1000 + total_payout_0 / 2);
-			assert_eq!(Staking::eras_stakers(active_era(), &21).total, 69 + total_payout_0 / 2);
+			assert_eq!(Staking::eras_stakers(active_era(), &21).total, 2000 + total_payout_0 / 2);
 		});
 }
 
@@ -2004,9 +2004,9 @@ fn bond_with_little_staked_value_bounded() {
 			mock::start_active_era(1);
 			mock::make_all_reward_payment(0);
 
-			// 2 is elected.
+			// 1 is elected.
 			assert_eq_uvec!(validator_controllers(), vec![21, 11, 1]);
-			assert_eq!(Staking::eras_stakers(active_era(), &1).total, 0);
+			assert_eq!(Staking::eras_stakers(active_era(), &2).total, 0);
 
 			// Old ones are rewarded.
 			assert_eq_error_rate!(
@@ -2024,7 +2024,7 @@ fn bond_with_little_staked_value_bounded() {
 			mock::make_all_reward_payment(1);
 
 			assert_eq_uvec!(validator_controllers(), vec![21, 11, 1]);
-			assert_eq!(Staking::eras_stakers(active_era(), &1).total, 0);
+			assert_eq!(Staking::eras_stakers(active_era(), &2).total, 0);
 
 			// 2 is now rewarded.
 			assert_eq_error_rate!(
@@ -3737,16 +3737,14 @@ fn test_nominators_are_rewarded_for_all_exposure_page() {
 
 		for i in 0..nominator_count {
 			let stash = 10_000 + i as AccountId;
-			let controller = 20_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
 			Balances::make_free_balance_be(&stash, balance);
 			assert_ok!(Staking::bond(
 				RuntimeOrigin::signed(stash),
-				controller,
 				balance,
 				RewardDestination::Stash
 			));
-			assert_ok!(Staking::nominate(RuntimeOrigin::signed(controller), vec![11]));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(stash), vec![11]));
 		}
 		mock::start_active_era(1);
 
@@ -3822,11 +3820,11 @@ fn test_multi_page_payout_stakers_by_page() {
 		let pre_payout_total_issuance = Balances::total_issuance();
 		RewardOnUnbalanceWasCalled::set(false);
 
-		let controller_balance_before_p0_payout = Balances::free_balance(&10);
+		let controller_balance_before_p0_payout = Balances::free_balance(&11);
 		// Payout rewards for first exposure page
 		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, 0));
 
-		let controller_balance_after_p0_payout = Balances::free_balance(&10);
+		let controller_balance_after_p0_payout = Balances::free_balance(&11);
 
 		// verify rewards have been paid out but still some left
 		assert!(Balances::total_issuance() > pre_payout_total_issuance);
@@ -3839,7 +3837,7 @@ fn test_multi_page_payout_stakers_by_page() {
 		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, 1));
 
 		// verify the validator was not rewarded the second time
-		assert_eq!(Balances::free_balance(&10), controller_balance_after_p0_payout);
+		assert_eq!(Balances::free_balance(&11), controller_balance_after_p0_payout);
 
 		// verify all rewards have been paid out
 		assert_eq_error_rate!(Balances::total_issuance(), pre_payout_total_issuance + payout, 2);
@@ -3853,7 +3851,7 @@ fn test_multi_page_payout_stakers_by_page() {
 		}
 
 		// verify we no longer track rewards in `legacy_claimed_rewards` vec
-		let ledger = Staking::ledger(&10);
+		let ledger = Staking::ledger(&11);
 		assert_eq!(
 			Staking::ledger(&11),
 			Some(StakingLedger {
@@ -3900,7 +3898,7 @@ fn test_multi_page_payout_stakers_by_page() {
 				assert_eq!(
 					EraInfo::<Test>::is_rewards_claimed_with_legacy_fallback(
 						i - 1,
-						Staking::ledger(&10).as_ref().unwrap(),
+						Staking::ledger(&11).as_ref().unwrap(),
 						&11,
 						page
 					),
@@ -3984,7 +3982,7 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 		// Track the exposure of the validator and all nominators.
 		let mut total_exposure = balance;
 		// Create a validator:
-		bond_validator(11, 10, balance); // Default(64)
+		bond_validator(11, balance); // Default(64)
 		assert_eq!(Validators::<Test>::count(), 1);
 
 		let err_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
@@ -3992,7 +3990,7 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 		// Create nominators, targeting stash of validators
 		for i in 0..100 {
 			let bond_amount = balance + i as Balance;
-			bond_nominator(1000 + i, 100 + i, bond_amount, vec![11]);
+			bond_nominator(1000 + i, bond_amount, vec![11]);
 			// with multi page reward payout, payout exposure is same as total exposure.
 			total_exposure += bond_amount;
 		}
@@ -4021,7 +4019,7 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 		let pre_payout_total_issuance = Balances::total_issuance();
 		RewardOnUnbalanceWasCalled::set(false);
 
-		let controller_balance_before_p0_payout = Balances::free_balance(&10);
+		let controller_balance_before_p0_payout = Balances::free_balance(&11);
 		// Payout rewards for first exposure page
 		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
 		// page 0 is claimed
@@ -4030,7 +4028,7 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 
-		let controller_balance_after_p0_payout = Balances::free_balance(&10);
+		let controller_balance_after_p0_payout = Balances::free_balance(&11);
 
 		// verify rewards have been paid out but still some left
 		assert!(Balances::total_issuance() > pre_payout_total_issuance);
@@ -4049,7 +4047,7 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 		);
 
 		// verify the validator was not rewarded the second time
-		assert_eq!(Balances::free_balance(&10), controller_balance_after_p0_payout);
+		assert_eq!(Balances::free_balance(&11), controller_balance_after_p0_payout);
 
 		// verify all rewards have been paid out
 		assert_eq_error_rate!(Balances::total_issuance(), pre_payout_total_issuance + payout, 2);
@@ -4057,13 +4055,13 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 
 		// verify all nominators of validator 11 are paid out, including the validator
 		// Validator payout goes to controller.
-		assert!(Balances::free_balance(&10) > balance);
+		assert!(Balances::free_balance(&11) > balance);
 		for i in 0..100 {
-			assert!(Balances::free_balance(&(100 + i)) > balance + i as Balance);
+			assert!(Balances::free_balance(&(1000 + i)) > balance + i as Balance);
 		}
 
 		// verify we no longer track rewards in `legacy_claimed_rewards` vec
-		let ledger = Staking::ledger(&10);
+		let ledger = Staking::ledger(&11);
 		assert_eq!(
 			Staking::ledger(&11),
 			Some(StakingLedger {
@@ -4215,13 +4213,13 @@ fn test_page_count_and_size() {
 		let balance = 1000;
 		// Track the exposure of the validator and all nominators.
 		// Create a validator:
-		bond_validator(11, 10, balance); // Default(64)
+		bond_validator(11, balance); // Default(64)
 		assert_eq!(Validators::<Test>::count(), 1);
 
 		// Create nominators, targeting stash of validators
 		for i in 0..100 {
 			let bond_amount = balance + i as Balance;
-			bond_nominator(1000 + i, 100 + i, bond_amount, vec![11]);
+			bond_nominator(1000 + i, bond_amount, vec![11]);
 		}
 
 		mock::start_active_era(1);
@@ -4427,9 +4425,9 @@ fn test_commission_paid_across_pages() {
 		let balance = 1;
 		let commission = 50;
 		// Create a validator:
-		bond_validator(11, 10, balance);
+		bond_validator(11, balance);
 		assert_ok!(Staking::validate(
-			RuntimeOrigin::signed(10),
+			RuntimeOrigin::signed(11),
 			ValidatorPrefs { commission: Perbill::from_percent(commission), blocked: false }
 		));
 		assert_eq!(Validators::<Test>::count(), 1);
@@ -4437,7 +4435,7 @@ fn test_commission_paid_across_pages() {
 		// Create nominators, targeting stash of validators
 		for i in 0..200 {
 			let bond_amount = balance + i as Balance;
-			bond_nominator(1000 + i, 100 + i, bond_amount, vec![11]);
+			bond_nominator(1000 + i, bond_amount, vec![11]);
 		}
 
 		mock::start_active_era(1);
@@ -4451,25 +4449,25 @@ fn test_commission_paid_across_pages() {
 		let payout = current_total_payout_for_duration(reward_time_per_era());
 		mock::start_active_era(2);
 
-		let initial_balance = Balances::free_balance(&10);
+		let initial_balance = Balances::free_balance(&11);
 		// Payout rewards for first exposure page
 		assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, 0));
 
-		let controller_balance_after_p0_payout = Balances::free_balance(&10);
+		let controller_balance_after_p0_payout = Balances::free_balance(&11);
 
 		// some commission is paid
 		assert!(initial_balance < controller_balance_after_p0_payout);
 
 		// payout all pages
 		for i in 1..4 {
-			let before_balance = Balances::free_balance(&10);
+			let before_balance = Balances::free_balance(&11);
 			assert_ok!(Staking::payout_stakers_by_page(RuntimeOrigin::signed(1337), 11, 1, i));
-			let after_balance = Balances::free_balance(&10);
+			let after_balance = Balances::free_balance(&11);
 			// some commission is paid for every page
 			assert!(before_balance < after_balance);
 		}
 
-		assert_eq_error_rate!(Balances::free_balance(&10), initial_balance + payout / 2, 1,);
+		assert_eq_error_rate!(Balances::free_balance(&11), initial_balance + payout / 2, 1,);
 	});
 }
 
@@ -6251,7 +6249,7 @@ fn should_retain_era_info_only_upto_history_depth() {
 fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		// Create a validator:
-		bond_validator(11, 10, 1000);
+		bond_validator(11, 1000);
 
 		// reward validator for next 2 eras
 		mock::start_active_era(1);
@@ -6264,7 +6262,7 @@ fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
 		assert_eq!(
 			EraInfo::<Test>::is_rewards_claimed_with_legacy_fallback(
 				1,
-				Staking::ledger(10).as_ref().unwrap(),
+				Staking::ledger(11).as_ref().unwrap(),
 				&11,
 				0
 			),
@@ -6273,7 +6271,7 @@ fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
 		assert_eq!(
 			EraInfo::<Test>::is_rewards_claimed_with_legacy_fallback(
 				2,
-				Staking::ledger(10).as_ref().unwrap(),
+				Staking::ledger(11).as_ref().unwrap(),
 				&11,
 				0
 			),
@@ -6282,7 +6280,7 @@ fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
 
 		// assume reward claim for era 1 was stored in legacy storage
 		Ledger::<Test>::insert(
-			10,
+			11,
 			StakingLedger {
 				stash: 11,
 				total: 1000,
@@ -6301,7 +6299,7 @@ fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
 		assert_eq!(
 			EraInfo::<Test>::is_rewards_claimed_with_legacy_fallback(
 				1,
-				Staking::ledger(10).as_ref().unwrap(),
+				Staking::ledger(11).as_ref().unwrap(),
 				&11,
 				0
 			),
@@ -6313,7 +6311,7 @@ fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
 		assert_eq!(
 			EraInfo::<Test>::is_rewards_claimed_with_legacy_fallback(
 				2,
-				Staking::ledger(10).as_ref().unwrap(),
+				Staking::ledger(11).as_ref().unwrap(),
 				&11,
 				0
 			),
@@ -6321,7 +6319,7 @@ fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
 		);
 		// but the new claimed rewards for era 2 is not stored in legacy storage
 		assert_eq!(
-			Ledger::<Test>::get(10).unwrap(),
+			Ledger::<Test>::get(11).unwrap(),
 			StakingLedger {
 				stash: 11,
 				total: 1000,
@@ -6344,14 +6342,14 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		// case 1: exposure exist in clipped.
 		// set page cap to 10
 		MaxExposurePageSize::set(10);
-		bond_validator(11, 10, 1000);
+		bond_validator(11, 1000);
 		let mut expected_individual_exposures: Vec<IndividualExposure<AccountId, Balance>> = vec![];
 		let mut total_exposure: Balance = 0;
 		// 1st exposure page
 		for i in 0..10 {
 			let who = 1000 + i;
 			let value = 1000 + i as Balance;
-			bond_nominator(who, 100 + i, value, vec![11]);
+			bond_nominator(who, value, vec![11]);
 			expected_individual_exposures.push(IndividualExposure { who, value });
 			total_exposure += value;
 		}
@@ -6359,7 +6357,7 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		for i in 10..15 {
 			let who = 1000 + i;
 			let value = 1000 + i as Balance;
-			bond_nominator(who, 100 + i, value, vec![11]);
+			bond_nominator(who, value, vec![11]);
 			expected_individual_exposures.push(IndividualExposure { who, value });
 			total_exposure += value;
 		}
