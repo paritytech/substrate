@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 pallet-beefy-mmr = { version = "4.0.0-dev", default-features = false, path = "../../frame/beefy-mmr" }
-sc-genesis-builder = { version = "0.1.0-dev", default-features = false, path = "../../client/genesis-builder" }
+sp-genesis-builder = { version = "0.1.0-dev", default-features = false, path = "../../primitives/genesis-builder" }
 sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura", features = ["serde"] }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe", features = ["serde"] }
@@ -75,7 +75,7 @@ default = [
 ]
 std = [
 	"array-bytes",
-	"sc-genesis-builder/std",
+	"sp-genesis-builder/std",
 	"sp-application-crypto/std",
 	"sp-consensus-aura/std",
 	"sp-consensus-babe/std",

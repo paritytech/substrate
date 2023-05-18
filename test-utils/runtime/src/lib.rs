@@ -714,14 +714,14 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl sc_genesis_builder::api::GenesisBuilder<Block> for Runtime {
+	impl sp_genesis_builder::api::GenesisBuilder<Block> for Runtime {
 		fn default_genesis_config_as_json() -> Vec<u8> {
-			sc_genesis_builder::helper::GenesisBuilder::<Runtime, GenesisConfig>::default_genesis_config_as_json()
+			sp_genesis_builder::helper::GenesisBuilder::<Runtime, GenesisConfig>::default_genesis_config_as_json()
 		}
 
 		fn build_genesis_config_from_json(json: sp_std::vec::Vec<u8>) {
 			log::trace!("build_genesis_config_from_json: {:?}", json);
-			sc_genesis_builder::helper::GenesisBuilder::<Runtime, GenesisConfig>::build_genesis_config_from_json(json)
+			sp_genesis_builder::helper::GenesisBuilder::<Runtime, GenesisConfig>::build_genesis_config_from_json(json)
 		}
 	}
 }
