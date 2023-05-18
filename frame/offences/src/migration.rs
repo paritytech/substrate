@@ -52,8 +52,10 @@ pub mod v1 {
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			let onchain = Pallet::<T>::on_chain_storage_version();
-			ensure!(onchain < 1, "pallet_offences::MigrateToV1 migration can be deleted");
+			ensure!(
+				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
+				"Offences: the on_chain version is equal or more than the current one"
+			);
 
 			log::info!(
 				target: LOG_TARGET,
