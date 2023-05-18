@@ -252,10 +252,8 @@ impl TraitPair for Pair {
 	/// Returns true if the signature is good.
 	fn verify<M: AsRef<[u8]>>(signature: &Self::Signature, data: M, public: &Self::Public) -> bool {
 		let data = vrf::VrfSignData::new(SIGNING_CTX, &[data.as_ref()], vrf::VrfIosVec::default());
-		let signature = vrf::VrfSignature {
-			signature: signature.clone(),
-			vrf_outputs: vrf::VrfIosVec::default(),
-		};
+		let signature =
+			vrf::VrfSignature { signature: *signature, vrf_outputs: vrf::VrfIosVec::default() };
 		public.vrf_verify(&data, &signature)
 	}
 
