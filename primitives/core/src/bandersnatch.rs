@@ -380,6 +380,32 @@ pub mod vrf {
 			let bounded = VrfIosVec::try_from(vrf_inputs).map_err(|_| ())?;
 			Ok(Self::new(label, transcript_data, bounded))
 		}
+
+		/// Appends a message to the transcript
+		pub fn push_transcript_data(
+			&mut self,
+			data: &[u8],
+		) {
+			self.transcript.append_slice(data);
+		}
+
+		/// Appends a `VrfInput` to the vrf inputs to be signed.
+		/// On failure, returns the `VrfInput`.
+		pub fn push_vrf_input(
+			&mut self,
+			vrf_input: VrfInput,
+		) -> Result<(), VrfInput> {
+			self.vrf_inputs.try_push(vrf_input)
+		}
+
+		/// Create challenge from input transcript within the signing data.
+		pub fn challenge<const N: usize>(&self) -> [u8; N] {
+			let mut output = [0; N];
+			let mut t = self.transcript.clone();
+			let mut reader = t.challenge(b"Prehashed for Ed25519");
+			reader.read_bytes(&mut output);
+			output
+		}
 	}
 
 	/// VRF signature.

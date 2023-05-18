@@ -24,7 +24,7 @@ use sp_consensus_sassafras::{
 	digests::PreDigest, slot_claim_sign_data, ticket_id, ticket_id_threshold, AuthorityId, Slot,
 	TicketClaim, TicketData, TicketEnvelope, TicketId,
 };
-use sp_core::{twox_64, ByteArray};
+use sp_core::{twox_64, ByteArray, ed25519};
 
 use std::pin::Pin;
 
@@ -41,7 +41,7 @@ pub(crate) fn secondary_authority_index(
 /// If ticket is `None`, then the slot should be claimed using the fallback mechanism.
 pub(crate) fn claim_slot(
 	slot: Slot,
-	epoch: &Epoch,
+	epoch: &mut Epoch,
 	maybe_ticket: Option<(TicketId, TicketData)>,
 	keystore: &KeystorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
@@ -51,20 +51,25 @@ pub(crate) fn claim_slot(
 		return None
 	}
 
+	let mut vrf_sign_data = slot_claim_sign_data(&config.randomness, slot, epoch.epoch_idx);
+
 	let (authority_idx, ticket_claim) = match maybe_ticket {
 		Some((ticket_id, ticket_data)) => {
 			log::debug!(target: LOG_TARGET, "[TRY PRIMARY (slot {slot}, tkt = {ticket_id:16x})]");
-			let (authority_idx, ticket_secret) = epoch.tickets_aux.get(&ticket_id)?.clone();
+			let (authority_idx, ticket_secret) = epoch.tickets_aux.remove(&ticket_id)?.clone();
 			log::debug!(
 				target: LOG_TARGET,
 				"   got ticket: auth: {}, attempt: {}",
 				authority_idx,
 				ticket_data.attempt_idx
 			);
-			let erased_pair = sp_core::ed25519::Pair::from_seed(&ticket_secret.erased_secret);
-			// TODO DAVXY : sign proper data...
-			let data_to_sign = b"dummy";
-			let erased_signature: [u8; 64] = *erased_pair.sign(data_to_sign).as_ref();
+
+			vrf_sign_data.push_transcript_data(&ticket_data.encode());
+
+			let data = vrf_sign_data.challenge::<32>();
+			let erased_pair = ed25519::Pair::from_seed(&ticket_secret.erased_secret);
+			let erased_signature = *erased_pair.sign(&data).as_ref();
+
 			let claim = TicketClaim { erased_signature };
 			(authority_idx, Some(claim))
 		},
@@ -76,9 +81,8 @@ pub(crate) fn claim_slot(
 
 	let authority_id = config.authorities.get(authority_idx as usize).map(|auth| &auth.0)?;
 
-	let data = slot_claim_sign_data(&config.randomness, slot, epoch.epoch_idx);
 	let vrf_signature = keystore
-		.bandersnatch_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &data)
+		.bandersnatch_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &vrf_sign_data)
 		.ok()
 		.flatten()?;
 
@@ -124,8 +128,7 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 				return None
 			}
 
-			// TODO DAVXY: compute proper erased_secret/public and revealed_public
-			let (erased_pair, erased_seed) = sp_core::ed25519::Pair::generate();
+			let (erased_pair, erased_seed) = ed25519::Pair::generate();
 
 			let erased_public: [u8; 32] = *erased_pair.public().as_ref();
 			let revealed_public = [0; 32];
@@ -227,12 +230,12 @@ where
 		let maybe_ticket =
 			self.client.runtime_api().slot_ticket(parent_header.hash(), slot).ok()?;
 
+		let mut epoch_changes = self.epoch_changes.shared_data_locked();
+		let mut epoch = epoch_changes.viable_epoch_mut(epoch_descriptor, |slot| Epoch::genesis(&self.genesis_config, slot))?;
+
 		let claim = authorship::claim_slot(
 			slot,
-			self.epoch_changes
-				.shared_data()
-				.viable_epoch(epoch_descriptor, |slot| Epoch::genesis(&self.genesis_config, slot))?
-				.as_ref(),
+			&mut epoch.as_mut(),
 			maybe_ticket,
 			&self.keystore,
 		);
