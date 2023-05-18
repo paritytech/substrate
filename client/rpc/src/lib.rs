@@ -114,7 +114,11 @@ pub mod utils {
 		};
 
 		executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
-		rx.await.expect("Sender sends always a message; qed")
+
+		// The RPC server is not gracefully shutdown
+		// and it's possible that the message isn't
+		// received here.
+		rx.await.unwrap_or(SubscriptionResponse::Closed)
 	}
 
 	/// Subscription response type for substrate.
@@ -162,6 +166,9 @@ pub mod utils {
 
 		executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 
-		rx.await.expect("Sender sends always a message; qed")
+		// The RPC server is not gracefully shutdown
+		// and it's possible that the message isn't
+		// received here.
+		rx.await.unwrap_or(SubscriptionResponse::Closed)
 	}
 }
