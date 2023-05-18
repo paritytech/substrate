@@ -27,7 +27,7 @@ use frame_support::{
 use pallet_session::historical as pallet_session_historical;
 use sp_consensus_babe::{AuthorityId, AuthorityPair, Randomness, Slot, VrfSignature};
 use sp_core::{
-	crypto::{KeyTypeId, Pair, VrfSigner},
+	crypto::{KeyTypeId, Pair, VrfSecret},
 	H256, U256,
 };
 use sp_io;
@@ -314,17 +314,16 @@ pub fn make_secondary_vrf_pre_digest(
 	Digest { logs: vec![log] }
 }
 
-pub fn make_vrf_output(
+pub fn make_vrf_signature_and_randomness(
 	slot: Slot,
 	pair: &sp_consensus_babe::AuthorityPair,
 ) -> (VrfSignature, Randomness) {
-	let transcript = sp_consensus_babe::make_transcript(&Babe::randomness(), slot, 0);
+	let transcript = sp_consensus_babe::make_vrf_transcript(&Babe::randomness(), slot, 0);
 
-	let signature = pair.as_ref().vrf_sign(&transcript);
+	let randomness =
+		pair.as_ref().make_bytes(sp_consensus_babe::RANDOMNESS_VRF_CONTEXT, &transcript);
 
-	let randomness = pair
-		.as_ref()
-		.make_bytes::<Randomness>(sp_consensus_babe::RANDOMNESS_VRF_CONTEXT, &transcript);
+	let signature = pair.as_ref().vrf_sign(&transcript.into());
 
 	(signature, randomness)
 }
@@ -369,11 +368,9 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::Tes
 		.assimilate_storage(&mut t)
 		.unwrap();
 
-	// controllers are the index + 1000
+	// controllers are same as stash
 	let stakers: Vec<_> = (0..authorities.len())
-		.map(|i| {
-			(i as u64, i as u64 + 1000, 10_000, pallet_staking::StakerStatus::<u64>::Validator)
-		})
+		.map(|i| (i as u64, i as u64, 10_000, pallet_staking::StakerStatus::<u64>::Validator))
 		.collect();
 
 	let staking_config = pallet_staking::GenesisConfig::<Test> {

@@ -16,7 +16,7 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 log = { version = "0.4.17", default-features = false }
 mmr-lib = { package = "ckb-merkle-mountain-range", version = "0.5.2", default-features = false }
-serde = { version = "1.0.136", features = ["derive"], optional = true }
+serde = { version = "1.0.136", features = ["derive", "alloc"], default-features = false, optional = true }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
 sp-core = { version = "7.0.0", default-features = false, path = "../core" }
 sp-debug-derive = { version = "5.0.0", default-features = false, path = "../debug-derive" }
@@ -33,10 +33,18 @@ std = [
 	"codec/std",
 	"log/std",
 	"mmr-lib/std",
-	"serde",
+	"serde/std",
 	"sp-api/std",
 	"sp-core/std",
 	"sp-debug-derive/std",
 	"sp-runtime/std",
 	"sp-std/std",
+]
+
+# Serde support without relying on std features.
+serde = [
+	"dep:serde",
+	"scale-info/serde",
+	"sp-core/serde",
+	"sp-runtime/serde",
 ]

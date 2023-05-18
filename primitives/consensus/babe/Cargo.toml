@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 async-trait = { version = "0.1.57", optional = true }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-serde = { version = "1.0.136", features = ["derive"], optional = true }
+serde = { version = "1.0.136", default-features = false, features = ["derive", "alloc"], optional = true }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../api" }
 sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../application-crypto" }
 sp-consensus = { version = "0.10.0-dev", optional = true, path = "../common" }
@@ -34,7 +34,7 @@ std = [
 	"async-trait",
 	"codec/std",
 	"scale-info/std",
-	"serde",
+	"serde/std",
 	"sp-api/std",
 	"sp-application-crypto/std",
 	"sp-consensus",
@@ -45,4 +45,14 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-timestamp",
+]
+
+# Serde support without relying on std features.
+serde = [
+	"dep:serde",
+	"scale-info/serde",
+	"sp-application-crypto/serde",
+	"sp-consensus-slots/serde",
+	"sp-core/serde",
+	"sp-runtime/serde",
 ]

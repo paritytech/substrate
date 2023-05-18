@@ -122,7 +122,10 @@ pub mod v1 {
 			);
 
 			Asset::<T>::iter().for_each(|(_id, asset)| {
-				assert!(asset.status == AssetStatus::Live || asset.status == AssetStatus::Frozen, "assets should only be live or frozen. None should be in destroying status, or undefined state")
+				assert!(
+					asset.status == AssetStatus::Live || asset.status == AssetStatus::Frozen,
+					"assets should only be live or frozen. None should be in destroying status, or undefined state"
+				)
 			});
 			Ok(())
 		}

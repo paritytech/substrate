@@ -15,30 +15,86 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub trait Config: frame_support_test::Config {}
+use sp_core::sr25519;
+use sp_runtime::{
+	generic,
+	traits::{BlakeTwo256, Verify},
+};
 
-frame_support::decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=frame_support_test {}
-}
+#[frame_support::pallet]
+pub mod pallet {
+	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_support_test as frame_system;
 
-frame_support::decl_storage! {
-	trait Store for Module<T: Config> as Test {
-		pub AppendableDM config(t): double_map hasher(identity) u32, hasher(identity) T::BlockNumber => Vec<u32>;
+	#[pallet::pallet]
+	pub struct Pallet<T>(PhantomData<T>);
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config {}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {}
+
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub type AppendableDM<T: Config> =
+		StorageDoubleMap<_, Identity, u32, Identity, T::BlockNumber, Vec<u32>>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub t: Vec<(u32, T::BlockNumber, Vec<u32>)>,
+	}
+
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { t: Default::default() }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			for (k1, k2, v) in &self.t {
+				<AppendableDM<T>>::insert(k1, k2, v);
+			}
+		}
 	}
 }
 
-struct Test;
+pub type BlockNumber = u32;
+pub type Signature = sr25519::Signature;
+pub type AccountId = <Signature as Verify>::Signer;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+
+frame_support::construct_runtime!(
+	pub enum Test
+	where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_support_test,
+		MyPallet: pallet,
+	}
+);
 
 impl frame_support_test::Config for Test {
-	type BlockNumber = u32;
-	type RuntimeOrigin = ();
-	type PalletInfo = frame_support_test::PanicPalletInfo;
+	type BlockNumber = BlockNumber;
+	type AccountId = AccountId;
+	type BaseCallFilter = frame_support::traits::Everything;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
+	type PalletInfo = PalletInfo;
 	type DbWeight = ();
 }
 
-impl Config for Test {}
+impl pallet::Config for Test {}
 
 #[test]
 fn init_genesis_config() {
-	GenesisConfig::<Test>::default();
+	pallet::GenesisConfig::<Test>::default();
 }
