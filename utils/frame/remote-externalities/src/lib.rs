@@ -356,12 +356,7 @@ where
 	) -> Result<Vec<StorageKey>, &'static str> {
 		self.as_online()
 			.rpc_client()
-			.storage_keys_paged(
-				prefix,
-				Self::DEFAULT_KEY_DOWNLOAD_PAGE,
-				start_key.clone(),
-				Some(at),
-			)
+			.storage_keys_paged(prefix, Self::DEFAULT_KEY_DOWNLOAD_PAGE, start_key, Some(at))
 			.await
 			.map_err(|e| {
 				error!(target: LOG_TARGET, "Error = {:?}", e);
