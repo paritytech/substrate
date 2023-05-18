@@ -54,7 +54,7 @@ pub mod v1 {
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			ensure!(
 				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
-				"Offences: the on_chain version is equal or more than the current one"
+				"offences::migration::v1: the on_chain version is equal or more than the current one"
 			);
 
 			log::info!(
