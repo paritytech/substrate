@@ -347,6 +347,14 @@ fn process_named_generics(
 		parsed.insert(arg.ident.to_string(), arg.clone());
 	}
 
+	let mut map_mandatory_generics = vec!["Key", "Value"];
+	let mut map_optional_generics = vec!["QueryKind", "OnEmpty", "MaxValues"];
+	if dev_mode {
+		map_optional_generics.push("Hasher");
+	} else {
+		map_mandatory_generics.push("Hasher");
+	}
+
 	let generics = match storage {
 		StorageKind::Value => {
 			check_generics(
@@ -367,20 +375,10 @@ fn process_named_generics(
 			}
 		},
 		StorageKind::Map => {
-			let mandatory_generics: &[&str];
-			let optional_generics: &[&str];
-			if dev_mode {
-				mandatory_generics = &["Key", "Value"];
-				optional_generics = &["Hasher", "QueryKind", "OnEmpty", "MaxValues"];
-			} else {
-				mandatory_generics = &["Hasher", "Key", "Value"];
-				optional_generics = &["QueryKind", "OnEmpty", "MaxValues"];
-			}
-
 			check_generics(
 				&parsed,
-				mandatory_generics,
-				optional_generics,
+				&map_mandatory_generics,
+				&map_optional_generics,
 				"StorageMap",
 				args_span,
 			)?;
@@ -404,20 +402,10 @@ fn process_named_generics(
 			}
 		},
 		StorageKind::CountedMap => {
-			let mandatory_generics: &[&str];
-			let optional_generics: &[&str];
-			if dev_mode {
-				mandatory_generics = &["Key", "Value"];
-				optional_generics = &["Hasher", "QueryKind", "OnEmpty", "MaxValues"];
-			} else {
-				mandatory_generics = &["Hasher", "Key", "Value"];
-				optional_generics = &["QueryKind", "OnEmpty", "MaxValues"];
-			}
-
 			check_generics(
 				&parsed,
-				mandatory_generics,
-				optional_generics,
+				&map_mandatory_generics,
+				&map_optional_generics,
 				"CountedStorageMap",
 				args_span,
 			)?;
@@ -441,20 +429,17 @@ fn process_named_generics(
 			}
 		},
 		StorageKind::DoubleMap => {
-			let mandatory_generics: &[&str];
-			let optional_generics: &[&str];
+			let mut double_map_mandatory_generics = vec!["Key1", "Key2", "Value"];
 			if dev_mode {
-				mandatory_generics = &["Key1", "Key2", "Value"];
-				optional_generics = &["Hasher1", "Hasher2", "QueryKind", "OnEmpty", "MaxValues"];
+				map_optional_generics.extend(["Hasher1", "Hasher2"]);
 			} else {
-				mandatory_generics = &["Hasher1", "Key1", "Hasher2", "Key2", "Value"];
-				optional_generics = &["QueryKind", "OnEmpty", "MaxValues"];
+				double_map_mandatory_generics.extend(["Hasher1", "Hasher2"]);
 			}
 
 			check_generics(
 				&parsed,
-				mandatory_generics,
-				optional_generics,
+				&double_map_mandatory_generics,
+				&map_optional_generics,
 				"StorageDoubleMap",
 				args_span,
 			)?;
