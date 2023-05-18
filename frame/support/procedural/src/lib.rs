@@ -879,7 +879,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// the path to the auto-generated `DefaultConfig` for the existing pallet `Config` we want to
 /// base our test config off of.
 ///
-/// Consider the following taken from the `basic` example pallet:
+/// The following is what the `basic` example pallet would look like with a default testing config:
 ///
 /// ```ignore
 /// #[derive_impl(frame_system::prelude::testing::TestDefaultConfig as frame_system::pallet::DefaultConfig)]

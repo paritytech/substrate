@@ -212,8 +212,8 @@ pub mod pallet {
 			/// [`derive_impl`](`frame_support::derive_impl`) to derive a testing pallet config
 			/// based on this one.
 			///
-			/// See `Test` in the "basic" example pallet's `test.rs` for an example of a
-			/// downstream user of this particular `TestDefaultConfig`
+			/// See `Test` in the `default-config` example pallet's `test.rs` for an example of
+			/// a downstream user of this particular `TestDefaultConfig`
 			pub struct TestDefaultConfig;
 
 			#[register_default_impl(TestDefaultConfig)]
