@@ -53,8 +53,8 @@ pub mod v1 {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			ensure!(
-				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
-				"offences::migration::v1: the on_chain version is equal or more than the current one"
+				Pallet::<T>::current_storage_version() >= Pallet::<T>::on_chain_storage_version(),
+				"offences::migration::v1: on_chain version is greater than current version"
 			);
 
 			log::info!(
@@ -67,19 +67,16 @@ pub mod v1 {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
-			let onchain = Pallet::<T>::on_chain_storage_version();
-
-			if onchain > 0 {
+			if Pallet::<T>::on_chain_storage_version() > 0 {
 				log::info!(target: LOG_TARGET, "pallet_offences::MigrateToV1 should be removed");
 				return T::DbWeight::get().reads(1)
 			}
 
 			let keys_removed = v0::ReportsByKindIndex::<T>::clear(u32::MAX, None).unique as u64;
-			let weight = T::DbWeight::get().reads_writes(keys_removed, keys_removed);
-
 			StorageVersion::new(1).put::<Pallet<T>>();
 
-			weight
+			// + 1 for reading/writing the new storage version
+			T::DbWeight::get().reads_writes(keys_removed + 1, keys_removed + 1)
 		}
 
 		#[cfg(feature = "try-runtime")]
