@@ -347,22 +347,37 @@ impl ConfigDef {
 			let is_event = check_event_type(frame_system, trait_item, has_instance)?;
 			let mut no_default = false;
 			has_event_type = has_event_type || is_event;
+			let mut already_constant = false;
 
-			for _ in 0..2 {
-				if let Ok(Some(pallet_attr)) =
-					helper::take_first_item_pallet_attr::<PalletAttr>(trait_item)
-				{
-					match (pallet_attr.typ, &trait_item) {
-						(PalletAttrType::Constant(_), syn::TraitItem::Type(ref typ)) =>
-							consts_metadata.push(ConstMetadataDef::try_from(typ)?),
-						(PalletAttrType::Constant(_), _) =>
+			while let Ok(Some(pallet_attr)) =
+				helper::take_first_item_pallet_attr::<PalletAttr>(trait_item)
+			{
+				match (pallet_attr.typ, &trait_item) {
+					(PalletAttrType::Constant(_), syn::TraitItem::Type(ref typ)) => {
+						if already_constant {
 							return Err(syn::Error::new(
-								trait_item.span(),
-								"Invalid pallet::constant in pallet::config, expected \
+								pallet_attr._bracket.span.join(),
+								"Duplicate #[pallet::constant] attribute not allowed.",
+							))
+						}
+						already_constant = true;
+						consts_metadata.push(ConstMetadataDef::try_from(typ)?);
+					},
+					(PalletAttrType::Constant(_), _) =>
+						return Err(syn::Error::new(
+							trait_item.span(),
+							"Invalid pallet::constant in pallet::config, expected \
 								type trait item",
-							)),
-						(PalletAttrType::NoDefault(_), _) => no_default = true,
-					}
+						)),
+					(PalletAttrType::NoDefault(_), _) => {
+						if no_default {
+							return Err(syn::Error::new(
+								pallet_attr._bracket.span.join(),
+								"Duplicate #[pallet::no_default] attribute not allowed.",
+							))
+						}
+						no_default = true;
+					},
 				}
 			}
 
