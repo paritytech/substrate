@@ -378,7 +378,7 @@ where
 			let retry_strategy = FixedInterval::new(Self::KEYS_PAGE_RETRY_INTERVAL)
 				.take(Self::KEYS_PAGE_MAX_RETRIES);
 			let get_page_closure =
-				|| self.get_keys_single_page(Some(prefix.clone()), last_key.clone(), at.clone());
+				|| self.get_keys_single_page(Some(prefix.clone()), last_key.clone(), at);
 			let page = Retry::spawn(retry_strategy, get_page_closure).await?;
 			let page_len = page.len();
 
