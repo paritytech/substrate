@@ -25,12 +25,12 @@
 //! `ProtocolController` has an imperfect view of the states of the peers. To reduce this
 //! desynchronization, the following measures are taken:
 //!
-//! 1. Network peer events from `Notifictions` are prioritized over actions from external API and
+//! 1. Network peer events from `Notifications` are prioritized over actions from external API and
 //!    internal actions by `ProtocolController` (like slot allocation).
 //! 2. `Notifications` ignores all commands from `ProtocolController` after sending "incoming"
 //!    request until receiving the answer to this "incoming" request.
-//! 3. After sending a "connect" message, `ProtocolController` switchs the state of the peer from
-//!    `Outbound` to `Inbound` if receives an "incoming" request from `Notifications` for this peer.
+//! 3. After sending a "connect" message, `ProtocolController` switches the state of the peer from
+//!    `Outbound` to `Inbound` if it receives an "incoming" request from `Notifications` for this peer.
 //!
 //! These measures do not eliminate confusing commands from `ProtocolController` completely,
 //! so `Notifications` must correctly handle seemingly inconsistent commands, like a "connect"
@@ -522,7 +522,6 @@ impl ProtocolController {
 					self.accept_connection(incoming_index);
 				},
 				PeerState::NotConnected => {
-					// FIXME: unable to call `self.is_banned()` because of borrowed `self`.
 					if self.peer_store.is_banned(&peer_id) {
 						self.reject_connection(incoming_index);
 					} else {
