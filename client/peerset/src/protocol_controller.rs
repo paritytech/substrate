@@ -30,7 +30,8 @@
 //! 2. `Notifications` ignores all commands from `ProtocolController` after sending "incoming"
 //!    request until receiving the answer to this "incoming" request.
 //! 3. After sending a "connect" message, `ProtocolController` switches the state of the peer from
-//!    `Outbound` to `Inbound` if it receives an "incoming" request from `Notifications` for this peer.
+//!    `Outbound` to `Inbound` if it receives an "incoming" request from `Notifications` for this
+//! peer.
 //!
 //! These measures do not eliminate confusing commands from `ProtocolController` completely,
 //! so `Notifications` must correctly handle seemingly inconsistent commands, like a "connect"
@@ -517,18 +518,17 @@ impl ProtocolController {
 			match state {
 				PeerState::Connected(ref mut direction) => {
 					// We are accepting an incoming connection, so ensure the direction is inbound.
-					// (See the note above.)
+					// (See the implementation note above.)
 					*direction = Direction::Inbound;
 					self.accept_connection(incoming_index);
 				},
-				PeerState::NotConnected => {
+				PeerState::NotConnected =>
 					if self.peer_store.is_banned(&peer_id) {
 						self.reject_connection(incoming_index);
 					} else {
 						*state = PeerState::Connected(Direction::Inbound);
 						self.accept_connection(incoming_index);
-					}
-				},
+					},
 			}
 			return
 		}
