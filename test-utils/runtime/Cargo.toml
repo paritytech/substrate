@@ -16,9 +16,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 pallet-beefy-mmr = { version = "4.0.0-dev", default-features = false, path = "../../frame/beefy-mmr" }
 sc-genesis-builder = { version = "0.1.0-dev", default-features = false, path = "../../client/genesis-builder" }
 sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
-sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura" }
-sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
-sp-consensus-beefy = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/beefy" }
+sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura", features = ["serde"] }
+sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe", features = ["serde"] }
+sp-consensus-beefy = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/beefy", features = ["serde"] }
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
@@ -43,7 +43,7 @@ frame-executive = { version = "4.0.0-dev", default-features = false, path = "../
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../frame/timestamp" }
-sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/grandpa" }
+sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/grandpa", features = ["serde"] }
 sp-trie = { version = "7.0.0", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-pool" }
 trie-db = { version = "0.27.0", default-features = false }
