@@ -785,7 +785,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// For a full end-to-end example, see [below](#use-case-auto-derive-test-pallet-config-traits).
 ///
-/// ## Usage
+/// # Usage
 ///
 /// The attribute should be attached to an impl block (strictly speaking a `syn::ItemImpl`) for
 /// which we want to inject defaults in the event of missing trait items in the block.
@@ -829,43 +829,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// locally in the context of the foreign impl and the pallet (or context) in which it is
 /// defined.
 ///
-/// ## Importing & Re-Exporting
-///
-/// Since `#[derive_impl(..)]` is a
-/// [`macro_magic`](https://docs.rs/macro_magic/latest/macro_magic/)-based attribute macro,
-/// special care must be taken when importing and re-exporting it. Glob imports will work
-/// properly, such as `use frame_support::*` to bring `derive_impl` into scope, however any
-/// other use statements involving `derive_impl` should have
-/// [`#[macro_magic::use_attr]`](https://docs.rs/macro_magic/latest/macro_magic/attr.use_attr.html)
-/// attached or your use statement will fail to fully bring the macro into scope.
-///
-/// This brings `derive_impl` into scope in the current context:
-/// ```ignore
-/// #[use_attr]
-/// use frame_support::derive_impl;
-/// ```
-///
-/// This brings `derive_impl` into scope and publicly re-exports it from the current context:
-/// ```ignore
-/// #[use_attr]
-/// pub use frame_support::derive_impl;
-/// ```
-///
-/// ## Expansion
-///
-/// The `#[derive_impl(default_impl_path as disambiguation_path)]` attribute will expand to the
-/// local impl, with any extra items from the foreign impl that aren't present in the local
-/// impl also included. In the case of a colliding trait item, the version of the item that
-/// exists in the local impl will be retained. All imported items are qualified by the
-/// `disambiguation_path`, as discussed above.
-///
-/// ## Handling of Unnamed Trait Items
-///
-/// Items that lack a `syn::Ident` for whatever reason are first checked to see if they
-/// exist, verbatim, in the local/destination trait before they are copied over, so you should
-/// not need to worry about collisions between identical unnamed items.
-///
-/// ## Use-Case: Auto-Derive Test Pallet Config Traits
+/// ## Use-Case Example: Auto-Derive Test Pallet Config Traits
 ///
 /// The `#[derive_imp(..)]` attribute can be used to derive a test pallet `Config` based on an
 /// existing pallet `Config` that has been marked with
@@ -969,6 +933,44 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// See `frame/examples/default-config/tests.rs` for a runnable end-to-end example pallet that
 /// makes use of `derive_impl` to derive its testing config.
+///
+/// # Advanced Usage
+///
+/// ## Importing & Re-Exporting
+///
+/// Since `#[derive_impl(..)]` is a
+/// [`macro_magic`](https://docs.rs/macro_magic/latest/macro_magic/)-based attribute macro,
+/// special care must be taken when importing and re-exporting it. Glob imports will work
+/// properly, such as `use frame_support::*` to bring `derive_impl` into scope, however any
+/// other use statements involving `derive_impl` should have
+/// [`#[macro_magic::use_attr]`](https://docs.rs/macro_magic/latest/macro_magic/attr.use_attr.html)
+/// attached or your use statement will fail to fully bring the macro into scope.
+///
+/// This brings `derive_impl` into scope in the current context:
+/// ```ignore
+/// #[use_attr]
+/// use frame_support::derive_impl;
+/// ```
+///
+/// This brings `derive_impl` into scope and publicly re-exports it from the current context:
+/// ```ignore
+/// #[use_attr]
+/// pub use frame_support::derive_impl;
+/// ```
+///
+/// ## Expansion
+///
+/// The `#[derive_impl(default_impl_path as disambiguation_path)]` attribute will expand to the
+/// local impl, with any extra items from the foreign impl that aren't present in the local
+/// impl also included. In the case of a colliding trait item, the version of the item that
+/// exists in the local impl will be retained. All imported items are qualified by the
+/// `disambiguation_path`, as discussed above.
+///
+/// ## Handling of Unnamed Trait Items
+///
+/// Items that lack a `syn::Ident` for whatever reason are first checked to see if they
+/// exist, verbatim, in the local/destination trait before they are copied over, so you should
+/// not need to worry about collisions between identical unnamed items.
 #[import_tokens_attr(frame_support::macro_magic)]
 #[with_custom_parsing(derive_impl::DeriveImplAttrArgs)]
 #[proc_macro_attribute]
