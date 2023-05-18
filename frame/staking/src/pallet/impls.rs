@@ -22,6 +22,7 @@ use frame_election_provider_support::{
 	SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
+	defensive,
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
@@ -687,18 +688,20 @@ impl<T: Config> Pallet<T> {
 
 	/// Clear all era information for given era.
 	pub(crate) fn clear_era_information(era_index: EraIndex) {
-		#[allow(deprecated)]
-		<ErasStakers<T>>::remove_prefix(era_index, None);
-		#[allow(deprecated)]
-		<ErasStakersClipped<T>>::remove_prefix(era_index, None);
-		#[allow(deprecated)]
-		<ErasValidatorPrefs<T>>::remove_prefix(era_index, None);
-		#[allow(deprecated)]
-		<ClaimedRewards<T>>::remove_prefix(era_index, None);
-		#[allow(deprecated)]
-		<ErasStakersPaged<T>>::remove_prefix((era_index,), None);
-		#[allow(deprecated)]
-		<ErasStakersOverview<T>>::remove_prefix(era_index, None);
+		// FIXME: We can possibly set a reasonable limit since we do this only once per era and
+		// clean up state across multiple blocks.
+		let mut cursor = <ErasStakers<T>>::clear_prefix(era_index, u32::MAX, None);
+		debug_assert!(cursor.maybe_cursor.is_none());
+		cursor = <ErasStakersClipped<T>>::clear_prefix(era_index, u32::MAX, None);
+		debug_assert!(cursor.maybe_cursor.is_none());
+		cursor = <ErasValidatorPrefs<T>>::clear_prefix(era_index, u32::MAX, None);
+		debug_assert!(cursor.maybe_cursor.is_none());
+		cursor = <ClaimedRewards<T>>::clear_prefix(era_index, u32::MAX, None);
+		debug_assert!(cursor.maybe_cursor.is_none());
+		cursor = <ErasStakersPaged<T>>::clear_prefix((era_index,), u32::MAX, None);
+		debug_assert!(cursor.maybe_cursor.is_none());
+		cursor = <ErasStakersOverview<T>>::clear_prefix(era_index, u32::MAX, None);
+		debug_assert!(cursor.maybe_cursor.is_none());
 
 		<ErasValidatorReward<T>>::remove(era_index);
 		<ErasRewardPoints<T>>::remove(era_index);
@@ -1279,7 +1282,7 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 }
 
 /// Add reward points to block authors:
-/// * 20 points to the block producer for producing a (non-uncle) block in the relay chain,
+/// * 20 points to the block producer for producing a (non-uncle) block,
 impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Pallet<T>
 where
 	T: Config + pallet_authorship::Config + pallet_session::Config,
@@ -1638,7 +1641,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::current_era().unwrap_or(Zero::zero())
 	}
 
-	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
+	fn stake(who: &Self::AccountId) -> Result<Stake<BalanceOf<T>>, DispatchError> {
 		Self::bonded(who)
 			.and_then(|c| Self::ledger(c))
 			.map(|l| Stake { total: l.total, active: l.active })
@@ -1652,7 +1655,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	) -> DispatchResult {
 		Self::bond(
 			RawOrigin::Signed(who.clone()).into(),
-			T::Lookup::unlookup(who.clone()),
 			value,
 			RewardDestination::Account(payee.clone()),
 		)
@@ -1709,10 +1711,33 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		ErasStakers::<T>::iter_prefix(era).any(|(validator, exposures)| {
 			validator == *who || exposures.others.iter().any(|i| i.who == *who)
 		})
+	fn status(
+		who: &Self::AccountId,
+	) -> Result<sp_staking::StakerStatus<Self::AccountId>, DispatchError> {
+		let is_bonded = Self::bonded(who).is_some();
+		if !is_bonded {
+			return Err(Error::<T>::NotStash.into())
+		}
+
+		let is_validator = Validators::<T>::contains_key(&who);
+		let is_nominator = Nominators::<T>::get(&who);
+
+		use sp_staking::StakerStatus;
+		match (is_validator, is_nominator.is_some()) {
+			(false, false) => Ok(StakerStatus::Idle),
+			(true, false) => Ok(StakerStatus::Validator),
+			(false, true) => Ok(StakerStatus::Nominator(
+				is_nominator.expect("is checked above; qed").targets.into_inner(),
+			)),
+			(true, true) => {
+				defensive!("cannot be both validators and nominator");
+				Err(Error::<T>::BadState.into())
+			},
+		}
 	}
 
 	sp_staking::runtime_benchmarks_enabled! {
-		fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
+		fn nominations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
 			Nominators::<T>::get(who).map(|n| n.targets.into_inner())
 		}
 

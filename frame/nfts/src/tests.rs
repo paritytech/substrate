@@ -3141,6 +3141,34 @@ fn add_remove_item_attributes_approval_should_work() {
 }
 
 #[test]
+fn validate_signature() {
+	new_test_ext().execute_with(|| {
+		let user_1_pair = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
+		let user_1_signer = MultiSigner::Sr25519(user_1_pair.public());
+		let user_1 = user_1_signer.clone().into_account();
+		let mint_data: PreSignedMint<u32, u32, AccountId, u32> = PreSignedMint {
+			collection: 0,
+			item: 0,
+			attributes: vec![],
+			metadata: vec![],
+			only_account: None,
+			deadline: 100000,
+		};
+		let encoded_data = Encode::encode(&mint_data);
+		let signature = MultiSignature::Sr25519(user_1_pair.sign(&encoded_data));
+		assert_ok!(Nfts::validate_signature(&encoded_data, &signature, &user_1));
+
+		let mut wrapped_data: Vec<u8> = Vec::new();
+		wrapped_data.extend(b"<Bytes>");
+		wrapped_data.extend(&encoded_data);
+		wrapped_data.extend(b"</Bytes>");
+
+		let signature = MultiSignature::Sr25519(user_1_pair.sign(&wrapped_data));
+		assert_ok!(Nfts::validate_signature(&encoded_data, &signature, &user_1));
+	})
+}
+
+#[test]
 fn pre_signed_mints_should_work() {
 	new_test_ext().execute_with(|| {
 		let user_0 = account(0);

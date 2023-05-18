@@ -67,6 +67,14 @@ impl sp_staking::StakingInterface for StakingMock {
 		BondingDuration::get()
 	}
 
+	fn status(
+		_: &Self::AccountId,
+	) -> Result<sp_staking::StakerStatus<Self::AccountId>, DispatchError> {
+		Nominations::get()
+			.map(|noms| sp_staking::StakerStatus::Nominator(noms))
+			.ok_or(DispatchError::Other("NotStash"))
+	}
+
 	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
 		let mut x = BondedBalanceMap::get();
 		x.get_mut(who).map(|v| *v += extra);
@@ -108,7 +116,7 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn nominations(_: Self::AccountId) -> Option<Vec<Self::AccountId>> {
+	fn nominations(_: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
 		Nominations::get()
 	}
 
@@ -116,7 +124,7 @@ impl sp_staking::StakingInterface for StakingMock {
 		unimplemented!("method currently not used in testing")
 	}
 
-	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
+	fn stake(who: &Self::AccountId) -> Result<Stake<Balance>, DispatchError> {
 		match (
 			UnbondingBalanceMap::get().get(who).copied(),
 			BondedBalanceMap::get().get(who).copied(),
