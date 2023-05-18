@@ -238,6 +238,7 @@ where
 		// TODO: when we get rid of `Peerset`, we'll likely need to add some kind of async
 		// interface to `PeerStore`, otherwise we'll have trouble calling functions accepting
 		// `&mut self` via `Arc`.
+		// See https://github.com/paritytech/substrate/issues/14170.
 		T::report_peer(self, who, cost_benefit)
 	}
 
