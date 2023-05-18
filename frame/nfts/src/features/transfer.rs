@@ -32,15 +32,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
 		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::ItemLocked);
-
-		// validate the item is not locked by another pallet
-		let attribute = (
-			&collection,
-			Some(item),
-			AttributeNamespace::Pallet,
-			&Self::construct_attribute_key(LOCKED_NFT_KEY.encode())?,
+		ensure!(
+			!Self::has_system_attribute(&collection, &item, PalletAttributes::TransferDisabled)?,
+			Error::<T, I>::ItemLocked
 		);
-		ensure!(!Attribute::<T, I>::contains_key(attribute), Error::<T, I>::ItemLocked);
 
 		let collection_config = Self::get_collection_config(&collection)?;
 		ensure!(

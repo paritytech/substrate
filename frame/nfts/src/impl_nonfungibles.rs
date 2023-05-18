@@ -117,10 +117,11 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	///
 	/// Default implementation is that all items are transferable.
 	fn can_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> bool {
-		if Self::system_attribute(&collection, &item, LOCKED_NFT_KEY).is_some() {
-			return false
+		use PalletAttributes::TransferDisabled;
+		match Self::has_system_attribute(&collection, &item, TransferDisabled) {
+			Ok(transfer_disabled) if transfer_disabled => return false,
+			_ => (),
 		}
-
 		match (
 			CollectionConfigOf::<T, I>::get(collection),
 			ItemConfigOf::<T, I>::get(collection, item),
@@ -331,8 +332,8 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 		<Self as Mutate<T::AccountId, ItemConfig>>::set_attribute(
 			collection,
 			item,
-			LOCKED_NFT_KEY,
-			&[1],
+			&PalletAttributes::<Self::CollectionId>::TransferDisabled.encode(),
+			&[],
 		)
 	}
 
@@ -340,7 +341,7 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 		<Self as Mutate<T::AccountId, ItemConfig>>::clear_attribute(
 			collection,
 			item,
-			LOCKED_NFT_KEY,
+			&PalletAttributes::<Self::CollectionId>::TransferDisabled.encode(),
 		)
 	}
 }

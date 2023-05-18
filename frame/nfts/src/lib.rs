@@ -63,7 +63,6 @@ pub use weights::WeightInfo;
 pub const LOG_TARGET: &'static str = "runtime::nfts";
 
 type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
-pub const LOCKED_NFT_KEY: &[u8; 6] = b"locked";
 
 #[frame_support::pallet]
 pub mod pallet {
