@@ -10,7 +10,7 @@ use frame_support::{
     pallet_prelude::*,
     assert_ok,
 	traits::{
-		tokens::nonfungibles_v2::{Create, Mutate},
+		tokens::nonfungibles_v2::{Create, Mutate}, Currency
 	},
 };
 pub use sp_runtime::{Permill};
@@ -49,6 +49,7 @@ mod benchmarks {
     {
         let caller: T::AccountId = whitelisted_caller();
         //assert_ok!(T::Currency::set_balance(&caller, BalanceOf::<T>::max_value()));
+        T::Currency::make_free_balance_be(&caller, 1_000_000u32.into());
         assert_ok!(T::Nfts::create_collection(&caller, &caller, &default_collection_config::<T>()));
         assert_ok!(T::Nfts::mint_into(&collection_id, &nft_id, &caller, &ItemConfig::default(), true));
         caller
@@ -62,6 +63,7 @@ mod benchmarks {
     {
         let caller: T::AccountId = whitelisted_caller();
         //assert_ok!(T::Currency::set_balance(&caller, BalanceOf::<T>::max_value()));
+        // T::Currency::make_free_balance_be(&caller, 1_000_000u32);
         assert_ok!(T::Nfts::create_collection(&caller, &caller, &default_collection_config::<T>()));
         (caller, 0.into())
     }
