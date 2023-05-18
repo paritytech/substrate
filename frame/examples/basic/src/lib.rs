@@ -363,13 +363,10 @@ pub mod pallet {
 	/// should be added to our implied traits list.
 	///
 	/// `frame_system::Config` should always be included.
-	#[pallet::default_config]
+	#[pallet::config]
 	pub trait Config: pallet_balances::Config + frame_system::Config {
 		// Setting a constant config parameter from the runtime
 		#[pallet::constant]
-		#[pallet::no_default]
-		// It is very unfortunate that we cannot have this have a default either, because it relies
-		// on `<Self as pallet_balances::Config>`
 		type MagicNumber: Get<Self::Balance>;
 
 		/// The overarching event type.

@@ -1502,7 +1502,7 @@ pub mod pallet {
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
-	#[pallet::default_config]
+	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -1511,7 +1511,6 @@ pub mod pallet {
 		type WeightInfo: weights::WeightInfo;
 
 		/// The nominating balance.
-		#[pallet::no_default]
 		type Currency: Currency<Self::AccountId>;
 
 		/// The type that is used for reward counter.
@@ -1548,15 +1547,12 @@ pub mod pallet {
 		type MaxPointsToBalance: Get<u8>;
 
 		/// Infallible method for converting `Currency::Balance` to `U256`.
-		#[pallet::no_default]
 		type BalanceToU256: Convert<BalanceOf<Self>, U256>;
 
 		/// Infallible method for converting `U256` to `Currency::Balance`.
-		#[pallet::no_default]
 		type U256ToBalance: Convert<U256, BalanceOf<Self>>;
 
 		/// The interface for nominating.
-		#[pallet::no_default]
 		type Staking: StakingInterface<Balance = BalanceOf<Self>, AccountId = Self::AccountId>;
 
 		/// The amount of eras a `SubPools::with_era` pool can exist before it gets merged into the

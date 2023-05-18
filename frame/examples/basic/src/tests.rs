@@ -21,18 +21,18 @@ use crate::*;
 use frame_support::{
 	assert_ok,
 	dispatch::{DispatchInfo, GetDispatchInfo},
-	macro_magic::use_attr,
 	traits::{ConstU64, OnInitialize},
 };
-
+use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
-use sp_runtime::{testing::Header, BuildStorage};
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
+};
 // Reexport crate as its pallet name for construct_runtime.
 use crate as pallet_example_basic;
-
-#[use_attr]
-use frame_support::derive_impl;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -50,18 +50,31 @@ frame_support::construct_runtime!(
 	}
 );
 
-#[derive_impl(frame_system::prelude::testing::TestDefaultConfig as frame_system::pallet::DefaultConfig)]
 impl frame_system::Config for Test {
-	// These are all defined by system as mandatory.
 	type BaseCallFilter = frame_support::traits::Everything;
-	type RuntimeEvent = RuntimeEvent;
-	type RuntimeCall = RuntimeCall;
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type OnSetCode = ();
-	type PalletInfo = PalletInfo;
+	type Index = u64;
+	type BlockNumber = u64;
+	type Hash = H256;
+	type RuntimeCall = RuntimeCall;
+	type Hashing = BlakeTwo256;
+	type AccountId = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	// We decide to override this one.
+	type RuntimeEvent = RuntimeEvent;
+	type BlockHashCount = ConstU64<250>;
+	type Version = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
+	type OnNewAccount = ();
+	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
+	type SS58Prefix = ();
+	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 impl pallet_balances::Config for Test {
