@@ -374,7 +374,7 @@ fn claim_secondary_slots_works() {
 
 	let authorities = [Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 
-	let epoch = Epoch {
+	let mut epoch = Epoch {
 		epoch_idx: 1,
 		start_slot: 6.into(),
 		config: config.clone(),
@@ -388,7 +388,7 @@ fn claim_secondary_slots_works() {
 
 		for slot in 0..config.epoch_duration {
 			if let Some((claim, auth_id2)) =
-				authorship::claim_slot(slot.into(), &epoch, None, &keystore)
+				authorship::claim_slot(slot.into(), &mut epoch, None, &keystore)
 			{
 				assert_eq!(claim.authority_idx as usize, auth_idx);
 				assert_eq!(claim.slot, Slot::from(slot));
@@ -423,40 +423,43 @@ fn claim_primary_slots_works() {
 	};
 
 	let keystore = create_test_keystore(Keyring::Alice);
+	let alice_authority_idx = 0_u32;
 
-	// Success if we have ticket aux data and the authority key in our keystore
-	// 	ticket-aux: OK , authority-key: OK => SUCCESS
-
-	let authority_idx = 0u32;
 	let ticket_id = 123;
 	let ticket_data =
 		TicketData { attempt_idx: 0, erased_public: [0; 32], revealed_public: [0; 32] };
 	let ticket_secret = TicketSecret { attempt_idx: 0, erased_secret: [0; 32] };
-	epoch.tickets_aux.insert(ticket_id, (authority_idx, ticket_secret.clone()));
-
-	let (pre_digest, auth_id) =
-		authorship::claim_slot(0.into(), &epoch, Some((ticket_id, ticket_data.clone())), &keystore)
-			.unwrap();
-
-	assert_eq!(pre_digest.authority_idx, authority_idx);
-	assert_eq!(auth_id, Keyring::Alice.public().into());
 
 	// Fail if we have authority key in our keystore but not ticket aux data
 	// 	ticket-aux: KO , authority-key: OK => FAIL
 
-	let ticket_id = 321;
 	let claim =
-		authorship::claim_slot(0.into(), &epoch, Some((ticket_id, ticket_data.clone())), &keystore);
+		authorship::claim_slot(0.into(), &mut epoch, Some((ticket_id, ticket_data.clone())), &keystore);
+
 	assert!(claim.is_none());
+	assert!(epoch.tickets_aux.is_empty());
+
+	// Success if we have ticket aux data and the authority key in our keystore
+	// 	ticket-aux: OK , authority-key: OK => SUCCESS
+
+	epoch.tickets_aux.insert(ticket_id, (alice_authority_idx, ticket_secret.clone()));
+
+	let (pre_digest, auth_id) =
+		authorship::claim_slot(0.into(), &mut epoch, Some((ticket_id, ticket_data.clone())), &keystore)
+			.unwrap();
+
+	assert!(epoch.tickets_aux.is_empty());
+	assert_eq!(pre_digest.authority_idx, alice_authority_idx);
+	assert_eq!(auth_id, Keyring::Alice.public().into());
 
 	// Fail if we have ticket aux data but not the authority key in out keystore
 	// 	ticket-aux: OK , authority-key: KO => FAIL
 
-	let authority_idx = 1u32; // we don't have this key
-	let ticket_id = 666;
-	epoch.tickets_aux.insert(ticket_id, (authority_idx, ticket_secret));
-	let claim = authorship::claim_slot(0.into(), &epoch, Some((ticket_id, ticket_data)), &keystore);
+	epoch.tickets_aux.insert(ticket_id, (alice_authority_idx + 1, ticket_secret));
+
+	let claim = authorship::claim_slot(0.into(), &mut epoch, Some((ticket_id, ticket_data)), &keystore);
 	assert!(claim.is_none());
+	assert!(epoch.tickets_aux.is_empty());
 }
 
 #[test]
