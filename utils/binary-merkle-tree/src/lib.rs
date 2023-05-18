@@ -47,7 +47,7 @@ use hash_db::Hasher;
 pub fn merkle_root<H, I>(leaves: I) -> H::Out
 where
 	H: Hasher,
-	H::Out: Default + AsRef<[u8]> + PartialOrd,
+	H::Out: Default + AsRef<[u8]>,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
@@ -58,7 +58,7 @@ where
 fn merkelize<H, V, I>(leaves: I, visitor: &mut V) -> H::Out
 where
 	H: Hasher,
-	H::Out: Default + AsRef<[u8]> + PartialOrd,
+	H::Out: Default + AsRef<[u8]>,
 	V: Visitor<H::Out>,
 	I: Iterator<Item = H::Out>,
 {
@@ -143,7 +143,7 @@ impl<T> Visitor<T> for () {
 pub fn merkle_proof<H, I, T>(leaves: I, leaf_index: usize) -> MerkleProof<H::Out, T>
 where
 	H: Hasher,
-	H::Out: Default + Copy + AsRef<[u8]> + PartialOrd,
+	H::Out: Default + Copy + AsRef<[u8]>,
 	I: IntoIterator<Item = T>,
 	I::IntoIter: ExactSizeIterator,
 	T: AsRef<[u8]>,
@@ -243,7 +243,7 @@ pub fn verify_proof<'a, H, P, L>(
 ) -> bool
 where
 	H: Hasher,
-	H::Out: PartialEq + AsRef<[u8]> + PartialOrd,
+	H::Out: PartialEq + AsRef<[u8]>,
 	P: IntoIterator<Item = H::Out>,
 	L: Into<Leaf<'a, H::Out>>,
 {
@@ -297,7 +297,7 @@ fn merkelize_row<H, V, I>(
 ) -> Result<H::Out, Vec<H::Out>>
 where
 	H: Hasher,
-	H::Out: AsRef<[u8]> + PartialOrd,
+	H::Out: AsRef<[u8]>,
 	V: Visitor<H::Out>,
 	I: Iterator<Item = H::Out>,
 {
