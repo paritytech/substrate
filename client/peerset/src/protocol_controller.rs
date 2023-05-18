@@ -31,7 +31,7 @@
 //!    request until receiving the answer to this "incoming" request.
 //! 3. After sending a "connect" message, `ProtocolController` switches the state of the peer from
 //!    `Outbound` to `Inbound` if it receives an "incoming" request from `Notifications` for this
-//! peer.
+//!    peer.
 //!
 //! These measures do not eliminate confusing commands from `ProtocolController` completely,
 //! so `Notifications` must correctly handle seemingly inconsistent commands, like a "connect"
