@@ -24,13 +24,14 @@ use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{
 	assert_ok,
 	traits::{
-		fungible::{Inspect as InspectFungible, Unbalanced},
+		fungible::{Inspect as InspectFungible, Mutate as MutateFungible},
 		tokens::nonfungibles_v2::{Create, Mutate},
+		Get,
 	},
 };
 use frame_system::RawOrigin as SystemOrigin;
 use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, MintSettings};
-use sp_runtime::traits::{Bounded, StaticLookup};
+use sp_runtime::traits::StaticLookup;
 use sp_std::prelude::*;
 
 use crate::Pallet as NftFractionalization;
@@ -62,8 +63,10 @@ where
 {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
-	T::Currency::set_total_issuance(BalanceOf::<T>::max_value());
-	assert_ok!(T::Currency::write_balance(&caller, BalanceOf::<T>::max_value()));
+	let ed = T::Currency::minimum_balance();
+	let multiplier = BalanceOf::<T>::from(100u8);
+	T::Currency::set_balance(&caller, ed * multiplier + T::Deposit::get() * multiplier);
+
 	assert_ok!(T::Nfts::create_collection(&caller, &caller, &default_collection_config::<T>()));
 	let collection = T::BenchmarkHelper::collection(0);
 	assert_ok!(T::Nfts::mint_into(&collection, &nft_id, &caller, &ItemConfig::default(), true));
