@@ -18,37 +18,40 @@
 //! Benchmarks for the Sassafras pallet.
 
 use super::*;
+
 use frame_benchmarking::benchmarks;
 use frame_system::RawOrigin;
-use sp_io::hashing;
+use sp_consensus_sassafras::VrfOutput;
 
-fn make_dummy_ticket(i: usize) -> Ticket {
-	let buf = i.to_le_bytes();
-	hashing::twox_256(&buf).try_into().unwrap()
+// Makes a dummy ticket envelope.
+// The resulting ticket-id is not very important and is expected to be below the
+// configured threshold (which is guaranteed because we are using mock::TEST_EPOCH_CONFIGURATION).
+fn make_dummy_ticket(attempt_idx: u32) -> TicketEnvelope {
+	let mut output_enc: &[u8] = &[
+		0x0c, 0x1a, 0x83, 0x5e, 0x56, 0x9b, 0x18, 0xa0, 0xd9, 0x13, 0x39, 0x7e, 0xb9, 0x5a, 0x39,
+		0x83, 0xf3, 0xc5, 0x73, 0xf6, 0xb1, 0x35, 0xa6, 0x48, 0xa3, 0x83, 0xac, 0x3b, 0xb8, 0x43,
+		0xa7, 0x3d,
+	];
+	let output = VrfOutput::decode(&mut output_enc).unwrap();
+	let data = TicketData {
+		attempt_idx,
+		erased_public: Default::default(),
+		revealed_public: Default::default(),
+	};
+	TicketEnvelope { data, vrf_preout: output, ring_proof: () }
 }
 
 benchmarks! {
 	submit_tickets {
-		let x in 0 .. 100;
+		let x in 0 .. <T as Config>::MaxTickets::get();
 
-		// Almost fill the available tickets space.
-
-		let max_tickets: u32 = <T as crate::Config>::MaxTickets::get() - 10;
-		let tickets: Vec<Ticket> = (0..max_tickets as usize).into_iter().map(|i| {
-			make_dummy_ticket(i)
-		}).collect();
-		let _ = Pallet::<T>::submit_tickets(RawOrigin::None.into(), tickets);
-
-		// Create the tickets to submit during the benchmark
-
-		let tickets: Vec<Ticket> = (0..x as usize).into_iter().map(|i| {
-			make_dummy_ticket(i + max_tickets as usize)
-		}).collect();
+		let tickets: BoundedVec<TicketEnvelope, <T as Config>::MaxTickets> =
+			(0..x).map(make_dummy_ticket).collect::<Vec<_>>().try_into().unwrap();
 	}: _(RawOrigin::None, tickets)
 
 	impl_benchmark_test_suite!(
 		Pallet,
-		crate::mock::new_test_ext(3),
+		crate::mock::new_test_ext(1),
 		crate::mock::Test,
 	)
 }

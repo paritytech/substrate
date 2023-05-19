@@ -106,9 +106,10 @@ frame_support::construct_runtime!(
 	}
 );
 
-// Default used under tests.
-// The max redundancy factor allows to accept all submitted tickets without worrying
-// about the threshold.
+// Default used for most of the tests and benchmarks.
+//
+// The redundancy factor has been set to max value to accept all submitted
+// tickets without worrying about the threshold.
 pub const TEST_EPOCH_CONFIGURATION: SassafrasEpochConfiguration =
 	SassafrasEpochConfiguration { redundancy_factor: u32::MAX, attempts_number: 32 };
 
