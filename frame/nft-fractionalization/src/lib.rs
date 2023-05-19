@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! * NFT Fractionalization pallet
+//! # NFT Fractionalization Pallet
 //!
 //! This pallet provides the basic functionality that should allow users
 //! to leverage partial ownership, transfers, and sales, of illiquid assets,
@@ -30,8 +30,8 @@
 //!
 //! ### Functions
 //!
-//! * `fractionalize`: lock the NFT, create and mint new asset.
-//! * `unify`: return 100% of the asset, unlock the NFT.
+//! * `fractionalize`: Lock the NFT and create and mint a new fungible asset.
+//! * `unify`: Return 100% of the asset and unlock the NFT.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -217,7 +217,7 @@ pub mod pallet {
 		/// - `asset_id`: The ID of the new asset. It must not exist.
 		/// Is used within the context of `pallet_assets`.
 		/// - `beneficiary`: The account that will receive the newly created asset.
-		/// - `fractions`: The amount to be minted of the newly created asset.
+		/// - `fractions`: The total issuance of the newly created asset class.
 		///
 		/// Emits `NftFractionalized` event when successful.
 		#[pallet::call_index(0)]
@@ -261,7 +261,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Burn the whole amount of the asset and return back the locked NFT.
+		/// Burn the total issuance of the fungible asset and return (unlock) the locked NFT.
 		///
 		/// The dispatch origin for this call must be Signed.
 		///
