@@ -28,6 +28,7 @@
 //! See [`Worker`] and [`Service`] for more documentation.
 
 pub use crate::{
+	error::Error,
 	service::Service,
 	worker::{AuthorityDiscovery, NetworkProvider, Role, Worker},
 };
@@ -148,7 +149,7 @@ pub fn new_worker_and_service_with_config<Client, Network, Block, DhtEventStream
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: AuthorityDiscovery<Block> + HeaderBackend<Block> + 'static,
+	Client: AuthorityDiscovery<Block> + 'static,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	let (to_worker, from_service) = mpsc::channel(0);

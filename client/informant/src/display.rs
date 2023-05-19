@@ -76,7 +76,7 @@ impl<B: BlockT> InformantDisplay<B> {
 		let best_number = info.chain.best_number;
 		let best_hash = info.chain.best_hash;
 		let finalized_number = info.chain.finalized_number;
-		let num_connected_peers = net_status.num_connected_peers;
+		let num_connected_peers = sync_status.num_connected_peers;
 		let speed = speed::<B>(best_number, self.last_number, self.last_update);
 		let total_bytes_inbound = net_status.total_bytes_inbound;
 		let total_bytes_outbound = net_status.total_bytes_outbound;
@@ -98,25 +98,36 @@ impl<B: BlockT> InformantDisplay<B> {
 
 		let (level, status, target) =
 			match (sync_status.state, sync_status.state_sync, sync_status.warp_sync) {
+				// Do not set status to "Block history" when we are doing a major sync.
+				//
+				// A node could for example have been warp synced to the tip of the chain and
+				// shutdown. At the next start we still need to download the block history, but
+				// first will sync to the tip of the chain.
 				(
-					_,
+					sync_status,
 					_,
 					Some(WarpSyncProgress { phase: WarpSyncPhase::DownloadingBlocks(n), .. }),
-				) => ("⏩", "Block history".into(), format!(", #{}", n)),
+				) if !sync_status.is_major_syncing() => ("⏩", "Block history".into(), format!(", #{}", n)),
 				(
 					_,
 					_,
 					Some(WarpSyncProgress { phase: WarpSyncPhase::AwaitingTargetBlock, .. }),
 				) => ("⏩", "Waiting for pending target block".into(), "".into()),
-				(_, _, Some(warp)) => (
-					"⏩",
-					"Warping".into(),
-					format!(
-						", {}, {:.2} Mib",
+				// Handle all phases besides the two phases we already handle above.
+				(_, _, Some(warp))
+					if !matches!(
 						warp.phase,
-						(warp.total_bytes as f32) / (1024f32 * 1024f32)
+						WarpSyncPhase::AwaitingTargetBlock | WarpSyncPhase::DownloadingBlocks(_)
+					) =>
+					(
+						"⏩",
+						"Warping".into(),
+						format!(
+							", {}, {:.2} Mib",
+							warp.phase,
+							(warp.total_bytes as f32) / (1024f32 * 1024f32)
+						),
 					),
-				),
 				(_, Some(state), _) => (
 					"⚙️ ",
 					"Downloading state".into(),

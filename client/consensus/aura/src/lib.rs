@@ -33,11 +33,10 @@
 use std::{fmt::Debug, hash::Hash, marker::PhantomData, pin::Pin, sync::Arc};
 
 use futures::prelude::*;
-use log::{debug, trace};
 
 use codec::{Codec, Decode, Encode};
 
-use sc_client_api::{backend::AuxStore, BlockOf, UsageProvider};
+use sc_client_api::{backend::AuxStore, BlockOf};
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, StateAction};
 use sc_consensus_slots::{
 	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, SimpleSlotWorkerToSlotWorker,
@@ -45,20 +44,19 @@ use sc_consensus_slots::{
 };
 use sc_telemetry::TelemetryHandle;
 use sp_api::{Core, ProvideRuntimeApi};
-use sp_application_crypto::{AppCrypto, AppPublic};
-use sp_blockchain::{HeaderBackend, Result as CResult};
+use sp_application_crypto::AppPublic;
+use sp_blockchain::HeaderBackend;
 use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
 use sp_consensus_slots::Slot;
-use sp_core::crypto::{ByteArray, Pair, Public};
+use sp_core::crypto::{Pair, Public};
 use sp_inherents::CreateInherentDataProviders;
 use sp_keystore::KeystorePtr;
-use sp_runtime::{
-	traits::{Block as BlockT, Header, Member, NumberFor, Zero},
-	DigestItem,
-};
+use sp_runtime::traits::{Block as BlockT, Header, Member, NumberFor};
 
 mod import_queue;
+pub mod standalone;
 
+pub use crate::standalone::{find_pre_digest, slot_duration};
 pub use import_queue::{
 	build_verifier, import_queue, AuraVerifier, BuildVerifierParams, CheckForEquivocation,
 	ImportQueueParams,
@@ -110,39 +108,6 @@ impl<N> Default for CompatibilityMode<N> {
 	fn default() -> Self {
 		Self::None
 	}
-}
-
-/// Get the slot duration for Aura.
-pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration>
-where
-	A: Codec,
-	B: BlockT,
-	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
-	C::Api: AuraApi<B, A>,
-{
-	client
-		.runtime_api()
-		.slot_duration(client.usage_info().chain.best_hash)
-		.map_err(|err| err.into())
-}
-
-/// Get slot author for given block along with authorities.
-fn slot_author<P: Pair>(slot: Slot, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
-	if authorities.is_empty() {
-		return None
-	}
-
-	let idx = *slot % (authorities.len() as u64);
-	assert!(
-		idx <= usize::MAX as u64,
-		"It is impossible to have a vector with length beyond the address space; qed",
-	);
-
-	let current_author = authorities.get(idx as usize).expect(
-		"authorities not empty; index constrained to list length;this is a valid index; qed",
-	);
-
-	Some(current_author)
 }
 
 /// Parameters of [`start_aura`].
@@ -412,21 +377,11 @@ where
 		slot: Slot,
 		authorities: &Self::AuxData,
 	) -> Option<Self::Claim> {
-		let expected_author = slot_author::<P>(slot, authorities);
-		expected_author.and_then(|p| {
-			if self
-				.keystore
-				.has_keys(&[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)])
-			{
-				Some(p.clone())
-			} else {
-				None
-			}
-		})
+		crate::standalone::claim_slot::<P>(slot, authorities, &self.keystore).await
 	}
 
 	fn pre_digest_data(&self, slot: Slot, _claim: &Self::Claim) -> Vec<sp_runtime::DigestItem> {
-		vec![<DigestItem as CompatibleDigestItem<P::Signature>>::aura_pre_digest(slot)]
+		vec![crate::standalone::pre_digest::<P>(slot)]
 	}
 
 	async fn block_import_params(
@@ -441,28 +396,8 @@ where
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		ConsensusError,
 	> {
-		let signature = self
-			.keystore
-			.sign_with(
-				<AuthorityId<P> as AppCrypto>::ID,
-				<AuthorityId<P> as AppCrypto>::CRYPTO_ID,
-				public.as_slice(),
-				header_hash.as_ref(),
-			)
-			.map_err(|e| ConsensusError::CannotSign(format!("{}. Key: {:?}", e, public)))?
-			.ok_or_else(|| {
-				ConsensusError::CannotSign(format!(
-					"Could not find key in keystore. Key: {:?}",
-					public
-				))
-			})?;
-		let signature = signature
-			.clone()
-			.try_into()
-			.map_err(|_| ConsensusError::InvalidSignature(signature, public.to_raw_vec()))?;
-
 		let signature_digest_item =
-			<DigestItem as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
+			crate::standalone::seal::<_, P>(header_hash, &public, &self.keystore)?;
 
 		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 		import_block.post_digests.push(signature_digest_item);
@@ -526,11 +461,6 @@ where
 	}
 }
 
-fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
-	debug!(target: LOG_TARGET, "{}", error);
-	error
-}
-
 /// Aura Errors
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
@@ -569,22 +499,13 @@ impl<B: BlockT> From<Error<B>> for String {
 	}
 }
 
-/// Get pre-digests from the header
-pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Slot, Error<B>> {
-	if header.number().is_zero() {
-		return Ok(0.into())
-	}
-
-	let mut pre_digest: Option<Slot> = None;
-	for log in header.digest().logs() {
-		trace!(target: LOG_TARGET, "Checking log {:?}", log);
-		match (CompatibleDigestItem::<Signature>::as_aura_pre_digest(log), pre_digest.is_some()) {
-			(Some(_), true) => return Err(aura_err(Error::MultipleHeaders)),
-			(None, _) => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
-			(s, false) => pre_digest = s,
+impl<B: BlockT> From<crate::standalone::PreDigestLookupError> for Error<B> {
+	fn from(e: crate::standalone::PreDigestLookupError) -> Self {
+		match e {
+			crate::standalone::PreDigestLookupError::MultipleHeaders => Error::MultipleHeaders,
+			crate::standalone::PreDigestLookupError::NoDigestFound => Error::NoDigestFound,
 		}
 	}
-	pre_digest.ok_or_else(|| aura_err(Error::NoDigestFound))
 }
 
 fn authorities<A, B, C>(
@@ -637,7 +558,7 @@ mod tests {
 	use sc_consensus_slots::{BackoffAuthoringOnFinalizedHeadLagging, SimpleSlotWorker};
 	use sc_keystore::LocalKeystore;
 	use sc_network_test::{Block as TestBlock, *};
-	use sp_application_crypto::key_types::AURA;
+	use sp_application_crypto::{key_types::AURA, AppCrypto};
 	use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sp_inherents::InherentData;
@@ -849,22 +770,6 @@ mod tests {
 			future::select(future::join_all(aura_futures), future::join_all(import_notifications)),
 		)
 		.await;
-	}
-
-	#[test]
-	fn authorities_call_works() {
-		let client = substrate_test_runtime_client::new();
-
-		assert_eq!(client.chain_info().best_number, 0);
-		assert_eq!(
-			authorities(&client, client.chain_info().best_hash, 1, &CompatibilityMode::None)
-				.unwrap(),
-			vec![
-				Keyring::Alice.public().into(),
-				Keyring::Bob.public().into(),
-				Keyring::Charlie.public().into()
-			]
-		);
 	}
 
 	#[tokio::test]

@@ -23,6 +23,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type for the authority discovery module.
 #[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
 pub enum Error {
 	#[error("Received dht value found event with records with different keys.")]
 	ReceivingDhtValueFoundEventWithDifferentKeys,
@@ -55,7 +56,7 @@ pub enum Error {
 	ParsingMultiaddress(#[from] libp2p::core::multiaddr::Error),
 
 	#[error("Failed to parse a libp2p key.")]
-	ParsingLibp2pIdentity(#[from] libp2p::identity::error::DecodingError),
+	ParsingLibp2pIdentity(#[from] libp2p::identity::DecodingError),
 
 	#[error("Failed to sign: {0}.")]
 	CannotSign(String),
@@ -71,4 +72,7 @@ pub enum Error {
 
 	#[error("Received authority record without a valid signature for the remote peer id.")]
 	MissingPeerIdSignature,
+
+	#[error("Unable to fetch best block.")]
+	BestBlockFetchingError,
 }

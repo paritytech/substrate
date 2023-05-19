@@ -77,7 +77,7 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::{traits::Zero, Normalizable, PerThing, Rational128, ThresholdOrd};
 use sp_core::{bounded::BoundedVec, RuntimeDebug};
@@ -144,7 +144,7 @@ pub type ExtendedBalance = u128;
 /// 2. `sum_stake`.
 /// 3. `sum_stake_squared`.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, Default)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ElectionScore {
 	/// The minimal winner, in terms of total backing stake.
 	///
@@ -430,7 +430,7 @@ pub struct ElectionResult<AccountId, P: PerThing> {
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet they
 /// do not necessarily have to be the same.
 #[derive(RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Support<AccountId> {
 	/// Total support.
 	pub total: ExtendedBalance,

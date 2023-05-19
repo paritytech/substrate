@@ -21,15 +21,19 @@
 use crate::{
 	aux_schema::{load_persistent, tests::verify_persisted_version},
 	beefy_block_import_and_links,
-	communication::request_response::{
-		on_demand_justifications_protocol_config, BeefyJustifsRequestHandler,
+	communication::{
+		gossip::{
+			proofs_topic, tests::sign_commitment, votes_topic, GossipFilterCfg, GossipMessage,
+			GossipValidator,
+		},
+		request_response::{on_demand_justifications_protocol_config, BeefyJustifsRequestHandler},
 	},
 	gossip_protocol_name,
 	justification::*,
 	load_or_init_voter_state, wait_for_runtime_pallet, BeefyRPCLinks, BeefyVoterLinks, KnownPeers,
 	PersistedState,
 };
-use futures::{future, stream::FuturesUnordered, Future, StreamExt};
+use futures::{future, stream::FuturesUnordered, Future, FutureExt, StreamExt};
 use parking_lot::Mutex;
 use sc_client_api::{Backend as BackendT, BlockchainEvents, FinalityNotifications, HeaderBackend};
 use sc_consensus::{
@@ -48,21 +52,21 @@ use sp_consensus::BlockOrigin;
 use sp_consensus_beefy::{
 	crypto::{AuthorityId, Signature},
 	known_payloads,
-	mmr::MmrRootProvider,
+	mmr::{find_mmr_root_digest, MmrRootProvider},
 	BeefyApi, Commitment, ConsensusLog, EquivocationProof, Keyring as BeefyKeyring, MmrRootHash,
 	OpaqueKeyOwnershipProof, Payload, SignedCommitment, ValidatorSet, ValidatorSetId,
-	VersionedFinalityProof, BEEFY_ENGINE_ID, KEY_TYPE as BeefyKeyType,
+	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, KEY_TYPE as BeefyKeyType,
 };
 use sp_core::H256;
 use sp_keystore::{testing::MemoryKeystore, Keystore, KeystorePtr};
 use sp_mmr_primitives::{Error as MmrError, MmrApi};
 use sp_runtime::{
-	codec::Encode,
+	codec::{Decode, Encode},
 	traits::{Header as HeaderT, NumberFor},
 	BuildStorage, DigestItem, EncodedJustification, Justifications, Storage,
 };
 use std::{marker::PhantomData, sync::Arc, task::Poll};
-use substrate_test_runtime_client::{runtime::Header, ClientExt};
+use substrate_test_runtime_client::{BlockBuilderExt, ClientExt};
 use tokio::time::Duration;
 
 const GENESIS_HASH: H256 = H256::zero();
@@ -161,19 +165,21 @@ impl BeefyTestNet {
 		// push genesis to make indexing human readable (index equals to block number)
 		all_hashes.push(self.peer(0).client().info().genesis_hash);
 
-		let built_hashes = self.peer(0).generate_blocks(count, BlockOrigin::File, |builder| {
-			let mut block = builder.build().unwrap().block;
-
+		let mut block_num: NumberFor<Block> = self.peer(0).client().info().best_number;
+		let built_hashes = self.peer(0).generate_blocks(count, BlockOrigin::File, |mut builder| {
+			block_num = block_num.saturating_add(1).try_into().unwrap();
 			if include_mmr_digest {
-				let block_num = *block.header.number();
 				let num_byte = block_num.to_le_bytes().into_iter().next().unwrap();
 				let mmr_root = MmrRootHash::repeat_byte(num_byte);
-				add_mmr_digest(&mut block.header, mmr_root);
+				add_mmr_digest(&mut builder, mmr_root);
 			}
 
-			if *block.header.number() % session_length == 0 {
-				add_auth_change_digest(&mut block.header, validator_set.clone());
+			if block_num % session_length == 0 {
+				add_auth_change_digest(&mut builder, validator_set.clone());
 			}
+
+			let block = builder.build().unwrap().block;
+			assert_eq!(block.header.number, block_num);
 
 			block
 		});
@@ -321,18 +327,22 @@ sp_api::mock_impl_runtime_apis! {
 	}
 }
 
-fn add_mmr_digest(header: &mut Header, mmr_hash: MmrRootHash) {
-	header.digest_mut().push(DigestItem::Consensus(
-		BEEFY_ENGINE_ID,
-		ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),
-	));
+fn add_mmr_digest(builder: &mut impl BlockBuilderExt, mmr_hash: MmrRootHash) {
+	builder
+		.push_deposit_log_digest_item(DigestItem::Consensus(
+			BEEFY_ENGINE_ID,
+			ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),
+		))
+		.unwrap();
 }
 
-fn add_auth_change_digest(header: &mut Header, new_auth_set: BeefyValidatorSet) {
-	header.digest_mut().push(DigestItem::Consensus(
-		BEEFY_ENGINE_ID,
-		ConsensusLog::<AuthorityId>::AuthoritiesChange(new_auth_set).encode(),
-	));
+fn add_auth_change_digest(builder: &mut impl BlockBuilderExt, new_auth_set: BeefyValidatorSet) {
+	builder
+		.push_deposit_log_digest_item(DigestItem::Consensus(
+			BEEFY_ENGINE_ID,
+			ConsensusLog::<AuthorityId>::AuthoritiesChange(new_auth_set).encode(),
+		))
+		.unwrap();
 }
 
 pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
@@ -354,8 +364,8 @@ async fn voter_init_setup(
 ) -> sp_blockchain::Result<PersistedState<Block>> {
 	let backend = net.peer(0).client().as_backend();
 	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
-	let gossip_validator =
-		Arc::new(crate::communication::gossip::GossipValidator::new(known_peers));
+	let (gossip_validator, _) = GossipValidator::new(known_peers);
+	let gossip_validator = Arc::new(gossip_validator);
 	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
 		net.peer(0).network_service().clone(),
 		net.peer(0).sync_service().clone(),
@@ -503,16 +513,15 @@ async fn wait_for_beefy_signed_commitments(
 	run_until(wait_for, net).await;
 }
 
-async fn streams_empty_after_timeout<T>(
+async fn streams_empty_after_future<T>(
 	streams: Vec<NotificationReceiver<T>>,
-	net: &Arc<Mutex<BeefyTestNet>>,
-	timeout: Option<Duration>,
+	future: Option<impl Future + Unpin>,
 ) where
 	T: std::fmt::Debug,
 	T: std::cmp::PartialEq,
 {
-	if let Some(timeout) = timeout {
-		run_for(timeout, net).await;
+	if let Some(future) = future {
+		future.await;
 	}
 	for mut stream in streams.into_iter() {
 		future::poll_fn(move |cx| {
@@ -521,6 +530,18 @@ async fn streams_empty_after_timeout<T>(
 		})
 		.await;
 	}
+}
+
+async fn streams_empty_after_timeout<T>(
+	streams: Vec<NotificationReceiver<T>>,
+	net: &Arc<Mutex<BeefyTestNet>>,
+	timeout: Option<Duration>,
+) where
+	T: std::fmt::Debug,
+	T: std::cmp::PartialEq,
+{
+	let timeout = timeout.map(|timeout| Box::pin(run_for(timeout, net)));
+	streams_empty_after_future(streams, timeout).await;
 }
 
 async fn finalize_block_and_wait_for_beefy(
@@ -1228,4 +1249,144 @@ async fn beefy_reports_equivocations() {
 	let equivocation_proof = alice_reported_equivocations.get(0).unwrap();
 	assert_eq!(equivocation_proof.first.id, BeefyKeyring::Bob.public());
 	assert_eq!(equivocation_proof.first.commitment.block_number, 1);
+}
+
+#[tokio::test]
+async fn gossipped_finality_proofs() {
+	sp_tracing::try_init_simple();
+
+	let validators = [BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie];
+	// Only Alice and Bob are running the voter -> finality threshold not reached
+	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob];
+	let validator_set = ValidatorSet::new(make_beefy_ids(&validators), 0).unwrap();
+	let session_len = 30;
+	let min_block_delta = 1;
+
+	let mut net = BeefyTestNet::new(3);
+	let api = Arc::new(TestApi::with_validator_set(&validator_set));
+	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
+
+	let charlie = &net.peers[2];
+	let known_peers = Arc::new(Mutex::new(KnownPeers::<Block>::new()));
+	// Charlie will run just the gossip engine and not the full voter.
+	let (gossip_validator, _) = GossipValidator::new(known_peers);
+	let charlie_gossip_validator = Arc::new(gossip_validator);
+	charlie_gossip_validator.update_filter(GossipFilterCfg::<Block> {
+		start: 1,
+		end: 10,
+		validator_set: &validator_set,
+	});
+	let mut charlie_gossip_engine = sc_network_gossip::GossipEngine::new(
+		charlie.network_service().clone(),
+		charlie.sync_service().clone(),
+		beefy_gossip_proto_name(),
+		charlie_gossip_validator.clone(),
+		None,
+	);
+
+	// Alice and Bob run full voter.
+	tokio::spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
+
+	let net = Arc::new(Mutex::new(net));
+
+	// Pump net + Charlie gossip to see peers.
+	let timeout = Box::pin(tokio::time::sleep(Duration::from_millis(200)));
+	let gossip_engine_pump = &mut charlie_gossip_engine;
+	let pump_with_timeout = future::select(gossip_engine_pump, timeout);
+	run_until(pump_with_timeout, &net).await;
+
+	// push 10 blocks
+	let hashes = net.lock().generate_blocks_and_sync(10, session_len, &validator_set, true).await;
+
+	let peers = peers.into_iter().enumerate();
+
+	// Alice, Bob and Charlie finalize #1, Alice and Bob vote on it, but not Charlie.
+	let finalize = hashes[1];
+	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
+	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
+	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
+	net.lock().peer(2).client().as_client().finalize_block(finalize, None).unwrap();
+	// verify nothing gets finalized by BEEFY
+	let timeout = Box::pin(tokio::time::sleep(Duration::from_millis(100)));
+	let pump_net = futures::future::poll_fn(|cx| {
+		net.lock().poll(cx);
+		Poll::<()>::Pending
+	});
+	let pump_gossip = &mut charlie_gossip_engine;
+	let pump_with_timeout = future::select(pump_gossip, future::select(pump_net, timeout));
+	streams_empty_after_future(best_blocks, Some(pump_with_timeout)).await;
+	streams_empty_after_timeout(versioned_finality_proof, &net, None).await;
+
+	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
+	// Charlie gossips finality proof for #1 -> Alice and Bob also finalize.
+	let proof = crate::communication::gossip::tests::dummy_proof(1, &validator_set);
+	let gossip_proof = GossipMessage::<Block>::FinalityProof(proof);
+	let encoded_proof = gossip_proof.encode();
+	charlie_gossip_engine.gossip_message(proofs_topic::<Block>(), encoded_proof, true);
+	// Expect #1 is finalized.
+	wait_for_best_beefy_blocks(best_blocks, &net, &[1]).await;
+	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &[1]).await;
+
+	// Code above verifies gossipped finality proofs are correctly imported and consumed by voters.
+	// Next, let's verify finality proofs are correctly generated and gossipped by voters.
+
+	// Everyone finalizes #2
+	let block_number = 2u64;
+	let finalize = hashes[block_number as usize];
+	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
+	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
+	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
+	net.lock().peer(2).client().as_client().finalize_block(finalize, None).unwrap();
+
+	// Simulate Charlie vote on #2
+	let header = net.lock().peer(2).client().as_client().expect_header(finalize).unwrap();
+	let mmr_root = find_mmr_root_digest::<Block>(&header).unwrap();
+	let payload = Payload::from_single_entry(known_payloads::MMR_ROOT_ID, mmr_root.encode());
+	let commitment = Commitment { payload, block_number, validator_set_id: validator_set.id() };
+	let signature = sign_commitment(&BeefyKeyring::Charlie, &commitment);
+	let vote_message = VoteMessage { commitment, id: BeefyKeyring::Charlie.public(), signature };
+	let encoded_vote = GossipMessage::<Block>::Vote(vote_message).encode();
+	charlie_gossip_engine.gossip_message(votes_topic::<Block>(), encoded_vote, true);
+
+	// Expect #2 is finalized.
+	wait_for_best_beefy_blocks(best_blocks, &net, &[2]).await;
+	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &[2]).await;
+
+	// Now verify Charlie also sees the gossipped proof generated by either Alice or Bob.
+	let mut charlie_gossip_proofs = Box::pin(
+		charlie_gossip_engine
+			.messages_for(proofs_topic::<Block>())
+			.filter_map(|notification| async move {
+				GossipMessage::<Block>::decode(&mut &notification.message[..]).ok().and_then(
+					|message| match message {
+						GossipMessage::<Block>::Vote(_) => unreachable!(),
+						GossipMessage::<Block>::FinalityProof(proof) => Some(proof),
+					},
+				)
+			})
+			.fuse(),
+	);
+	loop {
+		let pump_net = futures::future::poll_fn(|cx| {
+			net.lock().poll(cx);
+			Poll::<()>::Pending
+		});
+		let mut gossip_engine = &mut charlie_gossip_engine;
+		futures::select! {
+			// pump gossip engine
+			_ = gossip_engine => unreachable!(),
+			// pump network
+			_ = pump_net.fuse() => unreachable!(),
+			// verify finality proof has been gossipped
+			proof = charlie_gossip_proofs.next() => {
+				let proof = proof.unwrap();
+				let (round, _) = proof_block_num_and_set_id::<Block>(&proof);
+				match round {
+					1 => continue, // finality proof generated by Charlie in the previous round
+					2 => break,	// finality proof generated by Alice or Bob and gossiped to Charlie
+					_ => panic!("Charlie got unexpected finality proof"),
+				}
+			},
+		}
+	}
 }

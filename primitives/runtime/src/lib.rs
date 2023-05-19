@@ -24,7 +24,7 @@
 pub use codec;
 #[doc(hidden)]
 pub use scale_info;
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 #[doc(hidden)]
 pub use serde;
 #[doc(hidden)]
@@ -52,6 +52,8 @@ use sp_std::prelude::*;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+#[cfg(all(not(feature = "std"), feature = "serde"))]
+use sp_std::alloc::format;
 
 pub mod curve;
 pub mod generic;
@@ -122,7 +124,7 @@ pub type EncodedJustification = Vec<u8>;
 
 /// Collection of justifications for a given block, multiple justifications may
 /// be provided by different consensus engines for the same block.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct Justifications(Vec<Justification>);
 
@@ -179,7 +181,7 @@ impl From<Justification> for Justifications {
 use traits::{Lazy, Verify};
 
 use crate::traits::IdentifyAccount;
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 pub use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// Complex storage builder stuff.
@@ -235,7 +237,7 @@ impl BuildStorage for () {
 pub type ConsensusEngineId = [u8; 4];
 
 /// Signature verify that can work with any known signature types.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Eq, PartialEq, Clone, Encode, Decode, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum MultiSignature {
 	/// An Ed25519 signature.
@@ -299,7 +301,7 @@ impl TryFrom<MultiSignature> for ecdsa::Signature {
 
 /// Public key for any known crypto algorithm.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum MultiSigner {
 	/// An Ed25519 identity.
 	Ed25519(ed25519::Public),
@@ -427,7 +429,7 @@ impl Verify for MultiSignature {
 
 /// Signature verify that can work with any known signature types..
 #[derive(Eq, PartialEq, Clone, Default, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AnySignature(H512);
 
 impl Verify for AnySignature {
@@ -475,7 +477,7 @@ pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWith
 
 /// Reason why a pallet call failed.
 #[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ModuleError {
 	/// Module index, matching the metadata module index.
 	pub index: u8,
@@ -483,7 +485,7 @@ pub struct ModuleError {
 	pub error: [u8; MAX_MODULE_ERROR_ENCODED_SIZE],
 	/// Optional error message.
 	#[codec(skip)]
-	#[cfg_attr(feature = "std", serde(skip_deserializing))]
+	#[cfg_attr(feature = "serde", serde(skip_deserializing))]
 	pub message: Option<&'static str>,
 }
 
@@ -495,7 +497,7 @@ impl PartialEq for ModuleError {
 
 /// Errors related to transactional storage layers.
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TransactionalError {
 	/// Too many transactional layers have been spawned.
 	LimitReached,
@@ -520,12 +522,12 @@ impl From<TransactionalError> for DispatchError {
 
 /// Reason why a dispatch call failed.
 #[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, PartialEq, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.
 	Other(
 		#[codec(skip)]
-		#[cfg_attr(feature = "std", serde(skip_deserializing))]
+		#[cfg_attr(feature = "serde", serde(skip_deserializing))]
 		&'static str,
 	),
 	/// Failed to lookup some data.
@@ -553,6 +555,8 @@ pub enum DispatchError {
 	Corruption,
 	/// Some resource (e.g. a preimage) is unavailable right now. This might fix itself later.
 	Unavailable,
+	/// Root origin is not allowed.
+	RootNotAllowed,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -603,7 +607,7 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 
 /// Description of what went wrong when trying to complete an operation on a token.
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TokenError {
 	/// Funds are unavailable.
 	FundsUnavailable,
@@ -624,6 +628,8 @@ pub enum TokenError {
 	CannotCreateHold,
 	/// Withdrawal would cause unwanted loss of account.
 	NotExpendable,
+	/// Account cannot receive the assets.
+	Blocked,
 }
 
 impl From<TokenError> for &'static str {
@@ -639,6 +645,7 @@ impl From<TokenError> for &'static str {
 			TokenError::CannotCreateHold =>
 				"Account cannot be created for recording amount on hold",
 			TokenError::NotExpendable => "Account that is desired to remain would die",
+			TokenError::Blocked => "Account cannot receive the assets",
 		}
 	}
 }
@@ -678,6 +685,7 @@ impl From<DispatchError> for &'static str {
 			Exhausted => "Resources exhausted",
 			Corruption => "State corrupt",
 			Unavailable => "Resource unavailable",
+			RootNotAllowed => "Root not allowed",
 		}
 	}
 }
@@ -724,6 +732,7 @@ impl traits::Printable for DispatchError {
 			Exhausted => "Resources exhausted".print(),
 			Corruption => "State corrupt".print(),
 			Unavailable => "Resource unavailable".print(),
+			RootNotAllowed => "Root not allowed".print(),
 		}
 	}
 }
@@ -872,7 +881,7 @@ impl sp_std::fmt::Debug for OpaqueExtrinsic {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl ::serde::Serialize for OpaqueExtrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
 	where
@@ -882,7 +891,7 @@ impl ::serde::Serialize for OpaqueExtrinsic {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
 	fn deserialize<D>(de: D) -> Result<Self, D::Error>
 	where
@@ -902,40 +911,6 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 /// Print something that implements `Printable` from the runtime.
 pub fn print(print: impl traits::Printable) {
 	print.print();
-}
-
-/// Batching session.
-///
-/// To be used in runtime only. Outside of runtime, just construct
-/// `BatchVerifier` directly.
-#[must_use = "`verify()` needs to be called to finish batch signature verification!"]
-pub struct SignatureBatching(bool);
-
-impl SignatureBatching {
-	/// Start new batching session.
-	pub fn start() -> Self {
-		sp_io::crypto::start_batch_verify();
-		SignatureBatching(false)
-	}
-
-	/// Verify all signatures submitted during the batching session.
-	#[must_use]
-	pub fn verify(mut self) -> bool {
-		self.0 = true;
-		sp_io::crypto::finish_batch_verify()
-	}
-}
-
-impl Drop for SignatureBatching {
-	fn drop(&mut self) {
-		// Sanity check. If user forgets to actually call `verify()`.
-		//
-		// We should not panic if the current thread is already panicking,
-		// because Rust otherwise aborts the process.
-		if !self.0 && !sp_std::thread::panicking() {
-			panic!("Signature verification has not been called before `SignatureBatching::drop`")
-		}
-	}
 }
 
 /// Describes on what should happen with a storage transaction.
@@ -962,7 +937,7 @@ mod tests {
 
 	use super::*;
 	use codec::{Decode, Encode};
-	use sp_core::crypto::{Pair, UncheckedFrom};
+	use sp_core::crypto::Pair;
 	use sp_io::TestExternalities;
 	use sp_state_machine::create_proof_check_backend;
 
@@ -1046,36 +1021,6 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Signature verification has not been called")]
-	fn batching_still_finishes_when_not_called_directly() {
-		let mut ext = sp_state_machine::BasicExternalities::default();
-		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
-			sp_core::testing::TaskExecutor::new(),
-		));
-
-		ext.execute_with(|| {
-			let _batching = SignatureBatching::start();
-			let dummy = UncheckedFrom::unchecked_from([1; 32]);
-			let dummy_sig = UncheckedFrom::unchecked_from([1; 64]);
-			sp_io::crypto::sr25519_verify(&dummy_sig, &Vec::new(), &dummy);
-		});
-	}
-
-	#[test]
-	#[should_panic(expected = "Hey, I'm an error")]
-	fn batching_does_not_panic_while_thread_is_already_panicking() {
-		let mut ext = sp_state_machine::BasicExternalities::default();
-		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
-			sp_core::testing::TaskExecutor::new(),
-		));
-
-		ext.execute_with(|| {
-			let _batching = SignatureBatching::start();
-			panic!("Hey, I'm an error");
-		});
-	}
-
-	#[test]
 	fn execute_and_generate_proof_works() {
 		use codec::Encode;
 		use sp_state_machine::Backend;
@@ -1116,5 +1061,25 @@ mod tests {
 			assert_eq!(sp_io::storage::get(b"a").unwrap(), vec![1u8; 44]);
 			assert_eq!(sp_io::storage::get(b"b").unwrap(), vec![2u8; 33]);
 		});
+	}
+}
+
+// NOTE: we have to test the sp_core stuff also from a different crate to check that the macro
+// can access the sp_core crate.
+#[cfg(test)]
+mod sp_core_tests {
+	use super::*;
+
+	#[test]
+	#[should_panic]
+	fn generate_feature_enabled_macro_panics() {
+		sp_core::generate_feature_enabled_macro!(if_test, test, $);
+		if_test!(panic!("This should panic"));
+	}
+
+	#[test]
+	fn generate_feature_enabled_macro_works() {
+		sp_core::generate_feature_enabled_macro!(if_not_test, not(test), $);
+		if_not_test!(panic!("This should not panic"));
 	}
 }
