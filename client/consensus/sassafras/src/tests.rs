@@ -433,8 +433,12 @@ fn claim_primary_slots_works() {
 	// Fail if we have authority key in our keystore but not ticket aux data
 	// 	ticket-aux: KO , authority-key: OK => FAIL
 
-	let claim =
-		authorship::claim_slot(0.into(), &mut epoch, Some((ticket_id, ticket_data.clone())), &keystore);
+	let claim = authorship::claim_slot(
+		0.into(),
+		&mut epoch,
+		Some((ticket_id, ticket_data.clone())),
+		&keystore,
+	);
 
 	assert!(claim.is_none());
 	assert!(epoch.tickets_aux.is_empty());
@@ -442,11 +446,17 @@ fn claim_primary_slots_works() {
 	// Success if we have ticket aux data and the authority key in our keystore
 	// 	ticket-aux: OK , authority-key: OK => SUCCESS
 
-	epoch.tickets_aux.insert(ticket_id, (alice_authority_idx, ticket_secret.clone()));
+	epoch
+		.tickets_aux
+		.insert(ticket_id, (alice_authority_idx, ticket_secret.clone()));
 
-	let (pre_digest, auth_id) =
-		authorship::claim_slot(0.into(), &mut epoch, Some((ticket_id, ticket_data.clone())), &keystore)
-			.unwrap();
+	let (pre_digest, auth_id) = authorship::claim_slot(
+		0.into(),
+		&mut epoch,
+		Some((ticket_id, ticket_data.clone())),
+		&keystore,
+	)
+	.unwrap();
 
 	assert!(epoch.tickets_aux.is_empty());
 	assert_eq!(pre_digest.authority_idx, alice_authority_idx);
@@ -457,7 +467,8 @@ fn claim_primary_slots_works() {
 
 	epoch.tickets_aux.insert(ticket_id, (alice_authority_idx + 1, ticket_secret));
 
-	let claim = authorship::claim_slot(0.into(), &mut epoch, Some((ticket_id, ticket_data)), &keystore);
+	let claim =
+		authorship::claim_slot(0.into(), &mut epoch, Some((ticket_id, ticket_data)), &keystore);
 	assert!(claim.is_none());
 	assert!(epoch.tickets_aux.is_empty());
 }

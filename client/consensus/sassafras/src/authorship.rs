@@ -24,7 +24,7 @@ use sp_consensus_sassafras::{
 	digests::PreDigest, slot_claim_sign_data, ticket_id, ticket_id_threshold, AuthorityId, Slot,
 	TicketClaim, TicketData, TicketEnvelope, TicketId,
 };
-use sp_core::{twox_64, ByteArray, ed25519};
+use sp_core::{ed25519, twox_64, ByteArray};
 
 use std::pin::Pin;
 
@@ -231,14 +231,11 @@ where
 			self.client.runtime_api().slot_ticket(parent_header.hash(), slot).ok()?;
 
 		let mut epoch_changes = self.epoch_changes.shared_data_locked();
-		let mut epoch = epoch_changes.viable_epoch_mut(epoch_descriptor, |slot| Epoch::genesis(&self.genesis_config, slot))?;
+		let mut epoch = epoch_changes.viable_epoch_mut(epoch_descriptor, |slot| {
+			Epoch::genesis(&self.genesis_config, slot)
+		})?;
 
-		let claim = authorship::claim_slot(
-			slot,
-			&mut epoch.as_mut(),
-			maybe_ticket,
-			&self.keystore,
-		);
+		let claim = authorship::claim_slot(slot, &mut epoch.as_mut(), maybe_ticket, &self.keystore);
 		if claim.is_some() {
 			debug!(target: LOG_TARGET, "Claimed slot {}", slot);
 		}

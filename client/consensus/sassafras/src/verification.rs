@@ -94,7 +94,8 @@ fn check_header<B: BlockT + Sized>(
 
 	// Optionally check ticket ownership
 
-	let mut vrf_sign_data = slot_claim_sign_data(&config.randomness, pre_digest.slot, epoch.epoch_idx);
+	let mut vrf_sign_data =
+		slot_claim_sign_data(&config.randomness, pre_digest.slot, epoch.epoch_idx);
 
 	match (&maybe_ticket, &pre_digest.ticket_claim) {
 		(Some((_ticket_id, ticket_data)), Some(ticket_claim)) => {
@@ -104,8 +105,7 @@ fn check_header<B: BlockT + Sized>(
 			let challenge = vrf_sign_data.challenge::<32>();
 
 			let erased_public = ed25519::Public::from_raw(ticket_data.erased_public);
-			let erased_signature =
-				ed25519::Signature::from_raw(ticket_claim.erased_signature);
+			let erased_signature = ed25519::Signature::from_raw(ticket_claim.erased_signature);
 
 			if !ed25519::Pair::verify(&erased_signature, &challenge, &erased_public) {
 				return Err(sassafras_err(Error::BadSignature(pre_hash)))
@@ -132,7 +132,10 @@ fn check_header<B: BlockT + Sized>(
 
 	// Check per-slot vrf proof
 
-	if !authority_id.as_inner_ref().vrf_verify(&vrf_sign_data, &pre_digest.vrf_signature) {
+	if !authority_id
+		.as_inner_ref()
+		.vrf_verify(&vrf_sign_data, &pre_digest.vrf_signature)
+	{
 		return Err(sassafras_err(Error::VrfVerificationFailed))
 	}
 
