@@ -19,7 +19,7 @@ futures = "0.3.21"
 futures-timer = "3.0.2"
 log = "0.4.17"
 parking_lot = "0.12.1"
-parity-db = "0.4.7"
+parity-db = "0.4.8"
 tokio = { version = "1.22.0", features = ["time"] }
 sp-statement-store = { version = "4.0.0-dev", path = "../../primitives/statement-store" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
