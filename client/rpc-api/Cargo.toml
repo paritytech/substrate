@@ -19,6 +19,7 @@ serde = { version = "1.0.163", features = ["derive"] }
 serde_json = "1.0.85"
 thiserror = "1.0"
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
+sc-mixnet = { version = "0.1.0-dev", path = "../mixnet" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
 sp-core = { version = "21.0.0", path = "../../primitives/core" }
 sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }

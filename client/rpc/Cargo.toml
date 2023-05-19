@@ -22,6 +22,7 @@ serde_json = "1.0.85"
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
+sc-mixnet = { version = "0.1.0-dev", path = "../mixnet" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../rpc-api" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }

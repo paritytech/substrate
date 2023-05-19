@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) Parity Technologies (UK) Ltd.
+// Copyright (C) 2022-2023 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,23 +16,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Substrate RPC interfaces.
-//!
-//! A collection of RPC methods and subscriptions supported by all substrate clients.
+//! Substrate mixnet API.
 
-#![warn(missing_docs)]
+pub mod error;
 
-mod error;
-mod policy;
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use sp_core::Bytes;
 
-pub use policy::DenyUnsafe;
-
-pub mod author;
-pub mod chain;
-pub mod child_state;
-pub mod dev;
-pub mod mixnet;
-pub mod offchain;
-pub mod state;
-pub mod statement;
-pub mod system;
+#[rpc(client, server)]
+pub trait MixnetApi {
+	/// Submit encoded extrinsic over the mixnet for inclusion in block.
+	#[method(name = "mixnet_submitExtrinsic")]
+	async fn submit_extrinsic(&self, extrinsic: Bytes) -> RpcResult<()>;
+}
