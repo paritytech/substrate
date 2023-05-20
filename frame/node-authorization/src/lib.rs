@@ -109,15 +109,9 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, PeerId, BTreeSet<PeerId>, ValueQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub nodes: Vec<(PeerId, T::AccountId)>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { nodes: Vec::new() }
-		}
 	}
 
 	#[pallet::genesis_build]
