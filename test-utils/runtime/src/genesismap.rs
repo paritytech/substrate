@@ -18,8 +18,7 @@
 //! Tool for creating the genesis block.
 
 use super::{
-	currency, substrate_test_pallet, wasm_binary_unwrap, AccountId, AuthorityId, Balance,
-	GenesisConfig,
+	currency, substrate_test_pallet, wasm_binary_unwrap, AccountId, Balance, GenesisConfig,
 };
 use codec::Encode;
 use sc_service::construct_genesis_block;
@@ -34,14 +33,19 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-/// Builder for generating storage from substrate-test-runtime genesis config. Default storage can
-/// be extended with additional key-value pairs.
+/// Builder for generating storage from substrate-test-runtime genesis config.
+///
+/// Default storage can be extended with additional key-value pairs.
 pub struct GenesisStorageBuilder {
-	authorities: Vec<AuthorityId>,
+	/// Authorities accounts used by any component requiring an authority set (e.g. babe).
+	authorities: Vec<AccountId>,
+	/// Accounts to be endowed with some funds.
 	balances: Vec<(AccountId, u64)>,
+	/// Override default number of heap pages.
 	heap_pages_override: Option<u64>,
 	/// Additional storage key pairs that will be added to the genesis map.
 	extra_storage: Storage,
+	/// Optional wasm code override.
 	wasm_code: Option<Vec<u8>>,
 }
 
@@ -50,9 +54,9 @@ impl Default for GenesisStorageBuilder {
 	fn default() -> Self {
 		Self::new(
 			vec![
-				sr25519::Public::from(Sr25519Keyring::Alice).into(),
-				sr25519::Public::from(Sr25519Keyring::Bob).into(),
-				sr25519::Public::from(Sr25519Keyring::Charlie).into(),
+				Sr25519Keyring::Alice.into(),
+				Sr25519Keyring::Bob.into(),
+				Sr25519Keyring::Charlie.into(),
 			],
 			(0..16_usize)
 				.into_iter()
@@ -74,7 +78,7 @@ impl GenesisStorageBuilder {
 	/// from `extra_storage` will be injected into built storage. `HEAP_PAGES` key and value will
 	/// also be placed into storage.
 	pub fn new(
-		authorities: Vec<AuthorityId>,
+		authorities: Vec<AccountId>,
 		endowed_accounts: Vec<AccountId>,
 		balance: Balance,
 	) -> Self {
@@ -104,17 +108,28 @@ impl GenesisStorageBuilder {
 	}
 
 	/// Builds the `GenesisConfig` and returns its storage.
-	pub fn build_storage(&mut self) -> Storage {
+	pub fn build(self) -> Storage {
+		let authorities_sr25519: Vec<_> = self
+			.authorities
+			.clone()
+			.into_iter()
+			.map(|id| sr25519::Public::from(id))
+			.collect();
+
 		let genesis_config = GenesisConfig {
 			system: frame_system::GenesisConfig {
 				code: self.wasm_code.clone().unwrap_or(wasm_binary_unwrap().to_vec()),
 			},
 			babe: pallet_babe::GenesisConfig {
-				authorities: self.authorities.clone().into_iter().map(|x| (x, 1)).collect(),
+				authorities: authorities_sr25519
+					.clone()
+					.into_iter()
+					.map(|x| (x.into(), 1))
+					.collect(),
 				epoch_config: Some(crate::TEST_RUNTIME_BABE_EPOCH_CONFIGURATION),
 			},
 			substrate_test: substrate_test_pallet::GenesisConfig {
-				authorities: self.authorities.clone(),
+				authorities: authorities_sr25519.clone(),
 			},
 			balances: pallet_balances::GenesisConfig { balances: self.balances.clone() },
 		};

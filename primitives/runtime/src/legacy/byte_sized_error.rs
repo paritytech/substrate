@@ -20,12 +20,12 @@
 use crate::{ArithmeticError, TokenError};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// [`ModuleError`] type definition before BlockBuilder API version 6.
 #[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ModuleError {
 	/// Module index, matching the metadata module index.
 	pub index: u8,
@@ -33,7 +33,7 @@ pub struct ModuleError {
 	pub error: u8,
 	/// Optional error message.
 	#[codec(skip)]
-	#[cfg_attr(feature = "std", serde(skip_deserializing))]
+	#[cfg_attr(feature = "serde", serde(skip_deserializing))]
 	pub message: Option<&'static str>,
 }
 
@@ -45,12 +45,12 @@ impl PartialEq for ModuleError {
 
 /// [`DispatchError`] type definition before BlockBuilder API version 6.
 #[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, PartialEq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.
 	Other(
 		#[codec(skip)]
-		#[cfg_attr(feature = "std", serde(skip_deserializing))]
+		#[cfg_attr(feature = "serde", serde(skip_deserializing))]
 		&'static str,
 	),
 	/// Failed to lookup some data.
