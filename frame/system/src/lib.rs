@@ -630,10 +630,10 @@ pub mod pallet {
 	#[pallet::whitelist_storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		#[serde(with = "sp_core::bytes")]
+		#[cfg_attr(feature = "std", serde(with = "sp_core::bytes"))]
 		pub code: Vec<u8>,
 	}
 
