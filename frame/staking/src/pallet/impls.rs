@@ -669,12 +669,12 @@ impl<T: Config> Pallet<T> {
 
 	/// Clear all era information for given era.
 	pub(crate) fn clear_era_information(era_index: EraIndex) {
-		#[allow(deprecated)]
-		<ErasStakers<T>>::remove_prefix(era_index, None);
-		#[allow(deprecated)]
-		<ErasStakersClipped<T>>::remove_prefix(era_index, None);
-		#[allow(deprecated)]
-		<ErasValidatorPrefs<T>>::remove_prefix(era_index, None);
+		let mut cursor = <ErasStakers<T>>::clear_prefix(era_index, u32::MAX, None);
+		debug_assert!(cursor.maybe_cursor.is_none());
+		cursor = <ErasStakersClipped<T>>::clear_prefix(era_index, u32::MAX, None);
+		debug_assert!(cursor.maybe_cursor.is_none());
+		cursor = <ErasValidatorPrefs<T>>::clear_prefix(era_index, u32::MAX, None);
+		debug_assert!(cursor.maybe_cursor.is_none());
 		<ErasValidatorReward<T>>::remove(era_index);
 		<ErasRewardPoints<T>>::remove(era_index);
 		<ErasTotalStake<T>>::remove(era_index);
@@ -1651,7 +1651,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	) -> DispatchResult {
 		Self::bond(
 			RawOrigin::Signed(who.clone()).into(),
-			T::Lookup::unlookup(who.clone()),
 			value,
 			RewardDestination::Account(payee.clone()),
 		)
