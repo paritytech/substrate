@@ -18,7 +18,7 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 grandpa = { package = "finality-grandpa", version = "0.16.2", default-features = false, features = ["derive-codec"] }
 log = { version = "0.4.17", default-features = false }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-serde = { version = "1.0.136", features = ["derive"], optional = true }
+serde = { version = "1.0.136", features = ["derive", "alloc"], default-features = false, optional = true }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../api" }
 sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../application-crypto" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../core" }
@@ -33,11 +33,20 @@ std = [
 	"grandpa/std",
 	"log/std",
 	"scale-info/std",
-	"serde",
+	"serde/std",
 	"sp-api/std",
 	"sp-application-crypto/std",
 	"sp-core/std",
 	"sp-keystore",
 	"sp-runtime/std",
 	"sp-std/std",
+]
+
+# Serde support without relying on std features.
+serde = [
+	"dep:serde",
+	"scale-info/serde",
+	"sp-application-crypto/serde",
+	"sp-core/serde",
+	"sp-runtime/serde",
 ]

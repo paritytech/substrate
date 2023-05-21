@@ -643,21 +643,11 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub pot: BalanceOf<T, I>,
 		pub members: Vec<T::AccountId>,
 		pub max_members: u32,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
-		fn default() -> Self {
-			Self {
-				pot: Default::default(),
-				members: Default::default(),
-				max_members: Default::default(),
-			}
-		}
 	}
 
 	#[pallet::genesis_build]

@@ -1,0 +1,11 @@
+error: Invalid pallet::storage, cannot find `Hasher` generic, required for `StorageMap`.
+  --> tests/pallet_ui/non_dev_mode_storage_map_explicit_key_default_hasher.rs:21:43
+   |
+21 |     type MyStorageMap<T: Config> = StorageMap<Key = u32, Value = u64>;
+   |                                              ^
+
+error[E0432]: unresolved import `pallet`
+ --> tests/pallet_ui/non_dev_mode_storage_map_explicit_key_default_hasher.rs:3:9
+  |
+3 | pub use pallet::*;
+  |         ^^^^^^ help: a similar path exists: `test_pallet::pallet`

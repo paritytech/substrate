@@ -32,8 +32,11 @@ use sp_std::{
 	prelude::*,
 };
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+
+#[cfg(all(not(feature = "std"), feature = "serde"))]
+use sp_std::alloc::string::{String, ToString};
 
 /// Integer types that can be used to interact with `FixedPointNumber` implementations.
 pub trait FixedPointOperand:
@@ -928,14 +931,12 @@ macro_rules! implement_fixed {
 			}
 		}
 
-		#[cfg(feature = "std")]
 		impl sp_std::fmt::Display for $name {
 			fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 				write!(f, "{}", self.0)
 			}
 		}
 
-		#[cfg(feature = "std")]
 		impl sp_std::str::FromStr for $name {
 			type Err = &'static str;
 
@@ -948,7 +949,7 @@ macro_rules! implement_fixed {
 
 		// Manual impl `Serialize` as serde_json does not support i128.
 		// TODO: remove impl if issue https://github.com/serde-rs/json/issues/548 fixed.
-		#[cfg(feature = "std")]
+		#[cfg(feature = "serde")]
 		impl Serialize for $name {
 			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 			where
@@ -960,7 +961,7 @@ macro_rules! implement_fixed {
 
 		// Manual impl `Deserialize` as serde_json does not support i128.
 		// TODO: remove impl if issue https://github.com/serde-rs/json/issues/548 fixed.
-		#[cfg(feature = "std")]
+		#[cfg(feature = "serde")]
 		impl<'de> Deserialize<'de> for $name {
 			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 			where
