@@ -361,7 +361,7 @@ pub struct GeometricDepositBase<T> {
 
 impl<T: Config> Convert<usize, BalanceOf<T>> for GeometricDepositBase<T> {
 	// Calculates the base deposit as a geometric progression based on the number of signed
-	// su Calculates.
+	// submissions.
 	//
 	// The nth term is obtained by calculating `base * (1 + increase_factor)^nth`. Example: factor
 	// 5, with initial deposit of 1000 and 10% of increase factor is 1000 * (1 + 0.1)^5.
