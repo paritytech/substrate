@@ -290,13 +290,14 @@ fn transition_to_signed_phase_from_unsigned() {
 /// <https://github.com/paritytech/substrate/pull/12420>.
 ///
 /// Related to <https://github.com/paritytech/substrate/issues/13714>.
+#[test]
 fn set_validation_intention_after_chilled() {
 	use frame_election_provider_support::SortedListProvider;
 	use pallet_staking::{Event, Forcing, Nominators};
 
 	let staking_builder = StakingExtBuilder::default();
 	let epm_builder = EpmExtBuilder::default();
-  	ExtBuilder::default()
+	ExtBuilder::default()
 		.staking(staking_builder)
 		.epm(epm_builder)
 		.build_and_execute(|| {
