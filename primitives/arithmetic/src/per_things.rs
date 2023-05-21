@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::traits::{
@@ -556,7 +556,7 @@ macro_rules! implement_per_thing {
 		/// A fixed point representation of a number in the range [0, 1].
 		///
 		#[doc = $title]
-		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+		#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 		#[derive(Encode, Copy, Clone, PartialEq, Eq, codec::MaxEncodedLen, PartialOrd, Ord, scale_info::TypeInfo)]
 		pub struct $name($type);
 
