@@ -1042,14 +1042,22 @@ pub mod pallet {
 
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.
 		///
-		/// This essentially frees up that balance to be used by the stash account to do
-		/// whatever it wants.
+		/// This essentially frees up that balance to be used by the stash account to do whatever
+		/// it wants.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller.
 		///
 		/// Emits `Withdrawn`.
 		///
 		/// See also [`Call::unbond`].
+		///
+		/// ## Parameters
+		/// - `num_slashing_spans` indicates the number of metadata slashing spans to clear when
+		/// the call to [`Call::withdraw_unbounded`] results in a complete removal of all the data
+		/// related to the stash account. In this case, the `num_slashing_spans` must be larger or
+		/// equal to the number of slashing spans associated with the stash account in the
+		/// [`SlashingSpans`] storage type, otherwise the call will fail. The call weight is
+		/// directly propotional to `num_slashing_spans`.
 		///
 		/// ## Complexity
 		/// O(S) where S is the number of slashing spans to remove
