@@ -18,7 +18,7 @@
 
 use crate::{
 	error,
-	params::{GenericNumber, PruningParams, SharedParams, DatabaseParams},
+	params::{DatabaseParams, GenericNumber, PruningParams, SharedParams},
 	CliConfiguration,
 };
 use clap::Parser;
