@@ -7,11 +7,11 @@ pub mod ed_on_bls12_377;
 pub mod ed_on_bls12_381_bandersnatch;
 mod utils;
 
-#[cfg(feature = "ec-utils-experimental")] 
+#[cfg(feature = "ec-utils-experimental")]
 use sp_runtime_interface::runtime_interface;
 
 /// Interfaces for working with elliptic curves related types from within the runtime.
-#[cfg(feature = "ec-utils-experimental")] 
+#[cfg(feature = "ec-utils-experimental")]
 #[runtime_interface]
 pub trait EllipticCurves {
 	/// Compute a multi Miller loop on bls12_381
