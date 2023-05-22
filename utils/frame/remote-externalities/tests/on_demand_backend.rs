@@ -5,7 +5,7 @@ use frame_remote_externalities::on_demand_backend::{OnDemandBackend, RawIter};
 use regex::Regex;
 use sp_core::Blake2Hasher;
 use sp_keyring::AccountKeyring;
-use sp_state_machine::StorageIterator;
+use sp_state_machine::{Backend, StorageIterator};
 use substrate_cli_test_utils as common;
 use subxt::{
 	config::substrate::{Era, SubstrateExtrinsicParamsBuilder},
@@ -19,6 +19,21 @@ pub mod node_runtime {}
 
 type SystemCall = node_runtime::runtime_types::frame_system::pallet::Call;
 type RuntimeCall = node_runtime::runtime_types::kitchensink_runtime::RuntimeCall;
+
+fn build_key_value_vec() -> Vec<(Vec<u8>, Vec<u8>)> {
+	// Make sure we have enough items to fetch a few pages from the node over the course
+	// of the tests
+	let n_items = RawIter::<Blake2Hasher>::NEXT_KEYS_CACHE_PAGE_SIZE * 3 + 10;
+	let mut v = (0..n_items)
+		.map(|i| {
+			let key = format!("test__key{}", i).into_bytes();
+			let value = format!("test__value{}", i).into_bytes();
+			(key, value)
+		})
+		.collect::<Vec<_>>();
+	v.sort();
+	v
+}
 
 async fn setup_remote_node(port: u32) -> Result<Child, subxt::Error> {
 	// Spawn node
@@ -45,11 +60,7 @@ async fn setup_remote_node(port: u32) -> Result<Child, subxt::Error> {
 	let api = OnlineClient::<SubstrateConfig>::from_url(format!("ws://localhost:{}", port)).await?;
 
 	// Create storage items
-	let items = vec![
-		(b"key1".to_vec(), b"value1".to_vec()),
-		(b"key2".to_vec(), b"value2".to_vec()),
-		(b"key3".to_vec(), b"value3".to_vec()),
-	];
+	let items = build_key_value_vec();
 	let tx_params = SubstrateExtrinsicParamsBuilder::new().era(Era::Immortal, api.genesis_hash());
 	let call = RuntimeCall::System(SystemCall::set_storage { items });
 	let tx = node_runtime::tx().sudo().sudo(call);
@@ -68,9 +79,8 @@ async fn setup_remote_node(port: u32) -> Result<Child, subxt::Error> {
 }
 
 #[tokio::test]
-async fn test_next_key() {
+async fn test_raw_iter_next_key() {
 	let port = 9989;
-
 	let _node_child = match setup_remote_node(port).await {
 		Ok(child) => child,
 		Err(e) => return println!("Error: {}", e),
@@ -81,24 +91,22 @@ async fn test_next_key() {
 			.await
 			.unwrap();
 
-	let mut iter = RawIter::new(None, None, None, true);
-
-	while let Some(key) = iter.next_key(&backend) {
-		dbg!(key.unwrap());
+	// Test iter with prefix works, and values come back OK
+	let mut iter = RawIter::new(Some(b"test__key"), None, None, true);
+	let items = build_key_value_vec();
+	for (expected_key, expected_value) in items {
+		assert_eq!(iter.next_key(&backend), Some(Ok(expected_key.clone())));
+		assert_eq!(backend.storage(&expected_key).unwrap(), Some(expected_value));
 	}
-	dbg!("done");
+	assert_eq!(iter.next_key(&backend), None);
+	assert_eq!(iter.was_complete(), true);
 
-	// // Test with a backend containing a few keys
-	// let mut iter = new_raw_iter(None, None);
-	// assert_eq!(iter.next_key(&backend), Some(Ok(b"key1".to_vec())));
-	// assert_eq!(iter.next_key(&backend), Some(Ok(b"key2".to_vec())));
-	// assert_eq!(iter.next_key(&backend), Some(Ok(b"key3".to_vec())));
-	// assert_eq!(iter.next_key(&backend), None);
-
-	// // Test with a different prefix
-	// let mut iter = new_raw_iter(Some(b"key"), None);
-	// assert_eq!(iter.next_key(&backend), Some(Ok(b"key1".to_vec())));
-	// assert_eq!(iter.next_key(&backend), Some(Ok(b"key2".to_vec())));
-	// assert_eq!(iter.next_key(&backend), Some(Ok(b"key3".to_vec())));
-	// assert_eq!(iter.next_key(&backend), None);
+	// Test iter with start_key works, and values come back OK
+	let mut iter = RawIter::new(None, None, Some(b"test__key"), true);
+	let items = build_key_value_vec();
+	for (expected_key, expected_value) in items {
+		assert_eq!(iter.next_key(&backend), Some(Ok(expected_key.clone())));
+		assert_eq!(backend.storage(&expected_key).unwrap(), Some(expected_value));
+	}
+	assert_eq!(iter.was_complete(), false);
 }

@@ -284,7 +284,7 @@ where
 	child_info: Option<ChildInfo>,
 	complete: bool,
 	next_keys_cache: Vec<Vec<u8>>,
-	_stop_on_incomplete_database: bool, // TODO: handle this?
+	_stop_on_incomplete_database: bool, // TODO: handle this boolean & test it
 	_phantom: std::marker::PhantomData<H>,
 }
 
@@ -293,7 +293,7 @@ where
 	H: Hasher + 'static,
 	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
 {
-	const NEXT_KEYS_CACHE_PAGE_SIZE: u32 = 1000;
+	pub const NEXT_KEYS_CACHE_PAGE_SIZE: u32 = 1000;
 
 	pub fn new(
 		prefix: Option<&[u8]>,
