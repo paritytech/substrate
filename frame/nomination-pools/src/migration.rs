@@ -401,14 +401,14 @@ pub mod v3 {
 			let current = Pallet::<T>::current_storage_version();
 			let onchain = Pallet::<T>::on_chain_storage_version();
 
-			log!(
-				info,
-				"Running migration with current storage version {:?} / onchain {:?}",
-				current,
-				onchain
-			);
+			if onchain == 2 {
+				log!(
+					info,
+					"Running migration with current storage version {:?} / onchain {:?}",
+					current,
+					onchain
+				);
 
-			if current > onchain {
 				let mut metadata_iterated = 0u64;
 				let mut metadata_removed = 0u64;
 				Metadata::<T>::iter_keys()
@@ -422,7 +422,7 @@ pub mod v3 {
 						metadata_removed += 1;
 						Metadata::<T>::remove(&id);
 					});
-				current.put::<Pallet<T>>();
+				StorageVersion::new(3).put::<Pallet<T>>();
 				// metadata iterated + bonded pools read + a storage version read
 				let total_reads = metadata_iterated * 2 + 1;
 				// metadata removed + a storage version write
