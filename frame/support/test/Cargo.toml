@@ -51,6 +51,7 @@ std = [
 	"sp-arithmetic/std",
 	"sp-version/std",
 	"sp-api/std",
+	"test-pallet/std",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
