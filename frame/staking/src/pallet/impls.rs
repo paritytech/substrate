@@ -1631,7 +1631,9 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		// defensive-only: any account bonded via this interface has the stash set as the
 		// controller, but we have to be sure. Same comment anywhere else that we read this.
 		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
-		Self::chill(RawOrigin::Signed(ctrl).into())
+		Self::chill(RawOrigin::Signed(ctrl).into(), None)
+			.map_err(|with_post| with_post.error)
+			.map(|_| ())
 	}
 
 	fn withdraw_unbonded(

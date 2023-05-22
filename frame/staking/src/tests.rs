@@ -243,7 +243,7 @@ fn change_controller_works() {
 		assert_eq!(Staking::bonded(&stash), Some(controller));
 
 		// `controller` can control `stash` who is initially a validator.
-		assert_ok!(Staking::chill(RuntimeOrigin::signed(controller)));
+		assert_ok!(Staking::chill(RuntimeOrigin::signed(controller), None));
 
 		// sets controller back to `stash`.
 		assert_ok!(Staking::set_controller(RuntimeOrigin::signed(stash)));
@@ -266,7 +266,7 @@ fn change_controller_already_paired_once_stash() {
 		assert_eq!(Staking::bonded(&11), Some(11));
 
 		// 11 is initially a validator.
-		assert_ok!(Staking::chill(RuntimeOrigin::signed(11)));
+		assert_ok!(Staking::chill(RuntimeOrigin::signed(11), None));
 
 		// Controller cannot change once matching with stash.
 		assert_noop!(
@@ -442,7 +442,7 @@ fn staking_should_work() {
 		assert_eq_uvec!(validator_controllers(), vec![21, 3]);
 		// --- Block 6: Unstake 4 as a validator, freeing up the balance stashed in 3
 		// 4 will chill
-		Staking::chill(RuntimeOrigin::signed(3)).unwrap();
+		Staking::chill(RuntimeOrigin::signed(3), None).unwrap();
 
 		// --- Block 7: nothing. 3 is still there.
 		start_session(7);
@@ -540,7 +540,7 @@ fn no_candidate_emergency_condition() {
 			MinimumValidatorCount::<Test>::put(11);
 
 			// try to chill
-			let res = Staking::chill(RuntimeOrigin::signed(11));
+			let res = Staking::chill(RuntimeOrigin::signed(11), None);
 			assert_ok!(res);
 
 			let current_era = CurrentEra::<Test>::get();
@@ -1969,7 +1969,7 @@ fn bond_with_little_staked_value_bounded() {
 		.minimum_validator_count(1)
 		.build_and_execute(|| {
 			// setup
-			assert_ok!(Staking::chill(RuntimeOrigin::signed(31)));
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(31), None));
 			assert_ok!(Staking::set_payee(
 				RuntimeOrigin::signed(11),
 				RewardDestination::Controller
@@ -2151,8 +2151,8 @@ fn phragmen_should_not_overflow() {
 		// This is the maximum value that we can have as the outcome of CurrencyToVote.
 		type Votes = u64;
 
-		let _ = Staking::chill(RuntimeOrigin::signed(10));
-		let _ = Staking::chill(RuntimeOrigin::signed(20));
+		let _ = Staking::chill(RuntimeOrigin::signed(10), None);
+		let _ = Staking::chill(RuntimeOrigin::signed(20), None);
 
 		bond_validator(3, Votes::max_value() as Balance);
 		bond_validator(5, Votes::max_value() as Balance);
@@ -2965,7 +2965,7 @@ fn retroactive_deferred_slashes_one_before() {
 
 		// unbond at slash era.
 		mock::start_active_era(2);
-		assert_ok!(Staking::chill(RuntimeOrigin::signed(11)));
+		assert_ok!(Staking::chill(RuntimeOrigin::signed(11), None));
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(11), 100));
 
 		mock::start_active_era(3);
@@ -3021,7 +3021,7 @@ fn staker_cannot_bail_deferred_slash() {
 		);
 
 		// now we chill
-		assert_ok!(Staking::chill(RuntimeOrigin::signed(101)));
+		assert_ok!(Staking::chill(RuntimeOrigin::signed(101), None));
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(101), 500));
 
 		assert_eq!(Staking::current_era().unwrap(), 1);
@@ -4354,7 +4354,7 @@ fn cannot_rebond_to_lower_than_ed() {
 			);
 
 			// unbond all of it. must be chilled first.
-			assert_ok!(Staking::chill(RuntimeOrigin::signed(21)));
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(21), None));
 			assert_ok!(Staking::unbond(RuntimeOrigin::signed(21), 11 * 1000));
 			assert_eq!(
 				Staking::ledger(&21).unwrap(),
@@ -4394,7 +4394,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 			);
 
 			// unbond all of it. must be chilled first.
-			assert_ok!(Staking::chill(RuntimeOrigin::signed(21)));
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(21), None));
 			assert_ok!(Staking::unbond(RuntimeOrigin::signed(21), 11 * 1000));
 			assert_eq!(
 				Staking::ledger(&21).unwrap(),
@@ -4748,7 +4748,7 @@ fn min_bond_checks_work() {
 			);
 
 			// Once they are chilled they can unbond everything
-			assert_ok!(Staking::chill(RuntimeOrigin::signed(3)));
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(3), None));
 			assert_ok!(Staking::unbond(RuntimeOrigin::signed(3), 1000));
 		})
 }
@@ -4793,16 +4793,16 @@ fn chill_other_works() {
 			// * Set a limit
 			// * Set a threshold
 			//
-			// If any of these are missing, we do not have enough information to allow the
-			// `chill_other` to succeed from one user to another.
+			// If any of these are missing, we do not have enough information to allow `chill`
+			// to succeed from one user to another.
 
 			// Can't chill these users
 			assert_noop!(
-				Staking::chill_other(RuntimeOrigin::signed(1337), 0),
+				Staking::chill(RuntimeOrigin::signed(1337), Some(0)),
 				Error::<Test>::CannotChillOther
 			);
 			assert_noop!(
-				Staking::chill_other(RuntimeOrigin::signed(1337), 2),
+				Staking::chill(RuntimeOrigin::signed(1337), Some(2)),
 				Error::<Test>::CannotChillOther
 			);
 
@@ -4819,11 +4819,11 @@ fn chill_other_works() {
 
 			// Still can't chill these users
 			assert_noop!(
-				Staking::chill_other(RuntimeOrigin::signed(1337), 0),
+				Staking::chill(RuntimeOrigin::signed(1337), Some(0)),
 				Error::<Test>::CannotChillOther
 			);
 			assert_noop!(
-				Staking::chill_other(RuntimeOrigin::signed(1337), 2),
+				Staking::chill(RuntimeOrigin::signed(1337), Some(2)),
 				Error::<Test>::CannotChillOther
 			);
 
@@ -4840,11 +4840,11 @@ fn chill_other_works() {
 
 			// Still can't chill these users
 			assert_noop!(
-				Staking::chill_other(RuntimeOrigin::signed(1337), 0),
+				Staking::chill(RuntimeOrigin::signed(1337), Some(0)),
 				Error::<Test>::CannotChillOther
 			);
 			assert_noop!(
-				Staking::chill_other(RuntimeOrigin::signed(1337), 2),
+				Staking::chill(RuntimeOrigin::signed(1337), Some(2)),
 				Error::<Test>::CannotChillOther
 			);
 
@@ -4861,11 +4861,11 @@ fn chill_other_works() {
 
 			// Still can't chill these users
 			assert_noop!(
-				Staking::chill_other(RuntimeOrigin::signed(1337), 0),
+				Staking::chill(RuntimeOrigin::signed(1337), Some(0)),
 				Error::<Test>::CannotChillOther
 			);
 			assert_noop!(
-				Staking::chill_other(RuntimeOrigin::signed(1337), 2),
+				Staking::chill(RuntimeOrigin::signed(1337), Some(2)),
 				Error::<Test>::CannotChillOther
 			);
 
@@ -4889,19 +4889,19 @@ fn chill_other_works() {
 			for i in 6..15 {
 				let b = 4 * i;
 				let d = 4 * i + 2;
-				assert_ok!(Staking::chill_other(RuntimeOrigin::signed(1337), b));
-				assert_ok!(Staking::chill_other(RuntimeOrigin::signed(1337), d));
+				assert_ok!(Staking::chill(RuntimeOrigin::signed(1337), Some(b)));
+				assert_ok!(Staking::chill(RuntimeOrigin::signed(1337), Some(d)));
 			}
 
 			// chill a nominator. Limit is not reached, not chill-able
 			assert_eq!(Nominators::<Test>::count(), 7);
 			assert_noop!(
-				Staking::chill_other(RuntimeOrigin::signed(1337), 0),
+				Staking::chill(RuntimeOrigin::signed(1337), Some(0)),
 				Error::<Test>::CannotChillOther
 			);
 			// chill a validator. Limit is reached, chill-able.
 			assert_eq!(Validators::<Test>::count(), 9);
-			assert_ok!(Staking::chill_other(RuntimeOrigin::signed(1337), 2));
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(1337), Some(2)));
 		})
 }
 
@@ -5143,7 +5143,7 @@ fn change_of_max_nominations() {
 			// or they can be chilled by any account.
 			assert!(Nominators::<Test>::contains_key(101));
 			assert!(Nominators::<Test>::get(101).is_none());
-			assert_ok!(Staking::chill_other(RuntimeOrigin::signed(71), 101));
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(71), Some(101)));
 			assert!(!Nominators::<Test>::contains_key(101));
 			assert!(Nominators::<Test>::get(101).is_none());
 		})

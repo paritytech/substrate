@@ -459,7 +459,7 @@ benchmarks! {
 		assert!(T::VoterList::contains(&stash));
 
 		whitelist_account!(controller);
-	}: _(RawOrigin::Signed(controller))
+	}: _(RawOrigin::Signed(controller), None)
 	verify {
 		assert!(!T::VoterList::contains(&stash));
 	}
@@ -897,7 +897,7 @@ benchmarks! {
 		)?;
 
 		let caller = whitelisted_caller();
-	}: _(RawOrigin::Signed(caller), controller)
+	}: chill(RawOrigin::Signed(caller), Some(controller))
 	verify {
 		assert!(!T::VoterList::contains(&stash));
 	}

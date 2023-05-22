@@ -1087,7 +1087,7 @@ pub mod pallet {
 			// Only check limits if they are not already a validator.
 			if !Validators::<T>::contains_key(stash) {
 				// If this error is reached, we need to adjust the `MinValidatorBond` and start
-				// calling `chill_other`. Until then, we explicitly block new validators to protect
+				// calling `chill`. Until then, we explicitly block new validators to protect
 				// the runtime.
 				if let Some(max_validators) = MaxValidatorsCount::<T>::get() {
 					ensure!(
@@ -1129,7 +1129,7 @@ pub mod pallet {
 			// Only check limits if they are not already a nominator.
 			if !Nominators::<T>::contains_key(stash) {
 				// If this error is reached, we need to adjust the `MinNominatorBond` and start
-				// calling `chill_other`. Until then, we explicitly block new nominators to protect
+				// calling `chill`. Until then, we explicitly block new nominators to protect
 				// the runtime.
 				if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
 					ensure!(
@@ -1169,25 +1169,6 @@ pub mod pallet {
 
 			Self::do_remove_validator(stash);
 			Self::do_add_nominator(stash, nominations);
-			Ok(())
-		}
-
-		/// Declare no desire to either validate or nominate.
-		///
-		/// Effects will be felt at the beginning of the next era.
-		///
-		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
-		///
-		/// ## Complexity
-		/// - Independent of the arguments. Insignificant complexity.
-		/// - Contains one read.
-		/// - Writes are limited to the `origin` account key.
-		#[pallet::call_index(6)]
-		#[pallet::weight(T::WeightInfo::chill())]
-		pub fn chill(origin: OriginFor<T>) -> DispatchResult {
-			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			Self::chill_stash(&ledger.stash);
 			Ok(())
 		}
 
@@ -1634,91 +1615,6 @@ pub mod pallet {
 			config_op_exp!(MinCommission<T>, min_commission);
 			Ok(())
 		}
-		/// Declare a `controller` to stop participating as either a validator or nominator.
-		///
-		/// Effects will be felt at the beginning of the next era.
-		///
-		/// The dispatch origin for this call must be _Signed_, but can be called by anyone.
-		///
-		/// If the caller is the same as the controller being targeted, then no further checks are
-		/// enforced, and this function behaves just like `chill`.
-		///
-		/// If the caller is different than the controller being targeted, the following conditions
-		/// must be met:
-		///
-		/// * `controller` must belong to a nominator who has become non-decodable,
-		///
-		/// Or:
-		///
-		/// * A `ChillThreshold` must be set and checked which defines how close to the max
-		///   nominators or validators we must reach before users can start chilling one-another.
-		/// * A `MaxNominatorCount` and `MaxValidatorCount` must be set which is used to determine
-		///   how close we are to the threshold.
-		/// * A `MinNominatorBond` and `MinValidatorBond` must be set and checked, which determines
-		///   if this is a person that should be chilled because they have not met the threshold
-		///   bond required.
-		///
-		/// This can be helpful if bond requirements are updated, and we need to remove old users
-		/// who do not satisfy these requirements.
-		#[pallet::call_index(23)]
-		#[pallet::weight(T::WeightInfo::chill_other())]
-		pub fn chill_other(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
-			// Anyone can call this function.
-			let caller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			let stash = ledger.stash;
-
-			// In order for one user to chill another user, the following conditions must be met:
-			//
-			// * `controller` belongs to a nominator who has become non-decodable,
-			//
-			// Or
-			//
-			// * A `ChillThreshold` is set which defines how close to the max nominators or
-			//   validators we must reach before users can start chilling one-another.
-			// * A `MaxNominatorCount` and `MaxValidatorCount` which is used to determine how close
-			//   we are to the threshold.
-			// * A `MinNominatorBond` and `MinValidatorBond` which is the final condition checked to
-			//   determine this is a person that should be chilled because they have not met the
-			//   threshold bond required.
-			//
-			// Otherwise, if caller is the same as the controller, this is just like `chill`.
-
-			if Nominators::<T>::contains_key(&stash) && Nominators::<T>::get(&stash).is_none() {
-				Self::chill_stash(&stash);
-				return Ok(())
-			}
-
-			if caller != controller {
-				let threshold = ChillThreshold::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
-				let min_active_bond = if Nominators::<T>::contains_key(&stash) {
-					let max_nominator_count =
-						MaxNominatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
-					let current_nominator_count = Nominators::<T>::count();
-					ensure!(
-						threshold * max_nominator_count < current_nominator_count,
-						Error::<T>::CannotChillOther
-					);
-					MinNominatorBond::<T>::get()
-				} else if Validators::<T>::contains_key(&stash) {
-					let max_validator_count =
-						MaxValidatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
-					let current_validator_count = Validators::<T>::count();
-					ensure!(
-						threshold * max_validator_count < current_validator_count,
-						Error::<T>::CannotChillOther
-					);
-					MinValidatorBond::<T>::get()
-				} else {
-					Zero::zero()
-				};
-
-				ensure!(ledger.active < min_active_bond, Error::<T>::CannotChillOther);
-			}
-
-			Self::chill_stash(&stash);
-			Ok(())
-		}
 
 		/// Force a validator to have at least the minimum commission. This will not affect a
 		/// validator who already has a commission greater than or equal to the minimum. Any account
@@ -1753,6 +1649,103 @@ pub mod pallet {
 			T::AdminOrigin::ensure_origin(origin)?;
 			MinCommission::<T>::put(new);
 			Ok(())
+		}
+
+		/// Declare a `controller` to stop participating as either a validator or nominator.
+		///
+		/// Effects will be felt at the beginning of the next era.
+		///
+		/// The dispatch origin for this call must be _Signed_, but can be called by anyone.
+		///
+		/// If the caller is the same as the controller being targeted, then no further checks are
+		/// enforced, and this function behaves just like `chill`.
+		///
+		/// If the caller is different than the controller being targeted, the following conditions
+		/// must be met:
+		///
+		/// * `controller` must belong to a nominator who has become non-decodable,
+		///
+		/// Or:
+		///
+		/// * A `ChillThreshold` must be set and checked which defines how close to the max
+		///   nominators or validators we must reach before users can start chilling one-another.
+		/// * A `MaxNominatorCount` and `MaxValidatorCount` must be set which is used to determine
+		///   how close we are to the threshold.
+		/// * A `MinNominatorBond` and `MinValidatorBond` must be set and checked, which determines
+		///   if this is a person that should be chilled because they have not met the threshold
+		///   bond required.
+		///
+		/// This can be helpful if bond requirements are updated, and we need to remove old users
+		/// who do not satisfy these requirements.
+		#[pallet::call_index(26)]
+		#[pallet::weight(T::WeightInfo::chill_other())]
+		pub fn chill(
+			origin: OriginFor<T>,
+			controller: Option<T::AccountId>,
+		) -> DispatchResultWithPostInfo {
+			let caller = ensure_signed(origin)?;
+
+			// In order for one user to chill another user, the following conditions must be met:
+			//
+			// * `controller` belongs to a nominator who has become non-decodable,
+			//
+			// Or
+			//
+			// * A `ChillThreshold` is set which defines how close to the max nominators or
+			//   validators we must reach before users can start chilling one-another.
+			// * A `MaxNominatorCount` and `MaxValidatorCount` which is used to determine how close
+			//   we are to the threshold.
+			// * A `MinNominatorBond` and `MinValidatorBond` which is the final condition checked to
+			//   determine this is a person that should be chilled because they have not met the
+			//   threshold bond required.
+			//
+			// Otherwise, if caller is the same as the controller, this is just like `chill`.
+			let used_weight = if let Some(controller) = controller {
+				let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+				let stash = ledger.stash;
+
+				// caller controlls the controller.
+				if Nominators::<T>::contains_key(&stash) && Nominators::<T>::get(&stash).is_none() {
+					Self::chill_stash(&stash);
+					return Ok(Some(T::WeightInfo::chill()).into())
+				}
+
+				let threshold = ChillThreshold::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
+				let min_active_bond = if Nominators::<T>::contains_key(&stash) {
+					let max_nominator_count =
+						MaxNominatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
+					let current_nominator_count = Nominators::<T>::count();
+					ensure!(
+						threshold * max_nominator_count < current_nominator_count,
+						Error::<T>::CannotChillOther
+					);
+					MinNominatorBond::<T>::get()
+				} else if Validators::<T>::contains_key(&stash) {
+					let max_validator_count =
+						MaxValidatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
+					let current_validator_count = Validators::<T>::count();
+					ensure!(
+						threshold * max_validator_count < current_validator_count,
+						Error::<T>::CannotChillOther
+					);
+					MinValidatorBond::<T>::get()
+				} else {
+					Zero::zero()
+				};
+
+				ensure!(ledger.active < min_active_bond, Error::<T>::CannotChillOther);
+
+				Self::chill_stash(&stash);
+				T::WeightInfo::chill_other()
+			} else {
+				let ledger = Self::ledger(&caller).ok_or(Error::<T>::NotController)?;
+				let stash = ledger.stash;
+
+				Self::chill_stash(&stash);
+				T::WeightInfo::chill()
+			};
+
+			Ok(Some(used_weight).into())
 		}
 	}
 }
