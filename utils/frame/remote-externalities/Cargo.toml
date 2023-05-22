@@ -16,16 +16,21 @@ jsonrpsee = { version = "0.16.2", features = ["http-client", "ws-client"] }
 codec = { package = "parity-scale-codec", version = "3.2.2" }
 log = "0.4.17"
 serde = "1.0.136"
+regex = "1.6.0"
+frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
+assert_cmd = "2.0.10"
 frame-support = { version = "4.0.0-dev", optional = true, path = "../../../frame/support" }
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-externalities = { version = "0.13.0", path = "../../../primitives/externalities" }
 sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-keyring = "23.0.0"
 sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
 sp-state-machine = { version = "0.13.0", path = "../../../primitives/state-machine" }
 hash-db = "0.16.0"
 tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread"] }
 substrate-rpc-client = { path = "../rpc/client" }
+substrate-cli-test-utils = { path = "../../../test-utils/cli" }
 futures = "0.3"
 async-recursion = "1.0.4"
 indicatif = "0.17.3"
@@ -33,6 +38,7 @@ spinners = "4.1.0"
 async-std = "1.12.0"
 serde_json = "1.0.96"
 rayon = "1.7.0"
+subxt = "0.28.0"
 
 [dev-dependencies]
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }

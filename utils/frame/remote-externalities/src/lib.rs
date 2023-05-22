@@ -938,7 +938,8 @@ where
 			"ws://localhost:9944".to_owned(),
 			Some(H256(block_hash.encode().as_slice().try_into().unwrap())),
 			StateVersion::V1,
-		)?;
+		)
+		.await?;
 		Ok(RemoteExternalities { block_hash, inner_ext, on_demand_ext: Some(on_demand_ext) })
 	}
 

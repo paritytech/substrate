@@ -27,12 +27,12 @@ where
 	H: Hasher + 'static,
 	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
 {
-	pub fn new(
+	pub async fn new(
 		rpc_uri: String,
 		at: Option<H256>,
 		state_version: StateVersion,
 	) -> Result<Self, &'static str> {
-		let backend = OnDemandBackend::new(rpc_uri, at)?;
+		let backend = OnDemandBackend::new(rpc_uri, at, true).await?;
 		Ok(OnDemandExt {
 			overlay: OverlayedChanges::default(),
 			extensions: Default::default(),

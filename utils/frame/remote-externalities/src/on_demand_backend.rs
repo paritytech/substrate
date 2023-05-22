@@ -1,4 +1,3 @@
-use async_std;
 use codec::{Decode, Encode};
 use core::fmt::Debug;
 use hash_db::Hasher;
@@ -41,6 +40,7 @@ where
 	// TODO: make this an LRU cache
 	pub cache: InMemoryBackend<H>,
 	ws_client: Arc<WsClient>,
+	rpc_uri: String,
 	// TODO: make this a generic type
 	at: Arc<Option<H256>>,
 	// TODO: we still create a new Runtime inside the thread each time we use it,
@@ -50,6 +50,15 @@ where
 	// TODO: cap the size of this Map, so it doesn't exhaust memory in extreme scenarios
 	next_storage_key_iters: HashMap<Vec<u8>, RawIter<H>>,
 	// TODO: create an iter for next_child_stroage_key
+	/// Create a WS connection on start and use it for all requests.
+	/// Set this to false in environments where the WsClient can't be passed between threads
+	/// properly, like in tests.
+	///
+	/// Careful: recreating a WsClient every request can heavily degrade performance.
+	///
+	/// TODO: Need to understand why this doesn't work in tests, and if we can find a better soln
+	/// than this hacky workaround.
+	reuse_ws_connection: bool,
 }
 
 impl<H> Debug for OnDemandBackend<H>
@@ -67,23 +76,34 @@ where
 	H: Hasher + 'static,
 	H::Out: Ord + 'static + codec::Codec + DeserializeOwned + Serialize,
 {
-	pub fn new(rpc_uri: String, at: Option<H256>) -> Result<Self, &'static str> {
-		let ws_client = async_std::task::block_on(
-			WsClientBuilder::default()
-				.max_request_body_size(u32::MAX)
-				.connection_timeout(Duration::from_secs(15))
-				.build(rpc_uri),
-		)
-		.unwrap(); // TODO: Handle error
+	pub async fn new(
+		rpc_uri: String,
+		at: Option<H256>,
+		reuse_ws_connection: bool,
+	) -> Result<Self, &'static str> {
+		if !reuse_ws_connection {
+			log::warn!("Creating a new WsClient for each request. This should not be used in production as it can heavily degrade performance.");
+		};
 
 		let pool = rayon::ThreadPoolBuilder::new().num_threads(1).build().unwrap(); // TODO: Handle error
 		Ok(Self {
-			ws_client: Arc::new(ws_client),
+			ws_client: Arc::new(Self::new_ws_client(rpc_uri.clone()).await),
 			cache: InMemoryBackend::default(),
 			at: Arc::new(at),
 			pool,
 			next_storage_key_iters: HashMap::new(),
+			rpc_uri,
+			reuse_ws_connection,
 		})
+	}
+
+	async fn new_ws_client(rpc_uri: String) -> WsClient {
+		WsClientBuilder::default()
+			.max_request_body_size(u32::MAX)
+			.connection_timeout(Duration::from_secs(15))
+			.build(rpc_uri.clone())
+			.await
+			.unwrap()
 	}
 
 	// TODO: implement batch_remote for child storage
@@ -95,9 +115,18 @@ where
 
 		let ws_client = self.ws_client.clone();
 		let at = self.at.clone();
+		let rpc_uri = self.rpc_uri.clone();
+		let reuse_ws_connection = self.reuse_ws_connection;
 
 		let (tx, rx) = mpsc::channel();
 		self.pool.spawn(move || {
+			let rt = tokio::runtime::Runtime::new().unwrap();
+			let ws_client = if reuse_ws_connection {
+				ws_client
+			} else {
+				Arc::new(rt.block_on(Self::new_ws_client(rpc_uri.clone())))
+			};
+
 			// Build the batch request
 			let mut batch = BatchRequestBuilder::new();
 			for k in keys.into_iter() {
@@ -106,7 +135,6 @@ where
 					.expect("params are valid, qed.");
 			}
 
-			let rt = tokio::runtime::Runtime::new().unwrap();
 			let result = rt.block_on(ws_client.batch_request::<Option<StorageData>>(batch));
 
 			tx.send(result).unwrap();
@@ -146,10 +174,18 @@ where
 		let prefix = prefix.map(|p| StorageKey(p.to_vec()));
 		let start_key = start_key.map(|p| StorageKey(p.to_vec()));
 		let at = self.at.clone();
+		let reuse_ws_connection = self.reuse_ws_connection;
+		let rpc_uri = self.rpc_uri.clone();
 
 		let (tx, rx) = mpsc::channel();
 		self.pool.spawn(move || {
 			let rt = tokio::runtime::Runtime::new().unwrap();
+			let ws_client = if reuse_ws_connection {
+				ws_client
+			} else {
+				Arc::new(rt.block_on(Self::new_ws_client(rpc_uri.clone())))
+			};
+
 			let result = rt
 				.block_on(substrate_rpc_client::StateApi::<H256>::storage_keys_paged(
 					ws_client.as_ref(),
@@ -191,10 +227,18 @@ where
 		let start_key = start_key.map(|p| StorageKey(p.to_vec()));
 		let at = self.at.clone();
 		let child_info_prefixed_storage_key = child_info.prefixed_storage_key().clone();
+		let reuse_ws_connection = self.reuse_ws_connection;
+		let rpc_uri = self.rpc_uri.clone();
 
 		let (tx, rx) = mpsc::channel();
 		self.pool.spawn(move || {
 			let rt = tokio::runtime::Runtime::new().unwrap();
+			let ws_client = if reuse_ws_connection {
+				ws_client
+			} else {
+				Arc::new(rt.block_on(Self::new_ws_client(rpc_uri.clone())))
+			};
+
 			let result = rt
 				.block_on(substrate_rpc_client::ChildStateApi::<H256>::storage_keys_paged(
 					ws_client.as_ref(),
