@@ -26,22 +26,22 @@ use crate::{
 		MaybeSerializeDeserialize, Member, SimpleBitOps,
 	},
 };
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sp_core::U256;
 use sp_std::fmt::Debug;
 
 /// Abstraction over a block header for a substrate chain.
 #[derive(Encode, Decode, PartialEq, Eq, Clone, sp_core::RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	/// The parent hash.
 	pub parent_hash: Hash::Output,
 	/// The block number.
 	#[cfg_attr(
-		feature = "std",
+		feature = "serde",
 		serde(serialize_with = "serialize_number", deserialize_with = "deserialize_number")
 	)]
 	#[codec(compact)]
@@ -54,7 +54,7 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	pub digest: Digest,
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 pub fn serialize_number<S, T: Copy + Into<U256> + TryFrom<U256>>(
 	val: &T,
 	s: S,
@@ -66,7 +66,7 @@ where
 	serde::Serialize::serialize(&u256, s)
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 pub fn deserialize_number<'a, D, T: Copy + Into<U256> + TryFrom<U256>>(d: D) -> Result<T, D::Error>
 where
 	D: serde::Deserializer<'a>,

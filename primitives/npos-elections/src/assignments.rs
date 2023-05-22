@@ -18,7 +18,7 @@
 //! Structs and helpers for distributing a voter's stake among various winners.
 
 use crate::{ExtendedBalance, IdentifierT, PerThing128};
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use codec::{Decode, Encode};
 use sp_arithmetic::{
 	traits::{Bounded, Zero},
@@ -29,7 +29,7 @@ use sp_std::vec::Vec;
 
 /// A voter's stake assignment among a set of targets, represented as ratios.
 #[derive(RuntimeDebug, Clone, Default)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
+#[cfg_attr(feature = "serde", derive(PartialEq, Eq, Encode, Decode))]
 pub struct Assignment<AccountId, P: PerThing> {
 	/// Voter's identifier.
 	pub who: AccountId,
@@ -97,7 +97,7 @@ impl<AccountId: IdentifierT, P: PerThing128> Assignment<AccountId, P> {
 /// A voter's stake assignment among a set of targets, represented as absolute values in the scale
 /// of [`ExtendedBalance`].
 #[derive(RuntimeDebug, Clone, Default)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
+#[cfg_attr(feature = "serde", derive(PartialEq, Eq, Encode, Decode))]
 pub struct StakedAssignment<AccountId> {
 	/// Voter's identifier
 	pub who: AccountId,
