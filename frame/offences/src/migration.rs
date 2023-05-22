@@ -139,7 +139,7 @@ mod test {
 		ext.execute_with(|| {
 			assert_eq!(
 				v1::MigrateToV1::<T>::on_runtime_upgrade(),
-				<T as frame_system::Config>::DbWeight::get().reads_writes(1, 1),
+				<T as frame_system::Config>::DbWeight::get().reads_writes(2, 2),
 			);
 
 			assert!(<v0::ReportsByKindIndex<T>>::iter_values().count() == 0);
