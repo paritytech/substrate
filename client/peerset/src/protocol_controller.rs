@@ -484,7 +484,7 @@ impl ProtocolController {
 		// Disconnect all non-reserved peers.
 		self.nodes
 			.iter()
-			.map(|(k, v)| (k.clone(), v.clone()))
+			.map(|(k, v)| (*k, *v))
 			.collect::<Vec<(_, _)>>()
 			.iter()
 			.for_each(|(peer_id, direction)| {
