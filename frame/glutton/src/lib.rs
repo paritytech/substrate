@@ -184,7 +184,7 @@ pub mod pallet {
 		/// `current_count` is the current number of elements in `TrashData`. This can be set to
 		/// `None` when the pallet is first initialized.
 		///
-		/// Only callable by Root or `Admintrash_countOrigin`. A good default for `new_count` is
+		/// Only callable by Root or `AdminOrigin`. A good default for `new_count` is
 		/// `5_000`.
 		#[pallet::call_index(0)]
 		#[pallet::weight(
