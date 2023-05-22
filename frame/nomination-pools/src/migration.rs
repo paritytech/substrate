@@ -436,10 +436,6 @@ pub mod v3 {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			ensure!(
-				Pallet::<T>::current_storage_version() >= Pallet::<T>::on_chain_storage_version(),
-				"nomination-pools::migration::v3: on_chain version is greater than current version"
-			);
 			Ok(Vec::new())
 		}
 
@@ -539,10 +535,6 @@ pub mod v4 {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			ensure!(
-				Pallet::<T>::current_storage_version() >= Pallet::<T>::on_chain_storage_version(),
-				"nomination-pools::migration::v3tov5: on_chain version is greater than current version"
-			);
 			Ok(Vec::new())
 		}
 
@@ -635,11 +627,6 @@ pub mod v5 {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			ensure!(
-				Pallet::<T>::current_storage_version() >= Pallet::<T>::on_chain_storage_version(),
-				"nomination-pools::migration::v5: on_chain version is greater than current version"
-			);
-
 			let rpool_keys = RewardPools::<T>::iter_keys().count();
 			let rpool_values = RewardPools::<T>::iter_values().count();
 			if rpool_keys != rpool_values {

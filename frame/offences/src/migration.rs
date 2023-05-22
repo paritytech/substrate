@@ -52,11 +52,6 @@ pub mod v1 {
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			ensure!(
-				Pallet::<T>::current_storage_version() >= Pallet::<T>::on_chain_storage_version(),
-				"offences::migration::v1: on_chain version is greater than current version"
-			);
-
 			log::info!(
 				target: LOG_TARGET,
 				"Number of reports to refund and delete: {}",
