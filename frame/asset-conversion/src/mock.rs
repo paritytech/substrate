@@ -147,7 +147,7 @@ impl pallet_assets::Config<Instance2> for Test {
 parameter_types! {
 	pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
 	pub storage AllowMultiAssetPools: bool = true;
-	pub storage LiquidityWithdrawalFee: Permill = Permill::from_float(0.002); // should be non-zero if AllowMultiAssetPools is true, otherwise can be zero
+	pub storage LiquidityWithdrawalFee: Permill = Permill::from_percent(0); // should be non-zero if AllowMultiAssetPools is true, otherwise can be zero
 }
 
 ord_parameter_types! {
