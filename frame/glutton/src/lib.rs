@@ -105,6 +105,37 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type TrashDataCount<T: Config> = StorageValue<_, u32, ValueQuery>;
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig {
+		pub compute: Perbill,
+		pub storage: Perbill,
+		pub trash_data_count: u32,
+	}
+
+	impl Default for GenesisConfig {
+		fn default() -> Self {
+			Self {
+				compute: Default::default(),
+				storage: Default::default(),
+				trash_data_count: Default::default(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		fn build(&self) {
+			<Compute<T>>::put(self.compute);
+			<Storage<T>>::put(self.storage);
+
+			if self.trash_data_count <= 65_000 {
+				(0..self.trash_data_count).for_each(|i| TrashData::<T>::insert(i, [i as u8; 1024]));
+			}
+
+			TrashDataCount::<T>::set(self.trash_data_count);
+		}
+	}
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
