@@ -1662,7 +1662,6 @@ pub mod pallet {
 		pub global_max_commission: Option<Perbill>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {

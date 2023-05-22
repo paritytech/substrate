@@ -368,7 +368,7 @@ pub mod pallet {
 			who: T::AccountId,
 			at_rank: RankOf<T, I>,
 		) -> DispatchResult {
-			match T::PromoteOrigin::try_origin(origin) {
+			match T::ApproveOrigin::try_origin(origin) {
 				Ok(allow_rank) => ensure!(allow_rank >= at_rank, Error::<T, I>::NoPermission),
 				Err(origin) => ensure_root(origin)?,
 			}

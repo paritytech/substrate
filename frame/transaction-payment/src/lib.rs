@@ -362,7 +362,6 @@ pub mod pallet {
 		pub multiplier: Multiplier,
 	}
 
-	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
 			Self { multiplier: MULTIPLIER_DEFAULT_VALUE }

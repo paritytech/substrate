@@ -35,6 +35,15 @@ pub mod pallet {
 	#[pallet::storage]
 	type MyCountedStorageMap<T: Config> = CountedStorageMap<_, _, u32, u64>;
 
+	#[pallet::storage]
+	pub type MyStorageMap2<T: Config> = StorageMap<Key = u32, Value = u64>;
+
+	#[pallet::storage]
+	type MyStorageDoubleMap2<T: Config> = StorageDoubleMap<Key1 = u32, Key2 = u64, Value = u64>;
+
+	#[pallet::storage]
+	type MyCountedStorageMap2<T: Config> = CountedStorageMap<Key = u32, Value = u64>;
+
 	// Your Pallet's callable functions.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
