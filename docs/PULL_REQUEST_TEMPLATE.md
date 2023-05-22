@@ -12,6 +12,8 @@ Thank you for your Pull Request! 🙏 Please make sure it follows the contributi
 - Why are these changes needed?
 - How were these changes implemented and what do they affect?
 
+*Use [Github semantic linking](https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword) to address any open issues this PR relates to or closes.*
+
 Fixes # (issue number, *if applicable*) 
 
 Closes # (issue number, *if applicable*) 
