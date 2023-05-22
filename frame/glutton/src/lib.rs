@@ -102,7 +102,7 @@ pub mod pallet {
 	pub(super) type TrashData<T: Config> = StorageMap<
 		Hasher = Twox64Concat,
 		Key = u32,
-		Value = [u8; 1024],
+		Value = [u8; VALUE_SIZE],
 		QueryKind = OptionQuery,
 		MaxValues = ConstU32<65_000>,
 	>;
@@ -297,7 +297,7 @@ pub mod pallet {
 			// compiler does not know that (hopefully).
 			debug_assert!(clobber.len() == 64);
 			if clobber.len() == 65 {
-				TrashData::<T>::insert(0, [clobber[0] as u8; 1024]);
+				TrashData::<T>::insert(0, [clobber[0] as u8; VALUE_SIZE]);
 			}
 		}
 
