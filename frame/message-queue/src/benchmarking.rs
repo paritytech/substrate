@@ -142,7 +142,7 @@ mod benchmarks {
 		// Check that it was processed.
 		assert_last_event::<T>(
 			Event::Processed {
-				hash: T::Hashing::hash(&msg),
+				id: sp_io::hashing::blake2_256(&msg),
 				origin: 0.into(),
 				weight_used: 1.into_weight(),
 				success: true,
@@ -227,7 +227,7 @@ mod benchmarks {
 
 		assert_last_event::<T>(
 			Event::Processed {
-				hash: T::Hashing::hash(&((msgs - 1) as u32).encode()),
+				id: sp_io::hashing::blake2_256(&((msgs - 1) as u32).encode()),
 				origin: 0.into(),
 				weight_used: Weight::from_parts(1, 1),
 				success: true,
@@ -264,7 +264,7 @@ mod benchmarks {
 
 		assert_last_event::<T>(
 			Event::Processed {
-				hash: T::Hashing::hash(&((msgs - 1) as u32).encode()),
+				id: sp_io::hashing::blake2_256(&((msgs - 1) as u32).encode()),
 				origin: 0.into(),
 				weight_used: Weight::from_parts(1, 1),
 				success: true,
