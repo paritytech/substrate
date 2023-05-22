@@ -238,8 +238,10 @@ pub mod pallet {
 
 		/// Set how much of the remaining `proof_size` weight should be consumed by `on_idle`.
 		//
-		/// 100% means that all remaining `proof_size` will be consumed. The PoV metering will
-		/// likely be an
+		/// 100% means that all remaining `proof_size` will be consumed. The PoV benchmarking
+		/// results that are used here are likely an over-estimation. 100% intended consumption will
+		/// therefore translate to less than 100% actual consumption. In the future, this could be
+		/// counter-acted by allowing the glutton to specify over-unity consumption ratios.
 		///
 		/// Only callable by Root or `AdminOrigin`.
 		#[pallet::call_index(2)]
