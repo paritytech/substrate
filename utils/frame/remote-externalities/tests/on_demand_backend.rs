@@ -79,34 +79,68 @@ async fn setup_remote_node(port: u32) -> Result<Child, subxt::Error> {
 }
 
 #[tokio::test]
-async fn test_raw_iter_next_key() {
+async fn test_raw_iter() {
 	let port = 9989;
 	let _node_child = match setup_remote_node(port).await {
 		Ok(child) => child,
 		Err(e) => return println!("Error: {}", e),
 	};
 
-	let backend =
-		OnDemandBackend::<Blake2Hasher>::new("ws://localhost:9989".to_owned(), None, false)
-			.await
-			.unwrap();
+	let backend = OnDemandBackend::<Blake2Hasher>::new(
+		format!("ws://localhost:{}", port).to_owned(),
+		None,
+		false,
+	)
+	.await
+	.unwrap();
 
 	// Test iter with prefix works, and values come back OK
 	let mut iter = RawIter::new(Some(b"test__key"), None, None, true);
 	let items = build_key_value_vec();
-	for (expected_key, expected_value) in items {
+	for (expected_key, expected_value) in items.clone() {
 		assert_eq!(iter.next_key(&backend), Some(Ok(expected_key.clone())));
 		assert_eq!(backend.storage(&expected_key).unwrap(), Some(expected_value));
 	}
+	assert_eq!(iter.was_complete(), true);
 	assert_eq!(iter.next_key(&backend), None);
 	assert_eq!(iter.was_complete(), true);
 
 	// Test iter with start_key works, and values come back OK
 	let mut iter = RawIter::new(None, None, Some(b"test__key"), true);
-	let items = build_key_value_vec();
-	for (expected_key, expected_value) in items {
+	for (expected_key, expected_value) in items.clone() {
 		assert_eq!(iter.next_key(&backend), Some(Ok(expected_key.clone())));
 		assert_eq!(backend.storage(&expected_key).unwrap(), Some(expected_value));
 	}
 	assert_eq!(iter.was_complete(), false);
+
+	// Test iter next_pair works
+	let mut iter = RawIter::new(Some(b"test__key"), None, None, true);
+	for (expected_key, expected_value) in items.clone() {
+		assert_eq!(iter.next_pair(&backend), Some(Ok((expected_key, expected_value))));
+	}
+	assert_eq!(iter.was_complete(), true);
+	assert_eq!(iter.next_pair(&backend), None);
+	assert_eq!(iter.was_complete(), true);
+
+	// Test using next_key and next_pair together on the same iter works
+	let mut iter = RawIter::new(Some(b"test__key"), None, None, true);
+	for (i, (expected_key, expected_value)) in items.clone().iter().enumerate() {
+		// Every 5th iteration use next_pair
+		if i % 5 == 0 {
+			assert_eq!(
+				iter.next_pair(&backend),
+				Some(Ok((expected_key.clone(), expected_value.clone())))
+			);
+		} else {
+			assert_eq!(iter.next_key(&backend), Some(Ok(expected_key.clone())));
+			assert_eq!(
+				backend.storage(&expected_key.clone()).unwrap(),
+				Some(expected_value.clone())
+			);
+		}
+	}
+	assert_eq!(iter.was_complete(), true);
+	assert_eq!(iter.next_pair(&backend), None);
+	assert_eq!(iter.next_key(&backend), None);
+	assert_eq!(iter.was_complete(), true);
 }

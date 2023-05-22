@@ -378,8 +378,6 @@ where
 	}
 
 	fn next_pair(&mut self, backend: &Self::Backend) -> Option<Result<(Vec<u8>, Vec<u8>), String>> {
-		// TODO: optimistically fetch future pairs here, so we don't need to go to the node every
-		// single key
 		// TODO: better err handling
 		let key = match self.next_key(backend) {
 			Some(Ok(key)) => key,
