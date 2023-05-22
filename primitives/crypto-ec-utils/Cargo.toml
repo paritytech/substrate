@@ -1,5 +1,5 @@
 [package]
-name = "sp-arkworks"
+name = "sp-crypto-ec-utils"
 version = "0.4.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"

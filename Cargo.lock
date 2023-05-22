@@ -10875,32 +10875,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-arkworks"
-version = "0.4.0"
-dependencies = [
- "ark-algebra-test-templates",
- "ark-bls12-377",
- "ark-bls12-381",
- "ark-bw6-761",
- "ark-ec",
- "ark-ed-on-bls12-377",
- "ark-ed-on-bls12-381-bandersnatch",
- "ark-ff",
- "ark-scale",
- "ark-serialize",
- "ark-std",
- "parity-scale-codec",
- "sp-ark-bls12-377",
- "sp-ark-bls12-381",
- "sp-ark-bw6-761",
- "sp-ark-ed-on-bls12-377",
- "sp-ark-ed-on-bls12-381-bandersnatch",
- "sp-ark-models",
- "sp-io",
- "sp-std",
-]
-
-[[package]]
 name = "sp-authority-discovery"
 version = "4.0.0-dev"
 dependencies = [
@@ -11123,6 +11097,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-crypto-ec-utils"
+version = "0.4.0"
+dependencies = [
+ "ark-algebra-test-templates",
+ "ark-bls12-377",
+ "ark-bls12-381",
+ "ark-bw6-761",
+ "ark-ec",
+ "ark-ed-on-bls12-377",
+ "ark-ed-on-bls12-381-bandersnatch",
+ "ark-ff",
+ "ark-scale",
+ "ark-serialize",
+ "ark-std",
+ "parity-scale-codec",
+ "sp-ark-bls12-377",
+ "sp-ark-bls12-381",
+ "sp-ark-bw6-761",
+ "sp-ark-ed-on-bls12-377",
+ "sp-ark-ed-on-bls12-381-bandersnatch",
+ "sp-ark-models",
+ "sp-io",
+ "sp-std",
+]
+
+[[package]]
 name = "sp-database"
 version = "4.0.0-dev"
 dependencies = [
@@ -11177,8 +11177,8 @@ dependencies = [
  "parity-scale-codec",
  "rustversion",
  "secp256k1",
- "sp-arkworks",
  "sp-core",
+ "sp-crypto-ec-utils",
  "sp-externalities",
  "sp-keystore",
  "sp-runtime-interface",
