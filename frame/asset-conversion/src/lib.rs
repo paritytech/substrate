@@ -103,6 +103,7 @@ pub mod pallet {
 		},
 		BoundedBTreeSet, PalletId,
 	};
+	use sp_arithmetic::Permill;
 	use sp_runtime::{
 		traits::{IntegerSquareRoot, One, Zero},
 		Saturating,
@@ -178,7 +179,7 @@ pub mod pallet {
 
 		/// A fee to provide the liquidity.
 		#[pallet::constant]
-		type LiquidityProvisionFee: Get<Self::Balance>;
+		type LiquidityWithdrawalFee: Get<Permill>;
 
 		/// The minimum LP token amount that could be minted. Ameliorates rounding errors.
 		#[pallet::constant]
@@ -265,6 +266,8 @@ pub mod pallet {
 			lp_token: T::PoolAssetId,
 			/// The amount of lp tokens that were burned of that id.
 			lp_token_burned: AssetBalanceOf<T>,
+			/// Liquidity withdrawal fee (%).
+			withdrawal_fee: Permill,
 		},
 		/// Assets have been converted from one to another. Both `SwapExactTokenForToken`
 		/// and `SwapTokenForExactToken` will generate this event.
@@ -477,15 +480,6 @@ pub mod pallet {
 			let amount1: AssetBalanceOf<T>;
 			let amount2: AssetBalanceOf<T>;
 			let pool_account = Self::get_pool_account(pool_id);
-
-			// pay the provision fee
-			T::Currency::transfer(
-				&sender,
-				&pool_account,
-				T::LiquidityProvisionFee::get(),
-				Preserve,
-			)?;
-
 			let reserve1 = Self::get_balance(&pool_account, asset1)?;
 			let reserve2 = Self::get_balance(&pool_account, asset2)?;
 
@@ -566,7 +560,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset1: T::MultiAssetId,
 			asset2: T::MultiAssetId,
-			lp_token_burn: AssetBalanceOf<T>,
+			lp_token_amount: AssetBalanceOf<T>,
 			amount1_min_receive: AssetBalanceOf<T>,
 			amount2_min_receive: AssetBalanceOf<T>,
 			withdraw_to: T::AccountId,
@@ -582,7 +576,7 @@ pub mod pallet {
 			};
 			let (asset1, asset2) = pool_id;
 
-			ensure!(lp_token_burn > Zero::zero(), Error::<T>::ZeroLiquidity);
+			ensure!(lp_token_amount > Zero::zero(), Error::<T>::ZeroLiquidity);
 
 			let maybe_pool = Pools::<T>::get(pool_id);
 			let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
@@ -592,6 +586,8 @@ pub mod pallet {
 			let reserve2 = Self::get_balance(&pool_account, asset2)?;
 
 			let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
+			let withdrawal_fee_amount = T::LiquidityWithdrawalFee::get() * lp_token_amount;
+			let lp_token_burn = lp_token_amount.saturating_sub(withdrawal_fee_amount);
 
 			let amount1 = Self::mul_div(&lp_token_burn, &reserve1, &total_supply)?;
 			let amount2 = Self::mul_div(&lp_token_burn, &reserve2, &total_supply)?;
@@ -611,7 +607,7 @@ pub mod pallet {
 			Self::validate_minimal_amount(reserve2_left, asset2)
 				.map_err(|_| Error::<T>::ReserveLeftLessThanMinimal)?;
 
-			T::PoolAssets::burn_from(pool.lp_token, &sender, lp_token_burn, Exact, Polite)?;
+			T::PoolAssets::burn_from(pool.lp_token, &sender, lp_token_amount, Exact, Polite)?;
 
 			Self::transfer(asset1, &pool_account, &withdraw_to, amount1, false)?;
 			Self::transfer(asset2, &pool_account, &withdraw_to, amount2, false)?;
@@ -623,7 +619,8 @@ pub mod pallet {
 				amount1,
 				amount2,
 				lp_token: pool.lp_token,
-				lp_token_burned: lp_token_burn,
+				lp_token_burned: lp_token_amount,
+				withdrawal_fee: T::LiquidityWithdrawalFee::get(),
 			});
 
 			Ok(())

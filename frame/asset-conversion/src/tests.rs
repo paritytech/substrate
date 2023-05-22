@@ -20,6 +20,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	traits::{fungible::Inspect, fungibles::InspectEnumerable, Get},
 };
+use sp_arithmetic::Permill;
 use sp_runtime::{DispatchError, TokenError};
 
 fn events() -> Vec<Event<Test>> {
@@ -320,30 +321,6 @@ fn can_add_liquidity() {
 		assert_eq!(balance(user, token_1), ed);
 		assert_eq!(balance(user, token_3), 1000 - 10);
 		assert_eq!(pool_balance(user, lp_token2), 216);
-
-		// validate liquidity provision fee
-		LiquidityProvisionFee::set(&1000);
-		assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user, 10000 + 1000 + ed));
-		assert_ok!(AssetConversion::add_liquidity(
-			RuntimeOrigin::signed(user),
-			token_3,
-			token_1,
-			10,
-			10000,
-			1,
-			1,
-			user,
-		));
-		assert!(events().contains(&Event::<Test>::LiquidityAdded {
-			who: user,
-			mint_to: user,
-			pool_id,
-			amount1_provided: 10000,
-			amount2_provided: 9,
-			lp_token: lp_token2,
-			lp_token_minted: 284,
-		}));
-		assert_eq!(balance(user, token_1), ed);
 	});
 }
 
@@ -465,6 +442,8 @@ fn can_remove_liquidity() {
 		));
 
 		let total_lp_received = pool_balance(user, lp_token);
+		LiquidityWithdrawalFee::set(&Permill::from_percent(10));
+
 		assert_ok!(AssetConversion::remove_liquidity(
 			RuntimeOrigin::signed(user),
 			token_1,
@@ -479,19 +458,20 @@ fn can_remove_liquidity() {
 			who: user,
 			withdraw_to: user,
 			pool_id,
-			amount1: 999990000,
-			amount2: 99999,
+			amount1: 899991000,
+			amount2: 89999,
 			lp_token,
 			lp_token_burned: total_lp_received,
+			withdrawal_fee: <Test as Config>::LiquidityWithdrawalFee::get()
 		}));
 
-		let pallet_account = AssetConversion::get_pool_account(pool_id);
-		assert_eq!(balance(pallet_account, token_1), 10000);
-		assert_eq!(balance(pallet_account, token_2), 1);
-		assert_eq!(pool_balance(pallet_account, lp_token), 100);
+		let pool_account = AssetConversion::get_pool_account(pool_id);
+		assert_eq!(balance(pool_account, token_1), 100009000);
+		assert_eq!(balance(pool_account, token_2), 10001);
+		assert_eq!(pool_balance(pool_account, lp_token), 100);
 
-		assert_eq!(balance(user, token_1), 9999990000);
-		assert_eq!(balance(user, token_2), 99999);
+		assert_eq!(balance(user, token_1), 10000000000 - 1000000000 + 899991000);
+		assert_eq!(balance(user, token_2), 89999);
 		assert_eq!(pool_balance(user, lp_token), 0);
 	});
 }

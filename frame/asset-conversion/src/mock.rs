@@ -28,6 +28,7 @@ use frame_support::{
 	PalletId,
 };
 use frame_system::{EnsureSigned, EnsureSignedBy};
+use sp_arithmetic::Permill;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -146,7 +147,7 @@ impl pallet_assets::Config<Instance2> for Test {
 parameter_types! {
 	pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
 	pub storage AllowMultiAssetPools: bool = true;
-	pub storage LiquidityProvisionFee: u128 = 0; // should be non-zero if AllowMultiAssetPools is true, otherwise can be zero
+	pub storage LiquidityWithdrawalFee: Permill = Permill::from_float(0.002); // should be non-zero if AllowMultiAssetPools is true, otherwise can be zero
 }
 
 ord_parameter_types! {
@@ -166,7 +167,7 @@ impl Config for Test {
 	type LPFee = ConstU32<3>; // means 0.3%
 	type PoolSetupFee = ConstU128<100>; // should be more or equal to the existential deposit
 	type PoolSetupFeeReceiver = AssetConversionOrigin;
-	type LiquidityProvisionFee = LiquidityProvisionFee;
+	type LiquidityWithdrawalFee = LiquidityWithdrawalFee;
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = ConstU32<4>;
 	type MintMinLiquidity = ConstU128<100>; // 100 is good enough when the main currency has 12 decimals.
