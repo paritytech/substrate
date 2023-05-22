@@ -314,7 +314,7 @@ pub mod pallet {
 	pub(super) type SkippedEpochs<T> =
 		StorageValue<_, BoundedVec<(u64, SessionIndex), ConstU32<100>>, ValueQuery>;
 
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,

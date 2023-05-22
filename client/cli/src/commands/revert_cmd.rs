@@ -18,7 +18,7 @@
 
 use crate::{
 	error,
-	params::{GenericNumber, PruningParams, SharedParams},
+	params::{DatabaseParams, GenericNumber, PruningParams, SharedParams},
 	CliConfiguration,
 };
 use clap::Parser;
@@ -41,6 +41,10 @@ pub struct RevertCmd {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub pruning_params: PruningParams,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub database_params: DatabaseParams,
 }
 
 /// Revert handler for auxiliary data (e.g. consensus).
@@ -78,5 +82,9 @@ impl CliConfiguration for RevertCmd {
 
 	fn pruning_params(&self) -> Option<&PruningParams> {
 		Some(&self.pruning_params)
+	}
+
+	fn database_params(&self) -> Option<&DatabaseParams> {
+		Some(&self.database_params)
 	}
 }
