@@ -11119,6 +11119,7 @@ dependencies = [
  "sp-ark-ed-on-bls12-381-bandersnatch",
  "sp-ark-models",
  "sp-io",
+ "sp-runtime-interface",
  "sp-std",
 ]
 

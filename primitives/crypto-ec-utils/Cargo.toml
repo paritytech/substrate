@@ -23,6 +23,7 @@ ark-ed-on-bls12-377 = { version = "0.4.0", default-features = false }
 sp-std = { version = "5.0.0", path = "../std", default-features = false }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
 ark-scale = { version = "0.0.3", features = ["hazmat"], default-features = false }
+sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../runtime-interface" }
 
 [dev-dependencies]
 sp-io = { path = "../io", default-features = false }
@@ -49,6 +50,7 @@ std = [
 	"sp-std/std",
 	"codec/std",
 	"ark-scale/std",
+	"sp-runtime-interface/std",
 	"sp-io/std",
 	"ark-algebra-test-templates/std",
 	"sp-ark-bls12-377/std",
@@ -57,3 +59,4 @@ std = [
     "sp-ark-ed-on-bls12-377/std",
     "sp-ark-ed-on-bls12-381-bandersnatch/std",
 ]
+ec-utils-experimental = []
