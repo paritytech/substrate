@@ -598,7 +598,7 @@ where
 /// The same as [`create_runtime`] but takes the bytes of a precompiled artifact,
 /// which makes this function considerably faster than [`create_runtime`],
 /// but slower than the more optimized [`create_runtime_from_artifact`].
-/// Useful in very niche cases.
+/// This is especially slow on non-Linux Unix systems. Useful in very niche cases.
 ///
 /// # Safety
 ///
