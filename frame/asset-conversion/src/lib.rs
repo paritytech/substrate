@@ -177,7 +177,7 @@ pub mod pallet {
 		/// An account that receives the pool setup fee.
 		type PoolSetupFeeReceiver: Get<Self::AccountId>;
 
-		/// A fee to provide the liquidity.
+		/// A fee to withdraw the liquidity.
 		#[pallet::constant]
 		type LiquidityWithdrawalFee: Get<Permill>;
 
@@ -551,9 +551,9 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Allows you to remove liquidity by providing an lp token.
-		/// With the usage of `amount1_min_receive`/`amount2_min_receive` it's possible to control
-		/// the min amount of returned tokens you're happy with.
+		/// Allows you to remove liquidity by providing the `lp_token_amount` tokens that will be
+		/// burned in the process. With the usage of `amount1_min_receive`/`amount2_min_receive`
+		/// it's possible to control the min amount of returned tokens you're happy with.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::remove_liquidity())]
 		pub fn remove_liquidity(
