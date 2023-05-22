@@ -166,7 +166,6 @@ pub mod pallet {
 		pub genesis_block: Option<BlockNumberFor<T>>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			// BEEFY genesis will be first BEEFY-MANDATORY block,
