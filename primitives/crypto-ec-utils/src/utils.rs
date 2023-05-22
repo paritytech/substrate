@@ -71,8 +71,8 @@ pub(crate) fn msm_te_generic<Curve: TECurveConfig>(
 	)
 	.map_err(|_| ())?;
 
-	let result =
-		<twisted_edwards::Projective<Curve> as VariableBaseMSM>::msm(&bases.0, &scalars.0).unwrap();
+	let result = <twisted_edwards::Projective<Curve> as VariableBaseMSM>::msm(&bases.0, &scalars.0)
+		.map_err(|_| ())?;
 
 	let result: ArkScaleProjective<twisted_edwards::Projective<Curve>> = result.into();
 	Ok(result.encode())
