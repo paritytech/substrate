@@ -57,8 +57,8 @@ pub struct ConfigDef {
 	/// Whether a default sub-trait should be generated.
 	///
 	/// Contains default sub-trait items (instantiated by `#[pallet::default_config]`). Vec
-	/// will be empty if `#[pallet::default_config]` is not specified or if there are no trait
-	/// items
+	/// will be empty if `#[pallet::config(with_default)]` is not specified or if there are no
+	/// trait items
 	pub default_sub_trait: Vec<syn::TraitItem>,
 }
 
@@ -370,6 +370,13 @@ impl ConfigDef {
 								type trait item",
 						)),
 					(PalletAttrType::NoDefault(_), _) => {
+						if !enable_default {
+							return Err(syn::Error::new(
+								pallet_attr._bracket.span.join(),
+								"`#[pallet:no_default]` can only be used if `#[pallet::config(with_default)]` \
+								has been specified"
+							))
+						}
 						if no_default {
 							return Err(syn::Error::new(
 								pallet_attr._bracket.span.join(),

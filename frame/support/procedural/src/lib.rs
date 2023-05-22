@@ -833,7 +833,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// The `#[derive_imp(..)]` attribute can be used to derive a test pallet `Config` based on an
 /// existing pallet `Config` that has been marked with
-/// [`#[pallet::default_config]`](`macro@default_config`) (which under the hood, generates a
+/// [`#[pallet::config(with_default)]`](`macro@config`) (which under the hood, generates a
 /// `DefaultConfig` trait in the pallet in which the macro was invoked).
 ///
 /// In this case, the `#[derive_impl(..)]` attribute should be attached to an `impl` block that
@@ -924,12 +924,11 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// You can then use the resulting `Test` config in test scenarios.
 ///
-/// Note that items that are _not_ present in our local
-/// [`#[pallet::default_config]`](`macro@default_config`) are automatically copied from the
-/// foreign trait (in this case `TestDefaultConfig`) into the local trait impl (in this case
-/// `Test`), unless the trait item in the local trait impl is marked with
-/// [`#[pallet::no_default]`](`macro@default_config`), in which case it cannot be overridden,
-/// and any attempts to do so will result in a compiler error.
+/// Note that items that are _not_ present in our local `DefaultConfig` are automatically
+/// copied from the foreign trait (in this case `TestDefaultConfig`) into the local trait impl
+/// (in this case `Test`), unless the trait item in the local trait impl is marked with
+/// [`#[pallet::no_default]`](`macro@no_default`), in which case it cannot be overridden, and
+/// any attempts to do so will result in a compiler error.
 ///
 /// See `frame/examples/default-config/tests.rs` for a runnable end-to-end example pallet that
 /// makes use of `derive_impl` to derive its testing config.
@@ -986,25 +985,8 @@ pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
 	.into()
 }
 
-/// The optional attribute `#[pallet::default_config]` can be attached to a `Config` trait
-/// within your pallet to mark it as auto-derivable under test conditions via
-/// [`[#[derive_impl(..)]`](`macro@derive_impl`).
-///
-/// You may use [`#[pallet::no_default]`](`macro@no_default`) and
-/// [`#[pallet::constant]`](`macro@constant`) on individual trait items within your `Config`
-/// trait.
-///
-/// The [`#[pallet::no_default]`](`macro@no_default`) attribute allows you to specify that a
-/// particular trait item _cannot_ be used as a default when a test `Config` is derived using
-/// the [`#[derive_impl(..)]`](`macro@derive_impl`) attribute macro.
-#[proc_macro_attribute]
-pub fn default_config(_: TokenStream, _: TokenStream) -> TokenStream {
-	pallet_macro_stub()
-}
-
 /// The optional attribute `#[pallet::no_default]` can be attached to trait items within a
-/// `Config` trait impl that has [`#[pallet::default_config]`](`macro@default_config`) attached
-/// to it.
+/// `Config` trait impl that has [`#[pallet::config(with_default)]`](`macro@config`) attached.
 ///
 /// Attaching this attribute to a trait item ensures that that trait item will not be used as a
 /// default with the [`#[derive_impl(..)]`](`macro@derive_impl`) attribute macro.
@@ -1081,6 +1063,36 @@ fn pallet_macro_stub() -> TokenStream {
 ///
 /// [`pallet::event`](`macro@event`) must be present if `RuntimeEvent` exists as a config item
 /// in your `#[pallet::config]`.
+///
+/// ## Optional: `with_default`
+///
+/// An optional `with_default` argument may also be specified. Doing so will automatically
+/// generate a `DefaultConfig` trait inside your pallet which is suitable for use with
+/// [`[#[derive_impl(..)]`](`macro@derive_impl`) to derive a default testing config. The
+/// following demonstrates this syntax:
+///
+/// ```ignore
+/// #[pallet::config(with_default)]
+/// pub trait Config: frame_system::Config {
+/// 		type RuntimeEvent: Parameter
+/// 			+ Member
+/// 			+ From<Event<Self>>
+/// 			+ Debug
+/// 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+///
+/// 		#[pallet::no_default]
+/// 		type BaseCallFilter: Contains<Self::RuntimeCall>;
+/// 	// ...
+/// }
+/// ```
+///
+/// As shown above, you may also attach the [`#[pallet::no_default]`](`macro@no_default`)
+/// attribute to specify that a particular trait item _cannot_ be used as a default when a test
+/// `Config` is derived using the [`#[derive_impl(..)]`](`macro@derive_impl`) attribute macro.
+/// This will cause that particular trait item to simply not appear in default testing configs
+/// based on this config.
+///
+/// For more information, see [`macro@derive_impl`].
 #[proc_macro_attribute]
 pub fn config(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()

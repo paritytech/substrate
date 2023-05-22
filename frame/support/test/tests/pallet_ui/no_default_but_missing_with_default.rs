@@ -3,10 +3,9 @@ mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
-	#[pallet::config(with_default)]
+	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		#[pallet::constant]
-		#[pallet::no_default]
 		#[pallet::no_default]
 		type MyGetParam2: Get<u32>;
 	}

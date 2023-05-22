@@ -240,7 +240,7 @@ pub mod pallet {
 	}
 
 	/// System configuration trait. Implemented by runtime.
-	#[pallet::default_config]
+	#[pallet::config(with_default)]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: 'static + Eq + Clone {
 		/// The aggregated event type of the runtime.
