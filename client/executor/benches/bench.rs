@@ -188,10 +188,17 @@ fn bench_call_instance(c: &mut Criterion) {
 			},
 		),
 		(
-			"pooling_vanilla",
+			"pooling_vanilla_fresh",
 			Method::Compiled {
 				instantiation_strategy: InstantiationStrategy::Pooling,
 				precompile: false,
+			},
+		),
+		(
+			"pooling_vanilla_precompiled",
+			Method::Compiled {
+				instantiation_strategy: InstantiationStrategy::Pooling,
+				precompile: true,
 			},
 		),
 		(

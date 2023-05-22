@@ -435,7 +435,7 @@ pub struct DeterministicStackLimit {
 /// All of the CoW strategies (with `CopyOnWrite` suffix) are only supported when either:
 ///   a) we're running on Linux,
 ///   b) we're running on an Unix-like system and we're precompiling
-///      our module beforehand.
+///      our module beforehand and instantiating from a file.
 ///
 /// If the CoW variant of a strategy is unsupported the executor will
 /// fall back to the non-CoW equivalent.
