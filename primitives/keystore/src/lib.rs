@@ -19,13 +19,14 @@
 
 pub mod testing;
 
+#[cfg(feature = "bsnvrf-experimental")]
+use sp_core::bsnvrf;
+#[cfg(feature = "bls-experimental")]
+use sp_core::{bls377, bls381};
 use sp_core::{
-	bandersnatch,
 	crypto::{ByteArray, CryptoTypeId, KeyTypeId},
 	ecdsa, ed25519, sr25519,
 };
-#[cfg(feature = "bls-experimental")]
-use sp_core::{bls377, bls381};
 
 use std::sync::Arc;
 
@@ -175,39 +176,67 @@ pub trait Keystore: Send + Sync {
 		msg: &[u8; 32],
 	) -> Result<Option<ecdsa::Signature>, Error>;
 
-	/// DAVXY TODO
-	fn bandersnatch_public_keys(&self, key_type: KeyTypeId) -> Vec<bandersnatch::Public>;
+	#[cfg(feature = "bsnvrf-experimental")]
+	/// Returns all bsnvrf public keys for the given key type.
+	fn bsnvrf_public_keys(&self, key_type: KeyTypeId) -> Vec<bsnvrf::Public>;
 
-	/// DAVXY TODO
-	fn bandersnatch_generate_new(
+	#[cfg(feature = "bsnvrf-experimental")]
+	/// Generate a new bsnvrf key pair for the given key type and an optional seed.
+	///
+	/// Returns an `ed25519::Public` key of the generated key pair or an `Err` if
+	/// something failed during key generation.
+	fn bsnvrf_generate_new(
 		&self,
 		key_type: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<bandersnatch::Public, Error>;
+	) -> Result<bsnvrf::Public, Error>;
 
-	/// DAVXY TODO
-	fn bandersnatch_sign(
+	#[cfg(feature = "bsnvrf-experimental")]
+	/// Generate an bsnvrf signature for the given data.
+	///
+	/// Receives [`KeyTypeId`] and an [`bsnvrf::Public`] key to be able to map
+	/// them to a private key that exists in the keystore.
+	///
+	/// Returns `None` if the given `key_type` and `public` combination doesn't
+	/// exist in the keystore or an `Err` when something failed.
+	// TODO DAVXY: maybe we can remove this and just pass through the `vrf_sign`
+	// as this reduces to the other with a sign-data with 0 vrf-inputs.
+	fn bsnvrf_sign(
 		&self,
 		key_type: KeyTypeId,
-		public: &bandersnatch::Public,
+		public: &bsnvrf::Public,
 		msg: &[u8],
-	) -> Result<Option<bandersnatch::Signature>, Error>;
+	) -> Result<Option<bsnvrf::Signature>, Error>;
 
-	/// DAVXY TODO
-	fn bandersnatch_vrf_sign(
+	#[cfg(feature = "bsnvrf-experimental")]
+	/// Generate a bsnvrf VRF signature for the given data.
+	///
+	/// Receives [`KeyTypeId`] and an [`bsnvrf::Public`] key to be able to map
+	/// them to a private key that exists in the keystore.
+	///
+	/// Returns `None` if the given `key_type` and `public` combination doesn't
+	/// exist in the keystore or an `Err` when something failed.
+	fn bsnvrf_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
-		public: &bandersnatch::Public,
-		input: &bandersnatch::vrf::VrfSignData,
-	) -> Result<Option<bandersnatch::vrf::VrfSignature>, Error>;
+		public: &bsnvrf::Public,
+		input: &bsnvrf::vrf::VrfSignData,
+	) -> Result<Option<bsnvrf::vrf::VrfSignature>, Error>;
 
-	/// DAVXY TODO
-	fn bandersnatch_vrf_output(
+	#[cfg(feature = "bsnvrf-experimental")]
+	/// Generate a bsnvrf VRF output for a given input data.
+	///
+	/// Receives [`KeyTypeId`] and an [`bsnvrf::Public`] key to be able to map
+	/// them to a private key that exists in the keystore.
+	///
+	/// Returns `None` if the given `key_type` and `public` combination doesn't
+	/// exist in the keystore or an `Err` when something failed.
+	fn bsnvrf_vrf_output(
 		&self,
 		key_type: KeyTypeId,
-		public: &bandersnatch::Public,
-		input: &bandersnatch::vrf::VrfInput,
-	) -> Result<Option<bandersnatch::vrf::VrfOutput>, Error>;
+		public: &bsnvrf::Public,
+		input: &bsnvrf::vrf::VrfInput,
+	) -> Result<Option<bsnvrf::vrf::VrfOutput>, Error>;
 
 	#[cfg(feature = "bls-experimental")]
 	/// Returns all bls12-381 public keys for the given key type.
@@ -293,7 +322,7 @@ pub trait Keystore: Send + Sync {
 	/// - sr25519
 	/// - ed25519
 	/// - ecdsa
-	/// - bandersnatch
+	/// - bsnvrf
 	/// - bls381
 	/// - bls377
 	///
@@ -327,10 +356,11 @@ pub trait Keystore: Send + Sync {
 
 				self.ecdsa_sign(id, &public, msg)?.map(|s| s.encode())
 			},
-			bandersnatch::CRYPTO_ID => {
-				let public = bandersnatch::Public::from_slice(public)
+			#[cfg(feature = "bsnvrf-experimental")]
+			bsnvrf::CRYPTO_ID => {
+				let public = bsnvrf::Public::from_slice(public)
 					.map_err(|_| Error::ValidationError("Invalid public key format".into()))?;
-				self.bandersnatch_sign(id, &public, msg)?.map(|s| s.encode())
+				self.bsnvrf_sign(id, &public, msg)?.map(|s| s.encode())
 			},
 			#[cfg(feature = "bls-experimental")]
 			bls381::CRYPTO_ID => {

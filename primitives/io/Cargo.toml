@@ -94,3 +94,11 @@ disable_allocator = []
 #          host function to be supported by the host. Do *not* enable it for your
 #          runtime without first upgrading your host client!
 improved_panic_error_reporting = []
+
+# This feature adds Bandersnatch-VRF crypto primitives.
+# It should not be used in production since the implementation
+# and interface may still be subject to significant change.
+bsnvrf-experimental = [
+	"sp-core/bsnvrf-experimental",
+	"sp-keystore/bsnvrf-experimental",
+]

@@ -55,9 +55,10 @@ pub mod crypto;
 pub mod hexdisplay;
 pub use paste;
 
-pub mod bandersnatch;
 #[cfg(feature = "bls-experimental")]
 pub mod bls;
+#[cfg(feature = "bsnvrf-experimental")]
+pub mod bsnvrf;
 pub mod defer;
 pub mod ecdsa;
 pub mod ed25519;

@@ -44,8 +44,9 @@ use sp_core::{
 #[cfg(feature = "std")]
 use sp_keystore::KeystoreExt;
 
+#[cfg(feature = "bsnvrf-experimental")]
+use sp_core::bsnvrf;
 use sp_core::{
-	bandersnatch,
 	crypto::KeyTypeId,
 	ecdsa, ed25519,
 	offchain::{
@@ -1141,17 +1142,23 @@ pub trait Crypto {
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize())
 	}
+}
 
-	/// DAVXY
-	fn bandersnatch_generate(
-		&mut self,
-		id: KeyTypeId,
-		seed: Option<Vec<u8>>,
-	) -> bandersnatch::Public {
+/// Temporary experimental interface that provides required Bandersnatch-VRFs functions.
+#[cfg(feature = "bsnvrf-experimental")]
+#[runtime_interface]
+pub trait BsnVrfExperimental {
+	/// Generate a `bsnvrf` key for the given key type using an optional `seed` and
+	/// store it in the keystore.
+	///
+	/// The `seed` needs to be a valid utf8.
+	///
+	/// Returns the public key.
+	fn bsnvrf_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> bsnvrf::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
 		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
-			.bandersnatch_generate_new(id, seed)
+			.bsnvrf_generate_new(id, seed)
 			.expect("`bandernatch_generate` failed")
 	}
 }

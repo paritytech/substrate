@@ -19,13 +19,14 @@
 
 use parking_lot::RwLock;
 use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
+#[cfg(feature = "bsnvrf-experimental")]
+use sp_core::bsnvrf;
+#[cfg(feature = "bls-experimental")]
+use sp_core::{bls377, bls381};
 use sp_core::{
-	bandersnatch,
 	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSecret},
 	ecdsa, ed25519, sr25519,
 };
-#[cfg(feature = "bls-experimental")]
-use sp_core::{bls377, bls381};
 use sp_keystore::{Error as TraitError, Keystore, KeystorePtr};
 use std::{
 	collections::HashMap,
@@ -135,7 +136,7 @@ impl Keystore for LocalKeystore {
 		self.public_keys::<sr25519::Pair>(key_type)
 	}
 
-	/// Generate a new pair compatible with the 'ed25519' signature scheme.
+	/// Generate a new key pair.
 	///
 	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn sr25519_generate_new(
@@ -177,7 +178,7 @@ impl Keystore for LocalKeystore {
 		self.public_keys::<ed25519::Pair>(key_type)
 	}
 
-	/// Generate a new pair compatible with the 'sr25519' signature scheme.
+	/// Generate a new key pair.
 	///
 	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn ed25519_generate_new(
@@ -201,7 +202,7 @@ impl Keystore for LocalKeystore {
 		self.public_keys::<ecdsa::Pair>(key_type)
 	}
 
-	/// Generate a new pair compatible with the 'ecdsa' signature scheme.
+	/// Generate a new key pair.
 	///
 	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn ecdsa_generate_new(
@@ -235,46 +236,51 @@ impl Keystore for LocalKeystore {
 		Ok(sig)
 	}
 
-	fn bandersnatch_public_keys(&self, key_type: KeyTypeId) -> Vec<bandersnatch::Public> {
-		self.public_keys::<bandersnatch::Pair>(key_type)
+	#[cfg(feature = "bsnvrf-experimental")]
+	fn bsnvrf_public_keys(&self, key_type: KeyTypeId) -> Vec<bsnvrf::Public> {
+		self.public_keys::<bsnvrf::Pair>(key_type)
 	}
 
-	fn bandersnatch_generate_new(
+	#[cfg(feature = "bsnvrf-experimental")]
+	/// Generate a new key pair.
+	///
+	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
+	fn bsnvrf_generate_new(
 		&self,
 		key_type: KeyTypeId,
 		seed: Option<&str>,
-	) -> std::result::Result<bandersnatch::Public, TraitError> {
-		self.generate_new::<bandersnatch::Pair>(key_type, seed)
+	) -> std::result::Result<bsnvrf::Public, TraitError> {
+		self.generate_new::<bsnvrf::Pair>(key_type, seed)
 	}
 
-	fn bandersnatch_sign(
+	#[cfg(feature = "bsnvrf-experimental")]
+	fn bsnvrf_sign(
 		&self,
 		key_type: KeyTypeId,
-		public: &bandersnatch::Public,
+		public: &bsnvrf::Public,
 		msg: &[u8],
-	) -> std::result::Result<Option<bandersnatch::Signature>, TraitError> {
-		self.sign::<bandersnatch::Pair>(key_type, public, msg)
+	) -> std::result::Result<Option<bsnvrf::Signature>, TraitError> {
+		self.sign::<bsnvrf::Pair>(key_type, public, msg)
 	}
 
-	// TODO DAVXY
-	// Maybe we can expose just this bandersnatch sign (the above one reduces to this with
-	// input len = 0)
-	fn bandersnatch_vrf_sign(
+	#[cfg(feature = "bsnvrf-experimental")]
+	fn bsnvrf_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
-		public: &bandersnatch::Public,
-		data: &bandersnatch::vrf::VrfSignData,
-	) -> std::result::Result<Option<bandersnatch::vrf::VrfSignature>, TraitError> {
-		self.vrf_sign::<bandersnatch::Pair>(key_type, public, data)
+		public: &bsnvrf::Public,
+		data: &bsnvrf::vrf::VrfSignData,
+	) -> std::result::Result<Option<bsnvrf::vrf::VrfSignature>, TraitError> {
+		self.vrf_sign::<bsnvrf::Pair>(key_type, public, data)
 	}
 
-	fn bandersnatch_vrf_output(
+	#[cfg(feature = "bsnvrf-experimental")]
+	fn bsnvrf_vrf_output(
 		&self,
 		key_type: KeyTypeId,
-		public: &bandersnatch::Public,
-		input: &bandersnatch::vrf::VrfInput,
-	) -> std::result::Result<Option<bandersnatch::vrf::VrfOutput>, TraitError> {
-		self.vrf_output::<bandersnatch::Pair>(key_type, public, input)
+		public: &bsnvrf::Public,
+		input: &bsnvrf::vrf::VrfInput,
+	) -> std::result::Result<Option<bsnvrf::vrf::VrfOutput>, TraitError> {
+		self.vrf_output::<bsnvrf::Pair>(key_type, public, input)
 	}
 
 	#[cfg(feature = "bls-experimental")]
@@ -283,7 +289,7 @@ impl Keystore for LocalKeystore {
 	}
 
 	#[cfg(feature = "bls-experimental")]
-	/// Generate a new pair compatible with the 'bls381' signature scheme.
+	/// Generate a new key pair.
 	///
 	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn bls381_generate_new(
@@ -310,7 +316,7 @@ impl Keystore for LocalKeystore {
 	}
 
 	#[cfg(feature = "bls-experimental")]
-	/// Generate a new pair compatible with the 'bls377' signature scheme.
+	/// Generate a new key-pair.
 	///
 	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn bls377_generate_new(
