@@ -301,21 +301,42 @@ impl ProtocolController {
 
 	/// Send "accept" message to `Notifications`.
 	fn accept_connection(&mut self, incoming_index: IncomingIndex) {
-		trace!(target: LOG_TARGET, "Accepting {incoming_index:?}.");
+		trace!(
+			target: LOG_TARGET,
+			"Accepting {:?} on {:?} ({}/{} num_in/max_in).",
+			incoming_index,
+			self.set_id,
+			self.num_in,
+			self.max_in,
+		);
 
 		let _ = self.to_notifications.unbounded_send(Message::Accept(incoming_index));
 	}
 
 	/// Send "reject" message to `Notifications`.
 	fn reject_connection(&mut self, incoming_index: IncomingIndex) {
-		trace!(target: LOG_TARGET, "Rejecting {incoming_index:?}.");
+		trace!(
+			target: LOG_TARGET,
+			"Rejecting {:?} on {:?} ({}/{} num_in/max_in).",
+			incoming_index,
+			self.set_id,
+			self.num_in,
+			self.max_in,
+		);
 
 		let _ = self.to_notifications.unbounded_send(Message::Reject(incoming_index));
 	}
 
 	/// Send "connect" message to `Notifications`.
 	fn start_connection(&mut self, peer_id: PeerId) {
-		trace!(target: LOG_TARGET, "Connecting to {peer_id}.");
+		trace!(
+			target: LOG_TARGET,
+			"Connecting to {} on {:?} ({}/{} num_out/max_out).",
+			peer_id,
+			self.set_id,
+			self.num_out,
+			self.max_out,
+		);
 
 		let _ = self
 			.to_notifications
@@ -324,7 +345,16 @@ impl ProtocolController {
 
 	/// Send "drop" message to `Notifications`.
 	fn drop_connection(&mut self, peer_id: PeerId) {
-		trace!(target: LOG_TARGET, "Dropping {peer_id}.");
+		trace!(
+			target: LOG_TARGET,
+			"Dropping {} on {:?} ({}/{} num_in/max_in, {}/{} num_out/max_out).",
+			peer_id,
+			self.set_id,
+			self.num_in,
+			self.max_in,
+			self.num_out,
+			self.max_out,
+		);
 
 		let _ = self
 			.to_notifications
@@ -404,7 +434,10 @@ impl ProtocolController {
 				// Count connections as of regular node.
 				trace!(
 					target: LOG_TARGET,
-					"Making a connected reserved node {peer_id} ({direction:?}) a regular one.",
+					"Making a connected reserved node {} ({:?}) on {:?} a regular one.",
+					peer_id,
+					direction,
+					self.set_id,
 				);
 
 				match direction {
@@ -450,14 +483,19 @@ impl ProtocolController {
 
 		// Disconnect all non-reserved peers.
 		self.nodes
-			.keys()
-			.cloned()
-			.collect::<Vec<_>>()
 			.iter()
-			.for_each(|peer_id| self.drop_connection(*peer_id));
+			.map(|(k, v)| (k.clone(), v.clone()))
+			.collect::<Vec<(_, _)>>()
+			.iter()
+			.for_each(|(peer_id, direction)| {
+				// Update counters in the loop for `drop_connection` to report the correct number.
+				match direction {
+					Direction::Inbound => self.num_in -= 1,
+					Direction::Outbound => self.num_out -= 1,
+				}
+				self.drop_connection(*peer_id)
+			});
 		self.nodes.clear();
-		self.num_in = 0;
-		self.num_out = 0;
 	}
 
 	/// Get the list of reserved peers.
