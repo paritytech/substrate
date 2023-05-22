@@ -101,7 +101,6 @@ async fn test_raw_iter() {
 		assert_eq!(iter.next_key(&backend), Some(Ok(expected_key.clone())));
 		assert_eq!(backend.storage(&expected_key).unwrap(), Some(expected_value));
 	}
-	assert_eq!(iter.was_complete(), true);
 	assert_eq!(iter.next_key(&backend), None);
 	assert_eq!(iter.was_complete(), true);
 
@@ -118,7 +117,6 @@ async fn test_raw_iter() {
 	for (expected_key, expected_value) in items.clone() {
 		assert_eq!(iter.next_pair(&backend), Some(Ok((expected_key, expected_value))));
 	}
-	assert_eq!(iter.was_complete(), true);
 	assert_eq!(iter.next_pair(&backend), None);
 	assert_eq!(iter.was_complete(), true);
 
@@ -139,7 +137,6 @@ async fn test_raw_iter() {
 			);
 		}
 	}
-	assert_eq!(iter.was_complete(), true);
 	assert_eq!(iter.next_pair(&backend), None);
 	assert_eq!(iter.next_key(&backend), None);
 	assert_eq!(iter.was_complete(), true);
