@@ -853,6 +853,11 @@ where
 		amount: T::Balance,
 		reasons: WithdrawReasons,
 	) {
+		if reasons.is_empty() || amount.is_zero() {
+			Self::remove_lock(id, who);
+			return
+		}
+
 		let mut new_lock = Some(BalanceLock { id, amount, reasons: reasons.into() });
 		let mut locks = Self::locks(who)
 			.into_iter()
