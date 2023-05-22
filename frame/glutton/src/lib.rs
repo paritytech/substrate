@@ -42,6 +42,8 @@ pub use weights::WeightInfo;
 
 /// The size of each value in the `TrashData` storage in bytes.
 pub const VALUE_SIZE: usize = 1024;
+/// Max number of entries for `TrashData` storage item
+pub const MAX_TRASH_DATA_ENTRIES: u32 = 65_000;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -104,7 +106,7 @@ pub mod pallet {
 		Key = u32,
 		Value = [u8; VALUE_SIZE],
 		QueryKind = OptionQuery,
-		MaxValues = ConstU32<65_000>,
+		MaxValues = ConstU32<MAX_TRASH_DATA_ENTRIES>,
 	>;
 
 	/// The current number of entries in `TrashData`.
@@ -131,15 +133,19 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			<Compute<T>>::put(self.compute);
-			<Storage<T>>::put(self.storage);
+			assert!(
+				self.trash_data_count <= MAX_TRASH_DATA_ENTRIES,
+				"number of TrashData entries can not be bigger than {:?}",
+				MAX_TRASH_DATA_ENTRIES
+			);
 
-			if self.trash_data_count <= 65_000 {
-				(0..self.trash_data_count)
-					.for_each(|i| TrashData::<T>::insert(i, Pallet::<T>::gen_value(i)));
-			}
+			(0..self.trash_data_count)
+				.for_each(|i| TrashData::<T>::insert(i, Pallet::<T>::gen_value(i)));
 
 			TrashDataCount::<T>::set(self.trash_data_count);
+
+			<Compute<T>>::put(self.compute);
+			<Storage<T>>::put(self.storage);
 		}
 	}
 
