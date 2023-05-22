@@ -15,9 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! TODO DOCS.
-
-// #![allow(unused)]
+//! VRF defined using Bandersnatch, an elliptic curve built over the BLS12-381 scalar field.
 
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
@@ -125,7 +123,7 @@ impl sp_std::fmt::Debug for Public {
 	}
 }
 
-/// TODO davxy: DOCS
+/// Signature without attached VRF pre-out.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo)]
 pub struct Signature([u8; SIGNATURE_SERIALIZED_LEN]);
@@ -186,7 +184,7 @@ impl sp_std::fmt::Debug for Signature {
 #[cfg(feature = "full_crypto")]
 type Seed = [u8; SEED_SERIALIZED_LEN];
 
-/// TODO davxy: DOCS
+/// Keypair
 #[cfg(feature = "full_crypto")]
 #[derive(Clone)]
 pub struct Pair(SecretKey);
@@ -282,12 +280,14 @@ pub mod vrf {
 
 	const PREOUT_SERIALIZED_LEN: usize = 32;
 
-	/// Max number of VRF inputs/outputs
+	/// Max number of VRF inputs/outputs per sign operation.
+	/// In other words, the max number of `VrfInput`s and `VrfOutput`s embeddable
+	/// in `VrfSignData` and `VrfSignature`, respectively.
 	pub const MAX_VRF_IOS: u32 = 3;
 
 	pub(super) type VrfIosVec<T> = BoundedVec<T, ConstU32<MAX_VRF_IOS>>;
 
-	/// Input to be used for VRF sign and verify operations.
+	/// Input used for VRF operations.
 	#[derive(Clone)]
 	pub struct VrfInput(pub(super) bandersnatch_vrfs::VrfInput);
 
@@ -295,21 +295,27 @@ pub mod vrf {
 		/// Build a new VRF input.
 		///
 		/// Each message tuple has the form: (domain, data).
-		// TODO: Maybe we should access directly the transcript.
-		// I see a commented method in bandersnatch_vrfs crate that fullfil what we need...
+		// TODO davxy (temporary hack)
+		// `bandersnatch_vrfs::Message` maps to a single (domain, data) tuple.
+		// We need something to push multiple messages together with a `label`.
+		// One solution is to construct the labeled Transcript here and then use
+		// `dleq_vrf::into_vrf_input()`.
+		// But has been commented out:
+		// https://github.com/w3f/ring-vrf/blob/8ab7b7b56e844f80b76afb1742b201fd69fb6046/dleq_vrf/src/vrf.rs#L38-L55
 		pub fn new(label: &'static [u8], messages: &[(&[u8], &[u8])]) -> Self {
-			let _ = label;
 			let mut buf = Vec::new();
 			messages.into_iter().for_each(|(domain, message)| {
 				buf.extend_from_slice(domain);
 				buf.extend_from_slice(message);
 			});
-			let msg = Message { domain: b"TODO-DAVXY-FIXME", message: buf.as_slice() };
+			let msg = Message { domain: label, message: buf.as_slice() };
 			VrfInput(msg.into_vrf_input())
 		}
 	}
 
-	/// TODO davxy docs
+	/// VRF Pre-output derived from some `VrfInput` using a `VrfSecret`.
+	///
+	/// This can be used to generate an arbitrary number of bytes va the `make_bytes` method.
 	#[derive(Clone, Debug, PartialEq, Eq)]
 	pub struct VrfOutput(pub(super) bandersnatch_vrfs::VrfPreOut);
 
@@ -346,7 +352,7 @@ pub mod vrf {
 		}
 	}
 
-	/// TODO davxy docs
+	/// A Fiat-Shamir transcript and a sequence of `VrfInput`s ready to be signed.
 	pub struct VrfSignData {
 		/// Associated Fiat-Shamir transcript
 		pub transcript: Transcript,
@@ -355,7 +361,7 @@ pub mod vrf {
 	}
 
 	impl VrfSignData {
-		/// Construct a new data to be signed.
+		/// Construct a new data ready to be signed or verified.
 		pub fn new<T: Into<VrfIosVec<VrfInput>>>(
 			label: &'static [u8],
 			transcript_data: &[&[u8]],
@@ -420,8 +426,9 @@ pub mod vrf {
 	#[cfg(feature = "full_crypto")]
 	impl VrfSecret for Pair {
 		fn vrf_sign(&self, data: &Self::VrfSignData) -> Self::VrfSignature {
-			// Hack used because backend signature type is generic over the number of ios
-			// @burdges can we provide a vec or boxed version?
+			// TODO davxy:
+			// (maybe temporary) Hack used because backend signature type is generic over the number
+			// of ios @burdges can we provide a vec or boxed version?
 			match data.vrf_inputs.len() {
 				0 => self.vrf_sign_gen::<0>(data),
 				1 => self.vrf_sign_gen::<1>(data),
@@ -450,8 +457,9 @@ pub mod vrf {
 			if preouts_len != data.vrf_inputs.len() {
 				return false
 			}
-			// Hack used because backend signature type is generic over the number of ios
-			// @burdges can we provide a vec or boxed version?
+			// TODO davxy:
+			// (maybe temporary) Hack used because backend signature type is generic over the number
+			// of ios @burdges can we provide a vec or boxed version?
 			match preouts_len {
 				0 => self.vrf_verify_gen::<0>(data, signature),
 				1 => self.vrf_verify_gen::<1>(data, signature),
@@ -519,8 +527,8 @@ pub mod vrf {
 				};
 
 			// Deserialize only the proof, the rest has already been deserialized
-			// This is another hack used because backend signature type is generic over the number
-			// of ios. @burdges can we provide a vec or boxed version?
+			// TODO davxy. This is another hack used because backend signature type is generic over
+			// the number of ios. @burdges can you provide a vec version?
 			let Ok(signature) = ThinVrfSignature::<0>::deserialize_compressed(signature.signature.as_ref()).map(|s| s.signature) else {
 				return false
 			};

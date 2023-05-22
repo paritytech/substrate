@@ -199,7 +199,7 @@ pub trait Keystore: Send + Sync {
 	///
 	/// Returns `None` if the given `key_type` and `public` combination doesn't
 	/// exist in the keystore or an `Err` when something failed.
-	// TODO DAVXY: maybe we can remove this and just pass through the `vrf_sign`
+	// TODO davxy: maybe we can remove this and just pass through the `vrf_sign`
 	// as this reduces to the other with a sign-data with 0 vrf-inputs.
 	fn bsnvrf_sign(
 		&self,
