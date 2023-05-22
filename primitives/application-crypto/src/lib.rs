@@ -45,11 +45,12 @@ pub use traits::*;
 
 mod traits;
 
-pub mod bandersnatch;
 #[cfg(feature = "bls-experimental")]
 pub mod bls377;
 #[cfg(feature = "bls-experimental")]
 pub mod bls381;
+#[cfg(feature = "bsnvrf-experimental")]
+pub mod bsnvrf;
 pub mod ecdsa;
 pub mod ed25519;
 pub mod sr25519;

@@ -17,9 +17,9 @@
 
 //! Support code for the runtime. A set of test accounts.
 
-pub use sp_core::bandersnatch;
+pub use sp_core::bsnvrf;
 use sp_core::{
-	bandersnatch::{Pair, Public, Signature},
+	bsnvrf::{Pair, Public, Signature},
 	crypto::UncheckedFrom,
 	ByteArray, Pair as PairT, H256,
 };
@@ -218,7 +218,7 @@ impl Deref for Keyring {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::{bandersnatch::Pair, Pair as PairT};
+	use sp_core::{bsnvrf::Pair, Pair as PairT};
 
 	#[test]
 	fn should_work() {

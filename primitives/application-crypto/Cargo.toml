@@ -44,3 +44,11 @@ full_crypto = [
 	"sp-io/disable_panic_handler",
 	"sp-io/disable_oom",
 ]
+
+# This feature adds Bandersnatch-VRFs crypto primitives.
+# It should not be used in production since the implementation
+# and interface may still be subject to significant change.
+bsnvrf-experimental = [
+	"sp-core/bsnvrf-experimental",
+	"sp-io/bsnvrf-experimental",
+]

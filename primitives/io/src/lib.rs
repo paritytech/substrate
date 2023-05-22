@@ -1142,12 +1142,8 @@ pub trait Crypto {
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize())
 	}
-}
 
-/// Temporary experimental interface that provides required Bandersnatch-VRFs functions.
-#[cfg(feature = "bsnvrf-experimental")]
-#[runtime_interface]
-pub trait BsnVrfExperimental {
+	#[cfg(feature = "bsnvrf-experimental")]
 	/// Generate a `bsnvrf` key for the given key type using an optional `seed` and
 	/// store it in the keystore.
 	///

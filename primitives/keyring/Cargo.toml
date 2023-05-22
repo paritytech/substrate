@@ -18,3 +18,8 @@ lazy_static = "1.4.0"
 strum = { version = "0.24.1", features = ["derive"], default-features = false }
 sp-core = { version = "7.0.0", path = "../core" }
 sp-runtime = { version = "7.0.0", path = "../runtime" }
+
+[features]
+bsnvrf-experimental = [
+  "sp-core/bsnvrf-experimental",
+]
