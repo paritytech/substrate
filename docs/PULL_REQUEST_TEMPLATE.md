@@ -2,7 +2,7 @@
 
 ✄ -----------------------------------------------------------------------------
 
-Thank you for your Pull Request! 🙏 Please make sure it follows the CONTRIBUTING guidelines outlined in [this document](./CONTRIBUTING.adoc) and fill out the sections below. Once you're ready to submit your PR for review, please delete this section and leave only the text under the "Description" heading.
+Thank you for your Pull Request! 🙏 Please make sure it follows the contribution guidelines outlined in [this document](./CONTRIBUTING.adoc) and fill out the sections below. Once you're ready to submit your PR for review, please delete this section and leave only the text under the "Description" heading.
 
 # Description
 
