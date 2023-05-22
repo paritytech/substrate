@@ -227,7 +227,7 @@ pub mod pallet {
 		///
 		/// The origin must be the actual owner of the `collection`.
 		///
-		/// - `collection`: The NFT collection.
+		/// - `collection_id`: The NFT collection id.
 		/// - `royalty_percentage`: Royalty percentage to be set.
 		/// - `royalty_recipient`: Account into which the royalty will be sent to.
 		///
@@ -612,6 +612,72 @@ pub mod pallet {
 					royalty_recipient: royalty_recipient.clone(),
 				});
 			}
+
+			Ok(())
+		}
+
+		/// Redeem the deposit paid for creating a collection royalty.
+		///
+		/// Origin must be Signed and must be the owner of `CollectionWithRoyalty`.
+		///
+		/// - `collection`: The collection that has an associated royalty no longer exists.
+		///
+		/// Emits `CollectionDepositClaimed`.
+		#[pallet::call_index(7)]
+		#[pallet::weight(0)]
+		pub fn claim_collection_deposit(
+			origin: OriginFor<T>,
+			collection_id: T::NftCollectionId,
+		) -> DispatchResult {
+			let caller = ensure_signed(origin)?;
+
+			// TODO: Check if the caller is the same account that orginally paid the deposit
+			// When implementing the deposit, whoever pays for the deposit, this is the account that we will check here
+
+			// Delete the collection from `CollectionWithRoyalty`
+			<CollectionWithRoyalty<T>>::remove(collection_id);
+
+			// Delete the list of recipients from `CollectionRoyaltyRecipients`
+			<CollectionRoyaltyRecipients<T>>::remove(collection_id);
+
+			// TODO: Return the deposit to the account that initially paid for it
+
+			// TODO: Emit an event
+
+			Ok(())
+		}
+
+		/// Redeem the deposit paid for creating an item royalty.
+		///
+		/// Origin must be Signed and must be the owner of `ItemWithRoyalty`.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item that has an associated royalty and that has been burned.
+		///
+		/// Emits `ItemDepositClaimed`.
+		#[pallet::call_index(8)]
+		#[pallet::weight(0)]
+		pub fn claim_item_deposit(
+			origin: OriginFor<T>,
+			collection_id: T::NftCollectionId,
+			item_id: T::NftItemId,
+		) -> DispatchResult {
+			let caller = ensure_signed(origin)?;
+
+			// TODO: Check if the caller is the same account that orginally paid the deposit
+			// When implementing the deposit, whoever pays for the deposit, this is the account that we will check here
+
+			// TODO: Ensure the item no longer exists
+
+			// Delete the item from ItemWithRoyalty
+			<ItemWithRoyalty<T>>::remove((collection_id, item_id));
+
+			// Delete the list of recipients from ItemRoyaltyRecipients
+			<ItemRoyaltyRecipients<T>>::remove((collection_id, item_id));
+
+			// TODO: Return the deposit to the account that initially paid for it
+
+			// TODO: Emit an event
 
 			Ok(())
 		}
