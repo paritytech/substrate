@@ -1,4 +1,4 @@
-# Substrate Documentation Guidelines
+wra# Substrate Documentation Guidelines
 
 This document is only focused on documenting parts of substrate that relates to its external API. The list of such crates can be found in [CODEOWNERS](./CODEOWNERS). Search for the crates that are auto-assigned to a team called `docs-audit`.
 
@@ -141,7 +141,7 @@ fn multiply_by_2(x: u32) -> u32 { .. }
 
 They are both roughly conveying the same set of facts, but one is easier to follow because it was formatted cleanly. Especially for traits and types that you can foresee will be seen and used a lot, try and write a well formatted version.
 
-Similarly, make sure your comments are wrapped at 100 characters line-width (as defined by our [`rustfmt.toml`](../rustfmt.toml)), no **more and no less**! The more is fixed by `rustfmt` and our CI, but if you (for some unknown reason) wrap your lines at 59 characters, it will pass the CI, and it will not look good 🫣.
+Similarly, make sure your comments are wrapped at 100 characters line-width (as defined by our [`rustfmt.toml`](../rustfmt.toml)), no **more and no less**! The more is fixed by `rustfmt` and our CI, but if you (for some unknown reason) wrap your lines at 59 characters, it will pass the CI, and it will not look good 🫣. Consider using a plugin like [rewrap](https://marketplace.visualstudio.com/items?itemName=stkb.rewrap) (for Visual Studio Code) to properly do this.
 
 [^1]: Those that help two pallets talk to each other.
 
