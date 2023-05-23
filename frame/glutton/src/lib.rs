@@ -34,9 +34,9 @@ pub mod weights;
 use blake2::{Blake2b512, Digest};
 use frame_support::{pallet_prelude::*, weights::WeightMeter};
 use frame_system::pallet_prelude::*;
+use sp_io::hashing::twox_256;
 use sp_runtime::{traits::Zero, Perbill};
 use sp_std::{vec, vec::Vec};
-use sp_io::hashing::twox_256;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
