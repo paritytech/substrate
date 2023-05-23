@@ -58,7 +58,8 @@ pub trait Inspect<AccountId>: Sized {
 	/// The minimum balance any single account may have.
 	fn minimum_balance() -> Self::Balance;
 
-	/// Get the total amount of funds whose ultimate bneficial ownership can be determined as `who`.
+	/// Get the total amount of funds whose ultimate beneficial ownership can be determined as
+	/// `who`.
 	///
 	/// This may include funds which are wholly inaccessible to `who`, either temporarily or even
 	/// indefinitely.

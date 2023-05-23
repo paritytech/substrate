@@ -962,9 +962,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(metadata.as_ref().map_or(true, |m| !m.is_frozen), Error::<T, I>::NoPermission);
 
 			let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-			let new_deposit = T::MetadataDepositPerByte::get()
-				.saturating_mul(((name.len() + symbol.len()) as u32).into())
-				.saturating_add(T::MetadataDepositBase::get());
+			let new_deposit = Self::calc_metadata_deposit(&name, &symbol);
 
 			if new_deposit > old_deposit {
 				T::Currency::reserve(from, new_deposit - old_deposit)?;
@@ -989,6 +987,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			});
 			Ok(())
 		})
+	}
+
+	/// Calculate the metadata deposit for the provided data.
+	pub(super) fn calc_metadata_deposit(name: &[u8], symbol: &[u8]) -> DepositBalanceOf<T, I> {
+		T::MetadataDepositPerByte::get()
+			.saturating_mul(((name.len() + symbol.len()) as u32).into())
+			.saturating_add(T::MetadataDepositBase::get())
 	}
 
 	/// Returns all the non-zero balances for all assets of the given `account`.
