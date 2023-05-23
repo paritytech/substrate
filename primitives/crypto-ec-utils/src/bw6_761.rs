@@ -15,9 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Support functions for bw6_761 to improve the performance of multi_miller_loop, 
+//! Support functions for bw6_761 to improve the performance of multi_miller_loop,
 //! final_exponentiation, msm's and projective multiplications by host function calls
-
 
 use crate::utils::{
 	final_exponentiation_generic, msm_sw_generic, mul_projective_generic, multi_miller_loop_generic,

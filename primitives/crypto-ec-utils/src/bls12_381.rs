@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Support functions for bls12_381 to improve the performance of multi_miller_loop, 
+//! Support functions for bls12_381 to improve the performance of multi_miller_loop,
 //! final_exponentiation, msm's and projective multiplications by host function calls
 
 use crate::utils::{
