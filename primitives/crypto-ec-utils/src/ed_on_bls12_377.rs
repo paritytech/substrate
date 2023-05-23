@@ -18,7 +18,6 @@
 //! Support functions for ed_on_bls12_377 to improve the performance of 
 //! msm and projective multiplication by host function calls
 
-#![warn(missing_docs)]
 
 use crate::utils::{msm_te_generic, mul_projective_te_generic};
 use ark_ed_on_bls12_377::EdwardsConfig;

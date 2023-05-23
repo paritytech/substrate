@@ -18,7 +18,6 @@
 //! Support functions for ed_on_bls12_381_bandersnatch to improve the performance of 
 //! msm' and projective multiplications by host function calls
 
-#![warn(missing_docs)]
 
 use crate::utils::{
 	msm_sw_generic, msm_te_generic, mul_projective_generic, mul_projective_te_generic,

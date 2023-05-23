@@ -18,8 +18,6 @@
 //! Support functions for bls12_377 to improve the performance of multi_miller_loop, 
 //! final_exponentiation, msm's and projective multiplications by host function calls
 
-#![warn(missing_docs)]
-
 use crate::utils::{
 	final_exponentiation_generic, msm_sw_generic, mul_projective_generic, multi_miller_loop_generic,
 };
