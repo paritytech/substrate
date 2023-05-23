@@ -442,15 +442,9 @@ pub mod pallet {
 	>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub keys: Vec<T::AuthorityId>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			GenesisConfig { keys: Default::default() }
-		}
 	}
 
 	#[pallet::genesis_build]

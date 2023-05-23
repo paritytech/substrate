@@ -579,6 +579,7 @@ pub mod pallet {
 	pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub validator_count: u32,
 		pub minimum_validator_count: u32,
@@ -592,25 +593,6 @@ pub mod pallet {
 		pub min_validator_bond: BalanceOf<T>,
 		pub max_validator_count: Option<u32>,
 		pub max_nominator_count: Option<u32>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			GenesisConfig {
-				validator_count: Default::default(),
-				minimum_validator_count: Default::default(),
-				invulnerables: Default::default(),
-				force_era: Default::default(),
-				slash_reward_fraction: Default::default(),
-				canceled_payout: Default::default(),
-				stakers: Default::default(),
-				min_nominator_bond: Default::default(),
-				min_validator_bond: Default::default(),
-				max_validator_count: None,
-				max_nominator_count: None,
-			}
-		}
 	}
 
 	#[pallet::genesis_build]
@@ -631,7 +613,7 @@ pub mod pallet {
 				MaxNominatorsCount::<T>::put(x);
 			}
 
-			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
+			for &(ref stash, _, balance, ref status) in &self.stakers {
 				crate::log!(
 					trace,
 					"inserting genesis staker: {:?} => {:?} => {:?}",
@@ -650,11 +632,11 @@ pub mod pallet {
 				));
 				frame_support::assert_ok!(match status {
 					crate::StakerStatus::Validator => <Pallet<T>>::validate(
-						T::RuntimeOrigin::from(Some(controller.clone()).into()),
+						T::RuntimeOrigin::from(Some(stash.clone()).into()),
 						Default::default(),
 					),
 					crate::StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
-						T::RuntimeOrigin::from(Some(controller.clone()).into()),
+						T::RuntimeOrigin::from(Some(stash.clone()).into()),
 						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
 					),
 					_ => Ok(()),
