@@ -36,6 +36,7 @@ use frame_support::{pallet_prelude::*, weights::WeightMeter};
 use frame_system::pallet_prelude::*;
 use sp_runtime::{traits::Zero, Perbill};
 use sp_std::{vec, vec::Vec};
+use sp_io::hashing::twox_256;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
@@ -348,7 +349,7 @@ pub mod pallet {
 			let mut ret = [0u8; VALUE_SIZE];
 
 			for i in 0u32..(VALUE_SIZE as u32 / 32) {
-				let hash = (seed, i).using_encoded(sp_core::twox_256);
+				let hash = (seed, i).using_encoded(|p| twox_256(p));
 				ret[i as usize * 32..(i + 1) as usize * 32].copy_from_slice(&hash);
 			}
 
