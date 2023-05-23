@@ -798,8 +798,8 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::ProxyExecuted { result: e.map(|_| ()).map_err(|e| e.error) });
 	}
 
-	pub fn remove_all_proxy_delegates(who: &T::AccountId) {
-		let (_, old_deposit) = Proxies::<T>::take(&who);
-		T::Currency::unreserve(&who, old_deposit);
+	pub fn remove_all_proxy_delegates(delegator: &T::AccountId) {
+		let (_, old_deposit) = Proxies::<T>::take(&delegator);
+		T::Currency::unreserve(&delegator, old_deposit);
 	}
 }
