@@ -20,6 +20,9 @@
 use super::*;
 use frame_support::traits::OnRuntimeUpgrade;
 
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
+
 /// The log target.
 const TARGET: &'static str = "runtime::scheduler::migration";
 
@@ -97,8 +100,8 @@ pub mod v3 {
 
 	impl<T: Config<Hash = PreimageHash>> OnRuntimeUpgrade for MigrateToV4<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			assert_eq!(StorageVersion::get::<Pallet<T>>(), 3, "Can only upgrade from version 3");
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+			ensure!(StorageVersion::get::<Pallet<T>>() == 3, "Can only upgrade from version 3");
 
 			let agendas = Agenda::<T>::iter_keys().count() as u32;
 			let decodable_agendas = Agenda::<T>::iter_values().count() as u32;
@@ -125,7 +128,7 @@ pub mod v3 {
 						agenda.len(),
 						max_scheduled_per_block,
 					);
-					return Err("Agenda would overflow `MaxScheduledPerBlock`.")
+					return Err("Agenda would overflow `MaxScheduledPerBlock`.".into())
 				}
 			}
 			// Check that bounding the calls will not overflow `MAX_LENGTH`.
@@ -142,7 +145,7 @@ pub mod v3 {
 									block_number,
 									l,
 								);
-								return Err("Call is too large.")
+								return Err("Call is too large.".into())
 							}
 						},
 						_ => (),
@@ -169,12 +172,12 @@ pub mod v3 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-			assert_eq!(StorageVersion::get::<Pallet<T>>(), 4, "Must upgrade");
+		fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
+			ensure!(StorageVersion::get::<Pallet<T>>() == 4, "Must upgrade");
 
 			// Check that everything decoded fine.
 			for k in crate::Agenda::<T>::iter_keys() {
-				assert!(crate::Agenda::<T>::try_get(k).is_ok(), "Cannot decode V4 Agenda");
+				ensure!(crate::Agenda::<T>::try_get(k).is_ok(), "Cannot decode V4 Agenda");
 			}
 
 			let old_agendas: u32 =
@@ -210,7 +213,7 @@ pub mod v4 {
 
 	impl<T: Config> OnRuntimeUpgrade for CleanupAgendas<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			assert_eq!(
 				StorageVersion::get::<Pallet<T>>(),
 				4,
@@ -285,8 +288,8 @@ pub mod v4 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-			assert_eq!(StorageVersion::get::<Pallet<T>>(), 4, "Version must not change");
+		fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
+			ensure!(StorageVersion::get::<Pallet<T>>() == 4, "Version must not change");
 
 			let (old_agendas, non_empty_agendas): (u32, u32) =
 				Decode::decode(&mut state.as_ref()).expect("Must decode pre_upgrade state");
@@ -305,7 +308,7 @@ pub mod v4 {
 					old_agendas, new_agendas
 				),
 			}
-			assert_eq!(new_agendas, non_empty_agendas, "Expected to keep all non-empty agendas");
+			ensure!(new_agendas == non_empty_agendas, "Expected to keep all non-empty agendas");
 
 			Ok(())
 		}
@@ -496,7 +499,7 @@ mod test {
 
 			// The pre_upgrade hook fails:
 			let err = v3::MigrateToV4::<Test>::pre_upgrade().unwrap_err();
-			assert!(err.contains("Call is too large"));
+			assert!(err == "Call is too large".into());
 			// But the migration itself works:
 			let _w = v3::MigrateToV4::<Test>::on_runtime_upgrade();
 

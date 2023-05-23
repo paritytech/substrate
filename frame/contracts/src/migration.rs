@@ -28,6 +28,9 @@ use frame_support::{
 use sp_runtime::traits::Saturating;
 use sp_std::{marker::PhantomData, prelude::*};
 
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
+
 /// Performs all necessary migrations based on `StorageVersion`.
 pub struct Migration<T: Config>(PhantomData<T>);
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
@@ -66,7 +69,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		let version = <Pallet<T>>::on_chain_storage_version();
 
 		if version == 7 {
@@ -77,7 +80,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		let version = Decode::decode(&mut state.as_ref()).map_err(|_| "Cannot decode version")?;
 		post_checks::post_upgrade::<T>(version)
 	}
@@ -355,7 +358,7 @@ mod v8 {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	pub fn pre_upgrade<T: Config>() -> Result<(), &'static str> {
+	pub fn pre_upgrade<T: Config>() -> Result<(), TryRuntimeError> {
 		use frame_support::traits::ReservableCurrency;
 		for (key, value) in ContractInfoOf::<T, OldContractInfo<T>>::iter() {
 			let reserved = T::Currency::reserved_balance(&key);
@@ -418,7 +421,7 @@ mod post_checks {
 	type ContractInfoOf<T: Config, V> =
 		StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, V>;
 
-	pub fn post_upgrade<T: Config>(old_version: StorageVersion) -> Result<(), &'static str> {
+	pub fn post_upgrade<T: Config>(old_version: StorageVersion) -> Result<(), TryRuntimeError> {
 		if old_version < 7 {
 			return Ok(())
 		}
@@ -434,7 +437,7 @@ mod post_checks {
 		Ok(())
 	}
 
-	fn v8<T: Config>() -> Result<(), &'static str> {
+	fn v8<T: Config>() -> Result<(), TryRuntimeError> {
 		use frame_support::traits::ReservableCurrency;
 		for (key, value) in ContractInfoOf::<T, ContractInfo<T>>::iter() {
 			let reserved = T::Currency::reserved_balance(&key);
@@ -455,13 +458,13 @@ mod post_checks {
 				storage_bytes.saturating_accrue(len);
 				storage_items.saturating_accrue(1);
 			}
-			ensure!(storage_bytes == value.storage_bytes, "Storage bytes do not match.",);
-			ensure!(storage_items == value.storage_items, "Storage items do not match.",);
+			ensure!(storage_bytes == value.storage_bytes, "Storage bytes do not match.");
+			ensure!(storage_items == value.storage_items, "Storage items do not match.");
 		}
 		Ok(())
 	}
 
-	fn v9<T: Config>() -> Result<(), &'static str> {
+	fn v9<T: Config>() -> Result<(), TryRuntimeError> {
 		for value in CodeStorage::<T>::iter_values() {
 			ensure!(
 				value.determinism == Determinism::Enforced,
