@@ -162,7 +162,7 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero},
 	ArithmeticError, TokenError,
 };
-use sp_std::{borrow::Borrow, prelude::*};
+use sp_std::prelude::*;
 
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},

@@ -21,7 +21,7 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
-use sp_std::{borrow::Borrow, prelude::*};
+use sp_std::prelude::*;
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
 ///
@@ -78,7 +78,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 	{
 		let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
-		let key_hashed = k1.borrow().using_encoded(Self::Hasher1::hash);
+		let key_hashed = k1.using_encoded(Self::Hasher1::hash);
 
 		let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.as_ref().len());
 
@@ -95,8 +95,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg2: EncodeLike<K2>,
 	{
 		let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
-		let key1_hashed = k1.borrow().using_encoded(Self::Hasher1::hash);
-		let key2_hashed = k2.borrow().using_encoded(Self::Hasher2::hash);
+		let key1_hashed = k1.using_encoded(Self::Hasher1::hash);
+		let key2_hashed = k2.using_encoded(Self::Hasher2::hash);
 
 		let mut final_key = Vec::with_capacity(
 			storage_prefix.len() + key1_hashed.as_ref().len() + key2_hashed.as_ref().len(),
@@ -198,7 +198,7 @@ where
 		KArg2: EncodeLike<K2>,
 		VArg: EncodeLike<V>,
 	{
-		unhashed::put(&Self::storage_double_map_final_key(k1, k2), &val.borrow())
+		unhashed::put(&Self::storage_double_map_final_key(k1, k2), &val)
 	}
 
 	fn remove<KArg1, KArg2>(k1: KArg1, k2: KArg2)
@@ -336,8 +336,8 @@ where
 		let old_key = {
 			let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
 
-			let key1_hashed = key1.borrow().using_encoded(OldHasher1::hash);
-			let key2_hashed = key2.borrow().using_encoded(OldHasher2::hash);
+			let key1_hashed = key1.using_encoded(OldHasher1::hash);
+			let key2_hashed = key2.using_encoded(OldHasher2::hash);
 
 			let mut final_key = Vec::with_capacity(
 				storage_prefix.len() + key1_hashed.as_ref().len() + key2_hashed.as_ref().len(),
