@@ -632,13 +632,13 @@ pub mod pallet {
 
 	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
-	pub struct RuntimeGenesisConfig {
+	pub struct GenesisConfig {
 		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for RuntimeGenesisConfig {
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			<BlockHash<T>>::insert::<_, T::Hash>(T::BlockNumber::zero(), hash69());
 			<ParentHash<T>>::put::<T::Hash>(hash69());
@@ -653,7 +653,7 @@ pub mod pallet {
 }
 
 #[cfg(feature = "std")]
-impl RuntimeGenesisConfig {
+impl GenesisConfig {
 	/// Direct implementation of `GenesisBuild::build_storage`.
 	///
 	/// Kept in order not to break dependency.

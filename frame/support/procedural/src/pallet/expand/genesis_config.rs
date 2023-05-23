@@ -18,7 +18,6 @@
 use crate::{pallet::Def, COUNTER};
 use frame_support_procedural_tools::get_doc_literals;
 use syn::{spanned::Spanned, Ident};
-use quote::ToTokens;
 
 ///
 /// * add various derive trait on RuntimeGenesisConfig struct.
@@ -85,7 +84,6 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 	// TODO [#14065]
 	// - add a deprecation warning
 	// - later, remove `genesis_config_support` and the deprecation warning
-
 	let genesis_config_support = if genesis_config.genesis_config == "GenesisConfig" {
 		let span = genesis_config.genesis_config.span();
 		let gen = if genesis_config.gen_kind.is_generic() {
@@ -94,7 +92,10 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 		} else {
 			quote::quote!()
 		};
-		quote::quote_spanned! ( span => pub type RuntimeGenesisConfig #gen = crate::GenesisConfig #gen; )
+		quote::quote_spanned! ( span =>
+			#[cfg(feature = "std")]
+			pub type RuntimeGenesisConfig #gen = GenesisConfig #gen;
+		)
 	} else {
 		quote::quote!()
 	};
@@ -125,7 +126,6 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 		_ => unreachable!("Checked by genesis_config parser"),
 	}
 
-	println!("DEF: {:?}", def);
 	quote::quote! {
 
 		#genesis_config_support
