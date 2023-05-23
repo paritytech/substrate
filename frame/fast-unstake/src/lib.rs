@@ -76,7 +76,7 @@
 #![doc = docify::embed!("./frame/fast-unstake/src/tests.rs", successful_multi_queue)]
 //!
 //! 2. Fast unstake failing because a nominator is exposed.
-#![doc = docify::embed!("./frame/fast-unstake/src/tests.rs", exposed_nominator_cannot_unstake)]
+#![doc = docify::embed!("./frame/fast-unstake/src/tests.rs", exposed_nominator_cannot_unstake_fail)]
 //!
 //! ## Pallet API
 //!

@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::{mock::*, types::*, Event};
-use frame_support::{pallet_prelude::*, traits::Currency, testing_prelude::*};
+use frame_support::{pallet_prelude::*, testing_prelude::*, traits::Currency};
 use pallet_staking::{CurrentEra, RewardDestination};
 
 use sp_runtime::traits::BadOrigin;
@@ -695,8 +695,8 @@ mod on_idle {
 		});
 	}
 
-	#[test]
 	#[docify::export]
+	#[test]
 	fn exposed_nominator_cannot_unstake() {
 		ExtBuilder::default().build_and_execute(|| {
 			ErasToCheckPerBlock::<T>::put(1);
