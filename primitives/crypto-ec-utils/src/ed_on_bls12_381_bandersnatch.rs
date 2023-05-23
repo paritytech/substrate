@@ -15,8 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Support functions for ed_on_bls12_381_bandersnatch to improve the performance of
-//! msm' and projective multiplications by host function calls
+//! Support functions for ed_on_bls12_381_bandersnatch to improve the
+//! performance of msm' and projective multiplications by host function
+//! calls.
 
 use crate::utils::{
 	msm_sw_generic, msm_te_generic, mul_projective_generic, mul_projective_te_generic,
@@ -24,22 +25,26 @@ use crate::utils::{
 use ark_ed_on_bls12_381_bandersnatch::BandersnatchConfig;
 use sp_std::vec::Vec;
 
-/// Compute a projective scalar multiplication for short_weierstrass through arkworks
+/// Compute a projective scalar multiplication for short_weierstrass
+/// through arkworks.
 pub fn sw_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 	mul_projective_generic::<BandersnatchConfig>(base, scalar)
 }
 
-/// Compute a projective scalar multiplication for twisted_edwards through arkworks
+/// Compute a projective scalar multiplication for twisted_edwards
+/// through arkworks.
 pub fn te_mul_projective(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 	mul_projective_te_generic::<BandersnatchConfig>(base, scalar)
 }
 
-/// Compute a multi scalar mulitplication for twisted_edwards through arkworks
+/// Compute a multi scalar mulitplication for twisted_edwards through
+/// arkworks.
 pub fn te_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 	msm_te_generic::<BandersnatchConfig>(bases, scalars)
 }
 
-/// Compute a multi scalar multiplication for short_weierstrass through arkworks
+/// Compute a multi scalar multiplication for short_weierstrass through
+/// arkworks.
 pub fn sw_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 	msm_sw_generic::<BandersnatchConfig>(bases, scalars)
 }

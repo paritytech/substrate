@@ -15,8 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Support functions for bls12_381 to improve the performance of multi_miller_loop,
-//! final_exponentiation, msm's and projective multiplications by host function calls
+//! Support functions for bls12_381 to improve the performance of
+//! multi_miller_loop, final_exponentiation, msm's and projective
+//! multiplications by host function calls
 
 use crate::utils::{
 	final_exponentiation_generic, msm_sw_generic, mul_projective_generic, multi_miller_loop_generic,
@@ -34,22 +35,26 @@ pub fn final_exponentiation(target: Vec<u8>) -> Result<Vec<u8>, ()> {
 	final_exponentiation_generic::<Bls12_381>(target)
 }
 
-/// Compute a multi scalar multiplication for short_weierstrass through arkworks on G1
+/// Compute a multi scalar multiplication for short_weierstrass through
+/// arkworks on G1.
 pub fn msm_g1(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 	msm_sw_generic::<g1::Config>(bases, scalars)
 }
 
-/// Compute a multi scalar multiplication for short_weierstrass through arkworks on G2
+/// Compute a multi scalar multiplication for short_weierstrass through
+/// arkworks on G2.
 pub fn msm_g2(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 	msm_sw_generic::<g2::Config>(bases, scalars)
 }
 
-/// Compute a projective scalar multiplication for short_weierstrass through arkworks on G1
+/// Compute a projective scalar multiplication for short_weierstrass
+/// through arkworks on G1.
 pub fn mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 	mul_projective_generic::<g1::Config>(base, scalar)
 }
 
-/// Compute a projective scalar multiplication for short_weierstrass through arkworks on G2
+/// Compute a projective scalar multiplication for short_weierstrass
+/// through arkworks on G2.
 pub fn mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 	mul_projective_generic::<g2::Config>(base, scalar)
 }
