@@ -202,7 +202,10 @@ impl<AssetId, AccountId> AssetsCallback<AssetId, AccountId> for () {}
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::AccountTouch};
+	use frame_support::{
+		pallet_prelude::*,
+		traits::{AccountTouch, ContainsPair},
+	};
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
@@ -366,6 +369,7 @@ pub mod pallet {
 	>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		/// Genesis assets: id, owner, is_sufficient, min_balance
 		pub assets: Vec<(T::AssetId, T::AccountId, bool, T::Balance)>,
@@ -373,17 +377,6 @@ pub mod pallet {
 		pub metadata: Vec<(T::AssetId, Vec<u8>, Vec<u8>, u8)>,
 		/// Genesis accounts: id, account_id, balance
 		pub accounts: Vec<(T::AssetId, T::AccountId, T::Balance)>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
-		fn default() -> Self {
-			Self {
-				assets: Default::default(),
-				metadata: Default::default(),
-				accounts: Default::default(),
-			}
-		}
 	}
 
 	#[pallet::genesis_build]
@@ -1645,18 +1638,26 @@ pub mod pallet {
 		}
 	}
 
-	/// Implements [AccountTouch] trait.
+	/// Implements [`AccountTouch`] trait.
 	/// Note that a depositor can be any account, without any specific privilege.
 	/// This implementation is supposed to be used only for creation of system accounts.
 	impl<T: Config<I>, I: 'static> AccountTouch<T::AssetId, T::AccountId> for Pallet<T, I> {
 		type Balance = DepositBalanceOf<T, I>;
 
-		fn deposit_required() -> Self::Balance {
+		fn deposit_required(_: T::AssetId) -> Self::Balance {
 			T::AssetAccountDeposit::get()
 		}
 
 		fn touch(asset: T::AssetId, who: T::AccountId, depositor: T::AccountId) -> DispatchResult {
 			Self::do_touch(asset, who, depositor, false)
+		}
+	}
+
+	/// Implements [`ContainsPair`] trait for a pair of asset and account IDs.
+	impl<T: Config<I>, I: 'static> ContainsPair<T::AssetId, T::AccountId> for Pallet<T, I> {
+		/// Check if an account with the given asset ID and account address exists.
+		fn contains(asset: &T::AssetId, who: &T::AccountId) -> bool {
+			Account::<T, I>::contains_key(asset, who)
 		}
 	}
 }

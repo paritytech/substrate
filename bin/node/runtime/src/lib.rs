@@ -44,7 +44,7 @@ use frame_support::{
 		},
 		ConstantMultiplier, IdentityFee, Weight,
 	},
-	PalletId, RuntimeDebug,
+	BoundedVec, PalletId, RuntimeDebug,
 };
 use frame_system::{
 	limits::{BlockLength, BlockWeights},
@@ -445,6 +445,8 @@ parameter_types! {
 pub enum HoldReason {
 	/// The NIS Pallet has reserved it for a non-fungible receipt.
 	Nis,
+	/// Used by the NFT Fractionalization Pallet.
+	NftFractionalization,
 }
 
 impl pallet_balances::Config for Runtime {
@@ -460,7 +462,7 @@ impl pallet_balances::Config for Runtime {
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
 	type HoldIdentifier = HoldReason;
-	type MaxHolds = ConstU32<1>;
+	type MaxHolds = ConstU32<2>;
 }
 
 parameter_types! {
@@ -1251,6 +1253,7 @@ impl pallet_contracts::Config for Runtime {
 impl pallet_sudo::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
+	type WeightInfo = pallet_sudo::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -1612,6 +1615,33 @@ impl pallet_core_fellowship::Config for Runtime {
 }
 
 parameter_types! {
+	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
+	pub NewAssetSymbol: BoundedVec<u8, StringLimit> = (*b"FRAC").to_vec().try_into().unwrap();
+	pub NewAssetName: BoundedVec<u8, StringLimit> = (*b"Frac").to_vec().try_into().unwrap();
+	pub const NftFractionalizationHoldReason: HoldReason = HoldReason::NftFractionalization;
+}
+
+impl pallet_nft_fractionalization::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Deposit = AssetDeposit;
+	type Currency = Balances;
+	type NewAssetSymbol = NewAssetSymbol;
+	type NewAssetName = NewAssetName;
+	type StringLimit = StringLimit;
+	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+	type NftId = <Self as pallet_nfts::Config>::ItemId;
+	type AssetBalance = <Self as pallet_balances::Config>::Balance;
+	type AssetId = <Self as pallet_assets::Config>::AssetId;
+	type Assets = Assets;
+	type Nfts = Nfts;
+	type PalletId = NftFractionalizationPalletId;
+	type WeightInfo = pallet_nft_fractionalization::weights::SubstrateWeight<Runtime>;
+	type HoldReason = NftFractionalizationHoldReason;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
+}
+
+parameter_types! {
 	pub Features: PalletFeatures = PalletFeatures::all_enabled();
 	pub const MaxAttributesPerCall: u32 = 10;
 }
@@ -1828,6 +1858,7 @@ construct_runtime!(
 		Nis: pallet_nis,
 		Uniques: pallet_uniques,
 		Nfts: pallet_nfts,
+		NftFractionalization: pallet_nft_fractionalization,
 		Salary: pallet_salary,
 		CoreFellowship: pallet_core_fellowship,
 		TransactionStorage: pallet_transaction_storage,
@@ -1962,6 +1993,7 @@ mod benches {
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_staking, Staking]
 		[pallet_state_trie_migration, StateTrieMigration]
+		[pallet_sudo, Sudo]
 		[frame_system, SystemBench::<Runtime>]
 		[pallet_timestamp, Timestamp]
 		[pallet_tips, Tips]
@@ -1970,6 +2002,7 @@ mod benches {
 		[pallet_asset_rate, AssetRate]
 		[pallet_uniques, Uniques]
 		[pallet_nfts, Nfts]
+		[pallet_nft_fractionalization, NftFractionalization]
 		[pallet_utility, Utility]
 		[pallet_vesting, Vesting]
 		[pallet_whitelist, Whitelist]
@@ -2484,44 +2517,8 @@ impl_runtime_apis! {
 mod tests {
 	use super::*;
 	use frame_election_provider_support::NposSolution;
-	use frame_support::traits::WhitelistedStorageKeys;
 	use frame_system::offchain::CreateSignedTransaction;
-	use sp_core::hexdisplay::HexDisplay;
 	use sp_runtime::UpperOf;
-	use std::collections::HashSet;
-
-	#[test]
-	fn check_whitelist() {
-		let whitelist: HashSet<String> = AllPalletsWithSystem::whitelisted_storage_keys()
-			.iter()
-			.map(|e| HexDisplay::from(&e.key).to_string())
-			.collect();
-
-		// Block Number
-		assert!(
-			whitelist.contains("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac")
-		);
-		// Total Issuance
-		assert!(
-			whitelist.contains("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80")
-		);
-		// Execution Phase
-		assert!(
-			whitelist.contains("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a")
-		);
-		// Event Count
-		assert!(
-			whitelist.contains("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850")
-		);
-		// System Events
-		assert!(
-			whitelist.contains("26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7")
-		);
-		// System BlockWeight
-		assert!(
-			whitelist.contains("26aa394eea5630e07c48ae0c9558cef734abf5cb34d6244378cddbf18e849d96")
-		);
-	}
 
 	#[test]
 	fn validate_transaction_submitter_bounds() {

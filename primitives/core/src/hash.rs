@@ -32,7 +32,6 @@ pub fn convert_hash<H1: Default + AsMut<[u8]>, H2: AsRef<[u8]>>(src: &H2) -> H1 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_serializer as ser;
 
 	#[test]
 	fn test_h160() {
@@ -47,8 +46,11 @@ mod tests {
 		];
 
 		for (number, expected) in tests {
-			assert_eq!(format!("{:?}", expected), ser::to_string_pretty(&number));
-			assert_eq!(number, ser::from_str(&format!("{:?}", expected)).unwrap());
+			assert_eq!(
+				format!("{:?}", expected),
+				serde_json::to_string_pretty(&number).expect("Json pretty print failed")
+			);
+			assert_eq!(number, serde_json::from_str(&format!("{:?}", expected)).unwrap());
 		}
 	}
 
@@ -86,30 +88,33 @@ mod tests {
 		];
 
 		for (number, expected) in tests {
-			assert_eq!(format!("{:?}", expected), ser::to_string_pretty(&number));
-			assert_eq!(number, ser::from_str(&format!("{:?}", expected)).unwrap());
+			assert_eq!(
+				format!("{:?}", expected),
+				serde_json::to_string_pretty(&number).expect("Json pretty print failed")
+			);
+			assert_eq!(number, serde_json::from_str(&format!("{:?}", expected)).unwrap());
 		}
 	}
 
 	#[test]
 	fn test_invalid() {
-		assert!(ser::from_str::<H256>(
+		assert!(serde_json::from_str::<H256>(
 			"\"0x000000000000000000000000000000000000000000000000000000000000000\""
 		)
 		.unwrap_err()
 		.is_data());
-		assert!(ser::from_str::<H256>(
+		assert!(serde_json::from_str::<H256>(
 			"\"0x000000000000000000000000000000000000000000000000000000000000000g\""
 		)
 		.unwrap_err()
 		.is_data());
-		assert!(ser::from_str::<H256>(
+		assert!(serde_json::from_str::<H256>(
 			"\"0x00000000000000000000000000000000000000000000000000000000000000000\""
 		)
 		.unwrap_err()
 		.is_data());
-		assert!(ser::from_str::<H256>("\"\"").unwrap_err().is_data());
-		assert!(ser::from_str::<H256>("\"0\"").unwrap_err().is_data());
-		assert!(ser::from_str::<H256>("\"10\"").unwrap_err().is_data());
+		assert!(serde_json::from_str::<H256>("\"\"").unwrap_err().is_data());
+		assert!(serde_json::from_str::<H256>("\"0\"").unwrap_err().is_data());
+		assert!(serde_json::from_str::<H256>("\"10\"").unwrap_err().is_data());
 	}
 }

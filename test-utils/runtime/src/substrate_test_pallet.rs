@@ -21,10 +21,13 @@
 //! functioning runtime. Some calls are allowed to be submitted as unsigned extrinsics, however most
 //! of them requires signing. Refer to `pallet::Call` for further details.
 
-use crate::AuthorityId;
 use frame_support::{pallet_prelude::*, storage};
-use sp_runtime::transaction_validity::{
-	InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
+use sp_core::sr25519::Public;
+use sp_runtime::{
+	traits::{BlakeTwo256, Hash},
+	transaction_validity::{
+		InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
+	},
 };
 use sp_std::prelude::*;
 
@@ -49,12 +52,12 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub type Authorities<T> = StorageValue<_, Vec<AuthorityId>, ValueQuery>;
+	pub type Authorities<T> = StorageValue<_, Vec<Public>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	#[cfg_attr(feature = "std", derive(Default))]
 	pub struct GenesisConfig {
-		pub authorities: Vec<AuthorityId>,
+		pub authorities: Vec<Public>,
 	}
 
 	#[pallet::genesis_build]
@@ -225,7 +228,10 @@ pub mod pallet {
 				Call::deposit_log_digest_item { .. } |
 				Call::storage_change { .. } |
 				Call::read { .. } |
-				Call::read_and_panic { .. } => Ok(Default::default()),
+				Call::read_and_panic { .. } => Ok(ValidTransaction {
+					provides: vec![BlakeTwo256::hash_of(&call).encode()],
+					..Default::default()
+				}),
 				_ => Err(TransactionValidityError::Invalid(InvalidTransaction::Call)),
 			}
 		}
