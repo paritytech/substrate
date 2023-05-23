@@ -27,8 +27,8 @@ First, consider the case for all such crates, except for those that are pallets.
 
 The first question is, what should you document? Use the following filter:
 
-1. Within the set of crates above,
-2. All `pub` item within the aforementioned crates need to be documented. If it is not `pub`, it does not appear in the rust-docs, and is not public facing.
+1. In the crates assigned to `docs-audit` in [CODEOWNERS](./CODEOWNERS),
+2. All `pub` item need to be documented. If it is not `pub`, it does not appear in the rust-docs, and is not public facing.
     * Within `pub` items, sometimes they are only `pub` in order to be used by another internal crate, and you can foresee that this will not be used by anyone else other than you. These need **not** be documented thoroughly, and are left to your discretion to identify.
     * Reminder: `trait` items are public by definition, if the trait is public.
 3. All public modules (`mod`) should have reasonable module-level documentation (`//!`).
@@ -50,7 +50,6 @@ Note that anything starting with `///` is an external rust-doc, and everything s
 pub fn sqrt(x: u32) -> Result<u32, ()> {
     todo!();
 }
-
 ```
 
 ### How to Document?
@@ -61,7 +60,6 @@ There are a few very good sources that you can look into:
 - https://web.mit.edu/rust-lang_v1.25/arch/amd64_ubuntu1404/share/doc/rust/html/book/first-edition/documentation.html
 - https://blog.guillaume-gomez.fr/articles/2020-03-12+Guide+on+how+to+write+documentation+for+a+Rust+crate
 
-
 As mentioned [here](https://web.mit.edu/rust-lang_v1.25/arch/amd64_ubuntu1404/share/doc/rust/html/book/first-edition/documentation.html#writing-documentation-comments) and [here](https://blog.guillaume-gomez.fr/articles/2020-03-12+Guide+on+how+to+write+documentation+for+a+Rust+crate), always start with a **single sentence** demonstrating what is being documented. All additional documentation should be added *after a newline*. Strive to make the first sentence succinct and short. The reason for this is the first paragraph of docs about an item (everything before the first newline) is used as the excerpt that rust doc displays about this item when it appears in tables, such as the table listing all functions in a module. If this excerpt is too long, the module docs will be very difficult to read.
 
 About [special sections](https://web.mit.edu/rust-lang_v1.25/arch/amd64_ubuntu1404/share/doc/rust/html/book/first-edition/documentation.html#special-sections), we will most likely not need to think about panic and safety in any runtime related code. Our code is never `unsafe`, and will (almost) never panic.
@@ -71,16 +69,22 @@ Use `# Examples as much as possible. These are great ways to further demonstrate
 You can also consider having an `# Error` section optionally. Of course, this only applies if there is a `Result` being returned, and if the `Error` variants are overly complicated.
 
 Strive to include correct links to other items in your written docs as much as possible. In other words, avoid \`some_func\` and instead use \[\`some_fund\`\]. Read more about how to correctly use links in your rust-docs [here](https://doc.rust-lang.org/rustdoc/write-documentation/linking-to-items-by-name.html#valid-links) and [here](https://rust-lang.github.io/rfcs/1946-intra-rustdoc-links.html#additions-to-the-documentation-syntax).
+Strive to include correct links to other items in your written docs as much as possible. In other words, avoid `` `some_func` `` and instead use ``[`some_func`]``.
+
 
 > While you are linking, you might become conscious of the fact that you are in need of linking to (too many) foreign items in order to explain your API. This is leaning more towards API-Design rather than documentation, but it is a warning that the subject API might be slightly wrong. For example, most "glue" traits[^1] in `frame/support` should be designed and documented without making hard assumptions about particular pallets that implement them.
 
-### TLDR
+#### TLDR
 
 0. Have the goal of enforcing `#![deny(missing_docs)]` mentally, even if it is not enforced by the compiler 🙈.
 1. Start with a single, clear and concise sentence. Follow up with more context, after a newline, if needed.
 2. Use examples as much as reasonably possible.
 3. Use links as much as possible.
 4. Think about context. If you are explaining a lot of foreign topics while documenting a trait that should not explicitly depend on them, you have likely not designed it properly.
+
+#### Proc-Macros
+
+Note that there are special considerations when documenting proc macros. Doc links will appear to function _within_ your proc macro crate, but often will no longer function when these proc macros are re-exported elsewhere in your project. The exception is doc links to _other proc macros_ which will function just fine if they are also being re-exported. It is also often necessary to disambiguate between a proc macro and a function of the same name, which can be done using the `macro@my_macro_name` syntax in your link. Read more about how to correctly use links in your rust-docs [here](https://doc.rust-lang.org/rustdoc/write-documentation/linking-to-items-by-name.html#valid-links) and [here](https://rust-lang.github.io/rfcs/1946-intra-rustdoc-links.html#additions-to-the-documentation-syntax).
 
 
 ### Other Guidelines
@@ -106,7 +110,7 @@ You should make sure that your code is properly-named and well-organized so that
  }
  ```
 
-In the above example, the documentation has added no useful information not already contained within the properly-named trait and is redundant. 
+In the above example, the documentation has added no useful information not already contained within the properly-named trait and is redundant.
 
 
 #### Formatting Matters
@@ -168,9 +172,9 @@ For the top-level pallet docs, consider the following template:
 //!
 //! ## Code Details
 //!
-//! <Reminder: inside the [`pallet`] module, a template that leads the reader to the relevant items is auto-generated. There is no need to repeat things like "See Config trait for ...", which are generated inside [`pallet`] here anyways>
+//! <Reminder: inside the [`pallet`] module, a template that leads the reader to the relevant items is auto-generated. There is no need to repeat things like "See Config trait for ...", which are generated inside [`pallet`] here anyways. You can use the below line as-is:>
 //!
-//! See [`pallet`] module.
+//! See the [`pallet`] module for more information about the interfaces this pallet exposes, including its configuration trait, dispatchables, events and errors.
 //!
 //! <The audience of this is those who want to know how this pallet works, to the extent of being able to build something on top of it, like a DApp or another pallet>
 //!
