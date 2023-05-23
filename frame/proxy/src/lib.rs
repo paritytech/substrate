@@ -799,7 +799,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Removes all proxy delegates for a given delegator.
-	/// It takes the delegator's account ID as a parameter.
+	///
+	/// Parameters:
+	/// - `delegator`: The delegator account.
 	pub fn remove_all_proxy_delegates(delegator: &T::AccountId) {
 		let (_, old_deposit) = Proxies::<T>::take(&delegator);
 		T::Currency::unreserve(&delegator, old_deposit);
