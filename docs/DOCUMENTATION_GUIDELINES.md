@@ -80,7 +80,7 @@ Strive to include correct links to other items in your written docs as much as p
 1. Start with a single, clear and concise sentence. Follow up with more context, after a newline, if needed.
 2. Use examples as much as reasonably possible.
 3. Use links as much as possible.
-4. Think about context. If you are in need of explaining a lot of foreign topics in documenting a trait that should not explicitly depend on them, you have likely not designed it properly.
+4. Think about context. If you are explaining a lot of foreign topics while documenting a trait that should not explicitly depend on them, you have likely not designed it properly.
 
 
 ### Other Guidelines
@@ -97,7 +97,7 @@ You should make sure that your code is properly-named and well-organized so that
 > Our north star is self-documenting code that also happens to be well-documented and littered with examples.
 
 
-* Your written documents should *complement* the code, not *repeat* it. Put bluntly, if you end up writing this, you are likely doing it wrong:
+* Your written documents should *complement* the code, not *repeat* it. As an example, a documentation on top of a code example should never look like the following:
 
  ```rust
  /// Sends request and handles the response.
@@ -106,7 +106,7 @@ You should make sure that your code is properly-named and well-organized so that
  }
  ```
 
- Because the document is adding no extra information and you are better of without it.
+In the above example, the documentation has added no useful information not already contained within the properly-named trait and is redundant. 
 
 
 #### Formatting Matters
