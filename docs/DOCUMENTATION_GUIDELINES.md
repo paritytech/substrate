@@ -111,7 +111,7 @@ In the above example, the documentation has added no useful information not alre
 
 #### Formatting Matters
 
-The way you format your documents (newlines, heading and so on) do matter! Consider the below examples:
+The way you format your documents (newlines, heading and so on) makes a difference. Consider the below examples:
 
 ```rust
 /// This function works with input u32 x and multiplies it by two. If
@@ -135,15 +135,15 @@ fn multiply_by_2(x: u32) -> u32 { .. }
 fn multiply_by_2(x: u32) -> u32 { .. }
 ```
 
-They are both roughly conveying the same set of facts, but one is substantially kinder on the eye. Especially for traits and type that you can foresee will be seen/used a lot, try and write the better version!
+They are both roughly conveying the same set of facts, but one is easier to follow because it was formatted cleanly. Especially for traits and types that you can foresee will be seen and used a lot, try and write a well formatted version.
 
-Similarly, make sure your comments are wrapped at 100 characters line-width (as defined by our [`rustfmt.toml`](../rustfmt.toml)), no **more and no less**! The more is fixed by `rustfmt` and our CI, but if you (some some unknown reason) wrap your lines at 59 characters, it will pass the CI, and it will not look good 🫣.
+Similarly, make sure your comments are wrapped at 100 characters line-width (as defined by our [`rustfmt.toml`](../rustfmt.toml)), no **more and no less**! The more is fixed by `rustfmt` and our CI, but if you (for some unknown reason) wrap your lines at 59 characters, it will pass the CI, and it will not look good 🫣.
 
 [^1]: Those that help two pallets talk to each other.
 
 ## Pallet Crates
 
-Everything above is related to non-pallet details. They might be relevant in both crates that are pallets, and non-pallet crates.
+The guidelines so far have been general in nature, and are applicable to crates that are pallets and crates that're not pallets.
 
 The following is relevant to how to document parts of a crate that is a pallet.
 
