@@ -93,7 +93,7 @@ benchmarks! {
 		let collection = T::BenchmarkHelper::collection(0);
 		let nft = T::BenchmarkHelper::nft(0);
 		let (caller, caller_lookup) = mint_nft::<T>(nft);
-	}: _(SystemOrigin::Signed(caller.clone()), collection, nft, asset, caller_lookup, 1000u32.into())
+	}: _(SystemOrigin::Signed(caller.clone()), collection, nft, asset.clone(), caller_lookup, 1000u32.into())
 	verify {
 		assert_last_event::<T>(
 			Event::NftFractionalized {
@@ -115,11 +115,11 @@ benchmarks! {
 			SystemOrigin::Signed(caller.clone()).into(),
 			collection,
 			nft,
-			asset,
+			asset.clone(),
 			caller_lookup.clone(),
 			1000u32.into(),
 		)?;
-	}: _(SystemOrigin::Signed(caller.clone()), collection, nft, asset, caller_lookup)
+	}: _(SystemOrigin::Signed(caller.clone()), collection, nft, asset.clone(), caller_lookup)
 	verify {
 		assert_last_event::<T>(
 			Event::NftUnified {
