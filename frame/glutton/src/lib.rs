@@ -136,7 +136,7 @@ pub mod pallet {
 		fn build(&self) {
 			assert!(
 				self.trash_data_count <= MAX_TRASH_DATA_ENTRIES,
-				"number of TrashData entries can not be bigger than {:?}",
+				"number of TrashData entries cannot be bigger than {:?}",
 				MAX_TRASH_DATA_ENTRIES
 			);
 
