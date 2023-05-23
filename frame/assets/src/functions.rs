@@ -739,7 +739,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		maybe_check_owner: Option<T::AccountId>,
 	) -> DispatchResult {
 		Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
-			let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 			if let Some(check_owner) = maybe_check_owner {
 				ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
 			}
@@ -800,7 +800,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut removed_approvals = 0;
 		let _ =
 			Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
-				let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 
 				// Should only destroy accounts while the asset is in a destroying state.
 				ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::IncorrectStatus);
