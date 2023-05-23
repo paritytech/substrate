@@ -20,6 +20,9 @@ use crate::log;
 use frame_support::traits::OnRuntimeUpgrade;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
+
 pub mod v1 {
 	use super::*;
 
@@ -100,9 +103,12 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
 			// new version must be set.
-			assert_eq!(Pallet::<T>::on_chain_storage_version(), 1);
+			ensure!(
+				Pallet::<T>::on_chain_storage_version() == 1,
+				"The onchain version must be updated after the migration."
+			);
 			Pallet::<T>::try_state(frame_system::Pallet::<T>::block_number())?;
 			Ok(())
 		}
@@ -352,38 +358,47 @@ pub mod v2 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			// all reward accounts must have more than ED.
-			RewardPools::<T>::iter().for_each(|(id, _)| {
-				assert!(
+			RewardPools::<T>::iter().try_for_each(|(id, _)| -> Result<(), TryRuntimeError> {
+				ensure!(
 					T::Currency::free_balance(&Pallet::<T>::create_reward_account(id)) >=
-						T::Currency::minimum_balance()
-				)
-			});
+						T::Currency::minimum_balance(),
+					"Reward accounts must have greater balance than ED."
+				);
+				Ok(())
+			})?;
 
 			Ok(Vec::new())
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
 			// new version must be set.
-			assert_eq!(Pallet::<T>::on_chain_storage_version(), 2);
+			ensure!(
+				Pallet::<T>::on_chain_storage_version() == 2,
+				"The onchain version must be updated after the migration."
+			);
 
 			// no reward or bonded pool has been skipped.
-			assert_eq!(RewardPools::<T>::iter().count() as u32, RewardPools::<T>::count());
-			assert_eq!(BondedPools::<T>::iter().count() as u32, BondedPools::<T>::count());
+			ensure!(
+				RewardPools::<T>::iter().count() as u32 == RewardPools::<T>::count(),
+				"The count of reward pools must remain the same after the migration."
+			);
+			ensure!(
+				BondedPools::<T>::iter().count() as u32 == BondedPools::<T>::count(),
+				"The count of reward pools must remain the same after the migration."
+			);
 
 			// all reward pools must have exactly ED in them. This means no reward can be claimed,
 			// and that setting reward counters all over the board to zero will work henceforth.
-			RewardPools::<T>::iter().for_each(|(id, _)| {
-				assert_eq!(
-					RewardPool::<T>::current_balance(id),
-					Zero::zero(),
-					"reward pool({}) balance is {:?}",
-					id,
-					RewardPool::<T>::current_balance(id)
+			RewardPools::<T>::iter().try_for_each(|(id, _)| -> Result<(), TryRuntimeError> {
+				ensure!(
+					RewardPool::<T>::current_balance(id) == Zero::zero(),
+					"Reward pool balance must be zero.",
 				);
-			});
+				Ok(())
+			})?;
 
 			log!(info, "post upgrade hook for MigrateToV2 executed.");
 			Ok(())
@@ -435,7 +450,7 @@ pub mod v3 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			ensure!(
 				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
 				"the on_chain version is equal or more than the current one"
@@ -444,7 +459,7 @@ pub mod v3 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
 			ensure!(
 				Metadata::<T>::iter_keys().all(|id| BondedPools::<T>::contains_key(&id)),
 				"not all of the stale metadata has been removed"
@@ -535,7 +550,7 @@ pub mod v4 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			ensure!(
 				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
 				"the on_chain version is equal or more than the current one"
@@ -544,7 +559,7 @@ pub mod v4 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
 			// ensure all BondedPools items now contain an `inner.commission: Commission` field.
 			ensure!(
 				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.current.is_none() &&
@@ -620,7 +635,7 @@ pub mod v5 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			ensure!(
 				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
 				"the on_chain version is equal or more than the current one"
@@ -654,7 +669,7 @@ pub mod v5 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(data: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(data: Vec<u8>) -> Result<(), TryRuntimeError> {
 			let old_rpool_values: u64 = Decode::decode(&mut &data[..]).unwrap();
 			let rpool_keys = RewardPools::<T>::iter_keys().count() as u64;
 			let rpool_values = RewardPools::<T>::iter_values().count() as u64;

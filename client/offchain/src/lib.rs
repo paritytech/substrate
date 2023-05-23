@@ -333,18 +333,6 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn add_to_peers_set(
-			&self,
-			_protocol: ProtocolName,
-			_peers: HashSet<Multiaddr>,
-		) -> Result<(), String> {
-			unimplemented!();
-		}
-
-		fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
-			unimplemented!();
-		}
-
 		fn sync_num_connected(&self) -> usize {
 			unimplemented!();
 		}
