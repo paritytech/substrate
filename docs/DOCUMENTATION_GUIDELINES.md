@@ -164,11 +164,11 @@ For the top-level pallet docs, consider the following template:
 //!
 //! ### Example
 //!
-//! <Your pallet must have a few tests that cover important user journeys. Use https://crates.io/crates/docify to reuse your these as examples>.
+//! <Your pallet must have a few tests that cover important user journeys. Use https://crates.io/crates/docify to reuse these as examples>.
 //!
 //! ## Code Details
 //!
-//! <inside [`pallet`] module, a template is auto-generated that leads the reader to the relevant items. This is just a reminder to navigate to that page. Don't repeat things like "See Config trait for ..." that are generated inside [`pallet`] in here>
+//! <Reminder: inside the [`pallet`] module, a template that leads the reader to the relevant items is auto-generated. There is no need to repeat things like "See Config trait for ...", which are generated inside [`pallet`] here anyways>
 //!
 //! See [`pallet`] module.
 //!
@@ -178,19 +178,19 @@ For the top-level pallet docs, consider the following template:
 //!
 //! <The format of this section is up to you, but we suggest the Design-oriented approach that follows>
 //!
-//! <The audience of this would be your future self, and those who want to deeply understand the pallet to optimize it further and such>
+//! <The audience of this would be your future self, or anyone who wants to gain a deep understanding of how the pallet works so that they can eventually propose optimizations to it>
 //!
 //! ### Design Goals (optional)
 //!
-//! <Describe your goals with with the pallet design.>
+//! <Describe your goals with the pallet design.>
 //!
 //! ### Design (optional)
 //!
-//! <Describe how you reach those goals. This should namely describe how your storage is laid out.>
+//! <Describe how you've reached those goals. This should describe the storage layout of your pallet and what was your approach in designing it that way.>
 //!
 //! ### Terminology (optional)
 //!
-//! <Optionally, contain any custom terminology here. You can link to it if you want to use the terminology further up>
+//! <Optionally, explain any non-obvious terminology here. You can link to it if you want to use the terminology further up>
 ```
 
 ### Dispatchable
@@ -198,15 +198,15 @@ For the top-level pallet docs, consider the following template:
 For each dispatchable (`fn` item inside `pallet::call`), consider the following template:
 
 ```
-/// <One liner explaining what this does>
+/// <One-liner explaining what the dispatchable does>
 ///
 /// ## Dispatch Origin
 ///
-/// The dispatch origin of this call must be <details>
+/// The dispatch origin of this call must be <details (e.g. Root, Signed, Unsigned)>
 ///
 /// ## Details
 ///
-/// <All other details. Focus on what errors could occur within this dispatch>
+/// <All other details, namely any errors that could occur within this dispatch and the events this dispatch could emit>
 ///
 /// ## Errors (optional)
 ///
@@ -215,7 +215,7 @@ For each dispatchable (`fn` item inside `pallet::call`), consider the following 
 /// ## Events (optional)
 ///
 /// <Events are akin to the "return type" of dispatchables, optionally mention them>
-pub fn name(origin: OriginFor<T>, ...) -> DispatchResult {}
+pub fn name_of_dispatchable(origin: OriginFor<T>, ...) -> DispatchResult {}
 ```
 
 ### Storage Items
