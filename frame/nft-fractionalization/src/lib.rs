@@ -241,13 +241,19 @@ pub mod pallet {
 			let deposit = T::Deposit::get();
 			T::Currency::hold(&T::HoldReason::get(), &nft_owner, deposit)?;
 			Self::do_lock_nft(nft_collection_id, nft_id)?;
-			Self::do_create_asset(asset_id, pallet_account.clone())?;
-			Self::do_mint_asset(asset_id, &beneficiary, fractions)?;
-			Self::do_set_metadata(asset_id, &who, &pallet_account, &nft_collection_id, &nft_id)?;
+			Self::do_create_asset(asset_id.clone(), pallet_account.clone())?;
+			Self::do_mint_asset(asset_id.clone(), &beneficiary, fractions)?;
+			Self::do_set_metadata(
+				asset_id.clone(),
+				&who,
+				&pallet_account,
+				&nft_collection_id,
+				&nft_id,
+			)?;
 
 			NftToAsset::<T>::insert(
 				(nft_collection_id, nft_id),
-				Details { asset: asset_id, fractions, asset_creator: nft_owner, deposit },
+				Details { asset: asset_id.clone(), fractions, asset_creator: nft_owner, deposit },
 			);
 
 			Self::deposit_event(Event::NftFractionalized {
@@ -295,7 +301,7 @@ pub mod pallet {
 
 				let deposit = details.deposit;
 				let asset_creator = details.asset_creator;
-				Self::do_burn_asset(asset_id, &who, details.fractions)?;
+				Self::do_burn_asset(asset_id.clone(), &who, details.fractions)?;
 				Self::do_unlock_nft(nft_collection_id, nft_id, &beneficiary)?;
 				T::Currency::release(&T::HoldReason::get(), &asset_creator, deposit, BestEffort)?;
 
@@ -356,7 +362,7 @@ pub mod pallet {
 			account: &T::AccountId,
 			amount: AssetBalanceOf<T>,
 		) -> DispatchResult {
-			T::Assets::burn_from(asset_id, account, amount, Exact, Polite)?;
+			T::Assets::burn_from(asset_id.clone(), account, amount, Exact, Polite)?;
 			T::Assets::start_destroy(asset_id, None)
 		}
 
