@@ -15,6 +15,7 @@ These are crates that are often used by external developers and need more thorou
     - [Formatting Matters](#formatting-matters)
 - [Pallet Crates](#pallet-crates)
   - [Top Level Pallet Docs (`lib.rs`)](#top-level-pallet-docs-librs)
+    - [Polkadot and Substrate](#polkadot-and-substrate)
   - [Dispatchable](#dispatchable)
   - [Storage Items](#storage-items)
 
@@ -219,7 +220,6 @@ Optionally, in order to demonstrate the relation between the two, you can start 
 //!
 //! [polkadot]: https://img.shields.io/badge/polkadot-E6007A?style=for-the-badge&logo=polkadot&logoColor=white
 //! [github]: https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github
-
 ```
 
 ### Dispatchable
