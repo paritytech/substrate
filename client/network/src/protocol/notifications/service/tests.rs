@@ -577,3 +577,81 @@ async fn cloned_service_opening_substream_sending_and_receiving_notifications_wo
 		}
 	}
 }
+
+#[tokio::test]
+async fn sending_notifications_using_notifications_sink_works() {
+	let (proto, mut notif) = notification_service("/proto/1".into());
+	let (sink, mut async_rx, mut sync_rx) = NotificationsSink::new(PeerId::random());
+	let (mut handle, _stream) = proto.split();
+	let peer_id = PeerId::random();
+
+	// validate inbound substream
+	let result_rx = handle.report_incoming_substream(peer_id, vec![1, 3, 3, 7]).unwrap();
+
+	if let Some(NotificationEvent::ValidateInboundSubstream { peer, handshake, result_tx }) =
+		notif.next_event().await
+	{
+		assert_eq!(peer_id, peer);
+		assert_eq!(handshake, vec![1, 3, 3, 7]);
+		let _ = result_tx.send(ValidationResult::Accept).unwrap();
+	} else {
+		panic!("invalid event received");
+	}
+	assert_eq!(result_rx.await.unwrap(), ValidationResult::Accept);
+
+	// report that a substream has been opened
+	handle
+		.report_substream_opened(peer_id, vec![1, 3, 3, 7], ObservedRole::Full, None, sink)
+		.unwrap();
+
+	if let Some(NotificationEvent::NotificationStreamOpened {
+		peer,
+		role,
+		negotiated_fallback,
+		handshake,
+	}) = notif.next_event().await
+	{
+		assert_eq!(peer_id, peer);
+		assert_eq!(negotiated_fallback, None);
+		assert_eq!(role, ObservedRole::Full);
+		assert_eq!(handshake, vec![1, 3, 3, 7]);
+	} else {
+		panic!("invalid event received");
+	}
+
+	// get a copy of the notification sink and send a synchronous notification using.
+	let sink = notif.notification_sink(&peer_id).unwrap();
+	sink.send_sync_notification(vec![1, 3, 3, 6]);
+
+	// send an asynchronous notification using the acquired notifications sink.
+	let sender = sink.reserve_notification().await.unwrap();
+	sender.send(vec![1, 3, 3, 7]).unwrap();
+
+	assert_eq!(
+		sync_rx.next().await,
+		Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 6] }),
+	);
+	assert_eq!(
+		async_rx.next().await,
+		Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 7] }),
+	);
+
+	// send notifications using the stored notification sink as well.
+	notif.send_sync_notification(&peer_id, vec![1, 3, 3, 8]).unwrap();
+	notif.send_async_notification(&peer_id, vec![1, 3, 3, 9]).await.unwrap();
+
+	assert_eq!(
+		sync_rx.next().await,
+		Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 8] }),
+	);
+	assert_eq!(
+		async_rx.next().await,
+		Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 9] }),
+	);
+}
+
+#[test]
+fn try_to_get_notifications_sink_for_non_existent_peer() {
+	let (_proto, notif) = notification_service("/proto/1".into());
+	assert!(notif.notification_sink(&PeerId::random()).is_none());
+}

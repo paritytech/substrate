@@ -27,6 +27,7 @@ use crate::{
 	request_responses::{IfDisconnected, RequestFailure},
 	service::signature::Signature,
 	types::ProtocolName,
+	NotificationsSink,
 };
 
 use futures::{channel::oneshot, Stream};
@@ -770,4 +771,7 @@ pub trait NotificationService: Debug + Send {
 
 	/// Get protocol name of the `NotificationService`.
 	fn protocol(&self) -> &ProtocolName;
+
+	/// Get notification sink of the peer.
+	fn notification_sink(&self, peer: &PeerId) -> Option<NotificationsSink>;
 }

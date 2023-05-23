@@ -250,6 +250,11 @@ impl NotificationService for NotificationHandle {
 	fn protocol(&self) -> &ProtocolName {
 		&self.protocol
 	}
+
+	/// Get notification sink of the peer.
+	fn notification_sink(&self, peer: &PeerId) -> Option<NotificationsSink> {
+		self.peers.get(peer).map(|sink| sink.clone())
+	}
 }
 
 /// Channel pair which allows `Notifications` to interact with a protocol.
