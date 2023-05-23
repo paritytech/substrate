@@ -221,10 +221,10 @@ impl WithdrawReasons {
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
 pub trait AssetId:
-	FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
+	FullCodec + Clone + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
 {
 }
-impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> AssetId
+impl<T: FullCodec + Clone + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> AssetId
 	for T
 {
 }
