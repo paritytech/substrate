@@ -44,9 +44,6 @@ Note that anything starting with `///` is an external rust-doc, and everything s
 /// # Errors
 /// ...
 ///
-/// # Complexity
-/// ...
-///
 // Details about the complexity, how you implemented this, and some quirks that
 // are NOT relevant to the external interface, so it starts with '//'.
 // This can also be moved inside the function.
@@ -65,17 +62,17 @@ There are a few very good sources that you can look into:
 - https://blog.guillaume-gomez.fr/articles/2020-03-12+Guide+on+how+to+write+documentation+for+a+Rust+crate
 
 
-As mentioned [here](https://web.mit.edu/rust-lang_v1.25/arch/amd64_ubuntu1404/share/doc/rust/html/book/first-edition/documentation.html#writing-documentation-comments) and [here](https://blog.guillaume-gomez.fr/articles/2020-03-12+Guide+on+how+to+write+documentation+for+a+Rust+crate), always start with a **single sentence** demonstrating what is being documented. If there is more to say, add it *after a newline*.
+As mentioned [here](https://web.mit.edu/rust-lang_v1.25/arch/amd64_ubuntu1404/share/doc/rust/html/book/first-edition/documentation.html#writing-documentation-comments) and [here](https://blog.guillaume-gomez.fr/articles/2020-03-12+Guide+on+how+to+write+documentation+for+a+Rust+crate), always start with a **single sentence** demonstrating what is being documented. All additional documentation should be added *after a newline*. Strive to make the first sentence succinct and short. The reason for this is the first paragraph of docs about an item (everything before the first newline) is used as the excerpt that rust doc displays about this item when it appears in tables, such as the table listing all functions in a module. If this excerpt is too long, the module docs will be very difficult to read.
 
 About [special sections](https://web.mit.edu/rust-lang_v1.25/arch/amd64_ubuntu1404/share/doc/rust/html/book/first-edition/documentation.html#special-sections), we will most likely not need to think about panic and safety in any runtime related code. Our code is never `unsafe`, and will (almost) never panic.
 
-Use `# Example`s as much as possible. These are great ways to further demonstrate what your APIs are doing, and add free test coverage. As a cherry on top, any code in rust-docs is treated as an "integration tests", not unit tests, which tests your crate in a different way than unit tests. So, it is both a win for "more documentation" and a win for "more test coverage".
+Use `# Examples as much as possible. These are great ways to further demonstrate what your APIs are doing, and add free test coverage. As an additional benefit, any code in rust-docs is treated as an "integration tests", not unit tests, which tests your crate in a different way than unit tests. So, it is both a win for "more documentation" and a win for "more test coverage".
 
-You can also consider having am `# Error` section, but consider that optional. Of course, this only applies if there is a `Result` being returned, and IFF the `Error` variants are overly complicated.
+You can also consider having an `# Error` section optionally. Of course, this only applies if there is a `Result` being returned, and if the `Error` variants are overly complicated.
 
 Strive to include correct links to other items in your written docs as much as possible. In other words, avoid \`some_func\` and instead use \[\`some_fund\`\]. Read more about how to correctly use links in your rust-docs [here](https://doc.rust-lang.org/rustdoc/write-documentation/linking-to-items-by-name.html#valid-links) and [here](https://rust-lang.github.io/rfcs/1946-intra-rustdoc-links.html#additions-to-the-documentation-syntax).
 
-> While you are linking, you might become conscious of the fact that you are in need of linking to (too many) foreign items in order to explain your API. This is leaning more towards API-Design rather than documentation, but it is a warning that the subject API might be slightly wrong. For example, most "glue" traits[^1] in `frame/support` should be designed, and documented without making hard assumptions about a particular pallets that implement them.
+> While you are linking, you might become conscious of the fact that you are in need of linking to (too many) foreign items in order to explain your API. This is leaning more towards API-Design rather than documentation, but it is a warning that the subject API might be slightly wrong. For example, most "glue" traits[^1] in `frame/support` should be designed and documented without making hard assumptions about particular pallets that implement them.
 
 ### TLDR
 
@@ -88,14 +85,16 @@ Strive to include correct links to other items in your written docs as much as p
 
 ### Other Guidelines
 
-The above 5 guidelines must always be respected in docs, as long as reasonable possible.
+The above five guidelines must always be reasonably respected in the documentation.
 
-The following are a set of notes that may not necessarily hold at all circumstances. Consider them as opinionated guidelines that you may or may not abide by.
+The following are a set of notes that may not necessarily hold in all circumstances:
 
 
 #### Document Through Code
 
-You can certainly do parts of your documentation through your well-organized, properly-named code. That's all true, but:
+You should make sure that your code is properly-named and well-organized so that your code functions as a form of documentation. However, within the complexity of our projects in Polkadot/Substrate that is not enough. Particularly, things like examples, errors and panics cannot be documented only through properly-named and well-organized code.
+
+> Our north star is self-documenting code that also happens to be well-documented and littered with examples.
 
 * This is hard to scale at a project the size of Polkadot/Substrate. Moreover, things like examples, errors and panics cannot be documented via just code.
 
