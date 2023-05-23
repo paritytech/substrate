@@ -19,7 +19,7 @@
 
 use crate::Error;
 use clap::Parser;
-use libp2p::identity::{ed25519, PublicKey};
+use libp2p_identity::Keypair;
 use std::{
 	fs,
 	io::{self, Read},
@@ -68,12 +68,10 @@ impl InspectNodeKeyCmd {
 				.map_err(|_| "failed to decode secret as hex")?;
 		}
 
-		let secret =
-			ed25519::SecretKey::from_bytes(&mut file_data).map_err(|_| "Bad node key file")?;
+		let keypair =
+			Keypair::ed25519_from_bytes(&mut file_data).map_err(|_| "Bad node key file")?;
 
-		let keypair = ed25519::Keypair::from(secret);
-
-		println!("{}", PublicKey::Ed25519(keypair.public()).to_peer_id());
+		println!("{}", keypair.public().to_peer_id());
 
 		Ok(())
 	}

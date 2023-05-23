@@ -49,6 +49,7 @@ use std::{
 	time::{Duration, Instant},
 };
 use substrate_rpc_client::{rpc_params, BatchRequestBuilder, ChainApi, ClientT, StateApi};
+use tokio_retry::{strategy::FixedInterval, Retry};
 
 type KeyValue = (StorageKey, StorageData);
 type TopKeyValues = Vec<KeyValue>;
@@ -317,8 +318,10 @@ where
 	const BATCH_SIZE_INCREASE_FACTOR: f32 = 1.10;
 	const BATCH_SIZE_DECREASE_FACTOR: f32 = 0.50;
 	const INITIAL_BATCH_SIZE: usize = 5000;
-	// NOTE: increasing this value does not seem to impact speed all that much.
+	// nodes by default will not return more than 1000 keys per request
 	const DEFAULT_KEY_DOWNLOAD_PAGE: u32 = 1000;
+	const KEYS_PAGE_MAX_RETRIES: usize = 12;
+	const KEYS_PAGE_RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 	async fn rpc_get_storage(
 		&self,
@@ -345,6 +348,22 @@ where
 			})
 	}
 
+	async fn get_keys_single_page(
+		&self,
+		prefix: Option<StorageKey>,
+		start_key: Option<StorageKey>,
+		at: B::Hash,
+	) -> Result<Vec<StorageKey>, &'static str> {
+		self.as_online()
+			.rpc_client()
+			.storage_keys_paged(prefix, Self::DEFAULT_KEY_DOWNLOAD_PAGE, start_key, Some(at))
+			.await
+			.map_err(|e| {
+				error!(target: LOG_TARGET, "Error = {:?}", e);
+				"rpc get_keys failed"
+			})
+	}
+
 	/// Get all the keys at `prefix` at `hash` using the paged, safe RPC methods.
 	async fn rpc_get_keys_paged(
 		&self,
@@ -354,20 +373,13 @@ where
 		let mut last_key: Option<StorageKey> = None;
 		let mut all_keys: Vec<StorageKey> = vec![];
 		let keys = loop {
-			let page = self
-				.as_online()
-				.rpc_client()
-				.storage_keys_paged(
-					Some(prefix.clone()),
-					Self::DEFAULT_KEY_DOWNLOAD_PAGE,
-					last_key.clone(),
-					Some(at),
-				)
-				.await
-				.map_err(|e| {
-					error!(target: LOG_TARGET, "Error = {:?}", e);
-					"rpc get_keys failed"
-				})?;
+			// This loop can hit the node with very rapid requests, occasionally causing it to
+			// error out in CI (https://github.com/paritytech/substrate/issues/14129), so we retry.
+			let retry_strategy = FixedInterval::new(Self::KEYS_PAGE_RETRY_INTERVAL)
+				.take(Self::KEYS_PAGE_MAX_RETRIES);
+			let get_page_closure =
+				|| self.get_keys_single_page(Some(prefix.clone()), last_key.clone(), at);
+			let page = Retry::spawn(retry_strategy, get_page_closure).await?;
 			let page_len = page.len();
 
 			all_keys.extend(page);
@@ -385,7 +397,7 @@ where
 					HexDisplay::from(new_last_key)
 				);
 				last_key = Some(new_last_key.clone());
-			}
+			};
 		};
 
 		Ok(keys)
@@ -556,7 +568,7 @@ where
 			.unwrap()
 			.progress_chars("=>-"),
 		);
-		let payloads_chunked = payloads.chunks(&payloads.len() / Self::PARALLEL_REQUESTS);
+		let payloads_chunked = payloads.chunks((&payloads.len() / Self::PARALLEL_REQUESTS).max(1));
 		let requests = payloads_chunked.map(|payload_chunk| {
 			Self::get_storage_data_dynamic_batch_size(
 				&client,

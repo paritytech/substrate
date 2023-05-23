@@ -456,7 +456,6 @@ pub mod pallet {
 		pub balances: Vec<(T::AccountId, T::Balance)>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self { balances: Default::default() }
@@ -483,7 +482,7 @@ pub mod pallet {
 				.iter()
 				.map(|(x, _)| x)
 				.cloned()
-				.collect::<std::collections::BTreeSet<_>>();
+				.collect::<sp_std::collections::btree_set::BTreeSet<_>>();
 
 			assert!(
 				endowed_accounts.len() == self.balances.len(),

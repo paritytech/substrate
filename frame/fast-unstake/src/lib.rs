@@ -29,7 +29,7 @@
 //! [`StakingInterface`]) to unstake quicker, if and only if they meet the condition of not being
 //! exposed to any slashes.
 //!
-//! ## High Level / End-User Details
+//! ## Overview
 //!
 //! This pallet that's designed to JUST do the following:
 //!
@@ -78,9 +78,10 @@
 //! 2. Fast unstake failing because a nominator is exposed.
 #![doc = docify::embed!("./frame/fast-unstake/src/tests.rs", exposed_nominator_cannot_unstake)]
 //!
-//! ## Code Details
+//! ## Pallet API
 //!
-//! See [`pallet`] module for more information.
+//! See the [`pallet`] module for more information about the interfaces this pallet exposes,
+//! including its configuration trait, dispatchables, storage items, events and errors.
 //!
 //! ## Low Level / Implementation Details
 //!
@@ -160,6 +161,9 @@ pub mod pallet {
 	use sp_staking::{EraIndex, StakingInterface};
 	use sp_std::{prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
+
+	#[cfg(feature = "try-runtime")]
+	use sp_runtime::TryRuntimeError;
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
@@ -292,10 +296,10 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
+		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
 			// ensure that the value of `ErasToCheckPerBlock` is less than
 			// `T::MaxErasToCheckPerBlock`.
-			assert!(
+			ensure!(
 				ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
 				"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
 			);

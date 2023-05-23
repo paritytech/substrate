@@ -40,3 +40,11 @@ std = [
 	"sp-std/std",
 	"sp-timestamp/std",
 ]
+
+# Serde support without relying on std features.
+serde = [
+	"scale-info/serde",
+	"sp-application-crypto/serde",
+	"sp-consensus-slots/serde",
+	"sp-runtime/serde",
+]

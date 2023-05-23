@@ -105,7 +105,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 					current_version,
 				);
 
-				return Err("On chain and current storage version do not match. Missing runtime upgrade?");
+				return Err("On chain and current storage version do not match. Missing runtime upgrade?".into());
 			}
 		}
 	} else {
@@ -121,14 +121,14 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 
 				#frame_support::log::error!(
 					target: #frame_support::LOG_TARGET,
-					"{}: On chain storage version {:?} is set to non zero,\
+					"{}: On chain storage version {:?} is set to non zero, \
 					 while the pallet is missing the `#[pallet::storage_version(VERSION)]` attribute.",
 					pallet_name,
 					on_chain_version,
 				);
 
 				return Err("On chain storage version set, while the pallet doesn't \
-							have the `#[pallet::storage_version(VERSION)]` attribute.");
+							have the `#[pallet::storage_version(VERSION)]` attribute.".into());
 			}
 		}
 	};
@@ -211,7 +211,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<#frame_support::sp_std::vec::Vec<u8>, &'static str> {
+			fn pre_upgrade() -> Result<#frame_support::sp_std::vec::Vec<u8>, #frame_support::sp_runtime::TryRuntimeError> {
 				<
 					Self
 					as
@@ -220,7 +220,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade(state: #frame_support::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			fn post_upgrade(state: #frame_support::sp_std::vec::Vec<u8>) -> Result<(), #frame_support::sp_runtime::TryRuntimeError> {
 				#post_storage_version_check
 
 				<
@@ -268,7 +268,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			fn try_state(
 				n: <T as #frame_system::Config>::BlockNumber,
 				_s: #frame_support::traits::TryStateSelect
-			) -> Result<(), &'static str> {
+			) -> Result<(), #frame_support::sp_runtime::TryRuntimeError> {
 				#log_try_state
 				<
 					Self as #frame_support::traits::Hooks<

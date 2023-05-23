@@ -22,6 +22,9 @@ use impl_trait_for_tuples::impl_for_tuples;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
+
 /// The block initialization trait.
 ///
 /// Implementing this lets you express what should happen for your pallet when the block is
@@ -136,7 +139,7 @@ pub trait OnRuntimeUpgrade {
 	/// Same as `on_runtime_upgrade`, but perform the optional `pre_upgrade` and `post_upgrade` as
 	/// well.
 	#[cfg(feature = "try-runtime")]
-	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
+	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
 		let maybe_state = if checks {
 			let _guard = frame_support::StorageNoopGuard::default();
 			let state = Self::pre_upgrade()?;
@@ -167,7 +170,7 @@ pub trait OnRuntimeUpgrade {
 	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
 	/// inaccurate.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		Ok(Vec::new())
 	}
 
@@ -182,7 +185,7 @@ pub trait OnRuntimeUpgrade {
 	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
 	/// inaccurate.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 }
@@ -201,9 +204,37 @@ impl OnRuntimeUpgrade for Tuple {
 	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
 	/// hooks for tuples are a noop.
 	#[cfg(feature = "try-runtime")]
-	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
+	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
 		let mut weight = Weight::zero();
-		for_tuples!( #( weight = weight.saturating_add(Tuple::try_on_runtime_upgrade(checks)?); )* );
+
+		let mut errors = Vec::new();
+
+		for_tuples!(#(
+			match Tuple::try_on_runtime_upgrade(checks) {
+				Ok(weight) => { weight.saturating_add(weight); },
+				Err(err) => { errors.push(err); },
+			}
+		)*);
+
+		if errors.len() == 1 {
+			return Err(errors[0])
+		} else if !errors.is_empty() {
+			log::error!(
+				target: "try-runtime",
+				"Detected multiple errors while executing `try_on_runtime_upgrade`:",
+			);
+
+			errors.iter().for_each(|err| {
+				log::error!(
+					target: "try-runtime",
+					"{:?}",
+					err
+				);
+			});
+
+			return Err("Detected multiple errors while executing `try_on_runtime_upgrade`, check the logs!".into())
+		}
+
 		Ok(weight)
 	}
 }
@@ -277,7 +308,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// This hook should not alter any storage.
 	#[cfg(feature = "try-runtime")]
-	fn try_state(_n: BlockNumber) -> Result<(), &'static str> {
+	fn try_state(_n: BlockNumber) -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 
@@ -289,7 +320,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		Ok(Vec::new())
 	}
 
@@ -301,7 +332,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 
@@ -383,13 +414,13 @@ mod tests {
 					}
 
 					#[cfg(feature = "try-runtime")]
-					fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+					fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 						Pre::mutate(|s| s.push(stringify!($name)));
 						Ok(Vec::new())
 					}
 
 					#[cfg(feature = "try-runtime")]
-					fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+					fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
 						Post::mutate(|s| s.push(stringify!($name)));
 						Ok(())
 					}

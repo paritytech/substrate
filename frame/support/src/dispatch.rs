@@ -879,6 +879,8 @@ impl<T> PaysFee<T> for (u64, Pays) {
 ///   in an externalities-provided environment. Implement
 ///   [`IntegrityTest`](./trait.IntegrityTest.html) trait.
 #[macro_export]
+#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead.
+	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
 macro_rules! decl_module {
 	// Entry point #1.
 	(
@@ -2095,7 +2097,7 @@ macro_rules! decl_module {
 			fn try_state(
 				_: <$trait_instance as $system::Config>::BlockNumber,
 				_: $crate::traits::TryStateSelect,
-			) -> Result<(), &'static str> {
+			) -> Result<(), $crate::sp_runtime::TryRuntimeError> {
 				let pallet_name = <<
 					$trait_instance
 					as
@@ -2142,12 +2144,12 @@ macro_rules! decl_module {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, &'static str> {
+			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, $crate::sp_runtime::TryRuntimeError> {
 				Ok($crate::sp_std::vec::Vec::new())
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), $crate::sp_runtime::TryRuntimeError> {
 				Ok(())
 			}
 		}
@@ -2180,12 +2182,12 @@ macro_rules! decl_module {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, &'static str> {
+			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, $crate::sp_runtime::TryRuntimeError> {
 				Ok($crate::sp_std::vec::Vec::new())
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), $crate::sp_runtime::TryRuntimeError> {
 				Ok(())
 			}
 		}
@@ -3197,6 +3199,7 @@ macro_rules! __check_reserved_fn_name {
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
+#[allow(deprecated)]
 mod tests {
 	use super::*;
 	use crate::{
