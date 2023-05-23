@@ -60,6 +60,9 @@ use frame_support::{
 	weights::Weight,
 };
 
+#[cfg(any(feature = "try-runtime", test))]
+use sp_runtime::TryRuntimeError;
+
 #[cfg(test)]
 mod tests;
 
@@ -346,9 +349,8 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
-			Self::do_try_state()?;
-			Ok(())
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
+			Self::do_try_state()
 		}
 	}
 
@@ -967,77 +969,78 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Looking at prime account:
 	/// * The prime account must be a member of the collective.
 	#[cfg(any(feature = "try-runtime", test))]
-	fn do_try_state() -> DispatchResult {
-		Self::proposals().into_iter().try_for_each(|proposal| -> DispatchResult {
-			ensure!(
-				Self::proposal_of(proposal).is_some(),
-				DispatchError::Other(
+	fn do_try_state() -> Result<(), TryRuntimeError> {
+		Self::proposals()
+			.into_iter()
+			.try_for_each(|proposal| -> Result<(), TryRuntimeError> {
+				ensure!(
+					Self::proposal_of(proposal).is_some(),
 					"Proposal hash from `Proposals` is not found inside the `ProposalOf` mapping."
-				)
-			);
-			Ok(())
-		})?;
+				);
+				Ok(())
+			})?;
 
 		ensure!(
 			Self::proposals().into_iter().count() <= Self::proposal_count() as usize,
-			DispatchError::Other("The actual number of proposals is greater than `ProposalCount`")
+			"The actual number of proposals is greater than `ProposalCount`"
 		);
 		ensure!(
 			Self::proposals().into_iter().count() == <ProposalOf<T, I>>::iter_keys().count(),
-			DispatchError::Other("Proposal count inside `Proposals` is not equal to the proposal count in `ProposalOf`")
+			"Proposal count inside `Proposals` is not equal to the proposal count in `ProposalOf`"
 		);
 
-		Self::proposals().into_iter().try_for_each(|proposal| -> DispatchResult {
-			if let Some(votes) = Self::voting(proposal) {
-				let ayes = votes.ayes.len();
-				let nays = votes.nays.len();
+		Self::proposals()
+			.into_iter()
+			.try_for_each(|proposal| -> Result<(), TryRuntimeError> {
+				if let Some(votes) = Self::voting(proposal) {
+					let ayes = votes.ayes.len();
+					let nays = votes.nays.len();
 
-				ensure!(
-					ayes.saturating_add(nays) <= T::MaxMembers::get() as usize,
-					DispatchError::Other("The sum of ayes and nays is greater than `MaxMembers`")
-				);
-			}
-			Ok(())
-		})?;
+					ensure!(
+						ayes.saturating_add(nays) <= T::MaxMembers::get() as usize,
+						"The sum of ayes and nays is greater than `MaxMembers`"
+					);
+				}
+				Ok(())
+			})?;
 
 		let mut proposal_indices = vec![];
-		Self::proposals().into_iter().try_for_each(|proposal| -> DispatchResult {
-			if let Some(votes) = Self::voting(proposal) {
-				let proposal_index = votes.index;
-				ensure!(
-					!proposal_indices.contains(&proposal_index),
-					DispatchError::Other("The proposal index is not unique.")
-				);
-				proposal_indices.push(proposal_index);
-			}
-			Ok(())
-		})?;
+		Self::proposals()
+			.into_iter()
+			.try_for_each(|proposal| -> Result<(), TryRuntimeError> {
+				if let Some(votes) = Self::voting(proposal) {
+					let proposal_index = votes.index;
+					ensure!(
+						!proposal_indices.contains(&proposal_index),
+						"The proposal index is not unique."
+					);
+					proposal_indices.push(proposal_index);
+				}
+				Ok(())
+			})?;
 
-		<Voting<T, I>>::iter_keys().try_for_each(|proposal_hash| -> DispatchResult {
-			ensure!(
-				Self::proposals().contains(&proposal_hash),
-				DispatchError::Other(
+		<Voting<T, I>>::iter_keys().try_for_each(
+			|proposal_hash| -> Result<(), TryRuntimeError> {
+				ensure!(
+					Self::proposals().contains(&proposal_hash),
 					"`Proposals` doesn't contain the proposal hash from the `Voting` storage map."
-				)
-			);
-			Ok(())
-		})?;
+				);
+				Ok(())
+			},
+		)?;
 
 		ensure!(
 			Self::members().len() <= T::MaxMembers::get() as usize,
-			DispatchError::Other("The member count is greater than `MaxMembers`.")
+			"The member count is greater than `MaxMembers`."
 		);
 
 		ensure!(
 			Self::members().windows(2).all(|members| members[0] <= members[1]),
-			DispatchError::Other("The members are not sorted by value.")
+			"The members are not sorted by value."
 		);
 
 		if let Some(prime) = Self::prime() {
-			ensure!(
-				Self::members().contains(&prime),
-				DispatchError::Other("Prime account is not a member.")
-			);
+			ensure!(Self::members().contains(&prime), "Prime account is not a member.");
 		}
 
 		Ok(())
