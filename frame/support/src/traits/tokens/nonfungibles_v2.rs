@@ -338,4 +338,18 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		item: &Self::ItemId,
 		destination: &AccountId,
 	) -> DispatchResult;
+
+	/// Disable the `item` of `collection` transfer.
+	///
+	/// By default, this is not a supported operation.
+	fn disable_transfer(_collection: &Self::CollectionId, _item: &Self::ItemId) -> DispatchResult {
+		Err(TokenError::Unsupported.into())
+	}
+
+	/// Re-enable the `item` of `collection` transfer.
+	///
+	/// By default, this is not a supported operation.
+	fn enable_transfer(_collection: &Self::CollectionId, _item: &Self::ItemId) -> DispatchResult {
+		Err(TokenError::Unsupported.into())
+	}
 }
