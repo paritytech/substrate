@@ -140,7 +140,7 @@ where
 				let signed = lookup.lookup(signed)?;
 				let raw_payload = SignedPayload::new(self.function, extra)?;
 				if !raw_payload.using_encoded(|payload| signature.verify(payload, &signed)) {
-					return Err(InvalidTransaction::BadProof.into())
+					return Err(InvalidTransaction::BadProof.into());
 				}
 
 				let (function, extra, _) = raw_payload.deconstruct();
@@ -253,7 +253,7 @@ where
 		let is_signed = version & 0b1000_0000 != 0;
 		let version = version & 0b0111_1111;
 		if version != EXTRINSIC_FORMAT_VERSION {
-			return Err("Invalid transaction version".into())
+			return Err("Invalid transaction version".into());
 		}
 
 		let signature = is_signed.then(|| Decode::decode(input)).transpose()?;
@@ -265,7 +265,7 @@ where
 			let length = before_length.saturating_sub(after_length);
 
 			if length != expected_length.0 as usize {
-				return Err("Invalid length prefix".into())
+				return Err("Invalid length prefix".into());
 			}
 		}
 
