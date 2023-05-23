@@ -798,6 +798,8 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::ProxyExecuted { result: e.map(|_| ()).map_err(|e| e.error) });
 	}
 
+	/// Removes all proxy delegates for a given delegator.
+	/// It takes the delegator's account ID as a parameter.
 	pub fn remove_all_proxy_delegates(delegator: &T::AccountId) {
 		let (_, old_deposit) = Proxies::<T>::take(&delegator);
 		T::Currency::unreserve(&delegator, old_deposit);
