@@ -56,9 +56,9 @@ pub struct ConfigDef {
 	pub attr_span: proc_macro2::Span,
 	/// Whether a default sub-trait should be generated.
 	///
-	/// Contains default sub-trait items (instantiated by `#[pallet::default_config]`). Vec
-	/// will be empty if `#[pallet::config(with_default)]` is not specified or if there are no
-	/// trait items
+	/// Contains default sub-trait items (instantiated by `#[pallet::config(with_default)]`).
+	/// Vec will be empty if `#[pallet::config(with_default)]` is not specified or if there are
+	/// no trait items
 	pub default_sub_trait: Vec<syn::TraitItem>,
 }
 
