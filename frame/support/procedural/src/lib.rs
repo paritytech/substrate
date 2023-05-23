@@ -933,6 +933,15 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// See `frame/examples/default-config/tests.rs` for a runnable end-to-end example pallet that
 /// makes use of `derive_impl` to derive its testing config.
 ///
+/// ## Optional Conventions
+///
+/// Note that as an optional convention, we encourage creating a `prelude` module inside of
+/// your pallet with sub-modules for `testing`, `production` etc.. This is the convention we
+/// follow for `frame_system`'s `TestDefaultConfig` which, as shown above, is located at
+/// `frame_system::prelude::testing::TestDefaultConfig`. This is just a suggested convention --
+/// there is nothing in the code that expects modules with these names to be in place, so there
+/// is no imperative to follow this pattern unless desired.
+///
 /// # Advanced Usage
 ///
 /// ## Importing & Re-Exporting
