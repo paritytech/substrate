@@ -21,8 +21,8 @@
 use crate::keyring::*;
 use kitchensink_runtime::{
 	constants::currency::*, wasm_binary_unwrap, AccountId, AssetsConfig, BabeConfig,
-	BalancesConfig, GenesisConfig, GrandpaConfig, IndicesConfig, SessionConfig, SocietyConfig,
-	StakerStatus, StakingConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
+	BalancesConfig, GenesisConfig, GluttonConfig, GrandpaConfig, IndicesConfig, SessionConfig,
+	SocietyConfig, StakerStatus, StakingConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
 };
 use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use sp_runtime::Perbill;
@@ -94,5 +94,10 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 		alliance: Default::default(),
 		alliance_motion: Default::default(),
 		nomination_pools: Default::default(),
+		glutton: GluttonConfig {
+			compute: Default::default(),
+			storage: Default::default(),
+			trash_data_count: Default::default(),
+		},
 	}
 }
