@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -121,6 +121,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 pallet_staking_reward_curve::build! {
@@ -255,7 +259,7 @@ impl ExtBuilder {
 
 		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![
-				//controllers
+				// controllers (still used in some tests. Soon to be deprecated).
 				(10, self.balance_factor * 50),
 				(20, self.balance_factor * 50),
 				(30, self.balance_factor * 50),
@@ -273,12 +277,12 @@ impl ExtBuilder {
 		let stakers = vec![
 			// (stash, ctrl, stake, status)
 			// these two will be elected in the default test where we elect 2.
-			(11, 10, 1000, StakerStatus::<AccountId>::Validator),
-			(21, 20, 1000, StakerStatus::<AccountId>::Validator),
+			(11, 11, 1000, StakerStatus::<AccountId>::Validator),
+			(21, 21, 1000, StakerStatus::<AccountId>::Validator),
 			// a loser validator
-			(31, 30, 500, StakerStatus::<AccountId>::Validator),
+			(31, 31, 500, StakerStatus::<AccountId>::Validator),
 			// an idle validator
-			(41, 40, 1000, StakerStatus::<AccountId>::Idle),
+			(41, 41, 1000, StakerStatus::<AccountId>::Idle),
 		];
 
 		let _ = pallet_staking::GenesisConfig::<Test> {

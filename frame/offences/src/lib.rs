@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,9 @@ pub mod migration;
 mod mock;
 mod tests;
 
-use codec::{Decode, Encode};
+use core::marker::PhantomData;
+
+use codec::Encode;
 use frame_support::weights::Weight;
 use sp_runtime::{traits::Hash, Perbill};
 use sp_staking::{
@@ -43,13 +45,17 @@ type OpaqueTimeSlot = Vec<u8>;
 /// A type alias for a report identifier.
 type ReportIdOf<T> = <T as frame_system::Config>::Hash;
 
+const LOG_TARGET: &str = "runtime::offences";
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -86,21 +92,6 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Enumerates all reports of a kind along with the time they happened.
-	///
-	/// All reports are sorted by the time of offence.
-	///
-	/// Note that the actual type of this mapping is `Vec<u8>`, this is because values of
-	/// different types are not supported at the moment so we are doing the manual serialization.
-	#[pallet::storage]
-	pub type ReportsByKindIndex<T> = StorageMap<
-		_,
-		Twox64Concat,
-		Kind,
-		Vec<u8>, // (O::TimeSlot, ReportIdOf<T>)
-		ValueQuery,
-	>;
-
 	/// Events type.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -112,10 +103,10 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config, O: Offence<T::IdentificationTuple>>
-	ReportOffence<T::AccountId, T::IdentificationTuple, O> for Pallet<T>
+impl<T, O> ReportOffence<T::AccountId, T::IdentificationTuple, O> for Pallet<T>
 where
-	T::IdentificationTuple: Clone,
+	T: Config,
+	O: Offence<T::IdentificationTuple>,
 {
 	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
 		let offenders = offence.offenders();
@@ -191,7 +182,7 @@ impl<T: Config> Pallet<T> {
 					OffenceDetails { offender, reporters: reporters.clone() },
 				);
 
-				storage.insert(time_slot, report_id);
+				storage.insert(report_id);
 			}
 		}
 
@@ -226,7 +217,7 @@ struct TriageOutcome<T: Config> {
 struct ReportIndexStorage<T: Config, O: Offence<T::IdentificationTuple>> {
 	opaque_time_slot: OpaqueTimeSlot,
 	concurrent_reports: Vec<ReportIdOf<T>>,
-	same_kind_reports: Vec<(O::TimeSlot, ReportIdOf<T>)>,
+	_phantom: PhantomData<O>,
 }
 
 impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
@@ -234,30 +225,19 @@ impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 	fn load(time_slot: &O::TimeSlot) -> Self {
 		let opaque_time_slot = time_slot.encode();
 
-		let same_kind_reports = ReportsByKindIndex::<T>::get(&O::ID);
-		let same_kind_reports =
-			Vec::<(O::TimeSlot, ReportIdOf<T>)>::decode(&mut &same_kind_reports[..])
-				.unwrap_or_default();
-
 		let concurrent_reports = <ConcurrentReportsIndex<T>>::get(&O::ID, &opaque_time_slot);
 
-		Self { opaque_time_slot, concurrent_reports, same_kind_reports }
+		Self { opaque_time_slot, concurrent_reports, _phantom: Default::default() }
 	}
 
 	/// Insert a new report to the index.
-	fn insert(&mut self, time_slot: &O::TimeSlot, report_id: ReportIdOf<T>) {
-		// Insert the report id into the list while maintaining the ordering by the time
-		// slot.
-		let pos = self.same_kind_reports.partition_point(|&(ref when, _)| when <= time_slot);
-		self.same_kind_reports.insert(pos, (time_slot.clone(), report_id));
-
+	fn insert(&mut self, report_id: ReportIdOf<T>) {
 		// Update the list of concurrent reports.
 		self.concurrent_reports.push(report_id);
 	}
 
 	/// Dump the indexes to the storage.
 	fn save(self) {
-		ReportsByKindIndex::<T>::insert(&O::ID, self.same_kind_reports.encode());
 		<ConcurrentReportsIndex<T>>::insert(
 			&O::ID,
 			&self.opaque_time_slot,

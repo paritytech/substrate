@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -79,7 +79,7 @@ impl<Payload, TK: TracingKeyStr> NotificationStream<Payload, TK> {
 	}
 
 	/// Subscribe to a channel through which the generic payload can be received.
-	pub fn subscribe(&self, queue_size_warning: i64) -> NotificationReceiver<Payload> {
+	pub fn subscribe(&self, queue_size_warning: usize) -> NotificationReceiver<Payload> {
 		let receiver = self.hub.subscribe((), queue_size_warning);
 		NotificationReceiver { receiver }
 	}

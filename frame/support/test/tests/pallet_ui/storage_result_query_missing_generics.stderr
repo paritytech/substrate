@@ -12,4 +12,4 @@ note: enum defined here, with 1 generic parameter: `T`
 help: add missing generic argument
    |
 17 |     type Foo<T: Config> = StorageValue<_, u8, ResultQuery<Error<T>::NonExistentValue>>;
-   |                                                           ~~~~~~~~
+   |                                                                +++

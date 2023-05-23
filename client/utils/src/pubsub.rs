@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -164,7 +164,7 @@ impl<M, R> Hub<M, R> {
 	/// Subscribe to this Hub using the `subs_key: K`.
 	///
 	/// A subscription with a key `K` is possible if the Registry implements `Subscribe<K>`.
-	pub fn subscribe<K>(&self, subs_key: K, queue_size_warning: i64) -> Receiver<M, R>
+	pub fn subscribe<K>(&self, subs_key: K, queue_size_warning: usize) -> Receiver<M, R>
 	where
 		R: Subscribe<K> + Unsubscribe,
 	{

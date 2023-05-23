@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,6 +25,10 @@ pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
 pub const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
 /// Key type for generic ECDSA key.
 pub const ECDSA: KeyTypeId = KeyTypeId(*b"ecds");
+/// Key type for generic BLS12-377 key.
+pub const BLS377: KeyTypeId = KeyTypeId(*b"bls7");
+/// Key type for generic BLS12-381 key.
+pub const BLS381: KeyTypeId = KeyTypeId(*b"bls8");
 
 /// Macro for exporting functions from wasm in with the expected signature for using it with the
 /// wasm executor. This is useful for tests where you need to call a function in wasm.
