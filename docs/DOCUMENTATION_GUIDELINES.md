@@ -2,7 +2,7 @@
 
 This document is only focused on documenting parts of substrate that relates to its external API. The list of such crates can be found in [CODEOWNERS](./CODEOWNERS). Search for the crates that are auto-assigned to a team called `docs-audit`.
 
-These are crates that are often used by external developers and deserve a better documents. Consequently, most of this revolves around FRAME-development.
+These are crates that are often used by external developers and need more thorough documentation. These are the crates most concerned with FRAME development.
 
 - [Substrate Documentation Guidelines](#substrate-documentation-guidelines)
   - [General/Non-Pallet Crates](#generalnon-pallet-crates)
@@ -28,15 +28,15 @@ First, consider the case for all such crates, except for those that are pallets.
 The first question is, what should you document? Use the following filter:
 
 1. Within the set of crates above,
-2. Any `pub` item within them needs to be documented. If it is not `pub`, it won't show up in the rust-docs, and won't matter.
+2. All `pub` item within the aforementioned crates need to be documented. If it is not `pub`, it does not appear in the rust-docs, and is not public facing.
     * Within `pub` items, sometimes they are only `pub` in order to be used by another internal crate, and you can foresee that this will not be used by anyone else other than you. These need **not** be documented thoroughly, and are left to your discretion to identify.
     * Reminder: `trait` items are public by definition, if the trait is public.
-3. Of course, all of these crates should have a reasonable module documentation (`//!`).
+3. All public modules (`mod`) should have reasonable module-level documentation (`//!`).
 
 
 #### Rust Docs vs. Code Comments
 
-Note that anything starting with `///` is external rust-doc, and anything starting with `//` is just for you to see. Don't mix the two!
+Note that anything starting with `///` is an external rust-doc, and everything starting with `//` does not appear in the rust-docs. It's important to not confuse the two in your documentation.
 
 ```rust
 /// Computes the square root of the input, returning `Ok(_)` if successful.
