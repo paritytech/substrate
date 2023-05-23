@@ -21,12 +21,12 @@ use syn::spanned::Spanned;
 /// Definition for pallet genesis config type.
 ///
 /// Either:
-/// * `struct GenesisConfig`
-/// * `enum GenesisConfig`
+/// * `struct RuntimeGenesisConfig`
+/// * `enum RuntimeGenesisConfig`
 pub struct GenesisConfigDef {
 	/// The index of item in pallet module.
 	pub index: usize,
-	/// The kind of generic the type `GenesisConfig` has.
+	/// The kind of generic the type `RuntimeGenesisConfig` has.
 	pub gen_kind: super::GenericKind,
 	/// A set of usage of instance, must be check for consistency with trait.
 	pub instances: Vec<helper::InstanceUsage>,
@@ -47,8 +47,8 @@ impl GenesisConfigDef {
 		};
 
 		let mut instances = vec![];
-		// NOTE: GenesisConfig is not allowed to be only generic on I because it is not supported
-		// by construct_runtime.
+		// NOTE: RuntimeGenesisConfig is not allowed to be only generic on I because it is not
+		// supported by construct_runtime.
 		if let Some(u) = helper::check_type_def_optional_gen(generics, ident.span())? {
 			instances.push(u);
 		}
@@ -58,13 +58,14 @@ impl GenesisConfigDef {
 		let gen_kind = super::GenericKind::from_gens(has_config, has_instance)
 			.expect("Checked by `helper::check_type_def_optional_gen` above");
 
+		// TODO [#14065] Remove deprecated `GenesisConfig` for good.
 		if !matches!(vis, syn::Visibility::Public(_)) {
-			let msg = "Invalid pallet::genesis_config, GenesisConfig must be public";
+			let msg =
+				"Invalid pallet::genesis_config, RuntimeGenesisConfig/GenesisConfig must be public";
 			return Err(syn::Error::new(item_span, msg))
 		}
-
-		if ident != "GenesisConfig" {
-			let msg = "Invalid pallet::genesis_config, ident must `GenesisConfig`";
+		if ident != "RuntimeGenesisConfig" && ident != "GenesisConfig" {
+			let msg = "Invalid pallet::genesis_config, ident must `RuntimeGenesisConfig` or `GenesisConfig`";
 			return Err(syn::Error::new(ident.span(), msg))
 		}
 

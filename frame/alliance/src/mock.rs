@@ -275,7 +275,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.unwrap();
 
 	GenesisBuild::<Test>::assimilate_storage(
-		&pallet_alliance::GenesisConfig {
+		&pallet_alliance::RuntimeGenesisConfig {
 			fellows: vec![],
 			allies: vec![],
 			phantom: Default::default(),

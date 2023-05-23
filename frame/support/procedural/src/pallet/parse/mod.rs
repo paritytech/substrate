@@ -116,7 +116,7 @@ impl Def {
 					error = Some(error::ErrorDef::try_from(span, index, item)?),
 				Some(PalletAttr::RuntimeEvent(span)) if event.is_none() =>
 					event = Some(event::EventDef::try_from(span, index, item)?),
-				Some(PalletAttr::GenesisConfig(_)) if genesis_config.is_none() => {
+				Some(PalletAttr::RuntimeGenesisConfig(_)) if genesis_config.is_none() => {
 					let g = genesis_config::GenesisConfigDef::try_from(index, item)?;
 					genesis_config = Some(g);
 				},
@@ -469,7 +469,7 @@ enum PalletAttr {
 	RuntimeOrigin(proc_macro2::Span),
 	Inherent(proc_macro2::Span),
 	Storage(proc_macro2::Span),
-	GenesisConfig(proc_macro2::Span),
+	RuntimeGenesisConfig(proc_macro2::Span),
 	GenesisBuild(proc_macro2::Span),
 	ValidateUnsigned(proc_macro2::Span),
 	TypeValue(proc_macro2::Span),
@@ -489,7 +489,7 @@ impl PalletAttr {
 			Self::RuntimeOrigin(span) => *span,
 			Self::Inherent(span) => *span,
 			Self::Storage(span) => *span,
-			Self::GenesisConfig(span) => *span,
+			Self::RuntimeGenesisConfig(span) => *span,
 			Self::GenesisBuild(span) => *span,
 			Self::ValidateUnsigned(span) => *span,
 			Self::TypeValue(span) => *span,
@@ -532,7 +532,7 @@ impl syn::parse::Parse for PalletAttr {
 		} else if lookahead.peek(keyword::storage) {
 			Ok(PalletAttr::Storage(content.parse::<keyword::storage>()?.span()))
 		} else if lookahead.peek(keyword::genesis_config) {
-			Ok(PalletAttr::GenesisConfig(content.parse::<keyword::genesis_config>()?.span()))
+			Ok(PalletAttr::RuntimeGenesisConfig(content.parse::<keyword::genesis_config>()?.span()))
 		} else if lookahead.peek(keyword::genesis_build) {
 			Ok(PalletAttr::GenesisBuild(content.parse::<keyword::genesis_build>()?.span()))
 		} else if lookahead.peek(keyword::validate_unsigned) {

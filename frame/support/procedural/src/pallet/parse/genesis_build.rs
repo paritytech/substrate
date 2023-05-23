@@ -48,7 +48,7 @@ impl GenesisBuildDef {
 			.as_ref()
 			.ok_or_else(|| {
 				let msg = "Invalid pallet::genesis_build, expected impl<..> GenesisBuild<..> \
-					for GenesisConfig<..>";
+					for RuntimeGenesisConfig<..>";
 				syn::Error::new(item.span(), msg)
 			})?
 			.1;

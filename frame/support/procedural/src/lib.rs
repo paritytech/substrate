@@ -198,7 +198,7 @@ fn counter_prefix(prefix: &str) -> String {
 /// * `#name`: Name of the storage item, used as a prefix in storage.
 /// * \[optional\] `get(fn #getter)`: Implements the function #getter to `Module`.
 /// * \[optional\] `config(#field_name)`: `field_name` is optional if get is set.
-/// Will include the item in `GenesisConfig`.
+/// Will include the item in `RuntimeGenesisConfig`.
 /// * \[optional\] `build(#closure)`: Closure called with storage overlays.
 /// * \[optional\] `max_values(#expr)`: `expr` is an expression returning a `u32`. It is used to
 /// implement `StorageInfoTrait`. Note this attribute is not available for storage value as the
@@ -212,9 +212,9 @@ fn counter_prefix(prefix: &str) -> String {
 /// * The `Store` trait structure: `<Module<T> as Store>::Foo`
 /// * The getter on the module that calls get on the structure: `Module::<T>::foo()`
 ///
-/// ## GenesisConfig
+/// ## RuntimeGenesisConfig
 ///
-/// An optional `GenesisConfig` struct for storage initialization can be defined, either
+/// An optional `RuntimeGenesisConfig` struct for storage initialization can be defined, either
 /// when at least one storage field requires default initialization
 /// (both `get` and `config` or `build`), or specifically as in:
 ///
@@ -270,7 +270,7 @@ fn counter_prefix(prefix: &str) -> String {
 ///
 /// ## Limitations
 ///
-/// # Instancing and generic `GenesisConfig`
+/// # Instancing and generic `RuntimeGenesisConfig`
 ///
 /// If your module supports instancing and you see an error like `parameter `I` is never used` for
 /// your `decl_storage!`, you are hitting a limitation of the current implementation. You probably
@@ -283,7 +283,7 @@ fn counter_prefix(prefix: &str) -> String {
 /// }
 /// ```
 ///
-/// This adds a field to your `GenesisConfig` with the name `phantom` that you can initialize with
+/// This adds a field to your `RuntimeGenesisConfig` with the name `phantom` that you can initialize with
 /// `Default::default()`.
 ///
 /// ## PoV information
@@ -362,7 +362,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///   - `Event` or `Event<T>` (if the event is generic) - If the pallet emits events
 ///   - `Origin` or `Origin<T>` (if the origin is generic) - If the pallet has instanciable origins
 ///   - `Config` or `Config<T>` (if the config is generic) - If the pallet builds the genesis
-///     storage with `GenesisConfig`
+///     storage with `RuntimeGenesisConfig`
 ///   - `Inherent` - If the pallet provides/can check inherents.
 ///   - `ValidateUnsigned` - If the pallet validates unsigned extrinsics.
 ///
@@ -1269,7 +1269,7 @@ pub fn type_value(_: TokenStream, _: TokenStream) -> TokenStream {
 ///
 /// ```ignore
 /// #[pallet::genesis_config]
-/// pub struct GenesisConfig<T: Config> {
+/// pub struct RuntimeGenesisConfig<T: Config> {
 /// 	_myfield: BalanceOf<T>,
 /// }
 /// ```
@@ -1279,26 +1279,26 @@ pub fn genesis_config(_: TokenStream, _: TokenStream) -> TokenStream {
 }
 
 /// The `#[pallet::genesis_build]` attribute allows you to define how `genesis_configuration`
-/// is built. This takes as input the `GenesisConfig` type (as `self`) and constructs the pallet's
+/// is built. This takes as input the `RuntimeGenesisConfig` type (as `self`) and constructs the pallet's
 /// initial state.
 ///
 /// The impl must be defined as:
 ///
 /// ```ignore
 /// #[pallet::genesis_build]
-/// impl<T: Config> GenesisBuild<T> for GenesisConfig<$maybe_generics> {
+/// impl<T: Config> GenesisBuild<T> for RuntimeGenesisConfig<$maybe_generics> {
 /// 	fn build(&self) { $expr }
 /// }
 /// ```
 ///
 /// I.e. a trait implementation with generic `T: Config`, of trait `GenesisBuild<T>` on
-/// type `GenesisConfig` with generics none or `T`.
+/// type `RuntimeGenesisConfig` with generics none or `T`.
 ///
 /// E.g.:
 ///
 /// ```ignore
 /// #[pallet::genesis_build]
-/// impl<T: Config> GenesisBuild<T> for GenesisConfig {
+/// impl<T: Config> GenesisBuild<T> for RuntimeGenesisConfig {
 /// 	fn build(&self) {}
 /// }
 /// ```

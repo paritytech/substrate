@@ -61,7 +61,7 @@ pub fn expand_outer_config(
 			});
 		}
 	}
-
+	
 	quote! {
 		#( #query_genesis_config_part_macros )*
 
@@ -74,12 +74,12 @@ pub fn expand_outer_config(
 		#[serde(rename_all = "camelCase")]
 		#[serde(deny_unknown_fields)]
 		#[serde(crate = "__genesis_config_serde_import__")]
-		pub struct GenesisConfig {
+		pub struct RuntimeGenesisConfig {
 			#fields
 		}
 
 		#[cfg(any(feature = "std", test))]
-		impl #scrate::sp_runtime::BuildStorage for GenesisConfig {
+		impl #scrate::sp_runtime::BuildStorage for RuntimeGenesisConfig {
 			fn assimilate_storage(
 				&self,
 				storage: &mut #scrate::sp_runtime::Storage,
@@ -109,17 +109,17 @@ fn expand_config_types(
 		(Some(inst), true) => quote! {
 			#attr
 			#[cfg(any(feature = "std", test))]
-			pub type #config = #path::GenesisConfig<#runtime, #path::#inst>;
+			pub type #config = #path::RuntimeGenesisConfig<#runtime, #path::#inst>;
 		},
 		(None, true) => quote! {
 			#attr
 			#[cfg(any(feature = "std", test))]
-			pub type #config = #path::GenesisConfig<#runtime>;
+			pub type #config = #path::RuntimeGenesisConfig<#runtime>;
 		},
 		(_, false) => quote! {
 			#attr
 			#[cfg(any(feature = "std", test))]
-			pub type #config = #path::GenesisConfig;
+			pub type #config = #path::RuntimeGenesisConfig;
 		},
 	}
 }

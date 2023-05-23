@@ -114,6 +114,6 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 		.expect("This is checked by parsing")
 		.1
 		.push(syn::Item::Verbatim(new_items));
-
+	println!("{}", def.item.to_token_stream().to_string());
 	def.item.into_token_stream()
 }

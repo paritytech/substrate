@@ -107,13 +107,13 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 		genesis_config = format!(
 			"
 	#[pallet::genesis_config]
-	pub struct GenesisConfig{genesis_config_decl_gen}
+	pub struct RuntimeGenesisConfig{genesis_config_decl_gen}
 		// TODO_MAYBE_WHERE_CLAUSE
 	{{{genesis_config_decl_fields}
 	}}
 
 	#[cfg(feature = \"std\")]
-	impl{genesis_config_impl_gen} Default for GenesisConfig{genesis_config_use_gen}
+	impl{genesis_config_impl_gen} Default for RuntimeGenesisConfig{genesis_config_use_gen}
 		// TODO_MAYBE_WHERE_CLAUSE
 	{{
 		fn default() -> Self {{
@@ -141,7 +141,7 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 		genesis_build = format!(
 			"
 	#[pallet::genesis_build]
-	impl{impl_gen} GenesisBuild{use_gen} for GenesisConfig{genesis_config_use_gen}
+	impl{impl_gen} GenesisBuild{use_gen} for RuntimeGenesisConfig{genesis_config_use_gen}
 		// TODO_MAYBE_WHERE_CLAUSE
 	{{
 		fn build(&self) {{{genesis_config_build}
