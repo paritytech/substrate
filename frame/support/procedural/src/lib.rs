@@ -933,6 +933,9 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// See `frame/examples/default-config/tests.rs` for a runnable end-to-end example pallet that
 /// makes use of `derive_impl` to derive its testing config.
 ///
+/// See [here](`macro@config`) for more information and caveats about the auto-generated
+/// `DefaultConfig` trait.
+///
 /// ## Optional Conventions
 ///
 /// Note that as an optional convention, we encourage creating a `prelude` module inside of
@@ -1077,8 +1080,7 @@ fn pallet_macro_stub() -> TokenStream {
 ///
 /// An optional `with_default` argument may also be specified. Doing so will automatically
 /// generate a `DefaultConfig` trait inside your pallet which is suitable for use with
-/// [`[#[derive_impl(..)]`](`macro@derive_impl`) to derive a default testing config. The
-/// following demonstrates this syntax:
+/// [`[#[derive_impl(..)]`](`macro@derive_impl`) to derive a default testing config:
 ///
 /// ```ignore
 /// #[pallet::config(with_default)]
@@ -1099,7 +1101,24 @@ fn pallet_macro_stub() -> TokenStream {
 /// attribute to specify that a particular trait item _cannot_ be used as a default when a test
 /// `Config` is derived using the [`#[derive_impl(..)]`](`macro@derive_impl`) attribute macro.
 /// This will cause that particular trait item to simply not appear in default testing configs
-/// based on this config.
+/// based on this config (the trait item will not be included in `DefaultConfig`).
+///
+/// ### `DefaultConfig` Caveats
+///
+/// The auto-generated `DefaultConfig` trait:
+/// - is always a _subset_ of your pallet's `Config` trait.
+/// - can only contain items that don't rely on externalities, such as `frame_system::Config`.
+///
+/// Trait items that _do_ rely on externalities should be marked with
+/// [`#[pallet::no_default]`](`macro@no_default`)
+///
+/// Consequently:
+/// - Any items that rely on externalities _must_ be marked with
+///   [`#[pallet::no_default]`](`macro@no_default`) or your trait will fail to compile when used
+///   with [`derive_impl`](`macro@derive_impl`).
+/// - Items marked with [`#[pallet::no_default]`](`macro@no_default`) are entirely excluded from the
+///   `DefaultConfig` trait, and therefore any impl of `DefaultConfig` doesn't need to implement
+///   such items.
 ///
 /// For more information, see [`macro@derive_impl`].
 #[proc_macro_attribute]

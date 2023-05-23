@@ -55,6 +55,9 @@ pub fn expand_config(def: &mut Def) -> TokenStream {
 			/// [`#[register_default_config]`](`frame_support::register_default_config`) and
 			/// [`#[derive_impl]`](`frame_support::derive_impl`) to derive test config traits
 			/// based on existing pallet config traits in a safe and developer-friendly way.
+			///
+			/// See [here](`frame_support::pallet_macros::config`) for more information and caveats about
+			/// the auto-generated `DefaultConfig` trait and how it is generated.
 			pub trait DefaultConfig {
 				#(#trait_items)*
 			}
