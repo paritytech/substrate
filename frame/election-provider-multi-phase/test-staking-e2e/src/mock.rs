@@ -124,11 +124,11 @@ impl pallet_balances::Config for Runtime {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
-	type WeightInfo = ();
+	type MaxHolds = ConstU32<1>;
+	type MaxFreezes = traits::ConstU32<1>;
 	type HoldIdentifier = ();
 	type FreezeIdentifier = ();
-	type MaxHolds = traits::ConstU32<1>;
-	type MaxFreezes = traits::ConstU32<1>;
+	type WeightInfo = ();
 }
 
 impl pallet_timestamp::Config for Runtime {
@@ -780,4 +780,12 @@ pub(crate) fn set_minimum_election_score(
 	)
 	.map(|_| ())
 	.map_err(|_| ())
+}
+
+pub(crate) fn staking_events() -> Vec<pallet_staking::Event<Runtime>> {
+	System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let RuntimeEvent::Staking(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>()
 }

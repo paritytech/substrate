@@ -66,6 +66,7 @@
 
 #[cfg(feature = "std")]
 use serde::Serialize;
+use sp_io::hashing::blake2_256;
 #[cfg(feature = "runtime-benchmarks")]
 use sp_runtime::traits::TrailingZeroInput;
 use sp_runtime::{
@@ -638,10 +639,10 @@ pub mod pallet {
 	#[pallet::whitelist_storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		#[serde(with = "sp_core::bytes")]
+		#[cfg_attr(feature = "std", serde(with = "sp_core::bytes"))]
 		pub code: Vec<u8>,
 	}
 
@@ -1325,6 +1326,8 @@ impl<T: Config> Pallet<T> {
 		// populate environment
 		ExecutionPhase::<T>::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
+		let entropy = (b"frame_system::initialize", parent_hash).using_encoded(blake2_256);
+		storage::unhashed::put_raw(well_known_keys::INTRABLOCK_ENTROPY, &entropy[..]);
 		<Number<T>>::put(number);
 		<Digest<T>>::put(digest);
 		<ParentHash<T>>::put(parent_hash);
@@ -1374,6 +1377,7 @@ impl<T: Config> Pallet<T> {
 		);
 		ExecutionPhase::<T>::kill();
 		AllExtrinsicsLen::<T>::kill();
+		storage::unhashed::kill(well_known_keys::INTRABLOCK_ENTROPY);
 
 		// The following fields
 		//
@@ -1623,23 +1627,33 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
 
 		cfg_if::cfg_if! {
-			 if #[cfg(all(feature = "runtime-benchmarks", not(test)))] {
+			if #[cfg(all(feature = "runtime-benchmarks", not(test)))] {
 					// Let's ensure the compiler doesn't optimize our fetching of the runtime version away.
 					core::hint::black_box((new_version, current_version));
 					Ok(())
-			  } else {
-				  if new_version.spec_name != current_version.spec_name {
-					  return Err(Error::<T>::InvalidSpecName.into())
-				   }
+			} else {
+				if new_version.spec_name != current_version.spec_name {
+					return Err(Error::<T>::InvalidSpecName.into())
+				}
 
-				   if new_version.spec_version <= current_version.spec_version {
-						return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
-				   }
+				if new_version.spec_version <= current_version.spec_version {
+					return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
+				}
 
-				   Ok(())
-			  }
+				Ok(())
+			}
 		}
 	}
+}
+
+/// Returns a 32 byte datum which is guaranteed to be universally unique. `entropy` is provided
+/// as a facility to reduce the potential for precalculating results.
+pub fn unique(entropy: impl Encode) -> [u8; 32] {
+	let mut last = [0u8; 32];
+	sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut last[..], 0);
+	let next = (b"frame_system::unique", entropy, last).using_encoded(blake2_256);
+	sp_io::storage::set(well_known_keys::INTRABLOCK_ENTROPY, &next);
+	next
 }
 
 /// Event handler which registers a provider when created.
