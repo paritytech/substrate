@@ -4,19 +4,19 @@ This document is only focused on documenting parts of substrate that relates to 
 
 These are crates that are often used by external developers and need more thorough documentation. These are the crates most concerned with FRAME development.
 
-- [Substrate Documentation Guidelines](#substrate-documentation-guidelines)
-  - [General/Non-Pallet Crates](#generalnon-pallet-crates)
-    - [What to Document?](#what-to-document)
-      - [Rust Docs vs. Code Comments](#rust-docs-vs-code-comments)
-    - [How to Document?](#how-to-document)
+- [General/Non-Pallet Crates](#generalnon-pallet-crates)
+  - [What to Document?](#what-to-document)
+    - [Rust Docs vs. Code Comments](#rust-docs-vs-code-comments)
+  - [How to Document?](#how-to-document)
     - [TLDR](#tldr)
-    - [Other Guidelines](#other-guidelines)
-      - [Document Through Code](#document-through-code)
-      - [Formatting Matters](#formatting-matters)
-  - [Pallet Crates](#pallet-crates)
-    - [Top Level Pallet Docs (`lib.rs`)](#top-level-pallet-docs-librs)
-    - [Dispatchable](#dispatchable)
-    - [Storage Items](#storage-items)
+    - [Proc-Macros](#proc-macros)
+  - [Other Guidelines](#other-guidelines)
+    - [Document Through Code](#document-through-code)
+    - [Formatting Matters](#formatting-matters)
+- [Pallet Crates](#pallet-crates)
+  - [Top Level Pallet Docs (`lib.rs`)](#top-level-pallet-docs-librs)
+  - [Dispatchable](#dispatchable)
+  - [Storage Items](#storage-items)
 
 
 ## General/Non-Pallet Crates
@@ -149,7 +149,7 @@ Similarly, make sure your comments are wrapped at 100 characters line-width (as 
 
 The guidelines so far have been general in nature, and are applicable to crates that are pallets and crates that're not pallets.
 
-The following is relevant to how to document parts of a crate that is a pallet.
+The following is relevant to how to document parts of a crate that is a pallet. See [`pallet-fast-unstake`](../frame/fast-unstake/src/lib.rs) as one examples of adhering these guidelines.
 
 ### Top Level Pallet Docs (`lib.rs`)
 
@@ -160,23 +160,27 @@ For the top-level pallet docs, consider the following template:
 //!
 //! <single-liner about the pallet>.
 //!
-//! ## High-Level/End-User Details
+//! ## Overview
 //!
-//! <a few paragraphs, focus on what external folks should know about the pallet>
+//! <should be high-level details that are relevant to the most broad audience>
 //!
 //! <The audience here is potentially non-coders who just want to know what this pallet does, not how it does it>
+//!
+//! <potentially a few paragraphs, focus on what external folks should know about the pallet>
 //!
 //! ### Example
 //!
 //! <Your pallet must have a few tests that cover important user journeys. Use https://crates.io/crates/docify to reuse these as examples>.
 //!
-//! ## Code Details
+//! ## Pallet API
 //!
 //! <Reminder: inside the [`pallet`] module, a template that leads the reader to the relevant items is auto-generated. There is no need to repeat things like "See Config trait for ...", which are generated inside [`pallet`] here anyways. You can use the below line as-is:>
 //!
-//! See the [`pallet`] module for more information about the interfaces this pallet exposes, including its configuration trait, dispatchables, events and errors.
+//! See the [`pallet`] module for more information about the interfaces this pallet exposes, including its configuration trait, dispatchables, storage items, events and errors.
 //!
 //! <The audience of this is those who want to know how this pallet works, to the extent of being able to build something on top of it, like a DApp or another pallet>
+//!
+//! This section can most often be left as-is.
 //!
 //! ## Low Level / Implementation Details
 //!
@@ -195,6 +199,27 @@ For the top-level pallet docs, consider the following template:
 //! ### Terminology (optional)
 //!
 //! <Optionally, explain any non-obvious terminology here. You can link to it if you want to use the terminology further up>
+```
+
+This template's details (heading 3s and beyond) are left flexible, and at the discretion of the developer to make the best final choice about. For example, you might want to include `### Terminology` or not. Moreover, you might find it more useful to include it in `## Overview`.
+
+Nonetheless, the high level flow of going from the most high level explanation to the most low level explanation is important to follow.
+
+As a rule of thumb, the Heading 2s (`##`) in this template can be considered a strict rule, while the Heading 3s (`###`) and beyond are flexible.
+
+#### Polkadot and Substrate
+
+Optionally, in order to demonstrate the relation between the two, you can start the pallet documentation with:
+
+```
+//! > Made with *Substrate*, for *Polkadot*.
+//!
+//! [![github]](https://github.com/paritytech/substrate/frame/fast-unstake) -
+//! [![polkadot]](https://polkadot.network)
+//!
+//! [polkadot]: https://img.shields.io/badge/polkadot-E6007A?style=for-the-badge&logo=polkadot&logoColor=white
+//! [github]: https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github
+
 ```
 
 ### Dispatchable
