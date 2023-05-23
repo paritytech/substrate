@@ -1,10 +1,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "ec-utils-experimental")]
 pub mod bls12_377;
+#[cfg(feature = "ec-utils-experimental")]
 pub mod bls12_381;
+#[cfg(feature = "ec-utils-experimental")]
 pub mod bw6_761;
+#[cfg(feature = "ec-utils-experimental")]
 pub mod ed_on_bls12_377;
+#[cfg(feature = "ec-utils-experimental")]
 pub mod ed_on_bls12_381_bandersnatch;
+#[cfg(feature = "ec-utils-experimental")]
 mod utils;
 
 #[cfg(feature = "ec-utils-experimental")]

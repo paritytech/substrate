@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! ... docs
+//! Support functions for bls12_377 to improve the performance of multi_miller_loop, 
+//! final_exponentiation, msm's and projective multiplications by host function calls
 
 #![warn(missing_docs)]
 
