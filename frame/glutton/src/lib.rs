@@ -349,7 +349,7 @@ pub mod pallet {
 			let mut ret = [0u8; VALUE_SIZE];
 
 			for i in 0u32..(VALUE_SIZE as u32 / 32) {
-				let hash = (seed, i).using_encoded(|p| twox_256(p));
+				let hash = (seed, i).using_encoded(twox_256);
 				ret[i as usize * 32..(i + 1) as usize * 32].copy_from_slice(&hash);
 			}
 
