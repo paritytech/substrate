@@ -48,7 +48,7 @@ pub mod v1 {
 
 			ensure!(onchain < 1, "this migration can be deleted");
 
-			log!(info, "Numberof calls to refund and delete: {}", Calls::<T>::iter().count());
+			log!(info, "Number of calls to refund and delete: {}", Calls::<T>::iter().count());
 
 			Ok(Vec::new())
 		}
