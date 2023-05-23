@@ -1,4 +1,4 @@
-wra# Substrate Documentation Guidelines
+# Substrate Documentation Guidelines
 
 This document is only focused on documenting parts of substrate that relates to its external API. The list of such crates can be found in [CODEOWNERS](./CODEOWNERS). Search for the crates that are auto-assigned to a team called `docs-audit`.
 
