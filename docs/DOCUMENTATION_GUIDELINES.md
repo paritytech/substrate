@@ -96,7 +96,6 @@ You should make sure that your code is properly-named and well-organized so that
 
 > Our north star is self-documenting code that also happens to be well-documented and littered with examples.
 
-* This is hard to scale at a project the size of Polkadot/Substrate. Moreover, things like examples, errors and panics cannot be documented via just code.
 
 * Your written documents should *complement* the code, not *repeat* it. Put bluntly, if you end up writing this, you are likely doing it wrong:
 
