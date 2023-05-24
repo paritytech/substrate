@@ -9038,6 +9038,7 @@ name = "sc-consensus-beefy"
 version = "4.0.0-dev"
 dependencies = [
  "array-bytes 4.2.0",
+ "async-channel",
  "async-trait",
  "fnv",
  "futures",
@@ -9426,6 +9427,7 @@ dependencies = [
 name = "sc-network-bitswap"
 version = "0.10.0-dev"
 dependencies = [
+ "async-channel",
  "cid",
  "futures",
  "libp2p-identity",
@@ -9502,6 +9504,7 @@ name = "sc-network-light"
 version = "0.10.0-dev"
 dependencies = [
  "array-bytes 4.2.0",
+ "async-channel",
  "futures",
  "libp2p-identity",
  "log",
@@ -9543,6 +9546,7 @@ name = "sc-network-sync"
 version = "0.10.0-dev"
 dependencies = [
  "array-bytes 4.2.0",
+ "async-channel",
  "async-trait",
  "fork-tree",
  "futures",
