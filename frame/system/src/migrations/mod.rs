@@ -31,8 +31,8 @@ type RefCount = u32;
 
 /// Information of an account.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
-struct AccountInfo<Index, AccountData> {
-	nonce: Index,
+struct AccountInfo<Nonce, AccountData> {
+	nonce: Nonce,
 	consumers: RefCount,
 	providers: RefCount,
 	sufficients: RefCount,
