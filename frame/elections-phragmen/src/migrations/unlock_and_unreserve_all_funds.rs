@@ -124,7 +124,16 @@ where
 				acc
 			});
 
-		(account_deposited_sums, account_staked_sums, RocksDbWeight::get().writes(1))
+		(
+			account_deposited_sums,
+			account_staked_sums,
+			RocksDbWeight::get().reads(
+				members.len() as u64 +
+					runner_ups.len() as u64 +
+					candidates.len() as u64 +
+					voters.len() as u64,
+			),
+		)
 	}
 
 	/// Helper function for returning the locked amount of an account under the ID of this
