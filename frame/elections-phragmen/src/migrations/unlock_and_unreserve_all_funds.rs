@@ -165,7 +165,7 @@ where
 	/// Collects pre-migration data useful for validating the migration was successful, and also
 	/// checks the integrity of deposited and reserved balances.
 	///
-	/// This function performs the following steps:
+	/// Steps:
 	/// 1. Gets the deposited and staked balances for each account stored in this pallet.
 	/// 2. Collects actual pre-migration locked and reserved balances for each account.
 	/// 3. Checks the integrity of the deposited and reserved balances.
