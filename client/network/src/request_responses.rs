@@ -36,10 +36,7 @@
 
 use crate::{types::ProtocolName, ReputationChange};
 
-use futures::{
-	channel::{mpsc, oneshot},
-	prelude::*,
-};
+use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{Endpoint, Multiaddr},
 	request_response::{self, Behaviour, Codec, Message, ProtocolSupport, ResponseChannel},
@@ -126,7 +123,7 @@ pub struct ProtocolConfig {
 	/// other peers. If this is `Some` but the channel is closed, then the local node will
 	/// advertise support for this protocol, but any incoming request will lead to an error being
 	/// sent back.
-	pub inbound_queue: Option<mpsc::Sender<IncomingRequest>>,
+	pub inbound_queue: Option<async_channel::Sender<IncomingRequest>>,
 }
 
 /// A single request received by a peer on a request-response protocol.
@@ -259,8 +256,10 @@ pub struct RequestResponsesBehaviour {
 	///
 	/// Contains the underlying libp2p request-response [`Behaviour`], plus an optional
 	/// "response builder" used to build responses for incoming requests.
-	protocols:
-		HashMap<ProtocolName, (Behaviour<GenericCodec>, Option<mpsc::Sender<IncomingRequest>>)>,
+	protocols: HashMap<
+		ProtocolName,
+		(Behaviour<GenericCodec>, Option<async_channel::Sender<IncomingRequest>>),
+	>,
 
 	/// Pending requests, passed down to a request-response [`Behaviour`], awaiting a reply.
 	pending_requests:
@@ -295,7 +294,10 @@ struct MessageRequest {
 	request: Vec<u8>,
 	channel: ResponseChannel<Result<Vec<u8>, ()>>,
 	protocol: ProtocolName,
-	resp_builder: Option<futures::channel::mpsc::Sender<IncomingRequest>>,
+	// A builder used for building responses for incoming requests. Note that we use
+	// `async_channel` and not `mpsc` on purpose, because `mpsc::channel` allocates an extra
+	// message slot for every cloned `Sender` and this breaks a back-pressure mechanism.
+	resp_builder: Option<async_channel::Sender<IncomingRequest>>,
 	// Once we get incoming request we save all params, create an async call to Peerset
 	// to get the reputation of the peer.
 	get_peer_reputation: Pin<Box<dyn Future<Output = Result<i32, ()>> + Send>>,
@@ -618,10 +620,12 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 
 						// Submit the request to the "response builder" passed by the user at
 						// initialization.
-						if let Some(mut resp_builder) = resp_builder {
+						if let Some(resp_builder) = resp_builder {
 							// If the response builder is too busy, silently drop `tx`. This
 							// will be reported by the corresponding request-response [`Behaviour`]
 							// through an `InboundFailure::Omission` event.
+							// Note that we use `async_channel::bounded` and not `mpsc::channel`
+							// because the latter allocates an extra slot for every cloned sender.
 							let _ = resp_builder.try_send(IncomingRequest {
 								peer,
 								payload: request,
@@ -1036,11 +1040,7 @@ impl Codec for GenericCodec {
 mod tests {
 	use super::*;
 
-	use futures::{
-		channel::{mpsc, oneshot},
-		executor::LocalPool,
-		task::Spawn,
-	};
+	use futures::{channel::oneshot, executor::LocalPool, task::Spawn};
 	use libp2p::{
 		core::{
 			transport::{MemoryTransport, Transport},
@@ -1112,7 +1112,7 @@ mod tests {
 		// Build swarms whose behaviour is [`RequestResponsesBehaviour`].
 		let mut swarms = (0..2)
 			.map(|_| {
-				let (tx, mut rx) = mpsc::channel::<IncomingRequest>(64);
+				let (tx, mut rx) = async_channel::bounded::<IncomingRequest>(64);
 
 				pool.spawner()
 					.spawn_obj(
@@ -1215,7 +1215,7 @@ mod tests {
 		// Build swarms whose behaviour is [`RequestResponsesBehaviour`].
 		let mut swarms = (0..2)
 			.map(|_| {
-				let (tx, mut rx) = mpsc::channel::<IncomingRequest>(64);
+				let (tx, mut rx) = async_channel::bounded::<IncomingRequest>(64);
 
 				pool.spawner()
 					.spawn_obj(
@@ -1353,8 +1353,8 @@ mod tests {
 		};
 
 		let (mut swarm_2, mut swarm_2_handler_1, mut swarm_2_handler_2, listen_add_2, peerset) = {
-			let (tx_1, rx_1) = mpsc::channel(64);
-			let (tx_2, rx_2) = mpsc::channel(64);
+			let (tx_1, rx_1) = async_channel::bounded(64);
+			let (tx_2, rx_2) = async_channel::bounded(64);
 
 			let protocol_configs = vec![
 				ProtocolConfig {
