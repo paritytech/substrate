@@ -49,7 +49,7 @@ frame_support::construct_runtime!(
 	}
 );
 
-/// Normally this impl statement would need have to have the areas that are commented out below
+/// Normally this impl statement would need to have the areas that are commented out below
 /// be specified manually. Attaching the `derive_impl` attribute, specifying
 /// `frame_system::prelude::testing::TestDefaultConfig` as the `default_impl` and
 /// `frame_system::pallet::DefaultConfig` as the `disambiguation_path` allows us to bring in
