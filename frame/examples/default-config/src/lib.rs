@@ -66,9 +66,9 @@ pub mod pallet {
 		pub fn add_person(origin: OriginFor<T>, id: T::AccountId) -> DispatchResult {
 			ensure_root(origin)?;
 
-			if let Some(mut dummies) = Person::<T>::get() {
-				dummies.push(id.clone());
-				Person::<T>::set(Some(dummies));
+			if let Some(mut people) = Person::<T>::get() {
+				people.push(id.clone());
+				Person::<T>::set(Some(people));
 			} else {
 				Person::<T>::set(Some(vec![id.clone()]));
 			}
