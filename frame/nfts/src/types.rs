@@ -346,6 +346,8 @@ pub struct CancelAttributesApprovalWitness {
 pub enum PalletAttributes<CollectionId> {
 	/// Marks an item as being used in order to claim another item.
 	UsedToClaim(CollectionId),
+	/// Marks an item as being restricted from transferring.
+	TransferDisabled,
 }
 
 /// Collection's configuration.

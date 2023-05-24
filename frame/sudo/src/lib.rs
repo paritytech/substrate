@@ -282,16 +282,10 @@ pub mod pallet {
 	pub(super) type Key<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		/// The `AccountId` of the sudo key.
 		pub key: Option<T::AccountId>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { key: None }
-		}
 	}
 
 	#[pallet::genesis_build]

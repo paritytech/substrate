@@ -19,13 +19,35 @@ use crate::*;
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::{Pays, PostDispatchInfo, WithPostDispatchInfo},
+	traits::WhitelistedStorageKeys,
 };
+use std::collections::BTreeSet;
+
 use mock::{RuntimeOrigin, *};
-use sp_core::H256;
+use sp_core::{hexdisplay::HexDisplay, H256};
 use sp_runtime::{
 	traits::{BlakeTwo256, Header},
 	DispatchError, DispatchErrorWithPostInfo,
 };
+
+#[test]
+fn check_whitelist() {
+	let whitelist: BTreeSet<String> = AllPalletsWithSystem::whitelisted_storage_keys()
+		.iter()
+		.map(|s| HexDisplay::from(&s.key).to_string())
+		.collect();
+
+	// Block Number
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac"));
+	// Execution Phase
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a"));
+	// Event Count
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850"));
+	// System Events
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7"));
+	// System BlockWeight
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef734abf5cb34d6244378cddbf18e849d96"));
+}
 
 #[test]
 fn origin_works() {

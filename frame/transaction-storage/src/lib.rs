@@ -383,7 +383,6 @@ pub mod pallet {
 		pub storage_period: T::BlockNumber,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {

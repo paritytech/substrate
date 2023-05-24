@@ -137,6 +137,9 @@ use sp_runtime::{
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
+
 #[allow(dead_code)]
 const LOG_TARGET: &str = "runtime::executive";
 
@@ -338,7 +341,7 @@ where
 	/// `true`. Also, if set to `true`, it runs the `pre_upgrade` and `post_upgrade` hooks.
 	pub fn try_runtime_upgrade(
 		checks: frame_try_runtime::UpgradeCheckSelect,
-	) -> Result<Weight, &'static str> {
+	) -> Result<Weight, TryRuntimeError> {
 		if checks.try_state() {
 			let _guard = frame_support::StorageNoopGuard::default();
 			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
