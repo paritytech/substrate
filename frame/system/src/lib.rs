@@ -50,7 +50,7 @@
 //!   - [`CheckWeight`]: Checks the weight and length of the block and ensure that it does not
 //!     exceed the limits.
 //!   - [`CheckNonce`]: Checks the nonce of the transaction. Contains a single payload of type
-//!     `T::Index`.
+//!     `T::Nonce`.
 //!   - [`CheckEra`]: Checks the era of the transaction. Contains a single payload of type `Era`.
 //!   - [`CheckGenesis`]: Checks the provided genesis hash of the transaction. Must be a part of the
 //!     signed payload of the transaction.
@@ -724,9 +724,9 @@ pub type RefCount = u32;
 
 /// Information of an account.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct AccountInfo<Index, AccountData> {
+pub struct AccountInfo<Nonce, AccountData> {
 	/// The number of transactions this account has sent.
-	pub nonce: Index,
+	pub nonce: Nonce,
 	/// The number of other modules that currently depend on this account's existence. The account
 	/// cannot be reaped until this is zero.
 	pub consumers: RefCount,
