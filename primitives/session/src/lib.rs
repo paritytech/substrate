@@ -26,9 +26,11 @@ use sp_api::ProvideRuntimeApi;
 #[cfg(feature = "std")]
 use sp_runtime::traits::Block as BlockT;
 
-use sp_core::{crypto::KeyTypeId, RuntimeDebug};
+use sp_core::RuntimeDebug;
 use sp_staking::SessionIndex;
 use sp_std::vec::Vec;
+
+pub use sp_core::crypto::KeyTypeId;
 
 sp_api::decl_runtime_apis! {
 	/// Session keys runtime api.

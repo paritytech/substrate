@@ -2494,6 +2494,7 @@ dependencies = [
  "frame-executive",
  "frame-support",
  "frame-system",
+ "frame-system-rpc-runtime-api",
  "parity-scale-codec",
  "scale-info",
  "sp-api",
@@ -5554,6 +5555,7 @@ dependencies = [
 name = "node-template-runtime"
 version = "4.0.0-dev"
 dependencies = [
+ "frame",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",

@@ -50,6 +50,8 @@
 //! In short, this crate only re-exports types and traits from multiple sources. All of these
 //! sources are listed (and re-exported again) in [`deps`].
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 /// export the main pallet macro. This can wrap a `mod pallet` and will transform it into being
 /// a pallet, eg `#[frame::pallet] mod pallet { .. }`.
 pub use frame_support::pallet;
@@ -57,6 +59,7 @@ pub use frame_support::pallet;
 /// A prelude that is suitable to be used inside the
 pub mod prelude {
 	pub use super::macros::*;
+	pub use super::std::prelude::*;
 	pub use frame_support::pallet_prelude::*;
 	pub use frame_system::pallet_prelude::*;
 }
@@ -139,6 +142,7 @@ pub mod runtime {
 			sp_runtime::generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, Extra>;
 		pub type BlockOf<RuntimeCall, Extra = ()> =
 			sp_runtime::generic::Block<Header, Extrinsic<RuntimeCall, Extra>>;
+		pub type OpaqueBlock = sp_runtime::generic::Block<Header, sp_runtime::OpaqueExtrinsic>;
 
 		pub type ExtrinsicOf<Block> = <Block as sp_runtime::traits::Block>::Extrinsic;
 		pub type HeaderOf<Block> = <Block as sp_runtime::traits::Block>::Header;
@@ -151,13 +155,18 @@ pub mod runtime {
 	}
 
 	pub mod runtime_apis {
-		// TODO: preferably not do wildcard imports, but we need to bring in some macro_generated
-		// stuff.
+		// This should contain all RPCs, but only those that are needed in order to run a bare-bone
+		// chain.
+
+		// TODO: preferably not do wildcard imports, but we need to bring in some
+		// macro_generated stuff.
+		pub use frame_system_rpc_runtime_api::*;
 		pub use sp_api::{self, *};
 		pub use sp_block_builder::*;
 		pub use sp_consensus_aura::*;
 		pub use sp_consensus_grandpa::*;
 		pub use sp_offchain::*;
+		pub use sp_session::*; // TODO: this will leak too much stuff.
 		pub use sp_transaction_pool::runtime_api::*;
 	}
 
