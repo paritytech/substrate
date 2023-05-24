@@ -21,20 +21,21 @@
 use crate::keyring::*;
 use kitchensink_runtime::{
 	constants::currency::*, wasm_binary_unwrap, AccountId, AssetsConfig, BabeConfig,
-	BalancesConfig, GenesisConfig, GluttonConfig, GrandpaConfig, IndicesConfig, SessionConfig,
-	SocietyConfig, StakerStatus, StakingConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
+	BalancesConfig, GluttonConfig, GrandpaConfig, IndicesConfig, RuntimeGenesisConfig,
+	SessionConfig, SocietyConfig, StakerStatus, StakingConfig, SystemConfig,
+	BABE_GENESIS_EPOCH_CONFIG,
 };
 use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use sp_runtime::Perbill;
 
 /// Create genesis runtime configuration for tests.
-pub fn config(code: Option<&[u8]>) -> GenesisConfig {
+pub fn config(code: Option<&[u8]>) -> RuntimeGenesisConfig {
 	config_endowed(code, Default::default())
 }
 
 /// Create genesis runtime configuration for tests with some extra
 /// endowed accounts.
-pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> GenesisConfig {
+pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> RuntimeGenesisConfig {
 	let mut endowed = vec![
 		(alice(), 111 * DOLLARS),
 		(bob(), 100 * DOLLARS),
@@ -46,7 +47,7 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 
 	endowed.extend(extra_endowed.into_iter().map(|endowed| (endowed, 100 * DOLLARS)));
 
-	GenesisConfig {
+	RuntimeGenesisConfig {
 		system: SystemConfig {
 			code: code.map(|x| x.to_vec()).unwrap_or_else(|| wasm_binary_unwrap().to_vec()),
 		},
