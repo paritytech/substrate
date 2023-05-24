@@ -183,8 +183,7 @@ pub mod pallet {
 	/// Latest MMR Root hash.
 	#[pallet::storage]
 	#[pallet::getter(fn mmr_root_hash)]
-	pub type RootHash<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, HashOf<T, I>, ValueQuery>;
+	pub type RootHash<T: Config<I>, I: 'static = ()> = StorageValue<_, HashOf<T, I>, ValueQuery>;
 
 	/// Current size of the MMR (number of leaves).
 	#[pallet::storage]

@@ -21,7 +21,7 @@ use crate::{
 		Hasher, Node, NodeOf,
 	},
 	primitives::{self, Error, NodeIndex},
-	Config, HashingOf, HashOf,
+	Config, HashOf, HashingOf,
 };
 use sp_mmr_primitives::{mmr_lib, utils::NodesUtils};
 use sp_std::prelude::*;
@@ -145,9 +145,7 @@ where
 
 	/// Commit the changes to underlying storage, return current number of leaves and
 	/// calculate the new MMR's root hash.
-	pub fn finalize(
-		self,
-	) -> Result<(NodeIndex, HashOf<T, I>), Error> {
+	pub fn finalize(self) -> Result<(NodeIndex, HashOf<T, I>), Error> {
 		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.log_error(e))?;
 		self.mmr.commit().map_err(|e| Error::Commit.log_error(e))?;
 		Ok((self.leaves, root.hash()))
@@ -168,10 +166,7 @@ where
 	pub fn generate_proof(
 		&self,
 		leaf_indices: Vec<NodeIndex>,
-	) -> Result<
-		(Vec<L>, primitives::Proof<HashOf<T, I>>),
-		Error,
-	> {
+	) -> Result<(Vec<L>, primitives::Proof<HashOf<T, I>>), Error> {
 		let positions = leaf_indices
 			.iter()
 			.map(|index| mmr_lib::leaf_index_to_pos(*index))
