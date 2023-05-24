@@ -76,7 +76,7 @@ const TICK_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1100)
 /// Maximum number of known block hashes to keep for a peer.
 const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
 
-/// If the block announces stream to peer has been inactive for two minutes meaning local node
+/// If the block announces stream to peer has been inactive for 30 seconds meaning local node
 /// has not sent or received block announcements to/from the peer, report the node for inactivity,
 /// disconnect it and attempt to establish connection to some other peer.
 const INACTIVITY_EVICT_THRESHOLD: Duration = Duration::from_secs(30);
