@@ -38,7 +38,7 @@ sp-storage = { version = "7.0.0", default-features = false, path = "../../../pri
 
 pallet-assets = { version = "4.0.0-dev", path = "../../assets" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
-pallet-dex = { version = "4.0.0-dev", path = "../../dex" }
+pallet-asset-conversion = { version = "4.0.0-dev", path = "../../asset-conversion" }
 
 [features]
 default = ["std"]

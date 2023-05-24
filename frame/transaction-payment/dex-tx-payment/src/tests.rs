@@ -23,8 +23,8 @@ use frame_support::{
 };
 use frame_system as system;
 use mock::*;
+use pallet_asset_conversion::NativeOrAssetId;
 use pallet_balances::Call as BalancesCall;
-use pallet_dex::NativeOrAssetId;
 use sp_runtime::traits::StaticLookup;
 
 const CALL: &<Runtime as frame_system::Config>::RuntimeCall =

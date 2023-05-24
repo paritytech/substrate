@@ -28,7 +28,7 @@ use frame_support::{
 };
 use frame_system as system;
 use frame_system::{EnsureRoot, EnsureSignedBy};
-use pallet_dex::{NativeOrAssetId, NativeOrAssetIdConverter};
+use pallet_asset_conversion::{NativeOrAssetId, NativeOrAssetIdConverter};
 use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
 use sp_runtime::{
