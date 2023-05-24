@@ -70,39 +70,61 @@ where
 	///   sums.
 	fn get_account_deposited_and_staked_sums(
 	) -> (BTreeMap<T::AccountId, T::Balance>, BTreeMap<T::AccountId, T::Balance>) {
-		use sp_runtime::{traits::Zero, SaturatedConversion, Saturating};
+		use sp_runtime::{traits::Zero, SaturatedConversion};
 		let members = crate::Members::<T>::get();
 		let runner_ups = crate::RunnersUp::<T>::get();
 		let candidates = crate::Candidates::<T>::get();
 		let voters: Vec<(T::AccountId, crate::Voter<T::AccountId, crate::BalanceOf<T>>)> =
 			crate::Voting::<T>::iter().collect::<Vec<_>>();
 
-		// Get the total amount deposited by all Members, RunnerUps, and Candidates.
-		let mut account_deposited_sums: BTreeMap<T::AccountId, T::Balance> = BTreeMap::new();
-		for member in members.iter().chain(runner_ups.iter()) {
-			let deposited_sum =
-				account_deposited_sums.entry(member.who.clone()).or_insert(Zero::zero());
-			*deposited_sum += member.deposit.into();
-		}
-		for (candidate, amount) in candidates.iter() {
-			let deposited_sum =
-				account_deposited_sums.entry(candidate.clone()).or_insert(Zero::zero());
-			*deposited_sum += (*amount).saturated_into::<T::Balance>();
-		}
+		// Get the total amount deposited (Members, RunnerUps, Candidates and Voters all can have
+		// deposits).
+		let account_deposited_sums: BTreeMap<T::AccountId, T::Balance> = members
+			// Massage all data into (account_id, deposit) tuples.
+			.iter()
+			.chain(runner_ups.iter())
+			.map(|member| (member.who.clone(), member.deposit.into()))
+			.chain(candidates.iter().map(|(candidate, amount)| {
+				(candidate.clone(), (*amount).saturated_into::<T::Balance>())
+			}))
+			.chain(voters.iter().map(|(account_id, voter)| {
+				(account_id.clone(), voter.deposit.saturated_into::<T::Balance>())
+			}))
+			// Finally, aggregate the tuples into a Map.
+			.fold(BTreeMap::new(), |mut acc, (id, deposit)| {
+				*acc.entry(id).or_insert(Zero::zero()) += deposit;
+				acc
+			});
 
-		// Get the total amount staked and deposited by Voters.
-		let mut account_staked_sums: BTreeMap<T::AccountId, T::Balance> = BTreeMap::new();
-		for (account_id, voter) in voters.iter() {
-			let staked_sum = account_staked_sums.entry(account_id.clone()).or_insert(Zero::zero());
-			*staked_sum =
-				staked_sum.saturating_add(voter.stake.saturated_into::<T::Balance>().into());
-
-			let deposited_sum =
-				account_deposited_sums.entry(account_id.clone()).or_insert(Zero::zero());
-			*deposited_sum += voter.deposit.saturated_into::<T::Balance>();
-		}
+		// Get the total amount staked (only Voters stake).
+		let account_staked_sums: BTreeMap<T::AccountId, T::Balance> = voters
+			.iter()
+			.map(|(account_id, voter)| {
+				(account_id.clone(), voter.stake.saturated_into::<T::Balance>().into())
+			})
+			.fold(BTreeMap::new(), |mut acc, (id, stake)| {
+				*acc.entry(id).or_insert(Zero::zero()) += stake;
+				acc
+			});
 
 		(account_deposited_sums, account_staked_sums)
+	}
+
+	/// Helper function for returning the actual locked amount of an account under the ID of this
+	/// pallet.
+	///
+	/// If there is no locked amount, returns zero.
+	#[cfg(feature = "try-runtime")]
+	fn get_actual_locked_amount(account: T::AccountId) -> T::Balance {
+		use pallet_balances::Locks;
+		use sp_core::Get;
+		use sp_runtime::{traits::Zero, SaturatedConversion};
+
+		Locks::<T>::get(account.clone())
+			.iter()
+			.find(|l| l.id == T::PalletId::get())
+			.map(|lock| lock.amount.saturated_into::<T::Balance>())
+			.unwrap_or(Zero::zero())
 	}
 }
 
@@ -118,12 +140,10 @@ where
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		use frame_support::traits::ReservableCurrency;
-		use pallet_balances::{BalanceLock, Locks, Reasons};
-		use sp_core::Get;
 		use sp_runtime::{traits::Zero, SaturatedConversion};
 		use sp_std::collections::btree_set::BTreeSet;
 
-		// Get storage items containing locked and reserved balances.
+		// Get staked and deposited balances as reported by this pallet.
 		let (account_deposited_sums, account_staked_sums) =
 			Self::get_account_deposited_and_staked_sums();
 
@@ -134,37 +154,42 @@ where
 			.chain(account_deposited_sums.keys())
 			.cloned()
 			.collect();
-		let mut account_locked_before: BTreeMap<T::AccountId, T::Balance> = BTreeMap::new();
-		let mut account_reserved_before: BTreeMap<T::AccountId, T::Balance> = BTreeMap::new();
-		let empty_lock =
-			BalanceLock { id: T::PalletId::get(), amount: Zero::zero(), reasons: Reasons::Misc };
+
+		let account_locked_before: BTreeMap<T::AccountId, T::Balance> = all_accounts
+			.iter()
+			.map(|account| (account.clone(), Self::get_actual_locked_amount(account.clone())))
+			.collect();
+
+		let account_reserved_before: BTreeMap<T::AccountId, T::Balance> = all_accounts
+			.iter()
+			.map(|account| {
+				(
+					account.clone(),
+					T::Currency::reserved_balance(&account).saturated_into::<T::Balance>(),
+				)
+			})
+			.collect();
 
 		// Total deposited for each account *should* be less than or equal to the total reserved,
 		// however this does not hold for all cases due to bugs in the reserve logic of this pallet.
-		let mut bugged_deposits = 0;
-		for account in all_accounts.iter() {
-			// Question: how does this know where to get locks just from T? what if there were
-			// multiple pallet_balance implementations in the runtime?
-			let locked = Locks::<T>::get(account.clone())
+		let bugged_deposits = all_accounts
+			.iter()
+			.filter(|account| {
+				account_deposited_sums.get(&account).unwrap_or(&Zero::zero()) >
+					account_reserved_before.get(&account).unwrap_or(&Zero::zero())
+			})
+			.count();
+
+		// The calculation of the locked & staked logic is not known to be bugged, so we assert
+		// that the amounts staked in the pallet match the amounts actually locked in Balances.
+		// If this fails, there is likely a bug in the migration and it should be investigated.
+		ensure!(
+			!all_accounts
 				.iter()
-				.find(|l| l.id == T::PalletId::get())
-				.unwrap_or(&empty_lock)
-				.amount
-				.saturated_into::<T::Balance>();
-
-			let reserved = T::Currency::reserved_balance(&account).saturated_into::<T::Balance>();
-			ensure!(
-				&locked == account_staked_sums.get(&account).unwrap_or(&Zero::zero()),
-				"account locked != account staked"
-			);
-			if account_deposited_sums.get(&account).unwrap_or(&Zero::zero()) > &reserved {
-				bugged_deposits += 1;
-			}
-
-			// Record the values in the Map
-			account_locked_before.insert(account.clone(), locked);
-			account_reserved_before.insert(account.clone(), reserved);
-		}
+				.any(|account| account_locked_before.get(&account).unwrap_or(&Zero::zero()) !=
+					account_staked_sums.get(&account).unwrap_or(&Zero::zero())),
+			"account locked != account staked"
+		);
 
 		// Print some summary stats.
 		let total_stake_to_unlock = account_staked_sums.clone().into_values().sum::<T::Balance>();
