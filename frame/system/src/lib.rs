@@ -223,7 +223,7 @@ pub mod pallet {
 				type BlockLength = ();
 				type DbWeight = ();
 				type Index = u64;
-				type BlockNumber = u64;
+				type BlockNumber = u32;
 				type Hash = sp_core::hash::H256;
 				type Hashing = sp_runtime::traits::BlakeTwo256;
 				type AccountId = AccountId;
