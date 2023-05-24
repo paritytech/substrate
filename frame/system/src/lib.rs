@@ -201,8 +201,11 @@ pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
 
+	/// Contains default types suitable for various environments
 	pub mod prelude {
 		use super::*;
+
+		/// Contains default types suitable for testing purposes
 		pub mod testing {
 			type AccountId = u64;
 			use super::*;
