@@ -321,9 +321,9 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 		persisted_state,
 	};
 
-	futures::future::join(
-		worker.run(block_import_justif, finality_notifications),
-		on_demand_justifications_handler.run(),
+	futures::future::select(
+		Box::pin(worker.run(block_import_justif, finality_notifications)),
+		Box::pin(on_demand_justifications_handler.run()),
 	)
 	.await;
 }

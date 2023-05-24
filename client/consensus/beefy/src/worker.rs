@@ -429,7 +429,10 @@ where
 		);
 	}
 
-	fn handle_finality_notification(&mut self, notification: &FinalityNotification<B>) {
+	fn handle_finality_notification(
+		&mut self,
+		notification: &FinalityNotification<B>,
+	) -> Result<(), Error> {
 		debug!(
 			target: LOG_TARGET,
 			"🥩 Finality notification: header {:?} tree_route {:?}",
@@ -437,6 +440,18 @@ where
 			notification.tree_route,
 		);
 		let header = &notification.header;
+
+		self.runtime
+			.runtime_api()
+			.beefy_genesis(header.hash())
+			.ok()
+			.flatten()
+			.filter(|genesis| *genesis == self.persisted_state.pallet_genesis)
+			.ok_or_else(|| {
+				let err = Error::ConsensusReset;
+				error!(target: LOG_TARGET, "🥩 Error: {}", err);
+				err
+			})?;
 
 		if *header.number() > self.best_grandpa_block() {
 			// update best GRANDPA finalized block we have seen
@@ -469,6 +484,8 @@ where
 				error!(target: LOG_TARGET, "🥩 Voter error: {:?}", e);
 			}
 		}
+
+		Ok(())
 	}
 
 	/// Based on [VoterOracle] this vote is either processed here or discarded.
@@ -831,9 +848,9 @@ where
 				// Use `select_biased!` to prioritize order below.
 				// Process finality notifications first since these drive the voter.
 				notification = finality_notifications.next() => {
-					if let Some(notification) = notification {
-						self.handle_finality_notification(&notification);
-					} else {
+					if notification.and_then(|notif| {
+						self.handle_finality_notification(&notif).ok()
+					}).is_none() {
 						error!(target: LOG_TARGET, "🥩 Finality stream terminated, closing worker.");
 						return;
 					}
