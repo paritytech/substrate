@@ -69,6 +69,9 @@ pub(crate) enum RoundAction {
 /// Responsible for the voting strategy.
 /// It chooses which incoming votes to accept and which votes to generate.
 /// Keeps track of voting seen for current and future rounds.
+///
+/// Note: this is part of `PersistedState` so any changes here should also bump
+/// aux-db schema version.
 #[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct VoterOracle<B: Block> {
 	/// Queue of known sessions. Keeps track of voting rounds (block numbers) within each session.
@@ -256,6 +259,9 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
+/// BEEFY voter state persisted in aux DB.
+///
+/// Note: Any changes here should also bump aux-db schema version.
 #[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct PersistedState<B: Block> {
 	/// Best block we voted on.
@@ -263,6 +269,8 @@ pub(crate) struct PersistedState<B: Block> {
 	/// Chooses which incoming votes to accept and which votes to generate.
 	/// Keeps track of voting seen for current and future rounds.
 	voting_oracle: VoterOracle<B>,
+	/// Pallet-beefy genesis block - block number when BEEFY consensus started for this chain.
+	pallet_genesis: NumberFor<B>,
 }
 
 impl<B: Block> PersistedState<B> {
@@ -271,9 +279,19 @@ impl<B: Block> PersistedState<B> {
 		best_beefy: NumberFor<B>,
 		sessions: VecDeque<Rounds<B>>,
 		min_block_delta: u32,
+		pallet_genesis: NumberFor<B>,
 	) -> Option<Self> {
-		VoterOracle::checked_new(sessions, min_block_delta, grandpa_header, best_beefy)
-			.map(|voting_oracle| PersistedState { best_voted: Zero::zero(), voting_oracle })
+		VoterOracle::checked_new(sessions, min_block_delta, grandpa_header, best_beefy).map(
+			|voting_oracle| PersistedState {
+				best_voted: Zero::zero(),
+				voting_oracle,
+				pallet_genesis,
+			},
+		)
+	}
+
+	pub fn pallet_genesis(&self) -> NumberFor<B> {
+		self.pallet_genesis
 	}
 
 	pub(crate) fn set_min_block_delta(&mut self, min_block_delta: u32) {
@@ -1086,6 +1104,7 @@ pub(crate) mod tests {
 		};
 
 		let backend = peer.client().as_backend();
+		let beefy_genesis = 1;
 		let api = Arc::new(TestApi::with_validator_set(&genesis_validator_set));
 		let network = peer.network_service().clone();
 		let sync = peer.sync_service().clone();
@@ -1118,6 +1137,7 @@ pub(crate) mod tests {
 			Zero::zero(),
 			vec![Rounds::new(One::one(), genesis_validator_set)].into(),
 			min_block_delta,
+			beefy_genesis,
 		)
 		.unwrap();
 		let payload_provider = MmrRootProvider::new(api.clone());

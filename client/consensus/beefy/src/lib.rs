@@ -281,8 +281,14 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 	let persisted_state =
 		match wait_for_runtime_pallet(&*runtime, &mut gossip_engine, &mut finality_notifications)
 			.await
-			.and_then(|best_grandpa| {
-				load_or_init_voter_state(&*backend, &*runtime, best_grandpa, min_block_delta)
+			.and_then(|(beefy_genesis, best_grandpa)| {
+				load_or_init_voter_state(
+					&*backend,
+					&*runtime,
+					beefy_genesis,
+					best_grandpa,
+					min_block_delta,
+				)
 			}) {
 			Ok(state) => state,
 			Err(e) => {
@@ -325,6 +331,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 fn load_or_init_voter_state<B, BE, R>(
 	backend: &BE,
 	runtime: &R,
+	beefy_genesis: NumberFor<B>,
 	best_grandpa: <B as Block>::Header,
 	min_block_delta: u32,
 ) -> ClientResult<PersistedState<B>>
@@ -334,17 +341,22 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B>,
 {
-	// Initialize voter state from AUX DB or from pallet genesis.
-	if let Some(mut state) = crate::aux_schema::load_persistent(backend)? {
-		// Overwrite persisted state with current best GRANDPA block.
-		state.set_best_grandpa(best_grandpa);
-		// Overwrite persisted data with newly provided `min_block_delta`.
-		state.set_min_block_delta(min_block_delta);
-		info!(target: LOG_TARGET, "🥩 Loading BEEFY voter state from db: {:?}.", state);
-		Ok(state)
-	} else {
-		initialize_voter_state(backend, runtime, best_grandpa, min_block_delta)
-	}
+	// Initialize voter state from AUX DB if compatible.
+	crate::aux_schema::load_persistent(backend)?
+		// Verify state pallet genesis matches runtime.
+		.filter(|state| state.pallet_genesis() == beefy_genesis)
+		.and_then(|mut state| {
+			// Overwrite persisted state with current best GRANDPA block.
+			state.set_best_grandpa(best_grandpa.clone());
+			// Overwrite persisted data with newly provided `min_block_delta`.
+			state.set_min_block_delta(min_block_delta);
+			info!(target: LOG_TARGET, "🥩 Loading BEEFY voter state from db: {:?}.", state);
+			Some(Ok(state))
+		})
+		// No valid voter-state persisted, re-initialize from pallet genesis.
+		.unwrap_or_else(|| {
+			initialize_voter_state(backend, runtime, beefy_genesis, best_grandpa, min_block_delta)
+		})
 }
 
 // If no persisted state present, walk back the chain from first GRANDPA notification to either:
@@ -354,6 +366,7 @@ where
 fn initialize_voter_state<B, BE, R>(
 	backend: &BE,
 	runtime: &R,
+	beefy_genesis: NumberFor<B>,
 	best_grandpa: <B as Block>::Header,
 	min_block_delta: u32,
 ) -> ClientResult<PersistedState<B>>
@@ -368,6 +381,7 @@ where
 		.beefy_genesis(best_grandpa.hash())
 		.ok()
 		.flatten()
+		.filter(|genesis| *genesis == beefy_genesis)
 		.ok_or_else(|| ClientError::Backend("BEEFY pallet expected to be active.".into()))?;
 	// Walk back the imported blocks and initialize voter either, at the last block with
 	// a BEEFY justification, or at pallet genesis block; voter will resume from there.
@@ -395,9 +409,14 @@ where
 				rounds.conclude(best_beefy);
 				sessions.push_front(rounds);
 			}
-			let state =
-				PersistedState::checked_new(best_grandpa, best_beefy, sessions, min_block_delta)
-					.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?;
+			let state = PersistedState::checked_new(
+				best_grandpa,
+				best_beefy,
+				sessions,
+				min_block_delta,
+				beefy_genesis,
+			)
+			.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?;
 			break state
 		}
 
@@ -413,8 +432,14 @@ where
 			);
 
 			sessions.push_front(Rounds::new(beefy_genesis, genesis_set));
-			break PersistedState::checked_new(best_grandpa, Zero::zero(), sessions, min_block_delta)
-				.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?
+			break PersistedState::checked_new(
+				best_grandpa,
+				Zero::zero(),
+				sessions,
+				min_block_delta,
+				beefy_genesis,
+			)
+			.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?
 		}
 
 		if let Some(active) = worker::find_authorities_change::<B>(&header) {
@@ -449,7 +474,7 @@ async fn wait_for_runtime_pallet<B, R>(
 	runtime: &R,
 	mut gossip_engine: &mut GossipEngine<B>,
 	finality: &mut Fuse<FinalityNotifications<B>>,
-) -> ClientResult<<B as Block>::Header>
+) -> ClientResult<(NumberFor<B>, <B as Block>::Header)>
 where
 	B: Block,
 	R: ProvideRuntimeApi<B>,
@@ -472,7 +497,7 @@ where
 							"🥩 BEEFY pallet available: block {:?} beefy genesis {:?}",
 							notif.header.number(), start
 						);
-						return Ok(notif.header)
+						return Ok((start, notif.header))
 					}
 				}
 			},
