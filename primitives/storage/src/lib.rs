@@ -21,7 +21,7 @@
 
 use core::fmt::Display;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sp_debug_derive::RuntimeDebug;
 
@@ -35,11 +35,11 @@ use sp_std::{
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
 #[cfg_attr(
-	feature = "std",
+	feature = "serde",
 	derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone, Encode, Decode)
 )]
 pub struct StorageKey(
-	#[cfg_attr(feature = "std", serde(with = "impl_serde::serialize"))] pub Vec<u8>,
+	#[cfg_attr(feature = "serde", serde(with = "impl_serde::serialize"))] pub Vec<u8>,
 );
 
 impl AsRef<[u8]> for StorageKey {
@@ -100,11 +100,11 @@ impl From<Vec<u8>> for TrackedStorageKey {
 
 /// Storage key of a child trie, it contains the prefix to the key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone))]
 #[repr(transparent)]
 #[derive(RefCast)]
 pub struct PrefixedStorageKey(
-	#[cfg_attr(feature = "std", serde(with = "impl_serde::serialize"))] Vec<u8>,
+	#[cfg_attr(feature = "serde", serde(with = "impl_serde::serialize"))] Vec<u8>,
 );
 
 impl Deref for PrefixedStorageKey {
@@ -142,11 +142,11 @@ impl PrefixedStorageKey {
 /// Storage data associated to a [`StorageKey`].
 #[derive(PartialEq, Eq, RuntimeDebug)]
 #[cfg_attr(
-	feature = "std",
+	feature = "serde",
 	derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone, Encode, Decode, Default)
 )]
 pub struct StorageData(
-	#[cfg_attr(feature = "std", serde(with = "impl_serde::serialize"))] pub Vec<u8>,
+	#[cfg_attr(feature = "serde", serde(with = "impl_serde::serialize"))] pub Vec<u8>,
 );
 
 /// Map of data to use in a storage, it is a collection of
@@ -178,8 +178,8 @@ pub struct Storage {
 
 /// Storage change set
 #[derive(RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, PartialEq, Eq))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize, PartialEq, Eq))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct StorageChangeSet<Hash> {
 	/// Block hash
 	pub block: Hash,
@@ -245,7 +245,7 @@ pub const TRIE_VALUE_NODE_THRESHOLD: u32 = 33;
 
 /// Information related to a child state.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
+#[cfg_attr(feature = "serde", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
 pub enum ChildInfo {
 	/// This is the one used by default.
 	ParentKeyId(ChildTrieParentKeyId),
@@ -392,7 +392,7 @@ impl ChildType {
 /// to be a unique id that will be use only once. Those unique id also required to be long enough to
 /// avoid any unique id to be prefixed by an other unique id.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
+#[cfg_attr(feature = "serde", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
 pub struct ChildTrieParentKeyId {
 	/// Data is the storage key without prefix.
 	data: Vec<u8>,
