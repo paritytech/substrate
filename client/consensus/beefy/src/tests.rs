@@ -1166,7 +1166,7 @@ async fn beefy_finalizing_after_pallet_genesis() {
 	sp_tracing::try_init_simple();
 
 	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob];
-	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
+	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 14).unwrap();
 	let session_len = 10;
 	let min_block_delta = 1;
 	let pallet_genesis = 15;

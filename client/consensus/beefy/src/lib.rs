@@ -47,7 +47,6 @@ use sp_blockchain::{
 use sp_consensus::{Error as ConsensusError, SyncOracle};
 use sp_consensus_beefy::{
 	crypto::AuthorityId, BeefyApi, MmrRootHash, PayloadProvider, ValidatorSet, BEEFY_ENGINE_ID,
-	GENESIS_AUTHORITY_SET_ID,
 };
 use sp_keystore::KeystorePtr;
 use sp_mmr_primitives::MmrApi;
@@ -404,8 +403,7 @@ where
 
 		if *header.number() == beefy_genesis {
 			// We've reached BEEFY genesis, initialize voter here.
-			let genesis_set =
-				expect_validator_set(runtime, header.hash()).and_then(genesis_set_sanity_check)?;
+			let genesis_set = expect_validator_set(runtime, header.hash())?;
 			info!(
 				target: LOG_TARGET,
 				"🥩 Loading BEEFY voter state from genesis on what appears to be first startup. \
@@ -486,17 +484,6 @@ where
 	let err_msg = "🥩 Gossip engine has unexpectedly terminated.".into();
 	error!(target: LOG_TARGET, "{}", err_msg);
 	Err(ClientError::Backend(err_msg))
-}
-
-fn genesis_set_sanity_check(
-	active: ValidatorSet<AuthorityId>,
-) -> ClientResult<ValidatorSet<AuthorityId>> {
-	if active.id() == GENESIS_AUTHORITY_SET_ID {
-		Ok(active)
-	} else {
-		error!(target: LOG_TARGET, "🥩 Unexpected ID for genesis validator set {:?}.", active);
-		Err(ClientError::Backend("BEEFY Genesis sanity check failed.".into()))
-	}
 }
 
 fn expect_validator_set<B, R>(
