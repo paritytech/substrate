@@ -73,7 +73,7 @@ impl frame_system::Config for Test {
 	// type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
-	// type BlockHashCount = ConstU64<250>;
+	type BlockHashCount = ConstU64<250>;
 	// type Version = ();
 	type PalletInfo = PalletInfo;
 
@@ -124,16 +124,16 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 #[test]
 fn it_works_for_optional_value() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Person::<Test>::get(), None);
+		assert_eq!(People::<Test>::get(), None);
 
 		let val1 = 42;
 		assert_ok!(Example::add_person(RuntimeOrigin::root(), val1));
-		assert_eq!(Person::<Test>::get(), Some(vec![val1]));
+		assert_eq!(People::<Test>::get(), Some(vec![val1]));
 
-		// Check that accumulate works when we have Some value in Person already.
+		// Check that accumulate works when we have Some value in People already.
 		let val2 = 27;
 		assert_ok!(Example::add_person(RuntimeOrigin::root(), val2));
-		assert_eq!(Person::<Test>::get(), Some(vec![val1, val2]));
+		assert_eq!(People::<Test>::get(), Some(vec![val1, val2]));
 	});
 }
 

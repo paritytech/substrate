@@ -66,15 +66,15 @@ pub mod pallet {
 		pub fn add_person(origin: OriginFor<T>, id: T::AccountId) -> DispatchResult {
 			ensure_root(origin)?;
 
-			if let Some(mut people) = Person::<T>::get() {
+			if let Some(mut people) = People::<T>::get() {
 				people.push(id.clone());
-				Person::<T>::set(Some(people));
+				People::<T>::set(Some(people));
 			} else {
-				Person::<T>::set(Some(vec![id.clone()]));
+				People::<T>::set(Some(vec![id.clone()]));
 			}
 
 			// Let's deposit an event to let the outside world know this happened.
-			Self::deposit_event(Event::AddPerson { account: id });
+			Self::deposit_event(Event::AddPeople { account: id });
 
 			Ok(())
 		}
@@ -98,12 +98,12 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		AddPerson { account: T::AccountId },
+		AddPeople { account: T::AccountId },
 		SetPoints { account: T::AccountId, balance: BalanceOf<T> },
 	}
 
 	#[pallet::storage]
-	pub type Person<T: Config> = StorageValue<_, Vec<T::AccountId>>;
+	pub type People<T: Config> = StorageValue<_, Vec<T::AccountId>>;
 
 	#[pallet::storage]
 	pub type Points<T: Config> = StorageMap<_, _, T::AccountId, T::Balance>;
