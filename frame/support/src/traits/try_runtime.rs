@@ -19,6 +19,7 @@
 
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::AtLeast32BitUnsigned;
+use sp_runtime::TryRuntimeError;
 use sp_std::prelude::*;
 
 /// Which state tests to execute.
@@ -129,7 +130,7 @@ impl core::str::FromStr for UpgradeCheckSelect {
 /// This hook should not alter any storage.
 pub trait TryState<BlockNumber> {
 	/// Execute the state checks.
-	fn try_state(_: BlockNumber, _: Select) -> Result<(), &'static str>;
+	fn try_state(_: BlockNumber, _: Select) -> Result<(), TryRuntimeError>;
 }
 
 #[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
@@ -139,7 +140,7 @@ impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<Bl
 	for Tuple
 {
 	for_tuples!( where #( Tuple: crate::traits::PalletInfoAccess )* );
-	fn try_state(n: BlockNumber, targets: Select) -> Result<(), &'static str> {
+	fn try_state(n: BlockNumber, targets: Select) -> Result<(), TryRuntimeError> {
 		match targets {
 			Select::None => Ok(()),
 			Select::All => {
@@ -148,7 +149,7 @@ impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<Bl
 				result
 			},
 			Select::RoundRobin(len) => {
-				let functions: &[fn(BlockNumber, Select) -> Result<(), &'static str>] =
+				let functions: &[fn(BlockNumber, Select) -> Result<(), TryRuntimeError>] =
 					&[for_tuples!(#( Tuple::try_state ),*)];
 				let skip = n.clone() % (functions.len() as u32).into();
 				let skip: u32 =
@@ -163,7 +164,7 @@ impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<Bl
 			Select::Only(ref pallet_names) => {
 				let try_state_fns: &[(
 					&'static str,
-					fn(BlockNumber, Select) -> Result<(), &'static str>,
+					fn(BlockNumber, Select) -> Result<(), TryRuntimeError>,
 				)] = &[for_tuples!(
 					#( (<Tuple as crate::traits::PalletInfoAccess>::name(), Tuple::try_state) ),*
 				)];

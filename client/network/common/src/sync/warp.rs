@@ -32,7 +32,7 @@ pub struct WarpProofRequest<B: BlockT> {
 
 /// The different types of warp syncing.
 pub enum WarpSyncParams<Block: BlockT> {
-	/// Standard warp sync for the relay chain
+	/// Standard warp sync for the chain.
 	WithProvider(Arc<dyn WarpSyncProvider<Block>>),
 	/// Skip downloading proofs and wait for a header of the state that should be downloaded.
 	///
@@ -48,7 +48,7 @@ pub enum VerificationResult<Block: BlockT> {
 	Complete(SetId, AuthorityList, Block::Header),
 }
 
-/// Warp sync backend. Handles retrieveing and verifying warp sync proofs.
+/// Warp sync backend. Handles retrieving and verifying warp sync proofs.
 pub trait WarpSyncProvider<Block: BlockT>: Send + Sync {
 	/// Generate proof starting at given block hash. The proof is accumulated until maximum proof
 	/// size is reached.
@@ -72,7 +72,7 @@ pub trait WarpSyncProvider<Block: BlockT>: Send + Sync {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum WarpSyncPhase<Block: BlockT> {
 	/// Waiting for peers to connect.
-	AwaitingPeers,
+	AwaitingPeers { required_peers: usize },
 	/// Waiting for target block to be received.
 	AwaitingTargetBlock,
 	/// Downloading and verifying grandpa warp proofs.
@@ -90,7 +90,8 @@ pub enum WarpSyncPhase<Block: BlockT> {
 impl<Block: BlockT> fmt::Display for WarpSyncPhase<Block> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Self::AwaitingPeers => write!(f, "Waiting for peers"),
+			Self::AwaitingPeers { required_peers } =>
+				write!(f, "Waiting for {required_peers} peers to be connected"),
 			Self::AwaitingTargetBlock => write!(f, "Waiting for target block to be received"),
 			Self::DownloadingWarpProofs => write!(f, "Downloading finality proofs"),
 			Self::DownloadingTargetBlock => write!(f, "Downloading target block"),

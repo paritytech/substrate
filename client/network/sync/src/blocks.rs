@@ -89,7 +89,7 @@ impl<B: BlockT> BlockCollection<B> {
 			Some(&BlockRangeState::Downloading { .. }) => {
 				trace!(target: "sync", "Inserting block data still marked as being downloaded: {}", start);
 			},
-			Some(&BlockRangeState::Complete(ref existing)) if existing.len() >= blocks.len() => {
+			Some(BlockRangeState::Complete(existing)) if existing.len() >= blocks.len() => {
 				trace!(target: "sync", "Ignored block data already downloaded: {}", start);
 				return
 			},

@@ -63,7 +63,7 @@ pub(crate) mod beefy_protocol_name {
 }
 
 /// Returns the configuration value to put in
-/// [`sc_network::config::NetworkConfiguration::extra_sets`].
+/// [`sc_network::config::FullNetworkConfiguration`].
 /// For standard protocol name see [`beefy_protocol_name::gossip_protocol_name`].
 pub fn beefy_peers_set_config(
 	gossip_protocol_name: sc_network::ProtocolName,
@@ -71,6 +71,39 @@ pub fn beefy_peers_set_config(
 	let mut cfg = sc_network::config::NonDefaultSetConfig::new(gossip_protocol_name, 1024 * 1024);
 	cfg.allow_non_reserved(25, 25);
 	cfg
+}
+
+// cost scalars for reporting peers.
+mod cost {
+	use sc_network::ReputationChange as Rep;
+	// Message that's for an outdated round.
+	pub(super) const OUTDATED_MESSAGE: Rep = Rep::new(-50, "BEEFY: Past message");
+	// Message that's from the future relative to our current set-id.
+	pub(super) const FUTURE_MESSAGE: Rep = Rep::new(-100, "BEEFY: Future message");
+	// Vote message containing bad signature.
+	pub(super) const BAD_SIGNATURE: Rep = Rep::new(-100, "BEEFY: Bad signature");
+	// Message received with vote from voter not in validator set.
+	pub(super) const UNKNOWN_VOTER: Rep = Rep::new(-150, "BEEFY: Unknown voter");
+	// A message received that cannot be evaluated relative to our current state.
+	pub(super) const OUT_OF_SCOPE_MESSAGE: Rep = Rep::new(-500, "BEEFY: Out-of-scope message");
+	// Message containing invalid proof.
+	pub(super) const INVALID_PROOF: Rep = Rep::new(-5000, "BEEFY: Invalid commit");
+	// Reputation cost per signature checked for invalid proof.
+	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
+	// Reputation cost per byte for un-decodable message.
+	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
+	// On-demand request was refused by peer.
+	pub(super) const REFUSAL_RESPONSE: Rep = Rep::new(-100, "BEEFY: Proof request refused");
+	// On-demand request for a proof that can't be found in the backend.
+	pub(super) const UNKOWN_PROOF_REQUEST: Rep = Rep::new(-150, "BEEFY: Unknown proof request");
+}
+
+// benefit scalars for reporting peers.
+mod benefit {
+	use sc_network::ReputationChange as Rep;
+	pub(super) const VOTE_MESSAGE: Rep = Rep::new(100, "BEEFY: Round vote message");
+	pub(super) const KNOWN_VOTE_MESSAGE: Rep = Rep::new(50, "BEEFY: Known vote");
+	pub(super) const VALIDATED_PROOF: Rep = Rep::new(100, "BEEFY: Justification");
 }
 
 #[cfg(test)]

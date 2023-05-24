@@ -159,6 +159,9 @@ pub enum Error {
 	#[error("State Database error: {0}")]
 	StateDatabase(String),
 
+	#[error("Statement store error: {0}")]
+	StatementStore(String),
+
 	#[error("Failed to set the chain head to a block that's too old.")]
 	SetHeadTooOld,
 
