@@ -33,7 +33,6 @@ use std::sync::{
 
 #[derive(Clone)]
 enum Method {
-	Interpreted,
 	Compiled { instantiation_strategy: InstantiationStrategy, precompile: bool },
 }
 
@@ -50,17 +49,10 @@ fn initialize(
 	method: Method,
 ) -> Box<dyn WasmModule> {
 	let blob = RuntimeBlob::uncompress_if_needed(runtime).unwrap();
-	let host_functions = sp_io::SubstrateHostFunctions::host_functions();
+
 	let allow_missing_func_imports = true;
 
 	match method {
-		Method::Interpreted => sc_executor_wasmi::create_runtime(
-			blob,
-			DEFAULT_HEAP_ALLOC_STRATEGY,
-			host_functions,
-			allow_missing_func_imports,
-		)
-		.map(|runtime| -> Box<dyn WasmModule> { Box::new(runtime) }),
 		Method::Compiled { instantiation_strategy, precompile } => {
 			let config = sc_executor_wasmtime::Config {
 				allow_missing_func_imports,
@@ -188,10 +180,17 @@ fn bench_call_instance(c: &mut Criterion) {
 			},
 		),
 		(
-			"pooling_vanilla",
+			"pooling_vanilla_fresh",
 			Method::Compiled {
 				instantiation_strategy: InstantiationStrategy::Pooling,
 				precompile: false,
+			},
+		),
+		(
+			"pooling_vanilla_precompiled",
+			Method::Compiled {
+				instantiation_strategy: InstantiationStrategy::Pooling,
+				precompile: true,
 			},
 		),
 		(
@@ -208,7 +207,6 @@ fn bench_call_instance(c: &mut Criterion) {
 				precompile: true,
 			},
 		),
-		("interpreted", Method::Interpreted),
 	];
 
 	let runtimes = [("kusama_runtime", kusama_runtime()), ("test_runtime", test_runtime())];

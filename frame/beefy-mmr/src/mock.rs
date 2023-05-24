@@ -25,7 +25,7 @@ use frame_support::{
 	BasicExternalities,
 };
 use sp_consensus_beefy::mmr::MmrLeafVersion;
-use sp_core::{Hasher, H256};
+use sp_core::H256;
 use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	impl_opaque_keys,
@@ -104,7 +104,7 @@ impl pallet_session::Config for Test {
 pub type MmrLeaf = sp_consensus_beefy::mmr::MmrLeaf<
 	<Test as frame_system::Config>::BlockNumber,
 	<Test as frame_system::Config>::Hash,
-	<Test as pallet_mmr::Config>::Hash,
+	crate::MerkleRootOf<Test>,
 	Vec<u8>,
 >;
 
@@ -112,8 +112,6 @@ impl pallet_mmr::Config for Test {
 	const INDEXING_PREFIX: &'static [u8] = b"mmr";
 
 	type Hashing = Keccak256;
-
-	type Hash = <Keccak256 as Hasher>::Out;
 
 	type LeafData = BeefyMmr;
 
