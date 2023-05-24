@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,7 +50,7 @@ pub struct ExtraConstantDef {
 	/// The type returned by the function
 	pub type_: syn::Type,
 	/// The doc associated
-	pub doc: Vec<syn::Lit>,
+	pub doc: Vec<syn::Expr>,
 	/// Optional MetaData Name
 	pub metadata_name: Option<syn::Ident>,
 }
@@ -100,7 +100,7 @@ impl ExtraConstantsDef {
 
 		let mut extra_constants = vec![];
 		for impl_item in &mut item.items {
-			let method = if let syn::ImplItem::Method(method) = impl_item {
+			let method = if let syn::ImplItem::Fn(method) = impl_item {
 				method
 			} else {
 				let msg = "Invalid pallet::call, only method accepted";

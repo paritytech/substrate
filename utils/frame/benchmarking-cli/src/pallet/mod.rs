@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -187,7 +187,7 @@ pub struct PalletCmd {
 	/// Each layer will result in an additional 495 bytes PoV per distinct top-level access.
 	/// Therefore multiple `StorageMap` accesses only suffer from this increase once. The exact
 	/// number of storage items depends on the runtime and the deployed pallets.
-	#[clap(long, default_value = "0")]
+	#[clap(long, default_value = "2")]
 	pub additional_trie_layers: u8,
 
 	/// A path to a `.json` file with existing benchmark results generated with `--json` or

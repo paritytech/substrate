@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,11 +17,11 @@
 
 use std::vec;
 
-use beefy_primitives::{
+use codec::Encode;
+use sp_consensus_beefy::{
 	check_equivocation_proof, generate_equivocation_proof, known_payloads::MMR_ROOT_ID,
 	Keyring as BeefyKeyring, Payload, ValidatorSet,
 };
-use codec::Encode;
 
 use sp_runtime::DigestItem;
 
@@ -162,6 +162,39 @@ fn validator_set_updates_work() {
 	});
 }
 
+#[test]
+fn cleans_up_old_set_id_session_mappings() {
+	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
+		let max_set_id_session_entries = MaxSetIdSessionEntries::get();
+
+		// we have 3 sessions per era
+		let era_limit = max_set_id_session_entries / 3;
+		// sanity check against division precision loss
+		assert_eq!(0, max_set_id_session_entries % 3);
+		// go through `max_set_id_session_entries` sessions
+		start_era(era_limit);
+
+		// we should have a session id mapping for all the set ids from
+		// `max_set_id_session_entries` eras we have observed
+		for i in 1..=max_set_id_session_entries {
+			assert!(Beefy::session_for_set(i as u64).is_some());
+		}
+
+		// go through another `max_set_id_session_entries` sessions
+		start_era(era_limit * 2);
+
+		// we should keep tracking the new mappings for new sessions
+		for i in max_set_id_session_entries + 1..=max_set_id_session_entries * 2 {
+			assert!(Beefy::session_for_set(i as u64).is_some());
+		}
+
+		// but the old ones should have been pruned by now
+		for i in 1..=max_set_id_session_entries {
+			assert!(Beefy::session_for_set(i as u64).is_none());
+		}
+	});
+}
+
 /// Returns a list with 3 authorities with known keys:
 /// Alice, Bob and Charlie.
 pub fn test_authorities() -> Vec<BeefyId> {
@@ -265,7 +298,7 @@ fn report_equivocation_current_set_works() {
 
 		// create the key ownership proof
 		let key_owner_proof =
-			Historical::prove((beefy_primitives::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_beefy::KEY_TYPE, &equivocation_key)).unwrap();
 
 		// report the equivocation and the tx should be dispatched successfully
 		assert_ok!(Beefy::report_equivocation_unsigned(
@@ -322,7 +355,7 @@ fn report_equivocation_old_set_works() {
 
 		// create the key ownership proof in the "old" set
 		let key_owner_proof =
-			Historical::prove((beefy_primitives::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_beefy::KEY_TYPE, &equivocation_key)).unwrap();
 
 		start_era(2);
 
@@ -404,7 +437,7 @@ fn report_equivocation_invalid_set_id() {
 		let equivocation_keyring = BeefyKeyring::from_public(equivocation_key).unwrap();
 
 		let key_owner_proof =
-			Historical::prove((beefy_primitives::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_beefy::KEY_TYPE, &equivocation_key)).unwrap();
 
 		let payload1 = Payload::from_single_entry(MMR_ROOT_ID, vec![42]);
 		let payload2 = Payload::from_single_entry(MMR_ROOT_ID, vec![128]);
@@ -443,7 +476,7 @@ fn report_equivocation_invalid_session() {
 
 		// generate a key ownership proof at current era set id
 		let key_owner_proof =
-			Historical::prove((beefy_primitives::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_beefy::KEY_TYPE, &equivocation_key)).unwrap();
 
 		start_era(2);
 
@@ -487,7 +520,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 
 		// generate a key ownership proof for the authority at index 1
 		let invalid_key_owner_proof =
-			Historical::prove((beefy_primitives::KEY_TYPE, &invalid_owner_key)).unwrap();
+			Historical::prove((sp_consensus_beefy::KEY_TYPE, &invalid_owner_key)).unwrap();
 
 		let equivocation_authority_index = 0;
 		let equivocation_key = &authorities[equivocation_authority_index];
@@ -536,7 +569,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 
 		// generate a key ownership proof at set id in era 1
 		let key_owner_proof =
-			Historical::prove((beefy_primitives::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_beefy::KEY_TYPE, &equivocation_key)).unwrap();
 
 		let assert_invalid_equivocation_proof = |equivocation_proof| {
 			assert_err!(
@@ -617,7 +650,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		);
 
 		let key_owner_proof =
-			Historical::prove((beefy_primitives::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_beefy::KEY_TYPE, &equivocation_key)).unwrap();
 
 		let call = Call::report_equivocation_unsigned {
 			equivocation_proof: Box::new(equivocation_proof.clone()),
@@ -723,7 +756,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// create the key ownership proof.
 		let key_owner_proof =
-			Historical::prove((beefy_primitives::KEY_TYPE, &equivocation_key)).unwrap();
+			Historical::prove((sp_consensus_beefy::KEY_TYPE, &equivocation_key)).unwrap();
 
 		// check the dispatch info for the call.
 		let info = Call::<Test>::report_equivocation_unsigned {

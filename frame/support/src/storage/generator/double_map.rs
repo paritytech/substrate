@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
-use sp_std::{borrow::Borrow, prelude::*};
+use sp_std::prelude::*;
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
 ///
@@ -78,7 +78,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 	{
 		let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
-		let key_hashed = k1.borrow().using_encoded(Self::Hasher1::hash);
+		let key_hashed = k1.using_encoded(Self::Hasher1::hash);
 
 		let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.as_ref().len());
 
@@ -95,8 +95,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg2: EncodeLike<K2>,
 	{
 		let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
-		let key1_hashed = k1.borrow().using_encoded(Self::Hasher1::hash);
-		let key2_hashed = k2.borrow().using_encoded(Self::Hasher2::hash);
+		let key1_hashed = k1.using_encoded(Self::Hasher1::hash);
+		let key2_hashed = k2.using_encoded(Self::Hasher2::hash);
 
 		let mut final_key = Vec::with_capacity(
 			storage_prefix.len() + key1_hashed.as_ref().len() + key2_hashed.as_ref().len(),
@@ -198,7 +198,7 @@ where
 		KArg2: EncodeLike<K2>,
 		VArg: EncodeLike<V>,
 	{
-		unhashed::put(&Self::storage_double_map_final_key(k1, k2), &val.borrow())
+		unhashed::put(&Self::storage_double_map_final_key(k1, k2), &val)
 	}
 
 	fn remove<KArg1, KArg2>(k1: KArg1, k2: KArg2)
@@ -336,8 +336,8 @@ where
 		let old_key = {
 			let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
 
-			let key1_hashed = key1.borrow().using_encoded(OldHasher1::hash);
-			let key2_hashed = key2.borrow().using_encoded(OldHasher2::hash);
+			let key1_hashed = key1.using_encoded(OldHasher1::hash);
+			let key2_hashed = key2.using_encoded(OldHasher2::hash);
 
 			let mut final_key = Vec::with_capacity(
 				storage_prefix.len() + key1_hashed.as_ref().len() + key2_hashed.as_ref().len(),
@@ -514,43 +514,12 @@ where
 mod test_iterators {
 	use crate::{
 		hash::StorageHasher,
-		storage::{generator::StorageDoubleMap, unhashed, IterableStorageDoubleMap},
+		storage::{
+			generator::{tests::*, StorageDoubleMap},
+			unhashed,
+		},
 	};
-	use codec::{Decode, Encode};
-
-	pub trait Config: 'static {
-		type RuntimeOrigin;
-		type BlockNumber;
-		type PalletInfo: crate::traits::PalletInfo;
-		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
-	}
-
-	crate::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {}
-	}
-
-	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-	struct NoDef(u32);
-
-	crate::decl_storage! {
-		trait Store for Module<T: Config> as Test {
-			DoubleMap: double_map hasher(blake2_128_concat) u16, hasher(twox_64_concat) u32 => u64;
-		}
-	}
-
-	fn key_before_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
-		let last = prefix.iter_mut().last().unwrap();
-		assert!(*last != 0, "mock function not implemented for this prefix");
-		*last -= 1;
-		prefix
-	}
-
-	fn key_after_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
-		let last = prefix.iter_mut().last().unwrap();
-		assert!(*last != 255, "mock function not implemented for this prefix");
-		*last += 1;
-		prefix
-	}
+	use codec::Encode;
 
 	#[test]
 	fn double_map_iter_from() {
@@ -589,6 +558,8 @@ mod test_iterators {
 	#[test]
 	fn double_map_reversible_reversible_iteration() {
 		sp_io::TestExternalities::default().execute_with(|| {
+			type DoubleMap = self::frame_system::DoubleMap<Runtime>;
+
 			// All map iterator
 			let prefix = DoubleMap::prefix_hash();
 

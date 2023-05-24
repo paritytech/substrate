@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -48,9 +48,12 @@ benchmarks! {
 	set_heap_pages {
 	}: _(RawOrigin::Root, Default::default())
 
-	// `set_code` was not benchmarked because it is pretty hard to come up with a real
-	// Wasm runtime to test the upgrade with. But this is okay because we will make
-	// `set_code` take a full block anyway.
+	set_code {
+		let runtime_blob = include_bytes!("../res/kitchensink_runtime.compact.compressed.wasm").to_vec();
+	}: _(RawOrigin::Root, runtime_blob)
+	verify {
+		System::<T>::assert_last_event(frame_system::Event::<T>::CodeUpdated.into());
+	}
 
 	#[extra]
 	set_code_without_checks {

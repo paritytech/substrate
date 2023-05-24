@@ -1,4 +1,4 @@
-// Copyright 2022 Parity Technologies (UK) Ltd.
+// Copyright Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,14 +21,14 @@
 //! CID is expected to reference 256-bit Blake2b transaction hash.
 
 use cid::{self, Version};
-use futures::{channel::mpsc, StreamExt};
-use libp2p::core::PeerId;
+use futures::StreamExt;
+use libp2p_identity::PeerId;
 use log::{debug, error, trace};
 use prost::Message;
 use sc_client_api::BlockBackend;
-use sc_network_common::{
-	protocol::ProtocolName,
+use sc_network::{
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+	types::ProtocolName,
 };
 use schema::bitswap::{
 	message::{wantlist::WantType, Block as MessageBlock, BlockPresence, BlockPresenceType},
@@ -93,13 +93,13 @@ impl Prefix {
 /// Bitswap request handler
 pub struct BitswapRequestHandler<B> {
 	client: Arc<dyn BlockBackend<B> + Send + Sync>,
-	request_receiver: mpsc::Receiver<IncomingRequest>,
+	request_receiver: async_channel::Receiver<IncomingRequest>,
 }
 
 impl<B: BlockT> BitswapRequestHandler<B> {
 	/// Create a new [`BitswapRequestHandler`].
 	pub fn new(client: Arc<dyn BlockBackend<B> + Send + Sync>) -> (Self, ProtocolConfig) {
-		let (tx, request_receiver) = mpsc::channel(MAX_REQUEST_QUEUE);
+		let (tx, request_receiver) = async_channel::bounded(MAX_REQUEST_QUEUE);
 
 		let config = ProtocolConfig {
 			name: ProtocolName::from(PROTOCOL_NAME),
@@ -127,8 +127,9 @@ impl<B: BlockT> BitswapRequestHandler<B> {
 					};
 
 					match pending_response.send(response) {
-						Ok(()) =>
-							trace!(target: LOG_TARGET, "Handled bitswap request from {peer}.",),
+						Ok(()) => {
+							trace!(target: LOG_TARGET, "Handled bitswap request from {peer}.",)
+						},
 						Err(_) => debug!(
 							target: LOG_TARGET,
 							"Failed to handle light client request from {peer}: {}",
@@ -288,7 +289,7 @@ pub enum BitswapError {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::{channel::oneshot, SinkExt};
+	use futures::channel::oneshot;
 	use sc_block_builder::BlockBuilderProvider;
 	use schema::bitswap::{
 		message::{wantlist::Entry, Wantlist},
@@ -296,7 +297,7 @@ mod tests {
 	};
 	use sp_consensus::BlockOrigin;
 	use sp_runtime::codec::Encode;
-	use substrate_test_runtime::Extrinsic;
+	use substrate_test_runtime::ExtrinsicBuilder;
 	use substrate_test_runtime_client::{self, prelude::*, TestClientBuilder};
 
 	#[tokio::test]
@@ -469,7 +470,9 @@ mod tests {
 		let mut client = TestClientBuilder::with_tx_storage(u32::MAX).build();
 		let mut block_builder = client.new_block(Default::default()).unwrap();
 
-		let ext = Extrinsic::Store(vec![0x13, 0x37, 0x13, 0x38]);
+		// encoded extrinsic: [161, .. , 2, 6, 16, 19, 55, 19, 56]
+		let ext = ExtrinsicBuilder::new_indexed_call(vec![0x13, 0x37, 0x13, 0x38]).build();
+		let pattern_index = ext.encoded_size() - 4;
 
 		block_builder.push(ext.clone()).unwrap();
 		let block = block_builder.build().unwrap().block;
@@ -493,7 +496,7 @@ mod tests {
 								0x70,
 								cid::multihash::Multihash::wrap(
 									u64::from(cid::multihash::Code::Blake2b256),
-									&sp_core::hashing::blake2_256(&ext.encode()[2..]),
+									&sp_core::hashing::blake2_256(&ext.encode()[pattern_index..]),
 								)
 								.unwrap(),
 							)

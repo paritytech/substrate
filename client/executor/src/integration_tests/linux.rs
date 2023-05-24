@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,28 +18,44 @@
 
 //! Tests that are only relevant for Linux.
 
+mod smaps;
+
 use super::mk_test_runtime;
 use crate::WasmExecutionMethod;
 use codec::Encode as _;
-
-mod smaps;
+use sc_executor_common::wasm_runtime::DEFAULT_HEAP_ALLOC_STRATEGY;
 
 use self::smaps::Smaps;
 
 #[test]
 fn memory_consumption_compiled() {
+	let _ = sp_tracing::try_init_simple();
+
+	if std::env::var("RUN_TEST").is_ok() {
+		memory_consumption(WasmExecutionMethod::Compiled {
+			instantiation_strategy:
+				sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse,
+		});
+	} else {
+		// We need to run the test in isolation, to not getting interfered by the other tests.
+		let executable = std::env::current_exe().unwrap();
+		let status = std::process::Command::new(executable)
+			.env("RUN_TEST", "1")
+			.args(&["--nocapture", "memory_consumption_compiled"])
+			.status()
+			.unwrap();
+
+		assert!(status.success());
+	}
+}
+
+fn memory_consumption(wasm_method: WasmExecutionMethod) {
 	// This aims to see if linear memory stays backed by the physical memory after a runtime call.
 	//
 	// For that we make a series of runtime calls, probing the RSS for the VMA matching the linear
 	// memory. After the call we expect RSS to be equal to 0.
 
-	let runtime = mk_test_runtime(
-		WasmExecutionMethod::Compiled {
-			instantiation_strategy:
-				sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse,
-		},
-		1024,
-	);
+	let runtime = mk_test_runtime(wasm_method, DEFAULT_HEAP_ALLOC_STRATEGY);
 
 	let mut instance = runtime.new_instance().unwrap();
 	let heap_base = instance

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -119,7 +119,7 @@ fn test_whitelist_call_and_execute() {
 				RuntimeOrigin::root(),
 				call_hash,
 				call_encoded_len,
-				call_weight - Weight::from_ref_time(1)
+				call_weight - Weight::from_parts(1, 0)
 			),
 			crate::Error::<Test>::InvalidCallWeightWitness,
 		);

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,12 +25,10 @@ use sp_runtime::traits::MaybeDisplay;
 pub use pallet_transaction_payment::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 
 sp_api::decl_runtime_apis! {
-	#[api_version(3)]
+	#[api_version(4)]
 	pub trait TransactionPaymentApi<Balance> where
 		Balance: Codec + MaybeDisplay,
 	{
-		#[changed_in(2)]
-		fn query_info(uxt: Block::Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance, sp_weights::OldWeight>;
 		fn query_info(uxt: Block::Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance>;
 		fn query_fee_details(uxt: Block::Extrinsic, len: u32) -> FeeDetails<Balance>;
 		fn query_weight_to_fee(weight: sp_weights::Weight) -> Balance;

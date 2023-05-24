@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -281,7 +281,7 @@ impl SpawnEssentialTaskHandle {
 		let essential_failed = self.essential_failed_tx.clone();
 		let essential_task = std::panic::AssertUnwindSafe(task).catch_unwind().map(move |_| {
 			log::error!("Essential task `{}` failed. Shutting down service.", name);
-			let _ = essential_failed.close_channel();
+			let _ = essential_failed.close();
 		});
 
 		let _ = self.inner.spawn_inner(name, group, essential_task, task_type);

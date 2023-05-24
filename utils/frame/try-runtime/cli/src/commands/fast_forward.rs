@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -103,7 +103,7 @@ async fn dry_run<T: Decode, Block: BlockT, HostFns: HostFunctions>(
 		executor,
 		method,
 		data,
-		full_extensions(),
+		full_extensions(executor.clone()),
 	)?;
 
 	Ok(<T>::decode(&mut &*result)?)
@@ -121,7 +121,7 @@ async fn run<Block: BlockT, HostFns: HostFunctions>(
 		executor,
 		method,
 		data,
-		full_extensions(),
+		full_extensions(executor.clone()),
 	)?;
 
 	let storage_changes = changes.drain_storage_changes(
