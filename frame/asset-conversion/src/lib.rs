@@ -391,7 +391,7 @@ pub mod pallet {
 			ensure!(asset1 != asset2, Error::<T>::EqualAssets);
 
 			let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
-			let (asset1, _asset2) = pool_id.clone();
+			let (asset1, asset2) = pool_id.clone();
 
 			if !T::AllowMultiAssetPools::get() && !T::MultiAssetIdConverter::is_native(&asset1) {
 				Err(Error::<T>::PoolMustContainNativeCurrency)?;
