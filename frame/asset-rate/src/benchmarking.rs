@@ -38,7 +38,7 @@ mod benchmarks {
 	fn create() -> Result<(), BenchmarkError> {
 		let asset_id: T::AssetId = ASSET_ID.into();
 		#[extrinsic_call]
-		_(RawOrigin::Root, asset_id, default_conversion_rate());
+		_(RawOrigin::Root, asset_id.clone(), default_conversion_rate());
 
 		assert_eq!(
 			pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id),
@@ -52,12 +52,12 @@ mod benchmarks {
 		let asset_id: T::AssetId = ASSET_ID.into();
 		assert_ok!(AssetRate::<T>::create(
 			RawOrigin::Root.into(),
-			asset_id,
+			asset_id.clone(),
 			default_conversion_rate()
 		));
 
 		#[extrinsic_call]
-		_(RawOrigin::Root, asset_id, FixedU128::from_u32(2));
+		_(RawOrigin::Root, asset_id.clone(), FixedU128::from_u32(2));
 
 		assert_eq!(
 			pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id),
@@ -76,7 +76,7 @@ mod benchmarks {
 		));
 
 		#[extrinsic_call]
-		_(RawOrigin::Root, asset_id);
+		_(RawOrigin::Root, asset_id.clone());
 
 		assert!(pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id).is_none());
 		Ok(())

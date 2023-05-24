@@ -91,6 +91,9 @@ pub mod pallet {
 	use sp_std::{prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
 
+	#[cfg(feature = "try-runtime")]
+	use sp_runtime::TryRuntimeError;
+
 	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
 	#[codec(mel_bound(T: Config))]
 	#[scale_info(skip_type_params(T))]
@@ -228,10 +231,10 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
+		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
 			// ensure that the value of `ErasToCheckPerBlock` is less than
 			// `T::MaxErasToCheckPerBlock`.
-			assert!(
+			ensure!(
 				ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
 				"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
 			);

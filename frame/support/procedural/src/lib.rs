@@ -468,7 +468,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 ///   storage types. This is equivalent to specifying `#[pallet::unbounded]` on all storage type
 ///   definitions.
 /// * Storage hashers no longer need to be specified and can be replaced by `_`. In dev mode, these
-///   will be replaced by `Blake2_128Concat`.
+///   will be replaced by `Blake2_128Concat`. In case of explicit key-binding, `Hasher` can simply
+///   be ignored when in `dev_mode`.
 ///
 /// Note that the `dev_mode` argument can only be supplied to the `#[pallet]` or
 /// `#[frame_support::pallet]` attribute macro that encloses your pallet module. This argument
