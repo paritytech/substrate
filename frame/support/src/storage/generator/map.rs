@@ -68,7 +68,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 		KeyArg: EncodeLike<K>,
 	{
 		let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
-		let key_hashed = key.borrow().using_encoded(Self::Hasher::hash);
+		let key_hashed = key.using_encoded(Self::Hasher::hash);
 
 		let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.as_ref().len());
 
@@ -327,7 +327,7 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 	fn migrate_key<OldHasher: StorageHasher, KeyArg: EncodeLike<K>>(key: KeyArg) -> Option<V> {
 		let old_key = {
 			let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
-			let key_hashed = key.borrow().using_encoded(OldHasher::hash);
+			let key_hashed = key.using_encoded(OldHasher::hash);
 
 			let mut final_key =
 				Vec::with_capacity(storage_prefix.len() + key_hashed.as_ref().len());

@@ -805,7 +805,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(n: BlockNumberFor<T>) -> Result<(), &'static str> {
+		fn try_state(n: BlockNumberFor<T>) -> Result<(), sp_runtime::TryRuntimeError> {
 			Self::do_try_state(n)
 		}
 	}
@@ -1006,9 +1006,7 @@ pub mod pallet {
 
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
-				if let Some(mut chunk) =
-					ledger.unlocking.last_mut().filter(|chunk| chunk.era == era)
-				{
+				if let Some(chunk) = ledger.unlocking.last_mut().filter(|chunk| chunk.era == era) {
 					// To keep the chunk count down, we only keep one chunk per era. Since
 					// `unlocking` is a FiFo queue, if a chunk exists for `era` we know that it will
 					// be the last one.
