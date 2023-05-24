@@ -257,8 +257,8 @@ pub mod pallet {
 		/// Use of reserves is deprecated in favour of holds. See `https://github.com/paritytech/substrate/pull/12951/`
 		type ReserveIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
 
-		/// The ID type for holds.
-		type HoldIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
+		/// The overarching hold reason.
+		type RuntimeHoldReason: Parameter + Member + MaxEncodedLen + Ord + Copy;
 
 		/// The ID type for freezes.
 		type FreezeIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
@@ -437,7 +437,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		BoundedVec<IdAmount<T::HoldIdentifier, T::Balance>, T::MaxHolds>,
+		BoundedVec<IdAmount<T::RuntimeHoldReason, T::Balance>, T::MaxHolds>,
 		ValueQuery,
 	>;
 
