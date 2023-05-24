@@ -228,7 +228,7 @@ pub mod pallet {
 				type Hashing = sp_runtime::traits::BlakeTwo256;
 				type AccountId = AccountId;
 				type Lookup = IdentityLookup<AccountId>;
-				type BlockHashCount = frame_support::traits::ConstU64<10>;
+				type BlockHashCount = frame_support::traits::ConstU32<10>;
 				type AccountData = ();
 				type OnNewAccount = ();
 				type OnKilledAccount = ();
