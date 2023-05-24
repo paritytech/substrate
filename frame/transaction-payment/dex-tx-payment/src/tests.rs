@@ -12,7 +12,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use super::*;
 use frame_support::{
 	assert_ok,
@@ -203,7 +202,7 @@ fn transaction_payment_in_asset_possible() {
 			// mint into the caller account
 			let caller = 1;
 			let lp_provider = 2;
-			assert_ok!(Balances::set_balance(RuntimeOrigin::root(), lp_provider, 1_000_000, 0));
+			assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), lp_provider, 1_000_000));
 			let lp_provider_account = <Runtime as system::Config>::Lookup::unlookup(lp_provider);
 			let beneficiary = <Runtime as system::Config>::Lookup::unlookup(caller);
 			let balance = 100;
@@ -216,9 +215,13 @@ fn transaction_payment_in_asset_possible() {
 
 			let token_1 = NativeOrAssetId::Native;
 			let token_2 = NativeOrAssetId::Asset(asset_id);
-			assert_ok!(Dex::create_pool(RuntimeOrigin::signed(lp_provider), token_1, token_2));
+			assert_ok!(AssetConversion::create_pool(
+				RuntimeOrigin::signed(lp_provider),
+				token_1,
+				token_2
+			));
 
-			assert_ok!(Dex::add_liquidity(
+			assert_ok!(AssetConversion::add_liquidity(
 				RuntimeOrigin::signed(lp_provider),
 				token_1,
 				token_2,
@@ -227,11 +230,10 @@ fn transaction_payment_in_asset_possible() {
 				1,       // 1 min
 				1,       // 2 min
 				lp_provider_account,
-				false
 			));
 
 			let fee_in_native = base_weight_5 + tx_weight_5 + len_10 as u64;
-			let input_quote = Dex::quote_price_tokens_for_exact_tokens(
+			let input_quote = AssetConversion::quote_price_tokens_for_exact_tokens(
 				NativeOrAssetId::Asset(asset_id),
 				NativeOrAssetId::Native,
 				fee_in_native,
@@ -310,15 +312,15 @@ fn transaction_payment_in_asset_fails_if_no_pool_for_that_asset() {
 
 fn setup_lp(asset_id: u32) {
 	let lp_provider = 5;
-	assert_ok!(Balances::set_balance(RuntimeOrigin::root(), lp_provider, 1_000_000, 0));
+	assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), lp_provider, 1_000_000));
 	let lp_provider_account = <Runtime as system::Config>::Lookup::unlookup(lp_provider);
 	assert_ok!(Assets::mint_into(asset_id.into(), &lp_provider_account, 1_000_000));
 
 	let token_1 = NativeOrAssetId::Native;
 	let token_2 = NativeOrAssetId::Asset(asset_id);
-	assert_ok!(Dex::create_pool(RuntimeOrigin::signed(lp_provider), token_1, token_2));
+	assert_ok!(AssetConversion::create_pool(RuntimeOrigin::signed(lp_provider), token_1, token_2));
 
-	assert_ok!(Dex::add_liquidity(
+	assert_ok!(AssetConversion::add_liquidity(
 		RuntimeOrigin::signed(lp_provider),
 		token_1,
 		token_2,
@@ -327,7 +329,6 @@ fn setup_lp(asset_id: u32) {
 		1,       // 1 min
 		1,       // 2 min
 		lp_provider_account,
-		false
 	));
 }
 
@@ -365,7 +366,7 @@ fn transaction_payment_without_fee() {
 			// we convert the from weight to fee based on the ratio between asset min balance and
 			// existential deposit
 			let fee_in_native = base_weight + weight + len as u64;
-			let input_quote = Dex::quote_price_tokens_for_exact_tokens(
+			let input_quote = AssetConversion::quote_price_tokens_for_exact_tokens(
 				NativeOrAssetId::Asset(asset_id),
 				NativeOrAssetId::Native,
 				fee_in_native,
@@ -431,7 +432,7 @@ fn asset_transaction_payment_with_tip_and_refund() {
 			// we convert the from weight to fee based on the ratio between asset min balance and
 			// existential deposit
 			let fee_in_native = base_weight + weight + len as u64 + tip;
-			let input_quote = Dex::quote_price_tokens_for_exact_tokens(
+			let input_quote = AssetConversion::quote_price_tokens_for_exact_tokens(
 				NativeOrAssetId::Asset(asset_id),
 				NativeOrAssetId::Native,
 				fee_in_native,
@@ -500,7 +501,7 @@ fn payment_from_account_with_only_assets() {
 			let len = 10;
 
 			let fee_in_native = base_weight + weight + len as u64;
-			let input_quote = Dex::quote_price_tokens_for_exact_tokens(
+			let input_quote = AssetConversion::quote_price_tokens_for_exact_tokens(
 				NativeOrAssetId::Asset(asset_id),
 				NativeOrAssetId::Native,
 				fee_in_native,
@@ -599,8 +600,8 @@ fn payment_only_with_existing_sufficient_asset() {
 // 			// we convert the from weight to fee based on the ratio between asset min balance and
 // 			// existential deposit
 // 			let fee_in_native = base_weight + weight + len as u64;
-// 			let input_quote = Dex::quote_price_tokens_for_exact_tokens(Some(asset_id), None, fee_in_native,
-// true); 			assert_eq!(input_quote, Some(1));
+// 			let input_quote = AssetConversion::quote_price_tokens_for_exact_tokens(Some(asset_id), None,
+// fee_in_native, true); 			assert_eq!(input_quote, Some(1));
 
 // 			let fee_in_asset = input_quote.unwrap();
 // 			// naive fee calculation would round down to zero

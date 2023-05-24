@@ -22,7 +22,9 @@ use frame_support::{
 	ord_parameter_types,
 	pallet_prelude::*,
 	parameter_types,
-	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, Imbalance, OnUnbalanced},
+	traits::{
+		AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, ConstU8, Imbalance, OnUnbalanced,
+	},
 	weights::{Weight, WeightToFee as WeightToFeeT},
 	PalletId,
 };
@@ -34,6 +36,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{AccountIdConversion, BlakeTwo256, IdentityLookup, SaturatedConversion},
+	Permill,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -52,7 +55,7 @@ frame_support::construct_runtime!(
 		TransactionPayment: pallet_transaction_payment,
 		Assets: pallet_assets,
 		PoolAssets: pallet_assets::<Instance2>,
-		Dex: pallet_dex,
+		AssetConversion: pallet_asset_conversion,
 		DexAssetTxPayment: pallet_dex_tx_payment,
 	}
 );
@@ -122,6 +125,10 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = ();
 	type MaxReserves = ConstU32<50>;
 	type ReserveIdentifier = [u8; 8];
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type HoldIdentifier = ();
+	type MaxHolds = ();
 }
 
 impl WeightToFeeT for WeightToFee {
@@ -185,7 +192,7 @@ impl pallet_assets::Config<Instance2> for Runtime {
 	type AssetId = u32;
 	type AssetIdParameter = u32;
 	type Currency = Balances;
-	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<DexOrigin, u64>>;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<AssetConversionOrigin, u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type AssetDeposit = ConstU64<0>;
 	type AssetAccountDeposit = ConstU64<0>;
@@ -203,36 +210,45 @@ impl pallet_assets::Config<Instance2> for Runtime {
 }
 
 parameter_types! {
-	pub const DexPalletId: PalletId = PalletId(*b"py/dexer");
+	pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
 	pub storage AllowMultiAssetPools: bool = false;
+	pub storage LiquidityWithdrawalFee: Permill = Permill::from_percent(0); // should be non-zero if AllowMultiAssetPools is true, otherwise can be zero
 }
 
 ord_parameter_types! {
-	pub const DexOrigin: u64 = AccountIdConversion::<u64>::into_account_truncating(&DexPalletId::get());
+	pub const AssetConversionOrigin: u64 = AccountIdConversion::<u64>::into_account_truncating(&AssetConversionPalletId::get());
 }
 
 parameter_types! {
 	pub const MaxSwapPathLength: u32 = 4;
 }
 
-impl pallet_dex::Config for Runtime {
+impl pallet_asset_conversion::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Fee = ConstU32<3>;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
 	type AssetId = u32;
-	type MultiAssetId = NativeOrAssetId<u32>;
 	type PoolAssetId = u32;
 	type Assets = Assets;
 	type PoolAssets = PoolAssets;
-	type PalletId = DexPalletId;
+	type PalletId = AssetConversionPalletId;
 	type WeightInfo = ();
+	type LPFee = ConstU32<3>; // means 0.3%
+	type PoolSetupFee = ConstU64<100>; // should be more or equal to the existential deposit
+	type PoolSetupFeeReceiver = AssetConversionOrigin;
+	type LiquidityWithdrawalFee = LiquidityWithdrawalFee;
 	type AllowMultiAssetPools = AllowMultiAssetPools;
 	type MaxSwapPathLength = MaxSwapPathLength;
-	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
+	type MintMinLiquidity = ConstU64<100>; // 100 is good enough when the main currency has 12 decimals.
 
 	type Balance = u64;
 	type HigherPrecisionBalance = u128;
+
+	type MultiAssetId = NativeOrAssetId<u32>;
+	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 parameter_types! {
@@ -257,5 +273,5 @@ impl OnUnbalanced<pallet_balances::NegativeImbalance<Runtime>> for DealWithFees 
 impl Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Fungibles = Assets;
-	type OnChargeAssetTransactionBySwap = FungiblesAdapter<Dex>;
+	type OnChargeAssetTransactionBySwap = FungiblesAdapter<AssetConversion>;
 }
