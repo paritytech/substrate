@@ -40,13 +40,13 @@ pub trait MultiAssetIdConverter<MultiAssetId, AssetId> {
 	fn get_native() -> MultiAssetId;
 
 	/// Returns true if the given MultiAssetId is the native currency.
-	fn is_native(asset: MultiAssetId) -> bool;
+	fn is_native(asset: &MultiAssetId) -> bool;
 
 	/// If it's not native, returns the AssetId for the given MultiAssetId.
-	fn try_convert(asset: MultiAssetId) -> Result<AssetId, ()>;
+	fn try_convert(asset: &MultiAssetId) -> Result<AssetId, ()>;
 
 	/// Wrapps an AssetId as a MultiAssetId.
-	fn into_multiasset_id(asset: AssetId) -> MultiAssetId;
+	fn into_multiasset_id(asset: &AssetId) -> MultiAssetId;
 }
 
 /// Benchmark Helper
@@ -107,25 +107,25 @@ pub struct NativeOrAssetIdConverter<AssetId> {
 	_phantom: PhantomData<AssetId>,
 }
 
-impl<AssetId: Ord> MultiAssetIdConverter<NativeOrAssetId<AssetId>, AssetId>
+impl<AssetId: Ord + Clone> MultiAssetIdConverter<NativeOrAssetId<AssetId>, AssetId>
 	for NativeOrAssetIdConverter<AssetId>
 {
 	fn get_native() -> NativeOrAssetId<AssetId> {
 		NativeOrAssetId::Native
 	}
 
-	fn is_native(asset: NativeOrAssetId<AssetId>) -> bool {
-		asset == Self::get_native()
+	fn is_native(asset: &NativeOrAssetId<AssetId>) -> bool {
+		*asset == Self::get_native()
 	}
 
-	fn try_convert(asset: NativeOrAssetId<AssetId>) -> Result<AssetId, ()> {
+	fn try_convert(asset: &NativeOrAssetId<AssetId>) -> Result<AssetId, ()> {
 		match asset {
-			NativeOrAssetId::Asset(asset) => Ok(asset),
+			NativeOrAssetId::Asset(asset) => Ok(asset.clone()),
 			NativeOrAssetId::Native => Err(()),
 		}
 	}
 
-	fn into_multiasset_id(asset: AssetId) -> NativeOrAssetId<AssetId> {
-		NativeOrAssetId::Asset(asset)
+	fn into_multiasset_id(asset: &AssetId) -> NativeOrAssetId<AssetId> {
+		NativeOrAssetId::Asset((*asset).clone())
 	}
 }
