@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@ use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
 /// Which state tests to execute.
-#[derive(codec::Encode, codec::Decode, Clone)]
+#[derive(codec::Encode, codec::Decode, Clone, scale_info::TypeInfo)]
 pub enum Select {
 	/// None of them.
 	None,
@@ -82,7 +82,7 @@ impl sp_std::str::FromStr for Select {
 }
 
 /// Select which checks should be run when trying a runtime upgrade upgrade.
-#[derive(codec::Encode, codec::Decode, Clone, Debug, Copy)]
+#[derive(codec::Encode, codec::Decode, Clone, Debug, Copy, scale_info::TypeInfo)]
 pub enum UpgradeCheckSelect {
 	/// Run no checks.
 	None,
@@ -168,11 +168,19 @@ impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<Bl
 					#( (<Tuple as crate::traits::PalletInfoAccess>::name(), Tuple::try_state) ),*
 				)];
 				let mut result = Ok(());
-				for (name, try_state_fn) in try_state_fns {
-					if pallet_names.iter().any(|n| n == name.as_bytes()) {
+				pallet_names.iter().for_each(|pallet_name| {
+					if let Some((name, try_state_fn)) =
+						try_state_fns.iter().find(|(name, _)| name.as_bytes() == pallet_name)
+					{
 						result = result.and(try_state_fn(n.clone(), targets.clone()));
+					} else {
+						crate::log::warn!(
+							"Pallet {:?} not found",
+							sp_std::str::from_utf8(pallet_name).unwrap_or_default()
+						);
 					}
-				}
+				});
+
 				result
 			},
 		}

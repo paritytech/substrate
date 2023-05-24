@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -42,13 +42,10 @@ use futures::{
 	prelude::*,
 };
 use parking_lot::Mutex;
-use sc_network_common::service::{NetworkPeers, NetworkStateInfo};
+use sc_network::{NetworkPeers, NetworkStateInfo};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_core::{offchain, traits::SpawnNamed, ExecutionContext};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{self, Header},
-};
+use sp_runtime::traits::{self, Header};
 use threadpool::ThreadPool;
 
 mod api;
@@ -123,9 +120,9 @@ where
 		is_validator: bool,
 	) -> impl Future<Output = ()> {
 		let runtime = self.client.runtime_api();
-		let at = BlockId::hash(header.hash());
-		let has_api_v1 = runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(&at, |v| v == 1);
-		let has_api_v2 = runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(&at, |v| v == 2);
+		let hash = header.hash();
+		let has_api_v1 = runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(hash, |v| v == 1);
+		let has_api_v2 = runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(hash, |v| v == 2);
 		let version = match (has_api_v1, has_api_v2) {
 			(_, Ok(true)) => 2,
 			(Ok(true), _) => 1,
@@ -144,13 +141,13 @@ where
 		tracing::debug!(
 			target: LOG_TARGET,
 			"Checking offchain workers at {:?}: version:{}",
-			at,
+			hash,
 			version
 		);
 		let process = (version > 0).then(|| {
 			let (api, runner) =
 				api::AsyncApi::new(network_provider, is_validator, self.shared_http_client.clone());
-			tracing::debug!(target: LOG_TARGET, "Spawning offchain workers at {:?}", at);
+			tracing::debug!(target: LOG_TARGET, "Spawning offchain workers at {:?}", hash);
 			let header = header.clone();
 			let client = self.client.clone();
 
@@ -160,15 +157,15 @@ where
 			self.spawn_worker(move || {
 				let runtime = client.runtime_api();
 				let api = Box::new(api);
-				tracing::debug!(target: LOG_TARGET, "Running offchain workers at {:?}", at);
+				tracing::debug!(target: LOG_TARGET, "Running offchain workers at {:?}", hash);
 
 				let context = ExecutionContext::OffchainCall(Some((api, capabilities)));
 				let run = if version == 2 {
-					runtime.offchain_worker_with_context(&at, context, &header)
+					runtime.offchain_worker_with_context(hash, context, &header)
 				} else {
 					#[allow(deprecated)]
 					runtime.offchain_worker_before_version_2_with_context(
-						&at,
+						hash,
 						context,
 						*header.number(),
 					)
@@ -177,7 +174,7 @@ where
 					tracing::error!(
 						target: LOG_TARGET,
 						"Error running offchain workers at {:?}: {}",
-						at,
+						hash,
 						e
 					);
 				}
@@ -249,15 +246,18 @@ mod tests {
 	use libp2p::{Multiaddr, PeerId};
 	use sc_block_builder::BlockBuilderProvider as _;
 	use sc_client_api::Backend as _;
-	use sc_network_common::{config::MultiaddrWithPeerId, protocol::ProtocolName};
+	use sc_network::{config::MultiaddrWithPeerId, types::ProtocolName};
 	use sc_peerset::ReputationChange;
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 	use sp_consensus::BlockOrigin;
+	use sp_runtime::generic::BlockId;
 	use std::{collections::HashSet, sync::Arc};
 	use substrate_test_runtime_client::{
-		runtime::Block, ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient,
-		TestClientBuilderExt,
+		runtime::{
+			substrate_test_pallet::pallet::Call as PalletCall, Block, ExtrinsicBuilder, RuntimeCall,
+		},
+		ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient, TestClientBuilderExt,
 	};
 
 	struct TestNetwork();
@@ -269,6 +269,10 @@ mod tests {
 
 		fn local_peer_id(&self) -> PeerId {
 			PeerId::random()
+		}
+
+		fn listen_addresses(&self) -> Vec<Multiaddr> {
+			Vec::new()
 		}
 	}
 
@@ -383,7 +387,10 @@ mod tests {
 
 		// then
 		assert_eq!(pool.0.status().ready, 1);
-		assert_eq!(pool.0.ready().next().unwrap().is_propagable(), false);
+		assert!(matches!(
+			pool.0.ready().next().unwrap().data().function,
+			RuntimeCall::SubstrateTest(PalletCall::storage_change { .. })
+		));
 	}
 
 	#[test]
@@ -401,12 +408,8 @@ mod tests {
 		let key = &b"hello"[..];
 		let value = &b"world"[..];
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		block_builder
-			.push(substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexSet(
-				key.to_vec(),
-				value.to_vec(),
-			))
-			.unwrap();
+		let ext = ExtrinsicBuilder::new_offchain_index_set(key.to_vec(), value.to_vec()).build();
+		block_builder.push(ext).unwrap();
 
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
@@ -414,11 +417,8 @@ mod tests {
 		assert_eq!(value, &offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).unwrap());
 
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		block_builder
-			.push(substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexClear(
-				key.to_vec(),
-			))
-			.unwrap();
+		let ext = ExtrinsicBuilder::new_offchain_index_clear(key.to_vec()).nonce(1).build();
+		block_builder.push(ext).unwrap();
 
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();

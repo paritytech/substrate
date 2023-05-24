@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -99,7 +99,6 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -274,6 +273,13 @@ pub mod pallet {
 	}
 }
 
+#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub fn do_try_state() -> Result<(), &'static str> {
+		List::<T, I>::do_try_state()
+	}
+}
+
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Move an account from one bag to another, depositing an event on success.
 	///
@@ -348,8 +354,9 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		List::<T, I>::unsafe_regenerate(all, score_of)
 	}
 
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str> {
-		List::<T, I>::try_state()
+		Self::do_try_state()
 	}
 
 	fn unsafe_clear() {
@@ -390,7 +397,7 @@ impl<T: Config<I>, I: 'static> ScoreProvider<T::AccountId> for Pallet<T, I> {
 		Node::<T, I>::get(id).map(|node| node.score()).unwrap_or_default()
 	}
 
-	frame_election_provider_support::runtime_benchmarks_or_fuzz_enabled! {
+	frame_election_provider_support::runtime_benchmarks_fuzz_or_std_enabled! {
 		fn set_score_of(id: &T::AccountId, new_score: T::Score) {
 			ListNodes::<T, I>::mutate(id, |maybe_node| {
 				if let Some(node) = maybe_node.as_mut() {

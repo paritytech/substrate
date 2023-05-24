@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -48,23 +48,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		with_details(&collection_details, &mut details)?;
 
-		if details.deposit.account == details.owner {
-			// Move the deposit to the new owner.
-			T::Currency::repatriate_reserved(
-				&details.owner,
-				&dest,
-				details.deposit.amount,
-				Reserved,
-			)?;
-		}
-
 		Account::<T, I>::remove((&details.owner, &collection, &item));
 		Account::<T, I>::insert((&dest, &collection, &item), ());
 		let origin = details.owner;
 		details.owner = dest;
 
 		// The approved accounts have to be reset to None, because otherwise pre-approve attack
-		// would be possible, where the owner can approve his second account before making the
+		// would be possible, where the owner can approve their second account before making the
 		// transaction and then claiming the item back.
 		details.approvals.clear();
 

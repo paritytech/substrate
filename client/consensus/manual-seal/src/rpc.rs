@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -160,10 +160,11 @@ pub fn send_result<T: std::fmt::Debug>(
 			}
 		}
 	} else {
-		// instant seal doesn't report errors over rpc, simply log them.
+		// Sealing/Finalization with no RPC sender such as instant seal or delayed finalize doesn't
+		// report errors over rpc, simply log them.
 		match result {
-			Ok(r) => log::info!("Instant Seal success: {:?}", r),
-			Err(e) => log::error!("Instant Seal encountered an error: {}", e),
+			Ok(r) => log::info!("Consensus with no RPC sender success: {:?}", r),
+			Err(e) => log::error!("Consensus with no RPC sender encountered an error: {}", e),
 		}
 	}
 }

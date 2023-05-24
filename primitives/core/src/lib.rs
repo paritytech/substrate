@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,16 +34,16 @@ macro_rules! map {
 #[doc(hidden)]
 pub use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 pub use serde;
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sp_runtime_interface::pass_by::{PassByEnum, PassByInner};
 use sp_std::{ops::Deref, prelude::*};
 
 pub use sp_debug_derive::RuntimeDebug;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 pub use impl_serde::serialize as bytes;
 
 #[cfg(feature = "full_crypto")]
@@ -51,10 +51,12 @@ pub mod hashing;
 
 #[cfg(feature = "full_crypto")]
 pub use hashing::{blake2_128, blake2_256, keccak_256, twox_128, twox_256, twox_64};
-pub mod bounded;
 pub mod crypto;
 pub mod hexdisplay;
+pub use paste;
 
+#[cfg(feature = "bls-experimental")]
+pub mod bls;
 pub mod defer;
 pub mod ecdsa;
 pub mod ed25519;
@@ -67,6 +69,9 @@ pub mod testing;
 #[cfg(feature = "std")]
 pub mod traits;
 pub mod uint;
+
+#[cfg(feature = "bls-experimental")]
+pub use bls::{bls377, bls381};
 
 pub use self::{
 	hash::{convert_hash, H160, H256, H512},
@@ -81,6 +86,13 @@ pub use self::hasher::blake2::Blake2Hasher;
 pub use self::hasher::keccak::KeccakHasher;
 pub use hash_db::Hasher;
 
+pub use bounded_collections as bounded;
+#[cfg(feature = "std")]
+pub use bounded_collections::{bounded_btree_map, bounded_vec};
+pub use bounded_collections::{
+	parameter_types, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128,
+	ConstU16, ConstU32, ConstU64, ConstU8, Get, GetDefault, TryCollect, TypedGet,
+};
 pub use sp_storage as storage;
 
 #[doc(hidden)]
@@ -127,8 +139,8 @@ impl ExecutionContext {
 
 /// Hex-serialized shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord))]
-pub struct Bytes(#[cfg_attr(feature = "std", serde(with = "bytes"))] pub Vec<u8>);
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize, Hash, PartialOrd, Ord))]
+pub struct Bytes(#[cfg_attr(feature = "serde", serde(with = "bytes"))] pub Vec<u8>);
 
 impl From<Vec<u8>> for Bytes {
 	fn from(s: Vec<u8>) -> Self {
@@ -165,7 +177,7 @@ impl sp_std::str::FromStr for Bytes {
 }
 
 /// Stores the encoded `RuntimeMetadata` for the native side as opaque type.
-#[derive(Encode, Decode, PartialEq)]
+#[derive(Encode, Decode, PartialEq, TypeInfo)]
 pub struct OpaqueMetadata(Vec<u8>);
 
 impl OpaqueMetadata {
@@ -197,7 +209,7 @@ impl sp_std::ops::Deref for OpaqueMetadata {
 	PassByInner,
 	TypeInfo,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct OpaquePeerId(pub Vec<u8>);
 
 impl OpaquePeerId {
@@ -382,246 +394,49 @@ macro_rules! impl_maybe_marker {
 	}
 }
 
+/// Macro for creating `Maybe*` marker traits.
+///
+/// Such a maybe-marker trait requires the given bound when either `feature = std` or `feature =
+/// serde` is activated.
+///
+/// # Example
+///
+/// ```
+/// sp_core::impl_maybe_marker_std_or_serde! {
+///     /// A marker for a type that implements `Debug` when `feature = serde` or `feature = std`.
+///     trait MaybeDebug: std::fmt::Debug;
+///     /// A marker for a type that implements `Debug + Display` when `feature = serde` or `feature = std`.
+///     trait MaybeDebugDisplay: std::fmt::Debug, std::fmt::Display;
+/// }
+/// ```
+#[macro_export]
+macro_rules! impl_maybe_marker_std_or_serde {
+	(
+		$(
+			$(#[$doc:meta] )+
+			trait $trait_name:ident: $( $trait_bound:path ),+;
+		)+
+	) => {
+		$(
+			$(#[$doc])+
+			#[cfg(any(feature = "serde", feature = "std"))]
+			pub trait $trait_name: $( $trait_bound + )+ {}
+			#[cfg(any(feature = "serde", feature = "std"))]
+			impl<T: $( $trait_bound + )+> $trait_name for T {}
+
+			$(#[$doc])+
+			#[cfg(not(any(feature = "serde", feature = "std")))]
+			pub trait $trait_name {}
+			#[cfg(not(any(feature = "serde", feature = "std")))]
+			impl<T> $trait_name for T {}
+		)+
+	}
+}
+
 /// The maximum number of bytes that can be allocated at one time.
 // The maximum possible allocation size was chosen rather arbitrary, 32 MiB should be enough for
 // everybody.
 pub const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
-
-/// A trait for querying a single value from a type defined in the trait.
-///
-/// It is not required that the value is constant.
-pub trait TypedGet {
-	/// The type which is returned.
-	type Type;
-	/// Return the current value.
-	fn get() -> Self::Type;
-}
-
-/// A trait for querying a single value from a type.
-///
-/// It is not required that the value is constant.
-pub trait Get<T> {
-	/// Return the current value.
-	fn get() -> T;
-}
-
-impl<T: Default> Get<T> for () {
-	fn get() -> T {
-		T::default()
-	}
-}
-
-/// Implement Get by returning Default for any type that implements Default.
-pub struct GetDefault;
-impl<T: Default> Get<T> for GetDefault {
-	fn get() -> T {
-		T::default()
-	}
-}
-
-macro_rules! impl_const_get {
-	($name:ident, $t:ty) => {
-		#[doc = "Const getter for a basic type."]
-		#[derive($crate::RuntimeDebug)]
-		pub struct $name<const T: $t>;
-		impl<const T: $t> Get<$t> for $name<T> {
-			fn get() -> $t {
-				T
-			}
-		}
-		impl<const T: $t> Get<Option<$t>> for $name<T> {
-			fn get() -> Option<$t> {
-				Some(T)
-			}
-		}
-		impl<const T: $t> TypedGet for $name<T> {
-			type Type = $t;
-			fn get() -> $t {
-				T
-			}
-		}
-	};
-}
-
-impl_const_get!(ConstBool, bool);
-impl_const_get!(ConstU8, u8);
-impl_const_get!(ConstU16, u16);
-impl_const_get!(ConstU32, u32);
-impl_const_get!(ConstU64, u64);
-impl_const_get!(ConstU128, u128);
-impl_const_get!(ConstI8, i8);
-impl_const_get!(ConstI16, i16);
-impl_const_get!(ConstI32, i32);
-impl_const_get!(ConstI64, i64);
-impl_const_get!(ConstI128, i128);
-
-/// Try and collect into a collection `C`.
-pub trait TryCollect<C> {
-	/// The error type that gets returned when a collection can't be made from `self`.
-	type Error;
-	/// Consume self and try to collect the results into `C`.
-	///
-	/// This is useful in preventing the undesirable `.collect().try_into()` call chain on
-	/// collections that need to be converted into a bounded type (e.g. `BoundedVec`).
-	fn try_collect(self) -> Result<C, Self::Error>;
-}
-
-/// Create new implementations of the [`Get`](crate::Get) trait.
-///
-/// The so-called parameter type can be created in four different ways:
-///
-/// - Using `const` to create a parameter type that provides a `const` getter. It is required that
-///   the `value` is const.
-///
-/// - Declare the parameter type without `const` to have more freedom when creating the value.
-///
-/// NOTE: A more substantial version of this macro is available in `frame_support` crate which
-/// allows mutable and persistant variants.
-///
-/// # Examples
-///
-/// ```
-/// # use sp_core::Get;
-/// # use sp_core::parameter_types;
-/// // This function cannot be used in a const context.
-/// fn non_const_expression() -> u64 { 99 }
-///
-/// const FIXED_VALUE: u64 = 10;
-/// parameter_types! {
-///    pub const Argument: u64 = 42 + FIXED_VALUE;
-///    /// Visibility of the type is optional
-///    OtherArgument: u64 = non_const_expression();
-/// }
-///
-/// trait Config {
-///    type Parameter: Get<u64>;
-///    type OtherParameter: Get<u64>;
-/// }
-///
-/// struct Runtime;
-/// impl Config for Runtime {
-///    type Parameter = Argument;
-///    type OtherParameter = OtherArgument;
-/// }
-/// ```
-///
-/// # Invalid example:
-///
-/// ```compile_fail
-/// # use sp_core::Get;
-/// # use sp_core::parameter_types;
-/// // This function cannot be used in a const context.
-/// fn non_const_expression() -> u64 { 99 }
-///
-/// parameter_types! {
-///    pub const Argument: u64 = non_const_expression();
-/// }
-/// ```
-#[macro_export]
-macro_rules! parameter_types {
-	(
-		$( #[ $attr:meta ] )*
-		$vis:vis const $name:ident: $type:ty = $value:expr;
-		$( $rest:tt )*
-	) => (
-		$( #[ $attr ] )*
-		$vis struct $name;
-		$crate::parameter_types!(@IMPL_CONST $name , $type , $value);
-		$crate::parameter_types!( $( $rest )* );
-	);
-	(
-		$( #[ $attr:meta ] )*
-		$vis:vis $name:ident: $type:ty = $value:expr;
-		$( $rest:tt )*
-	) => (
-		$( #[ $attr ] )*
-		$vis struct $name;
-		$crate::parameter_types!(@IMPL $name, $type, $value);
-		$crate::parameter_types!( $( $rest )* );
-	);
-	() => ();
-	(@IMPL_CONST $name:ident, $type:ty, $value:expr) => {
-		impl $name {
-			/// Returns the value of this parameter type.
-			pub const fn get() -> $type {
-				$value
-			}
-		}
-
-		impl<I: From<$type>> $crate::Get<I> for $name {
-			fn get() -> I {
-				I::from(Self::get())
-			}
-		}
-
-		impl $crate::TypedGet for $name {
-			type Type = $type;
-			fn get() -> $type {
-				Self::get()
-			}
-		}
-	};
-	(@IMPL $name:ident, $type:ty, $value:expr) => {
-		impl $name {
-			/// Returns the value of this parameter type.
-			pub fn get() -> $type {
-				$value
-			}
-		}
-
-		impl<I: From<$type>> $crate::Get<I> for $name {
-			fn get() -> I {
-				I::from(Self::get())
-			}
-		}
-
-		impl $crate::TypedGet for $name {
-			type Type = $type;
-			fn get() -> $type {
-				Self::get()
-			}
-		}
-	};
-}
-
-/// Build a bounded vec from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_vec {
-	($ ($values:expr),* $(,)?) => {
-		{
-			$crate::sp_std::vec![$($values),*].try_into().unwrap()
-		}
-	};
-	( $value:expr ; $repetition:expr ) => {
-		{
-			$crate::sp_std::vec![$value ; $repetition].try_into().unwrap()
-		}
-	}
-}
-
-/// Build a bounded btree-map from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_btree_map {
-	($ ( $key:expr => $value:expr ),* $(,)?) => {
-		{
-			$crate::TryCollect::<$crate::bounded::BoundedBTreeMap<_, _, _>>::try_collect(
-				$crate::sp_std::vec![$(($key, $value)),*].into_iter()
-			).unwrap()
-		}
-	};
-}
 
 /// Generates a macro for checking if a certain feature is enabled.
 ///
@@ -633,38 +448,62 @@ macro_rules! bounded_btree_map {
 #[rustfmt::skip]
 macro_rules! generate_feature_enabled_macro {
 	( $macro_name:ident, $feature_name:meta, $d:tt ) => {
-		/// Enable/disable the given code depending on
-		#[doc = concat!("`", stringify!($feature_name), "`")]
-		/// being enabled for the crate or not.
-		///
-		/// # Example
-		///
-		/// ```nocompile
-		/// // Will add the code depending on the feature being enabled or not.
-		#[doc = concat!(stringify!($macro_name), "!( println!(\"Hello\") )")]
-		/// ```
-		#[cfg($feature_name)]
-		#[macro_export]
-		macro_rules! $macro_name {
-			( $d ( $d input:tt )* ) => {
-				$d ( $d input )*
+		$crate::paste::paste!{
+			/// Enable/disable the given code depending on
+			#[doc = concat!("`", stringify!($feature_name), "`")]
+			/// being enabled for the crate or not.
+			///
+			/// # Example
+			///
+			/// ```nocompile
+			/// // Will add the code depending on the feature being enabled or not.
+			#[doc = concat!(stringify!($macro_name), "!( println!(\"Hello\") )")]
+			/// ```
+			#[cfg($feature_name)]
+			#[macro_export]
+			macro_rules! [<_ $macro_name>] {
+				( $d ( $d input:tt )* ) => {
+					$d ( $d input )*
+				}
 			}
-		}
 
-		/// Enable/disable the given code depending on
-		#[doc = concat!("`", stringify!($feature_name), "`")]
-		/// being enabled for the crate or not.
-		///
-		/// # Example
-		///
-		/// ```nocompile
-		/// // Will add the code depending on the feature being enabled or not.
-		#[doc = concat!(stringify!($macro_name), "!( println!(\"Hello\") )")]
-		/// ```
-		#[cfg(not($feature_name))]
-		#[macro_export]
-		macro_rules! $macro_name {
-			( $d ( $d input:tt )* ) => {};
+			/// Enable/disable the given code depending on
+			#[doc = concat!("`", stringify!($feature_name), "`")]
+			/// being enabled for the crate or not.
+			///
+			/// # Example
+			///
+			/// ```nocompile
+			/// // Will add the code depending on the feature being enabled or not.
+			#[doc = concat!(stringify!($macro_name), "!( println!(\"Hello\") )")]
+			/// ```
+			#[cfg(not($feature_name))]
+			#[macro_export]
+			macro_rules! [<_ $macro_name>] {
+				( $d ( $d input:tt )* ) => {};
+			}
+
+			// Work around for: <https://github.com/rust-lang/rust/pull/52234>
+			#[doc(hidden)]
+			pub use [<_ $macro_name>] as $macro_name;
 		}
 	};
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	#[should_panic]
+	fn generate_feature_enabled_macro_panics() {
+		generate_feature_enabled_macro!(if_test, test, $);
+		if_test!(panic!("This should panic"));
+	}
+
+	#[test]
+	fn generate_feature_enabled_macro_works() {
+		generate_feature_enabled_macro!(if_not_test, not(test), $);
+		if_not_test!(panic!("This should not panic"));
+	}
 }

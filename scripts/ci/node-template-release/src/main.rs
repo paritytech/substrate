@@ -1,30 +1,32 @@
-use clap::Parser;
-
 use std::{
 	collections::HashMap,
 	fs::{self, File, OpenOptions},
-	io::{Read, Write},
 	path::{Path, PathBuf},
 	process::Command,
 };
 
-use glob;
-
-use fs_extra::dir::{self, CopyOptions};
-
-use tempfile;
-
-use git2;
-
-use toml;
-
-use tar;
-
+use clap::Parser;
 use flate2::{write::GzEncoder, Compression};
+use fs_extra::dir::{self, CopyOptions};
+use git2;
+use glob;
+use itertools::Itertools;
+use tar;
+use tempfile;
+use toml_edit::{self, value, Array, Item, Table};
 
 const SUBSTRATE_GIT_URL: &str = "https://github.com/paritytech/substrate.git";
 
-type CargoToml = HashMap<String, toml::Value>;
+type CargoToml = toml_edit::Document;
+
+#[derive(Debug, PartialEq)]
+struct Dependency {
+	name: String,
+	version: Option<String>,
+	default_features: Option<bool>,
+}
+
+type Dependencies = HashMap<String, HashMap<String, Dependency>>;
 
 #[derive(Parser)]
 struct Options {
@@ -36,8 +38,14 @@ struct Options {
 	output: PathBuf,
 }
 
+/// Copy the `node-template` to the given path.
+fn copy_node_template(node_template: &Path, dest_path: &Path) {
+	let options = CopyOptions::new();
+	dir::copy(node_template, dest_path, &options).expect("Copies node-template to tmp dir");
+}
+
 /// Find all `Cargo.toml` files in the given path.
-fn find_cargo_tomls(path: PathBuf) -> Vec<PathBuf> {
+fn find_cargo_tomls(path: &PathBuf) -> Vec<PathBuf> {
 	let path = format!("{}/**/*.toml", path.display());
 
 	let glob = glob::glob(&path).expect("Generates globbing pattern");
@@ -55,10 +63,18 @@ fn find_cargo_tomls(path: PathBuf) -> Vec<PathBuf> {
 	result
 }
 
-/// Copy the `node-template` to the given path.
-fn copy_node_template(node_template: &Path, dest_path: &Path) {
-	let options = CopyOptions::new();
-	dir::copy(node_template, dest_path, &options).expect("Copies node-template to tmp dir");
+/// Parse the given `Cargo.toml`.
+fn parse_cargo_toml(file: &Path) -> CargoToml {
+	fs::read_to_string(file)
+		.unwrap_or_else(|e| panic!("Failed to read `{}`: {}", file.display(), e))
+		.parse()
+		.unwrap_or_else(|e| panic!("Failed to parse `{}`: {}", file.display(), e))
+}
+
+/// Write the given `Cargo.toml` to the given path.
+fn write_cargo_toml(path: &Path, cargo_toml: CargoToml) {
+	fs::write(path, cargo_toml.to_string())
+		.unwrap_or_else(|e| panic!("Failed to write `{}`: {}", path.display(), e));
 }
 
 /// Gets the latest commit id of the repository given by `path`.
@@ -76,82 +92,125 @@ fn get_git_commit_id(path: &Path) -> String {
 	format!("{}", commit_id)
 }
 
-/// Parse the given `Cargo.toml` into a `HashMap`
-fn parse_cargo_toml(file: &Path) -> CargoToml {
-	let mut content = String::new();
-	File::open(file)
-		.expect("Cargo.toml exists")
-		.read_to_string(&mut content)
-		.expect("Reads file");
-	toml::from_str(&content).expect("Cargo.toml is a valid toml file")
-}
-
-/// Replaces all substrate path dependencies with a git dependency.
-fn replace_path_dependencies_with_git(
-	cargo_toml_path: &Path,
-	commit_id: &str,
+/// Rewrites git dependencies:
+/// - inserts `workspace = true`;
+/// - removes `path`;
+/// - removes `version`;
+/// - removes `default-features`
+/// - and returns the dependencies that were rewritten.
+fn update_git_dependencies<F: Copy + Fn(&str) -> bool>(
 	cargo_toml: &mut CargoToml,
-) {
-	let mut cargo_toml_path = cargo_toml_path.to_path_buf();
-	// remove `Cargo.toml`
-	cargo_toml_path.pop();
-
-	for &table in &["dependencies", "build-dependencies", "dev-dependencies"] {
-		let mut dependencies: toml::value::Table =
-			match cargo_toml.remove(table).and_then(|v| v.try_into().ok()) {
-				Some(deps) => deps,
-				None => continue,
-			};
-
-		let deps_rewritten = dependencies
-			.iter()
-			.filter_map(|(k, v)| {
-				v.clone().try_into::<toml::value::Table>().ok().map(move |v| (k, v))
+	path_filter: F,
+) -> Dependencies {
+	let process_dep = |dep: (toml_edit::KeyMut, &mut Item)| -> Option<Dependency> {
+		let (key, value) = dep;
+		value
+			.as_table_like_mut()
+			.filter(|dep| {
+				dep.get("path").and_then(|path| path.as_str()).map(path_filter).unwrap_or(false)
 			})
-			.filter(|t| {
-				t.1.contains_key("path") && {
-					// if the path does not exists, we need to add this as git dependency
-					t.1.get("path")
-						.unwrap()
-						.as_str()
-						.map(|path| !cargo_toml_path.join(path).exists())
-						.unwrap_or(false)
+			.map(|dep| {
+				dep.insert("workspace", toml_edit::value(true));
+				dep.remove("path");
+
+				Dependency {
+					name: key.get().to_string(),
+					version: dep
+						.remove("version")
+						.and_then(|version| version.as_str().map(|s| s.to_string())),
+					default_features: dep.remove("default-features").and_then(|b| b.as_bool()),
 				}
 			})
-			.map(|(k, mut v)| {
-				// remove `path` and add `git` and `rev`
-				v.remove("path");
-				v.insert("git".into(), SUBSTRATE_GIT_URL.into());
-				v.insert("rev".into(), commit_id.into());
+	};
 
-				(k.clone(), v.into())
-			})
-			.collect::<HashMap<_, _>>();
+	["dependencies", "build-dependencies", "dev-dependencies"]
+		.into_iter()
+		.map(|table| -> (String, HashMap<String, Dependency>) {
+			(
+				table.to_string(),
+				cargo_toml[table]
+					.as_table_mut()
+					.into_iter()
+					.flat_map(|deps| deps.iter_mut().filter_map(process_dep))
+					.map(|dep| (dep.name.clone(), dep))
+					.collect(),
+			)
+		})
+		.collect()
+}
 
-		dependencies.extend(deps_rewritten.into_iter());
-
-		cargo_toml.insert(table.into(), dependencies.into());
+/// Processes all `Cargo.toml` files, aggregates dependencies and saves the changes.
+fn process_cargo_tomls(cargo_tomls: &Vec<PathBuf>) -> Dependencies {
+	/// Merge dependencies from one collection in another.
+	fn merge_deps(into: &mut Dependencies, from: Dependencies) {
+		from.into_iter().for_each(|(table, deps)| {
+			into.entry(table).or_insert_with(HashMap::new).extend(deps);
+		});
 	}
+
+	cargo_tomls.iter().fold(Dependencies::new(), |mut acc, path| {
+		let mut cargo_toml = parse_cargo_toml(&path);
+
+		let mut cargo_toml_path = path.clone();
+		cargo_toml_path.pop(); // remove `Cargo.toml` from the path
+		let deps = update_git_dependencies(&mut cargo_toml, |dep_path| {
+			!cargo_toml_path.join(dep_path).exists()
+		});
+
+		write_cargo_toml(&path, cargo_toml);
+		merge_deps(&mut acc, deps);
+		acc
+	})
 }
 
 /// Update the top level (workspace) `Cargo.toml` file.
 ///
-/// - Adds `profile.release` = `panic = unwind`
 /// - Adds `workspace` definition
-fn update_top_level_cargo_toml(
+/// - Adds dependencies
+/// - Adds `profile.release` = `panic = unwind`
+fn update_root_cargo_toml(
 	cargo_toml: &mut CargoToml,
-	workspace_members: Vec<&PathBuf>,
-	node_template_path: &Path,
+	members: &[String],
+	deps: Dependencies,
+	commit_id: &str,
 ) {
-	let mut panic_unwind = toml::value::Table::new();
-	panic_unwind.insert("panic".into(), "unwind".into());
+	let mut workspace = Table::new();
+	workspace.insert("members", value(Array::from_iter(members.iter())));
 
-	let mut profile = toml::value::Table::new();
-	profile.insert("release".into(), panic_unwind.into());
+	let mut workspace_dependencies = Table::new();
+	deps.values()
+		.flatten()
+		.sorted_by_key(|(name, _)| *name)
+		.for_each(|(name, dep)| {
+			if let Some(version) = &dep.version {
+				workspace_dependencies[name]["version"] = value(version);
+			}
+			if let Some(default_features) = dep.default_features {
+				workspace_dependencies[name]["default-features"] = value(default_features);
+			}
+			workspace_dependencies[name]["git"] = value(SUBSTRATE_GIT_URL);
+			workspace_dependencies[name]["rev"] = value(commit_id);
+		});
 
-	cargo_toml.insert("profile".into(), profile.into());
+	workspace.insert("dependencies", Item::Table(workspace_dependencies));
+	cargo_toml.insert("workspace", Item::Table(workspace));
 
-	let members = workspace_members
+	let mut panic_unwind = Table::new();
+	panic_unwind.insert("panic", value("unwind"));
+	let mut profile = Table::new();
+	profile.insert("release", Item::Table(panic_unwind));
+	cargo_toml.insert("profile", Item::Table(profile.into()));
+}
+
+fn process_root_cargo_toml(
+	root_cargo_toml_path: &Path,
+	root_deps: Dependencies,
+	cargo_tomls: &[PathBuf],
+	node_template_path: &PathBuf,
+	commit_id: &str,
+) {
+	let mut root_cargo_toml = parse_cargo_toml(root_cargo_toml_path);
+	let workspace_members = cargo_tomls
 		.iter()
 		.map(|p| {
 			p.strip_prefix(node_template_path)
@@ -165,16 +224,8 @@ fn update_top_level_cargo_toml(
 		})
 		.collect::<Vec<_>>();
 
-	let mut members_section = toml::value::Table::new();
-	members_section.insert("members".into(), members.into());
-
-	cargo_toml.insert("workspace".into(), members_section.into());
-}
-
-fn write_cargo_toml(path: &Path, cargo_toml: CargoToml) {
-	let content = toml::to_string_pretty(&cargo_toml).expect("Creates `Cargo.toml`");
-	let mut file = File::create(path).expect(&format!("Creates `{}`.", path.display()));
-	write!(file, "{}", content).expect("Writes `Cargo.toml`");
+	update_root_cargo_toml(&mut root_cargo_toml, &workspace_members, root_deps, commit_id);
+	write_cargo_toml(&root_cargo_toml_path, root_cargo_toml);
 }
 
 /// Build and test the generated node-template
@@ -211,8 +262,8 @@ fn build_and_test(path: &Path, cargo_tomls: &[PathBuf]) {
 fn main() {
 	let options = Options::parse();
 
+	// Copy node-template to a temp build dir.
 	let build_dir = tempfile::tempdir().expect("Creates temp build dir");
-
 	let node_template_folder = options
 		.node_template
 		.canonicalize()
@@ -220,46 +271,38 @@ fn main() {
 		.file_name()
 		.expect("Node template folder is last element of path")
 		.to_owned();
+	copy_node_template(&options.node_template, build_dir.path());
 
 	// The path to the node-template in the build dir.
 	let node_template_path = build_dir.path().join(node_template_folder);
+	let root_cargo_toml_path = node_template_path.join("Cargo.toml");
 
-	copy_node_template(&options.node_template, build_dir.path());
-	let mut cargo_tomls = find_cargo_tomls(build_dir.path().to_owned());
+	// Get all `Cargo.toml` files in the node-template
+	let mut cargo_tomls = find_cargo_tomls(&node_template_path);
 
-	let commit_id = get_git_commit_id(&options.node_template);
-	let top_level_cargo_toml_path = node_template_path.join("Cargo.toml");
-
-	// Check if top level Cargo.toml exists. If not, create one in the destination
-	if !cargo_tomls.contains(&top_level_cargo_toml_path) {
-		// create the top_level_cargo_toml
+	// Check if top level Cargo.toml exists. If not, create one in the destination,
+	// else remove it from the list, as this requires some special treatments.
+	if let Some(index) = cargo_tomls.iter().position(|x| *x == root_cargo_toml_path) {
+		cargo_tomls.remove(index);
+	} else {
 		OpenOptions::new()
 			.create(true)
 			.write(true)
-			.open(top_level_cargo_toml_path.clone())
+			.open(root_cargo_toml_path.clone())
 			.expect("Create root level `Cargo.toml` failed.");
-
-		// push into our data structure
-		cargo_tomls.push(PathBuf::from(top_level_cargo_toml_path.clone()));
 	}
 
-	cargo_tomls.iter().for_each(|t| {
-		let mut cargo_toml = parse_cargo_toml(&t);
-		replace_path_dependencies_with_git(&t, &commit_id, &mut cargo_toml);
+	// Process all `Cargo.toml` files.
+	let root_deps = process_cargo_tomls(&cargo_tomls);
+	process_root_cargo_toml(
+		&root_cargo_toml_path,
+		root_deps,
+		&cargo_tomls,
+		&node_template_path,
+		&get_git_commit_id(&options.node_template),
+	);
 
-		// Check if this is the top level `Cargo.toml`, as this requires some special treatments.
-		if top_level_cargo_toml_path == *t {
-			// All workspace member `Cargo.toml` file paths.
-			let workspace_members =
-				cargo_tomls.iter().filter(|p| **p != top_level_cargo_toml_path).collect();
-
-			update_top_level_cargo_toml(&mut cargo_toml, workspace_members, &node_template_path);
-		}
-
-		write_cargo_toml(&t, cargo_toml);
-	});
-
-	// adding root rustfmt to node template build path
+	// Add root rustfmt to node template build path.
 	let node_template_rustfmt_toml_path = node_template_path.join("rustfmt.toml");
 	let root_rustfmt_toml = &options.node_template.join("../../rustfmt.toml");
 	if root_rustfmt_toml.exists() {
@@ -276,4 +319,104 @@ fn main() {
 	let mut tar = tar::Builder::new(output);
 	tar.append_dir_all("substrate-node-template", node_template_path)
 		.expect("Writes substrate-node-template archive");
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_update_git_dependencies() {
+		let toml = r#"
+[dev-dependencies]
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+
+[dependencies]
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+sp-io = { version = "7.0.0", path = "../../../../primitives/io" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/system" }
+"#;
+		let mut cargo_toml = toml.parse::<CargoToml>().expect("invalid doc");
+		let actual_deps = update_git_dependencies(&mut cargo_toml, |_| true);
+
+		assert_eq!(actual_deps.len(), 3);
+		assert_eq!(actual_deps.get("dependencies").unwrap().len(), 2);
+		assert_eq!(actual_deps.get("dev-dependencies").unwrap().len(), 0);
+		assert_eq!(
+			actual_deps.get("dependencies").unwrap().get("sp-io").unwrap(),
+			&Dependency {
+				name: "sp-io".into(),
+				version: Some("7.0.0".into()),
+				default_features: None
+			}
+		);
+		assert_eq!(
+			actual_deps.get("dependencies").unwrap().get("frame-system").unwrap(),
+			&Dependency {
+				name: "frame-system".into(),
+				version: Some("4.0.0-dev".into()),
+				default_features: Some(false),
+			}
+		);
+
+		let expected_toml = r#"
+[dev-dependencies]
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+
+[dependencies]
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+sp-io = { workspace = true }
+frame-system = { workspace = true }
+"#;
+		assert_eq!(cargo_toml.to_string(), expected_toml);
+	}
+
+	#[test]
+	fn test_update_root_cargo_toml() {
+		let mut cargo_toml = CargoToml::new();
+		update_root_cargo_toml(
+			&mut cargo_toml,
+			&vec!["node".into(), "pallets/template".into(), "runtime".into()],
+			Dependencies::from([
+				(
+					"dependencies".into(),
+					HashMap::from([
+						(
+							"sp-io".into(),
+							Dependency {
+								name: "sp-io".into(),
+								version: Some("7.0.0".into()),
+								default_features: None,
+							},
+						),
+						(
+							"frame-system".into(),
+							Dependency {
+								name: "frame-system".into(),
+								version: Some("4.0.0-dev".into()),
+								default_features: Some(true),
+							},
+						),
+					]),
+				),
+				("dev-dependencies".into(), HashMap::new()),
+				("build-dependencies".into(), HashMap::new()),
+			]),
+			"commit_id",
+		);
+
+		let expected_toml = r#"[workspace]
+members = ["node", "pallets/template", "runtime"]
+
+[workspace.dependencies]
+frame-system = { version = "4.0.0-dev", default-features = true, git = "https://github.com/paritytech/substrate.git", rev = "commit_id" }
+sp-io = { version = "7.0.0", git = "https://github.com/paritytech/substrate.git", rev = "commit_id" }
+
+[profile]
+
+[profile.release]
+panic = "unwind"
+"#;
+		assert_eq!(cargo_toml.to_string(), expected_toml);
+	}
 }

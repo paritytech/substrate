@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,8 +40,8 @@ pub struct OnRuntimeUpgradeCmd {
 	/// Performing any checks will potentially invalidate the measured PoV/Weight.
 	// NOTE: The clap attributes make it backwards compatible with the previous `--checks` flag.
 	#[clap(long,
-		default_value = "None",
-		default_missing_value = "All",
+		default_value = "pre-and-post",
+		default_missing_value = "all",
 		num_args = 0..=1,
 		require_equals = true,
 		verbatim_doc_comment)]
@@ -62,7 +62,7 @@ where
 	HostFns: HostFunctions,
 {
 	let executor = build_executor(&shared);
-	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None).await?;
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 
 	let (_, encoded_result) = state_machine_call_with_proof::<Block, HostFns>(
 		&ext,

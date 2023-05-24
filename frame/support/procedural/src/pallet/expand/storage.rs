@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,9 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{
-	parse::storage::{Metadata, QueryKind, StorageDef, StorageGenerics},
-	Def,
+use crate::{
+	counter_prefix,
+	pallet::{
+		parse::storage::{Metadata, QueryKind, StorageDef, StorageGenerics},
+		Def,
+	},
 };
 use quote::ToTokens;
 use std::{collections::HashMap, ops::IndexMut};
@@ -37,12 +40,6 @@ fn counter_prefix_ident(storage_ident: &syn::Ident) -> syn::Ident {
 		&format!("_GeneratedCounterPrefixForStorage{}", storage_ident),
 		storage_ident.span(),
 	)
-}
-
-/// Generate the counter_prefix related to the storage.
-/// counter_prefix is used by counted storage map.
-fn counter_prefix(prefix: &str) -> String {
-	format!("CounterFor{}", prefix)
 }
 
 /// Check for duplicated storage prefixes. This step is necessary since users can specify an
@@ -272,6 +269,19 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 				Metadata::DoubleMap { .. } => (5, 6, 7),
 			};
 
+			if storage_def.use_default_hasher {
+				let hasher_indices: Vec<usize> = match storage_def.metadata {
+					Metadata::Map { .. } | Metadata::CountedMap { .. } => vec![1],
+					Metadata::DoubleMap { .. } => vec![1, 3],
+					_ => vec![],
+				};
+				for hasher_idx in hasher_indices {
+					args.args[hasher_idx] = syn::GenericArgument::Type(
+						syn::parse_quote!(#frame_support::Blake2_128Concat),
+					);
+				}
+			}
+
 			if query_idx < args.args.len() {
 				if let syn::GenericArgument::Type(query_kind) = args.args.index_mut(query_idx) {
 					set_result_query_type_parameter(query_kind)?;
@@ -374,10 +384,11 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
@@ -397,10 +408,11 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
@@ -422,10 +434,11 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
@@ -447,10 +460,11 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
@@ -474,10 +488,11 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
@@ -642,8 +657,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			#completed_where_clause
 		{
 			#[doc(hidden)]
-			pub fn storage_metadata() -> #frame_support::metadata::PalletStorageMetadata {
-				#frame_support::metadata::PalletStorageMetadata {
+			pub fn storage_metadata() -> #frame_support::metadata_ir::PalletStorageMetadataIR {
+				#frame_support::metadata_ir::PalletStorageMetadataIR {
 					prefix: <
 						<T as #frame_system::Config>::PalletInfo as
 						#frame_support::traits::PalletInfo

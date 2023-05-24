@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use asynchronous_codec::Framed;
 /// Notifications protocol.
 ///
 /// The Substrate notifications protocol consists in the following:
@@ -35,11 +34,15 @@ use asynchronous_codec::Framed;
 ///
 /// Notification substreams are unidirectional. If A opens a substream with B, then B is
 /// encouraged but not required to open a substream to A as well.
+use crate::types::ProtocolName;
+
+use asynchronous_codec::Framed;
 use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{upgrade, InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 use log::{error, warn};
-use sc_network_common::protocol::ProtocolName;
+use unsigned_varint::codec::UviBytes;
+
 use std::{
 	convert::Infallible,
 	io, mem,
@@ -47,7 +50,6 @@ use std::{
 	task::{Context, Poll},
 	vec,
 };
-use unsigned_varint::codec::UviBytes;
 
 /// Maximum allowed size of the two handshake messages, in bytes.
 const MAX_HANDSHAKE_SIZE: usize = 1024;
@@ -88,7 +90,8 @@ pub struct NotificationsInSubstream<TSubstream> {
 }
 
 /// State of the handshake sending back process.
-enum NotificationsInSubstreamHandshake {
+#[derive(Debug)]
+pub enum NotificationsInSubstreamHandshake {
 	/// Waiting for the user to give us the handshake message.
 	NotSent,
 	/// User gave us the handshake message. Trying to push it in the socket.
@@ -109,6 +112,13 @@ pub struct NotificationsOutSubstream<TSubstream> {
 	/// Substream where to send messages.
 	#[pin]
 	socket: Framed<TSubstream, UviBytes<io::Cursor<Vec<u8>>>>,
+}
+
+#[cfg(test)]
+impl<TSubstream> NotificationsOutSubstream<TSubstream> {
+	pub fn new(socket: Framed<TSubstream, UviBytes<io::Cursor<Vec<u8>>>>) -> Self {
+		Self { socket }
+	}
 }
 
 impl NotificationsIn {
@@ -193,6 +203,14 @@ impl<TSubstream> NotificationsInSubstream<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
+	#[cfg(test)]
+	pub fn new(
+		socket: Framed<TSubstream, UviBytes<io::Cursor<Vec<u8>>>>,
+		handshake: NotificationsInSubstreamHandshake,
+	) -> Self {
+		Self { socket, handshake }
+	}
+
 	/// Sends the handshake in order to inform the remote that we accept the substream.
 	pub fn send_handshake(&mut self, message: impl Into<Vec<u8>>) {
 		if !matches!(self.handshake, NotificationsInSubstreamHandshake::NotSent) {

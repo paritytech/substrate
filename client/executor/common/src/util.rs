@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -26,11 +26,7 @@ use std::ops::Range;
 /// Returns None if the end of the range would exceed some maximum offset.
 pub fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usize>> {
 	let end = offset.checked_add(len)?;
-	if end <= max {
-		Some(offset..end)
-	} else {
-		None
-	}
+	(end <= max).then(|| offset..end)
 }
 
 /// Provides safe memory access interface using an external buffer

@@ -12,6 +12,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+async-channel = "1.8.0"
 array-bytes = "4.1"
 fdlimit = "0.2.1"
 futures = "0.3.21"
@@ -27,6 +28,7 @@ sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/commo
 sc-executor = { version = "0.10.0-dev", path = "../../executor" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
 sc-network-common = { version = "0.10.0-dev", path = "../../network/common" }
+sc-network-sync = { version = "0.10.0-dev", path = "../../network/sync" }
 sc-service = { version = "0.10.0-dev", features = ["test-helpers"], path = "../../service" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }

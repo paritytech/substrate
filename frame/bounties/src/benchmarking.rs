@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,9 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller, BenchmarkError};
+use frame_benchmarking::v1::{
+	account, benchmarks_instance_pallet, whitelisted_caller, BenchmarkError,
+};
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;
 
@@ -55,9 +57,12 @@ fn setup_bounty<T: Config<I>, I: 'static>(
 	let fee = value / 2u32.into();
 	let deposit = T::BountyDepositBase::get() +
 		T::DataDepositPerByte::get() * T::MaximumReasonLength::get().into();
-	let _ = T::Currency::make_free_balance_be(&caller, deposit);
+	let _ = T::Currency::make_free_balance_be(&caller, deposit + T::Currency::minimum_balance());
 	let curator = account("curator", u, SEED);
-	let _ = T::Currency::make_free_balance_be(&curator, fee / 2u32.into());
+	let _ = T::Currency::make_free_balance_be(
+		&curator,
+		fee / 2u32.into() + T::Currency::minimum_balance(),
+	);
 	let reason = vec![0; d as usize];
 	(caller, curator, fee, value, reason)
 }
@@ -171,7 +176,8 @@ benchmarks_instance_pallet! {
 		let (caller, curator, fee, value, reason) = setup_bounty::<T, I>(0, 0);
 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T, I>::get() - 1;
-		let approve_origin = T::ApproveOrigin::successful_origin();
+		let approve_origin =
+			T::ApproveOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: close_bounty<T::RuntimeOrigin>(approve_origin, bounty_id)
 
 	close_bounty_active {
@@ -179,7 +185,8 @@ benchmarks_instance_pallet! {
 		let (curator_lookup, bounty_id) = create_bounty::<T, I>()?;
 		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 		let bounty_id = BountyCount::<T, I>::get() - 1;
-		let approve_origin = T::ApproveOrigin::successful_origin();
+		let approve_origin =
+			T::ApproveOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: close_bounty<T::RuntimeOrigin>(approve_origin, bounty_id)
 	verify {
 		assert_last_event::<T, I>(Event::BountyCanceled { index: bounty_id }.into())

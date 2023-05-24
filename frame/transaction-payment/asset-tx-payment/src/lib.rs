@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -42,7 +42,7 @@ use frame_support::{
 	dispatch::{DispatchInfo, DispatchResult, PostDispatchInfo},
 	traits::{
 		tokens::{
-			fungibles::{Balanced, CreditOf, Inspect},
+			fungibles::{Balanced, Credit, Inspect},
 			WithdrawConsequence,
 		},
 		IsType,
@@ -104,7 +104,7 @@ pub enum InitialPayment<T: Config> {
 	/// The initial fee was payed in the native currency.
 	Native(LiquidityInfoOf<T>),
 	/// The initial fee was payed in an asset.
-	Asset(CreditOf<T::AccountId, T::Fungibles>),
+	Asset(Credit<T::AccountId, T::Fungibles>),
 }
 
 pub use pallet::*;
@@ -124,7 +124,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::event]
@@ -134,8 +133,8 @@ pub mod pallet {
 		/// has been paid by `who` in an asset `asset_id`.
 		AssetTxFeePaid {
 			who: T::AccountId,
-			actual_fee: BalanceOf<T>,
-			tip: BalanceOf<T>,
+			actual_fee: AssetBalanceOf<T>,
+			tip: AssetBalanceOf<T>,
 			asset_id: Option<ChargeAssetIdOf<T>>,
 		},
 	}
@@ -160,7 +159,7 @@ where
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
 	BalanceOf<T>: Send + Sync + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
-	CreditOf<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
+	Credit<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
 {
 	/// Utility constructor. Used only in client/factory code.
 	pub fn from(tip: BalanceOf<T>, asset_id: Option<ChargeAssetIdOf<T>>) -> Self {
@@ -217,7 +216,7 @@ where
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
-	CreditOf<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
+	Credit<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
 {
 	const IDENTIFIER: &'static str = "ChargeAssetTxPayment";
 	type AccountId = T::AccountId;
@@ -284,18 +283,20 @@ where
 					let actual_fee = pallet_transaction_payment::Pallet::<T>::compute_actual_fee(
 						len as u32, info, post_info, tip,
 					);
-					T::OnChargeAssetTransaction::correct_and_deposit_fee(
-						&who,
-						info,
-						post_info,
-						actual_fee.into(),
-						tip.into(),
-						already_withdrawn.into(),
-					)?;
+
+					let (converted_fee, converted_tip) =
+						T::OnChargeAssetTransaction::correct_and_deposit_fee(
+							&who,
+							info,
+							post_info,
+							actual_fee.into(),
+							tip.into(),
+							already_withdrawn.into(),
+						)?;
 					Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
 						who,
-						actual_fee,
-						tip,
+						actual_fee: converted_fee,
+						tip: converted_tip,
 						asset_id,
 					});
 				},

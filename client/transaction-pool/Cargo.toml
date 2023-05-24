@@ -37,7 +37,7 @@ sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transact
 [dev-dependencies]
 array-bytes = "4.1"
 assert_matches = "1.3.0"
-criterion = "0.3"
+criterion = "0.4.0"
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
