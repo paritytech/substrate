@@ -283,6 +283,11 @@ where
 		RocksDbWeight::get().reads_writes(1, 1) + initial_reads_weight
 	}
 
+	/// Performs post-upgrade sanity checks:
+	///
+	/// 1. All expected locks were removed after the migration.
+	/// 2. There are no 'hanging' locks for this pallet in Balances.
+	/// 3. The reserved balance for each account has been reduced by the expected amount.
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(pre_migration_data_bytes: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
 		use pallet_balances::BalanceLock;
