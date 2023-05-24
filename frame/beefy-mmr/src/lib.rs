@@ -59,7 +59,7 @@ where
 	T: pallet_mmr::Config<Hash = sp_consensus_beefy::MmrRootHash>,
 	T: pallet_beefy::Config,
 {
-	fn on_new_root(root: &<T as pallet_mmr::Config>::Hash) {
+	fn on_new_root(root: &sp_consensus_beefy::MmrRootHash) {
 		let digest = sp_runtime::generic::DigestItem::Consensus(
 			sp_consensus_beefy::BEEFY_ENGINE_ID,
 			codec::Encode::encode(&sp_consensus_beefy::ConsensusLog::<
@@ -84,7 +84,7 @@ impl Convert<sp_consensus_beefy::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToE
 	}
 }
 
-type MerkleRootOf<T> = <T as pallet_mmr::Config>::Hash;
+type MerkleRootOf<T> = <<T as pallet_mmr::Config>::Hashing as sp_runtime::traits::Hash>::Output;
 
 #[frame_support::pallet]
 pub mod pallet {
