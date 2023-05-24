@@ -647,7 +647,7 @@ where
 			// they're still waiting to receive enough relaychain blocks to start producing blocks.
 			if let Some(started) = self.syncing_started {
 				if started.elapsed() < INITIAL_EVICTION_WAIT_PERIOD {
-					break
+					continue
 				}
 
 				// reset the peer activity timers so they don't expire right away after
