@@ -229,7 +229,7 @@ pub mod pallet {
 				type AccountId = AccountId;
 				type Lookup = IdentityLookup<AccountId>;
 				type BlockHashCount = frame_support::traits::ConstU64<10>;
-				type AccountData = u32;
+				type AccountData = ();
 				type OnNewAccount = ();
 				type OnKilledAccount = ();
 				type SystemWeightInfo = ();
