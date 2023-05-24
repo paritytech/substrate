@@ -486,7 +486,7 @@ pub trait CreateSignedTransaction<LocalCall>:
 		call: Self::OverarchingCall,
 		public: Self::Public,
 		account: Self::AccountId,
-		nonce: Self::Index,
+		nonce: Self::Nonce,
 	) -> Option<(Self::OverarchingCall, <Self::Extrinsic as ExtrinsicT>::SignaturePayload)>;
 }
 

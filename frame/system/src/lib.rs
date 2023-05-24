@@ -229,9 +229,8 @@ pub mod pallet {
 			+ Debug
 			+ From<Call<Self>>;
 
-		/// Account index (aka nonce) type. This stores the number of previous transactions
-		/// associated with a sender account.
-		type Index: Parameter
+		/// This stores the number of previous transactions associated with a sender account.
+		type Nonce: Parameter
 			+ Member
 			+ MaybeSerializeDeserialize
 			+ Debug
@@ -528,7 +527,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		AccountInfo<T::Index, T::AccountData>,
+		AccountInfo<T::Nonce, T::AccountData>,
 		ValueQuery,
 	>;
 
@@ -1533,13 +1532,13 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Retrieve the account transaction counter from storage.
-	pub fn account_nonce(who: impl EncodeLike<T::AccountId>) -> T::Index {
+	pub fn account_nonce(who: impl EncodeLike<T::AccountId>) -> T::Nonce {
 		Account::<T>::get(who).nonce
 	}
 
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_nonce(who: impl EncodeLike<T::AccountId>) {
-		Account::<T>::mutate(who, |a| a.nonce += T::Index::one());
+		Account::<T>::mutate(who, |a| a.nonce += T::Nonce::one());
 	}
 
 	/// Note what the extrinsic data of the current extrinsic index is.
@@ -1595,7 +1594,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// An account is being created.
-	pub fn on_created_account(who: T::AccountId, _a: &mut AccountInfo<T::Index, T::AccountData>) {
+	pub fn on_created_account(who: T::AccountId, _a: &mut AccountInfo<T::Nonce, T::AccountData>) {
 		T::OnNewAccount::on_new_account(&who);
 		Self::deposit_event(Event::NewAccount { account: who });
 	}
