@@ -1606,7 +1606,6 @@ parameter_types! {
 	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
 	pub NewAssetSymbol: BoundedVec<u8, StringLimit> = (*b"FRAC").to_vec().try_into().unwrap();
 	pub NewAssetName: BoundedVec<u8, StringLimit> = (*b"Frac").to_vec().try_into().unwrap();
-	pub const NftFractionalizationHoldReason: HoldReason = HoldReason::NftFractionalization;
 }
 
 impl pallet_nft_fractionalization::Config for Runtime {
@@ -1624,7 +1623,7 @@ impl pallet_nft_fractionalization::Config for Runtime {
 	type Nfts = Nfts;
 	type PalletId = NftFractionalizationPalletId;
 	type WeightInfo = pallet_nft_fractionalization::weights::SubstrateWeight<Runtime>;
-	type HoldReason = NftFractionalizationHoldReason;
+	type RuntimeHoldReason = RuntimeHoldReason;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();
 }
