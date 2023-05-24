@@ -79,9 +79,11 @@ pub fn expand_outer_config(
 		}
 
 		// TODO [#14065]
-		// - deprecate it
+		// - remove the deprecation attribute before merging the PR
+		// - deprecate it (for real)
 		// - later, remove it
 		#[cfg(any(feature = "std", test))]
+		#[deprecated(note = "Use `RuntimeGenesisConfig` instead")] // just to make sure CI passes before merging the PR
 		pub type GenesisConfig = RuntimeGenesisConfig;
 
 		#[cfg(any(feature = "std", test))]
