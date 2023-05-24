@@ -15,19 +15,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This migration unlocks all `Voter` and `SeatHolder` `stake`s, and unreserves all `Voter` and
-//! `SeatHolder` `deposit`s.
+//! A migration that unreserves all deposit and unlocks all stake held in the context of this
+//! pallet.
 
-use codec::{Decode, Encode};
 use core::iter::Sum;
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::{
+	traits::{LockableCurrency, OnRuntimeUpgrade, ReservableCurrency},
+	weights::constants::RocksDbWeight,
+};
+use sp_core::Get;
+use sp_runtime::traits::Zero;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+
+#[cfg(feature = "try-runtime")]
+use codec::{Decode, Encode};
 
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
-#[cfg(feature = "try-runtime")]
-use sp_std::collections::btree_map::BTreeMap;
-#[cfg(feature = "try-runtime")]
-use sp_std::vec::Vec;
 
 #[cfg(feature = "try-runtime")]
 #[derive(Debug, Encode, Decode)]
@@ -36,6 +40,14 @@ struct PreMigrationData<T: frame_system::Config + pallet_balances::Config> {
 	account_reserved_before: BTreeMap<T::AccountId, T::Balance>,
 }
 
+/// A migration that unreserves all deposit and unlocks all stake held in the context of this
+/// pallet.
+///
+/// Useful to prevent funds from being locked up when the pallet is being deprecated.
+///
+/// The pallet should be made inoperable before or immediately after this migration is run.
+///
+/// (See also the `RemovePallet` migration in `frame/support/src/migrations.rs`)
 pub struct UnlockAndUnreserveAllFunds<T: crate::Config + pallet_balances::Config>(
 	sp_std::marker::PhantomData<T>,
 );
@@ -62,15 +74,20 @@ where
 	///
 	/// # Returns
 	///
-	/// This function returns a tuple of two `BTreeMap` collections:
+	/// This function returns a tuple of two `BTreeMap` collections and the weight of the reads:
 	///
 	/// * `BTreeMap<T::AccountId, T::Balance>`: Map of account IDs to their respective total deposit
 	///   sums.
 	/// * `BTreeMap<T::AccountId, T::Balance>`: Map of account IDs to their respective total staked
 	///   sums.
-	fn get_account_deposited_and_staked_sums(
-	) -> (BTreeMap<T::AccountId, T::Balance>, BTreeMap<T::AccountId, T::Balance>) {
-		use sp_runtime::{traits::Zero, SaturatedConversion};
+	/// * frame_support::weights::Weight
+	fn get_account_deposited_and_staked_sums() -> (
+		BTreeMap<T::AccountId, T::Balance>,
+		BTreeMap<T::AccountId, T::Balance>,
+		frame_support::weights::Weight,
+	) {
+		use sp_runtime::SaturatedConversion;
+
 		let members = crate::Members::<T>::get();
 		let runner_ups = crate::RunnersUp::<T>::get();
 		let candidates = crate::Candidates::<T>::get();
@@ -80,7 +97,7 @@ where
 		// Get the total amount deposited (Members, RunnerUps, Candidates and Voters all can have
 		// deposits).
 		let account_deposited_sums: BTreeMap<T::AccountId, T::Balance> = members
-			// Massage all data into (account_id, deposit) tuples.
+			// Massage all data structures into (account_id, deposit) tuples.
 			.iter()
 			.chain(runner_ups.iter())
 			.map(|member| (member.who.clone(), member.deposit.into()))
@@ -107,24 +124,20 @@ where
 				acc
 			});
 
-		(account_deposited_sums, account_staked_sums)
+		(account_deposited_sums, account_staked_sums, RocksDbWeight::get().writes(1))
 	}
 
-	/// Helper function for returning the actual locked amount of an account under the ID of this
+	/// Helper function for returning the locked amount of an account under the ID of this
 	/// pallet.
-	///
-	/// If there is no locked amount, returns zero.
 	#[cfg(feature = "try-runtime")]
-	fn get_actual_locked_amount(account: T::AccountId) -> T::Balance {
+	fn get_actual_locked_amount(account: T::AccountId) -> Option<T::Balance> {
 		use pallet_balances::Locks;
-		use sp_core::Get;
-		use sp_runtime::{traits::Zero, SaturatedConversion};
+		use sp_runtime::SaturatedConversion;
 
 		Locks::<T>::get(account.clone())
 			.iter()
 			.find(|l| l.id == T::PalletId::get())
 			.map(|lock| lock.amount.saturated_into::<T::Balance>())
-			.unwrap_or(Zero::zero())
 	}
 }
 
@@ -135,16 +148,30 @@ where
 			<T as frame_system::Config>::AccountId,
 		>>::Balance,
 	>,
+	<<T as crate::Config>::Currency as frame_support::traits::Currency<
+		<T as frame_system::Config>::AccountId,
+	>>::Balance: From<<T as pallet_balances::Config>::Balance>,
 	<T as pallet_balances::Config>::Balance: Sum<<T as pallet_balances::Config>::Balance>,
 {
+	/// Collects pre-migration data useful for validating the migration was successful, and also
+	/// checks the integrity of deposited and reserved balances.
+	///
+	/// This function performs the following steps:
+	/// 1. Gets the deposited and staked balances for each account stored in this pallet.
+	/// 2. Collects actual pre-migration locked and reserved balances for each account.
+	/// 3. Checks the integrity of the deposited and reserved balances.
+	/// 4. Prints summary statistics about the state to be migrated.
+	/// 5. Encodes and returns pre-migration data to be used in post_upgrade.
+	///
+	/// Fails with a `TryRuntimeError` if there's a discrepancy between the amount
+	/// reported as staked by the pallet and the amount actually locked in `Balances`.
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
-		use frame_support::traits::ReservableCurrency;
-		use sp_runtime::{traits::Zero, SaturatedConversion};
+		use sp_runtime::SaturatedConversion;
 		use sp_std::collections::btree_set::BTreeSet;
 
 		// Get staked and deposited balances as reported by this pallet.
-		let (account_deposited_sums, account_staked_sums) =
+		let (account_deposited_sums, account_staked_sums, _) =
 			Self::get_account_deposited_and_staked_sums();
 
 		// Now get the *actual* locked and reserved amounts for each account before the migration,
@@ -157,7 +184,12 @@ where
 
 		let account_locked_before: BTreeMap<T::AccountId, T::Balance> = all_accounts
 			.iter()
-			.map(|account| (account.clone(), Self::get_actual_locked_amount(account.clone())))
+			.map(|account| {
+				(
+					account.clone(),
+					Self::get_actual_locked_amount(account.clone()).unwrap_or(Zero::zero()),
+				)
+			})
 			.collect();
 
 		let account_reserved_before: BTreeMap<T::AccountId, T::Balance> = all_accounts
@@ -206,17 +238,81 @@ where
 	}
 
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		log::info!("on_runtime_upgrade");
-		todo!()
+		// Get staked and deposited balances as reported by this pallet.
+		let (account_deposited_sums, account_staked_sums, initial_reads_weight) =
+			Self::get_account_deposited_and_staked_sums();
+
+		// Deposited funds need to be unreserved.
+		for (account, unreserve_amount) in account_deposited_sums {
+			if unreserve_amount.is_zero() {
+				continue
+			}
+			T::Currency::unreserve(&account, unreserve_amount.into());
+		}
+
+		// Staked funds need to be unlocked.
+		for (account, amount) in account_staked_sums {
+			if amount.is_zero() {
+				continue
+			}
+			// Question for reviewers:
+			// remove_lock triggers a few
+			// `ERROR main runtime::system: Logic error: Unexpected underflow in reducing consumer`
+			// errors. are they safe to ignore?
+			//
+			// I have verified that a non-zero lock always exists before remove_lock is called.
+			T::Currency::remove_lock(T::PalletId::get(), &account);
+		}
+
+		// Question for reviewers: how do I know the weight of the unreserve & remove_lock calls?
+		RocksDbWeight::get().reads_writes(1, 1) + initial_reads_weight
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(pre_migration_data_bytes: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
+		use pallet_balances::BalanceLock;
+		use sp_runtime::{Saturating, WeakBoundedVec};
+
 		let pre_migration_data = PreMigrationData::<T>::decode(&mut &pre_migration_data_bytes[..])
 			.map_err(|_| "Failed to decode pre-migration data")?;
 
-		log::info!("{:?}", pre_migration_data.account_locked_before);
-		log::info!("{:?}", pre_migration_data.account_reserved_before);
+		// Get staked and deposited balances as reported by this pallet.
+		let (account_deposited_sums, account_staked_sums, _) =
+			Self::get_account_deposited_and_staked_sums();
+
+		// Check that all expected locks were removed.
+		account_staked_sums.iter().for_each(|(acc, _)| {
+			assert_eq!(Self::get_actual_locked_amount(acc.clone()), None, "Lock still exists!");
+		});
+
+		// Extra sanity check to ensure there're no 'hanging' locks.
+		pallet_balances::Locks::<T>::iter().for_each(|(_, lock_vec)| {
+			let lock_vec: WeakBoundedVec<BalanceLock<T::Balance>, T::MaxLocks> = lock_vec;
+			for lock in lock_vec {
+				assert!(lock.id != T::PalletId::get(), "Locks still exist for this pallet!");
+			}
+		});
+
+		// Check that the reserved balance is reduced by the expected deposited amount.
+		for (account, actual_reserved_before) in pre_migration_data.account_reserved_before {
+			let actual_reserved_after = T::Currency::reserved_balance(&account);
+			let expected_amount_deducted = account_deposited_sums
+				.get(&account)
+				.unwrap_or(&Zero::zero())
+				.min(&actual_reserved_before)
+				.clone();
+			let expected_reserved_after =
+				actual_reserved_before.saturating_sub(expected_amount_deducted);
+			assert!(
+				actual_reserved_after == expected_reserved_after.into(),
+				"Reserved balance for {:?} is incorrect. actual before: {:?}, actual after, {:?}, expected deducted: {:?}",
+				account,
+				actual_reserved_before,
+				actual_reserved_after,
+				expected_amount_deducted,
+			);
+		}
+
 		Ok(())
 	}
 }
