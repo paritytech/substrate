@@ -18,7 +18,7 @@
 //! Benchmarks for the bags list pallet.
 
 use super::*;
-use crate::List;
+use crate::list::List;
 use frame_benchmarking::v1::{
 	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
 };

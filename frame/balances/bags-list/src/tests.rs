@@ -19,7 +19,7 @@ use frame_support::{assert_noop, assert_ok, assert_storage_noop, traits::Integri
 
 use super::*;
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
-use crate::{Bag, Node};
+use list::Bag;
 use mock::{test_utils::*, *};
 
 mod pallet {
@@ -153,7 +153,7 @@ mod pallet {
 	#[test]
 	fn wrong_rebag_errs() {
 		ExtBuilder::default().build_and_execute(|| {
-			let node_3 = Node::<Runtime>::get(&3).unwrap();
+			let node_3 = list::Node::<Runtime>::get(&3).unwrap();
 			// when account 3 is _not_ misplaced with score 500
 			NextVoteWeight::set(500);
 			assert!(!node_3.is_misplaced(500));
@@ -412,7 +412,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
-			assert!(!List::<Runtime>::contains(&5));
+			assert!(!ListNodes::<Runtime>::contains_key(5));
 
 			// then
 			assert_noop!(
@@ -426,7 +426,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
-			assert!(!List::<Runtime>::contains(&5));
+			assert!(!ListNodes::<Runtime>::contains_key(5));
 
 			// then
 			assert_noop!(
@@ -612,15 +612,15 @@ mod sorted_list_provider {
 	#[test]
 	fn on_remove_works() {
 		let ensure_left = |id, counter| {
-			assert!(!List::<Runtime>::contains(id));
+			assert!(!ListNodes::<Runtime>::contains_key(id));
 			assert_eq!(BagsList::count(), counter);
-			assert_eq!(List::<Runtime>::count(), counter);
-			assert_eq!(List::<Runtime>::iter().count() as u32, counter);
+			assert_eq!(ListNodes::<Runtime>::count(), counter);
+			assert_eq!(ListNodes::<Runtime>::iter().count() as u32, counter);
 		};
 
 		ExtBuilder::default().build_and_execute(|| {
 			// it is a noop removing a non-existent id
-			assert!(!List::<Runtime>::contains(&42));
+			assert!(!ListNodes::<Runtime>::contains_key(42));
 			assert_noop!(BagsList::on_remove(&42), ListError::NodeNotFound);
 
 			// when removing a node from a bag with multiple nodes
@@ -629,7 +629,7 @@ mod sorted_list_provider {
 			// then
 			assert_eq!(get_list_as_ids(), vec![3, 4, 1]);
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![3, 4])]);
-			ensure_left(&2, 3);
+			ensure_left(2, 3);
 
 			// when removing a node from a bag with only one node
 			BagsList::on_remove(&1).unwrap();
@@ -637,17 +637,17 @@ mod sorted_list_provider {
 			// then
 			assert_eq!(get_list_as_ids(), vec![3, 4]);
 			assert_eq!(List::<Runtime>::get_bags(), vec![(1_000, vec![3, 4])]);
-			ensure_left(&1, 2);
+			ensure_left(1, 2);
 
 			// when removing all remaining ids
 			BagsList::on_remove(&4).unwrap();
 			assert_eq!(get_list_as_ids(), vec![3]);
-			ensure_left(&4, 1);
+			ensure_left(4, 1);
 			BagsList::on_remove(&3).unwrap();
 
 			// then the storage is completely cleaned up
 			assert_eq!(get_list_as_ids(), Vec::<AccountId>::new());
-			ensure_left(&3, 0);
+			ensure_left(3, 0);
 		});
 	}
 

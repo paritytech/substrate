@@ -56,22 +56,24 @@
 use codec::FullCodec;
 use frame_election_provider_support::{ScoreProvider, SortedListProvider};
 use frame_system::ensure_signed;
-use sp_runtime::traits::{AtLeast32BitUnsigned, StaticLookup};
+use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded, StaticLookup};
 use sp_std::prelude::*;
-use bags_list::*;
+
+#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
+use sp_runtime::TryRuntimeError;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
 
+mod list;
 pub mod migrations;
 #[cfg(any(test, feature = "fuzz"))]
 pub mod mock;
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod tests_bags_list;
 pub mod weights;
 
+pub use list::{notional_bag_for, Bag, List, ListError, Node};
 pub use pallet::*;
 pub use weights::WeightInfo;
 
@@ -93,9 +95,6 @@ macro_rules! log {
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
-use frame_support::pallet_macros::*;
-
-#[import_section(bags_list)]
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -179,6 +178,20 @@ pub mod pallet {
 			+ MaxEncodedLen;
 	}
 
+	/// A single node, within some bag.
+	///
+	/// Nodes store links forward and back within their respective bags.
+	#[pallet::storage]
+	pub(crate) type ListNodes<T: Config<I>, I: 'static = ()> =
+		CountedStorageMap<_, Twox64Concat, T::AccountId, list::Node<T, I>>;
+
+	/// A bag stored in storage.
+	///
+	/// Stores a `Bag` struct, which stores head and tail pointers to itself.
+	#[pallet::storage]
+	pub(crate) type ListBags<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::Score, list::Bag<T, I>>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -250,18 +263,14 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn integrity_test() {
 			// ensure they are strictly increasing, this also implies that duplicates are detected.
-			for window in T::BagThresholds::get().windows(2) {
-				assert!(window[1] > window[0], "thresholds must strictly increase, and have no duplicates");
-			}
-			// FAIL-CI: Following snippet fails under `import_section` but above snippet works
-			// assert!(
-			// 	T::BagThresholds::get().windows(2).all(|window| window[1] > window[0]),
-			// 	"thresholds must strictly increase, and have no duplicates",
-			// );
+			assert!(
+				T::BagThresholds::get().windows(2).all(|window| window[1] > window[0]),
+				"thresholds must strictly increase, and have no duplicates",
+			);
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
+		fn try_state(_: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 			<Self as SortedListProvider<T::AccountId>>::try_state()
 		}
 	}
@@ -269,7 +278,7 @@ pub mod pallet {
 
 #[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn do_try_state() -> Result<(), &'static str> {
+	pub fn do_try_state() -> Result<(), TryRuntimeError> {
 		List::<T, I>::do_try_state()
 	}
 }
@@ -283,7 +292,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		new_score: T::Score,
 	) -> Result<Option<(T::Score, T::Score)>, ListError> {
 		// If no voter at that node, don't do anything. the caller just wasted the fee to call this.
-		let node = Node::<T, I>::get(&account).ok_or(ListError::NodeNotFound)?;
+		let node = list::Node::<T, I>::get(&account).ok_or(ListError::NodeNotFound)?;
 		let maybe_movement = List::update_position_for(node, new_score);
 		if let Some((from, to)) = maybe_movement {
 			Self::deposit_event(Event::<T, I>::Rebagged { who: account.clone(), from, to });
@@ -292,7 +301,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(maybe_movement)
 	}
 
-
+	/// Equivalent to `ListBags::get`, but public. Useful for tests in outside of this crate.
+	#[cfg(feature = "std")]
+	pub fn list_bags_get(score: T::Score) -> Option<list::Bag<T, I>> {
+		ListBags::get(score)
+	}
 }
 
 impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I> {
@@ -311,7 +324,7 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 	}
 
 	fn count() -> u32 {
-		List::<T, I>::count()
+		ListNodes::<T, I>::count()
 	}
 
 	fn contains(id: &T::AccountId) -> bool {
@@ -345,7 +358,7 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn try_state() -> Result<(), &'static str> {
+	fn try_state() -> Result<(), TryRuntimeError> {
 		Self::do_try_state()
 	}
 
@@ -360,7 +373,7 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		fn score_update_worst_case(who: &T::AccountId, is_increase: bool) -> Self::Score {
 			use frame_support::traits::Get as _;
 			let thresholds = T::BagThresholds::get();
-			let node = Node::<T, I>::get(who).unwrap();
+			let node = list::Node::<T, I>::get(who).unwrap();
 			let current_bag_idx = thresholds
 				.iter()
 				.chain(sp_std::iter::once(&T::Score::max_value()))
@@ -387,7 +400,7 @@ impl<T: Config<I>, I: 'static> ScoreProvider<T::AccountId> for Pallet<T, I> {
 		Node::<T, I>::get(id).map(|node| node.score()).unwrap_or_default()
 	}
 
-	frame_election_provider_support::runtime_benchmarks_or_fuzz_enabled! {
+	frame_election_provider_support::runtime_benchmarks_fuzz_or_std_enabled! {
 		fn set_score_of(id: &T::AccountId, new_score: T::Score) {
 			ListNodes::<T, I>::mutate(id, |maybe_node| {
 				if let Some(node) = maybe_node.as_mut() {
