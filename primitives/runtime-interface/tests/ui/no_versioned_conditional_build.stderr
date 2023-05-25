@@ -1,0 +1,5 @@
+error: Conditional compilation is not supported for versioned functions
+ --> tests/ui/no_versioned_conditional_build.rs:4:7
+  |
+4 | trait Test {
+  |       ^^^^

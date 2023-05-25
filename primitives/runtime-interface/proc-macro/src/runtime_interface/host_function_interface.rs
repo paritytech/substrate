@@ -336,6 +336,12 @@ fn generate_host_function_implementation(
 		.filter(|a| a.path().is_ident("cfg"))
 		.map(|a| a.clone())
 		.collect();
+	if version > 1 && !cfg_attrs.is_empty() {
+		return Err(Error::new(
+			trait_name.span(),
+			"Conditional compilation is not supported for versioned functions",
+		))
+	}
 
 	let implementation = quote! {
 		#(#cfg_attrs)*
