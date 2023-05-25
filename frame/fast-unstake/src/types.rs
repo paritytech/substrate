@@ -23,7 +23,7 @@ use frame_support::{
 	traits::Currency, BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
-use sp_staking::EraIndex;
+use sp_staking::{EraIndex, StakingInterface};
 use sp_std::prelude::*;
 
 /// Maximum number of eras that we might check for a single staker.
