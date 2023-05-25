@@ -334,7 +334,7 @@ fn generate_host_function_implementation(
 		.attrs
 		.iter()
 		.filter(|a| a.path().is_ident("cfg"))
-		.map(|a| a.clone())
+		.cloned()
 		.collect();
 	if version > 1 && !cfg_attrs.is_empty() {
 		return Err(Error::new(
