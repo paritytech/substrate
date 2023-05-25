@@ -1694,7 +1694,7 @@ impl pallet_nft_fractionalization::Config for Runtime {
 	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
-	type AssetId = <Self as pallet_assets::Config>::AssetId;
+	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type Assets = Assets;
 	type Nfts = Nfts;
 	type PalletId = NftFractionalizationPalletId;
@@ -2384,7 +2384,7 @@ impl_runtime_apis! {
 		}
 
 		fn get_reserves(asset1: NativeOrAssetId<u32>, asset2: NativeOrAssetId<u32>) -> Option<(Balance, Balance)> {
-			AssetConversion::get_reserves(asset1, asset2).ok()
+			AssetConversion::get_reserves(&asset1, &asset2).ok()
 		}
 	}
 
