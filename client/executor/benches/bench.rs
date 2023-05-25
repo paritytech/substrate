@@ -25,7 +25,6 @@ use sc_executor_common::{
 };
 use sc_executor_wasmtime::InstantiationStrategy;
 use sc_runtime_test::wasm_binary_unwrap as test_runtime;
-use sp_wasm_interface::HostFunctions as _;
 use std::sync::{
 	atomic::{AtomicBool, AtomicUsize, Ordering},
 	Arc,
