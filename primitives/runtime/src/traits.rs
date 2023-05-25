@@ -711,6 +711,7 @@ pub trait HashOutput: Member
 + AsRef<[u8]>
 + AsMut<[u8]>
 + Copy
++ Ord
 + Default
 + Encode
 + Decode
@@ -727,6 +728,7 @@ impl <T> HashOutput for T
 	+ AsRef<[u8]>
 	+ AsMut<[u8]>
 	+ Copy
+	+ Ord
 	+ Default
 	+ Encode
 	+ Decode
