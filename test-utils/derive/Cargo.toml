@@ -13,7 +13,7 @@ publish = false
 proc-macro-crate = "1.1.3"
 proc-macro2 = "1.0.56"
 quote = "1.0.26"
-syn = { version = "2.0.14", features = ["full"] }
+syn = { version = "2.0.16", features = ["full"] }
 
 [lib]
 proc-macro = true

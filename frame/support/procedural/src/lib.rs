@@ -296,6 +296,8 @@ fn counter_prefix(prefix: &str) -> String {
 /// }
 /// ```
 #[proc_macro]
+#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead.
+	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::decl_storage_impl(input)
 }
@@ -466,7 +468,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 ///   storage types. This is equivalent to specifying `#[pallet::unbounded]` on all storage type
 ///   definitions.
 /// * Storage hashers no longer need to be specified and can be replaced by `_`. In dev mode, these
-///   will be replaced by `Blake2_128Concat`.
+///   will be replaced by `Blake2_128Concat`. In case of explicit key-binding, `Hasher` can simply
+///   be ignored when in `dev_mode`.
 ///
 /// Note that the `dev_mode` argument can only be supplied to the `#[pallet]` or
 /// `#[frame_support::pallet]` attribute macro that encloses your pallet module. This argument
@@ -646,12 +649,13 @@ pub fn derive_debug_no_bound(input: TokenStream) -> TokenStream {
 }
 
 /// Derive [`Debug`], if `std` is enabled it uses `frame_support::DebugNoBound`, if `std` is not
-/// enabled it just returns `"<stripped>"`.
+/// enabled it just returns `"<wasm:stripped>"`.
 /// This behaviour is useful to prevent bloating the runtime WASM blob from unneeded code.
 #[proc_macro_derive(RuntimeDebugNoBound)]
 pub fn derive_runtime_debug_no_bound(input: TokenStream) -> TokenStream {
-	#[cfg(not(feature = "std"))]
-	{
+	if cfg!(any(feature = "std", feature = "try-runtime")) {
+		debug_no_bound::derive_debug_no_bound(input)
+	} else {
 		let input: syn::DeriveInput = match syn::parse(input) {
 			Ok(input) => input,
 			Err(e) => return e.to_compile_error().into(),
@@ -664,17 +668,12 @@ pub fn derive_runtime_debug_no_bound(input: TokenStream) -> TokenStream {
 			const _: () = {
 				impl #impl_generics core::fmt::Debug for #name #ty_generics #where_clause {
 					fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
-						fmt.write_str("<stripped>")
+						fmt.write_str("<wasm:stripped>")
 					}
 				}
 			};
 		)
 		.into()
-	}
-
-	#[cfg(feature = "std")]
-	{
-		debug_no_bound::derive_debug_no_bound(input)
 	}
 }
 
@@ -864,24 +863,6 @@ pub fn disable_frame_system_supertrait_check(_: TokenStream, _: TokenStream) -> 
 /// definition.
 #[proc_macro_attribute]
 pub fn generate_store(_: TokenStream, _: TokenStream) -> TokenStream {
-	pallet_macro_stub()
-}
-
-/// To generate the full storage info (used for PoV calculation) use the attribute
-/// `#[pallet::generate_storage_info]`, e.g.:
-///
-/// ```ignore
-/// #[pallet::pallet]
-/// #[pallet::generate_storage_info]
-/// pub struct Pallet<T>(_);
-/// ```
-///
-/// This requires all storage items to implement the trait `StorageInfoTrait`, thus all keys
-/// and value types must be bound by `MaxEncodedLen`. Individual storages can opt-out from this
-/// constraint by using [`#[pallet::unbounded]`](`macro@unbounded`) (see
-/// [`#[pallet::storage]`](`macro@storage`) for more info).
-#[proc_macro_attribute]
-pub fn generate_storage_info(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 

@@ -25,6 +25,11 @@ pub mod v1 {
 	use sp_staking::EraIndex;
 	use sp_std::prelude::*;
 
+	#[cfg(feature = "try-runtime")]
+	use frame_support::ensure;
+	#[cfg(feature = "try-runtime")]
+	use sp_runtime::TryRuntimeError;
+
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
 		fn on_runtime_upgrade() -> Weight {
@@ -65,14 +70,20 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			assert_eq!(Pallet::<T>::on_chain_storage_version(), 0);
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+			ensure!(
+				Pallet::<T>::on_chain_storage_version() == 0,
+				"The onchain storage version must be zero for the migration to execute."
+			);
 			Ok(Default::default())
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
-			assert_eq!(Pallet::<T>::on_chain_storage_version(), 1);
+		fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
+			ensure!(
+				Pallet::<T>::on_chain_storage_version() == 1,
+				"The onchain version must be updated after the migration."
+			);
 			Ok(())
 		}
 	}
