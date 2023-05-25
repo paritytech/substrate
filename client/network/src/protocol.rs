@@ -26,10 +26,10 @@ use bytes::Bytes;
 use codec::{DecodeAll, Encode};
 use futures::{channel::oneshot, stream::FuturesUnordered, StreamExt};
 use libp2p::{
-	core::connection::ConnectionId,
+	core::Endpoint,
 	swarm::{
-		behaviour::FromSwarm, ConnectionHandler, IntoConnectionHandler, NetworkBehaviour,
-		NetworkBehaviourAction, PollParameters,
+		behaviour::FromSwarm, ConnectionDenied, ConnectionId, NetworkBehaviour, PollParameters,
+		THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
 	},
 	Multiaddr, PeerId,
 };
@@ -102,6 +102,7 @@ impl<B: BlockT> Protocol<B> {
 	pub fn new(
 		roles: Roles,
 		network_config: &config::NetworkConfiguration,
+		notification_protocols: Vec<config::NonDefaultSetConfig>,
 		block_announces_protocol: config::NonDefaultSetConfig,
 		tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
 	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
@@ -109,7 +110,7 @@ impl<B: BlockT> Protocol<B> {
 
 		let (peerset, peerset_handle) = {
 			let mut sets =
-				Vec::with_capacity(NUM_HARDCODED_PEERSETS + network_config.extra_sets.len());
+				Vec::with_capacity(NUM_HARDCODED_PEERSETS + notification_protocols.len());
 
 			let mut default_sets_reserved = HashSet::new();
 			for reserved in network_config.default_peers_set.reserved_nodes.iter() {
@@ -135,7 +136,7 @@ impl<B: BlockT> Protocol<B> {
 					NonReservedPeerMode::Deny,
 			});
 
-			for set_cfg in &network_config.extra_sets {
+			for set_cfg in &notification_protocols {
 				let mut reserved_nodes = HashSet::new();
 				for reserved in set_cfg.set_config.reserved_nodes.iter() {
 					reserved_nodes.insert(reserved.peer_id);
@@ -169,7 +170,7 @@ impl<B: BlockT> Protocol<B> {
 					handshake: block_announces_protocol.handshake.as_ref().unwrap().to_vec(),
 					max_notification_size: block_announces_protocol.max_notification_size,
 				})
-				.chain(network_config.extra_sets.iter().map(|s| notifications::ProtocolConfig {
+				.chain(notification_protocols.iter().map(|s| notifications::ProtocolConfig {
 					name: s.notifications_protocol.clone(),
 					fallback_names: s.fallback_names.clone(),
 					handshake: s.handshake.as_ref().map_or(roles.encode(), |h| (*h).to_vec()),
@@ -182,7 +183,7 @@ impl<B: BlockT> Protocol<B> {
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
 			notification_protocols: iter::once(block_announces_protocol.notifications_protocol)
-				.chain(network_config.extra_sets.iter().map(|s| s.notifications_protocol.clone()))
+				.chain(notification_protocols.iter().map(|s| s.notifications_protocol.clone()))
 				.collect(),
 			bad_handshake_substreams: Default::default(),
 			peers: HashMap::new(),
@@ -256,8 +257,8 @@ impl<B: BlockT> Protocol<B> {
 	}
 
 	/// Returns the list of reserved peers.
-	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
-		self.behaviour.reserved_peers(HARDCODED_PEERSETS_SYNC)
+	pub fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
+		self.behaviour.reserved_peers(HARDCODED_PEERSETS_SYNC, pending_response);
 	}
 
 	/// Adds a `PeerId` to the list of reserved peers for syncing purposes.
@@ -309,39 +310,13 @@ impl<B: BlockT> Protocol<B> {
 		}
 	}
 
-	/// Notify the protocol that we have learned about the existence of nodes on the default set.
+	/// Notify the protocol that we have learned about the existence of some peer.
 	///
-	/// Can be called multiple times with the same `PeerId`s.
-	pub fn add_default_set_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
-		for peer_id in peer_ids {
-			self.peerset_handle.add_to_peers_set(HARDCODED_PEERSETS_SYNC, peer_id);
-		}
-	}
-
-	/// Add a peer to a peers set.
-	pub fn add_to_peers_set(&self, protocol: ProtocolName, peer: PeerId) {
-		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.add_to_peers_set(sc_peerset::SetId::from(index), peer);
-		} else {
-			error!(
-				target: "sub-libp2p",
-				"add_to_peers_set with unknown protocol: {}",
-				protocol
-			);
-		}
-	}
-
-	/// Remove a peer from a peers set.
-	pub fn remove_from_peers_set(&self, protocol: ProtocolName, peer: PeerId) {
-		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.remove_from_peers_set(sc_peerset::SetId::from(index), peer);
-		} else {
-			error!(
-				target: "sub-libp2p",
-				"remove_from_peers_set with unknown protocol: {}",
-				protocol
-			);
-		}
+	/// Can be called multiple times with the same `PeerId`.
+	pub fn add_known_peer(&mut self, peer_id: PeerId) {
+		// TODO: get rid of this function and call `Peerset`/`PeerStore` directly
+		// from `NetworkWorker`.
+		self.peerset_handle.add_known_peer(peer_id);
 	}
 }
 
@@ -377,14 +352,46 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = CustomMessageOutcome;
 
-	fn new_handler(&mut self) -> Self::ConnectionHandler {
-		self.behaviour.new_handler()
+	fn handle_established_inbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		peer: PeerId,
+		local_addr: &Multiaddr,
+		remote_addr: &Multiaddr,
+	) -> Result<THandler<Self>, ConnectionDenied> {
+		self.behaviour.handle_established_inbound_connection(
+			connection_id,
+			peer,
+			local_addr,
+			remote_addr,
+		)
 	}
 
-	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {
-		// Only `Discovery::addresses_of_peer` must be returning addresses to ensure that we
-		// don't return unwanted addresses.
-		Vec::new()
+	fn handle_established_outbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		peer: PeerId,
+		addr: &Multiaddr,
+		role_override: Endpoint,
+	) -> Result<THandler<Self>, ConnectionDenied> {
+		self.behaviour.handle_established_outbound_connection(
+			connection_id,
+			peer,
+			addr,
+			role_override,
+		)
+	}
+
+	fn handle_pending_outbound_connection(
+		&mut self,
+		_connection_id: ConnectionId,
+		_maybe_peer: Option<PeerId>,
+		_addresses: &[Multiaddr],
+		_effective_role: Endpoint,
+	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
+		// Only `Discovery::handle_pending_outbound_connection` must be returning addresses to
+		// ensure that we don't return unwanted addresses.
+		Ok(Vec::new())
 	}
 
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
@@ -395,8 +402,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		&mut self,
 		peer_id: PeerId,
 		connection_id: ConnectionId,
-		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
-		ConnectionHandler>::OutEvent,
+		event: THandlerOutEvent<Self>,
 	) {
 		self.behaviour.on_connection_handler_event(peer_id, connection_id, event);
 	}
@@ -405,7 +411,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		&mut self,
 		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
 		while let Poll::Ready(Some(validation_result)) =
 			self.sync_substream_validations.poll_next_unpin(cx)
 		{
@@ -425,19 +431,14 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 
 		let event = match self.behaviour.poll(cx, params) {
 			Poll::Pending => return Poll::Pending,
-			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
-			Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }) =>
-				return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }),
-			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
-				return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-					peer_id,
-					handler,
-					event,
-				}),
-			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
-				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
-			Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }) =>
-				return Poll::Ready(NetworkBehaviourAction::CloseConnection { peer_id, connection }),
+			Poll::Ready(ToSwarm::GenerateEvent(ev)) => ev,
+			Poll::Ready(ToSwarm::Dial { opts }) => return Poll::Ready(ToSwarm::Dial { opts }),
+			Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }) =>
+				return Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }),
+			Poll::Ready(ToSwarm::ReportObservedAddr { address, score }) =>
+				return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
+			Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }) =>
+				return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
 		};
 
 		let outcome = match event {
@@ -633,7 +634,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		};
 
 		if !matches!(outcome, CustomMessageOutcome::None) {
-			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome))
+			return Poll::Ready(ToSwarm::GenerateEvent(outcome))
 		}
 
 		// This block can only be reached if an event was pulled from the behaviour and that

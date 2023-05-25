@@ -39,6 +39,7 @@ sp-runtime = { version = "7.0.0", default-features = false, path = "../../../pri
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
+sp-statement-store = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/statement-store" }
 sp-version = { version = "5.0.0", default-features = false, path = "../../../primitives/version" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../../primitives/io" }
 
@@ -84,6 +85,7 @@ pallet-mmr = { version = "4.0.0-dev", default-features = false, path = "../../..
 pallet-multisig = { version = "4.0.0-dev", default-features = false, path = "../../../frame/multisig" }
 pallet-nfts = { version = "4.0.0-dev", default-features = false, path = "../../../frame/nfts" }
 pallet-nfts-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/nfts/runtime-api" }
+pallet-nft-fractionalization = { version = "4.0.0-dev", default-features = false, path = "../../../frame/nft-fractionalization" }
 pallet-nomination-pools = { version = "1.0.0", default-features = false, path = "../../../frame/nomination-pools"}
 pallet-nomination-pools-benchmarking = { version = "1.0.0", default-features = false, optional = true, path = "../../../frame/nomination-pools/benchmarking" }
 pallet-nomination-pools-runtime-api = { version = "1.0.0-dev", default-features = false, path = "../../../frame/nomination-pools/runtime-api" }
@@ -105,6 +107,7 @@ pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-staking-reward-curve = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking/reward-curve" }
 pallet-staking-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking/runtime-api" }
 pallet-state-trie-migration = { version = "4.0.0-dev", default-features = false, path = "../../../frame/state-trie-migration" }
+pallet-statement = { version = "4.0.0-dev", default-features = false, path = "../../../frame/statement" }
 pallet-scheduler = { version = "4.0.0-dev", default-features = false, path = "../../../frame/scheduler" }
 pallet-society = { version = "4.0.0-dev", default-features = false, path = "../../../frame/society" }
 pallet-sudo = { version = "4.0.0-dev", default-features = false, path = "../../../frame/sudo" }
@@ -187,6 +190,7 @@ std = [
 	"pallet-staking/std",
 	"pallet-staking-runtime-api/std",
 	"pallet-state-trie-migration/std",
+	"pallet-statement/std",
 	"pallet-salary/std",
 	"sp-session/std",
 	"pallet-sudo/std",
@@ -204,6 +208,7 @@ std = [
 	"pallet-treasury/std",
 	"pallet-asset-rate/std",
 	"sp-transaction-pool/std",
+	"sp-statement-store/std",
 	"pallet-utility/std",
 	"sp-version/std",
 	"pallet-society/std",
@@ -215,6 +220,7 @@ std = [
 	"pallet-uniques/std",
 	"pallet-nfts/std",
 	"pallet-nfts-runtime-api/std",
+	"pallet-nft-fractionalization/std",
 	"pallet-vesting/std",
 	"log/std",
 	"frame-try-runtime?/std",
@@ -270,6 +276,7 @@ runtime-benchmarks = [
 	"pallet-society/runtime-benchmarks",
 	"pallet-staking/runtime-benchmarks",
 	"pallet-state-trie-migration/runtime-benchmarks",
+	"pallet-sudo/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"pallet-tips/runtime-benchmarks",
 	"pallet-transaction-storage/runtime-benchmarks",
@@ -278,6 +285,7 @@ runtime-benchmarks = [
 	"pallet-utility/runtime-benchmarks",
 	"pallet-uniques/runtime-benchmarks",
 	"pallet-nfts/runtime-benchmarks",
+	"pallet-nft-fractionalization/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",
 	"pallet-whitelist/runtime-benchmarks",
 	"frame-system-benchmarking/runtime-benchmarks",
@@ -330,6 +338,7 @@ try-runtime = [
 	"pallet-session/try-runtime",
 	"pallet-staking/try-runtime",
 	"pallet-state-trie-migration/try-runtime",
+	"pallet-statement/try-runtime",
 	"pallet-scheduler/try-runtime",
 	"pallet-society/try-runtime",
 	"pallet-sudo/try-runtime",
@@ -343,6 +352,7 @@ try-runtime = [
 	"pallet-transaction-storage/try-runtime",
 	"pallet-uniques/try-runtime",
 	"pallet-nfts/try-runtime",
+	"pallet-nft-fractionalization/try-runtime",
 	"pallet-vesting/try-runtime",
 	"pallet-whitelist/try-runtime",
 ]

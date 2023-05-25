@@ -515,8 +515,12 @@ where
 				phase: WarpSyncPhase::DownloadingBlocks(gap_sync.best_queued_number),
 				total_bytes: 0,
 			}),
-			(None, SyncMode::Warp, _) =>
-				Some(WarpSyncProgress { phase: WarpSyncPhase::AwaitingPeers, total_bytes: 0 }),
+			(None, SyncMode::Warp, _) => Some(WarpSyncProgress {
+				phase: WarpSyncPhase::AwaitingPeers {
+					required_peers: MIN_PEERS_TO_START_WARP_SYNC,
+				},
+				total_bytes: 0,
+			}),
 			(Some(sync), _, _) => Some(sync.progress()),
 			_ => None,
 		};
@@ -2708,9 +2712,7 @@ where
 				break
 			}
 
-			if result.is_err() {
-				has_error = true;
-			}
+			has_error |= result.is_err();
 
 			match result {
 				Ok(BlockImportStatus::ImportedKnown(number, who)) =>
@@ -2721,9 +2723,7 @@ where
 					if aux.clear_justification_requests {
 						trace!(
 							target: "sync",
-							"Block imported clears all pending justification requests {}: {:?}",
-							number,
-							hash,
+							"Block imported clears all pending justification requests {number}: {hash:?}",
 						);
 						self.clear_justification_requests();
 					}
@@ -2731,9 +2731,7 @@ where
 					if aux.needs_justification {
 						trace!(
 							target: "sync",
-							"Block imported but requires justification {}: {:?}",
-							number,
-							hash,
+							"Block imported but requires justification {number}: {hash:?}",
 						);
 						self.request_justification(&hash, number);
 					}
@@ -2793,25 +2791,26 @@ where
 						output.push(Err(BadPeer(peer, rep::INCOMPLETE_HEADER)));
 						output.extend(self.restart());
 					},
-				Err(BlockImportError::VerificationFailed(who, e)) =>
+				Err(BlockImportError::VerificationFailed(who, e)) => {
+					let extra_message =
+						who.map_or_else(|| "".into(), |peer| format!(" received from ({peer})"));
+
+					warn!(
+						target: "sync",
+						"💔 Verification failed for block {hash:?}{extra_message}: {e:?}",
+					);
+
 					if let Some(peer) = who {
-						warn!(
-							target: "sync",
-							"💔 Verification failed for block {:?} received from peer: {}, {:?}",
-							hash,
-							peer,
-							e,
-						);
 						output.push(Err(BadPeer(peer, rep::VERIFICATION_FAIL)));
-						output.extend(self.restart());
-					},
+					}
+
+					output.extend(self.restart());
+				},
 				Err(BlockImportError::BadBlock(who)) =>
 					if let Some(peer) = who {
 						warn!(
 							target: "sync",
-							"💔 Block {:?} received from peer {} has been blacklisted",
-							hash,
-							peer,
+							"💔 Block {hash:?} received from peer {peer} has been blacklisted",
 						);
 						output.push(Err(BadPeer(peer, rep::BAD_BLOCK)));
 					},
@@ -2819,10 +2818,10 @@ where
 					// This may happen if the chain we were requesting upon has been discarded
 					// in the meantime because other chain has been finalized.
 					// Don't mark it as bad as it still may be synced if explicitly requested.
-					trace!(target: "sync", "Obsolete block {:?}", hash);
+					trace!(target: "sync", "Obsolete block {hash:?}");
 				},
 				e @ Err(BlockImportError::UnknownParent) | e @ Err(BlockImportError::Other(_)) => {
-					warn!(target: "sync", "💔 Error importing block {:?}: {}", hash, e.unwrap_err());
+					warn!(target: "sync", "💔 Error importing block {hash:?}: {}", e.unwrap_err());
 					self.state_sync = None;
 					self.warp_sync = None;
 					output.extend(self.restart());

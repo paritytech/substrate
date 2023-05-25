@@ -23,10 +23,7 @@ use crate::{
 };
 
 use codec::{Decode, Encode};
-use futures::{
-	channel::{mpsc, oneshot},
-	stream::StreamExt,
-};
+use futures::{channel::oneshot, stream::StreamExt};
 use libp2p::PeerId;
 use log::debug;
 use lru::LruCache;
@@ -110,7 +107,7 @@ struct SeenRequestsKey<B: BlockT> {
 	support_multiple_justifications: bool,
 }
 
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl<B: BlockT> Hash for SeenRequestsKey<B> {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		self.peer.hash(state);
@@ -136,7 +133,7 @@ enum SeenRequestsValue {
 /// Handler for incoming block requests from a remote peer.
 pub struct BlockRequestHandler<B: BlockT, Client> {
 	client: Arc<Client>,
-	request_receiver: mpsc::Receiver<IncomingRequest>,
+	request_receiver: async_channel::Receiver<IncomingRequest>,
 	/// Maps from request to number of times we have seen this request.
 	///
 	/// This is used to check if a peer is spamming us with the same request.
@@ -157,7 +154,7 @@ where
 	) -> (Self, ProtocolConfig) {
 		// Reserve enough request slots for one request per peer when we are at the maximum
 		// number of peers.
-		let (tx, request_receiver) = mpsc::channel(num_peer_hint);
+		let (tx, request_receiver) = async_channel::bounded(num_peer_hint);
 
 		let mut protocol_config = generate_protocol_config(
 			protocol_id,

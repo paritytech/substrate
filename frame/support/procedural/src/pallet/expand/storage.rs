@@ -349,7 +349,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 		let cfg_attrs = &storage.cfg_attrs;
 
-		// Since we are using `entries` defined later, we need to specify `call_site` to disable macro hygiene.
+		// Since we are using `entries` defined later, we need to specify `call_site` to disable
+		// macro hygiene.
 		quote::quote_spanned!(Span::call_site() =>
 			#(#cfg_attrs)*
 			{

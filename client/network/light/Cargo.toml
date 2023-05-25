@@ -16,12 +16,13 @@ targets = ["x86_64-unknown-linux-gnu"]
 prost-build = "0.11"
 
 [dependencies]
+async-channel = "1.8.0"
 array-bytes = "4.1"
 codec = { package = "parity-scale-codec", version = "3.2.2", features = [
     "derive",
 ] }
 futures = "0.3.21"
-libp2p = "0.50.0"
+libp2p-identity = { version = "0.1.2", features = ["peerid"] }
 log = "0.4.16"
 prost = "0.11"
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
