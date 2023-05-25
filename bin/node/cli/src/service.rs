@@ -37,6 +37,7 @@ use sc_network_sync::SyncingService;
 use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_statement_store::Store as StatementStore;
 use sc_telemetry::{Telemetry, TelemetryWorker};
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
 use sp_runtime::{generic, traits::Block as BlockT, SaturatedConversion};
@@ -584,7 +585,9 @@ pub fn new_full_base(
 				runtime_api_provider: client.clone(),
 				keystore: Some(keystore_container.keystore()),
 				offchain_db: backend.offchain_storage(),
-				transaction_pool: Some(transaction_pool.clone()),
+				transaction_pool: Some(OffchainTransactionPoolFactory::new(
+					transaction_pool.clone(),
+				)),
 				network_provider: network.clone(),
 				is_validator: role.is_authority(),
 				enable_http_requests: true,

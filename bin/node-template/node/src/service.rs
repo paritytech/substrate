@@ -8,6 +8,7 @@ use sc_consensus_grandpa::SharedVoterState;
 pub use sc_executor::NativeElseWasmExecutor;
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager, WarpSyncParams};
 use sc_telemetry::{Telemetry, TelemetryWorker};
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use std::{sync::Arc, time::Duration};
 
@@ -187,7 +188,9 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 				is_validator: config.role.is_authority(),
 				keystore: Some(keystore_container.keystore()),
 				offchain_db: backend.offchain_storage(),
-				transaction_pool: Some(transaction_pool.clone()),
+				transaction_pool: Some(OffchainTransactionPoolFactory::new(
+					transaction_pool.clone(),
+				)),
 				network_provider: network.clone(),
 				enable_http_requests: true,
 				custom_extensions: |_| vec![],
