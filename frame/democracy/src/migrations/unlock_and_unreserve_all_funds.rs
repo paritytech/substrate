@@ -171,9 +171,8 @@ where
 		// If it is higher, there is either a bug with the pallet or a bug in the calculation of the
 		// deposit amount.
 		ensure!(
-			account_deposits.iter().all(
-				|(account, deposit)| *deposit <= *account_reserved_before.get(account).unwrap()
-			),
+			account_deposits.iter().all(|(account, deposit)| *deposit <=
+				*account_reserved_before.get(account).unwrap_or(&Zero::zero())),
 			"Deposit amount is greater than reserved amount"
 		);
 
@@ -254,8 +253,7 @@ where
 			let actual_reserved_after = T::Currency::reserved_balance(&account);
 			let expected_amount_deducted = *account_deposits
 				.get(&account)
-				.unwrap_or(&Zero::zero())
-				.min(&actual_reserved_before);
+				.expect("account deposit must exist to be in pre_migration_data, qed");
 			let expected_reserved_after =
 				actual_reserved_before.saturating_sub(expected_amount_deducted);
 			assert!(
