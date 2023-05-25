@@ -275,6 +275,12 @@ pub use sp_std;
 /// ```
 /// mod interface {
 ///     mod extern_host_functions_impls {
+///         /// Every function is exported by the native code as `ext_FUNCTION_NAME_version_VERSION`.
+///         ///
+///         /// The type for each argument of the exported function depends on
+///         /// `<ARGUMENT_TYPE as RIType>::FFIType`.
+///         ///
+///         /// `key` holds the pointer and the length to the `data` slice.
 ///         pub fn call(data: &[u8]) -> Vec<u8> {
 ///             extern "C" { pub fn ext_call_version_2(key: u64); }
 ///             // Should call into extenal `ext_call_version_2(<[u8] as IntoFFIValue>::into_ffi_value(key))`
@@ -283,11 +289,13 @@ pub use sp_std;
 ///             Vec::new()
 ///         }
 ///
+///         /// `key` holds the pointer and the length of the `option` value.
 ///         pub fn set_or_clear(option: Option<Vec<u8>>) {
 ///             extern "C" { pub fn ext_set_or_clear_version_1(key: u64); }
 ///             // Same as above
 ///         }
 ///
+///         /// `key` holds the pointer and the length to the `data` slice.
 ///         #[cfg(feature = "experimental-function")]
 ///         pub fn gated_call(data: &[u8]) -> Vec<u8> {
 ///             extern "C" { pub fn ext_gated_call_version_1(key: u64); }
