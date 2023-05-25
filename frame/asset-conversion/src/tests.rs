@@ -134,6 +134,7 @@ fn check_max_numbers() {
 #[test]
 fn can_create_pool() {
 	new_test_ext().execute_with(|| {
+		let asset_account_deposit: u128 = AssetAccountDeposit::get();
 		let user = 1;
 		let token_1 = NativeOrAssetId::Native;
 		let token_2 = NativeOrAssetId::Asset(2);
@@ -147,7 +148,10 @@ fn can_create_pool() {
 
 		let setup_fee = <<Test as Config>::PoolSetupFee as Get<<Test as Config>::Balance>>::get();
 		let pool_account = <<Test as Config>::PoolSetupFeeReceiver as Get<u128>>::get();
-		assert_eq!(balance(user, NativeOrAssetId::Native), 1000 - setup_fee);
+		assert_eq!(
+			balance(user, NativeOrAssetId::Native),
+			1000 - (setup_fee + asset_account_deposit)
+		);
 		assert_eq!(balance(pool_account, NativeOrAssetId::Native), setup_fee);
 		assert_eq!(lp_token + 1, AssetConversion::get_next_pool_asset_id());
 
@@ -219,7 +223,7 @@ fn different_pools_should_have_different_lp_tokens() {
 		let pool_id_1_2 = (token_1, token_2);
 		let pool_id_1_3 = (token_1, token_3);
 
-		create_tokens(user, vec![token_2]);
+		create_tokens(user, vec![token_2, token_3]);
 
 		let lp_token2_1 = AssetConversion::get_next_pool_asset_id();
 		assert_ok!(AssetConversion::create_pool(RuntimeOrigin::signed(user), token_2, token_1));
