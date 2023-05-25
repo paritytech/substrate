@@ -86,7 +86,7 @@ where
 		BTreeMap<T::AccountId, T::Balance>,
 		frame_support::weights::Weight,
 	) {
-		use sp_runtime::SaturatedConversion;
+		use sp_runtime::{SaturatedConversion, Saturating};
 
 		let members = crate::Members::<T>::get();
 		let runner_ups = crate::RunnersUp::<T>::get();
@@ -109,7 +109,8 @@ where
 			}))
 			// Finally, aggregate the tuples into a Map.
 			.fold(BTreeMap::new(), |mut acc, (id, deposit)| {
-				*acc.entry(id).or_insert(Zero::zero()) += deposit;
+				*acc.entry(id).or_insert(Zero::zero()) =
+					acc.entry(id.clone()).or_insert(Zero::zero()).saturating_add(deposit);
 				acc
 			});
 
@@ -120,7 +121,9 @@ where
 				(account_id.clone(), voter.stake.saturated_into::<T::Balance>().into())
 			})
 			.fold(BTreeMap::new(), |mut acc, (id, stake)| {
-				*acc.entry(id).or_insert(Zero::zero()) += stake;
+				*acc.entry(id).or_insert(Zero::zero()) =
+					acc.entry(id.clone()).or_insert(Zero::zero()).saturating_add(stake);
+
 				acc
 			});
 
