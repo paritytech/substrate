@@ -167,12 +167,12 @@ where
 		debug_assert!(self.tip <= fee, "tip should be included in the computed fee");
 		if fee.is_zero() {
 			Ok((fee, InitialPayment::Nothing))
-		} else if let Some(asset_id) = self.asset_id {
+		} else if let Some(asset_id) = &self.asset_id {
 			T::OnChargeAssetTransactionBySwap::withdraw_fee(
 				who,
 				call,
 				info,
-				asset_id,
+				asset_id.clone(),
 				fee.into(),
 				self.tip.into(),
 			)
