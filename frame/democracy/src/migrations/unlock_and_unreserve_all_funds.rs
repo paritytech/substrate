@@ -208,7 +208,7 @@ where
 			if unreserve_amount.is_zero() {
 				continue
 			}
-			T::Currency::unreserve(&account, unreserve_amount.clone().into());
+			T::Currency::unreserve(&account, (*unreserve_amount).into());
 		}
 
 		// Staked funds need to be unlocked.
@@ -252,11 +252,10 @@ where
 		// Check that the reserved balance is reduced by the expected deposited amount.
 		for (account, actual_reserved_before) in pre_migration_data.account_reserved_before {
 			let actual_reserved_after = T::Currency::reserved_balance(&account);
-			let expected_amount_deducted = account_deposits
+			let expected_amount_deducted = *account_deposits
 				.get(&account)
 				.unwrap_or(&Zero::zero())
-				.min(&actual_reserved_before)
-				.clone();
+				.min(&actual_reserved_before);
 			let expected_reserved_after =
 				actual_reserved_before.saturating_sub(expected_amount_deducted);
 			assert!(
