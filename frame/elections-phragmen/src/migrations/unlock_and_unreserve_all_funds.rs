@@ -319,11 +319,10 @@ where
 		// Check that the reserved balance is reduced by the expected deposited amount.
 		for (account, actual_reserved_before) in pre_migration_data.account_reserved_before {
 			let actual_reserved_after = T::Currency::reserved_balance(&account);
-			let expected_amount_deducted = account_deposited_sums
+			let expected_amount_deducted = *account_deposited_sums
 				.get(&account)
 				.unwrap_or(&Zero::zero())
-				.min(&actual_reserved_before)
-				.clone();
+				.min(&actual_reserved_before);
 			let expected_reserved_after =
 				actual_reserved_before.saturating_sub(expected_amount_deducted);
 			assert!(
