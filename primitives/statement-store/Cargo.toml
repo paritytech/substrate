@@ -39,3 +39,9 @@ std = [
 	"thiserror",
 	"log",
 ]
+serde = [
+        "scale-info/serde",
+        "sp-application-crypto/serde",
+        "sp-core/serde",
+        "sp-runtime/serde",
+]

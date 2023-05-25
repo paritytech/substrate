@@ -30,3 +30,8 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 ]
+serde = [
+	"scale-info/serde",
+	"sp-application-crypto/serde",
+	"sp-runtime/serde",
+]
