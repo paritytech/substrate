@@ -95,8 +95,6 @@ impl pallet_balances::Config for Test {
 	type MaxHolds = ();
 }
 
-pub type AssetAccountDeposit = ConstU128<10>;
-
 impl pallet_assets::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u128;
@@ -107,7 +105,7 @@ impl pallet_assets::Config<Instance1> for Test {
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<Self::AccountId>>;
 	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type AssetDeposit = ConstU128<1>;
-	type AssetAccountDeposit = AssetAccountDeposit;
+	type AssetAccountDeposit = ConstU128<10>;
 	type MetadataDepositBase = ConstU128<1>;
 	type MetadataDepositPerByte = ConstU128<1>;
 	type ApprovalDeposit = ConstU128<1>;

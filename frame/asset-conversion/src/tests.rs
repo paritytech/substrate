@@ -18,6 +18,7 @@
 use crate::{mock::*, *};
 use frame_support::{
 	assert_noop, assert_ok,
+	instances::Instance1,
 	traits::{fungible::Inspect, fungibles::InspectEnumerable, Get},
 };
 use sp_arithmetic::Permill;
@@ -134,7 +135,8 @@ fn check_max_numbers() {
 #[test]
 fn can_create_pool() {
 	new_test_ext().execute_with(|| {
-		let asset_account_deposit: u128 = AssetAccountDeposit::get();
+		let asset_account_deposit: u128 =
+			<mock::Test as pallet_assets::Config<Instance1>>::AssetAccountDeposit::get();
 		let user = 1;
 		let token_1 = NativeOrAssetId::Native;
 		let token_2 = NativeOrAssetId::Asset(2);
