@@ -684,18 +684,7 @@ pub trait Hash:
 	+ Hasher<Out = <Self as Hash>::Output>
 {
 	/// The hash type produced.
-	type Output: Member
-		+ MaybeSerializeDeserialize
-		+ Debug
-		+ sp_std::hash::Hash
-		+ AsRef<[u8]>
-		+ AsMut<[u8]>
-		+ Copy
-		+ Default
-		+ Encode
-		+ Decode
-		+ MaxEncodedLen
-		+ TypeInfo;
+	type Output: HashOutput;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output {
@@ -713,6 +702,37 @@ pub trait Hash:
 	/// The Patricia tree root of the given mapping.
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, state_version: StateVersion) -> Self::Output;
 }
+
+pub trait HashOutput: Member
++ MaybeSerializeDeserialize
++ MaybeDisplay
++ Debug
++ sp_std::hash::Hash
++ AsRef<[u8]>
++ AsMut<[u8]>
++ Copy
++ Default
++ Encode
++ Decode
++ MaxEncodedLen
++ TypeInfo {}
+
+impl <T> HashOutput for T
+	where T:
+	Member
+	+ MaybeSerializeDeserialize
+	+ MaybeDisplay
+	+ Debug
+	+ sp_std::hash::Hash
+	+ AsRef<[u8]>
+	+ AsMut<[u8]>
+	+ Copy
+	+ Default
+	+ Encode
+	+ Decode
+	+ MaxEncodedLen
+	+ TypeInfo
+{}
 
 /// Blake2-256 Hash implementation.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, TypeInfo)]
@@ -861,19 +881,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 		+ Codec
 		+ sp_std::str::FromStr;
 	/// Header hash type
-	type Hash: Member
-		+ MaybeSerializeDeserialize
-		+ Debug
-		+ sp_std::hash::Hash
-		+ Ord
-		+ Copy
-		+ MaybeDisplay
-		+ Default
-		+ SimpleBitOps
-		+ Codec
-		+ AsRef<[u8]>
-		+ AsMut<[u8]>
-		+ TypeInfo;
+	type Hash: HashOutput;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
 
@@ -927,19 +935,7 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 	/// Header type.
 	type Header: Header<Hash = Self::Hash>;
 	/// Block hash type.
-	type Hash: Member
-		+ MaybeSerializeDeserialize
-		+ Debug
-		+ sp_std::hash::Hash
-		+ Ord
-		+ Copy
-		+ MaybeDisplay
-		+ Default
-		+ SimpleBitOps
-		+ Codec
-		+ AsRef<[u8]>
-		+ AsMut<[u8]>
-		+ TypeInfo;
+	type Hash: HashOutput;
 
 	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
