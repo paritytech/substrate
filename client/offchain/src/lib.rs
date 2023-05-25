@@ -37,7 +37,6 @@
 
 use std::{fmt, sync::Arc};
 
-use codec::Decode;
 use futures::{
 	future::{ready, Future},
 	prelude::*,
@@ -45,15 +44,12 @@ use futures::{
 use parking_lot::Mutex;
 use sc_client_api::BlockchainEvents;
 use sc_network::{NetworkPeers, NetworkStateInfo};
-use sc_transaction_pool_api::OffchainSubmitTransaction;
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_core::{offchain, traits::SpawnNamed};
 use sp_externalities::Extension;
 use sp_keystore::{KeystoreExt, KeystorePtr};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{self, Header},
-};
+use sp_runtime::traits::{self, Header};
 use threadpool::ThreadPool;
 
 mod api;
@@ -108,7 +104,7 @@ pub struct OffchainWorkerOptions<RA, Block: traits::Block, Storage, CE> {
 	/// Use [`NoOffchainStorage`] as type when passing `None` to have some type that works.
 	pub offchain_db: Option<Storage>,
 	/// Provides access to the transaction pool.
-	pub transaction_pool: Option<Arc<dyn OffchainSubmitTransaction<Block>>>,
+	pub transaction_pool: Option<OffchainTransactionPoolFactory<Block>>,
 	/// Provides access to network information.
 	pub network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 	/// Is the node running as validator?
@@ -141,7 +137,7 @@ pub struct OffchainWorkers<RA, Block: traits::Block, Storage> {
 	enable_http_requests: bool,
 	keystore: Option<KeystorePtr>,
 	offchain_db: Option<api::Db<Storage>>,
-	transaction_pool: Option<Arc<dyn OffchainSubmitTransaction<Block>>>,
+	transaction_pool: Option<OffchainTransactionPoolFactory<Block>>,
 	network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 	is_validator: bool,
 	custom_extensions: Box<dyn Fn(Block::Hash) -> Vec<Box<dyn Extension>> + Send>,
@@ -277,9 +273,7 @@ where
 				}
 
 				if let Some(pool) = tx_pool {
-					runtime.register_extension(offchain::TransactionPoolExt(Box::new(
-						TransactionPoolAdapter { hash, pool: pool.clone() },
-					) as _));
+					runtime.register_extension(pool.offchain_transaction_pool(hash));
 				}
 
 				if let Some(offchain_db) = db {
@@ -329,26 +323,6 @@ where
 	/// alternatively:
 	fn spawn_worker(&self, f: impl FnOnce() -> () + Send + 'static) {
 		self.thread_pool.lock().execute(f);
-	}
-}
-
-/// A wrapper type to pass `BlockId` to the actual transaction pool.
-struct TransactionPoolAdapter<Block: traits::Block> {
-	hash: Block::Hash,
-	pool: Arc<dyn OffchainSubmitTransaction<Block>>,
-}
-
-impl<Block: traits::Block> offchain::TransactionPool for TransactionPoolAdapter<Block> {
-	fn submit_transaction(&mut self, data: Vec<u8>) -> Result<(), ()> {
-		let xt = match Block::Extrinsic::decode(&mut &*data) {
-			Ok(xt) => xt,
-			Err(e) => {
-				log::warn!("Unable to decode extrinsic: {:?}: {}", data, e);
-				return Err(())
-			},
-		};
-
-		self.pool.submit_at(&BlockId::Hash(self.hash), xt)
 	}
 }
 
@@ -466,7 +440,7 @@ mod tests {
 			runtime_api_provider: client,
 			keystore: None,
 			offchain_db: None::<NoOffchainStorage>,
-			transaction_pool: Some(Arc::new(pool.clone())),
+			transaction_pool: Some(OffchainTransactionPoolFactory::new(pool.clone())),
 			network_provider: network,
 			is_validator: false,
 			enable_http_requests: false,

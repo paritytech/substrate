@@ -24,7 +24,7 @@
 use frame_support::{pallet_prelude::*, storage};
 use sp_core::sr25519::Public;
 use sp_runtime::{
-	traits::{BlakeTwo256, Hash},
+	traits::Hash,
 	transaction_validity::{
 		InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
 	},

@@ -1001,7 +1001,7 @@ pub mod storage_key_generator {
 mod tests {
 	use super::*;
 	use codec::Encode;
-	use frame_support::{dispatch::DispatchInfo, pallet_prelude::ValidTransaction};
+	use frame_support::dispatch::DispatchInfo;
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_api::{ApiExt, ProvideRuntimeApi};
 	use sp_consensus::BlockOrigin;
