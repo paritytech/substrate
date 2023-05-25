@@ -89,6 +89,7 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 		society: SocietyConfig { members: vec![alice(), bob()], pot: 0, max_members: 999 },
 		vesting: Default::default(),
 		assets: AssetsConfig { assets: vec![(9, alice(), true, 1)], ..Default::default() },
+		pool_assets: Default::default(),
 		transaction_storage: Default::default(),
 		transaction_payment: Default::default(),
 		alliance: Default::default(),
