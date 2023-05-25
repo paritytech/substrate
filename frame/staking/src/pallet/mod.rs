@@ -579,6 +579,7 @@ pub mod pallet {
 	pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub validator_count: u32,
 		pub minimum_validator_count: u32,
@@ -592,25 +593,6 @@ pub mod pallet {
 		pub min_validator_bond: BalanceOf<T>,
 		pub max_validator_count: Option<u32>,
 		pub max_nominator_count: Option<u32>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			GenesisConfig {
-				validator_count: Default::default(),
-				minimum_validator_count: Default::default(),
-				invulnerables: Default::default(),
-				force_era: Default::default(),
-				slash_reward_fraction: Default::default(),
-				canceled_payout: Default::default(),
-				stakers: Default::default(),
-				min_nominator_bond: Default::default(),
-				min_validator_bond: Default::default(),
-				max_validator_count: None,
-				max_nominator_count: None,
-			}
-		}
 	}
 
 	#[pallet::genesis_build]
@@ -823,7 +805,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(n: BlockNumberFor<T>) -> Result<(), &'static str> {
+		fn try_state(n: BlockNumberFor<T>) -> Result<(), sp_runtime::TryRuntimeError> {
 			Self::do_try_state(n)
 		}
 	}
@@ -1024,9 +1006,7 @@ pub mod pallet {
 
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
-				if let Some(mut chunk) =
-					ledger.unlocking.last_mut().filter(|chunk| chunk.era == era)
-				{
+				if let Some(chunk) = ledger.unlocking.last_mut().filter(|chunk| chunk.era == era) {
 					// To keep the chunk count down, we only keep one chunk per era. Since
 					// `unlocking` is a FiFo queue, if a chunk exists for `era` we know that it will
 					// be the last one.

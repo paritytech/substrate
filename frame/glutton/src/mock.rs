@@ -68,6 +68,7 @@ impl frame_system::Config for Test {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
+	type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type WeightInfo = ();
 }
 

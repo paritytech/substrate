@@ -23,8 +23,11 @@
 
 use frame_support::{pallet_prelude::*, storage};
 use sp_core::sr25519::Public;
-use sp_runtime::transaction_validity::{
-	InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
+use sp_runtime::{
+	traits::{BlakeTwo256, Hash},
+	transaction_validity::{
+		InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
+	},
 };
 use sp_std::prelude::*;
 
@@ -226,7 +229,7 @@ pub mod pallet {
 				Call::storage_change { .. } |
 				Call::read { .. } |
 				Call::read_and_panic { .. } => Ok(ValidTransaction {
-					provides: vec![BlakeTwo256::hash_of(call).encode()],
+					provides: vec![BlakeTwo256::hash_of(&call).encode()],
 					..Default::default()
 				}),
 				_ => Err(TransactionValidityError::Invalid(InvalidTransaction::Call)),

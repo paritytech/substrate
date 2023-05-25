@@ -394,7 +394,7 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
+	type RuntimeHoldReason = RuntimeHoldReason;
 	type MaxHolds = ConstU32<1>;
 }
 
@@ -1008,8 +1008,8 @@ mod tests {
 	use sp_core::{storage::well_known_keys::HEAP_PAGES, traits::CallContext};
 	use sp_keyring::AccountKeyring;
 	use sp_runtime::{
-		traits::{Hash, SignedExtension},
-		transaction_validity::InvalidTransaction,
+		traits::{Hash as _, SignedExtension},
+		transaction_validity::{InvalidTransaction, ValidTransaction},
 	};
 	use substrate_test_runtime_client::{
 		prelude::*, runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder,
@@ -1110,92 +1110,42 @@ mod tests {
 	fn validate_unsigned_works() {
 		sp_tracing::try_init_simple();
 		new_test_ext().execute_with(|| {
-			assert_eq!(
-				<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
-					TransactionSource::External,
-					&substrate_test_pallet::Call::bench_call { transfer: Default::default() },
-				),
-				InvalidTransaction::Call.into(),
-			);
+			let failing_calls = vec![
+				substrate_test_pallet::Call::bench_call { transfer: Default::default() },
+				substrate_test_pallet::Call::include_data { data: vec![] },
+				substrate_test_pallet::Call::fill_block { ratio: Perbill::from_percent(50) },
+			];
+			let succeeding_calls = vec![
+				substrate_test_pallet::Call::deposit_log_digest_item {
+					log: DigestItem::Other(vec![]),
+				},
+				substrate_test_pallet::Call::storage_change { key: vec![], value: None },
+				substrate_test_pallet::Call::read { count: 0 },
+				substrate_test_pallet::Call::read_and_panic { count: 0 },
+			];
 
-			assert_eq!(
-				<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
-					TransactionSource::External,
-					&substrate_test_pallet::Call::include_data { data: vec![] },
-				),
-				InvalidTransaction::Call.into(),
-			);
+			for call in failing_calls {
+				assert_eq!(
+					<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+						TransactionSource::External,
+						&call,
+					),
+					InvalidTransaction::Call.into(),
+				);
+			}
 
-			assert_eq!(
-				<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
-					TransactionSource::External,
-					&substrate_test_pallet::Call::fill_block { ratio: Perbill::from_percent(50) },
-				),
-				InvalidTransaction::Call.into(),
-			);
-
-			assert_eq!(
-				<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
-					TransactionSource::External,
-					&substrate_test_pallet::Call::deposit_log_digest_item {
-						log: DigestItem::Other(vec![])
-					},
-				),
-				Ok(ValidTransaction {
-					provides: vec![BlakeTwo256::hash_of(
-						&substrate_test_pallet::Call::<Runtime>::deposit_log_digest_item {
-							log: DigestItem::Other(vec![])
-						}
-					)
-					.encode()],
-					..Default::default()
-				}),
-			);
-
-			assert_eq!(
-				<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
-					TransactionSource::External,
-					&substrate_test_pallet::Call::storage_change { key: vec![], value: None },
-				),
-				Ok(ValidTransaction {
-					provides: vec![BlakeTwo256::hash_of(
-						&substrate_test_pallet::Call::<Runtime>::storage_change {
-							key: vec![],
-							value: None
-						}
-					)
-					.encode()],
-					..Default::default()
-				}),
-			);
-
-			assert_eq!(
-				<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
-					TransactionSource::External,
-					&substrate_test_pallet::Call::read { count: 0 },
-				),
-				Ok(ValidTransaction {
-					provides: vec![BlakeTwo256::hash_of(
-						&substrate_test_pallet::Call::<Runtime>::read { count: 0 }
-					)
-					.encode()],
-					..Default::default()
-				}),
-			);
-
-			assert_eq!(
-				<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
-					TransactionSource::External,
-					&substrate_test_pallet::Call::read_and_panic { count: 0 },
-				),
-				Ok(ValidTransaction {
-					provides: vec![BlakeTwo256::hash_of(
-						&substrate_test_pallet::Call::<Runtime>::read_and_panic { count: 0 }
-					)
-					.encode()],
-					..Default::default()
-				}),
-			);
+			for call in succeeding_calls {
+				assert_eq!(
+					<SubstrateTest as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+						TransactionSource::External,
+						&call,
+					),
+					Ok(ValidTransaction {
+						provides: vec![BlakeTwo256::hash_of(&call).encode()],
+						..Default::default()
+					})
+				);
+			}
 		});
 	}
 
