@@ -10143,9 +10143,11 @@ dependencies = [
  "async-trait",
  "futures",
  "log",
+ "parity-scale-codec",
  "serde",
  "serde_json",
  "sp-blockchain",
+ "sp-core",
  "sp-runtime",
  "thiserror",
 ]

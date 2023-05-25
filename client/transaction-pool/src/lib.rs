@@ -52,8 +52,8 @@ use std::{
 use graph::{ExtrinsicHash, IsValidator};
 use sc_transaction_pool_api::{
 	error::Error as TxPoolError, ChainEvent, ImportNotificationStream, MaintainedTransactionPool,
-	PoolFuture, PoolStatus, ReadyTransactions, TransactionFor, TransactionPool, TransactionSource,
-	TransactionStatusStreamFor, TxHash,
+	OffchainTransactionPoolFactory, PoolFuture, PoolStatus, ReadyTransactions, TransactionFor,
+	TransactionPool, TransactionSource, TransactionStatusStreamFor, TxHash,
 };
 use sp_core::traits::SpawnEssentialNamed;
 use sp_runtime::{
@@ -418,7 +418,7 @@ where
 
 	fn submit_local(
 		&self,
-		at: &BlockId<Self::Block>,
+		at: Block::Hash,
 		xt: sc_transaction_pool_api::LocalTransactionFor<Self>,
 	) -> Result<Self::Hash, Self::Error> {
 		use sp_runtime::{
@@ -427,7 +427,11 @@ where
 
 		let validity = self
 			.api
-			.validate_transaction_blocking(at, TransactionSource::Local, xt.clone())?
+			.validate_transaction_blocking(
+				&BlockId::hash(at),
+				TransactionSource::Local,
+				xt.clone(),
+			)?
 			.map_err(|e| {
 				Self::Error::Pool(match e {
 					TransactionValidityError::Invalid(i) => TxPoolError::InvalidTransaction(i),
@@ -438,7 +442,7 @@ where
 		let (hash, bytes) = self.pool.validated_pool().api().hash_and_length(&xt);
 		let block_number = self
 			.api
-			.block_id_to_number(at)?
+			.block_id_to_number(&BlockId::hash(at))?
 			.ok_or_else(|| error::Error::BlockIdConversion(format!("{:?}", at)))?;
 
 		let validated = ValidatedTransaction::valid_at(
