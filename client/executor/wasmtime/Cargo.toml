@@ -19,7 +19,7 @@ libc = "0.2.121"
 
 # When bumping wasmtime do not forget to also bump rustix
 # to exactly the same version as used by wasmtime!
-wasmtime = { version = "6.0.2", default-features = false, features = [
+wasmtime = { version = "8.0.1", default-features = false, features = [
 	"cache",
 	"cranelift",
 	"jitdump",
