@@ -487,8 +487,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	set_head: Option<Block::Hash>,
 }
 
-impl<Block: BlockT> BlockImportOperation<Block>
-{
+impl<Block: BlockT> BlockImportOperation<Block> {
 	fn apply_storage(
 		&mut self,
 		storage: Storage,
@@ -517,8 +516,7 @@ impl<Block: BlockT> BlockImportOperation<Block>
 	}
 }
 
-impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block>
-{
+impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
 	type State = InMemoryBackend<HashFor<Block>>;
 
 	fn state(&self) -> sp_blockchain::Result<Option<&Self::State>> {
@@ -607,16 +605,14 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 ///
 /// > **Warning**: Doesn't support all the features necessary for a proper database. Only use this
 /// > struct for testing purposes. Do **NOT** use in production.
-pub struct Backend<Block: BlockT>
-{
+pub struct Backend<Block: BlockT> {
 	states: RwLock<HashMap<Block::Hash, InMemoryBackend<HashFor<Block>>>>,
 	blockchain: Blockchain<Block>,
 	import_lock: RwLock<()>,
 	pinned_blocks: RwLock<HashMap<Block::Hash, i64>>,
 }
 
-impl<Block: BlockT> Backend<Block>
-{
+impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of in-mem backend.
 	///
 	/// # Warning
@@ -642,8 +638,7 @@ impl<Block: BlockT> Backend<Block>
 	}
 }
 
-impl<Block: BlockT> backend::AuxStore for Backend<Block>
-{
+impl<Block: BlockT> backend::AuxStore for Backend<Block> {
 	fn insert_aux<
 		'a,
 		'b: 'a,
@@ -663,8 +658,7 @@ impl<Block: BlockT> backend::AuxStore for Backend<Block>
 	}
 }
 
-impl<Block: BlockT> backend::Backend<Block> for Backend<Block>
-{
+impl<Block: BlockT> backend::Backend<Block> for Backend<Block> {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = Blockchain<Block>;
 	type State = InMemoryBackend<HashFor<Block>>;
