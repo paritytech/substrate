@@ -703,7 +703,7 @@ pub trait Hash:
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, state_version: StateVersion) -> Self::Output;
 }
 
-/// A generic hash output type trait.
+/// Super trait with all the attributes for a hashing output.
 pub trait HashOutput:
 	Member
 	+ MaybeSerializeDeserialize
