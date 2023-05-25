@@ -29,7 +29,7 @@
 
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
-	config::{MultiaddrWithPeerId, Params, TransportConfig},
+	config::{FullNetworkConfiguration, MultiaddrWithPeerId, Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	event::{DhtEvent, Event},
@@ -52,17 +52,19 @@ use crate::{
 	ReputationChange,
 };
 
+use either::Either;
 use futures::{channel::oneshot, prelude::*};
+#[allow(deprecated)]
 use libp2p::{
-	core::{either::EitherError, upgrade, ConnectedPoint},
+	connection_limits::Exceeded,
+	core::{upgrade, ConnectedPoint, Endpoint},
 	identify::Info as IdentifyInfo,
 	kad::record::Key as KademliaKey,
 	multiaddr,
 	ping::Failure as PingFailure,
 	swarm::{
-		AddressScore, ConnectionError, ConnectionHandler, ConnectionLimits, DialError, Executor,
-		IntoConnectionHandler, NetworkBehaviour, PendingConnectionError, Swarm, SwarmBuilder,
-		SwarmEvent,
+		AddressScore, ConnectionError, ConnectionId, ConnectionLimits, DialError, Executor,
+		ListenError, NetworkBehaviour, Swarm, SwarmBuilder, SwarmEvent, THandlerErr,
 	},
 	Multiaddr, PeerId,
 };
@@ -90,7 +92,7 @@ use std::{
 };
 
 pub use behaviour::{InboundFailure, OutboundFailure, ResponseFailure};
-pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
+pub use libp2p::identity::{DecodingError, Keypair, PublicKey};
 pub use protocol::NotificationsSink;
 
 mod metrics;
@@ -98,12 +100,6 @@ mod out_events;
 
 pub mod signature;
 pub mod traits;
-
-/// Custom error that can be produced by the [`ConnectionHandler`] of the [`NetworkBehaviour`].
-/// Used as a template parameter of [`SwarmEvent`] below.
-type ConnectionHandlerErr<TBehaviour> =
-	<<<TBehaviour as NetworkBehaviour>::ConnectionHandler as IntoConnectionHandler>
-		::Handler as ConnectionHandler>::Error;
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -147,25 +143,24 @@ where
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(mut params: Params<B>) -> Result<Self, Error> {
+	pub fn new(params: Params<B>) -> Result<Self, Error> {
+		let FullNetworkConfiguration {
+			notification_protocols,
+			request_response_protocols,
+			mut network_config,
+		} = params.network_config;
+
 		// Private and public keys configuration.
-		let local_identity = params.network_config.node_key.clone().into_keypair()?;
+		let local_identity = network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.to_peer_id();
 
-		params
-			.network_config
-			.request_response_protocols
-			.extend(params.request_response_protocol_configs);
-
-		params.network_config.boot_nodes = params
-			.network_config
+		network_config.boot_nodes = network_config
 			.boot_nodes
 			.into_iter()
 			.filter(|boot_node| boot_node.peer_id != local_peer_id)
 			.collect();
-		params.network_config.default_peers_set.reserved_nodes = params
-			.network_config
+		network_config.default_peers_set.reserved_nodes = network_config
 			.default_peers_set
 			.reserved_nodes
 			.into_iter()
@@ -185,36 +180,31 @@ where
 
 		// Ensure the listen addresses are consistent with the transport.
 		ensure_addresses_consistent_with_transport(
-			params.network_config.listen_addresses.iter(),
-			&params.network_config.transport,
+			network_config.listen_addresses.iter(),
+			&network_config.transport,
 		)?;
 		ensure_addresses_consistent_with_transport(
-			params.network_config.boot_nodes.iter().map(|x| &x.multiaddr),
-			&params.network_config.transport,
+			network_config.boot_nodes.iter().map(|x| &x.multiaddr),
+			&network_config.transport,
 		)?;
 		ensure_addresses_consistent_with_transport(
-			params
-				.network_config
-				.default_peers_set
-				.reserved_nodes
-				.iter()
-				.map(|x| &x.multiaddr),
-			&params.network_config.transport,
+			network_config.default_peers_set.reserved_nodes.iter().map(|x| &x.multiaddr),
+			&network_config.transport,
 		)?;
-		for extra_set in &params.network_config.extra_sets {
+		for notification_protocol in &notification_protocols {
 			ensure_addresses_consistent_with_transport(
-				extra_set.set_config.reserved_nodes.iter().map(|x| &x.multiaddr),
-				&params.network_config.transport,
+				notification_protocol.set_config.reserved_nodes.iter().map(|x| &x.multiaddr),
+				&network_config.transport,
 			)?;
 		}
 		ensure_addresses_consistent_with_transport(
-			params.network_config.public_addresses.iter(),
-			&params.network_config.transport,
+			network_config.public_addresses.iter(),
+			&network_config.transport,
 		)?;
 
 		let (to_worker, from_service) = tracing_unbounded("mpsc_network_worker", 100_000);
 
-		if let Some(path) = &params.network_config.net_config_path {
+		if let Some(path) = &network_config.net_config_path {
 			fs::create_dir_all(path)?;
 		}
 
@@ -224,9 +214,58 @@ where
 			local_peer_id.to_base58(),
 		);
 
+		let (transport, bandwidth) = {
+			let config_mem = match network_config.transport {
+				TransportConfig::MemoryOnly => true,
+				TransportConfig::Normal { .. } => false,
+			};
+
+			// The yamux buffer size limit is configured to be equal to the maximum frame size
+			// of all protocols. 10 bytes are added to each limit for the length prefix that
+			// is not included in the upper layer protocols limit but is still present in the
+			// yamux buffer. These 10 bytes correspond to the maximum size required to encode
+			// a variable-length-encoding 64bits number. In other words, we make the
+			// assumption that no notification larger than 2^64 will ever be sent.
+			let yamux_maximum_buffer_size = {
+				let requests_max = request_response_protocols
+					.iter()
+					.map(|cfg| usize::try_from(cfg.max_request_size).unwrap_or(usize::MAX));
+				let responses_max = request_response_protocols
+					.iter()
+					.map(|cfg| usize::try_from(cfg.max_response_size).unwrap_or(usize::MAX));
+				let notifs_max = notification_protocols
+					.iter()
+					.map(|cfg| usize::try_from(cfg.max_notification_size).unwrap_or(usize::MAX));
+
+				// A "default" max is added to cover all the other protocols: ping, identify,
+				// kademlia, block announces, and transactions.
+				let default_max = cmp::max(
+					1024 * 1024,
+					usize::try_from(protocol::BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE)
+						.unwrap_or(usize::MAX),
+				);
+
+				iter::once(default_max)
+					.chain(requests_max)
+					.chain(responses_max)
+					.chain(notifs_max)
+					.max()
+					.expect("iterator known to always yield at least one element; qed")
+					.saturating_add(10)
+			};
+
+			transport::build_transport(
+				local_identity.clone(),
+				config_mem,
+				network_config.yamux_window_size,
+				yamux_maximum_buffer_size,
+			)
+		};
+
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			From::from(&params.role),
-			&params.network_config,
+			&network_config,
+			notification_protocols,
 			params.block_announce_config,
 			params.tx,
 		)?;
@@ -235,7 +274,7 @@ where
 		let mut boot_node_ids = HashSet::new();
 
 		// Process the bootnodes.
-		for bootnode in params.network_config.boot_nodes.iter() {
+		for bootnode in network_config.boot_nodes.iter() {
 			boot_node_ids.insert(bootnode.peer_id);
 			known_addresses.push((bootnode.peer_id, bootnode.multiaddr.clone()));
 		}
@@ -243,9 +282,8 @@ where
 		let boot_node_ids = Arc::new(boot_node_ids);
 
 		// Check for duplicate bootnodes.
-		params.network_config.boot_nodes.iter().try_for_each(|bootnode| {
-			if let Some(other) = params
-				.network_config
+		network_config.boot_nodes.iter().try_for_each(|bootnode| {
+			if let Some(other) = network_config
 				.boot_nodes
 				.iter()
 				.filter(|o| o.multiaddr == bootnode.multiaddr)
@@ -265,29 +303,25 @@ where
 
 		// Build the swarm.
 		let (mut swarm, bandwidth): (Swarm<Behaviour<B>>, _) = {
-			let user_agent = format!(
-				"{} ({})",
-				params.network_config.client_version, params.network_config.node_name
-			);
+			let user_agent =
+				format!("{} ({})", network_config.client_version, network_config.node_name);
 
 			let discovery_config = {
-				let mut config = DiscoveryConfig::new(local_public.clone());
+				let mut config = DiscoveryConfig::new(local_public.to_peer_id());
 				config.with_permanent_addresses(known_addresses);
-				config.discovery_limit(
-					u64::from(params.network_config.default_peers_set.out_peers) + 15,
-				);
+				config.discovery_limit(u64::from(network_config.default_peers_set.out_peers) + 15);
 				config.with_kademlia(
 					params.genesis_hash,
 					params.fork_id.as_deref(),
 					&params.protocol_id,
 				);
-				config.with_dht_random_walk(params.network_config.enable_dht_random_walk);
-				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
+				config.with_dht_random_walk(network_config.enable_dht_random_walk);
+				config.allow_non_globals_in_dht(network_config.allow_non_globals_in_dht);
 				config.use_kademlia_disjoint_query_paths(
-					params.network_config.kademlia_disjoint_query_paths,
+					network_config.kademlia_disjoint_query_paths,
 				);
 
-				match params.network_config.transport {
+				match network_config.transport {
 					TransportConfig::MemoryOnly => {
 						config.with_mdns(false);
 						config.allow_private_ip(false);
@@ -305,64 +339,13 @@ where
 				config
 			};
 
-			let (transport, bandwidth) = {
-				let config_mem = match params.network_config.transport {
-					TransportConfig::MemoryOnly => true,
-					TransportConfig::Normal { .. } => false,
-				};
-
-				// The yamux buffer size limit is configured to be equal to the maximum frame size
-				// of all protocols. 10 bytes are added to each limit for the length prefix that
-				// is not included in the upper layer protocols limit but is still present in the
-				// yamux buffer. These 10 bytes correspond to the maximum size required to encode
-				// a variable-length-encoding 64bits number. In other words, we make the
-				// assumption that no notification larger than 2^64 will ever be sent.
-				let yamux_maximum_buffer_size = {
-					let requests_max = params
-						.network_config
-						.request_response_protocols
-						.iter()
-						.map(|cfg| usize::try_from(cfg.max_request_size).unwrap_or(usize::MAX));
-					let responses_max =
-						params.network_config.request_response_protocols.iter().map(|cfg| {
-							usize::try_from(cfg.max_response_size).unwrap_or(usize::MAX)
-						});
-					let notifs_max = params.network_config.extra_sets.iter().map(|cfg| {
-						usize::try_from(cfg.max_notification_size).unwrap_or(usize::MAX)
-					});
-
-					// A "default" max is added to cover all the other protocols: ping, identify,
-					// kademlia, block announces, and transactions.
-					let default_max = cmp::max(
-						1024 * 1024,
-						usize::try_from(protocol::BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE)
-							.unwrap_or(usize::MAX),
-					);
-
-					iter::once(default_max)
-						.chain(requests_max)
-						.chain(responses_max)
-						.chain(notifs_max)
-						.max()
-						.expect("iterator known to always yield at least one element; qed")
-						.saturating_add(10)
-				};
-
-				transport::build_transport(
-					local_identity.clone(),
-					config_mem,
-					params.network_config.yamux_window_size,
-					yamux_maximum_buffer_size,
-				)
-			};
-
 			let behaviour = {
 				let result = Behaviour::new(
 					protocol,
 					user_agent,
 					local_public,
 					discovery_config,
-					params.network_config.request_response_protocols,
+					request_response_protocols,
 					peerset_handle.clone(),
 				);
 
@@ -387,6 +370,7 @@ where
 					SpawnImpl(params.executor),
 				)
 			};
+			#[allow(deprecated)]
 			let builder = builder
 				.connection_limits(
 					ConnectionLimits::default()
@@ -397,7 +381,9 @@ where
 				)
 				.substream_upgrade_protocol_override(upgrade::Version::V1Lazy)
 				.notify_handler_buffer_size(NonZeroUsize::new(32).expect("32 != 0; qed"))
-				.connection_event_buffer_size(1024)
+				// NOTE: 24 is somewhat arbitrary and should be tuned in the future if necessary.
+				// See <https://github.com/paritytech/substrate/pull/6080>
+				.per_connection_event_buffer_size(24)
 				.max_negotiating_inbound_streams(2048);
 
 			(builder.build(), bandwidth)
@@ -416,14 +402,14 @@ where
 		};
 
 		// Listen on multiaddresses.
-		for addr in &params.network_config.listen_addresses {
+		for addr in &network_config.listen_addresses {
 			if let Err(err) = Swarm::<Behaviour<B>>::listen_on(&mut swarm, addr.clone()) {
 				warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
 			}
 		}
 
 		// Add external addresses.
-		for addr in &params.network_config.public_addresses {
+		for addr in &network_config.public_addresses {
 			Swarm::<Behaviour<B>>::add_external_address(
 				&mut swarm,
 				addr.clone(),
@@ -522,15 +508,23 @@ where
 	pub fn network_state(&mut self) -> NetworkState {
 		let swarm = &mut self.network_service;
 		let open = swarm.behaviour_mut().user_protocol().open_peers().cloned().collect::<Vec<_>>();
-
 		let connected_peers = {
 			let swarm = &mut *swarm;
 			open.iter()
 				.filter_map(move |peer_id| {
-					let known_addresses =
-						NetworkBehaviour::addresses_of_peer(swarm.behaviour_mut(), peer_id)
-							.into_iter()
-							.collect();
+					let known_addresses = if let Ok(addrs) =
+						NetworkBehaviour::handle_pending_outbound_connection(
+							swarm.behaviour_mut(),
+							ConnectionId::new_unchecked(0), // dummy value
+							Some(*peer_id),
+							&vec![],
+							Endpoint::Listener,
+						) {
+						addrs.into_iter().collect()
+					} else {
+						error!(target: "sub-libp2p", "Was not able to get known addresses for {:?}", peer_id);
+						return None
+					};
 
 					let endpoint = if let Some(e) =
 						swarm.behaviour_mut().node(peer_id).and_then(|i| i.endpoint())
@@ -569,6 +563,20 @@ where
 				.into_iter()
 				.filter(|p| open.iter().all(|n| n != p))
 				.map(move |peer_id| {
+					let known_addresses = if let Ok(addrs) =
+						NetworkBehaviour::handle_pending_outbound_connection(
+							swarm.behaviour_mut(),
+							ConnectionId::new_unchecked(0), // dummy value
+							Some(peer_id),
+							&vec![],
+							Endpoint::Listener,
+						) {
+						addrs.into_iter().collect()
+					} else {
+						error!(target: "sub-libp2p", "Was not able to get known addresses for {:?}", peer_id);
+						Default::default()
+					};
+
 					(
 						peer_id.to_base58(),
 						NetworkStateNotConnectedPeer {
@@ -580,12 +588,7 @@ where
 								.behaviour_mut()
 								.node(&peer_id)
 								.and_then(|i| i.latest_ping()),
-							known_addresses: NetworkBehaviour::addresses_of_peer(
-								swarm.behaviour_mut(),
-								&peer_id,
-							)
-							.into_iter()
-							.collect(),
+							known_addresses,
 						},
 					)
 				})
@@ -617,8 +620,11 @@ where
 	}
 
 	/// Returns the list of reserved peers.
-	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
-		self.network_service.behaviour().user_protocol().reserved_peers()
+	fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
+		self.network_service
+			.behaviour()
+			.user_protocol()
+			.reserved_peers(pending_response);
 	}
 }
 
@@ -879,40 +885,6 @@ where
 		}
 	}
 
-	fn add_to_peers_set(
-		&self,
-		protocol: ProtocolName,
-		peers: HashSet<Multiaddr>,
-	) -> Result<(), String> {
-		let peers = self.split_multiaddr_and_peer_id(peers)?;
-
-		for (peer_id, addr) in peers.into_iter() {
-			// Make sure the local peer ID is never added to the PSM.
-			if peer_id == self.local_peer_id {
-				return Err("Local peer ID cannot be added as a reserved peer.".to_string())
-			}
-
-			if !addr.is_empty() {
-				let _ = self
-					.to_worker
-					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
-			}
-			let _ = self
-				.to_worker
-				.unbounded_send(ServiceToWorkerMsg::AddToPeersSet(protocol.clone(), peer_id));
-		}
-
-		Ok(())
-	}
-
-	fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>) {
-		for peer_id in peers.into_iter() {
-			let _ = self
-				.to_worker
-				.unbounded_send(ServiceToWorkerMsg::RemoveFromPeersSet(protocol.clone(), peer_id));
-		}
-	}
-
 	fn sync_num_connected(&self) -> usize {
 		self.num_connected.load(Ordering::Relaxed)
 	}
@@ -1125,8 +1097,6 @@ enum ServiceToWorkerMsg {
 	SetPeersetReserved(ProtocolName, HashSet<PeerId>),
 	AddSetReserved(ProtocolName, PeerId),
 	RemoveSetReserved(ProtocolName, PeerId),
-	AddToPeersSet(ProtocolName, PeerId),
-	RemoveFromPeersSet(ProtocolName, PeerId),
 	EventStream(out_events::Sender),
 	Request {
 		target: PeerId,
@@ -1303,16 +1273,6 @@ where
 				.remove_set_reserved_peer(protocol, peer_id),
 			ServiceToWorkerMsg::AddKnownAddress(peer_id, addr) =>
 				self.network_service.behaviour_mut().add_known_address(peer_id, addr),
-			ServiceToWorkerMsg::AddToPeersSet(protocol, peer_id) => self
-				.network_service
-				.behaviour_mut()
-				.user_protocol_mut()
-				.add_to_peers_set(protocol, peer_id),
-			ServiceToWorkerMsg::RemoveFromPeersSet(protocol, peer_id) => self
-				.network_service
-				.behaviour_mut()
-				.user_protocol_mut()
-				.remove_from_peers_set(protocol, peer_id),
 			ServiceToWorkerMsg::EventStream(sender) => self.event_streams.push(sender),
 			ServiceToWorkerMsg::Request {
 				target,
@@ -1346,17 +1306,13 @@ where
 				.user_protocol_mut()
 				.set_notification_handshake(protocol, handshake),
 			ServiceToWorkerMsg::ReservedPeers { pending_response } => {
-				let _ =
-					pending_response.send(self.reserved_peers().map(ToOwned::to_owned).collect());
+				self.reserved_peers(pending_response);
 			},
 		}
 	}
 
 	/// Process the next event coming from `Swarm`.
-	fn handle_swarm_event(
-		&mut self,
-		event: SwarmEvent<BehaviourOut, ConnectionHandlerErr<Behaviour<B>>>,
-	) {
+	fn handle_swarm_event(&mut self, event: SwarmEvent<BehaviourOut, THandlerErr<Behaviour<B>>>) {
 		match event {
 			SwarmEvent::Behaviour(BehaviourOut::InboundRequest { protocol, result, .. }) => {
 				if let Some(metrics) = self.metrics.as_ref() {
@@ -1454,16 +1410,10 @@ where
 						.behaviour_mut()
 						.add_self_reported_address_to_dht(&peer_id, &protocols, addr);
 				}
-				self.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.add_default_set_discovered_nodes(iter::once(peer_id));
+				self.network_service.behaviour_mut().user_protocol_mut().add_known_peer(peer_id);
 			},
 			SwarmEvent::Behaviour(BehaviourOut::Discovered(peer_id)) => {
-				self.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.add_default_set_discovered_nodes(iter::once(peer_id));
+				self.network_service.behaviour_mut().user_protocol_mut().add_known_peer(peer_id);
 			},
 			SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted) => {
 				if let Some(metrics) = self.metrics.as_ref() {
@@ -1585,6 +1535,7 @@ where
 				endpoint,
 				num_established,
 				concurrent_dial_errors,
+				..
 			} => {
 				if let Some(errors) = concurrent_dial_errors {
 					debug!(target: "sub-libp2p", "Libp2p => Connected({:?}) with errors: {:?}", peer_id, errors);
@@ -1613,11 +1564,11 @@ where
 					};
 					let reason = match cause {
 						Some(ConnectionError::IO(_)) => "transport-error",
-						Some(ConnectionError::Handler(EitherError::A(EitherError::A(
-							EitherError::B(EitherError::A(PingFailure::Timeout)),
+						Some(ConnectionError::Handler(Either::Left(Either::Left(
+							Either::Right(Either::Left(PingFailure::Timeout)),
 						)))) => "ping-timeout",
-						Some(ConnectionError::Handler(EitherError::A(EitherError::A(
-							EitherError::A(NotifsHandlerError::SyncNotificationsClogged),
+						Some(ConnectionError::Handler(Either::Left(Either::Left(
+							Either::Left(NotifsHandlerError::SyncNotificationsClogged),
 						)))) => "sync-notifications-clogged",
 						Some(ConnectionError::Handler(_)) => "protocol-error",
 						Some(ConnectionError::KeepAliveTimeout) => "keep-alive-timeout",
@@ -1666,16 +1617,22 @@ where
 				}
 
 				if let Some(metrics) = self.metrics.as_ref() {
+					#[allow(deprecated)]
 					let reason = match error {
+						DialError::Denied { cause } =>
+							if cause.downcast::<Exceeded>().is_ok() {
+								Some("limit-reached")
+							} else {
+								None
+							},
 						DialError::ConnectionLimit(_) => Some("limit-reached"),
-						DialError::InvalidPeerId(_) => Some("invalid-peer-id"),
-						DialError::Transport(_) | DialError::ConnectionIo(_) =>
-							Some("transport-error"),
+						DialError::InvalidPeerId(_) |
+						DialError::WrongPeerId { .. } |
+						DialError::LocalPeerId { .. } => Some("invalid-peer-id"),
+						DialError::Transport(_) => Some("transport-error"),
 						DialError::Banned |
-						DialError::LocalPeerId |
 						DialError::NoAddresses |
 						DialError::DialPeerConditionFalse(_) |
-						DialError::WrongPeerId { .. } |
 						DialError::Aborted => None, // ignore them
 					};
 					if let Some(reason) = reason {
@@ -1700,12 +1657,19 @@ where
 					local_addr, send_back_addr, error,
 				);
 				if let Some(metrics) = self.metrics.as_ref() {
+					#[allow(deprecated)]
 					let reason = match error {
-						PendingConnectionError::ConnectionLimit(_) => Some("limit-reached"),
-						PendingConnectionError::WrongPeerId { .. } => Some("invalid-peer-id"),
-						PendingConnectionError::Transport(_) | PendingConnectionError::IO(_) =>
-							Some("transport-error"),
-						PendingConnectionError::Aborted => None, // ignore it
+						ListenError::Denied { cause } =>
+							if cause.downcast::<Exceeded>().is_ok() {
+								Some("limit-reached")
+							} else {
+								None
+							},
+						ListenError::ConnectionLimit(_) => Some("limit-reached"),
+						ListenError::WrongPeerId { .. } | ListenError::LocalPeerId { .. } =>
+							Some("invalid-peer-id"),
+						ListenError::Transport(_) => Some("transport-error"),
+						ListenError::Aborted => None, // ignore it
 					};
 
 					if let Some(reason) = reason {
@@ -1716,6 +1680,7 @@ where
 					}
 				}
 			},
+			#[allow(deprecated)]
 			SwarmEvent::BannedPeer { peer_id, endpoint } => {
 				debug!(
 					target: "sub-libp2p",

@@ -22,7 +22,7 @@ use syn::{
 	ImplItem, ItemImpl, Pat, Path, PathArguments, Result, ReturnType, Signature, Type, TypePath,
 };
 
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 
 use proc_macro_crate::{crate_name, FoundCrate};
 
@@ -158,7 +158,7 @@ pub fn extract_all_signature_types(items: &[ImplItem]) -> Vec<Type> {
 	items
 		.iter()
 		.filter_map(|i| match i {
-			ImplItem::Method(method) => Some(&method.sig),
+			ImplItem::Fn(method) => Some(&method.sig),
 			_ => None,
 		})
 		.flat_map(|sig| {
@@ -253,7 +253,76 @@ pub fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
 	version.base10_parse()
 }
 
-// Each versioned trait is named 'ApiNameVN' where N is the specific version. E.g. ParachainHostV2
+/// Each versioned trait is named 'ApiNameVN' where N is the specific version. E.g. ParachainHostV2
 pub fn versioned_trait_name(trait_ident: &Ident, version: u64) -> Ident {
 	format_ident!("{}V{}", trait_ident, version)
+}
+
+/// Extract the documentation from the provided attributes.
+pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
+	attrs
+		.iter()
+		.filter_map(|attr| {
+			let syn::Meta::NameValue(meta) = &attr.meta else {
+				return None
+			};
+			let Ok(lit) = syn::parse2::<syn::Lit>(meta.value.to_token_stream()) else {
+				unreachable!("non-lit doc attribute values do not exist");
+			};
+			meta.path.get_ident().filter(|ident| *ident == "doc").map(|_| lit)
+		})
+		.collect()
+}
+
+/// Filters all attributes except the cfg ones.
+pub fn filter_cfg_attributes(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
+	attrs.iter().filter(|a| a.path().is_ident("cfg")).cloned().collect()
+}
+
+#[cfg(test)]
+mod tests {
+	use assert_matches::assert_matches;
+
+	use super::*;
+
+	#[test]
+	fn check_get_doc_literals() {
+		const FIRST: &'static str = "hello";
+		const SECOND: &'static str = "WORLD";
+
+		let doc: Attribute = parse_quote!(#[doc = #FIRST]);
+		let doc_world: Attribute = parse_quote!(#[doc = #SECOND]);
+
+		let attrs = vec![
+			doc.clone(),
+			parse_quote!(#[derive(Debug)]),
+			parse_quote!(#[test]),
+			parse_quote!(#[allow(non_camel_case_types)]),
+			doc_world.clone(),
+		];
+
+		let docs = get_doc_literals(&attrs);
+		assert_eq!(docs.len(), 2);
+		assert_matches!(&docs[0], syn::Lit::Str(val) if val.value() == FIRST);
+		assert_matches!(&docs[1], syn::Lit::Str(val) if val.value() == SECOND);
+	}
+
+	#[test]
+	fn check_filter_cfg_attributes() {
+		let cfg_std: Attribute = parse_quote!(#[cfg(feature = "std")]);
+		let cfg_benchmarks: Attribute = parse_quote!(#[cfg(feature = "runtime-benchmarks")]);
+
+		let attrs = vec![
+			cfg_std.clone(),
+			parse_quote!(#[derive(Debug)]),
+			parse_quote!(#[test]),
+			cfg_benchmarks.clone(),
+			parse_quote!(#[allow(non_camel_case_types)]),
+		];
+
+		let filtered = filter_cfg_attributes(&attrs);
+		assert_eq!(filtered.len(), 2);
+		assert_eq!(cfg_std, filtered[0]);
+		assert_eq!(cfg_benchmarks, filtered[1]);
+	}
 }

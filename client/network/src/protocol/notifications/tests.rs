@@ -22,11 +22,12 @@ use crate::protocol::notifications::{Notifications, NotificationsOut, ProtocolCo
 
 use futures::prelude::*;
 use libp2p::{
-	core::{connection::ConnectionId, transport::MemoryTransport, upgrade},
+	core::{transport::MemoryTransport, upgrade, Endpoint},
 	identity, noise,
 	swarm::{
-		behaviour::FromSwarm, ConnectionHandler, Executor, IntoConnectionHandler, NetworkBehaviour,
-		NetworkBehaviourAction, PollParameters, Swarm, SwarmEvent,
+		behaviour::FromSwarm, ConnectionDenied, ConnectionId, Executor, NetworkBehaviour,
+		PollParameters, Swarm, SwarmBuilder, SwarmEvent, THandler, THandlerInEvent,
+		THandlerOutEvent, ToSwarm,
 	},
 	yamux, Multiaddr, PeerId, Transport,
 };
@@ -57,13 +58,10 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 	for index in 0..2 {
 		let keypair = keypairs[index].clone();
 
-		let noise_keys =
-			noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair).unwrap();
-
 		let transport = MemoryTransport::new()
 			.upgrade(upgrade::Version::V1)
-			.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-			.multiplex(yamux::YamuxConfig::default())
+			.authenticate(noise::Config::new(&keypair).unwrap())
+			.multiplex(yamux::Config::default())
 			.timeout(Duration::from_secs(20))
 			.boxed();
 
@@ -105,12 +103,13 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		};
 
 		let runtime = tokio::runtime::Runtime::new().unwrap();
-		let mut swarm = Swarm::with_executor(
+		let mut swarm = SwarmBuilder::with_executor(
 			transport,
 			behaviour,
 			keypairs[index].public().to_peer_id(),
 			TokioExecutor(runtime),
-		);
+		)
+		.build();
 		swarm.listen_on(addrs[index].clone()).unwrap();
 		out.push(swarm);
 	}
@@ -146,18 +145,63 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = <Notifications as NetworkBehaviour>::OutEvent;
 
-	fn new_handler(&mut self) -> Self::ConnectionHandler {
-		self.inner.new_handler()
+	fn handle_pending_inbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		local_addr: &Multiaddr,
+		remote_addr: &Multiaddr,
+	) -> Result<(), ConnectionDenied> {
+		self.inner
+			.handle_pending_inbound_connection(connection_id, local_addr, remote_addr)
 	}
 
-	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-		let mut list = self.inner.addresses_of_peer(peer_id);
-		for (p, a) in self.addrs.iter() {
-			if p == peer_id {
-				list.push(a.clone());
+	fn handle_pending_outbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		maybe_peer: Option<PeerId>,
+		addresses: &[Multiaddr],
+		effective_role: Endpoint,
+	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
+		let mut list = self.inner.handle_pending_outbound_connection(
+			connection_id,
+			maybe_peer,
+			addresses,
+			effective_role,
+		)?;
+		if let Some(peer_id) = maybe_peer {
+			for (p, a) in self.addrs.iter() {
+				if *p == peer_id {
+					list.push(a.clone());
+				}
 			}
 		}
-		list
+		Ok(list)
+	}
+
+	fn handle_established_inbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		peer: PeerId,
+		local_addr: &Multiaddr,
+		remote_addr: &Multiaddr,
+	) -> Result<THandler<Self>, ConnectionDenied> {
+		self.inner.handle_established_inbound_connection(
+			connection_id,
+			peer,
+			local_addr,
+			remote_addr,
+		)
+	}
+
+	fn handle_established_outbound_connection(
+		&mut self,
+		connection_id: ConnectionId,
+		peer: PeerId,
+		addr: &Multiaddr,
+		role_override: Endpoint,
+	) -> Result<THandler<Self>, ConnectionDenied> {
+		self.inner
+			.handle_established_outbound_connection(connection_id, peer, addr, role_override)
 	}
 
 	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
@@ -168,8 +212,7 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		&mut self,
 		peer_id: PeerId,
 		connection_id: ConnectionId,
-		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
-		ConnectionHandler>::OutEvent,
+		event: THandlerOutEvent<Self>,
 	) {
 		self.inner.on_connection_handler_event(peer_id, connection_id, event);
 	}
@@ -178,7 +221,7 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
 		self.inner.poll(cx, params)
 	}
 }
@@ -264,8 +307,20 @@ fn reconnect_after_disconnect() {
 				_ => {},
 			}
 
+			// Due to the bug in `Notifications`, the disconnected node does not always detect that
+			// it was disconnected. The closed inbound substream is tolerated by design, and the
+			// closed outbound substream is not detected until something is sent into it.
+			// See [PR #13396](https://github.com/paritytech/substrate/pull/13396).
+			// This happens if the disconnecting node reconnects to it fast enough.
+			// In this case the disconnected node does not transit via `ServiceState::NotConnected`
+			// and stays in `ServiceState::FirstConnec`.
+			// TODO: update this once the fix is finally merged.
 			if service1_state == ServiceState::ConnectedAgain &&
-				service2_state == ServiceState::ConnectedAgain
+				service2_state == ServiceState::ConnectedAgain ||
+				service1_state == ServiceState::ConnectedAgain &&
+					service2_state == ServiceState::FirstConnec ||
+				service1_state == ServiceState::FirstConnec &&
+					service2_state == ServiceState::ConnectedAgain
 			{
 				break
 			}

@@ -43,7 +43,7 @@ use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
 	AccountIdOf, BalanceOf, CodeHash, CodeVec, Config, Error, OwnerInfoOf, RelaxedCodeVec,
-	Schedule,
+	Schedule, LOG_TARGET,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::dispatch::{DispatchError, DispatchResult};
@@ -326,7 +326,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 			},
 		)
 		.map_err(|msg| {
-			log::debug!(target: "runtime::contracts", "failed to instantiate code: {}", msg);
+			log::debug!(target: LOG_TARGET, "failed to instantiate code: {}", msg);
 			Error::<T>::CodeRejected
 		})?;
 		store.data_mut().set_memory(memory);
@@ -335,7 +335,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 			.get_export(&store, function.identifier())
 			.and_then(|export| export.into_func())
 			.ok_or_else(|| {
-				log::error!(target: "runtime::contracts", "failed to find entry point");
+				log::error!(target: LOG_TARGET, "failed to find entry point");
 				Error::<T>::CodeRejected
 			})?;
 
@@ -370,7 +370,7 @@ mod tests {
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
-		BalanceOf, CodeHash, Error, OldWeight, Pallet as Contracts,
+		BalanceOf, CodeHash, Error, Origin, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
 	use frame_support::{
@@ -434,7 +434,9 @@ mod tests {
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
 		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
+		sr25519_verify: RefCell<Vec<([u8; 64], Vec<u8>, [u8; 32])>>,
 		code_hashes: Vec<CodeHash<Test>>,
+		caller: Origin<Test>,
 	}
 
 	/// The call is mocked and just returns this hardcoded value.
@@ -458,6 +460,8 @@ mod tests {
 				gas_meter: GasMeter::new(Weight::from_parts(10_000_000_000, 10 * 1024 * 1024)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
+				caller: Default::default(),
+				sr25519_verify: Default::default(),
 			}
 		}
 	}
@@ -468,6 +472,7 @@ mod tests {
 		fn call(
 			&mut self,
 			_gas_limit: Weight,
+			_deposit_limit: BalanceOf<Self::T>,
 			to: AccountIdOf<Self::T>,
 			value: u64,
 			data: Vec<u8>,
@@ -487,6 +492,7 @@ mod tests {
 		fn instantiate(
 			&mut self,
 			gas_limit: Weight,
+			_deposit_limit: BalanceOf<Self::T>,
 			code_hash: CodeHash<Test>,
 			value: u64,
 			data: Vec<u8>,
@@ -541,8 +547,8 @@ mod tests {
 			}
 			Ok(result)
 		}
-		fn caller(&self) -> &AccountIdOf<Self::T> {
-			&ALICE
+		fn caller(&self) -> Origin<Self::T> {
+			self.caller.clone()
 		}
 		fn is_contract(&self, _address: &AccountIdOf<Self::T>) -> bool {
 			true
@@ -556,6 +562,9 @@ mod tests {
 		}
 		fn caller_is_origin(&self) -> bool {
 			false
+		}
+		fn caller_is_root(&self) -> bool {
+			&self.caller == &Origin::Root
 		}
 		fn address(&self) -> &AccountIdOf<Self::T> {
 			&BOB
@@ -585,7 +594,11 @@ mod tests {
 			16_384
 		}
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
-			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.ref_time().into())
+			BalanceOf::<Self::T>::from(1312_u32)
+				.saturating_mul(weight.ref_time().into())
+				.saturating_add(
+					BalanceOf::<Self::T>::from(103_u32).saturating_mul(weight.proof_size()),
+				)
 		}
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
@@ -611,6 +624,10 @@ mod tests {
 		) -> Result<[u8; 33], ()> {
 			self.ecdsa_recover.borrow_mut().push((*signature, *message_hash));
 			Ok([3; 33])
+		}
+		fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool {
+			self.sr25519_verify.borrow_mut().push((*signature, message.to_vec(), *pub_key));
+			true
 		}
 		fn contract_info(&mut self) -> &mut crate::ContractInfo<Self::T> {
 			unimplemented!()
@@ -1319,6 +1336,49 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn contract_sr25519() {
+		const CODE_SR25519: &str = r#"
+(module
+	(import "seal0" "sr25519_verify" (func $sr25519_verify (param i32 i32 i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(drop
+			(call $sr25519_verify
+				(i32.const 0) ;; Pointer to signature.
+				(i32.const 64) ;; Pointer to public key.
+				(i32.const 16) ;; message length.
+				(i32.const 96) ;; Pointer to message.
+			)
+		)
+	)
+	(func (export "deploy"))
+
+	;; Signature (64 bytes)
+	(data (i32.const 0)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+
+	;;  public key (32 bytes)
+	(data (i32.const 64)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+
+	;;  message. (16 bytes)
+	(data (i32.const 96)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+)
+"#;
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(&CODE_SR25519, vec![], &mut mock_ext));
+		assert_eq!(mock_ext.sr25519_verify.into_inner(), [([1; 64], [1; 16].to_vec(), [1; 32])]);
+	}
+
 	const CODE_GET_STORAGE: &str = r#"
 (module
 	(import "seal0" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32) (result i32)))
@@ -1444,6 +1504,16 @@ mod tests {
 		assert_ok!(execute(CODE_CALLER, vec![], MockExt::default()));
 	}
 
+	#[test]
+	fn caller_traps_when_no_account_id() {
+		let mut ext = MockExt::default();
+		ext.caller = Origin::Root;
+		assert_eq!(
+			execute(CODE_CALLER, vec![], ext),
+			Err(ExecError { error: DispatchError::RootNotAllowed, origin: ErrorOrigin::Caller })
+		);
+	}
+
 	/// calls `seal_address` and compares the result with the constant (BOB's address part).
 	const CODE_ADDRESS: &str = r#"
 (module
@@ -1540,7 +1610,7 @@ mod tests {
 
 	const CODE_GAS_PRICE: &str = r#"
 (module
-	(import "seal0" "seal_weight_to_fee" (func $seal_weight_to_fee (param i64 i32 i32)))
+	(import "seal1" "weight_to_fee" (func $seal_weight_to_fee (param i64 i64 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1557,7 +1627,7 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the gas price in the buffer
-		(call $seal_weight_to_fee (i64.const 2) (i32.const 0) (i32.const 32))
+		(call $seal_weight_to_fee (i64.const 2) (i64.const 1) (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert
@@ -1567,11 +1637,11 @@ mod tests {
 			)
 		)
 
-		;; assert that contents of the buffer is equal to the i64 value of 2 * 1312.
+		;; assert that contents of the buffer is equal to the i64 value of 2 * 1312 + 103 = 2727.
 		(call $assert
 			(i64.eq
 				(i64.load (i32.const 0))
-				(i64.const 2624)
+				(i64.const 2727)
 			)
 		)
 	)
@@ -1586,12 +1656,12 @@ mod tests {
 
 	const CODE_GAS_LEFT: &str = r#"
 (module
-	(import "seal0" "seal_gas_left" (func $seal_gas_left (param i32 i32)))
+	(import "seal1" "gas_left" (func $seal_gas_left (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; size of our buffer is 32 bytes
-	(data (i32.const 32) "\20")
+	;; Make output buffer size 20 bytes
+	(data (i32.const 20) "\14")
 
 	(func $assert (param i32)
 		(block $ok
@@ -1603,19 +1673,19 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; This stores the gas left in the buffer
-		(call $seal_gas_left (i32.const 0) (i32.const 32))
+		;; This stores the weight left to the buffer
+		(call $seal_gas_left (i32.const 0) (i32.const 20))
 
-		;; assert len == 8
+		;; Assert len <= 16 (max encoded Weight len)
 		(call $assert
-			(i32.eq
-				(i32.load (i32.const 32))
-				(i32.const 8)
+			(i32.le_u
+				(i32.load (i32.const 20))
+				(i32.const 16)
 			)
 		)
 
-		;; return gas left
-		(call $seal_return (i32.const 0) (i32.const 0) (i32.const 8))
+		;; Return weight left and its encoded value len
+		(call $seal_return (i32.const 0) (i32.const 0) (i32.load (i32.const 20)))
 
 		(unreachable)
 	)
@@ -1630,11 +1700,11 @@ mod tests {
 
 		let output = execute(CODE_GAS_LEFT, vec![], &mut ext).unwrap();
 
-		let gas_left = OldWeight::decode(&mut &*output.data).unwrap();
+		let weight_left = Weight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
-		// TODO: account for proof size weight
-		assert!(gas_left < gas_limit.ref_time(), "gas_left must be less than initial");
-		assert!(gas_left > actual_left.ref_time(), "gas_left must be greater than final");
+
+		assert!(weight_left.all_lt(gas_limit), "gas_left must be less than initial");
+		assert!(weight_left.all_gt(actual_left), "gas_left must be greater than final");
 	}
 
 	/// Test that [`frame_support::weights::OldWeight`] en/decodes the same as our
@@ -2920,6 +2990,45 @@ mod tests {
 
 		// The mock ext just always returns 0u32 (`false`)
 		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: 0u32.encode() },);
+	}
+
+	#[test]
+	fn caller_is_root_works() {
+		const CODE_CALLER_IS_ROOT: &str = r#"
+;; This runs `caller_is_root` check on zero account address
+(module
+	(import "seal0" "caller_is_root" (func $caller_is_root (result i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; [0, 4) here the return code of the `caller_is_root` will be stored
+	;; we initialize it with non-zero value to be sure that it's being overwritten below
+	(data (i32.const 0) "\10\10\10\10")
+
+	(func (export "deploy"))
+
+	(func (export "call")
+		(i32.store
+			(i32.const 0)
+			(call $caller_is_root)
+		)
+		;; exit with success and take `caller_is_root` return code to the output buffer
+		(call $seal_return (i32.const 0) (i32.const 0) (i32.const 4))
+	)
+)
+"#;
+		// The default `caller` is ALICE. Therefore not root.
+		let output = execute(CODE_CALLER_IS_ROOT, vec![], MockExt::default()).unwrap();
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: 0u32.encode() },);
+
+		// The caller is forced to be root instead of using the default ALICE.
+		let output = execute(
+			CODE_CALLER_IS_ROOT,
+			vec![],
+			MockExt { caller: Origin::Root, ..MockExt::default() },
+		)
+		.unwrap();
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: 1u32.encode() },);
 	}
 
 	#[test]

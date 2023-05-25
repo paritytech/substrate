@@ -17,15 +17,15 @@
 
 //! Types that should only be used for testing!
 
+use crate::{Error, Keystore, KeystorePtr};
+
+#[cfg(feature = "bls-experimental")]
+use sp_core::{bls377, bls381};
 use sp_core::{
-	crypto::{ByteArray, KeyTypeId, Pair},
+	crypto::{ByteArray, KeyTypeId, Pair, VrfSecret},
 	ecdsa, ed25519, sr25519,
 };
 
-use crate::{
-	vrf::{make_transcript, VRFSignature, VRFTranscriptData},
-	Error, Keystore, KeystorePtr,
-};
 use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
 
@@ -100,6 +100,26 @@ impl MemoryKeystore {
 		let sig = self.pair::<T>(key_type, public).map(|pair| pair.sign(msg));
 		Ok(sig)
 	}
+
+	fn vrf_sign<T: Pair + VrfSecret>(
+		&self,
+		key_type: KeyTypeId,
+		public: &T::Public,
+		data: &T::VrfSignData,
+	) -> Result<Option<T::VrfSignature>, Error> {
+		let sig = self.pair::<T>(key_type, public).map(|pair| pair.vrf_sign(data));
+		Ok(sig)
+	}
+
+	fn vrf_output<T: Pair + VrfSecret>(
+		&self,
+		key_type: KeyTypeId,
+		public: &T::Public,
+		input: &T::VrfInput,
+	) -> Result<Option<T::VrfOutput>, Error> {
+		let preout = self.pair::<T>(key_type, public).map(|pair| pair.vrf_output(input));
+		Ok(preout)
+	}
 }
 
 impl Keystore for MemoryKeystore {
@@ -128,14 +148,18 @@ impl Keystore for MemoryKeystore {
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript_data: VRFTranscriptData,
-	) -> Result<Option<VRFSignature>, Error> {
-		let sig = self.pair::<sr25519::Pair>(key_type, public).map(|pair| {
-			let transcript = make_transcript(transcript_data);
-			let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
-			VRFSignature { output: inout.to_output(), proof }
-		});
-		Ok(sig)
+		data: &sr25519::vrf::VrfSignData,
+	) -> Result<Option<sr25519::vrf::VrfSignature>, Error> {
+		self.vrf_sign::<sr25519::Pair>(key_type, public, data)
+	}
+
+	fn sr25519_vrf_output(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		input: &sr25519::vrf::VrfInput,
+	) -> Result<Option<sr25519::vrf::VrfOutput>, Error> {
+		self.vrf_output::<sr25519::Pair>(key_type, public, input)
 	}
 
 	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {
@@ -190,6 +214,54 @@ impl Keystore for MemoryKeystore {
 		Ok(sig)
 	}
 
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_public_keys(&self, key_type: KeyTypeId) -> Vec<bls381::Public> {
+		self.public_keys::<bls381::Pair>(key_type)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls381::Public, Error> {
+		self.generate_new::<bls381::Pair>(key_type, seed)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bls381::Public,
+		msg: &[u8],
+	) -> Result<Option<bls381::Signature>, Error> {
+		self.sign::<bls381::Pair>(key_type, public, msg)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_public_keys(&self, key_type: KeyTypeId) -> Vec<bls377::Public> {
+		self.public_keys::<bls377::Pair>(key_type)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls377::Public, Error> {
+		self.generate_new::<bls377::Pair>(key_type, seed)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bls377::Public,
+		msg: &[u8],
+	) -> Result<Option<bls377::Signature>, Error> {
+		self.sign::<bls377::Pair>(key_type, public, msg)
+	}
+
 	fn insert(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
 		self.keys
 			.write()
@@ -225,7 +297,6 @@ impl Into<KeystorePtr> for MemoryKeystore {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::vrf::VRFTranscriptValue;
 	use sp_core::{
 		sr25519,
 		testing::{ECDSA, ED25519, SR25519},
@@ -265,25 +336,55 @@ mod tests {
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
-		let transcript_data = VRFTranscriptData {
-			label: b"Test",
-			items: vec![
-				("one", VRFTranscriptValue::U64(1)),
-				("two", VRFTranscriptValue::U64(2)),
-				("three", VRFTranscriptValue::Bytes("test".as_bytes().to_vec())),
+		let data = sr25519::vrf::VrfInput::new(
+			b"Test",
+			&[
+				(b"one", &1_u64.to_le_bytes()),
+				(b"two", &2_u64.to_le_bytes()),
+				(b"three", "test".as_bytes()),
 			],
-		};
+		)
+		.into_sign_data();
 
-		let result = store.sr25519_vrf_sign(SR25519, &key_pair.public(), transcript_data.clone());
+		let result = store.sr25519_vrf_sign(SR25519, &key_pair.public(), &data);
 		assert!(result.unwrap().is_none());
 
 		store
 			.insert(SR25519, secret_uri, key_pair.public().as_ref())
 			.expect("Inserts unknown key");
 
-		let result = store.sr25519_vrf_sign(SR25519, &key_pair.public(), transcript_data);
+		let result = store.sr25519_vrf_sign(SR25519, &key_pair.public(), &data);
 
 		assert!(result.unwrap().is_some());
+	}
+
+	#[test]
+	fn vrf_output() {
+		let store = MemoryKeystore::new();
+
+		let secret_uri = "//Alice";
+		let pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
+
+		let input = sr25519::vrf::VrfInput::new(
+			b"Test",
+			&[
+				(b"one", &1_u64.to_le_bytes()),
+				(b"two", &2_u64.to_le_bytes()),
+				(b"three", "test".as_bytes()),
+			],
+		);
+
+		let result = store.sr25519_vrf_output(SR25519, &pair.public(), &input);
+		assert!(result.unwrap().is_none());
+
+		store
+			.insert(SR25519, secret_uri, pair.public().as_ref())
+			.expect("Inserts unknown key");
+
+		let preout = store.sr25519_vrf_output(SR25519, &pair.public(), &input).unwrap().unwrap();
+
+		let result = preout.make_bytes::<32>(b"rand", &input, &pair.public());
+		assert!(result.is_ok());
 	}
 
 	#[test]
