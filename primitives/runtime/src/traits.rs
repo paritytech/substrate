@@ -703,23 +703,8 @@ pub trait Hash:
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, state_version: StateVersion) -> Self::Output;
 }
 
-pub trait HashOutput: Member
-+ MaybeSerializeDeserialize
-+ MaybeDisplay
-+ Debug
-+ sp_std::hash::Hash
-+ AsRef<[u8]>
-+ AsMut<[u8]>
-+ Copy
-+ Ord
-+ Default
-+ Encode
-+ Decode
-+ MaxEncodedLen
-+ TypeInfo {}
-
-impl <T> HashOutput for T
-	where T:
+/// A generic hash output type trait.
+pub trait HashOutput:
 	Member
 	+ MaybeSerializeDeserialize
 	+ MaybeDisplay
@@ -734,7 +719,26 @@ impl <T> HashOutput for T
 	+ Decode
 	+ MaxEncodedLen
 	+ TypeInfo
-{}
+{
+}
+
+impl<T> HashOutput for T where
+	T: Member
+		+ MaybeSerializeDeserialize
+		+ MaybeDisplay
+		+ Debug
+		+ sp_std::hash::Hash
+		+ AsRef<[u8]>
+		+ AsMut<[u8]>
+		+ Copy
+		+ Ord
+		+ Default
+		+ Encode
+		+ Decode
+		+ MaxEncodedLen
+		+ TypeInfo
+{
+}
 
 /// Blake2-256 Hash implementation.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, TypeInfo)]
@@ -754,12 +758,12 @@ impl Hasher for BlakeTwo256 {
 impl Hash for BlakeTwo256 {
 	type Output = sp_core::H256;
 
-	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
-		sp_io::trie::blake2_256_root(input, version)
-	}
-
 	fn ordered_trie_root(input: Vec<Vec<u8>>, version: StateVersion) -> Self::Output {
 		sp_io::trie::blake2_256_ordered_root(input, version)
+	}
+
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
+		sp_io::trie::blake2_256_root(input, version)
 	}
 }
 
@@ -781,12 +785,12 @@ impl Hasher for Keccak256 {
 impl Hash for Keccak256 {
 	type Output = sp_core::H256;
 
-	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
-		sp_io::trie::keccak_256_root(input, version)
-	}
-
 	fn ordered_trie_root(input: Vec<Vec<u8>>, version: StateVersion) -> Self::Output {
 		sp_io::trie::keccak_256_ordered_root(input, version)
+	}
+
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
+		sp_io::trie::keccak_256_root(input, version)
 	}
 }
 
