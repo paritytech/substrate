@@ -2057,23 +2057,24 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "docify"
-version = "0.1.5"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1955ad3f17ac98c900db08d539b838e22db36de79e6dc5b91d0bd7023a11d7e"
+checksum = "fd42b99df89dcc00ff3d62361e02d8a91320f25bafde59d66f0be5d87a906f0f"
 dependencies = [
  "docify_macros",
 ]
 
 [[package]]
 name = "docify_macros"
-version = "0.1.5"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e42a4bfcc0d24888181bf02b5ddf90f7f0c5d1246223dbb8d7a565a92e0e4bd"
+checksum = "22ee41bab3ace62c9e2ba2960003219b57b5b2203a93b5e08ce8fb2ab7aa05be"
 dependencies = [
  "colored",
  "common-path",
  "derive-syn-parse",
  "lazy_static",
+ "prettyplease 0.2.4",
  "proc-macro2",
  "quote",
  "regex",
