@@ -78,10 +78,9 @@ pub fn expand_outer_config(
 			#fields
 		}
 
-		// TODO [#14065]
-		// - deprecate it
-		// - later, remove it
+		// TODO [#14065] remove it for good
 		#[cfg(any(feature = "std", test))]
+		#[deprecated(note = "Use `RuntimeGenesisConfig` instead.")]
 		pub type GenesisConfig = RuntimeGenesisConfig;
 
 		#[cfg(any(feature = "std", test))]
