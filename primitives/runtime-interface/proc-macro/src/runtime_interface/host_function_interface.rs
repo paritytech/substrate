@@ -338,7 +338,7 @@ fn generate_host_function_implementation(
 		.collect();
 	if version > 1 && !cfg_attrs.is_empty() {
 		return Err(Error::new(
-			trait_name.span(),
+			method.span(),
 			"Conditional compilation is not supported for versioned functions",
 		))
 	}
