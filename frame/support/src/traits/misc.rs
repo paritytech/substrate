@@ -752,13 +752,13 @@ impl<T> IsType<T> for T {
 	}
 }
 
-/// Something that can be checked to be a of sub type `T`.
+/// Something that can be checked to be a sub type of `T`.
 ///
 /// This is useful for enums where each variant encapsulates a different sub type, and
 /// you need access to these sub types.
 ///
 /// For example, in FRAME, this trait is implemented for the runtime `Call` enum. Pallets use this
-/// to check if a certain call is an instance of the local pallet's `Call` enum.
+/// to check if a local pallet call is an instance of the runtime `Call` enum.
 ///
 /// # Example
 ///
@@ -770,32 +770,27 @@ impl<T> IsType<T> for T {
 ///     U32(u32),
 /// }
 ///
-/// impl IsSubType<String> for Test {
+/// impl IsSubType<Test> for String {
 ///     fn is_sub_type(&self) -> Option<&String> {
-///         match self {
-///             Self::String(ref r) => Some(r),
-///             _ => None,
-///         }
+/// 		Some(self)
 ///     }
 /// }
 ///
-/// impl IsSubType<u32> for Test {
+/// impl IsSubType<Test> for u64 {
 ///     fn is_sub_type(&self) -> Option<&u32> {
-///         match self {
-///             Self::U32(ref r) => Some(r),
-///             _ => None,
-///         }
+/// 		None
 ///     }
 /// }
 ///
 /// fn main() {
-///     let data = Test::String("test".into());
+///     let data = "test".to_string();
 ///
-///     assert_eq!("test", IsSubType::<String>::is_sub_type(&data).unwrap().as_str());
+///     assert!(IsSubType::<Test>::is_sub_type(&data).is_some());
+///     assert!(IsSubType::<Test>::is_sub_type(&0u64).is_none());
 /// }
 /// ```
 pub trait IsSubType<T> {
-	/// Returns `Some(_)` if `self` is an instance of sub type `T`.
+	/// Returns `Some(_)` if `self` is an sub type instance of `T`.
 	fn is_sub_type(&self) -> Option<&T>;
 }
 
