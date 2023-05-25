@@ -330,12 +330,8 @@ fn generate_host_function_implementation(
 		});
 	}
 
-	let cfg_attrs: Vec<_> = method
-		.attrs
-		.iter()
-		.filter(|a| a.path().is_ident("cfg"))
-		.cloned()
-		.collect();
+	let cfg_attrs: Vec<_> =
+		method.attrs.iter().filter(|a| a.path().is_ident("cfg")).cloned().collect();
 	if version > 1 && !cfg_attrs.is_empty() {
 		return Err(Error::new(
 			method.span(),
