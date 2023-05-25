@@ -216,9 +216,6 @@ pub(crate) struct TestNotificationService {
 #[async_trait::async_trait]
 impl NotificationService for TestNotificationService {
 	/// Instruct `Notifications` to open a new substream for `peer`.
-	///
-	/// `dial_if_disconnected` informs `Notifications` whether to dial
-	// the peer if there is currently no active connection to it.
 	async fn open_substream(&mut self, _peer: PeerId) -> Result<(), ()> {
 		unimplemented!();
 	}
@@ -456,7 +453,7 @@ fn good_commit_leads_to_relay() {
 			// waiting for events from the network. Send it events that inform that
 			// a notification stream was opened and that a notification was received.
 			//
-			// since each protocol has its own notification stream, events need not be filtered.
+			// Since each protocol has its own notification stream, events need not be filtered.
 			let sender_id = id;
 
 			let send_message = async move {
@@ -486,7 +483,7 @@ fn good_commit_leads_to_relay() {
 					},
 				);
 
-				// Announce its local set has being on the current set id through a neighbor
+				// Announce its local set being on the current set id through a neighbor
 				// packet, otherwise it won't be eligible to receive the commit
 				let _ = {
 					let update = gossip::VersionedNeighborPacket::V1(gossip::NeighborPacket {
@@ -607,7 +604,7 @@ fn bad_commit_leads_to_report() {
 			// waiting for events from the network. Send it events that inform that
 			// a notification stream was opened and that a notification was received.
 			//
-			// since each protocol has its own notification stream, events need not be filtered.
+			// Since each protocol has its own notification stream, events need not be filtered.
 			let sender_id = id;
 
 			let send_message = async move {

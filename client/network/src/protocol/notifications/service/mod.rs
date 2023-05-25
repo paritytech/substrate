@@ -281,7 +281,7 @@ impl ProtocolHandlePair {
 	}
 
 	/// Consume `self` and split [`ProtocolHandlePair`] into a handle which allows it to send events
-	/// to the protocol into a stream of commands received from the protocol.
+	/// to the protocol and a stream of commands received from the protocol.
 	pub fn split(
 		self,
 	) -> (ProtocolHandle, Box<dyn Stream<Item = NotificationCommand> + Send + Unpin>) {

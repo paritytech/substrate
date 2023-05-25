@@ -551,7 +551,7 @@ impl NonDefaultSetConfig {
 		&self.protocol_name
 	}
 
-	/// Get refer
+	/// Get reference to fallback protocol names.
 	pub fn fallback_names(&self) -> impl Iterator<Item = &ProtocolName> {
 		self.fallback_names.iter()
 	}

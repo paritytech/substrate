@@ -771,7 +771,7 @@ where
 					if !self.peers.contains_key(&peer) {
 						log::trace!(
 							target: LOG_TARGET,
-							"seceived notification from {peer} who had been earlier refused by `SyncingEngine`",
+							"received notification from {peer} who had been earlier refused by `SyncingEngine`",
 						);
 						continue
 					}
