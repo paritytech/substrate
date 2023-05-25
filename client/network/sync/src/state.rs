@@ -150,7 +150,7 @@ where
 				} else {
 					values.key_values
 				};
-				let mut entry = self.state.entry(values.state_root).or_default();
+				let entry = self.state.entry(values.state_root).or_default();
 				if entry.0.len() > 0 && entry.1.len() > 1 {
 					// Already imported child_trie with same root.
 					// Warning this will not work with parallel download.

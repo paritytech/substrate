@@ -133,7 +133,7 @@ where
 		&executor,
 		"TryRuntime_execute_block",
 		&payload,
-		full_extensions(),
+		full_extensions(executor.clone()),
 		shared.export_proof,
 	)?;
 

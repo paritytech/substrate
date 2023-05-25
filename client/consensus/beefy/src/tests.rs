@@ -24,6 +24,7 @@ use crate::{
 	communication::{
 		gossip::{
 			proofs_topic, tests::sign_commitment, votes_topic, GossipFilterCfg, GossipMessage,
+			GossipValidator,
 		},
 		request_response::{on_demand_justifications_protocol_config, BeefyJustifsRequestHandler},
 	},
@@ -65,7 +66,7 @@ use sp_runtime::{
 	BuildStorage, DigestItem, EncodedJustification, Justifications, Storage,
 };
 use std::{marker::PhantomData, sync::Arc, task::Poll};
-use substrate_test_runtime_client::{runtime::Header, ClientExt};
+use substrate_test_runtime_client::{BlockBuilderExt, ClientExt};
 use tokio::time::Duration;
 
 const GENESIS_HASH: H256 = H256::zero();
@@ -164,19 +165,21 @@ impl BeefyTestNet {
 		// push genesis to make indexing human readable (index equals to block number)
 		all_hashes.push(self.peer(0).client().info().genesis_hash);
 
-		let built_hashes = self.peer(0).generate_blocks(count, BlockOrigin::File, |builder| {
-			let mut block = builder.build().unwrap().block;
-
+		let mut block_num: NumberFor<Block> = self.peer(0).client().info().best_number;
+		let built_hashes = self.peer(0).generate_blocks(count, BlockOrigin::File, |mut builder| {
+			block_num = block_num.saturating_add(1).try_into().unwrap();
 			if include_mmr_digest {
-				let block_num = *block.header.number();
 				let num_byte = block_num.to_le_bytes().into_iter().next().unwrap();
 				let mmr_root = MmrRootHash::repeat_byte(num_byte);
-				add_mmr_digest(&mut block.header, mmr_root);
+				add_mmr_digest(&mut builder, mmr_root);
 			}
 
-			if *block.header.number() % session_length == 0 {
-				add_auth_change_digest(&mut block.header, validator_set.clone());
+			if block_num % session_length == 0 {
+				add_auth_change_digest(&mut builder, validator_set.clone());
 			}
+
+			let block = builder.build().unwrap().block;
+			assert_eq!(block.header.number, block_num);
 
 			block
 		});
@@ -324,18 +327,22 @@ sp_api::mock_impl_runtime_apis! {
 	}
 }
 
-fn add_mmr_digest(header: &mut Header, mmr_hash: MmrRootHash) {
-	header.digest_mut().push(DigestItem::Consensus(
-		BEEFY_ENGINE_ID,
-		ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),
-	));
+fn add_mmr_digest(builder: &mut impl BlockBuilderExt, mmr_hash: MmrRootHash) {
+	builder
+		.push_deposit_log_digest_item(DigestItem::Consensus(
+			BEEFY_ENGINE_ID,
+			ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),
+		))
+		.unwrap();
 }
 
-fn add_auth_change_digest(header: &mut Header, new_auth_set: BeefyValidatorSet) {
-	header.digest_mut().push(DigestItem::Consensus(
-		BEEFY_ENGINE_ID,
-		ConsensusLog::<AuthorityId>::AuthoritiesChange(new_auth_set).encode(),
-	));
+fn add_auth_change_digest(builder: &mut impl BlockBuilderExt, new_auth_set: BeefyValidatorSet) {
+	builder
+		.push_deposit_log_digest_item(DigestItem::Consensus(
+			BEEFY_ENGINE_ID,
+			ConsensusLog::<AuthorityId>::AuthoritiesChange(new_auth_set).encode(),
+		))
+		.unwrap();
 }
 
 pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
@@ -357,8 +364,8 @@ async fn voter_init_setup(
 ) -> sp_blockchain::Result<PersistedState<Block>> {
 	let backend = net.peer(0).client().as_backend();
 	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
-	let gossip_validator =
-		Arc::new(crate::communication::gossip::GossipValidator::new(known_peers));
+	let (gossip_validator, _) = GossipValidator::new(known_peers);
+	let gossip_validator = Arc::new(gossip_validator);
 	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
 		net.peer(0).network_service().clone(),
 		net.peer(0).sync_service().clone(),
@@ -1262,8 +1269,8 @@ async fn gossipped_finality_proofs() {
 	let charlie = &net.peers[2];
 	let known_peers = Arc::new(Mutex::new(KnownPeers::<Block>::new()));
 	// Charlie will run just the gossip engine and not the full voter.
-	let charlie_gossip_validator =
-		Arc::new(crate::communication::gossip::GossipValidator::new(known_peers));
+	let (gossip_validator, _) = GossipValidator::new(known_peers);
+	let charlie_gossip_validator = Arc::new(gossip_validator);
 	charlie_gossip_validator.update_filter(GossipFilterCfg::<Block> {
 		start: 1,
 		end: 10,

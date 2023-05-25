@@ -35,6 +35,7 @@ pub fn expand_outer_slash_reason(pallet_decls: &[Pallet], scrate: &TokenStream) 
 	}
 
 	quote! {
+		/// A reason for slashing funds.
 		#[derive(
 			Copy, Clone, Eq, PartialEq, Ord, PartialOrd,
 			#scrate::codec::Encode, #scrate::codec::Decode, #scrate::codec::MaxEncodedLen,

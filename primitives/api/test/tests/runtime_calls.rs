@@ -29,6 +29,7 @@ use substrate_test_runtime_client::{
 use codec::Encode;
 use sc_block_builder::BlockBuilderProvider;
 use sp_consensus::SelectChain;
+use substrate_test_runtime_client::sc_executor::WasmExecutor;
 
 fn calling_function_with_strat(strat: ExecutionStrategy) {
 	let client = TestClientBuilder::new().set_execution_strategy(strat).build();
@@ -57,55 +58,6 @@ fn calling_native_runtime_signature_changed_function() {
 	let best_hash = client.chain_info().best_hash;
 
 	assert_eq!(runtime_api.function_signature_changed(best_hash).unwrap(), 1);
-}
-
-#[test]
-fn calling_wasm_runtime_signature_changed_old_function() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-		.build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-
-	#[allow(deprecated)]
-	let res = runtime_api.function_signature_changed_before_version_2(best_hash).unwrap();
-	assert_eq!(&res, &[1, 2]);
-}
-
-#[test]
-fn calling_with_both_strategy_and_fail_on_wasm_should_return_error() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert!(runtime_api.fail_on_wasm(best_hash).is_err());
-}
-
-#[test]
-fn calling_with_both_strategy_and_fail_on_native_should_work() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert_eq!(runtime_api.fail_on_native(best_hash).unwrap(), 1);
-}
-
-#[test]
-fn calling_with_native_else_wasm_and_fail_on_wasm_should_work() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::NativeElseWasm)
-		.build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert_eq!(runtime_api.fail_on_wasm(best_hash).unwrap(), 1);
-}
-
-#[test]
-fn calling_with_native_else_wasm_and_fail_on_native_should_work() {
-	let client = TestClientBuilder::new()
-		.set_execution_strategy(ExecutionStrategy::NativeElseWasm)
-		.build();
-	let runtime_api = client.runtime_api();
-	let best_hash = client.chain_info().best_hash;
-	assert_eq!(runtime_api.fail_on_native(best_hash).unwrap(), 1);
 }
 
 #[test]
@@ -161,7 +113,7 @@ fn record_proof_works() {
 		from: AccountKeyring::Alice.into(),
 		to: AccountKeyring::Bob.into(),
 	}
-	.into_signed_tx();
+	.into_unchecked_extrinsic();
 
 	// Build the block and record proof
 	let mut builder = client
@@ -178,11 +130,8 @@ fn record_proof_works() {
 
 	// Use the proof backend to execute `execute_block`.
 	let mut overlay = Default::default();
-	let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new(
-		WasmExecutionMethod::Interpreted,
-		None,
-		8,
-		2,
+	let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new_with_wasm_executor(
+		WasmExecutor::builder().build(),
 	);
 	execution_proof_check_on_trie_backend(
 		&backend,

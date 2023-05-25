@@ -163,7 +163,7 @@ mod execution {
 	use sp_core::{
 		hexdisplay::HexDisplay,
 		storage::{ChildInfo, ChildType, PrefixedStorageKey},
-		traits::{CallContext, CodeExecutor, ReadRuntimeVersionExt, RuntimeCode},
+		traits::{CallContext, CodeExecutor, RuntimeCode},
 	};
 	use sp_externalities::Extensions;
 	use std::{
@@ -322,12 +322,10 @@ mod execution {
 			exec: &'a Exec,
 			method: &'a str,
 			call_data: &'a [u8],
-			mut extensions: Extensions,
+			extensions: Extensions,
 			runtime_code: &'a RuntimeCode,
 			context: CallContext,
 		) -> Self {
-			extensions.register(ReadRuntimeVersionExt::new(exec.clone()));
-
 			Self {
 				backend,
 				exec,

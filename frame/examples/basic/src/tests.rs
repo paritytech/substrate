@@ -89,7 +89,7 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
+	type RuntimeHoldReason = ();
 	type MaxHolds = ();
 }
 
@@ -192,6 +192,7 @@ fn weights_work() {
 	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
 	// TODO: account for proof size weight
 	assert!(info1.weight.ref_time() > 0);
+	assert_eq!(info1.weight, <Test as Config>::WeightInfo::accumulate_dummy());
 
 	// `set_dummy` is simpler than `accumulate_dummy`, and the weight
 	//   should be less.
