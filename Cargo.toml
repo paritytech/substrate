@@ -38,7 +38,6 @@ members = [
 	"client/executor",
 	"client/executor/common",
 	"client/executor/runtime-test",
-	"client/executor/wasmi",
 	"client/executor/wasmtime",
 	"client/informant",
 	"client/keystore",
