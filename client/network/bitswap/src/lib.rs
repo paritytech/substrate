@@ -21,7 +21,7 @@
 //! CID is expected to reference 256-bit Blake2b transaction hash.
 
 use cid::{self, Version};
-use futures::{channel::mpsc, StreamExt};
+use futures::StreamExt;
 use libp2p_identity::PeerId;
 use log::{debug, error, trace};
 use prost::Message;
@@ -93,13 +93,13 @@ impl Prefix {
 /// Bitswap request handler
 pub struct BitswapRequestHandler<B> {
 	client: Arc<dyn BlockBackend<B> + Send + Sync>,
-	request_receiver: mpsc::Receiver<IncomingRequest>,
+	request_receiver: async_channel::Receiver<IncomingRequest>,
 }
 
 impl<B: BlockT> BitswapRequestHandler<B> {
 	/// Create a new [`BitswapRequestHandler`].
 	pub fn new(client: Arc<dyn BlockBackend<B> + Send + Sync>) -> (Self, ProtocolConfig) {
-		let (tx, request_receiver) = mpsc::channel(MAX_REQUEST_QUEUE);
+		let (tx, request_receiver) = async_channel::bounded(MAX_REQUEST_QUEUE);
 
 		let config = ProtocolConfig {
 			name: ProtocolName::from(PROTOCOL_NAME),
@@ -289,7 +289,7 @@ pub enum BitswapError {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::{channel::oneshot, SinkExt};
+	use futures::channel::oneshot;
 	use sc_block_builder::BlockBuilderProvider;
 	use schema::bitswap::{
 		message::{wantlist::Entry, Wantlist},
