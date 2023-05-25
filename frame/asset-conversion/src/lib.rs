@@ -358,11 +358,11 @@ pub mod pallet {
 					// pool account for different pool ids.
 					let native = T::MultiAssetIdConverter::get_native();
 					// Decode the asset ids from bytes.
-					let asset_1 = T::MultiAssetIdConverter::into_multiasset_id(T::AssetId::decode(&mut vec![0u8, 0, 0, 1].as_slice()).unwrap());
-					let asset_2 = T::MultiAssetIdConverter::into_multiasset_id(T::AssetId::decode(&mut vec![255u8, 255, 255, 255].as_slice()).unwrap());
+					let asset_1 = T::MultiAssetIdConverter::into_multiasset_id(&T::AssetId::decode(&mut vec![0u8, 0, 0, 1].as_slice()).unwrap());
+					let asset_2 = T::MultiAssetIdConverter::into_multiasset_id(&T::AssetId::decode(&mut vec![255u8, 255, 255, 255].as_slice()).unwrap());
 					assert!(asset_1 != asset_2, "unfortunatly decoded to be the same asset.");
-					let pool_account_1 = Self::get_pool_account((native, asset_1));
-					let pool_account_2 = Self::get_pool_account((native, asset_2));
+					let pool_account_1 = Self::get_pool_account(&(native.clone(), asset_1));
+					let pool_account_2 = Self::get_pool_account(&(native, asset_2));
 					assert!(sp_std::mem::size_of::<T::AccountId>() >= sp_std::mem::size_of::<u128>());
 					assert!(
 						pool_account_1 != pool_account_2,
@@ -390,16 +390,16 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			ensure!(asset1 != asset2, Error::<T>::EqualAssets);
 
-			let pool_id = Self::get_pool_id(asset1, asset2);
-			let (asset1, _asset2) = pool_id;
+			let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
+			let (asset1, asset2) = pool_id.clone();
 
-			if !T::AllowMultiAssetPools::get() && !T::MultiAssetIdConverter::is_native(asset1) {
+			if !T::AllowMultiAssetPools::get() && !T::MultiAssetIdConverter::is_native(&asset1) {
 				Err(Error::<T>::PoolMustContainNativeCurrency)?;
 			}
 
 			ensure!(!Pools::<T>::contains_key(&pool_id), Error::<T>::PoolExists);
 
-			let pool_account = Self::get_pool_account(pool_id);
+			let pool_account = Self::get_pool_account(&pool_id);
 			frame_system::Pallet::<T>::inc_providers(&pool_account);
 
 			// pay the setup fee
@@ -410,12 +410,12 @@ pub mod pallet {
 				Preserve,
 			)?;
 
-			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(asset1) {
+			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(&asset1) {
 				if !T::Assets::contains(&asset, &pool_account) {
 					T::Assets::touch(asset, pool_account.clone(), sender.clone())?;
 				}
 			}
-			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(asset2) {
+			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(&asset2) {
 				if !T::Assets::contains(&asset, &pool_account) {
 					T::Assets::touch(asset, pool_account.clone(), sender.clone())?;
 				}
@@ -425,11 +425,11 @@ pub mod pallet {
 			let next_lp_token_id = lp_token.increment();
 			NextPoolAssetId::<T>::set(Some(next_lp_token_id));
 
-			T::PoolAssets::create(lp_token, pool_account.clone(), false, 1u32.into())?;
-			T::PoolAssets::touch(lp_token, pool_account.clone(), sender.clone())?;
+			T::PoolAssets::create(lp_token.clone(), pool_account.clone(), false, 1u32.into())?;
+			T::PoolAssets::touch(lp_token.clone(), pool_account.clone(), sender.clone())?;
 
-			let pool_info = PoolInfo { lp_token };
-			Pools::<T>::insert(pool_id, pool_info);
+			let pool_info = PoolInfo { lp_token: lp_token.clone() };
+			Pools::<T>::insert(pool_id.clone(), pool_info);
 
 			Self::deposit_event(Event::PoolCreated { creator: sender, pool_id, lp_token });
 
@@ -459,7 +459,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			let pool_id = Self::get_pool_id(asset1, asset2);
+			let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
 			// swap params if needed
 			let (amount1_desired, amount2_desired, amount1_min, amount2_min) =
 				if pool_id.0 == asset1 {
@@ -467,21 +467,21 @@ pub mod pallet {
 				} else {
 					(amount2_desired, amount1_desired, amount2_min, amount1_min)
 				};
-			let (asset1, asset2) = pool_id;
+			let (asset1, asset2) = pool_id.clone();
 
 			ensure!(
 				amount1_desired > Zero::zero() && amount2_desired > Zero::zero(),
 				Error::<T>::WrongDesiredAmount
 			);
 
-			let maybe_pool = Pools::<T>::get(pool_id);
+			let maybe_pool = Pools::<T>::get(pool_id.clone());
 			let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
 
 			let amount1: AssetBalanceOf<T>;
 			let amount2: AssetBalanceOf<T>;
-			let pool_account = Self::get_pool_account(pool_id);
-			let reserve1 = Self::get_balance(&pool_account, asset1)?;
-			let reserve2 = Self::get_balance(&pool_account, asset2)?;
+			let pool_account = Self::get_pool_account(&pool_id);
+			let reserve1 = Self::get_balance(&pool_account, &asset1)?;
+			let reserve2 = Self::get_balance(&pool_account, &asset2)?;
 
 			if reserve1.is_zero() || reserve2.is_zero() {
 				amount1 = amount1_desired;
@@ -511,20 +511,24 @@ pub mod pallet {
 				}
 			}
 
-			Self::validate_minimal_amount(amount1.saturating_add(reserve1), asset1)
+			Self::validate_minimal_amount(amount1.saturating_add(reserve1), &asset1)
 				.map_err(|_| Error::<T>::AmountLessThanMinimal)?;
-			Self::validate_minimal_amount(amount2.saturating_add(reserve2), asset2)
+			Self::validate_minimal_amount(amount2.saturating_add(reserve2), &asset2)
 				.map_err(|_| Error::<T>::AmountLessThanMinimal)?;
 
-			Self::transfer(asset1, &sender, &pool_account, amount1, true)?;
-			Self::transfer(asset2, &sender, &pool_account, amount2, true)?;
+			Self::transfer(&asset1, &sender, &pool_account, amount1, true)?;
+			Self::transfer(&asset2, &sender, &pool_account, amount2, true)?;
 
-			let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
+			let total_supply = T::PoolAssets::total_issuance(pool.lp_token.clone());
 
 			let lp_token_amount: AssetBalanceOf<T>;
 			if total_supply.is_zero() {
 				lp_token_amount = Self::calc_lp_amount_for_zero_supply(&amount1, &amount2)?;
-				T::PoolAssets::mint_into(pool.lp_token, &pool_account, T::MintMinLiquidity::get())?;
+				T::PoolAssets::mint_into(
+					pool.lp_token.clone(),
+					&pool_account,
+					T::MintMinLiquidity::get(),
+				)?;
 			} else {
 				let side1 = Self::mul_div(&amount1, &total_supply, &reserve1)?;
 				let side2 = Self::mul_div(&amount2, &total_supply, &reserve2)?;
@@ -536,7 +540,7 @@ pub mod pallet {
 				Error::<T>::InsufficientLiquidityMinted
 			);
 
-			T::PoolAssets::mint_into(pool.lp_token, &mint_to, lp_token_amount)?;
+			T::PoolAssets::mint_into(pool.lp_token.clone(), &mint_to, lp_token_amount)?;
 
 			Self::deposit_event(Event::LiquidityAdded {
 				who: sender,
@@ -544,7 +548,7 @@ pub mod pallet {
 				pool_id,
 				amount1_provided: amount1,
 				amount2_provided: amount2,
-				lp_token: pool.lp_token,
+				lp_token: pool.lp_token.clone(),
 				lp_token_minted: lp_token_amount,
 			});
 
@@ -567,25 +571,25 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			let pool_id = Self::get_pool_id(asset1, asset2);
+			let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
 			// swap params if needed
 			let (amount1_min_receive, amount2_min_receive) = if pool_id.0 == asset1 {
 				(amount1_min_receive, amount2_min_receive)
 			} else {
 				(amount2_min_receive, amount1_min_receive)
 			};
-			let (asset1, asset2) = pool_id;
+			let (asset1, asset2) = pool_id.clone();
 
 			ensure!(lp_token_burn > Zero::zero(), Error::<T>::ZeroLiquidity);
 
-			let maybe_pool = Pools::<T>::get(pool_id);
+			let maybe_pool = Pools::<T>::get(pool_id.clone());
 			let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
 
-			let pool_account = Self::get_pool_account(pool_id);
-			let reserve1 = Self::get_balance(&pool_account, asset1)?;
-			let reserve2 = Self::get_balance(&pool_account, asset2)?;
+			let pool_account = Self::get_pool_account(&pool_id);
+			let reserve1 = Self::get_balance(&pool_account, &asset1)?;
+			let reserve2 = Self::get_balance(&pool_account, &asset2)?;
 
-			let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
+			let total_supply = T::PoolAssets::total_issuance(pool.lp_token.clone());
 			let withdrawal_fee_amount = T::LiquidityWithdrawalFee::get() * lp_token_burn;
 			let lp_redeem_amount = lp_token_burn.saturating_sub(withdrawal_fee_amount);
 
@@ -602,16 +606,16 @@ pub mod pallet {
 			);
 			let reserve1_left = reserve1.saturating_sub(amount1);
 			let reserve2_left = reserve2.saturating_sub(amount2);
-			Self::validate_minimal_amount(reserve1_left, asset1)
+			Self::validate_minimal_amount(reserve1_left, &asset1)
 				.map_err(|_| Error::<T>::ReserveLeftLessThanMinimal)?;
-			Self::validate_minimal_amount(reserve2_left, asset2)
+			Self::validate_minimal_amount(reserve2_left, &asset2)
 				.map_err(|_| Error::<T>::ReserveLeftLessThanMinimal)?;
 
 			// burn the provided lp token amount that includes the fee
-			T::PoolAssets::burn_from(pool.lp_token, &sender, lp_token_burn, Exact, Polite)?;
+			T::PoolAssets::burn_from(pool.lp_token.clone(), &sender, lp_token_burn, Exact, Polite)?;
 
-			Self::transfer(asset1, &pool_account, &withdraw_to, amount1, false)?;
-			Self::transfer(asset2, &pool_account, &withdraw_to, amount2, false)?;
+			Self::transfer(&asset1, &pool_account, &withdraw_to, amount1, false)?;
+			Self::transfer(&asset2, &pool_account, &withdraw_to, amount2, false)?;
 
 			Self::deposit_event(Event::LiquidityRemoved {
 				who: sender,
@@ -619,7 +623,7 @@ pub mod pallet {
 				pool_id,
 				amount1,
 				amount2,
-				lp_token: pool.lp_token,
+				lp_token: pool.lp_token.clone(),
 				lp_token_burned: lp_token_burn,
 				withdrawal_fee: T::LiquidityWithdrawalFee::get(),
 			});
@@ -712,7 +716,7 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		fn transfer(
-			asset_id: T::MultiAssetId,
+			asset_id: &T::MultiAssetId,
 			from: &T::AccountId,
 			to: &T::AccountId,
 			amount: AssetBalanceOf<T>,
@@ -721,7 +725,7 @@ pub mod pallet {
 			Self::deposit_event(Event::Transfer {
 				from: from.clone(),
 				to: to.clone(),
-				asset: asset_id,
+				asset: (*asset_id).clone(),
 				amount,
 			});
 			if T::MultiAssetIdConverter::is_native(asset_id) {
@@ -733,7 +737,7 @@ pub mod pallet {
 				Ok(Self::native_to_asset(T::Currency::transfer(from, to, amount, preservation)?)?)
 			} else {
 				T::Assets::transfer(
-					T::MultiAssetIdConverter::try_convert(asset_id)
+					T::MultiAssetIdConverter::try_convert(&asset_id)
 						.map_err(|_| Error::<T>::Overflow)?,
 					from,
 					to,
@@ -762,9 +766,9 @@ pub mod pallet {
 			send_to: &T::AccountId,
 			keep_alive: bool,
 		) -> Result<(), DispatchError> {
-			if let Some(&[asset1, asset2]) = path.get(0..2) {
-				let pool_id = Self::get_pool_id(asset1, asset2);
-				let pool_account = Self::get_pool_account(pool_id);
+			if let Some([asset1, asset2]) = path.get(0..2) {
+				let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
+				let pool_account = Self::get_pool_account(&pool_id);
 				let first_amount = amounts.first().expect("Always has more than one element");
 
 				Self::transfer(asset1, sender, &pool_account, *first_amount, keep_alive)?;
@@ -772,16 +776,19 @@ pub mod pallet {
 				let mut i = 0;
 				let path_len = path.len() as u32;
 				for assets_pair in path.windows(2) {
-					if let &[asset1, asset2] = assets_pair {
-						let pool_id = Self::get_pool_id(asset1, asset2);
-						let pool_account = Self::get_pool_account(pool_id);
+					if let [asset1, asset2] = assets_pair {
+						let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
+						let pool_account = Self::get_pool_account(&pool_id);
 
 						let amount_out =
 							amounts.get((i + 1) as usize).ok_or(Error::<T>::PathError)?;
 
 						let to = if i < path_len - 2 {
 							let asset3 = path.get((i + 2) as usize).ok_or(Error::<T>::PathError)?;
-							Self::get_pool_account(Self::get_pool_id(asset2, *asset3))
+							Self::get_pool_account(&Self::get_pool_id(
+								asset2.clone(),
+								asset3.clone(),
+							))
 						} else {
 							send_to.clone()
 						};
@@ -803,8 +810,8 @@ pub mod pallet {
 		///
 		/// This actually does computation. If you need to keep using it, then make sure you cache
 		/// the value and only call this once.
-		pub fn get_pool_account(pool_id: PoolIdOf<T>) -> T::AccountId {
-			let encoded_pool_id = sp_io::hashing::blake2_256(&Encode::encode(&pool_id)[..]);
+		pub fn get_pool_account(pool_id: &PoolIdOf<T>) -> T::AccountId {
+			let encoded_pool_id = sp_io::hashing::blake2_256(&Encode::encode(pool_id)[..]);
 
 			Decode::decode(&mut TrailingZeroInput::new(encoded_pool_id.as_ref()))
 				.expect("infinite length input; no invalid inputs for type; qed")
@@ -812,7 +819,7 @@ pub mod pallet {
 
 		fn get_balance(
 			owner: &T::AccountId,
-			asset: T::MultiAssetId,
+			asset: &T::MultiAssetId,
 		) -> Result<T::AssetBalance, Error<T>> {
 			if T::MultiAssetIdConverter::is_native(asset) {
 				Self::native_to_asset(<<T as Config>::Currency>::reducible_balance(
@@ -842,11 +849,11 @@ pub mod pallet {
 		/// Returns the balance of each asset in the pool.
 		/// The tuple result is in the order requested (not necessarily the same as pool order).
 		pub fn get_reserves(
-			asset1: T::MultiAssetId,
-			asset2: T::MultiAssetId,
+			asset1: &T::MultiAssetId,
+			asset2: &T::MultiAssetId,
 		) -> Result<(AssetBalanceOf<T>, AssetBalanceOf<T>), Error<T>> {
-			let pool_id = Self::get_pool_id(asset1, asset2);
-			let pool_account = Self::get_pool_account(pool_id);
+			let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
+			let pool_account = Self::get_pool_account(&pool_id);
 
 			let balance1 = Self::get_balance(&pool_account, asset1)?;
 			let balance2 = Self::get_balance(&pool_account, asset2)?;
@@ -865,7 +872,7 @@ pub mod pallet {
 			let mut amounts: Vec<AssetBalanceOf<T>> = vec![*amount_out];
 
 			for assets_pair in path.windows(2).rev() {
-				if let &[asset1, asset2] = assets_pair {
+				if let [asset1, asset2] = assets_pair {
 					let (reserve_in, reserve_out) = Self::get_reserves(asset1, asset2)?;
 					let prev_amount = amounts.last().expect("Always has at least one element");
 					let amount_in = Self::get_amount_in(prev_amount, &reserve_in, &reserve_out)?;
@@ -884,7 +891,7 @@ pub mod pallet {
 			let mut amounts: Vec<AssetBalanceOf<T>> = vec![*amount_in];
 
 			for assets_pair in path.windows(2) {
-				if let &[asset1, asset2] = assets_pair {
+				if let [asset1, asset2] = assets_pair {
 					let (reserve_in, reserve_out) = Self::get_reserves(asset1, asset2)?;
 					let prev_amount = amounts.last().expect("Always has at least one element");
 					let amount_out = Self::get_amount_out(prev_amount, &reserve_in, &reserve_out)?;
@@ -902,11 +909,11 @@ pub mod pallet {
 			amount: AssetBalanceOf<T>,
 			include_fee: bool,
 		) -> Option<AssetBalanceOf<T>> {
-			let pool_id = Self::get_pool_id(asset1, asset2);
-			let pool_account = Self::get_pool_account(pool_id);
+			let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
+			let pool_account = Self::get_pool_account(&pool_id);
 
-			let balance1 = Self::get_balance(&pool_account, asset1).ok()?;
-			let balance2 = Self::get_balance(&pool_account, asset2).ok()?;
+			let balance1 = Self::get_balance(&pool_account, &asset1).ok()?;
+			let balance2 = Self::get_balance(&pool_account, &asset2).ok()?;
 			if !balance1.is_zero() {
 				if include_fee {
 					Self::get_amount_out(&amount, &balance1, &balance2).ok()
@@ -925,11 +932,11 @@ pub mod pallet {
 			amount: AssetBalanceOf<T>,
 			include_fee: bool,
 		) -> Option<AssetBalanceOf<T>> {
-			let pool_id = Self::get_pool_id(asset1, asset2);
-			let pool_account = Self::get_pool_account(pool_id);
+			let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
+			let pool_account = Self::get_pool_account(&pool_id);
 
-			let balance1 = Self::get_balance(&pool_account, asset1).ok()?;
-			let balance2 = Self::get_balance(&pool_account, asset2).ok()?;
+			let balance1 = Self::get_balance(&pool_account, &asset1).ok()?;
+			let balance2 = Self::get_balance(&pool_account, &asset2).ok()?;
 			if !balance1.is_zero() {
 				if include_fee {
 					Self::get_amount_in(&amount, &balance1, &balance2).ok()
@@ -1065,7 +1072,7 @@ pub mod pallet {
 
 		fn validate_minimal_amount(
 			value: T::AssetBalance,
-			asset: T::MultiAssetId,
+			asset: &T::MultiAssetId,
 		) -> Result<(), ()> {
 			if T::MultiAssetIdConverter::is_native(asset) {
 				let ed = T::Currency::minimum_balance();
@@ -1089,8 +1096,8 @@ pub mod pallet {
 			// validate all the pools in the path are unique
 			let mut pools = BoundedBTreeSet::<PoolIdOf<T>, T::MaxSwapPathLength>::new();
 			for assets_pair in path.windows(2) {
-				if let &[asset1, asset2] = assets_pair {
-					let pool_id = Self::get_pool_id(asset1, asset2);
+				if let [asset1, asset2] = assets_pair {
+					let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
 					let new_element = pools.try_insert(pool_id).expect("can't get here");
 					if !new_element {
 						return Err(Error::<T>::NonUniquePath.into())
@@ -1134,7 +1141,7 @@ where
 			ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
 		}
 		let mut path = sp_std::vec::Vec::new();
-		path.push(T::MultiAssetIdConverter::into_multiasset_id(asset_id));
+		path.push(T::MultiAssetIdConverter::into_multiasset_id(&asset_id));
 		path.push(T::MultiAssetIdConverter::get_native());
 		let path = path.try_into().unwrap();
 
