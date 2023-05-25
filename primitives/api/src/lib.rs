@@ -92,8 +92,8 @@ pub use sp_runtime::StateVersion;
 pub use sp_runtime::{
 	generic::BlockId,
 	traits::{
-		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, GetRuntimeOuterEnumTypes,
-		Hash as HashT, HashFor, Header as HeaderT, NumberFor,
+		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, Hash as HashT, HashFor,
+		Header as HeaderT, NumberFor,
 	},
 	transaction_validity::TransactionValidity,
 	RuntimeString, TransactionOutcome,

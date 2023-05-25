@@ -236,9 +236,6 @@ fn construct_runtime_final_expansion(
 		))
 	}
 
-	// The path to the `System` pallet.
-	let system_path = &system_pallet.path;
-
 	let features = pallets
 		.iter()
 		.filter_map(|decl| {
@@ -269,7 +266,13 @@ fn construct_runtime_final_expansion(
 	let pallet_to_index = decl_pallet_runtime_setup(&name, &pallets, &scrate);
 
 	let dispatch = expand::expand_outer_dispatch(&name, system_pallet, &pallets, &scrate);
-	let metadata = expand::expand_runtime_metadata(&name, &pallets, &scrate, &unchecked_extrinsic);
+	let metadata = expand::expand_runtime_metadata(
+		&name,
+		&pallets,
+		&scrate,
+		&unchecked_extrinsic,
+		&system_pallet.path,
+	);
 	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate);
 	let inherent =
 		expand::expand_outer_inherent(&name, &block, &unchecked_extrinsic, &pallets, &scrate);
@@ -300,17 +303,6 @@ fn construct_runtime_final_expansion(
 		}
 		impl #scrate::sp_runtime::traits::GetRuntimeBlockType for #name {
 			type RuntimeBlock = #block;
-		}
-		// The outer enums are generated in this scope with the following names.
-		impl #scrate::sp_runtime::traits::GetRuntimeOuterEnumTypes for #name {
-			// The `RuntimeCall` must be defined for all runtimes.
-			type RuntimeCall = <#name as #system_path::Config>::RuntimeCall;
-			// The associated type `RuntimeEvent` is present in the `frame_system::Config` trait
-			// if and only if the `#[pallet::event]` is declared. However, fallback to our
-			// generated outer `RuntimeEvent` enum to ensure consistency with pallets that don't
-			// emit events.
-			type RuntimeEvent = RuntimeEvent;
-			type RuntimeError = RuntimeError;
 		}
 
 		// Each runtime must expose the `runtime_metadata()` to fetch the runtime API metadata.
