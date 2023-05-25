@@ -620,7 +620,6 @@ impl State {
 	where
 		Block::Hash: FromStr,
 		Block::Header: DeserializeOwned,
-		Block::Hash: DeserializeOwned,
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		let builder = match self {

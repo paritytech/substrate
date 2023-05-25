@@ -488,8 +488,6 @@ pub struct BlockImportOperation<Block: BlockT> {
 }
 
 impl<Block: BlockT> BlockImportOperation<Block>
-where
-	Block::Hash: Ord,
 {
 	fn apply_storage(
 		&mut self,
@@ -520,8 +518,6 @@ where
 }
 
 impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block>
-where
-	Block::Hash: Ord,
 {
 	type State = InMemoryBackend<HashFor<Block>>;
 
@@ -612,8 +608,6 @@ where
 /// > **Warning**: Doesn't support all the features necessary for a proper database. Only use this
 /// > struct for testing purposes. Do **NOT** use in production.
 pub struct Backend<Block: BlockT>
-where
-	Block::Hash: Ord,
 {
 	states: RwLock<HashMap<Block::Hash, InMemoryBackend<HashFor<Block>>>>,
 	blockchain: Blockchain<Block>,
@@ -622,8 +616,6 @@ where
 }
 
 impl<Block: BlockT> Backend<Block>
-where
-	Block::Hash: Ord,
 {
 	/// Create a new instance of in-mem backend.
 	///
@@ -651,8 +643,6 @@ where
 }
 
 impl<Block: BlockT> backend::AuxStore for Backend<Block>
-where
-	Block::Hash: Ord,
 {
 	fn insert_aux<
 		'a,
@@ -674,8 +664,6 @@ where
 }
 
 impl<Block: BlockT> backend::Backend<Block> for Backend<Block>
-where
-	Block::Hash: Ord,
 {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = Blockchain<Block>;
@@ -809,7 +797,7 @@ where
 	}
 }
 
-impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> where Block::Hash: Ord {}
+impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> {}
 
 /// Check that genesis storage is valid.
 pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {

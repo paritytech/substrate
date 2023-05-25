@@ -424,8 +424,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
 	) -> (B::Hash, Self::Transaction)
-	where
-		B::Hash: Ord,
 	{
 		self.state
 			.borrow()
@@ -439,8 +437,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
 	) -> (B::Hash, bool, Self::Transaction)
-	where
-		B::Hash: Ord,
 	{
 		self.state
 			.borrow()
