@@ -18,7 +18,6 @@
 //! Primitives for the runtime modules.
 
 use crate::{
-	codec::{Codec, Decode, Encode, MaxEncodedLen},
 	generic::Digest,
 	scale_info::{MetaType, StaticTypeInfo, TypeInfo},
 	transaction_validity::{
@@ -27,6 +26,7 @@ use crate::{
 	},
 	DispatchResult,
 };
+use codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
 #[cfg(feature = "serde")]
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -694,6 +694,7 @@ pub trait Hash:
 		+ Default
 		+ Encode
 		+ Decode
+		+ EncodeLike
 		+ MaxEncodedLen
 		+ TypeInfo;
 

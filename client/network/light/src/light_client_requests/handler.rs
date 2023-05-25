@@ -24,7 +24,7 @@
 
 use crate::schema;
 use codec::{self, Decode, Encode};
-use futures::{channel::mpsc, prelude::*};
+use futures::prelude::*;
 use libp2p_identity::PeerId;
 use log::{debug, trace};
 use prost::Message;
@@ -43,9 +43,13 @@ use std::{marker::PhantomData, sync::Arc};
 
 const LOG_TARGET: &str = "light-client-request-handler";
 
+/// Incoming requests bounded queue size. For now due to lack of data on light client request
+/// handling in production systems, this value is chosen to match the block request limit.
+const MAX_LIGHT_REQUEST_QUEUE: usize = 20;
+
 /// Handler for incoming light client requests from a remote peer.
 pub struct LightClientRequestHandler<B, Client> {
-	request_receiver: mpsc::Receiver<IncomingRequest>,
+	request_receiver: async_channel::Receiver<IncomingRequest>,
 	/// Blockchain client.
 	client: Arc<Client>,
 	_block: PhantomData<B>,
@@ -62,9 +66,7 @@ where
 		fork_id: Option<&str>,
 		client: Arc<Client>,
 	) -> (Self, ProtocolConfig) {
-		// For now due to lack of data on light client request handling in production systems, this
-		// value is chosen to match the block request limit.
-		let (tx, request_receiver) = mpsc::channel(20);
+		let (tx, request_receiver) = async_channel::bounded(MAX_LIGHT_REQUEST_QUEUE);
 
 		let mut protocol_config = super::generate_protocol_config(
 			protocol_id,

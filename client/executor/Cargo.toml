@@ -17,11 +17,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 lru = "0.8.1"
 parking_lot = "0.12.1"
 tracing = "0.1.29"
-wasmi = "0.13.2"
 
 codec = { package = "parity-scale-codec", version = "3.2.2" }
 sc-executor-common = { version = "0.10.0-dev", path = "common" }
-sc-executor-wasmi = { version = "0.10.0-dev", path = "wasmi" }
 sc-executor-wasmtime = { version = "0.10.0-dev", path = "wasmtime" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
