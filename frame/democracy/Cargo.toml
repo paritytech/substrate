@@ -26,9 +26,9 @@ sp-runtime = { version = "7.0.0", default-features = false, path = "../../primit
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 log = { version = "0.4.17", default-features = false }
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
 
 [dev-dependencies]
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
 pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }
 
