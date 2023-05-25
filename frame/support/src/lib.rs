@@ -822,6 +822,10 @@ macro_rules! assert_error_encoded_size {
 #[doc(hidden)]
 pub use serde::{Deserialize, Serialize};
 
+#[doc(hidden)]
+#[cfg(not(no_std))]
+pub use macro_magic;
+
 #[cfg(test)]
 pub mod tests {
 	use super::*;
@@ -2888,6 +2892,9 @@ pub mod pallet_macros {
 		storage_prefix, storage_version, type_value, unbounded, validate_unsigned, weight,
 		whitelist_storage,
 	};
+	#[macro_magic::use_attr]
+	pub use frame_support_procedural::import_section;
+	pub use frame_support_procedural::export_section;
 }
 
 // Generate a macro that will enable/disable code based on `std` feature being active.

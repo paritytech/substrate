@@ -109,6 +109,7 @@ members = [
 	"frame/examples/basic",
 	"frame/examples/offchain-worker",
 	"frame/examples/dev-mode",
+	"frame/examples/split",
 	"frame/executive",
 	"frame/nis",
 	"frame/grandpa",

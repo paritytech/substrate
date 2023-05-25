@@ -38,7 +38,10 @@ mod tt_macro;
 
 use proc_macro::TokenStream;
 use quote::quote;
+use macro_magic::*;
+use syn::{parse_macro_input, ItemMod};
 use std::{cell::RefCell, str::FromStr};
+use quote::ToTokens;
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 
 thread_local! {
@@ -1420,4 +1423,29 @@ pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn composite_enum(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
+}
+
+#[proc_macro_attribute]
+pub fn export_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	match macro_magic::mm_core::export_tokens_internal(attr, tokens, false) {
+		Ok(tokens) => tokens.into(),
+		Err(err) => err.to_compile_error().into(),
+	}
+}
+
+#[import_tokens_attr]
+#[proc_macro_attribute]
+pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	let foreign_mod = parse_macro_input!(attr as ItemMod);
+	let mut internal_mod = parse_macro_input!(tokens as ItemMod);
+
+	if let Some(ref mut content) = internal_mod.content {
+		if let Some(foreign_content) = foreign_mod.content {
+			content.1.extend(foreign_content.1);
+		}
+	}
+
+	quote! {
+		#internal_mod
+	}.into()
 }
