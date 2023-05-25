@@ -9621,7 +9621,6 @@ dependencies = [
  "libp2p",
  "log",
  "parity-scale-codec",
- "pin-project",
  "sc-network",
  "sc-network-common",
  "sc-peerset",
