@@ -1,7 +1,7 @@
 # Nicks Module
 
-- [`nicks::Config`](https://docs.rs/pallet-nicks/latest/pallet_nicks/trait.Config.html)
-- [`Call`](https://docs.rs/pallet-nicks/latest/pallet_nicks/enum.Call.html)
+- [`Config`](https://docs.rs/pallet-nicks/latest/pallet_nicks/pallet/trait.Config.html)
+- [`Call`](https://docs.rs/pallet-nicks/latest/pallet_nicks/pallet/enum.Call.html)
 
 ## Overview
 

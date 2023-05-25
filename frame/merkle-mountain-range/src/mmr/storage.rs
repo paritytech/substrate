@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,14 +58,6 @@ impl<StorageType, T, I, L> Default for Storage<StorageType, T, I, L> {
 	fn default() -> Self {
 		Self(Default::default())
 	}
-}
-
-impl<T, I, L> Storage<OffchainStorage, T, I, L>
-where
-	T: Config<I>,
-	I: 'static,
-	L: primitives::FullLeaf,
-{
 }
 
 impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T, I, L>

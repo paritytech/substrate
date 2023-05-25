@@ -2,7 +2,7 @@ error: `Pallet` does not have the std feature enabled, this will cause the `test
   --> tests/construct_runtime_ui/no_std_genesis_config.rs:40:1
    |
 40 | / construct_runtime! {
-41 | |     pub enum Runtime where
+41 | |     pub struct Runtime where
 42 | |         Block = Block,
 43 | |         NodeBlock = Block,
 ...  |
@@ -16,7 +16,7 @@ error[E0412]: cannot find type `GenesisConfig` in crate `test_pallet`
   --> tests/construct_runtime_ui/no_std_genesis_config.rs:40:1
    |
 40 | / construct_runtime! {
-41 | |     pub enum Runtime where
+41 | |     pub struct Runtime where
 42 | |         Block = Block,
 43 | |         NodeBlock = Block,
 ...  |
@@ -34,7 +34,7 @@ error[E0283]: type annotations needed
   --> tests/construct_runtime_ui/no_std_genesis_config.rs:40:1
    |
 40 | / construct_runtime! {
-41 | |     pub enum Runtime where
+41 | |     pub struct Runtime where
 42 | |         Block = Block,
 43 | |         NodeBlock = Block,
 ...  |

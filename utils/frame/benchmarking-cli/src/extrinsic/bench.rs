@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -93,7 +93,9 @@ impl<Block, BA, C> Benchmark<Block, BA, C>
 where
 	Block: BlockT<Extrinsic = OpaqueExtrinsic>,
 	BA: ClientBackend<Block>,
-	C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
+	C: BlockBuilderProvider<BA, Block, C>
+		+ ProvideRuntimeApi<Block>
+		+ sp_blockchain::HeaderBackend<Block>,
 	C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 {
 	/// Create a new [`Self`] from the arguments.
@@ -187,13 +189,13 @@ where
 	/// Measures the time that it take to execute a block or an extrinsic.
 	fn measure_block(&self, block: &Block) -> Result<BenchRecord> {
 		let mut record = BenchRecord::new();
-		let genesis = BlockId::Number(Zero::zero());
+		let genesis = self.client.info().genesis_hash;
 
 		info!("Running {} warmups...", self.params.warmup);
 		for _ in 0..self.params.warmup {
 			self.client
 				.runtime_api()
-				.execute_block(&genesis, block.clone())
+				.execute_block(genesis, block.clone())
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 		}
 
@@ -206,7 +208,7 @@ where
 			let start = Instant::now();
 
 			runtime_api
-				.execute_block(&genesis, block)
+				.execute_block(genesis, block)
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 
 			let elapsed = start.elapsed().as_nanos();
@@ -257,7 +259,7 @@ where
 	/// Benchmark a block that does not include any new extrinsics but needs to shuffle previous one
 	pub fn bench_block(&mut self, ext_builder: &dyn ExtrinsicBuilder) -> Result<Stats> {
 		let block = self.build_second_block(ext_builder, 0, false)?;
-		let record = self.measure_block(&block.block, BlockId::Number(One::one()))?;
+		let record = self.measure_block(&block.block)?;
 		Stats::new(&record)
 	}
 
@@ -274,7 +276,7 @@ where
 	) -> Result<Stats> {
 		let block = self.build_second_block(ext_builder, count, true)?;
 		let num_ext = block.block.extrinsics().len();
-		let mut records = self.measure_block(&block.block.clone(), BlockId::Number(One::one()))?;
+		let mut records = self.measure_block(&block.block.clone())?;
 
 		for r in &mut records {
 			// Divide by the number of extrinsics in the block.
@@ -300,10 +302,8 @@ where
 			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(block.storage_changes));
 		params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-		futures::executor::block_on(
-			self.client.borrow_mut().import_block(params, Default::default()),
-		)
-		.expect("importing a block doesn't fail");
+		futures::executor::block_on(self.client.borrow_mut().import_block(params))
+			.expect("importing a block doesn't fail");
 		info!("best number: {} ", self.client.borrow().info().best_number);
 	}
 
@@ -340,7 +340,7 @@ where
 			let mut valid_txs: Vec<(Option<sp_runtime::AccountId32>, Block::Extrinsic)> =
 				Default::default();
 			for remark in remarks {
-				match validate_transaction::<Block, C>(at, &api, remark.clone()) {
+				match validate_transaction::<Block, C>(*at, &api, remark.clone()) {
 					Ok(()) => {
 						valid_txs.push((None, remark));
 					},
@@ -406,15 +406,16 @@ where
 	}
 
 	/// Measures the time that it take to execute a block or an extrinsic.
-	fn measure_block(&self, block: &Block, block_id: BlockId<Block>) -> Result<BenchRecord> {
+	fn measure_block(&self, block: &Block) -> Result<BenchRecord> {
 		let mut record = BenchRecord::new();
+		let parent = block.header().parent_hash().clone();
 
 		info!("Running {} warmups...", self.params.warmup);
 		for _ in 0..self.params.warmup {
 			self.client
 				.borrow()
 				.runtime_api()
-				.execute_block(&block_id, block.clone())
+				.execute_block(parent, block.clone())
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 		}
 
@@ -428,7 +429,7 @@ where
 			let start = Instant::now();
 
 			runtime_api
-				.execute_block(&block_id, block)
+				.execute_block(parent, block)
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 
 			let elapsed = start.elapsed().as_nanos();

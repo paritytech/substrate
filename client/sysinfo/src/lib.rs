@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,7 +29,8 @@ mod sysinfo_linux;
 pub use sysinfo::{
 	benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
 	benchmark_memory, benchmark_sr25519_verify, gather_hwbench, gather_sysinfo,
-	serialize_throughput, serialize_throughput_option, Throughput,
+	serialize_throughput, serialize_throughput_option, Metric, Requirement, Requirements,
+	Throughput,
 };
 
 /// The operating system part of the current target triplet.

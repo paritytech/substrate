@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -241,7 +241,12 @@ where
 	H::Out: Ord + codec::Codec,
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, self.backend.pairs())
+		let pairs: Vec<_> = self
+			.backend
+			.pairs(Default::default())
+			.expect("creating an iterator over all of the pairs doesn't fail in tests")
+			.collect();
+		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, pairs)
 	}
 }
 

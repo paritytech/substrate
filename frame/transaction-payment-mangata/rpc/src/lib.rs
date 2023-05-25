@@ -100,7 +100,7 @@ where
 		at: Option<Block::Hash>,
 	) -> RpcResult<RuntimeDispatchInfo<Balance, sp_weights::OldWeight>> {
 		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
+		let at = self.client.info().best_hash;
 
 		let encoded_len = encoded_xt.len() as u32;
 
@@ -121,7 +121,7 @@ where
 		}
 
 		let api_version = api
-			.api_version::<dyn TransactionPaymentRuntimeApi<Block, Balance>>(&at)
+			.api_version::<dyn TransactionPaymentRuntimeApi<Block, Balance>>(at)
 			.map_err(|e| map_err(e, "Failed to get transaction payment runtime api version"))?
 			.ok_or_else(|| {
 				CallError::Custom(ErrorObject::owned(
@@ -133,11 +133,11 @@ where
 
 		if api_version < 2 {
 			#[allow(deprecated)]
-			api.query_info_before_version_2(&at, uxt, encoded_len)
+			api.query_info_before_version_2(at, uxt, encoded_len)
 				.map_err(|e| map_err(e, "Unable to query dispatch info.").into())
 		} else {
 			let res = api
-				.query_info(&at, uxt, encoded_len)
+				.query_info(at, uxt, encoded_len)
 				.map_err(|e| map_err(e, "Unable to query dispatch info."))?;
 
 			Ok(RuntimeDispatchInfo {
@@ -154,7 +154,7 @@ where
 		at: Option<Block::Hash>,
 	) -> RpcResult<FeeDetails<NumberOrHex>> {
 		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
+		let at = self.client.info().best_hash;
 
 		let encoded_len = encoded_xt.len() as u32;
 
@@ -165,7 +165,7 @@ where
 				Some(format!("{:?}", e)),
 			))
 		})?;
-		let fee_details = api.query_fee_details(&at, uxt, encoded_len).map_err(|e| {
+		let fee_details = api.query_fee_details(at, uxt, encoded_len).map_err(|e| {
 			CallError::Custom(ErrorObject::owned(
 				Error::RuntimeError.into(),
 				"Unable to query fee details.",

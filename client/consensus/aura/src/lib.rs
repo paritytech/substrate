@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -53,7 +53,6 @@ use sp_core::crypto::{ByteArray, Pair, Public};
 use sp_inherents::CreateInherentDataProviders;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
-	generic::BlockId,
 	traits::{Block as BlockT, Header, Member, NumberFor, Zero},
 	DigestItem,
 };
@@ -121,8 +120,10 @@ where
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: AuraApi<B, A>,
 {
-	let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
-	client.runtime_api().slot_duration(&best_block_id).map_err(|err| err.into())
+	client
+		.runtime_api()
+		.slot_duration(client.usage_info().chain.best_hash)
+		.map_err(|err| err.into())
 }
 
 /// Get slot author for given block along with authorities.
@@ -621,7 +622,7 @@ where
 			if *until > context_block_number {
 				runtime_api
 					.initialize_block(
-						&BlockId::Hash(parent_hash),
+						parent_hash,
 						&B::Header::new(
 							context_block_number,
 							Default::default(),
@@ -635,7 +636,7 @@ where
 	}
 
 	runtime_api
-		.authorities(&BlockId::Hash(parent_hash))
+		.authorities(parent_hash)
 		.ok()
 		.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 }
@@ -726,18 +727,9 @@ mod tests {
 	>;
 	type AuraPeer = Peer<(), PeersClient>;
 
+	#[derive(Default)]
 	pub struct AuraTestNet {
-		rt_handle: Handle,
 		peers: Vec<AuraPeer>,
-	}
-
-	impl WithRuntime for AuraTestNet {
-		fn with_runtime(rt_handle: Handle) -> Self {
-			AuraTestNet { rt_handle, peers: Vec::new() }
-		}
-		fn rt_handle(&self) -> &Handle {
-			&self.rt_handle
-		}
 	}
 
 	impl TestNetFactory for AuraTestNet {
@@ -783,16 +775,20 @@ mod tests {
 		fn peers(&self) -> &Vec<AuraPeer> {
 			&self.peers
 		}
+
+		fn peers_mut(&mut self) -> &mut Vec<AuraPeer> {
+			&mut self.peers
+		}
+
 		fn mut_peers<F: FnOnce(&mut Vec<AuraPeer>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
 	}
 
-	#[test]
-	fn authoring_blocks() {
+	#[tokio::test]
+	async fn authoring_blocks() {
 		sp_tracing::try_init_simple();
-		let runtime = Runtime::new().unwrap();
-		let net = AuraTestNet::new(runtime.handle().clone(), 3);
+		let net = AuraTestNet::new(3);
 
 		let peers = &[(0, Keyring::Alice), (1, Keyring::Bob), (2, Keyring::Charlie)];
 
@@ -858,13 +854,14 @@ mod tests {
 			);
 		}
 
-		runtime.block_on(future::select(
+		future::select(
 			future::poll_fn(move |cx| {
 				net.lock().poll(cx);
 				Poll::<()>::Pending
 			}),
 			future::select(future::join_all(aura_futures), future::join_all(import_notifications)),
-		));
+		)
+		.await;
 	}
 
 	#[test]
@@ -883,10 +880,9 @@ mod tests {
 		);
 	}
 
-	#[test]
-	fn current_node_authority_should_claim_slot() {
-		let runtime = Runtime::new().unwrap();
-		let net = AuraTestNet::new(runtime.handle().clone(), 4);
+	#[tokio::test]
+	async fn current_node_authority_should_claim_slot() {
+		let net = AuraTestNet::new(4);
 
 		let mut authorities = vec![
 			Keyring::Alice.public().into(),
@@ -930,20 +926,19 @@ mod tests {
 			Default::default(),
 			Default::default(),
 		);
-		assert!(runtime.block_on(worker.claim_slot(&head, 0.into(), &authorities)).is_none());
-		assert!(runtime.block_on(worker.claim_slot(&head, 1.into(), &authorities)).is_none());
-		assert!(runtime.block_on(worker.claim_slot(&head, 2.into(), &authorities)).is_none());
-		assert!(runtime.block_on(worker.claim_slot(&head, 3.into(), &authorities)).is_some());
-		assert!(runtime.block_on(worker.claim_slot(&head, 4.into(), &authorities)).is_none());
-		assert!(runtime.block_on(worker.claim_slot(&head, 5.into(), &authorities)).is_none());
-		assert!(runtime.block_on(worker.claim_slot(&head, 6.into(), &authorities)).is_none());
-		assert!(runtime.block_on(worker.claim_slot(&head, 7.into(), &authorities)).is_some());
+		assert!(worker.claim_slot(&head, 0.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 1.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 2.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 3.into(), &authorities).await.is_some());
+		assert!(worker.claim_slot(&head, 4.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 5.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 6.into(), &authorities).await.is_none());
+		assert!(worker.claim_slot(&head, 7.into(), &authorities).await.is_some());
 	}
 
-	#[test]
-	fn on_slot_returns_correct_block() {
-		let runtime = Runtime::new().unwrap();
-		let net = AuraTestNet::new(runtime.handle().clone(), 4);
+	#[tokio::test]
+	async fn on_slot_returns_correct_block() {
+		let net = AuraTestNet::new(4);
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.");
@@ -977,20 +972,21 @@ mod tests {
 			compatibility_mode: Default::default(),
 		};
 
-		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
+		let head = client.expect_header(client.info().genesis_hash).unwrap();
 
-		let res = runtime
-			.block_on(worker.on_slot(SlotInfo {
+		let res = worker
+			.on_slot(SlotInfo {
 				slot: 0.into(),
 				ends_at: Instant::now() + Duration::from_secs(100),
 				create_inherent_data: Box::new(()),
 				duration: Duration::from_millis(1000),
 				chain_head: head,
 				block_size_limit: None,
-			}))
+			})
+			.await
 			.unwrap();
 
 		// The returned block should be imported and we should be able to get its header by now.
-		assert!(client.header(&BlockId::Hash(res.block.hash())).unwrap().is_some());
+		assert!(client.header(res.block.hash()).unwrap().is_some());
 	}
 }

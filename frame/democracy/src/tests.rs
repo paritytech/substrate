@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,12 +27,12 @@ use frame_support::{
 	},
 	weights::Weight,
 };
-use frame_system::{EnsureRoot, EnsureSignedBy};
+use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use pallet_balances::{BalanceLock, Error as BalancesError};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+	traits::{BadOrigin, BlakeTwo256, Hash, IdentityLookup},
 	Perbill,
 };
 mod cancellation;
@@ -41,6 +41,7 @@ mod delegation;
 mod external_proposing;
 mod fast_tracking;
 mod lock_voting;
+mod metadata;
 mod public_proposals;
 mod scheduling;
 mod voting;
@@ -176,6 +177,7 @@ impl Config for Test {
 	type MinimumDeposit = ConstU64<1>;
 	type MaxDeposits = ConstU32<1000>;
 	type MaxBlacklisted = ConstU32<5>;
+	type SubmitOrigin = EnsureSigned<Self::AccountId>;
 	type ExternalOrigin = EnsureSignedBy<Two, u64>;
 	type ExternalMajorityOrigin = EnsureSignedBy<Three, u64>;
 	type ExternalDefaultOrigin = EnsureSignedBy<One, u64>;
@@ -275,4 +277,16 @@ fn big_nay(who: u64) -> AccountVote<u64> {
 
 fn tally(r: ReferendumIndex) -> Tally<u64> {
 	Democracy::referendum_status(r).unwrap().tally
+}
+
+/// note a new preimage without registering.
+fn note_preimage(who: u64) -> PreimageHash {
+	use std::sync::atomic::{AtomicU8, Ordering};
+	// note a new preimage on every function invoke.
+	static COUNTER: AtomicU8 = AtomicU8::new(0);
+	let data = vec![COUNTER.fetch_add(1, Ordering::Relaxed)];
+	assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(who), data.clone()));
+	let hash = BlakeTwo256::hash(&data);
+	assert!(!Preimage::is_requested(&hash));
+	hash
 }

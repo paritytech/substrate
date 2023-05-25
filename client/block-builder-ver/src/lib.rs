@@ -87,7 +87,7 @@ impl From<bool> for RecordProof {
 /// use proper api for applying extriniscs basedon version
 pub fn apply_transaction_wrapper<'a, Block, Api>(
 	api: &<Api as ProvideRuntimeApi<Block>>::Api,
-	block_id: &BlockId<Block>,
+	block_id: Block::Hash,
 	xt: Block::Extrinsic,
 	context: ExecutionContext,
 ) -> Result<sp_runtime::ApplyExtrinsicResult, sp_api::ApiError>
@@ -97,7 +97,7 @@ where
 	Api::Api: BlockBuilderApi<Block>,
 {
 	let version = api
-		.api_version::<dyn BlockBuilderApi<Block>>(&block_id)?
+		.api_version::<dyn BlockBuilderApi<Block>>(block_id)?
 		.ok_or_else(|| Error::VersionInvalid("BlockBuilderApi".to_string()))?;
 
 	if version < 6 {
@@ -212,7 +212,11 @@ where
 
 		let block_id = BlockId::Hash(parent_hash);
 
-		api.initialize_block_with_context(&block_id, ExecutionContext::BlockConstruction, &header)?;
+		api.initialize_block_with_context(
+			parent_hash,
+			ExecutionContext::BlockConstruction,
+			&header,
+		)?;
 
 		Ok(Self {
 			parent_hash,
@@ -228,7 +232,7 @@ where
 	/// temporaily apply extrinsics and record them on the list
 	pub fn build_with_seed<
 		F: FnOnce(
-			&'_ BlockId<Block>,
+			&'_ Block::Hash,
 			&'_ A::Api,
 		) -> Vec<(Option<sp_runtime::AccountId32>, Block::Extrinsic)>,
 	>(
@@ -236,20 +240,20 @@ where
 		seed: ShufflingSeed,
 		call: F,
 	) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
-		let block_id = self.block_id;
+		let parent_hash = self.parent_hash;
 
-		let previous_block_txs = self.api.get_previous_block_txs(&block_id).unwrap();
+		let previous_block_txs = self.api.get_previous_block_txs(parent_hash).unwrap();
 
 		let mut valid_txs = if self.extrinsics.len() == 0 && previous_block_txs.len() > 0 {
 			log::info!(target:"block_builder", "Not enough room for (any) StoragQeueue enqueue inherent, producing empty block");
 			vec![]
-		} else if self.api.can_enqueue_txs(&block_id).unwrap() {
+		} else if self.api.can_enqueue_txs(parent_hash).unwrap() {
 			self.api.execute_in_transaction(|api| {
 				let next_header = api
-					.finalize_block_with_context(&block_id, ExecutionContext::BlockConstruction)
+					.finalize_block_with_context(parent_hash, ExecutionContext::BlockConstruction)
 					.unwrap();
 
-				api.start_prevalidation(&block_id).unwrap();
+				api.start_prevalidation(parent_hash).unwrap();
 
 				// create dummy header just to condider N+1 block extrinsics like new session
 				let header = <<Block as BlockT>::Header as HeaderT>::new(
@@ -260,17 +264,17 @@ where
 					Default::default(),
 				);
 
-				if api.is_storage_migration_scheduled(&self.block_id).unwrap() {
+				if api.is_storage_migration_scheduled(parent_hash).unwrap() {
 					log::debug!(target:"block_builder", "storage migration scheduled - ignoring any txs");
 					TransactionOutcome::Rollback(vec![])
 				} else {
 					api.initialize_block_with_context(
-						&self.block_id,
+						parent_hash,
 						ExecutionContext::BlockConstruction,
 						&header,
 					)
 					.unwrap();
-					let txs = call(&self.block_id, &api);
+					let txs = call(&self.parent_hash, &api);
 					TransactionOutcome::Rollback(txs)
 				}
 			})
@@ -288,14 +292,14 @@ where
 		let store_txs_inherent = self
 			.api
 			.create_enqueue_txs_inherent(
-				&self.block_id,
+				parent_hash,
 				valid_txs.into_iter().map(|(_, tx)| tx).collect(),
 			)
 			.unwrap();
 
 		apply_transaction_wrapper::<Block, A>(
 			&self.api,
-			&self.block_id,
+			parent_hash,
 			store_txs_inherent.clone(),
 			ExecutionContext::BlockConstruction,
 		)
@@ -306,7 +310,7 @@ where
 		// TODO get rid of collect
 		let mut next_header = self
 			.api
-			.finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
+			.finalize_block_with_context(parent_hash, ExecutionContext::BlockConstruction)?;
 
 		let proof = self.api.extract_proof();
 
@@ -348,13 +352,13 @@ where
 	///
 	/// validate extrinsics but without commiting the change
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), Error> {
-		let block_id = &self.block_id;
+		let parent_hash = self.parent_hash;
 		let inherents = &mut self.inherents;
 
 		self.api.execute_in_transaction(|api| {
 			match apply_transaction_wrapper::<Block, A>(
 				api,
-				block_id,
+				parent_hash,
 				xt.clone(),
 				ExecutionContext::BlockConstruction,
 			) {
@@ -382,11 +386,11 @@ where
 	) where
 		F: Fn() -> bool,
 	{
-		let block_id = &self.block_id;
-		self.api.store_seed(&block_id, seed.seed).unwrap();
+		let parent_hash = self.parent_hash;
+		self.api.store_seed(self.parent_hash, seed.seed).unwrap();
 		let extrinsics = &mut self.extrinsics;
 
-		let previous_block_txs = self.api.get_previous_block_txs(&block_id).unwrap();
+		let previous_block_txs = self.api.get_previous_block_txs(self.parent_hash).unwrap();
 		let previous_block_txs_count = previous_block_txs.len();
 		log::debug!(target: "block_builder", "previous block enqueued {} txs", previous_block_txs_count);
 
@@ -399,7 +403,7 @@ where
 				if self.api.execute_in_transaction(|api| { // execute tx to get execution status
 					match apply_transaction_wrapper::<Block, A>(
 						api,
-						block_id,
+						parent_hash,
 						xt.clone(),
 						ExecutionContext::BlockConstruction,
 					) {
@@ -433,7 +437,7 @@ where
 			}
 		}
 
-		self.api.pop_txs(&block_id, extrinsics.len() as u64).unwrap();
+		self.api.pop_txs(self.parent_hash, extrinsics.len() as u64).unwrap();
 		log::info!(target: "block_builder", "executed {}/{} previous block transactions", extrinsics.len(), previous_block_txs_count);
 	}
 
@@ -444,7 +448,6 @@ where
 		&mut self,
 		inherent_data: sp_inherents::InherentData,
 	) -> Result<(ShufflingSeed, Vec<Block::Extrinsic>), Error> {
-		let block_id = self.block_id;
 		let seed = extract_inherent_data(&inherent_data).map_err(|_| {
 			sp_blockchain::Error::Backend(String::from(
 				"cannot read random seed from inherents data",
@@ -452,11 +455,11 @@ where
 		})?;
 
 		self.api
-			.execute_in_transaction(move |api| {
+			.execute_in_transaction(|api| {
 				// `create_inherents` should not change any state, to ensure this we always rollback
 				// the transaction.
 				TransactionOutcome::Rollback(api.inherent_extrinsics_with_context(
-					&block_id,
+					self.parent_hash,
 					ExecutionContext::BlockConstruction,
 					inherent_data,
 				))
@@ -475,7 +478,7 @@ where
 		let size = self.estimated_header_size +
 			self.inherents.encoded_size() +
 			self.api
-				.create_enqueue_txs_inherent(&self.block_id, Default::default())
+				.create_enqueue_txs_inherent(self.parent_hash, Default::default())
 				.unwrap()
 				.encoded_size();
 
@@ -489,7 +492,7 @@ where
 
 /// Verifies if trasaction can be executed
 pub fn validate_transaction<'a, Block, Api>(
-	at: &BlockId<Block>,
+	at: Block::Hash,
 	api: &'_ Api::Api,
 	xt: <Block as BlockT>::Extrinsic,
 ) -> Result<(), Error>

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -93,6 +93,10 @@ impl syn::parse::Parse for FunctionAttr {
 			let call_index_content;
 			syn::parenthesized!(call_index_content in content);
 			let index = call_index_content.parse::<syn::LitInt>()?;
+			if !index.suffix().is_empty() {
+				let msg = "Number literal must not have a suffix";
+				return Err(syn::Error::new(index.span(), msg))
+			}
 			Ok(FunctionAttr::CallIndex(index.base10_parse()?))
 		} else {
 			Err(lookahead.error())

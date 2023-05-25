@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -330,16 +330,6 @@ impl Signature {
 	pub fn from_h512(v: H512) -> Signature {
 		Signature(v.into())
 	}
-}
-
-/// A localized signature also contains sender information.
-#[cfg(feature = "std")]
-#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
-pub struct LocalizedSignature {
-	/// The signer of the signature.
-	pub signer: Public,
-	/// The signature itself.
-	pub signature: Signature,
 }
 
 impl Public {

@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 # frame
 pallet-staking = { path = "../../staking", version = "4.0.0-dev" }
-pallet-bags-list = { path = "../../bags-list", version = "4.0.0-dev" }
+pallet-bags-list = { path = "../../bags-list", version = "4.0.0-dev", features = ["fuzz"] }
 frame-election-provider-support = { path = "../../election-provider-support", version = "4.0.0-dev" }
 frame-system = { path = "../../system", version = "4.0.0-dev" }
 frame-support = { path = "../../support", version = "4.0.0-dev" }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg(feature = "try-runtime")]
 
-pub use frame_support::traits::TryStateSelect;
+pub use frame_support::traits::{TryStateSelect, UpgradeCheckSelect};
 use frame_support::weights::Weight;
 
 sp_api::decl_runtime_apis! {
@@ -37,7 +37,7 @@ sp_api::decl_runtime_apis! {
 		/// If `checks` is `true`, `pre_migrate` and `post_migrate` of each migration and
 		/// `try_state` of all pallets will be executed. Else, no. If checks are executed, the PoV
 		/// tracking is likely inaccurate.
-		fn on_runtime_upgrade(checks: bool) -> (Weight, Weight);
+		fn on_runtime_upgrade(checks: UpgradeCheckSelect) -> (Weight, Weight);
 
 		/// Execute the given block, but optionally disable state-root and signature checks.
 		///

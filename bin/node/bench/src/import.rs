@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -34,8 +34,7 @@ use std::borrow::Cow;
 
 use node_primitives::Block;
 use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes, Profile};
-use sc_client_api::{backend::Backend, HeaderBackend};
-use sp_runtime::generic::BlockId;
+use sc_client_api::backend::Backend;
 use sp_state_machine::InspectState;
 
 use crate::{
@@ -115,7 +114,7 @@ impl core::Benchmark for ImportBenchmark {
 
 		let _ = context
 			.client
-			.runtime_version_at(&BlockId::Number(0))
+			.runtime_version_at(context.client.chain_info().genesis_hash)
 			.expect("Failed to get runtime version")
 			.spec_version;
 
@@ -127,15 +126,10 @@ impl core::Benchmark for ImportBenchmark {
 		context.import_block(self.block.clone());
 		let elapsed = start.elapsed();
 
-		let hash = context
-			.client
-			.expect_block_hash_from_id(&BlockId::number(1))
-			.expect("Block 1 was imported; qed");
-
 		// Sanity checks.
 		context
 			.client
-			.state_at(hash)
+			.state_at(self.block.header.hash())
 			.expect("state_at failed for block#1")
 			.inspect_state(|| {
 				match self.block_type {

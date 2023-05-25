@@ -8,23 +8,24 @@ The Wasm builder is a tool that integrates the process of building the WASM bina
 A project that should be compiled as a Wasm binary needs to:
 
 1. Add a `build.rs` file.
-2. Add `wasm-builder` as dependency into `build-dependencies`.
+2. Add `wasm-builder` as dependency into `build-dependencies` (can be made optional and only enabled when `std` feature is used).
 
 The `build.rs` file needs to contain the following code:
 
 ```rust
-use substrate_wasm_builder::WasmBuilder;
-
 fn main() {
-    WasmBuilder::new()
-        // Tell the builder to build the project (crate) this `build.rs` is part of.
-        .with_current_project()
-        // Make sure to export the `heap_base` global, this is required by Substrate
-        .export_heap_base()
-        // Build the Wasm file so that it imports the memory (need to be provided by at instantiation)
-        .import_memory()
-        // Build it.
-        .build()
+    #[cfg(feature = "std")]
+    {
+        substrate_wasm_builder::WasmBuilder::new()
+            // Tell the builder to build the project (crate) this `build.rs` is part of.
+            .with_current_project()
+            // Make sure to export the `heap_base` global, this is required by Substrate
+            .export_heap_base()
+            // Build the Wasm file so that it imports the memory (need to be provided by at instantiation)
+            .import_memory()
+            // Build it.
+            .build();
+    }
 }
 ```
 

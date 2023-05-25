@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,7 +47,6 @@ mod pallet {
 	use frame_support::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
@@ -363,7 +362,7 @@ mod tests {
 	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
 	use sp_core::{
 		map,
-		traits::{CodeExecutor, RuntimeCode},
+		traits::{CallContext, CodeExecutor, RuntimeCode},
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
@@ -449,7 +448,14 @@ mod tests {
 			};
 
 			executor()
-				.call(&mut ext, &runtime_code, "Core_execute_block", &b.encode(), false)
+				.call(
+					&mut ext,
+					&runtime_code,
+					"Core_execute_block",
+					&b.encode(),
+					false,
+					CallContext::Offchain,
+				)
 				.0
 				.unwrap();
 		})
@@ -555,7 +561,14 @@ mod tests {
 			};
 
 			executor()
-				.call(&mut ext, &runtime_code, "Core_execute_block", &b.encode(), false)
+				.call(
+					&mut ext,
+					&runtime_code,
+					"Core_execute_block",
+					&b.encode(),
+					false,
+					CallContext::Offchain,
+				)
 				.0
 				.unwrap();
 		})

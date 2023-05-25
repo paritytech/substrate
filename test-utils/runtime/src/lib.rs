@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +28,7 @@ use scale_info::TypeInfo;
 use sp_std::{marker::PhantomData, prelude::*};
 
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
-use sp_core::{offchain::KeyTypeId, OpaqueMetadata, RuntimeDebug};
+use sp_core::{OpaqueMetadata, RuntimeDebug};
 use sp_trie::{
 	trie_types::{TrieDBBuilder, TrieDBMutBuilderV1},
 	PrefixedMemoryDB, StorageProof,
@@ -39,7 +39,7 @@ use cfg_if::cfg_if;
 use frame_support::{
 	dispatch::RawOrigin,
 	parameter_types,
-	traits::{CallerTrait, ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
+	traits::{CallerTrait, ConstU32, ConstU64, CrateVersion},
 	weights::{RuntimeDbWeight, Weight},
 };
 use frame_system::limits::{BlockLength, BlockWeights};
@@ -299,7 +299,7 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 }
 
 /// A type that can not be decoded.
-#[derive(PartialEq)]
+#[derive(PartialEq, TypeInfo)]
 pub struct DecodeFails<B: BlockT> {
 	_phantom: PhantomData<B>,
 }
@@ -603,7 +603,7 @@ parameter_types! {
 	pub RuntimeBlockLength: BlockLength =
 		BlockLength::max(4 * 1024 * 1024);
 	pub RuntimeBlockWeights: BlockWeights =
-		BlockWeights::with_sensible_defaults(Weight::from_ref_time(4 * 1024 * 1024), Perbill::from_percent(75));
+		BlockWeights::with_sensible_defaults(Weight::from_parts(4 * 1024 * 1024, 0), Perbill::from_percent(75));
 }
 
 impl From<frame_system::Call<Runtime>> for Extrinsic {
@@ -661,21 +661,10 @@ impl pallet_babe::Config for Runtime {
 	// pallet_babe::SameAuthoritiesForever.
 	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
 	type DisabledValidators = ();
-
-	type KeyOwnerProofSystem = ();
-
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
-
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		AuthorityId,
-	)>>::IdentificationTuple;
-
-	type HandleEquivocation = ();
 	type WeightInfo = ();
-
 	type MaxAuthorities = ConstU32<10>;
+	type KeyOwnerProof = sp_core::Void;
+	type EquivocationReportSystem = ();
 }
 
 /// Adds one to the given input and returns the final result.
@@ -975,45 +964,63 @@ cfg_if! {
 				}
 			}
 
-			impl sp_finality_grandpa::GrandpaApi<Block> for Runtime {
-				fn grandpa_authorities() -> sp_finality_grandpa::AuthorityList {
+			impl sp_consensus_grandpa::GrandpaApi<Block> for Runtime {
+				fn grandpa_authorities() -> sp_consensus_grandpa::AuthorityList {
 					Vec::new()
 				}
 
-				fn current_set_id() -> sp_finality_grandpa::SetId {
+				fn current_set_id() -> sp_consensus_grandpa::SetId {
 					0
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
-					_equivocation_proof: sp_finality_grandpa::EquivocationProof<
+					_equivocation_proof: sp_consensus_grandpa::EquivocationProof<
 						<Block as BlockT>::Hash,
 						NumberFor<Block>,
 					>,
-					_key_owner_proof: sp_finality_grandpa::OpaqueKeyOwnershipProof,
+					_key_owner_proof: sp_consensus_grandpa::OpaqueKeyOwnershipProof,
 				) -> Option<()> {
 					None
 				}
 
 				fn generate_key_ownership_proof(
-					_set_id: sp_finality_grandpa::SetId,
-					_authority_id: sp_finality_grandpa::AuthorityId,
-				) -> Option<sp_finality_grandpa::OpaqueKeyOwnershipProof> {
+					_set_id: sp_consensus_grandpa::SetId,
+					_authority_id: sp_consensus_grandpa::AuthorityId,
+				) -> Option<sp_consensus_grandpa::OpaqueKeyOwnershipProof> {
 					None
 				}
 			}
 
-			impl beefy_primitives::BeefyApi<Block> for Runtime {
-				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
+			impl sp_consensus_beefy::BeefyApi<Block> for Runtime {
+				fn beefy_genesis() -> Option<BlockNumber> {
 					None
 				}
+
+				fn validator_set() -> Option<sp_consensus_beefy::ValidatorSet<sp_consensus_beefy::crypto::AuthorityId>> {
+					None
+				}
+
+				fn submit_report_equivocation_unsigned_extrinsic(
+					_equivocation_proof: sp_consensus_beefy::EquivocationProof<
+						NumberFor<Block>,
+						sp_consensus_beefy::crypto::AuthorityId,
+						sp_consensus_beefy::crypto::Signature
+					>,
+					_key_owner_proof: sp_consensus_beefy::OpaqueKeyOwnershipProof,
+				) -> Option<()> { None }
+
+				fn generate_key_ownership_proof(
+					_set_id: sp_consensus_beefy::ValidatorSetId,
+					_authority_id: sp_consensus_beefy::crypto::AuthorityId,
+				) -> Option<sp_consensus_beefy::OpaqueKeyOwnershipProof> { None }
 			}
 
-			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for Runtime {
-				fn authority_set_proof() -> beefy_primitives::mmr::BeefyAuthoritySet<beefy_primitives::MmrRootHash> {
+			impl pallet_beefy_mmr::BeefyMmrApi<Block, sp_consensus_beefy::MmrRootHash> for Runtime {
+				fn authority_set_proof() -> sp_consensus_beefy::mmr::BeefyAuthoritySet<sp_consensus_beefy::MmrRootHash> {
 					Default::default()
 				}
 
-				fn next_authority_set_proof() -> beefy_primitives::mmr::BeefyNextAuthoritySet<beefy_primitives::MmrRootHash> {
+				fn next_authority_set_proof() -> sp_consensus_beefy::mmr::BeefyNextAuthoritySet<sp_consensus_beefy::MmrRootHash> {
 					Default::default()
 				}
 			}
@@ -1364,8 +1371,7 @@ mod tests {
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_api::ProvideRuntimeApi;
 	use sp_consensus::BlockOrigin;
-	use sp_core::storage::well_known_keys::HEAP_PAGES;
-	use sp_runtime::generic::BlockId;
+	use sp_core::{storage::well_known_keys::HEAP_PAGES, ExecutionContext};
 	use sp_state_machine::ExecutionStrategy;
 	use substrate_test_runtime_client::{
 		prelude::*, runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder,
@@ -1380,21 +1386,26 @@ mod tests {
 			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
 			.set_heap_pages(8)
 			.build();
-		let block_id = BlockId::Hash(client.chain_info().best_hash);
+		let best_hash = client.chain_info().best_hash;
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
-		let ret = client.runtime_api().vec_with_capacity(&block_id, 1048576);
+		let ret = client.runtime_api().vec_with_capacity_with_context(
+			best_hash,
+			// Use `BlockImport` to ensure we use the on chain heap pages as configured above.
+			ExecutionContext::Importing,
+			1048576,
+		);
 		assert!(ret.is_err());
 
 		// Create a block that sets the `:heap_pages` to 32 pages of memory which corresponds to
 		// ~2048k of heap memory.
-		let (new_block_id, block) = {
+		let (new_at_hash, block) = {
 			let mut builder = client.new_block(Default::default()).unwrap();
 			builder.push_storage_change(HEAP_PAGES.to_vec(), Some(32u64.encode())).unwrap();
 			let block = builder.build().unwrap().block;
 			let hash = block.header.hash();
-			(BlockId::Hash(hash), block)
+			(hash, block)
 		};
 
 		futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
@@ -1408,7 +1419,7 @@ mod tests {
 		futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 		// Allocation of 1024k while having ~2048k should succeed.
-		let ret = client.runtime_api().vec_with_capacity(&new_block_id, 1048576);
+		let ret = client.runtime_api().vec_with_capacity(new_at_hash, 1048576);
 		assert!(ret.is_ok());
 	}
 
@@ -1417,9 +1428,9 @@ mod tests {
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Hash(client.chain_info().best_hash);
+		let best_hash = client.chain_info().best_hash;
 
-		runtime_api.test_storage(&block_id).unwrap();
+		runtime_api.test_storage(best_hash).unwrap();
 	}
 
 	fn witness_backend() -> (sp_trie::MemoryDB<crate::Hashing>, crate::Hash) {
@@ -1444,8 +1455,8 @@ mod tests {
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Hash(client.chain_info().best_hash);
+		let best_hash = client.chain_info().best_hash;
 
-		runtime_api.test_witness(&block_id, proof, root).unwrap();
+		runtime_api.test_witness(best_hash, proof, root).unwrap();
 	}
 }

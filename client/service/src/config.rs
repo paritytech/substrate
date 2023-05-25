@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,14 +22,14 @@ pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStra
 pub use sc_client_db::{BlocksPruning, Database, DatabaseSource, PruningMode};
 pub use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 pub use sc_network::{
-	config::{NetworkConfiguration, NodeKeyConfig, Role},
-	Multiaddr,
-};
-pub use sc_network_common::{
-	config::{MultiaddrWithPeerId, NonDefaultSetConfig, ProtocolId, SetConfig, TransportConfig},
+	config::{
+		MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig, NonDefaultSetConfig, ProtocolId,
+		Role, SetConfig, SyncMode, TransportConfig,
+	},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
+	Multiaddr,
 };
 
 use prometheus_endpoint::Registry;
@@ -237,6 +237,22 @@ impl Configuration {
 			},
 		};
 		ProtocolId::from(protocol_id_full)
+	}
+
+	/// Returns true if the genesis state writting will be skipped while initializing the genesis
+	/// block.
+	pub fn no_genesis(&self) -> bool {
+		matches!(self.network.sync_mode, SyncMode::Fast { .. } | SyncMode::Warp { .. })
+	}
+
+	/// Returns the database config for creating the backend.
+	pub fn db_config(&self) -> sc_client_db::DatabaseSettings {
+		sc_client_db::DatabaseSettings {
+			trie_cache_maximum_size: self.trie_cache_maximum_size,
+			state_pruning: self.state_pruning.clone(),
+			source: self.database.clone(),
+			blocks_pruning: self.blocks_pruning,
+		}
 	}
 }
 

@@ -215,9 +215,7 @@ pub trait ProofOfStakeRewardsApi<AccountId> {
 
 	fn disable(liquidity_token_id: Self::CurrencyId);
 
-	fn is_enabled(
-		liquidity_token_id: Self::CurrencyId,
-	) -> bool;
+	fn is_enabled(liquidity_token_id: Self::CurrencyId) -> bool;
 
 	fn claim_rewards_all(
 		sender: AccountId,

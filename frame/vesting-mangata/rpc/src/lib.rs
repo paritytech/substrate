@@ -79,12 +79,10 @@ where
 	fn get_vesting_locked_at(&self, who: AccountId, token_id: TokenId, at_block_number: Option<BlockNumber>, at: Option<<Block as BlockT>::Hash>)
 	 -> RpcResult<VestingInfosWithLockedAt<Balance, BlockNumber>> {
 		let api = self.client.runtime_api();
-		let at = BlockId::<Block>::hash(at.unwrap_or_else(||
-            // If the block hash is not supplied assume the best block.
-            self.client.info().best_hash));
+		let at = self.client.info().best_hash;
 
 		let runtime_api_result = api.get_vesting_locked_at(
-			&at,
+			at,
 			who,
 			token_id,
 			at_block_number,

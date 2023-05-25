@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 
 pub(crate) fn initialize_transport() -> Result<WsTrans, io::Error> {
 	let transport = {
-		let tcp_transport = libp2p::tcp::TokioTcpTransport::new(libp2p::tcp::GenTcpConfig::new());
+		let tcp_transport = libp2p::tcp::tokio::Transport::new(libp2p::tcp::Config::new());
 		let inner = libp2p::dns::TokioDnsConfig::system(tcp_transport)?;
 		libp2p::websocket::framed::WsConfig::new(inner).and_then(|connec, _| {
 			let connec = connec

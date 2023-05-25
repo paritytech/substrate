@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -118,4 +118,30 @@ pub trait WasmInstance: Send {
 	fn linear_memory_base_ptr(&self) -> Option<*const u8> {
 		None
 	}
+}
+
+/// Defines the heap pages allocation strategy the wasm runtime should use.
+///
+/// A heap page is defined as 64KiB of memory.
+#[derive(Debug, Copy, Clone, PartialEq, Hash, Eq)]
+pub enum HeapAllocStrategy {
+	/// Allocate a static number of heap pages.
+	///
+	/// The total number of allocated heap pages is the initial number of heap pages requested by
+	/// the wasm file plus the `extra_pages`.
+	Static {
+		/// The number of pages that will be added on top of the initial heap pages requested by
+		/// the wasm file.
+		extra_pages: u32,
+	},
+	/// Allocate the initial heap pages as requested by the wasm file and then allow it to grow
+	/// dynamically.
+	Dynamic {
+		/// The absolute maximum size of the linear memory (in pages).
+		///
+		/// When `Some(_)` the linear memory will be allowed to grow up to this limit.
+		/// When `None` the linear memory will be allowed to grow up to the maximum limit supported
+		/// by WASM (4GB).
+		maximum_pages: Option<u32>,
+	},
 }

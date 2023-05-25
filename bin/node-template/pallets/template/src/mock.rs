@@ -1,6 +1,5 @@
 use crate as pallet_template;
 use frame_support::traits::{ConstU16, ConstU64};
-use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -22,7 +21,7 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl system::Config for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -55,5 +54,5 @@ impl pallet_template::Config for Test {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }

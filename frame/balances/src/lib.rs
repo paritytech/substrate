@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -193,6 +193,8 @@ pub use weights::WeightInfo;
 
 pub use pallet::*;
 
+const LOG_TARGET: &str = "runtime::balances";
+
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
@@ -251,7 +253,6 @@ pub mod pallet {
 		frame_support::traits::StorageVersion::new(1);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
@@ -265,7 +266,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be `Signed` by the transactor.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - Dependent on arguments but not critical, given proper implementations for input config
 		///   types. See related functions below.
 		/// - It contains a limited number of reads and writes internally and no complex
@@ -279,9 +280,6 @@ pub mod pallet {
 		///   - Removing enough funds from an account will trigger `T::DustRemoval::on_unbalanced`.
 		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional check
 		///     that the transfer will not kill the origin account.
-		/// ---------------------------------
-		/// - Origin account is already in memory, so no DB operations for them.
-		/// # </weight>
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
@@ -358,10 +356,9 @@ pub mod pallet {
 
 		/// Exactly as `transfer`, except the origin must be root and the source account may be
 		/// specified.
-		/// # <weight>
+		/// ## Complexity
 		/// - Same as transfer, but additional read and write because the source account is not
 		///   assumed to be in the overlay.
-		/// # </weight>
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
@@ -415,9 +412,8 @@ pub mod pallet {
 		/// - `keep_alive`: A boolean to determine if the `transfer_all` operation should send all
 		///   of the funds the account has, causing the sender account to be killed (false), or
 		///   transfer everything except at least the existential deposit, which will guarantee to
-		///   keep the sender account alive (true). # <weight>
+		///   keep the sender account alive (true). ## Complexity
 		/// - O(1). Just like transfer, but reading the user's transferable balance first.
-		///   #</weight>
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::transfer_all())]
 		pub fn transfer_all(
@@ -950,7 +946,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if locks.len() as u32 > T::MaxLocks::get() {
 			log::warn!(
-				target: "runtime::balances",
+				target: LOG_TARGET,
 				"Warning: A user has more currency locks than expected. \
 				A runtime configuration adjustment may be needed."
 			);
@@ -985,7 +981,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// since the funds that are under the lock will themselves be stored in the
 				// account and therefore will need a reference.
 				log::warn!(
-					target: "runtime::balances",
+					target: LOG_TARGET,
 					"Warning: Attempt to introduce lock consumer reference, yet no providers. \
 					This is unexpected but should be safe."
 				);
@@ -1482,10 +1478,9 @@ where
 	// restrictions like locks and vesting balance.
 	// Is a no-op if amount to be withdrawn is zero.
 	//
-	// # <weight>
+	// ## Complexity
 	// Despite iterating over a list of locks, they are limited by the number of
 	// lock IDs, which means the number of runtime pallets that intend to use and create locks.
-	// # </weight>
 	fn ensure_can_withdraw(
 		who: &T::AccountId,
 		amount: T::Balance,

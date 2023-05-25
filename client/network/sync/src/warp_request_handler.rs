@@ -1,4 +1,4 @@
-// Copyright 2022 Parity Technologies (UK) Ltd.
+// Copyright Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,14 +22,16 @@ use futures::{
 	stream::StreamExt,
 };
 use log::debug;
-use sc_network_common::{
+
+use sc_network::{
 	config::ProtocolId,
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
-	sync::warp::{EncodedProof, WarpProofRequest, WarpSyncProvider},
 };
+use sc_network_common::sync::warp::{EncodedProof, WarpProofRequest, WarpSyncProvider};
 use sp_runtime::traits::Block as BlockT;
+
 use std::{sync::Arc, time::Duration};
 
 const MAX_RESPONSE_SIZE: u64 = 16 * 1024 * 1024;

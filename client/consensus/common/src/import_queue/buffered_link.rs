@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@
 //! # use sp_test_primitives::Block;
 //! # struct DummyLink; impl Link<Block> for DummyLink {}
 //! # let mut my_link = DummyLink;
-//! let (mut tx, mut rx) = buffered_link::<Block>();
+//! let (mut tx, mut rx) = buffered_link::<Block>(100_000);
 //! tx.blocks_processed(0, 0, vec![]);
 //!
 //! // Calls `my_link.blocks_processed(0, 0, vec![])` when polled.
@@ -51,9 +51,11 @@ use super::BlockImportResult;
 
 /// Wraps around an unbounded channel from the `futures` crate. The sender implements `Link` and
 /// can be used to buffer commands, and the receiver can be used to poll said commands and transfer
-/// them to another link.
-pub fn buffered_link<B: BlockT>() -> (BufferedLinkSender<B>, BufferedLinkReceiver<B>) {
-	let (tx, rx) = tracing_unbounded("mpsc_buffered_link");
+/// them to another link. `queue_size_warning` sets the warning threshold of the channel queue size.
+pub fn buffered_link<B: BlockT>(
+	queue_size_warning: usize,
+) -> (BufferedLinkSender<B>, BufferedLinkReceiver<B>) {
+	let (tx, rx) = tracing_unbounded("mpsc_buffered_link", queue_size_warning);
 	let tx = BufferedLinkSender { tx };
 	let rx = BufferedLinkReceiver { rx: rx.fuse() };
 	(tx, rx)
@@ -164,7 +166,7 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 	}
 
 	/// Close the channel.
-	pub fn close(&mut self) {
+	pub fn close(&mut self) -> bool {
 		self.rx.get_mut().close()
 	}
 }
@@ -175,7 +177,7 @@ mod tests {
 
 	#[test]
 	fn is_closed() {
-		let (tx, rx) = super::buffered_link::<Block>();
+		let (tx, rx) = super::buffered_link::<Block>(1);
 		assert!(!tx.is_closed());
 		drop(rx);
 		assert!(tx.is_closed());

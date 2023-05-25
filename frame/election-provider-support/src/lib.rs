@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -562,7 +562,8 @@ pub trait SortedListProvider<AccountId> {
 	/// unbounded amount of storage accesses.
 	fn unsafe_clear();
 
-	/// Check internal state of list. Only meant for debugging.
+	/// Check internal state of the list. Only meant for debugging.
+	#[cfg(feature = "try-runtime")]
 	fn try_state() -> Result<(), &'static str>;
 
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change

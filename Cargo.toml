@@ -2,8 +2,8 @@
 resolver = "2"
 
 members = [
-#	"bin/node-template/node",
-#	"bin/node-template/pallets/template",
+	"bin/node-template/node",
+	"bin/node-template/pallets/template",
 	"bin/node-template/runtime",
 #	"bin/node/bench",
 #	"bin/node/cli",
@@ -19,8 +19,6 @@ members = [
 	"client/authority-discovery",
 	"client/basic-authorship",
 	"client/basic-authorship-ver",
-	"client/beefy",
-	"client/beefy/rpc",
 	"client/block-builder",
 	"client/block-builder-ver",
 	"client/chain-spec",
@@ -29,20 +27,21 @@ members = [
 	"client/consensus/aura",
 	"client/consensus/babe",
 	"client/consensus/babe/rpc",
+	"client/consensus/beefy",
+	"client/consensus/beefy/rpc",
 	"client/consensus/common",
 	"client/consensus/epochs",
+	"client/consensus/grandpa",
+	"client/consensus/grandpa/rpc",
 	"client/consensus/manual-seal",
 	"client/consensus/pow",
 	"client/consensus/slots",
-	"client/consensus/uncles",
 	"client/db",
 	"client/executor",
 	"client/executor/common",
 	"client/executor/runtime-test",
 	"client/executor/wasmi",
 	"client/executor/wasmtime",
-	"client/finality-grandpa",
-	"client/finality-grandpa/rpc",
 	"client/informant",
 	"client/keystore",
 	"client/merkle-mountain-range",
@@ -66,6 +65,7 @@ members = [
 	"client/service",
 	"client/service/test",
 	"client/state-db",
+	"client/storage-monitor",
 	"client/sysinfo",
 	"client/sync-state-rpc",
 	"client/telemetry",
@@ -87,8 +87,8 @@ members = [
 	"frame/balances",
 	"frame/beefy",
 	"frame/beefy-mmr",
-	"frame/beefy-mmr/primitives",
 	"frame/benchmarking",
+	"frame/benchmarking/pov",
 	"frame/bounties",
 	"frame/child-bounties",
 	"frame/collective",
@@ -97,6 +97,7 @@ members = [
 	"frame/contracts/proc-macro",
 	"frame/contracts/primitives",
 	"frame/conviction-voting",
+	"frame/core-fellowship",
 	"frame/democracy",
 	"frame/fast-unstake",
 	"frame/try-runtime",
@@ -125,16 +126,19 @@ members = [
 	"frame/preimage",
 	"frame/proxy",
 	"frame/message-queue",
+	"frame/nfts",
+	"frame/nfts/runtime-api",
 	"frame/nomination-pools",
 	"frame/nomination-pools/fuzzer",
 	"frame/nomination-pools/benchmarking",
 	"frame/nomination-pools/test-staking",
 	"frame/nomination-pools/runtime-api",
-	"frame/randomness-collective-flip",
+	"frame/insecure-randomness-collective-flip",
 	"frame/ranked-collective",
 	"frame/recovery",
 	"frame/referenda",
 	"frame/remark",
+	"frame/salary",
 	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",
@@ -143,6 +147,7 @@ members = [
 	"frame/staking",
 	"frame/staking/reward-curve",
 	"frame/staking/reward-fn",
+	"frame/staking/runtime-api",
 	"frame/state-trie-migration",
 	"frame/sudo",
 	"frame/sudo-mangata",
@@ -175,6 +180,7 @@ members = [
 	"frame/utility",
 	"frame/utility-mangata",
 	"frame/vesting",
+	"frame/glutton",
 	"frame/whitelist",
 	"frame/vesting-mangata",
 	"primitives/api",
@@ -185,14 +191,14 @@ members = [
 	"primitives/arithmetic",
 	"primitives/arithmetic/fuzzer",
 	"primitives/authority-discovery",
-	"primitives/authorship",
-	"primitives/beefy",
 	"primitives/block-builder",
 	"primitives/blockchain",
 	"primitives/consensus/aura",
 	"primitives/consensus/babe",
+	"primitives/consensus/beefy",
 	"primitives/consensus/common",
 	"primitives/mangata-types",
+	"primitives/consensus/grandpa",
 	"primitives/consensus/pow",
 	"primitives/consensus/slots",
 	"primitives/consensus/vrf",
@@ -203,7 +209,6 @@ members = [
 	"primitives/debug-derive",
 	"primitives/externalities",
 	"primitives/ver-api",
-	"primitives/finality-grandpa",
 	"primitives/inherents",
 	"primitives/io",
 	"primitives/keyring",
@@ -260,6 +265,7 @@ members = [
 	"utils/frame/rpc/client",
 	"utils/prometheus",
 	"utils/wasm-builder",
+	"utils/binary-merkle-tree",
 ]
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
@@ -354,7 +360,6 @@ sp-offchain = { path = "../substrate/primitives/offchain" }
 sp-state-machine = { path = "../substrate/primitives/state-machine" }
 sp-keyring = { path = "../substrate/primitives/keyring" }
 sp-externalities = { path = "../substrate/primitives/externalities" }
-beefy-primitives = { path = "../substrate/primitives/beefy", package = "sp-beefy" }
 sp-session = { path = "../substrate/primitives/session" }
 sp-runtime-interface-proc-macro = { path = "../substrate/primitives/runtime-interface/proc-macro" }
 sp-runtime-interface = { path = "../substrate/primitives/runtime-interface" }
@@ -375,7 +380,6 @@ sp-authority-discovery = { path = "../substrate/primitives/authority-discovery" 
 sp-transaction-pool = { path = "../substrate/primitives/transaction-pool" }
 sp-io = { path = "../substrate/primitives/io" }
 sp-staking = { path = "../substrate/primitives/staking" }
-sp-finality-grandpa = { path = "../substrate/primitives/finality-grandpa" }
 sp-api-proc-macro = { path = "../substrate/primitives/api/proc-macro" }
 sp-api = { path = "../substrate/primitives/api" }
 sp-blockchain = { path = "../substrate/primitives/blockchain" }
@@ -404,14 +408,11 @@ sc-chain-spec = { path = "../substrate/client/chain-spec" }
 sc-chain-spec-derive = { path = "../substrate/client/chain-spec/derive" }
 sc-offchain = { path = "../substrate/client/offchain" }
 sc-utils = { path = "../substrate/client/utils" }
-beefy-gadget = { path = "../substrate/client/beefy" }
-beefy-gadget-rpc = { path = "../substrate/client/beefy/rpc" }
 sc-proposer-metrics = { path = "../substrate/client/proposer-metrics" }
 sc-consensus-slots = { path = "../substrate/client/consensus/slots" }
 sc-consensus-babe = { path = "../substrate/client/consensus/babe" }
 sc-consensus-babe-rpc = { path = "../substrate/client/consensus/babe/rpc" }
 sc-consensus-epochs = { path = "../substrate/client/consensus/epochs" }
-sc-consensus-uncles = { path = "../substrate/client/consensus/uncles" }
 sc-consensus-aura = { path = "../substrate/client/consensus/aura" }
 sc-consensus = { path = "../substrate/client/consensus/common" }
 sc-rpc = { path = "../substrate/client/rpc" }
@@ -419,8 +420,6 @@ sc-authority-discovery = { path = "../substrate/client/authority-discovery" }
 sc-informant = { path = "../substrate/client/informant" }
 sc-transaction-pool = { path = "../substrate/client/transaction-pool" }
 sc-transaction-pool-api = { path = "../substrate/client/transaction-pool/api" }
-sc-finality-grandpa = { path = "../substrate/client/finality-grandpa" }
-sc-finality-grandpa-rpc = { path = "../substrate/client/finality-grandpa/rpc" }
 sc-client-api = { path = "../substrate/client/api" }
 sc-peerset = { path = "../substrate/client/peerset" }
 sc-network = { path = "../substrate/client/network" }
@@ -458,7 +457,6 @@ frame-support-procedural-tools = { path = "../substrate/frame/support/procedural
 frame-support-procedural-tools-derive = { path = "../substrate/frame/support/procedural/tools/derive" }
 frame-support = { path = "../substrate/frame/support" }
 pallet-aura = { path = "../substrate/frame/aura" }
-beefy-merkle-tree = { path = "../substrate/frame/beefy-mmr/primitives" }
 pallet-beefy-mmr = { path = "../substrate/frame/beefy-mmr" }
 pallet-vesting = { path = "../substrate/frame/vesting" }
 frame-benchmarking = { path = "../substrate/frame/benchmarking" }
@@ -516,7 +514,6 @@ sp-offchain = { path = "../substrate/primitives/offchain" }
 sp-state-machine = { path = "../substrate/primitives/state-machine" }
 sp-keyring = { path = "../substrate/primitives/keyring" }
 sp-externalities = { path = "../substrate/primitives/externalities" }
-beefy-primitives = { path = "../substrate/primitives/beefy", package = "sp-beefy" }
 sp-session = { path = "../substrate/primitives/session" }
 sp-runtime-interface-proc-macro = { path = "../substrate/primitives/runtime-interface/proc-macro" }
 sp-runtime-interface = { path = "../substrate/primitives/runtime-interface" }
@@ -537,7 +534,6 @@ sp-authority-discovery = { path = "../substrate/primitives/authority-discovery" 
 sp-transaction-pool = { path = "../substrate/primitives/transaction-pool" }
 sp-io = { path = "../substrate/primitives/io" }
 sp-staking = { path = "../substrate/primitives/staking" }
-sp-finality-grandpa = { path = "../substrate/primitives/finality-grandpa" }
 sp-api-proc-macro = { path = "../substrate/primitives/api/proc-macro" }
 sp-api = { path = "../substrate/primitives/api" }
 sp-blockchain = { path = "../substrate/primitives/blockchain" }
@@ -566,14 +562,11 @@ sc-chain-spec = { path = "../substrate/client/chain-spec" }
 sc-chain-spec-derive = { path = "../substrate/client/chain-spec/derive" }
 sc-offchain = { path = "../substrate/client/offchain" }
 sc-utils = { path = "../substrate/client/utils" }
-beefy-gadget = { path = "../substrate/client/beefy" }
-beefy-gadget-rpc = { path = "../substrate/client/beefy/rpc" }
 sc-proposer-metrics = { path = "../substrate/client/proposer-metrics" }
 sc-consensus-slots = { path = "../substrate/client/consensus/slots" }
 sc-consensus-babe = { path = "../substrate/client/consensus/babe" }
 sc-consensus-babe-rpc = { path = "../substrate/client/consensus/babe/rpc" }
 sc-consensus-epochs = { path = "../substrate/client/consensus/epochs" }
-sc-consensus-uncles = { path = "../substrate/client/consensus/uncles" }
 sc-consensus-aura = { path = "../substrate/client/consensus/aura" }
 sc-consensus = { path = "../substrate/client/consensus/common" }
 sc-rpc = { path = "../substrate/client/rpc" }
@@ -581,8 +574,6 @@ sc-authority-discovery = { path = "../substrate/client/authority-discovery" }
 sc-informant = { path = "../substrate/client/informant" }
 sc-transaction-pool = { path = "../substrate/client/transaction-pool" }
 sc-transaction-pool-api = { path = "../substrate/client/transaction-pool/api" }
-sc-finality-grandpa = { path = "../substrate/client/finality-grandpa" }
-sc-finality-grandpa-rpc = { path = "../substrate/client/finality-grandpa/rpc" }
 sc-client-api = { path = "../substrate/client/api" }
 sc-peerset = { path = "../substrate/client/peerset" }
 sc-network = { path = "../substrate/client/network" }
@@ -620,7 +611,6 @@ frame-support-procedural-tools = { path = "../substrate/frame/support/procedural
 frame-support-procedural-tools-derive = { path = "../substrate/frame/support/procedural/tools/derive" }
 frame-support = { path = "../substrate/frame/support" }
 pallet-aura = { path = "../substrate/frame/aura" }
-beefy-merkle-tree = { path = "../substrate/frame/beefy-mmr/primitives" }
 pallet-beefy-mmr = { path = "../substrate/frame/beefy-mmr" }
 pallet-vesting = { path = "../substrate/frame/vesting" }
 frame-benchmarking = { path = "../substrate/frame/benchmarking" }

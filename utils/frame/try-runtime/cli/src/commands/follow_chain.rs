@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -137,7 +137,7 @@ where
 				pallet: vec![],
 				child_tree: true,
 			});
-			let ext = state.into_ext::<Block, HostFns>(&shared, &executor, None).await?;
+			let ext = state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 			maybe_state_ext = Some(ext);
 		}
 
@@ -150,6 +150,10 @@ where
 			"TryRuntime_execute_block",
 			(block, command.state_root_check, command.try_state.clone()).encode().as_ref(),
 			full_extensions(),
+			shared
+				.export_proof
+				.as_ref()
+				.map(|path| path.as_path().join(&format!("{}.json", number))),
 		);
 
 		if let Err(why) = result {

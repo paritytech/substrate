@@ -44,7 +44,6 @@ pub mod logger {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::call]
@@ -110,7 +109,7 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(Weight::from_ref_time(1024));
+	pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(Weight::from_parts(1024, 0));
 }
 
 pub struct BlockEverything;

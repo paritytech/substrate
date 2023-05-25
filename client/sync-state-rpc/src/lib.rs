@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -48,14 +48,11 @@ use jsonrpsee::{
 };
 use sc_client_api::StorageData;
 use sp_blockchain::HeaderBackend;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, NumberFor},
-};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::sync::Arc;
 
 type SharedAuthoritySet<TBl> =
-	sc_finality_grandpa::SharedAuthoritySet<<TBl as BlockT>::Hash, NumberFor<TBl>>;
+	sc_consensus_grandpa::SharedAuthoritySet<<TBl as BlockT>::Hash, NumberFor<TBl>>;
 type SharedEpochChanges<TBl> =
 	sc_consensus_epochs::SharedEpochChanges<TBl, sc_consensus_babe::Epoch>;
 
@@ -120,7 +117,7 @@ pub struct LightSyncState<Block: BlockT> {
 	/// The authority set for grandpa.
 	#[serde(serialize_with = "serialize_encoded")]
 	pub grandpa_authority_set:
-		sc_finality_grandpa::AuthoritySet<<Block as BlockT>::Hash, NumberFor<Block>>,
+		sc_consensus_grandpa::AuthoritySet<<Block as BlockT>::Hash, NumberFor<Block>>,
 }
 
 /// An api for sync state RPC calls.
@@ -164,7 +161,7 @@ where
 		let finalized_hash = self.client.info().finalized_hash;
 		let finalized_header = self
 			.client
-			.header(BlockId::Hash(finalized_hash))?
+			.header(finalized_hash)?
 			.ok_or_else(|| sp_blockchain::Error::MissingHeader(finalized_hash.to_string()))?;
 
 		let finalized_block_weight =

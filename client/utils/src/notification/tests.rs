@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -36,7 +36,7 @@ fn notification_channel_simple() {
 
 	// Create a future to receive a single notification
 	// from the stream and verify its payload.
-	let future = stream.subscribe().take(1).for_each(move |payload| {
+	let future = stream.subscribe(100_000).take(1).for_each(move |payload| {
 		let test_payload = closure_payload.clone();
 		async move {
 			assert_eq!(payload, test_payload);

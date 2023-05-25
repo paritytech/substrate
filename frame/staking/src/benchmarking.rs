@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,7 +35,7 @@ use sp_runtime::{
 use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 
-pub use frame_benchmarking::{
+pub use frame_benchmarking::v1::{
 	account, benchmarks, impl_benchmark_test_suite, whitelist_account, whitelisted_caller,
 };
 use frame_system::RawOrigin;
@@ -920,6 +920,13 @@ benchmarks! {
 			Validators::<T>::get(&stash),
 			ValidatorPrefs { commission: Perbill::from_percent(75), ..Default::default() }
 		);
+	}
+
+	set_min_commission {
+		let min_commission = Perbill::max_value();
+	}: _(RawOrigin::Root, min_commission)
+	verify {
+		assert_eq!(MinCommission::<T>::get(), Perbill::from_percent(100));
 	}
 
 	impl_benchmark_test_suite!(

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -26,11 +26,8 @@ use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::HeaderBackend;
 use sp_consensus::{self, BlockOrigin, Environment, Proposer, SelectChain};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT},
-};
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use std::{sync::Arc, time::Duration};
 
 /// max duration for creating a proposal in secs
 pub const MAX_PROPOSAL_DURATION: u64 = 10;
@@ -102,9 +99,8 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, P>(
 		// use the parent_hash supplied via `EngineCommand`
 		// or fetch the best_block.
 		let parent = match parent_hash {
-			Some(hash) => client
-				.header(BlockId::Hash(hash))?
-				.ok_or_else(|| Error::BlockNotFound(format!("{}", hash)))?,
+			Some(hash) =>
+				client.header(hash)?.ok_or_else(|| Error::BlockNotFound(format!("{}", hash)))?,
 			None => select_chain.best_chain().await?,
 		};
 
@@ -157,7 +153,7 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, P>(
 		let mut post_header = header.clone();
 		post_header.digest_mut().logs.extend(params.post_digests.iter().cloned());
 
-		match block_import.import_block(params, HashMap::new()).await? {
+		match block_import.import_block(params).await? {
 			ImportResult::Imported(aux) =>
 				Ok(CreatedBlock { hash: <B as BlockT>::Header::hash(&post_header), aux }),
 			other => Err(other.into()),
