@@ -327,6 +327,7 @@ pub use sp_std;
 ///     #[cfg(feature = "experimental-feature")]
 ///     pub fn gated_call(data: &[u8]) -> Vec<u8> {
 ///         // Same as above
+///         Vec::new()
 ///     }
 /// }
 /// ```
