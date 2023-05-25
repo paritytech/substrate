@@ -84,11 +84,10 @@ where
 		// Get all deposits (reserved).
 		let account_deposits: BTreeMap<T::AccountId, T::Balance> = deposit_of
 			.into_iter()
-			.map(|(_prop_index, (accounts, balance))| {
+			.flat_map(|(_prop_index, (accounts, balance))| {
 				// Create a vec of tuples where each account is associated with the given balance
 				accounts.into_iter().map(|account| (account, balance)).collect::<Vec<_>>()
 			})
-			.flatten()
 			.fold(BTreeMap::new(), |mut acc, (account, balance)| {
 				// Add the balance to the account's existing balance in the accumulator
 				*acc.entry(account).or_insert(Zero::zero()) = acc
@@ -109,6 +108,19 @@ where
 			voting_accounts,
 			RocksDbWeight::get().reads(deposit_of_len as u64 + voting_of_len as u64),
 		)
+	}
+
+	/// Helper function for returning the locked amount of an account under the ID of this
+	/// pallet.
+	#[cfg(feature = "try-runtime")]
+	fn get_actual_locked_amount(account: T::AccountId) -> Option<T::Balance> {
+		use pallet_balances::Locks;
+		use sp_runtime::SaturatedConversion;
+
+		Locks::<T>::get(account.clone())
+			.iter()
+			.find(|l| l.id == DEMOCRACY_ID)
+			.map(|lock| lock.amount.saturated_into::<T::Balance>())
 	}
 }
 
@@ -142,7 +154,7 @@ where
 		use sp_runtime::SaturatedConversion;
 
 		// Get staked and deposited balances as reported by this pallet.
-		let (account_deposits, _, _) = Self::get_account_deposits_and_locks();
+		let (account_deposits, accounts_with_locks, _) = Self::get_account_deposits_and_locks();
 
 		let all_accounts = account_deposits.keys().cloned().collect::<BTreeSet<_>>();
 		let account_reserved_before: BTreeMap<T::AccountId, T::Balance> = all_accounts
@@ -167,8 +179,14 @@ where
 
 		let total_deposits_to_unreserve =
 			account_deposits.clone().into_values().sum::<T::Balance>();
+		let total_amount_to_unlock = accounts_with_locks
+			.iter()
+			.map(|account| Self::get_actual_locked_amount(account.clone()).unwrap_or_default())
+			.sum::<T::Balance>();
+
 		log::info!("Total accounts: {:?}", all_accounts.len());
 		log::info!("Total deposit to unreserve: {:?}", total_deposits_to_unreserve);
+		log::info!("Total deposit to unlock: {:?}", total_amount_to_unlock);
 
 		let pre_migration_data = PreMigrationData::<T> { account_reserved_before };
 		Ok(pre_migration_data.encode())
