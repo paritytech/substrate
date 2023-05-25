@@ -583,3 +583,16 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	fn done_deposit(_asset: Self::AssetId, _who: &AccountId, _amount: Self::Balance) {}
 	fn done_withdraw(_asset: Self::AssetId, _who: &AccountId, _amount: Self::Balance) {}
 }
+
+/// Use an on-chain exchange to convert the asset to the equivalent in native tokens.
+pub trait SwapForNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
+	// If successful returns the amount in native tokens.
+	fn swap_tokens_for_exact_native(
+		sender: AccountId,
+		asset_id: AssetId,
+		amount_out: Balance,
+		amount_in_max: Option<AssetBalance>,
+		send_to: AccountId,
+		keep_alive: bool,
+	) -> Result<AssetBalance, DispatchError>;
+}
