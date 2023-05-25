@@ -117,7 +117,7 @@ pub fn expand_runtime_metadata(
 					ty: #scrate::scale_info::meta_type::<#runtime>(),
 					apis: (&rt).runtime_metadata(),
 					call_enum_ty: #scrate::scale_info::meta_type::<
-							<#runtime as #system_path::Config>::RuntimeCall;
+							<#runtime as #system_path::Config>::RuntimeCall
 						>(),
 					event_enum_ty: #scrate::scale_info::meta_type::<RuntimeEvent>(),
 					error_enum_ty: #scrate::scale_info::meta_type::<RuntimeError>(),
