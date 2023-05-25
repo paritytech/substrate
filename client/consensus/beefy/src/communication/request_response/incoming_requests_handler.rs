@@ -18,7 +18,7 @@
 
 use codec::Decode;
 use futures::{channel::oneshot, StreamExt};
-use log::{debug, trace};
+use log::{debug, error, trace};
 use sc_client_api::BlockBackend;
 use sc_network::{
 	config as netconfig, config::RequestResponseConfig, types::ProtocolName, PeerId,
@@ -215,5 +215,9 @@ where
 				},
 			}
 		}
+		error!(
+			target: crate::LOG_TARGET,
+			"🥩 On-demand requests receiver stream terminated, closing worker."
+		);
 	}
 }

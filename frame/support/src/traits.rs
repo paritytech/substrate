@@ -90,8 +90,8 @@ pub use hooks::{
 pub mod schedule;
 mod storage;
 pub use storage::{
-	Instance, PartialStorageInfoTrait, StorageInfo, StorageInfoTrait, StorageInstance,
-	TrackedStorageKey, WhitelistedStorageKeys,
+	Incrementable, Instance, PartialStorageInfoTrait, StorageInfo, StorageInfoTrait,
+	StorageInstance, TrackedStorageKey, WhitelistedStorageKeys,
 };
 
 mod dispatch;
