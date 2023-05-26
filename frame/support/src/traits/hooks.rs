@@ -308,6 +308,9 @@ pub trait Hooks<BlockNumber> {
 	/// It should focus on certain checks to ensure that the state is sensible. This is never
 	/// executed in a consensus code-path, therefore it can consume as much weight as it needs.
 	///
+	/// Takes the block number and `TryStateSelect`as a parameter. The `TryStateSelect` is used to
+	/// select which state tests to execute.
+	///
 	/// This hook should not alter any storage.
 	#[cfg(feature = "try-runtime")]
 	fn try_state(_n: BlockNumber, _s: TryStateSelect) -> Result<(), TryRuntimeError> {
