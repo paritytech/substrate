@@ -229,8 +229,9 @@ pub mod pallet {
 	/// If set to 0, this pallet does absolutely nothing. Cannot be set to more than
 	/// [`Config::MaxErasToCheckPerBlock`].
 	///
-	/// Based on the amount of weight available at [`Pallet::on_idle`], up to this many eras of a
-	/// [`UnstakeRequest`], stored in [`Head`] might be checked.
+	/// Based on the amount of weight available at [`Pallet::on_idle`], up to this many eras are
+	/// checked. The checking is represented by updating [`UnstakeRequest::checked`], which is
+	/// stored in [`Head`].
 	#[pallet::storage]
 	#[pallet::getter(fn eras_to_check_per_block)]
 	pub type ErasToCheckPerBlock<T: Config> = StorageValue<_, u32, ValueQuery>;
