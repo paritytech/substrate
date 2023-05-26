@@ -231,8 +231,8 @@ where
 	///
 	/// Steps:
 	/// 1. Retrieves the deposit and stake amounts from the pallet.
-	/// 1. Unreserves the deposited funds for each account.
-	/// 2. Unlocks the staked funds for each account.
+	/// 2. Unreserves the deposited funds for each account.
+	/// 3. Unlocks the staked funds for each account.
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		// Get staked and deposited balances as reported by this pallet.
 		let (account_deposited_sums, account_staked_sums, initial_reads_weight) =
