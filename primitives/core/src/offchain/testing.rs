@@ -217,7 +217,7 @@ impl offchain::Externalities for TestOffchainExt {
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
-		Ok(OpaqueNetworkState { peer_id: Default::default(), external_addresses: vec![] })
+		Ok(OpaqueNetworkState { peer_id: Default::default() })
 	}
 
 	fn timestamp(&mut self) -> Timestamp {

@@ -48,7 +48,7 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_im_online.
 pub trait WeightInfo {
-	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight;
+	fn validate_unsigned_and_then_heartbeat(k: u32) -> Weight;
 }
 
 /// Weights for pallet_im_online using the Substrate node and recommended hardware.
@@ -65,20 +65,15 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: ImOnline AuthoredBlocks (r:1 w:0)
 	/// Proof: ImOnline AuthoredBlocks (max_values: None, max_size: Some(56), added: 2531, mode: MaxEncodedLen)
 	/// The range of component `k` is `[1, 1000]`.
-	/// The range of component `e` is `[1, 100]`.
-	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight {
+	fn validate_unsigned_and_then_heartbeat(k: u32) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `295 + k * (32 ±0)`
-		//  Estimated: `10024497 + e * (35 ±0) + k * (32 ±0)`
+		//  Estimated: `10024497 + k * (32 ±0)`
 		// Minimum execution time: 95_573_000 picoseconds.
 		Weight::from_parts(78_856_572, 10024497)
 			// Standard Error: 315
 			.saturating_add(Weight::from_parts(22_926, 0).saturating_mul(k.into()))
-			// Standard Error: 3_181
-			.saturating_add(Weight::from_parts(362_093, 0).saturating_mul(e.into()))
-			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
-			.saturating_add(Weight::from_parts(0, 35).saturating_mul(e.into()))
 			.saturating_add(Weight::from_parts(0, 32).saturating_mul(k.into()))
 	}
 }
@@ -96,20 +91,15 @@ impl WeightInfo for () {
 	/// Storage: ImOnline AuthoredBlocks (r:1 w:0)
 	/// Proof: ImOnline AuthoredBlocks (max_values: None, max_size: Some(56), added: 2531, mode: MaxEncodedLen)
 	/// The range of component `k` is `[1, 1000]`.
-	/// The range of component `e` is `[1, 100]`.
-	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight {
+	fn validate_unsigned_and_then_heartbeat(k: u32) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `295 + k * (32 ±0)`
-		//  Estimated: `10024497 + e * (35 ±0) + k * (32 ±0)`
+		//  Estimated: `10024497 + k * (32 ±0)`
 		// Minimum execution time: 95_573_000 picoseconds.
 		Weight::from_parts(78_856_572, 10024497)
 			// Standard Error: 315
 			.saturating_add(Weight::from_parts(22_926, 0).saturating_mul(k.into()))
-			// Standard Error: 3_181
-			.saturating_add(Weight::from_parts(362_093, 0).saturating_mul(e.into()))
-			.saturating_add(RocksDbWeight::get().reads(4_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
-			.saturating_add(Weight::from_parts(0, 35).saturating_mul(e.into()))
 			.saturating_add(Weight::from_parts(0, 32).saturating_mul(k.into()))
 	}
 }

@@ -235,27 +235,18 @@ where
 /// A type that is the same as [`OpaqueNetworkState`] but with [`Vec`] replaced with
 /// [`WeakBoundedVec<Limit>`] where Limit is the respective size limit
 /// `PeerIdEncodingLimit` represents the size limit of the encoding of `PeerId`
-/// `MultiAddrEncodingLimit` represents the size limit of the encoding of `MultiAddr`
-/// `AddressesLimit` represents the size limit of the vector of peers connected
 #[derive(Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[codec(mel_bound())]
-#[scale_info(skip_type_params(PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit))]
-pub struct BoundedOpaqueNetworkState<PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit>
+#[scale_info(skip_type_params(PeerIdEncodingLimit))]
+pub struct BoundedOpaqueNetworkState<PeerIdEncodingLimit>
 where
 	PeerIdEncodingLimit: Get<u32>,
-	MultiAddrEncodingLimit: Get<u32>,
-	AddressesLimit: Get<u32>,
 {
 	/// PeerId of the local node in SCALE encoded.
 	pub peer_id: WeakBoundedVec<u8, PeerIdEncodingLimit>,
-	/// List of addresses the node knows it can be reached as.
-	pub external_addresses:
-		WeakBoundedVec<WeakBoundedVec<u8, MultiAddrEncodingLimit>, AddressesLimit>,
 }
 
-impl<PeerIdEncodingLimit: Get<u32>, MultiAddrEncodingLimit: Get<u32>, AddressesLimit: Get<u32>>
-	BoundedOpaqueNetworkState<PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit>
-{
+impl<PeerIdEncodingLimit: Get<u32>> BoundedOpaqueNetworkState<PeerIdEncodingLimit> {
 	fn force_from(ons: &OpaqueNetworkState) -> Self {
 		let peer_id = WeakBoundedVec::<_, PeerIdEncodingLimit>::force_from(
 			ons.peer_id.0.clone(),
@@ -265,28 +256,7 @@ impl<PeerIdEncodingLimit: Get<u32>, MultiAddrEncodingLimit: Get<u32>, AddressesL
   				adjustment may be needed.",
 			),
 		);
-
-		let external_addresses = WeakBoundedVec::<_, AddressesLimit>::force_from(
-			ons.external_addresses
-				.iter()
-				.map(|x| {
-					WeakBoundedVec::<_, MultiAddrEncodingLimit>::force_from(
-						x.0.clone(),
-						Some(
-							"Warning: The size of the encoding of MultiAddr \
-  							is bigger than expected. A runtime configuration \
-  							adjustment may be needed.",
-						),
-					)
-				})
-				.collect(),
-			Some(
-				"Warning: The network has more peers than expected \
-  				A runtime configuration adjustment may be needed.",
-			),
-		);
-
-		Self { peer_id, external_addresses }
+		Self { peer_id }
 	}
 }
 
@@ -418,13 +388,7 @@ pub mod pallet {
 		SessionIndex,
 		Twox64Concat,
 		AuthIndex,
-		WrapperOpaque<
-			BoundedOpaqueNetworkState<
-				T::MaxPeerDataEncodingSize,
-				T::MaxPeerDataEncodingSize,
-				T::MaxPeerInHeartbeats,
-			>,
-		>,
+		WrapperOpaque<BoundedOpaqueNetworkState<T::MaxPeerDataEncodingSize>>,
 	>;
 
 	/// For each session index, we keep a mapping of `ValidatorId<T>` to the
@@ -457,16 +421,13 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// ## Complexity:
-		/// - `O(K + E)` where K is length of `Keys` (heartbeat.validators_len) and E is length of
-		///   `heartbeat.network_state.external_address`
+		/// - `O(K)` where K is length of `Keys` (heartbeat.validators_len)
 		///   - `O(K)`: decoding of length `K`
-		///   - `O(E)`: decoding/encoding of length `E`
 		// NOTE: the weight includes the cost of validate_unsigned as it is part of the cost to
 		// import block with such an extrinsic.
 		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::validate_unsigned_and_then_heartbeat(
 			heartbeat.validators_len as u32,
-			heartbeat.network_state.external_addresses.len() as u32,
 		))]
 		pub fn heartbeat(
 			origin: OriginFor<T>,
@@ -485,11 +446,10 @@ pub mod pallet {
 			if let (false, Some(public)) = (exists, public) {
 				Self::deposit_event(Event::<T>::HeartbeatReceived { authority_id: public.clone() });
 
-				let network_state_bounded = BoundedOpaqueNetworkState::<
-					T::MaxPeerDataEncodingSize,
-					T::MaxPeerDataEncodingSize,
-					T::MaxPeerInHeartbeats,
-				>::force_from(&heartbeat.network_state);
+				let network_state_bounded =
+					BoundedOpaqueNetworkState::<T::MaxPeerDataEncodingSize>::force_from(
+						&heartbeat.network_state,
+					);
 				ReceivedHeartbeats::<T>::insert(
 					&current_session,
 					&heartbeat.authority_index,

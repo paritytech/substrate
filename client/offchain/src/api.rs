@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::HashSet, str::FromStr, sync::Arc, thread::sleep};
+use std::{collections::HashSet, sync::Arc, thread::sleep};
 
 use crate::NetworkProvider;
 use codec::{Decode, Encode};
@@ -25,8 +25,8 @@ pub use http::SharedClient;
 use libp2p::{Multiaddr, PeerId};
 use sp_core::{
 	offchain::{
-		self, HttpError, HttpRequestId, HttpRequestStatus, OffchainStorage, OpaqueMultiaddr,
-		OpaqueNetworkState, StorageKind, Timestamp,
+		self, HttpError, HttpRequestId, HttpRequestStatus, OffchainStorage, OpaqueNetworkState,
+		StorageKind, Timestamp,
 	},
 	OpaquePeerId,
 };
@@ -252,16 +252,7 @@ impl From<NetworkState> for OpaqueNetworkState {
 		let enc = Encode::encode(&state.peer_id.to_bytes());
 		let peer_id = OpaquePeerId::new(enc);
 
-		let external_addresses: Vec<OpaqueMultiaddr> = state
-			.external_addresses
-			.iter()
-			.map(|multiaddr| {
-				let e = Encode::encode(&multiaddr.to_string());
-				OpaqueMultiaddr::new(e)
-			})
-			.collect();
-
-		OpaqueNetworkState { peer_id, external_addresses }
+		OpaqueNetworkState { peer_id }
 	}
 }
 
@@ -274,20 +265,7 @@ impl TryFrom<OpaqueNetworkState> for NetworkState {
 		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..]).map_err(|_| ())?;
 		let peer_id = PeerId::from_bytes(&bytes).map_err(|_| ())?;
 
-		let external_addresses: Result<Vec<Multiaddr>, Self::Error> = state
-			.external_addresses
-			.iter()
-			.map(|enc_multiaddr| -> Result<Multiaddr, Self::Error> {
-				let inner_vec = &enc_multiaddr.0;
-				let bytes = <Vec<u8>>::decode(&mut &inner_vec[..]).map_err(|_| ())?;
-				let multiaddr_str = String::from_utf8(bytes).map_err(|_| ())?;
-				let multiaddr = Multiaddr::from_str(&multiaddr_str).map_err(|_| ())?;
-				Ok(multiaddr)
-			})
-			.collect();
-		let external_addresses = external_addresses?;
-
-		Ok(NetworkState { peer_id, external_addresses })
+		Ok(NetworkState { peer_id, external_addresses: vec![] })
 	}
 }
 

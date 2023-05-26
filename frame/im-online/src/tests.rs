@@ -125,10 +125,7 @@ fn heartbeat(
 
 	let heartbeat = Heartbeat {
 		block_number,
-		network_state: OpaqueNetworkState {
-			peer_id: OpaquePeerId(vec![1]),
-			external_addresses: vec![],
-		},
+		network_state: OpaqueNetworkState { peer_id: OpaquePeerId(vec![1]) },
 		session_index,
 		authority_index,
 		validators_len: validators.len() as u32,
