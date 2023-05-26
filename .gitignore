@@ -26,3 +26,5 @@ rls*.log
 *.iml
 bin/node-template/Cargo.lock
 substrate.code-workspace
+.direnv/
+/.envrc

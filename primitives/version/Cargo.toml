@@ -15,10 +15,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
-impl-serde = { version = "0.4.0", optional = true }
+impl-serde = { version = "0.4.0", default-features = false, optional = true }
 parity-wasm = { version = "0.45", optional = true }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-serde = { version = "1.0.136", features = ["derive"], optional = true }
+serde = { version = "1.0.136",  default-features = false, features = ["derive", "alloc"], optional = true }
 thiserror = { version = "1.0.30", optional = true }
 sp-core-hashing-proc-macro = { version = "5.0.0", path = "../core/hashing/proc-macro" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
@@ -29,11 +29,18 @@ sp-version-proc-macro = { version = "4.0.0-dev", default-features = false, path 
 default = ["std"]
 std = [
 	"codec/std",
-	"impl-serde",
+	"impl-serde/std",
 	"parity-wasm",
 	"scale-info/std",
-	"serde",
+	"serde/std",
 	"sp-runtime/std",
 	"sp-std/std",
 	"thiserror",
+]
+
+# Serde support without relying on std features.
+serde = [
+	"dep:serde",
+	"impl-serde",
+	"sp-runtime/serde",
 ]

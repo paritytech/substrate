@@ -204,7 +204,7 @@ pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{BaseArithmetic, Unsigned};
 use sp_runtime::{
-	traits::{Hash, One, Zero},
+	traits::{One, Zero},
 	SaturatedConversion, Saturating,
 };
 use sp_std::{fmt::Debug, ops::Deref, prelude::*, vec};
@@ -499,16 +499,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Message discarded due to an inability to decode the item. Usually caused by state
-		/// corruption.
-		Discarded { hash: T::Hash },
 		/// Message discarded due to an error in the `MessageProcessor` (usually a format error).
-		ProcessingFailed { hash: T::Hash, origin: MessageOriginOf<T>, error: ProcessMessageError },
+		ProcessingFailed { id: [u8; 32], origin: MessageOriginOf<T>, error: ProcessMessageError },
 		/// Message is processed.
-		Processed { hash: T::Hash, origin: MessageOriginOf<T>, weight_used: Weight, success: bool },
+		Processed { id: [u8; 32], origin: MessageOriginOf<T>, weight_used: Weight, success: bool },
 		/// Message placed in overweight queue.
 		OverweightEnqueued {
-			hash: T::Hash,
+			id: [u8; 32],
 			origin: MessageOriginOf<T>,
 			page_index: PageIndex,
 			message_index: T::Size,
@@ -1147,15 +1144,16 @@ impl<T: Config> Pallet<T> {
 		meter: &mut WeightMeter,
 		overweight_limit: Weight,
 	) -> MessageExecutionStatus {
-		let hash = T::Hashing::hash(message);
+		let hash = sp_io::hashing::blake2_256(message);
 		use ProcessMessageError::*;
 		let prev_consumed = meter.consumed;
+		let mut id = hash;
 
-		match T::MessageProcessor::process_message(message, origin.clone(), meter) {
+		match T::MessageProcessor::process_message(message, origin.clone(), meter, &mut id) {
 			Err(Overweight(w)) if w.any_gt(overweight_limit) => {
 				// Permanently overweight.
 				Self::deposit_event(Event::<T>::OverweightEnqueued {
-					hash,
+					id,
 					origin,
 					page_index,
 					message_index,
@@ -1173,13 +1171,13 @@ impl<T: Config> Pallet<T> {
 			},
 			Err(error @ BadFormat | error @ Corrupt | error @ Unsupported) => {
 				// Permanent error - drop
-				Self::deposit_event(Event::<T>::ProcessingFailed { hash, origin, error });
+				Self::deposit_event(Event::<T>::ProcessingFailed { id, origin, error });
 				MessageExecutionStatus::Unprocessable { permanent: true }
 			},
 			Ok(success) => {
 				// Success
 				let weight_used = meter.consumed.saturating_sub(prev_consumed);
-				Self::deposit_event(Event::<T>::Processed { hash, origin, weight_used, success });
+				Self::deposit_event(Event::<T>::Processed { id, origin, weight_used, success });
 				MessageExecutionStatus::Processed
 			},
 		}

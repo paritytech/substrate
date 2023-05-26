@@ -34,16 +34,16 @@ macro_rules! map {
 #[doc(hidden)]
 pub use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 pub use serde;
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sp_runtime_interface::pass_by::{PassByEnum, PassByInner};
 use sp_std::{ops::Deref, prelude::*};
 
 pub use sp_debug_derive::RuntimeDebug;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 pub use impl_serde::serialize as bytes;
 
 #[cfg(feature = "full_crypto")]
@@ -139,8 +139,8 @@ impl ExecutionContext {
 
 /// Hex-serialized shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord))]
-pub struct Bytes(#[cfg_attr(feature = "std", serde(with = "bytes"))] pub Vec<u8>);
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize, Hash, PartialOrd, Ord))]
+pub struct Bytes(#[cfg_attr(feature = "serde", serde(with = "bytes"))] pub Vec<u8>);
 
 impl From<Vec<u8>> for Bytes {
 	fn from(s: Vec<u8>) -> Self {
@@ -209,7 +209,7 @@ impl sp_std::ops::Deref for OpaqueMetadata {
 	PassByInner,
 	TypeInfo,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct OpaquePeerId(pub Vec<u8>);
 
 impl OpaquePeerId {
@@ -394,6 +394,45 @@ macro_rules! impl_maybe_marker {
 	}
 }
 
+/// Macro for creating `Maybe*` marker traits.
+///
+/// Such a maybe-marker trait requires the given bound when either `feature = std` or `feature =
+/// serde` is activated.
+///
+/// # Example
+///
+/// ```
+/// sp_core::impl_maybe_marker_std_or_serde! {
+///     /// A marker for a type that implements `Debug` when `feature = serde` or `feature = std`.
+///     trait MaybeDebug: std::fmt::Debug;
+///     /// A marker for a type that implements `Debug + Display` when `feature = serde` or `feature = std`.
+///     trait MaybeDebugDisplay: std::fmt::Debug, std::fmt::Display;
+/// }
+/// ```
+#[macro_export]
+macro_rules! impl_maybe_marker_std_or_serde {
+	(
+		$(
+			$(#[$doc:meta] )+
+			trait $trait_name:ident: $( $trait_bound:path ),+;
+		)+
+	) => {
+		$(
+			$(#[$doc])+
+			#[cfg(any(feature = "serde", feature = "std"))]
+			pub trait $trait_name: $( $trait_bound + )+ {}
+			#[cfg(any(feature = "serde", feature = "std"))]
+			impl<T: $( $trait_bound + )+> $trait_name for T {}
+
+			$(#[$doc])+
+			#[cfg(not(any(feature = "serde", feature = "std")))]
+			pub trait $trait_name {}
+			#[cfg(not(any(feature = "serde", feature = "std")))]
+			impl<T> $trait_name for T {}
+		)+
+	}
+}
+
 /// The maximum number of bytes that can be allocated at one time.
 // The maximum possible allocation size was chosen rather arbitrary, 32 MiB should be enough for
 // everybody.
@@ -445,7 +484,7 @@ macro_rules! generate_feature_enabled_macro {
 			}
 
 			// Work around for: <https://github.com/rust-lang/rust/pull/52234>
-			#[doc(hidden)] 
+			#[doc(hidden)]
 			pub use [<_ $macro_name>] as $macro_name;
 		}
 	};

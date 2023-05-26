@@ -630,10 +630,10 @@ pub mod pallet {
 	#[pallet::whitelist_storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		#[serde(with = "sp_core::bytes")]
+		#[cfg_attr(feature = "std", serde(with = "sp_core::bytes"))]
 		pub code: Vec<u8>,
 	}
 
@@ -707,7 +707,6 @@ pub struct EventRecord<E: Parameter + Member, T> {
 
 // Create a Hash with 69 for each byte,
 // only used to build genesis config.
-#[cfg(feature = "std")]
 fn hash69<T: AsMut<[u8]> + Default>() -> T {
 	let mut h = T::default();
 	h.as_mut().iter_mut().for_each(|byte| *byte = 69);
@@ -1618,21 +1617,21 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
 
 		cfg_if::cfg_if! {
-			 if #[cfg(all(feature = "runtime-benchmarks", not(test)))] {
+			if #[cfg(all(feature = "runtime-benchmarks", not(test)))] {
 					// Let's ensure the compiler doesn't optimize our fetching of the runtime version away.
 					core::hint::black_box((new_version, current_version));
 					Ok(())
-			  } else {
-				  if new_version.spec_name != current_version.spec_name {
-					  return Err(Error::<T>::InvalidSpecName.into())
-				   }
+			} else {
+				if new_version.spec_name != current_version.spec_name {
+					return Err(Error::<T>::InvalidSpecName.into())
+				}
 
-				   if new_version.spec_version <= current_version.spec_version {
-						return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
-				   }
+				if new_version.spec_version <= current_version.spec_version {
+					return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
+				}
 
-				   Ok(())
-			  }
+				Ok(())
+			}
 		}
 	}
 }
@@ -1643,7 +1642,7 @@ pub fn unique(entropy: impl Encode) -> [u8; 32] {
 	let mut last = [0u8; 32];
 	sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut last[..], 0);
 	let next = (b"frame_system::unique", entropy, last).using_encoded(blake2_256);
-	sp_io::storage::set(well_known_keys::INTRABLOCK_ENTROPY, &next.encode());
+	sp_io::storage::set(well_known_keys::INTRABLOCK_ENTROPY, &next);
 	next
 }
 
