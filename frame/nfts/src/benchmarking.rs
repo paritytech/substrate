@@ -828,6 +828,7 @@ benchmarks_instance_pallet! {
 			metadata: metadata.clone(),
 			only_account: None,
 			deadline: One::one(),
+			mint_price: Some(DepositBalanceOf::<T, I>::min_value()),
 		};
 		let message = Encode::encode(&mint_data);
 		let signature = MultiSignature::Sr25519(sr25519_sign(0.into(), &caller_public, &message).unwrap());

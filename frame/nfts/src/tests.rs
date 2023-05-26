@@ -3146,13 +3146,14 @@ fn validate_signature() {
 		let user_1_pair = sp_core::sr25519::Pair::from_string("//Alice", None).unwrap();
 		let user_1_signer = MultiSigner::Sr25519(user_1_pair.public());
 		let user_1 = user_1_signer.clone().into_account();
-		let mint_data: PreSignedMint<u32, u32, AccountId, u32> = PreSignedMint {
+		let mint_data: PreSignedMint<u32, u32, AccountId, u32, u64> = PreSignedMint {
 			collection: 0,
 			item: 0,
 			attributes: vec![],
 			metadata: vec![],
 			only_account: None,
 			deadline: 100000,
+			mint_price: None,
 		};
 		let encoded_data = Encode::encode(&mint_data);
 		let signature = MultiSignature::Sr25519(user_1_pair.sign(&encoded_data));
@@ -3182,6 +3183,7 @@ fn pre_signed_mints_should_work() {
 			metadata: vec![0, 1],
 			only_account: None,
 			deadline: 10000000,
+			mint_price: Some(10),
 		};
 		let message = Encode::encode(&mint_data);
 		let signature = MultiSignature::Sr25519(user_1_pair.sign(&message));
@@ -3228,8 +3230,8 @@ fn pre_signed_mints_should_work() {
 		assert_eq!(deposit.account, Some(user_2.clone()));
 		assert_eq!(deposit.amount, 3);
 
-		assert_eq!(Balances::free_balance(&user_0), 100 - 2); // 2 - collection deposit
-		assert_eq!(Balances::free_balance(&user_2), 100 - 1 - 3 - 6); // 1 - item deposit, 3 - metadata, 6 - attributes
+		assert_eq!(Balances::free_balance(&user_0), 100 - 2 + 10); // 2 - collection deposit, 10 - mint price
+		assert_eq!(Balances::free_balance(&user_2), 100 - 1 - 3 - 6 - 10); // 1 - item deposit, 3 - metadata, 6 - attributes, 10 - mint price
 
 		assert_noop!(
 			Nfts::mint_pre_signed(
@@ -3242,7 +3244,7 @@ fn pre_signed_mints_should_work() {
 		);
 
 		assert_ok!(Nfts::burn(RuntimeOrigin::signed(user_2.clone()), 0, 0));
-		assert_eq!(Balances::free_balance(&user_2), 100 - 6);
+		assert_eq!(Balances::free_balance(&user_2), 100 - 6 - 10);
 
 		// validate the `only_account` field
 		let mint_data = PreSignedMint {
@@ -3252,6 +3254,7 @@ fn pre_signed_mints_should_work() {
 			metadata: vec![],
 			only_account: Some(account(2)),
 			deadline: 10000000,
+			mint_price: None,
 		};
 
 		// can't mint with the wrong signature
@@ -3299,6 +3302,7 @@ fn pre_signed_mints_should_work() {
 			metadata: vec![],
 			only_account: Some(account(2)),
 			deadline: 10000000,
+			mint_price: None,
 		};
 		let message = Encode::encode(&mint_data);
 		let signature = MultiSignature::Sr25519(user_1_pair.sign(&message));
@@ -3321,6 +3325,7 @@ fn pre_signed_mints_should_work() {
 			metadata: vec![0, 1],
 			only_account: None,
 			deadline: 10000000,
+			mint_price: None,
 		};
 		let message = Encode::encode(&mint_data);
 		let signature = MultiSignature::Sr25519(user_1_pair.sign(&message));

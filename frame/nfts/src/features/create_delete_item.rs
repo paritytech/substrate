@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::*;
-use frame_support::pallet_prelude::*;
+use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_mint(
@@ -91,8 +91,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		mint_data: PreSignedMintOf<T, I>,
 		signer: T::AccountId,
 	) -> DispatchResult {
-		let PreSignedMint { collection, item, attributes, metadata, deadline, only_account } =
-			mint_data;
+		let PreSignedMint {
+			collection,
+			item,
+			attributes,
+			metadata,
+			deadline,
+			only_account,
+			mint_price,
+		} = mint_data;
 		let metadata = Self::construct_metadata(metadata)?;
 
 		ensure!(
@@ -118,7 +125,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Some(mint_to.clone()),
 			mint_to.clone(),
 			item_config,
-			|_, _| Ok(()),
+			|collection_details, _| {
+				if let Some(price) = mint_price {
+					T::Currency::transfer(
+						&mint_to,
+						&collection_details.owner,
+						price,
+						ExistenceRequirement::KeepAlive,
+					)?;
+				}
+				Ok(())
+			},
 		)?;
 		let admin_account = Self::find_account_by_role(&collection, CollectionRole::Admin);
 		if let Some(admin_account) = admin_account {
