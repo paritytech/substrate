@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -74,6 +74,6 @@ impl pallet_remark::Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = GenesisConfig { system: Default::default() }.build_storage().unwrap();
+	let t = RuntimeGenesisConfig { system: Default::default() }.build_storage().unwrap();
 	t.into()
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,4 +38,9 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		symbol: Vec<u8>,
 		decimals: u8,
 	) -> DispatchResult;
+}
+
+pub trait MetadataDeposit<DepositBalance> {
+	// Returns the required deposit amount for a given metadata.
+	fn calc_metadata_deposit(name: &[u8], symbol: &[u8]) -> DepositBalance;
 }

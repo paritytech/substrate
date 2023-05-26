@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,14 +18,9 @@
 
 //! Common data structures of the networking layer.
 
-pub mod config;
-pub mod error;
 pub mod message;
-pub mod protocol;
-pub mod request_responses;
-pub mod service;
+pub mod role;
 pub mod sync;
-pub mod utils;
 
 /// Minimum Requirements for a Hash within Networking
 pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}

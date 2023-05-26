@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,6 +67,12 @@ fn get_cargo_env_var<T: FromStr>(version_env: &str) -> std::result::Result<T, ()
 		.unwrap_or_else(|_| panic!("`{}` is always set by cargo; qed", version_env));
 
 	T::from_str(&version).map_err(drop)
+}
+
+/// Generate the counter_prefix related to the storage.
+/// counter_prefix is used by counted storage map.
+fn counter_prefix(prefix: &str) -> String {
+	format!("CounterFor{}", prefix)
 }
 
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
@@ -290,6 +296,8 @@ fn get_cargo_env_var<T: FromStr>(version_env: &str) -> std::result::Result<T, ()
 /// }
 /// ```
 #[proc_macro]
+#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead.
+	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::decl_storage_impl(input)
 }
@@ -459,6 +467,9 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// * All storages are marked as unbounded, meaning you do not need to implement `MaxEncodedLen` on
 ///   storage types. This is equivalent to specifying `#[pallet::unbounded]` on all storage type
 ///   definitions.
+/// * Storage hashers no longer need to be specified and can be replaced by `_`. In dev mode, these
+///   will be replaced by `Blake2_128Concat`. In case of explicit key-binding, `Hasher` can simply
+///   be ignored when in `dev_mode`.
 ///
 /// Note that the `dev_mode` argument can only be supplied to the `#[pallet]` or
 /// `#[frame_support::pallet]` attribute macro that encloses your pallet module. This argument
@@ -475,6 +486,57 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// </pre></div>
 ///
 /// See `frame_support::pallet` docs for more info.
+///
+/// ## Runtime Metadata Documentation
+///
+/// The documentation added to this pallet is included in the runtime metadata.
+///
+/// The documentation can be defined in the following ways:
+///
+/// ```ignore
+/// #[pallet::pallet]
+/// /// Documentation for pallet 1
+/// #[doc = "Documentation for pallet 2"]
+/// #[doc = include_str!("../README.md")]
+/// #[pallet_doc("../doc1.md")]
+/// #[pallet_doc("../doc2.md")]
+/// pub mod pallet {}
+/// ```
+///
+/// The runtime metadata for this pallet contains the following
+///  - " Documentation for pallet 1" (captured from `///`)
+///  - "Documentation for pallet 2"  (captured from `#[doc]`)
+///  - content of ../README.md       (captured from `#[doc]` with `include_str!`)
+///  - content of "../doc1.md"       (captured from `pallet_doc`)
+///  - content of "../doc2.md"       (captured from `pallet_doc`)
+///
+/// ### `doc` attribute
+///
+/// The value of the `doc` attribute is included in the runtime metadata, as well as
+/// expanded on the pallet module. The previous example is expanded to:
+///
+/// ```ignore
+/// /// Documentation for pallet 1
+/// /// Documentation for pallet 2
+/// /// Content of README.md
+/// pub mod pallet {}
+/// ```
+///
+/// If you want to specify the file from which the documentation is loaded, you can use the
+/// `include_str` macro. However, if you only want the documentation to be included in the
+/// runtime metadata, use the `pallet_doc` attribute.
+///
+/// ### `pallet_doc` attribute
+///
+/// Unlike the `doc` attribute, the documentation provided to the `pallet_doc` attribute is
+/// not inserted on the module.
+///
+/// The `pallet_doc` attribute can only be provided with one argument,
+/// which is the file path that holds the documentation to be added to the metadata.
+///
+/// This approach is beneficial when you use the `include_str` macro at the beginning of the file
+/// and want that documentation to extend to the runtime metadata, without reiterating the
+/// documentation on the pallet module itself.
 #[proc_macro_attribute]
 pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 	pallet::pallet(attr, item)
@@ -587,12 +649,13 @@ pub fn derive_debug_no_bound(input: TokenStream) -> TokenStream {
 }
 
 /// Derive [`Debug`], if `std` is enabled it uses `frame_support::DebugNoBound`, if `std` is not
-/// enabled it just returns `"<stripped>"`.
+/// enabled it just returns `"<wasm:stripped>"`.
 /// This behaviour is useful to prevent bloating the runtime WASM blob from unneeded code.
 #[proc_macro_derive(RuntimeDebugNoBound)]
 pub fn derive_runtime_debug_no_bound(input: TokenStream) -> TokenStream {
-	#[cfg(not(feature = "std"))]
-	{
+	if cfg!(any(feature = "std", feature = "try-runtime")) {
+		debug_no_bound::derive_debug_no_bound(input)
+	} else {
 		let input: syn::DeriveInput = match syn::parse(input) {
 			Ok(input) => input,
 			Err(e) => return e.to_compile_error().into(),
@@ -605,17 +668,12 @@ pub fn derive_runtime_debug_no_bound(input: TokenStream) -> TokenStream {
 			const _: () = {
 				impl #impl_generics core::fmt::Debug for #name #ty_generics #where_clause {
 					fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
-						fmt.write_str("<stripped>")
+						fmt.write_str("<wasm:stripped>")
 					}
 				}
 			};
 		)
 		.into()
-	}
-
-	#[cfg(feature = "std")]
-	{
-		debug_no_bound::derive_debug_no_bound(input)
 	}
 }
 
@@ -808,24 +866,6 @@ pub fn generate_store(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
-/// To generate the full storage info (used for PoV calculation) use the attribute
-/// `#[pallet::generate_storage_info]`, e.g.:
-///
-/// ```ignore
-/// #[pallet::pallet]
-/// #[pallet::generate_storage_info]
-/// pub struct Pallet<T>(_);
-/// ```
-///
-/// This requires all storage items to implement the trait `StorageInfoTrait`, thus all keys
-/// and value types must be bound by `MaxEncodedLen`. Individual storages can opt-out from this
-/// constraint by using [`#[pallet::unbounded]`](`macro@unbounded`) (see
-/// [`#[pallet::storage]`](`macro@storage`) for more info).
-#[proc_macro_attribute]
-pub fn generate_storage_info(_: TokenStream, _: TokenStream) -> TokenStream {
-	pallet_macro_stub()
-}
-
 /// Because the `pallet::pallet` macro implements `GetStorageVersion`, the current storage
 /// version needs to be communicated to the macro. This can be done by using the
 /// `pallet::storage_version` attribute:
@@ -927,7 +967,8 @@ pub fn compact(_: TokenStream, _: TokenStream) -> TokenStream {
 ///
 /// The macro creates an enum `Call` with one variant per dispatchable. This enum implements:
 /// [`Clone`], [`Eq`], [`PartialEq`], [`Debug`] (with stripped implementation in `not("std")`),
-/// `Encode`, `Decode`, `GetDispatchInfo`, `GetCallName`, and `UnfilteredDispatchable`.
+/// `Encode`, `Decode`, `GetDispatchInfo`, `GetCallName`, `GetCallIndex` and
+/// `UnfilteredDispatchable`.
 ///
 /// The macro implements the `Callable` trait on `Pallet` and a function `call_functions`
 /// which returns the dispatchable metadata.
@@ -1351,5 +1392,32 @@ pub fn validate_unsigned(_: TokenStream, _: TokenStream) -> TokenStream {
 /// NOTE: for instantiable pallets, the origin must be generic over `T` and `I`.
 #[proc_macro_attribute]
 pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The `#[pallet::composite_enum]` attribute allows you to define an enum that gets composed as an
+/// aggregate enum by `construct_runtime`. This is similar in principle with `#[pallet::event]` and
+/// `#[pallet::error]`.
+///
+/// The attribute currently only supports enum definitions, and identifiers that are named
+/// `FreezeReason`, `HoldReason`, `LockId` or `SlashReason`. Arbitrary identifiers for the enum are
+/// not supported. The aggregate enum generated by `construct_runtime` will have the name of
+/// `RuntimeFreezeReason`, `RuntimeHoldReason`, `RuntimeLockId` and `RuntimeSlashReason`
+/// respectively.
+///
+/// NOTE: The aggregate enum generated by `construct_runtime` generates a conversion function from
+/// the pallet enum to the aggregate enum, and automatically derives the following traits:
+///
+/// ```ignore
+/// Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo,
+/// RuntimeDebug
+/// ```
+///
+/// For ease of usage, when no `#[derive]` attributes are found for the enum under
+/// `#[pallet::composite_enum]`, the aforementioned traits are automatically derived for it. The
+/// inverse is also true: if there are any `#[derive]` attributes found for the enum, then no traits
+/// will automatically be derived for it.
+#[proc_macro_attribute]
+pub fn composite_enum(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }

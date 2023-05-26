@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -130,7 +130,6 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -332,7 +331,7 @@ pub mod pallet {
 				parent_bounty_id,
 				child_bounty_id,
 				|maybe_child_bounty| -> DispatchResult {
-					let mut child_bounty =
+					let child_bounty =
 						maybe_child_bounty.as_mut().ok_or(BountiesError::<T>::InvalidIndex)?;
 
 					// Ensure child-bounty is in expected state.
@@ -397,7 +396,7 @@ pub mod pallet {
 				parent_bounty_id,
 				child_bounty_id,
 				|maybe_child_bounty| -> DispatchResult {
-					let mut child_bounty =
+					let child_bounty =
 						maybe_child_bounty.as_mut().ok_or(BountiesError::<T>::InvalidIndex)?;
 
 					// Ensure child-bounty is in expected state.
@@ -474,7 +473,7 @@ pub mod pallet {
 				parent_bounty_id,
 				child_bounty_id,
 				|maybe_child_bounty| -> DispatchResult {
-					let mut child_bounty =
+					let child_bounty =
 						maybe_child_bounty.as_mut().ok_or(BountiesError::<T>::InvalidIndex)?;
 
 					let slash_curator = |curator: &T::AccountId,
@@ -592,7 +591,7 @@ pub mod pallet {
 				parent_bounty_id,
 				child_bounty_id,
 				|maybe_child_bounty| -> DispatchResult {
-					let mut child_bounty =
+					let child_bounty =
 						maybe_child_bounty.as_mut().ok_or(BountiesError::<T>::InvalidIndex)?;
 
 					// Ensure child-bounty is in active state.

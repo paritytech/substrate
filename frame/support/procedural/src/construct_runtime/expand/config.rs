@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -74,12 +74,16 @@ pub fn expand_outer_config(
 		#[serde(rename_all = "camelCase")]
 		#[serde(deny_unknown_fields)]
 		#[serde(crate = "__genesis_config_serde_import__")]
-		pub struct GenesisConfig {
+		pub struct RuntimeGenesisConfig {
 			#fields
 		}
 
+		// GenesisConfig is in the process of being deprecated [https://github.com/paritytech/substrate/issues/14065]
 		#[cfg(any(feature = "std", test))]
-		impl #scrate::sp_runtime::BuildStorage for GenesisConfig {
+		pub type GenesisConfig = RuntimeGenesisConfig;
+
+		#[cfg(any(feature = "std", test))]
+		impl #scrate::sp_runtime::BuildStorage for RuntimeGenesisConfig {
 			fn assimilate_storage(
 				&self,
 				storage: &mut #scrate::sp_runtime::Storage,

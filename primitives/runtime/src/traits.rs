@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,6 @@
 //! Primitives for the runtime modules.
 
 use crate::{
-	codec::{Codec, Decode, Encode, MaxEncodedLen},
 	generic::Digest,
 	scale_info::{MetaType, StaticTypeInfo, TypeInfo},
 	transaction_validity::{
@@ -27,10 +26,11 @@ use crate::{
 	},
 	DispatchResult,
 };
+use codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use sp_application_crypto::AppKey;
+use sp_application_crypto::AppCrypto;
 pub use sp_arithmetic::traits::{
 	checked_pow, ensure_pow, AtLeast32Bit, AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedDiv,
 	CheckedMul, CheckedShl, CheckedShr, CheckedSub, Ensure, EnsureAdd, EnsureAddAssign, EnsureDiv,
@@ -148,10 +148,10 @@ pub trait AppVerify {
 }
 
 impl<
-		S: Verify<Signer = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic>
+		S: Verify<Signer = <<T as AppCrypto>::Public as sp_application_crypto::AppPublic>::Generic>
 			+ From<T>,
 		T: sp_application_crypto::Wraps<Inner = S>
-			+ sp_application_crypto::AppKey
+			+ sp_application_crypto::AppCrypto
 			+ sp_application_crypto::AppSignature
 			+ AsRef<S>
 			+ AsMut<S>
@@ -159,16 +159,18 @@ impl<
 	> AppVerify for T
 where
 	<S as Verify>::Signer: IdentifyAccount<AccountId = <S as Verify>::Signer>,
-	<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic: IdentifyAccount<
-		AccountId = <<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic,
+	<<T as AppCrypto>::Public as sp_application_crypto::AppPublic>::Generic: IdentifyAccount<
+		AccountId = <<T as AppCrypto>::Public as sp_application_crypto::AppPublic>::Generic,
 	>,
 {
-	type AccountId = <T as AppKey>::Public;
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<T as AppKey>::Public) -> bool {
+	type AccountId = <T as AppCrypto>::Public;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<T as AppCrypto>::Public) -> bool {
 		use sp_application_crypto::IsWrappedBy;
 		let inner: &S = self.as_ref();
 		let inner_pubkey =
-			<<T as AppKey>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(signer);
+			<<T as AppCrypto>::Public as sp_application_crypto::AppPublic>::Generic::from_ref(
+				signer,
+			);
 		Verify::verify(inner, msg, inner_pubkey)
 	}
 }
@@ -316,6 +318,24 @@ impl<T> TryMorph<T> for Identity {
 	type Outcome = T;
 	fn try_morph(a: T) -> Result<T, ()> {
 		Ok(a)
+	}
+}
+
+/// Implementation of `Morph` which converts between types using `Into`.
+pub struct MorphInto<T>(sp_std::marker::PhantomData<T>);
+impl<T, A: Into<T>> Morph<A> for MorphInto<T> {
+	type Outcome = T;
+	fn morph(a: A) -> T {
+		a.into()
+	}
+}
+
+/// Implementation of `TryMorph` which attmepts to convert between types using `TryInto`.
+pub struct TryMorphInto<T>(sp_std::marker::PhantomData<T>);
+impl<T, A: TryInto<T>> TryMorph<A> for TryMorphInto<T> {
+	type Outcome = T;
+	fn try_morph(a: A) -> Result<T, ()> {
+		a.try_into().map_err(|_| ())
 	}
 }
 
@@ -674,6 +694,7 @@ pub trait Hash:
 		+ Default
 		+ Encode
 		+ Decode
+		+ EncodeLike
 		+ MaxEncodedLen
 		+ TypeInfo;
 
@@ -696,7 +717,7 @@ pub trait Hash:
 
 /// Blake2-256 Hash implementation.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
 impl Hasher for BlakeTwo256 {
@@ -723,7 +744,7 @@ impl Hash for BlakeTwo256 {
 
 /// Keccak-256 Hash implementation.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Keccak256;
 
 impl Hasher for Keccak256 {
@@ -804,11 +825,13 @@ sp_core::impl_maybe_marker!(
 
 	/// A type that implements Hash when in std environment.
 	trait MaybeHash: sp_std::hash::Hash;
+);
 
-	/// A type that implements Serialize when in std environment.
+sp_core::impl_maybe_marker_std_or_serde!(
+	/// A type that implements Serialize when in std environment or serde feature is activated.
 	trait MaybeSerialize: Serialize;
 
-	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
+	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment or serde feature is activated.
 	trait MaybeSerializeDeserialize: DeserializeOwned, Serialize;
 );
 

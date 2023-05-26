@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -94,6 +94,9 @@ pub mod pallet {
 	use sp_staking::{EraIndex, StakingInterface};
 	use sp_std::{prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
+
+	#[cfg(feature = "try-runtime")]
+	use sp_runtime::TryRuntimeError;
 
 	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
 	#[codec(mel_bound(T: Config))]
@@ -212,7 +215,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		fn on_idle(_: T::BlockNumber, remaining_weight: Weight) -> Weight {
 			if remaining_weight.any_lt(T::DbWeight::get().reads(2)) {
-				return Weight::from_ref_time(0)
+				return Weight::from_parts(0, 0)
 			}
 
 			Self::do_on_idle(remaining_weight)
@@ -232,10 +235,10 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber, _: TryStateSelect) -> Result<(), &'static str> {
+		fn try_state(_n: T::BlockNumber, _: TryStateSelect) -> Result<(), TryRuntimeError> {
 			// ensure that the value of `ErasToCheckPerBlock` is less than
 			// `T::MaxErasToCheckPerBlock`.
-			assert!(
+			ensure!(
 				ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
 				"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
 			);
@@ -360,7 +363,7 @@ pub mod pallet {
 		/// checked, we don't finish the process.
 		pub(crate) fn do_on_idle(remaining_weight: Weight) -> Weight {
 			// any weight that is unaccounted for
-			let mut unaccounted_weight = Weight::from_ref_time(0);
+			let mut unaccounted_weight = Weight::from_parts(0, 0);
 
 			let eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
 			if eras_to_check_per_block.is_zero() {

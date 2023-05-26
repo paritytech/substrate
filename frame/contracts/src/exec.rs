@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,25 +17,33 @@
 
 use crate::{
 	gas::GasMeter,
-	storage::{self, Storage, WriteOutcome},
+	storage::{self, DepositAccount, WriteOutcome},
 	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, DebugBufferVec, Determinism, Error,
-	Event, Nonce, Pallet as Contracts, Schedule,
+	Event, Nonce, Origin, Pallet as Contracts, Schedule, System, LOG_TARGET,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
-	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
+	dispatch::{
+		fmt::Debug, DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable,
+	},
 	storage::{with_transaction, TransactionOutcome},
-	traits::{Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time},
+	traits::{
+		tokens::{Fortitude::Polite, Preservation::Expendable},
+		Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time,
+	},
 	weights::Weight,
 	Blake2_128Concat, BoundedVec, StorageHasher,
 };
 use frame_system::RawOrigin;
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
-use sp_core::ecdsa::Public as ECDSAPublic;
+use sp_core::{
+	ecdsa::Public as ECDSAPublic,
+	sr25519::{Public as SR25519Public, Signature as SR25519Signature},
+};
 use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
-use sp_runtime::traits::{Convert, Hash};
-use sp_std::{marker::PhantomData, mem, prelude::*};
+use sp_runtime::traits::{Convert, Hash, Zero};
+use sp_std::{marker::PhantomData, mem, prelude::*, vec::Vec};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type MomentOf<T> = <<T as Config>::Time as Time>::Moment;
@@ -46,32 +54,39 @@ pub type ExecResult = Result<ExecReturnValue, ExecError>;
 /// A type that represents a topic of an event. At the moment a hash is used.
 pub type TopicOf<T> = <T as frame_system::Config>::Hash;
 
-/// Type for fix sized storage key.
-pub type FixSizedKey = [u8; 32];
-
 /// Type for variable sized storage key. Used for transparent hashing.
-pub type VarSizedKey<T> = BoundedVec<u8, <T as Config>::MaxStorageKeyLen>;
+type VarSizedKey<T> = BoundedVec<u8, <T as Config>::MaxStorageKeyLen>;
 
-/// Trait for hashing storage keys.
-pub trait StorageKey<T>
-where
-	T: Config,
-{
-	fn hash(&self) -> Vec<u8>;
+/// Combined key type for both fixed and variable sized storage keys.
+pub enum Key<T: Config> {
+	/// Variant for fixed sized keys.
+	Fix([u8; 32]),
+	/// Variant for variable sized keys.
+	Var(VarSizedKey<T>),
 }
 
-impl<T: Config> StorageKey<T> for FixSizedKey {
-	fn hash(&self) -> Vec<u8> {
-		blake2_256(self.as_slice()).to_vec()
+impl<T: Config> Key<T> {
+	/// Copies self into a new vec.
+	pub fn to_vec(&self) -> Vec<u8> {
+		match self {
+			Key::Fix(v) => v.to_vec(),
+			Key::Var(v) => v.to_vec(),
+		}
 	}
-}
 
-impl<T> StorageKey<T> for VarSizedKey<T>
-where
-	T: Config,
-{
-	fn hash(&self) -> Vec<u8> {
-		Blake2_128Concat::hash(self.as_slice())
+	pub fn hash(&self) -> Vec<u8> {
+		match self {
+			Key::Fix(v) => blake2_256(v.as_slice()).to_vec(),
+			Key::Var(v) => Blake2_128Concat::hash(v.as_slice()),
+		}
+	}
+
+	pub fn try_from_fix(v: Vec<u8>) -> Result<Self, Vec<u8>> {
+		<[u8; 32]>::try_from(v).map(Self::Fix)
+	}
+
+	pub fn try_from_var(v: Vec<u8>) -> Result<Self, Vec<u8>> {
+		VarSizedKey::<T>::try_from(v).map(Self::Var)
 	}
 }
 
@@ -84,14 +99,14 @@ where
 pub enum ErrorOrigin {
 	/// Caller error origin.
 	///
-	/// The error happened in the current exeuction context rather than in the one
+	/// The error happened in the current execution context rather than in the one
 	/// of the contract that is called into.
 	Caller,
 	/// The error happened during execution of the called contract.
 	Callee,
 }
 
-/// Error returned by contract exection.
+/// Error returned by contract execution.
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct ExecError {
 	/// The reason why the execution failed.
@@ -124,6 +139,7 @@ pub trait Ext: sealing::Sealed {
 	fn call(
 		&mut self,
 		gas_limit: Weight,
+		deposit_limit: BalanceOf<Self::T>,
 		to: AccountIdOf<Self::T>,
 		value: BalanceOf<Self::T>,
 		input_data: Vec<u8>,
@@ -147,6 +163,7 @@ pub trait Ext: sealing::Sealed {
 	fn instantiate(
 		&mut self,
 		gas_limit: Weight,
+		deposit_limit: BalanceOf<Self::T>,
 		code: CodeHash<Self::T>,
 		value: BalanceOf<Self::T>,
 		input_data: Vec<u8>,
@@ -169,50 +186,25 @@ pub trait Ext: sealing::Sealed {
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	fn get_storage(&mut self, key: &FixSizedKey) -> Option<Vec<u8>>;
-
-	/// This is a variation of `get_storage()` to be used with transparent hashing.
-	/// These two will be merged into a single function after some refactoring is done.
-	/// Returns the storage entry of the executing account by the given `key`.
-	///
-	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
-	/// was deleted.
-	fn get_storage_transparent(&mut self, key: &VarSizedKey<Self::T>) -> Option<Vec<u8>>;
+	fn get_storage(&mut self, key: &Key<Self::T>) -> Option<Vec<u8>>;
 
 	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	fn get_storage_size(&mut self, key: &FixSizedKey) -> Option<u32>;
-
-	/// This is the variation of `get_storage_size()` to be used with transparent hashing.
-	/// These two will be merged into a single function after some refactoring is done.
-	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
-	///
-	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
-	/// was deleted.
-	fn get_storage_size_transparent(&mut self, key: &VarSizedKey<Self::T>) -> Option<u32>;
+	fn get_storage_size(&mut self, key: &Key<Self::T>) -> Option<u32>;
 
 	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
 	/// the storage entry is deleted.
 	fn set_storage(
 		&mut self,
-		key: &FixSizedKey,
+		key: &Key<Self::T>,
 		value: Option<Vec<u8>>,
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError>;
 
-	/// This is the variation of `set_storage()` to be used with transparent hashing.
-	/// These two will be merged into a single function after some refactoring is done.
-	fn set_storage_transparent(
-		&mut self,
-		key: &VarSizedKey<Self::T>,
-		value: Option<Vec<u8>>,
-		take_old: bool,
-	) -> Result<WriteOutcome, DispatchError>;
-
-	/// Returns a reference to the account id of the caller.
-	fn caller(&self) -> &AccountIdOf<Self::T>;
+	/// Returns the caller.
+	fn caller(&self) -> Origin<Self::T>;
 
 	/// Check if a contract lives at the specified `address`.
 	fn is_contract(&self, address: &AccountIdOf<Self::T>) -> bool;
@@ -230,6 +222,9 @@ pub trait Ext: sealing::Sealed {
 	/// This can be checked with `is_contract(self.caller())` as well.
 	/// However, this function does not require any storage lookup and therefore uses less weight.
 	fn caller_is_origin(&self) -> bool;
+
+	/// Check if the caller is origin, and this origin is root.
+	fn caller_is_root(&self) -> bool;
 
 	/// Returns a reference to the account id of the current contract.
 	fn address(&self) -> &AccountIdOf<Self::T>;
@@ -286,6 +281,9 @@ pub trait Ext: sealing::Sealed {
 
 	/// Recovers ECDSA compressed public key based on signature and message hash.
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
+
+	/// Verify a sr25519 signature.
+	fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool;
 
 	/// Returns Ethereum address from the ECDSA compressed public key.
 	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()>;
@@ -378,14 +376,15 @@ pub trait Executable<T: Config>: Sized {
 /// This type implements `Ext` and by that exposes the business logic of contract execution to
 /// the runtime module which interfaces with the contract (the wasm blob) itself.
 pub struct Stack<'a, T: Config, E> {
-	/// The account id of a plain account that initiated the call stack.
+	/// The origin that initiated the call stack. It could either be a Signed plain account that
+	/// holds an account id or Root.
 	///
 	/// # Note
 	///
-	/// Please note that it is possible that the id belongs to a contract rather than a plain
-	/// account when being called through one of the contract RPCs where the client can freely
-	/// choose the origin. This usually makes no sense but is still possible.
-	origin: T::AccountId,
+	/// Please note that it is possible that the id of a Signed origin belongs to a contract rather
+	/// than a plain account when being called through one of the contract RPCs where the
+	/// client can freely choose the origin. This usually makes no sense but is still possible.
+	origin: Origin<T>,
 	/// The cost schedule used when charging from the gas meter.
 	schedule: &'a Schedule<T>,
 	/// The gas meter where costs are charged to.
@@ -441,15 +440,15 @@ pub struct Frame<T: Config> {
 	/// If `false` the contract enabled its defense against reentrance attacks.
 	allows_reentry: bool,
 	/// The caller of the currently executing frame which was spawned by `delegate_call`.
-	delegate_caller: Option<T::AccountId>,
+	delegate_caller: Option<Origin<T>>,
 }
 
 /// Used in a delegate call frame arguments in order to override the executable and caller.
 struct DelegatedCall<T: Config, E> {
 	/// The executable which is run instead of the contracts own `executable`.
 	executable: E,
-	/// The account id of the caller contract.
-	caller: T::AccountId,
+	/// The caller of the contract.
+	caller: Origin<T>,
 }
 
 /// Parameter passed in when creating a new `Frame`.
@@ -492,7 +491,7 @@ enum CachedContract<T: Config> {
 	///
 	/// In this case a reload is neither allowed nor possible. Please note that recursive
 	/// calls cannot remove a contract as this is checked and denied.
-	Terminated,
+	Terminated(DepositAccount<T>),
 }
 
 impl<T: Config> CachedContract<T> {
@@ -511,6 +510,15 @@ impl<T: Config> CachedContract<T> {
 			Some(contract)
 		} else {
 			None
+		}
+	}
+
+	/// Returns `Some` iff the contract is not `Cached::Invalidated`.
+	fn deposit_account(&self) -> Option<&DepositAccount<T>> {
+		match self {
+			CachedContract::Cached(contract) => Some(contract.deposit_account()),
+			CachedContract::Terminated(deposit_account) => Some(&deposit_account),
+			CachedContract::Invalidated => None,
 		}
 	}
 }
@@ -591,7 +599,9 @@ impl<T: Config> CachedContract<T> {
 	/// Terminate and return the contract info.
 	fn terminate(&mut self, account_id: &T::AccountId) -> ContractInfo<T> {
 		self.load(account_id);
-		get_cached_or_panic_after_load!(mem::replace(self, Self::Terminated))
+		let contract = get_cached_or_panic_after_load!(self);
+		let deposit_account = contract.deposit_account().clone();
+		get_cached_or_panic_after_load!(mem::replace(self, Self::Terminated(deposit_account)))
 	}
 }
 
@@ -611,7 +621,7 @@ where
 	///
 	/// Result<(ExecReturnValue, CodeSize), (ExecError, CodeSize)>
 	pub fn run_call(
-		origin: T::AccountId,
+		origin: Origin<T>,
 		dest: T::AccountId,
 		gas_meter: &'a mut GasMeter<T>,
 		storage_meter: &'a mut storage::meter::Meter<T>,
@@ -663,13 +673,13 @@ where
 				salt,
 				input_data: input_data.as_ref(),
 			},
-			origin,
+			Origin::from_account_id(origin),
 			gas_meter,
 			storage_meter,
 			schedule,
 			value,
 			debug_message,
-			Determinism::Deterministic,
+			Determinism::Enforced,
 		)?;
 		let account_id = stack.top_frame().account_id.clone();
 		stack.run(executable, input_data).map(|ret| (account_id, ret))
@@ -678,7 +688,7 @@ where
 	/// Create a new call stack.
 	fn new(
 		args: FrameArgs<T, E>,
-		origin: T::AccountId,
+		origin: Origin<T>,
 		gas_meter: &'a mut GasMeter<T>,
 		storage_meter: &'a mut storage::meter::Meter<T>,
 		schedule: &'a Schedule<T>,
@@ -690,8 +700,9 @@ where
 			args,
 			value,
 			gas_meter,
-			storage_meter,
 			Weight::zero(),
+			storage_meter,
+			BalanceOf::<T>::zero(),
 			schedule,
 			determinism,
 		)?;
@@ -717,12 +728,13 @@ where
 	///
 	/// This does not take `self` because when constructing the first frame `self` is
 	/// not initialized, yet.
-	fn new_frame<S: storage::meter::State>(
+	fn new_frame<S: storage::meter::State + Default + Debug>(
 		frame_args: FrameArgs<T, E>,
 		value_transferred: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
-		storage_meter: &mut storage::meter::GenericMeter<T, S>,
 		gas_limit: Weight,
+		storage_meter: &mut storage::meter::GenericMeter<T, S>,
+		deposit_limit: BalanceOf<T>,
 		schedule: &Schedule<T>,
 		determinism: Determinism,
 	) -> Result<(Frame<T>, E, Option<u64>), ExecError> {
@@ -751,9 +763,7 @@ where
 						input_data,
 						salt,
 					);
-					let trie_id = Storage::<T>::generate_trie_id(&account_id, nonce);
-					let contract =
-						Storage::<T>::new_contract(&account_id, trie_id, *executable.code_hash())?;
+					let contract = ContractInfo::new(&account_id, nonce, *executable.code_hash())?;
 					(
 						account_id,
 						contract,
@@ -765,10 +775,10 @@ where
 				},
 			};
 
-		// `AllowIndeterminism` will only be ever set in case of off-chain execution.
+		// `Relaxed` will only be ever set in case of off-chain execution.
 		// Instantiations are never allowed even when executing off-chain.
 		if !(executable.is_deterministic() ||
-			(matches!(determinism, Determinism::AllowIndeterminism) &&
+			(matches!(determinism, Determinism::Relaxed) &&
 				matches!(entry_point, ExportedFunction::Call)))
 		{
 			return Err(Error::<T>::Indeterministic.into())
@@ -781,7 +791,7 @@ where
 			account_id,
 			entry_point,
 			nested_gas: gas_meter.nested(gas_limit)?,
-			nested_storage: storage_meter.nested(),
+			nested_storage: storage_meter.nested(deposit_limit),
 			allows_reentry: true,
 		};
 
@@ -794,6 +804,7 @@ where
 		frame_args: FrameArgs<T, E>,
 		value_transferred: BalanceOf<T>,
 		gas_limit: Weight,
+		deposit_limit: BalanceOf<T>,
 	) -> Result<E, ExecError> {
 		if self.frames.len() == T::CallStack::size() {
 			return Err(Error::<T>::MaxCallDepthReached.into())
@@ -817,8 +828,9 @@ where
 			frame_args,
 			value_transferred,
 			nested_gas,
-			nested_storage,
 			gas_limit,
+			nested_storage,
+			deposit_limit,
 			self.schedule,
 			self.determinism,
 		)?;
@@ -838,9 +850,12 @@ where
 			// We need to charge the storage deposit before the initial transfer so that
 			// it can create the account in case the initial transfer is < ed.
 			if entry_point == ExportedFunction::Constructor {
+				// Root origin can't be used to instantiate a contract, so it is safe to assume that
+				// if we reached this point the origin has an associated account.
+				let origin = &self.origin.account_id()?;
 				let frame = top_frame_mut!(self);
 				frame.nested_storage.charge_instantiate(
-					&self.origin,
+					origin,
 					&frame.account_id,
 					frame.contract_info.get(&frame.account_id),
 				)?;
@@ -859,8 +874,10 @@ where
 				return Ok(output)
 			}
 
-			// Storage limit is enforced as late as possible (when the last frame returns) so that
-			// the ordering of storage accesses does not matter.
+			// Storage limit is normally enforced as late as possible (when the last frame returns)
+			// so that the ordering of storage accesses does not matter.
+			// (However, if a special limit was set for a sub-call, it should be enforced right
+			// after the sub-call returned. See below for this case of enforcement).
 			if self.frames.is_empty() {
 				let frame = &mut self.first_frame;
 				frame.contract_info.load(&frame.account_id);
@@ -869,21 +886,27 @@ where
 			}
 
 			let frame = self.top_frame();
-			let account_id = &frame.account_id;
+			let account_id = &frame.account_id.clone();
 			match (entry_point, delegated_code_hash) {
 				(ExportedFunction::Constructor, _) => {
 					// It is not allowed to terminate a contract inside its constructor.
-					if matches!(frame.contract_info, CachedContract::Terminated) {
+					if matches!(frame.contract_info, CachedContract::Terminated(_)) {
 						return Err(Error::<T>::TerminatedInConstructor.into())
 					}
 
+					// If a special limit was set for the sub-call, we enforce it here.
+					// This is needed because contract constructor might write to storage.
+					// The sub-call will be rolled back in case the limit is exhausted.
+					let frame = self.top_frame_mut();
+					let contract = frame.contract_info.as_contract();
+					frame.nested_storage.enforce_subcall_limit(contract)?;
+
+					let caller = self.caller().account_id()?.clone();
+
 					// Deposit an instantiation event.
 					Contracts::<T>::deposit_event(
-						vec![T::Hashing::hash_of(self.caller()), T::Hashing::hash_of(account_id)],
-						Event::Instantiated {
-							deployer: self.caller().clone(),
-							contract: account_id.clone(),
-						},
+						vec![T::Hashing::hash_of(&caller), T::Hashing::hash_of(account_id)],
+						Event::Instantiated { deployer: caller, contract: account_id.clone() },
 					);
 				},
 				(ExportedFunction::Call, Some(code_hash)) => {
@@ -893,9 +916,15 @@ where
 					);
 				},
 				(ExportedFunction::Call, None) => {
+					// If a special limit was set for the sub-call, we enforce it here.
+					// The sub-call will be rolled back in case the limit is exhausted.
+					let frame = self.top_frame_mut();
+					let contract = frame.contract_info.as_contract();
+					frame.nested_storage.enforce_subcall_limit(contract)?;
+
 					let caller = self.caller();
 					Contracts::<T>::deposit_event(
-						vec![T::Hashing::hash_of(caller), T::Hashing::hash_of(account_id)],
+						vec![T::Hashing::hash_of(&caller), T::Hashing::hash_of(&account_id)],
 						Event::Called { caller: caller.clone(), contract: account_id.clone() },
 					);
 				},
@@ -962,11 +991,21 @@ where
 
 			// Record the storage meter changes of the nested call into the parent meter.
 			// If the dropped frame's contract wasn't terminated we update the deposit counter
-			// in its contract info. The load is necessary to to pull it from storage in case
+			// in its contract info. The load is necessary to pull it from storage in case
 			// it was invalidated.
 			frame.contract_info.load(account_id);
+			let deposit_account = frame
+				.contract_info
+				.deposit_account()
+				.expect(
+					"Is only `None` when the info is invalidated.
+				We just re-loaded from storage which either makes the state `Cached` or `Terminated`.
+				qed",
+				)
+				.clone();
 			let mut contract = frame.contract_info.into_contract();
-			prev.nested_storage.absorb(frame.nested_storage, account_id, contract.as_mut());
+			prev.nested_storage
+				.absorb(frame.nested_storage, deposit_account, contract.as_mut());
 
 			// In case the contract wasn't terminated we need to persist changes made to it.
 			if let Some(contract) = contract {
@@ -992,7 +1031,7 @@ where
 		} else {
 			if let Some((msg, false)) = self.debug_message.as_ref().map(|m| (m, m.is_empty())) {
 				log::debug!(
-					target: "runtime::contracts",
+					target: LOG_TARGET,
 					"Execution finished with debug buffer: {}",
 					core::str::from_utf8(msg).unwrap_or("<Invalid UTF8>"),
 				);
@@ -1001,10 +1040,14 @@ where
 			if !persist {
 				return
 			}
+			let deposit_account = self.first_frame.contract_info.deposit_account().expect(
+				"Is only `None` when the info is invalidated. The first frame can't be invalidated.
+				qed",
+			).clone();
 			let mut contract = self.first_frame.contract_info.as_contract();
 			self.storage_meter.absorb(
 				mem::take(&mut self.first_frame.nested_storage),
-				&self.first_frame.account_id,
+				deposit_account,
 				contract.as_deref_mut(),
 			);
 			if let Some(contract) = contract {
@@ -1039,7 +1082,16 @@ where
 		}
 
 		let value = frame.value_transferred;
-		Self::transfer(ExistenceRequirement::KeepAlive, self.caller(), &frame.account_id, value)
+
+		// Get the account id from the caller.
+		// If the caller is root there is no account to transfer from, and therefore we can't take
+		// any `value` other than 0.
+		let caller = match self.caller() {
+			Origin::Signed(caller) => caller,
+			Origin::Root if value.is_zero() => return Ok(()),
+			Origin::Root => return DispatchError::RootNotAllowed.into(),
+		};
+		Self::transfer(ExistenceRequirement::KeepAlive, &caller, &frame.account_id, value)
 	}
 
 	/// Reference to the current (top) frame.
@@ -1093,6 +1145,7 @@ where
 	fn call(
 		&mut self,
 		gas_limit: Weight,
+		deposit_limit: BalanceOf<T>,
 		to: T::AccountId,
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
@@ -1121,6 +1174,7 @@ where
 				FrameArgs::Call { dest: to, cached_info, delegated_call: None },
 				value,
 				gas_limit,
+				deposit_limit,
 			)?;
 			self.run(executable, input_data)
 		};
@@ -1152,6 +1206,7 @@ where
 			},
 			value,
 			Weight::zero(),
+			BalanceOf::<T>::zero(),
 		)?;
 		self.run(executable, input_data)
 	}
@@ -1159,6 +1214,7 @@ where
 	fn instantiate(
 		&mut self,
 		gas_limit: Weight,
+		deposit_limit: BalanceOf<Self::T>,
 		code_hash: CodeHash<T>,
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
@@ -1176,25 +1232,28 @@ where
 			},
 			value,
 			gas_limit,
+			deposit_limit,
 		)?;
 		let account_id = self.top_frame().account_id.clone();
 		self.run(executable, input_data).map(|ret| (account_id, ret))
 	}
 
 	fn terminate(&mut self, beneficiary: &AccountIdOf<Self::T>) -> Result<(), DispatchError> {
+		use frame_support::traits::fungible::Inspect;
 		if self.is_recursive() {
 			return Err(Error::<T>::TerminatedWhileReentrant.into())
 		}
 		let frame = self.top_frame_mut();
 		let info = frame.terminate();
 		frame.nested_storage.terminate(&info);
-		Storage::<T>::queue_trie_for_deletion(&info)?;
-		<Stack<'a, T, E>>::transfer(
-			ExistenceRequirement::AllowDeath,
+		System::<T>::dec_consumers(&frame.account_id);
+		T::Currency::transfer(
 			&frame.account_id,
 			beneficiary,
-			T::Currency::free_balance(&frame.account_id),
+			T::Currency::reducible_balance(&frame.account_id, Expendable, Polite),
+			ExistenceRequirement::AllowDeath,
 		)?;
+		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::remove_user(info.code_hash);
 		Contracts::<T>::deposit_event(
@@ -1211,48 +1270,23 @@ where
 		Self::transfer(ExistenceRequirement::KeepAlive, &self.top_frame().account_id, to, value)
 	}
 
-	fn get_storage(&mut self, key: &FixSizedKey) -> Option<Vec<u8>> {
-		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
+	fn get_storage(&mut self, key: &Key<T>) -> Option<Vec<u8>> {
+		self.top_frame_mut().contract_info().read(key)
 	}
 
-	fn get_storage_transparent(&mut self, key: &VarSizedKey<T>) -> Option<Vec<u8>> {
-		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
-	}
-
-	fn get_storage_size(&mut self, key: &FixSizedKey) -> Option<u32> {
-		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key)
-	}
-
-	fn get_storage_size_transparent(&mut self, key: &VarSizedKey<T>) -> Option<u32> {
-		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key)
+	fn get_storage_size(&mut self, key: &Key<T>) -> Option<u32> {
+		self.top_frame_mut().contract_info().size(key.into())
 	}
 
 	fn set_storage(
 		&mut self,
-		key: &FixSizedKey,
+		key: &Key<T>,
 		value: Option<Vec<u8>>,
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError> {
 		let frame = self.top_frame_mut();
-		Storage::<T>::write(
-			&frame.contract_info.get(&frame.account_id).trie_id,
-			key,
-			value,
-			Some(&mut frame.nested_storage),
-			take_old,
-		)
-	}
-
-	fn set_storage_transparent(
-		&mut self,
-		key: &VarSizedKey<T>,
-		value: Option<Vec<u8>>,
-		take_old: bool,
-	) -> Result<WriteOutcome, DispatchError> {
-		let frame = self.top_frame_mut();
-		Storage::<T>::write(
-			&frame.contract_info.get(&frame.account_id).trie_id,
-			key,
+		frame.contract_info.get(&frame.account_id).write(
+			key.into(),
 			value,
 			Some(&mut frame.nested_storage),
 			take_old,
@@ -1263,11 +1297,14 @@ where
 		&self.top_frame().account_id
 	}
 
-	fn caller(&self) -> &T::AccountId {
+	fn caller(&self) -> Origin<T> {
 		if let Some(caller) = &self.top_frame().delegate_caller {
-			caller
+			caller.clone()
 		} else {
-			self.frames().nth(1).map(|f| &f.account_id).unwrap_or(&self.origin)
+			self.frames()
+				.nth(1)
+				.map(|f| Origin::from_account_id(f.account_id.clone()))
+				.unwrap_or(self.origin.clone())
 		}
 	}
 
@@ -1284,7 +1321,12 @@ where
 	}
 
 	fn caller_is_origin(&self) -> bool {
-		self.caller() == &self.origin
+		self.origin == self.caller()
+	}
+
+	fn caller_is_root(&self) -> bool {
+		// if the caller isn't origin, then it can't be root.
+		self.caller_is_origin() && self.origin == Origin::Root
 	}
 
 	fn balance(&self) -> BalanceOf<T> {
@@ -1336,31 +1378,16 @@ where
 
 	fn append_debug_buffer(&mut self, msg: &str) -> bool {
 		if let Some(buffer) = &mut self.debug_message {
-			let err_msg = scale_info::prelude::format!(
-				"Debug message too big (size={}) for debug buffer (bound={})",
-				msg.len(),
-				DebugBufferVec::<T>::bound(),
-			);
-
-			let mut msg = if msg.len() > DebugBufferVec::<T>::bound() {
-				err_msg.bytes()
-			} else {
-				msg.bytes()
-			};
-
-			let num_drain = {
-				let capacity = DebugBufferVec::<T>::bound().checked_sub(buffer.len()).expect(
-					"
-					`buffer` is of type `DebugBufferVec`,
-					`DebugBufferVec` is a `BoundedVec`,
-					`BoundedVec::len()` <= `BoundedVec::bound()`;
-					qed
-				",
-				);
-				msg.len().saturating_sub(capacity).min(buffer.len())
-			};
-			buffer.drain(0..num_drain);
-			buffer.try_extend(&mut msg).ok();
+			buffer
+				.try_extend(&mut msg.bytes())
+				.map_err(|_| {
+					log::debug!(
+						target: LOG_TARGET,
+						"Debug buffer (of {} bytes) exhausted!",
+						DebugBufferVec::<T>::bound(),
+					)
+				})
+				.ok();
 			true
 		} else {
 			false
@@ -1375,6 +1402,14 @@ where
 
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()> {
 		secp256k1_ecdsa_recover_compressed(signature, message_hash).map_err(|_| ())
+	}
+
+	fn sr25519_verify(&self, signature: &[u8; 64], message: &[u8], pub_key: &[u8; 32]) -> bool {
+		sp_io::crypto::sr25519_verify(
+			&SR25519Signature(*signature),
+			message,
+			&SR25519Public(*pub_key),
+		)
 	}
 
 	fn ecdsa_to_eth_address(&self, pk: &[u8; 33]) -> Result<[u8; 20], ()> {
@@ -1453,7 +1488,6 @@ mod tests {
 	use crate::{
 		exec::ExportedFunction::*,
 		gas::GasMeter,
-		storage::Storage,
 		tests::{
 			test_utils::{get_balance, hash, place_contract, set_balance},
 			ExtBuilder, RuntimeCall, RuntimeEvent as MetaEvent, Test, TestFilter, ALICE, BOB,
@@ -1626,11 +1660,13 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, exec_ch);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), value).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&Origin::from_account_id(ALICE), Some(0), value)
+					.unwrap();
 
 			assert_matches!(
 				MockStack::run_call(
-					ALICE,
+					Origin::from_account_id(ALICE),
 					BOB,
 					&mut gas_meter,
 					&mut storage_meter,
@@ -1638,7 +1674,7 @@ mod tests {
 					value,
 					vec![],
 					None,
-					Determinism::Deterministic,
+					Determinism::Enforced,
 				),
 				Ok(_)
 			);
@@ -1681,10 +1717,12 @@ mod tests {
 			place_contract(&dest, success_ch);
 			set_balance(&origin, 100);
 			let balance = get_balance(&dest);
-			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 55).unwrap();
+			let contract_origin = Origin::from_account_id(origin.clone());
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), value).unwrap();
 
 			let _ = MockStack::run_call(
-				origin.clone(),
+				contract_origin.clone(),
 				dest.clone(),
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -1692,7 +1730,7 @@ mod tests {
 				value,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -1723,10 +1761,12 @@ mod tests {
 			place_contract(&dest, delegate_ch);
 			set_balance(&origin, 100);
 			let balance = get_balance(&dest);
-			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 55).unwrap();
+			let contract_origin = Origin::from_account_id(origin.clone());
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 55).unwrap();
 
 			let _ = MockStack::run_call(
-				origin.clone(),
+				contract_origin.clone(),
 				dest.clone(),
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -1734,7 +1774,7 @@ mod tests {
 				value,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -1759,10 +1799,12 @@ mod tests {
 			place_contract(&dest, return_ch);
 			set_balance(&origin, 100);
 			let balance = get_balance(&dest);
-			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 55).unwrap();
+			let contract_origin = Origin::from_account_id(origin.clone());
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 55).unwrap();
 
 			let output = MockStack::run_call(
-				origin.clone(),
+				contract_origin.clone(),
 				dest.clone(),
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -1770,7 +1812,7 @@ mod tests {
 				55,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -1810,11 +1852,13 @@ mod tests {
 
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
-			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(origin);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			place_contract(&BOB, return_ch);
 
 			let result = MockStack::run_call(
-				origin,
+				contract_origin,
 				dest,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -1822,7 +1866,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			let output = result.unwrap();
@@ -1844,10 +1888,12 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, return_ch);
-			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(origin);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
-				origin,
+				contract_origin,
 				dest,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -1855,7 +1901,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			let output = result.unwrap();
@@ -1875,10 +1921,12 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, input_data_ch);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -1886,7 +1934,7 @@ mod tests {
 				0,
 				vec![1, 2, 3, 4],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -1906,9 +1954,10 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable =
 				MockExecutable::from_storage(input_data_ch, &schedule, &mut gas_meter).unwrap();
-			set_balance(&ALICE, min_balance * 1000);
+			set_balance(&ALICE, min_balance * 10_000);
+			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
-				storage::meter::Meter::new(&ALICE, Some(min_balance * 100), min_balance).unwrap();
+				storage::meter::Meter::new(&contract_origin, None, min_balance).unwrap();
 
 			let result = MockStack::run_instantiate(
 				ALICE,
@@ -1935,7 +1984,7 @@ mod tests {
 		let value = Default::default();
 		let recurse_ch = MockLoader::insert(Call, |ctx, _| {
 			// Try to call into yourself.
-			let r = ctx.ext.call(Weight::zero(), BOB, 0, vec![], true);
+			let r = ctx.ext.call(Weight::zero(), BalanceOf::<Test>::zero(), BOB, 0, vec![], true);
 
 			ReachedBottom::mutate(|reached_bottom| {
 				if !*reached_bottom {
@@ -1956,10 +2005,12 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			set_balance(&BOB, 1);
 			place_contract(&BOB, recurse_ch);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), value).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), value).unwrap();
 
 			let result = MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -1967,7 +2018,7 @@ mod tests {
 				value,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			assert_matches!(result, Ok(_));
@@ -1986,15 +2037,23 @@ mod tests {
 
 		let bob_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for bob.
-			WitnessedCallerBob::mutate(|caller| *caller = Some(ctx.ext.caller().clone()));
+			WitnessedCallerBob::mutate(|caller| {
+				*caller = Some(ctx.ext.caller().account_id().unwrap().clone())
+			});
 
 			// Call into CHARLIE contract.
-			assert_matches!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), Ok(_));
+			assert_matches!(
+				ctx.ext
+					.call(Weight::zero(), BalanceOf::<Test>::zero(), CHARLIE, 0, vec![], true),
+				Ok(_)
+			);
 			exec_success()
 		});
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for charlie.
-			WitnessedCallerCharlie::mutate(|caller| *caller = Some(ctx.ext.caller().clone()));
+			WitnessedCallerCharlie::mutate(|caller| {
+				*caller = Some(ctx.ext.caller().account_id().unwrap().clone())
+			});
 			exec_success()
 		});
 
@@ -2002,10 +2061,12 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&dest, bob_ch);
 			place_contract(&CHARLIE, charlie_ch);
-			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(origin.clone());
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
-				origin.clone(),
+				contract_origin.clone(),
 				dest.clone(),
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -2013,7 +2074,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			assert_matches!(result, Ok(_));
@@ -2037,9 +2098,11 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, bob_ch);
 
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			let result = MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -2047,7 +2110,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2066,10 +2129,12 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, code_bob);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			// ALICE (not contract) -> BOB (contract)
 			let result = MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -2077,7 +2142,7 @@ mod tests {
 				0,
 				vec![0],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2094,10 +2159,12 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, bob_ch);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			// ALICE (not contract) -> BOB (contract)
 			let result = MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -2105,7 +2172,7 @@ mod tests {
 				0,
 				vec![0],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2123,17 +2190,20 @@ mod tests {
 			// ALICE is the origin of the call stack
 			assert!(ctx.ext.caller_is_origin());
 			// BOB calls CHARLIE
-			ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true)
+			ctx.ext
+				.call(Weight::zero(), BalanceOf::<Test>::zero(), CHARLIE, 0, vec![], true)
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, code_bob);
 			place_contract(&CHARLIE, code_charlie);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			// ALICE -> BOB (caller is origin) -> CHARLIE (caller is not origin)
 			let result = MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -2141,7 +2211,106 @@ mod tests {
 				0,
 				vec![0],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
+			);
+			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn root_caller_succeeds() {
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			// root is the origin of the call stack.
+			assert!(ctx.ext.caller_is_root());
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_bob);
+			let contract_origin = Origin::Root;
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			// root -> BOB (caller is root)
+			let result = MockStack::run_call(
+				contract_origin,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![0],
+				None,
+				Determinism::Enforced,
+			);
+			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn root_caller_does_not_succeed_when_value_not_zero() {
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			// root is the origin of the call stack.
+			assert!(ctx.ext.caller_is_root());
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_bob);
+			let contract_origin = Origin::Root;
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			// root -> BOB (caller is root)
+			let result = MockStack::run_call(
+				contract_origin,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				1,
+				vec![0],
+				None,
+				Determinism::Enforced,
+			);
+			assert_matches!(result, Err(_));
+		});
+	}
+
+	#[test]
+	fn root_caller_succeeds_with_consecutive_calls() {
+		let code_charlie = MockLoader::insert(Call, |ctx, _| {
+			// BOB is not root, even though the origin is root.
+			assert!(!ctx.ext.caller_is_root());
+			exec_success()
+		});
+
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			// root is the origin of the call stack.
+			assert!(ctx.ext.caller_is_root());
+			// BOB calls CHARLIE.
+			ctx.ext
+				.call(Weight::zero(), BalanceOf::<Test>::zero(), CHARLIE, 0, vec![], true)
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_bob);
+			place_contract(&CHARLIE, code_charlie);
+			let contract_origin = Origin::Root;
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
+			// root -> BOB (caller is root) -> CHARLIE (caller is not root)
+			let result = MockStack::run_call(
+				contract_origin,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![0],
+				None,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2154,7 +2323,11 @@ mod tests {
 			assert_eq!(*ctx.ext.address(), BOB);
 
 			// Call into charlie contract.
-			assert_matches!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), Ok(_));
+			assert_matches!(
+				ctx.ext
+					.call(Weight::zero(), BalanceOf::<Test>::zero(), CHARLIE, 0, vec![], true),
+				Ok(_)
+			);
 			exec_success()
 		});
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
@@ -2166,10 +2339,12 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, bob_ch);
 			place_contract(&CHARLIE, charlie_ch);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -2177,7 +2352,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 
 			assert_matches!(result, Ok(_));
@@ -2193,7 +2368,9 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable =
 				MockExecutable::from_storage(dummy_ch, &schedule, &mut gas_meter).unwrap();
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			assert_matches!(
 				MockStack::run_instantiate(
@@ -2225,8 +2402,10 @@ mod tests {
 			let executable =
 				MockExecutable::from_storage(dummy_ch, &schedule, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 1000);
+			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
-				storage::meter::Meter::new(&ALICE, Some(min_balance * 100), min_balance).unwrap();
+				storage::meter::Meter::new(&contract_origin, Some(min_balance * 100), min_balance)
+					.unwrap();
 
 			let instantiated_contract_address = assert_matches!(
 				MockStack::run_instantiate(
@@ -2246,7 +2425,7 @@ mod tests {
 			// Check that the newly created account has the expected code hash and
 			// there are instantiation event.
 			assert_eq!(
-				Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(),
+				ContractInfo::<Test>::load_code_hash(&instantiated_contract_address).unwrap(),
 				dummy_ch
 			);
 			assert_eq!(
@@ -2269,8 +2448,10 @@ mod tests {
 			let executable =
 				MockExecutable::from_storage(dummy_ch, &schedule, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 1000);
+			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
-				storage::meter::Meter::new(&ALICE, Some(min_balance * 100), min_balance).unwrap();
+				storage::meter::Meter::new(&contract_origin, Some(min_balance * 100), min_balance)
+					.unwrap();
 
 			let instantiated_contract_address = assert_matches!(
 				MockStack::run_instantiate(
@@ -2288,7 +2469,7 @@ mod tests {
 			);
 
 			// Check that the account has not been created.
-			assert!(Storage::<Test>::code_hash(&instantiated_contract_address).is_none());
+			assert!(ContractInfo::<Test>::load_code_hash(&instantiated_contract_address).is_none());
 			assert!(events().is_empty());
 		});
 	}
@@ -2305,6 +2486,7 @@ mod tests {
 					.ext
 					.instantiate(
 						Weight::zero(),
+						BalanceOf::<Test>::zero(),
 						dummy_ch,
 						<Test as Config>::Currency::minimum_balance(),
 						vec![],
@@ -2322,13 +2504,17 @@ mod tests {
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			set_balance(&ALICE, min_balance * 100);
 			place_contract(&BOB, instantiator_ch);
-			let mut storage_meter =
-				storage::meter::Meter::new(&ALICE, Some(min_balance * 10), min_balance * 10)
-					.unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter = storage::meter::Meter::new(
+				&contract_origin,
+				Some(min_balance * 10),
+				min_balance * 10,
+			)
+			.unwrap();
 
 			assert_matches!(
 				MockStack::run_call(
-					ALICE,
+					contract_origin,
 					BOB,
 					&mut GasMeter::<Test>::new(GAS_LIMIT),
 					&mut storage_meter,
@@ -2336,7 +2522,7 @@ mod tests {
 					min_balance * 10,
 					vec![],
 					None,
-					Determinism::Deterministic,
+					Determinism::Enforced,
 				),
 				Ok(_)
 			);
@@ -2347,14 +2533,14 @@ mod tests {
 			// Check that the newly created account has the expected code hash and
 			// there are instantiation event.
 			assert_eq!(
-				Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(),
+				ContractInfo::<Test>::load_code_hash(&instantiated_contract_address).unwrap(),
 				dummy_ch
 			);
 			assert_eq!(
 				&events(),
 				&[
 					Event::Instantiated { deployer: BOB, contract: instantiated_contract_address },
-					Event::Called { caller: ALICE, contract: BOB },
+					Event::Called { caller: Origin::from_account_id(ALICE), contract: BOB },
 				]
 			);
 		});
@@ -2369,6 +2555,7 @@ mod tests {
 				assert_matches!(
 					ctx.ext.instantiate(
 						Weight::zero(),
+						BalanceOf::<Test>::zero(),
 						dummy_ch,
 						<Test as Config>::Currency::minimum_balance(),
 						vec![],
@@ -2389,11 +2576,13 @@ mod tests {
 			set_balance(&ALICE, 1000);
 			set_balance(&BOB, 100);
 			place_contract(&BOB, instantiator_ch);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(100), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(200), 0).unwrap();
 
 			assert_matches!(
 				MockStack::run_call(
-					ALICE,
+					contract_origin,
 					BOB,
 					&mut GasMeter::<Test>::new(GAS_LIMIT),
 					&mut storage_meter,
@@ -2401,14 +2590,17 @@ mod tests {
 					0,
 					vec![],
 					None,
-					Determinism::Deterministic,
+					Determinism::Enforced,
 				),
 				Ok(_)
 			);
 
 			// The contract wasn't instantiated so we don't expect to see an instantiation
 			// event here.
-			assert_eq!(&events(), &[Event::Called { caller: ALICE, contract: BOB },]);
+			assert_eq!(
+				&events(),
+				&[Event::Called { caller: Origin::from_account_id(ALICE), contract: BOB },]
+			);
 		});
 	}
 
@@ -2424,8 +2616,10 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable =
 				MockExecutable::from_storage(terminate_ch, &schedule, &mut gas_meter).unwrap();
-			set_balance(&ALICE, 1000);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(100), 100).unwrap();
+			set_balance(&ALICE, 10_000);
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, None, 100).unwrap();
 
 			assert_eq!(
 				MockStack::run_instantiate(
@@ -2449,7 +2643,7 @@ mod tests {
 	#[test]
 	fn in_memory_changes_not_discarded() {
 		// Call stack: BOB -> CHARLIE (trap) -> BOB' (success)
-		// This tests verfies some edge case of the contract info cache:
+		// This tests verifies some edge case of the contract info cache:
 		// We change some value in our contract info before calling into a contract
 		// that calls into ourself. This triggers a case where BOBs contract info
 		// is written to storage and invalidated by the successful execution of BOB'.
@@ -2461,13 +2655,26 @@ mod tests {
 				let info = ctx.ext.contract_info();
 				assert_eq!(info.storage_byte_deposit, 0);
 				info.storage_byte_deposit = 42;
-				assert_eq!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), exec_trapped());
+				assert_eq!(
+					ctx.ext.call(
+						Weight::zero(),
+						BalanceOf::<Test>::zero(),
+						CHARLIE,
+						0,
+						vec![],
+						true
+					),
+					exec_trapped()
+				);
 				assert_eq!(ctx.ext.contract_info().storage_byte_deposit, 42);
 			}
 			exec_success()
 		});
 		let code_charlie = MockLoader::insert(Call, |ctx, _| {
-			assert!(ctx.ext.call(Weight::zero(), BOB, 0, vec![99], true).is_ok());
+			assert!(ctx
+				.ext
+				.call(Weight::zero(), BalanceOf::<Test>::zero(), BOB, 0, vec![99], true)
+				.is_ok());
 			exec_trapped()
 		});
 
@@ -2476,10 +2683,12 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, code_bob);
 			place_contract(&CHARLIE, code_charlie);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -2487,7 +2696,7 @@ mod tests {
 				0,
 				vec![0],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2497,7 +2706,7 @@ mod tests {
 	fn recursive_call_during_constructor_fails() {
 		let code = MockLoader::insert(Constructor, |ctx, _| {
 			assert_matches!(
-				ctx.ext.call(Weight::zero(), ctx.ext.address().clone(), 0, vec![], true),
+				ctx.ext.call(Weight::zero(), BalanceOf::<Test>::zero(), ctx.ext.address().clone(), 0, vec![], true),
 				Err(ExecError{error, ..}) if error == <Error<Test>>::ContractNotFound.into()
 			);
 			exec_success()
@@ -2509,9 +2718,10 @@ mod tests {
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable = MockExecutable::from_storage(code, &schedule, &mut gas_meter).unwrap();
-			set_balance(&ALICE, min_balance * 1000);
+			set_balance(&ALICE, min_balance * 10_000);
+			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
-				storage::meter::Meter::new(&ALICE, Some(min_balance * 100), min_balance).unwrap();
+				storage::meter::Meter::new(&contract_origin, None, min_balance).unwrap();
 
 			let result = MockStack::run_instantiate(
 				ALICE,
@@ -2544,9 +2754,11 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut gas_meter,
 				&mut storage_meter,
@@ -2554,7 +2766,7 @@ mod tests {
 				0,
 				vec![],
 				Some(&mut debug_buffer),
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 		});
@@ -2578,9 +2790,11 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			let result = MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut gas_meter,
 				&mut storage_meter,
@@ -2588,7 +2802,7 @@ mod tests {
 				0,
 				vec![],
 				Some(&mut debug_buffer),
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert!(result.is_err());
 		});
@@ -2603,9 +2817,11 @@ mod tests {
 			exec_success()
 		});
 
-		// Pre-fill the buffer up to its limit
-		let mut debug_buffer =
-			DebugBufferVec::<Test>::try_from(vec![0u8; DebugBufferVec::<Test>::bound()]).unwrap();
+		// Pre-fill the buffer almost up to its limit, leaving not enough space to the message
+		let debug_buf_before =
+			DebugBufferVec::<Test>::try_from(vec![0u8; DebugBufferVec::<Test>::bound() - 5])
+				.unwrap();
+		let mut debug_buf_after = debug_buf_before.clone();
 
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule: Schedule<Test> = <Test as Config>::Schedule::get();
@@ -2613,24 +2829,22 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut gas_meter,
 				&mut storage_meter,
 				&schedule,
 				0,
 				vec![],
-				Some(&mut debug_buffer),
-				Determinism::Deterministic,
+				Some(&mut debug_buf_after),
+				Determinism::Enforced,
 			)
 			.unwrap();
-			assert_eq!(
-				&String::from_utf8(debug_buffer[DebugBufferVec::<Test>::bound() - 17..].to_vec())
-					.unwrap(),
-				"overflowing bytes"
-			);
+			assert_eq!(debug_buf_before, debug_buf_after);
 		});
 	}
 
@@ -2639,7 +2853,7 @@ mod tests {
 		// call the contract passed as input with disabled reentry
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			let dest = Decode::decode(&mut ctx.input_data.as_ref()).unwrap();
-			ctx.ext.call(Weight::zero(), dest, 0, vec![], false)
+			ctx.ext.call(Weight::zero(), BalanceOf::<Test>::zero(), dest, 0, vec![], false)
 		});
 
 		let code_charlie = MockLoader::insert(Call, |_, _| exec_success());
@@ -2648,11 +2862,13 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, code_bob);
 			place_contract(&CHARLIE, code_charlie);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			// Calling another contract should succeed
 			assert_ok!(MockStack::run_call(
-				ALICE,
+				contract_origin.clone(),
 				BOB,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -2660,13 +2876,13 @@ mod tests {
 				0,
 				CHARLIE.encode(),
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 
 			// Calling into oneself fails
 			assert_err!(
 				MockStack::run_call(
-					ALICE,
+					contract_origin,
 					BOB,
 					&mut GasMeter::<Test>::new(GAS_LIMIT),
 					&mut storage_meter,
@@ -2674,7 +2890,7 @@ mod tests {
 					0,
 					BOB.encode(),
 					None,
-					Determinism::Deterministic
+					Determinism::Enforced
 				)
 				.map_err(|e| e.error),
 				<Error<Test>>::ReentranceDenied,
@@ -2686,26 +2902,30 @@ mod tests {
 	fn call_deny_reentry() {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			if ctx.input_data[0] == 0 {
-				ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], false)
+				ctx.ext
+					.call(Weight::zero(), BalanceOf::<Test>::zero(), CHARLIE, 0, vec![], false)
 			} else {
 				exec_success()
 			}
 		});
 
 		// call BOB with input set to '1'
-		let code_charlie =
-			MockLoader::insert(Call, |ctx, _| ctx.ext.call(Weight::zero(), BOB, 0, vec![1], true));
+		let code_charlie = MockLoader::insert(Call, |ctx, _| {
+			ctx.ext.call(Weight::zero(), BalanceOf::<Test>::zero(), BOB, 0, vec![1], true)
+		});
 
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, code_bob);
 			place_contract(&CHARLIE, code_charlie);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 
 			// BOB -> CHARLIE -> BOB fails as BOB denies reentry.
 			assert_err!(
 				MockStack::run_call(
-					ALICE,
+					contract_origin,
 					BOB,
 					&mut GasMeter::<Test>::new(GAS_LIMIT),
 					&mut storage_meter,
@@ -2713,7 +2933,7 @@ mod tests {
 					0,
 					vec![0],
 					None,
-					Determinism::Deterministic
+					Determinism::Enforced
 				)
 				.map_err(|e| e.error),
 				<Error<Test>>::ReentranceDenied,
@@ -2737,10 +2957,12 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			System::reset_events();
 			MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut gas_meter,
 				&mut storage_meter,
@@ -2748,7 +2970,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -2767,10 +2989,10 @@ mod tests {
 					EventRecord {
 						phase: Phase::Initialization,
 						event: MetaEvent::Contracts(crate::Event::Called {
-							caller: ALICE,
+							caller: Origin::from_account_id(ALICE),
 							contract: BOB,
 						}),
-						topics: vec![hash(&ALICE), hash(&BOB)],
+						topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&BOB)],
 					},
 				]
 			);
@@ -2789,8 +3011,10 @@ mod tests {
 				RuntimeCall::System(SysCall::remark_with_event { remark: b"Hello".to_vec() });
 
 			// transfers are disallowed by the `TestFiler` (see below)
-			let forbidden_call =
-				RuntimeCall::Balances(BalanceCall::transfer { dest: CHARLIE, value: 22 });
+			let forbidden_call = RuntimeCall::Balances(BalanceCall::transfer_allow_death {
+				dest: CHARLIE,
+				value: 22,
+			});
 
 			// simple cases: direct call
 			assert_err!(
@@ -2810,7 +3034,7 @@ mod tests {
 		});
 
 		TestFilter::set_filter(|call| match call {
-			RuntimeCall::Balances(pallet_balances::Call::transfer { .. }) => false,
+			RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death { .. }) => false,
 			_ => true,
 		});
 
@@ -2820,10 +3044,12 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			System::reset_events();
 			MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut gas_meter,
 				&mut storage_meter,
@@ -2831,7 +3057,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			)
 			.unwrap();
 
@@ -2863,10 +3089,10 @@ mod tests {
 					EventRecord {
 						phase: Phase::Initialization,
 						event: MetaEvent::Contracts(crate::Event::Called {
-							caller: ALICE,
+							caller: Origin::from_account_id(ALICE),
 							contract: BOB,
 						}),
-						topics: vec![hash(&ALICE), hash(&BOB)],
+						topics: vec![hash(&Origin::<Test>::from_account_id(ALICE)), hash(&BOB)],
 					},
 				]
 			);
@@ -2881,6 +3107,7 @@ mod tests {
 			ctx.ext
 				.instantiate(
 					Weight::zero(),
+					BalanceOf::<Test>::zero(),
 					fail_code,
 					ctx.ext.minimum_balance() * 100,
 					vec![],
@@ -2894,6 +3121,7 @@ mod tests {
 				.ext
 				.instantiate(
 					Weight::zero(),
+					BalanceOf::<Test>::zero(),
 					success_code,
 					ctx.ext.minimum_balance() * 100,
 					vec![],
@@ -2902,7 +3130,9 @@ mod tests {
 				.unwrap();
 
 			// a plain call should not influence the account counter
-			ctx.ext.call(Weight::zero(), account_id, 0, vec![], false).unwrap();
+			ctx.ext
+				.call(Weight::zero(), BalanceOf::<Test>::zero(), account_id, 0, vec![], false)
+				.unwrap();
 
 			exec_success()
 		});
@@ -2919,10 +3149,10 @@ mod tests {
 				MockExecutable::from_storage(succ_fail_code, &schedule, &mut gas_meter).unwrap();
 			let succ_succ_executable =
 				MockExecutable::from_storage(succ_succ_code, &schedule, &mut gas_meter).unwrap();
-			set_balance(&ALICE, min_balance * 1000);
+			set_balance(&ALICE, min_balance * 10_000);
+			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
-				storage::meter::Meter::new(&ALICE, Some(min_balance * 500), min_balance * 100)
-					.unwrap();
+				storage::meter::Meter::new(&contract_origin, None, min_balance * 100).unwrap();
 
 			MockStack::run_instantiate(
 				ALICE,
@@ -2984,35 +3214,41 @@ mod tests {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			// Write
 			assert_eq!(
-				ctx.ext.set_storage(&[1; 32], Some(vec![1, 2, 3]), false),
+				ctx.ext.set_storage(&Key::Fix([1; 32]), Some(vec![1, 2, 3]), false),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage(&[2; 32], Some(vec![4, 5, 6]), true),
+				ctx.ext.set_storage(&Key::Fix([2; 32]), Some(vec![4, 5, 6]), true),
 				Ok(WriteOutcome::New)
 			);
-			assert_eq!(ctx.ext.set_storage(&[3; 32], None, false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.set_storage(&[4; 32], None, true), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.set_storage(&[5; 32], Some(vec![]), false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.set_storage(&[6; 32], Some(vec![]), true), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&Key::Fix([3; 32]), None, false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&Key::Fix([4; 32]), None, true), Ok(WriteOutcome::New));
+			assert_eq!(
+				ctx.ext.set_storage(&Key::Fix([5; 32]), Some(vec![]), false),
+				Ok(WriteOutcome::New)
+			);
+			assert_eq!(
+				ctx.ext.set_storage(&Key::Fix([6; 32]), Some(vec![]), true),
+				Ok(WriteOutcome::New)
+			);
 
 			// Overwrite
 			assert_eq!(
-				ctx.ext.set_storage(&[1; 32], Some(vec![42]), false),
+				ctx.ext.set_storage(&Key::Fix([1; 32]), Some(vec![42]), false),
 				Ok(WriteOutcome::Overwritten(3))
 			);
 			assert_eq!(
-				ctx.ext.set_storage(&[2; 32], Some(vec![48]), true),
+				ctx.ext.set_storage(&Key::Fix([2; 32]), Some(vec![48]), true),
 				Ok(WriteOutcome::Taken(vec![4, 5, 6]))
 			);
-			assert_eq!(ctx.ext.set_storage(&[3; 32], None, false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.set_storage(&[4; 32], None, true), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&Key::Fix([3; 32]), None, false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage(&Key::Fix([4; 32]), None, true), Ok(WriteOutcome::New));
 			assert_eq!(
-				ctx.ext.set_storage(&[5; 32], Some(vec![]), false),
+				ctx.ext.set_storage(&Key::Fix([5; 32]), Some(vec![]), false),
 				Ok(WriteOutcome::Overwritten(0))
 			);
 			assert_eq!(
-				ctx.ext.set_storage(&[6; 32], Some(vec![]), true),
+				ctx.ext.set_storage(&Key::Fix([6; 32]), Some(vec![]), true),
 				Ok(WriteOutcome::Taken(vec![]))
 			);
 
@@ -3025,9 +3261,10 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 1000);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter = storage::meter::Meter::new(&contract_origin, None, 0).unwrap();
 			assert_ok!(MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut gas_meter,
 				&mut storage_meter,
@@ -3035,58 +3272,58 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
 
 	#[test]
-	fn set_storage_transparent_works() {
+	fn set_storage_varsized_key_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			// Write
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([1; 64].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([1; 64].to_vec()).unwrap(),
 					Some(vec![1, 2, 3]),
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([2; 19].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([2; 19].to_vec()).unwrap(),
 					Some(vec![4, 5, 6]),
 					true
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([3; 19].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([3; 19].to_vec()).unwrap(),
 					None,
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([4; 64].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([4; 64].to_vec()).unwrap(),
 					None,
 					true
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([5; 30].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([5; 30].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([6; 128].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([6; 128].to_vec()).unwrap(),
 					Some(vec![]),
 					true
 				),
@@ -3095,48 +3332,48 @@ mod tests {
 
 			// Overwrite
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([1; 64].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([1; 64].to_vec()).unwrap(),
 					Some(vec![42, 43, 44]),
 					false
 				),
 				Ok(WriteOutcome::Overwritten(3))
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([2; 19].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([2; 19].to_vec()).unwrap(),
 					Some(vec![48]),
 					true
 				),
 				Ok(WriteOutcome::Taken(vec![4, 5, 6]))
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([3; 19].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([3; 19].to_vec()).unwrap(),
 					None,
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([4; 64].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([4; 64].to_vec()).unwrap(),
 					None,
 					true
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([5; 30].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([5; 30].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
 				Ok(WriteOutcome::Overwritten(0))
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([6; 128].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([6; 128].to_vec()).unwrap(),
 					Some(vec![]),
 					true
 				),
@@ -3152,9 +3389,10 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 1000);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter = storage::meter::Meter::new(&contract_origin, None, 0).unwrap();
 			assert_ok!(MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut gas_meter,
 				&mut storage_meter,
@@ -3162,7 +3400,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3171,13 +3409,16 @@ mod tests {
 	fn get_storage_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
-				ctx.ext.set_storage(&[1; 32], Some(vec![1, 2, 3]), false),
+				ctx.ext.set_storage(&Key::Fix([1; 32]), Some(vec![1, 2, 3]), false),
 				Ok(WriteOutcome::New)
 			);
-			assert_eq!(ctx.ext.set_storage(&[2; 32], Some(vec![]), false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.get_storage(&[1; 32]), Some(vec![1, 2, 3]));
-			assert_eq!(ctx.ext.get_storage(&[2; 32]), Some(vec![]));
-			assert_eq!(ctx.ext.get_storage(&[3; 32]), None);
+			assert_eq!(
+				ctx.ext.set_storage(&Key::Fix([2; 32]), Some(vec![]), false),
+				Ok(WriteOutcome::New)
+			);
+			assert_eq!(ctx.ext.get_storage(&Key::Fix([1; 32])), Some(vec![1, 2, 3]));
+			assert_eq!(ctx.ext.get_storage(&Key::Fix([2; 32])), Some(vec![]));
+			assert_eq!(ctx.ext.get_storage(&Key::Fix([3; 32])), None);
 
 			exec_success()
 		});
@@ -3188,9 +3429,10 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 1000);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter = storage::meter::Meter::new(&contract_origin, None, 0).unwrap();
 			assert_ok!(MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut gas_meter,
 				&mut storage_meter,
@@ -3198,7 +3440,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3207,13 +3449,16 @@ mod tests {
 	fn get_storage_size_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
-				ctx.ext.set_storage(&[1; 32], Some(vec![1, 2, 3]), false),
+				ctx.ext.set_storage(&Key::Fix([1; 32]), Some(vec![1, 2, 3]), false),
 				Ok(WriteOutcome::New)
 			);
-			assert_eq!(ctx.ext.set_storage(&[2; 32], Some(vec![]), false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.get_storage_size(&[1; 32]), Some(3));
-			assert_eq!(ctx.ext.get_storage_size(&[2; 32]), Some(0));
-			assert_eq!(ctx.ext.get_storage_size(&[3; 32]), None);
+			assert_eq!(
+				ctx.ext.set_storage(&Key::Fix([2; 32]), Some(vec![]), false),
+				Ok(WriteOutcome::New)
+			);
+			assert_eq!(ctx.ext.get_storage_size(&Key::Fix([1; 32])), Some(3));
+			assert_eq!(ctx.ext.get_storage_size(&Key::Fix([2; 32])), Some(0));
+			assert_eq!(ctx.ext.get_storage_size(&Key::Fix([3; 32])), None);
 
 			exec_success()
 		});
@@ -3224,9 +3469,10 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 1000);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter = storage::meter::Meter::new(&contract_origin, None, 0).unwrap();
 			assert_ok!(MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut gas_meter,
 				&mut storage_meter,
@@ -3234,46 +3480,40 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
 
 	#[test]
-	fn get_storage_transparent_works() {
+	fn get_storage_varsized_key_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([1; 19].to_vec()).unwrap(),
 					Some(vec![1, 2, 3]),
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([2; 16].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.get_storage_transparent(
-					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap()
-				),
+				ctx.ext.get_storage(&Key::<Test>::try_from_var([1; 19].to_vec()).unwrap()),
 				Some(vec![1, 2, 3])
 			);
 			assert_eq!(
-				ctx.ext.get_storage_transparent(
-					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap()
-				),
+				ctx.ext.get_storage(&Key::<Test>::try_from_var([2; 16].to_vec()).unwrap()),
 				Some(vec![])
 			);
 			assert_eq!(
-				ctx.ext.get_storage_transparent(
-					&VarSizedKey::<Test>::try_from([3; 8].to_vec()).unwrap()
-				),
+				ctx.ext.get_storage(&Key::<Test>::try_from_var([3; 8].to_vec()).unwrap()),
 				None
 			);
 
@@ -3286,9 +3526,10 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 1000);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter = storage::meter::Meter::new(&contract_origin, None, 0).unwrap();
 			assert_ok!(MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut gas_meter,
 				&mut storage_meter,
@@ -3296,46 +3537,40 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
 
 	#[test]
-	fn get_storage_size_transparent_works() {
+	fn get_storage_size_varsized_key_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([1; 19].to_vec()).unwrap(),
 					Some(vec![1, 2, 3]),
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.set_storage_transparent(
-					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap(),
+				ctx.ext.set_storage(
+					&Key::<Test>::try_from_var([2; 16].to_vec()).unwrap(),
 					Some(vec![]),
 					false
 				),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(
-				ctx.ext.get_storage_size_transparent(
-					&VarSizedKey::<Test>::try_from([1; 19].to_vec()).unwrap()
-				),
+				ctx.ext.get_storage_size(&Key::<Test>::try_from_var([1; 19].to_vec()).unwrap()),
 				Some(3)
 			);
 			assert_eq!(
-				ctx.ext.get_storage_size_transparent(
-					&VarSizedKey::<Test>::try_from([2; 16].to_vec()).unwrap()
-				),
+				ctx.ext.get_storage_size(&Key::<Test>::try_from_var([2; 16].to_vec()).unwrap()),
 				Some(0)
 			);
 			assert_eq!(
-				ctx.ext.get_storage_size_transparent(
-					&VarSizedKey::<Test>::try_from([3; 8].to_vec()).unwrap()
-				),
+				ctx.ext.get_storage_size(&Key::<Test>::try_from_var([3; 8].to_vec()).unwrap()),
 				None
 			);
 
@@ -3348,9 +3583,10 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 1000);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter = storage::meter::Meter::new(&contract_origin, None, 0).unwrap();
 			assert_ok!(MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut gas_meter,
 				&mut storage_meter,
@@ -3358,7 +3594,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3380,9 +3616,11 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, bob_ch);
 
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			let result = MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -3390,7 +3628,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -3403,19 +3641,35 @@ mod tests {
 		let code_hash = MockLoader::insert(Call, move |ctx, _| {
 			// It is set to one when this contract was instantiated by `place_contract`
 			assert_eq!(ctx.ext.nonce(), 1);
-			// Should not change without any instantation in-between
+			// Should not change without any instantiation in-between
 			assert_eq!(ctx.ext.nonce(), 1);
 			// Should not change with a failed instantiation
 			assert_err!(
-				ctx.ext.instantiate(Weight::zero(), fail_code, 0, vec![], &[],),
+				ctx.ext.instantiate(
+					Weight::zero(),
+					BalanceOf::<Test>::zero(),
+					fail_code,
+					0,
+					vec![],
+					&[],
+				),
 				ExecError {
 					error: <Error<Test>>::ContractTrapped.into(),
 					origin: ErrorOrigin::Callee
 				}
 			);
 			assert_eq!(ctx.ext.nonce(), 1);
-			// Successful instantation increments
-			ctx.ext.instantiate(Weight::zero(), success_code, 0, vec![], &[]).unwrap();
+			// Successful instantiation increments
+			ctx.ext
+				.instantiate(
+					Weight::zero(),
+					BalanceOf::<Test>::zero(),
+					success_code,
+					0,
+					vec![],
+					&[],
+				)
+				.unwrap();
 			assert_eq!(ctx.ext.nonce(), 2);
 			exec_success()
 		});
@@ -3426,9 +3680,10 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 1000);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter = storage::meter::Meter::new(&contract_origin, None, 0).unwrap();
 			assert_ok!(MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut gas_meter,
 				&mut storage_meter,
@@ -3436,7 +3691,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic
+				Determinism::Enforced
 			));
 		});
 	}
@@ -3456,9 +3711,11 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, code_hash);
 
-			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let contract_origin = Origin::from_account_id(ALICE);
+			let mut storage_meter =
+				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
 			let result = MockStack::run_call(
-				ALICE,
+				contract_origin,
 				BOB,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&mut storage_meter,
@@ -3466,7 +3723,7 @@ mod tests {
 				0,
 				vec![],
 				None,
-				Determinism::Deterministic,
+				Determinism::Enforced,
 			);
 			assert_matches!(result, Ok(_));
 		});
