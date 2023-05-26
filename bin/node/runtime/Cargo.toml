@@ -24,6 +24,9 @@ scale-info = { version = "2.5.0", default-features = false, features = ["derive"
 static_assertions = "1.1.0"
 log = { version = "0.4.17", default-features = false }
 
+# pallet-asset-conversion: turn on "num-traits" feature
+primitive-types = { version = "0.12.0", default-features = false, features = ["codec", "scale-info", "num-traits"] }
+
 # primitives
 sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/authority-discovery" }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/babe" }
@@ -54,6 +57,7 @@ frame-election-provider-support = { version = "4.0.0-dev", default-features = fa
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
 frame-try-runtime = { version = "0.10.0-dev", default-features = false, path = "../../../frame/try-runtime", optional = true }
 pallet-alliance = { version = "4.0.0-dev", default-features = false, path = "../../../frame/alliance" }
+pallet-asset-conversion = { version = "4.0.0-dev", default-features = false, path = "../../../frame/asset-conversion" }
 pallet-asset-rate = { version = "4.0.0-dev", default-features = false, path = "../../../frame/asset-rate" }
 pallet-assets = { version = "4.0.0-dev", default-features = false, path = "../../../frame/assets" }
 pallet-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/authority-discovery" }
@@ -137,6 +141,7 @@ std = [
 	"frame-system-benchmarking?/std",
 	"frame-election-provider-support/std",
 	"sp-authority-discovery/std",
+	"pallet-asset-conversion/std",
 	"pallet-assets/std",
 	"pallet-authority-discovery/std",
 	"pallet-authorship/std",
@@ -236,6 +241,7 @@ runtime-benchmarks = [
 	"frame-system/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"pallet-alliance/runtime-benchmarks",
+	"pallet-asset-conversion/runtime-benchmarks",
 	"pallet-assets/runtime-benchmarks",
 	"pallet-babe/runtime-benchmarks",
 	"pallet-bags-list/runtime-benchmarks",
@@ -297,6 +303,7 @@ try-runtime = [
 	"frame-system/try-runtime",
 	"frame-support/try-runtime",
 	"pallet-alliance/try-runtime",
+	"pallet-asset-conversion/try-runtime",
 	"pallet-assets/try-runtime",
 	"pallet-authority-discovery/try-runtime",
 	"pallet-authorship/try-runtime",
