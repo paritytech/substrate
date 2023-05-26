@@ -518,7 +518,7 @@ pub struct NonDefaultSetConfig {
 	/// `ProtocolHandle` is given to `Notifications` when it initializes itself. This handle allows
 	/// `Notifications ` to communicate with the protocol directly without relaying events through
 	/// `sc-network.`
-	protocol_handle_pair: Option<ProtocolHandlePair>,
+	protocol_handle_pair: ProtocolHandlePair,
 }
 
 impl NonDefaultSetConfig {
@@ -540,7 +540,7 @@ impl NonDefaultSetConfig {
 				fallback_names,
 				handshake,
 				set_config,
-				protocol_handle_pair: Some(protocol_handle_pair),
+				protocol_handle_pair,
 			},
 			notification_service,
 		)
@@ -572,12 +572,8 @@ impl NonDefaultSetConfig {
 	}
 
 	/// Take `ProtocolHandlePair` from `NonDefaultSetConfig`
-	// TODO: consume self instead?
-	pub(crate) fn take_protocol_handle(&mut self) -> ProtocolHandlePair {
-		std::mem::take(&mut self.protocol_handle_pair).expect(
-			"`take_protocol_handle()` is called only once for each `NonDefaultSetConfig`\
-			  during protocol initialization so it must exist. qed",
-		)
+	pub(crate) fn take_protocol_handle(self) -> ProtocolHandlePair {
+		self.protocol_handle_pair
 	}
 
 	/// Modifies the configuration to allow non-reserved nodes.

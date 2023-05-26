@@ -103,7 +103,7 @@ impl<B: BlockT> Protocol<B> {
 		roles: Roles,
 		network_config: &config::NetworkConfiguration,
 		notification_protocols: Vec<config::NonDefaultSetConfig>,
-		mut block_announces_protocol: config::NonDefaultSetConfig,
+		block_announces_protocol: config::NonDefaultSetConfig,
 		_tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
 	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let mut known_addresses = Vec::new();
@@ -185,7 +185,7 @@ impl<B: BlockT> Protocol<B> {
 						},
 						block_announces_protocol.take_protocol_handle(),
 					))
-					.chain(notification_protocols.into_iter().map(|mut s| {
+					.chain(notification_protocols.into_iter().map(|s| {
 						(
 							notifications::ProtocolConfig {
 								name: s.protocol_name().clone(),

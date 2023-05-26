@@ -2720,6 +2720,7 @@ mod tests {
 		// we rely on implementation detail that incoming indices are counted from 0
 		// to not mock the `Peerset`
 		notif.peerset_report_accept(IncomingIndex(0));
+		notif.protocol_report_accept(sc_peerset::IncomingIndex(0));
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Enabled { .. })));
 	}
 
@@ -2802,6 +2803,7 @@ mod tests {
 		// we rely on the implementation detail that incoming indices are counted from 0
 		// to not mock the `Peerset`
 		notif.peerset_report_accept(IncomingIndex(0));
+		notif.protocol_report_accept(sc_peerset::IncomingIndex(0));
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Enabled { .. })));
 
 		// disconnect peer and verify that the state is `Disabled`
@@ -2923,6 +2925,7 @@ mod tests {
 		));
 
 		notif.peerset_report_accept(sc_peerset::IncomingIndex(0));
+		notif.protocol_report_accept(sc_peerset::IncomingIndex(0));
 		assert_eq!(notif.incoming.len(), 0);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(PeerState::Disabled { .. })));
 	}
@@ -3176,6 +3179,7 @@ mod tests {
 		// We rely on the implementation detail that incoming indices are counted
 		// from 0 to not mock the `Peerset`.
 		notif.peerset_report_accept(sc_peerset::IncomingIndex(0));
+		notif.protocol_report_accept(sc_peerset::IncomingIndex(0));
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Enabled { .. })));
 
 		// open new substream
@@ -4042,6 +4046,7 @@ mod tests {
 		// we rely on the implementation detail that incoming indices are counted from 0
 		// to not mock the `Peerset`
 		notif.peerset_report_accept(IncomingIndex(0));
+		notif.protocol_report_accept(sc_peerset::IncomingIndex(0));
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Enabled { .. })));
 
 		let event = conn_yielder.open_substream(peer, 0, connected, vec![1, 2, 3, 4]);

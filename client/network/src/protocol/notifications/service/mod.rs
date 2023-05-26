@@ -68,8 +68,7 @@ enum InnerNotificationEvent {
 		result_tx: oneshot::Sender<ValidationResult>,
 	},
 
-	/// Remote identified by `PeerId` opened a substream and sent `Handshake`.
-	/// Validate `Handshake` and report status (accept/reject) to `Notifications`.
+	/// Notification substream open to `peer`.
 	NotificationStreamOpened {
 		/// Peer ID.
 		peer: PeerId,
