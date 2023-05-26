@@ -2068,7 +2068,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "syn 2.0.15",
+ "syn 2.0.16",
  "walkdir",
 ]
 
