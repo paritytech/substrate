@@ -886,7 +886,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
+		fn try_state(_n: T::BlockNumber, _s: frame_support::traits::TryStateSelect) -> Result<(), TryRuntimeError> {
 			Self::do_try_state()
 		}
 	}

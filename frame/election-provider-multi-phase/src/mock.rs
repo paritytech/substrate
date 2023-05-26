@@ -623,7 +623,7 @@ impl ExtBuilder {
 		#[cfg(feature = "try-runtime")]
 		ext.execute_with(|| {
 			assert_ok!(<MultiPhase as frame_support::traits::Hooks<u64>>::try_state(
-				System::block_number()
+				System::block_number(), frame_support::traits::TryStateSelect::All
 			));
 		});
 	}
