@@ -1506,9 +1506,15 @@ impl NetworkBehaviour for Notifications {
 											let event = NotificationsOut::CustomProtocolReplaced {
 												peer_id,
 												set_id,
-												notifications_sink: replacement_sink,
+												notifications_sink: replacement_sink.clone(),
 											};
 											self.events.push_back(ToSwarm::GenerateEvent(event));
+											// TODO(aaro): check error
+											let _ = self.protocol_handles[usize::from(set_id)]
+												.report_notification_sink_replaced(
+													peer_id,
+													replacement_sink,
+												);
 										}
 									} else {
 										trace!(

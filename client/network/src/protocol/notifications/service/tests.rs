@@ -655,3 +655,131 @@ fn try_to_get_notifications_sink_for_non_existent_peer() {
 	let (_proto, notif) = notification_service("/proto/1".into());
 	assert!(notif.notification_sink(&PeerId::random()).is_none());
 }
+
+#[tokio::test]
+async fn notification_sink_replaced() {
+	let (proto, mut notif) = notification_service("/proto/1".into());
+	let (sink, mut async_rx, mut sync_rx) = NotificationsSink::new(PeerId::random());
+	let (mut handle, _stream) = proto.split();
+	let peer_id = PeerId::random();
+
+	// validate inbound substream
+	let result_rx = handle.report_incoming_substream(peer_id, vec![1, 3, 3, 7]).unwrap();
+
+	if let Some(NotificationEvent::ValidateInboundSubstream { peer, handshake, result_tx }) =
+		notif.next_event().await
+	{
+		assert_eq!(peer_id, peer);
+		assert_eq!(handshake, vec![1, 3, 3, 7]);
+		let _ = result_tx.send(ValidationResult::Accept).unwrap();
+	} else {
+		panic!("invalid event received");
+	}
+	assert_eq!(result_rx.await.unwrap(), ValidationResult::Accept);
+
+	// report that a substream has been opened
+	handle
+		.report_substream_opened(peer_id, vec![1, 3, 3, 7], ObservedRole::Full, None, sink)
+		.unwrap();
+
+	if let Some(NotificationEvent::NotificationStreamOpened {
+		peer,
+		role,
+		negotiated_fallback,
+		handshake,
+	}) = notif.next_event().await
+	{
+		assert_eq!(peer_id, peer);
+		assert_eq!(negotiated_fallback, None);
+		assert_eq!(role, ObservedRole::Full);
+		assert_eq!(handshake, vec![1, 3, 3, 7]);
+	} else {
+		panic!("invalid event received");
+	}
+
+	// get a copy of the notification sink and send a synchronous notification using.
+	let sink = notif.notification_sink(&peer_id).unwrap();
+	sink.send_sync_notification(vec![1, 3, 3, 6]);
+
+	// send an asynchronous notification using the acquired notifications sink.
+	let sender = sink.reserve_notification().await.unwrap();
+	sender.send(vec![1, 3, 3, 7]).unwrap();
+
+	assert_eq!(
+		sync_rx.next().await,
+		Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 6] }),
+	);
+	assert_eq!(
+		async_rx.next().await,
+		Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 7] }),
+	);
+
+	// send notifications using the stored notification sink as well.
+	notif.send_sync_notification(&peer_id, vec![1, 3, 3, 8]).unwrap();
+	notif.send_async_notification(&peer_id, vec![1, 3, 3, 9]).await.unwrap();
+
+	assert_eq!(
+		sync_rx.next().await,
+		Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 8] }),
+	);
+	assert_eq!(
+		async_rx.next().await,
+		Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 9] }),
+	);
+
+	// the initial connection was closed and `Notifications` switched to secondary connection
+	// and emitted `CustomProtocolReplaced` which informs the local `NotificationService` that
+	// the notification sink was replaced.
+	let (new_sink, mut new_async_rx, mut new_sync_rx) = NotificationsSink::new(PeerId::random());
+	handle.report_notification_sink_replaced(peer_id, new_sink).unwrap();
+
+	let new_received_sink =
+		if let Some(NotificationEvent::NotificationSinkReplaced { peer: _, sink }) =
+			notif.next_event().await
+		{
+			drop(sync_rx);
+			drop(async_rx);
+			sink
+		} else {
+			panic!("invalid event received");
+		};
+
+	// verify that using the `NotificationService` API automatically results in using the correct
+	// sink
+	notif.send_sync_notification(&peer_id, vec![1, 3, 3, 8]).unwrap();
+	notif.send_async_notification(&peer_id, vec![1, 3, 3, 9]).await.unwrap();
+
+	assert_eq!(
+		new_sync_rx.next().await,
+		Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 8] }),
+	);
+	assert_eq!(
+		new_async_rx.next().await,
+		Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 9] }),
+	);
+
+	// try to use the old sink to send a synchronous notification but nothing is obviously received
+	// and no error is reported as defined in the documentation
+	sink.send_sync_notification(vec![1, 3, 3, 6]);
+	assert!(new_sync_rx.try_next().is_err());
+
+	// try to use the old sink to send an asynchronous notification but this time an error is
+	// returned as the connection has closed.
+	assert!(sink.reserve_notification().await.is_err());
+
+	// now send two notifications using the new sink
+	new_received_sink.send_sync_notification(vec![1, 3, 3, 6]);
+
+	// send an asynchronous notification using the acquired notifications sink.
+	let sender = new_received_sink.reserve_notification().await.unwrap();
+	sender.send(vec![1, 3, 3, 7]).unwrap();
+
+	assert_eq!(
+		new_sync_rx.next().await,
+		Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 6] }),
+	);
+	assert_eq!(
+		new_async_rx.next().await,
+		Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 7] }),
+	);
+}

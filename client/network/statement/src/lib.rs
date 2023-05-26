@@ -342,6 +342,7 @@ where
 					log::debug!(target: LOG_TARGET, "Failed to decode statement list from {peer}");
 				}
 			},
+			NotificationEvent::NotificationSinkReplaced { .. } => {},
 		}
 	}
 

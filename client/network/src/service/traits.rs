@@ -655,11 +655,20 @@ pub enum NotificationEvent {
 
 	/// Notification was received from the substream.
 	NotificationReceived {
-		/// Peer IDJ.
+		/// Peer ID.
 		peer: PeerId,
 
 		/// Received notification.
 		notification: Vec<u8>,
+	},
+
+	/// Notification sink was replaced.
+	NotificationSinkReplaced {
+		/// Peer ID.
+		peer: PeerId,
+
+		/// Notification sink.
+		sink: NotificationsSink,
 	},
 }
 

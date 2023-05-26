@@ -410,6 +410,7 @@ async fn notifications_state_consistent() {
 						.send_sync_notification(&node1.local_peer_id(), b"hello world".to_vec());
 				}
 			},
+			_ => {},
 		};
 	}
 }

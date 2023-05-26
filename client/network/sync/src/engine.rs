@@ -827,6 +827,7 @@ where
 						self.process_block_announce_validation_result(res)
 					}
 				},
+				NotificationEvent::NotificationSinkReplaced { .. } => {},
 			}
 		}
 

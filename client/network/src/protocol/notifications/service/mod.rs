@@ -88,7 +88,7 @@ enum InnerNotificationEvent {
 
 	/// Substream was closed.
 	NotificationStreamClosed {
-		/// Peer Id.
+		/// Peer ID.
 		peer: PeerId,
 	},
 
@@ -99,6 +99,15 @@ enum InnerNotificationEvent {
 
 		/// Received notification.
 		notification: Vec<u8>,
+	},
+
+	/// Notification sink has been replaced.
+	NotificationSinkReplaced {
+		/// Peer ID.
+		peer: PeerId,
+
+		/// Notification sink.
+		sink: NotificationsSink,
 	},
 }
 
@@ -227,6 +236,10 @@ impl NotificationService for NotificationHandle {
 			},
 			InnerNotificationEvent::NotificationReceived { peer, notification } =>
 				Some(NotificationEvent::NotificationReceived { peer, notification }),
+			InnerNotificationEvent::NotificationSinkReplaced { peer, sink } => {
+				self.peers.insert(peer, sink.clone());
+				Some(NotificationEvent::NotificationSinkReplaced { peer, sink })
+			},
 		}
 	}
 
@@ -437,6 +450,32 @@ impl ProtocolHandle {
 				.unbounded_send(InnerNotificationEvent::NotificationReceived {
 					peer,
 					notification: notification.clone(),
+				})
+				.is_ok()
+		});
+
+		Ok(())
+	}
+
+	/// Notification sink was replaced.
+	pub fn report_notification_sink_replaced(
+		&mut self,
+		peer: PeerId,
+		sink: NotificationsSink,
+	) -> Result<(), ()> {
+		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
+
+		log::trace!(
+			target: LOG_TARGET,
+			"{}: notification sink replaced for {peer:?}",
+			self.protocol
+		);
+
+		subscribers.retain(|subscriber| {
+			subscriber
+				.unbounded_send(InnerNotificationEvent::NotificationSinkReplaced {
+					peer,
+					sink: sink.clone(),
 				})
 				.is_ok()
 		});
