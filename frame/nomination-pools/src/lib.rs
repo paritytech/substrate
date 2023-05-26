@@ -1498,9 +1498,6 @@ pub mod pallet {
 	use frame_system::{ensure_signed, pallet_prelude::*};
 	use sp_runtime::Perbill;
 
-	#[cfg(feature = "try-runtime")]
-	use frame_support::traits::TryStateSelect;
-
 	/// The current storage version.
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
 
@@ -2632,7 +2629,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: BlockNumberFor<T>, _: TryStateSelect) -> Result<(), TryRuntimeError> {
+		fn try_state(_n: BlockNumberFor<T>, _: frame_support::traits::TryStateSelect) -> Result<(), TryRuntimeError> {
 			Self::do_try_state(u8::MAX)
 		}
 

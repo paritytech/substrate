@@ -101,9 +101,6 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
-	#[cfg(feature = "try-runtime")]
-	use frame_support::traits::TryStateSelect;
-
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(_);
 
@@ -273,7 +270,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_: BlockNumberFor<T>, _: TryStateSelect) -> Result<(), TryRuntimeError> {
+		fn try_state(_: BlockNumberFor<T>, _: frame_support::traits::TryStateSelect) -> Result<(), TryRuntimeError> {
 			<Self as SortedListProvider<T::AccountId>>::try_state()
 		}
 	}

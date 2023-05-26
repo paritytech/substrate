@@ -25,8 +25,6 @@ use sp_runtime::TryRuntimeError;
 
 pub mod v1 {
 	use super::*;
-	#[cfg(feature = "try-runtime")]
-	use frame_support::traits::TryStateSelect;
 
 	#[derive(Decode)]
 	pub struct OldPoolRoles<AccountId> {
@@ -111,7 +109,7 @@ pub mod v1 {
 				Pallet::<T>::on_chain_storage_version() == 1,
 				"The onchain version must be updated after the migration."
 			);
-			Pallet::<T>::try_state(frame_system::Pallet::<T>::block_number(), TryStateSelect::All)?;
+			Pallet::<T>::try_state(frame_system::Pallet::<T>::block_number(), frame_support::traits::TryStateSelect::All)?;
 			Ok(())
 		}
 	}

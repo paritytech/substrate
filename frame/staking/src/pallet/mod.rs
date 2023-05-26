@@ -59,8 +59,6 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_election_provider_support::ElectionDataProvider;
-	#[cfg(feature = "try-runtime")]
-	use frame_support::traits::TryStateSelect;
 
 	use crate::BenchmarkingConfig;
 
@@ -807,8 +805,8 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(n: BlockNumberFor<T>, select: TryStateSelect) -> Result<(), sp_runtime::TryRuntimeError> {
-			Self::do_try_state(n, select == TryStateSelect::Fast)
+		fn try_state(n: BlockNumberFor<T>, select: frame_support::traits::TryStateSelect) -> Result<(), sp_runtime::TryRuntimeError> {
+			Self::do_try_state(n, select == frame_support::traits::TryStateSelect::Fast)
 		}
 	}
 
