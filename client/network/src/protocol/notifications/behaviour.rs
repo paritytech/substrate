@@ -17,13 +17,13 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
+	peerset::DropReason,
 	protocol::notifications::handler::{
 		self, NotificationsSink, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut,
 	},
 	types::ProtocolName,
 };
 
-use crate::peerset::DropReason;
 use bytes::BytesMut;
 use fnv::FnvHashMap;
 use futures::{channel::oneshot, prelude::*};
