@@ -18,93 +18,198 @@
 //! <!-- markdown-link-check-disable -->
 //! # Default Config Pallet Example
 //!
-//! A simple example of a FRAME pallet that utilizes [`frame_support::derive_impl`] to
-//! implement a `DefaultConfig` for testing purposes.
+//! A simple example of a FRAME pallet that utilizes [`frame_support::derive_impl`] to demonstrate
+//! the simpler way to implement `Config` trait of pallets. This example only showcases this in a
+//! `mock.rs` environment, but the same applies to a real runtime as well.
 //!
 //! See the source code for `tests.rs` to see the relevant
 //! [`derive_impl`](`frame_support::derive_impl`) example.
 //!
-//! Note that this pallet makes use of `dev_mode` for ease of use, since the point of this
-//! example is the tests, not the pallet itself. See `pallet-dev-mode` for a more detailed
-//! example of the capabilities of `dev_mode`.
+//! Note that this pallet makes use of `dev_mode` for ease of use, since the point of this example
+//! is the tests, not the pallet itself. See `pallet-dev-mode` for a more detailed example of the
+//! capabilities of `dev_mode`.
 
 // Ensure we're `no_std` when compiling for WASM.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::dispatch::DispatchResult;
-use frame_system::ensure_signed;
-
-// Re-export pallet items so that they can be accessed from the crate namespace.
-pub use pallet::*;
-
-#[cfg(test)]
-mod tests;
-
-/// A type alias for the balance type from this pallet's point of view.
-type BalanceOf<T> = <T as pallet_balances::Config>::Balance;
-
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
-	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
-	#[pallet::config]
-	pub trait Config: pallet_balances::Config + frame_system::Config {
-		/// The overarching event type.
+	/// This pallet is annotated to have a default config. This will auto-generate
+	/// [`DefaultConfig`].
+	#[pallet::config(with_default)]
+	pub trait Config: frame_system::Config {
+		/// The overarching event type. This is coming from the runtime, and cannot have a default.
+		/// In general, `Runtime*`-oriented types cannot have a sensible default.
+		#[pallet::no_default]
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+		/// An input parameter to this pallet. This value can have a default, because it is not
+		/// reliant on `frame_system::Config`.
+		type WithDefaultValue: Get<u32>;
+
+		/// Same as [`Config::WithDefaultValue`], but we don't intend to define a default for this
+		/// in our tests below.
+		type OverwrittenDefaultValue: Get<u32>;
+
+		/// An input parameter that relies on `<Self as frame_system::Config>::AccountId`. As of
+		/// now, such types cannot have defaults and need to be annotated as such:
+		#[pallet::no_default]
+		type CannotHaveDefault: Get<Self::AccountId>;
+
+		/// Something that is a normal type, with default.
+		type WithDefaultType;
+
+		/// Same as [`Config::WithDefaultType`], but we don't intend to define a default for this
+		/// in our tests below.
+		type OverwrittenDefaultType;
 	}
 
-	// Simple declaration of the `Pallet` type. It is placeholder we use to implement traits and
-	// method.
+	pub mod config_preludes {
+		// This will help use not need to disambiguate anything when using `derive_impl`.
+		use super::*;
+
+		/// A type providing default configurations for this pallet in testing environment.
+		pub struct TestDefaultConfig;
+		#[frame_support::register_default_impl(TestDefaultConfig)]
+		impl DefaultConfig for TestDefaultConfig {
+			type WithDefaultValue = frame_support::traits::ConstU32<42>;
+			type OverwrittenDefaultValue = frame_support::traits::ConstU32<42>;
+
+			type WithDefaultType = u32;
+			type OverwrittenDefaultType = u32;
+		}
+
+		/// A type providing default configurations for this pallet in a parachain environment.
+		pub struct ParachainDefaultConfig;
+		#[frame_support::register_default_impl(ParachainDefaultConfig)]
+		impl DefaultConfig for ParachainDefaultConfig {
+			type WithDefaultValue = frame_support::traits::ConstU32<66>;
+			type OverwrittenDefaultValue = frame_support::traits::ConstU32<66>;
+			type WithDefaultType = u32;
+			type OverwrittenDefaultType = u32;
+		}
+	}
+
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {
-		#[pallet::call_index(0)]
-		pub fn add_person(origin: OriginFor<T>, id: T::AccountId) -> DispatchResult {
-			ensure_root(origin)?;
-
-			if let Some(mut people) = People::<T>::get() {
-				people.push(id.clone());
-				People::<T>::set(Some(people));
-			} else {
-				People::<T>::set(Some(vec![id.clone()]));
-			}
-
-			// Let's deposit an event to let the outside world know this happened.
-			Self::deposit_event(Event::AddPeople { account: id });
-
-			Ok(())
-		}
-
-		#[pallet::call_index(1)]
-		pub fn set_points(
-			origin: OriginFor<T>,
-			#[pallet::compact] new_value: T::Balance,
-		) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-
-			// Put the new value into storage.
-			<Points<T>>::insert(&sender, new_value);
-
-			Self::deposit_event(Event::SetPoints { account: sender, balance: new_value });
-
-			Ok(())
-		}
-	}
-
 	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
-		AddPeople { account: T::AccountId },
-		SetPoints { account: T::AccountId, balance: BalanceOf<T> },
+	pub enum Event<T: Config> {}
+}
+
+#[cfg(any(test))]
+pub mod tests {
+	use super::*;
+
+	use frame_support::macro_magic::use_attr;
+	// Because `derive_impl` is a [macro_magic](https://crates.io/crates/macro_magic) attribute
+	// macro, [`#[use_attr]`](`frame_support::macro_magic::use_attr`) must be attached to any use
+	// statement that brings it into scope.
+	#[use_attr]
+	use frame_support::derive_impl;
+
+	use super::pallet as pallet_default_config_example;
+
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
+
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system,
+			DefaultPallet: pallet_default_config_example,
+		}
+	);
+
+	/// Normally this impl statement would need to have the areas that are commented out below be
+	/// specified manually. Attaching the `derive_impl` attribute, specifying
+	/// `frame_system::prelude::testing::TestDefaultConfig` as the `default_impl` and
+	/// `frame_system::pallet::DefaultConfig` as the `disambiguation_path` allows us to bring in
+	/// defaults for this impl from the `TestDefaultConfig` impl.
+	///
+	/// This will fill in defaults for anything in the `default_impl` that isn't present in our
+	/// local impl, allowing us to override the `default_impl` in any cases where we want to be
+	/// explicit and differ from the `default_impl`.
+	#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+	impl frame_system::Config for Test {
+		// these items are defined by frame-system as `no_default`, so we must specify them here.
+		// Note that these are types that actually rely on the outer runtime, and can't sensibly
+		// have an _independent_ default.
+		type BaseCallFilter = frame_support::traits::Everything;
+		type RuntimeOrigin = RuntimeOrigin;
+		type RuntimeCall = RuntimeCall;
+		type RuntimeEvent = RuntimeEvent;
+		type PalletInfo = PalletInfo;
+		type OnSetCode = ();
+
+		// all of this is coming from `frame_system::config_preludes::TestDefaultConfig`.
+
+		// type Index = u32;
+		// type BlockNumber = u32;
+		// type Header = sp_runtime::generic::Header<Self::BlockNumber, Self::Hashing>;
+		// type Hash = sp_core::hash::H256;
+		// type Hashing = sp_runtime::traits::BlakeTwo256;
+		// type AccountId = u64;
+		// type Lookup = sp_runtime::traits::IdentityLookup<u64>;
+		// type BlockHashCount = frame_support::traits::ConstU32<10>;
+		// type MaxConsumers = frame_support::traits::ConstU32<16>;
+		// type AccountData = ();
+		// type OnNewAccount = ();
+		// type OnKilledAccount = ();
+		// type SystemWeightInfo = ();
+		// type SS58Prefix = ();
+		// type Version = ();
+		// type BlockWeights = ();
+		// type BlockLength = ();
+		// type DbWeight = ();
+
+		// you could still overwrite any of them if desired.
+		type SS58Prefix = frame_support::traits::ConstU16<456>;
 	}
 
-	#[pallet::storage]
-	pub type People<T: Config> = StorageValue<_, Vec<T::AccountId>>;
+	/// Similarly, we use the defaults provided by own crate as well.
+	use pallet::config_preludes::TestDefaultConfig;
+	#[derive_impl(TestDefaultConfig as pallet::DefaultConfig)]
+	impl crate::pallet::Config for Test {
+		// These two both cannot have defaults.
+		type RuntimeEvent = RuntimeEvent;
+		// Note that the default account-id type in
+		// `frame_system::config_preludes::TestDefaultConfig` is `u64`.
+		type CannotHaveDefault = frame_support::traits::ConstU64<1>;
 
-	#[pallet::storage]
-	pub type Points<T: Config> = StorageMap<_, _, T::AccountId, T::Balance>;
+		type OverwrittenDefaultValue = frame_support::traits::ConstU32<678>;
+		type OverwrittenDefaultType = u128;
+	}
+
+	#[test]
+	fn it_works() {
+		use frame_support::traits::Get;
+		use pallet::{Config, DefaultConfig};
+
+		// assert one of the value types that is not overwritten.
+		assert_eq!(
+			<<Test as Config>::WithDefaultValue as Get<u32>>::get(),
+			<<TestDefaultConfig as DefaultConfig>::WithDefaultValue as Get<u32>>::get()
+		);
+
+		// assert one of the value types that is overwritten.
+		assert_eq!(<<Test as Config>::OverwrittenDefaultValue as Get<u32>>::get(), 678u32);
+
+		// assert one of the types that is not overwritten.
+		assert_eq!(
+			std::any::TypeId::of::<<Test as Config>::WithDefaultType>(),
+			std::any::TypeId::of::<<TestDefaultConfig as DefaultConfig>::WithDefaultType>()
+		);
+
+		// assert one of the types that is overwritten.
+		assert_eq!(
+			std::any::TypeId::of::<<Test as Config>::OverwrittenDefaultType>(),
+			std::any::TypeId::of::<u128>()
+		)
+	}
 }

@@ -202,43 +202,37 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 
 	/// Contains default types suitable for various environments
-	pub mod prelude {
-		use super::*;
+	pub mod config_preludes {
+		use super::DefaultConfig;
 
-		/// Contains default types suitable for testing purposes
-		pub mod testing {
+		/// Provides a viable default config that can be used with
+		/// [`derive_impl`](`frame_support::derive_impl`) to derive a testing pallet config
+		/// based on this one.
+		///
+		/// See `Test` in the `default-config` example pallet's `test.rs` for an example of
+		/// a downstream user of this particular `TestDefaultConfig`
+		pub struct TestDefaultConfig;
+
+		#[frame_support::register_default_impl(TestDefaultConfig)]
+		impl DefaultConfig for TestDefaultConfig {
+			type Index = u32;
+			type BlockNumber = u32;
+			type Header = sp_runtime::generic::Header<Self::BlockNumber, Self::Hashing>;
+			type Hash = sp_core::hash::H256;
+			type Hashing = sp_runtime::traits::BlakeTwo256;
 			type AccountId = u64;
-			use super::*;
-			use sp_runtime::traits::IdentityLookup;
-
-			/// Provides a viable default config that can be used with
-			/// [`derive_impl`](`frame_support::derive_impl`) to derive a testing pallet config
-			/// based on this one.
-			///
-			/// See `Test` in the `default-config` example pallet's `test.rs` for an example of
-			/// a downstream user of this particular `TestDefaultConfig`
-			pub struct TestDefaultConfig;
-
-			#[register_default_impl(TestDefaultConfig)]
-			impl DefaultConfig for TestDefaultConfig {
-				type Version = ();
-				type BlockWeights = ();
-				type BlockLength = ();
-				type DbWeight = ();
-				type Index = u64;
-				type BlockNumber = u32;
-				type Hash = sp_core::hash::H256;
-				type Hashing = sp_runtime::traits::BlakeTwo256;
-				type AccountId = AccountId;
-				type Lookup = IdentityLookup<AccountId>;
-				type BlockHashCount = frame_support::traits::ConstU32<10>;
-				type AccountData = ();
-				type OnNewAccount = ();
-				type OnKilledAccount = ();
-				type SystemWeightInfo = ();
-				type SS58Prefix = ();
-				type MaxConsumers = frame_support::traits::ConstU32<16>;
-			}
+			type Lookup = sp_runtime::traits::IdentityLookup<u64>;
+			type BlockHashCount = frame_support::traits::ConstU32<10>;
+			type MaxConsumers = frame_support::traits::ConstU32<16>;
+			type AccountData = ();
+			type OnNewAccount = ();
+			type OnKilledAccount = ();
+			type SystemWeightInfo = ();
+			type SS58Prefix = ();
+			type Version = ();
+			type BlockWeights = ();
+			type BlockLength = ();
+			type DbWeight = ();
 		}
 	}
 
@@ -344,7 +338,6 @@ pub mod pallet {
 		type Lookup: StaticLookup<Target = Self::AccountId>;
 
 		/// The block header.
-		#[pallet::no_default]
 		type Header: Parameter + traits::Header<Number = Self::BlockNumber, Hash = Self::Hash>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
