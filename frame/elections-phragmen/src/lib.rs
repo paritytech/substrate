@@ -1503,7 +1503,7 @@ mod tests {
 			MEMBERS.with(|m| {
 				*m.borrow_mut() = self.genesis_members.iter().map(|(m, _)| *m).collect::<Vec<_>>()
 			});
-			let mut ext: sp_io::TestExternalities = GenesisConfig {
+			let mut ext: sp_io::TestExternalities = RuntimeGenesisConfig {
 				balances: pallet_balances::GenesisConfig::<Test> {
 					balances: vec![
 						(1, 10 * self.balance_factor),
