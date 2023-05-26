@@ -106,13 +106,13 @@ pub trait Migrate: Codec + MaxEncodedLen + Default {
 
 	/// Execute some pre-checks prior to running the first step of this migration.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade_step() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade_step() -> Result<Vec<u8>, TryRuntimeError> {
 		Ok(Vec::new())
 	}
 
 	/// Execute some post-checks after running the last step of this migration.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade_step(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade_step(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 }
@@ -166,12 +166,12 @@ pub trait MigrateSequence: private::Sealed {
 	fn new(version: StorageVersion) -> Cursor;
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade_step(_version: StorageVersion) -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade_step(_version: StorageVersion) -> Result<Vec<u8>, TryRuntimeError> {
 		Ok(Vec::new())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade_step(_version: StorageVersion, _state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade_step(_version: StorageVersion, _state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 
@@ -214,7 +214,7 @@ pub struct Migration<T: Config, M: MigrateSequence = (NoopMigration<1>, NoopMigr
 
 #[cfg(feature = "try-runtime")]
 impl<T: Config, M: MigrateSequence> Migration<T, M> {
-	fn run_all_steps() -> Result<(), &'static str> {
+	fn run_all_steps() -> Result<(), TryRuntimeError> {
 		let mut weight = Weight::zero();
 		let name = <Pallet<T>>::name();
 		loop {
@@ -281,7 +281,7 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		// We can't really do much here as our migrations do not happen during the runtime upgrade.
 		// Instead, we call the migrations `pre_upgrade` and `post_upgrade` hooks when we iterate
 		// over our migrations.
@@ -434,7 +434,7 @@ impl MigrateSequence for Tuple {
 
 	#[cfg(feature = "try-runtime")]
 	/// Execute the pre-checks of the step associated with this version.
-	fn pre_upgrade_step(version: StorageVersion) -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade_step(version: StorageVersion) -> Result<Vec<u8>, TryRuntimeError> {
 		for_tuples!(
 			#(
 				if version == Tuple::VERSION {
@@ -447,7 +447,7 @@ impl MigrateSequence for Tuple {
 
 	#[cfg(feature = "try-runtime")]
 	/// Execute the post-checks of the step associated with this version.
-	fn post_upgrade_step(version: StorageVersion, state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade_step(version: StorageVersion, state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		for_tuples!(
 			#(
 				if version == Tuple::VERSION {

@@ -101,7 +101,7 @@ impl<T: Config> Migrate for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade_step() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade_step() -> Result<Vec<u8>, TryRuntimeError> {
 		let old_queue = old::DeletionQueue::<T>::take().unwrap_or_default();
 
 		if old_queue.is_empty() {
@@ -118,11 +118,11 @@ impl<T: Config> Migrate for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade_step(state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		let len = <u32 as Decode>::decode(&mut &state[..]).unwrap();
 		let counter = <DeletionQueueCounter<T>>::get();
-		assert_eq!(counter.insert_counter, len);
-		assert_eq!(counter.delete_counter, 0);
+		ensure!(counter.insert_counter == len);
+		ensure!(counter.delete_counter == 0);
 		Ok(())
 	}
 }

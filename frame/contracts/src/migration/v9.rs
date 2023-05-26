@@ -115,7 +115,7 @@ impl<T: Config> Migrate for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade_step() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade_step() -> Result<Vec<u8>, TryRuntimeError> {
 		let sample: Vec<_> = old::CodeStorage::<T>::iter().take(100).collect();
 
 		log::debug!(target: LOG_TARGET, "Taking sample of {} contract codes", sample.len());
@@ -123,18 +123,18 @@ impl<T: Config> Migrate for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade_step(state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		let sample =
 			<Vec<(CodeHash<T>, old::PrefabWasmModule)> as Decode>::decode(&mut &state[..]).unwrap();
 
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contract codes", sample.len());
 		for (code_hash, old) in sample {
 			let module = CodeStorage::<T>::get(&code_hash).unwrap();
-			assert_eq!(module.instruction_weights_version, old.instruction_weights_version);
-			assert_eq!(module.determinism, Determinism::Enforced);
-			assert_eq!(module.initial, old.initial);
-			assert_eq!(module.maximum, old.maximum);
-			assert_eq!(module.code, old.code);
+			ensure!(module.instruction_weights_version == old.instruction_weights_version);
+			ensure!(module.determinism == Determinism::Enforced);
+			ensure!(module.initial == old.initial);
+			ensure!(module.maximum == old.maximum);
+			ensure!(module.code == old.code);
 		}
 
 		Ok(())
