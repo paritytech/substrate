@@ -190,7 +190,7 @@ mod test {
 		let tip_0_reason = b"what_is_really_not_awesome".to_vec();
 		let tip_1_reason = b"pineapple_on_pizza".to_vec();
 		new_test_ext().execute_with(|| {
-			// Assert no amounts are reserved pre-tip.
+			// Set up
 			assert_ok!(<Test as pallet_treasury::Config>::Currency::reserve(
 				&tipper_0,
 				tipper_0_initial_reserved
