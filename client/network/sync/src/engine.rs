@@ -76,10 +76,22 @@ const TICK_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1100)
 /// Maximum number of known block hashes to keep for a peer.
 const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
 
-/// If the block announces stream to peer has been inactive for two minutes meaning local node
+/// If the block announces stream to peer has been inactive for 30 seconds meaning local node
 /// has not sent or received block announcements to/from the peer, report the node for inactivity,
 /// disconnect it and attempt to establish connection to some other peer.
 const INACTIVITY_EVICT_THRESHOLD: Duration = Duration::from_secs(30);
+
+/// When `SyncingEngine` is started, wait two minutes before actually staring to count peers as
+/// evicted.
+///
+/// Parachain collator may incorrectly get evicted because it's waiting to receive a number of
+/// relaychain blocks before it can start creating parachain blocks. During this wait,
+/// `SyncingEngine` still counts it as active and as the peer is not sending blocks, it may get
+/// evicted if a block is not received within the first 30 secons since the peer connected.
+///
+/// To prevent this from happening, define a threshold for how long `SyncingEngine` should wait
+/// before it starts evicting peers.
+const INITIAL_EVICTION_WAIT_PERIOD: Duration = Duration::from_secs(2 * 60);
 
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
@@ -243,6 +255,12 @@ pub struct SyncingEngine<B: BlockT, Client> {
 
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
+
+	/// When the syncing was started.
+	///
+	/// Stored as an `Option<Instant>` so once the initial wait has passed, `SyncingEngine`
+	/// can reset the peer timers and continue with the normal eviction process.
+	syncing_started: Option<Instant>,
 }
 
 impl<B: BlockT, Client> SyncingEngine<B, Client>
@@ -389,6 +407,7 @@ where
 				default_peers_set_num_light,
 				event_streams: Vec::new(),
 				tick_timeout: Delay::new(TICK_TIMEOUT),
+				syncing_started: None,
 				metrics: if let Some(r) = metrics_registry {
 					match Metrics::register(r, is_major_syncing.clone()) {
 						Ok(metrics) => Some(metrics),
@@ -607,6 +626,8 @@ where
 	}
 
 	pub async fn run(mut self) {
+		self.syncing_started = Some(Instant::now());
+
 		loop {
 			futures::future::poll_fn(|cx| self.poll(cx)).await;
 		}
@@ -619,6 +640,25 @@ where
 
 		while let Poll::Ready(()) = self.tick_timeout.poll_unpin(cx) {
 			self.report_metrics();
+			self.tick_timeout.reset(TICK_TIMEOUT);
+
+			// if `SyncingEngine` has just started, don't evict seemingly inactive peers right away
+			// as they may not have produced blocks not because they've disconnected but because
+			// they're still waiting to receive enough relaychain blocks to start producing blocks.
+			if let Some(started) = self.syncing_started {
+				if started.elapsed() < INITIAL_EVICTION_WAIT_PERIOD {
+					continue
+				}
+
+				// reset the peer activity timers so they don't expire right away after
+				// the initial wait is done.
+				for info in self.peers.values_mut() {
+					info.last_notification_received = Instant::now();
+					info.last_notification_sent = Instant::now();
+				}
+
+				self.syncing_started = None;
+			}
 
 			// go over all connected peers and check if any of them have been idle for a while. Idle
 			// in this case means that we haven't sent or received block announcements to/from this
@@ -647,8 +687,6 @@ where
 					self.evicted.insert(*id);
 				}
 			}
-
-			self.tick_timeout.reset(TICK_TIMEOUT);
 		}
 
 		while let Poll::Ready(Some(event)) = self.service_rx.poll_next_unpin(cx) {
