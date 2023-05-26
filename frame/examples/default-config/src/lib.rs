@@ -30,7 +30,6 @@
 //!   [`pallet::DefaultConfig`].
 //! - Notice how [`pallet::DefaultConfig`] is independent of [`frame_system::Config`].
 
-// Ensure we're `no_std` when compiling for WASM.
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[frame_support::pallet]
