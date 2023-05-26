@@ -184,19 +184,21 @@ mod test {
 	fn unreserve_all_funds_works() {
 		let tipper_0 = 0;
 		let tipper_1 = 1;
+		let tipper_0_initial_reserved = 0;
+		let tipper_1_initial_reserved = 5;
 		let recipient = 100;
-		let tip_0_reason = b"whats_not_awesome?".to_vec();
-		let tip_1_reason = b"pinaple_on_pizza".to_vec();
+		let tip_0_reason = b"what_is_really_not_awesome".to_vec();
+		let tip_1_reason = b"pineapple_on_pizza".to_vec();
 		new_test_ext().execute_with(|| {
 			// Assert no amounts are reserved pre-tip.
-			assert_eq!(
-				<Test as pallet_treasury::Config>::Currency::reserved_balance(&tipper_0),
-				0u64
-			);
-			assert_eq!(
-				<Test as pallet_treasury::Config>::Currency::reserved_balance(&tipper_1),
-				0u64
-			);
+			assert_ok!(<Test as pallet_treasury::Config>::Currency::reserve(
+				&tipper_0,
+				tipper_0_initial_reserved
+			));
+			assert_ok!(<Test as pallet_treasury::Config>::Currency::reserve(
+				&tipper_1,
+				tipper_1_initial_reserved
+			));
 
 			// Make some tips
 			assert_ok!(Tips::report_awesome(
@@ -213,13 +215,15 @@ mod test {
 			// Verify the expected amount is reserved
 			assert_eq!(
 				<Test as pallet_treasury::Config>::Currency::reserved_balance(&tipper_0),
-				<Test as crate::Config>::TipReportDepositBase::get() +
+				tipper_0_initial_reserved +
+					<Test as crate::Config>::TipReportDepositBase::get() +
 					<Test as crate::Config>::DataDepositPerByte::get() *
 						tip_0_reason.len() as u64
 			);
 			assert_eq!(
 				<Test as pallet_treasury::Config>::Currency::reserved_balance(&tipper_1),
-				<Test as crate::Config>::TipReportDepositBase::get() +
+				tipper_1_initial_reserved +
+					<Test as crate::Config>::TipReportDepositBase::get() +
 					<Test as crate::Config>::DataDepositPerByte::get() *
 						tip_1_reason.len() as u64
 			);
@@ -230,11 +234,11 @@ mod test {
 			// Check the deposits were were unreserved
 			assert_eq!(
 				<Test as pallet_treasury::Config>::Currency::reserved_balance(&tipper_0),
-				0u64
+				tipper_0_initial_reserved
 			);
 			assert_eq!(
 				<Test as pallet_treasury::Config>::Currency::reserved_balance(&tipper_1),
-				0u64
+				tipper_1_initial_reserved
 			);
 		});
 	}
