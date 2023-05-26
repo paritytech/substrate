@@ -250,5 +250,5 @@ pub fn name_of_dispatchable(origin: OriginFor<T>, ...) -> DispatchResult {}
 ### Storage Items
 
 1. If a map-like type is being used, always note the choice of your hashers as private code docs (`// Hasher X chosen because ...`). Recall that this is not relevant information to external people, so it must be documented as `//`.
-2. Consider explaining why a storage type is always bounded.
-3. Consider explaining the crypto-economics of how a deposit is being taken in return of the storage being used.
+2. Consider explaining the crypto-economics of how a deposit is being taken in return of the storage being used.
+3. Consider explaining why it is safe for the storage item to be unbounded, if `#[pallet::unbounded]` or `#[pallet::without_storage_info]` is being used.
