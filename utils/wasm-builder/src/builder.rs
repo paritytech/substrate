@@ -48,7 +48,7 @@ impl WasmBuilderSelectProject {
 			file_name: None,
 			project_cargo_toml: get_manifest_dir().join("Cargo.toml"),
 			features_to_enable: Vec::new(),
-			check_for_runtime_version_section: true,
+			disable_runtime_version_section_check: fale,
 		}
 	}
 
@@ -64,7 +64,7 @@ impl WasmBuilderSelectProject {
 				file_name: None,
 				project_cargo_toml: path,
 				features_to_enable: Vec::new(),
-				check_for_runtime_version_section: true,
+				disable_runtime_version_section_check: false,
 			})
 		} else {
 			Err("Project path must point to the `Cargo.toml` of the project")
@@ -95,8 +95,8 @@ pub struct WasmBuilder {
 	project_cargo_toml: PathBuf,
 	/// Features that should be enabled when building the wasm binary.
 	features_to_enable: Vec<String>,
-	/// Should the builder check that the `runtime_version` section exists in the wasm binary?
-	check_for_runtime_version_section: bool,
+	/// Should the builder not check that the `runtime_version` section exists in the wasm binary?
+	disable_runtime_version_section_check: bool,
 }
 
 impl WasmBuilder {
@@ -154,7 +154,7 @@ impl WasmBuilder {
 	/// `RuntimeVersion` without needing to call into the wasm binary. However, for some
 	/// use cases (like tests) you may want to disable this check.
 	pub fn disable_runtime_version_section_check(mut self) -> Self {
-		self.check_for_runtime_version_section = false;
+		self.disable_runtime_version_section_check = true;
 		self
 	}
 
@@ -180,7 +180,7 @@ impl WasmBuilder {
 			self.rust_flags.into_iter().map(|f| format!("{} ", f)).collect(),
 			self.features_to_enable,
 			self.file_name,
-			self.check_for_runtime_version_section,
+			!self.disable_runtime_version_section_check,
 		);
 
 		// As last step we need to generate our `rerun-if-changed` stuff. If a build fails, we don't
