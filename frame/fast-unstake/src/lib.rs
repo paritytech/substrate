@@ -36,7 +36,7 @@
 //! If a nominator is not exposed anywhere in the staking system, checked via
 //! [`StakingInterface::is_exposed_in_era`] (i.e. "has not actively backed any validators in the
 //! last [`StakingInterface::bonding_duration`] days"), then they can register themselves in this
-//! pallet, unstake faster than having to wait an entire bonding duration.
+//! pallet and unstake faster than having to wait an entire bonding duration.
 //!
 //! *Being exposed with validator* from the point of view of the staking system means earning
 //! rewards with the validator, and also being at the risk of slashing with the validator. This is
@@ -44,29 +44,29 @@
 //! [here](https://polkadot.network/blog/staking-update-february-2022/).
 //!
 //! Stakers who are certain about NOT being exposed can register themselves with
-//! [`Pallet::register_fast_unstake`]. This will chill, and fully unbond the staker, and place them
+//! [`Pallet::register_fast_unstake`]. This will chill, fully unbond the staker and place them
 //! in the queue to be checked.
 //!
 //! A successful registration implies being fully unbonded and chilled in the staking system. These
-//! effects persist, even if the fast-unstake registration is retracted (see [`Pallet::deregister`]
+//! effects persist even if the fast-unstake registration is retracted (see [`Pallet::deregister`]
 //! and further).
 //!
 //! Once registered as a fast-unstaker, the staker will be queued and checked by the system. This
 //! can take a variable number of blocks based on demand, but will almost certainly be "faster" (as
 //! the name suggest) than waiting the standard bonding duration.
 //!
-//! A fast-unstaker is either in [`Queue`], or actively being checked, at which point it lives in
-//! [`Head`]. Once in [`Head`], the request cannot retracted anymore. But, once in [`Queue`], it
+//! A fast-unstaker is either in [`Queue`] or actively being checked, at which point it lives in
+//! [`Head`]. Once in [`Head`], the request cannot be retracted anymore. But, once in [`Queue`], it
 //! can, via [`Pallet::deregister`].
 //!
-//! A deposit, equal to [`Config::Deposit`] is collected for this process, and is returned in case a
+//! A deposit equal to [`Config::Deposit`] is collected for this process, and is returned in case a
 //! successful unstake occurs (`Event::Unstaked` signals that).
 //!
 //! Once processed, if successful, no additional fee for the checking process is taken, and the
 //! staker is instantly unbonded.
 //!
 //! If unsuccessful, meaning that the staker was exposed, the aforementioned deposit will be slashed
-//! for the amount of wasted work they have inflicted on the chian.
+//! for the amount of wasted work they have inflicted on the chain.
 //!
 //! All in all, this pallet is meant to provide an easy off-ramp for some stakers.
 //!
@@ -199,8 +199,8 @@ pub mod pallet {
 
 		/// Maximum value for `ErasToCheckPerBlock`, checked in [`Pallet::control`].
 		///
-		/// This should be as close as possible, but more than the actual value, in order to have
-		/// accurate benchmarks.
+		/// This should be slightly bigger than the actual value in order to have accurate
+		/// benchmarks.
 		type MaxErasToCheckPerBlock: Get<u32>;
 
 		/// The weight information of this pallet.
@@ -314,7 +314,7 @@ pub mod pallet {
 		///
 		/// ## Dispatch Origin
 		///
-		/// The dispatch origin of this call must be *signed* by the whoever is permitted by to call
+		/// The dispatch origin of this call must be *signed* by whoever is permitted to call
 		/// unbond funds by the staking system. See [`Config::Staking`].
 		///
 		/// ## Details
@@ -363,7 +363,7 @@ pub mod pallet {
 		///
 		/// ## Dispatch Origin
 		///
-		/// The dispatch origin of this call must be *signed* by the whoever is permitted by to call
+		/// The dispatch origin of this call must be *signed* by whoever is permitted to call
 		/// unbond funds by the staking system. See [`Config::Staking`].
 		///
 		/// ## Details
@@ -371,7 +371,7 @@ pub mod pallet {
 		/// This is useful if one is registered, they are still waiting, and they change their mind.
 		///
 		/// Note that the associated stash is still fully unbonded and chilled as a consequence of
-		/// calling [`Pallet::register_fast_unstake`]. THerefore, this should probably be followed
+		/// calling [`Pallet::register_fast_unstake`]. Therefore, this should probably be followed
 		/// by a call to `rebond` in the staking system.
 		///
 		/// ## Events

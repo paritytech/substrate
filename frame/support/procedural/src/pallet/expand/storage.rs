@@ -312,7 +312,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 }
 
 fn augment_final_docs(def: &mut Def) {
-	// expand the docs with a new line showing the storage type (value, map, double map etc), and if
+	// expand the docs with a new line showing the storage type (value, map, double map, etc), and
 	// the key/value type(s).
 	let mut push_string_literal = |doc_line: &str, storage: &mut StorageDef| {
 		let item = &mut def.item.content.as_mut().expect("Checked by def").1[storage.index];
@@ -436,7 +436,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 			let cfg_attrs = &storage.cfg_attrs;
 
-			// If the storage item is public, just link to it, rather than copy-pasting the docs.
+			// If the storage item is public, just link to it rather than copy-pasting the docs.
 			let getter_doc_line = if matches!(storage.vis, syn::Visibility::Public(_)) {
 				format!("An auto-generated getter for [`{}`].", storage.ident)
 			} else {

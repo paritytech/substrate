@@ -63,7 +63,7 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 				///
 				/// # Warning: Doc-Only
 				///
-				/// This type is an automatically generated, and is doc-only. See the real version in
+				/// This type is automatically generated, and is doc-only. See the real version in
 				#[ doc = #real ]
 				pub struct #storage_name();
 			)
