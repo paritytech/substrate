@@ -15,7 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! <!-- markdown-link-check-disable -->
 //! # Default Config Pallet Example
 //!
 //! A simple example of a FRAME pallet that utilizes [`frame_support::derive_impl`] to demonstrate

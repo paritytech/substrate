@@ -343,10 +343,10 @@ impl ConfigDef {
 		let mut consts_metadata = vec![];
 		let mut default_sub_trait = vec![];
 		for trait_item in &mut item.items {
-			// Parse for event
 			let is_event = check_event_type(frame_system, trait_item, has_instance)?;
-			let mut no_default = false;
 			has_event_type = has_event_type || is_event;
+
+			let mut already_no_default = false;
 			let mut already_constant = false;
 
 			while let Ok(Some(pallet_attr)) =
@@ -366,8 +366,7 @@ impl ConfigDef {
 					(PalletAttrType::Constant(_), _) =>
 						return Err(syn::Error::new(
 							trait_item.span(),
-							"Invalid pallet::constant in pallet::config, expected \
-								type trait item",
+							"Invalid #[pallet::constant] in #[pallet::config], expected type item",
 						)),
 					(PalletAttrType::NoDefault(_), _) => {
 						if !enable_default {
@@ -377,18 +376,18 @@ impl ConfigDef {
 								has been specified"
 							))
 						}
-						if no_default {
+						if already_no_default {
 							return Err(syn::Error::new(
 								pallet_attr._bracket.span.join(),
-								"Duplicate #[pallet::no_default] attribute not allowed.",
+								"Duplicate #[pallet::already_no_default] attribute not allowed.",
 							))
 						}
-						no_default = true;
+						already_no_default = true;
 					},
 				}
 			}
 
-			if !no_default && !is_event && enable_default {
+			if !already_no_default && !is_event && enable_default {
 				default_sub_trait.push(trait_item.clone());
 			}
 		}
