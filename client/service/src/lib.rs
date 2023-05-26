@@ -50,7 +50,7 @@ use sp_blockchain::HeaderMetadata;
 use sp_consensus::SyncOracle;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 };
 
 pub use self::{
@@ -160,6 +160,7 @@ async fn build_network_future<
 	network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
 	sync_service: Arc<SyncingService<B>>,
+	network_block: Arc<Box<dyn NetworkBlock<B::Hash, NumberFor<B>> + Send + Sync>>,
 	announce_imported_blocks: bool,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
@@ -185,11 +186,11 @@ async fn build_network_future<
 				};
 
 				if announce_imported_blocks {
-					sync_service.announce_block(notification.hash, None);
+					network_block.announce_block(notification.hash, None);
 				}
 
 				if notification.is_new_best {
-					sync_service.new_best_block_imported(
+					network_block.new_best_block_imported(
 						notification.hash,
 						*notification.header.number(),
 					);

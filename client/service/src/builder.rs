@@ -22,8 +22,8 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 	error::Error,
 	metrics::MetricsService,
-	start_rpc_servers, BuildGenesisBlock, GenesisBlockBuilder, RpcHandlers, SpawnTaskHandle,
-	TaskManager, TransactionPoolAdapter,
+	start_rpc_servers, BuildGenesisBlock, GenesisBlockBuilder, NetworkBlock, RpcHandlers,
+	SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpsee::RpcModule;
@@ -748,6 +748,10 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 		Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
 	/// Optional warp sync params.
 	pub warp_sync_params: Option<WarpSyncParams<TBl>>,
+	/// Optional network block handle.
+	///
+	/// User can specify this to achieve their own block sync service.
+	pub network_block: Option<Arc<Box<dyn NetworkBlock<TBl::Hash, NumberFor<TBl>> + Send + Sync>>>,
 }
 /// Build the network service, the network status sinks and an RPC sender.
 pub fn build_network<TBl, TExPool, TImpQu, TCl>(
@@ -785,6 +789,7 @@ where
 		import_queue,
 		block_announce_validator_builder,
 		warp_sync_params,
+		network_block,
 	} = params;
 
 	if warp_sync_params.is_none() && config.network.sync_mode.is_warp() {
@@ -968,8 +973,13 @@ where
 		),
 	);
 
-	let future =
-		build_network_future(network_mut, client, sync_service.clone(), config.announce_block);
+	let future = build_network_future(
+		network_mut,
+		client,
+		sync_service.clone(),
+		network_block.unwrap_or_else(|| Arc::new(Box::new(sync_service.clone()))),
+		config.announce_block,
+	);
 
 	// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the
 	// node through the `NetworkConfiguration` struct. But because this function doesn't know in
