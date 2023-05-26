@@ -65,8 +65,8 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 			.timeout(Duration::from_secs(20))
 			.boxed();
 
-		let (peerset, _) = sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig {
-			sets: vec![sc_peerset::SetConfig {
+		let (peerset, _) = crate::peerset::Peerset::from_config(crate::peerset::PeersetConfig {
+			sets: vec![crate::peerset::SetConfig {
 				in_peers: 25,
 				out_peers: 25,
 				bootnodes: if index == 0 {
@@ -266,7 +266,7 @@ fn reconnect_after_disconnect() {
 						if service2_state == ServiceState::FirstConnec {
 							service1.behaviour_mut().disconnect_peer(
 								Swarm::local_peer_id(&service2),
-								sc_peerset::SetId::from(0),
+								crate::peerset::SetId::from(0),
 							);
 						}
 					},
@@ -289,7 +289,7 @@ fn reconnect_after_disconnect() {
 						if service1_state == ServiceState::FirstConnec {
 							service1.behaviour_mut().disconnect_peer(
 								Swarm::local_peer_id(&service2),
-								sc_peerset::SetId::from(0),
+								crate::peerset::SetId::from(0),
 							);
 						}
 					},

@@ -9390,6 +9390,7 @@ dependencies = [
  "multistream-select",
  "parity-scale-codec",
  "parking_lot 0.12.1",
+ "partial_sort",
  "pin-project",
  "rand 0.8.5",
  "sc-block-builder",
@@ -9398,7 +9399,6 @@ dependencies = [
  "sc-network-common",
  "sc-network-light",
  "sc-network-sync",
- "sc-peerset",
  "sc-utils",
  "serde",
  "serde_json",
@@ -9420,6 +9420,7 @@ dependencies = [
  "tokio-test",
  "tokio-util",
  "unsigned-varint",
+ "wasm-timer",
  "zeroize",
 ]
 
@@ -9464,7 +9465,6 @@ dependencies = [
  "parity-scale-codec",
  "prost-build",
  "sc-consensus",
- "sc-peerset",
  "sc-utils",
  "serde",
  "smallvec",
@@ -9491,7 +9491,6 @@ dependencies = [
  "quickcheck",
  "sc-network",
  "sc-network-common",
- "sc-peerset",
  "sp-runtime",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
@@ -9514,7 +9513,6 @@ dependencies = [
  "sc-client-api",
  "sc-network",
  "sc-network-common",
- "sc-peerset",
  "sp-blockchain",
  "sp-core",
  "sp-runtime",
@@ -9534,7 +9532,6 @@ dependencies = [
  "pin-project",
  "sc-network",
  "sc-network-common",
- "sc-peerset",
  "sp-consensus",
  "sp-runtime",
  "sp-statement-store",
@@ -9564,7 +9561,6 @@ dependencies = [
  "sc-consensus",
  "sc-network",
  "sc-network-common",
- "sc-peerset",
  "sc-utils",
  "smallvec",
  "sp-arithmetic",
@@ -9624,7 +9620,6 @@ dependencies = [
  "pin-project",
  "sc-network",
  "sc-network-common",
- "sc-peerset",
  "sc-utils",
  "sp-consensus",
  "sp-runtime",
@@ -9654,7 +9649,6 @@ dependencies = [
  "sc-client-db",
  "sc-network",
  "sc-network-common",
- "sc-peerset",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
  "sc-utils",
@@ -9668,24 +9662,6 @@ dependencies = [
  "threadpool",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "sc-peerset"
-version = "4.0.0-dev"
-dependencies = [
- "futures",
- "libp2p-identity",
- "log",
- "mockall",
- "parking_lot 0.12.1",
- "partial_sort",
- "rand 0.8.5",
- "sc-utils",
- "serde_json",
- "sp-arithmetic",
- "sp-tracing",
- "wasm-timer",
 ]
 
 [[package]]

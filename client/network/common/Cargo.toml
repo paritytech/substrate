@@ -29,7 +29,6 @@ libp2p-identity = { version = "0.1.2", features = ["peerid"] }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
 smallvec = "1.8.0"
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
-sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }
 sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 serde = { version = "1.0.136", features = ["derive"] }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
