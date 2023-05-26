@@ -883,13 +883,13 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 	/// Header number.
 	type Number: Member
 		+ MaybeSerializeDeserialize
+		+ MaybeFromStr
 		+ Debug
 		+ sp_std::hash::Hash
 		+ Copy
 		+ MaybeDisplay
 		+ AtLeast32BitUnsigned
-		+ Codec
-		+ sp_std::str::FromStr;
+		+ Codec;
 	/// Header hash type
 	type Hash: HashOutput;
 	/// Hashing algorithm
