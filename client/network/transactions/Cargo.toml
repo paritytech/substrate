@@ -18,7 +18,6 @@ codec = { package = "parity-scale-codec", version = "3.2.2", features = ["derive
 futures = "0.3.21"
 libp2p = "0.51.3"
 log = "0.4.17"
-pin-project = "1.0.12"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
 sc-network = { version = "0.10.0-dev", path = "../" }
 sc-network-common = { version = "0.10.0-dev", path = "../common" }

@@ -35,11 +35,17 @@
 /client/sysinfo/ @koute
 /client/tracing/ @koute
 
+# Documentation audit
+/primitives/runtime @paritytech/docs-audit
+/primitives/arithmetic @paritytech/docs-audit
+# /primitives/core (to be added later)
+# /primitives/io (to be added later)
+
 # FRAME
-/frame/ @paritytech/frame-coders
-/frame/nfts/ @jsidorenko
+/frame/ @paritytech/frame-coders @paritytech/docs-audit
+/frame/nfts/ @jsidorenko @paritytech/docs-audit
 /frame/state-trie-migration/ @paritytech/frame-coders @cheme
-/frame/uniques/ @jsidorenko
+/frame/uniques/ @jsidorenko @paritytech/docs-audit
 
 # GRANDPA, BABE, consensus stuff
 /client/consensus/babe/ @andresilva
@@ -57,12 +63,12 @@
 /primitives/merkle-mountain-range/ @acatangiu
 
 # Contracts
-/frame/contracts/ @athei
+/frame/contracts/ @athei @paritytech/docs-audit
 
 # NPoS and election
-/frame/election-provider-multi-phase/ @paritytech/staking-core
-/frame/election-provider-support/ @paritytech/staking-core
-/frame/elections-phragmen/ @paritytech/staking-core
-/frame/nomination-pools/ @paritytech/staking-core
-/frame/staking/ @paritytech/staking-core
-/primitives/npos-elections/ @paritytech/staking-core
+/frame/election-provider-multi-phase/ @paritytech/staking-core @paritytech/docs-audit
+/frame/election-provider-support/ @paritytech/staking-core @paritytech/docs-audit
+/frame/elections-phragmen/ @paritytech/staking-core @paritytech/docs-audit
+/frame/nomination-pools/ @paritytech/staking-core @paritytech/docs-audit
+/frame/staking/ @paritytech/staking-core @paritytech/docs-audit
+/primitives/npos-elections/ @paritytech/staking-core @paritytech/docs-audit
