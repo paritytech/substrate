@@ -400,31 +400,13 @@ where
 	) -> Result<Vec<StorageKey>, &'static str> {
 		let mut last_key: Option<StorageKey> = None;
 		let mut keys: Vec<StorageKey> = vec![];
-
 		loop {
-			let page = self
-				.as_online()
-				.rpc_client()
-				.storage_keys_paged(
-					Some(start_key.clone()),
-					Self::DEFAULT_KEY_DOWNLOAD_PAGE,
-					last_key.clone(),
-					Some(at),
-				)
-				.await
-				.map_err(|e| {
-					error!(target: LOG_TARGET, "Error = {:?}", e);
-					"rpc get_keys failed"
-				})?;
-
-		let mut all_keys: Vec<StorageKey> = vec![];
-		let keys = loop {
 			// This loop can hit the node with very rapid requests, occasionally causing it to
 			// error out in CI (https://github.com/paritytech/substrate/issues/14129), so we retry.
 			let retry_strategy = FixedInterval::new(Self::KEYS_PAGE_RETRY_INTERVAL)
 				.take(Self::KEYS_PAGE_MAX_RETRIES);
 			let get_page_closure =
-				|| self.get_keys_single_page(Some(prefix.clone()), last_key.clone(), at);
+				|| self.get_keys_single_page(Some(start_key.clone()), last_key.clone(), at);
 			let page = Retry::spawn(retry_strategy, get_page_closure).await?;
 			let page_len = page.len();
 
@@ -448,7 +430,7 @@ where
 				}
 				last_key = Some(new_last_key.clone());
 			};
-		};
+		}
 
 		Ok(keys)
 	}
