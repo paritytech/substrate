@@ -71,8 +71,8 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 		.collect::<proc_macro2::TokenStream>();
 
 	quote::quote!(
-		/// Auto-generated docs-only module listing all defined storage types for this pallet,
-		/// public or non-public.
+		/// Auto-generated docs-only module listing all (public and private) defined storage types
+		/// for this pallet.
 		///
 		/// # Warning: Doc-Only
 		///
