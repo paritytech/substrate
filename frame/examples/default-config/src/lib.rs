@@ -21,27 +21,31 @@
 //! the simpler way to implement `Config` trait of pallets. This example only showcases this in a
 //! `mock.rs` environment, but the same applies to a real runtime as well.
 //!
-//! See the source code for `tests.rs` to see the relevant
-//! [`derive_impl`](`frame_support::derive_impl`) example.
+//! See the source code of [`tests`] for a real examples.
 //!
-//! Note that this pallet makes use of `dev_mode` for ease of use, since the point of this example
-//! is the tests, not the pallet itself. See `pallet-dev-mode` for a more detailed example of the
-//! capabilities of `dev_mode`.
+//! Study the following types:
+//!
+//! - [`pallet::DefaultConfig`], and how it differs from [`pallet::Config`].
+//! - [`pallet::config_preludes::TestDefaultConfig`] and how it implements
+//!   [`pallet::DefaultConfig`].
+//! - Notice how [`pallet::DefaultConfig`] is independent of [`frame_system::Config`].
 
 // Ensure we're `no_std` when compiling for WASM.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[frame_support::pallet(dev_mode)]
+#[frame_support::pallet]
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
 
 	/// This pallet is annotated to have a default config. This will auto-generate
 	/// [`DefaultConfig`].
+	///
+	/// It will be an identical, but won't have anything that is `#[pallet::no_default]`.
 	#[pallet::config(with_default)]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type. This is coming from the runtime, and cannot have a default.
 		/// In general, `Runtime*`-oriented types cannot have a sensible default.
-		#[pallet::no_default]
+		#[pallet::no_default] // optional. `RuntimeEvent` is automatically excluded as well.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// An input parameter to this pallet. This value can have a default, because it is not
@@ -98,7 +102,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {}
 }
 
-#[cfg(any(test))]
+#[cfg(any(test, doc))]
 pub mod tests {
 	use super::*;
 
@@ -125,15 +129,6 @@ pub mod tests {
 		}
 	);
 
-	/// Normally this impl statement would need to have the areas that are commented out below be
-	/// specified manually. Attaching the `derive_impl` attribute, specifying
-	/// `frame_system::prelude::testing::TestDefaultConfig` as the `default_impl` and
-	/// `frame_system::pallet::DefaultConfig` as the `disambiguation_path` allows us to bring in
-	/// defaults for this impl from the `TestDefaultConfig` impl.
-	///
-	/// This will fill in defaults for anything in the `default_impl` that isn't present in our
-	/// local impl, allowing us to override the `default_impl` in any cases where we want to be
-	/// explicit and differ from the `default_impl`.
 	#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 	impl frame_system::Config for Test {
 		// these items are defined by frame-system as `no_default`, so we must specify them here.
