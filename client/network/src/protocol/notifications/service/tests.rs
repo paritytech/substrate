@@ -427,7 +427,7 @@ async fn cloned_service_opening_substream_works() {
 	// validate inbound substream
 	let mut result_rx = handle.report_incoming_substream(peer_id, vec![1, 3, 3, 7]).unwrap();
 
-	// verify that `stream1` also gets the event
+	// verify that `notif1` gets the event
 	if let Some(NotificationEvent::ValidateInboundSubstream { peer, handshake, result_tx }) =
 		notif1.next_event().await
 	{
@@ -442,7 +442,7 @@ async fn cloned_service_opening_substream_works() {
 	// pending
 	assert!(result_rx.try_recv().is_err());
 
-	// verify that `stream2` also gets the event
+	// verify that `notif2` also gets the event
 	if let Some(NotificationEvent::ValidateInboundSubstream { peer, handshake, result_tx }) =
 		notif2.next_event().await
 	{

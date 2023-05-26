@@ -2279,7 +2279,7 @@ impl NetworkBehaviour for Notifications {
 					self.protocol_report_reject(index);
 				},
 				Err(_) => {
-					error!(target: "sub-libp2p", "Protocol ha shut down");
+					error!(target: "sub-libp2p", "Protocol has shut down");
 					break
 				},
 			}
