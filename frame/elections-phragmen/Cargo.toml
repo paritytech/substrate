@@ -32,6 +32,7 @@ pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-tracing = { path = "../../primitives/tracing" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 
 [features]
 default = ["std"]

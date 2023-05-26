@@ -317,21 +317,178 @@ where
 
 #[cfg(test)]
 mod test {
-	use crate::tests::{ExtBuilder, Members};
+	use super::*;
+	use crate::{
+		tests::{ExtBuilder, Test},
+		Candidates, Members, RunnersUp, SeatHolder, Voter, Voting,
+	};
+	use frame_support::{
+		assert_ok,
+		traits::{Currency, OnRuntimeUpgrade, ReservableCurrency, WithdrawReasons},
+	};
 
 	#[test]
-	fn unreserving_deposits_works() {
+	fn unreserve_works_for_candidate() {
+		let candidate = 10;
+		let deposit = 100;
+		let initial_reserved = 15;
+		let initial_balance = 100_000;
 		ExtBuilder::default().build_and_execute(|| {
-			log::info!("{:?}", Members::get());
+			// Set up initial state.
+			<Test as crate::Config>::Currency::make_free_balance_be(&candidate, initial_balance);
+			assert_ok!(<Test as crate::Config>::Currency::reserve(&candidate, initial_reserved));
+			Candidates::<Test>::set(vec![(candidate, deposit)]);
+			assert_ok!(<Test as crate::Config>::Currency::reserve(&candidate, deposit));
 
-			// TODO: test
+			// Sanity check: ensure initial Balance state was set up correctly.
+			assert_eq!(
+				<Test as crate::Config>::Currency::reserved_balance(&candidate),
+				deposit + initial_reserved
+			);
+
+			// Run the migration.
+			crate::migrations::unlock_and_unreserve_all_funds::UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+
+			// Assert the voter lock was removed and the reserved balance was reduced by the expected amount.
+			assert_eq!(
+				<Test as crate::Config>::Currency::reserved_balance(&candidate),
+				initial_reserved
+			);
 		});
 	}
 
 	#[test]
-	fn unlocking_stakes_works() {
+	fn unreserve_works_for_runner_up() {
+		let runner_up = 10;
+		let deposit = 100;
+		let initial_reserved = 15;
+		let initial_balance = 100_000;
 		ExtBuilder::default().build_and_execute(|| {
-			// TODO: test
+			// Set up initial state.
+			<Test as crate::Config>::Currency::make_free_balance_be(&runner_up, initial_balance);
+			assert_ok!(<Test as crate::Config>::Currency::reserve(&runner_up, initial_reserved));
+			RunnersUp::<Test>::set(vec![SeatHolder {
+				who: runner_up,
+				deposit,
+				stake: 0,
+			}]);
+			assert_ok!(<Test as crate::Config>::Currency::reserve(&runner_up, deposit));
+
+			// Sanity check: ensure initial Balance state was set up correctly.
+			assert_eq!(
+				<Test as crate::Config>::Currency::reserved_balance(&runner_up),
+				deposit + initial_reserved
+			);
+
+			// Run the migration.
+			crate::migrations::unlock_and_unreserve_all_funds::UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+
+			// Assert the voter lock was removed and the reserved balance was reduced by the expected amount.
+			assert_eq!(
+				<Test as crate::Config>::Currency::reserved_balance(&runner_up),
+				initial_reserved
+			);
+		});
+	}
+
+	#[test]
+	fn unreserve_works_for_member() {
+		let member = 10;
+		let deposit = 100;
+		let initial_reserved = 15;
+		let initial_balance = 100_000;
+		ExtBuilder::default().build_and_execute(|| {
+			// Set up initial state.
+			<Test as crate::Config>::Currency::make_free_balance_be(&member, initial_balance);
+			assert_ok!(<Test as crate::Config>::Currency::reserve(&member, initial_reserved));
+			Members::<Test>::set(vec![SeatHolder {
+				who: member,
+				deposit,
+				stake: 0,
+			}]);
+			assert_ok!(<Test as crate::Config>::Currency::reserve(&member, deposit));
+
+			// Sanity check: ensure initial Balance state was set up correctly.
+			assert_eq!(
+				<Test as crate::Config>::Currency::reserved_balance(&member),
+				deposit + initial_reserved
+			);
+
+			// Run the migration.
+			crate::migrations::unlock_and_unreserve_all_funds::UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+
+			// Assert the voter lock was removed and the reserved balance was reduced by the expected amount.
+			assert_eq!(
+				<Test as crate::Config>::Currency::reserved_balance(&member),
+				initial_reserved
+			);
+		});
+	}
+
+	#[test]
+	fn unlock_and_unreserve_works_for_voter() {
+		let voter = 10;
+		let deposit = 100;
+		let initial_reserved = 15;
+		let initial_locks = vec![(b"somethin", 10)];
+		let stake = 25;
+		let initial_balance = 100_000;
+		ExtBuilder::default().build_and_execute(|| {
+			let pallet_id = <Test as crate::Config>::PalletId::get();
+
+			// Set up initial state.
+			<Test as crate::Config>::Currency::make_free_balance_be(&voter, initial_balance);
+			assert_ok!(<Test as crate::Config>::Currency::reserve(&voter, initial_reserved));
+			for lock in initial_locks.clone() {
+				<Test as crate::Config>::Currency::set_lock(
+					*lock.0,
+					&voter,
+					lock.1,
+					WithdrawReasons::all(),
+				);
+			}
+			Voting::<Test>::insert(
+				voter,
+				Voter { votes: vec![], deposit, stake },
+			);
+			assert_ok!(<Test as crate::Config>::Currency::reserve(&voter, deposit));
+			<Test as crate::Config>::Currency::set_lock(
+				<Test as crate::Config>::PalletId::get(),
+				&voter,
+				stake,
+				WithdrawReasons::all(),
+			);
+
+			// Sanity check: ensure initial Balance state was set up correctly.
+			assert_eq!(
+				<Test as crate::Config>::Currency::reserved_balance(&voter),
+				deposit + initial_reserved
+			);
+			let mut voter_all_locks = initial_locks.clone();
+			voter_all_locks.push((&pallet_id, stake));
+			assert_eq!(
+				<Test as crate::Config>::Currency::locks(&voter)
+					.iter()
+					.map(|lock| (&lock.id, lock.amount))
+					.collect::<Vec<_>>(),
+				voter_all_locks
+			);
+
+			// Run the migration.
+			crate::migrations::unlock_and_unreserve_all_funds::UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+
+			// Assert the voter lock was removed and the reserved balance was reduced by the expected amount.
+			assert_eq!(
+				<Test as crate::Config>::Currency::reserved_balance(&voter),
+				initial_reserved
+			);
+			assert_eq!(
+				<Test as crate::Config>::Currency::locks(&voter)
+					.iter()
+					.map(|lock| (&lock.id, lock.amount))
+					.collect::<Vec<_>>(),
+				initial_locks
+			);
 		});
 	}
 }
