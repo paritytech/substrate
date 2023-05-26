@@ -35,9 +35,9 @@ pub enum Select {
 	///
 	/// Pallet names are obtained from [`super::PalletInfoAccess`].
 	Only(Vec<Vec<u8>>),
-	/// Run only fast running tests.
+	/// Run only fast running tests for all pallets.
 	///
-	/// Optimal mode for CI. Avoids long running tests.
+	/// Optimal mode for CI. Avoids long running tests. Each pallet chooses what it considers fast.
 	Fast,
 }
 
