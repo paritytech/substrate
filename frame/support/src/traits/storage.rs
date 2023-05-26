@@ -20,6 +20,7 @@
 use crate::sp_std::collections::btree_set::BTreeSet;
 use impl_trait_for_tuples::impl_for_tuples;
 pub use sp_core::storage::TrackedStorageKey;
+use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
 /// An instance of a pallet in the storage.
@@ -120,3 +121,29 @@ impl WhitelistedStorageKeys for Tuple {
 		combined_keys.into_iter().collect::<Vec<_>>()
 	}
 }
+
+macro_rules! impl_incrementable {
+	($($type:ty),+) => {
+		$(
+			impl Incrementable for $type {
+				fn increment(&self) -> Self {
+					let mut val = self.clone();
+					val.saturating_inc();
+					val
+				}
+
+				fn initial_value() -> Self {
+					0
+				}
+			}
+		)+
+	};
+}
+
+/// For example: allows new identifiers to be created in a linear fashion.
+pub trait Incrementable {
+	fn increment(&self) -> Self;
+	fn initial_value() -> Self;
+}
+
+impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);

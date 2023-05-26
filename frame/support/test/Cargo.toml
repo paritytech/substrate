@@ -36,21 +36,22 @@ test-pallet = { package = "frame-support-test-pallet", default-features = false,
 [features]
 default = ["std"]
 std = [
-	"serde/std",
 	"codec/std",
-	"scale-info/std",
 	"frame-benchmarking/std",
 	"frame-executive/std",
 	"frame-support/std",
 	"frame-system/std",
+	"scale-info/std",
+	"serde/std",
+	"sp-api/std",
+	"sp-arithmetic/std",
 	"sp-core/std",
-	"sp-std/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-state-machine",
-	"sp-arithmetic/std",
+	"sp-std/std",
 	"sp-version/std",
-	"sp-api/std",
+	"test-pallet/std",
 ]
 try-runtime = [
 	"frame-support/try-runtime",

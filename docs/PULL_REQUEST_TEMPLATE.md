@@ -18,12 +18,11 @@ Before you submit, please check that:
   - [ ] Github project assignment
 - [ ] **Related Issues:** You mentioned a related issue if this PR is related to it, e.g. `Fixes #228` or `Related #1337`.
 - [ ] **2 Reviewers:** You asked at least two reviewers to review. If you aren't sure, start with GH suggestions.
-- [ ] **Style Guide:** Your PR adheres to [the style guide](https://github.com/paritytech/substrate/blob/master/docs/STYLE_GUIDE.md)
+- [ ] **Style Guide:** Your PR adheres to [the style guide](https://github.com/paritytech/substrate/blob/master/docs/STYLE_GUIDE.md).
   - In particular, mind the maximal line length of 100 (120 in exceptional circumstances).
   - There is no commented code checked in unless necessary.
   - Any panickers in the runtime have a proof or were removed.
-- [ ] **Runtime Version:** You bumped the runtime version if there are breaking changes in the **runtime**.
-- [ ] **Docs:** You updated any rustdocs which may need to change.
+- [ ] **Docs:** You updated any rustdocs which may need to change, as described [here](https://github.com/paritytech/substrate/blob/master/docs/DOCUMENTATION_GUIDELINES.md).
 - [ ] **Polkadot Companion:** Has the PR altered the external API or interfaces used by Polkadot?
   - [ ] If so, do you have the corresponding Polkadot PR ready?
   - [ ] Optionally: Do you have a corresponding Cumulus PR?
