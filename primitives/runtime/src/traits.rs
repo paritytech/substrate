@@ -708,6 +708,7 @@ pub trait HashOutput:
 	Member
 	+ MaybeSerializeDeserialize
 	+ MaybeDisplay
+	+ MaybeFromStr
 	+ Debug
 	+ sp_std::hash::Hash
 	+ AsRef<[u8]>
@@ -727,6 +728,7 @@ impl<T> HashOutput for T where
 	T: Member
 		+ MaybeSerializeDeserialize
 		+ MaybeDisplay
+		+ MaybeFromStr
 		+ Debug
 		+ sp_std::hash::Hash
 		+ AsRef<[u8]>

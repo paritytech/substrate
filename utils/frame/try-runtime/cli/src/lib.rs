@@ -618,7 +618,6 @@ impl State {
 		try_runtime_check: bool,
 	) -> sc_cli::Result<RemoteExternalities<Block>>
 	where
-		Block::Hash: FromStr,
 		Block::Header: DeserializeOwned,
 		<Block::Hash as FromStr>::Err: Debug,
 	{
@@ -731,7 +730,6 @@ impl TryRuntimeCmd {
 	where
 		Block: BlockT<Hash = H256> + DeserializeOwned,
 		Block::Header: DeserializeOwned,
-		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 		<NumberFor<Block> as FromStr>::Err: Debug,
 		<NumberFor<Block> as TryInto<u64>>::Error: Debug,
@@ -797,7 +795,6 @@ impl CliConfiguration for TryRuntimeCmd {
 /// Get the hash type of the generic `Block` from a `hash_str`.
 pub(crate) fn hash_of<Block: BlockT>(hash_str: &str) -> sc_cli::Result<Block::Hash>
 where
-	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
 {
 	hash_str

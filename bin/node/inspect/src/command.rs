@@ -32,7 +32,6 @@ impl InspectCmd {
 	pub fn run<B, RA, D>(&self, config: Configuration) -> Result<()>
 	where
 		B: Block,
-		B::Hash: FromStr,
 		RA: Send + Sync + 'static,
 		D: NativeExecutionDispatch + 'static,
 	{
