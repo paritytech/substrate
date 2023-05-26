@@ -232,7 +232,10 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber, _: frame_support::traits::TryStateSelect) -> Result<(), TryRuntimeError> {
+		fn try_state(
+			_n: T::BlockNumber,
+			_: frame_support::traits::TryStateSelect,
+		) -> Result<(), TryRuntimeError> {
 			// ensure that the value of `ErasToCheckPerBlock` is less than
 			// `T::MaxErasToCheckPerBlock`.
 			ensure!(

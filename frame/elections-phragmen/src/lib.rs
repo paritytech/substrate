@@ -330,7 +330,10 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber, _s: frame_support::traits::TryStateSelect) -> Result<(), TryRuntimeError> {
+		fn try_state(
+			_n: T::BlockNumber,
+			_s: frame_support::traits::TryStateSelect,
+		) -> Result<(), TryRuntimeError> {
 			Self::do_try_state()
 		}
 	}
@@ -1527,7 +1530,8 @@ mod tests {
 			#[cfg(feature = "try-runtime")]
 			ext.execute_with(|| {
 				assert_ok!(<Elections as frame_support::traits::Hooks<u64>>::try_state(
-					System::block_number(), frame_support::traits::TryStateSelect::All
+					System::block_number(),
+					frame_support::traits::TryStateSelect::All
 				));
 			});
 		}

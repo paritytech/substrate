@@ -1718,7 +1718,10 @@ impl<T: Config> StakingInterface for Pallet<T> {
 
 #[cfg(any(test, feature = "try-runtime"))]
 impl<T: Config> Pallet<T> {
-	pub(crate) fn do_try_state(_: BlockNumberFor<T>, fast_mode: bool) -> Result<(), TryRuntimeError> {
+	pub(crate) fn do_try_state(
+		_: BlockNumberFor<T>,
+		fast_mode: bool,
+	) -> Result<(), TryRuntimeError> {
 		ensure!(
 			T::VoterList::iter()
 				.all(|x| <Nominators<T>>::contains_key(&x) || <Validators<T>>::contains_key(&x)),

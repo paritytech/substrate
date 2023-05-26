@@ -270,7 +270,10 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_: BlockNumberFor<T>, _: frame_support::traits::TryStateSelect) -> Result<(), TryRuntimeError> {
+		fn try_state(
+			_: BlockNumberFor<T>,
+			_: frame_support::traits::TryStateSelect,
+		) -> Result<(), TryRuntimeError> {
 			<Self as SortedListProvider<T::AccountId>>::try_state()
 		}
 	}
