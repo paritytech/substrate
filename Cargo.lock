@@ -1279,17 +1279,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
-name = "colored"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3616f750b84d8f0de8a58bda93e08e2a81ad3f523089b05f1dffecab48c6cbd"
-dependencies = [
- "atty",
- "lazy_static",
- "winapi",
-]
-
-[[package]]
 name = "comfy-table"
 version = "6.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2047,20 +2036,19 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "docify"
-version = "0.1.8"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00e374affbf735d7a344f4ae5b623fb988cde5b1f9bbf2dff260c9d360796f44"
+checksum = "7767ccc3eb4cd952984251db536253f3b37447b00d5d700c12a3fa59e2116f01"
 dependencies = [
  "docify_macros",
 ]
 
 [[package]]
 name = "docify_macros"
-version = "0.1.8"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "998f7260ad879a4060e05ca21ea66432cd3811103549e85f66144bd5345e8afc"
+checksum = "cbaa8797736720f7df8d70318fc09e4ce5c5a897111a60ddce414713ea391043"
 dependencies = [
- "colored",
  "common-path",
  "derive-syn-parse",
  "lazy_static",
@@ -2069,6 +2057,7 @@ dependencies = [
  "quote",
  "regex",
  "syn 2.0.16",
+ "termcolor",
  "walkdir",
 ]
 
