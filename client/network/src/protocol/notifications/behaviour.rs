@@ -1050,7 +1050,13 @@ impl Notifications {
 
 		match mem::replace(state, PeerState::Poisoned) {
 			// Incoming => Enabled
-			PeerState::Incoming { ref mut accepted, backoff_until, connections } => {
+			PeerState::Incoming {
+				ref mut accepted,
+				backoff_until,
+				connections,
+				incoming_index,
+				..
+			} => {
 				trace!(
 					target: LOG_TARGET,
 					"PSM => Accept({:?}, {}, {:?}): Send substream for validation to protocol.",
@@ -1075,7 +1081,12 @@ impl Notifications {
 					},
 				}
 
-				*state = PeerState::Incoming { backoff_until, accepted: true, connections };
+				*state = PeerState::Incoming {
+					backoff_until,
+					accepted: true,
+					connections,
+					incoming_index,
+				};
 			},
 
 			// Any state other than `Incoming` is invalid.
@@ -1682,7 +1693,7 @@ impl NetworkBehaviour for Notifications {
 						mut connections,
 						backoff_until,
 						incoming_index,
-						accepeted,
+						accepted,
 					} => {
 						debug_assert!(connections
 							.iter()

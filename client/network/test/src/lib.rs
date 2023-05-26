@@ -266,8 +266,8 @@ where
 	}
 
 	/// Returns the number of peers we're connected to.
-	pub fn num_peers(&self) -> usize {
-		self.network.num_connected_peers()
+	pub async fn num_peers(&self) -> usize {
+		self.sync_service.status().await.unwrap().num_connected_peers as usize
 	}
 
 	/// Returns the number of downloaded blocks.
@@ -1000,20 +1000,6 @@ where
 		tokio::spawn(f);
 	}
 
-	/// Polls the testnet until all peers are connected to each other.
-	///
-	/// Must be executed in a task context.
-	fn poll_until_connected(&mut self, cx: &mut FutureContext) -> Poll<()> {
-		self.poll(cx);
-
-		let num_peers = self.peers().len();
-		if self.peers().iter().all(|p| p.num_peers() == num_peers - 1) {
-			return Poll::Ready(())
-		}
-
-		Poll::Pending
-	}
-
 	async fn is_in_sync(&mut self) -> bool {
 		let mut highest = None;
 		let peers = self.peers_mut();
@@ -1091,10 +1077,27 @@ where
 	}
 
 	/// Run the network until all peers are connected to each other.
-	///
-	/// Calls `poll_until_connected` repeatedly with the runtime passed as parameter.
 	async fn run_until_connected(&mut self) {
-		futures::future::poll_fn::<(), _>(|cx| self.poll_until_connected(cx)).await;
+		let num_peers = self.peers().len();
+		let sync_services =
+			self.peers().iter().map(|info| info.sync_service.clone()).collect::<Vec<_>>();
+
+		'outer: loop {
+			for sync_service in &sync_services {
+				if sync_service.status().await.unwrap().num_connected_peers as usize !=
+					num_peers - 1
+				{
+					futures::future::poll_fn::<(), _>(|cx| {
+						self.poll(cx);
+						Poll::Ready(())
+					})
+					.await;
+					continue 'outer
+				}
+			}
+
+			break
+		}
 	}
 
 	/// Polls the testnet. Processes all the pending actions.

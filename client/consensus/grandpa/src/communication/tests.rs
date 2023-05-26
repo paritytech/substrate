@@ -32,7 +32,7 @@ use sc_network::{
 	types::ProtocolName,
 	Multiaddr, NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 	NetworkSyncForkRequest, NotificationSenderError, NotificationSenderT as NotificationSender,
-	PeerId, ReputationChange,
+	NotificationsSink, PeerId, ReputationChange,
 };
 use sc_network_common::{
 	role::ObservedRole,
@@ -259,6 +259,10 @@ impl NotificationService for TestNotificationService {
 	}
 
 	fn protocol(&self) -> &ProtocolName {
+		unimplemented!();
+	}
+
+	fn notification_sink(&self, _peer: &PeerId) -> Option<NotificationsSink> {
 		unimplemented!();
 	}
 }

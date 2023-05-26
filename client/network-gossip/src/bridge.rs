@@ -339,7 +339,7 @@ mod tests {
 	use sc_network::{
 		config::MultiaddrWithPeerId, service::traits::NotificationEvent, Event, NetworkBlock,
 		NetworkEventStream, NetworkNotification, NetworkPeers, NotificationSenderError,
-		NotificationSenderT as NotificationSender, NotificationService,
+		NotificationSenderT as NotificationSender, NotificationService, NotificationsSink,
 	};
 	use sc_network_common::{role::ObservedRole, sync::SyncEventStream};
 	use sp_runtime::{
@@ -544,6 +544,10 @@ mod tests {
 		}
 
 		fn protocol(&self) -> &ProtocolName {
+			unimplemented!();
+		}
+
+		fn notification_sink(&self, _peer: &PeerId) -> Option<NotificationsSink> {
 			unimplemented!();
 		}
 	}

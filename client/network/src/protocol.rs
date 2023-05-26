@@ -24,7 +24,7 @@ use crate::{
 
 use bytes::Bytes;
 use codec::{DecodeAll, Encode};
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{channel::oneshot, stream::FuturesUnordered, StreamExt};
 use libp2p::{
 	core::Endpoint,
 	swarm::{
