@@ -48,7 +48,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// An input parameter to this pallet. This value can have a default, because it is not
-		/// reliant on `frame_system::Config`.
+		/// reliant on `frame_system::Config` or the overarching runtime in any way.
 		type WithDefaultValue: Get<u32>;
 
 		/// Same as [`Config::WithDefaultValue`], but we don't intend to define a default for this
@@ -56,7 +56,8 @@ pub mod pallet {
 		type OverwrittenDefaultValue: Get<u32>;
 
 		/// An input parameter that relies on `<Self as frame_system::Config>::AccountId`. As of
-		/// now, such types cannot have defaults and need to be annotated as such:
+		/// now, such types cannot have defaults and need to be annotated as such, iff
+		/// `#[pallet::config(with_default)]` is enabled:
 		#[pallet::no_default]
 		type CannotHaveDefault: Get<Self::AccountId>;
 
@@ -166,7 +167,7 @@ pub mod tests {
 		type SS58Prefix = frame_support::traits::ConstU16<456>;
 	}
 
-	/// Similarly, we use the defaults provided by own crate as well.
+	// Similarly, we use the defaults provided by own crate as well.
 	use pallet::config_preludes::TestDefaultConfig;
 	#[derive_impl(TestDefaultConfig as pallet::DefaultConfig)]
 	impl crate::pallet::Config for Test {
