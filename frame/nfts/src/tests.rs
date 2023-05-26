@@ -3200,7 +3200,7 @@ fn pre_signed_mints_should_work() {
 
 		assert_ok!(Nfts::mint_pre_signed(
 			RuntimeOrigin::signed(user_2.clone()),
-			mint_data.clone(),
+			Box::new(mint_data.clone()),
 			signature.clone(),
 			user_1.clone(),
 		));
@@ -3236,7 +3236,7 @@ fn pre_signed_mints_should_work() {
 		assert_noop!(
 			Nfts::mint_pre_signed(
 				RuntimeOrigin::signed(user_2.clone()),
-				mint_data,
+				Box::new(mint_data),
 				signature.clone(),
 				user_1.clone(),
 			),
@@ -3261,7 +3261,7 @@ fn pre_signed_mints_should_work() {
 		assert_noop!(
 			Nfts::mint_pre_signed(
 				RuntimeOrigin::signed(user_2.clone()),
-				mint_data.clone(),
+				Box::new(mint_data.clone()),
 				signature.clone(),
 				user_1.clone(),
 			),
@@ -3274,7 +3274,7 @@ fn pre_signed_mints_should_work() {
 		assert_noop!(
 			Nfts::mint_pre_signed(
 				RuntimeOrigin::signed(user_3),
-				mint_data.clone(),
+				Box::new(mint_data.clone()),
 				signature.clone(),
 				user_1.clone(),
 			),
@@ -3286,7 +3286,7 @@ fn pre_signed_mints_should_work() {
 		assert_noop!(
 			Nfts::mint_pre_signed(
 				RuntimeOrigin::signed(user_2.clone()),
-				mint_data,
+				Box::new(mint_data),
 				signature,
 				user_1.clone(),
 			),
@@ -3310,7 +3310,7 @@ fn pre_signed_mints_should_work() {
 		assert_noop!(
 			Nfts::mint_pre_signed(
 				RuntimeOrigin::signed(user_2.clone()),
-				mint_data,
+				Box::new(mint_data),
 				signature,
 				user_1.clone(),
 			),
@@ -3332,7 +3332,7 @@ fn pre_signed_mints_should_work() {
 		assert_noop!(
 			Nfts::mint_pre_signed(
 				RuntimeOrigin::signed(user_2),
-				mint_data,
+				Box::new(mint_data),
 				signature,
 				user_1.clone(),
 			),
