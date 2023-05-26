@@ -122,7 +122,7 @@ assert_cmd = "2.0.2"
 nix = { version = "0.26.1", features = ["signal"] }
 serde_json = "1.0"
 regex = "1.6.0"
-platforms = "2.0"
+platforms = "3.0"
 soketto = "0.7.1"
 criterion = { version = "0.4.0", features = ["async_tokio"] }
 tokio = { version = "1.22.0", features = ["macros", "time", "parking_lot"] }
