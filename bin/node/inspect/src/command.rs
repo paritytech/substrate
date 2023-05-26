@@ -25,7 +25,6 @@ use crate::{
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_runtime::traits::Block;
-use std::str::FromStr;
 
 impl InspectCmd {
 	/// Run the inspect command, passing the inspector.
