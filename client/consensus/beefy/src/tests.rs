@@ -373,8 +373,9 @@ async fn voter_init_setup(
 		gossip_validator,
 		None,
 	);
-	let best_grandpa = wait_for_runtime_pallet(api, &mut gossip_engine, finality).await.unwrap();
-	load_or_init_voter_state(&*backend, api, best_grandpa, 1)
+	let (beefy_genesis, best_grandpa) =
+		wait_for_runtime_pallet(api, &mut gossip_engine, finality).await.unwrap();
+	load_or_init_voter_state(&*backend, api, beefy_genesis, best_grandpa, 1)
 }
 
 // Spawns beefy voters. Returns a future to spawn on the runtime.
@@ -981,9 +982,7 @@ async fn should_initialize_voter_at_genesis() {
 
 	// push 15 blocks with `AuthorityChange` digests every 10 blocks
 	let hashes = net.generate_blocks_and_sync(15, 10, &validator_set, false).await;
-
 	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
-
 	// finalize 13 without justifications
 	net.peer(0).client().as_client().finalize_block(hashes[13], None).unwrap();
 
@@ -1022,11 +1021,9 @@ async fn should_initialize_voter_at_custom_genesis() {
 	let custom_pallet_genesis = 7;
 	let api = TestApi::new(custom_pallet_genesis, &validator_set, GOOD_MMR_ROOT);
 
-	// push 15 blocks with `AuthorityChange` digests every 10 blocks
-	let hashes = net.generate_blocks_and_sync(15, 10, &validator_set, false).await;
-
+	// push 15 blocks with `AuthorityChange` digests every 15 blocks
+	let hashes = net.generate_blocks_and_sync(15, 15, &validator_set, false).await;
 	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
-
 	// finalize 3, 5, 8 without justifications
 	net.peer(0).client().as_client().finalize_block(hashes[3], None).unwrap();
 	net.peer(0).client().as_client().finalize_block(hashes[5], None).unwrap();
@@ -1053,6 +1050,35 @@ async fn should_initialize_voter_at_custom_genesis() {
 	assert!(verify_persisted_version(&*backend));
 	let state = load_persistent(&*backend).unwrap().unwrap();
 	assert_eq!(state, persisted_state);
+
+	// now re-init after genesis changes
+
+	// should ignore existing aux db state and reinit at new genesis
+	let new_validator_set = ValidatorSet::new(make_beefy_ids(keys), 42).unwrap();
+	let new_pallet_genesis = 10;
+	let api = TestApi::new(new_pallet_genesis, &new_validator_set, GOOD_MMR_ROOT);
+
+	net.peer(0).client().as_client().finalize_block(hashes[10], None).unwrap();
+	// load persistent state - state preset in DB, but with different pallet genesis
+	let new_persisted_state = voter_init_setup(&mut net, &mut finality, &api).await.unwrap();
+
+	// verify voter initialized with single session starting at block `new_pallet_genesis` (10)
+	let sessions = new_persisted_state.voting_oracle().sessions();
+	assert_eq!(sessions.len(), 1);
+	assert_eq!(sessions[0].session_start(), new_pallet_genesis);
+	let rounds = new_persisted_state.active_round().unwrap();
+	assert_eq!(rounds.session_start(), new_pallet_genesis);
+	assert_eq!(rounds.validator_set_id(), new_validator_set.id());
+
+	// verify next vote target is mandatory block 10
+	assert_eq!(new_persisted_state.best_beefy_block(), 0);
+	assert_eq!(new_persisted_state.best_grandpa_number(), 10);
+	assert_eq!(new_persisted_state.voting_oracle().voting_target(), Some(new_pallet_genesis));
+
+	// verify state also saved to db
+	assert!(verify_persisted_version(&*backend));
+	let state = load_persistent(&*backend).unwrap().unwrap();
+	assert_eq!(state, new_persisted_state);
 }
 
 #[tokio::test]
@@ -1166,7 +1192,7 @@ async fn beefy_finalizing_after_pallet_genesis() {
 	sp_tracing::try_init_simple();
 
 	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob];
-	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
+	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 14).unwrap();
 	let session_len = 10;
 	let min_block_delta = 1;
 	let pallet_genesis = 15;

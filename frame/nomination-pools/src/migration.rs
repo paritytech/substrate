@@ -416,14 +416,14 @@ pub mod v3 {
 			let current = Pallet::<T>::current_storage_version();
 			let onchain = Pallet::<T>::on_chain_storage_version();
 
-			log!(
-				info,
-				"Running migration with current storage version {:?} / onchain {:?}",
-				current,
-				onchain
-			);
+			if onchain == 2 {
+				log!(
+					info,
+					"Running migration with current storage version {:?} / onchain {:?}",
+					current,
+					onchain
+				);
 
-			if current > onchain {
 				let mut metadata_iterated = 0u64;
 				let mut metadata_removed = 0u64;
 				Metadata::<T>::iter_keys()
@@ -437,7 +437,7 @@ pub mod v3 {
 						metadata_removed += 1;
 						Metadata::<T>::remove(&id);
 					});
-				current.put::<Pallet<T>>();
+				StorageVersion::new(3).put::<Pallet<T>>();
 				// metadata iterated + bonded pools read + a storage version read
 				let total_reads = metadata_iterated * 2 + 1;
 				// metadata removed + a storage version write
@@ -451,10 +451,6 @@ pub mod v3 {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-			ensure!(
-				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
-				"the on_chain version is equal or more than the current one"
-			);
 			Ok(Vec::new())
 		}
 
@@ -464,7 +460,10 @@ pub mod v3 {
 				Metadata::<T>::iter_keys().all(|id| BondedPools::<T>::contains_key(&id)),
 				"not all of the stale metadata has been removed"
 			);
-			ensure!(Pallet::<T>::on_chain_storage_version() == 3, "wrong storage version");
+			ensure!(
+				Pallet::<T>::on_chain_storage_version() >= 3,
+				"nomination-pools::migration::v3: wrong storage version"
+			);
 			Ok(())
 		}
 	}
@@ -551,10 +550,6 @@ pub mod v4 {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-			ensure!(
-				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
-				"the on_chain version is equal or more than the current one"
-			);
 			Ok(Vec::new())
 		}
 
@@ -562,17 +557,28 @@ pub mod v4 {
 		fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
 			// ensure all BondedPools items now contain an `inner.commission: Commission` field.
 			ensure!(
-				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.current.is_none() &&
-					inner.commission.max.is_none() &&
-					inner.commission.change_rate.is_none() &&
-					inner.commission.throttle_from.is_none()),
-				"a commission value has been incorrectly set"
+				BondedPools::<T>::iter().all(|(_, inner)|
+					// Check current
+					(inner.commission.current.is_none() ||
+					inner.commission.current.is_some()) &&
+					// Check max
+					(inner.commission.max.is_none() || inner.commission.max.is_some()) &&
+					// Check change_rate
+					(inner.commission.change_rate.is_none() ||
+					inner.commission.change_rate.is_some()) &&
+					// Check throttle_from
+					(inner.commission.throttle_from.is_none() ||
+					inner.commission.throttle_from.is_some())),
+				"a commission value has not been set correctly"
 			);
 			ensure!(
 				GlobalMaxCommission::<T>::get() == Some(U::get()),
 				"global maximum commission error"
 			);
-			ensure!(Pallet::<T>::on_chain_storage_version() == 4, "wrong storage version");
+			ensure!(
+				Pallet::<T>::on_chain_storage_version() >= 4,
+				"nomination-pools::migration::v4: wrong storage version"
+			);
 			Ok(())
 		}
 	}
@@ -636,11 +642,6 @@ pub mod v5 {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-			ensure!(
-				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
-				"the on_chain version is equal or more than the current one"
-			);
-
 			let rpool_keys = RewardPools::<T>::iter_keys().count();
 			let rpool_values = RewardPools::<T>::iter_values().count();
 			if rpool_keys != rpool_values {
@@ -690,13 +691,16 @@ pub mod v5 {
 			// `total_commission_claimed` field.
 			ensure!(
 				RewardPools::<T>::iter().all(|(_, reward_pool)| reward_pool
-					.total_commission_pending
-					.is_zero() && reward_pool
-					.total_commission_claimed
-					.is_zero()),
+					.total_commission_pending >=
+					Zero::zero() && reward_pool
+					.total_commission_claimed >=
+					Zero::zero()),
 				"a commission value has been incorrectly set"
 			);
-			ensure!(Pallet::<T>::on_chain_storage_version() == 5, "wrong storage version");
+			ensure!(
+				Pallet::<T>::on_chain_storage_version() >= 5,
+				"nomination-pools::migration::v5: wrong storage version"
+			);
 
 			// These should not have been touched - just in case.
 			ensure!(
