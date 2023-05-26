@@ -1699,7 +1699,7 @@ dependencies = [
  "cfg-if",
  "fiat-crypto",
  "packed_simd_2",
- "platforms 3.0.2",
+ "platforms",
  "subtle",
  "zeroize",
 ]
@@ -5264,7 +5264,7 @@ dependencies = [
  "pallet-timestamp",
  "pallet-transaction-payment",
  "parity-scale-codec",
- "platforms 2.0.0",
+ "platforms",
  "rand 0.8.5",
  "regex",
  "sc-authority-discovery",
@@ -7753,12 +7753,6 @@ name = "pkg-config"
 version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26072860ba924cbfa98ea39c8c19b4dd6a4a25423dbdf219c1eca91aa0cf6964"
-
-[[package]]
-name = "platforms"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8d0eef3571242013a0d5dc84861c3ae4a652e56e12adf8bdc26ff5f8cb34c94"
 
 [[package]]
 name = "platforms"
@@ -11633,7 +11627,7 @@ dependencies = [
 name = "substrate-build-script-utils"
 version = "3.0.0"
 dependencies = [
- "platforms 2.0.0",
+ "platforms",
 ]
 
 [[package]]
