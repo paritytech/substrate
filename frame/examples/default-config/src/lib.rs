@@ -69,6 +69,7 @@ pub mod pallet {
 		type OverwrittenDefaultType;
 	}
 
+	/// Container for different types that implement [`DefaultConfig`]` of this pallet.
 	pub mod config_preludes {
 		// This will help use not need to disambiguate anything when using `derive_impl`.
 		use super::*;
