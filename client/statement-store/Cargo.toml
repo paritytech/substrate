@@ -25,9 +25,9 @@ sp-statement-store = { version = "4.0.0-dev", path = "../../primitives/statement
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+sp-core = { version = "8.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "8.0.0", path = "../../primitives/runtime" }
+sp-tracing = { version = "7.0.0", path = "../../primitives/tracing" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 
 [dev-dependencies]

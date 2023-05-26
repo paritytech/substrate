@@ -21,7 +21,7 @@ clap = { version = "4.2.5", features = ["derive"] }
 futures = { version = "0.3.21", features = ["thread-pool"]}
 
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-core = { version = "8.0.0", path = "../../../primitives/core" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-network = { version = "0.10.0-dev", path = "../../../client/network" }
 sc-service = { version = "0.10.0-dev", path = "../../../client/service" }
@@ -37,11 +37,11 @@ sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/commo
 sc-consensus-grandpa = { version = "0.10.0-dev", path = "../../../client/consensus/grandpa" }
 sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/grandpa" }
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
-sp-io = { version = "7.0.0", path = "../../../primitives/io" }
+sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
+sp-io = { version = "8.0.0", path = "../../../primitives/io" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
+sp-keyring = { version = "8.0.0", path = "../../../primitives/keyring" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment" }
 

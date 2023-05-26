@@ -23,4 +23,4 @@ sc-consensus-babe = { version = "0.10.0-dev", path = "../consensus/babe" }
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../consensus/epochs" }
 sc-consensus-grandpa = { version = "0.10.0-dev", path = "../consensus/grandpa" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "8.0.0", path = "../../primitives/runtime" }
