@@ -1026,7 +1026,7 @@ mod tests {
 
 			// signed
 			roll_to_signed();
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::current_phase().is_signed());
 			assert!(matches!(
 				<MultiPhase as ValidateUnsigned>::validate_unsigned(
 					TransactionSource::Local,
@@ -1544,7 +1544,7 @@ mod tests {
 
 	#[test]
 	fn ocw_clears_cache_on_unsigned_phase_open() {
-		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		let (mut ext, pool) = ExtBuilder::default().min_electing_blocks(0).build_offchainify(0);
 		ext.execute_with(|| {
 			const BLOCK: u64 = 25;
 			let block_plus = |delta: u64| BLOCK + delta;

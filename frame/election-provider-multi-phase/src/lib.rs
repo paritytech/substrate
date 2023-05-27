@@ -126,12 +126,13 @@
 //! 2. Any other unforeseen internal error
 //!
 //! A call to `T::ElectionProvider::elect` is made, and `Ok(_)` cannot be returned, then the pallet
-//! proceeds to the [`Phase::Emergency`]. During this phase, any solution can be submitted from
-//! [`Config::ForceOrigin`], without any checking, via [`Pallet::set_emergency_election_result`]
-//! transaction. Hence, `[`Config::ForceOrigin`]` should only be set to a trusted origin, such as
-//! the council or root. Once submitted, the forced solution is kept in [`QueuedSolution`] until the
-//! next call to `T::ElectionProvider::elect`, where it is returned and [`Phase`] goes back to
-//! `Off`.
+//! proceeds to the [`Phase::Emergency`], if enough "electing" blocks have passed since the last
+//! successful election (see more details below under subsection "Emergency Phase Throttling").
+//! During this phase, any solution can be submitted from [`Config::ForceOrigin`], without any
+//! checking, via [`Pallet::set_emergency_election_result`] transaction. Hence,
+//! `[`Config::ForceOrigin`]` should only be set to a trusted origin, such as the council or root.
+//! Once submitted, the forced solution is kept in [`QueuedSolution`] until the next call to
+//! `T::ElectionProvider::elect`, where it is returned and [`Phase`] goes back to `Off`.
 //!
 //! This implies that the user of this pallet (i.e. a staking pallet) should re-try calling
 //! `T::ElectionProvider::elect` in case of error, until `OK(_)` is returned.
@@ -150,6 +151,16 @@
 //! against any substrate-based chain.
 //!
 //! See the `staking-miner` documentation in the Polkadot repository for more information.
+//!
+//! #### Emergency Phase Throttling
+//!
+//! It is possible to set a minimum number of "electing" blocks before an election results in a
+//! fallback election attempt and/or triggers a transition to the emergency phase. In this context,
+//! "electing" blocks refer to both signed and unsigned blocks. The config
+//! [`pallet::Config::MinElectingBlocks`] sets the minimum number of electing blocks (i.e. signed
+//! and unsigned phase blocks) that must pass in each election round *before* a failed election
+//! tries the fallback election and/or triggers the emergency phase. If
+//! [`pallet::Config::MinElectingBlocks`] is 0, the emergency throttling phase is disabled.
 //!
 //! ## Feasible Solution (correct solution)
 //!
@@ -253,7 +264,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchError, ModuleError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
+	DispatchError, ModuleError, PerThing, Perbill, RuntimeDebug, SaturatedConversion, Saturating,
 };
 use sp_std::prelude::*;
 
@@ -493,6 +504,8 @@ pub enum ElectionError<T: Config> {
 	Fallback(FallbackErrorOf<T>),
 	/// No solution has been queued.
 	NothingQueued,
+	/// Election failed and emergency phase was throttled.
+	ElectionTooEarly(Box<ElectionError<T>>),
 }
 
 // NOTE: we have to do this manually because of the additional where clause needed on
@@ -509,7 +522,14 @@ where
 			(Miner(x), Miner(y)) if x == y => true,
 			(DataProvider(x), DataProvider(y)) if x == y => true,
 			(Fallback(x), Fallback(y)) if x == y => true,
-			_ => false,
+			(NothingQueued, NothingQueued) => true,
+			(ElectionTooEarly(x), ElectionTooEarly(y)) if x == y => true,
+			(Feasibility(_), _) => false,
+			(Miner(_), _) => false,
+			(DataProvider(_), _) => false,
+			(Fallback(_), _) => false,
+			(NothingQueued, _) => false,
+			(ElectionTooEarly(_), _) => false,
 		}
 	}
 }
@@ -586,9 +606,17 @@ pub mod pallet {
 		/// Duration of the unsigned phase.
 		#[pallet::constant]
 		type UnsignedPhase: Get<Self::BlockNumber>;
+
 		/// Duration of the signed phase.
 		#[pallet::constant]
 		type SignedPhase: Get<Self::BlockNumber>;
+
+		/// Minimum number of signed and unsigned blocks that EPM expects for a successful
+		/// election. If an election fails before `MinElectionBlocks` have passed, the fallback
+		/// election and emergency phase are throttled.
+		//
+		/// If `MinElectionBlocks` is set to 0, the emergency throttling will be disabled.
+		type MinElectingBlocks: Get<Self::BlockNumber>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
 		/// "better" in the Signed phase.
@@ -763,7 +791,7 @@ pub mod pallet {
 				next_election,
 				Self::snapshot_metadata()
 			);
-			match current_phase {
+			let weight = match current_phase {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
 					match Self::create_snapshot() {
@@ -783,7 +811,7 @@ pub mod pallet {
 				{
 					// our needs vary according to whether or not the unsigned phase follows a
 					// signed phase
-					let (need_snapshot, enabled) = if current_phase == Phase::Signed {
+					let (need_snapshot, enabled) = if current_phase.is_signed() {
 						// there was previously a signed phase: close the signed phase, no need for
 						// snapshot.
 						//
@@ -821,7 +849,13 @@ pub mod pallet {
 					}
 				},
 				_ => T::WeightInfo::on_initialize_nothing(),
+			};
+
+			// increment the number of election blocks for this round if not in `Phase::Off` block.
+			if current_phase.is_signed() || current_phase.is_unsigned() {
+				ElectionBlocksCount::<T>::mutate(|c| c.saturating_inc());
 			}
+			weight
 		}
 
 		fn offchain_worker(now: T::BlockNumber) {
@@ -1154,6 +1188,9 @@ pub mod pallet {
 		Rewarded { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// An account has been slashed for submitting an invalid signed submission.
 		Slashed { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
+		/// The election failed but the emergency phase did not start because there was not enough
+		/// time to prepare the election results.
+		EmergencyPhaseThrottled,
 		/// There was a phase transition in a given round.
 		PhaseTransitioned { from: Phase<T::BlockNumber>, to: Phase<T::BlockNumber>, round: u32 },
 	}
@@ -1253,6 +1290,10 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn round)]
 	pub type Round<T: Config> = StorageValue<_, u32, ValueQuery, DefaultForRound>;
+
+	/// Counter of the number of signed and unsigned blocks since the start of the current round.
+	#[pallet::storage]
+	pub type ElectionBlocksCount<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Current phase.
 	#[pallet::storage]
@@ -1382,6 +1423,7 @@ impl<T: Config> Pallet<T> {
 			to,
 			round: Self::round(),
 		});
+
 		<CurrentPhase<T>>::put(to);
 	}
 
@@ -1519,7 +1561,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// 1. Increment round.
 	/// 2. Change phase to [`Phase::Off`]
-	/// 3. Clear all snapshot data.
+	/// 3. Clear all snapshot data
+	/// 4. Reset [`ElectionBlocksCount`].
 	fn rotate_round() {
 		// Inc round.
 		<Round<T>>::mutate(|r| *r += 1);
@@ -1529,6 +1572,27 @@ impl<T: Config> Pallet<T> {
 
 		// Kill snapshots.
 		Self::kill_snapshot();
+
+		// Reset election block counter.
+		ElectionBlocksCount::<T>::kill();
+	}
+
+	/// Returns `true` if the emergency phase should be throttled.
+	///
+	/// The emergency phase should be throttled when an election fails with the following
+	/// conditions:
+	///
+	/// - phase is off and emergency throttling is enabled (i.e. `T::MinElectingBlocks` > 0)
+	/// - signed or unsigned phases were active but the election failed before
+	///   `T::MinElectingBlocks` blocks have passed since the round started, i.e.
+	///   `T::MinElectingBlocks` > `T::ElectionBlocksCount`.
+	fn emergency_phase_throttling() -> bool {
+		match Self::current_phase() {
+			Phase::Off => T::MinElectingBlocks::get() > T::BlockNumber::zero(),
+			Phase::Signed | Phase::Unsigned(_) =>
+				ElectionBlocksCount::<T>::get() < T::MinElectingBlocks::get(),
+			Phase::Emergency => false,
+		}
 	}
 
 	fn do_elect() -> Result<BoundedSupportsOf<Self>, ElectionError<T>> {
@@ -1539,19 +1603,27 @@ impl<T: Config> Pallet<T> {
 		//   system
 		// - signed phase was complete or not started, in which case finalization is idempotent and
 		//   inexpensive (1 read of an empty vector).
+		//
+		// If the election fails, `fn emergency_throttling` checks if EPM should enter in the
+		// emergency phase. The emergency phase is throttled if not enough "electing" (i.e. signed
+		// phase and unsigned phase) blocks have passed since last successful election.
 		let _ = Self::finalize_signed_phase();
 		<QueuedSolution<T>>::take()
 			.ok_or(ElectionError::<T>::NothingQueued)
-			.or_else(|_| {
-				T::Fallback::instant_elect(None, None)
-					.map_err(|fe| ElectionError::Fallback(fe))
-					.and_then(|supports| {
-						Ok(ReadySolution {
-							supports,
-							score: Default::default(),
-							compute: ElectionCompute::Fallback,
+			.or_else(|err| {
+				if !Self::emergency_phase_throttling() {
+					T::Fallback::instant_elect(None, None)
+						.map_err(|fe| ElectionError::Fallback(fe))
+						.and_then(|supports| {
+							Ok(ReadySolution {
+								supports,
+								score: Default::default(),
+								compute: ElectionCompute::Fallback,
+							})
 						})
-					})
+				} else {
+					Err(ElectionError::ElectionTooEarly(Box::new(err)))
+				}
 			})
 			.map(|ReadySolution { compute, score, supports }| {
 				Self::deposit_event(Event::ElectionFinalized { compute, score });
@@ -1689,15 +1761,22 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		match Self::do_elect() {
 			Ok(supports) => {
-				// All went okay, record the weight, put sign to be Off, clean snapshot, etc.
+				// All went okay, record the weight, put sign to be Off, clean snapshot, set the
+				// block of the last successful election, etc.
 				Self::weigh_supports(&supports);
 				Self::rotate_round();
+
 				Ok(supports)
 			},
-			Err(why) => {
-				log!(error, "Entering emergency mode: {:?}", why);
-				Self::phase_transition(Phase::Emergency);
-				Err(why)
+			Err(err) => match err {
+				// error is wrapped in an `ElectionError::ElectionTooEarly` variant, return the
+				// inner error but do not enter emergency phase.
+				ElectionError::ElectionTooEarly(err) => Err(*err),
+				_ => {
+					log!(error, "Entering emergency mode: {:?}", err);
+					Self::phase_transition(Phase::Emergency);
+					Err(err)
+				},
 			},
 		}
 	}
@@ -1920,13 +1999,13 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			multi_phase_events, raw_solution, roll_to, roll_to_signed, roll_to_unsigned, AccountId,
-			ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin,
-			SignedMaxSubmissions, System, TargetIndex, Targets,
+			multi_phase_events, raw_solution, roll_one, roll_to, roll_to_signed, roll_to_unsigned,
+			AccountId, ExtBuilder, MinElectingBlocks, MockWeightInfo, MockedWeightInfo, MultiPhase,
+			Runtime, RuntimeOrigin, SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
 	};
-	use frame_support::{assert_noop, assert_ok};
+	use frame_support::{assert_err, assert_noop, assert_ok};
 	use sp_npos_elections::{BalancingConfig, Support};
 
 	#[test]
@@ -1946,7 +2025,7 @@ mod tests {
 			assert_eq!(MultiPhase::round(), 1);
 
 			roll_to_signed();
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::current_phase().is_signed());
 			assert_eq!(
 				multi_phase_events(),
 				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 }]
@@ -1955,7 +2034,7 @@ mod tests {
 			assert_eq!(MultiPhase::round(), 1);
 
 			roll_to(24);
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::current_phase().is_signed());
 			assert!(MultiPhase::snapshot().is_some());
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -2051,6 +2130,7 @@ mod tests {
 			roll_to(30);
 			assert!(MultiPhase::current_phase().is_unsigned_open_at(20));
 
+			// elect after emergency throttling uses fallback successfully.
 			assert_ok!(MultiPhase::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
@@ -2123,7 +2203,7 @@ mod tests {
 
 	#[test]
 	fn both_phases_void() {
-		ExtBuilder::default().phases(0, 0).build_and_execute(|| {
+		ExtBuilder::default().phases(0, 0).min_electing_blocks(0).build_and_execute(|| {
 			roll_to(15);
 			assert!(MultiPhase::current_phase().is_off());
 
@@ -2159,6 +2239,69 @@ mod tests {
 	}
 
 	#[test]
+	fn emergency_throttling_works() {
+		ExtBuilder::default()
+			.onchain_fallback(false)
+			.phases(10, 10)
+			.build_and_execute(|| {
+				// call elect while snapshot does not exist during off phase but emergency phase is
+				// throttled because not enough blocks since last election passed (phase off).
+				assert!(MultiPhase::emergency_phase_throttling());
+				assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
+				assert!(MultiPhase::current_phase().is_off());
+
+				// same as above.
+				roll_to_signed();
+				assert!(MultiPhase::emergency_phase_throttling());
+				assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
+				assert!(MultiPhase::current_phase().is_signed());
+
+				// however, if `MinElectingBlocks` have passed since the start of the
+				// current round and the election fails during, EPM transitions to emergency phase.
+				loop {
+					roll_one();
+					if MinElectingBlocks::get() < ElectionBlocksCount::<Runtime>::get() {
+						break
+					}
+				}
+
+				assert!(!MultiPhase::emergency_phase_throttling());
+				assert_err!(MultiPhase::elect(), ElectionError::Fallback("NoFallback."));
+				assert!(MultiPhase::current_phase().is_emergency());
+			})
+	}
+
+	#[test]
+	fn emergency_throttling_disabled_works() {
+		ExtBuilder::default()
+			.onchain_fallback(false)
+			.phases(10, 10)
+			.build_and_execute(|| {
+				assert!(MultiPhase::current_phase().is_off());
+
+				// if `T::MinElectingBlocks` is 0, the emergency throttling is disabled.
+				<MinElectingBlocks>::set(0);
+				assert_eq!(MultiPhase::emergency_phase_throttling(), false);
+				assert_err!(MultiPhase::elect(), ElectionError::Fallback("NoFallback."));
+				assert!(MultiPhase::current_phase().is_emergency());
+
+				// recovers from emergency phase through governance fallback.
+				assert_ok!(MultiPhase::governance_fallback(RuntimeOrigin::root(), None, None));
+				assert!(MultiPhase::queued_solution().is_some());
+				assert!(MultiPhase::elect().is_ok());
+				assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+				roll_to_signed();
+				assert!(MultiPhase::current_phase().is_signed());
+
+				// tries fallback election and enters in emergency phase since emergency throttling
+				// is disabled.
+				assert_err!(MultiPhase::elect(), ElectionError::Fallback("NoFallback."));
+				assert!(MultiPhase::current_phase().is_emergency());
+			})
+	}
+
+	#[test]
 	fn early_termination() {
 		// An early termination in the signed phase, with no queued solution.
 		ExtBuilder::default().build_and_execute(|| {
@@ -2169,10 +2312,24 @@ mod tests {
 				multi_phase_events(),
 				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 }]
 			);
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::current_phase().is_signed());
 			assert_eq!(MultiPhase::round(), 1);
 
-			// An unexpected call to elect.
+			// An unexpected call to elect before `T::MinElectingBlocks` should fail and not
+			// run the fallback election.
+			assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::ElectionFailed,
+				],
+			);
+
+			// An unexpected call to elect after `T::MinElectingBlocks` will try the
+			// fallback election.
+			roll_to(System::block_number() + MinElectingBlocks::get());
 			assert_ok!(MultiPhase::elect());
 
 			// We surely can't have any feasible solutions. This will cause an on-chain election.
@@ -2180,11 +2337,21 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+					Event::ElectionFailed,
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: Default::default()
 					},
-					Event::PhaseTransitioned { from: Phase::Signed, to: Phase::Off, round: 2 },
+					Event::PhaseTransitioned {
+						from: Phase::Unsigned((true, 25)),
+						to: Phase::Off,
+						round: 2
+					}
 				],
 			);
 			// All storage items must be cleared.
@@ -2208,7 +2375,7 @@ mod tests {
 				multi_phase_events(),
 				vec![Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 }]
 			);
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::current_phase().is_signed());
 			assert_eq!(MultiPhase::round(), 1);
 
 			// fill the queue with signed submissions
@@ -2223,7 +2390,20 @@ mod tests {
 				));
 			}
 
-			// an unexpected call to elect.
+			// an unexpected call to elect before `T::MinElectingBlocks` should fail but not
+			// enter in emergency phase.
+			assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
+			assert!(MultiPhase::current_phase().is_signed());
+
+			// roll to block after emergency throttling.
+			loop {
+				roll_one();
+				if MinElectingBlocks::get() < ElectionBlocksCount::<Runtime>::get() {
+					break
+				}
+			}
+
+			// an unexpected call to elect after `T::MinElectingBlocks`.
 			assert_ok!(MultiPhase::elect());
 
 			// all storage items must be cleared.
@@ -2268,6 +2448,12 @@ mod tests {
 					Event::Slashed { account: 99, value: 5 },
 					Event::Slashed { account: 99, value: 5 },
 					Event::Slashed { account: 99, value: 5 },
+					Event::ElectionFailed,
+					Event::PhaseTransitioned {
+						from: Phase::Signed,
+						to: Phase::Unsigned((true, 25)),
+						round: 1
+					},
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: ElectionScore {
@@ -2276,7 +2462,11 @@ mod tests {
 							sum_stake_squared: 0
 						}
 					},
-					Event::PhaseTransitioned { from: Phase::Signed, to: Phase::Off, round: 2 },
+					Event::PhaseTransitioned {
+						from: Phase::Unsigned((true, 25)),
+						to: Phase::Off,
+						round: 2
+					}
 				]
 			);
 		})
@@ -2392,6 +2582,14 @@ mod tests {
 			roll_to_unsigned();
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
+			// `T::MinElectingBlocks` blocks hasn't passed since the start of the current
+			// round.
+			assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
+
+			// progress until end of emergency throttling and bypassing the fallback election.
+			roll_to(System::block_number() + MinElectingBlocks::get());
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+
 			// Zilch solutions thus far, but we get a result.
 			assert!(MultiPhase::queued_solution().is_none());
 			let supports = MultiPhase::elect().unwrap();
@@ -2413,6 +2611,7 @@ mod tests {
 						to: Phase::Unsigned((true, 25)),
 						round: 1
 					},
+					Event::ElectionFailed,
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: ElectionScore {
@@ -2434,6 +2633,14 @@ mod tests {
 			roll_to_unsigned();
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
+			// `T::MinElectingBlocks` blocks hasn't passed since the start of the current
+			// round.
+			assert_err!(MultiPhase::elect(), ElectionError::NothingQueued);
+
+			// progress until end of emergency throttling and bypassing the fallback election.
+			roll_to(System::block_number() + MinElectingBlocks::get());
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+
 			// Zilch solutions thus far.
 			assert!(MultiPhase::queued_solution().is_none());
 			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
@@ -2452,6 +2659,7 @@ mod tests {
 						round: 1
 					},
 					Event::ElectionFailed,
+					Event::ElectionFailed,
 					Event::PhaseTransitioned {
 						from: Phase::Unsigned((true, 25)),
 						to: Phase::Emergency,
@@ -2464,67 +2672,77 @@ mod tests {
 
 	#[test]
 	fn governance_fallback_works() {
-		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
-			roll_to_unsigned();
-			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+		ExtBuilder::default()
+			.onchain_fallback(false)
+			.min_electing_blocks(0)
+			.build_and_execute(|| {
+				roll_to_unsigned();
+				assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
-			// Zilch solutions thus far.
-			assert!(MultiPhase::queued_solution().is_none());
-			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
+				// Zilch solutions thus far.
+				assert!(MultiPhase::queued_solution().is_none());
+				assert_eq!(
+					MultiPhase::elect().unwrap_err(),
+					ElectionError::Fallback("NoFallback.")
+				);
 
-			// phase is now emergency.
-			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
-			assert!(MultiPhase::queued_solution().is_none());
-			assert!(MultiPhase::snapshot().is_some());
+				// phase is now emergency.
+				assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+				assert!(MultiPhase::queued_solution().is_none());
+				assert!(MultiPhase::snapshot().is_some());
 
-			// no single account can trigger this
-			assert_noop!(
-				MultiPhase::governance_fallback(RuntimeOrigin::signed(99), None, None),
-				DispatchError::BadOrigin
-			);
+				// no single account can trigger this
+				assert_noop!(
+					MultiPhase::governance_fallback(RuntimeOrigin::signed(99), None, None),
+					DispatchError::BadOrigin
+				);
 
-			// only root can
-			assert_ok!(MultiPhase::governance_fallback(RuntimeOrigin::root(), None, None));
-			// something is queued now
-			assert!(MultiPhase::queued_solution().is_some());
-			// next election call with fix everything.;
-			assert!(MultiPhase::elect().is_ok());
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+				// only root can
+				assert_ok!(MultiPhase::governance_fallback(RuntimeOrigin::root(), None, None));
+				// something is queued now
+				assert!(MultiPhase::queued_solution().is_some());
+				// next election call with fix everything.;
+				assert!(MultiPhase::elect().is_ok());
+				assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			assert_eq!(
-				multi_phase_events(),
-				vec![
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
-					Event::PhaseTransitioned {
-						from: Phase::Signed,
-						to: Phase::Unsigned((true, 25)),
-						round: 1
-					},
-					Event::ElectionFailed,
-					Event::PhaseTransitioned {
-						from: Phase::Unsigned((true, 25)),
-						to: Phase::Emergency,
-						round: 1
-					},
-					Event::SolutionStored {
-						compute: ElectionCompute::Fallback,
-						origin: None,
-						prev_ejected: false
-					},
-					Event::ElectionFinalized {
-						compute: ElectionCompute::Fallback,
-						score: Default::default()
-					},
-					Event::PhaseTransitioned { from: Phase::Emergency, to: Phase::Off, round: 2 },
-				]
-			);
-		})
+				assert_eq!(
+					multi_phase_events(),
+					vec![
+						Event::PhaseTransitioned { from: Phase::Off, to: Phase::Signed, round: 1 },
+						Event::PhaseTransitioned {
+							from: Phase::Signed,
+							to: Phase::Unsigned((true, 25)),
+							round: 1
+						},
+						Event::ElectionFailed,
+						Event::PhaseTransitioned {
+							from: Phase::Unsigned((true, 25)),
+							to: Phase::Emergency,
+							round: 1
+						},
+						Event::SolutionStored {
+							compute: ElectionCompute::Fallback,
+							origin: None,
+							prev_ejected: false
+						},
+						Event::ElectionFinalized {
+							compute: ElectionCompute::Fallback,
+							score: Default::default()
+						},
+						Event::PhaseTransitioned {
+							from: Phase::Emergency,
+							to: Phase::Off,
+							round: 2
+						},
+					]
+				);
+			})
 	}
 
 	#[test]
 	fn snapshot_too_big_failure_onchain_fallback() {
 		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().min_electing_blocks(0).build_and_execute(|| {
 			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
 
 			// Signed phase failed to open.
@@ -2559,32 +2777,39 @@ mod tests {
 	#[test]
 	fn snapshot_too_big_failure_no_fallback() {
 		// and if the backup mode is nothing, we go into the emergency mode..
-		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
-			crate::mock::Targets::set(
-				(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
-			);
+		ExtBuilder::default()
+			.onchain_fallback(false)
+			.min_electing_blocks(0)
+			.build_and_execute(|| {
+				crate::mock::Targets::set(
+					(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
+				);
 
-			// Signed phase failed to open.
-			roll_to(15);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+				// Signed phase failed to open.
+				roll_to(15);
+				assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			// Unsigned phase failed to open.
-			roll_to(25);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+				// Unsigned phase failed to open.
+				roll_to(25);
+				assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			roll_to(29);
-			let err = MultiPhase::elect().unwrap_err();
-			assert_eq!(err, ElectionError::Fallback("NoFallback."));
-			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+				roll_to(29);
+				let err = MultiPhase::elect().unwrap_err();
+				assert_eq!(err, ElectionError::Fallback("NoFallback."));
+				assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 
-			assert_eq!(
-				multi_phase_events(),
-				vec![
-					Event::ElectionFailed,
-					Event::PhaseTransitioned { from: Phase::Off, to: Phase::Emergency, round: 1 }
-				]
-			);
-		});
+				assert_eq!(
+					multi_phase_events(),
+					vec![
+						Event::ElectionFailed,
+						Event::PhaseTransitioned {
+							from: Phase::Off,
+							to: Phase::Emergency,
+							round: 1
+						}
+					]
+				);
+			});
 	}
 
 	#[test]
@@ -2598,7 +2823,7 @@ mod tests {
 
 			// Signed phase opens just fine.
 			roll_to_signed();
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::current_phase().is_signed());
 
 			assert_eq!(
 				MultiPhase::snapshot_metadata().unwrap(),
@@ -2611,7 +2836,7 @@ mod tests {
 	fn untrusted_score_verification_is_respected() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to_signed();
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::current_phase().is_signed());
 
 			// set the solution balancing to get the desired score.
 			crate::mock::Balancing::set(Some(BalancingConfig { iterations: 2, tolerance: 0 }));

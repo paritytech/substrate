@@ -99,6 +99,10 @@ pub fn roll_to(n: BlockNumber) {
 	}
 }
 
+pub fn roll_one() {
+	roll_to(System::block_number() + 1);
+}
+
 pub fn roll_to_unsigned() {
 	while !matches!(MultiPhase::current_phase(), Phase::Unsigned(_)) {
 		roll_to(System::block_number() + 1);
@@ -285,6 +289,8 @@ parameter_types! {
 	pub static DesiredTargets: u32 = 2;
 	pub static SignedPhase: BlockNumber = 10;
 	pub static UnsignedPhase: BlockNumber = 5;
+	// We expect a successful election to take at least one round.
+	pub static MinElectingBlocks: BlockNumber = SignedPhase::get() + UnsignedPhase::get();
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedMaxRefunds: u32 = 1;
 	pub static SignedDepositBase: Balance = 5;
@@ -388,6 +394,7 @@ impl crate::Config for Runtime {
 	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
+	type MinElectingBlocks = MinElectingBlocks;
 	type BetterUnsignedThreshold = BetterUnsignedThreshold;
 	type BetterSignedThreshold = BetterSignedThreshold;
 	type OffchainRepeat = OffchainRepeat;
@@ -530,6 +537,10 @@ impl ExtBuilder {
 	pub fn phases(self, signed: BlockNumber, unsigned: BlockNumber) -> Self {
 		<SignedPhase>::set(signed);
 		<UnsignedPhase>::set(unsigned);
+		self
+	}
+	pub fn min_electing_blocks(self, bn: BlockNumber) -> Self {
+		<MinElectingBlocks>::set(bn);
 		self
 	}
 	pub fn onchain_fallback(self, onchain: bool) -> Self {
