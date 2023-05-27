@@ -1052,6 +1052,7 @@ pub mod pallet {
 		/// See also [`Call::unbond`].
 		///
 		/// ## Parameters
+		///
 		/// - `num_slashing_spans` indicates the number of metadata slashing spans to clear when
 		/// the call to [`Call::withdraw_unbounded`] results in a complete removal of all the data
 		/// related to the stash account. In this case, the `num_slashing_spans` must be larger or
