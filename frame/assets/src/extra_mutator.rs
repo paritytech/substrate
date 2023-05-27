@@ -62,7 +62,7 @@ impl<T: Config<I>, I: 'static> ExtraMutator<T, I> {
 		id: T::AssetId,
 		who: impl sp_std::borrow::Borrow<T::AccountId>,
 	) -> Option<ExtraMutator<T, I>> {
-		if let Some(a) = Account::<T, I>::get(id, who.borrow()) {
+		if let Some(a) = Account::<T, I>::get(&id, who.borrow()) {
 			Some(ExtraMutator::<T, I> {
 				id,
 				who: who.borrow().clone(),
@@ -77,7 +77,7 @@ impl<T: Config<I>, I: 'static> ExtraMutator<T, I> {
 	/// Commit any changes to storage.
 	pub fn commit(&mut self) -> Result<(), ()> {
 		if let Some(extra) = self.pending.take() {
-			Account::<T, I>::try_mutate(self.id, self.who.borrow(), |maybe_account| {
+			Account::<T, I>::try_mutate(&self.id, &self.who, |maybe_account| {
 				maybe_account.as_mut().ok_or(()).map(|account| account.extra = extra)
 			})
 		} else {
@@ -88,7 +88,7 @@ impl<T: Config<I>, I: 'static> ExtraMutator<T, I> {
 	/// Revert any changes, even those already committed by `self` and drop self.
 	pub fn revert(mut self) -> Result<(), ()> {
 		self.pending = None;
-		Account::<T, I>::try_mutate(self.id, self.who.borrow(), |maybe_account| {
+		Account::<T, I>::try_mutate(&self.id, &self.who, |maybe_account| {
 			maybe_account
 				.as_mut()
 				.ok_or(())

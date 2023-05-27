@@ -141,6 +141,8 @@ pub enum DepositConsequence {
 	Overflow,
 	/// Account continued in existence.
 	Success,
+	/// Account cannot receive the assets.
+	Blocked,
 }
 
 impl DepositConsequence {
@@ -152,6 +154,7 @@ impl DepositConsequence {
 			CannotCreate => TokenError::CannotCreate.into(),
 			UnknownAsset => TokenError::UnknownAsset.into(),
 			Overflow => ArithmeticError::Overflow.into(),
+			Blocked => TokenError::Blocked.into(),
 			Success => return Ok(()),
 		})
 	}
@@ -218,10 +221,10 @@ impl WithdrawReasons {
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
 pub trait AssetId:
-	FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
+	FullCodec + Clone + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
 {
 }
-impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> AssetId
+impl<T: FullCodec + Clone + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> AssetId
 	for T
 {
 }
@@ -244,13 +247,23 @@ impl<
 }
 
 /// Converts a balance value into an asset balance.
-pub trait BalanceConversion<InBalance, AssetId, OutBalance> {
+pub trait ConversionToAssetBalance<InBalance, AssetId, AssetBalance> {
 	type Error;
-	fn to_asset_balance(balance: InBalance, asset_id: AssetId) -> Result<OutBalance, Self::Error>;
+	fn to_asset_balance(balance: InBalance, asset_id: AssetId)
+		-> Result<AssetBalance, Self::Error>;
 }
 
-/// Trait to handle asset locking mechanism to ensure interactions with the asset can be implemented
-/// downstream to extend logic of Uniques current functionality.
+/// Converts an asset balance value into balance.
+pub trait ConversionFromAssetBalance<AssetBalance, AssetId, OutBalance> {
+	type Error;
+	fn from_asset_balance(
+		balance: AssetBalance,
+		asset_id: AssetId,
+	) -> Result<OutBalance, Self::Error>;
+}
+
+/// Trait to handle NFT locking mechanism to ensure interactions with the asset can be implemented
+/// downstream to extend logic of Uniques/Nfts current functionality.
 pub trait Locker<CollectionId, ItemId> {
 	/// Check if the asset should be locked and prevent interactions with the asset from executing.
 	fn is_locked(collection: CollectionId, item: ItemId) -> bool;

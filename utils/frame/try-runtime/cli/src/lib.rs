@@ -97,18 +97,6 @@
 //! > If anything, in most cases, we expect spec-versions to NOT match, because try-runtime is all
 //! > about testing unreleased runtimes.
 //!
-//! ## Note on nodes that respond to `try-runtime` requests.
-//!
-//! There are a number of flags that need to be preferably set on a running node in order to work
-//! well with try-runtime's expensive RPC queries:
-//!
-//! - set `--rpc-max-response-size 1000` and
-//! - `--rpc-max-request-size 1000` to ensure connections are not dropped in case the state is
-//!   large.
-//! - set `--rpc-cors all` to ensure ws connections can come through.
-//!
-//! Note that *none* of the try-runtime operations need unsafe RPCs.
-//!
 //! ## Note on signature and state-root checks
 //!
 //! All of the commands calling into `TryRuntime_execute_block` ([`Command::ExecuteBlock`] and
@@ -134,10 +122,10 @@
 //!
 //! ```ignore
 //! #[cfg(feature = "try-runtime")]
-//! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
+//! fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {}
 //!
 //! #[cfg(feature = "try-runtime")]
-//! fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {}
+//! fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {}
 //! ```
 //!
 //! (The pallet macro syntax will support this simply as a part of `#[pallet::hooks]`).
@@ -153,7 +141,7 @@
 //!
 //! ```ignore
 //! #[cfg(feature = "try-runtime")]
-//! fn try_state(_: BlockNumber) -> Result<(), &'static str> {}
+//! fn try_state(_: BlockNumber) -> Result<(), TryRuntimeError> {}
 //! ```
 //!
 //! which is called on numerous code paths in the try-runtime tool. These checks should ensure that
@@ -260,7 +248,7 @@
 //! # assuming there's `./substrate --dev --tmp --ws-port 9999` or similar running.
 //! ./substrate-try-runtime \
 //!     try-runtime \
-//!     --runtime kitchensink_runtime.wasm \
+//!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     on-runtime-upgrade \
 //!     live --uri ws://localhost:9999
@@ -272,7 +260,7 @@
 //! ```bash
 //! ./substrate-try-runtime \
 //!     try-runtime \
-//!     --runtime kitchensink_runtime.wasm \
+//!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     on-runtime-upgrade \
 //!     live --uri ws://localhost:9999 \
@@ -307,7 +295,7 @@
 //! Then, we can use it to have the same command as before, `on-runtime-upgrade`
 //!
 //! ```bash
-//! try-runtime \
+//! ./substrate-try-runtime try-runtime \
 //!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     on-runtime-upgrade \
@@ -321,7 +309,7 @@
 //!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     execute-block live \
-//!     --uri ws://localhost:999
+//!     --uri ws://localhost:9999
 //! ```
 //!
 //! This can still be customized at a given block with `--at`. If you want to use a snapshot, you
@@ -332,15 +320,22 @@
 //!
 //! ```bash
 //! ./substrate-try-runtime try-runtime \
-//!     --runtime runtime-try-runtime.wasm \
-//!     -lruntime=debug \
-//!     execute-block live \
-//!     --try-state System,Staking \
-//!     --uri ws://localhost:999
+//!    --runtime runtime-try-runtime.wasm \
+//!    -lruntime=debug \
+//!    execute-block \
+//!    --try-state System,Staking \
+//!    live \
+//!    --uri ws://localhost:9999 \
+//!    --pallet System Staking
 //! ```
 //!
-//! Will only run the `try-state` of the two given pallets. See
-//! [`frame_try_runtime::TryStateSelect`] for more information.
+//! Will only run the `try-state` of the two given pallets. When running `try-state` against
+//! some real chain data it can take a long time for the command to execute since it has to
+//! query all the key-value pairs. In scenarios like above where we only want to run the
+//! `try-state` for some specific pallets, we can use the `--pallet` option to specify from
+//! which pallets we want to query the state. This will greatly decrease the execution time.
+//!
+//! See [`frame_try_runtime::TryStateSelect`] for more information.
 //!
 //! * Follow our live chain's blocks using `follow-chain`, whilst running the try-state of 3 pallets
 //!   in a round robin fashion
@@ -368,7 +363,9 @@ use sc_cli::{
 	WasmtimeInstantiationStrategy, DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
 	DEFAULT_WASM_EXECUTION_METHOD,
 };
-use sc_executor::{sp_wasm_interface::HostFunctions, WasmExecutor};
+use sc_executor::{
+	sp_wasm_interface::HostFunctions, HeapAllocStrategy, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY,
+};
 use sp_api::HashT;
 use sp_core::{
 	hexdisplay::HexDisplay,
@@ -377,8 +374,7 @@ use sp_core::{
 		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 	},
 	storage::well_known_keys,
-	testing::TaskExecutor,
-	traits::{CallContext, ReadRuntimeVersion, TaskExecutorExt},
+	traits::{CallContext, ReadRuntimeVersion, ReadRuntimeVersionExt},
 	twox_128, H256,
 };
 use sp_externalities::Extensions;
@@ -811,9 +807,8 @@ where
 }
 
 /// Build all extensions that we typically use.
-pub(crate) fn full_extensions() -> Extensions {
+pub(crate) fn full_extensions<H: HostFunctions>(wasm_executor: WasmExecutor<H>) -> Extensions {
 	let mut extensions = Extensions::default();
-	extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
 	let (offchain, _offchain_state) = TestOffchainExt::new();
 	let (pool, _pool_state) = TestTransactionPoolExt::new();
 	let keystore = MemoryKeystore::new();
@@ -821,22 +816,25 @@ pub(crate) fn full_extensions() -> Extensions {
 	extensions.register(OffchainWorkerExt::new(offchain));
 	extensions.register(KeystoreExt::new(keystore));
 	extensions.register(TransactionPoolExt::new(pool));
+	extensions.register(ReadRuntimeVersionExt::new(wasm_executor));
 
 	extensions
 }
 
+/// Build wasm executor by default config.
 pub(crate) fn build_executor<H: HostFunctions>(shared: &SharedParams) -> WasmExecutor<H> {
-	let heap_pages = shared.heap_pages.or(Some(2048));
-	let max_runtime_instances = 8;
-	let runtime_cache_size = 2;
+	let heap_pages = shared
+		.heap_pages
+		.map_or(DEFAULT_HEAP_ALLOC_STRATEGY, |p| HeapAllocStrategy::Static { extra_pages: p as _ });
 
-	WasmExecutor::new(
-		execution_method_from_cli(shared.wasm_method, shared.wasmtime_instantiation_strategy),
-		heap_pages,
-		max_runtime_instances,
-		None,
-		runtime_cache_size,
-	)
+	WasmExecutor::builder()
+		.with_execution_method(execution_method_from_cli(
+			shared.wasm_method,
+			shared.wasmtime_instantiation_strategy,
+		))
+		.with_onchain_heap_alloc_strategy(heap_pages)
+		.with_offchain_heap_alloc_strategy(heap_pages)
+		.build()
 }
 
 /// Ensure that the given `ext` is compiled with `try-runtime`
@@ -875,7 +873,6 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 		data,
 		extensions,
 		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code()?,
-		sp_core::testing::TaskExecutor::new(),
 		CallContext::Offchain,
 	)
 	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
@@ -915,7 +912,6 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 		data,
 		extensions,
 		&runtime_code,
-		sp_core::testing::TaskExecutor::new(),
 		CallContext::Offchain,
 	)
 	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
