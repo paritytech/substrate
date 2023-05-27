@@ -19,7 +19,7 @@
 
 use _feps::ExtendedBalance;
 use frame_support::{
-	parameter_types, traits,
+	assert_ok, parameter_types, traits,
 	traits::{GenesisBuild, Hooks},
 	weights::constants,
 };
@@ -634,6 +634,12 @@ pub(crate) fn start_next_active_era() -> Result<(), ()> {
 
 pub(crate) fn start_next_active_era_delayed_solution() -> Result<(), ()> {
 	start_active_era(active_era() + 1, true)
+}
+
+pub(crate) fn advance_eras(n: usize) {
+	for _ in 0..n {
+		assert_ok!(start_next_active_era());
+	}
 }
 
 /// Progress until the given era.
