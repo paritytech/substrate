@@ -346,7 +346,7 @@ where
 			let _guard = frame_support::StorageNoopGuard::default();
 			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
-				frame_try_runtime::TryStateSelect::Fast,
+				if checks.fast_try_state() { frame_try_runtime::TryStateSelect::Fast } else { frame_try_runtime::TryStateSelect::All },
 			)?;
 		}
 
@@ -359,7 +359,7 @@ where
 			let _guard = frame_support::StorageNoopGuard::default();
 			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
-				frame_try_runtime::TryStateSelect::Fast,
+				if checks.fast() { frame_try_runtime::TryStateSelect::Fast } else { frame_try_runtime::TryStateSelect::All },
 			)?;
 		}
 

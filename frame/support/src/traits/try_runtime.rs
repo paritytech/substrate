@@ -95,21 +95,33 @@ pub enum UpgradeCheckSelect {
 	None,
 	/// Run the `try_state`, `pre_upgrade` and `post_upgrade` checks.
 	All,
+	/// Run all fast running `try_state` checks, `pre_upgrade` and `post_upgrade` checks.
+	///
+	/// Skips long running try_state checks.
+	FastAll,
 	/// Run the `pre_upgrade` and `post_upgrade` checks.
 	PreAndPost,
 	/// Run the `try_state` checks.
 	TryState,
+	/// Run all fast running `try_state` checks.
+	///
+	/// Skips long running try_state checks.
+	FastTryState,
 }
 
 impl UpgradeCheckSelect {
 	/// Whether the pre- and post-upgrade checks are selected.
 	pub fn pre_and_post(&self) -> bool {
-		matches!(self, Self::All | Self::PreAndPost)
+		matches!(self, Self::All | Self::FastAll | Self::PreAndPost)
 	}
 
 	/// Whether the try-state checks are selected.
 	pub fn try_state(&self) -> bool {
-		matches!(self, Self::All | Self::TryState)
+		matches!(self, Self::All | Self::TryState | Self::FastAll | Self::FastTryState)
+	}
+
+	pub fn fast_try_state(&self) -> bool {
+		matches!(self, Self::FastAll | Self::FastTryState)
 	}
 }
 
@@ -121,8 +133,10 @@ impl core::str::FromStr for UpgradeCheckSelect {
 		match s.to_lowercase().as_str() {
 			"none" => Ok(Self::None),
 			"all" => Ok(Self::All),
+			"fast-all" => Ok(Self::FastAll),
 			"pre-and-post" => Ok(Self::PreAndPost),
 			"try-state" => Ok(Self::TryState),
+			"fast-try-state" => Ok(Self::FastTryState),
 			_ => Err("Invalid CheckSelector"),
 		}
 	}
