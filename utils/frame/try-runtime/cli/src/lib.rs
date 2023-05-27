@@ -276,7 +276,7 @@
 //!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     on-runtime-upgrade \
-//!     checks=fast-all \
+//!     --checks=fast-all \
 //!     live --uri ws://localhost:9999
 //! ```
 //!
