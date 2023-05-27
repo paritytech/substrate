@@ -160,7 +160,7 @@ async fn build_network_future<
 	network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
 	sync_service: Arc<SyncingService<B>>,
-	network_block: Arc<Box<dyn NetworkBlock<B::Hash, NumberFor<B>> + Send + Sync>>,
+	network_block: Arc<dyn NetworkBlock<B::Hash, NumberFor<B>> + Send + Sync>,
 	announce_imported_blocks: bool,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();

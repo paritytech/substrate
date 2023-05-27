@@ -751,7 +751,7 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// Optional network block handle.
 	///
 	/// User can specify this to achieve their own block sync service.
-	pub network_block: Option<Arc<Box<dyn NetworkBlock<TBl::Hash, NumberFor<TBl>> + Send + Sync>>>,
+	pub network_block: Option<Arc<dyn NetworkBlock<TBl::Hash, NumberFor<TBl>> + Send + Sync>>,
 }
 /// Build the network service, the network status sinks and an RPC sender.
 pub fn build_network<TBl, TExPool, TImpQu, TCl>(
@@ -977,7 +977,7 @@ where
 		network_mut,
 		client,
 		sync_service.clone(),
-		network_block.unwrap_or_else(|| Arc::new(Box::new(sync_service.clone()))),
+		network_block.unwrap_or_else(|| sync_service.clone()),
 		config.announce_block,
 	);
 
