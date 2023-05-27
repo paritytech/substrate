@@ -1054,11 +1054,11 @@ pub mod pallet {
 		/// ## Parameters
 		///
 		/// - `num_slashing_spans` indicates the number of metadata slashing spans to clear when
-		/// the call to [`Call::withdraw_unbounded`] results in a complete removal of all the data
-		/// related to the stash account. In this case, the `num_slashing_spans` must be larger or
-		/// equal to the number of slashing spans associated with the stash account in the
-		/// [`SlashingSpans`] storage type, otherwise the call will fail. The call weight is
-		/// directly propotional to `num_slashing_spans`.
+		/// this call results in a complete removal of all the data related to the stash account.
+		/// In this case, the `num_slashing_spans` must be larger or equal to the number of
+		/// slashing spans associated with the stash account in the [`SlashingSpans`] storage type,
+		/// otherwise the call will fail. The call weight is directly propotional to
+		/// `num_slashing_spans`.
 		///
 		/// ## Complexity
 		/// O(S) where S is the number of slashing spans to remove
@@ -1388,6 +1388,11 @@ pub mod pallet {
 		/// Force a current staker to become completely unstaked, immediately.
 		///
 		/// The dispatch origin must be Root.
+		///
+		/// ## Parameters
+		///
+		/// - `num_slashing_spans`: Refer to comments on [`Call::withdraw_unbonded`] for more
+		/// details.
 		#[pallet::call_index(15)]
 		#[pallet::weight(T::WeightInfo::force_unstake(*num_slashing_spans))]
 		pub fn force_unstake(
@@ -1528,6 +1533,11 @@ pub mod pallet {
 		/// It can be called by anyone, as long as `stash` meets the above requirements.
 		///
 		/// Refunds the transaction fees upon successful execution.
+		///
+		/// ## Parameters
+		///
+		/// - `num_slashing_spans`: Refer to comments on [`Call::withdraw_unbonded`] for more
+		/// details.
 		#[pallet::call_index(20)]
 		#[pallet::weight(T::WeightInfo::reap_stash(*num_slashing_spans))]
 		pub fn reap_stash(
