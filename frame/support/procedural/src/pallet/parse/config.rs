@@ -379,7 +379,7 @@ impl ConfigDef {
 						if already_no_default {
 							return Err(syn::Error::new(
 								pallet_attr._bracket.span.join(),
-								"Duplicate #[pallet::already_no_default] attribute not allowed.",
+								"Duplicate #[pallet::no_default] attribute not allowed.",
 							))
 						}
 						already_no_default = true;
