@@ -23,6 +23,8 @@ use crate::{
 	weights::WeightInfo,
 	Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
 
 use codec::{Decode, Encode};
 use frame_support::{codec, pallet_prelude::*, storage_alias, DefaultNoBound};
@@ -121,8 +123,8 @@ impl<T: Config> Migrate for Migration<T> {
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		let len = <u32 as Decode>::decode(&mut &state[..]).unwrap();
 		let counter = <DeletionQueueCounter<T>>::get();
-		ensure!(counter.insert_counter == len);
-		ensure!(counter.delete_counter == 0);
+		ensure!(counter.insert_counter == len, "invalid insert counter");
+		ensure!(counter.delete_counter == 0, "invalid delete counter");
 		Ok(())
 	}
 }

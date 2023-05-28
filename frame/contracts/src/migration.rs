@@ -44,6 +44,9 @@ use sp_std::marker::PhantomData;
 #[cfg(feature = "try-runtime")]
 use sp_std::prelude::*;
 
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
+
 const PROOF_ENCODE: &str = "Tuple::max_encoded_len() < Cursor::max_encoded_len()` is verified in `Self::integrity_test()`; qed";
 const PROOF_DECODE: &str =
 	"We encode to the same type in this trait only. No other code touches this item; qed";
@@ -287,18 +290,17 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 		// over our migrations.
 		let storage_version = <Pallet<T>>::on_chain_storage_version();
 		let target_version = <Pallet<T>>::current_storage_version();
-		if M::is_upgrade_supported(storage_version, target_version) {
-			Ok(Vec::new())
-		} else {
-			let name = <Pallet<T>>::name();
-			log::error!(
-				target: LOG_TARGET,
-				"{name}: Range supported {:?}, range requested {:?}",
-				M::VERSION_RANGE,
-				(storage_version, target_version)
-			);
-			Err("New runtime does not contain the required migrations to perform this upgrade.")
-		}
+
+		log::debug!(
+			target: LOG_TARGET,
+			"{}: Range supported {:?}, range requested {:?}",
+			<Pallet<T>>::name(),
+			M::VERSION_RANGE,
+			(storage_version, target_version)
+		);
+
+		ensure!(M::is_upgrade_supported(storage_version, target_version), "Unsupported upgrade");
+		Ok(Default::default())
 	}
 }
 

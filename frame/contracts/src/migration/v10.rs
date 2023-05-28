@@ -39,6 +39,8 @@ use frame_support::{
 	DefaultNoBound,
 };
 use sp_core::hexdisplay::HexDisplay;
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, Perbill, Saturating};
 use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
 
@@ -246,10 +248,10 @@ impl<T: Config> Migrate for Migration<T> {
 			log::debug!(target: LOG_TARGET, "===");
 			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
 			let contract = ContractInfoOf::<T>::get(&account).unwrap();
-			ensure!(old_contract.trie_id == contract.trie_id);
-			ensure!(old_contract.code_hash == contract.code_hash);
-			ensure!(old_contract.storage_bytes == contract.storage_bytes);
-			ensure!(old_contract.storage_items == contract.storage_items);
+			ensure!(old_contract.trie_id == contract.trie_id, "invalid trie_id");
+			ensure!(old_contract.code_hash == contract.code_hash, "invalid code_hash");
+			ensure!(old_contract.storage_bytes == contract.storage_bytes, "invalid storage_bytes");
+			ensure!(old_contract.storage_items == contract.storage_items, "invalid storage_items");
 
 			let deposit =
 				<<T as Config>::Currency as frame_support::traits::Currency<_>>::total_balance(

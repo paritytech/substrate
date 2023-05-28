@@ -26,6 +26,8 @@ use codec::{Decode, Encode};
 use frame_support::{
 	codec, pallet_prelude::*, storage_alias, BoundedVec, DefaultNoBound, Identity,
 };
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
 use sp_std::{marker::PhantomData, prelude::*};
 
 mod old {
@@ -130,11 +132,16 @@ impl<T: Config> Migrate for Migration<T> {
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contract codes", sample.len());
 		for (code_hash, old) in sample {
 			let module = CodeStorage::<T>::get(&code_hash).unwrap();
-			ensure!(module.instruction_weights_version == old.instruction_weights_version);
-			ensure!(module.determinism == Determinism::Enforced);
-			ensure!(module.initial == old.initial);
-			ensure!(module.maximum == old.maximum);
-			ensure!(module.code == old.code);
+			ensure!(
+				module.instruction_weights_version == old.instruction_weights_version,
+				"invalid isntruction weights version"
+			);
+			ensure!(module.determinism == Determinism::Enforced, "invalid determinism");
+			ensure!(module.initial == old.initial, "invalid initial");
+			ensure!(module.maximum == old.maximum, "invalid maximum");
+			ensure!(module.code == old.code, "invalid code");
+			ensure!(module.maximum == old.maximum, "invalid maximum");
+			ensure!(module.code == old.code, "invalid code");
 		}
 
 		Ok(())
