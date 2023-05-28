@@ -31,8 +31,6 @@
 //!
 //! ## Overview
 //!
-//! This pallet that's designed to JUST do the following:
-//!
 //! If a nominator is not exposed anywhere in the staking system, checked via
 //! [`StakingInterface::is_exposed_in_era`] (i.e. "has not actively backed any validators in the
 //! last [`StakingInterface::bonding_duration`] days"), then they can register themselves in this
