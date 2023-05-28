@@ -79,7 +79,7 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 		/// Members of this module cannot be used directly and are only provided for documentation
 		/// purposes.
 		///
-		/// To see the actual storage type, find the a struct with the same name at the root of the
+		/// To see the actual storage type, find a struct with the same name at the root of the
 		/// pallet, in the list of [*Type Definitions*](../index.html#types).
 		#[cfg(doc)]
 		pub mod storage_types {
