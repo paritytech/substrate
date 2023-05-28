@@ -48,7 +48,7 @@ impl WasmBuilderSelectProject {
 			file_name: None,
 			project_cargo_toml: get_manifest_dir().join("Cargo.toml"),
 			features_to_enable: Vec::new(),
-			disable_runtime_version_section_check: fale,
+			disable_runtime_version_section_check: false,
 		}
 	}
 
