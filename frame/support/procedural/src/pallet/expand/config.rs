@@ -39,7 +39,7 @@ The main purpose of this trait is to act as an interface between this pallet and
 which it is embedded in. A type, function, or constant in this trait is essentially left to be
 configured by the runtime that includes this pallet.
 
-Consequently, a runtime that wants to include this pallet mustimplement this trait."
+Consequently, a runtime that wants to include this pallet must implement this trait."
 			]
 		),
 	);
