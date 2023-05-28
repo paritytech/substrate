@@ -14,7 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-lru = "0.8.1"
+lru = "0.10.0"
 parking_lot = "0.12.1"
 tracing = "0.1.29"
 
