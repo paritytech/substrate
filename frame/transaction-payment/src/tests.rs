@@ -288,7 +288,7 @@ fn query_info_and_fee_details_works() {
 	let call = RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 2, value: 69 });
 	let origin = 111111;
 	let extra = ();
-	let xt = TestXt::new(call.clone(), Some((origin, (), extra)));
+	let xt = TestXt::new(call.clone(), Some((origin, extra)));
 	let info = xt.get_dispatch_info();
 	let ext = xt.encode();
 	let len = ext.len() as u32;

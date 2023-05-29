@@ -902,15 +902,13 @@ impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
 	{
 		let r = ::sp_core::bytes::deserialize(de)?;
 		Decode::decode(&mut &r[..])
-			.map_err(|e: codec::Error| ::serde::de::Error::custom(format!("Decode error: {}", e)))
+			.map_err(|e| ::serde::de::Error::custom(format!("Decode error: {}", e)))
 	}
 }
 
 impl traits::Extrinsic for OpaqueExtrinsic {
 	type Call = ();
-	type SignatureAddress = ();
-	type Signature = ();
-	type SignatureExtra = ();
+	type SignaturePayload = ();
 }
 
 /// Print something that implements `Printable` from the runtime.

@@ -1267,14 +1267,7 @@ where
 		public: <Signature as traits::Verify>::Signer,
 		account: AccountId,
 		nonce: Index,
-	) -> Option<(
-		RuntimeCall,
-		(
-			<UncheckedExtrinsic as traits::Extrinsic>::SignatureAddress,
-			<UncheckedExtrinsic as traits::Extrinsic>::Signature,
-			<UncheckedExtrinsic as traits::Extrinsic>::SignatureExtra,
-		),
-	)> {
+	) -> Option<(RuntimeCall, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
 		let tip = 0;
 		// take the biggest period possible.
 		let period =

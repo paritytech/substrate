@@ -956,8 +956,8 @@ mod tests {
 		)
 	}
 
-	fn sign_extra(who: u64, nonce: u64, fee: Balance) -> Option<(u64, (), SignedExtra)> {
-		Some((who, (), extra(nonce, fee)))
+	fn sign_extra(who: u64, nonce: u64, fee: Balance) -> Option<(u64, SignedExtra)> {
+		Some((who, extra(nonce, fee)))
 	}
 
 	fn call_transfer(dest: u64, value: u64) -> RuntimeCall {
