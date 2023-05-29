@@ -46,11 +46,11 @@ sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
 sc-network-common = { version = "0.10.0-dev", path = "./common" }
 sc-peerset = { version = "4.0.0-dev", path = "../peerset" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-arithmetic = { version = "6.0.0", path = "../../primitives/arithmetic" }
+sp-arithmetic = { version = "7.0.0", path = "../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sp-core = { version = "8.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "8.0.0", path = "../../primitives/runtime" }
 # Force 0.9.2 as snow release to fix the compilation.
 #
 # When libp2p also enforces this version, we can get rid off this extra dep here.
@@ -67,7 +67,7 @@ tokio-test = "0.4.2"
 sc-network-light = { version = "0.10.0-dev", path = "./light" }
 sc-network-sync = { version = "0.10.0-dev", path = "./sync" }
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "7.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 

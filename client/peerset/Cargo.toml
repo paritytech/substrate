@@ -22,9 +22,9 @@ partial_sort = "0.2.0"
 serde_json = "1.0.85"
 wasm-timer = "0.2"
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-arithmetic = { version = "6.0.0", path = "../../primitives/arithmetic" }
+sp-arithmetic = { version = "7.0.0", path = "../../primitives/arithmetic" }
 
 [dev-dependencies]
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "7.0.0", path = "../../primitives/tracing" }
 mockall = "0.11.3"
 rand = "0.8.5"

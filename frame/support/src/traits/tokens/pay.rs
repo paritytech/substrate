@@ -20,6 +20,7 @@
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::{RuntimeDebug, TypedGet};
+use sp_runtime::DispatchError;
 use sp_std::fmt::Debug;
 
 use super::{fungible, Balance, Preservation::Expendable};
@@ -38,13 +39,15 @@ pub trait Pay {
 	type AssetKind;
 	/// An identifier given to an individual payment.
 	type Id: FullCodec + MaxEncodedLen + TypeInfo + Clone + Eq + PartialEq + Debug + Copy;
+	/// An error which could be returned by the Pay type
+	type Error: Debug;
 	/// Make a payment and return an identifier for later evaluation of success in some off-chain
 	/// mechanism (likely an event, but possibly not on this chain).
 	fn pay(
 		who: &Self::Beneficiary,
 		asset_kind: Self::AssetKind,
 		amount: Self::Balance,
-	) -> Result<Self::Id, ()>;
+	) -> Result<Self::Id, Self::Error>;
 	/// Check how a payment has proceeded. `id` must have been previously returned by `pay` for
 	/// the result of this call to be meaningful. Once this returns anything other than
 	/// `InProgress` for some `id` it must return `Unknown` rather than the actual result
@@ -81,12 +84,13 @@ impl<A: TypedGet, F: fungible::Mutate<A::Type>> Pay for PayFromAccount<F, A> {
 	type Beneficiary = A::Type;
 	type AssetKind = ();
 	type Id = ();
+	type Error = DispatchError;
 	fn pay(
 		who: &Self::Beneficiary,
 		_: Self::AssetKind,
 		amount: Self::Balance,
-	) -> Result<Self::Id, ()> {
-		<F as fungible::Mutate<_>>::transfer(&A::get(), who, amount, Expendable).map_err(|_| ())?;
+	) -> Result<Self::Id, Self::Error> {
+		<F as fungible::Mutate<_>>::transfer(&A::get(), who, amount, Expendable)?;
 		Ok(())
 	}
 	fn check_payment(_: ()) -> PaymentStatus {

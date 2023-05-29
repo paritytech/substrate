@@ -1,6 +1,6 @@
 [package]
 name = "sp-core-hashing"
-version = "5.0.0"
+version = "6.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -19,7 +19,7 @@ digest = { version = "0.10.3", default-features = false }
 sha2 = { version = "0.10.2", default-features = false }
 sha3 = { version = "0.10.0", default-features = false }
 twox-hash = { version = "1.6.3", default-features = false, features = ["digest_0_10"] }
-sp-std = { version = "5.0.0", default-features = false, path = "../../std" }
+sp-std = { version = "6.0.0", default-features = false, path = "../../std" }
 
 [features]
 default = ["std"]

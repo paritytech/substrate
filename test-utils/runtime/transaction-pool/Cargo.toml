@@ -19,5 +19,5 @@ thiserror = "1.0"
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../client" }
