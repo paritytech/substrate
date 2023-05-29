@@ -774,7 +774,7 @@ pub mod pallet {
 		/// - `mint_to`: Account into which the item will be minted.
 		/// - `witness_data`: When the mint type is `HolderOf(collection_id)`, then the owned
 		///   item_id from that collection needs to be provided within the witness data object. If
-		///   the mint price is set, the it should be additionally confirmed in the `witness_data`.
+		///   the mint price is set, then it should be additionally confirmed in the `witness_data`.
 		///
 		/// Note: the deposit will be taken from the `origin` and not the `owner` of the `item`.
 		///
