@@ -28,7 +28,7 @@ ip_network = "0.4.1"
 libp2p = { version = "0.51.3", features = ["dns", "identify", "kad", "macros", "mdns", "noise", "ping", "tcp",  "tokio", "yamux", "websocket", "request-response"] }
 linked_hash_set = "0.1.3"
 log = "0.4.17"
-lru = "0.8.1"
+lru = "0.10.0"
 mockall = "0.11.3"
 parking_lot = "0.12.1"
 pin-project = "1.0.12"
