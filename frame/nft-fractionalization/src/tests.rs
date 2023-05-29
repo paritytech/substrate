@@ -105,7 +105,7 @@ fn fractionalize_should_work() {
 			),
 			DispatchError::Module(ModuleError {
 				index: 4,
-				error: [13, 0, 0, 0],
+				error: [12, 0, 0, 0],
 				message: Some("ItemLocked")
 			})
 		);

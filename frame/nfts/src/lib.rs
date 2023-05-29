@@ -560,8 +560,6 @@ pub mod pallet {
 		WrongOwner,
 		/// The witness data given does not match the current state of the chain.
 		BadWitness,
-		/// The witness data should be provided.
-		WitnessRequired,
 		/// Collection ID is already taken.
 		CollectionIdInUse,
 		/// Items within that collection are non-transferable.
@@ -638,6 +636,8 @@ pub mod pallet {
 		WrongNamespace,
 		/// Can't delete non-empty collections.
 		CollectionNotEmpty,
+		/// The witness data should be provided.
+		WitnessRequired,
 	}
 
 	#[pallet::call]
