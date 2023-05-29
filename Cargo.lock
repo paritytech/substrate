@@ -2036,18 +2036,18 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "docify"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7767ccc3eb4cd952984251db536253f3b37447b00d5d700c12a3fa59e2116f01"
+checksum = "5ce509bc276b9b3a9ceeafafd4d9f09c80fe99aac0a1111159b4403503a473aa"
 dependencies = [
  "docify_macros",
 ]
 
 [[package]]
 name = "docify_macros"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbaa8797736720f7df8d70318fc09e4ce5c5a897111a60ddce414713ea391043"
+checksum = "ad111835b124405b045223eba48ab631a22e7ffa1f232279780b4aafa1c65380"
 dependencies = [
  "common-path",
  "derive-syn-parse",
