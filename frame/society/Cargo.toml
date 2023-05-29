@@ -18,14 +18,14 @@ rand_chacha = { version = "0.2", default-features = false }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 frame-support-test = { version = "3.0.0", path = "../support/test" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-io = { version = "7.0.0", path = "../../primitives/io" }
+sp-core = { version = "8.0.0", path = "../../primitives/core" }
+sp-io = { version = "8.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]

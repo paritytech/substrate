@@ -97,21 +97,19 @@ impl Metrics {
 	}
 }
 
-#[pin_project::pin_project]
 struct PendingTransaction<H> {
-	#[pin]
 	validation: TransactionImportFuture,
 	tx_hash: H,
 }
 
+impl<H> Unpin for PendingTransaction<H> {}
+
 impl<H: ExHashT> Future for PendingTransaction<H> {
 	type Output = (H, TransactionImport);
 
-	fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-		let mut this = self.project();
-
-		if let Poll::Ready(import_result) = Pin::new(&mut this.validation).poll_unpin(cx) {
-			return Poll::Ready((this.tx_hash.clone(), import_result))
+	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+		if let Poll::Ready(import_result) = self.validation.poll_unpin(cx) {
+			return Poll::Ready((self.tx_hash.clone(), import_result))
 		}
 
 		Poll::Pending

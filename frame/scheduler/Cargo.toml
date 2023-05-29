@@ -16,14 +16,14 @@ scale-info = { version = "2.5.0", default-features = false, features = ["derive"
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-weights = { version = "4.0.0", default-features = false, path = "../../primitives/weights" }
+sp-io = { version = "8.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
+sp-weights = { version = "5.0.0", default-features = false, path = "../../primitives/weights" }
 
 [dev-dependencies]
 pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "8.0.0", default-features = false, path = "../../primitives/core" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 
 [features]

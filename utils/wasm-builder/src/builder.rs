@@ -48,6 +48,7 @@ impl WasmBuilderSelectProject {
 			file_name: None,
 			project_cargo_toml: get_manifest_dir().join("Cargo.toml"),
 			features_to_enable: Vec::new(),
+			disable_runtime_version_section_check: false,
 		}
 	}
 
@@ -63,6 +64,7 @@ impl WasmBuilderSelectProject {
 				file_name: None,
 				project_cargo_toml: path,
 				features_to_enable: Vec::new(),
+				disable_runtime_version_section_check: false,
 			})
 		} else {
 			Err("Project path must point to the `Cargo.toml` of the project")
@@ -93,6 +95,8 @@ pub struct WasmBuilder {
 	project_cargo_toml: PathBuf,
 	/// Features that should be enabled when building the wasm binary.
 	features_to_enable: Vec<String>,
+	/// Should the builder not check that the `runtime_version` section exists in the wasm binary?
+	disable_runtime_version_section_check: bool,
 }
 
 impl WasmBuilder {
@@ -143,6 +147,17 @@ impl WasmBuilder {
 		self
 	}
 
+	/// Disable the check for the `runtime_version` wasm section.
+	///
+	/// By default the `wasm-builder` will ensure that the `runtime_version` section will
+	/// exists in the build wasm binary. This `runtime_version` section is used to get the
+	/// `RuntimeVersion` without needing to call into the wasm binary. However, for some
+	/// use cases (like tests) you may want to disable this check.
+	pub fn disable_runtime_version_section_check(mut self) -> Self {
+		self.disable_runtime_version_section_check = true;
+		self
+	}
+
 	/// Build the WASM binary.
 	pub fn build(self) {
 		let out_dir = PathBuf::from(env::var("OUT_DIR").expect("`OUT_DIR` is set by cargo!"));
@@ -165,6 +180,7 @@ impl WasmBuilder {
 			self.rust_flags.into_iter().map(|f| format!("{} ", f)).collect(),
 			self.features_to_enable,
 			self.file_name,
+			!self.disable_runtime_version_section_check,
 		);
 
 		// As last step we need to generate our `rerun-if-changed` stuff. If a build fails, we don't
@@ -215,7 +231,7 @@ fn generate_rerun_if_changed_instructions() {
 /// The current project is determined by using the `CARGO_MANIFEST_DIR` environment variable.
 ///
 /// `file_name` - The name + path of the file being generated. The file contains the
-/// constant `WASM_BINARY`, which contains the built WASM binary.
+/// constant `WASM_BINARY`, which contains the built wasm binary.
 ///
 /// `project_cargo_toml` - The path to the `Cargo.toml` of the project that should be built.
 ///
@@ -224,14 +240,17 @@ fn generate_rerun_if_changed_instructions() {
 /// `features_to_enable` - Features that should be enabled for the project.
 ///
 /// `wasm_binary_name` - The optional wasm binary name that is extended with
-///
 /// `.compact.compressed.wasm`. If `None`, the project name will be used.
+///
+/// `check_for_runtime_version_section` - Should the wasm binary be checked for the
+/// `runtime_version` section?
 fn build_project(
 	file_name: PathBuf,
 	project_cargo_toml: PathBuf,
 	default_rustflags: String,
 	features_to_enable: Vec<String>,
 	wasm_binary_name: Option<String>,
+	check_for_runtime_version_section: bool,
 ) {
 	let cargo_cmd = match crate::prerequisites::check() {
 		Ok(cmd) => cmd,
@@ -247,6 +266,7 @@ fn build_project(
 		cargo_cmd,
 		features_to_enable,
 		wasm_binary_name,
+		check_for_runtime_version_section,
 	);
 
 	let (wasm_binary, wasm_binary_bloaty) = if let Some(wasm_binary) = wasm_binary {

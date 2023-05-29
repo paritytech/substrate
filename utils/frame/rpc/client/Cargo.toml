@@ -16,7 +16,7 @@ jsonrpsee = { version = "0.16.2", features = ["ws-client"] }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
 async-trait = "0.1.57"
 serde = "1"
-sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
+sp-runtime = { version = "8.0.0", path = "../../../../primitives/runtime" }
 log = "0.4"
 
 [dev-dependencies]
