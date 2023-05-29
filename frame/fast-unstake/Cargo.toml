@@ -27,6 +27,8 @@ frame-election-provider-support = { default-features = false, path = "../electio
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 
+docify = "0.1.13"
+
 [dev-dependencies]
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
 sp-core = { version = "8.0.0", default-features = false, path = "../../primitives/core" }
