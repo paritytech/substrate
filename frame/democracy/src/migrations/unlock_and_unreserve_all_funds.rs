@@ -18,7 +18,7 @@
 //! A migration that unreserves all deposit and unlocks all stake held in the context of this
 //! pallet.
 
-use crate::DEMOCRACY_ID;
+use crate::{BalanceOf, DEMOCRACY_ID};
 use core::iter::Sum;
 use frame_support::{
 	traits::{LockableCurrency, OnRuntimeUpgrade, ReservableCurrency},
@@ -32,12 +32,6 @@ use sp_std::{
 
 #[cfg(feature = "try-runtime")]
 use codec::{Decode, Encode};
-
-#[cfg(feature = "try-runtime")]
-#[derive(Debug, Encode, Decode)]
-struct PreMigrationData<T: frame_system::Config + pallet_balances::Config> {
-	account_reserved_before: BTreeMap<T::AccountId, T::Balance>,
-}
 
 /// A migration that unreserves all deposit and unlocks all stake held in the context of this
 /// pallet.
@@ -53,12 +47,8 @@ pub struct UnlockAndUnreserveAllFunds<T: crate::Config + pallet_balances::Config
 
 impl<T: crate::Config + pallet_balances::Config> UnlockAndUnreserveAllFunds<T>
 where
-	<T as pallet_balances::Config>::Balance: From<
-		<<T as crate::Config>::Currency as frame_support::traits::Currency<
-			<T as frame_system::Config>::AccountId,
-		>>::Balance,
-	>,
-	<T as pallet_balances::Config>::Balance: Sum<<T as pallet_balances::Config>::Balance>,
+	BalanceOf<T>: From<<T as pallet_balances::Config>::Balance>,
+	BalanceOf<T>: Sum,
 {
 	/// Calculates and returns the total amounts reserved by each account by this pallet, and all
 	/// accounts with locks in the context of this pallet.
@@ -71,18 +61,20 @@ where
 	///
 	/// This function returns a tuple of two `BTreeMap` collections and the weight of the reads:
 	///
-	/// * `BTreeMap<T::AccountId, T::Balance>`: Map of account IDs to their respective total
+	/// * `BTreeMap<T::AccountId, BalanceOf<T>>`: Map of account IDs to their respective total
 	///   reserved balance by this pallet
 	/// * `BTreeSet<T::AccountId>`: Set of account IDs with some amount locked by this pallet.
 	/// * frame_support::weights::Weight
-	fn get_account_deposits_and_locks(
-	) -> (BTreeMap<T::AccountId, T::Balance>, BTreeSet<T::AccountId>, frame_support::weights::Weight)
-	{
+	fn get_account_deposits_and_locks() -> (
+		BTreeMap<T::AccountId, BalanceOf<T>>,
+		BTreeSet<T::AccountId>,
+		frame_support::weights::Weight,
+	) {
 		let deposit_of = crate::DepositOf::<T>::iter().collect::<Vec<_>>();
 		let deposit_of_len = deposit_of.len();
 
 		// Get all deposits (reserved).
-		let account_deposits: BTreeMap<T::AccountId, T::Balance> = deposit_of
+		let account_deposits: BTreeMap<T::AccountId, BalanceOf<T>> = deposit_of
 			.into_iter()
 			.flat_map(|(_prop_index, (accounts, balance))| {
 				// Create a vec of tuples where each account is associated with the given balance
@@ -90,10 +82,8 @@ where
 			})
 			.fold(BTreeMap::new(), |mut acc, (account, balance)| {
 				// Add the balance to the account's existing balance in the accumulator
-				*acc.entry(account).or_insert(Zero::zero()) = acc
-					.entry(account.clone())
-					.or_insert(Zero::zero())
-					.saturating_add(balance.into());
+				*acc.entry(account).or_insert(Zero::zero()) =
+					acc.entry(account.clone()).or_insert(Zero::zero()).saturating_add(balance);
 				acc
 			});
 
@@ -113,28 +103,21 @@ where
 	/// Helper function for returning the locked amount of an account under the ID of this
 	/// pallet.
 	#[cfg(feature = "try-runtime")]
-	fn get_actual_locked_amount(account: T::AccountId) -> Option<T::Balance> {
+	fn get_actual_locked_amount(account: T::AccountId) -> Option<BalanceOf<T>> {
 		use pallet_balances::Locks;
 		use sp_runtime::SaturatedConversion;
 
 		Locks::<T>::get(account.clone())
 			.iter()
 			.find(|l| l.id == DEMOCRACY_ID)
-			.map(|lock| lock.amount.saturated_into::<T::Balance>())
+			.map(|lock| lock.amount.saturated_into::<BalanceOf<T>>())
 	}
 }
 
 impl<T: crate::Config + pallet_balances::Config> OnRuntimeUpgrade for UnlockAndUnreserveAllFunds<T>
 where
-	<T as pallet_balances::Config>::Balance: From<
-		<<T as crate::Config>::Currency as frame_support::traits::Currency<
-			<T as frame_system::Config>::AccountId,
-		>>::Balance,
-	>,
-	<<T as crate::Config>::Currency as frame_support::traits::Currency<
-		<T as frame_system::Config>::AccountId,
-	>>::Balance: From<<T as pallet_balances::Config>::Balance>,
-	<T as pallet_balances::Config>::Balance: Sum<<T as pallet_balances::Config>::Balance>,
+	BalanceOf<T>: From<<T as pallet_balances::Config>::Balance>,
+	BalanceOf<T>: Sum,
 {
 	/// Collects pre-migration data useful for validating the migration was successful, and also
 	/// checks the integrity of deposited and reserved balances.
@@ -151,20 +134,14 @@ where
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		use frame_support::ensure;
-		use sp_runtime::SaturatedConversion;
 
 		// Get staked and deposited balances as reported by this pallet.
 		let (account_deposits, accounts_with_locks, _) = Self::get_account_deposits_and_locks();
 
 		let all_accounts = account_deposits.keys().cloned().collect::<BTreeSet<_>>();
-		let account_reserved_before: BTreeMap<T::AccountId, T::Balance> = all_accounts
+		let account_reserved_before: BTreeMap<T::AccountId, BalanceOf<T>> = all_accounts
 			.iter()
-			.map(|account| {
-				(
-					account.clone(),
-					T::Currency::reserved_balance(&account).saturated_into::<T::Balance>(),
-				)
-			})
+			.map(|account| (account.clone(), T::Currency::reserved_balance(&account)))
 			.collect();
 
 		// The deposit amount must be less than or equal to the reserved amount.
@@ -177,18 +154,17 @@ where
 		);
 
 		let total_deposits_to_unreserve =
-			account_deposits.clone().into_values().sum::<T::Balance>();
+			account_deposits.clone().into_values().sum::<BalanceOf<T>>();
 		let total_amount_to_unlock = accounts_with_locks
 			.iter()
 			.map(|account| Self::get_actual_locked_amount(account.clone()).unwrap_or_default())
-			.sum::<T::Balance>();
+			.sum::<BalanceOf<T>>();
 
 		log::info!("Total accounts: {:?}", all_accounts.len());
 		log::info!("Total deposit to unreserve: {:?}", total_deposits_to_unreserve);
 		log::info!("Total deposit to unlock: {:?}", total_amount_to_unlock);
 
-		let pre_migration_data = PreMigrationData::<T> { account_reserved_before };
-		Ok(pre_migration_data.encode())
+		Ok(account_reserved_before.encode())
 	}
 
 	/// Executes the migration.
@@ -207,7 +183,7 @@ where
 			if unreserve_amount.is_zero() {
 				continue
 			}
-			T::Currency::unreserve(&account, (*unreserve_amount).into());
+			T::Currency::unreserve(&account, *unreserve_amount);
 		}
 
 		// Staked funds need to be unlocked.
@@ -234,9 +210,12 @@ where
 	/// 1. No locks remain for this pallet in Balances.
 	/// 2. The reserved balance for each account has been reduced by the expected amount.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(pre_migration_data_bytes: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
-		let pre_migration_data = PreMigrationData::<T>::decode(&mut &pre_migration_data_bytes[..])
-			.map_err(|_| "Failed to decode pre-migration data")?;
+	fn post_upgrade(
+		account_reserved_before_bytes: Vec<u8>,
+	) -> Result<(), sp_runtime::TryRuntimeError> {
+		let account_reserved_before =
+			BTreeMap::<T::AccountId, BalanceOf<T>>::decode(&mut &account_reserved_before_bytes[..])
+				.map_err(|_| "Failed to decode account_reserved_before_bytes")?;
 
 		// Get staked and deposited balances as reported by this pallet.
 		let (account_deposits, _, _) = Self::get_account_deposits_and_locks();
@@ -249,7 +228,7 @@ where
 		});
 
 		// Check that the reserved balance is reduced by the expected deposited amount.
-		for (account, actual_reserved_before) in pre_migration_data.account_reserved_before {
+		for (account, actual_reserved_before) in account_reserved_before {
 			let actual_reserved_after = T::Currency::reserved_balance(&account);
 			let expected_amount_deducted = *account_deposits
 				.get(&account)
@@ -257,7 +236,7 @@ where
 			let expected_reserved_after =
 				actual_reserved_before.saturating_sub(expected_amount_deducted);
 			assert!(
-				actual_reserved_after == expected_reserved_after.into(),
+				actual_reserved_after == expected_reserved_after,
 				"Reserved balance for {:?} is incorrect. actual before: {:?}, actual after, {:?}, expected deducted: {:?}",
 				account,
 				actual_reserved_before,
