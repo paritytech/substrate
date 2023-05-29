@@ -299,7 +299,7 @@ impl AsyncApi {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use libp2p::PeerId;
+	use libp2p::{Multiaddr, PeerId};
 	use sc_client_db::offchain::LocalStorage;
 	use sc_network::{
 		config::MultiaddrWithPeerId, types::ProtocolName, NetworkPeers, NetworkStateInfo,
@@ -390,6 +390,10 @@ mod tests {
 		}
 
 		fn listen_addresses(&self) -> Vec<Multiaddr> {
+			Vec::new()
+		}
+
+		fn external_addresses(&self) -> Vec<Multiaddr> {
 			Vec::new()
 		}
 	}
