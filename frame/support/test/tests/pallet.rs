@@ -36,7 +36,10 @@ use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::{traits::Extrinsic as ExtrinsicT, DispatchError, ModuleError};
+use sp_runtime::{
+	traits::{Extrinsic as ExtrinsicT, SignaturePayload as SignaturePayloadT},
+	DispatchError, ModuleError,
+};
 
 parameter_types! {
 	/// Used to control if the storage version should be updated.
@@ -1707,16 +1710,21 @@ fn metadata_ir_pallet_runtime_docs() {
 fn extrinsic_metadata_ir_types() {
 	let ir = Runtime::metadata_ir().extrinsic;
 
-	assert_eq!(meta_type::<<UncheckedExtrinsic as ExtrinsicT>::SignatureAddress>(), ir.address_ty);
+	assert_eq!(meta_type::<<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::SignatureAddress>(), ir.address_ty);
 	assert_eq!(meta_type::<u64>(), ir.address_ty);
 
 	assert_eq!(meta_type::<<UncheckedExtrinsic as ExtrinsicT>::Call>(), ir.call_ty);
 	assert_eq!(meta_type::<RuntimeCall>(), ir.call_ty);
 
-	assert_eq!(meta_type::<<UncheckedExtrinsic as ExtrinsicT>::Signature>(), ir.signature_ty);
+	assert_eq!(
+		meta_type::<
+			<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::Signature,
+		>(),
+		ir.signature_ty
+	);
 	assert_eq!(meta_type::<()>(), ir.signature_ty);
 
-	assert_eq!(meta_type::<<UncheckedExtrinsic as ExtrinsicT>::SignatureExtra>(), ir.extra_ty);
+	assert_eq!(meta_type::<<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::SignatureExtra>(), ir.extra_ty);
 	assert_eq!(meta_type::<frame_system::CheckNonZeroSender<Runtime>>(), ir.extra_ty);
 }
 
