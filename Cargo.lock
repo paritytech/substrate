@@ -10632,6 +10632,7 @@ dependencies = [
  "parity-scale-codec",
  "rustversion",
  "sc-block-builder",
+ "scale-info",
  "sp-api",
  "sp-consensus",
  "sp-core",
