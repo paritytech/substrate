@@ -17,8 +17,8 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 
 # primitives
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
 
 # FRAME
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
@@ -31,14 +31,14 @@ log = { version = "0.4.17", default-features = false }
 # Optional imports for benchmarking
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking", optional = true, default-features = false }
 pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true, default-features = false }
-sp-core = { version = "7.0.0", path = "../../primitives/core", optional = true, default-features = false }
-sp-io = { version = "7.0.0", path = "../../primitives/io", optional = true, default-features = false }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing", optional = true, default-features = false }
+sp-core = { version = "8.0.0", path = "../../primitives/core", optional = true, default-features = false }
+sp-io = { version = "8.0.0", path = "../../primitives/io", optional = true, default-features = false }
+sp-tracing = { version = "7.0.0", path = "../../primitives/tracing", optional = true, default-features = false }
 
 [dev-dependencies]
-sp-core = { version = "7.0.0", path = "../../primitives/core"}
-sp-io = { version = "7.0.0", path = "../../primitives/io"}
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+sp-core = { version = "8.0.0", path = "../../primitives/core"}
+sp-io = { version = "8.0.0", path = "../../primitives/io"}
+sp-tracing = { version = "7.0.0", path = "../../primitives/tracing" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
