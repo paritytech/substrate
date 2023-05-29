@@ -22,7 +22,7 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::Serialize;
 
 use codec::{Codec, Decode, Encode, Input};
@@ -140,8 +140,8 @@ pub struct GrandpaJustification<Header: HeaderT> {
 }
 
 /// A scheduled change of authority set.
-#[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
 	pub next_authorities: AuthorityList,
@@ -150,8 +150,8 @@ pub struct ScheduledChange<N> {
 }
 
 /// An consensus log item for GRANDPA.
-#[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum ConsensusLog<N: Codec> {
 	/// Schedule an authority set change.
 	///

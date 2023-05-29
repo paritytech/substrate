@@ -180,9 +180,18 @@ pub use sp_std;
 ///             None => self.clear_storage(&[1, 2, 3, 4]),
 ///         }
 ///     }
+///
+///     /// A function can be gated behind a configuration (`cfg`) attribute.
+///     /// To prevent ambiguity and confusion about what will be the final exposed host
+///     /// functions list, conditionally compiled functions can't be versioned.
+///     /// That is, conditionally compiled functions with `version`s greater than 1
+///     /// are not allowed.
+///     #[cfg(feature = "experimental-function")]
+///     fn gated_call(data: &[u8]) -> Vec<u8> {
+///         [42].to_vec()
+///     }
 /// }
 /// ```
-///
 ///
 /// The given example will generate roughly the following code for native:
 ///
@@ -197,6 +206,8 @@ pub use sp_std;
 ///         fn call_version_2(data: &[u8]) -> Vec<u8>;
 ///         fn call_version_3(data: &[u8]) -> Vec<u8>;
 ///         fn set_or_clear_version_1(&mut self, optional: Option<Vec<u8>>);
+///         #[cfg(feature = "experimental-function")]
+///         fn gated_call_version_1(data: &[u8]) -> Vec<u8>;
 ///     }
 ///
 ///     impl Interface for &mut dyn sp_externalities::Externalities {
@@ -209,6 +220,8 @@ pub use sp_std;
 ///                 None => self.clear_storage(&[1, 2, 3, 4]),
 ///             }
 ///         }
+///         #[cfg(feature = "experimental-function")]
+///         fn gated_call_version_1(data: &[u8]) -> Vec<u8> { [42].to_vec() }
 ///     }
 ///
 ///     pub fn call(data: &[u8]) -> Vec<u8> {
@@ -237,6 +250,16 @@ pub use sp_std;
 ///             .expect("`set_or_clear` called outside of an Externalities-provided environment.")
 ///     }
 ///
+///     #[cfg(feature = "experimental-function")]
+///     pub fn gated_call(data: &[u8]) -> Vec<u8> {
+///         gated_call_version_1(data)
+///     }
+///
+///     #[cfg(feature = "experimental-function")]
+///     fn gated_call_version_1(data: &[u8]) -> Vec<u8> {
+///         <&mut dyn sp_externalities::Externalities as Interface>::gated_call_version_1(data)
+///     }
+///
 ///     /// This type implements the `HostFunctions` trait (from `sp-wasm-interface`) and
 ///     /// provides the host implementation for the wasm side. The host implementation converts the
 ///     /// arguments from wasm to native and calls the corresponding native function.
@@ -247,28 +270,43 @@ pub use sp_std;
 /// }
 /// ```
 ///
-///
 /// The given example will generate roughly the following code for wasm:
 ///
 /// ```
 /// mod interface {
 ///     mod extern_host_functions_impls {
-///         extern "C" {
-///             /// Every function is exported as `ext_TRAIT_NAME_FUNCTION_NAME_version_VERSION`.
-///             ///
-///             /// `TRAIT_NAME` is converted into snake case.
-///             ///
-///             /// The type for each argument of the exported function depends on
-///             /// `<ARGUMENT_TYPE as RIType>::FFIType`.
-///             ///
-///             /// `data` holds the pointer and the length to the `[u8]` slice.
-///             pub fn ext_Interface_call_version_1(data: u64) -> u64;
-///             /// `optional` holds the pointer and the length of the encoded value.
-///             pub fn ext_Interface_set_or_clear_version_1(optional: u64);
+///         /// Every function is exported by the native code as `ext_FUNCTION_NAME_version_VERSION`.
+///         ///
+///         /// The type for each argument of the exported function depends on
+///         /// `<ARGUMENT_TYPE as RIType>::FFIType`.
+///         ///
+///         /// `key` holds the pointer and the length to the `data` slice.
+///         pub fn call(data: &[u8]) -> Vec<u8> {
+///             extern "C" { pub fn ext_call_version_2(key: u64); }
+///             // Should call into extenal `ext_call_version_2(<[u8] as IntoFFIValue>::into_ffi_value(key))`
+///             // But this is too much to replicate in a doc test so here we just return a dummy vector.
+///             // Note that we jump into the latest version not marked as `register_only` (i.e. version 2).
+///             Vec::new()
+///         }
+///
+///         /// `key` holds the pointer and the length of the `option` value.
+///         pub fn set_or_clear(option: Option<Vec<u8>>) {
+///             extern "C" { pub fn ext_set_or_clear_version_1(key: u64); }
+///             // Same as above
+///         }
+///
+///         /// `key` holds the pointer and the length to the `data` slice.
+///         #[cfg(feature = "experimental-function")]
+///         pub fn gated_call(data: &[u8]) -> Vec<u8> {
+///             extern "C" { pub fn ext_gated_call_version_1(key: u64); }
+///             /// Same as above
+///             Vec::new()
 ///         }
 ///     }
 ///
-///     /// The type is actually `ExchangeableFunction` (from `sp-runtime-interface`).
+///     /// The type is actually `ExchangeableFunction` (from `sp-runtime-interface`) and
+///     /// by default this is initialized to jump into the corresponding function in
+///     /// `extern_host_functions_impls`.
 ///     ///
 ///     /// This can be used to replace the implementation of the `call` function.
 ///     /// Instead of calling into the host, the callee will automatically call the other
@@ -279,6 +317,8 @@ pub use sp_std;
 ///     /// `host_call.replace_implementation(some_other_impl)`
 ///     pub static host_call: () = ();
 ///     pub static host_set_or_clear: () = ();
+///     #[cfg(feature = "experimental-feature")]
+///     pub static gated_call: () = ();
 ///
 ///     pub fn call(data: &[u8]) -> Vec<u8> {
 ///         // This is the actual call: `host_call.get()(data)`
@@ -290,6 +330,12 @@ pub use sp_std;
 ///
 ///     pub fn set_or_clear(optional: Option<Vec<u8>>) {
 ///         // Same as above
+///     }
+///
+///     #[cfg(feature = "experimental-feature")]
+///     pub fn gated_call(data: &[u8]) -> Vec<u8> {
+///         // Same as above
+///         Vec::new()
 ///     }
 /// }
 /// ```

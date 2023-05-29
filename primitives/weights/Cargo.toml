@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-serde = { version = "1.0.136", optional = true, features = ["derive"] }
+serde = { version = "1.0.136", default-features = false, optional = true, features = ["derive", "alloc"] }
 smallvec = "1.8.0"
 sp-arithmetic = { version = "6.0.0", default-features = false, path = "../arithmetic" }
 sp-core = { version = "7.0.0", default-features = false, path = "../core" }
@@ -27,7 +27,7 @@ default = [ "std" ]
 std = [
 	"codec/std",
 	"scale-info/std",
-	"serde",
+	"serde/std",
 	"sp-arithmetic/std",
 	"sp-core/std",
 	"sp-debug-derive/std",
@@ -36,3 +36,11 @@ std = [
 # By default some types have documentation, `full-metadata-docs` allows to add documentation to
 # more types in the metadata.
 full-metadata-docs = ["scale-info/docs"]
+
+# Serde support without relying on std features.
+serde = [
+	"dep:serde",
+	"scale-info/serde",
+	"sp-arithmetic/serde",
+	"sp-core/serde",
+]
