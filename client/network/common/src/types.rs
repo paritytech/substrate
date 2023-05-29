@@ -16,15 +16,23 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Common data structures of the networking layer.
+/// Description of a reputation adjustment for a node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReputationChange {
+	/// Reputation delta.
+	pub value: i32,
+	/// Reason for reputation change.
+	pub reason: &'static str,
+}
 
-pub mod message;
-pub mod role;
-pub mod sync;
-pub mod types;
+impl ReputationChange {
+	/// New reputation change with given delta and reason.
+	pub const fn new(value: i32, reason: &'static str) -> ReputationChange {
+		Self { value, reason }
+	}
 
-/// Minimum Requirements for a Hash within Networking
-pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
-
-impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
-{}
+	/// New reputation change that forces minimum possible reputation.
+	pub const fn new_fatal(reason: &'static str) -> ReputationChange {
+		Self { value: i32::MIN, reason }
+	}
+}
