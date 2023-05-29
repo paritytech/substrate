@@ -1235,8 +1235,9 @@ impl NetworkBehaviour for Notifications {
 							// If no connection is `OpenDesiredByRemote` anymore, clean up the
 							// peerset incoming request.
 							if no_desired_left {
-								// In the incoming state, we don't report "Dropped". Instead we will
-								// just ignore the corresponding Accept/Reject.
+								// In the incoming state, we don't report "Dropped" straight away.
+								// Instead we will report "Dropped" if receive the corresponding
+								// "Accept".
 								if let Some(state) = self
 									.incoming
 									.iter_mut()
