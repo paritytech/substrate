@@ -97,16 +97,16 @@ pub fn expand_runtime_metadata(
 
 				let ty = #scrate::scale_info::meta_type::<#extrinsic>();
 				let address_ty = #scrate::scale_info::meta_type::<
-						<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::SignatureAddress
+						<<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::SignaturePayload as #scrate::sp_runtime::traits::SignaturePayload>::SignatureAddress
 					>();
 				let call_ty = #scrate::scale_info::meta_type::<
 					<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::Call
 					>();
 				let signature_ty = #scrate::scale_info::meta_type::<
-						<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::Signature
+						<<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::SignaturePayload as #scrate::sp_runtime::traits::SignaturePayload>::Signature
 					>();
 				let extra_ty = #scrate::scale_info::meta_type::<
-						<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::SignatureExtra
+						<<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::SignaturePayload as #scrate::sp_runtime::traits::SignaturePayload>::SignatureExtra
 					>();
 
 				#scrate::metadata_ir::MetadataIR {
