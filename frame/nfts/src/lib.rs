@@ -1835,13 +1835,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::mint_pre_signed(mint_data.attributes.len() as u32))]
 		pub fn mint_pre_signed(
 			origin: OriginFor<T>,
-			mint_data: PreSignedMintOf<T, I>,
+			mint_data: Box<PreSignedMintOf<T, I>>,
 			signature: T::OffchainSignature,
 			signer: T::AccountId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::validate_signature(&Encode::encode(&mint_data), &signature, &signer)?;
-			Self::do_mint_pre_signed(origin, mint_data, signer)
+			Self::do_mint_pre_signed(origin, *mint_data, signer)
 		}
 
 		/// Set attributes for an item by providing the pre-signed approval.
