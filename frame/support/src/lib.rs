@@ -987,7 +987,7 @@ pub mod tests {
 	}
 
 	fn new_test_ext() -> TestExternalities {
-		GenesisConfig::default().build_storage().unwrap().into()
+		RuntimeGenesisConfig::default().build_storage().unwrap().into()
 	}
 
 	trait Sorted {
