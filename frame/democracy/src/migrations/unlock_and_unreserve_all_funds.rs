@@ -347,7 +347,7 @@ mod test {
 			// Run the migration.
 			crate::migrations::unlock_and_unreserve_all_funds::UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
 
-			// Assert the voter lock was removed and the reserved balance was reduced by the
+			// Assert the voter lock was removed
 			assert_eq!(
 				<Test as crate::Config>::Currency::locks(&voter)
 					.iter()
