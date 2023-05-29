@@ -907,7 +907,7 @@ fn inherent_expand() {
 		),
 		vec![UncheckedExtrinsic {
 			call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
-			signature: Some((1, (), Default::default())),
+			signature: Some((1, Default::default())),
 		}],
 	);
 
@@ -978,7 +978,7 @@ fn inherent_expand() {
 			},
 			UncheckedExtrinsic {
 				call: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
-				signature: Some((1, (), Default::default())),
+				signature: Some((1, Default::default())),
 			},
 			UncheckedExtrinsic {
 				call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
