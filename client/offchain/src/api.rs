@@ -22,7 +22,7 @@ use crate::NetworkProvider;
 use codec::{Decode, Encode};
 use futures::Future;
 pub use http::SharedClient;
-use libp2p::{Multiaddr, PeerId};
+use libp2p::PeerId;
 use sp_core::{
 	offchain::{
 		self, HttpError, HttpRequestId, HttpRequestStatus, OffchainStorage, OpaqueNetworkState,
@@ -159,9 +159,7 @@ impl offchain::Externalities for Api {
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
-		let external_addresses = self.network_provider.external_addresses();
-
-		let state = NetworkState::new(self.network_provider.local_peer_id(), external_addresses);
+		let state = NetworkState::new(self.network_provider.local_peer_id());
 		Ok(OpaqueNetworkState::from(state))
 	}
 
@@ -238,12 +236,11 @@ impl offchain::Externalities for Api {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct NetworkState {
 	peer_id: PeerId,
-	external_addresses: Vec<Multiaddr>,
 }
 
 impl NetworkState {
-	fn new(peer_id: PeerId, external_addresses: Vec<Multiaddr>) -> Self {
-		NetworkState { peer_id, external_addresses }
+	fn new(peer_id: PeerId) -> Self {
+		NetworkState { peer_id }
 	}
 }
 
@@ -265,7 +262,7 @@ impl TryFrom<OpaqueNetworkState> for NetworkState {
 		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..]).map_err(|_| ())?;
 		let peer_id = PeerId::from_bytes(&bytes).map_err(|_| ())?;
 
-		Ok(NetworkState { peer_id, external_addresses: vec![] })
+		Ok(NetworkState { peer_id })
 	}
 }
 
@@ -388,10 +385,6 @@ mod tests {
 	}
 
 	impl NetworkStateInfo for TestNetwork {
-		fn external_addresses(&self) -> Vec<Multiaddr> {
-			Vec::new()
-		}
-
 		fn local_peer_id(&self) -> PeerId {
 			PeerId::random()
 		}
@@ -502,13 +495,7 @@ mod tests {
 	#[test]
 	fn should_convert_network_states() {
 		// given
-		let state = NetworkState::new(
-			PeerId::random(),
-			vec![
-				Multiaddr::try_from("/ip4/127.0.0.1/tcp/1234".to_string()).unwrap(),
-				Multiaddr::try_from("/ip6/2601:9:4f81:9700:803e:ca65:66e8:c21").unwrap(),
-			],
-		);
+		let state = NetworkState::new(PeerId::random());
 
 		// when
 		let opaque_state = OpaqueNetworkState::from(state.clone());
