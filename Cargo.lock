@@ -9022,6 +9022,7 @@ dependencies = [
  "sc-network",
  "sc-network-test",
  "sc-telemetry",
+ "sc-transaction-pool-api",
  "scale-info",
  "sp-api",
  "sp-application-crypto",

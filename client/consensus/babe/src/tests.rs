@@ -26,6 +26,7 @@ use sc_consensus::{BoxBlockImport, BoxJustificationImport};
 use sc_consensus_epochs::{EpochIdentifier, EpochIdentifierPosition};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_network_test::{Block as TestBlock, *};
+use sc_transaction_pool_api::LocalTransactionPool;
 use sp_application_crypto::key_types::BABE;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_babe::{
@@ -214,6 +215,24 @@ impl Verifier<TestBlock> for TestVerifier {
 	}
 }
 
+struct FakeTxPool;
+
+impl LocalTransactionPool for FakeTxPool {
+	type Block = TestBlock;
+
+	type Hash = <TestBlock as BlockT>::Hash;
+
+	type Error = sc_transaction_pool_api::error::Error;
+
+	fn submit_local(
+		&self,
+		_: <TestBlock as BlockT>::Hash,
+		_: <TestBlock as BlockT>::Extrinsic,
+	) -> Result<Self::Hash, Self::Error> {
+		unimplemented!()
+	}
+}
+
 pub struct PeerData {
 	link: BabeLink<TestBlock>,
 	block_import: Mutex<
@@ -283,6 +302,7 @@ impl TestNetFactory for BabeTestNet {
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
 				telemetry: None,
+				offchain_tx_pool: OffchainTransactionPoolFactory::new(FakeTxPool),
 			},
 			mutator: MUTATOR.with(|m| m.borrow().clone()),
 		}
