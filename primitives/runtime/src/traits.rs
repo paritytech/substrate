@@ -1006,6 +1006,12 @@ pub trait SignaturePayload {
 	type SignatureExtra: TypeInfo;
 }
 
+impl SignaturePayload for () {
+	type SignatureAddress = ();
+	type Signature = ();
+	type SignatureExtra = ();
+}
+
 /// Implementor is an [`Extrinsic`] and provides metadata about this extrinsic.
 pub trait ExtrinsicMetadata {
 	/// The format version of the `Extrinsic`.
