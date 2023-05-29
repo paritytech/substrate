@@ -66,6 +66,9 @@ node-template-runtime = { version = "4.0.0-dev", path = "../runtime" }
 # CLI-specific dependencies
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 
+# Workaround until https://github.com/bluejekyll/enum-as-inner/issues/98 is fixed.
+enum-as-inner = "=0.5.1"
+
 [build-dependencies]
 substrate-build-script-utils = { version = "3.0.0", path = "../../../utils/build-script-utils" }
 
