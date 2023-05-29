@@ -23,6 +23,7 @@ codec = { package = "parity-scale-codec", version = "3.2.2" }
 sp-state-machine = { version = "0.13.0", path = "../../state-machine" }
 trybuild = "1.0.74"
 rustversion = "1.0.6"
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 
 [dev-dependencies]
 criterion = "0.4.0"
