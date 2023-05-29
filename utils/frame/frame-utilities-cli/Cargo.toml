@@ -15,8 +15,8 @@ clap = { version = "4.2.5", features = ["derive"] }
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-core = { version = "8.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
 
 [features]
 default = []

@@ -34,9 +34,9 @@ sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
 sc-peerset = { version = "4.0.0-dev", path = "../peerset" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-core = { version = "8.0.0", path = "../../primitives/core" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "8.0.0", path = "../../primitives/runtime" }
 
 [dev-dependencies]
 lazy_static = "1.4.0"
@@ -46,7 +46,7 @@ sc-client-db = { version = "0.10.0-dev", default-features = true, path = "../db"
 sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "7.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 
 [features]

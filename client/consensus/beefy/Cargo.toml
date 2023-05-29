@@ -29,15 +29,15 @@ sc-network-gossip = { version = "0.10.0-dev", path = "../../network-gossip" }
 sc-network-sync = { version = "0.10.0-dev", path = "../../network/sync" }
 sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-application-crypto = { version = "7.0.0", path = "../../../primitives/application-crypto" }
-sp-arithmetic = { version = "6.0.0", path = "../../../primitives/arithmetic" }
+sp-application-crypto = { version = "8.0.0", path = "../../../primitives/application-crypto" }
+sp-arithmetic = { version = "7.0.0", path = "../../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-beefy = { version = "4.0.0-dev", path = "../../../primitives/consensus/beefy" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
+sp-core = { version = "8.0.0", path = "../../../primitives/core" }
+sp-keystore = { version = "0.14.0", path = "../../../primitives/keystore" }
 sp-mmr-primitives = { version = "4.0.0-dev", path = "../../../primitives/merkle-mountain-range" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 serde = "1.0.136"
@@ -46,6 +46,6 @@ tokio = "1.22.0"
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
 sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/grandpa" }
-sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
-sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
+sp-keyring = { version = "8.0.0", path = "../../../primitives/keyring" }
+sp-tracing = { version = "7.0.0", path = "../../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
