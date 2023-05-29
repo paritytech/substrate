@@ -248,3 +248,113 @@ where
 		Ok(())
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use crate::{
+		tests::{new_test_ext, Test},
+		DepositOf, Voting, VotingOf,
+	};
+	use frame_support::{
+		assert_ok,
+		traits::{Currency, OnRuntimeUpgrade, ReservableCurrency, WithdrawReasons},
+		BoundedVec,
+	};
+
+	#[test]
+	fn unreserve_works_for_depositer() {
+		let depositer_0 = 10;
+		let depositer_1 = 11;
+		let deposit = 25;
+		let depositer_0_initial_reserved = 0;
+		let depositer_1_initial_reserved = 15;
+		let initial_balance = 100_000;
+		new_test_ext().execute_with(|| {
+
+			// Set up initial state.
+			<Test as crate::Config>::Currency::make_free_balance_be(&depositer_0, initial_balance);
+			<Test as crate::Config>::Currency::make_free_balance_be(&depositer_1, initial_balance);
+			assert_ok!(<Test as crate::Config>::Currency::reserve(&depositer_0, depositer_0_initial_reserved + deposit));
+			assert_ok!(<Test as crate::Config>::Currency::reserve(&depositer_1, depositer_1_initial_reserved + deposit));
+			let depositors = BoundedVec::<_, <Test as crate::Config>::MaxDeposits>::truncate_from(vec![depositer_0, depositer_1]);
+			DepositOf::<Test>::insert(
+				0,
+				(depositors, deposit),
+			);
+
+			// Sanity check: ensure initial reserved balance was set correctly.
+			assert_eq!(
+				<Test as crate::Config>::Currency::reserved_balance(&depositer_0),
+				depositer_0_initial_reserved + deposit
+			);
+			assert_eq!(
+				<Test as crate::Config>::Currency::reserved_balance(&depositer_1),
+				depositer_1_initial_reserved + deposit
+			);
+
+			// Run the migration.
+			crate::migrations::unlock_and_unreserve_all_funds::UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+
+			// Assert the reserved balance was reduced by the expected amount.
+			assert_eq!(
+				<Test as crate::Config>::Currency::reserved_balance(&depositer_0),
+				depositer_0_initial_reserved
+			);
+			assert_eq!(
+				<Test as crate::Config>::Currency::reserved_balance(&depositer_1),
+				depositer_1_initial_reserved
+			);
+		});
+	}
+
+	#[test]
+	fn unlock_works_for_voter() {
+		let voter = 10;
+		let stake = 25;
+		let initial_locks = vec![(b"somethin", 10)];
+		let initial_balance = 100_000;
+		new_test_ext().execute_with(|| {
+			// Set up initial state.
+			<Test as crate::Config>::Currency::make_free_balance_be(&voter, initial_balance);
+			for lock in initial_locks.clone() {
+				<Test as crate::Config>::Currency::set_lock(
+					*lock.0,
+					&voter,
+					lock.1,
+					WithdrawReasons::all(),
+				);
+			}
+			VotingOf::<Test>::insert(voter, Voting::default());
+			<Test as crate::Config>::Currency::set_lock(
+				DEMOCRACY_ID,
+				&voter,
+				stake,
+				WithdrawReasons::all(),
+			);
+
+			// Sanity check: ensure initial Balance state was set up correctly.
+			let mut voter_all_locks = initial_locks.clone();
+			voter_all_locks.push((&DEMOCRACY_ID, stake));
+			assert_eq!(
+				<Test as crate::Config>::Currency::locks(&voter)
+					.iter()
+					.map(|lock| (&lock.id, lock.amount))
+					.collect::<Vec<_>>(),
+				voter_all_locks
+			);
+
+			// Run the migration.
+			crate::migrations::unlock_and_unreserve_all_funds::UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+
+			// Assert the voter lock was removed and the reserved balance was reduced by the
+			assert_eq!(
+				<Test as crate::Config>::Currency::locks(&voter)
+					.iter()
+					.map(|lock| (&lock.id, lock.amount))
+					.collect::<Vec<_>>(),
+				initial_locks
+			);
+		});
+	}
+}
