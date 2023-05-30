@@ -211,6 +211,9 @@ impl TypeId for PalletId {
 /// ```
 pub use frame_support_procedural::storage_alias;
 
+#[macro_magic::use_attr]
+pub use frame_support_procedural::derive_impl;
+
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
 ///
 /// The so-called parameter type can be created in four different ways:
@@ -823,6 +826,7 @@ macro_rules! assert_error_encoded_size {
 pub use serde::{Deserialize, Serialize};
 
 #[doc(hidden)]
+#[cfg(not(no_std))]
 pub use macro_magic;
 
 #[cfg(test)]
@@ -1560,6 +1564,7 @@ pub mod pallet_prelude {
 	};
 	pub use codec::{Decode, Encode, MaxEncodedLen};
 	pub use frame_support::pallet_macros::*;
+	pub use frame_support_procedural::register_default_impl;
 	pub use scale_info::TypeInfo;
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
@@ -2893,16 +2898,17 @@ pub use frame_support_procedural::pallet;
 
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
-	#[macro_magic::use_attr]
-	pub use frame_support_procedural::import_section;
 	pub use frame_support_procedural::{
 		call_index, compact, composite_enum, config, constant,
-		disable_frame_system_supertrait_check, error, event, export_section, extra_constants,
-		generate_deposit, generate_store, genesis_build, genesis_config, getter, hooks, inherent,
-		origin, storage, storage_prefix, storage_version, type_value, unbounded, validate_unsigned,
-		weight, whitelist_storage,
+		disable_frame_system_supertrait_check, error, event, extra_constants, generate_deposit,
+		generate_store, genesis_build, genesis_config, getter, hooks, inherent, no_default, origin,
+		storage, storage_prefix, storage_version, type_value, unbounded, validate_unsigned, weight,
+		whitelist_storage,
 	};
 }
+
+#[doc(inline)]
+pub use frame_support_procedural::register_default_impl;
 
 // Generate a macro that will enable/disable code based on `std` feature being active.
 sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);
