@@ -1,4 +1,4 @@
-error: A section can only be imported under a pallet macro
+error: `#[import_section]` can only be applied to a valid pallet module
   --> tests/split_ui/import_without_pallet.rs:5:1
    |
 5  | / #[pallet_section]

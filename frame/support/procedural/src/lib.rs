@@ -42,7 +42,7 @@ use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
-use syn::{parse_macro_input, ItemImpl, ItemMod};
+use syn::{parse_macro_input, Error, ItemImpl, ItemMod};
 
 thread_local! {
 	/// A global counter, can be used to generate a relatively unique identifier.
@@ -1759,30 +1759,16 @@ pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 
 	// check that internal_mod is a pallet module
 	if internal_mod.attrs.iter().find(|attr| {
-	    if let Some(last_seg) = attr.path().segments.last() {
-	        last_seg.ident == "pallet"
-	    } else {
-	        false
-	    }
+		if let Some(last_seg) = attr.path().segments.last() {
+			last_seg.ident == "pallet"
+		} else {
+			false
+		}
 	}).is_none() {
-	    return Err(Error::new(
-	        internal_mod.span(),
+	    return Error::new(
+	        internal_mod.ident.span(),
 	        "`#[import_section]` can only be applied to a valid pallet module",
-	    )).to_compile_error.into();
-	}
-
-    // check that foreign_mod has `#[pallet_section]` attached to it
-	if foreign_mod.attrs.iter().find(|attr| {
-	    if let Some(last_seg) = attr.path().segments.last() {
-	        last_seg.ident == "pallet_section"
-	    } else {
-	        false
-	    }
-	}).is_none() {
-	    return Err(Error::new(
-	        foreign_mod.span(),
-	        "`#[import_section]` can only take a valid pallet section as an argument",
-	    )).to_compile_error().into();
+	    ).to_compile_error().into();
 	}
 
 	if let Some(ref mut content) = internal_mod.content {
