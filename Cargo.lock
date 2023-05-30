@@ -2749,6 +2749,7 @@ dependencies = [
  "frame-support",
  "frame-support-test-pallet",
  "frame-system",
+ "macro_magic",
  "parity-scale-codec",
  "pretty_assertions",
  "rustversion",
