@@ -18,10 +18,10 @@ log = { version = "0.4.17", default-features = false }
 mmr-lib = { package = "ckb-merkle-mountain-range", version = "0.5.2", default-features = false }
 serde = { version = "1.0.136", features = ["derive", "alloc"], default-features = false, optional = true }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
-sp-core = { version = "7.0.0", default-features = false, path = "../core" }
-sp-debug-derive = { version = "5.0.0", default-features = false, path = "../debug-derive" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../std" }
+sp-core = { version = "8.0.0", default-features = false, path = "../core" }
+sp-debug-derive = { version = "6.0.0", default-features = false, path = "../debug-derive" }
+sp-runtime = { version = "8.0.0", default-features = false, path = "../runtime" }
+sp-std = { version = "6.0.0", default-features = false, path = "../std" }
 thiserror = "1.0"
 
 [dev-dependencies]

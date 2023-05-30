@@ -1,0 +1,15 @@
+error: expected `impl`
+  --> tests/derive_impl_ui/attached_to_non_impl.rs:24:1
+   |
+24 | / #[register_default_impl(FourLeggedAnimal)]
+25 | | impl Animal for FourLeggedAnimal {
+26 | |     type Locomotion = RunsOnFourLegs;
+27 | |     type Diet = Omnivore;
+...  |
+37 | |
+38 | | #[derive_impl(FourLeggedAnimal as Animal)]
+   | |_-----------------------------------------^
+   |   |
+   |   in this procedural macro expansion
+   |
+   = note: this error originates in the macro `__import_tokens_attr_derive_impl_inner` which comes from the expansion of the attribute macro `derive_impl` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -15,6 +15,7 @@ There are a few basic ground-rules for contributors (including the maintainer(s)
 . **All modifications** must be made in a **pull-request** to solicit feedback from other contributors.
 . A pull-request *must not be merged until CI* has finished successfully.
 . Contributors should adhere to the link:STYLE_GUIDE.md[house coding style].
+. Contributors should adhere to the link:DOCUMENTATION_GUIDELINES.md[house documenting style], when applicable.
 
 
 == Merge Process
