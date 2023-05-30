@@ -2712,6 +2712,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "k256",
  "log",
+ "macro_magic",
  "once_cell",
  "parity-scale-codec",
  "paste",
@@ -2745,6 +2746,7 @@ dependencies = [
  "derive-syn-parse",
  "frame-support-procedural-tools",
  "itertools",
+ "macro_magic",
  "proc-macro-warning",
  "proc-macro2",
  "quote",
@@ -2793,6 +2795,7 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "sp-version",
+ "static_assertions",
  "trybuild",
 ]
 
@@ -4767,6 +4770,53 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_magic"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "686f3703e9d296140171bbd6a6fa560e6059a35299ee3ce8c5bd646afa0c3992"
+dependencies = [
+ "macro_magic_core",
+ "macro_magic_macros",
+ "quote",
+ "syn 2.0.16",
+]
+
+[[package]]
+name = "macro_magic_core"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e060da9399c1535b3f190084d7c6121bb3355b70c610110cff3f4978526f54e2"
+dependencies = [
+ "derive-syn-parse",
+ "macro_magic_core_macros",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.16",
+]
+
+[[package]]
+name = "macro_magic_core_macros"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fb9865e03b9641e57448b9743915eadd0f642e41a41c4d9eaa8b5b861d887b0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.16",
+]
+
+[[package]]
+name = "macro_magic_macros"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68cf083ba5ba151ce3230a7c687cb5c890498adae59c85f3be7e8e741a6c9f65"
+dependencies = [
+ "macro_magic_core",
+ "quote",
+ "syn 2.0.16",
+]
+
+[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6290,6 +6340,20 @@ dependencies = [
  "scale-info",
  "sp-arithmetic",
  "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-default-config-example"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
  "sp-io",
  "sp-runtime",
  "sp-std",
