@@ -23,13 +23,13 @@ use sp_core::{RuntimeDebug, TypedGet};
 use sp_runtime::DispatchError;
 use sp_std::fmt::Debug;
 
-use super::{fungible, fungibles, Preservation::Expendable};
+use super::{fungible, fungibles, Balance, Preservation::Expendable};
 
 /// Can be implemented by `PayFromAccount` using a `fungible` impl, but can also be implemented with
 /// XCM/MultiAsset and made generic over assets.
 pub trait Pay {
 	/// The type by which we measure units of the currency in which we make payments.
-	type Balance;
+	type Balance: Balance;
 	/// The type by which we identify the beneficiaries to whom a payment may be made.
 	type Beneficiary;
 	/// The type for the kinds of asset that are going to be paid.

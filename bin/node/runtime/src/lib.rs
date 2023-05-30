@@ -1106,7 +1106,8 @@ parameter_types! {
 
 impl pallet_treasury::Config for Runtime {
 	type PalletId = TreasuryPalletId;
-	type AssetKind = u32;
+	type AssetId = u32;
+	type AssetKind = pallet_treasury::SimpleAsset<u32, u128>;
 	type Paymaster = PayFungibles<Assets, TreasuryAccount>;
 	type BalanceConverter = ();
 	type Currency = Balances;
@@ -1130,6 +1131,7 @@ impl pallet_treasury::Config for Runtime {
 	type WeightInfo = pallet_treasury::weights::SubstrateWeight<Runtime>;
 	type MaxApprovals = MaxApprovals;
 	type SpendOrigin = EnsureWithSuccess<EnsureRoot<AccountId>, AccountId, MaxBalance>;
+	type MaxPaymentRetries = ConstU32<3>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();
 }

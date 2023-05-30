@@ -136,6 +136,21 @@ impl Asset<(), Self> for u64 {
 	}
 }
 
+/// SimpleAsset is an asset adapter where we can specify the AssetId and fungibility.
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub struct SimpleAsset<AssetId, Fungibility>(AssetId, Fungibility);
+
+impl<A: Copy, F: Copy> Asset<A, F> for SimpleAsset<A, F> {
+	fn asset_kind(&self) -> A {
+		let SimpleAsset(asset_kind, _val) = self;
+		*asset_kind
+	}
+	fn amount(&self) -> F {
+		let SimpleAsset(_asset_kind, val) = self;
+		(*val).into()
+	}
+}
+
 /// An index of a proposal. Just a `u32`.
 pub type ProposalIndex = u32;
 
