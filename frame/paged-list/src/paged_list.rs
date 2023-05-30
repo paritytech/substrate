@@ -89,11 +89,11 @@ pub struct StoragePagedList<Prefix, Value, ValuesPerPage> {
 )]
 // todo ignore scale bounds
 pub struct StoragePagedListMeta<Prefix, Value, ValuesPerPage> {
-	/// The first page that contains a value.
+	/// The first page that could contain a value.
 	///
 	/// Can be >0 when pages were deleted.
 	pub first_page: PageIndex,
-	/// The first value inside `first_page` that contains a value.
+	/// The first index inside `first_page` that could contain a value.
 	///
 	/// Can be >0 when values were deleted.
 	pub first_value_offset: ValueIndex,
