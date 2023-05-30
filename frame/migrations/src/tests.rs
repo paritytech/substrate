@@ -27,20 +27,20 @@ use frame_support::{
 /*
 log output:
 
- [Block 0] Advancing migration 0.    
- [Block 0] Migration 0 advanced.    
- [Block 1] Advancing migration 0.    
- [Block 1] Migration 0 done.    
- [Block 2] Advancing migration 1.    
- [Block 2] Migration 1 advanced.    
- [Block 3] Advancing migration 1.    
- [Block 3] Migration 1 advanced.    
- [Block 4] Advancing migration 1.    
- [Block 4] Migration 1 done.    
- [Block 5] All migrations processed (2 >= 2).    
- [Block 6] Nothing to do: waiting for cursor to become `Some`.    
- [Block 7] Nothing to do: waiting for cursor to become `Some`.    
- [Block 8] Nothing to do: waiting for cursor to become `Some`.    
+ [Block 0] Advancing migration 0.
+ [Block 0] Migration 0 advanced.
+ [Block 1] Advancing migration 0.
+ [Block 1] Migration 0 done.
+ [Block 2] Advancing migration 1.
+ [Block 2] Migration 1 advanced.
+ [Block 3] Advancing migration 1.
+ [Block 3] Migration 1 advanced.
+ [Block 4] Advancing migration 1.
+ [Block 4] Migration 1 done.
+ [Block 5] All migrations processed (2 >= 2).
+ [Block 6] Nothing to do: waiting for cursor to become `Some`.
+ [Block 7] Nothing to do: waiting for cursor to become `Some`.
+ [Block 8] Nothing to do: waiting for cursor to become `Some`.
  [Block 9] Nothing to do: waiting for cursor to become `Some`.
 */
 #[test]

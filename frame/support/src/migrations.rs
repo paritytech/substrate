@@ -252,22 +252,17 @@ pub enum SteppedMigrationError {
 	///
 	/// Can be resolved by calling with at least `required` weight. Note that calling it with
 	/// exactly `required` weight could cause it to not make any progress.
-	InsufficientWeight {
-		required: Weight,
-	},
+	InsufficientWeight { required: Weight },
 	/// Implementation specific error that should resolve itself at a later point in time.
 	///
 	/// The number of re-tries can be decided upon by the caller. `inner` is undefined.
-	Transient {
-		inner: u8,
-	},
+	Transient { inner: u8 },
 	// permanent errors:
 	/// The migration encountered a permanent error and cannot continue.
 	///
 	/// This can happen if the storage is corrupted or an assumption got invalidated while the
 	/// migration was running.
-	Permanent {
-		inner: u8,
-	},
+	Permanent { inner: u8 },
+	/// An internal error that should never happen.
 	Internal,
 }

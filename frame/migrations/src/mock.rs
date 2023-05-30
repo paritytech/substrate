@@ -72,31 +72,9 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
-frame_support::parameter_types! {
-	pub const ServiceWeight: Weight = Weight::MAX;
-	/// Stepped migrations need to be allocated as objects.
-	///
-	/// This is different from the normal compile-time tuple config, but allows them to carry
-	/// configuration.
-	pub SteppedMigrations: Vec<Box<dyn SteppedMigration>> = vec![
-		Box::new(MockedMigrateToV1(1)),
-		Box::new(MockedMigrateToV1(2)),
-	];
-}
-
-impl crate::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-	type ServiceWeight = ServiceWeight;
-	type Migrations = SteppedMigrations;
-}
-
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
-}
-
-pub struct MockedMigrateToV1(u32);
-impl SteppedMigration for MockedMigrateToV1 {
+/// Succeeds after `inner` steps.
+pub struct MockedMigrate(u32);
+impl SteppedMigration for MockedMigrate {
 	fn step(
 		&self,
 		cursor: &Option<SteppedMigrationCursor>,
@@ -110,4 +88,27 @@ impl SteppedMigration for MockedMigrateToV1 {
 		count += 1;
 		Ok(Some(count.encode().try_into().unwrap()))
 	}
+}
+
+frame_support::parameter_types! {
+	pub const ServiceWeight: Weight = Weight::MAX;
+	/// Stepped migrations need to be allocated as objects.
+	///
+	/// This is different from the normal compile-time tuple config, but allows them to carry
+	/// configuration.
+	pub SteppedMigrations: Vec<Box<dyn SteppedMigration>> = vec![
+		Box::new(MockedMigrate(1)),
+		Box::new(MockedMigrate(2)),
+	];
+}
+
+impl crate::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type ServiceWeight = ServiceWeight;
+	type Migrations = SteppedMigrations;
+}
+
+// Build genesis storage according to the mock runtime.
+pub fn new_test_ext() -> sp_io::TestExternalities {
+	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }

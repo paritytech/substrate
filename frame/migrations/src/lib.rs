@@ -43,8 +43,13 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+		/// All the multi-block migrations to run.
+		///
+		/// Should only be updated in a runtime-upgrade once all the old ones have completed. (Check
+		/// `Cursor` for `None`).
 		type Migrations: Get<Vec<Box<dyn SteppedMigration>>>;
 
+		/// The weight to spend each block to execute migrations.
 		type ServiceWeight: Get<Weight>;
 	}
 
@@ -54,19 +59,21 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
+		/// Runtime upgrade started.
 		UpgradeStarted,
+		/// Runtime upgrade completed with `migrations`.
 		UpgradeCompleted { migrations: u32 },
-
+		/// Migration `index` made progress.
 		MigrationAdvanced { index: u32 },
+		/// Migration `index` completed.
 		MigrationCompleted { index: u32 },
-		MigrationFailed { index: u32 }, // TODO add `inner` error
+		/// Migration `index` failed. TODO add `inner` error
+		MigrationFailed { index: u32 },
 	}
 
 	// Errors inform users that something went wrong.
 	#[pallet::error]
-	pub enum Error<T> {
-		TooLarge, // Errors cannot have fields.
-	}
+	pub enum Error<T> {}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -124,6 +131,9 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Allows root to set the cursor to any value.
+		///
+		/// Should normally not be needed and is only in place as emergency measure.
 		#[pallet::call_index(0)]
 		#[pallet::weight(0)]
 		pub fn force_set_cursor(
