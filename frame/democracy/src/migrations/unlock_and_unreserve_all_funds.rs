@@ -30,9 +30,6 @@ use sp_std::{
 	vec::Vec,
 };
 
-#[cfg(feature = "try-runtime")]
-use codec::{Decode, Encode};
-
 /// A migration that unreserves all deposit and unlocks all stake held in the context of this
 /// pallet.
 ///
@@ -41,13 +38,10 @@ use codec::{Decode, Encode};
 /// The pallet should be made inoperable before or immediately after this migration is run.
 ///
 /// (See also the `RemovePallet` migration in `frame/support/src/migrations.rs`)
-pub struct UnlockAndUnreserveAllFunds<T: crate::Config + pallet_balances::Config>(
-	sp_std::marker::PhantomData<T>,
-);
+pub struct UnlockAndUnreserveAllFunds<T: crate::Config>(sp_std::marker::PhantomData<T>);
 
-impl<T: crate::Config + pallet_balances::Config> UnlockAndUnreserveAllFunds<T>
+impl<T: crate::Config> UnlockAndUnreserveAllFunds<T>
 where
-	BalanceOf<T>: From<<T as pallet_balances::Config>::Balance>,
 	BalanceOf<T>: Sum,
 {
 	/// Calculates and returns the total amounts reserved by each account by this pallet, and all
@@ -99,24 +93,10 @@ where
 			RocksDbWeight::get().reads(deposit_of_len as u64 + voting_of_len as u64),
 		)
 	}
-
-	/// Helper function for returning the locked amount of an account under the ID of this
-	/// pallet.
-	#[cfg(feature = "try-runtime")]
-	fn get_actual_locked_amount(account: T::AccountId) -> Option<BalanceOf<T>> {
-		use pallet_balances::Locks;
-		use sp_runtime::SaturatedConversion;
-
-		Locks::<T>::get(account.clone())
-			.iter()
-			.find(|l| l.id == DEMOCRACY_ID)
-			.map(|lock| lock.amount.saturated_into::<BalanceOf<T>>())
-	}
 }
 
-impl<T: crate::Config + pallet_balances::Config> OnRuntimeUpgrade for UnlockAndUnreserveAllFunds<T>
+impl<T: crate::Config> OnRuntimeUpgrade for UnlockAndUnreserveAllFunds<T>
 where
-	BalanceOf<T>: From<<T as pallet_balances::Config>::Balance>,
 	BalanceOf<T>: Sum,
 {
 	/// Collects pre-migration data useful for validating the migration was successful, and also
@@ -131,12 +111,13 @@ where
 	///
 	/// Fails with a `TryRuntimeError` if somehow the amount reserved by this pallet is greater than
 	/// the actual total reserved amount for any accounts.
-	#[cfg(feature = "try-runtime")]
+	#[cfg(any(feature = "try-runtime", test))]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+		use codec::Encode;
 		use frame_support::ensure;
 
 		// Get staked and deposited balances as reported by this pallet.
-		let (account_deposits, accounts_with_locks, _) = Self::get_account_deposits_and_locks();
+		let (account_deposits, account_locks, _) = Self::get_account_deposits_and_locks();
 
 		let all_accounts = account_deposits.keys().cloned().collect::<BTreeSet<_>>();
 		let account_reserved_before: BTreeMap<T::AccountId, BalanceOf<T>> = all_accounts
@@ -155,14 +136,10 @@ where
 
 		let total_deposits_to_unreserve =
 			account_deposits.clone().into_values().sum::<BalanceOf<T>>();
-		let total_amount_to_unlock = accounts_with_locks
-			.iter()
-			.map(|account| Self::get_actual_locked_amount(account.clone()).unwrap_or_default())
-			.sum::<BalanceOf<T>>();
 
 		log::info!("Total accounts: {:?}", all_accounts.len());
 		log::info!("Total deposit to unreserve: {:?}", total_deposits_to_unreserve);
-		log::info!("Total deposit to unlock: {:?}", total_amount_to_unlock);
+		log::info!("Accounts with locks: {:?}", account_locks.len());
 
 		Ok(account_reserved_before.encode())
 	}
@@ -188,16 +165,6 @@ where
 
 		// Staked funds need to be unlocked.
 		for account in accounts_with_locks {
-			// There are lots of "Unexpected underflow in reducing consumer" errors logged when
-			// removing this lock, even when the lock is checked to be present like this:
-			// ```ignore
-			// let locks = Locks::<T>::get(&account);
-			// let has_democracy_lock = locks.iter().any(|lock| lock.id == DEMOCRACY_ID);
-			// if has_democracy_lock {
-			//     T::Currency::remove_lock(DEMOCRACY_ID, &account);
-			// }
-			// ```
-			// Question for reviewers: is this safe to ignore?
 			T::Currency::remove_lock(DEMOCRACY_ID, &account);
 		}
 
@@ -209,23 +176,18 @@ where
 	///
 	/// 1. No locks remain for this pallet in Balances.
 	/// 2. The reserved balance for each account has been reduced by the expected amount.
-	#[cfg(feature = "try-runtime")]
+	#[cfg(any(feature = "try-runtime", test))]
 	fn post_upgrade(
 		account_reserved_before_bytes: Vec<u8>,
 	) -> Result<(), sp_runtime::TryRuntimeError> {
+		use codec::Decode;
+
 		let account_reserved_before =
 			BTreeMap::<T::AccountId, BalanceOf<T>>::decode(&mut &account_reserved_before_bytes[..])
 				.map_err(|_| "Failed to decode account_reserved_before_bytes")?;
 
 		// Get staked and deposited balances as reported by this pallet.
 		let (account_deposits, _, _) = Self::get_account_deposits_and_locks();
-
-		// Ensure there're no hanging locks for this pallet.
-		pallet_balances::Locks::<T>::iter().for_each(|(_, lock_vec)| {
-			for lock in lock_vec {
-				assert!(lock.id != DEMOCRACY_ID, "Locks still exist for this pallet!");
-			}
-		});
 
 		// Check that the reserved balance is reduced by the expected deposited amount.
 		for (account, actual_reserved_before) in account_reserved_before {
@@ -271,17 +233,23 @@ mod test {
 		let depositer_1_initial_reserved = 15;
 		let initial_balance = 100_000;
 		new_test_ext().execute_with(|| {
-
 			// Set up initial state.
 			<Test as crate::Config>::Currency::make_free_balance_be(&depositer_0, initial_balance);
 			<Test as crate::Config>::Currency::make_free_balance_be(&depositer_1, initial_balance);
-			assert_ok!(<Test as crate::Config>::Currency::reserve(&depositer_0, depositer_0_initial_reserved + deposit));
-			assert_ok!(<Test as crate::Config>::Currency::reserve(&depositer_1, depositer_1_initial_reserved + deposit));
-			let depositors = BoundedVec::<_, <Test as crate::Config>::MaxDeposits>::truncate_from(vec![depositer_0, depositer_1]);
-			DepositOf::<Test>::insert(
-				0,
-				(depositors, deposit),
-			);
+			assert_ok!(<Test as crate::Config>::Currency::reserve(
+				&depositer_0,
+				depositer_0_initial_reserved + deposit
+			));
+			assert_ok!(<Test as crate::Config>::Currency::reserve(
+				&depositer_1,
+				depositer_1_initial_reserved + deposit
+			));
+			let depositors =
+				BoundedVec::<_, <Test as crate::Config>::MaxDeposits>::truncate_from(vec![
+					depositer_0,
+					depositer_1,
+				]);
+			DepositOf::<Test>::insert(0, (depositors, deposit));
 
 			// Sanity check: ensure initial reserved balance was set correctly.
 			assert_eq!(
@@ -294,7 +262,10 @@ mod test {
 			);
 
 			// Run the migration.
-			crate::migrations::unlock_and_unreserve_all_funds::UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+			let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
+				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
+			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
 
 			// Assert the reserved balance was reduced by the expected amount.
 			assert_eq!(
@@ -345,7 +316,10 @@ mod test {
 			);
 
 			// Run the migration.
-			crate::migrations::unlock_and_unreserve_all_funds::UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+			let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
+				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
+			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
 
 			// Assert the voter lock was removed
 			assert_eq!(
