@@ -1439,6 +1439,11 @@ pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 	let foreign_mod = parse_macro_input!(attr as ItemMod);
 	let mut internal_mod = parse_macro_input!(tokens as ItemMod);
 
+	let err = syn::Error::new_spanned(internal_mod.clone(), "A section can only be imported under a pallet macro")
+		.to_compile_error().into();
+
+	if internal_mod.attrs.len() == 0 { return err; }
+
 	if let Some(ref mut content) = internal_mod.content {
 		if let Some(foreign_content) = foreign_mod.content {
 			content.1.extend(foreign_content.1);

@@ -1,0 +1,15 @@
+error: A section can only be imported under a pallet macro
+  --> tests/split_ui/import_without_pallet.rs:5:1
+   |
+5  | / #[export_section]
+6  | | mod storages {
+7  | |     #[pallet::storage]
+8  | |     pub type MyStorageMap<T: Config> = StorageMap<_, _, u32, u64>;
+9  | | }
+10 | |
+11 | | #[import_section(storages)]
+   | |_--------------------------^
+   |   |
+   |   in this procedural macro expansion
+   |
+   = note: this error originates in the macro `__import_tokens_attr_import_section_inner` which comes from the expansion of the attribute macro `import_section` (in Nightly builds, run with -Z macro-backtrace for more info)
