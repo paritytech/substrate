@@ -18,9 +18,9 @@ array-bytes = "4.1"
 parking_lot = "0.12.1"
 serde_json = "1.0.85"
 thiserror = "1.0"
-sp-application-crypto = { version = "7.0.0", path = "../../primitives/application-crypto" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
+sp-application-crypto = { version = "8.0.0", path = "../../primitives/application-crypto" }
+sp-core = { version = "8.0.0", path = "../../primitives/core" }
+sp-keystore = { version = "0.14.0", path = "../../primitives/keystore" }
 
 [dev-dependencies]
 tempfile = "3.1.0"

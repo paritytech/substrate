@@ -23,19 +23,19 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-support-procedural = { version = "4.0.0-dev", default-features = false, path = "../support/procedural" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
-sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../../primitives/runtime-interface" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-storage = { version = "7.0.0", default-features = false, path = "../../primitives/storage" }
+sp-application-crypto = { version = "8.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-core = { version = "8.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "8.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime-interface = { version = "8.0.0", default-features = false, path = "../../primitives/runtime-interface" }
+sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
+sp-storage = { version = "8.0.0", default-features = false, path = "../../primitives/storage" }
 static_assertions = "1.1.0"
 
 [dev-dependencies]
 array-bytes = "4.1"
 rusty-fork = { version = "0.3.0", default-features = false }
-sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
+sp-keystore = { version = "0.14.0", path = "../../primitives/keystore" }
 
 [features]
 default = ["std"]

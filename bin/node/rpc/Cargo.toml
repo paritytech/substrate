@@ -33,8 +33,8 @@ sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-bu
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-keystore = { version = "0.14.0", path = "../../../primitives/keystore" }
+sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
 sp-statement-store = { version = "4.0.0-dev", path = "../../../primitives/statement-store" }
 substrate-frame-rpc-system = { version = "4.0.0-dev", path = "../../../utils/frame/rpc/system" }
 substrate-state-trie-migration-rpc = { version = "4.0.0-dev", path = "../../../utils/frame/rpc/state-trie-migration-rpc/" }
