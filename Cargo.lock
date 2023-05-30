@@ -6979,6 +6979,7 @@ dependencies = [
 name = "pallet-paged-list"
 version = "0.1.0"
 dependencies = [
+ "docify",
  "frame-benchmarking",
  "frame-support",
  "frame-system",

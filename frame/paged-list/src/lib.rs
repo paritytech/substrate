@@ -15,10 +15,49 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A minimal wrapper around the [`paged_list::StoragePagedList`].
+//! > Made with *Substrate*, for *DotSama*.
+//!
+//! [![github]](https://github.com/paritytech/substrate/frame/fast-unstake) -
+//! [![polkadot]](https://polkadot.network)
+//!
+//! [polkadot]: https://img.shields.io/badge/polkadot-E6007A?style=for-the-badge&logo=polkadot&logoColor=white
+//! [github]: https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github
+//!
+//! # Paged List Pallet
+//!
+//! A thin wrapper pallet around a [`paged_list::StoragePagedList`]. It provides an API for a single
+//! paginated list. It can be instantiated multiple times to provide multiple lists.
+//!
+//! ## Overview
+//!
+//! The pallet is quite unique since it does not expose any `Call`s, `Error`s or `Event`s. All
+//! interaction goes through the implemented [`StorageList`] trait.
+//!
+//! ## Examples
+//!
+//! 1. **Appending** some data to the list can happen either by [`Pallet::append_one`]:
+#![doc = docify::embed!("frame/paged-list/src/tests.rs", append_one_works)]
+//! 2. or by [`Pallet::append_many`]. This should always be preferred to repeated calls to
+//! [`Pallet::append_one`]:
+#![doc = docify::embed!("frame/paged-list/src/tests.rs", append_many_works)]
+//! 3. If you want to append many values (ie. in a loop), then best use the [`Pallet::appender`]:
+#![doc = docify::embed!("frame/paged-list/src/tests.rs", appender_works)]
+//! 4. **Iterating** over the list can be done with [`Pallet::iter`]. It uses the standard
+//! `Iterator` trait. For testing, there is a `Pallet::as_vec` convenience function:
+#![doc = docify::embed!("frame/paged-list/src/tests.rs", iter_works)]
+//! 5. **Draining** elements happens through the [`Pallet::drain`] iterator. For testing, there is a
+//! `Pallet::as_drained_vec` convenience function. Note that even *peeking* a value will remove it.
+#![doc = docify::embed!("frame/paged-list/src/tests.rs", drain_works)]
+//!
+//! ## Pallet API
+//!
+//! None. Only things to consider is the [`Config`] traits.
+//!
+//! ## Low Level / Implementation Details
+//!
+//! Implementation details are documented in [`paged_list::StoragePagedList`].
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![doc = include_str!("../README.md")]
 
 pub use pallet::*;
 
@@ -104,4 +143,11 @@ impl<T: Config<I>, I: 'static> StorageInstance for ListPrefix<T, I> {
 	}
 
 	const STORAGE_PREFIX: &'static str = "paged_list";
+}
+
+#[cfg(test)]
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub(crate) fn as_vec() -> Vec<T::Value> {
+		List::<T, I>::iter().collect::<Vec<_>>()
+	}
 }

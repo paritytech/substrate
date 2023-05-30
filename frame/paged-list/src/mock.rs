@@ -39,7 +39,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		PagedList1: crate,
+		PagedList: crate,
 		PagedList2: crate::<Instance2>,
 	}
 );
@@ -97,7 +97,13 @@ pub type MetaOf<T, I> = StoragePagedListMeta<
 	<T as Config>::ValuesPerPage,
 >;
 
-// Build genesis storage according to the mock runtime.
+/// Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+}
+
+/// Run this closure in test externalities.
+pub fn test_closure<R>(f: impl FnOnce() -> R) -> R {
+	let mut ext = new_test_ext();
+	ext.execute_with(f)
 }

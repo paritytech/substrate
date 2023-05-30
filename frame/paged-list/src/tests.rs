@@ -15,25 +15,87 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Pallet tests. Other tests are in [`super::paged_list`].
+
 #![cfg(test)]
 
 use crate::{mock::*, *};
 use frame_support::storage::{StorageList, StoragePrefixedContainer};
 
+#[docify::export]
+#[test]
+fn append_one_works() {
+	test_closure(|| {
+		PagedList::append_one(1);
+
+		assert_eq!(PagedList::as_vec(), vec![1]);
+	});
+}
+
+#[docify::export]
+#[test]
+fn append_many_works() {
+	test_closure(|| {
+		PagedList::append_many(0..3);
+
+		assert_eq!(PagedList::as_vec(), vec![0, 1, 2]);
+	});
+}
+
+#[docify::export]
+#[test]
+fn appender_works() {
+	use frame_support::storage::StorageAppender;
+	test_closure(|| {
+		let mut appender = PagedList::appender();
+
+		appender.append(0);
+		appender.append(1); // Repeated calls are fine here.
+		appender.append_many(2..4);
+
+		assert_eq!(PagedList::as_vec(), vec![0, 1, 2, 3]);
+	});
+}
+
+#[docify::export]
+#[test]
+fn iter_works() {
+	test_closure(|| {
+		PagedList::append_many(0..10);
+		let mut iter = PagedList::iter();
+
+		assert_eq!(iter.next(), Some(0));
+		assert_eq!(iter.next(), Some(1));
+		assert_eq!(iter.collect::<Vec<_>>(), (2..10).collect::<Vec<_>>());
+	});
+}
+
+#[docify::export]
+#[test]
+fn drain_works() {
+	test_closure(|| {
+		PagedList::append_many(0..3);
+		PagedList::drain().next();
+		assert_eq!(PagedList::as_vec(), vec![1, 2], "0 is drained");
+		PagedList::drain().peekable().peek();
+		assert_eq!(PagedList::as_vec(), vec![2], "Peeking removed 1");
+	});
+}
+
 #[test]
 fn iter_independent_works() {
-	new_test_ext().execute_with(|| {
-		PagedList1::append_many(0..1000);
+	test_closure(|| {
+		PagedList::append_many(0..1000);
 		PagedList2::append_many(0..1000);
 
-		assert_eq!(PagedList1::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
-		assert_eq!(PagedList1::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
+		assert_eq!(PagedList::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
+		assert_eq!(PagedList::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
 
 		// drain
-		assert_eq!(PagedList1::drain().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
+		assert_eq!(PagedList::drain().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
 		assert_eq!(PagedList2::iter().collect::<Vec<_>>(), (0..1000).collect::<Vec<_>>());
 
-		assert_eq!(PagedList1::iter().count(), 0);
+		assert_eq!(PagedList::iter().count(), 0);
 	});
 }
 
