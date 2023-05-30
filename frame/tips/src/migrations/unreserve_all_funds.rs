@@ -27,9 +27,6 @@ use pallet_treasury::BalanceOf;
 use sp_runtime::{traits::Zero, Saturating};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
-#[cfg(feature = "try-runtime")]
-use codec::{Decode, Encode};
-
 /// A migration that unreserves all tip deposits.
 ///
 /// Useful to prevent funds from being locked up when the pallet is deprecated.
@@ -87,6 +84,7 @@ where
 	/// the actual total reserved amount for any accounts.
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+		use codec::Encode;
 		use frame_support::ensure;
 
 		// Get the Tips pallet view of balances it has reserved
@@ -121,7 +119,7 @@ where
 	/// Executes the migration, unreserving funds that are locked in Tip deposits.
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		// Get staked and deposited balances as reported by this pallet.
-		let (account_deposits, initial_reads_weight) = Self::get_deposits();
+		let (account_deposits, initial_reads) = Self::get_deposits();
 
 		// Deposited funds need to be unreserved.
 		for (account, unreserve_amount) in account_deposits.iter() {
@@ -131,8 +129,9 @@ where
 			T::Currency::unreserve(&account, *unreserve_amount);
 		}
 
-		// Question for reviewers: how do I know the weight of the unreserve & remove_lock calls?
-		RocksDbWeight::get().reads_writes(1, 1) + initial_reads_weight
+		RocksDbWeight::get()
+			.reads_writes(account_deposits.len() as u64, account_deposits.len() as u64) +
+			initial_reads
 	}
 
 	/// Verifies that the account reserved balances were reduced by the actual expected amounts.
@@ -140,6 +139,8 @@ where
 	fn post_upgrade(
 		account_reserved_before_bytes: Vec<u8>,
 	) -> Result<(), sp_runtime::TryRuntimeError> {
+		use codec::Decode;
+
 		let account_reserved_before = BTreeMap::<T::AccountId, BalanceOf<T, I>>::decode(
 			&mut &account_reserved_before_bytes[..],
 		)
