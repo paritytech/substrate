@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Pallet tests. Other tests are in [`super::paged_list`].
+//! Mostly pallet doc-tests. Real tests are in [`super::paged_list`] and crate
+//! `pallet-paged-list-fuzzer`.
 
 #![cfg(test)]
 
@@ -28,7 +29,7 @@ fn append_one_works() {
 	test_closure(|| {
 		PagedList::append_one(1);
 
-		assert_eq!(PagedList::as_vec(), vec![1]);
+		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![1]);
 	});
 }
 
@@ -38,7 +39,7 @@ fn append_many_works() {
 	test_closure(|| {
 		PagedList::append_many(0..3);
 
-		assert_eq!(PagedList::as_vec(), vec![0, 1, 2]);
+		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![0, 1, 2]);
 	});
 }
 
@@ -53,7 +54,7 @@ fn appender_works() {
 		appender.append(1); // Repeated calls are fine here.
 		appender.append_many(2..4);
 
-		assert_eq!(PagedList::as_vec(), vec![0, 1, 2, 3]);
+		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![0, 1, 2, 3]);
 	});
 }
 
@@ -76,9 +77,29 @@ fn drain_works() {
 	test_closure(|| {
 		PagedList::append_many(0..3);
 		PagedList::drain().next();
-		assert_eq!(PagedList::as_vec(), vec![1, 2], "0 is drained");
+		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![1, 2], "0 is drained");
 		PagedList::drain().peekable().peek();
-		assert_eq!(PagedList::as_vec(), vec![2], "Peeking removed 1");
+		assert_eq!(PagedList::iter().collect::<Vec<_>>(), vec![2], "Peeking removed 1");
+	});
+}
+
+#[docify::export]
+#[test]
+fn as_vec_works() {
+	test_closure(|| {
+		PagedList::append_many(0..3);
+		assert_eq!(PagedList::as_vec(), vec![0, 1, 2]);
+		assert_eq!(PagedList::as_vec(), vec![0, 1, 2]);
+	});
+}
+
+#[docify::export]
+#[test]
+fn as_drained_vec_works() {
+	test_closure(|| {
+		PagedList::append_many(0..3);
+		assert_eq!(PagedList::as_drained_vec(), vec![0, 1, 2]);
+		assert!(PagedList::as_drained_vec().is_empty());
 	});
 }
 

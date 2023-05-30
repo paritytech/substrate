@@ -31,7 +31,10 @@
 //! ## Overview
 //!
 //! The pallet is quite unique since it does not expose any `Call`s, `Error`s or `Event`s. All
-//! interaction goes through the implemented [`StorageList`] trait.
+//! interaction goes through the implemented [`StorageList`][frame_support::storage::StorageList]
+//! trait.
+//!
+//! A fuzzer for testing is provided in crate `pallet-paged-list-fuzzer`.
 //!
 //! ## Examples
 //!
@@ -43,11 +46,14 @@
 //! 3. If you want to append many values (ie. in a loop), then best use the [`Pallet::appender`]:
 #![doc = docify::embed!("frame/paged-list/src/tests.rs", appender_works)]
 //! 4. **Iterating** over the list can be done with [`Pallet::iter`]. It uses the standard
-//! `Iterator` trait. For testing, there is a `Pallet::as_vec` convenience function:
+//! `Iterator` trait:
 #![doc = docify::embed!("frame/paged-list/src/tests.rs", iter_works)]
-//! 5. **Draining** elements happens through the [`Pallet::drain`] iterator. For testing, there is a
-//! `Pallet::as_drained_vec` convenience function. Note that even *peeking* a value will remove it.
+//! 5. **Draining** elements happens through the [`Pallet::drain`] iterator. Note that even
+//! *peeking* a value will already remove it.
 #![doc = docify::embed!("frame/paged-list/src/tests.rs", drain_works)]
+//! 6. **Testing** convenience functions are provided by `as_vec` and `as_drained_vec`:
+#![doc = docify::embed!("frame/paged-list/src/tests.rs", as_vec_works)]
+#![doc = docify::embed!("frame/paged-list/src/tests.rs", as_drained_vec_works)]
 //!
 //! ## Pallet API
 //!
@@ -132,9 +138,7 @@ impl<T: Config<I>, I: 'static> StorageList<T::Value> for Pallet<T, I> {
 	}
 }
 
-/// The storage prefix for the list.
-///
-/// Unique for each instance.
+/// Generates a unique storage prefix for each instance of the pallet.
 pub struct ListPrefix<T, I>(core::marker::PhantomData<(T, I)>);
 
 impl<T: Config<I>, I: 'static> StorageInstance for ListPrefix<T, I> {
@@ -149,5 +153,9 @@ impl<T: Config<I>, I: 'static> StorageInstance for ListPrefix<T, I> {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(crate) fn as_vec() -> Vec<T::Value> {
 		List::<T, I>::iter().collect::<Vec<_>>()
+	}
+
+	pub(crate) fn as_drained_vec() -> Vec<T::Value> {
+		List::<T, I>::drain().collect::<Vec<_>>()
 	}
 }
