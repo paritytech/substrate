@@ -1,0 +1,23 @@
+[package]
+name = "pallet-example-frame-api"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+
+frame = { path = "../../", default-features = false, features = ["runtime"] }
+frame-support = { path = "../../support", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"scale-info/std",
+
+	"frame/std",
+	"frame-support/std"
+]
+
+

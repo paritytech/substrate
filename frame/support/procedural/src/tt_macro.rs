@@ -92,7 +92,7 @@ pub fn create_tt_return_macro(input: proc_macro::TokenStream) -> proc_macro::Tok
 		macro_rules! #unique_name {
 			{
 				$caller:tt
-				$(frame_support = [{ $($frame_support:ident)::* }])?
+				$(frame_support = [{ $frame_support:path }])?
 			} => {
 				#frame_support::tt_return! {
 					$caller

@@ -155,7 +155,7 @@ use parse::{
 };
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{quote, ToTokens};
 use std::{collections::HashSet, str::FromStr};
 use syn::{spanned::Spanned, Ident, Result};
 
@@ -198,7 +198,6 @@ fn construct_runtime_intermediary_expansion(
 		expansion = quote::quote!(
 			#frame_support::tt_call! {
 				macro = [{ #pallet_path::tt_default_parts }]
-				frame_support = [{ #frame_support }]
 				~~> #frame_support::match_and_insert! {
 					target = [{ #expansion }]
 					pattern = [{ #pallet_name: #pallet_path #pallet_instance }]
@@ -642,7 +641,6 @@ fn decl_static_assertions(
 		quote! {
 			#scrate::tt_call! {
 				macro = [{ #path::tt_error_token }]
-				frame_support = [{ #scrate }]
 				~~> #scrate::assert_error_encoded_size! {
 					path = [{ #path }]
 					runtime = [{ #runtime }]

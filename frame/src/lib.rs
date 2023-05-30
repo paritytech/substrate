@@ -56,10 +56,20 @@
 /// a pallet, eg `#[frame::pallet] mod pallet { .. }`.
 pub use frame_support::pallet;
 
+/// A macro-sub module that contains a list of all pallet macros, with proper documentation. It
+/// enhances IDE experience.
+pub use frame_support::pallet_macros as _;
+
 pub mod prelude {
-	pub use super::sp_std::prelude::*;
 	pub use frame_support::pallet_prelude::*;
-	pub use frame_system::{self as system, pallet_prelude::*};
+	pub use frame_system::{self as frame_system, pallet_prelude::*};
+	pub use sp_std::prelude::*;
+}
+
+pub use frame_support::macro_magic::use_attr;
+
+pub mod macros {
+	pub use sp_std::if_std;
 }
 
 #[cfg(feature = "std")]
@@ -221,14 +231,6 @@ pub mod runtime {
 	/// All weight-related types.
 	pub use frame_support::weights;
 }
-
-/// Substrate's specific `std` library. See [`deps::sp_std`].
-pub use sp_std;
-
-/// A macro-sub module that contains a list of all pallet macros, with proper documentation. It
-/// enhances IDE experience.
-// TODO: does not seem to work.
-pub use frame_support::pallet_macros as pallet;
 
 /// Access to all of the dependencies of this crate. In case the re-exports are not enough, this
 /// module can be used.

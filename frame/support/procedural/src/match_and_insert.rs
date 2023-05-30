@@ -18,6 +18,7 @@
 //! Implementation of the `match_and_insert` macro.
 
 use proc_macro2::{Group, Span, TokenStream, TokenTree};
+use quote::ToTokens;
 use std::iter::once;
 use syn::spanned::Spanned;
 

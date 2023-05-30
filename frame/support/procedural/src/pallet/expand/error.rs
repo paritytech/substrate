@@ -32,6 +32,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
 	let config_where_clause = &def.config.where_clause;
+	let tt_return_path = quote::quote!(#frame_support::tt_return);
 
 	let error = if let Some(error) = &def.error {
 		error
@@ -42,9 +43,8 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 			macro_rules! #error_token_unique_id {
 				{
 					$caller:tt
-					frame_support = [{ $($frame_support:ident)::* }]
 				} => {
-					$($frame_support::)*tt_return! {
+					#tt_return_path! {
 						$caller
 					}
 				};
@@ -170,9 +170,8 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		macro_rules! #error_token_unique_id {
 			{
 				$caller:tt
-				frame_support = [{ $($frame_support:ident)::* }]
 			} => {
-				$($frame_support::)*tt_return! {
+				#tt_return_path! {
 					$caller
 					error = [{ #error_ident }]
 				}
