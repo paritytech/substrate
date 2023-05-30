@@ -1758,17 +1758,24 @@ pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 	let mut internal_mod = parse_macro_input!(tokens as ItemMod);
 
 	// check that internal_mod is a pallet module
-	if internal_mod.attrs.iter().find(|attr| {
-		if let Some(last_seg) = attr.path().segments.last() {
-			last_seg.ident == "pallet"
-		} else {
-			false
-		}
-	}).is_none() {
-	    return Error::new(
-	        internal_mod.ident.span(),
-	        "`#[import_section]` can only be applied to a valid pallet module",
-	    ).to_compile_error().into();
+	if internal_mod
+		.attrs
+		.iter()
+		.find(|attr| {
+			if let Some(last_seg) = attr.path().segments.last() {
+				last_seg.ident == "pallet"
+			} else {
+				false
+			}
+		})
+		.is_none()
+	{
+		return Error::new(
+			internal_mod.ident.span(),
+			"`#[import_section]` can only be applied to a valid pallet module",
+		)
+		.to_compile_error()
+		.into()
 	}
 
 	if let Some(ref mut content) = internal_mod.content {
