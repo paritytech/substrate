@@ -28,7 +28,7 @@ use core::marker::PhantomData;
 use frame_support::{
 	defensive,
 	storage::StoragePrefixedContainer,
-	traits::{Get, GetDefault, StorageInstance},
+	traits::{Get, StorageInstance},
 	CloneNoBound, DebugNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound,
 };
 use sp_runtime::traits::Saturating;
@@ -77,8 +77,8 @@ pub type ValueIndex = u32;
 ///   asymptotic case when using an `Appender`, and worse in all. For example when appending just
 ///   one value.
 /// - It does incur a read overhead on the host side as compared to a `StorageValue<Vec<V>>`.
-pub struct StoragePagedList<Prefix, Value, ValuesPerPage, MaxPages = GetDefault> {
-	_phantom: PhantomData<(Prefix, Value, ValuesPerPage, MaxPages)>,
+pub struct StoragePagedList<Prefix, Value, ValuesPerPage> {
+	_phantom: PhantomData<(Prefix, Value, ValuesPerPage)>,
 }
 
 /// The state of a [`StoragePagedList`].
@@ -311,13 +311,12 @@ where
 	}
 }
 
-impl<Prefix, Value, ValuesPerPage, MaxPages> frame_support::storage::StorageList<Value>
-	for StoragePagedList<Prefix, Value, ValuesPerPage, MaxPages>
+impl<Prefix, Value, ValuesPerPage> frame_support::storage::StorageList<Value>
+	for StoragePagedList<Prefix, Value, ValuesPerPage>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
 	ValuesPerPage: Get<u32>,
-	MaxPages: Get<Option<u32>>,
 {
 	type Iterator = StoragePagedListIterator<Prefix, Value, ValuesPerPage>;
 	type Appender = StoragePagedListMeta<Prefix, Value, ValuesPerPage>;
@@ -335,13 +334,11 @@ where
 	}
 }
 
-impl<Prefix, Value, ValuesPerPage, MaxPages>
-	StoragePagedList<Prefix, Value, ValuesPerPage, MaxPages>
+impl<Prefix, Value, ValuesPerPage> StoragePagedList<Prefix, Value, ValuesPerPage>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
 	ValuesPerPage: Get<u32>,
-	MaxPages: Get<Option<u32>>,
 {
 	fn read_meta() -> StoragePagedListMeta<Prefix, Value, ValuesPerPage> {
 		// Use default here to not require a setup migration.
@@ -389,13 +386,12 @@ where
 	}
 }
 
-impl<Prefix, Value, ValuesPerPage, MaxPages> frame_support::storage::StoragePrefixedContainer
-	for StoragePagedList<Prefix, Value, ValuesPerPage, MaxPages>
+impl<Prefix, Value, ValuesPerPage> frame_support::storage::StoragePrefixedContainer
+	for StoragePagedList<Prefix, Value, ValuesPerPage>
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
 	ValuesPerPage: Get<u32>,
-	MaxPages: Get<Option<u32>>,
 {
 	fn module_prefix() -> &'static [u8] {
 		StoragePagedListPrefix::<Prefix>::module_prefix()
@@ -432,7 +428,7 @@ pub(crate) mod mock {
 		const STORAGE_PREFIX: &'static str = "foo";
 	}
 
-	pub type List = StoragePagedList<Prefix, u32, ValuesPerPage, MaxPages>;
+	pub type List = StoragePagedList<Prefix, u32, ValuesPerPage>;
 }
 
 #[cfg(test)]

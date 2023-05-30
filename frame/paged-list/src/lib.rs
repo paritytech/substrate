@@ -95,10 +95,6 @@ pub mod pallet {
 		/// The number of values per page.
 		#[pallet::constant]
 		type ValuesPerPage: Get<u32>;
-
-		/// The maximal number of pages in the list.
-		#[pallet::constant]
-		type MaxPages: Get<Option<u32>>;
 	}
 
 	/// A storage paged list akin to what the FRAME macros would generate.
@@ -107,7 +103,6 @@ pub mod pallet {
 		ListPrefix<T, I>,
 		<T as Config<I>>::Value,
 		<T as Config<I>>::ValuesPerPage,
-		<T as Config<I>>::MaxPages,
 	>;
 }
 

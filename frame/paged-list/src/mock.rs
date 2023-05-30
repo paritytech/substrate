@@ -78,13 +78,11 @@ frame_support::parameter_types! {
 impl crate::Config for Test {
 	type Value = u32;
 	type ValuesPerPage = ValuesPerPage;
-	type MaxPages = MaxPages;
 }
 
 impl crate::Config<crate::Instance2> for Test {
 	type Value = u32;
 	type ValuesPerPage = ValuesPerPage;
-	type MaxPages = MaxPages;
 }
 
 pub type MetaOf<T, I> =
