@@ -49,15 +49,23 @@ pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
 /// Generate the crate access for the crate using 2018 syntax.
 ///
 /// for `frame-support` output will for example be `frame_support`.
-pub fn generate_crate_access_2018(def_crate: &str) -> Result<syn::Ident, Error> {
-	match crate_name(def_crate) {
+pub fn generate_crate_access_2018(def_crate: &str) -> Result<syn::Path, Error> {
+	if let Ok(FoundCrate::Name(name)) = crate_name(&"frame") {
+		let path = format!("{}::deps::{}", name, def_crate.to_string().replace("-", "_"));
+		let path = syn::parse_str::<syn::Path>(&path)?;
+		return Ok(path)
+	}
+
+	let ident = match crate_name(def_crate) {
 		Ok(FoundCrate::Itself) => {
 			let name = def_crate.to_string().replace("-", "_");
 			Ok(syn::Ident::new(&name, Span::call_site()))
 		},
 		Ok(FoundCrate::Name(name)) => Ok(Ident::new(&name, Span::call_site())),
 		Err(e) => Err(Error::new(Span::call_site(), e)),
-	}
+	}?;
+
+	Ok(syn::Path::from(ident))
 }
 
 /// Generates the hidden includes that are required to make the macro independent from its scope.

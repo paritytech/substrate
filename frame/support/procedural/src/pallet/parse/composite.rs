@@ -91,7 +91,7 @@ impl CompositeDef {
 	pub fn try_from(
 		attr_span: proc_macro2::Span,
 		index: usize,
-		scrate: &proc_macro2::Ident,
+		scrate: &syn::Path,
 		item: &mut syn::Item,
 	) -> syn::Result<Self> {
 		let item = if let syn::Item::Enum(item) = item {

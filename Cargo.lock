@@ -5555,7 +5555,6 @@ dependencies = [
 name = "node-template-runtime"
 version = "4.0.0-dev"
 dependencies = [
- "frame",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",
@@ -6457,6 +6456,15 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-example-frame-api"
+version = "0.1.0"
+dependencies = [
+ "frame",
+ "parity-scale-codec",
+ "scale-info",
 ]
 
 [[package]]

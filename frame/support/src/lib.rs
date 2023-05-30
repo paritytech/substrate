@@ -1524,7 +1524,9 @@ pub mod tests {
 pub mod pallet_prelude {
 	#[cfg(feature = "std")]
 	pub use crate::traits::GenesisBuild;
+
 	pub use crate::{
+		defensive, defensive_assert,
 		dispatch::{
 			DispatchClass, DispatchError, DispatchResult, DispatchResultWithPostInfo, Parameter,
 			Pays,
@@ -1533,11 +1535,14 @@ pub mod pallet_prelude {
 		inherent::{InherentData, InherentIdentifier, ProvideInherent},
 		storage,
 		storage::{
+			bounded_btree_map::BoundedBTreeMap,
+			bounded_btree_set::BoundedBTreeSet,
 			bounded_vec::BoundedVec,
 			types::{
 				CountedStorageMap, Key as NMapKey, OptionQuery, ResultQuery, StorageDoubleMap,
 				StorageMap, StorageNMap, StorageValue, ValueQuery,
 			},
+			weak_bounded_vec::WeakBoundedVec,
 		},
 		traits::{
 			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,

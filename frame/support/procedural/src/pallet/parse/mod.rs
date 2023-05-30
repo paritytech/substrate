@@ -60,8 +60,8 @@ pub struct Def {
 	pub extra_constants: Option<extra_constants::ExtraConstantsDef>,
 	pub composites: Vec<composite::CompositeDef>,
 	pub type_values: Vec<type_value::TypeValueDef>,
-	pub frame_system: syn::Ident,
-	pub frame_support: syn::Ident,
+	pub frame_system: syn::Path,
+	pub frame_support: syn::Path,
 	pub dev_mode: bool,
 }
 
@@ -98,7 +98,6 @@ impl Def {
 
 		for (index, item) in items.iter_mut().enumerate() {
 			let pallet_attr: Option<PalletAttr> = helper::take_first_item_pallet_attr(item)?;
-
 			match pallet_attr {
 				Some(PalletAttr::Config(span)) if config.is_none() =>
 					config = Some(config::ConfigDef::try_from(&frame_system, span, index, item)?),
@@ -422,6 +421,7 @@ mod keyword {
 
 /// Parse attributes for item in pallet module
 /// syntax must be `pallet::` (e.g. `#[pallet::config]`)
+#[derive(Debug)]
 enum PalletAttr {
 	Config(proc_macro2::Span),
 	Pallet(proc_macro2::Span),
@@ -550,7 +550,7 @@ impl syn::parse::Parse for PalletAttr {
 }
 
 /// The optional weight annotation on a `#[pallet::call]` like `#[pallet::call(weight($type))]`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct InheritedCallWeightAttr {
 	pub typename: syn::Type,
 	pub span: proc_macro2::Span,
