@@ -57,15 +57,15 @@ pub type ValueIndex = u32;
 /// only one that could have less than `ValuesPerPage` values.  
 /// **Iteration** happens by starting
 /// at [`first_page`][StoragePagedListMeta::first_page]/
-/// [`first_value`][StoragePagedListMeta::first_value] and incrementing these indices as long as
-/// there are elements in the page and there are pages in storage. All elements of a page are loaded
-/// once a page is read from storage. Iteration then happens on the cached elements. This reduces
-/// the storage `read` calls on the overlay. **Appending** to the list happens by appending to the
-/// last page by utilizing [`sp_io::storage::append`]. It allows to directly extend the elements of
-/// `values` vector of the page without loading the whole vector from storage. A new page is
-/// instantiated once [`Page::next`] overflows `ValuesPerPage`. Its vector will also be created
-/// through [`sp_io::storage::append`]. **Draining** advances the internal indices identical to
-/// Iteration. It additionally persists the increments to storage and thereby 'drains' elements.
+/// [`first_value_offset`][StoragePagedListMeta::first_value_offset] and incrementing these indices
+/// as long as there are elements in the page and there are pages in storage. All elements of a page
+/// are loaded once a page is read from storage. Iteration then happens on the cached elements. This
+/// reduces the storage `read` calls on the overlay. **Appending** to the list happens by appending
+/// to the last page by utilizing [`sp_io::storage::append`]. It allows to directly extend the
+/// elements of `values` vector of the page without loading the whole vector from storage. A new
+/// page is instantiated once [`Page::next`] overflows `ValuesPerPage`. Its vector will also be
+/// created through [`sp_io::storage::append`]. **Draining** advances the internal indices identical
+/// to Iteration. It additionally persists the increments to storage and thereby 'drains' elements.
 /// Completely drained pages are deleted from storage.
 ///
 /// # Further Observations
@@ -97,7 +97,7 @@ pub struct StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage> {
 	/// The first value inside `first_page` that contains a value.
 	///
 	/// Can be >0 when values were deleted.
-	pub first_value: ValueIndex,
+	pub first_value_offset: ValueIndex,
 
 	/// The last page that could contain data.
 	///
@@ -107,7 +107,7 @@ pub struct StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage> {
 	///
 	/// Appending starts at this index. If the page does not hold a value at this index, then the
 	/// whole list is empty. The only case where this can happen is when both are `0`.
-	pub last_value: ValueIndex,
+	pub last_page_len: ValueIndex,
 
 	_phantom: PhantomData<(Prefix, Hasher, Value, ValuesPerPage)>,
 }
@@ -151,12 +151,12 @@ where
 		EncodeLikeValue: EncodeLike<Value>,
 	{
 		// Note: we use >= here in case someone decreased it in a runtime upgrade.
-		if self.last_value >= ValuesPerPage::get() {
-			self.last_value = 0;
+		if self.last_page_len >= ValuesPerPage::get() {
 			self.last_page.saturating_inc();
+			self.last_page_len = 0;
 		}
 		let key = page_key::<Prefix, Hasher>(self.last_page);
-		self.last_value.saturating_inc();
+		self.last_page_len.saturating_inc();
 		sp_io::storage::append(key.as_ref(), item.encode());
 		self.store();
 	}
@@ -259,7 +259,8 @@ where
 		meta: StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage>,
 		drain: bool,
 	) -> Self {
-		let page = Page::<Value>::from_storage::<Prefix, Hasher>(meta.first_page, meta.first_value);
+		let page =
+			Page::<Value>::from_storage::<Prefix, Hasher>(meta.first_page, meta.first_value_offset);
 		Self { page, drain, meta }
 	}
 }
@@ -279,7 +280,7 @@ where
 
 		if let Some(val) = page.next() {
 			if self.drain {
-				self.meta.first_value.saturating_inc();
+				self.meta.first_value_offset.saturating_inc();
 				self.meta.store()
 			}
 			return Some(val)
@@ -287,7 +288,7 @@ where
 		if self.drain {
 			// page is empty
 			page.delete::<Prefix, Hasher>();
-			self.meta.first_value = 0;
+			self.meta.first_value_offset = 0;
 			self.meta.first_page.saturating_inc();
 			self.meta.store();
 		}
@@ -303,7 +304,7 @@ where
 		if let Some(val) = page.next() {
 			self.page = Some(page);
 			if self.drain {
-				self.meta.first_value.saturating_inc();
+				self.meta.first_value_offset.saturating_inc();
 				self.meta.store();
 			}
 			return Some(val)
@@ -486,7 +487,7 @@ mod tests {
 
 			let meta = List::read_meta();
 			// Will switch over to `10/0`, but will in the next call.
-			assert_eq!((meta.first_page, meta.first_value), (9, 5));
+			assert_eq!((meta.first_page, meta.first_value_offset), (9, 5));
 
 			// 50 gone, 50 to go
 			assert_eq!(List::as_vec(), (50..100).collect::<Vec<_>>());
