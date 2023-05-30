@@ -408,10 +408,6 @@ mod tests {
 		fn listen_addresses(&self) -> Vec<Multiaddr> {
 			Vec::new()
 		}
-
-		fn external_addresses(&self) -> Vec<Multiaddr> {
-			Vec::new()
-		}
 	}
 
 	fn offchain_api() -> (Api, AsyncApi) {
