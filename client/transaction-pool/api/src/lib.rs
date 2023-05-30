@@ -29,7 +29,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member, NumberFor},
 };
-use std::{collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
+use std::{collections::HashMap, hash::Hash, marker::PhantomData, pin::Pin, sync::Arc};
 
 const LOG_TARGET: &str = "txpool::api";
 
@@ -335,7 +335,7 @@ pub trait LocalTransactionPool: Send + Sync {
 	) -> Result<Self::Hash, Self::Error>;
 }
 
-impl<T: LocalTransactionPool>LocalTransactionPool for Arc<T> {
+impl<T: LocalTransactionPool> LocalTransactionPool for Arc<T> {
 	type Block = T::Block;
 
 	type Hash = T::Hash;
@@ -457,6 +457,29 @@ mod v1_compatible {
 	{
 		let hash: H = serde::Deserialize::deserialize(deserializer)?;
 		Ok((hash, 0))
+	}
+}
+
+/// Transaction pool that rejects all submitted transactions.
+///
+/// Could be used for example in tests.
+pub struct RejectAllTxPool<Block>(PhantomData<Block>);
+
+impl<Block> Default for RejectAllTxPool<Block> {
+	fn default() -> Self {
+		Self(PhantomData)
+	}
+}
+
+impl<Block: BlockT> LocalTransactionPool for RejectAllTxPool<Block> {
+	type Block = Block;
+
+	type Hash = Block::Hash;
+
+	type Error = error::Error;
+
+	fn submit_local(&self, _: Block::Hash, _: Block::Extrinsic) -> Result<Self::Hash, Self::Error> {
+		Err(error::Error::ImmediatelyDropped)
 	}
 }
 
