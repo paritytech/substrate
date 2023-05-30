@@ -148,7 +148,7 @@ const MAX_BLOCK_ANNOUNCE_SIZE: u64 = 1024 * 1024;
 pub(crate) const MAX_BLOCKS_IN_RESPONSE: usize = 128;
 
 mod rep {
-	use sc_peerset::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 	/// Reputation change when a peer sent us a message that led to a
 	/// database read error.
 	pub const BLOCKCHAIN_READ_ERROR: Rep = Rep::new(-(1 << 16), "DB Error");
@@ -515,8 +515,12 @@ where
 				phase: WarpSyncPhase::DownloadingBlocks(gap_sync.best_queued_number),
 				total_bytes: 0,
 			}),
-			(None, SyncMode::Warp, _) =>
-				Some(WarpSyncProgress { phase: WarpSyncPhase::AwaitingPeers, total_bytes: 0 }),
+			(None, SyncMode::Warp, _) => Some(WarpSyncProgress {
+				phase: WarpSyncPhase::AwaitingPeers {
+					required_peers: MIN_PEERS_TO_START_WARP_SYNC,
+				},
+				total_bytes: 0,
+			}),
 			(Some(sync), _, _) => Some(sync.progress()),
 			_ => None,
 		};

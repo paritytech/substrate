@@ -21,9 +21,8 @@ use crate::{
 	Network, Syncing, Validator,
 };
 
-use sc_network::{event::Event, types::ProtocolName};
+use sc_network::{event::Event, types::ProtocolName, ReputationChange};
 use sc_network_common::sync::SyncEvent;
-use sc_peerset::ReputationChange;
 
 use futures::{
 	channel::mpsc::{channel, Receiver, Sender},
@@ -415,18 +414,6 @@ mod tests {
 		}
 
 		fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
-
-		fn add_to_peers_set(
-			&self,
-			_protocol: ProtocolName,
-			_peers: HashSet<Multiaddr>,
-		) -> Result<(), String> {
-			unimplemented!();
-		}
-
-		fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
-			unimplemented!();
-		}
 
 		fn sync_num_connected(&self) -> usize {
 			unimplemented!();
