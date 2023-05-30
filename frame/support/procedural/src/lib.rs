@@ -42,7 +42,7 @@ use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
-use syn::{parse_macro_input, ItemImpl};
+use syn::{parse_macro_input, ItemImpl, ItemMod};
 
 thread_local! {
 	/// A global counter, can be used to generate a relatively unique identifier.
@@ -1737,4 +1737,45 @@ pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn composite_enum(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
+}
+
+/// An attribute macro that can be attached to a module declaration. Doing so will
+/// make it available for import later.
+#[proc_macro_attribute]
+pub fn export_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	match macro_magic::mm_core::export_tokens_internal(attr, tokens, false) {
+		Ok(tokens) => tokens.into(),
+		Err(err) => err.to_compile_error().into(),
+	}
+}
+
+/// An attribute macro that can be attached to a module declaration. Doing so will
+/// import the content of the section that was exported previously using [`macro@export_section`].
+#[import_tokens_attr]
+#[proc_macro_attribute]
+pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	let foreign_mod = parse_macro_input!(attr as ItemMod);
+	let mut internal_mod = parse_macro_input!(tokens as ItemMod);
+
+	let err = syn::Error::new_spanned(
+		internal_mod.clone(),
+		"A section can only be imported under a pallet macro",
+	)
+	.to_compile_error()
+	.into();
+
+	if internal_mod.attrs.len() == 0 {
+		return err
+	}
+
+	if let Some(ref mut content) = internal_mod.content {
+		if let Some(foreign_content) = foreign_mod.content {
+			content.1.extend(foreign_content.1);
+		}
+	}
+
+	quote! {
+		#internal_mod
+	}
+	.into()
 }
