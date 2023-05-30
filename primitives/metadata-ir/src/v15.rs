@@ -180,8 +180,8 @@ impl From<SignedExtensionMetadataIR> for SignedExtensionMetadata {
 impl From<ExtrinsicMetadataIR> for ExtrinsicMetadata {
 	fn from(ir: ExtrinsicMetadataIR) -> Self {
 		ExtrinsicMetadata {
-			ty: ir.ty,
 			version: ir.version,
+			len_ty: ir.len_ty,
 			address_ty: ir.address_ty,
 			call_ty: ir.call_ty,
 			signature_ty: ir.signature_ty,

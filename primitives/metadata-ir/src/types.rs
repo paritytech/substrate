@@ -153,9 +153,15 @@ impl IntoPortable for PalletMetadataIR {
 #[derive(Clone, PartialEq, Eq, Encode, Debug)]
 pub struct ExtrinsicMetadataIR<T: Form = MetaForm> {
 	/// The type of the extrinsic.
+	///
+	/// Note: Field used for metadata V14 only.
 	pub ty: T::Type,
 	/// Extrinsic version.
 	pub version: u8,
+	/// The prefix of the extrinsic.
+	///
+	/// This is the type of the encoded length of this extrinsic.
+	pub len_ty: T::Type,
 	/// The type of the address that signes the extrinsic
 	pub address_ty: T::Type,
 	/// The type of the outermost Call enum.
@@ -175,6 +181,7 @@ impl IntoPortable for ExtrinsicMetadataIR {
 		ExtrinsicMetadataIR {
 			ty: registry.register_type(&self.ty),
 			version: self.version,
+			len_ty: registry.register_type(&self.len_ty),
 			address_ty: registry.register_type(&self.address_ty),
 			call_ty: registry.register_type(&self.call_ty),
 			signature_ty: registry.register_type(&self.signature_ty),

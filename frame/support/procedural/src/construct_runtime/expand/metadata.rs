@@ -108,12 +108,14 @@ pub fn expand_runtime_metadata(
 				let extra_ty = #scrate::scale_info::meta_type::<
 						<<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::SignaturePayload as #scrate::sp_runtime::traits::SignaturePayload>::SignatureExtra
 					>();
+				let len_ty = #scrate::scale_info::meta_type::<#scrate::codec::Compact<u32>>();
 
 				#scrate::metadata_ir::MetadataIR {
 					pallets: #scrate::sp_std::vec![ #(#pallets),* ],
 					extrinsic: #scrate::metadata_ir::ExtrinsicMetadataIR {
 						ty,
 						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
+						len_ty,
 						address_ty,
 						call_ty,
 						signature_ty,
