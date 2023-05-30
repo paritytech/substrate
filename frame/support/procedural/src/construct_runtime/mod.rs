@@ -157,7 +157,7 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use std::{collections::HashSet, str::FromStr};
-use syn::{Ident, Result};
+use syn::{spanned::Spanned, Ident, Result};
 
 /// The fixed name of the system pallet.
 const SYSTEM_PALLET_NAME: &str = "System";
@@ -170,9 +170,12 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 
 	let res = match definition {
 		RuntimeDeclaration::Implicit(implicit_def) =>
-			construct_runtime_intermediary_expansion(input_copy.into(), implicit_def),
+			check_pallet_number(input_copy.clone().into(), implicit_def.pallets.len()).and_then(
+				|_| construct_runtime_intermediary_expansion(input_copy.into(), implicit_def),
+			),
 		RuntimeDeclaration::Explicit(explicit_decl) =>
-			construct_runtime_final_expansion(explicit_decl),
+			check_pallet_number(input_copy.into(), explicit_decl.pallets.len())
+				.and_then(|_| construct_runtime_final_expansion(explicit_decl)),
 	};
 
 	res.unwrap_or_else(|e| e.to_compile_error()).into()
@@ -221,7 +224,7 @@ fn construct_runtime_final_expansion(
 	let system_pallet =
 		pallets.iter().find(|decl| decl.name == SYSTEM_PALLET_NAME).ok_or_else(|| {
 			syn::Error::new(
-				pallets_token.span,
+				pallets_token.span.join(),
 				"`System` pallet declaration is missing. \
 			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
 			)
@@ -265,6 +268,10 @@ fn construct_runtime_final_expansion(
 	let inherent =
 		expand::expand_outer_inherent(&name, &block, &unchecked_extrinsic, &pallets, &scrate);
 	let validate_unsigned = expand::expand_outer_validate_unsigned(&name, &pallets, &scrate);
+	let freeze_reason = expand::expand_outer_freeze_reason(&pallets, &scrate);
+	let hold_reason = expand::expand_outer_hold_reason(&pallets, &scrate);
+	let lock_id = expand::expand_outer_lock_id(&pallets, &scrate);
+	let slash_reason = expand::expand_outer_slash_reason(&pallets, &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
 	let static_assertions = decl_static_assertions(&name, &pallets, &scrate);
 
@@ -289,6 +296,31 @@ fn construct_runtime_final_expansion(
 			type RuntimeBlock = #block;
 		}
 
+		// Each runtime must expose the `runtime_metadata()` to fetch the runtime API metadata.
+		// The function is implemented by calling `impl_runtime_apis!`.
+		//
+		// However, the `construct_runtime!` may be called without calling `impl_runtime_apis!`.
+		// Rely on the `Deref` trait to differentiate between a runtime that implements
+		// APIs (by macro impl_runtime_apis!) and a runtime that is simply created (by macro construct_runtime!).
+		//
+		// Both `InternalConstructRuntime` and `InternalImplRuntimeApis` expose a `runtime_metadata()` function.
+		// `InternalConstructRuntime` is implemented by the `construct_runtime!` for Runtime references (`& Runtime`),
+		// while `InternalImplRuntimeApis` is implemented by the `impl_runtime_apis!` for Runtime (`Runtime`).
+		//
+		// Therefore, the `Deref` trait will resolve the `runtime_metadata` from `impl_runtime_apis!`
+		// when both macros are called; and will resolve an empty `runtime_metadata` when only the `construct_runtime!`
+		// is called.
+
+		#[doc(hidden)]
+		trait InternalConstructRuntime {
+			#[inline(always)]
+			fn runtime_metadata(&self) -> #scrate::sp_std::vec::Vec<#scrate::metadata_ir::RuntimeApiMetadataIR> {
+				Default::default()
+			}
+		}
+		#[doc(hidden)]
+		impl InternalConstructRuntime for &#name {}
+
 		#outer_event
 
 		#outer_origin
@@ -306,6 +338,14 @@ fn construct_runtime_final_expansion(
 		#inherent
 
 		#validate_unsigned
+
+		#freeze_reason
+
+		#hold_reason
+
+		#lock_id
+
+		#slash_reason
 
 		#integrity_test
 
@@ -615,4 +655,35 @@ fn decl_static_assertions(
 	quote! {
 		#(#error_encoded_size_check)*
 	}
+}
+
+fn check_pallet_number(input: TokenStream2, pallet_num: usize) -> Result<()> {
+	let max_pallet_num = {
+		if cfg!(feature = "tuples-96") {
+			96
+		} else if cfg!(feature = "tuples-128") {
+			128
+		} else {
+			64
+		}
+	};
+
+	if pallet_num > max_pallet_num {
+		let no_feature = max_pallet_num == 128;
+		return Err(syn::Error::new(
+			input.span(),
+			format!(
+				"{} To increase this limit, enable the tuples-{} feature of [frame_support]. {}",
+				"The number of pallets exceeds the maximum number of tuple elements.",
+				max_pallet_num + 32,
+				if no_feature {
+					"If the feature does not exist - it needs to be implemented."
+				} else {
+					""
+				},
+			),
+		))
+	}
+
+	Ok(())
 }

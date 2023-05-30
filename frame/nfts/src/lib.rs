@@ -50,7 +50,7 @@ use frame_support::traits::{
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
-	traits::{Saturating, StaticLookup, Zero},
+	traits::{IdentifyAccount, Saturating, StaticLookup, Verify, Zero},
 	RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -69,7 +69,6 @@ pub mod pallet {
 	use super::*;
 	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::{IdentifyAccount, Verify};
 
 	/// The current storage version.
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
@@ -1836,14 +1835,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::mint_pre_signed(mint_data.attributes.len() as u32))]
 		pub fn mint_pre_signed(
 			origin: OriginFor<T>,
-			mint_data: PreSignedMintOf<T, I>,
+			mint_data: Box<PreSignedMintOf<T, I>>,
 			signature: T::OffchainSignature,
 			signer: T::AccountId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let msg = Encode::encode(&mint_data);
-			ensure!(signature.verify(&*msg, &signer), Error::<T, I>::WrongSignature);
-			Self::do_mint_pre_signed(origin, mint_data, signer)
+			Self::validate_signature(&Encode::encode(&mint_data), &signature, &signer)?;
+			Self::do_mint_pre_signed(origin, *mint_data, signer)
 		}
 
 		/// Set attributes for an item by providing the pre-signed approval.
@@ -1868,8 +1866,7 @@ pub mod pallet {
 			signer: T::AccountId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let msg = Encode::encode(&data);
-			ensure!(signature.verify(&*msg, &signer), Error::<T, I>::WrongSignature);
+			Self::validate_signature(&Encode::encode(&data), &signature, &signer)?;
 			Self::do_set_attributes_pre_signed(origin, data, signer)
 		}
 	}

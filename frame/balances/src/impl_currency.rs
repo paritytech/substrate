@@ -16,13 +16,16 @@
 // limitations under the License.
 
 //! Implementations for the `Currency` family of traits.
+//!
+//! Note that `WithdrawReasons` are intentionally not used for anything in this implementation and
+//! are expected to be removed in the near future, once migration to `fungible::*` traits is done.
 
 use super::*;
 use frame_support::{
 	ensure,
 	pallet_prelude::DispatchResult,
 	traits::{
-		tokens::{fungible, BalanceStatus as Status},
+		tokens::{fungible, BalanceStatus as Status, Fortitude::Polite, Precision::BestEffort},
 		Currency, DefensiveSaturating, ExistenceRequirement,
 		ExistenceRequirement::AllowDeath,
 		Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency,
@@ -487,7 +490,9 @@ where
 			return true
 		}
 		Self::account(who).free.checked_sub(&value).map_or(false, |new_balance| {
-			Self::ensure_can_withdraw(who, value, WithdrawReasons::RESERVE, new_balance).is_ok()
+			new_balance >= T::ExistentialDeposit::get() &&
+				Self::ensure_can_withdraw(who, value, WithdrawReasons::RESERVE, new_balance)
+					.is_ok()
 		})
 	}
 
@@ -590,13 +595,18 @@ where
 	/// Is a no-op if:
 	/// - the value to be moved is zero; or
 	/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
+	///
+	/// This is `Polite` and thus will not repatriate any funds which would lead the total balance
+	/// to be less than the frozen amount. Returns `Ok` with the actual amount of funds moved,
+	/// which may be less than `value` since the operation is done an a `BestEffort` basis.
 	fn repatriate_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
 		value: Self::Balance,
 		status: Status,
 	) -> Result<Self::Balance, DispatchError> {
-		let actual = Self::do_transfer_reserved(slashed, beneficiary, value, true, status)?;
+		let actual =
+			Self::do_transfer_reserved(slashed, beneficiary, value, BestEffort, Polite, status)?;
 		Ok(value.saturating_sub(actual))
 	}
 }
@@ -836,17 +846,18 @@ where
 
 	type MaxLocks = T::MaxLocks;
 
-	// Set a lock on the balance of `who`.
-	// Is a no-op if lock amount is zero or `reasons` `is_none()`.
+	// Set or alter a lock on the balance of `who`.
 	fn set_lock(
 		id: LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
 		reasons: WithdrawReasons,
 	) {
-		if amount.is_zero() || reasons.is_empty() {
+		if reasons.is_empty() || amount.is_zero() {
+			Self::remove_lock(id, who);
 			return
 		}
+
 		let mut new_lock = Some(BalanceLock { id, amount, reasons: reasons.into() });
 		let mut locks = Self::locks(who)
 			.into_iter()

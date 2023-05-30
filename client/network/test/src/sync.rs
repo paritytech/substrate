@@ -414,7 +414,7 @@ async fn can_sync_small_non_best_forks() {
 	// poll until the two nodes connect, otherwise announcing the block will not work
 	futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
-		if net.peer(0).num_peers() == 0 {
+		if net.peer(0).num_peers() == 0 || net.peer(1).num_peers() == 0 {
 			Poll::Pending
 		} else {
 			Poll::Ready(())
@@ -1183,7 +1183,7 @@ async fn syncs_indexed_blocks() {
 		64,
 		BlockOrigin::Own,
 		|mut builder| {
-			let ex = Extrinsic::Store(n.to_le_bytes().to_vec());
+			let ex = ExtrinsicBuilder::new_indexed_call(n.to_le_bytes().to_vec()).nonce(n).build();
 			n += 1;
 			builder.push(ex).unwrap();
 			builder.build().unwrap().block
@@ -1305,11 +1305,13 @@ async fn syncs_huge_blocks() {
 		builder.build().unwrap().block
 	});
 
+	let mut nonce = 0;
 	net.peer(0).generate_blocks(32, BlockOrigin::Own, |mut builder| {
 		// Add 32 extrinsics 32k each = 1MiB total
-		for _ in 0..32 {
-			let ex = Extrinsic::IncludeData([42u8; 32 * 1024].to_vec());
+		for _ in 0..32u64 {
+			let ex = ExtrinsicBuilder::new_include_data(vec![42u8; 32 * 1024]).nonce(nonce).build();
 			builder.push(ex).unwrap();
+			nonce += 1;
 		}
 		builder.build().unwrap().block
 	});

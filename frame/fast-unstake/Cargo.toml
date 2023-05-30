@@ -3,7 +3,7 @@ name = "pallet-fast-unstake"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
-license = "Unlicense"
+license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME fast unstake pallet"
@@ -14,14 +14,14 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
 log = { version = "0.4.17", default-features = false }
-scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "8.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
 sp-staking = { default-features = false, path = "../../primitives/staking" }
 frame-election-provider-support = { default-features = false, path = "../election-provider-support" }
 
@@ -29,9 +29,9 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional
 
 [dev-dependencies]
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "8.0.0", default-features = false, path = "../../primitives/core" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "7.0.0", path = "../../primitives/tracing" }
 pallet-staking = { path = "../staking" }
 pallet-balances = { path = "../balances" }
 pallet-timestamp = { path = "../timestamp" }

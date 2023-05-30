@@ -21,27 +21,30 @@ find-fail-ci-phrase:
       exit 0;
       fi
 
-cargo-deny:
+cargo-deny-licenses:
   stage: test
   extends:
     - .docker-env
-    - .nightly-pipeline
+    - .test-refs
+  variables:
+    CARGO_DENY_CMD: "cargo deny --all-features check licenses -c ./scripts/ci/deny.toml"
   script:
     - rusty-cachier snapshot create
-    - cargo deny check --hide-inclusion-graph -c ./scripts/ci/deny.toml
+    - $CARGO_DENY_CMD --hide-inclusion-graph
     - rusty-cachier cache upload
   after_script:
     - !reference [.rusty-cachier, after_script]
     - echo "___The complete log is in the artifacts___"
-    - cargo deny check -c ./scripts/ci/deny.toml 2> deny.log
+    - $CARGO_DENY_CMD 2> deny.log
+    - if [ $CI_JOB_STATUS != 'success' ]; then
+        echo 'Please check license of your crate or add an exception to scripts/ci/deny.toml';
+      fi
   artifacts:
     name: $CI_COMMIT_SHORT_SHA
     expire_in: 3 days
     when: always
     paths:
       - deny.log
-  # FIXME: Temporarily allow to fail.
-  allow_failure: true
 
 cargo-fmt:
   stage: test
@@ -61,21 +64,17 @@ cargo-clippy:
   needs:
     - job: cargo-fmt
       artifacts: false
-  variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
     - .docker-env
     - .test-refs
   script:
     - rusty-cachier snapshot create
-    - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy --all-targets
+    - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo clippy --locked --all-targets
     - rusty-cachier cache upload
 
 cargo-check-benches:
   stage: test
   variables:
-    # Override to use nightly toolchain
-    RUSTY_CACHIER_TOOLCHAIN: "nightly"
     CI_JOB_NAME: "cargo-check-benches"
   extends:
     - .docker-env
@@ -89,13 +88,17 @@ cargo-check-benches:
     - !reference [.job-switcher, before_script]
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
-    # merges in the master branch on PRs
+    # merges in the master branch on PRs. skip if base is not master
     - 'if [ $CI_COMMIT_REF_NAME != "master" ]; then
-      BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq -r .base.ref);
-      printf "Merging base branch %s\n" "${BASE:=master}";
-      git config user.email "ci@gitlab.parity.io";
-      git fetch origin "refs/heads/${BASE}";
-      git merge --verbose --no-edit FETCH_HEAD;
+        BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq -r .base.ref);
+        printf "Merging base branch %s\n" "${BASE:=master}";
+        if [ $BASE != "master" ]; then
+          echo "$BASE is not master, skipping merge";
+        else
+          git config user.email "ci@gitlab.parity.io";
+          git fetch origin "refs/heads/${BASE}";
+          git merge --verbose --no-edit FETCH_HEAD;
+        fi
       fi'
   parallel: 2
   script:
@@ -105,7 +108,7 @@ cargo-check-benches:
     - echo "___Running benchmarks___";
     - case ${CI_NODE_INDEX} in
       1)
-      SKIP_WASM_BUILD=1 time cargo +nightly check --locked --benches --all;
+      SKIP_WASM_BUILD=1 time cargo check --locked --benches --all;
       cargo run --locked --release -p node-bench -- ::trie::read::small --json
       | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json;
       echo "___Uploading cache for rusty-cachier___";
@@ -116,8 +119,6 @@ cargo-check-benches:
       | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json
       ;;
       esac
-  tags:
-    - linux-docker-benches
 
 node-bench-regression-guard:
   # it's not belong to `build` semantically, but dag jobs can't depend on each other
@@ -202,10 +203,10 @@ test-linux-stable:
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-C debug-assertions -D warnings"
     RUST_BACKTRACE: 1
     WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
     # Ensure we run the UI tests.
     RUN_UI_TESTS: 1
     # needed for rusty-cachier to keep cache in test-linux-stable folder and not in test-linux-stable-1/3
@@ -215,7 +216,6 @@ test-linux-stable:
     - rusty-cachier snapshot create
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     # tests are partitioned by nextest and executed in parallel on $CI_NODE_TOTAL runners
-    # node-cli is excluded until https://github.com/paritytech/substrate/issues/11321 fixed
     - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
     - time cargo nextest run --workspace
       --locked
@@ -223,10 +223,23 @@ test-linux-stable:
       --verbose
       --features runtime-benchmarks
       --manifest-path ./bin/node/cli/Cargo.toml
-      --exclude node-cli
       --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
     # we need to update cache only from one job
     - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
+    # Upload tests results to Elasticsearch
+    - echo "Upload test results to Elasticsearch"
+    - cat target/nextest/default/junit.xml | xq . > target/nextest/default/junit.json
+    - "curl -v -XPOST --http1.1
+      -u ${ELASTIC_USERNAME}:${ELASTIC_PASSWORD}
+      https://elasticsearch.parity-build.parity.io/unit-tests/_doc/${CI_JOB_ID}
+      -H 'Content-Type: application/json'
+      -d @target/nextest/default/junit.json"
+  artifacts:
+    when: always
+    paths:
+      - target/nextest/default/junit.xml
+    reports:
+      junit: target/nextest/default/junit.xml
 
 test-frame-support:
   stage: test
@@ -236,17 +249,19 @@ test-frame-support:
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-C debug-assertions -D warnings"
     RUST_BACKTRACE: 1
     WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
     # Ensure we run the UI tests.
     RUN_UI_TESTS: 1
   script:
     - rusty-cachier snapshot create
-    - time cargo test --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
-    - time cargo test --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
+    - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
+    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime --manifest-path ./frame/support/test/Cargo.toml
+    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs,try-runtime --manifest-path ./frame/support/test/Cargo.toml
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
+    - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
     - rusty-cachier cache upload
 
 # This job runs tests that don't work with cargo-nextest in test-linux-stable
@@ -258,10 +273,10 @@ test-linux-stable-extra:
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-C debug-assertions -D warnings"
     RUST_BACKTRACE: 1
     WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
     # Ensure we run the UI tests.
     RUN_UI_TESTS: 1
   script:
@@ -283,10 +298,10 @@ quick-benchmarks:
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-C debug-assertions -D warnings"
     RUST_BACKTRACE: "full"
     WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
   script:
     - rusty-cachier snapshot create
     - time cargo run --locked --release --features runtime-benchmarks -- benchmark pallet --execution wasm --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
@@ -299,17 +314,16 @@ test-frame-examples-compile-to-wasm:
     - .docker-env
     - .test-refs
   variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y"
+    RUSTFLAGS: "-C debug-assertions"
     RUST_BACKTRACE: 1
   script:
     - rusty-cachier snapshot create
     - cd ./frame/examples/offchain-worker/
-    - cargo +nightly build --locked --target=wasm32-unknown-unknown --no-default-features
+    - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
     - cd ../basic
-    - cargo +nightly build --locked --target=wasm32-unknown-unknown --no-default-features
+    - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
     - rusty-cachier cache upload
 
 test-linux-stable-int:
@@ -321,10 +335,10 @@ test-linux-stable-int:
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-C debug-assertions -D warnings"
     RUST_BACKTRACE: 1
     WASM_BUILD_NO_COLOR: 1
-    WASM_BUILD_RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
     # Ensure we run the UI tests.
     RUN_UI_TESTS: 1
   script:
@@ -342,8 +356,6 @@ check-tracing:
   needs:
     - job: test-linux-stable-int
       artifacts: false
-  variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
   extends:
     - .docker-env
     - .test-refs
@@ -351,8 +363,8 @@ check-tracing:
   script:
     - rusty-cachier snapshot create
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
-    - time cargo +nightly test --locked --manifest-path ./primitives/tracing/Cargo.toml --no-default-features
-    - time cargo +nightly test --locked --manifest-path ./primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
+    - time cargo test --locked --manifest-path ./primitives/tracing/Cargo.toml --no-default-features
+    - time cargo test --locked --manifest-path ./primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
     - rusty-cachier cache upload
 
 # more information about this job can be found here:
@@ -367,17 +379,16 @@ test-full-crypto-feature:
     - .docker-env
     - .test-refs
   variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y"
+    RUSTFLAGS: "-C debug-assertions"
     RUST_BACKTRACE: 1
   script:
     - rusty-cachier snapshot create
     - cd primitives/core/
-    - time cargo +nightly build --locked --verbose --no-default-features --features full_crypto
+    - time cargo build --locked --verbose --no-default-features --features full_crypto
     - cd ../application-crypto
-    - time cargo +nightly build --locked --verbose --no-default-features --features full_crypto
+    - time cargo build --locked --verbose --no-default-features --features full_crypto
     - rusty-cachier cache upload
 
 check-rustdoc:
@@ -386,12 +397,11 @@ check-rustdoc:
     - .docker-env
     - .test-refs
   variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
     SKIP_WASM_BUILD: 1
     RUSTDOCFLAGS: "-Dwarnings"
   script:
     - rusty-cachier snapshot create
-    - time cargo +nightly doc --locked --workspace --all-features --verbose --no-deps
+    - time cargo doc --locked --workspace --all-features --verbose --no-deps
     - rusty-cachier cache upload
 
 cargo-check-each-crate:

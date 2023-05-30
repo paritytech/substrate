@@ -79,7 +79,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Dispatchable, One, Saturating, Zero},
+	traits::{AtLeast32BitUnsigned, Bounded, Dispatchable, One, Saturating, Zero},
 	DispatchError, Perbill,
 };
 use sp_std::{fmt::Debug, prelude::*};
@@ -874,22 +874,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let when = (when.saturating_add(alarm_interval.saturating_sub(One::one())) /
 			alarm_interval)
 			.saturating_mul(alarm_interval);
-		let maybe_result = T::Scheduler::schedule(
+		let result = T::Scheduler::schedule(
 			DispatchTime::At(when),
 			None,
 			128u8,
 			frame_system::RawOrigin::Root.into(),
 			call,
-		)
-		.ok()
-		.map(|x| (when, x));
-		debug_assert!(
-			maybe_result.is_some(),
-			"Unable to schedule a new alarm at #{:?} (now: #{:?})?!",
-			when,
-			frame_system::Pallet::<T>::block_number()
 		);
-		maybe_result
+		debug_assert!(
+			result.is_ok(),
+			"Unable to schedule a new alarm at #{:?} (now: #{:?}), scheduler error: `{:?}`",
+			when,
+			frame_system::Pallet::<T>::block_number(),
+			result.unwrap_err(),
+		);
+		result.ok().map(|x| (when, x))
 	}
 
 	/// Mutate a referendum's `status` into the correct deciding state.
@@ -1055,9 +1054,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Some(x) => x,
 			None => return (ReferendumInfo::Ongoing(status), false, ServiceBranch::Fail),
 		};
+		// Default the alarm to the end of the world.
 		let timeout = status.submitted + T::UndecidingTimeout::get();
-		// Default the alarm to the submission timeout.
-		let mut alarm = timeout;
+		let mut alarm = T::BlockNumber::max_value();
 		let branch;
 		match &mut status.deciding {
 			None => {
@@ -1098,11 +1097,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							ServiceBranch::Preparing
 						}
 					} else {
+						alarm = timeout;
 						ServiceBranch::NoDeposit
 					}
 				}
 				// If we didn't move into being decided, then check the timeout.
-				if status.deciding.is_none() && now >= timeout {
+				if status.deciding.is_none() && now >= timeout && !status.in_queue {
 					// Too long without being decided - end it.
 					Self::ensure_no_alarm(&mut status);
 					Self::deposit_event(Event::<T, I>::TimedOut { index, tally: status.tally });
@@ -1187,7 +1187,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		}
 
-		let dirty_alarm = Self::ensure_alarm_at(&mut status, index, alarm);
+		let dirty_alarm = if alarm < T::BlockNumber::max_value() {
+			Self::ensure_alarm_at(&mut status, index, alarm)
+		} else {
+			Self::ensure_no_alarm(&mut status)
+		};
 		(ReferendumInfo::Ongoing(status), dirty_alarm || dirty, branch)
 	}
 
@@ -1206,15 +1210,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let until_approval = track.min_approval.delay(approval);
 			let until_support = track.min_support.delay(support);
 			let offset = until_support.max(until_approval);
-			deciding.since.saturating_add(offset * track.decision_period)
+			deciding.since.saturating_add(offset.mul_ceil(track.decision_period))
 		})
 	}
 
 	/// Cancel the alarm in `status`, if one exists.
-	fn ensure_no_alarm(status: &mut ReferendumStatusOf<T, I>) {
+	fn ensure_no_alarm(status: &mut ReferendumStatusOf<T, I>) -> bool {
 		if let Some((_, last_alarm)) = status.alarm.take() {
 			// Incorrect alarm - cancel it.
 			let _ = T::Scheduler::cancel(last_alarm);
+			true
+		} else {
+			false
 		}
 	}
 

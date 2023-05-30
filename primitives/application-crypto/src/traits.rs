@@ -15,10 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use codec::Codec;
+use scale_info::TypeInfo;
+
 #[cfg(feature = "full_crypto")]
 use sp_core::crypto::Pair;
-
-use codec::Codec;
 use sp_core::crypto::{CryptoType, CryptoTypeId, IsWrappedBy, KeyTypeId, Public};
 use sp_std::{fmt::Debug, vec::Vec};
 
@@ -60,15 +61,9 @@ pub trait MaybeHash {}
 #[cfg(all(not(feature = "std"), not(feature = "full_crypto")))]
 impl<T> MaybeHash for T {}
 
-/// Type which implements Debug and Hash in std, not when no-std (no-std variant with crypto).
-#[cfg(all(not(feature = "std"), feature = "full_crypto"))]
-pub trait MaybeDebugHash: sp_std::hash::Hash {}
-#[cfg(all(not(feature = "std"), feature = "full_crypto"))]
-impl<T: sp_std::hash::Hash> MaybeDebugHash for T {}
-
 /// A application's public key.
 pub trait AppPublic:
-	AppCrypto + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + codec::Codec
+	AppCrypto + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + Codec
 {
 	/// The wrapped type which is just a plain instance of `Public`.
 	type Generic: IsWrappedBy<Self>
@@ -79,7 +74,7 @@ pub trait AppPublic:
 		+ PartialEq
 		+ Debug
 		+ MaybeHash
-		+ codec::Codec;
+		+ Codec;
 }
 
 /// A application's key pair.
@@ -92,15 +87,15 @@ pub trait AppPair: AppCrypto + Pair<Public = <Self as AppCrypto>::Public> {
 }
 
 /// A application's signature.
-pub trait AppSignature: AppCrypto + Eq + PartialEq + Debug + MaybeHash {
+pub trait AppSignature: AppCrypto + Eq + PartialEq + Debug {
 	/// The wrapped type which is just a plain instance of `Signature`.
-	type Generic: IsWrappedBy<Self> + Eq + PartialEq + Debug + MaybeHash;
+	type Generic: IsWrappedBy<Self> + Eq + PartialEq + Debug;
 }
 
 /// A runtime interface for a public key.
 pub trait RuntimePublic: Sized {
 	/// The signature that will be generated when signing with the corresponding private key.
-	type Signature: Codec + Debug + MaybeHash + Eq + PartialEq + Clone;
+	type Signature: Debug + Eq + PartialEq + Clone;
 
 	/// Returns all public keys for the given key type in the keystore.
 	fn all(key_type: KeyTypeId) -> crate::Vec<Self>;
@@ -132,11 +127,9 @@ pub trait RuntimePublic: Sized {
 pub trait RuntimeAppPublic: Sized {
 	/// An identifier for this application-specific key type.
 	const ID: KeyTypeId;
-	/// The identifier of the crypto type of this application-specific key type.
-	const CRYPTO_ID: CryptoTypeId;
 
 	/// The signature that will be generated when signing with the corresponding private key.
-	type Signature: Codec + Debug + MaybeHash + Eq + PartialEq + Clone + scale_info::TypeInfo;
+	type Signature: Debug + Eq + PartialEq + Clone + TypeInfo + Codec;
 
 	/// Returns all public keys for this application in the keystore.
 	fn all() -> crate::Vec<Self>;
@@ -163,8 +156,50 @@ pub trait RuntimeAppPublic: Sized {
 	fn to_raw_vec(&self) -> Vec<u8>;
 }
 
-/// Something that bound to a fixed [`RuntimeAppPublic`].
+impl<T> RuntimeAppPublic for T
+where
+	T: AppPublic + AsRef<<T as AppPublic>::Generic>,
+	<T as AppPublic>::Generic: RuntimePublic,
+	<T as AppCrypto>::Signature: TypeInfo
+		+ Codec
+		+ From<<<T as AppPublic>::Generic as RuntimePublic>::Signature>
+		+ AsRef<<<T as AppPublic>::Generic as RuntimePublic>::Signature>,
+{
+	const ID: KeyTypeId = <T as AppCrypto>::ID;
+
+	type Signature = <T as AppCrypto>::Signature;
+
+	fn all() -> crate::Vec<Self> {
+		<<T as AppPublic>::Generic as RuntimePublic>::all(Self::ID)
+			.into_iter()
+			.map(|p| p.into())
+			.collect()
+	}
+
+	fn generate_pair(seed: Option<Vec<u8>>) -> Self {
+		<<T as AppPublic>::Generic as RuntimePublic>::generate_pair(Self::ID, seed).into()
+	}
+
+	fn sign<M: AsRef<[u8]>>(&self, msg: &M) -> Option<Self::Signature> {
+		<<T as AppPublic>::Generic as RuntimePublic>::sign(self.as_ref(), Self::ID, msg)
+			.map(|s| s.into())
+	}
+
+	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
+		<<T as AppPublic>::Generic as RuntimePublic>::verify(self.as_ref(), msg, signature.as_ref())
+	}
+
+	fn to_raw_vec(&self) -> Vec<u8> {
+		<<T as AppPublic>::Generic as RuntimePublic>::to_raw_vec(self.as_ref())
+	}
+}
+
+/// Something that is bound to a fixed [`RuntimeAppPublic`].
 pub trait BoundToRuntimeAppPublic {
 	/// The [`RuntimeAppPublic`] this type is bound to.
 	type Public: RuntimeAppPublic;
+}
+
+impl<T: RuntimeAppPublic> BoundToRuntimeAppPublic for T {
+	type Public = Self;
 }

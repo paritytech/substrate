@@ -25,7 +25,7 @@ use super::*;
 #[derive(
 	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Weight {
 	#[codec(compact)]
 	/// The weight of computational time used based on some reference hardware.
@@ -33,12 +33,6 @@ pub struct Weight {
 	#[codec(compact)]
 	/// The weight of storage space used by proof of validity.
 	proof_size: u64,
-}
-
-impl From<OldWeight> for Weight {
-	fn from(old: OldWeight) -> Self {
-		Weight::from_parts(old.0, 0)
-	}
 }
 
 impl Weight {
@@ -74,6 +68,7 @@ impl Weight {
 		&mut self.proof_size
 	}
 
+	/// The maximal weight in all dimensions.
 	pub const MAX: Self = Self { ref_time: u64::MAX, proof_size: u64::MAX };
 
 	/// Get the conservative min of `self` and `other` weight.

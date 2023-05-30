@@ -101,12 +101,6 @@ mockall::mock! {
 			peers: HashSet<Multiaddr>,
 		) -> Result<(), String>;
 		fn remove_peers_from_reserved_set(&self, protocol: ProtocolName, peers: Vec<PeerId>);
-		fn add_to_peers_set(
-			&self,
-			protocol: ProtocolName,
-			peers: HashSet<Multiaddr>,
-		) -> Result<(), String>;
-		fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>);
 		fn sync_num_connected(&self) -> usize;
 	}
 
