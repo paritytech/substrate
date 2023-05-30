@@ -16,17 +16,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::HashSet, sync::Arc, thread::sleep};
+use std::{collections::HashSet, str::FromStr, sync::Arc, thread::sleep};
 
 use crate::NetworkProvider;
 use codec::{Decode, Encode};
 use futures::Future;
 pub use http::SharedClient;
-use libp2p::PeerId;
+use libp2p::{Multiaddr, PeerId};
 use sp_core::{
 	offchain::{
-		self, HttpError, HttpRequestId, HttpRequestStatus, OffchainStorage, OpaqueNetworkState,
-		StorageKind, Timestamp,
+		self, HttpError, HttpRequestId, HttpRequestStatus, OffchainStorage, OpaqueMultiaddr,
+		OpaqueNetworkState, StorageKind, Timestamp,
 	},
 	OpaquePeerId,
 };
@@ -159,7 +159,9 @@ impl offchain::Externalities for Api {
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
-		let state = NetworkState::new(self.network_provider.local_peer_id());
+		let external_addresses = self.network_provider.external_addresses();
+
+		let state = NetworkState::new(self.network_provider.local_peer_id(), external_addresses);
 		Ok(OpaqueNetworkState::from(state))
 	}
 
@@ -236,11 +238,12 @@ impl offchain::Externalities for Api {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct NetworkState {
 	peer_id: PeerId,
+	external_addresses: Vec<Multiaddr>,
 }
 
 impl NetworkState {
-	fn new(peer_id: PeerId) -> Self {
-		NetworkState { peer_id }
+	fn new(peer_id: PeerId, external_addresses: Vec<Multiaddr>) -> Self {
+		NetworkState { peer_id, external_addresses }
 	}
 }
 
@@ -249,7 +252,16 @@ impl From<NetworkState> for OpaqueNetworkState {
 		let enc = Encode::encode(&state.peer_id.to_bytes());
 		let peer_id = OpaquePeerId::new(enc);
 
-		OpaqueNetworkState { peer_id }
+		let external_addresses: Vec<OpaqueMultiaddr> = state
+			.external_addresses
+			.iter()
+			.map(|multiaddr| {
+				let e = Encode::encode(&multiaddr.to_string());
+				OpaqueMultiaddr::new(e)
+			})
+			.collect();
+
+		OpaqueNetworkState { peer_id, external_addresses }
 	}
 }
 
@@ -262,7 +274,20 @@ impl TryFrom<OpaqueNetworkState> for NetworkState {
 		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..]).map_err(|_| ())?;
 		let peer_id = PeerId::from_bytes(&bytes).map_err(|_| ())?;
 
-		Ok(NetworkState { peer_id })
+		let external_addresses: Result<Vec<Multiaddr>, Self::Error> = state
+			.external_addresses
+			.iter()
+			.map(|enc_multiaddr| -> Result<Multiaddr, Self::Error> {
+				let inner_vec = &enc_multiaddr.0;
+				let bytes = <Vec<u8>>::decode(&mut &inner_vec[..]).map_err(|_| ())?;
+				let multiaddr_str = String::from_utf8(bytes).map_err(|_| ())?;
+				let multiaddr = Multiaddr::from_str(&multiaddr_str).map_err(|_| ())?;
+				Ok(multiaddr)
+			})
+			.collect();
+		let external_addresses = external_addresses?;
+
+		Ok(NetworkState { peer_id, external_addresses })
 	}
 }
 
@@ -299,7 +324,6 @@ impl AsyncApi {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use libp2p::{Multiaddr, PeerId};
 	use sc_client_db::offchain::LocalStorage;
 	use sc_network::{
 		config::MultiaddrWithPeerId, types::ProtocolName, NetworkPeers, NetworkStateInfo,
@@ -385,6 +409,10 @@ mod tests {
 	}
 
 	impl NetworkStateInfo for TestNetwork {
+		fn external_addresses(&self) -> Vec<Multiaddr> {
+			Vec::new()
+		}
+
 		fn local_peer_id(&self) -> PeerId {
 			PeerId::random()
 		}
@@ -499,7 +527,13 @@ mod tests {
 	#[test]
 	fn should_convert_network_states() {
 		// given
-		let state = NetworkState::new(PeerId::random());
+		let state = NetworkState::new(
+			PeerId::random(),
+			vec![
+				Multiaddr::try_from("/ip4/127.0.0.1/tcp/1234".to_string()).unwrap(),
+				Multiaddr::try_from("/ip6/2601:9:4f81:9700:803e:ca65:66e8:c21").unwrap(),
+			],
+		);
 
 		// when
 		let opaque_state = OpaqueNetworkState::from(state.clone());

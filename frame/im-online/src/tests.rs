@@ -125,7 +125,7 @@ fn heartbeat(
 
 	let heartbeat = Heartbeat {
 		block_number,
-		network_state: OpaqueNetworkState { peer_id: OpaquePeerId(vec![1]) },
+		peer_id: OpaquePeerId(vec![1]),
 		session_index,
 		authority_index,
 		validators_len: validators.len() as u32,
@@ -249,7 +249,7 @@ fn should_generate_heartbeats() {
 			heartbeat,
 			Heartbeat {
 				block_number: block,
-				network_state: sp_io::offchain::network_state().unwrap(),
+				peer_id: sp_io::offchain::network_state().unwrap().peer_id,
 				session_index: 2,
 				authority_index: 2,
 				validators_len: 3,
@@ -364,7 +364,7 @@ fn should_not_send_a_report_if_already_online() {
 			heartbeat,
 			Heartbeat {
 				block_number: 4,
-				network_state: sp_io::offchain::network_state().unwrap(),
+				peer_id: sp_io::offchain::network_state().unwrap().peer_id,
 				session_index: 2,
 				authority_index: 0,
 				validators_len: 3,

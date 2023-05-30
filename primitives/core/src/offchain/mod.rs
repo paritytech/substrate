@@ -189,6 +189,8 @@ impl TryFrom<u32> for HttpRequestStatus {
 pub struct OpaqueNetworkState {
 	/// PeerId of the local node in SCALE encoded.
 	pub peer_id: OpaquePeerId,
+	/// List of addresses the node knows it can be reached as.
+	pub external_addresses: Vec<OpaqueMultiaddr>,
 }
 
 /// Simple blob to hold a `Multiaddr` without committing to its format.

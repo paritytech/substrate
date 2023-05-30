@@ -26,8 +26,7 @@
 //! in the current era or session.
 //!
 //! The heartbeat is a signed transaction, which was signed using the session key
-//! and includes the recent best block number of the local validators chain as well
-//! as the [NetworkState](../../client/offchain/struct.NetworkState.html).
+//! and includes the recent best block number of the local validators chain.
 //! It is submitted as an Unsigned Transaction via off-chain workers.
 //!
 //! - [`Config`]
@@ -94,7 +93,7 @@ use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
-use sp_core::offchain::OpaqueNetworkState;
+use sp_core::OpaquePeerId;
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
 	traits::{AtLeast32BitUnsigned, Convert, Saturating, TrailingZeroInput},
@@ -222,8 +221,8 @@ where
 {
 	/// Block number at the time heartbeat is created..
 	pub block_number: BlockNumber,
-	/// A state of local network (peer id and external addresses)
-	pub network_state: OpaqueNetworkState,
+	/// Peer ID of the local node
+	pub peer_id: OpaquePeerId,
 	/// Index of the current session.
 	pub session_index: SessionIndex,
 	/// An index of the authority on the list of validators.
@@ -232,31 +231,26 @@ where
 	pub validators_len: u32,
 }
 
-/// A type that is the same as [`OpaqueNetworkState`] but with [`Vec`] replaced with
+/// A type that is the same as [`OpaquePeerId`] but with [`Vec`] replaced with
 /// [`WeakBoundedVec<Limit>`] where Limit is the respective size limit
 /// `PeerIdEncodingLimit` represents the size limit of the encoding of `PeerId`
 #[derive(Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[codec(mel_bound())]
 #[scale_info(skip_type_params(PeerIdEncodingLimit))]
-pub struct BoundedOpaqueNetworkState<PeerIdEncodingLimit>
+pub struct BoundedOpaquePeerId<PeerIdEncodingLimit>(WeakBoundedVec<u8, PeerIdEncodingLimit>)
 where
-	PeerIdEncodingLimit: Get<u32>,
-{
-	/// PeerId of the local node in SCALE encoded.
-	pub peer_id: WeakBoundedVec<u8, PeerIdEncodingLimit>,
-}
+	PeerIdEncodingLimit: Get<u32>;
 
-impl<PeerIdEncodingLimit: Get<u32>> BoundedOpaqueNetworkState<PeerIdEncodingLimit> {
-	fn force_from(ons: &OpaqueNetworkState) -> Self {
-		let peer_id = WeakBoundedVec::<_, PeerIdEncodingLimit>::force_from(
-			ons.peer_id.0.clone(),
+impl<PeerIdEncodingLimit: Get<u32>> BoundedOpaquePeerId<PeerIdEncodingLimit> {
+	fn force_from(opaque_peer_id: &OpaquePeerId) -> Self {
+		Self(WeakBoundedVec::<_, PeerIdEncodingLimit>::force_from(
+			opaque_peer_id.0.clone(),
 			Some(
 				"Warning: The size of the encoding of PeerId \
   				is bigger than expected. A runtime configuration \
   				adjustment may be needed.",
 			),
-		);
-		Self { peer_id }
+		))
 	}
 }
 
@@ -379,7 +373,7 @@ pub mod pallet {
 		StorageValue<_, WeakBoundedVec<T::AuthorityId, T::MaxKeys>, ValueQuery>;
 
 	/// For each session index, we keep a mapping of `SessionIndex` and `AuthIndex` to
-	/// `WrapperOpaque<BoundedOpaqueNetworkState>`.
+	/// `WrapperOpaque<BoundedOpaquePeerId>`.
 	#[pallet::storage]
 	#[pallet::getter(fn received_heartbeats)]
 	pub(crate) type ReceivedHeartbeats<T: Config> = StorageDoubleMap<
@@ -388,7 +382,7 @@ pub mod pallet {
 		SessionIndex,
 		Twox64Concat,
 		AuthIndex,
-		WrapperOpaque<BoundedOpaqueNetworkState<T::MaxPeerDataEncodingSize>>,
+		WrapperOpaque<BoundedOpaquePeerId<T::MaxPeerDataEncodingSize>>,
 	>;
 
 	/// For each session index, we keep a mapping of `ValidatorId<T>` to the
@@ -446,14 +440,13 @@ pub mod pallet {
 			if let (false, Some(public)) = (exists, public) {
 				Self::deposit_event(Event::<T>::HeartbeatReceived { authority_id: public.clone() });
 
-				let network_state_bounded =
-					BoundedOpaqueNetworkState::<T::MaxPeerDataEncodingSize>::force_from(
-						&heartbeat.network_state,
-					);
+				let peer_id = BoundedOpaquePeerId::<T::MaxPeerDataEncodingSize>::force_from(
+					&heartbeat.peer_id,
+				);
 				ReceivedHeartbeats::<T>::insert(
 					&current_session,
 					&heartbeat.authority_index,
-					WrapperOpaque::from(network_state_bounded),
+					WrapperOpaque::from(peer_id),
 				);
 
 				Ok(())
@@ -669,7 +662,7 @@ impl<T: Config> Pallet<T> {
 				sp_io::offchain::network_state().map_err(|_| OffchainErr::NetworkState)?;
 			let heartbeat = Heartbeat {
 				block_number,
-				network_state,
+				peer_id: network_state.peer_id,
 				session_index,
 				authority_index,
 				validators_len,
