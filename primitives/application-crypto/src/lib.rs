@@ -32,9 +32,6 @@ pub use sp_core::{
 	crypto::{ByteArray, CryptoType, Derive, IsWrappedBy, Public, UncheckedFrom, Wraps},
 	RuntimeDebug,
 };
-#[doc(hidden)]
-#[cfg(all(not(feature = "std"), feature = "serde"))]
-pub use sp_std::alloc::{format, string::String};
 
 #[doc(hidden)]
 pub use codec;
@@ -331,7 +328,7 @@ macro_rules! app_crypto_public_common {
 #[doc(hidden)]
 pub mod module_format_string_prelude {
 	#[cfg(all(not(feature = "std"), feature = "serde"))]
-	pub use super::{format, String};
+	pub use sp_std::alloc::{format, string::String};
 	#[cfg(feature = "std")]
 	pub use std::{format, string::String};
 }
