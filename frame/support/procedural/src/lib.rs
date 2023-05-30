@@ -1425,6 +1425,9 @@ pub fn composite_enum(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// An attribute macro that can be attached to a module declaration. Doing so will
+/// make it available for import later.
+///
 #[proc_macro_attribute]
 pub fn export_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 	match macro_magic::mm_core::export_tokens_internal(attr, tokens, false) {
@@ -1433,6 +1436,9 @@ pub fn export_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 	}
 }
 
+/// An attribute macro that can be attached to a module declaration. Doing so will
+/// import the content of the section that was exported previously using [`export_section`].
+///
 #[import_tokens_attr]
 #[proc_macro_attribute]
 pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
