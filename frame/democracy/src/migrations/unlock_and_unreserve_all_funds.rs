@@ -59,7 +59,7 @@ where
 	/// * `BTreeMap<T::AccountId, BalanceOf<T>>`: Map of account IDs to their respective total
 	///   reserved balance by this pallet
 	/// * `BTreeSet<T::AccountId>`: Set of account IDs with some amount locked by this pallet.
-	/// * frame_support::weights::Weight
+	/// * `frame_support::weights::Weight`: the weight consumed by this call.
 	fn get_account_deposits_and_locks() -> (
 		BTreeMap<T::AccountId, BalanceOf<T>>,
 		BTreeSet<T::AccountId>,
@@ -157,8 +157,8 @@ where
 	///
 	/// Steps:
 	/// 1. Retrieves the deposit and accounts with locks for the pallet.
-	/// 1. Unreserves the deposited funds for each account.
-	/// 2. Unlocks the staked funds for each account.
+	/// 2. Unreserves the deposited funds for each account.
+	/// 3. Unlocks the staked funds for each account.
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		// Get staked and deposited balances as reported by this pallet.
 		let (account_deposits, accounts_with_locks, initial_reads) =
