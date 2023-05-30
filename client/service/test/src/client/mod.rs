@@ -173,7 +173,7 @@ fn construct_genesis_should_work_with_native() {
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 		1000 * DOLLARS,
 	)
-	.build_storage();
+	.build();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
 	let backend = InMemoryBackend::from((storage, StateVersion::default()));
@@ -204,7 +204,7 @@ fn construct_genesis_should_work_with_wasm() {
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 		1000 * DOLLARS,
 	)
-	.build_storage();
+	.build();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
 	let backend = InMemoryBackend::from((storage, StateVersion::default()));
