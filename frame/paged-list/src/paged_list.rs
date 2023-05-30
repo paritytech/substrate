@@ -101,11 +101,11 @@ pub struct StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage> {
 
 	/// The last page that could contain data.
 	///
-	/// Iteration starts at this page index.
+	/// Appending starts at this page index.
 	pub last_page: PageIndex,
 	/// The last value inside `last_page` that could contain a value.
 	///
-	/// Iteration starts at this index. If the page does not hold a value at this index, then the
+	/// Appending starts at this index. If the page does not hold a value at this index, then the
 	/// whole list is empty. The only case where this can happen is when both are `0`.
 	pub last_value: ValueIndex,
 
