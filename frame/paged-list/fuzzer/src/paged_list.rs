@@ -31,7 +31,7 @@ use arbitrary::Arbitrary;
 use honggfuzz::fuzz;
 
 use frame_support::{storage::StorageList, StorageNoopGuard};
-use pallet_paged_list::mock::{PagedList1 as List, *};
+use pallet_paged_list::mock::{PagedList as List, *};
 use sp_io::TestExternalities;
 type Meta = MetaOf<Test, ()>;
 
@@ -44,6 +44,8 @@ fn main() {
 }
 
 /// Appends and drains random number of elements in random order and checks storage invariants.
+///
+/// It also changes the maximal number of elements per page dynamically, hence the `page_size`.
 fn drain_append_work(ops: Vec<Op>, page_size: u8) {
 	if page_size == 0 {
 		return
@@ -60,7 +62,7 @@ fn drain_append_work(ops: Vec<Op>, page_size: u8) {
 			assert!(total >= 0);
 			assert_eq!(List::iter().count(), total as usize);
 
-			// We have the assumption that the queue removes the metadata when being empty.
+			// We have the assumption that the queue removes the metadata when empty.
 			if total == 0 {
 				assert_eq!(List::drain().count(), 0);
 				assert_eq!(Meta::from_storage().unwrap_or_default(), Default::default());
@@ -68,7 +70,7 @@ fn drain_append_work(ops: Vec<Op>, page_size: u8) {
 		}
 
 		assert_eq!(List::drain().count(), total as usize);
-		// No storage leaking (checked by `StorageNoopGuard`).
+		// `StorageNoopGuard` checks that there is no storage leaked.
 	});
 }
 
