@@ -53,6 +53,9 @@ pub mod pallet {
 		type ServiceWeight: Get<Weight>;
 	}
 
+	/// The currently active migration to run and its cursor.
+	///
+	/// `None` indicates that no migration process is running.
 	#[pallet::storage]
 	pub type Cursor<T> = StorageValue<_, (u32, SteppedMigrationCursor), OptionQuery>;
 
