@@ -328,6 +328,14 @@ macro_rules! app_crypto_public_common {
 	};
 }
 
+#[doc(hidden)]
+pub mod module_format_string_prelude {
+	#[cfg(all(not(feature = "std"), feature = "serde"))]
+	pub use super::{format, String};
+	#[cfg(feature = "std")]
+	pub use std::{format, string::String};
+}
+
 /// Implements traits for the public key type if `feature = "serde"` is enabled.
 #[cfg(feature = "serde")]
 #[doc(hidden)]
@@ -365,9 +373,7 @@ macro_rules! app_crypto_public_common_if_serde {
 			where
 				D: $crate::serde::Deserializer<'de>,
 			{
-				use $crate::Ss58Codec;
-				#[cfg(all(not(feature = "std"), feature = "serde"))]
-				use $crate::{format, String};
+				use $crate::{module_format_string_prelude::*, Ss58Codec};
 
 				Public::from_ss58check(&String::deserialize(deserializer)?)
 					.map_err(|e| $crate::serde::de::Error::custom(format!("{:?}", e)))
