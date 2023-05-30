@@ -20,5 +20,5 @@ rand = "0.8"
 node-cli = { version = "3.0.0-dev", path = "../../node/cli" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../../../client/chain-spec" }
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
+sp-core = { version = "8.0.0", path = "../../../primitives/core" }
+sp-keystore = { version = "0.14.0", path = "../../../primitives/keystore" }

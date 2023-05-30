@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use crate::pallet::Def;
-use frame_support_procedural_tools::get_doc_literals;
 
 ///
 /// * Generate default rust doc
@@ -31,15 +30,19 @@ pub fn expand_config(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 	};
 
-	if get_doc_literals(&config_item.attrs).is_empty() {
-		config_item.attrs.push(syn::parse_quote!(
-			#[doc = r"
-			Configuration trait of this pallet.
+	config_item.attrs.insert(
+		0,
+		syn::parse_quote!(
+			#[doc = r"Configuration trait of this pallet.
 
-			Implement this type for a runtime in order to customize this pallet.
-			"]
-		));
-	}
+The main purpose of this trait is to act as an interface between this pallet and the runtime in
+which it is embedded in. A type, function, or constant in this trait is essentially left to be
+configured by the runtime that includes this pallet.
+
+Consequently, a runtime that wants to include this pallet must implement this trait."
+			]
+		),
+	);
 
 	Default::default()
 }

@@ -1520,6 +1520,17 @@ pub mod tests {
 	}
 }
 
+/// Prelude to be used for pallet testing, for ease of use.
+#[cfg(feature = "std")]
+pub mod testing_prelude {
+	pub use super::{
+		assert_err, assert_err_ignore_postinfo, assert_err_with_weight, assert_error_encoded_size,
+		assert_noop, assert_ok, assert_storage_noop, bounded_btree_map, bounded_vec,
+		parameter_types, traits::Get,
+	};
+	pub use sp_arithmetic::assert_eq_error_rate;
+}
+
 /// Prelude to be used alongside pallet macro, for ease of use.
 pub mod pallet_prelude {
 	pub use crate::{
