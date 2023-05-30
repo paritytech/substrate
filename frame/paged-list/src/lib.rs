@@ -41,7 +41,8 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(_);
 
-	/// This type alias is what FRAME normally get us.
+	/// A storage paged list akin to what the FRAME macros would generate.
+	// Note that FRAME does natively support paged lists in storage.
 	pub type List<T, I> = StoragePagedList<
 		ListPrefix<T, I>,
 		Blake2_128Concat,
@@ -55,11 +56,14 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+		/// The value type that can be stored in the list.
 		type Value: FullCodec + Clone + MaxEncodedLen;
 
+		/// The number of values per page.
 		#[pallet::constant]
 		type ValuesPerPage: Get<u32>;
 
+		/// The maximal number of pages in the list.
 		#[pallet::constant]
 		type MaxPages: Get<Option<u32>>;
 	}
