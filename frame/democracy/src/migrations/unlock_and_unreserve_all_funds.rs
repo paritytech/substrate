@@ -178,8 +178,8 @@ where
 		}
 
 		RocksDbWeight::get().reads_writes(
-			accounts_with_locks.len() as u64 + account_deposits.iter().count() as u64,
-			accounts_with_locks.len() as u64 + account_deposits.iter().count() as u64,
+			accounts_with_locks.len() as u64 + account_deposits.len() as u64,
+			accounts_with_locks.len() as u64 + account_deposits.len() as u64,
 		) + initial_reads
 	}
 
