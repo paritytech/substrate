@@ -34,7 +34,7 @@ pub trait ChainHeadApi<Hash> {
 		unsubscribe = "chainHead_unstable_unfollow",
 		item = FollowEvent<Hash>,
 	)]
-	fn chain_head_unstable_follow(&self, runtime_updates: bool);
+	fn chain_head_unstable_follow(&self, with_runtime: bool);
 
 	/// Retrieves the body (list of transactions) of a pinned block.
 	///

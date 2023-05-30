@@ -515,8 +515,12 @@ where
 				phase: WarpSyncPhase::DownloadingBlocks(gap_sync.best_queued_number),
 				total_bytes: 0,
 			}),
-			(None, SyncMode::Warp, _) =>
-				Some(WarpSyncProgress { phase: WarpSyncPhase::AwaitingPeers, total_bytes: 0 }),
+			(None, SyncMode::Warp, _) => Some(WarpSyncProgress {
+				phase: WarpSyncPhase::AwaitingPeers {
+					required_peers: MIN_PEERS_TO_START_WARP_SYNC,
+				},
+				total_bytes: 0,
+			}),
 			(Some(sync), _, _) => Some(sync.progress()),
 			_ => None,
 		};

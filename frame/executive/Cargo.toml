@@ -20,20 +20,20 @@ scale-info = { version = "2.5.0", default-features = false, features = ["derive"
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 frame-try-runtime = { version = "0.10.0-dev", default-features = false, path = "../try-runtime", optional = true }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-tracing = { version = "6.0.0", default-features = false, path = "../../primitives/tracing" }
+sp-core = { version = "8.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "8.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
+sp-tracing = { version = "7.0.0", default-features = false, path = "../../primitives/tracing" }
 
 [dev-dependencies]
 array-bytes = "4.1"
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../transaction-payment" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-core = { version = "8.0.0", path = "../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
-sp-io = { version = "7.0.0", path = "../../primitives/io" }
-sp-version = { version = "5.0.0", path = "../../primitives/version" }
+sp-io = { version = "8.0.0", path = "../../primitives/io" }
+sp-version = { version = "6.0.0", path = "../../primitives/version" }
 
 [features]
 default = ["std"]

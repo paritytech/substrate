@@ -21,15 +21,15 @@ scale-info = { version = "2.0.0", default-features = false, features = ["derive"
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-core = { version = "8.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "8.0.0", default-features = false, path = "../../primitives/io" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-core = { version = "8.0.0", path = "../../primitives/core" }
 sp-tracing = { path = "../../primitives/tracing" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 

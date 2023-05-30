@@ -18,9 +18,9 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 	"derive",
 ] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "8.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
@@ -28,7 +28,7 @@ pallet-session = { version = "4.0.0-dev", default-features = false, features = [
 	"historical",
 ], path = "../session" }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
-sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-application-crypto = { version = "8.0.0", default-features = false, path = "../../primitives/application-crypto" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
 log = { version = "0.4.17", default-features = false }
 
@@ -37,8 +37,8 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 rand_chacha = { version = "0.2", default-features = false, optional = true }
 
 [dev-dependencies]
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-tracing = { version = "7.0.0", path = "../../primitives/tracing" }
+sp-core = { version = "8.0.0", path = "../../primitives/core" }
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
