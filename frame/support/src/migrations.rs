@@ -18,8 +18,9 @@
 #[cfg(feature = "try-runtime")]
 use crate::storage::unhashed::contains_prefixed_key;
 use crate::{
+	storage::transactional::with_transaction_opaque_err,
 	traits::{GetStorageVersion, NoStorageVersionSet, PalletInfoAccess, StorageVersion},
-	weights::{RuntimeDbWeight, Weight},
+	weights::{RuntimeDbWeight, Weight, WeightMeter},
 };
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_core::Get;
@@ -208,4 +209,65 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 		};
 		Ok(())
 	}
+}
+
+/// A migration that can proceed in multiple steps.
+pub trait SteppedMigration {
+	/// Try to migrate as much as possible with the given weight.
+	///
+	/// **ANY STORAGE CHANGES MUST BE ROLLED-BACK BY THE CALLER UPON ERROR.** This is necessary
+	/// since the caller cannot return a cursor in the error case. `Self::transactional_step` is
+	/// provided as convenience for a caller. A cursor of `None` implies that the migration is at
+	/// its end. TODO: Think about iterator `fuse` requirement.
+	fn step(
+		&self,
+		cursor: &Option<SteppedMigrationCursor>,
+		meter: &mut WeightMeter,
+	) -> Result<Option<SteppedMigrationCursor>, SteppedMigrationError>;
+
+	/// Same as [`Self::step`], but rolls back pending changes in the error case.
+	fn transactional_step(
+		&self,
+		mut cursor: Option<SteppedMigrationCursor>,
+		meter: &mut WeightMeter,
+	) -> Result<Option<SteppedMigrationCursor>, SteppedMigrationError> {
+		with_transaction_opaque_err(move || match self.step(&cursor, meter) {
+			Ok(new_cursor) => {
+				cursor = new_cursor;
+				sp_api::TransactionOutcome::Commit(Ok(cursor))
+			},
+			Err(err) => sp_api::TransactionOutcome::Rollback(Err(err)),
+		})
+		.map_err(|()| SteppedMigrationError::Internal)?
+	}
+}
+
+/// An opaque cursor that defines the "position" or a migration.
+pub type SteppedMigrationCursor = crate::BoundedVec<u8, crate::traits::ConstU32<1024>>;
+
+#[derive(Debug)]
+pub enum SteppedMigrationError {
+	// Transient errors:
+	/// The remaining weight is not enough to do anything.
+	///
+	/// Can be resolved by calling with at least `required` weight. Note that calling it with
+	/// exactly `required` weight could cause it to not make any progress.
+	InsufficientWeight {
+		required: Weight,
+	},
+	/// Implementation specific error that should resolve itself at a later point in time.
+	///
+	/// The number of re-tries can be decided upon by the caller. `inner` is undefined.
+	Transient {
+		inner: u8,
+	},
+	// permanent errors:
+	/// The migration encountered a permanent error and cannot continue.
+	///
+	/// This can happen if the storage is corrupted or an assumption got invalidated while the
+	/// migration was running.
+	Permanent {
+		inner: u8,
+	},
+	Internal,
 }
