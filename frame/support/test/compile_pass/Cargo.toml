@@ -16,9 +16,9 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 renamed-frame-support = { package = "frame-support", version = "4.0.0-dev", default-features = false, path = "../../" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../system" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../../../primitives/core" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../../../primitives/runtime" }
-sp-version = { version = "5.0.0", default-features = false, path = "../../../../primitives/version" }
+sp-core = { version = "8.0.0", default-features = false, path = "../../../../primitives/core" }
+sp-runtime = { version = "8.0.0", default-features = false, path = "../../../../primitives/runtime" }
+sp-version = { version = "6.0.0", default-features = false, path = "../../../../primitives/version" }
 
 [features]
 default = ["std"]

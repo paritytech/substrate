@@ -75,7 +75,6 @@ impl Config for Test {
 	const INDEXING_PREFIX: &'static [u8] = b"mmr-";
 
 	type Hashing = Keccak256;
-	type Hash = H256;
 	type LeafData = Compact<Keccak256, (ParentNumberAndHash<Test>, LeafData)>;
 	type OnNewRoot = ();
 	type WeightInfo = ();

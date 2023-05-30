@@ -66,6 +66,7 @@ pub(super) type PreSignedMintOf<T, I = ()> = PreSignedMint<
 	<T as Config<I>>::ItemId,
 	<T as SystemConfig>::AccountId,
 	<T as SystemConfig>::BlockNumber,
+	BalanceOf<T, I>,
 >;
 pub(super) type PreSignedAttributesOf<T, I = ()> = PreSignedAttributes<
 	<T as Config<I>>::CollectionId,
@@ -123,10 +124,12 @@ impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
 }
 
 /// Witness data for items mint transactions.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub struct MintWitness<ItemId> {
+#[derive(Clone, Encode, Decode, Default, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+pub struct MintWitness<ItemId, Balance> {
 	/// Provide the id of the item in a required collection.
 	pub owned_item: ItemId,
+	/// The price specified in mint settings.
+	pub mint_price: Option<Balance>,
 }
 
 /// Information concerning the ownership of a single unique item.
@@ -506,7 +509,7 @@ impl CollectionRoles {
 impl_codec_bitflags!(CollectionRoles, u8, CollectionRole);
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct PreSignedMint<CollectionId, ItemId, AccountId, Deadline> {
+pub struct PreSignedMint<CollectionId, ItemId, AccountId, Deadline, Balance> {
 	/// A collection of the item to be minted.
 	pub(super) collection: CollectionId,
 	/// Item's ID.
@@ -519,6 +522,8 @@ pub struct PreSignedMint<CollectionId, ItemId, AccountId, Deadline> {
 	pub(super) only_account: Option<AccountId>,
 	/// A deadline for the signature.
 	pub(super) deadline: Deadline,
+	/// An optional price the claimer would need to pay for the mint.
+	pub(super) mint_price: Option<Balance>,
 }
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]

@@ -436,8 +436,8 @@ pub mod pallet {
 
 			claimant.last_active = status.cycle_index;
 
-			let id = T::Paymaster::pay(&beneficiary, (), payout)
-				.map_err(|()| Error::<T, I>::PayError)?;
+			let id =
+				T::Paymaster::pay(&beneficiary, (), payout).map_err(|_| Error::<T, I>::PayError)?;
 
 			claimant.status = Attempted { registered, id, amount: payout };
 
