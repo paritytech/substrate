@@ -335,4 +335,4 @@ lto = "fat"
 codegen-units = 1
 
 [patch.crates-io]
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "na-with-debug-info" }
