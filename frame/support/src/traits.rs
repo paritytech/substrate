@@ -55,8 +55,8 @@ pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter
 mod misc;
 pub use misc::{
 	defensive_prelude::{self, *},
-	Backing, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16,
-	ConstU32, ConstU64, ConstU8, DefensiveMax, DefensiveMin, DefensiveSaturating,
+	AccountTouch, Backing, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128,
+	ConstU16, ConstU32, ConstU64, ConstU8, DefensiveMax, DefensiveMin, DefensiveSaturating,
 	DefensiveTruncateFrom, EnsureInherentsAreFirst, EqualPrivilegeOnly, EstimateCallFee,
 	ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime, IsSubType, IsType,
 	Len, OffchainWorker, OnKilledAccount, OnNewAccount, PrivilegeCmp, SameOrOther, Time,
@@ -80,18 +80,16 @@ pub use metadata::{
 };
 
 mod hooks;
-#[cfg(feature = "std")]
-pub use hooks::GenesisBuild;
 pub use hooks::{
-	Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade,
-	OnTimestampSet,
+	GenesisBuild, Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize,
+	OnRuntimeUpgrade, OnTimestampSet,
 };
 
 pub mod schedule;
 mod storage;
 pub use storage::{
-	Instance, PartialStorageInfoTrait, StorageInfo, StorageInfoTrait, StorageInstance,
-	TrackedStorageKey, WhitelistedStorageKeys,
+	Incrementable, Instance, PartialStorageInfoTrait, StorageInfo, StorageInfoTrait,
+	StorageInstance, TrackedStorageKey, WhitelistedStorageKeys,
 };
 
 mod dispatch;

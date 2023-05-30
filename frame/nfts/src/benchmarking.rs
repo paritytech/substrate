@@ -828,6 +828,7 @@ benchmarks_instance_pallet! {
 			metadata: metadata.clone(),
 			only_account: None,
 			deadline: One::one(),
+			mint_price: Some(DepositBalanceOf::<T, I>::min_value()),
 		};
 		let message = Encode::encode(&mint_data);
 		let signature = MultiSignature::Sr25519(sr25519_sign(0.into(), &caller_public, &message).unwrap());
@@ -835,7 +836,7 @@ benchmarks_instance_pallet! {
 		let target: T::AccountId = account("target", 0, SEED);
 		T::Currency::make_free_balance_be(&target, DepositBalanceOf::<T, I>::max_value());
 		frame_system::Pallet::<T>::set_block_number(One::one());
-	}: _(SystemOrigin::Signed(target.clone()), mint_data, signature.into(), caller)
+	}: _(SystemOrigin::Signed(target.clone()), Box::new(mint_data), signature.into(), caller)
 	verify {
 		let metadata: BoundedVec<_, _> = metadata.try_into().unwrap();
 		assert_last_event::<T, I>(Event::ItemMetadataSet { collection, item, data: metadata }.into());

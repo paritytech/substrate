@@ -52,7 +52,7 @@ pub struct ChainHeadFollower<BE: Backend<Block>, Block: BlockT, Client> {
 	/// Subscriptions handle.
 	sub_handle: Arc<SubscriptionManagement<Block, BE>>,
 	/// Subscription was started with the runtime updates flag.
-	runtime_updates: bool,
+	with_runtime: bool,
 	/// Subscription ID.
 	sub_id: String,
 	/// The best reported block by this subscription.
@@ -65,10 +65,10 @@ impl<BE: Backend<Block>, Block: BlockT, Client> ChainHeadFollower<BE, Block, Cli
 		client: Arc<Client>,
 		backend: Arc<BE>,
 		sub_handle: Arc<SubscriptionManagement<Block, BE>>,
-		runtime_updates: bool,
+		with_runtime: bool,
 		sub_id: String,
 	) -> Self {
-		Self { client, backend, sub_handle, runtime_updates, sub_id, best_block_cache: None }
+		Self { client, backend, sub_handle, with_runtime, sub_id, best_block_cache: None }
 	}
 }
 
@@ -144,7 +144,7 @@ where
 		parent: Option<Block::Hash>,
 	) -> Option<RuntimeEvent> {
 		// No runtime versions should be reported.
-		if !self.runtime_updates {
+		if !self.with_runtime {
 			return None
 		}
 
@@ -228,7 +228,7 @@ where
 		let initialized_event = FollowEvent::Initialized(Initialized {
 			finalized_block_hash,
 			finalized_block_runtime,
-			runtime_updates: self.runtime_updates,
+			with_runtime: self.with_runtime,
 		});
 
 		let mut finalized_block_descendants = Vec::with_capacity(initial_blocks.len() + 1);
@@ -243,7 +243,7 @@ where
 				block_hash: child,
 				parent_block_hash: parent,
 				new_runtime,
-				runtime_updates: self.runtime_updates,
+				with_runtime: self.with_runtime,
 			});
 
 			finalized_block_descendants.push(event);
@@ -274,7 +274,7 @@ where
 			block_hash,
 			parent_block_hash,
 			new_runtime,
-			runtime_updates: self.runtime_updates,
+			with_runtime: self.with_runtime,
 		});
 
 		if !is_best_block {

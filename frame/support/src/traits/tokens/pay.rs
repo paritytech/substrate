@@ -56,7 +56,11 @@ pub trait Pay {
 	/// Ensure that a call to pay with the given parameters will be successful if done immediately
 	/// after this call. Used in benchmarking code.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_successful(who: &Self::Beneficiary, amount: Self::Balance);
+	fn ensure_successful(
+		who: &Self::Beneficiary,
+		asset_kind: Self::AssetKind,
+		amount: Self::Balance,
+	);
 	/// Ensure that a call to `check_payment` with the given parameters will return either `Success`
 	/// or `Failure`.
 	#[cfg(feature = "runtime-benchmarks")]
@@ -97,7 +101,7 @@ impl<A: TypedGet, F: fungible::Mutate<A::Type>> Pay for PayFromAccount<F, A> {
 		PaymentStatus::Success
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_successful(_: &Self::Beneficiary, amount: Self::Balance) {
+	fn ensure_successful(_: &Self::Beneficiary, _: Self::AssetKind, amount: Self::Balance) {
 		<F as fungible::Mutate<_>>::mint_into(&A::get(), amount).unwrap();
 	}
 	#[cfg(feature = "runtime-benchmarks")]

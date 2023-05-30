@@ -21,11 +21,11 @@ frame-system = { path = "../../system", version = "4.0.0-dev" }
 frame-support = { path = "../../support", version = "4.0.0-dev" }
 
 # core
-sp-storage = { path = "../../../primitives/storage", version = "7.0.0" }
-sp-core = { path = "../../../primitives/core", version = "7.0.0" }
-sp-tracing = { path = "../../../primitives/tracing", version = "6.0.0" }
-sp-runtime = { path = "../../../primitives/runtime", version = "7.0.0" }
-sp-std = { path = "../../../primitives/std", version = "5.0.0" }
+sp-storage = { path = "../../../primitives/storage", version = "8.0.0" }
+sp-core = { path = "../../../primitives/core", version = "8.0.0" }
+sp-tracing = { path = "../../../primitives/tracing", version = "7.0.0" }
+sp-runtime = { path = "../../../primitives/runtime", version = "8.0.0" }
+sp-std = { path = "../../../primitives/std", version = "6.0.0" }
 
 # utils
 remote-externalities = { path = "../../../utils/frame/remote-externalities", version = "0.10.0-dev", package = "frame-remote-externalities" }
