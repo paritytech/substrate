@@ -90,7 +90,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The value type that can be stored in the list.
-		type Value: FullCodec + Clone + MaxEncodedLen;
+		type Value: FullCodec;
 
 		/// The number of values per page.
 		#[pallet::constant]

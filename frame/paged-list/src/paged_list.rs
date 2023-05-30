@@ -198,6 +198,11 @@ impl<V: FullCodec> Page<V> {
 		Some(Self { index, values })
 	}
 
+	/// Whether no more values can be read from this page.
+	pub fn is_eof(&self) -> bool {
+		self.values.len() == 0
+	}
+
 	/// Delete this page from storage.
 	pub fn delete<Prefix: StorageInstance>(&self) {
 		delete_page::<Prefix>(self.index);
@@ -270,44 +275,37 @@ where
 
 	fn next(&mut self) -> Option<Self::Item> {
 		let page = self.page.as_mut()?;
-
-		if let Some(val) = page.next() {
-			if self.drain {
-				self.meta.first_value_offset.saturating_inc();
-				self.meta.store()
-			}
-			return Some(val)
-		}
-		if self.drain {
-			// page is empty
-			page.delete::<Prefix>();
-			self.meta.first_value_offset = 0;
-			self.meta.first_page.saturating_inc();
-			self.meta.store();
-		}
-
-		let Some(mut page) = Page::from_storage::<Prefix>(page.index.saturating_add(1), 0) else {
-			self.page = None;
-			if self.drain {
+		let value = match page.next() {
+			Some(value) => {
+				if self.drain {
+					self.meta.first_value_offset.saturating_inc();
+					self.meta.store()
+				}
+				value
+			},
+			None => {
+				defensive!("There are no empty pages in storage; nuking the list");
 				self.meta.reset();
-			}
-			return None;
+				self.page = None;
+				return None
+			},
 		};
 
-		if let Some(val) = page.next() {
-			self.page = Some(page);
+		if page.is_eof() {
 			if self.drain {
-				self.meta.first_value_offset.saturating_inc();
+				page.delete::<Prefix>();
+				self.meta.first_value_offset = 0;
+				self.meta.first_page.saturating_inc();
 				self.meta.store();
 			}
-			return Some(val)
-		}
 
-		defensive!("StoragePagedListIterator: empty pages do not exist: storage corrupted");
-		// Put the storage back into a consistent state.
-		self.meta.reset();
-		self.page = None;
-		None
+			debug_assert!(!self.drain || self.meta.first_page == page.index + 1);
+			self.page = Page::from_storage::<Prefix>(page.index.saturating_add(1), 0);
+			if self.page.is_none() && self.drain {
+				self.meta.reset();
+			}
+		}
+		Some(value)
 	}
 }
 
@@ -472,7 +470,7 @@ mod tests {
 
 			let meta = List::read_meta();
 			// Will switch over to `10/0`, but will in the next call.
-			assert_eq!((meta.first_page, meta.first_value_offset), (9, 5));
+			assert_eq!((meta.first_page, meta.first_value_offset), (10, 0));
 
 			// 50 gone, 50 to go
 			assert_eq!(List::as_vec(), (50..100).collect::<Vec<_>>());
