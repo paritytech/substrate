@@ -22,14 +22,14 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
-sp-io = { version = "8.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-storage-proof" }
 log = { version = "0.4.17", default-features = false }
 
 [dev-dependencies]
-sp-core = { version = "8.0.0", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = true, path = "../../primitives/transaction-storage-proof" }
 
 [features]
