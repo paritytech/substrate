@@ -48,10 +48,9 @@ pub fn create_heartbeat<T: Config>(
 		.map_err(|()| "More than the maximum number of keys provided")?;
 	Keys::<T>::put(bounded_keys);
 
-	let network_state = OpaqueNetworkState { peer_id: OpaquePeerId::default() };
 	let input_heartbeat = Heartbeat {
 		block_number: T::BlockNumber::zero(),
-		network_state,
+		peer_id: OpaquePeerId::default(),
 		session_index: 0,
 		authority_index: k - 1,
 		validators_len: keys.len() as u32,
