@@ -29,6 +29,8 @@ use crate::{
 use codec::{Compact, Decode, Encode, EncodeLike, Error, Input};
 use scale_info::{build::Fields, meta_type, Path, StaticTypeInfo, Type, TypeInfo, TypeParameter};
 use sp_io::hashing::blake2_256;
+#[cfg(all(not(feature = "std"), feature = "serde"))]
+use sp_std::alloc::format;
 use sp_std::{fmt, prelude::*};
 
 /// Current version of the [`UncheckedExtrinsic`] encoded format.
@@ -317,7 +319,7 @@ where
 {
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> serde::Serialize
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
@@ -329,7 +331,7 @@ impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> s
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<'a, Address: Decode, Signature: Decode, Call: Decode, Extra: SignedExtension>
 	serde::Deserialize<'a> for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {

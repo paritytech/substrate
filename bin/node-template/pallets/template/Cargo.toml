@@ -24,9 +24,9 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../../
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../../../frame/benchmarking" }
 
 [dev-dependencies]
-sp-core = { version = "7.0.0", path = "../../../../primitives/core" }
-sp-io = { version = "7.0.0", path = "../../../../primitives/io" }
-sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
+sp-core = { version = "8.0.0", path = "../../../../primitives/core" }
+sp-io = { version = "8.0.0", path = "../../../../primitives/io" }
+sp-runtime = { version = "8.0.0", path = "../../../../primitives/runtime" }
 
 [features]
 default = ["std"]

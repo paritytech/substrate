@@ -115,6 +115,9 @@ use sp_runtime::{
 };
 use sp_std::{cmp::Ordering, prelude::*};
 
+#[cfg(any(feature = "try-runtime", test))]
+use sp_runtime::TryRuntimeError;
+
 mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
@@ -327,7 +330,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
+		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
 			Self::do_try_state()
 		}
 	}
@@ -711,15 +714,9 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, T::AccountId, Voter<T::AccountId, BalanceOf<T>>, ValueQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub members: Vec<(T::AccountId, BalanceOf<T>)>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { members: Default::default() }
-		}
 	}
 
 	#[pallet::genesis_build]
@@ -746,7 +743,10 @@ pub mod pallet {
 					Members::<T>::mutate(|members| {
 						match members.binary_search_by(|m| m.who.cmp(member)) {
 							Ok(_) => {
-								panic!("Duplicate member in elections-phragmen genesis: {}", member)
+								panic!(
+									"Duplicate member in elections-phragmen genesis: {:?}",
+									member
+								)
 							},
 							Err(pos) => members.insert(
 								pos,
@@ -1199,7 +1199,7 @@ impl<T: Config> ContainsLengthBound for Pallet<T> {
 
 #[cfg(any(feature = "try-runtime", test))]
 impl<T: Config> Pallet<T> {
-	fn do_try_state() -> Result<(), &'static str> {
+	fn do_try_state() -> Result<(), TryRuntimeError> {
 		Self::try_state_members()?;
 		Self::try_state_runners_up()?;
 		Self::try_state_candidates()?;
@@ -1210,20 +1210,20 @@ impl<T: Config> Pallet<T> {
 
 	/// [`Members`] state checks. Invariants:
 	///  - Members are always sorted based on account ID.
-	fn try_state_members() -> Result<(), &'static str> {
+	fn try_state_members() -> Result<(), TryRuntimeError> {
 		let mut members = Members::<T>::get().clone();
 		members.sort_by_key(|m| m.who.clone());
 
 		if Members::<T>::get() == members {
 			Ok(())
 		} else {
-			Err("try_state checks: Members must be always sorted by account ID")
+			Err("try_state checks: Members must be always sorted by account ID".into())
 		}
 	}
 
 	// [`RunnersUp`] state checks. Invariants:
 	//  - Elements are sorted based on weight (worst to best).
-	fn try_state_runners_up() -> Result<(), &'static str> {
+	fn try_state_runners_up() -> Result<(), TryRuntimeError> {
 		let mut sorted = RunnersUp::<T>::get();
 		// worst stake first
 		sorted.sort_by(|a, b| a.stake.cmp(&b.stake));
@@ -1231,27 +1231,28 @@ impl<T: Config> Pallet<T> {
 		if RunnersUp::<T>::get() == sorted {
 			Ok(())
 		} else {
-			Err("try_state checks: Runners Up must always be sorted by stake (worst to best)")
+			Err("try_state checks: Runners Up must always be sorted by stake (worst to best)"
+				.into())
 		}
 	}
 
 	// [`Candidates`] state checks. Invariants:
 	//  - Always sorted based on account ID.
-	fn try_state_candidates() -> Result<(), &'static str> {
+	fn try_state_candidates() -> Result<(), TryRuntimeError> {
 		let mut candidates = Candidates::<T>::get().clone();
 		candidates.sort_by_key(|(c, _)| c.clone());
 
 		if Candidates::<T>::get() == candidates {
 			Ok(())
 		} else {
-			Err("try_state checks: Candidates must be always sorted by account ID")
+			Err("try_state checks: Candidates must be always sorted by account ID".into())
 		}
 	}
 	// [`Candidates`] and [`RunnersUp`] state checks. Invariants:
 	//  - Candidates and runners-ups sets are disjoint.
-	fn try_state_candidates_runners_up_disjoint() -> Result<(), &'static str> {
+	fn try_state_candidates_runners_up_disjoint() -> Result<(), TryRuntimeError> {
 		match Self::intersects(&Self::candidates_ids(), &Self::runners_up_ids()) {
-			true => Err("Candidates and runners up sets should always be disjoint"),
+			true => Err("Candidates and runners up sets should always be disjoint".into()),
 			false => Ok(()),
 		}
 	}
@@ -1259,11 +1260,12 @@ impl<T: Config> Pallet<T> {
 	// [`Members`], [`Candidates`] and [`RunnersUp`] state checks. Invariants:
 	//  - Members and candidates sets are disjoint;
 	//  - Members and runners-ups sets are disjoint.
-	fn try_state_members_disjoint() -> Result<(), &'static str> {
+	fn try_state_members_disjoint() -> Result<(), TryRuntimeError> {
 		match Self::intersects(&Pallet::<T>::members_ids(), &Self::candidates_ids()) &&
 			Self::intersects(&Pallet::<T>::members_ids(), &Self::runners_up_ids())
 		{
-			true => Err("Members set should be disjoint from candidates and runners-up sets"),
+			true =>
+				Err("Members set should be disjoint from candidates and runners-up sets".into()),
 			false => Ok(()),
 		}
 	}
@@ -1271,14 +1273,14 @@ impl<T: Config> Pallet<T> {
 	// [`Members`], [`RunnersUp`] and approval stake state checks. Invariants:
 	// - Selected members should have approval stake;
 	// - Selected RunnersUp should have approval stake.
-	fn try_state_members_approval_stake() -> Result<(), &'static str> {
+	fn try_state_members_approval_stake() -> Result<(), TryRuntimeError> {
 		match Members::<T>::get()
 			.iter()
 			.chain(RunnersUp::<T>::get().iter())
 			.all(|s| s.stake != BalanceOf::<T>::zero())
 		{
 			true => Ok(()),
-			false => Err("Members and RunnersUp must have approval stake"),
+			false => Err("Members and RunnersUp must have approval stake".into()),
 		}
 	}
 
@@ -1353,7 +1355,7 @@ mod tests {
 		type WeightInfo = ();
 		type FreezeIdentifier = ();
 		type MaxFreezes = ();
-		type HoldIdentifier = ();
+		type RuntimeHoldReason = ();
 		type MaxHolds = ();
 	}
 
@@ -1501,7 +1503,7 @@ mod tests {
 			MEMBERS.with(|m| {
 				*m.borrow_mut() = self.genesis_members.iter().map(|(m, _)| *m).collect::<Vec<_>>()
 			});
-			let mut ext: sp_io::TestExternalities = GenesisConfig {
+			let mut ext: sp_io::TestExternalities = RuntimeGenesisConfig {
 				balances: pallet_balances::GenesisConfig::<Test> {
 					balances: vec![
 						(1, 10 * self.balance_factor),

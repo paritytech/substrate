@@ -1160,8 +1160,8 @@ pub trait AccountTouch<AssetId, AccountId> {
 	/// The type for currency units of the deposit.
 	type Balance;
 
-	/// The deposit amount of a native currency required for creating an asset account.
-	fn deposit_required() -> Self::Balance;
+	/// The deposit amount of a native currency required for creating an account of the `asset`.
+	fn deposit_required(asset: AssetId) -> Self::Balance;
 
 	/// Create an account for `who` of the `asset` with a deposit taken from the `depositor`.
 	fn touch(asset: AssetId, who: AccountId, depositor: AccountId) -> DispatchResult;

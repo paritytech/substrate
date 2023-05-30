@@ -226,28 +226,20 @@ test-linux-stable:
       --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
     # we need to update cache only from one job
     - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
-  artifacts:
-    when: always
-    paths:
-      - target/nextest/default/junit.xml
-    reports:
-      junit: target/nextest/default/junit.xml
-
-test-linux-stable-upload-test-results:
-  stage: test
-  needs:
-    - job: test-linux-stable
-      artifacts: true
-  extends:
-    - .docker-env
-    - .test-refs
-  script:
+    # Upload tests results to Elasticsearch
+    - echo "Upload test results to Elasticsearch"
     - cat target/nextest/default/junit.xml | xq . > target/nextest/default/junit.json
     - "curl -v -XPOST --http1.1
       -u ${ELASTIC_USERNAME}:${ELASTIC_PASSWORD}
       https://elasticsearch.parity-build.parity.io/unit-tests/_doc/${CI_JOB_ID}
       -H 'Content-Type: application/json'
       -d @target/nextest/default/junit.json"
+  artifacts:
+    when: always
+    paths:
+      - target/nextest/default/junit.xml
+    reports:
+      junit: target/nextest/default/junit.xml
 
 test-frame-support:
   stage: test

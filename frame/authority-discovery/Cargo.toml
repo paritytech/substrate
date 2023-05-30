@@ -22,14 +22,14 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 pallet-session = { version = "4.0.0-dev", default-features = false, features = [
 	"historical",
 ], path = "../session" }
-sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-application-crypto = { version = "8.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authority-discovery" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-io = { version = "7.0.0", path = "../../primitives/io" }
+sp-core = { version = "8.0.0", path = "../../primitives/core" }
+sp-io = { version = "8.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]

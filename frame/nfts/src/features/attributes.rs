@@ -394,4 +394,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<BoundedVec<u8, T::ValueLimit>, DispatchError> {
 		Ok(BoundedVec::try_from(value).map_err(|_| Error::<T, I>::IncorrectData)?)
 	}
+
+	/// A helper method to check whether a system attribute is set for a given item.
+	pub fn has_system_attribute(
+		collection: &T::CollectionId,
+		item: &T::ItemId,
+		attribute_key: PalletAttributes<T::CollectionId>,
+	) -> Result<bool, DispatchError> {
+		let attribute = (
+			&collection,
+			Some(item),
+			AttributeNamespace::Pallet,
+			&Self::construct_attribute_key(attribute_key.encode())?,
+		);
+		Ok(Attribute::<T, I>::contains_key(attribute))
+	}
 }
