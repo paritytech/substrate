@@ -135,8 +135,6 @@ where
 		let (account_deposited_sums, account_staked_sums, _) =
 			Self::get_account_deposited_and_staked_sums();
 
-		// Now get the *actual* locked and reserved amounts for each account before the migration,
-		// so we can check that the amounts are reduced by the expected amounts post-migration.
 		let all_accounts: BTreeSet<T::AccountId> = account_staked_sums
 			.keys()
 			.chain(account_deposited_sums.keys())
