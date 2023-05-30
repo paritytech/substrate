@@ -105,16 +105,10 @@ pub mod pallet {
 	pub type Prime<T: Config<I>, I: 'static = ()> = StorageValue<_, T::AccountId, OptionQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub members: BoundedVec<T::AccountId, T::MaxMembers>,
 		pub phantom: PhantomData<I>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
-		fn default() -> Self {
-			Self { members: Default::default(), phantom: Default::default() }
-		}
 	}
 
 	#[pallet::genesis_build]

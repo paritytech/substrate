@@ -15,6 +15,6 @@ log = "0.4.17"
 fs4 = "0.6.3"
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../db" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-core = { version = "8.0.0", path = "../../primitives/core" }
 tokio = "1.22.0"
 thiserror = "1.0.30"
