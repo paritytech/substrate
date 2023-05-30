@@ -78,7 +78,7 @@ pub mod pallet {
 // This exposes the list functionality to other pallets.
 impl<T: Config<I>, I: 'static> StorageList<T::Value> for Pallet<T, I> {
 	type Iterator = <List<T, I> as StorageList<T::Value>>::Iterator;
-	type Appendix = <List<T, I> as StorageList<T::Value>>::Appendix;
+	type Appender = <List<T, I> as StorageList<T::Value>>::Appender;
 
 	fn iter() -> Self::Iterator {
 		List::<T, I>::iter()
@@ -88,8 +88,8 @@ impl<T: Config<I>, I: 'static> StorageList<T::Value> for Pallet<T, I> {
 		List::<T, I>::drain()
 	}
 
-	fn appendix() -> Self::Appendix {
-		List::<T, I>::appendix()
+	fn appender() -> Self::Appender {
+		List::<T, I>::appender()
 	}
 }
 

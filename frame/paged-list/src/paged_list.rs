@@ -75,7 +75,7 @@ pub type ValueIndex = u32;
 ///   besides having all management state handy in one location.
 /// - The PoV complexity of iterating compared to a `StorageValue<Vec<V>>` is improved for
 ///   "shortish" iterations and worse for total iteration. The append complexity is identical in the
-///   asymptotic case when using an `Appendix`, and worse in all. For example when appending just
+///   asymptotic case when using an `Appender`, and worse in all. For example when appending just
 ///   one value.
 /// - It does incur a read overhead on the host side as compared to a `StorageValue<Vec<V>>`.
 pub struct StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages = GetDefault> {
@@ -84,7 +84,7 @@ pub struct StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages = Get
 
 /// The state of a [`StoragePagedList`].
 ///
-/// This struct doubles as [`frame_support::storage::StorageList::Appendix`].
+/// This struct doubles as [`frame_support::storage::StorageList::Appender`].
 #[derive(
 	Encode, Decode, CloneNoBound, PartialEqNoBound, EqNoBound, DebugNoBound, DefaultNoBound,
 )]
@@ -112,7 +112,7 @@ pub struct StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage> {
 	_phantom: PhantomData<(Prefix, Hasher, Value, ValuesPerPage)>,
 }
 
-impl<Prefix, Hasher, Value, ValuesPerPage> frame_support::storage::StorageAppendix<Value>
+impl<Prefix, Hasher, Value, ValuesPerPage> frame_support::storage::StorageAppender<Value>
 	for StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage>
 where
 	Prefix: StorageInstance,
@@ -332,7 +332,7 @@ where
 	MaxPages: Get<Option<u32>>,
 {
 	type Iterator = StoragePagedListIterator<Prefix, Hasher, Value, ValuesPerPage>;
-	type Appendix = StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage>;
+	type Appender = StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage>;
 
 	fn iter() -> Self::Iterator {
 		StoragePagedListIterator::from_meta(Self::read_meta(), false)
@@ -342,8 +342,8 @@ where
 		StoragePagedListIterator::from_meta(Self::read_meta(), true)
 	}
 
-	fn appendix() -> Self::Appendix {
-		Self::appendix()
+	fn appender() -> Self::Appender {
+		Self::appender()
 	}
 }
 
@@ -364,7 +364,7 @@ where
 	/// Provides a fast append iterator.
 	///
 	/// The list should not be modified while appending. Also don't call it recursively.
-	fn appendix() -> StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage> {
+	fn appender() -> StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage> {
 		Self::read_meta()
 	}
 

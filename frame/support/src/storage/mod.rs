@@ -166,7 +166,7 @@ pub trait StorageList<V: FullCodec> {
 	type Iterator: Iterator<Item = V>;
 
 	/// Append iterator for fast append operations.
-	type Appendix: StorageAppendix<V>;
+	type Appender: StorageAppender<V>;
 
 	/// List the elements in append order.
 	fn iter() -> Self::Iterator;
@@ -178,7 +178,7 @@ pub trait StorageList<V: FullCodec> {
 	fn drain() -> Self::Iterator;
 
 	/// A fast append iterator.
-	fn appendix() -> Self::Appendix;
+	fn appender() -> Self::Appender;
 
 	/// Append a single element.
 	///
@@ -193,7 +193,7 @@ pub trait StorageList<V: FullCodec> {
 
 	/// Append many elements.
 	///
-	/// Should not be called repeatedly; use `appendix` instead.  
+	/// Should not be called repeatedly; use `appender` instead.  
 	/// Worst case linear `O(len + items.count())` with `len` beings the number if elements in the
 	/// list.
 	fn append_many<EncodeLikeValue, I>(items: I)
@@ -201,7 +201,7 @@ pub trait StorageList<V: FullCodec> {
 		EncodeLikeValue: EncodeLike<V>,
 		I: IntoIterator<Item = EncodeLikeValue>,
 	{
-		let mut ap = Self::appendix();
+		let mut ap = Self::appender();
 		ap.append_many(items);
 	}
 }
@@ -209,7 +209,7 @@ pub trait StorageList<V: FullCodec> {
 /// Append iterator to append values to a storage struct.
 ///
 /// Can be used in situations where appending does not have constant time complexity.
-pub trait StorageAppendix<V: FullCodec> {
+pub trait StorageAppender<V: FullCodec> {
 	/// Append a single item in constant time `O(1)`.
 	fn append<EncodeLikeValue>(&mut self, item: EncodeLikeValue)
 	where
