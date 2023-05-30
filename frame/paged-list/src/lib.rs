@@ -93,20 +93,6 @@ impl<T: Config<I>, I: 'static> StorageList<T::Value> for Pallet<T, I> {
 	}
 }
 
-// Helper stuff for tests.
-#[cfg(feature = "std")]
-impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	/// Return the elements of the list.
-	pub fn as_vec() -> Vec<T::Value> {
-		<Self as frame_support::storage::StorageList<_>>::iter().collect()
-	}
-
-	/// Remove and return all elements of the list.
-	pub fn as_drained_vec() -> Vec<T::Value> {
-		<Self as frame_support::storage::StorageList<_>>::drain().collect()
-	}
-}
-
 /// The storage prefix for the list.
 ///
 /// Unique for each instance.

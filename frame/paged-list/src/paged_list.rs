@@ -179,26 +179,28 @@ where
 }
 
 pub struct Page<V> {
-	next: ValueIndex,
+	/// The index of the page.
 	index: PageIndex,
-	// invariant: this is **never** empty
-	values: sp_std::vec::Vec<V>,
+	/// The remaining values of the page, to be drained by [`Page::next`].
+	values: sp_std::iter::Skip<sp_std::vec::IntoIter<V>>,
 }
 
 impl<V: FullCodec> Page<V> {
 	/// Decode a page with `index` from storage.
 	pub fn from_storage<Prefix: StorageInstance, Hasher: StorageHasher>(
 		index: PageIndex,
+		value_index: ValueIndex,
 	) -> Option<Self> {
 		let key = page_key::<Prefix, Hasher>(index);
 		let values = sp_io::storage::get(key.as_ref())
-			.and_then(|raw| sp_std::vec::Vec::<V>::decode(&mut &raw[..]).ok());
-		let values = values.unwrap_or_default();
+			.and_then(|raw| sp_std::vec::Vec::<V>::decode(&mut &raw[..]).ok())?;
 		if values.is_empty() {
-			None
-		} else {
-			Some(Self { next: 0, index, values })
+			// Dont create empty pages.
+			return None;
 		}
+		let values = values.into_iter().skip(value_index as usize);
+
+		Some(Self { index, values })
 	}
 
 	/// Delete this page from storage.
@@ -222,13 +224,11 @@ pub(crate) fn page_key<Prefix: StorageInstance, Hasher: StorageHasher>(
 	(StoragePagedListPrefix::<Prefix>::final_prefix(), b"page", index).using_encoded(Hasher::hash)
 }
 
-impl<V: Clone> Iterator for Page<V> {
+impl<V> Iterator for Page<V> {
 	type Item = V;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let val = self.values.get(self.next as usize).cloned();
-		self.next.saturating_inc();
-		val
+		self.values.next()
 	}
 }
 
@@ -250,7 +250,7 @@ impl<Prefix, Hasher, Value, ValuesPerPage>
 	StoragePagedListIterator<Prefix, Hasher, Value, ValuesPerPage>
 where
 	Prefix: StorageInstance,
-	Value: FullCodec + Clone,
+	Value: FullCodec,
 	Hasher: StorageHasher,
 	ValuesPerPage: Get<u32>,
 {
@@ -259,12 +259,7 @@ where
 		meta: StoragePagedListMeta<Prefix, Hasher, Value, ValuesPerPage>,
 		drain: bool,
 	) -> Self {
-		let mut page = Page::<Value>::from_storage::<Prefix, Hasher>(meta.first_page);
-
-		if let Some(ref mut page) = page {
-			page.next = meta.first_value;
-		}
-
+		let page = Page::<Value>::from_storage::<Prefix, Hasher>(meta.first_page, meta.first_value);
 		Self { page, drain, meta }
 	}
 }
@@ -273,7 +268,7 @@ impl<Prefix, Hasher, Value, ValuesPerPage> Iterator
 	for StoragePagedListIterator<Prefix, Hasher, Value, ValuesPerPage>
 where
 	Prefix: StorageInstance,
-	Value: FullCodec + Clone,
+	Value: FullCodec,
 	Hasher: StorageHasher,
 	ValuesPerPage: Get<u32>,
 {
@@ -297,7 +292,7 @@ where
 			self.meta.store();
 		}
 
-		let Some(mut page) = Page::from_storage::<Prefix, Hasher>(page.index.saturating_add(1)) else {
+		let Some(mut page) = Page::from_storage::<Prefix, Hasher>(page.index.saturating_add(1), 0) else {
 			self.page = None;
 			if self.drain {
 				self.meta.reset();
@@ -326,7 +321,7 @@ impl<Prefix, Hasher, Value, ValuesPerPage, MaxPages> frame_support::storage::Sto
 	for StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
 where
 	Prefix: StorageInstance,
-	Value: FullCodec + Clone,
+	Value: FullCodec,
 	Hasher: StorageHasher,
 	ValuesPerPage: Get<u32>,
 	MaxPages: Get<Option<u32>>,
@@ -351,7 +346,7 @@ impl<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
 	StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
 where
 	Prefix: StorageInstance,
-	Value: FullCodec + Clone,
+	Value: FullCodec,
 	Hasher: StorageHasher,
 	ValuesPerPage: Get<u32>,
 	MaxPages: Get<Option<u32>>,
@@ -369,15 +364,13 @@ where
 	}
 
 	/// Return the elements of the list.
-	#[cfg(feature = "std")]
-	#[allow(dead_code)]
+	#[cfg(test)]
 	fn as_vec() -> Vec<Value> {
 		<Self as frame_support::storage::StorageList<_>>::iter().collect()
 	}
 
 	/// Remove and return all elements of the list.
-	#[cfg(feature = "std")]
-	#[allow(dead_code)]
+	#[cfg(test)]
 	fn as_drained_vec() -> Vec<Value> {
 		<Self as frame_support::storage::StorageList<_>>::drain().collect()
 	}
@@ -409,7 +402,7 @@ impl<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
 	for StoragePagedList<Prefix, Hasher, Value, ValuesPerPage, MaxPages>
 where
 	Prefix: StorageInstance,
-	Value: FullCodec + Clone,
+	Value: FullCodec,
 	Hasher: StorageHasher,
 	ValuesPerPage: Get<u32>,
 	MaxPages: Get<Option<u32>>,
