@@ -4067,6 +4067,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "landlock"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "520baa32708c4e957d2fc3a186bc5bd8d26637c33137f399ddfc202adb240068"
+dependencies = [
+ "enumflags2",
+ "libc",
+ "thiserror",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10079,6 +10090,7 @@ name = "sc-sysinfo"
 version = "6.0.0-dev"
 dependencies = [
  "futures",
+ "landlock",
  "libc",
  "log",
  "rand 0.8.5",
@@ -10091,6 +10103,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "tempfile",
 ]
 
 [[package]]

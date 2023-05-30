@@ -137,6 +137,8 @@ pub struct SysInfo {
 	pub linux_distro: Option<String>,
 	/// Whether the node's running under a virtual machine.
 	pub is_virtual_machine: Option<bool>,
+	/// The landlock status (enabled / partial / disabled).
+	pub landlock_status: Option<String>,
 }
 
 /// Telemetry worker.

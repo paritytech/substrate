@@ -269,6 +269,7 @@ pub fn gather_sysinfo() -> SysInfo {
 		linux_kernel: None,
 		linux_distro: None,
 		is_virtual_machine: None,
+		landlock_status: None,
 	};
 
 	#[cfg(target_os = "linux")]

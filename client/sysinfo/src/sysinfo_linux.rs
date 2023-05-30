@@ -98,4 +98,118 @@ pub fn gather_linux_sysinfo(sysinfo: &mut SysInfo) {
 			}
 		}
 	}
+
+	match landlock::get_status() {
+		Err(err) => log::warn!("landlock::get_status failed: {}", err),
+		Ok(status) => sysinfo.landlock_status = Some(landlock::status_to_telemetry_string(status)),
+	}
+}
+
+mod landlock {
+	use landlock::{Access, AccessFs, Ruleset, RulesetAttr, RulesetError, RulesetStatus, ABI};
+
+	// TODO: <https://github.com/landlock-lsm/rust-landlock/issues/36>
+	/// Returns to what degree landlock is enabled on the current Linux environment.
+	pub fn get_status() -> Result<RulesetStatus, Box<dyn std::error::Error>> {
+		match std::thread::spawn(|| try_restrict_thread()).join() {
+			Ok(Ok(status)) => Ok(status),
+			Ok(Err(ruleset_err)) => Err(ruleset_err.into()),
+			Err(_err) => Err("a panic occurred in try_restrict_thread".into()),
+		}
+	}
+
+	/// Returns a single bool indicating whether landlock is fully enabled on the current Linux
+	/// environment.
+	pub fn is_fully_enabled() -> bool {
+		matches!(get_status(), Ok(RulesetStatus::FullyEnforced))
+	}
+
+	/// Converts the [`RulesetStatus`] to a string to be used in telemetry.
+	pub fn status_to_telemetry_string(status: RulesetStatus) -> String {
+		match status {
+			RulesetStatus::FullyEnforced => "Enabled".into(),
+			RulesetStatus::PartiallyEnforced => "Partially enabled".into(),
+			RulesetStatus::NotEnforced => "Disabled".into(),
+		}
+	}
+
+	// NOTE: Must be kept in-sync with `landlock::try_restrict_thread` in polkadot.
+	/// Tries to restrict the current thread with the following landlock access controls:
+	///
+	/// 1. all global filesystem access
+	/// 2. ... more may be supported in the future.
+	///
+	/// If landlock is not supported in the current environment this is simply a noop.
+	///
+	/// # Returns
+	///
+	/// The status of the restriction (whether it was fully, partially, or not-at-all enforced).
+	fn try_restrict_thread() -> Result<RulesetStatus, RulesetError> {
+		let abi = ABI::V2;
+		let status = Ruleset::new()
+			.handle_access(AccessFs::from_all(abi))?
+			.create()?
+			.restrict_self()?;
+		Ok(status.ruleset)
+	}
+
+	#[cfg(test)]
+	mod tests {
+		use super::*;
+		use std::{fs, io::ErrorKind, thread};
+
+		#[test]
+		fn restricted_thread_cannot_access_fs() {
+			// TODO: This would be nice: <https://github.com/rust-lang/rust/issues/68007>.
+			if !is_fully_enabled() {
+				return
+			}
+
+			// Restricted thread cannot read from FS.
+			let handle = thread::spawn(|| {
+				// Write to a tmp file, this should succeed before landlock is applied.
+				let text = "foo";
+				let tmpfile = tempfile::NamedTempFile::new().unwrap();
+				let path = tmpfile.path();
+				fs::write(path, text).unwrap();
+				let s = fs::read_to_string(path).unwrap();
+				assert_eq!(s, text);
+
+				let status = super::try_restrict_thread().unwrap();
+				if let RulesetStatus::NotEnforced = status {
+					panic!("Ruleset should be enforced since we checked if landlock is enabled");
+				}
+
+				// Try to read from the tmp file after landlock.
+				let result = fs::read_to_string(path);
+				assert!(matches!(
+					result,
+					Err(err) if matches!(err.kind(), ErrorKind::PermissionDenied)
+				));
+			});
+
+			assert!(handle.join().is_ok());
+
+			// Restricted thread cannot write to FS.
+			let handle = thread::spawn(|| {
+				let text = "foo";
+				let tmpfile = tempfile::NamedTempFile::new().unwrap();
+				let path = tmpfile.path();
+
+				let status = super::try_restrict_thread().unwrap();
+				if let RulesetStatus::NotEnforced = status {
+					panic!("Ruleset should be enforced since we checked if landlock is enabled");
+				}
+
+				// Try to write to the tmp file after landlock.
+				let result = fs::write(path, text);
+				assert!(matches!(
+					result,
+					Err(err) if matches!(err.kind(), ErrorKind::PermissionDenied)
+				));
+			});
+
+			assert!(handle.join().is_ok());
+		}
+	}
 }
