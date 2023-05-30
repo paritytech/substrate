@@ -120,7 +120,7 @@ where
 	///
 	/// Fails with a `TryRuntimeError` if somehow the amount reserved by this pallet is greater than
 	/// the actual total reserved amount for any accounts.
-	#[cfg(any(feature = "try-runtime", test))]
+	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		use codec::Encode;
 		use frame_support::ensure;
@@ -187,7 +187,7 @@ where
 	///
 	/// 1. No locks remain for this pallet in Balances.
 	/// 2. The reserved balance for each account has been reduced by the expected amount.
-	#[cfg(any(feature = "try-runtime", test))]
+	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(
 		account_reserved_before_bytes: Vec<u8>,
 	) -> Result<(), sp_runtime::TryRuntimeError> {
@@ -273,10 +273,13 @@ mod test {
 			);
 
 			// Run the migration.
-			let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
-				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
+
+			// TODO: decide how to add pre/post checks based on the outcome of
+			// https://github.com/paritytech/substrate/issues/14264
+			// let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
+			// 	.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
 			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
-			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
+			// assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
 
 			// Assert the reserved balance was reduced by the expected amount.
 			assert_eq!(
@@ -327,10 +330,12 @@ mod test {
 			);
 
 			// Run the migration.
-			let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
-				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
+			// TODO: decide how to add pre/post checks based on the outcome of
+			// https://github.com/paritytech/substrate/issues/14264
+			// let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
+			// 	.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
 			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
-			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
+			// assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
 
 			// Assert the voter lock was removed
 			assert_eq!(
