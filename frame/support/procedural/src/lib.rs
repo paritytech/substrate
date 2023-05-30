@@ -1437,7 +1437,7 @@ pub fn export_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 }
 
 /// An attribute macro that can be attached to a module declaration. Doing so will
-/// import the content of the section that was exported previously using [`export_section`].
+/// import the content of the section that was exported previously using [`macro@export_section`].
 ///
 #[import_tokens_attr]
 #[proc_macro_attribute]
