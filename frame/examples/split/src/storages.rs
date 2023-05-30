@@ -1,6 +1,6 @@
 use frame_support::pallet_macros::*;
 
-#[export_section]
+#[pallet_section]
 mod storages {
 	// The pallet's runtime storage items.
 	// https://docs.substrate.io/main-docs/build/runtime-storage/

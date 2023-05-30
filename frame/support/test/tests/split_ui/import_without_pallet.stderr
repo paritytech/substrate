@@ -1,7 +1,7 @@
 error: A section can only be imported under a pallet macro
   --> tests/split_ui/import_without_pallet.rs:5:1
    |
-5  | / #[export_section]
+5  | / #[pallet_section]
 6  | | mod storages {
 7  | |     #[pallet::storage]
 8  | |     pub type MyStorageMap<T: Config> = StorageMap<_, _, u32, u64>;

@@ -4,7 +4,7 @@ use frame_support::pallet_macros::*;
 
 pub use pallet::*;
 
-#[export_section]
+#[pallet_section]
 mod storages {
 	#[pallet::storage]
 	pub type MyStorageMap<T: Config> = StorageMap<_, _, u32, u64>;
