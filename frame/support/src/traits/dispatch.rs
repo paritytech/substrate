@@ -163,7 +163,9 @@ pub trait EnsureOriginWithArg<OuterOrigin, Argument> {
 	///
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin(a: &Argument) -> Result<OuterOrigin, ()>;
+	fn try_successful_origin(a: &Argument) -> Result<OuterOrigin, ()>{
+        Err(())
+    }
 }
 
 pub struct AsEnsureOriginWithArg<EO>(sp_std::marker::PhantomData<EO>);

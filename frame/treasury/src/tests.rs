@@ -162,9 +162,38 @@ impl frame_support::traits::EnsureOrigin<RuntimeOrigin> for TestSpendOrigin {
 	}
 }
 
+// #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+// pub struct NilAssetKind(u32);
+
+// impl<T: pallet::Config<I>, I: 'static> Asset<T, I> for NilAssetKind {
+// 	fn asset_kind(&self) -> T::AssetId {
+// 		().into()
+// 	}
+// 	fn amount(&self) -> PayBalanceOf<T, I> {
+// 		let NilAssetKind(val) = self;
+// 		(*val).into()
+// 	}
+// }
+
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub struct SimpleAsset<AssetId, Fungibility>(AssetId, Fungibility);
+
+impl<A: Copy, F: Copy> Asset<A, F> for SimpleAsset<A, F> {
+	fn asset_kind(&self) -> A {
+		let SimpleAsset(asset_kind, _val) = self;
+		*asset_kind
+	}
+	fn amount(&self) -> F {
+		let SimpleAsset(_asset_kind, val) = self;
+		(*val).into()
+	}
+}
+
 impl Config for Test {
 	type PalletId = TreasuryPalletId;
-	type AssetKind = AssetId;
+	type AssetId = AssetId;
+	// TODO: can that AssetId be a type argument of SimpleAsset instead?
+	type AssetKind = SimpleAsset<AssetId, PayBalanceOf<Test, ()>>;
 	type Paymaster = PayFungibles<Assets, TreasuryAccount>;
 	type BalanceConverter = ();
 	type Currency = pallet_balances::Pallet<Test>;
@@ -182,6 +211,7 @@ impl Config for Test {
 	type SpendFunds = ();
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = TestSpendOrigin;
+	type MaxPaymentRetries = ConstU32<3>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();
 }
@@ -232,21 +262,24 @@ fn spend_local_origin_permissioning_works() {
 #[test]
 fn spend_origin_permissioning_works() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Treasury::spend(RuntimeOrigin::signed(1), 0, 1, 1), BadOrigin);
 		assert_noop!(
-			Treasury::spend(RuntimeOrigin::signed(10), 0, 6, 1),
+			Treasury::spend(RuntimeOrigin::signed(1), vec![SimpleAsset(0, 1)], 1),
+			BadOrigin
+		);
+		assert_noop!(
+			Treasury::spend(RuntimeOrigin::signed(10), vec![SimpleAsset(0, 6)], 1),
 			Error::<Test>::InsufficientPermission
 		);
 		assert_noop!(
-			Treasury::spend(RuntimeOrigin::signed(11), 0, 11, 1),
+			Treasury::spend(RuntimeOrigin::signed(11), vec![SimpleAsset(0, 11)], 1),
 			Error::<Test>::InsufficientPermission
 		);
 		assert_noop!(
-			Treasury::spend(RuntimeOrigin::signed(12), 0, 21, 1),
+			Treasury::spend(RuntimeOrigin::signed(12), vec![SimpleAsset(0, 21)], 1),
 			Error::<Test>::InsufficientPermission
 		);
 		assert_noop!(
-			Treasury::spend(RuntimeOrigin::signed(13), 0, 51, 1),
+			Treasury::spend(RuntimeOrigin::signed(13), vec![SimpleAsset(0, 51)], 1),
 			Error::<Test>::InsufficientPermission
 		);
 	});
@@ -280,13 +313,13 @@ fn spend_origin_works() {
 		// Check that accumulate works when we have Some value in Dummy already.
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, Treasury::account_id(), true, 1));
 		assert_ok!(Assets::mint_into(0, &Treasury::account_id(), 100));
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 0, 5, 6));
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 0, 5, 6));
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 0, 5, 6));
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 0, 5, 6));
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(11), 0, 10, 6));
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(12), 0, 20, 6));
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(13), 0, 50, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), vec![SimpleAsset(0, 5)], 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), vec![SimpleAsset(0, 5)], 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), vec![SimpleAsset(0, 5)], 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), vec![SimpleAsset(0, 5)], 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(11), vec![SimpleAsset(0, 10)], 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(12), vec![SimpleAsset(0, 20)], 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(13), vec![SimpleAsset(0, 50)], 6));
 
 		// Treasury account should still have funds until next T::SpendPeriod
 		assert_eq!(Assets::reducible_balance(0, &Treasury::account_id(), Expendable, Polite), 100);
@@ -607,13 +640,11 @@ fn spending_in_batch_respects_max_total() {
 		assert_ok!(RuntimeCall::from(UtilityCall::batch_all {
 			calls: vec![
 				RuntimeCall::from(TreasuryCall::spend {
-					asset_kind: 0,
-					amount: 2,
+					assets: vec![SimpleAsset(0, 2)],
 					beneficiary: 100
 				}),
 				RuntimeCall::from(TreasuryCall::spend {
-					asset_kind: 0,
-					amount: 2,
+					assets: vec![SimpleAsset(0, 2)],
 					beneficiary: 101
 				})
 			]
@@ -624,13 +655,11 @@ fn spending_in_batch_respects_max_total() {
 			RuntimeCall::from(UtilityCall::batch_all {
 				calls: vec![
 					RuntimeCall::from(TreasuryCall::spend {
-						asset_kind: 0,
-						amount: 2,
+						assets: vec![SimpleAsset(0, 2)],
 						beneficiary: 100
 					}),
 					RuntimeCall::from(TreasuryCall::spend {
-						asset_kind: 0,
-						amount: 4,
+						assets: vec![SimpleAsset(0, 4)],
 						beneficiary: 101
 					})
 				]

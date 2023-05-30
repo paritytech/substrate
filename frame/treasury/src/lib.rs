@@ -121,11 +121,19 @@ pub trait SpendFunds<T: Config<I>, I: 'static = ()> {
 	);
 }
 
+pub trait Asset<AssetId, Fungibility> {
+	fn asset_kind(&self) -> AssetId;
+	fn amount(&self) -> Fungibility;
+}
+
 /// An index of a proposal. Just a `u32`.
 pub type ProposalIndex = u32;
 
 /// An index of a pending payment. Just a `u32`.
 pub type PendingPaymentIndex = u32;
+
+/// An index for the number tor times a payment is retried. Just a u32
+pub type RetryIndex = u32;
 
 /// A spending proposal.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
@@ -144,17 +152,19 @@ pub struct Proposal<AccountId, Balance> {
 /// PendingPayment represents treasury spend payment which has not yet succeeded.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-pub struct PendingPayment<AccountId, Balance, AssetKind, AssetBalance, PaymentId> {
+pub struct PendingPayment<AccountId, Balance, AssetKind, PaymentId> {
 	/// The account to whom the payment should be made if the proposal is accepted.
 	beneficiary: AccountId,
 	/// The asset_kind of the amount to be paid
 	asset_kind: AssetKind,
 	/// The (total) amount that should be paid.
-	value: AssetBalance,
+	// value: AssetBalance,
 	/// The amount to be paid, but normalized to the native asset class
 	normalized_value: Balance,
-	/// the identifier for tracking the status of a payment which is in flight.
+	/// The identifier for tracking the status of a payment which is in flight.
 	payment_id: Option<PaymentId>,
+	/// The number of times this payment has been attempted
+	tries: RetryIndex,
 }
 
 #[frame_support::pallet]
@@ -197,11 +207,16 @@ pub mod pallet {
 		type RejectOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The identifier for what asset should be spent.
-		type AssetKind: AssetId;
+		type AssetId: AssetId;
+
+		// TODO: replace with individual types
+		type AssetKind: Asset<Self::AssetId, PayBalanceOf<Self, I>> + AssetId;
 
 		/// The means by which we can make payments to beneficiaries.
 		/// This can be implmented over fungibles or some other means.
-		type Paymaster: Pay<Beneficiary = Self::AccountId, AssetKind = Self::AssetKind>;
+		type Paymaster: Pay<Beneficiary = Self::AccountId, AssetKind = Self::AssetId>;
+
+		type MaxPaymentRetries: Get<RetryIndex>;
 
 		// The means of knowing what is the equivalent native Balance of a given asset id Balance.
 		type BalanceConverter: ConversionFromAssetBalance<
@@ -283,20 +298,26 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// PendingPayments that have not yet processed or are not yet successful.
-	/// When a `PendingPayment` is verified to be successful, it is deleted from storage.
+	/// PendingPaymentsInbox that have not yet processed or are not yet successful.
+	/// When a `PendingPayment` is processed or paid out, it is moved to the PendingPayments
+	/// storage where it is monitored until it is successful.
+	#[pallet::storage]
+	pub type PendingPaymentsInbox<T: Config<I>, I: 'static = ()> = CountedStorageMap<
+		_,
+		Twox64Concat,
+		PendingPaymentIndex,
+		PendingPayment<T::AccountId, BalanceOf<T, I>, T::AssetKind, <T::Paymaster as Pay>::Id>,
+		OptionQuery,
+	>;
+
+	/// PendingPayments that have are not yet successful. When a `PendingPayment` is verified to be
+	/// successful, it is deleted from storage.
 	#[pallet::storage]
 	pub type PendingPayments<T: Config<I>, I: 'static = ()> = CountedStorageMap<
 		_,
 		Twox64Concat,
 		PendingPaymentIndex,
-		PendingPayment<
-			T::AccountId,
-			BalanceOf<T, I>,
-			T::AssetKind,
-			PayBalanceOf<T, I>,
-			<T::Paymaster as Pay>::Id,
-		>,
+		PendingPayment<T::AccountId, BalanceOf<T, I>, T::AssetKind, <T::Paymaster as Pay>::Id>,
 		OptionQuery,
 	>;
 
@@ -368,7 +389,10 @@ pub mod pallet {
 		ProcessingProposals { waiting_proposals: ProposalIndex },
 		/// Spending has finished; this is the number of proposals rolled over till next
 		/// T::SpendPeriod.
-		RolloverPayments { rollover_proposals: ProposalIndex, allocated_proposals: ProposalIndex },
+		RolloverPayments {
+			rollover_payments: ProposalIndex,
+			allocated_payments: PendingPaymentIndex,
+		},
 		/// A new spend proposal has been approved.
 		SpendApproved {
 			proposal_index: ProposalIndex,
@@ -381,29 +405,28 @@ pub mod pallet {
 		PaymentQueued {
 			pending_payment_index: PendingPaymentIndex,
 			asset_kind: T::AssetKind,
-			amount: PayBalanceOf<T, I>,
 			beneficiary: T::AccountId,
 		},
 		/// The payment has been processed but awaiting payment status.
 		PaymentTriggered {
 			pending_payment_index: PendingPaymentIndex,
 			asset_kind: T::AssetKind,
-			amount: PayBalanceOf<T, I>,
 			payment_id: <T::Paymaster as Pay>::Id,
+			tries: RetryIndex,
 		},
 		/// The proposal was paid successfully
 		PaymentSuccess {
 			pending_payment_index: PendingPaymentIndex,
 			asset_kind: T::AssetKind,
-			amount: PayBalanceOf<T, I>,
 			payment_id: <T::Paymaster as Pay>::Id,
+			tries: RetryIndex,
 		},
 		/// The proposal payment failed. Payment will be retried in next spend period.
 		PaymentFailure {
 			pending_payment_index: PendingPaymentIndex,
 			asset_kind: T::AssetKind,
-			amount: PayBalanceOf<T, I>,
 			payment_id: Option<<T::Paymaster as Pay>::Id>,
+			tries: RetryIndex,
 		},
 	}
 
@@ -423,6 +446,8 @@ pub mod pallet {
 		ProposalNotApproved,
 		/// Unable to convert asset to native balance
 		BalanceConversionFailed,
+		/// Invalid Spend Request
+		InvalidSpendRequest,
 	}
 
 	#[pallet::hooks]
@@ -579,7 +604,7 @@ pub mod pallet {
 				bond: Default::default(),
 			};
 			Proposals::<T, I>::insert(proposal_index, proposal);
-			ProposalCount::<T, I>::put(proposal_index + 1);
+			ProposalCount::<T, I>::put(proposal_index.saturating_add(1));
 
 			Self::deposit_event(Event::SpendApproved { proposal_index, amount, beneficiary });
 			Ok(())
@@ -595,54 +620,56 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::spend())]
 		pub fn spend(
 			origin: OriginFor<T>,
-			asset_kind: T::AssetKind,
-			#[pallet::compact] amount: PayBalanceOf<T, I>,
+			assets: Vec<T::AssetKind>,
 			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
-			let normalized_amount = T::BalanceConverter::from_asset_balance(amount, asset_kind)
-				.map_err(|_| Error::<T, I>::BalanceConversionFailed)?;
-			ensure!(normalized_amount <= max_amount, Error::<T, I>::InsufficientPermission);
-
-			with_context::<SpendContext<BalanceOf<T, I>>, _>(|v| {
-				let context = v.or_default();
-
-				// We group based on `max_amount`, to dinstinguish between different kind of
-				// origins. (assumes that all origins have different `max_amount`)
-				//
-				// Worst case is that we reject some "valid" request.
-				let spend = context.spend_in_context.entry(max_amount).or_default();
-
-				// Ensure that we don't overflow nor use more than `max_amount`
-				if spend.checked_add(&normalized_amount).map(|s| s > max_amount).unwrap_or(true) {
-					Err(Error::<T, I>::InsufficientPermission)
-				} else {
-					*spend = spend.saturating_add(normalized_amount);
-
-					Ok(())
-				}
-			})
-			.unwrap_or(Ok(()))?;
-
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
-			let pending_payment = PendingPayment {
-				asset_kind,
-				value: amount,
-				beneficiary: beneficiary.clone(),
-				normalized_value: normalized_amount,
-				payment_id: None,
-			};
+			for asset in assets {
+				let normalized_amount =
+					T::BalanceConverter::from_asset_balance(asset.amount(), asset)
+						.map_err(|_| Error::<T, I>::BalanceConversionFailed)?;
+				ensure!(normalized_amount <= max_amount, Error::<T, I>::InsufficientPermission);
 
-			let next_index = PendingPayments::<T, I>::count();
-			PendingPayments::<T, I>::insert(next_index, pending_payment);
+				with_context::<SpendContext<BalanceOf<T, I>>, _>(|v| {
+					let context = v.or_default();
 
-			Self::deposit_event(Event::PaymentQueued {
-				pending_payment_index: next_index,
-				asset_kind,
-				amount,
-				beneficiary,
-			});
+					// We group based on `max_amount`, to dinstinguish between different kind of
+					// origins. (assumes that all origins have different `max_amount`)
+					//
+					// Worst case is that we reject some "valid" request.
+					let spend = context.spend_in_context.entry(max_amount).or_default();
+
+					// Ensure that we don't overflow nor use more than `max_amount`
+					if spend.checked_add(&normalized_amount).map(|s| s > max_amount).unwrap_or(true)
+					{
+						Err(Error::<T, I>::InsufficientPermission)
+					} else {
+						*spend = spend.saturating_add(normalized_amount);
+
+						Ok(())
+					}
+				})
+				.unwrap_or(Ok(()))?;
+
+				let pending_payment = PendingPayment {
+					asset_kind: asset,
+					beneficiary: beneficiary.clone(),
+					normalized_value: normalized_amount,
+					payment_id: None,
+					tries: 0,
+				};
+
+				let next_index = PendingPaymentsInbox::<T, I>::count();
+				PendingPaymentsInbox::<T, I>::insert(next_index, pending_payment);
+
+				Self::deposit_event(Event::PaymentQueued {
+					pending_payment_index: next_index,
+					asset_kind: asset,
+					beneficiary: beneficiary.clone(),
+				});
+			}
 			Ok(())
 		}
 
@@ -703,58 +730,65 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Spend_funds is triggered periodically and uses the `T::Paymaster` to payout all spend
 	/// requests in the `PendingPayments` storage map.
-	pub fn spend_funds() -> Weight {
+	pub fn check_and_retry_payments() -> Weight {
 		let mut total_weight = Weight::zero();
-		let mut total_spent = BalanceOf::<T, I>::zero();
-		let mut missed_proposals: u32 = 0;
-		let proposals_len = PendingPayments::<T, I>::count();
+		let pending_payments_len = PendingPayments::<T, I>::count();
 
-		Self::deposit_event(Event::ProcessingProposals { waiting_proposals: proposals_len });
+		Self::deposit_event(Event::ProcessingProposals { waiting_proposals: pending_payments_len });
 
 		for key in PendingPayments::<T, I>::iter_keys() {
 			if let Some(mut p) = PendingPayments::<T, I>::get(key) {
 				match p.payment_id {
-					None => match T::Paymaster::pay(&p.beneficiary, p.asset_kind, p.value) {
+					None => match T::Paymaster::pay(
+						&p.beneficiary,
+						p.asset_kind.asset_kind(),
+						p.asset_kind.amount(),
+					) {
 						Ok(id) => {
-							total_spent += p.normalized_value;
+							total_spent = total_spent.saturating_add(p.normalized_value);
+							p.tries = p.tries.saturating_add(1);
 							p.payment_id = Some(id);
 							Self::deposit_event(Event::PaymentTriggered {
 								pending_payment_index: key,
 								asset_kind: p.asset_kind,
-								amount: p.value,
 								payment_id: id,
+								tries: p.tries,
 							});
 							PendingPayments::<T, I>::set(key, Some(p));
 						},
 						Err(err) => {
 							log::debug!(target: LOG_TARGET, "Paymaster::pay failed for PendingPayment with index: {:?} and error: {:?}", key, err);
-							missed_proposals = missed_proposals.saturating_add(1);
+							missed_payments = missed_payments.saturating_add(1);
 							Self::deposit_event(Event::PaymentFailure {
 								pending_payment_index: key,
 								asset_kind: p.asset_kind,
-								amount: p.value,
 								payment_id: None,
+								tries: p.tries,
 							});
+							p.tries = p.tries.saturating_add(1);
+							PendingPayments::<T, I>::set(key, Some(p));
 						},
 					},
 					Some(payment_id) => match T::Paymaster::check_payment(payment_id) {
-						PaymentStatus::Failure => {
+						PaymentStatus::Failure | PaymentStatus::Unknown => {
 							log::debug!(
 								target: LOG_TARGET,
 								"Paymaster::pay failed for PendingPayment with index: {:?}",
 								key
 							);
 							// try again in the next `T::SpendPeriod`.
-							missed_proposals = missed_proposals.saturating_add(1);
-							Self::deposit_event(Event::PaymentFailure {
-								pending_payment_index: key,
-								asset_kind: p.asset_kind,
-								amount: p.value,
-								payment_id: Some(payment_id),
-							});
+							missed_payments = missed_payments.saturating_add(1);
 							// Force the payment to none, so a fresh payment is sent during the next
 							// T::SpendPeriod.
 							p.payment_id = None;
+							p.tries = p.tries.saturating_add(1);
+
+							Self::deposit_event(Event::PaymentFailure {
+								pending_payment_index: key,
+								asset_kind: p.asset_kind,
+								payment_id: Some(payment_id),
+								tries: p.tries,
+							});
 							PendingPayments::<T, I>::set(key, Some(p));
 						},
 						PaymentStatus::Success => {
@@ -762,25 +796,85 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							Self::deposit_event(Event::PaymentSuccess {
 								pending_payment_index: key,
 								asset_kind: p.asset_kind,
-								amount: p.value,
 								payment_id,
+								tries: p.tries,
 							});
 						},
 						// PaymentStatus::InProgress and PaymentStatus::Unknown indicate that the
 						// proposal status is inconclusive, and might still be successful or failed
 						// in the future.
-						PaymentStatus::InProgress | PaymentStatus::Unknown => {},
+						PaymentStatus::InProgress => {},
 					},
 				}
-			} else {
 			}
 		}
 
-		total_weight += T::WeightInfo::on_initialize_pending_payments(proposals_len);
+		total_weight = total_weight
+			.saturating_add(T::WeightInfo::on_initialize_pending_payments(pending_payments_len));
 
 		Self::deposit_event(Event::RolloverPayments {
-			rollover_proposals: missed_proposals,
-			allocated_proposals: proposals_len.saturating_sub(missed_proposals),
+			rollover_payments: missed_payments,
+			allocated_payments: pending_payments_len.saturating_sub(missed_payments),
+		});
+
+		total_weight
+	}
+
+	/// Spend_funds is triggered periodically and uses the `T::Paymaster` to payout all spend
+	/// requests in the `PendingPayments` storage map.
+	pub fn spend_funds() -> Weight {
+		let mut total_weight = Weight::zero();
+		let mut total_spent = BalanceOf::<T, I>::zero();
+		let mut missed_payments: u32 = 0;
+		let pending_payments_len = PendingPayments::<T, I>::count();
+
+		Self::deposit_event(Event::ProcessingProposals { waiting_proposals: pending_payments_len });
+
+		for key in PendingPaymentsInbox::<T, I>::iter_keys() {
+			if let Some(mut p) = PendingPaymentsInbox::<T, I>::get(key) {
+				match p.payment_id {
+					None => match T::Paymaster::pay(
+						&p.beneficiary,
+						p.asset_kind.asset_kind(),
+						p.asset_kind.amount(),
+					) {
+						Ok(id) => {
+							total_spent = total_spent.saturating_add(p.normalized_value);
+							Self::deposit_event(Event::PaymentTriggered {
+								pending_payment_index: key,
+								asset_kind: p.asset_kind,
+								payment_id: Some(id),
+								tries: p.tries.saturating_add(1),
+							});
+							PendingPayments::<T, I>::insert(key, Some(p));
+							PendingPaymentsInbox::<T, I>::remove(key);
+						},
+						Err(err) => {
+							log::debug!(target: LOG_TARGET, "Paymaster::pay failed for PendingPayment with index: {:?} and error: {:?}", key, err);
+							missed_payments = missed_payments.saturating_add(1);
+							Self::deposit_event(Event::PaymentFailure {
+								pending_payment_index: key,
+								asset_kind: p.asset_kind,
+								payment_id: None,
+								tries: p.tries,
+							});
+							p.tries = p.tries.saturating_add(1);
+							// Insert it into `T::PendingPayments` to be retried.
+							PendingPayments::<T, I>::insert(key, Some(p));
+							PendingPaymentsInbox::<T, I>::remove(key);
+						},
+					},
+					Some(_payment_id) => unreachable!(),
+				}
+			}
+		}
+
+		total_weight = total_weight
+			.saturating_add(T::WeightInfo::on_initialize_pending_payments(pending_payments_len));
+
+		Self::deposit_event(Event::RolloverPayments {
+			rollover_payments: missed_payments,
+			allocated_payments: pending_payments_len.saturating_sub(missed_payments),
 		});
 
 		total_weight
@@ -829,7 +923,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			proposals_approvals_len
 		});
 
-		total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
+		total_weight =
+			total_weight.saturating_add(T::WeightInfo::on_initialize_proposals(proposals_len));
 
 		// Call Runtime hooks to external pallet using treasury to compute spend funds.
 		T::SpendFunds::spend_funds(
