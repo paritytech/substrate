@@ -157,7 +157,6 @@ where
 		}
 		let key = page_key::<Prefix, Hasher>(self.last_page);
 		self.last_value.saturating_inc();
-		// Pages are `Vec` and therefore appendable.
 		sp_io::storage::append(key.as_ref(), item.encode());
 		self.store();
 	}
@@ -178,6 +177,7 @@ where
 	}
 }
 
+/// A page that was decoded from storage and caches its values.
 pub struct Page<V> {
 	/// The index of the page.
 	index: PageIndex,
@@ -186,7 +186,7 @@ pub struct Page<V> {
 }
 
 impl<V: FullCodec> Page<V> {
-	/// Decode a page with `index` from storage.
+	/// Read the page with `index` from storage and assume the first value at `value_index`.
 	pub fn from_storage<Prefix: StorageInstance, Hasher: StorageHasher>(
 		index: PageIndex,
 		value_index: ValueIndex,
@@ -369,7 +369,7 @@ where
 		<Self as frame_support::storage::StorageList<_>>::iter().collect()
 	}
 
-	/// Remove and return all elements of the list.
+	/// Return and remove the elements of the list.
 	#[cfg(test)]
 	fn as_drained_vec() -> Vec<Value> {
 		<Self as frame_support::storage::StorageList<_>>::drain().collect()
@@ -416,7 +416,7 @@ where
 	}
 }
 
-/// Prelude for doc-tests.
+/// Prelude for (doc)tests.
 #[cfg(feature = "std")]
 #[allow(dead_code)]
 pub(crate) mod mock {
@@ -507,6 +507,36 @@ mod tests {
 				assert_eq!(List::as_vec(), (0..12).cycle().take(r * 12).collect::<Vec<_>>());
 			}
 		});
+	}
+
+	/// Appending encodes pages as `Vec`.
+	#[test]
+	fn append_storage_layout() {
+		TestExternalities::default().execute_with(|| {
+			List::append_many(0..9);
+
+			let key = page_key::<Prefix, Blake2_128Concat>(0);
+			let raw =
+				frame_support::storage::unhashed::get_raw(&key).expect("Page should be present");
+			let as_vec = Vec::<u32>::decode(&mut &raw[..]).unwrap();
+			assert_eq!(as_vec.len(), 5, "First page contains 5");
+
+			let key = page_key::<Prefix, Blake2_128Concat>(1);
+			let raw =
+				frame_support::storage::unhashed::get_raw(&key).expect("Page should be present");
+			let as_vec = Vec::<u32>::decode(&mut &raw[..]).unwrap();
+			assert_eq!(as_vec.len(), 4, "Second page contains 4");
+		});
+	}
+
+	#[test]
+	fn page_key_correct() {
+		let got = page_key::<Prefix, Blake2_128Concat>(0);
+		// FAIL-CI this is wrong
+		let want = (StoragePagedListPrefix::<Prefix>::final_prefix(), b"page", 0)
+			.using_encoded(Blake2_128Concat::hash);
+
+		assert_eq!(got, want);
 	}
 
 	#[test]
