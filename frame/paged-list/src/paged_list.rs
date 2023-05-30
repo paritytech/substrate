@@ -169,10 +169,10 @@ where
 
 	pub fn reset(&mut self) {
 		*self = Default::default();
-		Self::clear();
+		Self::delete();
 	}
 
-	pub fn clear() {
+	pub fn delete() {
 		let key = Self::key();
 		sp_io::storage::clear(key.as_ref());
 	}
@@ -478,7 +478,7 @@ mod tests {
 			// all gone
 			assert_eq!(List::as_vec(), Vec::<u32>::new());
 			// Need to delete the metadata manually.
-			StoragePagedListMeta::<Prefix, Blake2_128Concat, u32, ValuesPerPage>::clear();
+			StoragePagedListMeta::<Prefix, Blake2_128Concat, u32, ValuesPerPage>::delete();
 		});
 	}
 
