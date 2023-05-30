@@ -21,7 +21,10 @@ use libp2p::{Multiaddr, PeerId};
 
 use sc_consensus::{ImportQueue, Link};
 use sc_network::{
-	config::{self, FullNetworkConfiguration, MultiaddrWithPeerId, ProtocolId, TransportConfig, WebRTCConfig},
+	config::{
+		self, FullNetworkConfiguration, MultiaddrWithPeerId, ProtocolId, TransportConfig,
+		WebRTCConfig,
+	},
 	event::Event,
 	NetworkEventStream, NetworkNotification, NetworkPeers, NetworkService, NetworkStateInfo,
 	NetworkWorker,
