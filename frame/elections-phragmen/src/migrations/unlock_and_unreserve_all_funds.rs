@@ -28,19 +28,6 @@ use sp_core::Get;
 use sp_runtime::traits::Zero;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
-#[cfg(feature = "try-runtime")]
-use codec::{Decode, Encode};
-
-#[cfg(feature = "try-runtime")]
-use frame_support::ensure;
-
-#[cfg(feature = "try-runtime")]
-#[derive(Debug, Encode, Decode)]
-struct PreMigrationData<T: crate::Config> {
-	account_locked_before: BTreeMap<T::AccountId, BalanceOf<T>>,
-	account_reserved_before: BTreeMap<T::AccountId, BalanceOf<T>>,
-}
-
 /// A migration that unreserves all deposit and unlocks all stake held in the context of this
 /// pallet.
 ///
@@ -49,13 +36,10 @@ struct PreMigrationData<T: crate::Config> {
 /// The pallet should be made inoperable before or immediately after this migration is run.
 ///
 /// (See also the `RemovePallet` migration in `frame/support/src/migrations.rs`)
-pub struct UnlockAndUnreserveAllFunds<T: crate::Config + pallet_balances::Config>(
-	sp_std::marker::PhantomData<T>,
-);
+pub struct UnlockAndUnreserveAllFunds<T: crate::Config>(sp_std::marker::PhantomData<T>);
 
-impl<T: crate::Config + pallet_balances::Config> UnlockAndUnreserveAllFunds<T>
+impl<T: crate::Config> UnlockAndUnreserveAllFunds<T>
 where
-	BalanceOf<T>: From<<T as pallet_balances::Config>::Balance>,
 	BalanceOf<T>: Sum,
 {
 	/// Calculates and returns the total amounts deposited and staked by each account in the context
@@ -77,7 +61,7 @@ where
 	///   deposit sums.
 	/// * `BTreeMap<T::AccountId, BalanceOf<T>>`: Map of account IDs to their respective total
 	///   staked sums.
-	/// * frame_support::weights::Weight
+	/// * `frame_support::weights::Weight`: The weight of reading the storage.
 	fn get_account_deposited_and_staked_sums() -> (
 		BTreeMap<T::AccountId, BalanceOf<T>>,
 		BTreeMap<T::AccountId, BalanceOf<T>>,
@@ -125,30 +109,11 @@ where
 				members.len() as u64 +
 					runner_ups.len() as u64 +
 					candidates.len() as u64 +
-					voters.len() as u64,
+					(voters.len() as u64) * T::MaxVotesPerVoter::get() as u64,
 			),
 		)
 	}
 
-	/// Helper function for returning the locked amount of an account under the ID of this
-	/// pallet.
-	#[cfg(feature = "try-runtime")]
-	fn get_actual_locked_amount(account: T::AccountId) -> Option<BalanceOf<T>> {
-		use pallet_balances::Locks;
-		use sp_runtime::SaturatedConversion;
-
-		Locks::<T>::get(account.clone())
-			.iter()
-			.find(|l| l.id == T::PalletId::get())
-			.map(|lock| lock.amount.saturated_into::<BalanceOf<T>>())
-	}
-}
-
-impl<T: crate::Config + pallet_balances::Config> OnRuntimeUpgrade for UnlockAndUnreserveAllFunds<T>
-where
-	BalanceOf<T>: From<<T as pallet_balances::Config>::Balance>,
-	BalanceOf<T>: Sum,
-{
 	/// Collects pre-migration data useful for validating the migration was successful, and also
 	/// checks the integrity of deposited and reserved balances.
 	///
@@ -161,8 +126,9 @@ where
 	///
 	/// Fails with a `TryRuntimeError` if there's a discrepancy between the amount
 	/// reported as staked by the pallet and the amount actually locked in `Balances`.
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+	#[cfg(any(feature = "try-runtime", test))]
+	fn do_pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+		use codec::Encode;
 		use sp_std::collections::btree_set::BTreeSet;
 
 		// Get staked and deposited balances as reported by this pallet.
@@ -175,16 +141,6 @@ where
 			.keys()
 			.chain(account_deposited_sums.keys())
 			.cloned()
-			.collect();
-
-		let account_locked_before: BTreeMap<T::AccountId, BalanceOf<T>> = all_accounts
-			.iter()
-			.map(|account| {
-				(
-					account.clone(),
-					Self::get_actual_locked_amount(account.clone()).unwrap_or(Zero::zero()),
-				)
-			})
 			.collect();
 
 		let account_reserved_before: BTreeMap<T::AccountId, BalanceOf<T>> = all_accounts
@@ -202,17 +158,6 @@ where
 			})
 			.count();
 
-		// The calculation of the locked & staked logic is not known to be bugged, so we assert
-		// that the amounts staked in the pallet match the amounts actually locked in Balances.
-		// If this fails, there is likely a bug in the migration and it should be investigated.
-		ensure!(
-			!all_accounts
-				.iter()
-				.any(|account| account_locked_before.get(&account).unwrap_or(&Zero::zero()) !=
-					account_staked_sums.get(&account).unwrap_or(&Zero::zero())),
-			"account locked != account staked"
-		);
-
 		// Print some summary stats.
 		let total_stake_to_unlock = account_staked_sums.clone().into_values().sum::<BalanceOf<T>>();
 		let total_deposits_to_unreserve =
@@ -222,46 +167,7 @@ where
 		log::info!("Total deposit to unreserve: {:?}", total_deposits_to_unreserve);
 		log::info!("Bugged deposits: {}/{}", bugged_deposits, all_accounts.len());
 
-		let pre_migration_data =
-			PreMigrationData::<T> { account_locked_before, account_reserved_before };
-		Ok(pre_migration_data.encode())
-	}
-
-	/// Executes the migration.
-	///
-	/// Steps:
-	/// 1. Retrieves the deposit and stake amounts from the pallet.
-	/// 2. Unreserves the deposited funds for each account.
-	/// 3. Unlocks the staked funds for each account.
-	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		// Get staked and deposited balances as reported by this pallet.
-		let (account_deposited_sums, account_staked_sums, initial_reads_weight) =
-			Self::get_account_deposited_and_staked_sums();
-
-		// Deposited funds need to be unreserved.
-		for (account, unreserve_amount) in account_deposited_sums {
-			if unreserve_amount.is_zero() {
-				continue
-			}
-			T::Currency::unreserve(&account, unreserve_amount);
-		}
-
-		// Staked funds need to be unlocked.
-		for (account, amount) in account_staked_sums {
-			if amount.is_zero() {
-				continue
-			}
-			// Question for reviewers:
-			// remove_lock triggers a few
-			// `ERROR main runtime::system: Logic error: Unexpected underflow in reducing consumer`
-			// errors. are they safe to ignore?
-			//
-			// I have verified that a non-zero lock always exists before remove_lock is called.
-			T::Currency::remove_lock(T::PalletId::get(), &account);
-		}
-
-		// Question for reviewers: how do I know the weight of the unreserve & remove_lock calls?
-		RocksDbWeight::get().reads_writes(1, 1) + initial_reads_weight
+		Ok(account_reserved_before.encode())
 	}
 
 	/// Performs post-upgrade sanity checks:
@@ -269,31 +175,22 @@ where
 	/// 1. All expected locks were removed after the migration.
 	/// 2. There are no 'hanging' locks for this pallet in Balances.
 	/// 3. The reserved balance for each account has been reduced by the expected amount.
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(pre_migration_data_bytes: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
+	#[cfg(any(feature = "try-runtime", test))]
+	fn do_post_upgrade(
+		account_reserved_before_bytes: Vec<u8>,
+	) -> Result<(), sp_runtime::TryRuntimeError> {
+		use codec::Decode;
 		use sp_runtime::Saturating;
 
-		let pre_migration_data = PreMigrationData::<T>::decode(&mut &pre_migration_data_bytes[..])
-			.map_err(|_| "Failed to decode pre-migration data")?;
+		let account_reserved_before =
+			BTreeMap::<T::AccountId, BalanceOf<T>>::decode(&mut &account_reserved_before_bytes[..])
+				.map_err(|_| "Failed to decode account_reserved_before_bytes")?;
 
-		// Get staked and deposited balances as reported by this pallet.
-		let (account_deposited_sums, account_staked_sums, _) =
-			Self::get_account_deposited_and_staked_sums();
-
-		// Check that all expected locks were removed.
-		account_staked_sums.iter().for_each(|(acc, _)| {
-			assert_eq!(Self::get_actual_locked_amount(acc.clone()), None, "Lock still exists!");
-		});
-
-		// Extra sanity check to ensure there're no 'hanging' locks.
-		pallet_balances::Locks::<T>::iter().for_each(|(_, lock_vec)| {
-			for lock in lock_vec {
-				assert!(lock.id != T::PalletId::get(), "Locks still exist for this pallet!");
-			}
-		});
+		// Get deposited balances as reported by this pallet.
+		let (account_deposited_sums, _, _) = Self::get_account_deposited_and_staked_sums();
 
 		// Check that the reserved balance is reduced by the expected deposited amount.
-		for (account, actual_reserved_before) in pre_migration_data.account_reserved_before {
+		for (account, actual_reserved_before) in account_reserved_before {
 			let actual_reserved_after = T::Currency::reserved_balance(&account);
 			let expected_amount_deducted = *account_deposited_sums
 				.get(&account)
@@ -312,6 +209,56 @@ where
 		}
 
 		Ok(())
+	}
+}
+
+impl<T: crate::Config> OnRuntimeUpgrade for UnlockAndUnreserveAllFunds<T>
+where
+	BalanceOf<T>: Sum,
+{
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+		Self::do_pre_upgrade()
+	}
+
+	/// Executes the migration.
+	///
+	/// Steps:
+	/// 1. Retrieves the deposit and stake amounts from the pallet.
+	/// 2. Unreserves the deposited funds for each account.
+	/// 3. Unlocks the staked funds for each account.
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		// Get staked and deposited balances as reported by this pallet.
+		let (account_deposited_sums, account_staked_sums, initial_reads) =
+			Self::get_account_deposited_and_staked_sums();
+
+		// Deposited funds need to be unreserved.
+		for (account, unreserve_amount) in account_deposited_sums.iter() {
+			if unreserve_amount.is_zero() {
+				continue
+			}
+			T::Currency::unreserve(&account, *unreserve_amount);
+		}
+
+		// Staked funds need to be unlocked.
+		for (account, amount) in account_staked_sums.iter() {
+			if amount.is_zero() {
+				continue
+			}
+			T::Currency::remove_lock(T::PalletId::get(), account);
+		}
+
+		RocksDbWeight::get().reads_writes(
+			(account_deposited_sums.len() + account_staked_sums.len()) as u64,
+			(account_deposited_sums.len() + account_staked_sums.len()) as u64,
+		) + initial_reads
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(
+		account_reserved_before_bytes: Vec<u8>,
+	) -> Result<(), sp_runtime::TryRuntimeError> {
+		Self::do_post_upgrade(account_reserved_before_bytes)
 	}
 }
 
@@ -347,9 +294,12 @@ mod test {
 			);
 
 			// Run the migration.
-			crate::migrations::unlock_and_unreserve_all_funds::UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+			let bytes = UnlockAndUnreserveAllFunds::<Test>::do_pre_upgrade()
+				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
+			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::do_post_upgrade(bytes));
 
-			// Assert the voter lock was removed and the reserved balance was reduced by the expected amount.
+			// Assert the candidate reserved balance was reduced by the expected amount.
 			assert_eq!(
 				<Test as crate::Config>::Currency::reserved_balance(&candidate),
 				initial_reserved
@@ -367,11 +317,7 @@ mod test {
 			// Set up initial state.
 			<Test as crate::Config>::Currency::make_free_balance_be(&runner_up, initial_balance);
 			assert_ok!(<Test as crate::Config>::Currency::reserve(&runner_up, initial_reserved));
-			RunnersUp::<Test>::set(vec![SeatHolder {
-				who: runner_up,
-				deposit,
-				stake: 0,
-			}]);
+			RunnersUp::<Test>::set(vec![SeatHolder { who: runner_up, deposit, stake: 0 }]);
 			assert_ok!(<Test as crate::Config>::Currency::reserve(&runner_up, deposit));
 
 			// Sanity check: ensure initial Balance state was set up correctly.
@@ -381,9 +327,12 @@ mod test {
 			);
 
 			// Run the migration.
-			crate::migrations::unlock_and_unreserve_all_funds::UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+			let bytes = UnlockAndUnreserveAllFunds::<Test>::do_pre_upgrade()
+				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
+			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::do_post_upgrade(bytes));
 
-			// Assert the voter lock was removed and the reserved balance was reduced by the expected amount.
+			// Assert the reserved balance was reduced by the expected amount.
 			assert_eq!(
 				<Test as crate::Config>::Currency::reserved_balance(&runner_up),
 				initial_reserved
@@ -401,11 +350,7 @@ mod test {
 			// Set up initial state.
 			<Test as crate::Config>::Currency::make_free_balance_be(&member, initial_balance);
 			assert_ok!(<Test as crate::Config>::Currency::reserve(&member, initial_reserved));
-			Members::<Test>::set(vec![SeatHolder {
-				who: member,
-				deposit,
-				stake: 0,
-			}]);
+			Members::<Test>::set(vec![SeatHolder { who: member, deposit, stake: 0 }]);
 			assert_ok!(<Test as crate::Config>::Currency::reserve(&member, deposit));
 
 			// Sanity check: ensure initial Balance state was set up correctly.
@@ -415,9 +360,12 @@ mod test {
 			);
 
 			// Run the migration.
-			crate::migrations::unlock_and_unreserve_all_funds::UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+			let bytes = UnlockAndUnreserveAllFunds::<Test>::do_pre_upgrade()
+				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
+			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::do_post_upgrade(bytes));
 
-			// Assert the voter lock was removed and the reserved balance was reduced by the expected amount.
+			// Assert the reserved balance was reduced by the expected amount.
 			assert_eq!(
 				<Test as crate::Config>::Currency::reserved_balance(&member),
 				initial_reserved
@@ -447,10 +395,7 @@ mod test {
 					WithdrawReasons::all(),
 				);
 			}
-			Voting::<Test>::insert(
-				voter,
-				Voter { votes: vec![], deposit, stake },
-			);
+			Voting::<Test>::insert(voter, Voter { votes: vec![], deposit, stake });
 			assert_ok!(<Test as crate::Config>::Currency::reserve(&voter, deposit));
 			<Test as crate::Config>::Currency::set_lock(
 				<Test as crate::Config>::PalletId::get(),
@@ -475,9 +420,13 @@ mod test {
 			);
 
 			// Run the migration.
-			crate::migrations::unlock_and_unreserve_all_funds::UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+			let bytes = UnlockAndUnreserveAllFunds::<Test>::do_pre_upgrade()
+				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
+			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
+			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::do_post_upgrade(bytes));
 
-			// Assert the voter lock was removed and the reserved balance was reduced by the expected amount.
+			// Assert the voter lock was removed and the reserved balance was reduced by the
+			// expected amount.
 			assert_eq!(
 				<Test as crate::Config>::Currency::reserved_balance(&voter),
 				initial_reserved
