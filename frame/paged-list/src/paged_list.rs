@@ -63,10 +63,10 @@ pub type ValueIndex = u32;
 /// the storage `read` calls on the overlay. **Appending** to the list happens by appending to the
 /// last page by utilizing [`sp_io::storage::append`]. It allows to directly extend the elements of
 /// `values` vector of the page without loading the whole vector from storage. A new page is
-/// instanced once [`Page::next`] overflows `ValuesPerPage`. Its vector will also be created through
-/// [`sp_io::storage::append`]. **Draining** advances the internal indices identical to Iteration.
-/// It additionally persists the increments to storage and thereby 'drains' elements. Completely
-/// drained pages are deleted from storage.
+/// instantiated once [`Page::next`] overflows `ValuesPerPage`. Its vector will also be created
+/// through [`sp_io::storage::append`]. **Draining** advances the internal indices identical to
+/// Iteration. It additionally persists the increments to storage and thereby 'drains' elements.
+/// Completely drained pages are deleted from storage.
 ///
 /// # Further Observations
 ///
@@ -196,7 +196,7 @@ impl<V: FullCodec> Page<V> {
 			.and_then(|raw| sp_std::vec::Vec::<V>::decode(&mut &raw[..]).ok())?;
 		if values.is_empty() {
 			// Dont create empty pages.
-			return None;
+			return None
 		}
 		let values = values.into_iter().skip(value_index as usize);
 
