@@ -192,6 +192,8 @@ where
 			let expected_amount_deducted = *account_deposited_sums
 				.get(&account)
 				.unwrap_or(&Zero::zero())
+				// .min here to handle bugged deposits where actual_reserved_before is less than the
+				// amount the pallet reports is reserved
 				.min(&actual_reserved_before);
 			let expected_reserved_after =
 				actual_reserved_before.saturating_sub(expected_amount_deducted);
