@@ -42,7 +42,7 @@
 //! view of the peers' states at any given moment, the eventual consistency is maintained.
 
 use futures::{channel::oneshot, future::Either, FutureExt, StreamExt};
-use libp2p_identity::PeerId;
+use libp2p::PeerId;
 use log::{error, trace, warn};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -52,7 +52,13 @@ use std::{
 };
 use wasm_timer::Delay;
 
-use crate::{peer_store::PeerStoreProvider, IncomingIndex, Message, SetConfig, SetId, LOG_TARGET};
+use crate::{
+	peer_store::PeerStoreProvider,
+	peerset::{IncomingIndex, Message, SetConfig, SetId},
+};
+
+/// Log target for this file.
+pub const LOG_TARGET: &str = "peerset";
 
 /// External API actions.
 #[derive(Debug)]
@@ -738,9 +744,11 @@ impl ProtocolController {
 mod tests {
 	use super::{Direction, PeerState, ProtocolController, ProtocolHandle};
 	use crate::{
-		peer_store::PeerStoreProvider, IncomingIndex, Message, ReputationChange, SetConfig, SetId,
+		peer_store::PeerStoreProvider,
+		peerset::{IncomingIndex, Message, SetConfig, SetId},
+		ReputationChange,
 	};
-	use libp2p_identity::PeerId;
+	use libp2p::PeerId;
 	use sc_utils::mpsc::{tracing_unbounded, TryRecvError};
 	use std::collections::HashSet;
 
@@ -779,7 +787,7 @@ mod tests {
 		peer_store.expect_report_disconnect().times(2).return_const(());
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Add second reserved node at runtime (this currently calls `alloc_slots` internally).
 		controller.on_add_reserved_peer(reserved2);
@@ -793,8 +801,8 @@ mod tests {
 			messages.push(message);
 		}
 		assert_eq!(messages.len(), 2);
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: reserved1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: reserved2 }));
 
 		// Reserved peers do not occupy slots.
 		assert_eq!(controller.num_out, 0);
@@ -841,7 +849,7 @@ mod tests {
 		peer_store.expect_is_banned().times(6).return_const(true);
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Add second reserved node at runtime (this currently calls `alloc_slots` internally).
 		controller.on_add_reserved_peer(reserved2);
@@ -894,7 +902,7 @@ mod tests {
 		peer_store.expect_report_disconnect().times(2).return_const(());
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Add second reserved node at runtime (this calls `alloc_slots` internally).
 		controller.on_add_reserved_peer(reserved2);
@@ -908,8 +916,8 @@ mod tests {
 		}
 
 		assert_eq!(messages.len(), 2);
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: reserved1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: reserved2 }));
 
 		// Drop both reserved nodes.
 		controller.on_peer_dropped(reserved1);
@@ -924,8 +932,8 @@ mod tests {
 		}
 
 		assert_eq!(messages.len(), 2);
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: reserved1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: reserved2 }));
 
 		// No slots occupied.
 		assert_eq!(controller.num_out, 0);
@@ -953,7 +961,7 @@ mod tests {
 		peer_store.expect_outgoing_candidates().once().return_const(candidates);
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Initiate connections.
 		controller.alloc_slots();
@@ -965,8 +973,8 @@ mod tests {
 
 		// Only first two peers are connected (we only have 2 slots).
 		assert_eq!(messages.len(), 2);
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: peer1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: peer2 }));
 
 		// Outgoing slots occupied.
 		assert_eq!(controller.num_out, 2);
@@ -1005,7 +1013,7 @@ mod tests {
 		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Initiate connections.
 		controller.alloc_slots();
@@ -1015,10 +1023,10 @@ mod tests {
 			messages.push(message);
 		}
 		assert_eq!(messages.len(), 4);
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: regular1 }));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: regular2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: reserved1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: reserved2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: regular1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: regular2 }));
 		assert_eq!(controller.num_out, 2);
 		assert_eq!(controller.num_in, 0);
 	}
@@ -1048,7 +1056,7 @@ mod tests {
 		peer_store.expect_report_disconnect().times(2).return_const(());
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Initiate connections.
 		controller.alloc_slots();
@@ -1060,8 +1068,8 @@ mod tests {
 
 		// Only first two peers are connected (we only have 2 slots).
 		assert_eq!(messages.len(), 2);
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: peer1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: peer2 }));
 
 		// Outgoing slots occupied.
 		assert_eq!(controller.num_out, 2);
@@ -1093,7 +1101,7 @@ mod tests {
 
 		// Peers are connected.
 		assert_eq!(messages.len(), 1);
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer3 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: peer3 }));
 
 		// Outgoing slots occupied.
 		assert_eq!(controller.num_out, 1);
@@ -1116,7 +1124,7 @@ mod tests {
 		peer_store.expect_register_protocol().once().return_const(());
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Initiate connections.
 		controller.alloc_slots();
@@ -1143,7 +1151,7 @@ mod tests {
 		peer_store.expect_register_protocol().once().return_const(());
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		let peer = PeerId::random();
 		let incoming_index = IncomingIndex(1);
@@ -1182,7 +1190,7 @@ mod tests {
 		peer_store.expect_outgoing_candidates().once().return_const(candidates);
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Initiate connections.
 		controller.alloc_slots();
@@ -1201,8 +1209,8 @@ mod tests {
 		}
 
 		assert_eq!(messages.len(), 2);
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: peer1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: peer2 }));
 		assert_eq!(controller.num_out, 2);
 		assert_eq!(controller.num_in, 0);
 	}
@@ -1230,7 +1238,7 @@ mod tests {
 		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 		assert_eq!(controller.num_out, 0);
 		assert_eq!(controller.num_in, 0);
 
@@ -1242,9 +1250,9 @@ mod tests {
 			messages.push(message);
 		}
 		assert_eq!(messages.len(), 3);
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: regular1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: reserved1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: reserved2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: regular1 }));
 		assert_eq!(controller.num_out, 1);
 		assert_eq!(controller.num_in, 0);
 
@@ -1264,8 +1272,8 @@ mod tests {
 			messages.push(message);
 		}
 		assert_eq!(messages.len(), 2);
-		assert!(messages.contains(&Message::Drop { set_id: SetId(0), peer_id: regular1 }));
-		assert!(messages.contains(&Message::Drop { set_id: SetId(0), peer_id: regular2 }));
+		assert!(messages.contains(&Message::Drop { set_id: SetId::from(0), peer_id: regular1 }));
+		assert!(messages.contains(&Message::Drop { set_id: SetId::from(0), peer_id: regular2 }));
 		assert_eq!(controller.nodes.len(), 0);
 		assert_eq!(controller.num_out, 0);
 		assert_eq!(controller.num_in, 0);
@@ -1289,7 +1297,7 @@ mod tests {
 		peer_store.expect_register_protocol().once().return_const(());
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 		assert_eq!(controller.reserved_nodes.len(), 2);
 		assert_eq!(controller.nodes.len(), 0);
 		assert_eq!(controller.num_out, 0);
@@ -1323,7 +1331,7 @@ mod tests {
 		peer_store.expect_is_banned().times(2).return_const(false);
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Initiate connections.
 		controller.alloc_slots();
@@ -1332,8 +1340,8 @@ mod tests {
 			messages.push(message);
 		}
 		assert_eq!(messages.len(), 2);
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved1 }));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: reserved1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: reserved2 }));
 		assert_eq!(controller.reserved_nodes.len(), 2);
 		assert!(controller.reserved_nodes.contains_key(&reserved1));
 		assert!(controller.reserved_nodes.contains_key(&reserved2));
@@ -1341,7 +1349,10 @@ mod tests {
 
 		// Remove reserved node
 		controller.on_remove_reserved_peer(reserved1);
-		assert_eq!(rx.try_recv().unwrap(), Message::Drop { set_id: SetId(0), peer_id: reserved1 });
+		assert_eq!(
+			rx.try_recv().unwrap(),
+			Message::Drop { set_id: SetId::from(0), peer_id: reserved1 }
+		);
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert_eq!(controller.reserved_nodes.len(), 1);
 		assert!(controller.reserved_nodes.contains_key(&reserved2));
@@ -1368,7 +1379,7 @@ mod tests {
 		peer_store.expect_outgoing_candidates().once().return_const(Vec::new());
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Connect `peer1` as inbound, `peer2` as outbound.
 		controller.on_incoming_connection(peer1, IncomingIndex(1));
@@ -1379,7 +1390,7 @@ mod tests {
 		}
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: peer2 }));
 		assert_eq!(controller.num_out, 0);
 		assert_eq!(controller.num_in, 0);
 
@@ -1415,7 +1426,7 @@ mod tests {
 		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Connect `peer1` as outbound & `peer2` as inbound.
 		controller.alloc_slots();
@@ -1425,7 +1436,7 @@ mod tests {
 			messages.push(message);
 		}
 		assert_eq!(messages.len(), 2);
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: peer1 }));
 		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
 		assert_eq!(controller.num_in, 1);
 		assert_eq!(controller.num_out, 1);
@@ -1458,7 +1469,7 @@ mod tests {
 		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Connect `peer1` as outbound & `peer2` as inbound.
 		controller.alloc_slots();
@@ -1468,7 +1479,7 @@ mod tests {
 			messages.push(message);
 		}
 		assert_eq!(messages.len(), 2);
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: peer1 }));
 		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
 		assert_eq!(controller.nodes.len(), 2);
 		assert!(matches!(controller.nodes.get(&peer1), Some(Direction::Outbound)));
@@ -1477,7 +1488,10 @@ mod tests {
 		assert_eq!(controller.num_out, 1);
 
 		controller.on_disconnect_peer(peer1);
-		assert_eq!(rx.try_recv().unwrap(), Message::Drop { set_id: SetId(0), peer_id: peer1 });
+		assert_eq!(
+			rx.try_recv().unwrap(),
+			Message::Drop { set_id: SetId::from(0), peer_id: peer1 }
+		);
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert_eq!(controller.nodes.len(), 1);
 		assert!(!controller.nodes.contains_key(&peer1));
@@ -1485,7 +1499,10 @@ mod tests {
 		assert_eq!(controller.num_out, 0);
 
 		controller.on_disconnect_peer(peer2);
-		assert_eq!(rx.try_recv().unwrap(), Message::Drop { set_id: SetId(0), peer_id: peer2 });
+		assert_eq!(
+			rx.try_recv().unwrap(),
+			Message::Drop { set_id: SetId::from(0), peer_id: peer2 }
+		);
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert_eq!(controller.nodes.len(), 0);
 		assert_eq!(controller.num_in, 0);
@@ -1512,7 +1529,7 @@ mod tests {
 		peer_store.expect_outgoing_candidates().once().return_const(Vec::new());
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Connect `reserved1` as inbound & `reserved2` as outbound.
 		controller.on_incoming_connection(reserved1, IncomingIndex(1));
@@ -1523,7 +1540,7 @@ mod tests {
 		}
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: reserved2 }));
 		assert!(matches!(
 			controller.reserved_nodes.get(&reserved1),
 			Some(PeerState::Connected(Direction::Inbound))
@@ -1570,7 +1587,7 @@ mod tests {
 		peer_store.expect_report_disconnect().times(2).return_const(());
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Connect `peer1` as outbound & `peer2` as inbound.
 		controller.alloc_slots();
@@ -1580,7 +1597,7 @@ mod tests {
 			messages.push(message);
 		}
 		assert_eq!(messages.len(), 2);
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: peer1 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: peer1 }));
 		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
 		assert_eq!(controller.nodes.len(), 2);
 		assert!(matches!(controller.nodes.get(&peer1), Some(Direction::Outbound)));
@@ -1622,7 +1639,7 @@ mod tests {
 		peer_store.expect_outgoing_candidates().once().return_const(Vec::new());
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Connect `reserved1` as inbound & `reserved2` as outbound.
 		controller.on_incoming_connection(reserved1, IncomingIndex(1));
@@ -1633,7 +1650,7 @@ mod tests {
 		}
 		assert_eq!(messages.len(), 2);
 		assert!(messages.contains(&Message::Accept(IncomingIndex(1))));
-		assert!(messages.contains(&Message::Connect { set_id: SetId(0), peer_id: reserved2 }));
+		assert!(messages.contains(&Message::Connect { set_id: SetId::from(0), peer_id: reserved2 }));
 		assert!(matches!(
 			controller.reserved_nodes.get(&reserved1),
 			Some(PeerState::Connected(Direction::Inbound))
@@ -1683,7 +1700,7 @@ mod tests {
 		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 		assert_eq!(controller.num_out, 0);
 		assert_eq!(controller.num_in, 0);
 
@@ -1691,7 +1708,7 @@ mod tests {
 		controller.alloc_slots();
 		assert_eq!(
 			rx.try_recv().ok().unwrap(),
-			Message::Connect { set_id: SetId(0), peer_id: regular1 }
+			Message::Connect { set_id: SetId::from(0), peer_id: regular1 }
 		);
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(matches!(controller.nodes.get(&regular1).unwrap(), Direction::Outbound,));
@@ -1737,7 +1754,7 @@ mod tests {
 		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 		assert_eq!(controller.num_out, 0);
 		assert_eq!(controller.num_in, 0);
 
@@ -1745,7 +1762,7 @@ mod tests {
 		controller.alloc_slots();
 		assert_eq!(
 			rx.try_recv().ok().unwrap(),
-			Message::Connect { set_id: SetId(0), peer_id: regular1 }
+			Message::Connect { set_id: SetId::from(0), peer_id: regular1 }
 		);
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(matches!(controller.nodes.get(&regular1).unwrap(), Direction::Outbound,));
@@ -1790,7 +1807,7 @@ mod tests {
 		peer_store.expect_outgoing_candidates().once().return_const(outgoing_candidates);
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 		assert_eq!(controller.num_out, 0);
 		assert_eq!(controller.num_in, 0);
 
@@ -1798,7 +1815,7 @@ mod tests {
 		controller.alloc_slots();
 		assert_eq!(
 			rx.try_recv().ok().unwrap(),
-			Message::Connect { set_id: SetId(0), peer_id: regular1 }
+			Message::Connect { set_id: SetId::from(0), peer_id: regular1 }
 		);
 		assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
 		assert!(matches!(controller.nodes.get(&regular1).unwrap(), Direction::Outbound,));
@@ -1843,7 +1860,7 @@ mod tests {
 		peer_store.expect_is_banned().once().return_const(false);
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Connect `peer1` as inbound.
 		controller.on_incoming_connection(peer1, IncomingIndex(1));
@@ -1874,7 +1891,7 @@ mod tests {
 		peer_store.expect_is_banned().once().return_const(true);
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 
 		// Incoming request.
 		controller.on_incoming_connection(peer1, IncomingIndex(1));
@@ -1900,7 +1917,7 @@ mod tests {
 		peer_store.expect_is_banned().once().return_const(true);
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 		assert!(controller.reserved_nodes.contains_key(&reserved1));
 
 		// Incoming request.
@@ -1928,7 +1945,7 @@ mod tests {
 		peer_store.expect_outgoing_candidates().once().return_const(Vec::new());
 
 		let (_handle, mut controller) =
-			ProtocolController::new(SetId(0), config, tx, Box::new(peer_store));
+			ProtocolController::new(SetId::from(0), config, tx, Box::new(peer_store));
 		assert!(matches!(controller.reserved_nodes.get(&reserved1), Some(PeerState::NotConnected)));
 
 		// Initiate connectios
