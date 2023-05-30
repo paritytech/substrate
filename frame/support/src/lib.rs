@@ -983,7 +983,7 @@ pub mod tests {
 	}
 
 	fn new_test_ext() -> TestExternalities {
-		GenesisConfig::default().build_storage().unwrap().into()
+		RuntimeGenesisConfig::default().build_storage().unwrap().into()
 	}
 
 	trait Sorted {
@@ -1523,10 +1523,19 @@ pub mod tests {
 	}
 }
 
+/// Prelude to be used for pallet testing, for ease of use.
+#[cfg(feature = "std")]
+pub mod testing_prelude {
+	pub use super::{
+		assert_err, assert_err_ignore_postinfo, assert_err_with_weight, assert_error_encoded_size,
+		assert_noop, assert_ok, assert_storage_noop, bounded_btree_map, bounded_vec,
+		parameter_types, traits::Get,
+	};
+	pub use sp_arithmetic::assert_eq_error_rate;
+}
+
 /// Prelude to be used alongside pallet macro, for ease of use.
 pub mod pallet_prelude {
-	#[cfg(feature = "std")]
-	pub use crate::traits::GenesisBuild;
 	pub use crate::{
 		dispatch::{
 			DispatchClass, DispatchError, DispatchResult, DispatchResultWithPostInfo, Parameter,
@@ -1543,8 +1552,8 @@ pub mod pallet_prelude {
 			},
 		},
 		traits::{
-			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
-			PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
+			ConstU32, EnsureOrigin, GenesisBuild, Get, GetDefault, GetStorageVersion, Hooks,
+			IsType, PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
 		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,

@@ -112,8 +112,8 @@ struct BlockState {
 
 /// The state of a single subscription ID.
 struct SubscriptionState<Block: BlockT> {
-	/// The `runtime_updates` parameter flag of the subscription.
-	runtime_updates: bool,
+	/// The `with_runtime` parameter flag of the subscription.
+	with_runtime: bool,
 	/// Signals the "Stop" event.
 	tx_stop: Option<oneshot::Sender<()>>,
 	/// Track the block hashes available for this subscription.
@@ -234,7 +234,7 @@ impl<Block: BlockT> SubscriptionState<Block> {
 /// executing an RPC method call.
 pub struct BlockGuard<Block: BlockT, BE: Backend<Block>> {
 	hash: Block::Hash,
-	runtime_updates: bool,
+	with_runtime: bool,
 	backend: Arc<BE>,
 }
 
@@ -242,7 +242,7 @@ pub struct BlockGuard<Block: BlockT, BE: Backend<Block>> {
 // testing.
 impl<Block: BlockT, BE: Backend<Block>> std::fmt::Debug for BlockGuard<Block, BE> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "BlockGuard hash {:?} runtime_updates {:?}", self.hash, self.runtime_updates)
+		write!(f, "BlockGuard hash {:?} with_runtime {:?}", self.hash, self.with_runtime)
 	}
 }
 
@@ -250,19 +250,19 @@ impl<Block: BlockT, BE: Backend<Block>> BlockGuard<Block, BE> {
 	/// Construct a new [`BlockGuard`] .
 	fn new(
 		hash: Block::Hash,
-		runtime_updates: bool,
+		with_runtime: bool,
 		backend: Arc<BE>,
 	) -> Result<Self, SubscriptionManagementError> {
 		backend
 			.pin_block(hash)
 			.map_err(|err| SubscriptionManagementError::Custom(err.to_string()))?;
 
-		Ok(Self { hash, runtime_updates, backend })
+		Ok(Self { hash, with_runtime, backend })
 	}
 
-	/// The `runtime_updates` flag of the subscription.
-	pub fn has_runtime_updates(&self) -> bool {
-		self.runtime_updates
+	/// The `with_runtime` flag of the subscription.
+	pub fn has_runtime(&self) -> bool {
+		self.with_runtime
 	}
 }
 
@@ -310,12 +310,12 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 	pub fn insert_subscription(
 		&mut self,
 		sub_id: String,
-		runtime_updates: bool,
+		with_runtime: bool,
 	) -> Option<oneshot::Receiver<()>> {
 		if let Entry::Vacant(entry) = self.subs.entry(sub_id) {
 			let (tx_stop, rx_stop) = oneshot::channel();
 			let state = SubscriptionState::<Block> {
-				runtime_updates,
+				with_runtime,
 				tx_stop: Some(tx_stop),
 				blocks: Default::default(),
 			};
@@ -501,7 +501,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 			return Err(SubscriptionManagementError::BlockHashAbsent)
 		}
 
-		BlockGuard::new(hash, sub.runtime_updates, self.backend.clone())
+		BlockGuard::new(hash, sub.with_runtime, self.backend.clone())
 	}
 }
 
@@ -608,7 +608,7 @@ mod tests {
 	#[test]
 	fn sub_state_register_twice() {
 		let mut sub_state = SubscriptionState::<Block> {
-			runtime_updates: false,
+			with_runtime: false,
 			tx_stop: None,
 			blocks: Default::default(),
 		};
@@ -633,7 +633,7 @@ mod tests {
 	#[test]
 	fn sub_state_register_unregister() {
 		let mut sub_state = SubscriptionState::<Block> {
-			runtime_updates: false,
+			with_runtime: false,
 			tx_stop: None,
 			blocks: Default::default(),
 		};
@@ -709,7 +709,7 @@ mod tests {
 
 		let block = subs.lock_block(&id, hash).unwrap();
 		// Subscription started with runtime updates
-		assert_eq!(block.has_runtime_updates(), true);
+		assert_eq!(block.has_runtime(), true);
 
 		let invalid_id = "abc-invalid".to_string();
 		let err = subs.unpin_block(&invalid_id, hash).unwrap_err();

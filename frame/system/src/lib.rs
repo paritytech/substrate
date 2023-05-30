@@ -707,7 +707,6 @@ pub struct EventRecord<E: Parameter + Member, T> {
 
 // Create a Hash with 69 for each byte,
 // only used to build genesis config.
-#[cfg(feature = "std")]
 fn hash69<T: AsMut<[u8]> + Default>() -> T {
 	let mut h = T::default();
 	h.as_mut().iter_mut().for_each(|byte| *byte = 69);

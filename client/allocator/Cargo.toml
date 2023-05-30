@@ -16,5 +16,5 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 log = "0.4.17"
 thiserror = "1.0.30"
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-wasm-interface = { version = "7.0.0", path = "../../primitives/wasm-interface" }
+sp-core = { version = "8.0.0", path = "../../primitives/core" }
+sp-wasm-interface = { version = "8.0.0", path = "../../primitives/wasm-interface" }

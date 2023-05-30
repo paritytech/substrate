@@ -1,6 +1,6 @@
 [package]
 name = "sp-runtime"
-version = "7.0.0"
+version = "8.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -23,20 +23,20 @@ paste = "1.0"
 rand = { version = "0.8.5", optional = true }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", default-features = false, features = ["derive", "alloc"], optional = true }
-sp-application-crypto = { version = "7.0.0", default-features = false, path = "../application-crypto" }
-sp-arithmetic = { version = "6.0.0", default-features = false, path = "../arithmetic" }
-sp-core = { version = "7.0.0", default-features = false, path = "../core" }
-sp-io = { version = "7.0.0", default-features = false, path = "../io" }
-sp-std = { version = "5.0.0", default-features = false, path = "../std" }
-sp-weights = { version = "4.0.0", default-features = false, path = "../weights" }
+sp-application-crypto = { version = "8.0.0", default-features = false, path = "../application-crypto" }
+sp-arithmetic = { version = "7.0.0", default-features = false, path = "../arithmetic" }
+sp-core = { version = "8.0.0", default-features = false, path = "../core" }
+sp-io = { version = "8.0.0", default-features = false, path = "../io" }
+sp-std = { version = "6.0.0", default-features = false, path = "../std" }
+sp-weights = { version = "5.0.0", default-features = false, path = "../weights" }
 
 [dev-dependencies]
 rand = "0.8.5"
 serde_json = "1.0.85"
 zstd = { version = "0.12.3", default-features = false }
 sp-api = { version = "4.0.0-dev", path = "../api" }
-sp-state-machine = { version = "0.13.0", path = "../state-machine" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+sp-state-machine = { version = "0.14.0", path = "../state-machine" }
+sp-tracing = { version = "7.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 
 [features]
