@@ -19,11 +19,11 @@ frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarkin
 node-primitives = { version = "2.0.0", path = "../primitives" }
 kitchensink-runtime = { version = "3.0.0-dev", path = "../runtime" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
-sp-state-machine = { version = "0.13.0", path = "../../../primitives/state-machine" }
-sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
-sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
+sp-core = { version = "8.0.0", path = "../../../primitives/core" }
+sp-keystore = { version = "0.14.0", path = "../../../primitives/keystore" }
+sp-state-machine = { version = "0.14.0", path = "../../../primitives/state-machine" }
+sp-tracing = { version = "7.0.0", path = "../../../primitives/tracing" }
+sp-trie = { version = "8.0.0", path = "../../../primitives/trie" }
 sp-statement-store = { version = "4.0.0-dev", path = "../../../primitives/statement-store" }
 
 [dev-dependencies]
@@ -41,12 +41,12 @@ pallet-sudo = { version = "4.0.0-dev", path = "../../../frame/sudo" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 pallet-treasury = { version = "4.0.0-dev", path = "../../../frame/treasury" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
-sp-application-crypto = { version = "7.0.0", path = "../../../primitives/application-crypto" }
+sp-application-crypto = { version = "8.0.0", path = "../../../primitives/application-crypto" }
 pallet-root-testing = { version = "1.0.0-dev", path = "../../../frame/root-testing" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-sp-externalities = { version = "0.13.0", path = "../../../primitives/externalities" }
-sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-externalities = { version = "0.14.0", path = "../../../primitives/externalities" }
+sp-keyring = { version = "8.0.0", path = "../../../primitives/keyring" }
+sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
 
 [features]
 stress-test = []

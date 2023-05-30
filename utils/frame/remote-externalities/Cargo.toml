@@ -17,9 +17,9 @@ codec = { package = "parity-scale-codec", version = "3.2.2" }
 log = "0.4.17"
 serde = "1.0.136"
 frame-support = { version = "4.0.0-dev", optional = true, path = "../../../frame/support" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
-sp-io = { version = "7.0.0", path = "../../../primitives/io" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-core = { version = "8.0.0", path = "../../../primitives/core" }
+sp-io = { version = "8.0.0", path = "../../../primitives/io" }
+sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
 tokio = { version = "1.22.0", features = ["macros", "rt-multi-thread"] }
 substrate-rpc-client = { path = "../rpc/client" }
 futures = "0.3"
