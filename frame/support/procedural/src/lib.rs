@@ -1757,15 +1757,32 @@ pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 	let foreign_mod = parse_macro_input!(attr as ItemMod);
 	let mut internal_mod = parse_macro_input!(tokens as ItemMod);
 
-	let err = syn::Error::new_spanned(
-		internal_mod.clone(),
-		"A section can only be imported under a pallet macro",
-	)
-	.to_compile_error()
-	.into();
+	// check that internal_mod is a pallet module
+	if internal_mod.attrs.iter().find(|attr| {
+	    if let Some(last_seg) = attr.path().segments.last() {
+	        last_seg.ident == "pallet"
+	    } else {
+	        false
+	    }
+	}).is_none() {
+	    return Err(Error::new(
+	        internal_mod.span(),
+	        "`#[import_section]` can only be applied to a valid pallet module",
+	    )).to_compile_error.into();
+	}
 
-	if internal_mod.attrs.len() == 0 {
-		return err
+    // check that foreign_mod has `#[pallet_section]` attached to it
+	if foreign_mod.attrs.iter().find(|attr| {
+	    if let Some(last_seg) = attr.path().segments.last() {
+	        last_seg.ident == "pallet_section"
+	    } else {
+	        false
+	    }
+	}).is_none() {
+	    return Err(Error::new(
+	        foreign_mod.span(),
+	        "`#[import_section]` can only take a valid pallet section as an argument",
+	    )).to_compile_error().into();
 	}
 
 	if let Some(ref mut content) = internal_mod.content {
