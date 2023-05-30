@@ -495,6 +495,22 @@ mod tests {
 		});
 	}
 
+	/// Pages are removed ASAP.
+	#[test]
+	fn drain_eager_page_removal() {
+		TestExternalities::default().execute_with(|| {
+			List::append_many(0..9);
+
+			assert!(sp_io::storage::exists(&page_key::<Prefix>(0)));
+			assert!(sp_io::storage::exists(&page_key::<Prefix>(1)));
+
+			assert_eq!(List::drain().take(5).count(), 5);
+			// Page 0 is eagerly removed.
+			assert!(!sp_io::storage::exists(&page_key::<Prefix>(0)));
+			assert!(sp_io::storage::exists(&page_key::<Prefix>(1)));
+		});
+	}
+
 	/// Appending encodes pages as `Vec`.
 	#[test]
 	fn append_storage_layout() {
