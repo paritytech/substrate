@@ -155,7 +155,7 @@ use parse::{
 };
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::quote;
 use std::{collections::HashSet, str::FromStr};
 use syn::{spanned::Spanned, Ident, Result};
 

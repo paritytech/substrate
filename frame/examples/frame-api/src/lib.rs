@@ -19,15 +19,16 @@ pub mod pallet {
 #[cfg(test)]
 mod tests {
 	use super::pallet as pallet_example;
-	use frame::{prelude::*, runtime::construct_runtime, testing_prelude::*};
+	use frame::{prelude::*, testing_prelude::*};
 
-	#[frame::use_attr]
+	/// To use the derive-impl, this line must be provided as-is.
+	#[frame::macros::use_attr]
 	use frame::deps::frame_support::derive_impl;
 
 	type UncheckedExtrinsic = MockUncheckedExtrinsic<Test>;
 	type Block = MockBlock<Test>;
 
-	// For testing the pallet, we construct a mock runtime.
+	For testing the pallet, we construct a mock runtime.
 	construct_runtime!(
 		pub enum Test
 		where
@@ -35,7 +36,7 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 			{
-				System: frame_system::{Pallet, Call, Storage, Event<T>},
+				System: frame_system,
 				Example: pallet_example,
 			}
 	);

@@ -66,14 +66,11 @@ pub mod prelude {
 	pub use sp_std::prelude::*;
 }
 
-pub use frame_support::macro_magic::use_attr;
-
-pub mod macros {
-	pub use sp_std::if_std;
-}
-
 #[cfg(feature = "std")]
 pub mod testing_prelude {
+	#[cfg(feature = "runtime")]
+	pub use super::runtime::prelude::*;
+
 	pub use frame_support::{
 		assert_err, assert_err_ignore_postinfo, assert_error_encoded_size, assert_noop, assert_ok,
 		assert_storage_noop, ord_parameter_types, parameter_types,
@@ -81,6 +78,11 @@ pub mod testing_prelude {
 	};
 	pub use frame_system::mocking::*;
 	pub use sp_io::TestExternalities as TestState;
+}
+
+pub mod macros {
+	pub use frame_support::{derive_impl, macro_magic::use_attr, register_default_impl};
+	pub use sp_std::if_std;
 }
 
 /// All traits often used in FRAME pallets.
@@ -117,14 +119,16 @@ pub mod derive {
 /// [`test`], but it contains production-ready types, as opposed to mocks.
 #[cfg(feature = "runtime")]
 pub mod runtime {
-	pub use frame_executive::*;
-	pub use frame_support::{construct_runtime, OpaqueMetadata};
-	pub use sp_api::impl_runtime_apis;
-	pub use sp_inherents::{CheckInherentsResult, InherentData};
-	pub use sp_runtime::{generic as bock_types_generic, ApplyExtrinsicResult};
-	#[cfg(feature = "std")]
-	pub use sp_version::NativeVersion;
-	pub use sp_version::{create_runtime_str, runtime_version, RuntimeVersion};
+	pub mod prelude {
+		pub use frame_executive::*;
+		pub use frame_support::{construct_runtime, OpaqueMetadata};
+		pub use sp_api::impl_runtime_apis;
+		pub use sp_inherents::{CheckInherentsResult, InherentData};
+		pub use sp_runtime::{generic as block_types_generic, ApplyExtrinsicResult};
+		#[cfg(feature = "std")]
+		pub use sp_version::NativeVersion;
+		pub use sp_version::{create_runtime_str, runtime_version, RuntimeVersion};
+	}
 
 	/// A set of opinionated types aliases commonly used in runtimes.
 	///

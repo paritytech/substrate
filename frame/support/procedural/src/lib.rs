@@ -412,6 +412,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///   frame_system::Pallet<Runtime>`
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
+	println!("construct_runtime");
 	construct_runtime::construct_runtime(input)
 }
 
