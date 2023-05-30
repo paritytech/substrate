@@ -15,8 +15,8 @@ mod tests;
 mod benchmarking;
 mod storages;
 pub mod weights;
-pub use weights::*;
 use frame_support::pallet_macros::*;
+pub use weights::*;
 
 #[import_section(storages)]
 #[frame_support::pallet]
