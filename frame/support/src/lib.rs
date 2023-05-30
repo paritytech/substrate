@@ -2893,16 +2893,15 @@ pub use frame_support_procedural::pallet;
 
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
-	pub use frame_support_procedural::{
-		call_index, compact, composite_enum, config, constant,
-		disable_frame_system_supertrait_check, error, event, extra_constants, generate_deposit,
-		generate_store, genesis_build, genesis_config, getter, hooks, inherent, origin, storage,
-		storage_prefix, storage_version, type_value, unbounded, validate_unsigned, weight,
-		whitelist_storage,
-	};
 	#[macro_magic::use_attr]
 	pub use frame_support_procedural::import_section;
-	pub use frame_support_procedural::export_section;
+	pub use frame_support_procedural::{
+		call_index, compact, composite_enum, config, constant,
+		disable_frame_system_supertrait_check, error, event, export_section, extra_constants,
+		generate_deposit, generate_store, genesis_build, genesis_config, getter, hooks, inherent,
+		origin, storage, storage_prefix, storage_version, type_value, unbounded, validate_unsigned,
+		weight, whitelist_storage,
+	};
 }
 
 // Generate a macro that will enable/disable code based on `std` feature being active.

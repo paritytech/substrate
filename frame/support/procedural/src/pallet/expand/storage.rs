@@ -23,10 +23,10 @@ use crate::{
 	},
 };
 use itertools::Itertools;
+use proc_macro2::Span;
 use quote::ToTokens;
 use std::{collections::HashMap, ops::IndexMut};
 use syn::spanned::Spanned;
-use proc_macro2::Span;
 
 /// Generate the prefix_ident related to the storage.
 /// prefix_ident is used for the prefix struct to be given to storage as first generic param.
