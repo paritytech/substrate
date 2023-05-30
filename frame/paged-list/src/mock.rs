@@ -76,14 +76,12 @@ frame_support::parameter_types! {
 }
 
 impl crate::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type Value = u32;
 	type ValuesPerPage = ValuesPerPage;
 	type MaxPages = MaxPages;
 }
 
 impl crate::Config<crate::Instance2> for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type Value = u32;
 	type ValuesPerPage = ValuesPerPage;
 	type MaxPages = MaxPages;

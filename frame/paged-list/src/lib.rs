@@ -87,20 +87,8 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(_);
 
-	/// A storage paged list akin to what the FRAME macros would generate.
-	// Note that FRAME does natively support paged lists in storage.
-	pub type List<T, I> = StoragePagedList<
-		ListPrefix<T, I>,
-		<T as Config<I>>::Value,
-		<T as Config<I>>::ValuesPerPage,
-		<T as Config<I>>::MaxPages,
-	>;
-
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
-		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// The value type that can be stored in the list.
 		type Value: FullCodec + Clone + MaxEncodedLen;
 
@@ -113,11 +101,14 @@ pub mod pallet {
 		type MaxPages: Get<Option<u32>>;
 	}
 
-	#[pallet::event]
-	pub enum Event<T: Config<I>, I: 'static = ()> {}
-
-	#[pallet::call]
-	impl<T: Config<I>, I: 'static> Pallet<T, I> {}
+	/// A storage paged list akin to what the FRAME macros would generate.
+	// Note that FRAME does natively support paged lists in storage.
+	pub type List<T, I> = StoragePagedList<
+		ListPrefix<T, I>,
+		<T as Config<I>>::Value,
+		<T as Config<I>>::ValuesPerPage,
+		<T as Config<I>>::MaxPages,
+	>;
 }
 
 // This exposes the list functionality to other pallets.
