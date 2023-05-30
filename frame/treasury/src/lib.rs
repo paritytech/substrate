@@ -126,6 +126,16 @@ pub trait Asset<AssetId, Fungibility> {
 	fn amount(&self) -> Fungibility;
 }
 
+/// An asset implementation for the unit. Useful in cases where the asset_id is not needed
+impl Asset<(), Self> for u64 {
+	fn asset_kind(&self) -> () {
+		().into()
+	}
+	fn amount(&self) -> Self {
+		*self
+	}
+}
+
 /// An index of a proposal. Just a `u32`.
 pub type ProposalIndex = u32;
 
@@ -622,7 +632,7 @@ pub mod pallet {
 
 			for asset in assets {
 				let normalized_amount =
-					T::BalanceConverter::from_asset_balance(asset.amount(), asset)
+					T::BalanceConverter::from_asset_balance(asset.amount(), asset.clone())
 						.map_err(|_| Error::<T, I>::BalanceConversionFailed)?;
 				ensure!(normalized_amount <= max_amount, Error::<T, I>::InsufficientPermission);
 
@@ -648,7 +658,7 @@ pub mod pallet {
 				.unwrap_or(Ok(()))?;
 
 				let pending_payment = PendingPayment {
-					asset_kind: asset,
+					asset_kind: asset.clone(),
 					beneficiary: beneficiary.clone(),
 					normalized_value: normalized_amount,
 					payment_id: None,
@@ -732,6 +742,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		for key in PendingPayments::<T, I>::iter_keys() {
 			if let Some(mut p) = PendingPayments::<T, I>::get(key) {
+				if p.tries > T::MaxPaymentRetries::get() {
+					// Skip further processing of payments which have hit the maximum number of
+					// retures
+					continue
+				}
 				match p.payment_id {
 					None => match T::Paymaster::pay(
 						&p.beneficiary,
@@ -739,12 +754,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						p.asset_kind.amount(),
 					) {
 						Ok(id) => {
-							total_spent = total_spent.saturating_add(p.normalized_value);
 							p.tries = p.tries.saturating_add(1);
 							p.payment_id = Some(id);
 							Self::deposit_event(Event::PaymentTriggered {
 								pending_payment_index: key,
-								asset_kind: p.asset_kind,
+								asset_kind: p.asset_kind.clone(),
 								payment_id: id,
 								tries: p.tries,
 							});
@@ -752,10 +766,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						},
 						Err(err) => {
 							log::debug!(target: LOG_TARGET, "Paymaster::pay failed for PendingPayment with index: {:?} and error: {:?}", key, err);
-							missed_payments = missed_payments.saturating_add(1);
 							Self::deposit_event(Event::PaymentFailure {
 								pending_payment_index: key,
-								asset_kind: p.asset_kind,
+								asset_kind: p.asset_kind.clone(),
 								payment_id: None,
 								tries: p.tries,
 							});
@@ -770,16 +783,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								"Paymaster::pay failed for PendingPayment with index: {:?}",
 								key
 							);
-							// try again in the next `T::SpendPeriod`.
-							missed_payments = missed_payments.saturating_add(1);
-							// Force the payment to none, so a fresh payment is sent during the next
-							// T::SpendPeriod.
-							p.payment_id = None;
+
 							p.tries = p.tries.saturating_add(1);
+							if p.tries < T::MaxPaymentRetries::get() {
+								// Force the payment to none, so a fresh payment is sent during the
+								// next T::CheckAndRetryPeriod.
+								p.payment_id = None;
+							}
 
 							Self::deposit_event(Event::PaymentFailure {
 								pending_payment_index: key,
-								asset_kind: p.asset_kind,
+								asset_kind: p.asset_kind.clone(),
 								payment_id: Some(payment_id),
 								tries: p.tries,
 							});
@@ -805,12 +819,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		total_weight = total_weight
 			.saturating_add(T::WeightInfo::on_initialize_pending_payments(pending_payments_len));
-
-		Self::deposit_event(Event::RolloverPayments {
-			rollover_payments: missed_payments,
-			allocated_payments: pending_payments_len.saturating_sub(missed_payments),
-		});
-
 		total_weight
 	}
 
@@ -836,11 +844,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							total_spent = total_spent.saturating_add(p.normalized_value);
 							Self::deposit_event(Event::PaymentTriggered {
 								pending_payment_index: key,
-								asset_kind: p.asset_kind,
-								payment_id: Some(id),
+								asset_kind: p.asset_kind.clone(),
+								payment_id: id,
 								tries: p.tries.saturating_add(1),
 							});
-							PendingPayments::<T, I>::insert(key, Some(p));
+							PendingPayments::<T, I>::insert(key, p);
 							PendingPaymentsInbox::<T, I>::remove(key);
 						},
 						Err(err) => {
@@ -848,13 +856,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							missed_payments = missed_payments.saturating_add(1);
 							Self::deposit_event(Event::PaymentFailure {
 								pending_payment_index: key,
-								asset_kind: p.asset_kind,
+								asset_kind: p.asset_kind.clone(),
 								payment_id: None,
 								tries: p.tries,
 							});
 							p.tries = p.tries.saturating_add(1);
 							// Insert it into `T::PendingPayments` to be retried.
-							PendingPayments::<T, I>::insert(key, Some(p));
+							PendingPayments::<T, I>::insert(key, p);
 							PendingPaymentsInbox::<T, I>::remove(key);
 						},
 					},
