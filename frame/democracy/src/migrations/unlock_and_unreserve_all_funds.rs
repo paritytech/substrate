@@ -24,6 +24,7 @@ use frame_support::{
 	traits::{LockableCurrency, OnRuntimeUpgrade, ReservableCurrency},
 	weights::constants::RocksDbWeight,
 };
+use sp_core::Get;
 use sp_runtime::{traits::Zero, Saturating};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
@@ -65,12 +66,15 @@ where
 		frame_support::weights::Weight,
 	) {
 		let deposit_of = crate::DepositOf::<T>::iter().collect::<Vec<_>>();
-		let deposit_of_len = deposit_of.len();
+		let deposit_of_len = deposit_of.len() as u64;
 
 		// Get all deposits (reserved).
+		let mut total_voting_vec_entries: u64 = 0;
 		let account_deposits: BTreeMap<T::AccountId, BalanceOf<T>> = deposit_of
 			.into_iter()
 			.flat_map(|(_prop_index, (accounts, balance))| {
+				// Track the total number of vec entries to calculate the weight of the reads.
+				total_voting_vec_entries += accounts.len() as u64;
 				// Create a vec of tuples where each account is associated with the given balance
 				accounts.into_iter().map(|account| (account, balance)).collect::<Vec<_>>()
 			})
@@ -83,14 +87,19 @@ where
 
 		// Voter accounts have amounts locked.
 		let voting_of = crate::VotingOf::<T>::iter().collect::<Vec<_>>();
-		let voting_of_len = voting_of.len();
+		let voting_of_len = voting_of.len() as u64;
 		let voting_accounts: BTreeSet<T::AccountId> =
 			crate::VotingOf::<T>::iter().map(|(account_id, _voting)| account_id).collect();
 
 		(
 			account_deposits,
 			voting_accounts,
-			RocksDbWeight::get().reads(deposit_of_len as u64 + voting_of_len as u64),
+			RocksDbWeight::get().reads(
+				deposit_of_len +
+				voting_of_len +
+				// Max items in a Voting enum is MaxVotes + 5
+				total_voting_vec_entries * (T::MaxVotes::get() as u64 + 5),
+			),
 		)
 	}
 }
@@ -152,7 +161,7 @@ where
 	/// 2. Unlocks the staked funds for each account.
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		// Get staked and deposited balances as reported by this pallet.
-		let (account_deposits, accounts_with_locks, initial_reads_weight) =
+		let (account_deposits, accounts_with_locks, initial_reads) =
 			Self::get_account_deposits_and_locks();
 
 		// Deposited funds need to be unreserved.
@@ -164,12 +173,14 @@ where
 		}
 
 		// Staked funds need to be unlocked.
-		for account in accounts_with_locks {
-			T::Currency::remove_lock(DEMOCRACY_ID, &account);
+		for account in accounts_with_locks.iter() {
+			T::Currency::remove_lock(DEMOCRACY_ID, account);
 		}
 
-		// Question for reviewers: how do I know the weight of the unreserve & remove_lock calls?
-		RocksDbWeight::get().reads_writes(1, 1) + initial_reads_weight
+		RocksDbWeight::get().reads_writes(
+			accounts_with_locks.len() as u64 + account_deposits.iter().count() as u64,
+			accounts_with_locks.len() as u64 + account_deposits.iter().count() as u64,
+		) + initial_reads
 	}
 
 	/// Performs post-upgrade sanity checks:
