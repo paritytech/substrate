@@ -54,7 +54,7 @@
 //! }'
 //! ```
 //!
-//! Another alternative for the node admin is to use the key insert subcommand on the node's executable, which will write the keys into disk, and will persist in case the node is restarted (`author_insertKey` will not).
+//! Then make sure that the corresponding address (`5GCCgshTQCfGkXy6kAkFDW1TZXAdsbCNZJ9Uz2c7ViBnwcVg`) is added to `Authorities` in the runtime by adding it via `add_authority` extrinsic (from `root`).
 //!
 //! More complex management models and session based key rotations should be considered, but that’s outside the scope of this example.
 
