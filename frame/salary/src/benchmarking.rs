@@ -107,7 +107,7 @@ mod benchmarks {
 		System::<T>::set_block_number(System::<T>::block_number() + T::RegistrationPeriod::get());
 
 		let salary = T::Salary::get_salary(T::Members::rank_of(&caller).unwrap(), &caller);
-		T::Paymaster::ensure_successful(&caller, salary);
+		T::Paymaster::ensure_successful(&caller, (), salary);
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller.clone()));
@@ -134,7 +134,7 @@ mod benchmarks {
 
 		let salary = T::Salary::get_salary(T::Members::rank_of(&caller).unwrap(), &caller);
 		let recipient: T::AccountId = account("recipient", 0, SEED);
-		T::Paymaster::ensure_successful(&recipient, salary);
+		T::Paymaster::ensure_successful(&recipient, (), salary);
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller.clone()), recipient.clone());
@@ -161,7 +161,7 @@ mod benchmarks {
 
 		let salary = T::Salary::get_salary(T::Members::rank_of(&caller).unwrap(), &caller);
 		let recipient: T::AccountId = account("recipient", 0, SEED);
-		T::Paymaster::ensure_successful(&recipient, salary);
+		T::Paymaster::ensure_successful(&recipient, (), salary);
 		Salary::<T, I>::payout(RawOrigin::Signed(caller.clone()).into()).unwrap();
 		let id = match Claimant::<T, I>::get(&caller).unwrap().status {
 			Attempted { id, .. } => id,

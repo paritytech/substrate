@@ -17,9 +17,9 @@ jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"]
 serde = { version = "1.0.136", features = ["derive"] }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-core = { version = "8.0.0", path = "../../../primitives/core" }
+sp-core = { version = "21.0.0", path = "../../../primitives/core" }
 sp-mmr-primitives = { version = "4.0.0-dev", path = "../../../primitives/merkle-mountain-range" }
-sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }
 anyhow = "1"
 
 [dev-dependencies]

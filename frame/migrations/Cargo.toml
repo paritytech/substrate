@@ -20,13 +20,13 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 impl-trait-for-tuples = "0.2.2"
 log = "0.4.18"
-sp-std = { version = "6.0.0", path = "../../primitives/std", default-features = false }
-sp-runtime = { version = "8.0.0", path = "../../primitives/runtime", default-features = false }
+sp-std = { version = "8.0.0", path = "../../primitives/std", default-features = false }
+sp-runtime = { version = "24.0.0", path = "../../primitives/runtime", default-features = false }
 
 [dev-dependencies]
-sp-tracing = { version = "7.0.0", path = "../../primitives/tracing", features = [ "std" ] }
-sp-core = { version = "8.0.0", path = "../../primitives/core", features = [ "std" ] }
-sp-io = { version = "8.0.0", path = "../../primitives/io", features = [ "std" ] }
+sp-tracing = { version = "10.0.0", path = "../../primitives/tracing", features = [ "std" ] }
+sp-core = { version = "21.0.0", path = "../../primitives/core", features = [ "std" ] }
+sp-io = { version = "23.0.0", path = "../../primitives/io", features = [ "std" ] }
 
 [features]
 default = ["std"]

@@ -24,12 +24,11 @@ use crate::{
 	request_responses::{IfDisconnected, RequestFailure},
 	service::signature::Signature,
 	types::ProtocolName,
+	ReputationChange,
 };
 
 use futures::{channel::oneshot, Stream};
 use libp2p::{Multiaddr, PeerId};
-
-use sc_peerset::ReputationChange;
 
 use std::{collections::HashSet, future::Future, pin::Pin, sync::Arc};
 

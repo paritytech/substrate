@@ -42,16 +42,16 @@ sc-service = { version = "0.10.0-dev", default-features = false, path = "../../.
 sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-core = { version = "8.0.0", path = "../../../primitives/core" }
+sp-core = { version = "21.0.0", path = "../../../primitives/core" }
 sp-database = { version = "4.0.0-dev", path = "../../../primitives/database" }
-sp-externalities = { version = "0.14.0", path = "../../../primitives/externalities" }
+sp-externalities = { version = "0.19.0", path = "../../../primitives/externalities" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-keystore = { version = "0.14.0", path = "../../../primitives/keystore" }
-sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
-sp-state-machine = { version = "0.14.0", path = "../../../primitives/state-machine" }
-sp-std = { version = "6.0.0", path = "../../../primitives/std" }
-sp-storage = { version = "8.0.0", path = "../../../primitives/storage" }
-sp-trie = { version = "8.0.0", path = "../../../primitives/trie" }
+sp-keystore = { version = "0.27.0", path = "../../../primitives/keystore" }
+sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }
+sp-state-machine = { version = "0.28.0", path = "../../../primitives/state-machine" }
+sp-std = { version = "8.0.0", path = "../../../primitives/std" }
+sp-storage = { version = "13.0.0", path = "../../../primitives/storage" }
+sp-trie = { version = "22.0.0", path = "../../../primitives/trie" }
 gethostname = "0.2.3"
 
 [features]
