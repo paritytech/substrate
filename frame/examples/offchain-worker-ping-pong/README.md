@@ -51,6 +51,3 @@ Then make sure that the corresponding address (`5GCCgshTQCfGkXy6kAkFDW1TZXAdsbCN
 
 More complex management models and session
 based key rotations should be considered, but that's outside the scope of this example.
-
-The logic around block numbers only helps create different conditions to trigger the different
-kinds of transactions. It is not strictly necessary when implementing offchain workers.
