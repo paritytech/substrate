@@ -21,7 +21,6 @@
 
 mod code;
 mod sandbox;
-
 use self::{
 	code::{
 		body::{self, DynInstr::*},
@@ -31,12 +30,13 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
+	migration::{v10, v11, v9, Migrate},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
 use codec::{Encode, MaxEncodedLen};
 use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
-use frame_support::weights::Weight;
+use frame_support::{pallet_prelude::StorageVersion, weights::Weight};
 use frame_system::RawOrigin;
 use sp_runtime::{
 	traits::{Bounded, Hash},
@@ -232,6 +232,94 @@ benchmarks! {
 		let mut module = PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter)?;
 	}: {
 		Contracts::<T>::reinstrument_module(&mut module, &schedule)?;
+	}
+
+	// This benchmarks the v9 migration step. (update codeStorage)
+	#[pov_mode = Measured]
+	v9_migration_step {
+		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
+		v9::store_old_dummy_code::<T>(c as usize);
+		let mut m = v9::Migration::<T>::default();
+	}: {
+		m.step();
+	}
+
+	// This benchmarks the v10 migration step. (use dedicated deposit_account)
+	#[pov_mode = Measured]
+	v10_migration_step {
+		let contract = <Contract<T>>::with_caller(
+			whitelisted_caller(), WasmModule::dummy(), vec![],
+		)?;
+
+		v10::store_old_contrat_info::<T>(contract.account_id.clone(), contract.info()?);
+		let mut m = v10::Migration::<T>::default();
+	}: {
+		m.step();
+	}
+
+	// This benchmarks the v11 migration step.
+	#[pov_mode = Measured]
+	v11_migration_step {
+		let k in 0 .. 1024;
+		v11::fill_old_queue::<T>(k as usize);
+		let mut m = v11::Migration::<T>::default();
+	}: {
+		m.step();
+	}
+
+	// This benchmarks the weight of executing Migration::migrate to execute a noop migration.
+	#[pov_mode = Measured]
+	migration_noop {
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+	}:  {
+		Migration::<T>::migrate(Weight::MAX)
+	} verify {
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+	}
+
+	// This benchmarks the weight of executing Migration::migrate when there are no migration in progress.
+	#[pov_mode = Measured]
+	migrate {
+		StorageVersion::new(0).put::<Pallet<T>>();
+		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade();
+		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
+	}: {
+		<Contracts<T>>::migrate(origin.into(), Weight::MAX).unwrap()
+	} verify {
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
+	}
+
+	// This benchmarks the weight of running on_runtime_upgrade when there are no migration in progress.
+	#[pov_mode = Measured]
+	on_runtime_upgrade_noop {
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+	}:  {
+		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
+	} verify {
+		assert!(MigrationInProgress::<T>::get().is_none());
+	}
+
+	// This benchmarks the weight of running on_runtime_upgrade when there is a migration in progress.
+	#[pov_mode = Measured]
+	on_runtime_upgrade_in_progress {
+		StorageVersion::new(0).put::<Pallet<T>>();
+		let v = vec![42u8].try_into().ok();
+		MigrationInProgress::<T>::set(v.clone());
+	}:  {
+		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
+	} verify {
+		assert!(MigrationInProgress::<T>::get().is_some());
+		assert_eq!(MigrationInProgress::<T>::get(), v);
+	}
+
+	// This benchmarks the weight of running on_runtime_upgrade when there is a migration to process.
+	#[pov_mode = Measured]
+	on_runtime_upgrade {
+		StorageVersion::new(0).put::<Pallet<T>>();
+	}:  {
+		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
+	} verify {
+		assert!(MigrationInProgress::<T>::get().is_some());
 	}
 
 	// This benchmarks the overhead of loading a code of size `c` byte from storage and into
@@ -532,6 +620,28 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	#[pov_mode = Measured]
+	seal_caller_is_root {
+		let r in 0 .. API_BENCHMARK_RUNS;
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "caller_is_root",
+				params: vec![],
+				return_type: Some(ValueType::I32),
+			}],
+			call_body: Some(body::repeated(r, &[
+				Instruction::Call(0),
+				Instruction::Drop,
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Root;
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[pov_mode = Measured]
@@ -929,7 +1039,8 @@ benchmarks! {
 			Weight::MAX,
 			None,
 			vec![],
-			true,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result?;
@@ -978,7 +1089,8 @@ benchmarks! {
 			Weight::MAX,
 			None,
 			vec![],
-			true,
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result?;
@@ -3170,7 +3282,8 @@ benchmarks! {
 			Weight::MAX,
 			None,
 			data,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result?;
@@ -3219,7 +3332,8 @@ benchmarks! {
 			Weight::MAX,
 			None,
 			data,
-			false,
+			DebugInfo::Skip,
+			CollectEvents::Skip,
 			Determinism::Enforced,
 		)
 		.result?;

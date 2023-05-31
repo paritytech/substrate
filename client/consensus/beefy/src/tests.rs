@@ -66,7 +66,7 @@ use sp_runtime::{
 	BuildStorage, DigestItem, EncodedJustification, Justifications, Storage,
 };
 use std::{marker::PhantomData, sync::Arc, task::Poll};
-use substrate_test_runtime_client::{runtime::Header, ClientExt};
+use substrate_test_runtime_client::{BlockBuilderExt, ClientExt};
 use tokio::time::Duration;
 
 const GENESIS_HASH: H256 = H256::zero();
@@ -165,19 +165,21 @@ impl BeefyTestNet {
 		// push genesis to make indexing human readable (index equals to block number)
 		all_hashes.push(self.peer(0).client().info().genesis_hash);
 
-		let built_hashes = self.peer(0).generate_blocks(count, BlockOrigin::File, |builder| {
-			let mut block = builder.build().unwrap().block;
-
+		let mut block_num: NumberFor<Block> = self.peer(0).client().info().best_number;
+		let built_hashes = self.peer(0).generate_blocks(count, BlockOrigin::File, |mut builder| {
+			block_num = block_num.saturating_add(1).try_into().unwrap();
 			if include_mmr_digest {
-				let block_num = *block.header.number();
 				let num_byte = block_num.to_le_bytes().into_iter().next().unwrap();
 				let mmr_root = MmrRootHash::repeat_byte(num_byte);
-				add_mmr_digest(&mut block.header, mmr_root);
+				add_mmr_digest(&mut builder, mmr_root);
 			}
 
-			if *block.header.number() % session_length == 0 {
-				add_auth_change_digest(&mut block.header, validator_set.clone());
+			if block_num % session_length == 0 {
+				add_auth_change_digest(&mut builder, validator_set.clone());
 			}
+
+			let block = builder.build().unwrap().block;
+			assert_eq!(block.header.number, block_num);
 
 			block
 		});
@@ -325,18 +327,22 @@ sp_api::mock_impl_runtime_apis! {
 	}
 }
 
-fn add_mmr_digest(header: &mut Header, mmr_hash: MmrRootHash) {
-	header.digest_mut().push(DigestItem::Consensus(
-		BEEFY_ENGINE_ID,
-		ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),
-	));
+fn add_mmr_digest(builder: &mut impl BlockBuilderExt, mmr_hash: MmrRootHash) {
+	builder
+		.push_deposit_log_digest_item(DigestItem::Consensus(
+			BEEFY_ENGINE_ID,
+			ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),
+		))
+		.unwrap();
 }
 
-fn add_auth_change_digest(header: &mut Header, new_auth_set: BeefyValidatorSet) {
-	header.digest_mut().push(DigestItem::Consensus(
-		BEEFY_ENGINE_ID,
-		ConsensusLog::<AuthorityId>::AuthoritiesChange(new_auth_set).encode(),
-	));
+fn add_auth_change_digest(builder: &mut impl BlockBuilderExt, new_auth_set: BeefyValidatorSet) {
+	builder
+		.push_deposit_log_digest_item(DigestItem::Consensus(
+			BEEFY_ENGINE_ID,
+			ConsensusLog::<AuthorityId>::AuthoritiesChange(new_auth_set).encode(),
+		))
+		.unwrap();
 }
 
 pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
@@ -367,8 +373,9 @@ async fn voter_init_setup(
 		gossip_validator,
 		None,
 	);
-	let best_grandpa = wait_for_runtime_pallet(api, &mut gossip_engine, finality).await.unwrap();
-	load_or_init_voter_state(&*backend, api, best_grandpa, 1)
+	let (beefy_genesis, best_grandpa) =
+		wait_for_runtime_pallet(api, &mut gossip_engine, finality).await.unwrap();
+	load_or_init_voter_state(&*backend, api, beefy_genesis, best_grandpa, 1)
 }
 
 // Spawns beefy voters. Returns a future to spawn on the runtime.
@@ -975,9 +982,7 @@ async fn should_initialize_voter_at_genesis() {
 
 	// push 15 blocks with `AuthorityChange` digests every 10 blocks
 	let hashes = net.generate_blocks_and_sync(15, 10, &validator_set, false).await;
-
 	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
-
 	// finalize 13 without justifications
 	net.peer(0).client().as_client().finalize_block(hashes[13], None).unwrap();
 
@@ -1016,11 +1021,9 @@ async fn should_initialize_voter_at_custom_genesis() {
 	let custom_pallet_genesis = 7;
 	let api = TestApi::new(custom_pallet_genesis, &validator_set, GOOD_MMR_ROOT);
 
-	// push 15 blocks with `AuthorityChange` digests every 10 blocks
-	let hashes = net.generate_blocks_and_sync(15, 10, &validator_set, false).await;
-
+	// push 15 blocks with `AuthorityChange` digests every 15 blocks
+	let hashes = net.generate_blocks_and_sync(15, 15, &validator_set, false).await;
 	let mut finality = net.peer(0).client().as_client().finality_notification_stream().fuse();
-
 	// finalize 3, 5, 8 without justifications
 	net.peer(0).client().as_client().finalize_block(hashes[3], None).unwrap();
 	net.peer(0).client().as_client().finalize_block(hashes[5], None).unwrap();
@@ -1047,6 +1050,35 @@ async fn should_initialize_voter_at_custom_genesis() {
 	assert!(verify_persisted_version(&*backend));
 	let state = load_persistent(&*backend).unwrap().unwrap();
 	assert_eq!(state, persisted_state);
+
+	// now re-init after genesis changes
+
+	// should ignore existing aux db state and reinit at new genesis
+	let new_validator_set = ValidatorSet::new(make_beefy_ids(keys), 42).unwrap();
+	let new_pallet_genesis = 10;
+	let api = TestApi::new(new_pallet_genesis, &new_validator_set, GOOD_MMR_ROOT);
+
+	net.peer(0).client().as_client().finalize_block(hashes[10], None).unwrap();
+	// load persistent state - state preset in DB, but with different pallet genesis
+	let new_persisted_state = voter_init_setup(&mut net, &mut finality, &api).await.unwrap();
+
+	// verify voter initialized with single session starting at block `new_pallet_genesis` (10)
+	let sessions = new_persisted_state.voting_oracle().sessions();
+	assert_eq!(sessions.len(), 1);
+	assert_eq!(sessions[0].session_start(), new_pallet_genesis);
+	let rounds = new_persisted_state.active_round().unwrap();
+	assert_eq!(rounds.session_start(), new_pallet_genesis);
+	assert_eq!(rounds.validator_set_id(), new_validator_set.id());
+
+	// verify next vote target is mandatory block 10
+	assert_eq!(new_persisted_state.best_beefy_block(), 0);
+	assert_eq!(new_persisted_state.best_grandpa_number(), 10);
+	assert_eq!(new_persisted_state.voting_oracle().voting_target(), Some(new_pallet_genesis));
+
+	// verify state also saved to db
+	assert!(verify_persisted_version(&*backend));
+	let state = load_persistent(&*backend).unwrap().unwrap();
+	assert_eq!(state, new_persisted_state);
 }
 
 #[tokio::test]
@@ -1160,7 +1192,7 @@ async fn beefy_finalizing_after_pallet_genesis() {
 	sp_tracing::try_init_simple();
 
 	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob];
-	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
+	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 14).unwrap();
 	let session_len = 10;
 	let min_block_delta = 1;
 	let pallet_genesis = 15;

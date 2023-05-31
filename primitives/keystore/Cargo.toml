@@ -1,6 +1,6 @@
 [package]
 name = "sp-keystore"
-version = "0.13.0"
+version = "0.27.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -18,8 +18,8 @@ futures = "0.3.21"
 parking_lot = { version = "0.12.1", default-features = false }
 serde = { version = "1.0", optional = true }
 thiserror = "1.0"
-sp-core = { version = "7.0.0", default-features = false, path = "../core" }
-sp-externalities = { version = "0.13.0", default-features = false, path = "../externalities" }
+sp-core = { version = "21.0.0", default-features = false, path = "../core" }
+sp-externalities = { version = "0.19.0", default-features = false, path = "../externalities" }
 
 [dev-dependencies]
 rand = "0.7.2"
@@ -33,3 +33,7 @@ std = [
 	"sp-core/std",
 	"sp-externalities/std",
 ]
+
+# This feature adds BLS crypto primitives. It should not be used in production since
+# the BLS implementation and interface may still be subject to significant change.
+bls-experimental = ["sp-core/bls-experimental"]

@@ -17,5 +17,5 @@ path = "src/main.rs"
 name = "subkey"
 
 [dependencies]
-clap = { version = "4.0.9", features = ["derive"] }
+clap = { version = "4.2.5", features = ["derive"] }
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
