@@ -16,8 +16,8 @@ log = "0.4.17"
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0.30"
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-core = { version = "8.0.0", default-features = false, path = "../../../primitives/core" }
-sp-runtime = { version = "8.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../../primitives/core" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 serde_json = "1.0"

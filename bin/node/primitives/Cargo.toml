@@ -18,9 +18,9 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 ] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system" }
-sp-application-crypto = { version = "8.0.0", default-features = false, path = "../../../primitives/application-crypto" }
-sp-core = { version = "8.0.0", default-features = false, path = "../../../primitives/core" }
-sp-runtime = { version = "8.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-application-crypto = { version = "23.0.0", default-features = false, path = "../../../primitives/application-crypto" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../../primitives/core" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
 
 [features]
 default = ["std"]

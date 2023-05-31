@@ -10737,7 +10737,7 @@ dependencies = [
 
 [[package]]
 name = "sp-application-crypto"
-version = "8.0.0"
+version = "23.0.0"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -10761,7 +10761,7 @@ dependencies = [
 
 [[package]]
 name = "sp-arithmetic"
-version = "7.0.0"
+version = "16.0.0"
 dependencies = [
  "criterion",
  "integer-sqrt",
@@ -10942,7 +10942,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core"
-version = "8.0.0"
+version = "21.0.0"
 dependencies = [
  "array-bytes 4.2.0",
  "bitflags",
@@ -10990,7 +10990,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core-hashing"
-version = "6.0.0"
+version = "9.0.0"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -11003,7 +11003,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core-hashing-proc-macro"
-version = "6.0.0"
+version = "9.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -11021,7 +11021,7 @@ dependencies = [
 
 [[package]]
 name = "sp-debug-derive"
-version = "6.0.0"
+version = "8.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -11030,7 +11030,7 @@ dependencies = [
 
 [[package]]
 name = "sp-externalities"
-version = "0.14.0"
+version = "0.19.0"
 dependencies = [
  "environmental",
  "parity-scale-codec",
@@ -11055,7 +11055,7 @@ dependencies = [
 
 [[package]]
 name = "sp-io"
-version = "8.0.0"
+version = "23.0.0"
 dependencies = [
  "bytes",
  "ed25519",
@@ -11080,7 +11080,7 @@ dependencies = [
 
 [[package]]
 name = "sp-keyring"
-version = "8.0.0"
+version = "24.0.0"
 dependencies = [
  "lazy_static",
  "sp-core",
@@ -11090,7 +11090,7 @@ dependencies = [
 
 [[package]]
 name = "sp-keystore"
-version = "0.14.0"
+version = "0.27.0"
 dependencies = [
  "futures",
  "parity-scale-codec",
@@ -11178,7 +11178,7 @@ dependencies = [
 
 [[package]]
 name = "sp-panic-handler"
-version = "6.0.0"
+version = "8.0.0"
 dependencies = [
  "backtrace",
  "lazy_static",
@@ -11197,7 +11197,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime"
-version = "8.0.0"
+version = "24.0.0"
 dependencies = [
  "either",
  "hash256-std-hasher",
@@ -11224,7 +11224,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime-interface"
-version = "8.0.0"
+version = "17.0.0"
 dependencies = [
  "bytes",
  "impl-trait-for-tuples",
@@ -11247,7 +11247,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime-interface-proc-macro"
-version = "7.0.0"
+version = "11.0.0"
 dependencies = [
  "Inflector",
  "proc-macro-crate",
@@ -11322,7 +11322,7 @@ dependencies = [
 
 [[package]]
 name = "sp-state-machine"
-version = "0.14.0"
+version = "0.28.0"
 dependencies = [
  "array-bytes 4.2.0",
  "assert_matches",
@@ -11363,11 +11363,11 @@ dependencies = [
 
 [[package]]
 name = "sp-std"
-version = "6.0.0"
+version = "8.0.0"
 
 [[package]]
 name = "sp-storage"
-version = "8.0.0"
+version = "13.0.0"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -11406,7 +11406,7 @@ dependencies = [
 
 [[package]]
 name = "sp-tracing"
-version = "7.0.0"
+version = "10.0.0"
 dependencies = [
  "parity-scale-codec",
  "sp-std",
@@ -11440,7 +11440,7 @@ dependencies = [
 
 [[package]]
 name = "sp-trie"
-version = "8.0.0"
+version = "22.0.0"
 dependencies = [
  "ahash 0.8.3",
  "array-bytes 4.2.0",
@@ -11467,7 +11467,7 @@ dependencies = [
 
 [[package]]
 name = "sp-version"
-version = "6.0.0"
+version = "22.0.0"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -11483,7 +11483,7 @@ dependencies = [
 
 [[package]]
 name = "sp-version-proc-macro"
-version = "4.0.0"
+version = "8.0.0"
 dependencies = [
  "parity-scale-codec",
  "proc-macro2",
@@ -11494,7 +11494,7 @@ dependencies = [
 
 [[package]]
 name = "sp-wasm-interface"
-version = "8.0.0"
+version = "14.0.0"
 dependencies = [
  "anyhow",
  "impl-trait-for-tuples",
@@ -11506,7 +11506,7 @@ dependencies = [
 
 [[package]]
 name = "sp-weights"
-version = "5.0.0"
+version = "20.0.0"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
