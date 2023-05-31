@@ -29,17 +29,6 @@ mod benches {
 	use frame_support::traits::Hooks;
 
 	#[benchmark]
-	fn on_runtime_upgrade_bail() {
-		Cursor::<T>::set(Some(cursor(0)));
-		assert!(Cursor::<T>::exists());
-
-		#[block]
-		{
-			Pallet::<T>::on_runtime_upgrade();
-		}
-	}
-
-	#[benchmark]
 	fn on_runtime_upgrade() {
 		assert!(!Cursor::<T>::exists());
 
@@ -50,8 +39,18 @@ mod benches {
 	}
 
 	#[benchmark]
+	fn on_init_base() {
+		assert!(!Cursor::<T>::exists());
+		System::<T>::set_block_number(1u32.into());
+
+		#[block]
+		{
+			Pallet::<T>::on_initialize(1u32.into());
+		}
+	}
+
+	#[benchmark]
 	fn on_init_loop_base() {
-		Cursor::<T>::set(Some(cursor(0)));
 		System::<T>::set_block_number(1u32.into());
 		Pallet::<T>::on_runtime_upgrade();
 

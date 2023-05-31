@@ -37,9 +37,12 @@ use sp_runtime::Saturating;
 
 const LOG_TARGET: &'static str = "runtime::migrations";
 
+/// Points to the next migration to execute.
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
 pub enum MigrationCursor {
+	/// Points to the currently active migration and its cursor.
 	Active(u32, Option<SteppedMigrationCursor>),
+	/// Migration got stuck and cannot proceed.
 	Stuck,
 }
 
@@ -66,6 +69,7 @@ pub mod pallet {
 		/// The weight to spend each block to execute migrations.
 		type ServiceWeight: Get<Weight>;
 
+		/// Weight information for the calls and functions of this pallet.
 		type WeightInfo: WeightInfo;
 	}
 
@@ -89,41 +93,31 @@ pub mod pallet {
 		/// Runtime upgrade started.
 		UpgradeStarted,
 		/// Runtime upgrade completed with `migrations`.
-		UpgradeCompleted {
-			migrations: u32,
-		},
+		UpgradeCompleted { migrations: u32 },
 		/// Runtime upgrade failed.
 		///
 		/// This is very bad and will require governance intervention.
 		UpgradeFailed,
 		/// Migration `index` was skipped, since it already executed in the past.
-		MigrationSkippedHistoric {
-			index: u32,
-		},
+		MigrationSkippedHistoric { index: u32 },
 		/// Migration `index` made progress.
-		MigrationAdvanced {
-			index: u32,
-		},
+		MigrationAdvanced { index: u32 },
 		/// Migration `index` completed.
-		MigrationCompleted {
-			index: u32,
-		},
+		MigrationCompleted { index: u32 },
 		/// Migration `index` failed.
 		///
 		/// This implies that the whole upgrade failed and governance intervention is required.
-		MigrationFailed {
-			index: u32,
-		},
+		MigrationFailed { index: u32 },
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
 			if Cursor::<T>::exists() {
+				log::error!(target: LOG_TARGET, "Code for ongoing migrations was deleted.");
 				Self::deposit_event(Event::UpgradeFailed);
 				Cursor::<T>::set(Some(MigrationCursor::Stuck));
-				log::error!(target: LOG_TARGET, "Code for ongoing migrations was deleted.");
-				return Default::default() // FAIL-CI
+				return T::WeightInfo::on_runtime_upgrade()
 			}
 
 			if T::Migrations::get().len() > 0 {
@@ -131,7 +125,7 @@ pub mod pallet {
 				Self::deposit_event(Event::UpgradeStarted);
 			}
 
-			Default::default() // FAIL-CI
+			T::WeightInfo::on_runtime_upgrade()
 		}
 
 		fn on_initialize(n: T::BlockNumber) -> Weight {
@@ -139,7 +133,7 @@ pub mod pallet {
 
 			let (mut index, mut cursor) = match Cursor::<T>::get() {
 				None => {
-					log::debug!(target: LOG_TARGET, "[Block {n:?}] Nothing to migrate.");
+					log::debug!(target: LOG_TARGET, "[Block {n:?}] Waiting for cursor to become `Some`.");
 					return meter.consumed
 				},
 				Some(MigrationCursor::Active(index, cursor)) => (index, cursor),
