@@ -24,10 +24,6 @@
 //! Run `cargo doc --package pallet-example-offchain-worker-ping-pong --open` to view this module's
 //! documentation.
 //!
-//! - [`Config`]
-//! - [`Call`]
-//! - [`Pallet`]
-//!
 //! **This pallet serves as an example showcasing Substrate off-chain worker and is not meant to
 //! be used in production.**
 //!
@@ -52,16 +48,18 @@
 //! - `PongAckAuthenticated`: emitted when the call was made by an **authenticated** offchain worker
 //! - `PongAckUnauthenticated`: emitted when the call was made by an **unauthenticated** offchain worker
 //!
-//! The security implications from PongAckUnauthenticated should be obvious: not **ONLY** offchain workers can
-//! call `pong_unsigned_*`. **ANYONE** can do it, and they can actually use a different `nonce`
+//! The security implications from `PongAckUnauthenticated` should be obvious: not **ONLY** offchain workers can
+//! call `pong_unsigned*`. **ANYONE** can do it, and they can actually use a different `nonce`
 //! from the original ping (try it yourself!). If the `nonce` actually had some important meaning
 //! to the state of our chain, this would be a **VULNERABILITY**.
+//!
+//! Also, unsigned transactions can easily become a vector for DoS attacks!
 //!
 //! This is meant to highlight the importance of solid security assumptions when using unsigned transactions.
 //! In other words:
 //!
 //! ⚠️ **DO NOT USE UNSIGNED TRANSACTIONS UNLESS YOU KNOW EXACTLY WHAT YOU ARE DOING!** ⚠️
-
+//!
 //! Here's an example of how a node admin can inject some keys into the keystore, so that the OCW
 //! can call `pong_signed`:
 //!
@@ -455,7 +453,7 @@ pub mod pallet {
 }
 
 /// Payload used by this example crate to hold pong response
-/// data required to submit a transaction.
+/// data required to submit an unsigned transaction.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 pub struct PongPayload<Public, BlockNumber> {
 	block_number: BlockNumber,
