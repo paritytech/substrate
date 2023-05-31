@@ -24,11 +24,17 @@ pub mod error;
 use async_trait::async_trait;
 use futures::{Future, Stream};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use sp_core::offchain::TransactionPoolExt;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member, NumberFor},
 };
-use std::{collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
+use std::{
+	collections::HashMap,
+	hash::Hash,
+	pin::Pin,
+	sync::{Arc, Weak},
+};
 
 const LOG_TARGET: &str = "txpool::api";
 
@@ -329,29 +335,27 @@ pub trait LocalTransactionPool: Send + Sync {
 	/// `TransactionSource::Local`.
 	fn submit_local(
 		&self,
-		at: &BlockId<Self::Block>,
+		at: <Self::Block as BlockT>::Hash,
 		xt: LocalTransactionFor<Self>,
 	) -> Result<Self::Hash, Self::Error>;
 }
 
-/// An abstraction for transaction pool.
+/// An abstraction for [`LocalTransactionPool`]
 ///
-/// This trait is used by offchain calls to be able to submit transactions.
-/// The main use case is for offchain workers, to feed back the results of computations,
-/// but since the transaction pool access is a separate `ExternalitiesExtension` it can
-/// be also used in context of other offchain calls. For one may generate and submit
-/// a transaction for some misbehavior reports (say equivocation).
-pub trait OffchainSubmitTransaction<Block: BlockT>: Send + Sync {
+/// We want to use a transaction pool in [`OffchainTransactionPoolFactory`] in a `Arc` without
+/// bleeding the associated types besides the `Block`. Thus, this abstraction here exists to achieve
+/// the wrapping in a `Arc`.
+trait OffchainSubmitTransaction<Block: BlockT>: Send + Sync {
 	/// Submit transaction.
 	///
 	/// The transaction will end up in the pool and be propagated to others.
-	fn submit_at(&self, at: &BlockId<Block>, extrinsic: Block::Extrinsic) -> Result<(), ()>;
+	fn submit_at(&self, at: Block::Hash, extrinsic: Block::Extrinsic) -> Result<(), ()>;
 }
 
 impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 	fn submit_at(
 		&self,
-		at: &BlockId<TPool::Block>,
+		at: <TPool::Block as BlockT>::Hash,
 		extrinsic: <TPool::Block as BlockT>::Extrinsic,
 	) -> Result<(), ()> {
 		log::debug!(
@@ -369,6 +373,56 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 				e
 			)
 		})
+	}
+}
+
+/// Factory for creating [`TransactionPoolExt`]s.
+///
+/// This provides an easy way for creating [`TransactionPoolExt`] extensions for registering them in
+/// the wasm execution environment to send transactions from an offchain call to the  runtime.
+#[derive(Clone)]
+pub struct OffchainTransactionPoolFactory<Block: BlockT> {
+	// To break retain cycle between `Client` and `TransactionPool` we require this
+	// extension to be a `Weak` reference.
+	pool: Weak<dyn OffchainSubmitTransaction<Block>>,
+}
+
+impl<Block: BlockT> OffchainTransactionPoolFactory<Block> {
+	/// Creates a new instance using the given `tx_pool`.
+	pub fn new<T: LocalTransactionPool<Block = Block> + 'static>(tx_pool: &Arc<T>) -> Self {
+		Self { pool: Arc::downgrade(tx_pool) as Weak<_> }
+	}
+
+	/// Returns an instance of [`TransactionPoolExt`] bound to the given `block_hash`.
+	///
+	/// Transactions that are being submitted by this instance will be submitted with `block_hash`
+	/// as context for validation.
+	pub fn offchain_transaction_pool(&self, block_hash: Block::Hash) -> TransactionPoolExt {
+		TransactionPoolExt::new(OffchainTransactionPool { pool: self.pool.clone(), block_hash })
+	}
+}
+
+/// Wraps a `pool` and `block_hash` to implement [`sp_core::offchain::TransactionPool`].
+struct OffchainTransactionPool<Block: BlockT> {
+	block_hash: Block::Hash,
+	pool: Weak<dyn OffchainSubmitTransaction<Block>>,
+}
+
+impl<Block: BlockT> sp_core::offchain::TransactionPool for OffchainTransactionPool<Block> {
+	fn submit_transaction(&mut self, extrinsic: Vec<u8>) -> Result<(), ()> {
+		let extrinsic = match codec::Decode::decode(&mut &extrinsic[..]) {
+			Ok(t) => t,
+			Err(e) => {
+				log::error!(
+					target: LOG_TARGET,
+					"Failed to decode extrinsic in `OffchainTransactionPool::submit_transaction`: {e:?}"
+				);
+
+				return Err(())
+			},
+		};
+
+		self.pool.upgrade().ok_or(())?.submit_at(self.block_hash, extrinsic)
 	}
 }
 
