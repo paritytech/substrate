@@ -3,7 +3,17 @@
 /// This example does not focus on pallet instancing, `dev_mode`, and does nto include any 'where'
 /// clauses on `T`. These will both incur additional complexity to the syntax, but are not discussed
 /// here.
-// TODO: link to a particular example pallet that highlights each of these. https://github.com/paritytech/substrate/issues/13951
+// TODO: link to a particular example pallet that highlights each of these.
+// https://github.com/paritytech/substrate/issues/13951
+
+// Re-export pallet items so that they can be accessed from the crate namespace.
+pub use pallet::*;
+
+#[cfg(test)]
+mod tests;
+
+mod benchmarking;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -164,10 +174,12 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn set_foo(
 			_: OriginFor<T>,
-			_new_foo: u32,
+			new_foo: u32,
 			#[pallet::compact] _other_compact: u128,
 		) -> DispatchResult {
-			unimplemented!()
+			Foo::<T>::set(Some(new_foo));
+
+			Ok(())
 		}
 	}
 
@@ -242,7 +254,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: _) -> Result<(), &'static str> {
+		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
 			unimplemented!()
 		}
 	}

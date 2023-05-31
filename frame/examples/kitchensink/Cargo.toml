@@ -26,6 +26,8 @@ sp-std = { version = "5.0.0", default-features = false, path = "../../../primiti
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../benchmarking" }
 
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
+
 [dev-dependencies]
 sp-core = { version = "7.0.0", default-features = false, path = "../../../primitives/core" }
 
@@ -44,6 +46,8 @@ std = [
 	"sp-std/std",
 
 	"frame-benchmarking?/std",
+
+	"pallet-balances/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]
