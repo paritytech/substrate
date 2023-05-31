@@ -1,6 +1,6 @@
 [package]
 name = "sp-runtime-interface"
-version = "7.0.0"
+version = "8.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -15,22 +15,22 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 bytes = { version = "1.1.0", default-features = false }
-sp-wasm-interface = { version = "7.0.0", path = "../wasm-interface", default-features = false }
-sp-std = { version = "5.0.0", default-features = false, path = "../std" }
-sp-tracing = { version = "6.0.0", default-features = false, path = "../tracing" }
-sp-runtime-interface-proc-macro = { version = "6.0.0", path = "proc-macro" }
-sp-externalities = { version = "0.13.0", default-features = false, path = "../externalities" }
+sp-wasm-interface = { version = "8.0.0", path = "../wasm-interface", default-features = false }
+sp-std = { version = "6.0.0", default-features = false, path = "../std" }
+sp-tracing = { version = "7.0.0", default-features = false, path = "../tracing" }
+sp-runtime-interface-proc-macro = { version = "7.0.0", path = "proc-macro" }
+sp-externalities = { version = "0.14.0", default-features = false, path = "../externalities" }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["bytes"] }
 static_assertions = "1.0.0"
 primitive-types = { version = "0.12.0", default-features = false }
-sp-storage = { version = "7.0.0", default-features = false, path = "../storage" }
+sp-storage = { version = "8.0.0", default-features = false, path = "../storage" }
 impl-trait-for-tuples = "0.2.2"
 
 [dev-dependencies]
 sp-runtime-interface-test-wasm = { version = "2.0.0", path = "test-wasm" }
-sp-state-machine = { version = "0.13.0", path = "../state-machine" }
-sp-core = { version = "7.0.0", path = "../core" }
-sp-io = { version = "7.0.0", path = "../io" }
+sp-state-machine = { version = "0.14.0", path = "../state-machine" }
+sp-core = { version = "8.0.0", path = "../core" }
+sp-io = { version = "8.0.0", path = "../io" }
 rustversion = "1.0.6"
 trybuild = "1.0.74"
 

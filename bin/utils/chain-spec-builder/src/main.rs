@@ -100,7 +100,7 @@ fn genesis_constructor(
 	nominator_accounts: &[AccountId],
 	endowed_accounts: &[AccountId],
 	sudo_account: &AccountId,
-) -> chain_spec::GenesisConfig {
+) -> chain_spec::RuntimeGenesisConfig {
 	let authorities = authority_seeds
 		.iter()
 		.map(AsRef::as_ref)

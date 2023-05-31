@@ -25,16 +25,16 @@ sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/commo
 sc-consensus-slots = { version = "0.10.0-dev", path = "../slots" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-application-crypto = { version = "7.0.0", path = "../../../primitives/application-crypto" }
+sp-application-crypto = { version = "8.0.0", path = "../../../primitives/application-crypto" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-aura = { version = "0.10.0-dev", path = "../../../primitives/consensus/aura" }
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
-sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-core = { version = "8.0.0", path = "../../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-keystore = { version = "0.13.0", path = "../../../primitives/keystore" }
-sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-keystore = { version = "0.14.0", path = "../../../primitives/keystore" }
+sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 parking_lot = "0.12.1"
@@ -42,8 +42,8 @@ tempfile = "3.1.0"
 sc-keystore = { version = "4.0.0-dev", path = "../../keystore" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
-sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
+sp-keyring = { version = "8.0.0", path = "../../../primitives/keyring" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
-sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
+sp-tracing = { version = "7.0.0", path = "../../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 tokio = { version = "1.22.0" }
