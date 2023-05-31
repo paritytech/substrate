@@ -83,26 +83,6 @@ fn drain_works() {
 	});
 }
 
-#[docify::export]
-#[test]
-fn as_vec_works() {
-	test_closure(|| {
-		PagedList::append_many(0..3);
-		assert_eq!(PagedList::as_vec(), vec![0, 1, 2]);
-		assert_eq!(PagedList::as_vec(), vec![0, 1, 2]);
-	});
-}
-
-#[docify::export]
-#[test]
-fn as_drained_vec_works() {
-	test_closure(|| {
-		PagedList::append_many(0..3);
-		assert_eq!(PagedList::as_drained_vec(), vec![0, 1, 2]);
-		assert!(PagedList::as_drained_vec().is_empty());
-	});
-}
-
 #[test]
 fn iter_independent_works() {
 	test_closure(|| {

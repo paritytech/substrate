@@ -51,9 +51,6 @@
 //! 5. **Draining** elements happens through the [`Pallet::drain`] iterator. Note that even
 //! *peeking* a value will already remove it.
 #![doc = docify::embed!("frame/paged-list/src/tests.rs", drain_works)]
-//! 6. **Testing** convenience functions are provided by `as_vec` and `as_drained_vec`:
-#![doc = docify::embed!("frame/paged-list/src/tests.rs", as_vec_works)]
-#![doc = docify::embed!("frame/paged-list/src/tests.rs", as_drained_vec_works)]
 //!
 //! ## Pallet API
 //!
@@ -133,15 +130,4 @@ impl<T: Config<I>, I: 'static> StorageInstance for ListPrefix<T, I> {
 	}
 
 	const STORAGE_PREFIX: &'static str = "paged_list";
-}
-
-#[cfg(test)]
-impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub(crate) fn as_vec() -> Vec<T::Value> {
-		List::<T, I>::iter().collect::<Vec<_>>()
-	}
-
-	pub(crate) fn as_drained_vec() -> Vec<T::Value> {
-		List::<T, I>::drain().collect::<Vec<_>>()
-	}
 }
