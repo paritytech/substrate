@@ -505,7 +505,7 @@ pub mod pallet {
 		/// thereby delaying any automatic demotion but allowing immediate promotion.
 		///
 		/// - `origin`: A signed origin of a ranked, but not tracked, account.
-		#[pallet::weight(T::WeightInfo::import())]
+		#[pallet::weight(T::WeightInfo::import_member())]
 		#[pallet::call_index(8)]
 		pub fn import_member(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
