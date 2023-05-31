@@ -286,8 +286,9 @@ pub mod pallet {
 		pub fn pong_signed(origin: OriginFor<T>, nonce: u32) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			if Self::is_authority(&who) {
-				Self::deposit_event(Event::PongAckAuthenticated { nonce });
+			match Self::is_authority(&who) {
+				true => Self::deposit_event(Event::PongAckAuthenticated { nonce }),
+				false => return Err(Error::<T>::NotAuthority.into()),
 			}
 
 			Ok(().into())
