@@ -1811,17 +1811,16 @@ pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 	let mut internal_mod = parse_macro_input!(tokens as ItemMod);
 
 	// check that internal_mod is a pallet module
-	if internal_mod
+	if !internal_mod
 		.attrs
 		.iter()
-		.find(|attr| {
+		.any(|attr| {
 			if let Some(last_seg) = attr.path().segments.last() {
 				last_seg.ident == "pallet"
 			} else {
 				false
 			}
 		})
-		.is_none()
 	{
 		return Error::new(
 			internal_mod.ident.span(),
