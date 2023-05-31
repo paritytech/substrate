@@ -89,9 +89,12 @@ pub mod pallet {
 		/// The value type that can be stored in the list.
 		type Value: FullCodec;
 
-		/// The number of values per page.
+		/// The number of values that can be put into newly created pages.
+		///
+		/// Note that this does not retroactively affect already created pages. This value can be
+		/// changed at any time without requiring a runtime migration.
 		#[pallet::constant]
-		type ValuesPerPage: Get<u32>;
+		type ValuesPerNewPage: Get<u32>;
 	}
 
 	/// A storage paged list akin to what the FRAME macros would generate.
@@ -99,7 +102,7 @@ pub mod pallet {
 	pub type List<T, I> = StoragePagedList<
 		ListPrefix<T, I>,
 		<T as Config<I>>::Value,
-		<T as Config<I>>::ValuesPerPage,
+		<T as Config<I>>::ValuesPerNewPage,
 	>;
 }
 

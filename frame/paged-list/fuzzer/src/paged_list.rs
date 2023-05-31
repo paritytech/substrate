@@ -52,7 +52,7 @@ fn drain_append_work(ops: Vec<Op>, page_size: u8) {
 	}
 
 	TestExternalities::default().execute_with(|| {
-		ValuesPerPage::set(&page_size.into());
+		ValuesPerNewPage::set(&page_size.into());
 		let _g = StorageNoopGuard::default();
 		let mut total: i64 = 0;
 
