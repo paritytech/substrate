@@ -22,8 +22,8 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 	error::Error,
 	metrics::MetricsService,
-	start_rpc_servers, BuildGenesisBlock, GenesisBlockBuilder, NetworkBlock, RpcHandlers,
-	SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
+	start_rpc_servers, BuildGenesisBlock, GenesisBlockBuilder, RpcHandlers, SpawnTaskHandle,
+	TaskManager, TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpsee::RpcModule;
@@ -969,12 +969,8 @@ where
 		),
 	);
 
-	let future = build_network_future(
-		network_mut,
-		client,
-		sync_service.clone(),
-		config.announce_block,
-	);
+	let future =
+		build_network_future(network_mut, client, sync_service.clone(), config.announce_block);
 
 	// TODO: Normally, one is supposed to pass a list of notifications protocols supported by the
 	// node through the `NetworkConfiguration` struct. But because this function doesn't know in

@@ -50,7 +50,7 @@ use sp_blockchain::HeaderMetadata;
 use sp_consensus::SyncOracle;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, Header as HeaderT},
 };
 
 pub use self::{
