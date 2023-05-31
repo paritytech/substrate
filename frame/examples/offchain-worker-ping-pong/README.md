@@ -47,7 +47,7 @@ $ curl --location --request POST 'http://localhost:9944' \
 }'
 ```
 
-Then make sure that the corresponding address (`5GCCgshTQCfGkXy6kAkFDW1TZXAdsbCNZJ9Uz2c7ViBnwcVg`) is added to `Authorities` in the runtime by adding it via `add_authority` extrinsic (from `root`).
+Then make sure that the corresponding address (`5GCCgshTQCfGkXy6kAkFDW1TZXAdsbCNZJ9Uz2c7ViBnwcVg`) has funds and is added to `Authorities` in the runtime by adding it via `add_authority` extrinsic (from `root`).
 
 More complex management models and session
 based key rotations should be considered, but that's outside the scope of this example.
