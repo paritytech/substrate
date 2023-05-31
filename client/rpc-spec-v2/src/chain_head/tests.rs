@@ -5,18 +5,19 @@ use assert_matches::assert_matches;
 use codec::{Decode, Encode};
 use futures::Future;
 use jsonrpsee::{
-	core::{error::Error, server::rpc_module::Subscription as RpcSubscription},
-	types::{error::CallError, EmptyServerParams as EmptyParams},
+	core::{
+		error::Error, server::Subscription as RpcSubscription, EmptyServerParams as EmptyParams,
+	},
 	RpcModule,
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::ChildInfo;
+use sc_rpc::testing::test_executor;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
 use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::well_known_keys::{self, CODE},
-	testing::TaskExecutor,
 };
 use sp_version::RuntimeVersion;
 use std::sync::Arc;
@@ -50,6 +51,12 @@ async fn run_with_timeout<F: Future>(future: F) -> <F as Future>::Output {
 		.unwrap()
 }
 
+pub fn init_logger() {
+	let _ = tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init();
+}
+
 async fn setup_api() -> (
 	Arc<Client<Backend>>,
 	RpcModule<ChainHead<Backend, Block, Client<Backend>>>,
@@ -66,16 +73,11 @@ async fn setup_api() -> (
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
-	let mut sub = api.subscribe("chainHead_unstable_follow", [true]).await.unwrap();
+	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [true]).await.unwrap();
 	let sub_id = sub.subscription_id();
 	let sub_id = serde_json::to_string(&sub_id).unwrap();
 
@@ -105,17 +107,12 @@ async fn follow_subscription_produces_blocks() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
-	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 
 	// Initialized must always be reported first.
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -162,17 +159,12 @@ async fn follow_with_runtime() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
-	let mut sub = api.subscribe("chainHead_unstable_follow", [true]).await.unwrap();
+	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [true]).await.unwrap();
 
 	// Initialized must always be reported first.
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -267,14 +259,9 @@ async fn get_genesis() {
 	let backend = builder.backend();
 	let client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	let genesis: String =
 		api.call("chainHead_unstable_genesisHash", EmptyParams::new()).await.unwrap();
@@ -300,7 +287,7 @@ async fn get_header() {
 		.await
 		.unwrap_err();
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+		Error::Call(e) if e.code() == 2001 && e.message() == "Invalid block hash"
 	);
 
 	// Obtain the valid header.
@@ -312,13 +299,15 @@ async fn get_header() {
 
 #[tokio::test]
 async fn get_body() {
+	init_logger();
+
 	let (mut client, api, mut block_sub, sub_id, block) = setup_api().await;
 	let block_hash = format!("{:?}", block.header.hash());
 	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
 
 	// Subscription ID is stale the disjoint event is emitted.
 	let mut sub = api
-		.subscribe("chainHead_unstable_body", ["invalid_sub_id", &invalid_hash])
+		.subscribe_unbounded("chainHead_unstable_body", ["invalid_sub_id", &invalid_hash])
 		.await
 		.unwrap();
 	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
@@ -326,15 +315,18 @@ async fn get_body() {
 
 	// Valid subscription ID with invalid block hash will error.
 	let err = api
-		.subscribe("chainHead_unstable_body", [&sub_id, &invalid_hash])
+		.subscribe_unbounded("chainHead_unstable_body", [&sub_id, &invalid_hash])
 		.await
 		.unwrap_err();
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+		Error::Call(err) if err.code() == 2001 && err.message() == "Invalid block hash"
 	);
 
 	// Obtain valid the body (list of extrinsics).
-	let mut sub = api.subscribe("chainHead_unstable_body", [&sub_id, &block_hash]).await.unwrap();
+	let mut sub = api
+		.subscribe_unbounded("chainHead_unstable_body", [&sub_id, &block_hash])
+		.await
+		.unwrap();
 	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
 	// Block contains no extrinsics.
 	assert_matches!(event,
@@ -364,7 +356,10 @@ async fn get_body() {
 		FollowEvent::BestBlockChanged(_)
 	);
 
-	let mut sub = api.subscribe("chainHead_unstable_body", [&sub_id, &block_hash]).await.unwrap();
+	let mut sub = api
+		.subscribe_unbounded("chainHead_unstable_body", [&sub_id, &block_hash])
+		.await
+		.unwrap();
 	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
 	// Hex encoded scale encoded string for the vector of extrinsics.
 	let expected = format!("0x{:?}", HexDisplay::from(&block.extrinsics.encode()));
@@ -381,7 +376,7 @@ async fn call_runtime() {
 
 	// Subscription ID is stale the disjoint event is emitted.
 	let mut sub = api
-		.subscribe(
+		.subscribe_unbounded(
 			"chainHead_unstable_call",
 			["invalid_sub_id", &block_hash, "BabeApi_current_epoch", "0x00"],
 		)
@@ -392,33 +387,33 @@ async fn call_runtime() {
 
 	// Valid subscription ID with invalid block hash will error.
 	let err = api
-		.subscribe(
+		.subscribe_unbounded(
 			"chainHead_unstable_call",
 			[&sub_id, &invalid_hash, "BabeApi_current_epoch", "0x00"],
 		)
 		.await
 		.unwrap_err();
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+		Error::Call(err) if err.code() == 2001 && err.message() == "Invalid block hash"
 	);
 
 	// Pass an invalid parameters that cannot be decode.
 	let err = api
-		.subscribe(
+		.subscribe_unbounded(
 			"chainHead_unstable_call",
 			[&sub_id, &block_hash, "BabeApi_current_epoch", "0x0"],
 		)
 		.await
 		.unwrap_err();
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2003 && err.message().contains("Invalid parameter")
+		Error::Call(err) if err.code() == 2003 && err.message().contains("Invalid parameter")
 	);
 
 	let alice_id = AccountKeyring::Alice.to_account_id();
 	// Hex encoded scale encoded bytes representing the call parameters.
 	let call_parameters = format!("0x{:?}", HexDisplay::from(&alice_id.encode()));
 	let mut sub = api
-		.subscribe(
+		.subscribe_unbounded(
 			"chainHead_unstable_call",
 			[&sub_id, &block_hash, "AccountNonceApi_account_nonce", &call_parameters],
 		)
@@ -433,7 +428,7 @@ async fn call_runtime() {
 	// The `current_epoch` takes no parameters and not draining the input buffer
 	// will cause the execution to fail.
 	let mut sub = api
-		.subscribe(
+		.subscribe_unbounded(
 			"chainHead_unstable_call",
 			[&sub_id, &block_hash, "BabeApi_current_epoch", "0x00"],
 		)
@@ -451,16 +446,11 @@ async fn call_runtime_without_flag() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
-	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 	let sub_id = sub.subscription_id();
 	let sub_id = serde_json::to_string(&sub_id).unwrap();
 
@@ -486,7 +476,7 @@ async fn call_runtime_without_flag() {
 	let alice_id = AccountKeyring::Alice.to_account_id();
 	let call_parameters = format!("0x{:?}", HexDisplay::from(&alice_id.encode()));
 	let err = api
-		.subscribe(
+		.subscribe_unbounded(
 			"chainHead_unstable_call",
 			[&sub_id, &block_hash, "AccountNonceApi_account_nonce", &call_parameters],
 		)
@@ -494,7 +484,7 @@ async fn call_runtime_without_flag() {
 		.unwrap_err();
 
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2003 && err.message().contains("The runtime updates flag must be set")
+		Error::Call(err) if err.code() == 2003 && err.message().contains("The runtime updates flag must be set")
 	);
 }
 
@@ -507,7 +497,7 @@ async fn get_storage() {
 
 	// Subscription ID is stale the disjoint event is emitted.
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", ["invalid_sub_id", &invalid_hash, &key])
+		.subscribe_unbounded("chainHead_unstable_storage", ["invalid_sub_id", &invalid_hash, &key])
 		.await
 		.unwrap();
 	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
@@ -515,16 +505,16 @@ async fn get_storage() {
 
 	// Valid subscription ID with invalid block hash will error.
 	let err = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &invalid_hash, &key])
+		.subscribe_unbounded("chainHead_unstable_storage", [&sub_id, &invalid_hash, &key])
 		.await
 		.unwrap_err();
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+		Error::Call(err) if err.code() == 2001 && err.message() == "Invalid block hash"
 	);
 
 	// Valid call without storage at the key.
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &key])
+		.subscribe_unbounded("chainHead_unstable_storage", [&sub_id, &block_hash, &key])
 		.await
 		.unwrap();
 	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
@@ -550,7 +540,7 @@ async fn get_storage() {
 	// Valid call with storage at the key.
 	let expected_value = Some(format!("0x{:?}", HexDisplay::from(&VALUE)));
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &key])
+		.subscribe_unbounded("chainHead_unstable_storage", [&sub_id, &block_hash, &key])
 		.await
 		.unwrap();
 	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
@@ -561,7 +551,10 @@ async fn get_storage() {
 	let genesis_hash = format!("{:?}", client.genesis_hash());
 	let expected_value = Some(format!("0x{:?}", HexDisplay::from(&CHILD_VALUE)));
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &genesis_hash, &key, &child_info])
+		.subscribe_unbounded(
+			"chainHead_unstable_storage",
+			[&sub_id, &genesis_hash, &key, &child_info],
+		)
 		.await
 		.unwrap();
 	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
@@ -579,7 +572,7 @@ async fn get_storage_wrong_key() {
 	prefixed_key.extend_from_slice(&KEY);
 	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &prefixed_key])
+		.subscribe_unbounded("chainHead_unstable_storage", [&sub_id, &block_hash, &prefixed_key])
 		.await
 		.unwrap();
 	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
@@ -590,7 +583,7 @@ async fn get_storage_wrong_key() {
 	prefixed_key.extend_from_slice(&KEY);
 	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &prefixed_key])
+		.subscribe_unbounded("chainHead_unstable_storage", [&sub_id, &block_hash, &prefixed_key])
 		.await
 		.unwrap();
 	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
@@ -601,7 +594,10 @@ async fn get_storage_wrong_key() {
 	prefixed_key.extend_from_slice(b"child");
 	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &key, &prefixed_key])
+		.subscribe_unbounded(
+			"chainHead_unstable_storage",
+			[&sub_id, &block_hash, &key, &prefixed_key],
+		)
 		.await
 		.unwrap();
 	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
@@ -612,7 +608,10 @@ async fn get_storage_wrong_key() {
 	prefixed_key.extend_from_slice(b"child");
 	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &key, &prefixed_key])
+		.subscribe_unbounded(
+			"chainHead_unstable_storage",
+			[&sub_id, &block_hash, &key, &prefixed_key],
+		)
 		.await
 		.unwrap();
 	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
@@ -625,14 +624,9 @@ async fn follow_generates_initial_blocks() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
 
@@ -663,7 +657,7 @@ async fn follow_generates_initial_blocks() {
 	let block_3_hash = block_3.header.hash();
 	client.import(BlockOrigin::Own, block_3.clone()).await.unwrap();
 
-	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 
 	// Initialized must always be reported first.
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -752,16 +746,9 @@ async fn follow_exceeding_pinned_blocks() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		2,
-	)
-	.into_rpc();
+	let api = ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, 2).into_rpc();
 
-	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
@@ -802,16 +789,9 @@ async fn follow_with_unpin() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		2,
-	)
-	.into_rpc();
+	let api = ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, 2).into_rpc();
 
-	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 	let sub_id = sub.subscription_id();
 	let sub_id = serde_json::to_string(&sub_id).unwrap();
 
@@ -847,7 +827,7 @@ async fn follow_with_unpin() {
 		.await
 		.unwrap_err();
 	assert_matches!(err,
-		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+		Error::Call(err) if err.code() == 2001 && err.message() == "Invalid block hash"
 	);
 
 	// To not exceed the number of pinned blocks, we need to unpin before the next import.
@@ -882,17 +862,12 @@ async fn follow_prune_best_block() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
-	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 
 	// Initialized must always be reported first.
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -1038,14 +1013,9 @@ async fn follow_forks_pruned_block() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	// Block tree before the subscription:
 	//
@@ -1096,7 +1066,7 @@ async fn follow_forks_pruned_block() {
 	// Block 4 and 5 are not pruned, pruning happens at height (N - 1).
 	client.finalize_block(block_3_hash, None).unwrap();
 
-	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 
 	// Initialized must always be reported first.
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -1151,14 +1121,9 @@ async fn follow_report_multiple_pruned_block() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api = ChainHead::new(
-		client.clone(),
-		backend,
-		Arc::new(TaskExecutor::default()),
-		CHAIN_GENESIS,
-		MAX_PINNED_BLOCKS,
-	)
-	.into_rpc();
+	let api =
+		ChainHead::new(client.clone(), backend, test_executor(), CHAIN_GENESIS, MAX_PINNED_BLOCKS)
+			.into_rpc();
 
 	// Block tree:
 	//
@@ -1210,7 +1175,7 @@ async fn follow_report_multiple_pruned_block() {
 	let block_5 = block_builder.build().unwrap().block;
 	let block_5_hash = block_5.header.hash();
 	client.import(BlockOrigin::Own, block_5.clone()).await.unwrap();
-	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 
 	// Initialized must always be reported first.
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -1338,7 +1303,7 @@ async fn follow_finalized_before_new_block() {
 	let api = ChainHead::new(
 		client_mock.clone(),
 		backend,
-		Arc::new(TaskExecutor::default()),
+		test_executor(),
 		CHAIN_GENESIS,
 		MAX_PINNED_BLOCKS,
 	)
@@ -1349,7 +1314,7 @@ async fn follow_finalized_before_new_block() {
 	let block_1_hash = block_1.header.hash();
 	client.import(BlockOrigin::Own, block_1.clone()).await.unwrap();
 
-	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+	let mut sub = api.subscribe_unbounded("chainHead_unstable_follow", [false]).await.unwrap();
 
 	// Trigger the `FinalizedNotification` for block 1 before the `BlockImportNotification`, and
 	// expect for the `chainHead` to generate `NewBlock`, `BestBlock` and `Finalized` events.

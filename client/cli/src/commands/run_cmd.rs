@@ -138,6 +138,17 @@ pub struct RunCmd {
 	#[arg(long, value_name = "ORIGINS", value_parser = parse_cors)]
 	pub rpc_cors: Option<Cors>,
 
+	/// The number of messages the RPC server is allowed to keep in memory.
+	///
+	/// If the buffer becomes full then the server will not process
+	/// new messages until the connected client start reading the
+	/// underlying messages.
+	///
+	/// This applies per connection which includes both
+	/// JSON-RPC methods calls and subscriptions.
+	#[arg(long, default_value_t = 16)]
+	pub rpc_message_buffer_capacity_per_connection: u32,
+
 	/// The human-readable name for this node.
 	/// It's used as network node name.
 	#[arg(long, value_name = "NAME")]
@@ -417,6 +428,10 @@ impl CliConfiguration for RunCmd {
 
 	fn ws_max_out_buffer_capacity(&self) -> Result<Option<usize>> {
 		Ok(self.ws_max_out_buffer_capacity)
+	}
+
+	fn rpc_buffer_capacity_per_connection(&self) -> Result<u32> {
+		Ok(self.rpc_message_buffer_capacity_per_connection)
 	}
 
 	fn transaction_pool(&self, is_dev: bool) -> Result<TransactionPoolOptions> {

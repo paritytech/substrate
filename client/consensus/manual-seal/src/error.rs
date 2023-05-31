@@ -20,10 +20,7 @@
 //! This is suitable for a testing environment.
 
 use futures::channel::{mpsc::SendError, oneshot};
-use jsonrpsee::{
-	core::Error as JsonRpseeError,
-	types::error::{CallError, ErrorObject},
-};
+use jsonrpsee::types::error::{ErrorObject, ErrorObjectOwned};
 use sc_consensus::ImportResult;
 use sp_blockchain::Error as BlockchainError;
 use sp_consensus::Error as ConsensusError;
@@ -106,8 +103,8 @@ impl Error {
 	}
 }
 
-impl From<Error> for JsonRpseeError {
+impl From<Error> for ErrorObjectOwned {
 	fn from(err: Error) -> Self {
-		CallError::Custom(ErrorObject::owned(err.to_code(), err.to_string(), None::<()>)).into()
+		ErrorObject::owned(err.to_code(), err.to_string(), None::<()>)
 	}
 }

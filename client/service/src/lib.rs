@@ -37,7 +37,7 @@ mod task_manager;
 use std::{collections::HashMap, net::SocketAddr};
 
 use codec::{Decode, Encode};
-use futures::{channel::mpsc, pin_mut, FutureExt, StreamExt};
+use futures::{pin_mut, FutureExt, StreamExt};
 use jsonrpsee::{core::Error as JsonRpseeError, RpcModule};
 use log::{debug, error, warn};
 use sc_client_api::{blockchain::HeaderBackend, BlockBackend, BlockchainEvents, ProofProvider};
@@ -111,9 +111,9 @@ impl RpcHandlers {
 	pub async fn rpc_query(
 		&self,
 		json_query: &str,
-	) -> Result<(String, mpsc::UnboundedReceiver<String>), JsonRpseeError> {
+	) -> Result<(String, tokio::sync::mpsc::Receiver<String>), JsonRpseeError> {
 		self.0
-			.raw_json_request(json_query)
+			.raw_json_request(json_query, usize::MAX)
 			.await
 			.map(|(method_res, recv)| (method_res.result, recv))
 	}
@@ -425,6 +425,7 @@ where
 		gen_rpc_module(deny_unsafe(ws_addr, &config.rpc_methods))?,
 		config.tokio_handle.clone(),
 		rpc_id_provider,
+		config.rpc_message_buffer_capacity,
 	);
 
 	match tokio::task::block_in_place(|| {

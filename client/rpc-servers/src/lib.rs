@@ -21,10 +21,7 @@
 #![warn(missing_docs)]
 
 use jsonrpsee::{
-	server::{
-		middleware::proxy_get_request::ProxyGetRequestLayer, AllowHosts, ServerBuilder,
-		ServerHandle,
-	},
+	server::{middleware::proxy_get_request::ProxyGetRequestLayer, AllowHosts},
 	RpcModule,
 };
 use std::{error::Error as StdError, net::SocketAddr};
@@ -51,7 +48,7 @@ const WS_MAX_SUBS_PER_CONN: usize = 1024;
 pub mod middleware;
 
 /// Type alias JSON-RPC server
-pub type Server = ServerHandle;
+pub type Server = jsonrpsee::server::ServerHandle;
 
 /// Server config.
 #[derive(Debug, Clone)]
@@ -89,7 +86,7 @@ pub async fn start_http<M: Send + Sync + 'static>(
 	metrics: Option<RpcMetrics>,
 	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
-) -> Result<ServerHandle, Box<dyn StdError + Send + Sync>> {
+) -> Result<Server, Box<dyn StdError + Send + Sync>> {
 	let max_payload_in = payload_size_or_default(max_payload_in_mb) as u32;
 	let max_payload_out = payload_size_or_default(max_payload_out_mb) as u32;
 	let host_filter = hosts_filter(cors.is_some(), &addrs);
@@ -99,7 +96,7 @@ pub async fn start_http<M: Send + Sync + 'static>(
 		.layer(ProxyGetRequestLayer::new("/health", "system_health")?)
 		.layer(try_into_cors(cors)?);
 
-	let builder = ServerBuilder::new()
+	let builder = jsonrpsee::server::Server::builder()
 		.max_request_body_size(max_payload_in)
 		.max_response_body_size(max_payload_out)
 		.set_host_filtering(host_filter)
@@ -111,11 +108,11 @@ pub async fn start_http<M: Send + Sync + 'static>(
 	let (handle, addr) = if let Some(metrics) = metrics {
 		let server = builder.set_logger(metrics).build(&addrs[..]).await?;
 		let addr = server.local_addr();
-		(server.start(rpc_api)?, addr)
+		(server.start(rpc_api), addr)
 	} else {
 		let server = builder.build(&addrs[..]).await?;
 		let addr = server.local_addr();
-		(server.start(rpc_api)?, addr)
+		(server.start(rpc_api), addr)
 	};
 
 	log::info!(
@@ -136,7 +133,8 @@ pub async fn start<M: Send + Sync + 'static>(
 	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
 	id_provider: Option<Box<dyn IdProvider>>,
-) -> Result<ServerHandle, Box<dyn StdError + Send + Sync>> {
+	message_buffer_capacity: u32,
+) -> Result<Server, Box<dyn StdError + Send + Sync>> {
 	let (max_payload_in, max_payload_out, max_connections, max_subs_per_conn) =
 		ws_config.deconstruct();
 
@@ -147,7 +145,7 @@ pub async fn start<M: Send + Sync + 'static>(
 		.layer(ProxyGetRequestLayer::new("/health", "system_health")?)
 		.layer(try_into_cors(cors)?);
 
-	let mut builder = ServerBuilder::new()
+	let mut builder = jsonrpsee::server::Server::builder()
 		.max_request_body_size(max_payload_in)
 		.max_response_body_size(max_payload_out)
 		.max_connections(max_connections)
@@ -155,7 +153,8 @@ pub async fn start<M: Send + Sync + 'static>(
 		.ping_interval(std::time::Duration::from_secs(30))
 		.set_host_filtering(host_filter)
 		.set_middleware(middleware)
-		.custom_tokio_runtime(rt);
+		.custom_tokio_runtime(rt)
+		.set_message_buffer_capacity(message_buffer_capacity);
 
 	if let Some(provider) = id_provider {
 		builder = builder.set_id_provider(provider);
@@ -167,11 +166,11 @@ pub async fn start<M: Send + Sync + 'static>(
 	let (handle, addr) = if let Some(metrics) = metrics {
 		let server = builder.set_logger(metrics).build(&addrs[..]).await?;
 		let addr = server.local_addr();
-		(server.start(rpc_api)?, addr)
+		(server.start(rpc_api), addr)
 	} else {
 		let server = builder.build(&addrs[..]).await?;
 		let addr = server.local_addr();
-		(server.start(rpc_api)?, addr)
+		(server.start(rpc_api), addr)
 	};
 
 	log::info!(
@@ -189,9 +188,9 @@ fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModu
 
 	rpc_api
 		.register_method("rpc_methods", move |_, _| {
-			Ok(serde_json::json!({
+			serde_json::json!({
 				"methods": available_methods,
-			}))
+			})
 		})
 		.expect("infallible all other methods have their own address space; qed");
 

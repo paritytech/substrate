@@ -16,53 +16,36 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! State RPC errors.
+//! Statement RPC errors.
 
 use jsonrpsee::types::error::{ErrorObject, ErrorObjectOwned};
 
-/// State RPC Result type.
+/// Statement RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// State RPC errors.
+/// Statement RPC errors.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-	/// Client error.
-	#[error("Client error: {}", .0)]
-	Client(#[from] Box<dyn std::error::Error + Send + Sync>),
-	/// Provided block range couldn't be resolved to a list of blocks.
-	#[error("Cannot resolve a block range ['{:?}' ... '{:?}]. {}", .from, .to, .details)]
-	InvalidBlockRange {
-		/// Beginning of the block range.
-		from: String,
-		/// End of the block range.
-		to: String,
-		/// Details of the error message.
-		details: String,
-	},
-	/// Provided count exceeds maximum value.
-	#[error("count exceeds maximum value. value: {}, max: {}", .value, .max)]
-	InvalidCount {
-		/// Provided value
-		value: u32,
-		/// Maximum allowed value
-		max: u32,
-	},
+	/// Statement store internal error.
+	#[error("Statement store error")]
+	StatementStore(String),
 	/// Call to an unsafe RPC was denied.
 	#[error(transparent)]
 	UnsafeRpcCalled(#[from] crate::policy::UnsafeRpcError),
 }
 
-/// Base code for all state errors.
-const BASE_ERROR: i32 = 4000;
+/// Base error code for all statement errors.
+const BASE_ERROR: i32 = 6000;
 
 impl From<Error> for ErrorObjectOwned {
-	fn from(e: Error) -> ErrorObjectOwned {
+	fn from(e: Error) -> Self {
 		match e {
-			Error::InvalidBlockRange { .. } =>
-				ErrorObject::owned(BASE_ERROR + 1, e.to_string(), None::<()>),
-			Error::InvalidCount { .. } =>
-				ErrorObject::owned(BASE_ERROR + 2, e.to_string(), None::<()>),
-			e => ErrorObject::owned(BASE_ERROR + 3, e.to_string(), None::<()>),
+			Error::StatementStore(message) => ErrorObject::owned(
+				BASE_ERROR + 1,
+				format!("Statement store error: {message}"),
+				None::<()>,
+			),
+			Error::UnsafeRpcCalled(e) => e.into(),
 		}
 	}
 }

@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.2.2" }
-jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"] }
+jsonrpsee = { version = "0.18.2", features = ["client-core", "server", "macros"] }
 futures = "0.3.21"
 log = "0.4.17"
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../../frame/system/rpc/runtime-api" }
@@ -25,6 +25,7 @@ sp-block-builder = { version = "4.0.0-dev", path = "../../../../primitives/block
 sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
 sp-core = { version = "7.0.0", path = "../../../../primitives/core" }
 sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
+thiserror = "1.0.40"
 
 [dev-dependencies]
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../../client/transaction-pool" }

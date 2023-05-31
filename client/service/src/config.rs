@@ -111,6 +111,8 @@ pub struct Configuration {
 	pub rpc_max_subs_per_conn: Option<usize>,
 	/// Maximum size of the output buffer capacity for websocket connections.
 	pub ws_max_out_buffer_capacity: Option<usize>,
+	/// The number of messages the JSON-RPC server is allowed to keep in memory.
+	pub rpc_message_buffer_capacity: u32,
 	/// Prometheus endpoint configuration. `None` if disabled.
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.

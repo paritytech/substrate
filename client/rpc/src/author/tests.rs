@@ -22,8 +22,7 @@ use crate::testing::{test_executor, timeout_secs};
 use assert_matches::assert_matches;
 use codec::Encode;
 use jsonrpsee::{
-	core::Error as RpcError,
-	types::{error::CallError, EmptyServerParams as EmptyParams},
+	core::{EmptyServerParams as EmptyParams, Error as RpcError},
 	RpcModule,
 };
 use sc_transaction_pool::{BasicPool, FullChainApi};
@@ -104,7 +103,7 @@ async fn author_submit_transaction_should_not_cause_error() {
 
 	assert_matches!(
 		api.call::<_, H256>("author_submitExtrinsic", [xt]).await,
-		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("Already Imported") && err.code() == 1013
+		Err(RpcError::Call(err)) if err.message().contains("Already Imported") && err.code() == 1013
 	);
 }
 
@@ -113,7 +112,7 @@ async fn author_should_watch_extrinsic() {
 	let api = TestSetup::into_rpc();
 	let xt = to_hex(&uxt(AccountKeyring::Alice, 0).encode(), true);
 
-	let mut sub = api.subscribe("author_submitAndWatchExtrinsic", [xt]).await.unwrap();
+	let mut sub = api.subscribe_unbounded("author_submitAndWatchExtrinsic", [xt]).await.unwrap();
 	let (tx, sub_id) = timeout_secs(10, sub.next::<TransactionStatus<H256, Block>>())
 		.await
 		.unwrap()
@@ -154,12 +153,12 @@ async fn author_should_return_watch_validation_error() {
 
 	let api = TestSetup::into_rpc();
 	let failed_sub = api
-		.subscribe(METHOD, [to_hex(&uxt(AccountKeyring::Alice, 179).encode(), true)])
+		.subscribe_unbounded(METHOD, [to_hex(&uxt(AccountKeyring::Alice, 179).encode(), true)])
 		.await;
 
 	assert_matches!(
 		failed_sub,
-		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("Invalid Transaction") && err.code() == 1010
+		Err(RpcError::Call(err)) if err.message().contains("Invalid Transaction") && err.code() == 1010
 	);
 }
 
@@ -275,7 +274,7 @@ async fn author_has_session_keys() {
 
 	assert_matches!(
 		api.call::<_, bool>("author_hasSessionKeys", vec![Bytes::from(vec![1, 2, 3])]).await,
-		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("Session keys are not encoded correctly")
+		Err(RpcError::Call(err)) if err.message().contains("Session keys are not encoded correctly")
 	);
 }
 

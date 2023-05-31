@@ -370,6 +370,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(None)
 	}
 
+	/// The number of messages the RPC server is allowed to keep in memory per connection.
+	fn rpc_buffer_capacity_per_connection(&self) -> Result<u32> {
+		Ok(16)
+	}
+
 	/// Get the prometheus configuration (`None` if disabled)
 	///
 	/// By default this is `None`.
@@ -544,6 +549,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_id_provider: None,
 			rpc_max_subs_per_conn: self.rpc_max_subscriptions_per_connection()?,
 			ws_max_out_buffer_capacity: self.ws_max_out_buffer_capacity()?,
+			rpc_message_buffer_capacity: self.rpc_buffer_capacity_per_connection()?,
 			prometheus_config: self
 				.prometheus_config(DCV::prometheus_listen_port(), &chain_spec)?,
 			telemetry_endpoints,

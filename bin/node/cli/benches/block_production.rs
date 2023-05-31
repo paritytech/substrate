@@ -96,6 +96,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		rpc_id_provider: None,
 		rpc_max_subs_per_conn: None,
 		ws_max_out_buffer_capacity: None,
+		rpc_message_buffer_capacity: Default::default(),
 		prometheus_config: None,
 		telemetry_endpoints: None,
 		default_heap_pages: None,

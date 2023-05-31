@@ -31,17 +31,18 @@ use futures::{
 	stream::{self, Stream, StreamExt},
 };
 use futures_util::future::Either;
-use jsonrpsee::SubscriptionSink;
+use jsonrpsee::{SendTimeoutError, SubscriptionSink};
 use log::{debug, error};
 use sc_client_api::{
 	Backend, BlockBackend, BlockImportNotification, BlockchainEvents, FinalityNotification,
 };
+use sc_rpc::utils::SubscriptionResponse;
 use sp_api::CallApiAt;
 use sp_blockchain::{
 	Backend as BlockChainBackend, Error as BlockChainError, HeaderBackend, HeaderMetadata, Info,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 /// Generates the events of the `chainHead_follow` method.
 pub struct ChainHeadFollower<BE, Block: BlockT, Client> {
@@ -500,9 +501,10 @@ where
 		startup_point: &StartupPoint<Block>,
 		mut stream: EventStream,
 		mut to_ignore: HashSet<Block::Hash>,
-		mut sink: SubscriptionSink,
+		sink: SubscriptionSink,
 		rx_stop: oneshot::Receiver<()>,
-	) where
+	) -> SubscriptionResponse<FollowEvent<Block::Hash>>
+	where
 		EventStream: Stream<Item = NotificationType<Block>> + Unpin,
 	{
 		let mut stream_item = stream.next();
@@ -528,50 +530,36 @@ where
 						self.sub_id,
 						err
 					);
-					let _ = sink.send(&FollowEvent::<String>::Stop);
-					return
+					return SubscriptionResponse::Event(FollowEvent::Stop)
 				},
 			};
 
 			for event in events {
-				let result = sink.send(&event);
-
-				// Migration note: the new version of jsonrpsee returns Result<(), DisconnectError>
-				// The logic from `Err(err)` should be moved when building the new
-				// `SubscriptionMessage`.
-
-				// For now, jsonrpsee returns:
-				// Ok(true): message sent
-				// Ok(false): client disconnected or subscription closed
-				// Err(err): serder serialization error of the event
-				if let Err(err) = result {
-					// Failed to submit event.
-					debug!(
-						target: LOG_TARGET,
-						"[follow][id={:?}] Failed to send event {:?}", self.sub_id, err
-					);
-
-					let _ = sink.send(&FollowEvent::<String>::Stop);
-					return
-				}
-
-				if let Ok(false) = result {
-					// Client disconnected or subscription was closed.
-					return
-				}
+				match sink
+					.send_timeout(sc_rpc::utils::to_sub_message(&event), Duration::from_secs(60))
+					.await
+				{
+					Ok(_) => (),
+					Err(SendTimeoutError::Closed(_)) => return SubscriptionResponse::Closed,
+					Err(SendTimeoutError::Timeout(_)) =>
+						return SubscriptionResponse::Event(FollowEvent::Stop),
+				};
 			}
 
 			stream_item = stream.next();
 			stop_event = next_stop_event;
 		}
+		// If we got here either the substrate streams have closed
+		// or the `Stop` receiver was triggered.
+		SubscriptionResponse::Event(FollowEvent::Stop)
 	}
 
 	/// Generate the block events for the `chainHead_follow` method.
 	pub async fn generate_events(
 		&mut self,
-		mut sink: SubscriptionSink,
+		sink: SubscriptionSink,
 		rx_stop: oneshot::Receiver<()>,
-	) {
+	) -> SubscriptionResponse<FollowEvent<Block::Hash>> {
 		// Register for the new block and finalized notifications.
 		let stream_import = self
 			.client
@@ -593,8 +581,7 @@ where
 					self.sub_id,
 					err
 				);
-				let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
-				return
+				return SubscriptionResponse::Event(FollowEvent::Stop)
 			},
 		};
 
@@ -603,6 +590,6 @@ where
 		let stream = stream::once(futures::future::ready(initial)).chain(merged);
 
 		self.submit_events(&startup_point, stream.boxed(), pruned_forks, sink, rx_stop)
-			.await;
+			.await
 	}
 }
