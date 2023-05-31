@@ -115,7 +115,7 @@ parameter_types! {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type AuthorityId = crypto::TestAuthId;
-	type UnsignedInterval = ConstU64<128>;
+	type UnsignedInterval = ConstU64<16>;
 	type UnsignedPriority = UnsignedPriority;
 	type MaxPings = ConstU32<64>;
 	type MaxAuthorities = ConstU32<64>;
