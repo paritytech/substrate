@@ -719,12 +719,23 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub enum Phase {
-	/// Applying an extrinsic.
+	/// Applying an extrinsic at the given index of the current block.
 	ApplyExtrinsic(u32),
 	/// Finalizing the block.
+	///
+	/// This is mandatory phase in the execution of a block.
 	Finalization,
 	/// Initializing the block.
+	///
+	/// This is mandatory phase in the execution of a block.
 	Initialization,
+	/// Polling is happening.
+	///
+	/// Individual pallets and sub-systems might be polled to perform some work, but the amount of
+	/// weight allocated to them is not guaranteed.
+	///
+	/// This is subsequent phase of [`Phase::Initialization`] that may or may not run.
+	Polling,
 }
 
 impl Default for Phase {
@@ -1321,11 +1332,12 @@ impl<T: Config> Pallet<T> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
 	}
 
-	/// Gets extrinsics count.
+	/// Gets the count of all extrinsics.
 	pub fn extrinsic_count() -> u32 {
 		ExtrinsicCount::<T>::get().unwrap_or_default()
 	}
 
+	/// Get the the length of all extrinsics.
 	pub fn all_extrinsics_len() -> u32 {
 		AllExtrinsicsLen::<T>::get().unwrap_or_default()
 	}
@@ -1627,10 +1639,16 @@ impl<T: Config> Pallet<T> {
 		ExecutionPhase::<T>::put(Phase::Finalization);
 	}
 
+	/// To be called immediately after finishing the polling of the block
+	/// (e.g., called `poll` for all pallets).
+	pub fn note_finished_polling() {
+		ExecutionPhase::<T>::put(Phase::ApplyExtrinsic(0))
+	}
+
 	/// To be called immediately after finishing the initialization of the block
 	/// (e.g., called `on_initialize` for all pallets).
 	pub fn note_finished_initialize() {
-		ExecutionPhase::<T>::put(Phase::ApplyExtrinsic(0))
+		ExecutionPhase::<T>::put(Phase::Polling)
 	}
 
 	/// An account is being created.
