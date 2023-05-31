@@ -61,8 +61,25 @@
 //! In other words:
 //!
 //! ⚠️ **DO NOT USE UNSIGNED TRANSACTIONS UNLESS YOU KNOW EXACTLY WHAT YOU ARE DOING!** ⚠️
+
+//! Here's an example of how a node admin can inject some keys into the keystore, so that the OCW
+//! can call `pong_signed`:
 //!
-//! For `pong_signed`, more complex management models and session
+//! ```bash
+//! $ curl --location --request POST 'http://localhost:9933' \
+//! --header 'Content-Type: application/json' \
+//! --data-raw '{
+//!     "jsonrpc": "2.0",
+//!     "method": "author_insertKey",
+//!    "params": ["pong","bread tongue spell stadium clean grief coin rent spend total practice document","0xb6a8b4b6bf796991065035093d3265e314c3fe89e75ccb623985e57b0c2e0c30"],
+//!     "id": 1
+//! }'
+//! ```
+//!
+//! Another alternative for the node admin is to use the key insert subcommand on the node's executable,
+//! which will write the keys into disk, and will persist in case the node is restarted (`author_insertKey` will not).
+//!
+//! More complex management models and session
 //! based key rotations should be considered, but that's outside the scope of this example.
 //!
 //! The logic around block numbers only helps create different conditions to trigger the different
