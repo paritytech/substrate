@@ -288,7 +288,8 @@ pub mod pallet {
 				false => return Err(Error::<T>::NotAuthority.into()),
 			}
 
-			Ok(().into())
+			// Authorized OCWs don't need to pay fees
+			Ok(Pays::No.into())
 		}
 
 		#[pallet::call_index(2)]
