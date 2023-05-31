@@ -365,9 +365,9 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Event generated when new ping is received.
 		Ping { nonce: u32 },
-		/// Event generated when new pong_authenticated transaction is accepted.
+		/// Event generated when new pong_signed transaction is accepted.
 		PongAckAuthenticated { nonce: u32 },
-		/// Event generated when new pong_unauthenticated transaction is accepted.
+		/// Event generated when new pong_unsigned* transaction is accepted.
 		PongAckUnauthenticated { nonce: u32 },
 	}
 
