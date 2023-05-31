@@ -1,8 +1,7 @@
 <!-- markdown-link-check-disable -->
 # Ping-Pong Offchain Worker Example Pallet
 
-The Ping-Pong Offchain Worker Example: A simple pallet demonstrating
-concepts, APIs and structures common to most offchain workers.
+A simple pallet demonstrating concepts, APIs and structures common to most offchain workers.
 
 Run `cargo doc --package pallet-example-offchain-worker-ping-pong --open` to view this module's
 documentation.

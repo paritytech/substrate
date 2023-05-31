@@ -1,8 +1,7 @@
 <!-- markdown-link-check-disable -->
 # Price Oracle Offchain Worker Example Pallet
 
-The Price Oracle Offchain Worker Example: A simple pallet demonstrating
-concepts, APIs and structures common to most offchain workers.
+A simple pallet demonstrating concepts, APIs and structures common to most offchain workers.
 
 Run `cargo doc --package pallet-example-offchain-worker-price-oracle --open` to view this module's
 documentation.
