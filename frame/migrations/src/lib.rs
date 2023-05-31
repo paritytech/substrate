@@ -92,8 +92,10 @@ pub mod pallet {
 		UpgradeCompleted {
 			migrations: u32,
 		},
+		/// Runtime upgrade failed.
+		///
+		/// This is very bad and will require governance intervention.
 		UpgradeFailed,
-
 		/// Migration `index` was skipped, since it already executed in the past.
 		MigrationSkippedHistoric {
 			index: u32,
@@ -118,7 +120,9 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
 			if Cursor::<T>::exists() {
-				log::error!(target: LOG_TARGET, "Defensive: migrations in progress will be aborted.");
+				Self::deposit_event(Event::UpgradeFailed);
+				Cursor::<T>::set(Some(MigrationCursor::Stuck));
+				log::error!(target: LOG_TARGET, "Code for ongoing migrations was deleted.");
 				return Default::default() // FAIL-CI
 			}
 
