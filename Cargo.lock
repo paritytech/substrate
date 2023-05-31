@@ -2712,6 +2712,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "k256",
  "log",
+ "macro_magic",
  "once_cell",
  "parity-scale-codec",
  "paste",
@@ -2745,6 +2746,7 @@ dependencies = [
  "derive-syn-parse",
  "frame-support-procedural-tools",
  "itertools",
+ "macro_magic",
  "proc-macro-warning",
  "proc-macro2",
  "quote",
@@ -2793,6 +2795,7 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "sp-version",
+ "static_assertions",
  "trybuild",
 ]
 
@@ -4767,6 +4770,53 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_magic"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "686f3703e9d296140171bbd6a6fa560e6059a35299ee3ce8c5bd646afa0c3992"
+dependencies = [
+ "macro_magic_core",
+ "macro_magic_macros",
+ "quote",
+ "syn 2.0.16",
+]
+
+[[package]]
+name = "macro_magic_core"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e060da9399c1535b3f190084d7c6121bb3355b70c610110cff3f4978526f54e2"
+dependencies = [
+ "derive-syn-parse",
+ "macro_magic_core_macros",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.16",
+]
+
+[[package]]
+name = "macro_magic_core_macros"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fb9865e03b9641e57448b9743915eadd0f642e41a41c4d9eaa8b5b861d887b0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.16",
+]
+
+[[package]]
+name = "macro_magic_macros"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68cf083ba5ba151ce3230a7c687cb5c890498adae59c85f3be7e8e741a6c9f65"
+dependencies = [
+ "macro_magic_core",
+ "quote",
+ "syn 2.0.16",
+]
+
+[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5454,7 +5504,6 @@ name = "node-template"
 version = "4.0.0-dev"
 dependencies = [
  "clap 4.2.7",
- "enum-as-inner",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-system",
@@ -6290,6 +6339,20 @@ dependencies = [
  "scale-info",
  "sp-arithmetic",
  "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-default-config-example"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
  "sp-io",
  "sp-runtime",
  "sp-std",
@@ -10129,9 +10192,11 @@ dependencies = [
  "async-trait",
  "futures",
  "log",
+ "parity-scale-codec",
  "serde",
  "serde_json",
  "sp-blockchain",
+ "sp-core",
  "sp-runtime",
  "thiserror",
 ]
@@ -10372,18 +10437,18 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "serde"
-version = "1.0.162"
+version = "1.0.163"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71b2f6e1ab5c2b98c05f0f35b236b22e8df7ead6ffbf51d7808da7f8817e7ab6"
+checksum = "2113ab51b87a539ae008b5c6c02dc020ffa39afd2d83cffcb3f4eb2722cebec2"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.162"
+version = "1.0.163"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2a0814352fd64b58489904a44ea8d90cb1a91dcb6b4f5ebabc32c8318e93cb6"
+checksum = "8c805777e3930c8883389c602315a24224bcc738b63905ef87cd1420353ea93e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10672,7 +10737,7 @@ dependencies = [
 
 [[package]]
 name = "sp-application-crypto"
-version = "8.0.0"
+version = "23.0.0"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -10696,7 +10761,7 @@ dependencies = [
 
 [[package]]
 name = "sp-arithmetic"
-version = "7.0.0"
+version = "16.0.0"
 dependencies = [
  "criterion",
  "integer-sqrt",
@@ -10877,7 +10942,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core"
-version = "8.0.0"
+version = "21.0.0"
 dependencies = [
  "array-bytes 4.2.0",
  "bitflags",
@@ -10925,7 +10990,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core-hashing"
-version = "6.0.0"
+version = "9.0.0"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -10938,7 +11003,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core-hashing-proc-macro"
-version = "6.0.0"
+version = "9.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10956,7 +11021,7 @@ dependencies = [
 
 [[package]]
 name = "sp-debug-derive"
-version = "6.0.0"
+version = "8.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10965,7 +11030,7 @@ dependencies = [
 
 [[package]]
 name = "sp-externalities"
-version = "0.14.0"
+version = "0.19.0"
 dependencies = [
  "environmental",
  "parity-scale-codec",
@@ -10990,7 +11055,7 @@ dependencies = [
 
 [[package]]
 name = "sp-io"
-version = "8.0.0"
+version = "23.0.0"
 dependencies = [
  "bytes",
  "ed25519",
@@ -11015,7 +11080,7 @@ dependencies = [
 
 [[package]]
 name = "sp-keyring"
-version = "8.0.0"
+version = "24.0.0"
 dependencies = [
  "lazy_static",
  "sp-core",
@@ -11025,7 +11090,7 @@ dependencies = [
 
 [[package]]
 name = "sp-keystore"
-version = "0.14.0"
+version = "0.27.0"
 dependencies = [
  "futures",
  "parity-scale-codec",
@@ -11113,7 +11178,7 @@ dependencies = [
 
 [[package]]
 name = "sp-panic-handler"
-version = "6.0.0"
+version = "8.0.0"
 dependencies = [
  "backtrace",
  "lazy_static",
@@ -11132,7 +11197,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime"
-version = "8.0.0"
+version = "24.0.0"
 dependencies = [
  "either",
  "hash256-std-hasher",
@@ -11159,7 +11224,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime-interface"
-version = "8.0.0"
+version = "17.0.0"
 dependencies = [
  "bytes",
  "impl-trait-for-tuples",
@@ -11182,7 +11247,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime-interface-proc-macro"
-version = "7.0.0"
+version = "11.0.0"
 dependencies = [
  "Inflector",
  "proc-macro-crate",
@@ -11257,7 +11322,7 @@ dependencies = [
 
 [[package]]
 name = "sp-state-machine"
-version = "0.14.0"
+version = "0.28.0"
 dependencies = [
  "array-bytes 4.2.0",
  "assert_matches",
@@ -11298,11 +11363,11 @@ dependencies = [
 
 [[package]]
 name = "sp-std"
-version = "6.0.0"
+version = "8.0.0"
 
 [[package]]
 name = "sp-storage"
-version = "8.0.0"
+version = "13.0.0"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -11341,7 +11406,7 @@ dependencies = [
 
 [[package]]
 name = "sp-tracing"
-version = "7.0.0"
+version = "10.0.0"
 dependencies = [
  "parity-scale-codec",
  "sp-std",
@@ -11375,7 +11440,7 @@ dependencies = [
 
 [[package]]
 name = "sp-trie"
-version = "8.0.0"
+version = "22.0.0"
 dependencies = [
  "ahash 0.8.3",
  "array-bytes 4.2.0",
@@ -11402,7 +11467,7 @@ dependencies = [
 
 [[package]]
 name = "sp-version"
-version = "6.0.0"
+version = "22.0.0"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -11418,7 +11483,7 @@ dependencies = [
 
 [[package]]
 name = "sp-version-proc-macro"
-version = "4.0.0"
+version = "8.0.0"
 dependencies = [
  "parity-scale-codec",
  "proc-macro2",
@@ -11429,7 +11494,7 @@ dependencies = [
 
 [[package]]
 name = "sp-wasm-interface"
-version = "8.0.0"
+version = "14.0.0"
 dependencies = [
  "anyhow",
  "impl-trait-for-tuples",
@@ -11441,7 +11506,7 @@ dependencies = [
 
 [[package]]
 name = "sp-weights"
-version = "5.0.0"
+version = "20.0.0"
 dependencies = [
  "parity-scale-codec",
  "scale-info",

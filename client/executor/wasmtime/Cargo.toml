@@ -29,8 +29,8 @@ wasmtime = { version = "8.0.1", default-features = false, features = [
 anyhow = "1.0.68"
 sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
 sc-executor-common = { version = "0.10.0-dev", path = "../common" }
-sp-runtime-interface = { version = "8.0.0", path = "../../../primitives/runtime-interface" }
-sp-wasm-interface = { version = "8.0.0", path = "../../../primitives/wasm-interface", features = ["wasmtime"] }
+sp-runtime-interface = { version = "17.0.0", path = "../../../primitives/runtime-interface" }
+sp-wasm-interface = { version = "14.0.0", path = "../../../primitives/wasm-interface", features = ["wasmtime"] }
 
 # Here we include the rustix crate in the exactly same semver-compatible version as used by
 # wasmtime and enable its 'use-libc' flag.
@@ -44,7 +44,7 @@ once_cell = "1.12.0"
 [dev-dependencies]
 wat = "1.0"
 sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }
-sp-io = { version = "8.0.0", path = "../../../primitives/io" }
+sp-io = { version = "23.0.0", path = "../../../primitives/io" }
 tempfile = "3.3.0"
 paste = "1.0"
 codec = { package = "parity-scale-codec", version = "3.2.2" }

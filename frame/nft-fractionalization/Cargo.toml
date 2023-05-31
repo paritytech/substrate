@@ -21,14 +21,14 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-assets = { version = "4.0.0-dev", default-features = false, path = "../assets" }
 pallet-nfts = { version = "4.0.0-dev", default-features = false, path = "../nfts" }
-sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-sp-core = { version = "8.0.0", path = "../../primitives/core" }
-sp-io = { version = "8.0.0", path = "../../primitives/io" }
-sp-std = { version = "6.0.0", path = "../../primitives/std" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-io = { version = "23.0.0", path = "../../primitives/io" }
+sp-std = { version = "8.0.0", path = "../../primitives/std" }
 
 [features]
 default = ["std"]
