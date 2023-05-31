@@ -1,15 +1,11 @@
 <!-- markdown-link-check-disable -->
-# Offchain Worker Example Pallet
+# Price Oracle Offchain Worker Example Pallet
 
-The Offchain Worker Example: A simple pallet demonstrating
+The Price Oracle Offchain Worker Example: A simple pallet demonstrating
 concepts, APIs and structures common to most offchain workers.
 
-Run `cargo doc --package pallet-example-offchain-worker --open` to view this module's
+Run `cargo doc --package pallet-example-offchain-worker-price-oracle --open` to view this module's
 documentation.
-
-- [`pallet_example_offchain_worker::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
-- [`Module`](./struct.Module.html)
 
 **This pallet serves as an example showcasing Substrate off-chain worker and is not meant to be
 used in production.**
@@ -17,13 +13,29 @@ used in production.**
 ## Overview
 
 In this example we are going to build a very simplistic, naive and definitely NOT
-production-ready oracle for BTC/USD price.
-Offchain Worker (OCW) will be triggered after every block, fetch the current price
+production-ready oracle for BTC/USD price. The main goal is to showcase how to use 
+off-chain workers to fetch data from external sources via HTTP and feed it back on-chain.
+
+The OCW will be triggered after every block, fetch the current price
 and prepare either signed or unsigned transaction to feed the result back on chain.
 The on-chain logic will simply aggregate the results and store last `64` values to compute
 the average price.
-Additional logic in OCW is put in place to prevent spamming the network with both signed
-and unsigned transactions, and custom `UnsignedValidator` makes sure that there is only
-one unsigned transaction floating in the network.
+
+Only authorized keys are allowed to submit the price. The authorization key should be rotated.
+
+Here's an example of how a node admin can inject some keys into the keystore:
+
+```bash
+$ curl --location --request POST 'http://localhost:9933' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "jsonrpc": "2.0",
+    "method": "author_insertKey",
+   "params": ["btc!","bread tongue spell stadium clean grief coin rent spend total practice document","0xb6a8b4b6bf796991065035093d3265e314c3fe89e75ccb623985e57b0c2e0c30"],
+    "id": 1
+}'
+```
+
+Another alternative for the node admin is to use the key insert subcommand on the node's executable, which will write the keys into disk, and will persist in case the node is restarted (author_insertKey will not).
 
 License: MIT-0
