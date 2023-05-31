@@ -276,13 +276,7 @@ where
 	fn next(&mut self) -> Option<Self::Item> {
 		let page = self.page.as_mut()?;
 		let value = match page.next() {
-			Some(value) => {
-				if self.drain {
-					self.meta.first_value_offset.saturating_inc();
-					self.meta.store()
-				}
-				value
-			},
+			Some(value) => value,
 			None => {
 				defensive!("There are no empty pages in storage; nuking the list");
 				self.meta.reset();
@@ -296,13 +290,21 @@ where
 				page.delete::<Prefix>();
 				self.meta.first_value_offset = 0;
 				self.meta.first_page.saturating_inc();
-				self.meta.store();
 			}
 
 			debug_assert!(!self.drain || self.meta.first_page == page.index + 1);
 			self.page = Page::from_storage::<Prefix>(page.index.saturating_add(1), 0);
-			if self.page.is_none() && self.drain {
-				self.meta.reset();
+			if self.drain {
+				if self.page.is_none() {
+					self.meta.reset();
+				} else {
+					self.meta.store();
+				}
+			}
+		} else {
+			if self.drain {
+				self.meta.first_value_offset.saturating_inc();
+				self.meta.store();
 			}
 		}
 		Some(value)
