@@ -636,6 +636,8 @@ pub mod pallet {
 		WrongNamespace,
 		/// Can't delete non-empty collections.
 		CollectionNotEmpty,
+		/// The witness data should be provided.
+		WitnessRequired,
 	}
 
 	#[pallet::call]
@@ -771,7 +773,8 @@ pub mod pallet {
 		/// - `item`: An identifier of the new item.
 		/// - `mint_to`: Account into which the item will be minted.
 		/// - `witness_data`: When the mint type is `HolderOf(collection_id)`, then the owned
-		///   item_id from that collection needs to be provided within the witness data object.
+		///   item_id from that collection needs to be provided within the witness data object. If
+		///   the mint price is set, then it should be additionally confirmed in the `witness_data`.
 		///
 		/// Note: the deposit will be taken from the `origin` and not the `owner` of the `item`.
 		///
@@ -785,7 +788,7 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			mint_to: AccountIdLookupOf<T>,
-			witness_data: Option<MintWitness<T::ItemId>>,
+			witness_data: Option<MintWitness<T::ItemId, DepositBalanceOf<T, I>>>,
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 			let mint_to = T::Lookup::lookup(mint_to)?;
@@ -817,8 +820,8 @@ pub mod pallet {
 							);
 						},
 						MintType::HolderOf(collection_id) => {
-							let MintWitness { owned_item } =
-								witness_data.ok_or(Error::<T, I>::BadWitness)?;
+							let MintWitness { owned_item, .. } =
+								witness_data.clone().ok_or(Error::<T, I>::WitnessRequired)?;
 
 							let owns_item = Account::<T, I>::contains_key((
 								&caller,
@@ -858,6 +861,10 @@ pub mod pallet {
 					}
 
 					if let Some(price) = mint_settings.price {
+						let MintWitness { mint_price, .. } =
+							witness_data.clone().ok_or(Error::<T, I>::WitnessRequired)?;
+						let mint_price = mint_price.ok_or(Error::<T, I>::BadWitness)?;
+						ensure!(mint_price >= price, Error::<T, I>::BadWitness);
 						T::Currency::transfer(
 							&caller,
 							&collection_details.owner,

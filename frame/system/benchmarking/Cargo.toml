@@ -18,14 +18,14 @@ scale-info = { version = "2.5.0", default-features = false, features = ["derive"
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
-sp-core = { version = "8.0.0", default-features = false, path = "../../../primitives/core" }
-sp-runtime = { version = "8.0.0", default-features = false, path = "../../../primitives/runtime" }
-sp-std = { version = "6.0.0", default-features = false, path = "../../../primitives/std" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../../primitives/core" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
-sp-io = { version = "8.0.0", path = "../../../primitives/io" }
-sp-externalities = { version = "0.14.0", path = "../../../primitives/externalities" }
-sp-version = { version = "6.0.0", path = "../../../primitives/version" }
+sp-io = { version = "23.0.0", path = "../../../primitives/io" }
+sp-externalities = { version = "0.19.0", path = "../../../primitives/externalities" }
+sp-version = { version = "22.0.0", path = "../../../primitives/version" }
 
 [features]
 default = ["std"]
