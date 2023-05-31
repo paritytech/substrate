@@ -30,7 +30,7 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.
 smallvec = "1.8.0"
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-utils = { version = "4.0.0-dev", path = "../../utils" }
-serde = { version = "1.0.136", features = ["derive"] }
+serde = { version = "1.0.163", features = ["derive"] }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/grandpa" }
 sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }

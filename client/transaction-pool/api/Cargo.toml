@@ -13,7 +13,7 @@ async-trait = "0.1.57"
 codec = { package = "parity-scale-codec", version = "3.2.2" }
 futures = "0.3.21"
 log = "0.4.17"
-serde = { version = "1.0.136", features = ["derive"] }
+serde = { version = "1.0.163", features = ["derive"] }
 thiserror = "1.0.30"
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-core = { version = "21.0.0", default-features = false, path = "../../../primitives/core" }

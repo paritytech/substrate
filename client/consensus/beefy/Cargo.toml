@@ -40,7 +40,7 @@ sp-mmr-primitives = { version = "4.0.0-dev", path = "../../../primitives/merkle-
 sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-serde = "1.0.136"
+serde = "1.0.163"
 tempfile = "3.1.0"
 tokio = "1.22.0"
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }

@@ -18,7 +18,7 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 impl-serde = { version = "0.4.0", default-features = false, optional = true }
 parity-wasm = { version = "0.45", optional = true }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-serde = { version = "1.0.136",  default-features = false, features = ["derive", "alloc"], optional = true }
+serde = { version = "1.0.163",  default-features = false, features = ["derive", "alloc"], optional = true }
 thiserror = { version = "1.0.30", optional = true }
 sp-core-hashing-proc-macro = { version = "9.0.0", path = "../core/hashing/proc-macro" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../runtime" }
