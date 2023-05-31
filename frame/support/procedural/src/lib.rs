@@ -1760,6 +1760,11 @@ pub fn composite_enum(_: TokenStream, _: TokenStream) -> TokenStream {
 /// the module's ident name when you go to import it via `#[import_section]`. 
 #[proc_macro_attribute]
 pub fn pallet_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+        let tokens_clone = tokens.clone();
+        // ensure this can only be attached to a module
+        let _mod = parse_macro_input!(tokens_clone as ItemMod);
+        
+        // use macro_magic's export_tokens as the internal implementation otherwise
 	match macro_magic::mm_core::export_tokens_internal(attr, tokens, false) {
 		Ok(tokens) => tokens.into(),
 		Err(err) => err.to_compile_error().into(),
