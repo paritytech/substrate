@@ -442,7 +442,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
 	pub(super) type Authorities<T: Config> =
-		StorageValue<_, BoundedVec<T::AccountId, T::MaxPings>, ValueQuery>;
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxAuthorities>, ValueQuery>;
 
 	/// Defines the block when next unsigned transaction will be accepted.
 	///
