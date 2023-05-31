@@ -59,9 +59,9 @@ pub type ValueIndex = u32;
 /// [`first_value_offset`][StoragePagedListMeta::first_value_offset] and incrementing these indices
 /// as long as there are elements in the page and there are pages in storage. All elements of a page
 /// are loaded once a page is read from storage. Iteration then happens on the cached elements. This
-/// reduces the storage `read` calls on the overlay. **Appending** to the list happens by appending
-/// to the last page by utilizing [`sp_io::storage::append`]. It allows to directly extend the
-/// elements of `values` vector of the page without loading the whole vector from storage. A new
+/// reduces the number of storage `read` calls on the overlay. **Appending** to the list happens by
+/// appending to the last page by utilizing [`sp_io::storage::append`]. It allows to directly extend
+/// the elements of `values` vector of the page without loading the whole vector from storage. A new
 /// page is instantiated once [`Page::next`] overflows `ValuesPerPage`. Its vector will also be
 /// created through [`sp_io::storage::append`]. **Draining** advances the internal indices identical
 /// to Iteration. It additionally persists the increments to storage and thereby 'drains' elements.
