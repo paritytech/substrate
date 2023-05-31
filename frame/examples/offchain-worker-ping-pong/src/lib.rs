@@ -218,22 +218,25 @@ pub mod pallet {
 			let parent_hash = <system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log::debug!("Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
-			// try to send unsigned (depends on `NextUnsignedAt`)
-			// we also choose which kind based on block_number
-			let unsigned_type = block_number % 3u32.into();
-			if unsigned_type == Zero::zero() {
-				if let Err(e) = Self::ocw_pong_raw_unsigned(block_number) {
-					log::error!("Error: {}", e);
-				}
-			} else if unsigned_type == T::BlockNumber::from(1u32) {
-				// node needs to be loaded with keys
-				if let Err(e) = Self::ocw_pong_unsigned_for_any_account(block_number) {
-					log::error!("Error: {}", e);
-				}
-			} else if unsigned_type == T::BlockNumber::from(2u32) {
-				// node needs to be loaded with keys
-				if let Err(e) = Self::ocw_pong_unsigned_for_all_accounts(block_number) {
-					log::error!("Error: {}", e);
+			// if `NextUnsignedAt` allows, try to send some unsigned pong
+			let next_unsigned_at = <NextUnsignedAt<T>>::get();
+			if next_unsigned_at <= block_number {
+				// we choose which kind of unsigned pong based on block_number
+				let unsigned_type = block_number % 3u32.into();
+				if unsigned_type == Zero::zero() {
+					if let Err(e) = Self::ocw_pong_raw_unsigned(block_number) {
+						log::error!("Error: {}", e);
+					}
+				} else if unsigned_type == T::BlockNumber::from(1u32) {
+					// node needs to be loaded with keys
+					if let Err(e) = Self::ocw_pong_unsigned_for_any_account(block_number) {
+						log::error!("Error: {}", e);
+					}
+				} else if unsigned_type == T::BlockNumber::from(2u32) {
+					// node needs to be loaded with keys
+					if let Err(e) = Self::ocw_pong_unsigned_for_all_accounts(block_number) {
+						log::error!("Error: {}", e);
+					}
 				}
 			}
 
@@ -555,13 +558,6 @@ impl<T: Config> Pallet<T> {
 
 	/// A helper function to sign payload and send an unsigned pong transaction
 	fn ocw_pong_unsigned_for_any_account(block_number: T::BlockNumber) -> Result<(), &'static str> {
-		// Make sure we don't read the pings if unsigned transaction is going to be rejected
-		// anyway.
-		let next_unsigned_at = <NextUnsignedAt<T>>::get();
-		if next_unsigned_at > block_number {
-			return Err("Too early to send unsigned transaction");
-		}
-
 		let pings = <Pings<T>>::get();
 		for p in pings {
 			let Ping(nonce) = p;
@@ -586,13 +582,6 @@ impl<T: Config> Pallet<T> {
 	fn ocw_pong_unsigned_for_all_accounts(
 		block_number: T::BlockNumber,
 	) -> Result<(), &'static str> {
-		// Make sure we don't read the pings if unsigned transaction is going to be rejected
-		// anyway.
-		let next_unsigned_at = <NextUnsignedAt<T>>::get();
-		if next_unsigned_at > block_number {
-			return Err("Too early to send unsigned transaction");
-		}
-
 		let pings = <Pings<T>>::get();
 		for p in pings {
 			let Ping(nonce) = p;
@@ -618,13 +607,6 @@ impl<T: Config> Pallet<T> {
 
 	/// A helper function to send a raw unsigned pong transaction.
 	fn ocw_pong_raw_unsigned(block_number: T::BlockNumber) -> Result<(), &'static str> {
-		// Make sure we don't read the ping if unsigned transaction is going to be rejected
-		// anyway.
-		let next_unsigned_at = <NextUnsignedAt<T>>::get();
-		if next_unsigned_at > block_number {
-			return Err("Too early to send unsigned transaction");
-		}
-
 		let pings = <Pings<T>>::get();
 		for p in pings {
 			let Ping(nonce) = p;
