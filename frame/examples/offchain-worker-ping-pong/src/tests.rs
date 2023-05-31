@@ -28,13 +28,13 @@ use sp_core::{
 	H256,
 };
 
+use sp_api_hidden_includes_construct_runtime::hidden_include::traits::Hooks;
 use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
 use sp_runtime::{
 	testing::{Header, TestXt},
 	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify},
 	RuntimeAppPublic,
 };
-use sp_api_hidden_includes_construct_runtime::hidden_include::traits::Hooks;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -186,7 +186,10 @@ fn should_submit_signed_transaction_on_chain() {
 		assert!(pool_state.read().transactions.is_empty());
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature.unwrap().0, 0);
-		assert_eq!(tx.call, RuntimeCall::PingPongOcwExample(crate::Call::pong_signed { nonce: NONCE }));
+		assert_eq!(
+			tx.call,
+			RuntimeCall::PingPongOcwExample(crate::Call::pong_signed { nonce: NONCE })
+		);
 	});
 }
 

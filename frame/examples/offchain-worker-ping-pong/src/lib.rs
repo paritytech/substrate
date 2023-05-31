@@ -98,9 +98,7 @@ use frame_system::{
 };
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
-	offchain::{
-		storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
-	},
+	offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
 	traits::Zero,
 	transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction},
 	RuntimeDebug,
@@ -241,10 +239,12 @@ pub mod pallet {
 			let should_send = Self::choose_transaction_type(block_number);
 			let res = match should_send {
 				TransactionType::Signed => Self::ocw_pong_signed(),
-				TransactionType::UnsignedForAny =>
-					Self::ocw_pong_unsigned_for_any_account(block_number),
-				TransactionType::UnsignedForAll =>
-					Self::ocw_pong_unsigned_for_all_accounts(block_number),
+				TransactionType::UnsignedForAny => {
+					Self::ocw_pong_unsigned_for_any_account(block_number)
+				},
+				TransactionType::UnsignedForAll => {
+					Self::ocw_pong_unsigned_for_all_accounts(block_number)
+				},
 				TransactionType::Raw => Self::ocw_pong_raw_unsigned(block_number),
 				TransactionType::None => Ok(()),
 			};
@@ -332,7 +332,10 @@ pub mod pallet {
 
 		#[pallet::call_index(4)]
 		#[pallet::weight({0})]
-		pub fn add_authority(origin: OriginFor<T>, authority: T::AccountId) -> DispatchResultWithPostInfo {
+		pub fn add_authority(
+			origin: OriginFor<T>,
+			authority: T::AccountId,
+		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 
 			ensure!(!Self::is_authority(&authority), Error::<T>::AlreadyAuthority);
@@ -350,7 +353,10 @@ pub mod pallet {
 
 		#[pallet::call_index(5)]
 		#[pallet::weight({0})]
-		pub fn remove_authority(origin: OriginFor<T>, authority: T::AccountId) -> DispatchResultWithPostInfo {
+		pub fn remove_authority(
+			origin: OriginFor<T>,
+			authority: T::AccountId,
+		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 
 			ensure!(Self::is_authority(&authority), Error::<T>::NotAuthority);
@@ -413,7 +419,7 @@ pub mod pallet {
 				let signature_valid =
 					SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
 				if !signature_valid {
-					return InvalidTransaction::BadProof.into()
+					return InvalidTransaction::BadProof.into();
 				}
 				Self::validate_transaction_parameters(&payload.block_number)
 			} else if let Call::pong_unsigned { block_number, nonce: _n } = call {
@@ -435,7 +441,8 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub(super) type Authorities<T: Config> = StorageValue<_, BoundedVec<T::AccountId, T::MaxPings>, ValueQuery>;
+	pub(super) type Authorities<T: Config> =
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxPings>, ValueQuery>;
 
 	/// Defines the block when next unsigned transaction will be accepted.
 	///
@@ -500,8 +507,9 @@ impl<T: Config> Pallet<T> {
 			match last_send {
 				// If we already have a value in storage and the block number is recent enough
 				// we avoid sending another transaction at this time.
-				Ok(Some(block)) if block_number < block + T::GracePeriod::get() =>
-					Err(RECENTLY_SENT),
+				Ok(Some(block)) if block_number < block + T::GracePeriod::get() => {
+					Err(RECENTLY_SENT)
+				},
 				// In every other case we attempt to acquire the lock and send a transaction.
 				_ => Ok(block_number),
 			}
@@ -545,18 +553,16 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn validate_transaction_parameters(
-		block_number: &T::BlockNumber,
-	) -> TransactionValidity {
+	fn validate_transaction_parameters(block_number: &T::BlockNumber) -> TransactionValidity {
 		// Now let's check if the transaction has any chance to succeed.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
 		if &next_unsigned_at > block_number {
-			return InvalidTransaction::Stale.into()
+			return InvalidTransaction::Stale.into();
 		}
 		// Let's make sure to reject transactions from the future.
 		let current_block = <system::Pallet<T>>::block_number();
 		if &current_block < block_number {
-			return InvalidTransaction::Future.into()
+			return InvalidTransaction::Future.into();
 		}
 
 		ValidTransaction::with_tag_prefix("ExampleOffchainWorker")
@@ -593,7 +599,7 @@ impl<T: Config> Pallet<T> {
 		if !signer.can_sign() {
 			return Err(
 				"No local accounts available. Consider adding one via `author_insertKey` RPC.",
-			)
+			);
 		}
 
 		let pings = <Pings<T>>::get();
@@ -623,14 +629,12 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// A helper function to sign payload and send an unsigned pong transaction
-	fn ocw_pong_unsigned_for_any_account(
-		block_number: T::BlockNumber,
-	) -> Result<(), &'static str> {
+	fn ocw_pong_unsigned_for_any_account(block_number: T::BlockNumber) -> Result<(), &'static str> {
 		// Make sure we don't read the pings if unsigned transaction is going to be rejected
 		// anyway.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
 		if next_unsigned_at > block_number {
-			return Err("Too early to send unsigned transaction")
+			return Err("Too early to send unsigned transaction");
 		}
 
 		let pings = <Pings<T>>::get();
@@ -648,7 +652,6 @@ impl<T: Config> Pallet<T> {
 				)
 				.ok_or("No local accounts accounts available.")?;
 			result.map_err(|()| "Unable to submit transaction")?;
-
 		}
 
 		Ok(())
@@ -662,7 +665,7 @@ impl<T: Config> Pallet<T> {
 		// anyway.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
 		if next_unsigned_at > block_number {
-			return Err("Too early to send unsigned transaction")
+			return Err("Too early to send unsigned transaction");
 		}
 
 		let pings = <Pings<T>>::get();
@@ -680,10 +683,9 @@ impl<T: Config> Pallet<T> {
 				);
 			for (_account_id, result) in transaction_results.into_iter() {
 				if result.is_err() {
-					return Err("Unable to submit transaction")
+					return Err("Unable to submit transaction");
 				}
 			}
-
 		}
 
 		Ok(())
@@ -695,7 +697,7 @@ impl<T: Config> Pallet<T> {
 		// anyway.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
 		if next_unsigned_at > block_number {
-			return Err("Too early to send unsigned transaction")
+			return Err("Too early to send unsigned transaction");
 		}
 
 		let pings = <Pings<T>>::get();
