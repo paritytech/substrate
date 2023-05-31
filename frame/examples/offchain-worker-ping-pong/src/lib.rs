@@ -94,6 +94,7 @@ use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
 	transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction},
 	RuntimeDebug,
+	traits::Zero,
 };
 
 #[cfg(test)]
@@ -217,23 +218,28 @@ pub mod pallet {
 			let parent_hash = <system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log::debug!("Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
-			// we send every kind of transaction in this example
-			{
-				if let Err(e) = Self::ocw_pong_signed() {
-					log::error!("Error: {}", e);
-				}
-
-				if let Err(e) = Self::ocw_pong_unsigned_for_any_account(block_number) {
-					log::error!("Error: {}", e);
-				}
-
-				if let Err(e) = Self::ocw_pong_unsigned_for_all_accounts(block_number) {
-					log::error!("Error: {}", e);
-				}
-
+			// try to send unsigned (depends on `NextUnsignedAt`)
+			// we also choose which kind based on block_number
+			let unsigned_type = block_number % 3u32.into();
+			if unsigned_type == Zero::zero() {
 				if let Err(e) = Self::ocw_pong_raw_unsigned(block_number) {
 					log::error!("Error: {}", e);
 				}
+			} else if unsigned_type == T::BlockNumber::from(1u32) {
+				// node needs to be loaded with keys
+				if let Err(e) = Self::ocw_pong_unsigned_for_any_account(block_number) {
+					log::error!("Error: {}", e);
+				}
+			} else if unsigned_type == T::BlockNumber::from(2u32) {
+				// node needs to be loaded with keys
+				if let Err(e) = Self::ocw_pong_unsigned_for_all_accounts(block_number) {
+					log::error!("Error: {}", e);
+				}
+			}
+
+			// try to send a pong_signed (node needs to be loaded with keys)
+			if let Err(e) = Self::ocw_pong_signed() {
+				log::error!("Error: {}", e);
 			}
 		}
 
@@ -290,7 +296,10 @@ pub mod pallet {
 			ensure_none(origin)?;
 
 			// Emit the PongAckUnauthenticated event
-			Self::deposit_event(Event::PongAckUnauthenticated { nonce });
+			Self::deposit_event(Event::PongAckUnauthenticated {
+				nonce,
+				unsigned_type: UnsignedType::RawUnsigned,
+			});
 
 			// now increment the block number at which we expect next unsigned transaction.
 			let current_block = <system::Pallet<T>>::block_number();
@@ -308,7 +317,10 @@ pub mod pallet {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 
-			Self::deposit_event(Event::PongAckUnauthenticated { nonce: pong_payload.nonce });
+			Self::deposit_event(Event::PongAckUnauthenticated {
+				nonce: pong_payload.nonce,
+				unsigned_type: UnsignedType::UnsignedWithSignedPayload,
+			});
 
 			// now increment the block number at which we expect next unsigned transaction.
 			let current_block = <system::Pallet<T>>::block_number();
@@ -359,6 +371,12 @@ pub mod pallet {
 		}
 	}
 
+	#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq, scale_info::TypeInfo)]
+	pub enum UnsignedType {
+		UnsignedWithSignedPayload,
+		RawUnsigned,
+	}
+
 	/// Events for the pallet.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -368,7 +386,7 @@ pub mod pallet {
 		/// Event generated when new pong_signed transaction is accepted.
 		PongAckAuthenticated { nonce: u32 },
 		/// Event generated when new pong_unsigned* transaction is accepted.
-		PongAckUnauthenticated { nonce: u32 },
+		PongAckUnauthenticated { nonce: u32, unsigned_type: UnsignedType },
 	}
 
 	#[pallet::validate_unsigned]
