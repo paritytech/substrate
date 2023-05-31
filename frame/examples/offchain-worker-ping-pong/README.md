@@ -42,7 +42,7 @@ $ curl --location --request POST 'http://localhost:9933' \
 --data-raw '{
     "jsonrpc": "2.0",
     "method": "author_insertKey",
-   "params": ["pong","bread tongue spell stadium clean grief coin rent spend total practice document","0xb6a8b4b6bf796991065035093d3265e314c3fe89e75ccb623985e57b0c2e0c30"],
+    "params": ["pong","bread tongue spell stadium clean grief coin rent spend total practice document","0xb6a8b4b6bf796991065035093d3265e314c3fe89e75ccb623985e57b0c2e0c30"],
     "id": 1
 }'
 ```
