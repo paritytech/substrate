@@ -467,7 +467,7 @@ impl ConnectionHandler for NotifsHandler {
 		match event {
 			ConnectionEvent::FullyNegotiatedInbound(inbound) => {
 				let (mut in_substream_open, protocol_index) = inbound.protocol;
-				let mut protocol_info = &mut self.protocols[protocol_index];
+				let protocol_info = &mut self.protocols[protocol_index];
 
 				match protocol_info.state {
 					State::Closed { pending_opening } => {

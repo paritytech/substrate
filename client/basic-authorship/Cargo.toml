@@ -26,9 +26,9 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../client/transact
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-core = { version = "8.0.0", path = "../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "8.0.0", path = "../../primitives/runtime" }
 
 [dev-dependencies]
 parking_lot = "0.12.1"

@@ -126,7 +126,7 @@ impl pallet_balances::Config for Runtime {
 	type AccountStore = System;
 	type MaxHolds = ConstU32<1>;
 	type MaxFreezes = traits::ConstU32<1>;
-	type HoldIdentifier = ();
+	type RuntimeHoldReason = RuntimeHoldReason;
 	type FreezeIdentifier = ();
 	type WeightInfo = ();
 }

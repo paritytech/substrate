@@ -435,7 +435,7 @@ pub struct DeterministicStackLimit {
 /// All of the CoW strategies (with `CopyOnWrite` suffix) are only supported when either:
 ///   a) we're running on Linux,
 ///   b) we're running on an Unix-like system and we're precompiling
-///      our module beforehand.
+///      our module beforehand and instantiating from a file.
 ///
 /// If the CoW variant of a strategy is unsupported the executor will
 /// fall back to the non-CoW equivalent.
@@ -537,7 +537,7 @@ enum CodeSupplyMode<'a> {
 	/// The runtime is instantiated using the given runtime blob.
 	Fresh(RuntimeBlob),
 
-	/// The runtime is instantiated using a precompiled module.
+	/// The runtime is instantiated using a precompiled module at the given path.
 	///
 	/// This assumes that the code is already prepared for execution and the same `Config` was
 	/// used.
@@ -545,6 +545,12 @@ enum CodeSupplyMode<'a> {
 	/// We use a `Path` here instead of simply passing a byte slice to allow `wasmtime` to
 	/// map the runtime's linear memory on supported platforms in a copy-on-write fashion.
 	Precompiled(&'a Path),
+
+	/// The runtime is instantiated using a precompiled module with the given bytes.
+	///
+	/// This assumes that the code is already prepared for execution and the same `Config` was
+	/// used.
+	PrecompiledBytes(&'a [u8]),
 }
 
 /// Create a new `WasmtimeRuntime` given the code. This function performs translation from Wasm to
@@ -587,6 +593,31 @@ where
 	H: HostFunctions,
 {
 	do_create_runtime::<H>(CodeSupplyMode::Precompiled(compiled_artifact_path), config)
+}
+
+/// The same as [`create_runtime`] but takes the bytes of a precompiled artifact,
+/// which makes this function considerably faster than [`create_runtime`],
+/// but slower than the more optimized [`create_runtime_from_artifact`].
+/// This is especially slow on non-Linux Unix systems. Useful in very niche cases.
+///
+/// # Safety
+///
+/// The caller must ensure that the compiled artifact passed here was:
+///   1) produced by [`prepare_runtime_artifact`],
+///   2) was not modified,
+///
+/// Failure to adhere to these requirements might lead to crashes and arbitrary code execution.
+///
+/// It is ok though if the compiled artifact was created by code of another version or with
+/// different configuration flags. In such case the caller will receive an `Err` deterministically.
+pub unsafe fn create_runtime_from_artifact_bytes<H>(
+	compiled_artifact_bytes: &[u8],
+	config: Config,
+) -> std::result::Result<WasmtimeRuntime, WasmError>
+where
+	H: HostFunctions,
+{
+	do_create_runtime::<H>(CodeSupplyMode::PrecompiledBytes(compiled_artifact_bytes), config)
 }
 
 /// # Safety
@@ -659,6 +690,22 @@ where
 			//
 			//         See [`create_runtime_from_artifact`] for more details.
 			let module = wasmtime::Module::deserialize_file(&engine, compiled_artifact_path)
+				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {:#}", e)))?;
+
+			(module, InternalInstantiationStrategy::Builtin)
+		},
+		CodeSupplyMode::PrecompiledBytes(compiled_artifact_bytes) => {
+			if let InstantiationStrategy::LegacyInstanceReuse =
+				config.semantics.instantiation_strategy
+			{
+				return Err(WasmError::Other("the legacy instance reuse instantiation strategy is incompatible with precompiled modules".into()));
+			}
+
+			// SAFETY: The unsafety of `deserialize` is covered by this function. The
+			//         responsibilities to maintain the invariants are passed to the caller.
+			//
+			//         See [`create_runtime_from_artifact_bytes`] for more details.
+			let module = wasmtime::Module::deserialize(&engine, compiled_artifact_bytes)
 				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {:#}", e)))?;
 
 			(module, InternalInstantiationStrategy::Builtin)

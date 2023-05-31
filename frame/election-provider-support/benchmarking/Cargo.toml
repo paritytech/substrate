@@ -19,7 +19,7 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = ".." }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "8.0.0", default-features = false, path = "../../../primitives/runtime" }
 
 [features]
 default = ["std"]
