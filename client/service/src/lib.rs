@@ -160,7 +160,6 @@ async fn build_network_future<
 	network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
 	sync_service: Arc<SyncingService<B>>,
-	network_block: Arc<dyn NetworkBlock<B::Hash, NumberFor<B>> + Send + Sync>,
 	announce_imported_blocks: bool,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
@@ -186,11 +185,11 @@ async fn build_network_future<
 				};
 
 				if announce_imported_blocks {
-					network_block.announce_block(notification.hash, None);
+					sync_service.announce_block(notification.hash, None);
 				}
 
 				if notification.is_new_best {
-					network_block.new_best_block_imported(
+					sync_service.new_best_block_imported(
 						notification.hash,
 						*notification.header.number(),
 					);

@@ -748,11 +748,8 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 		Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
 	/// Optional warp sync params.
 	pub warp_sync_params: Option<WarpSyncParams<TBl>>,
-	/// Optional network block handle.
-	///
-	/// User can specify this to achieve their own block sync service.
-	pub network_block: Option<Arc<dyn NetworkBlock<TBl::Hash, NumberFor<TBl>> + Send + Sync>>,
 }
+
 /// Build the network service, the network status sinks and an RPC sender.
 pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>,
@@ -789,7 +786,6 @@ where
 		import_queue,
 		block_announce_validator_builder,
 		warp_sync_params,
-		network_block,
 	} = params;
 
 	if warp_sync_params.is_none() && config.network.sync_mode.is_warp() {
@@ -977,7 +973,6 @@ where
 		network_mut,
 		client,
 		sync_service.clone(),
-		network_block.unwrap_or_else(|| sync_service.clone()),
 		config.announce_block,
 	);
 
