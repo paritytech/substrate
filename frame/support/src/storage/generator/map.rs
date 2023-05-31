@@ -178,32 +178,11 @@ where
 	}
 
 	fn translate<O: Decode, F: FnMut(K, O) -> Option<V>>(mut f: F) {
-		let prefix = G::prefix_hash();
-		let mut previous_key = prefix.clone();
-		while let Some(next) =
-			sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix))
-		{
-			previous_key = next;
-			let value = match unhashed::get::<O>(&previous_key) {
-				Some(value) => value,
-				None => {
-					log::error!("Invalid translate: fail to decode old value");
-					continue
-				},
-			};
-
-			let mut key_material = G::Hasher::reverse(&previous_key[prefix.len()..]);
-			let key = match K::decode(&mut key_material) {
-				Ok(key) => key,
-				Err(_) => {
-					log::error!("Invalid translate: fail to decode key");
-					continue
-				},
-			};
-
-			match f(key, value) {
-				Some(new) => unhashed::put::<V>(&previous_key, &new),
-				None => unhashed::kill(&previous_key),
+		let mut previous_key = None;
+		loop {
+			previous_key = Self::translate_next(previous_key, &mut f);
+			if previous_key.is_none() {
+				break
 			}
 		}
 	}
@@ -211,7 +190,7 @@ where
 	fn translate_next<O: Decode, F: FnMut(K, O) -> Option<V>>(
 		previous_key: Option<Vec<u8>>,
 		mut f: F,
-	) -> (Option<Vec<u8>>, Result<(), ()>) {
+	) -> Option<Vec<u8>> {
 		let prefix = G::prefix_hash();
 		let previous_key = previous_key.unwrap_or_else(|| prefix.clone());
 
@@ -221,7 +200,7 @@ where
 					Some(value) => value,
 					None => {
 						log::error!("Invalid translate: fail to decode old value");
-						return (Some(current_key), Err(()))
+						return Some(current_key)
 					},
 				};
 
@@ -230,7 +209,7 @@ where
 					Ok(key) => key,
 					Err(_) => {
 						log::error!("Invalid translate: fail to decode key");
-						return (Some(current_key), Err(()))
+						return Some(current_key)
 					},
 				};
 
@@ -239,9 +218,9 @@ where
 					None => unhashed::kill(&current_key),
 				}
 
-				(Some(current_key), Ok(()))
+				Some(current_key)
 			},
-			None => (None, Ok(())),
+			None => None,
 		}
 	}
 }
