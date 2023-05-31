@@ -58,11 +58,12 @@ where
 	///
 	/// * `BTreeMap<T::AccountId, BalanceOf<T>>`: Map of account IDs to their respective total
 	///   reserved balance by this pallet
-	/// * `BTreeSet<T::AccountId>`: Set of account IDs with some amount locked by this pallet.
+	/// * `BTreeMap<T::AccountId, BalanceOf<T>>`: Map of account IDs to their respective total
+	///   locked balance by this pallet
 	/// * `frame_support::weights::Weight`: the weight consumed by this call.
 	fn get_account_deposits_and_locks() -> (
 		BTreeMap<T::AccountId, BalanceOf<T>>,
-		BTreeSet<T::AccountId>,
+		BTreeMap<T::AccountId, BalanceOf<T>>,
 		frame_support::weights::Weight,
 	) {
 		let deposit_of = crate::DepositOf::<T>::iter().collect::<Vec<_>>();
@@ -88,12 +89,13 @@ where
 		// Voter accounts have amounts locked.
 		let voting_of = crate::VotingOf::<T>::iter().collect::<Vec<_>>();
 		let voting_of_len = voting_of.len() as u64;
-		let voting_accounts: BTreeSet<T::AccountId> =
-			crate::VotingOf::<T>::iter().map(|(account_id, _voting)| account_id).collect();
+		let account_stakes: BTreeMap<T::AccountId, BalanceOf<T>> = crate::VotingOf::<T>::iter()
+			.map(|(account_id, voting)| (account_id, voting.locked_balance()))
+			.collect();
 
 		(
 			account_deposits,
-			voting_accounts,
+			account_stakes,
 			RocksDbWeight::get().reads(
 				deposit_of_len +
 				voting_of_len +
@@ -127,9 +129,13 @@ where
 		// Get staked and deposited balances as reported by this pallet.
 		let (account_deposits, account_locks, _) = Self::get_account_deposits_and_locks();
 
-		let all_accounts = account_deposits.keys().cloned().collect::<BTreeSet<_>>();
-		let account_reserved_before: BTreeMap<T::AccountId, BalanceOf<T>> = all_accounts
-			.iter()
+		let all_accounts = account_deposits
+			.keys()
+			.chain(account_locks.keys())
+			.cloned()
+			.collect::<BTreeSet<_>>();
+		let account_reserved_before: BTreeMap<T::AccountId, BalanceOf<T>> = account_deposits
+			.keys()
 			.map(|account| (account.clone(), T::Currency::reserved_balance(&account)))
 			.collect();
 
@@ -145,11 +151,12 @@ where
 
 		let total_deposits_to_unreserve =
 			account_deposits.clone().into_values().sum::<BalanceOf<T>>();
+		let total_stake_to_unlock = account_locks.clone().into_values().sum::<BalanceOf<T>>();
 
 		log::info!("Total accounts: {:?}", all_accounts.len());
+		log::info!("Total stake to unlock: {:?}", total_stake_to_unlock);
 		log::info!("Total deposit to unreserve: {:?}", total_deposits_to_unreserve);
-		log::info!("Accounts with locks: {:?}", account_locks.len());
-		log::info!("Bugged deposits: {}/{}", bugged_deposits, all_accounts.len());
+		log::info!("Bugged deposits: {}/{}", bugged_deposits, account_deposits.len());
 
 		Ok(account_reserved_before.encode())
 	}
@@ -162,7 +169,7 @@ where
 	/// 3. Unlocks the staked funds for each account.
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		// Get staked and deposited balances as reported by this pallet.
-		let (account_deposits, accounts_with_locks, initial_reads) =
+		let (account_deposits, account_stakes, initial_reads) =
 			Self::get_account_deposits_and_locks();
 
 		// Deposited funds need to be unreserved.
@@ -174,13 +181,13 @@ where
 		}
 
 		// Staked funds need to be unlocked.
-		for account in accounts_with_locks.iter() {
+		for account in account_stakes.keys() {
 			T::Currency::remove_lock(DEMOCRACY_ID, account);
 		}
 
 		RocksDbWeight::get().reads_writes(
-			accounts_with_locks.len() as u64 + account_deposits.len() as u64,
-			accounts_with_locks.len() as u64 + account_deposits.len() as u64,
+			account_stakes.len() as u64 + account_deposits.len() as u64,
+			account_stakes.len() as u64 + account_deposits.len() as u64,
 		) + initial_reads
 	}
 
