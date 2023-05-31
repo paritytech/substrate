@@ -13,11 +13,11 @@ used in production.**
 
 In this example we are going to build a very simplistic, naive and definitely NOT
 production-ready oracle for BTC/USD price. The main goal is to showcase how to use 
-off-chain workers to fetch data from external sources via HTTP and feed it back on-chain.
+offchain workers to fetch data from external sources via HTTP and feed it back on-chain.
 
 The OCW will be triggered after every block, fetch the current price
 and prepare either signed or unsigned transaction to feed the result back on chain.
-The on-chain logic will simply aggregate the results and store last `64` values to compute
+The on-chain logic will simply aggregate the results and store the last `64` values to compute
 the average price.
 
 Only authorized keys are allowed to submit the price. The authorization key should be rotated.
@@ -35,6 +35,9 @@ $ curl --location --request POST 'http://localhost:9933' \
 }'
 ```
 
-Another alternative for the node admin is to use the key insert subcommand on the node's executable, which will write the keys into disk, and will persist in case the node is restarted (author_insertKey will not).
+Then make sure that the corresponding address (`5GCCgshTQCfGkXy6kAkFDW1TZXAdsbCNZJ9Uz2c7ViBnwcVg`) is added to `Authorities` in the runtime by adding it via `add_authority` extrinsic (from `root`).
+
+More complex management models and session
+based key rotations should be considered, but that's outside the scope of this example.
 
 License: MIT-0
