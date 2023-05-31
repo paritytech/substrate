@@ -33,7 +33,7 @@ sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 serde = { version = "1.0.136", features = ["derive"] }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/grandpa" }
-sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 thiserror = "1.0"
 zeroize = "1.4.3"

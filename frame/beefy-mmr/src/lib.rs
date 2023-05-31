@@ -56,7 +56,7 @@ pub struct DepositBeefyDigest<T>(sp_std::marker::PhantomData<T>);
 
 impl<T> pallet_mmr::primitives::OnNewRoot<sp_consensus_beefy::MmrRootHash> for DepositBeefyDigest<T>
 where
-	T: pallet_mmr::Config<Hash = sp_consensus_beefy::MmrRootHash>,
+	T: pallet_mmr::Config<Hashing = sp_consensus_beefy::MmrHashing>,
 	T: pallet_beefy::Config,
 {
 	fn on_new_root(root: &sp_consensus_beefy::MmrRootHash) {

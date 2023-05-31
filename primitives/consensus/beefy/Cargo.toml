@@ -16,18 +16,18 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", default-features = false,  optional = true, features =  ["derive", "alloc"] }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../api" }
-sp-application-crypto = { version = "8.0.0", default-features = false, path = "../../application-crypto" }
-sp-core = { version = "8.0.0", default-features = false, path = "../../core" }
-sp-io = { version = "8.0.0", default-features = false, path = "../../io" }
+sp-application-crypto = { version = "23.0.0", default-features = false, path = "../../application-crypto" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../core" }
+sp-io = { version = "23.0.0", default-features = false, path = "../../io" }
 sp-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = "../../merkle-mountain-range" }
-sp-runtime = { version = "8.0.0", default-features = false, path = "../../runtime" }
-sp-std = { version = "6.0.0", default-features = false, path = "../../std" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../std" }
 strum = { version = "0.24.1", features = ["derive"], default-features = false }
 lazy_static = "1.4.0"
 
 [dev-dependencies]
 array-bytes = "4.1"
-sp-keystore = { version = "0.14.0", path = "../../keystore" }
+sp-keystore = { version = "0.27.0", path = "../../keystore" }
 
 [features]
 default = ["std"]

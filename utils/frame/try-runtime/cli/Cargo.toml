@@ -18,20 +18,20 @@ sc-executor = { version = "0.10.0-dev", path = "../../../../client/executor" }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../../client/service" }
 sp-consensus-aura = { path = "../../../../primitives/consensus/aura" }
 sp-consensus-babe = { path = "../../../../primitives/consensus/babe" }
-sp-core = { version = "8.0.0", path = "../../../../primitives/core" }
-sp-externalities = { version = "0.14.0", path = "../../../../primitives/externalities" }
+sp-core = { version = "21.0.0", path = "../../../../primitives/core" }
+sp-externalities = { version = "0.19.0", path = "../../../../primitives/externalities" }
 sp-inherents = { path = "../../../../primitives/inherents" }
-sp-io = { version = "8.0.0", path = "../../../../primitives/io" }
-sp-keystore = { version = "0.14.0", path = "../../../../primitives/keystore" }
-sp-runtime = { version = "8.0.0", path = "../../../../primitives/runtime" }
+sp-io = { version = "23.0.0", path = "../../../../primitives/io" }
+sp-keystore = { version = "0.27.0", path = "../../../../primitives/keystore" }
+sp-runtime = { version = "24.0.0", path = "../../../../primitives/runtime" }
 sp-rpc = { version = "6.0.0", path = "../../../../primitives/rpc" }
-sp-state-machine = { version = "0.14.0", path = "../../../../primitives/state-machine" }
+sp-state-machine = { version = "0.28.0", path = "../../../../primitives/state-machine" }
 sp-timestamp = { path = "../../../../primitives/timestamp" }
 sp-transaction-storage-proof = { path = "../../../../primitives/transaction-storage-proof" }
-sp-version = { version = "6.0.0", path = "../../../../primitives/version" }
+sp-version = { version = "22.0.0", path = "../../../../primitives/version" }
 sp-debug-derive = { path = "../../../../primitives/debug-derive" }
 sp-api = { path = "../../../../primitives/api" }
-sp-weights = { version = "5.0.0", path = "../../../../primitives/weights" }
+sp-weights = { version = "20.0.0", path = "../../../../primitives/weights" }
 frame-try-runtime = { optional = true, path = "../../../../frame/try-runtime" }
 substrate-rpc-client = { path = "../../rpc/client" }
 
