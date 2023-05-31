@@ -218,7 +218,7 @@ pub mod pallet {
 			// written to in the meantime.
 			match res {
 				// The value has been set correctly, which means we can safely send a transaction now.
-				Ok(block_number) => {
+				Ok(_) => {
 					if let Err(e) = Self::fetch_price_and_send_signed() {
 						log::error!("Error: {}", e);
 					}
@@ -232,8 +232,6 @@ pub mod pallet {
 				// already did.
 				Err(MutateStorageError::ConcurrentModification(_)) => log::error!("OCW failed to acquire a lock."),
 			}
-
-
 		}
 	}
 
