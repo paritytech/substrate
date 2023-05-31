@@ -191,8 +191,6 @@ impl fast_unstake::Config for Runtime {
 	type BatchSize = BatchSize;
 	type WeightInfo = ();
 	type MaxErasToCheckPerBlock = ConstU32<16>;
-	#[cfg(feature = "runtime-benchmarks")]
-	type MaxBackersPerValidator = ConstU32<128>;
 }
 
 type Block = frame_system::mocking::MockBlock<Runtime>;

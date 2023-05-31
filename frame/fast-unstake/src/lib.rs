@@ -203,10 +203,6 @@ pub mod pallet {
 
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
-
-		/// Use only for benchmarking.
-		#[cfg(feature = "runtime-benchmarks")]
-		type MaxBackersPerValidator: Get<u32>;
 	}
 
 	/// The current "head of the queue" being unstaked.
