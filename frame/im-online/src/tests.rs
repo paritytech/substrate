@@ -22,12 +22,9 @@
 use super::*;
 use crate::mock::*;
 use frame_support::{assert_noop, dispatch};
-use sp_core::{
-	offchain::{
-		testing::{TestOffchainExt, TestTransactionPoolExt},
-		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
-	},
-	OpaquePeerId,
+use sp_core::offchain::{
+	testing::{TestOffchainExt, TestTransactionPoolExt},
+	OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 };
 use sp_runtime::{
 	testing::UintAuthorityId,
@@ -125,7 +122,6 @@ fn heartbeat(
 
 	let heartbeat = Heartbeat {
 		block_number,
-		peer_id: OpaquePeerId(vec![1]),
 		session_index,
 		authority_index,
 		validators_len: validators.len() as u32,
@@ -249,7 +245,6 @@ fn should_generate_heartbeats() {
 			heartbeat,
 			Heartbeat {
 				block_number: block,
-				peer_id: sp_io::offchain::network_state().unwrap().peer_id,
 				session_index: 2,
 				authority_index: 2,
 				validators_len: 3,
@@ -362,13 +357,7 @@ fn should_not_send_a_report_if_already_online() {
 
 		assert_eq!(
 			heartbeat,
-			Heartbeat {
-				block_number: 4,
-				peer_id: sp_io::offchain::network_state().unwrap().peer_id,
-				session_index: 2,
-				authority_index: 0,
-				validators_len: 3,
-			}
+			Heartbeat { block_number: 4, session_index: 2, authority_index: 0, validators_len: 3 }
 		);
 	});
 }

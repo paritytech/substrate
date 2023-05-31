@@ -24,7 +24,6 @@ use super::*;
 use frame_benchmarking::v1::benchmarks;
 use frame_support::{traits::UnfilteredDispatchable, WeakBoundedVec};
 use frame_system::RawOrigin;
-use sp_core::OpaquePeerId;
 use sp_runtime::{
 	traits::{ValidateUnsigned, Zero},
 	transaction_validity::TransactionSource,
@@ -50,7 +49,6 @@ pub fn create_heartbeat<T: Config>(
 
 	let input_heartbeat = Heartbeat {
 		block_number: T::BlockNumber::zero(),
-		peer_id: OpaquePeerId::default(),
 		session_index: 0,
 		authority_index: k - 1,
 		validators_len: keys.len() as u32,
