@@ -40,17 +40,17 @@ sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "8.0.0", path = "../../primitives/core" }
-sp-keyring = { version = "8.0.0", path = "../../primitives/keyring" }
-sp-keystore = { version = "0.14.0", path = "../../primitives/keystore" }
-sp-panic-handler = { version = "6.0.0", path = "../../primitives/panic-handler" }
-sp-runtime = { version = "8.0.0", path = "../../primitives/runtime" }
-sp-version = { version = "6.0.0", path = "../../primitives/version" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-keyring = { version = "24.0.0", path = "../../primitives/keyring" }
+sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
+sp-panic-handler = { version = "8.0.0", path = "../../primitives/panic-handler" }
+sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
+sp-version = { version = "22.0.0", path = "../../primitives/version" }
 
 [dev-dependencies]
 tempfile = "3.1.0"
 futures-timer = "3.0.1"
-sp-tracing = { version = "7.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
 
 [features]
 default = ["rocksdb"]

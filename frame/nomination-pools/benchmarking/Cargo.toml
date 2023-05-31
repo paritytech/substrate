@@ -27,17 +27,17 @@ pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-nomination-pools = { version = "1.0.0", default-features = false, path = "../" }
 
 # Substrate Primitives
-sp-runtime = { version = "8.0.0", default-features = false, path = "../../../primitives/runtime" }
-sp-runtime-interface = { version = "8.0.0", default-features = false, path = "../../../primitives/runtime-interface" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime-interface = { version = "17.0.0", default-features = false, path = "../../../primitives/runtime-interface" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
-sp-std = { version = "6.0.0", default-features = false, path = "../../../primitives/std" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
-sp-core = { version = "8.0.0", path = "../../../primitives/core" }
-sp-io = { version = "8.0.0", path = "../../../primitives/io" }
+sp-core = { version = "21.0.0", path = "../../../primitives/core" }
+sp-io = { version = "23.0.0", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]

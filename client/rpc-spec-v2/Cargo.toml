@@ -18,11 +18,11 @@ jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"]
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
 # Pool for submitting extrinsics required by "transaction"
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
-sp-core = { version = "8.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "8.0.0", path = "../../primitives/runtime" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-version = { version = "6.0.0", path = "../../primitives/version" }
+sp-version = { version = "22.0.0", path = "../../primitives/version" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 codec = { package = "parity-scale-codec", version = "3.2.2" }
 thiserror = "1.0"
