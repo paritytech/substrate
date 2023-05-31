@@ -30,6 +30,7 @@ use frame_support::{
 	construct_runtime,
 	dispatch::DispatchClass,
 	instances::{Instance1, Instance2},
+	migrations::SteppedMigration,
 	ord_parameter_types,
 	pallet_prelude::Get,
 	parameter_types,
@@ -1855,6 +1856,19 @@ impl pallet_statement::Config for Runtime {
 	type MaxAllowedBytes = MaxAllowedBytes;
 }
 
+parameter_types! {
+	pub MbmServiceWeight: Weight = Perbill::from_percent(80) * RuntimeBlockWeights::get().max_block;
+	pub const MbmMigrations: Vec<Box<dyn SteppedMigration>> = vec![];
+}
+
+impl pallet_migrations::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Migrations = MbmMigrations; // same as ()
+	type Suspender = frame_system::Pallet<Runtime>;
+	type ServiceWeight = MbmServiceWeight;
+	type WeightInfo = pallet_migrations::weights::SubstrateWeight<Runtime>;
+}
+
 construct_runtime!(
 	pub struct Runtime where
 		Block = Block,
@@ -1930,6 +1944,7 @@ construct_runtime!(
 		MessageQueue: pallet_message_queue,
 		Pov: frame_benchmarking_pallet_pov,
 		Statement: pallet_statement,
+		MultiBlockMigrations: pallet_migrations,
 	}
 );
 
@@ -2029,6 +2044,7 @@ mod benches {
 		[pallet_lottery, Lottery]
 		[pallet_membership, TechnicalMembership]
 		[pallet_message_queue, MessageQueue]
+		[pallet_migrations, MultiBlockMigrations]
 		[pallet_mmr, Mmr]
 		[pallet_multisig, Multisig]
 		[pallet_nomination_pools, NominationPoolsBench::<Runtime>]

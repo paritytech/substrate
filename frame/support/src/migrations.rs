@@ -242,8 +242,12 @@ pub trait SteppedMigration {
 	}
 }
 
+/// The maximal length in bytes of a cursor for a stepped migration.
+pub const STEPPED_MIGRATION_CURSOR_LEN: u32 = 1024;
+
 /// An opaque cursor that defines the "position" or a migration.
-pub type SteppedMigrationCursor = crate::BoundedVec<u8, crate::traits::ConstU32<1024>>;
+pub type SteppedMigrationCursor =
+	crate::BoundedVec<u8, crate::traits::ConstU32<STEPPED_MIGRATION_CURSOR_LEN>>;
 
 #[derive(Debug)]
 pub enum SteppedMigrationError {
@@ -265,4 +269,15 @@ pub enum SteppedMigrationError {
 	Permanent { inner: u8 },
 	/// An internal error that should never happen.
 	Internal,
+}
+
+/// Can be used to pause extrinsic inclusion across the whole runtime.
+pub trait ExtrinsicSuspender {
+	/// Pause all extrinsics that are not mandatory.
+	fn suspend();
+	fn resume();
+}
+
+pub trait ExtrinsicSuspenderQuery {
+	fn is_suspended() -> bool;
 }

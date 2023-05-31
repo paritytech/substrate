@@ -1,6 +1,6 @@
 [package]
 name = "pallet-migrations"
-version = "0.1.0"
+version = "1.0.0"
 description = "FRAME pallet to execute multi-block migrations."
 authors = ["Parity Technologies <admin@parity.io>"]
 homepage = "https://substrate.io"
@@ -20,18 +20,26 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 impl-trait-for-tuples = "0.2.2"
 log = "0.4.18"
-sp-tracing = { version = "7.0.0", path = "../../primitives/tracing" }
+sp-std = { version = "6.0.0", path = "../../primitives/std", default-features = false }
 
 [dev-dependencies]
-sp-core = { version = "8.0.0", path = "../../primitives/core" }
-sp-io = { version = "8.0.0", path = "../../primitives/io" }
-sp-runtime = { version = "8.0.0", path = "../../primitives/runtime" }
+sp-tracing = { version = "7.0.0", path = "../../primitives/tracing", features = [ "std" ] }
+sp-core = { version = "8.0.0", path = "../../primitives/core", features = [ "std" ] }
+sp-io = { version = "8.0.0", path = "../../primitives/io", features = [ "std" ] }
+sp-runtime = { version = "8.0.0", path = "../../primitives/runtime", features = [ "std" ] }
 
 [features]
 default = ["std"]
 
-std = ["codec/std", "frame-benchmarking?/std", "frame-support/std", "frame-system/std", "scale-info/std", "sp-runtime/std"]
+std = [
+	"codec/std",
+	"frame-benchmarking?/std",
+	"frame-support/std",
+	"frame-system/std",
+	"scale-info/std",
+	"sp-std/std",
+]
 
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "frame-support/runtime-benchmarks", "frame-system/runtime-benchmarks", "sp-runtime/runtime-benchmarks"]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "frame-support/runtime-benchmarks", "frame-system/runtime-benchmarks"]
 
 try-runtime = ["frame-support/try-runtime"]

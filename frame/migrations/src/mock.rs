@@ -104,8 +104,10 @@ frame_support::parameter_types! {
 
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type ServiceWeight = ServiceWeight;
 	type Migrations = SteppedMigrations;
+	type Suspender = frame_system::Pallet<T>;
+	type ServiceWeight = ServiceWeight;
+	type WeightInfo = ();
 }
 
 // Build genesis storage according to the mock runtime.

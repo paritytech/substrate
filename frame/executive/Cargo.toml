@@ -24,6 +24,7 @@ sp-core = { version = "8.0.0", default-features = false, path = "../../primitive
 sp-io = { version = "8.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
+sp-storage = { version = "8.0.0", default-features = false, path = "../../primitives/storage" }
 sp-tracing = { version = "7.0.0", default-features = false, path = "../../primitives/tracing" }
 
 [dev-dependencies]
@@ -47,6 +48,7 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-storage/std",
 	"sp-tracing/std",
 ]
 try-runtime = ["frame-support/try-runtime", "frame-try-runtime/try-runtime", "sp-runtime/try-runtime"]

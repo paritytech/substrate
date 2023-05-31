@@ -671,6 +671,23 @@ where
 	}
 }
 
+pub struct ExtrinsicSuspender;
+impl frame_support::migrations::ExtrinsicSuspender for ExtrinsicSuspender {
+	fn suspend() {
+		sp_io::storage::set(sp_storage::well_known_keys::EXTRINSICS_PAUSED, b"");
+	}
+
+	fn resume() {
+		sp_io::storage::clear(sp_storage::well_known_keys::EXTRINSICS_PAUSED);
+	}
+}
+
+impl frame_support::migrations::ExtrinsicSuspenderQuery for ExtrinsicSuspender {
+	fn is_suspended() -> bool {
+		sp_io::storage::exists(sp_storage::well_known_keys::EXTRINSICS_PAUSED)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

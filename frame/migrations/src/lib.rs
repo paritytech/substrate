@@ -19,8 +19,12 @@
 
 pub use pallet::*;
 
+mod benchmarking;
 mod mock;
 mod tests;
+pub mod weights;
+
+pub use weights::WeightInfo;
 
 use frame_support::{
 	defensive,
@@ -30,11 +34,14 @@ use frame_support::{
 	BoundedVec,
 };
 
+const LOG_TARGET: &'static str = "runtime::migrations";
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use sp_std::{boxed::Box, vec::Vec};
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -49,8 +56,12 @@ pub mod pallet {
 		/// `Cursor` for `None`).
 		type Migrations: Get<Vec<Box<dyn SteppedMigration>>>;
 
+		type Suspender: ExtrinsicSuspender + ExtrinsicSuspenderQuery;
+
 		/// The weight to spend each block to execute migrations.
 		type ServiceWeight: Get<Weight>;
+
+		type WeightInfo: WeightInfo;
 	}
 
 	/// The currently active migration to run and its cursor.
@@ -74,15 +85,11 @@ pub mod pallet {
 		MigrationFailed { index: u32 },
 	}
 
-	// Errors inform users that something went wrong.
-	#[pallet::error]
-	pub enum Error<T> {}
-
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
 			if Cursor::<T>::exists() {
-				defensive!("Migrations in progress will be aborted.");
+				log::error!(target: LOG_TARGET, "Defensive: migrations in progress will be aborted.");
 				return Default::default() // FAIL-CI
 			}
 			Cursor::<T>::set(Some(Default::default()));
@@ -95,32 +102,27 @@ pub mod pallet {
 			let mut meter = WeightMeter::from_limit(T::ServiceWeight::get());
 
 			let Some((index, inner_cursor)) = Cursor::<T>::get() else {
-				log::info!("[Block {n}] Nothing to do: waiting for cursor to become `Some`.");
+				log::debug!(target: LOG_TARGET, "[Block {n:?}] Nothing to do: waiting for cursor to become `Some`.");
 				return meter.consumed;
 			};
 			let migrations = T::Migrations::get();
 
 			let Some(migration) = migrations.get(index as usize) else {
-				log::info!("[Block {n}] All migrations processed ({} >= {}).", index, migrations.len());
 				Cursor::<T>::kill();
 				Self::deposit_event(Event::UpgradeCompleted { migrations: migrations.len() as u32 });
 				return meter.consumed;
 			};
-			log::info!("[Block {n}] Advancing migration {index}.");
 
 			match migration.transactional_step(Some(inner_cursor), &mut meter) {
 				Ok(Some(inner_cursor)) => {
-					log::info!("[Block {n}] Migration {index} advanced.");
 					Cursor::<T>::set(Some((index, inner_cursor)));
 					Self::deposit_event(Event::MigrationAdvanced { index });
 				},
 				Ok(None) => {
-					log::info!("[Block {n}] Migration {index} done.");
 					Cursor::<T>::set(Some((index.saturating_add(1), Default::default())));
 					Self::deposit_event(Event::MigrationCompleted { index });
 				},
 				Err(err) => {
-					log::error!("[Block {n}] Migration {index} failed: {err:?}");
 					Cursor::<T>::kill();
 					// TODO: handle errors
 					Cursor::<T>::set(Some((index.saturating_add(1), Default::default())));
@@ -138,13 +140,15 @@ pub mod pallet {
 		///
 		/// Should normally not be needed and is only in place as emergency measure.
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
+		#[pallet::weight((0, DispatchClass::Mandatory))]
 		pub fn force_set_cursor(
 			origin: OriginFor<T>,
 			cursor: Option<(u32, SteppedMigrationCursor)>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+
 			Cursor::<T>::set(cursor);
+
 			Ok(())
 		}
 	}

@@ -17,7 +17,7 @@
 
 #![cfg(test)]
 
-use crate::{mock::*, Error};
+use crate::mock::*;
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::{OnInitialize, OnRuntimeUpgrade},

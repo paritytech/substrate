@@ -204,6 +204,8 @@ pub mod well_known_keys {
 	/// Encodes to `0x3a65787472696e7369635f696e646578`.
 	pub const EXTRINSIC_INDEX: &[u8] = b":extrinsic_index";
 
+	pub const EXTRINSICS_PAUSED: &[u8] = b":extrinsics_paused";
+
 	/// Current intra-block entropy (a universally unique `[u8; 32]` value) is stored here.
 	pub const INTRABLOCK_ENTROPY: &[u8] = b":intrablock_entropy";
 
