@@ -30,7 +30,4 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 ]
-serde = [
-	"dep:serde"
-]
 runtime-benchmarks = []
