@@ -1739,8 +1739,25 @@ pub fn composite_enum(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
-/// An attribute macro that can be attached to a module declaration. Doing so will
-/// make it available for import later.
+/// Can be attached to a module. Doing so will declare that module as importable into a pallet
+/// via [`#[import_section]`](`macro@import_section`).
+///
+/// Note that sections are imported by their module name/ident, and should be referred to by
+/// their _full path_ from the perspective of the target pallet. Do not attempt to make use
+/// of `use` statements to bring pallet sections into scope, as this will not work (unless
+/// you do so as part of a wildcard import, in which case it will work).
+///
+/// ## Naming Logistics
+///
+/// Also note that because of how `#[pallet_section]` works, pallet section names must be
+/// globally unique _within the crate in which they are defined_. For more information on
+/// why this must be the case, see macro_magic's
+/// [`#[export_tokens]`](https://docs.rs/macro_magic/latest/macro_magic/attr.export_tokens.html) macro.
+///
+/// Optionally, you may provide an argument to `#[pallet_section]` such as
+/// `#[pallet_section(some_ident)]`, in the event that there is another pallet section in
+/// same crate with the same ident/name. The ident you specify can then be used instead of
+/// the module's ident name when you go to import it via `#[import_section]`. 
 #[proc_macro_attribute]
 pub fn pallet_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 	match macro_magic::mm_core::export_tokens_internal(attr, tokens, false) {
