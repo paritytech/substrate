@@ -530,7 +530,7 @@ impl ProtocolController {
 				self.drop_connection(peer_id);
 			},
 			None => {
-				warn!(
+				trace!(
 					target: LOG_TARGET,
 					"Trying to disconnect unknown peer {} from {:?}.", peer_id, self.set_id,
 				);
