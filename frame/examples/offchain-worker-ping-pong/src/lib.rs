@@ -64,7 +64,7 @@
 //! can call `pong_signed`:
 //!
 //! ```bash
-//! $ curl --location --request POST 'http://localhost:9933' \
+//! $ curl --location --request POST 'http://localhost:9944' \
 //! --header 'Content-Type: application/json' \
 //! --data-raw '{
 //!     "jsonrpc": "2.0",

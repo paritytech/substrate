@@ -44,7 +44,7 @@
 //! Here's an example of how a node admin can inject some keys into the keystore:
 //!
 //! ```bash
-//! $ curl --location --request POST 'http://localhost:9933' \
+//! $ curl --location --request POST 'http://localhost:9944' \
 //! --header 'Content-Type: application/json' \
 //! --data-raw '{
 //!     "jsonrpc": "2.0",
