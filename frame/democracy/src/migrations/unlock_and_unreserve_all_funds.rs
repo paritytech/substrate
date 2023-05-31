@@ -123,7 +123,6 @@ where
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		use codec::Encode;
-		use frame_support::ensure;
 
 		// Get staked and deposited balances as reported by this pallet.
 		let (account_deposits, account_locks, _) = Self::get_account_deposits_and_locks();
@@ -134,14 +133,15 @@ where
 			.map(|account| (account.clone(), T::Currency::reserved_balance(&account)))
 			.collect();
 
-		// The deposit amount must be less than or equal to the reserved amount.
-		// If it is higher, there is either a bug with the pallet or a bug in the calculation of the
-		// deposit amount.
-		ensure!(
-			account_deposits.iter().all(|(account, deposit)| *deposit <=
-				*account_reserved_before.get(account).unwrap_or(&Zero::zero())),
-			"Deposit amount is greater than reserved amount"
-		);
+		// Total deposited for each account *should* be less than or equal to the total reserved,
+		// however this does not hold for all cases due to bugs in the reserve logic of this pallet.
+		let bugged_deposits = all_accounts
+			.iter()
+			.filter(|account| {
+				account_deposits.get(&account).unwrap_or(&Zero::zero()) >
+					account_reserved_before.get(&account).unwrap_or(&Zero::zero())
+			})
+			.count();
 
 		let total_deposits_to_unreserve =
 			account_deposits.clone().into_values().sum::<BalanceOf<T>>();
@@ -149,6 +149,7 @@ where
 		log::info!("Total accounts: {:?}", all_accounts.len());
 		log::info!("Total deposit to unreserve: {:?}", total_deposits_to_unreserve);
 		log::info!("Accounts with locks: {:?}", account_locks.len());
+		log::info!("Bugged deposits: {}/{}", bugged_deposits, all_accounts.len());
 
 		Ok(account_reserved_before.encode())
 	}
