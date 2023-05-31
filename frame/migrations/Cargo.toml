@@ -21,12 +21,12 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 impl-trait-for-tuples = "0.2.2"
 log = "0.4.18"
 sp-std = { version = "6.0.0", path = "../../primitives/std", default-features = false }
+sp-runtime = { version = "8.0.0", path = "../../primitives/runtime", default-features = false }
 
 [dev-dependencies]
 sp-tracing = { version = "7.0.0", path = "../../primitives/tracing", features = [ "std" ] }
 sp-core = { version = "8.0.0", path = "../../primitives/core", features = [ "std" ] }
 sp-io = { version = "8.0.0", path = "../../primitives/io", features = [ "std" ] }
-sp-runtime = { version = "8.0.0", path = "../../primitives/runtime", features = [ "std" ] }
 
 [features]
 default = ["std"]
@@ -38,8 +38,9 @@ std = [
 	"frame-system/std",
 	"scale-info/std",
 	"sp-std/std",
+	"sp-runtime/std",
 ]
 
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "frame-support/runtime-benchmarks", "frame-system/runtime-benchmarks"]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "frame-support/runtime-benchmarks", "frame-system/runtime-benchmarks", "sp-runtime/runtime-benchmarks",]
 
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = ["frame-support/try-runtime", "sp-runtime/try-runtime",]

@@ -26,15 +26,22 @@ pub mod weights;
 
 pub use weights::WeightInfo;
 
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	defensive,
 	migrations::*,
-	traits::{ConstU32, Get},
+	traits::Get,
 	weights::{Weight, WeightMeter},
-	BoundedVec,
 };
+use sp_runtime::Saturating;
 
 const LOG_TARGET: &'static str = "runtime::migrations";
+
+#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
+pub enum MigrationCursor {
+	Active(u32, Option<SteppedMigrationCursor>),
+	Stuck,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -56,7 +63,7 @@ pub mod pallet {
 		/// `Cursor` for `None`).
 		type Migrations: Get<Vec<Box<dyn SteppedMigration>>>;
 
-		type Suspender: ExtrinsicSuspender + ExtrinsicSuspenderQuery;
+		type Suspender: ExtrinsicSuspenderQuery;
 
 		/// The weight to spend each block to execute migrations.
 		type ServiceWeight: Get<Weight>;
@@ -68,7 +75,14 @@ pub mod pallet {
 	///
 	/// `None` indicates that no migration process is running.
 	#[pallet::storage]
-	pub type Cursor<T> = StorageValue<_, (u32, SteppedMigrationCursor), OptionQuery>;
+	pub type Cursor<T> = StorageValue<_, MigrationCursor, OptionQuery>;
+
+	/// Set of all successfully executed migrations.
+	///
+	/// This is used as blacklist, to not re-execute migrations that have not been removed from the
+	/// codebase yet.
+	#[pallet::storage]
+	pub type Executed<T> = StorageMap<_, Twox64Concat, [u8; 16], (), OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -76,13 +90,29 @@ pub mod pallet {
 		/// Runtime upgrade started.
 		UpgradeStarted,
 		/// Runtime upgrade completed with `migrations`.
-		UpgradeCompleted { migrations: u32 },
+		UpgradeCompleted {
+			migrations: u32,
+		},
+		UpgradeFailed,
+
+		/// Migration `index` was skipped, since it already executed in the past.
+		MigrationSkippedHistoric {
+			index: u32,
+		},
 		/// Migration `index` made progress.
-		MigrationAdvanced { index: u32 },
+		MigrationAdvanced {
+			index: u32,
+		},
 		/// Migration `index` completed.
-		MigrationCompleted { index: u32 },
-		/// Migration `index` failed. TODO add `inner` error
-		MigrationFailed { index: u32 },
+		MigrationCompleted {
+			index: u32,
+		},
+		/// Migration `index` failed.
+		///
+		/// This implies that the whole upgrade failed and governance intervention is required.
+		MigrationFailed {
+			index: u32,
+		},
 	}
 
 	#[pallet::hooks]
@@ -92,8 +122,11 @@ pub mod pallet {
 				log::error!(target: LOG_TARGET, "Defensive: migrations in progress will be aborted.");
 				return Default::default() // FAIL-CI
 			}
-			Cursor::<T>::set(Some(Default::default()));
-			Self::deposit_event(Event::UpgradeStarted);
+
+			if T::Migrations::get().len() > 0 {
+				Cursor::<T>::set(Some(MigrationCursor::Active(0, None)));
+				Self::deposit_event(Event::UpgradeStarted);
+			}
 
 			Default::default() // FAIL-CI
 		}
@@ -101,34 +134,56 @@ pub mod pallet {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let mut meter = WeightMeter::from_limit(T::ServiceWeight::get());
 
-			let Some((index, inner_cursor)) = Cursor::<T>::get() else {
-				log::debug!(target: LOG_TARGET, "[Block {n:?}] Nothing to do: waiting for cursor to become `Some`.");
-				return meter.consumed;
+			let (mut index, mut cursor) = match Cursor::<T>::get() {
+				None => {
+					log::debug!(target: LOG_TARGET, "[Block {n:?}] Nothing to migrate.");
+					return meter.consumed
+				},
+				Some(MigrationCursor::Active(index, cursor)) => (index, cursor),
+				Some(MigrationCursor::Stuck) => {
+					defensive!("Migration stuck. Governance intervention required.");
+					return meter.consumed
+				},
 			};
+			debug_assert!(T::Suspender::is_suspended());
+
 			let migrations = T::Migrations::get();
-
-			let Some(migration) = migrations.get(index as usize) else {
-				Cursor::<T>::kill();
-				Self::deposit_event(Event::UpgradeCompleted { migrations: migrations.len() as u32 });
-				return meter.consumed;
-			};
-
-			match migration.transactional_step(Some(inner_cursor), &mut meter) {
-				Ok(Some(inner_cursor)) => {
-					Cursor::<T>::set(Some((index, inner_cursor)));
-					Self::deposit_event(Event::MigrationAdvanced { index });
-				},
-				Ok(None) => {
-					Cursor::<T>::set(Some((index.saturating_add(1), Default::default())));
-					Self::deposit_event(Event::MigrationCompleted { index });
-				},
-				Err(err) => {
+			for step in 0.. {
+				let Some(migration) = migrations.get(index as usize) else {
+					Self::deposit_event(Event::UpgradeCompleted { migrations: migrations.len() as u32 });
 					Cursor::<T>::kill();
-					// TODO: handle errors
-					Cursor::<T>::set(Some((index.saturating_add(1), Default::default())));
-					Self::deposit_event(Event::MigrationFailed { index });
-				},
+					return meter.consumed;
+				};
+
+				match migration.transactional_step(cursor, &mut meter) {
+					Ok(Some(next_cursor)) => {
+						Self::deposit_event(Event::MigrationAdvanced { index });
+						cursor = Some(next_cursor);
+						// A migration has to make maximal progress per step, we therefore break.
+						break
+					},
+					Ok(None) => {
+						Self::deposit_event(Event::MigrationCompleted { index });
+						index.saturating_inc();
+						cursor = None;
+					},
+					Err(SteppedMigrationError::InsufficientWeight { required }) => {
+						if step == 0 || required.any_gt(meter.limit) {
+							Cursor::<T>::set(Some(MigrationCursor::Stuck));
+							Self::deposit_event(Event::UpgradeFailed);
+						} // else: Hope that it gets better next time.
+						return meter.consumed
+					},
+					Err(SteppedMigrationError::Failed) => {
+						Self::deposit_event(Event::MigrationFailed { index });
+						Self::deposit_event(Event::UpgradeFailed);
+						Cursor::<T>::set(Some(MigrationCursor::Stuck));
+						return meter.consumed
+					},
+				}
 			}
+
+			Cursor::<T>::set(Some(MigrationCursor::Active(index, cursor)));
 
 			meter.consumed
 		}
@@ -143,7 +198,7 @@ pub mod pallet {
 		#[pallet::weight((0, DispatchClass::Mandatory))]
 		pub fn force_set_cursor(
 			origin: OriginFor<T>,
-			cursor: Option<(u32, SteppedMigrationCursor)>,
+			cursor: Option<MigrationCursor>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -151,5 +206,11 @@ pub mod pallet {
 
 			Ok(())
 		}
+	}
+}
+
+impl<T: Config> ExtrinsicSuspenderQuery for Pallet<T> {
+	fn is_suspended() -> bool {
+		Cursor::<T>::exists()
 	}
 }

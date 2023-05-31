@@ -18,44 +18,33 @@
 #![cfg(test)]
 
 use crate::mock::*;
+use crate::Event;
 use frame_support::{
-	assert_noop, assert_ok,
-	traits::{OnInitialize, OnRuntimeUpgrade},
-	weights::Weight,
+	traits::{OnRuntimeUpgrade},
 };
 
-/*
-log output:
-
- [Block 0] Advancing migration 0.
- [Block 0] Migration 0 advanced.
- [Block 1] Advancing migration 0.
- [Block 1] Migration 0 done.
- [Block 2] Advancing migration 1.
- [Block 2] Migration 1 advanced.
- [Block 3] Advancing migration 1.
- [Block 3] Migration 1 advanced.
- [Block 4] Advancing migration 1.
- [Block 4] Migration 1 done.
- [Block 5] All migrations processed (2 >= 2).
- [Block 6] Nothing to do: waiting for cursor to become `Some`.
- [Block 7] Nothing to do: waiting for cursor to become `Some`.
- [Block 8] Nothing to do: waiting for cursor to become `Some`.
- [Block 9] Nothing to do: waiting for cursor to become `Some`.
-*/
+/// Example output:
+///
+/// ```pre
+/// Suspend    
+/// MockedMigrate: Step 1/2    
+/// MockedMigrate: Step 2/2    
+/// MockedMigrate: Succeeded after 2 steps    
+/// MockedMigrate: Step 1/3    
+/// MockedMigrate: Step 2/3    
+/// MockedMigrate: Step 3/3    
+/// MockedMigrate: Succeeded after 3 steps    
+/// Resume
+/// ```
 #[test]
 fn basic_works() {
 	sp_tracing::try_init_simple();
 
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-
 		Migrations::on_runtime_upgrade();
 
-		for i in 0..10 {
-			Migrations::on_initialize(i);
-		}
-
-		dbg!(System::events());
+		run_to_block(10);
+		assert_last_event::<Test>(Event::UpgradeCompleted { migrations: 4 }.into());
 	});
 }

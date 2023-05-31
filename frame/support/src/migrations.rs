@@ -238,7 +238,7 @@ pub trait SteppedMigration {
 			},
 			Err(err) => sp_api::TransactionOutcome::Rollback(Err(err)),
 		})
-		.map_err(|()| SteppedMigrationError::Internal)?
+		.map_err(|()| SteppedMigrationError::Failed)?
 	}
 }
 
@@ -257,36 +257,20 @@ pub enum SteppedMigrationError {
 	/// Can be resolved by calling with at least `required` weight. Note that calling it with
 	/// exactly `required` weight could cause it to not make any progress.
 	InsufficientWeight { required: Weight },
-	/// Implementation specific error that should resolve itself at a later point in time.
-	///
-	/// The number of re-tries can be decided upon by the caller. `inner` is undefined.
-	Transient { inner: u8 },
 	// permanent errors:
 	/// The migration encountered a permanent error and cannot continue.
 	///
 	/// This can happen if the storage is corrupted or an assumption got invalidated while the
 	/// migration was running.
-	Permanent { inner: u8 },
-	/// An internal error that should never happen.
-	Internal,
-}
-
-/// Can be used to pause extrinsic inclusion across the whole runtime.
-pub trait ExtrinsicSuspender {
-	/// Pause all extrinsics that are not mandatory.
-	fn suspend();
-	fn resume();
+	Failed,
 }
 
 pub trait ExtrinsicSuspenderQuery {
 	fn is_suspended() -> bool;
 }
 
-impl ExtrinsicSuspender for () {
-	fn suspend() {}
-	fn resume() {}
-}
-
 impl ExtrinsicSuspenderQuery for () {
-	fn is_suspended() -> bool { false }
+	fn is_suspended() -> bool {
+		false
+	}
 }

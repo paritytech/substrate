@@ -118,7 +118,9 @@
 
 use codec::{Codec, Encode};
 use frame_support::{
-	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
+	dispatch::{
+		DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, WithPostDispatchInfo,
+	},
 	pallet_prelude::InvalidTransaction,
 	traits::{
 		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
@@ -133,7 +135,7 @@ use sp_runtime::{
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult,
+	ApplyExtrinsicResult, DispatchError,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -191,8 +193,15 @@ impl<
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 		ExtrinsicSuspender: frame_support::migrations::ExtrinsicSuspenderQuery,
 	> ExecuteBlock<Block>
-	for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade, ExtrinsicSuspender>
-where
+	for Executive<
+		System,
+		Block,
+		Context,
+		UnsignedValidator,
+		AllPalletsWithSystem,
+		COnRuntimeUpgrade,
+		ExtrinsicSuspender,
+	> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
@@ -383,8 +392,16 @@ impl<
 			+ OffchainWorker<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 		ExtrinsicSuspender: frame_support::migrations::ExtrinsicSuspenderQuery,
-	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade, ExtrinsicSuspender>
-where
+	>
+	Executive<
+		System,
+		Block,
+		Context,
+		UnsignedValidator,
+		AllPalletsWithSystem,
+		COnRuntimeUpgrade,
+		ExtrinsicSuspender,
+	> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
@@ -569,7 +586,15 @@ where
 
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
-		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
+		// Check whether we need to error because extrinsics are paused.
+		let r = if dispatch_info.class != DispatchClass::Mandatory &&
+			ExtrinsicSuspender::is_suspended()
+		{
+			// no refunds
+			Err(DispatchError::Suspended.with_weight(dispatch_info.weight))
+		} else {
+			Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?
+		};
 
 		// Mandatory(inherents) are not allowed to fail.
 		//
@@ -673,23 +698,6 @@ where
 		<AllPalletsWithSystem as OffchainWorker<System::BlockNumber>>::offchain_worker(
 			*header.number(),
 		)
-	}
-}
-
-pub struct ExtrinsicSuspender;
-impl frame_support::migrations::ExtrinsicSuspender for ExtrinsicSuspender {
-	fn suspend() {
-		sp_io::storage::set(sp_storage::well_known_keys::EXTRINSICS_PAUSED, b"");
-	}
-
-	fn resume() {
-		sp_io::storage::clear(sp_storage::well_known_keys::EXTRINSICS_PAUSED);
-	}
-}
-
-impl frame_support::migrations::ExtrinsicSuspenderQuery for ExtrinsicSuspender {
-	fn is_suspended() -> bool {
-		sp_io::storage::exists(sp_storage::well_known_keys::EXTRINSICS_PAUSED)
 	}
 }
 

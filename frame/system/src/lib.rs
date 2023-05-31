@@ -89,7 +89,6 @@ use frame_support::{
 		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
 		DispatchResult, DispatchResultWithPostInfo, PerDispatchClass,
 	},
-	migrations::{ExtrinsicSuspender, ExtrinsicSuspenderQuery},
 	storage::{self, StorageStreamIter},
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
@@ -536,9 +535,6 @@ pub mod pallet {
 	/// Total extrinsics count for the current block.
 	#[pallet::storage]
 	pub(super) type ExtrinsicCount<T: Config> = StorageValue<_, u32>;
-
-	#[pallet::storage]
-	pub type ExtrinsicsSuspended<T: Config> = StorageValue<_, (), OptionQuery>;
 
 	/// The current weight for the block.
 	#[pallet::storage]
@@ -1749,22 +1745,6 @@ impl<T: Config> Lookup for ChainContext<T> {
 
 	fn lookup(&self, s: Self::Source) -> Result<Self::Target, LookupError> {
 		<T::Lookup as StaticLookup>::lookup(s)
-	}
-}
-
-impl<T: Config> ExtrinsicSuspender for Pallet<T> {
-	fn suspend() {
-		ExtrinsicsSuspended::<T>::put(());
-	}
-
-	fn resume() {
-		ExtrinsicsSuspended::<T>::kill();
-	}
-}
-
-impl<T: Config> ExtrinsicSuspenderQuery for Pallet<T> {
-	fn is_suspended() -> bool {
-		ExtrinsicsSuspended::<T>::exists()
 	}
 }
 

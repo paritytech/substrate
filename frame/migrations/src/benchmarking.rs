@@ -49,6 +49,18 @@ mod benches {
 		}
 	}
 
+	#[benchmark]
+	fn on_init_loop_base() {
+		Cursor::<T>::set(Some(cursor(0)));
+		System::<T>::set_block_number(1);
+		Pallet::<T>::on_runtime_upgrade();
+
+		#[block]
+		{
+			Pallet::<T>::on_initialize(1);
+		}
+	}
+
 	/// Benchmarks the slowest path of `change_value`.
 	#[benchmark]
 	fn force_set_cursor() {

@@ -18,10 +18,11 @@
 #![cfg(test)]
 
 //use crate::GetMigrations;
+use crate::Config;
 use codec::{Decode, Encode};
 use frame_support::{
 	migrations::*,
-	traits::{ConstU16, ConstU64},
+	traits::{ConstU16, ConstU64, OnFinalize, OnInitialize},
 	weights::{Weight, WeightMeter},
 };
 use sp_core::H256;
@@ -72,21 +73,39 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
-/// Succeeds after `inner` steps.
-pub struct MockedMigrate(u32);
+#[allow(dead_code)]
+pub enum MockedMigrationKind {
+	SucceedAfter,
+	FailAfter,
+}
+use MockedMigrationKind::*; // C style
+
+pub struct MockedMigrate(MockedMigrationKind, u32);
+
 impl SteppedMigration for MockedMigrate {
 	fn step(
 		&self,
 		cursor: &Option<SteppedMigrationCursor>,
-		meter: &mut WeightMeter,
+		_meter: &mut WeightMeter,
 	) -> Result<Option<SteppedMigrationCursor>, SteppedMigrationError> {
 		let mut count: u32 =
 			cursor.as_ref().and_then(|c| Decode::decode(&mut &c[..]).ok()).unwrap_or(0);
-		if count == self.0 {
-			return Ok(None)
+		log::debug!("MockedMigrate: Step {}", count);
+		if count != self.1 {
+			count += 1;
+			return Ok(Some(count.encode().try_into().unwrap()))
 		}
-		count += 1;
-		Ok(Some(count.encode().try_into().unwrap()))
+
+		match self.0 {
+			SucceedAfter => {
+				log::debug!("MockedMigrate: Succeeded after {} steps", count);
+				Ok(None)
+			},
+			FailAfter => {
+				log::debug!("MockedMigrate: Failed after {} steps", count);
+				Err(SteppedMigrationError::Failed)
+			},
+		}
 	}
 }
 
@@ -97,15 +116,17 @@ frame_support::parameter_types! {
 	/// This is different from the normal compile-time tuple config, but allows them to carry
 	/// configuration.
 	pub SteppedMigrations: Vec<Box<dyn SteppedMigration>> = vec![
-		Box::new(MockedMigrate(1)),
-		Box::new(MockedMigrate(2)),
+		Box::new(MockedMigrate(SucceedAfter, 0)),
+		Box::new(MockedMigrate(SucceedAfter, 0)),
+		Box::new(MockedMigrate(SucceedAfter, 1)),
+		Box::new(MockedMigrate(SucceedAfter, 2)),
 	];
 }
 
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Migrations = SteppedMigrations;
-	type Suspender = frame_system::Pallet<T>;
+	type Suspender = LoggingSuspender<crate::Pallet<Test>>;
 	type ServiceWeight = ServiceWeight;
 	type WeightInfo = ();
 }
@@ -113,4 +134,30 @@ impl crate::Config for Test {
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+}
+
+pub struct LoggingSuspender<Inner>(core::marker::PhantomData<Inner>);
+impl<Inner: ExtrinsicSuspenderQuery> ExtrinsicSuspenderQuery for LoggingSuspender<Inner> {
+	fn is_suspended() -> bool {
+		let res = Inner::is_suspended();
+		log::debug!("IsSuspended: {res}");
+		res
+	}
+}
+
+pub fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
+	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
+}
+
+pub fn run_to_block(n: u64) {
+	while System::block_number() < n {
+		if System::block_number() > 1 {
+			Migrations::on_finalize(System::block_number());
+			System::on_finalize(System::block_number());
+		}
+		log::debug!("Block {}", System::block_number());
+		System::set_block_number(System::block_number() + 1);
+		System::on_initialize(System::block_number());
+		Migrations::on_initialize(System::block_number());
+	}
 }

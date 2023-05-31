@@ -557,6 +557,8 @@ pub enum DispatchError {
 	Unavailable,
 	/// Root origin is not allowed.
 	RootNotAllowed,
+	/// The runtime is suspended and marks all transactions as failed.
+	Suspended,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -686,6 +688,7 @@ impl From<DispatchError> for &'static str {
 			Corruption => "State corrupt",
 			Unavailable => "Resource unavailable",
 			RootNotAllowed => "Root not allowed",
+			Suspended => "Extrinsics suspended",
 		}
 	}
 }
@@ -733,6 +736,7 @@ impl traits::Printable for DispatchError {
 			Corruption => "State corrupt".print(),
 			Unavailable => "Resource unavailable".print(),
 			RootNotAllowed => "Root not allowed".print(),
+			Suspended => "Extrinsics suspended".print(),
 		}
 	}
 }
