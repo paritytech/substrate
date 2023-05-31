@@ -39,5 +39,3 @@ Then make sure that the corresponding address (`5GCCgshTQCfGkXy6kAkFDW1TZXAdsbCN
 
 More complex management models and session
 based key rotations should be considered, but that's outside the scope of this example.
-
-License: MIT-0
