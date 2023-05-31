@@ -211,7 +211,7 @@ async fn build_network_future<
 }
 
 /// Builds a future that processes system RPC requests.
-async fn build_system_rpc_future<
+pub async fn build_system_rpc_future<
 	B: BlockT,
 	C: BlockchainEvents<B>
 		+ HeaderBackend<B>
@@ -419,6 +419,13 @@ where
 pub struct TransactionPoolAdapter<C, P> {
 	pool: Arc<P>,
 	client: Arc<C>,
+}
+
+impl<C, P> TransactionPoolAdapter<C, P> {
+	/// Constructs a new instance of [`TransactionPoolAdapter`].
+	pub fn new(pool: Arc<P>, client: Arc<C>) -> Self {
+		Self { pool, client }
+	}
 }
 
 /// Get transactions for propagation.
