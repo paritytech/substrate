@@ -21,18 +21,18 @@ sc-consensus-babe = { version = "0.10.0-dev", path = "../" }
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../../epochs" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../rpc-api" }
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
-sp-application-crypto = { version = "7.0.0", path = "../../../../primitives/application-crypto" }
+sp-application-crypto = { version = "8.0.0", path = "../../../../primitives/application-crypto" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../../primitives/consensus/common" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../../primitives/consensus/babe" }
-sp-core = { version = "7.0.0", path = "../../../../primitives/core" }
-sp-keystore = { version = "0.13.0", path = "../../../../primitives/keystore" }
-sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
+sp-core = { version = "8.0.0", path = "../../../../primitives/core" }
+sp-keystore = { version = "0.14.0", path = "../../../../primitives/keystore" }
+sp-runtime = { version = "8.0.0", path = "../../../../primitives/runtime" }
 
 [dev-dependencies]
 serde_json = "1.0.85"
 tokio = "1.22.0"
 sc-consensus = { version = "0.10.0-dev", path = "../../../consensus/common" }
 sc-keystore = { version = "4.0.0-dev", path = "../../../keystore" }
-sp-keyring = { version = "7.0.0", path = "../../../../primitives/keyring" }
+sp-keyring = { version = "8.0.0", path = "../../../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../../test-utils/runtime/client" }

@@ -3914,6 +3914,38 @@ pub(crate) mod tests {
 	}
 
 	#[test]
+	fn revert_finalized_blocks() {
+		let pruning_modes = [BlocksPruning::Some(10), BlocksPruning::KeepAll];
+
+		// we will create a chain with 11 blocks, finalize block #8 and then
+		// attempt to revert 5 blocks.
+		for pruning_mode in pruning_modes {
+			let backend = Backend::<Block>::new_test_with_tx_storage(pruning_mode, 1);
+
+			let mut parent = Default::default();
+			for i in 0..=10 {
+				parent = insert_block(&backend, i, parent, None, Default::default(), vec![], None)
+					.unwrap();
+			}
+
+			assert_eq!(backend.blockchain().info().best_number, 10);
+
+			let block8 = backend.blockchain().hash(8).unwrap().unwrap();
+			backend.finalize_block(block8, None).unwrap();
+			backend.revert(5, true).unwrap();
+
+			match pruning_mode {
+				// we can only revert to blocks for which we have state, if pruning is enabled
+				// then the last state available will be that of the latest finalized block
+				BlocksPruning::Some(_) =>
+					assert_eq!(backend.blockchain().info().finalized_number, 8),
+				// otherwise if we're not doing state pruning we can revert past finalized blocks
+				_ => assert_eq!(backend.blockchain().info().finalized_number, 5),
+			}
+		}
+	}
+
+	#[test]
 	fn test_no_duplicated_leaves_allowed() {
 		let backend: Backend<Block> = Backend::new_test(10, 10);
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());

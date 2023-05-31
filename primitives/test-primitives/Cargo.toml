@@ -15,10 +15,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", default-features = false, features = ["derive"], optional = true }
-sp-application-crypto = { version = "7.0.0", default-features = false, path = "../application-crypto" }
-sp-core = { version = "7.0.0", default-features = false, path = "../core" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../std" }
+sp-application-crypto = { version = "8.0.0", default-features = false, path = "../application-crypto" }
+sp-core = { version = "8.0.0", default-features = false, path = "../core" }
+sp-runtime = { version = "8.0.0", default-features = false, path = "../runtime" }
+sp-std = { version = "6.0.0", default-features = false, path = "../std" }
 
 [features]
 default = [

@@ -440,7 +440,7 @@ where
 
 		let fut = async move {
 			// Reject subscription if runtime_updates is false.
-			if !block_guard.has_runtime_updates() {
+			if !block_guard.has_runtime() {
 				pending
 					.reject(ChainHeadRpcError::InvalidParam(
 						"The runtime updates flag must be set".into(),

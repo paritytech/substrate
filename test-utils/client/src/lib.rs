@@ -42,7 +42,11 @@ use sc_client_api::BlockchainEvents;
 use sc_service::client::{ClientConfig, LocalCallExecutor};
 use serde::Deserialize;
 use sp_core::{storage::ChildInfo, testing::TaskExecutor};
-use sp_runtime::{codec::Encode, traits::Block as BlockT, OpaqueExtrinsic};
+use sp_runtime::{
+	codec::Encode,
+	traits::{Block as BlockT, Header},
+	OpaqueExtrinsic,
+};
 use std::{
 	collections::{HashMap, HashSet},
 	pin::Pin,
@@ -410,7 +414,7 @@ where
 		Box::pin(async move {
 			while let Some(notification) = import_notification_stream.next().await {
 				if notification.is_new_best {
-					blocks.insert(notification.hash);
+					blocks.insert(*notification.header.number());
 					if blocks.len() == count {
 						break
 					}

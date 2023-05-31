@@ -331,7 +331,7 @@ pub mod pallet {
 				parent_bounty_id,
 				child_bounty_id,
 				|maybe_child_bounty| -> DispatchResult {
-					let mut child_bounty =
+					let child_bounty =
 						maybe_child_bounty.as_mut().ok_or(BountiesError::<T>::InvalidIndex)?;
 
 					// Ensure child-bounty is in expected state.
@@ -396,7 +396,7 @@ pub mod pallet {
 				parent_bounty_id,
 				child_bounty_id,
 				|maybe_child_bounty| -> DispatchResult {
-					let mut child_bounty =
+					let child_bounty =
 						maybe_child_bounty.as_mut().ok_or(BountiesError::<T>::InvalidIndex)?;
 
 					// Ensure child-bounty is in expected state.
@@ -473,7 +473,7 @@ pub mod pallet {
 				parent_bounty_id,
 				child_bounty_id,
 				|maybe_child_bounty| -> DispatchResult {
-					let mut child_bounty =
+					let child_bounty =
 						maybe_child_bounty.as_mut().ok_or(BountiesError::<T>::InvalidIndex)?;
 
 					let slash_curator = |curator: &T::AccountId,
@@ -591,7 +591,7 @@ pub mod pallet {
 				parent_bounty_id,
 				child_bounty_id,
 				|maybe_child_bounty| -> DispatchResult {
-					let mut child_bounty =
+					let child_bounty =
 						maybe_child_bounty.as_mut().ok_or(BountiesError::<T>::InvalidIndex)?;
 
 					// Ensure child-bounty is in active state.
