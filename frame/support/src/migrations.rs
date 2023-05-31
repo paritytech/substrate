@@ -281,3 +281,12 @@ pub trait ExtrinsicSuspender {
 pub trait ExtrinsicSuspenderQuery {
 	fn is_suspended() -> bool;
 }
+
+impl ExtrinsicSuspender for () {
+	fn suspend() {}
+	fn resume() {}
+}
+
+impl ExtrinsicSuspenderQuery for () {
+	fn is_suspended() -> bool { false }
+}
