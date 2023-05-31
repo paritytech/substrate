@@ -55,7 +55,7 @@ pub trait WeightInfo {
 	fn induct() -> Weight;
 	fn promote() -> Weight;
 	fn offboard() -> Weight;
-	fn import() -> Weight;
+	fn import_member() -> Weight;
 	fn approve() -> Weight;
 	fn submit_evidence() -> Weight;
 }
@@ -189,7 +189,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
 	/// Storage: RankedCollective Members (r:1 w:0)
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
-	fn import() -> Weight {
+	fn import_member() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `280`
 		//  Estimated: `3514`
@@ -356,7 +356,7 @@ impl WeightInfo for () {
 	/// Proof: CoreFellowship Member (max_values: None, max_size: Some(49), added: 2524, mode: MaxEncodedLen)
 	/// Storage: RankedCollective Members (r:1 w:0)
 	/// Proof: RankedCollective Members (max_values: None, max_size: Some(42), added: 2517, mode: MaxEncodedLen)
-	fn import() -> Weight {
+	fn import_member() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `280`
 		//  Estimated: `3514`

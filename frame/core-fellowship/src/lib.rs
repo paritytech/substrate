@@ -36,7 +36,7 @@
 //!   `bump` to demote the candidate by one rank.
 //! - If a candidate fails to be promoted to a member within the `offboard_timeout` period, then
 //!   anyone may call `bump` to remove the account's candidacy.
-//! - Pre-existing members may call `import` to have their rank recognised and be inducted into this
+//! - Pre-existing members may call `import_member` to have their rank recognised and be inducted into this
 //!   pallet (to gain a salary and allow for eventual promotion).
 //! - If, externally to this pallet, a member or candidate has their rank removed completely, then
 //!   `offboard` may be called to remove them entirely from this pallet.
@@ -507,7 +507,7 @@ pub mod pallet {
 		/// - `origin`: A signed origin of a ranked, but not tracked, account.
 		#[pallet::weight(T::WeightInfo::import())]
 		#[pallet::call_index(8)]
-		pub fn import(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn import_member(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(!Member::<T, I>::contains_key(&who), Error::<T, I>::AlreadyInducted);
 			let rank = T::Members::rank_of(&who).ok_or(Error::<T, I>::Unranked)?;

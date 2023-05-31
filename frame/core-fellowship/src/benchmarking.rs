@@ -49,7 +49,7 @@ mod benchmarks {
 		for _ in 0..rank {
 			T::Members::promote(&member)?;
 		}
-		CoreFellowship::<T, I>::import(RawOrigin::Signed(member.clone()).into())?;
+		CoreFellowship::<T, I>::import_member(RawOrigin::Signed(member.clone()).into())?;
 		Ok(member)
 	}
 
@@ -162,7 +162,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn import() -> Result<(), BenchmarkError> {
+	fn import_member() -> Result<(), BenchmarkError> {
 		let member = account("member", 0, SEED);
 		T::Members::induct(&member)?;
 		T::Members::promote(&member)?;
