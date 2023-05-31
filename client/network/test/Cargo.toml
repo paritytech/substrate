@@ -33,8 +33,8 @@ sc-service = { version = "0.10.0-dev", default-features = false, features = ["te
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-sp-core = { version = "8.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
-sp-tracing = { version = "7.0.0", path = "../../../primitives/tracing" }
+sp-core = { version = "21.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }
+sp-tracing = { version = "10.0.0", path = "../../../primitives/tracing" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

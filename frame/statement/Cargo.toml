@@ -18,10 +18,10 @@ frame-support = { version = "4.0.0-dev", default-features = false,  path = "../s
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-statement-store = { version = "4.0.0-dev", default-features = false, path = "../../primitives/statement-store" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
-sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "8.0.0", default-features = false, path = "../../primitives/io" }
-sp-core = { version = "8.0.0", default-features = false, path = "../../primitives/core" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
 log = { version = "0.4.17", default-features = false }
 
 [dev-dependencies]

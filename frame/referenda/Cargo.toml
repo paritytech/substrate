@@ -19,13 +19,13 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 ] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", features = ["derive"], optional = true }
-sp-arithmetic = { version = "7.0.0", default-features = false, path = "../../primitives/arithmetic" }
+sp-arithmetic = { version = "16.0.0", default-features = false, path = "../../primitives/arithmetic" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-io = { version = "8.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 log = { version = "0.4.17", default-features = false }
 
 [dev-dependencies]
@@ -33,7 +33,7 @@ assert_matches = { version = "1.5" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }
 pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
-sp-core = { version = "8.0.0", path = "../../primitives/core" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
 
 [features]
 default = ["std"]

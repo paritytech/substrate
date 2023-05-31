@@ -39,14 +39,14 @@ sc-network-common = { version = "0.10.0-dev", path = "../../network/common" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
 sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-application-crypto = { version = "8.0.0", path = "../../../primitives/application-crypto" }
-sp-arithmetic = { version = "7.0.0", path = "../../../primitives/arithmetic" }
+sp-application-crypto = { version = "23.0.0", path = "../../../primitives/application-crypto" }
+sp-arithmetic = { version = "16.0.0", path = "../../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-core = { version = "8.0.0", path = "../../../primitives/core" }
+sp-core = { version = "21.0.0", path = "../../../primitives/core" }
 sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/grandpa" }
-sp-keystore = { version = "0.14.0", path = "../../../primitives/keystore" }
-sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
+sp-keystore = { version = "0.27.0", path = "../../../primitives/keystore" }
+sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"
@@ -55,6 +55,6 @@ serde = "1.0.136"
 tokio = "1.22.0"
 sc-network = { version = "0.10.0-dev", path = "../../network" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
-sp-keyring = { version = "8.0.0", path = "../../../primitives/keyring" }
-sp-tracing = { version = "7.0.0", path = "../../../primitives/tracing" }
+sp-keyring = { version = "24.0.0", path = "../../../primitives/keyring" }
+sp-tracing = { version = "10.0.0", path = "../../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
