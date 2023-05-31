@@ -1864,7 +1864,6 @@ parameter_types! {
 impl pallet_migrations::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Migrations = MbmMigrations; // same as ()
-	type Suspender = frame_system::Pallet<Runtime>;
 	type ServiceWeight = MbmServiceWeight;
 	type WeightInfo = pallet_migrations::weights::SubstrateWeight<Runtime>;
 }

@@ -25,10 +25,11 @@ use frame_support::{
 	traits::{ConstU16, ConstU64, OnFinalize, OnInitialize},
 	weights::{Weight, WeightMeter},
 };
-use sp_core::H256;
+use sp_core::{ConstU32, H256};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BoundedVec,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -73,6 +74,7 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
+#[derive(Debug)]
 #[allow(dead_code)]
 pub enum MockedMigrationKind {
 	SucceedAfter,
@@ -83,6 +85,14 @@ use MockedMigrationKind::*; // C style
 pub struct MockedMigrate(MockedMigrationKind, u32);
 
 impl SteppedMigration for MockedMigrate {
+	fn id(&self) -> BoundedVec<u8, ConstU32<32>> {
+		format!("MockedMigrate({:?}, {})", self.0, self.1)
+			.as_bytes()
+			.to_vec()
+			.try_into()
+			.unwrap()
+	}
+
 	fn step(
 		&self,
 		cursor: &Option<SteppedMigrationCursor>,
@@ -126,7 +136,6 @@ frame_support::parameter_types! {
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Migrations = SteppedMigrations;
-	type Suspender = LoggingSuspender<crate::Pallet<Test>>;
 	type ServiceWeight = ServiceWeight;
 	type WeightInfo = ();
 }

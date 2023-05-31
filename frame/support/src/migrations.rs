@@ -21,9 +21,10 @@ use crate::{
 	storage::transactional::with_transaction_opaque_err,
 	traits::{GetStorageVersion, NoStorageVersionSet, PalletInfoAccess, StorageVersion},
 	weights::{RuntimeDbWeight, Weight, WeightMeter},
+	BoundedVec,
 };
 use impl_trait_for_tuples::impl_for_tuples;
-use sp_core::Get;
+use sp_core::{ConstU32, Get};
 use sp_io::{hashing::twox_128, storage::clear_prefix, KillStorageResult};
 use sp_std::marker::PhantomData;
 #[cfg(feature = "try-runtime")]
@@ -213,6 +214,8 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 
 /// A migration that can proceed in multiple steps.
 pub trait SteppedMigration {
+	fn id(&self) -> BoundedVec<u8, ConstU32<32>>;
+
 	/// Try to migrate as much as possible with the given weight.
 	///
 	/// **ANY STORAGE CHANGES MUST BE ROLLED-BACK BY THE CALLER UPON ERROR.** This is necessary

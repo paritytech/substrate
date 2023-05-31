@@ -21,7 +21,7 @@ use super::*;
 
 use frame_benchmarking::v2::*;
 use frame_support::migrations::STEPPED_MIGRATION_CURSOR_LEN as CURSOR_LEN;
-use frame_system::RawOrigin;
+use frame_system::{Pallet as System, RawOrigin};
 
 #[benchmarks]
 mod benches {
@@ -52,12 +52,12 @@ mod benches {
 	#[benchmark]
 	fn on_init_loop_base() {
 		Cursor::<T>::set(Some(cursor(0)));
-		System::<T>::set_block_number(1);
+		System::<T>::set_block_number(1u32.into());
 		Pallet::<T>::on_runtime_upgrade();
 
 		#[block]
 		{
-			Pallet::<T>::on_initialize(1);
+			Pallet::<T>::on_initialize(1u32.into());
 		}
 	}
 
@@ -70,8 +70,11 @@ mod benches {
 		_(RawOrigin::Root, Some(cursor(1)));
 	}
 
-	fn cursor(i: u32) -> (u32, SteppedMigrationCursor) {
-		(u32::MAX - i, vec![1u8; CURSOR_LEN as usize].try_into().expect("Static length is good"))
+	fn cursor(i: u32) -> MigrationCursor {
+		MigrationCursor::Active(
+			u32::MAX - i,
+			Some(vec![1u8; CURSOR_LEN as usize].try_into().expect("Static length is good")),
+		)
 	}
 
 	// Implements a test for each benchmark. Execute with:

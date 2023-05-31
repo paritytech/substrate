@@ -63,8 +63,6 @@ pub mod pallet {
 		/// `Cursor` for `None`).
 		type Migrations: Get<Vec<Box<dyn SteppedMigration>>>;
 
-		type Suspender: ExtrinsicSuspenderQuery;
-
 		/// The weight to spend each block to execute migrations.
 		type ServiceWeight: Get<Weight>;
 
@@ -82,7 +80,8 @@ pub mod pallet {
 	/// This is used as blacklist, to not re-execute migrations that have not been removed from the
 	/// codebase yet.
 	#[pallet::storage]
-	pub type Executed<T> = StorageMap<_, Twox64Concat, [u8; 16], (), OptionQuery>;
+	pub type Executed<T> =
+		StorageMap<_, Twox64Concat, BoundedVec<u8, ConstU32<32>>, (), OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -145,7 +144,7 @@ pub mod pallet {
 					return meter.consumed
 				},
 			};
-			debug_assert!(T::Suspender::is_suspended());
+			debug_assert!(<Self as ExtrinsicSuspenderQuery>::is_suspended());
 
 			let migrations = T::Migrations::get();
 			for step in 0.. {
@@ -154,6 +153,12 @@ pub mod pallet {
 					Cursor::<T>::kill();
 					return meter.consumed;
 				};
+				if Executed::<T>::contains_key(&migration.id()) {
+					Self::deposit_event(Event::MigrationSkippedHistoric { index });
+					index.saturating_inc();
+					cursor = None;
+					continue
+				}
 
 				match migration.transactional_step(cursor, &mut meter) {
 					Ok(Some(next_cursor)) => {
@@ -164,6 +169,7 @@ pub mod pallet {
 					},
 					Ok(None) => {
 						Self::deposit_event(Event::MigrationCompleted { index });
+						Executed::<T>::insert(&migration.id(), ());
 						index.saturating_inc();
 						cursor = None;
 					},

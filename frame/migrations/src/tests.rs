@@ -17,11 +17,8 @@
 
 #![cfg(test)]
 
-use crate::mock::*;
-use crate::Event;
-use frame_support::{
-	traits::{OnRuntimeUpgrade},
-};
+use crate::{mock::*, Event, Executed};
+use frame_support::traits::OnRuntimeUpgrade;
 
 /// Example output:
 ///
@@ -45,6 +42,9 @@ fn basic_works() {
 		Migrations::on_runtime_upgrade();
 
 		run_to_block(10);
+
 		assert_last_event::<Test>(Event::UpgradeCompleted { migrations: 4 }.into());
+		// Just three, since one was added twice.
+		assert_eq!(Executed::<Test>::iter().count(), 3);
 	});
 }
