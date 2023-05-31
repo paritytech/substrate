@@ -145,6 +145,17 @@ pub mod pallet {
 		/// Maximum number of prices.
 		#[pallet::constant]
 		type MaxPrices: Get<u32>;
+
+		/// Maximum number of authorities.
+		#[pallet::constant]
+		type MaxAuthorities: Get<u32>;
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		NotAuthority,
+		AlreadyAuthority,
+		TooManyAuthorities,
 	}
 
 	#[pallet::pallet]
@@ -248,17 +259,60 @@ pub mod pallet {
 		/// In our example the `offchain worker` will create, sign & submit a transaction that
 		/// calls this function passing the price.
 		///
-		/// todo: docs authorized
+		/// This only works if the caller is in `Authorities`.
 		#[pallet::call_index(0)]
 		#[pallet::weight({0})]
 		pub fn submit_price(origin: OriginFor<T>, price: u32) -> DispatchResultWithPostInfo {
 			// Retrieve sender of the transaction.
 			let who = ensure_signed(origin)?;
 
-			// todo: check authorized
+			match Self::is_authority(&who) {
+				true => Self::add_price(Some(who), price),
+				false => return Err(Error::<T>::NotAuthority.into()),
+			}
 
-			// Add the price to the on-chain list.
-			Self::add_price(Some(who), price);
+			Ok(().into())
+		}
+
+		#[pallet::call_index(1)]
+		#[pallet::weight({0})]
+		pub fn add_authority(
+			origin: OriginFor<T>,
+			authority: T::AccountId,
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+
+			ensure!(!Self::is_authority(&authority), Error::<T>::AlreadyAuthority);
+
+			let mut authorities = <Authorities<T>>::get();
+			match authorities.try_push(authority.clone()) {
+				Ok(()) => (),
+				Err(_) => return Err(Error::<T>::TooManyAuthorities.into()),
+			};
+
+			Authorities::<T>::set(authorities);
+
+			Ok(().into())
+		}
+
+		#[pallet::call_index(2)]
+		#[pallet::weight({0})]
+		pub fn remove_authority(
+			origin: OriginFor<T>,
+			authority: T::AccountId,
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+
+			ensure!(Self::is_authority(&authority), Error::<T>::NotAuthority);
+
+			let mut authorities = <Authorities<T>>::get();
+			match authorities.iter().position(|a| a == &authority) {
+				Some(index) => authorities.swap_remove(index),
+				None => return Err(Error::<T>::NotAuthority.into()),
+			};
+
+			Authorities::<T>::set(authorities);
+
 			Ok(().into())
 		}
 	}
@@ -277,9 +331,18 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn prices)]
 	pub(super) type Prices<T: Config> = StorageValue<_, BoundedVec<u32, T::MaxPrices>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn authorities)]
+	pub(super) type Authorities<T: Config> =
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxAuthorities>, ValueQuery>;
 }
 
 impl<T: Config> Pallet<T> {
+	fn is_authority(who: &T::AccountId) -> bool {
+		<Authorities<T>>::get().contains(who)
+	}
+
 	/// A helper function to fetch the price and send signed transaction.
 	fn fetch_price_and_send_signed() -> Result<(), &'static str> {
 		let signer = Signer::<T, T::AuthorityId>::all_accounts();

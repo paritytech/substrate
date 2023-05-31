@@ -19,7 +19,7 @@ use crate as example_offchain_worker;
 use crate::*;
 use codec::Decode;
 use frame_support::{
-	assert_ok, parameter_types,
+	assert_noop, assert_ok, parameter_types,
 	traits::{ConstU32, ConstU64},
 };
 use sp_core::{
@@ -116,6 +116,7 @@ impl Config for Test {
 	type AuthorityId = crypto::TestAuthId;
 	type GracePeriod = ConstU64<5>;
 	type MaxPrices = ConstU32<64>;
+	type MaxAuthorities = ConstU32<64>;
 }
 
 fn test_pub() -> sp_core::sr25519::Public {
@@ -127,11 +128,23 @@ fn it_aggregates_the_price() {
 	sp_io::TestExternalities::default().execute_with(|| {
 		assert_eq!(PriceOracleOcwExample::average_price(), None);
 
+		assert_noop!(
+			PriceOracleOcwExample::submit_price(RuntimeOrigin::signed(test_pub()), 27),
+			Error::<Test>::NotAuthority
+		);
+
+		assert_ok!(PriceOracleOcwExample::add_authority(RuntimeOrigin::root(), test_pub()));
 		assert_ok!(PriceOracleOcwExample::submit_price(RuntimeOrigin::signed(test_pub()), 27));
 		assert_eq!(PriceOracleOcwExample::average_price(), Some(27));
 
 		assert_ok!(PriceOracleOcwExample::submit_price(RuntimeOrigin::signed(test_pub()), 43));
 		assert_eq!(PriceOracleOcwExample::average_price(), Some(35));
+
+		assert_ok!(PriceOracleOcwExample::remove_authority(RuntimeOrigin::root(), test_pub()));
+		assert_noop!(
+			PriceOracleOcwExample::submit_price(RuntimeOrigin::signed(test_pub()), 27),
+			Error::<Test>::NotAuthority
+		);
 	});
 }
 
