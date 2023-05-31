@@ -54,7 +54,7 @@ sp-debug-derive = { path = "../../primitives/debug-derive" }
 # 3rd party
 array-bytes = { version = "6.1", optional = true }
 log = { version = "0.4.17", default-features = false }
-serde = { version = "1.0.136", optional = true, features = ["derive"] }
+serde = { version = "1.0.163", optional = true, features = ["derive"] }
 
 [dev-dependencies]
 futures = "0.3.21"
