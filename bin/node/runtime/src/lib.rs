@@ -30,7 +30,6 @@ use frame_support::{
 	construct_runtime,
 	dispatch::DispatchClass,
 	instances::{Instance1, Instance2},
-	migrations::SteppedMigration,
 	ord_parameter_types,
 	pallet_prelude::Get,
 	parameter_types,
@@ -1856,17 +1855,15 @@ impl pallet_statement::Config for Runtime {
 	type MaxAllowedBytes = MaxAllowedBytes;
 }
 
-type MbmCursor = BoundedVec<u8, ConstU32<32>>;
-
 parameter_types! {
 	pub MbmServiceWeight: Weight = Perbill::from_percent(80) * RuntimeBlockWeights::get().max_block;
-	pub const MbmMigrations: Vec<Box<dyn SteppedMigration<Cursor=MbmCursor>>> = vec![];
 }
 
 impl pallet_migrations::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Migrations = MbmMigrations;
-	type Cursor = MbmCursor;
+	type Migrations = ();
+	type Cursor = ();
+	type Identifier = ();
 	type ServiceWeight = MbmServiceWeight;
 	type WeightInfo = pallet_migrations::weights::SubstrateWeight<Runtime>;
 }

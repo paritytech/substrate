@@ -140,7 +140,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
 			if Cursor::<T>::exists() {
-				defensive!("Code for ongoing migrations was deleted.");
+				defensive!("Ongoing migrations interrupted - chain stuck");
 				Self::deposit_event(Event::UpgradeFailed);
 				Cursor::<T>::set(Some(MigrationCursor::Stuck));
 				return T::WeightInfo::on_runtime_upgrade()
@@ -150,6 +150,7 @@ pub mod pallet {
 				Cursor::<T>::set(Some(MigrationCursor::Active(ActiveCursor {
 					index: 0,
 					inner_cursor: None,
+					// TODO is this +1 correct?
 					started_at: System::<T>::block_number().saturating_add(1u32.into()),
 				})));
 				Self::deposit_event(Event::UpgradeStarted);
@@ -228,13 +229,12 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call]
+	#[pallet::call(weight = T::WeightInfo)]
 	impl<T: Config> Pallet<T> {
 		/// Allows root to set the cursor to any value.
 		///
 		/// Should normally not be needed and is only in place as emergency measure.
 		#[pallet::call_index(0)]
-		#[pallet::weight((0, DispatchClass::Mandatory))]
 		pub fn force_set_cursor(
 			origin: OriginFor<T>,
 			cursor: Option<MigrationCursor<T::Cursor, T::BlockNumber>>,
@@ -247,11 +247,11 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})] // FAIL-CI
 		pub fn clear_historic(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
 
-			Historic::<T>::clear(0, None);
+			let _ = Historic::<T>::clear(0, None); // FAIL-CI think about limit + cursor
 			Self::deposit_event(Event::HistoricCleared);
 
 			Ok(())

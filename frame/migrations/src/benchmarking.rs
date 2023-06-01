@@ -20,7 +20,6 @@
 use super::*;
 
 use frame_benchmarking::v2::*;
-use frame_support::migrations::STEPPED_MIGRATION_CURSOR_LEN as CURSOR_LEN;
 use frame_system::{Pallet as System, RawOrigin};
 
 #[benchmarks]
@@ -40,7 +39,7 @@ mod benches {
 
 	#[benchmark]
 	fn on_init_base() {
-		assert!(!Cursor::<T>::exists());
+		Cursor::<T>::set(Some(cursor::<T>()));
 		System::<T>::set_block_number(1u32.into());
 
 		#[block]
@@ -63,17 +62,22 @@ mod benches {
 	/// Benchmarks the slowest path of `change_value`.
 	#[benchmark]
 	fn force_set_cursor() {
-		Cursor::<T>::set(Some(cursor(0)));
+		Cursor::<T>::set(Some(cursor::<T>()));
 
 		#[extrinsic_call]
-		_(RawOrigin::Root, Some(cursor(1)));
+		_(RawOrigin::Root, Some(cursor::<T>()));
 	}
 
-	fn cursor(i: u32) -> MigrationCursor {
-		MigrationCursor::Active(
-			u32::MAX - i,
-			Some(vec![1u8; CURSOR_LEN as usize].try_into().expect("Static length is good")),
-		)
+	fn cursor<T: Config>() -> MigrationCursor<T::Cursor, T::BlockNumber> {
+		// Note: The weight of a function can depend on the weight of reading the `inner_cursor`.
+		// `Cursor` is a user provided type. Now instead of requeuing something like `Cursor:
+		// From<u32>`, we instead rely on the fact that it is MEL and the PoV benchmarking will
+		// therefore already take the MEL bound, even when the cursor in storage is `None`.
+		MigrationCursor::Active(ActiveCursor {
+			index: u32::MAX,
+			inner_cursor: None,
+			started_at: 0u32.into(),
+		})
 	}
 
 	// Implements a test for each benchmark. Execute with:
