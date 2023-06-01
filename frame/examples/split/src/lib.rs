@@ -13,12 +13,12 @@ mod tests;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-mod storages;
+mod events;
 pub mod weights;
 use frame_support::pallet_macros::*;
 pub use weights::*;
 
-#[import_section(storages)]
+#[import_section(events)]
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -37,15 +37,13 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-	// Pallets use events to inform users when important changes are made.
-	// https://docs.substrate.io/main-docs/build/events-errors/
-	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
-		/// Event documentation should end with an array that provides descriptive names for event
-		/// parameters. [something, who]
-		SomethingStored { something: u32, who: T::AccountId },
-	}
+	// The pallet's runtime storage items.
+	// https://docs.substrate.io/main-docs/build/runtime-storage/
+	#[pallet::storage]
+	#[pallet::getter(fn something)]
+	// Learn more about declaring storage items:
+	// https://docs.substrate.io/main-docs/build/runtime-storage/#declaring-storage-items
+	pub type Something<T> = StorageValue<_, u32>;
 
 	// Errors inform users that something went wrong.
 	#[pallet::error]
