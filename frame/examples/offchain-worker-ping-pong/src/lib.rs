@@ -92,9 +92,9 @@ use frame_system::{
 };
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
+	traits::Zero,
 	transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction},
 	RuntimeDebug,
-	traits::Zero,
 };
 
 #[cfg(test)]
