@@ -160,7 +160,7 @@ mod tests {
 		}
 	}
 
-	// Test vectors and macro adapted from https://github.com/zkcrypto/bls12_381/blob/e224ad4ea1babfc582ccd751c2bf128611d10936/src/tests/mod.rs
+	// Test vectors and macro adapted from https://github.com/zkcrypto/bls12_381/blob/e224ad4ea1babfc582ccd751c2bf128611d10936/src/test-data/mod.rs
 	macro_rules! test_vectors {
 		($projective:ident, $affine:ident, $compress:expr, $expected:ident) => {
 			let mut e = $projective::zero();
@@ -193,25 +193,27 @@ mod tests {
 
 	#[test]
 	fn g1_compressed_valid_test_vectors() {
-		let bytes: &'static [u8] = include_bytes!("tests/g1_compressed_valid_test_vectors.dat");
+		let bytes: &'static [u8] = include_bytes!("test-data/g1_compressed_valid_test_vectors.dat");
 		test_vectors!(G1Projective, G1Affine, Compress::Yes, bytes);
 	}
 
 	#[test]
 	fn g1_uncompressed_valid_test_vectors() {
-		let bytes: &'static [u8] = include_bytes!("tests/g1_uncompressed_valid_test_vectors.dat");
+		let bytes: &'static [u8] =
+			include_bytes!("test-data/g1_uncompressed_valid_test_vectors.dat");
 		test_vectors!(G1Projective, G1Affine, Compress::No, bytes);
 	}
 
 	#[test]
 	fn g2_compressed_valid_test_vectors() {
-		let bytes: &'static [u8] = include_bytes!("tests/g2_compressed_valid_test_vectors.dat");
+		let bytes: &'static [u8] = include_bytes!("test-data/g2_compressed_valid_test_vectors.dat");
 		test_vectors!(G2Projective, G2Affine, Compress::Yes, bytes);
 	}
 
 	#[test]
 	fn g2_uncompressed_valid_test_vectors() {
-		let bytes: &'static [u8] = include_bytes!("tests/g2_uncompressed_valid_test_vectors.dat");
+		let bytes: &'static [u8] =
+			include_bytes!("test-data/g2_uncompressed_valid_test_vectors.dat");
 		test_vectors!(G2Projective, G2Affine, Compress::No, bytes);
 	}
 }
