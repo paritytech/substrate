@@ -530,6 +530,15 @@ impl<A, B: Default> Convert<A, B> for () {
 	}
 }
 
+/// Adapter which turns a `Get` implementation into a `Convert` implementation which always returns
+/// in the same value no matter the input.
+pub struct ConvertToValue<T>(sp_std::marker::PhantomData<T>);
+impl<X, Y, T: Get<Y>> Convert<X, Y> for ConvertToValue<T> {
+	fn convert(_: X) -> Y {
+		T::get()
+	}
+}
+
 /// A structure that performs identity conversion.
 pub struct Identity;
 impl<T> Convert<T, T> for Identity {

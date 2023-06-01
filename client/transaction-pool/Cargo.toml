@@ -21,7 +21,7 @@ linked-hash-map = "0.5.4"
 log = "0.4.17"
 num-traits = "0.2.8"
 parking_lot = "0.12.1"
-serde = { version = "1.0.136", features = ["derive"] }
+serde = { version = "1.0.163", features = ["derive"] }
 thiserror = "1.0.30"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }

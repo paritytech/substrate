@@ -20,7 +20,7 @@ log = "0.4.17"
 rand = "0.8.5"
 rand_pcg = "0.3.1"
 regex = "1"
-serde = { version = "1.0.136", features = ["derive"] }
+serde = { version = "1.0.163", features = ["derive"] }
 serde_json = "1.0.85"
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sp-core = { version = "21.0.0", path = "../../primitives/core" }

@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 impl-serde = { version = "0.4.0", optional = true, default-features = false }
 ref-cast = "1.0.0"
-serde = { version = "1.0.136", default-features = false, features = ["derive", "alloc"], optional = true }
+serde = { version = "1.0.163", default-features = false, features = ["derive", "alloc"], optional = true }
 sp-debug-derive = { version = "8.0.0", default-features = false, path = "../debug-derive" }
 sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 
