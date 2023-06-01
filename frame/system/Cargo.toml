@@ -16,15 +16,15 @@ targets = ["x86_64-unknown-linux-gnu"]
 cfg-if = "1.0"
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 log = { version = "0.4.17", default-features = false }
-scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-serde = { version = "1.0.163", features = ["derive"], optional = true }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive", "serde"] }
+serde = { version = "1.0.163", default-features = false, features = ["derive", "alloc"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core", features = ["serde"] }
 sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime", features = ["serde"] }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
-sp-version = { version = "22.0.0", default-features = false, path = "../../primitives/version" }
-sp-weights = { version = "20.0.0", default-features = false, path = "../../primitives/weights" }
+sp-version = { version = "22.0.0", default-features = false, path = "../../primitives/version", features = ["serde"] }
+sp-weights = { version = "20.0.0", default-features = false, path = "../../primitives/weights", features = ["serde"] }
 
 [dev-dependencies]
 criterion = "0.4.0"
@@ -38,7 +38,7 @@ std = [
 	"frame-support/std",
 	"log/std",
 	"scale-info/std",
-	"serde",
+	"serde/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",

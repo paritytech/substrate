@@ -673,7 +673,7 @@ pub mod pallet {
 	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		#[cfg_attr(feature = "std", serde(with = "sp_core::bytes"))]
+		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
 	}
 
