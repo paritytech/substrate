@@ -512,10 +512,22 @@ macro_rules! morph_types {
 morph_types! {
 	/// Morpher to disregard the source value and replace with another.
 	pub type Replace<V: TypedGet> = |_| -> V::Type { V::get() };
+
 	/// Mutator which reduces a scalar by a particular amount.
 	pub type ReduceBy<N: TypedGet> = |r: N::Type| -> N::Type {
 		r.checked_sub(&N::get()).unwrap_or(Zero::zero())
 	} where N::Type: CheckedSub | Zero;
+
+	/// A `TryMorph` implementation to reduce a scalar by a particular amount, checking for
+	/// underflow.
+	pub type CheckedReduceBy<N: TypedGet>: TryMorph = |r: N::Type| -> Result<N::Type, ()> {
+		r.checked_sub(&N::get()).ok_or(())
+	} where N::Type: CheckedSub;
+
+	/// A `TryMorph` implementation to enforce an upper limit for a result of the outer morphed type.
+	pub type MorphWithUpperLimit<L: TypedGet, M>: TryMorph = |r: L::Type| -> Result<L::Type, ()> {
+		M::try_morph(r).map(|m| m.min(L::get()))
+	} where L::Type: Ord, M: TryMorph<L::Type, Outcome = L::Type>;
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.
