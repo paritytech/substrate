@@ -1856,14 +1856,17 @@ impl pallet_statement::Config for Runtime {
 	type MaxAllowedBytes = MaxAllowedBytes;
 }
 
+type MbmCursor = BoundedVec<u8, ConstU32<32>>;
+
 parameter_types! {
 	pub MbmServiceWeight: Weight = Perbill::from_percent(80) * RuntimeBlockWeights::get().max_block;
-	pub const MbmMigrations: Vec<Box<dyn SteppedMigration>> = vec![];
+	pub const MbmMigrations: Vec<Box<dyn SteppedMigration<Cursor=MbmCursor>>> = vec![];
 }
 
 impl pallet_migrations::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Migrations = MbmMigrations; // same as ()
+	type Migrations = MbmMigrations;
+	type Cursor = MbmCursor;
 	type ServiceWeight = MbmServiceWeight;
 	type WeightInfo = pallet_migrations::weights::SubstrateWeight<Runtime>;
 }
