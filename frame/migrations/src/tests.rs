@@ -18,77 +18,60 @@
 #![cfg(test)]
 
 use crate::{
-	mock::{MockedMigrationKind::*, *},
-	Event, Historic,
+	mock::{MockedMigrationKind::*, Test as T, *},
+	Cursor, Event, MigrationCursor,
 };
 use frame_support::traits::OnRuntimeUpgrade;
-use frame_system::EventRecord;
-use sp_core::H256;
 
-/// Example output:
-///
-/// ```pre
-/// Suspend    
-/// MockedMigrate: Step 1/2    
-/// MockedMigrate: Step 2/2    
-/// MockedMigrate: Succeeded after 2 steps    
-/// MockedMigrate: Step 1/3    
-/// MockedMigrate: Step 2/3    
-/// MockedMigrate: Step 3/3    
-/// MockedMigrate: Succeeded after 3 steps    
-/// Resume
-/// ```
 #[test]
 fn basic_works() {
-	new_test_ext().execute_with(|| {
-		MIGRATIONS.with(|migrations| {
-			*migrations.borrow_mut() =
-				vec![(SucceedAfter, 0), (SucceedAfter, 1), (SucceedAfter, 2)];
-		});
+	test_closure(|| {
+		// Add three migrations. Each taking one block longer.
+		MigrationsStorage::set(vec![(SucceedAfter, 0), (SucceedAfter, 1), (SucceedAfter, 2)]);
 
 		System::set_block_number(1);
 		Migrations::on_runtime_upgrade();
-
 		run_to_block(10);
 
-		// Just three, since two were added twice.
-		assert_eq!(Historic::<Test>::iter().count(), 3);
-		dbg!(System::events());
+		// Check that the executed migrations are recorded into `Historical`.
 		assert_eq!(
-			System::events(),
+			historic(),
 			vec![
-				Event::UpgradeStarted.into_record(),
-				Event::MigrationCompleted { index: 0, took: 0 }.into_record(),
-				Event::MigrationAdvanced { index: 1, step: 0 }.into_record(),
-				Event::MigrationCompleted { index: 1, took: 1 }.into_record(),
-				Event::MigrationAdvanced { index: 2, step: 0 }.into_record(),
-				Event::MigrationAdvanced { index: 2, step: 1 }.into_record(),
-				Event::MigrationCompleted { index: 2, took: 2 }.into_record(),
-				Event::UpgradeCompleted { migrations: 3 }.into_record(),
+				mocked_id(SucceedAfter, 0),
+				mocked_id(SucceedAfter, 1),
+				mocked_id(SucceedAfter, 2),
 			]
 		);
+		// Check that we got all events.
+		assert_events(vec![
+			Event::UpgradeStarted,
+			Event::MigrationCompleted { index: 0, took: 0 },
+			Event::MigrationAdvanced { index: 1, step: 0 },
+			Event::MigrationCompleted { index: 1, took: 1 },
+			Event::MigrationAdvanced { index: 2, step: 0 },
+			Event::MigrationAdvanced { index: 2, step: 1 },
+			Event::MigrationCompleted { index: 2, took: 2 },
+			Event::UpgradeCompleted { migrations: 3 },
+		]);
 	});
 }
 
 #[test]
 fn historic_skipping_works() {
-	new_test_ext().execute_with(|| {
-		MIGRATIONS.with(|migrations| {
-			*migrations.borrow_mut() = vec![
-				(SucceedAfter, 0),
-				(SucceedAfter, 0), // Will be skipped
-				(SucceedAfter, 1),
-				(SucceedAfter, 2),
-				(SucceedAfter, 1), // Will be skipped
-			];
-		});
+	test_closure(|| {
+		MigrationsStorage::set(vec![
+			(SucceedAfter, 0),
+			(SucceedAfter, 0), // duplicate
+			(SucceedAfter, 1),
+			(SucceedAfter, 2),
+			(SucceedAfter, 1), // duplicate
+		]);
 
 		System::set_block_number(1);
 		Migrations::on_runtime_upgrade();
-
 		run_to_block(10);
 
-		// Just three, since two were added twice.
+		// Just three historical ones, since two were added twice.
 		assert_eq!(
 			historic(),
 			vec![
@@ -97,27 +80,26 @@ fn historic_skipping_works() {
 				mocked_id(SucceedAfter, 2),
 			]
 		);
+		// Events received.
+		assert_events(vec![
+			Event::UpgradeStarted,
+			Event::MigrationCompleted { index: 0, took: 0 },
+			Event::MigrationSkippedHistoric { index: 1 },
+			Event::MigrationAdvanced { index: 2, step: 0 },
+			Event::MigrationCompleted { index: 2, took: 1 },
+			Event::MigrationAdvanced { index: 3, step: 0 },
+			Event::MigrationAdvanced { index: 3, step: 1 },
+			Event::MigrationCompleted { index: 3, took: 2 },
+			Event::MigrationSkippedHistoric { index: 4 },
+			Event::UpgradeCompleted { migrations: 5 },
+		]);
 
-		assert_eq!(
-			System::events(),
-			vec![
-				Event::UpgradeStarted.into_record(),
-				Event::MigrationCompleted { index: 0, took: 0 }.into_record(),
-				Event::MigrationSkippedHistoric { index: 1 }.into_record(),
-				Event::MigrationAdvanced { index: 2, step: 0 }.into_record(),
-				Event::MigrationCompleted { index: 2, took: 1 }.into_record(),
-				Event::MigrationAdvanced { index: 3, step: 0 }.into_record(),
-				Event::MigrationAdvanced { index: 3, step: 1 }.into_record(),
-				Event::MigrationCompleted { index: 3, took: 2 }.into_record(),
-				Event::MigrationSkippedHistoric { index: 4 }.into_record(),
-				Event::UpgradeCompleted { migrations: 5 }.into_record(),
-			]
-		);
-
+		// Now go for another upgrade; just to make sure that it wont execute again.
 		System::reset_events();
+		Migrations::on_runtime_upgrade();
 		run_to_block(20);
-		assert!(System::events().is_empty());
 
+		// Same historical ones as before.
 		assert_eq!(
 			historic(),
 			vec![
@@ -126,16 +108,57 @@ fn historic_skipping_works() {
 				mocked_id(SucceedAfter, 2),
 			]
 		);
+
+		// Everything got skipped.
+		assert_events(vec![
+			Event::UpgradeStarted,
+			Event::MigrationSkippedHistoric { index: 0 },
+			Event::MigrationSkippedHistoric { index: 1 },
+			Event::MigrationSkippedHistoric { index: 2 },
+			Event::MigrationSkippedHistoric { index: 3 },
+			Event::MigrationSkippedHistoric { index: 4 },
+			Event::UpgradeCompleted { migrations: 5 },
+		]);
 	});
 }
 
-trait IntoRecord {
-	fn into_record(self) -> EventRecord<<Test as frame_system::Config>::RuntimeEvent, H256>;
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "Defensive")]
+fn upgrade_fails_when_migration_active_err() {
+	upgrade_fails_when_migration_active();
 }
 
-impl IntoRecord for Event<Test> {
-	fn into_record(self) -> EventRecord<<Test as frame_system::Config>::RuntimeEvent, H256> {
-		let re: <Test as frame_system::Config>::RuntimeEvent = self.into();
-		EventRecord { phase: frame_system::Phase::Initialization, event: re, topics: vec![] }
-	}
+#[test]
+#[cfg(not(debug_assertions))]
+fn upgrade_fails_when_migration_active_ok() {
+	upgrade_fails_when_migration_active();
+}
+
+/// When another upgrade happens while a migration is still running, it should stuck the chain.
+// FAIL-CI we could still check the unique id and only fail if it changed...
+fn upgrade_fails_when_migration_active() {
+	test_closure(|| {
+		MigrationsStorage::set(vec![(SucceedAfter, 10)]);
+
+		System::set_block_number(1);
+		Migrations::on_runtime_upgrade();
+		run_to_block(3);
+
+		//assert_eq!( // TODO
+		//	historic(),
+		//	vec![mocked_id(SucceedAfter, 0)]
+		//);
+		// Events received.
+		assert_events(vec![
+			Event::UpgradeStarted,
+			Event::MigrationAdvanced { index: 0, step: 0 },
+			Event::MigrationAdvanced { index: 0, step: 1 },
+		]);
+		// Upgrade again.
+		Migrations::on_runtime_upgrade();
+		// -- Defensive triggered --
+		assert_eq!(Cursor::<T>::get(), Some(MigrationCursor::Stuck));
+		assert_events(vec![Event::UpgradeFailed]);
+	});
 }

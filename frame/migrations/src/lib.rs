@@ -140,7 +140,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
 			if Cursor::<T>::exists() {
-				log::error!(target: LOG_TARGET, "Code for ongoing migrations was deleted.");
+				defensive!("Code for ongoing migrations was deleted.");
 				Self::deposit_event(Event::UpgradeFailed);
 				Cursor::<T>::set(Some(MigrationCursor::Stuck));
 				return T::WeightInfo::on_runtime_upgrade()

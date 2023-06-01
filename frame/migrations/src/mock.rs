@@ -17,8 +17,7 @@
 
 #![cfg(test)]
 
-//use crate::GetMigrations;
-use crate::{Config, Historic};
+use crate::{Event, Historic};
 use codec::{Decode, Encode};
 use core::cell::RefCell;
 #[use_attr]
@@ -26,15 +25,12 @@ use frame_support::derive_impl;
 use frame_support::{
 	macro_magic::use_attr,
 	migrations::*,
-	traits::{ConstU16, ConstU64, OnFinalize, OnInitialize},
+	traits::{OnFinalize, OnInitialize},
 	weights::{Weight, WeightMeter},
 };
+use frame_system::EventRecord;
 use sp_core::{ConstU32, Get, H256};
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-	BoundedVec,
-};
+use sp_runtime::BoundedVec;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -140,6 +136,13 @@ impl Get<Vec<Box<dyn SteppedMigration<Cursor = MockedCursor, Identifier = Mocked
 	}
 }
 
+impl MigrationsStorage {
+	/// Set the migrations to run.
+	pub fn set(migrations: Vec<(MockedMigrationKind, u32)>) {
+		MIGRATIONS.with(|m| *m.borrow_mut() = migrations);
+	}
+}
+
 pub fn mocked_id(kind: MockedMigrationKind, steps: u32) -> MockedIdentifier {
 	format!("MockedMigrate({:?}, {})", kind, steps)
 		.as_bytes()
@@ -168,6 +171,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
 
+/// Run this closure in test externalities.
+pub fn test_closure<R>(f: impl FnOnce() -> R) -> R {
+	let mut ext = new_test_ext();
+	ext.execute_with(f)
+}
+
 pub struct LoggingSuspender<Inner>(core::marker::PhantomData<Inner>);
 impl<Inner: ExtrinsicSuspenderQuery> ExtrinsicSuspenderQuery for LoggingSuspender<Inner> {
 	fn is_suspended() -> bool {
@@ -175,10 +184,6 @@ impl<Inner: ExtrinsicSuspenderQuery> ExtrinsicSuspenderQuery for LoggingSuspende
 		log::debug!("IsSuspended: {res}");
 		res
 	}
-}
-
-pub fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
-	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
 pub fn run_to_block(n: u32) {
@@ -192,4 +197,32 @@ pub fn run_to_block(n: u32) {
 		System::on_initialize(System::block_number());
 		Migrations::on_initialize(System::block_number());
 	}
+}
+
+// Traits to make using events less insufferable:
+
+pub trait IntoRecord {
+	fn into_record(self) -> EventRecord<<Test as frame_system::Config>::RuntimeEvent, H256>;
+}
+
+impl IntoRecord for Event<Test> {
+	fn into_record(self) -> EventRecord<<Test as frame_system::Config>::RuntimeEvent, H256> {
+		let re: <Test as frame_system::Config>::RuntimeEvent = self.into();
+		EventRecord { phase: frame_system::Phase::Initialization, event: re, topics: vec![] }
+	}
+}
+
+pub trait IntoRecords {
+	fn into_records(self) -> Vec<EventRecord<<Test as frame_system::Config>::RuntimeEvent, H256>>;
+}
+
+impl<E: IntoRecord> IntoRecords for Vec<E> {
+	fn into_records(self) -> Vec<EventRecord<<Test as frame_system::Config>::RuntimeEvent, H256>> {
+		self.into_iter().map(|e| e.into_record()).collect()
+	}
+}
+
+pub fn assert_events<E: IntoRecord>(events: Vec<E>) {
+	assert_eq!(System::events(), events.into_records());
+	System::reset_events();
 }
