@@ -346,7 +346,7 @@ impl frame_system::pallet::Config for Runtime {
 	type BlockLength = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = Index;
+	type Nonce = Index;
 	type BlockNumber = BlockNumber;
 	type Hash = H256;
 	type Hashing = Hashing;

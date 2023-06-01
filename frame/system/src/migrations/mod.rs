@@ -47,7 +47,7 @@ pub trait V2ToV3 {
 	/// System config account id
 	type AccountId: 'static + FullCodec;
 
-	/// System config index
+	/// System config nonce
 	type Nonce: 'static + FullCodec + Copy;
 
 	/// System config account data
