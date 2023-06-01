@@ -15,18 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for pallet-example-basic.
+//! Tests for pallet-example-kitchensink.
 
 use crate::*;
 use frame_support::{traits::ConstU64, parameter_types};
-use sp_core::H256;
-// The testing primitives are very useful for avoiding having to work with signatures
-// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
-};
+use sp_runtime::BuildStorage;
+use frame_support::macro_magic::use_attr;
+#[use_attr]
+use frame_support::derive_impl;
 // Reexport crate as its pallet name for construct_runtime.
 use crate as pallet_example_kitchensink;
 
@@ -46,31 +42,18 @@ frame_support::construct_runtime!(
 	}
 );
 
+/// Using a default config for [`frame_system`] in tests. See `default-config` example for more 
+/// details.
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type BlockWeights = ();
-	type BlockLength = ();
-	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
-	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
-	type BlockHashCount = ConstU64<250>;
-	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<u64>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+
+	type AccountData = pallet_balances::AccountData<u64>;
 }
 
 impl pallet_balances::Config for Test {
