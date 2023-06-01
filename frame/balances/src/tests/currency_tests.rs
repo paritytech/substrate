@@ -36,7 +36,7 @@ pub const CALL: &<Test as frame_system::Config>::RuntimeCall =
 #[test]
 fn set_lock_with_amount_zero_removes_lock() {
 	ExtBuilder::default()
-	    .existential_deposit(1)
+		.existential_deposit(1)
 		.monied(true)
 		.build_and_execute_with(|| {
 			Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::all());
@@ -48,11 +48,11 @@ fn set_lock_with_amount_zero_removes_lock() {
 #[test]
 fn set_lock_with_withdraw_reasons_empty_removes_lock() {
 	ExtBuilder::default()
-	    .existential_deposit(1)
+		.existential_deposit(1)
 		.monied(true)
 		.build_and_execute_with(|| {
 			Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::all());
-			Balances::set_lock(ID_1, &1, 2, WithdrawReasons::empty());
+			Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::empty());
 			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 		});
 }
