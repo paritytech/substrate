@@ -14,6 +14,9 @@ mod tests;
 
 mod benchmarking;
 
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -244,17 +247,17 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			unimplemented!()
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 			unimplemented!()
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
+		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
 			unimplemented!()
 		}
 	}
