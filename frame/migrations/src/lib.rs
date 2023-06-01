@@ -39,9 +39,9 @@ const LOG_TARGET: &'static str = "runtime::migrations";
 
 /// Points to the next migration to execute.
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
-pub enum MigrationCursor {
+pub enum MigrationCursor<Cursor> {
 	/// Points to the currently active migration and its cursor.
-	Active(u32, Option<SteppedMigrationCursor>),
+	Active(u32, Option<Cursor>),
 	/// Migration got stuck and cannot proceed.
 	Stuck,
 }
@@ -64,7 +64,10 @@ pub mod pallet {
 		///
 		/// Should only be updated in a runtime-upgrade once all the old ones have completed. (Check
 		/// `Cursor` for `None`).
-		type Migrations: Get<Vec<Box<dyn SteppedMigration>>>;
+		type Migrations: Get<Vec<Box<dyn SteppedMigration<Cursor = Self::Cursor>>>>;
+
+		/// The cursor type that is shared across all migrations.
+		type Cursor: codec::FullCodec + codec::MaxEncodedLen + scale_info::TypeInfo + Parameter;
 
 		/// The weight to spend each block to execute migrations.
 		type ServiceWeight: Get<Weight>;
@@ -77,7 +80,7 @@ pub mod pallet {
 	///
 	/// `None` indicates that no migration process is running.
 	#[pallet::storage]
-	pub type Cursor<T> = StorageValue<_, MigrationCursor, OptionQuery>;
+	pub type Cursor<T: Config> = StorageValue<_, MigrationCursor<T::Cursor>, OptionQuery>;
 
 	/// Set of all successfully executed migrations.
 	///
@@ -202,7 +205,7 @@ pub mod pallet {
 		#[pallet::weight((0, DispatchClass::Mandatory))]
 		pub fn force_set_cursor(
 			origin: OriginFor<T>,
-			cursor: Option<MigrationCursor>,
+			cursor: Option<MigrationCursor<T::Cursor>>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 

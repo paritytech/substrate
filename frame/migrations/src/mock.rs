@@ -85,6 +85,8 @@ use MockedMigrationKind::*; // C style
 pub struct MockedMigrate(MockedMigrationKind, u32);
 
 impl SteppedMigration for MockedMigrate {
+	type Cursor = BoundedVec<u8, ConstU32<1024>>;
+
 	fn id(&self) -> BoundedVec<u8, ConstU32<32>> {
 		format!("MockedMigrate({:?}, {})", self.0, self.1)
 			.as_bytes()
@@ -95,9 +97,9 @@ impl SteppedMigration for MockedMigrate {
 
 	fn step(
 		&self,
-		cursor: &Option<SteppedMigrationCursor>,
+		cursor: &Option<Self::Cursor>,
 		_meter: &mut WeightMeter,
-	) -> Result<Option<SteppedMigrationCursor>, SteppedMigrationError> {
+	) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
 		let mut count: u32 =
 			cursor.as_ref().and_then(|c| Decode::decode(&mut &c[..]).ok()).unwrap_or(0);
 		log::debug!("MockedMigrate: Step {}", count);
@@ -119,13 +121,15 @@ impl SteppedMigration for MockedMigrate {
 	}
 }
 
+type MockedCursor = BoundedVec<u8, ConstU32<1024>>;
+
 frame_support::parameter_types! {
 	pub const ServiceWeight: Weight = Weight::MAX;
 	/// Stepped migrations need to be allocated as objects.
 	///
 	/// This is different from the normal compile-time tuple config, but allows them to carry
 	/// configuration.
-	pub SteppedMigrations: Vec<Box<dyn SteppedMigration>> = vec![
+	pub SteppedMigrations: Vec<Box<dyn SteppedMigration<Cursor=MockedCursor>>> = vec![
 		Box::new(MockedMigrate(SucceedAfter, 0)),
 		Box::new(MockedMigrate(SucceedAfter, 0)),
 		Box::new(MockedMigrate(SucceedAfter, 1)),
@@ -136,6 +140,7 @@ frame_support::parameter_types! {
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Migrations = SteppedMigrations;
+	type Cursor = MockedCursor;
 	type ServiceWeight = ServiceWeight;
 	type WeightInfo = ();
 }

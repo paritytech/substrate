@@ -214,6 +214,8 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 
 /// A migration that can proceed in multiple steps.
 pub trait SteppedMigration {
+	type Cursor: codec::FullCodec + codec::MaxEncodedLen;
+
 	fn id(&self) -> BoundedVec<u8, ConstU32<32>>;
 
 	/// Try to migrate as much as possible with the given weight.
@@ -224,16 +226,16 @@ pub trait SteppedMigration {
 	/// its end. TODO: Think about iterator `fuse` requirement.
 	fn step(
 		&self,
-		cursor: &Option<SteppedMigrationCursor>,
+		cursor: &Option<Self::Cursor>,
 		meter: &mut WeightMeter,
-	) -> Result<Option<SteppedMigrationCursor>, SteppedMigrationError>;
+	) -> Result<Option<Self::Cursor>, SteppedMigrationError>;
 
 	/// Same as [`Self::step`], but rolls back pending changes in the error case.
 	fn transactional_step(
 		&self,
-		mut cursor: Option<SteppedMigrationCursor>,
+		mut cursor: Option<Self::Cursor>,
 		meter: &mut WeightMeter,
-	) -> Result<Option<SteppedMigrationCursor>, SteppedMigrationError> {
+	) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
 		with_transaction_opaque_err(move || match self.step(&cursor, meter) {
 			Ok(new_cursor) => {
 				cursor = new_cursor;
@@ -244,13 +246,6 @@ pub trait SteppedMigration {
 		.map_err(|()| SteppedMigrationError::Failed)?
 	}
 }
-
-/// The maximal length in bytes of a cursor for a stepped migration.
-pub const STEPPED_MIGRATION_CURSOR_LEN: u32 = 1024;
-
-/// An opaque cursor that defines the "position" or a migration.
-pub type SteppedMigrationCursor =
-	crate::BoundedVec<u8, crate::traits::ConstU32<STEPPED_MIGRATION_CURSOR_LEN>>;
 
 #[derive(Debug)]
 pub enum SteppedMigrationError {
