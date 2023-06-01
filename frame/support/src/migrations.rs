@@ -23,7 +23,7 @@ use crate::{
 	weights::{RuntimeDbWeight, Weight, WeightMeter},
 };
 use impl_trait_for_tuples::impl_for_tuples;
-use sp_core::{Get};
+use sp_core::Get;
 use sp_io::{hashing::twox_128, storage::clear_prefix, KillStorageResult};
 use sp_std::marker::PhantomData;
 #[cfg(feature = "try-runtime")]

@@ -30,7 +30,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	defensive,
 	migrations::*,
-	traits::{Get},
+	traits::Get,
 	weights::{Weight, WeightMeter},
 };
 use frame_system::Pallet as System;
@@ -182,9 +182,7 @@ pub mod pallet {
 					return meter.consumed;
 				};
 				if Historic::<T>::contains_key(&migration.id()) {
-					Self::deposit_event(Event::MigrationSkippedHistoric {
-						index: cursor.index,
-					});
+					Self::deposit_event(Event::MigrationSkippedHistoric { index: cursor.index });
 					cursor.advance(System::<T>::block_number());
 					continue
 				}
@@ -192,7 +190,10 @@ pub mod pallet {
 				let took = System::<T>::block_number().saturating_sub(cursor.started_at);
 				match migration.transactional_step(cursor.inner_cursor.clone(), &mut meter) {
 					Ok(Some(next_cursor)) => {
-						Self::deposit_event(Event::MigrationAdvanced { index: cursor.index, step: took });
+						Self::deposit_event(Event::MigrationAdvanced {
+							index: cursor.index,
+							step: took,
+						});
 						cursor.inner_cursor = Some(next_cursor);
 						// A migration has to make maximal progress per step, we therefore break.
 						break

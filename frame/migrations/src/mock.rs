@@ -18,16 +18,15 @@
 #![cfg(test)]
 
 //use crate::GetMigrations;
-use crate::Config;
-use core::cell::RefCell;
-use sp_core::Get;
+use crate::{Config, Historic};
 use codec::{Decode, Encode};
+use core::cell::RefCell;
 use frame_support::{
 	migrations::*,
 	traits::{ConstU16, ConstU64, OnFinalize, OnInitialize},
 	weights::{Weight, WeightMeter},
 };
-use sp_core::{ConstU32, H256};
+use sp_core::{ConstU32, Get, H256};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -132,20 +131,41 @@ thread_local! {
 }
 
 pub struct MigrationsStorage;
-impl Get<Vec<Box<dyn SteppedMigration<Cursor=MockedCursor, Identifier=MockedIdentifier>>>> for MigrationsStorage {
-	fn get() -> Vec<Box<dyn SteppedMigration<Cursor=MockedCursor, Identifier=MockedIdentifier>>> {
-		MIGRATIONS.with(|m|
-			m.borrow().clone().into_iter().map(|(k, v)| Box::new(MockedMigrate(k, v)) as Box<dyn SteppedMigration<Cursor=MockedCursor, Identifier=MockedIdentifier>>).collect()
-		)
+impl Get<Vec<Box<dyn SteppedMigration<Cursor = MockedCursor, Identifier = MockedIdentifier>>>>
+	for MigrationsStorage
+{
+	fn get() -> Vec<Box<dyn SteppedMigration<Cursor = MockedCursor, Identifier = MockedIdentifier>>>
+	{
+		MIGRATIONS.with(|m| {
+			m.borrow()
+				.clone()
+				.into_iter()
+				.map(|(k, v)| {
+					Box::new(MockedMigrate(k, v))
+						as Box<
+							dyn SteppedMigration<
+								Cursor = MockedCursor,
+								Identifier = MockedIdentifier,
+							>,
+						>
+				})
+				.collect()
+		})
 	}
 }
 
-fn mocked_id(kind: MockedMigrationKind, steps: u32) -> MockedIdentifier {
+pub fn mocked_id(kind: MockedMigrationKind, steps: u32) -> MockedIdentifier {
 	format!("MockedMigrate({:?}, {})", kind, steps)
 		.as_bytes()
 		.to_vec()
 		.try_into()
 		.unwrap()
+}
+
+pub fn historic() -> Vec<MockedIdentifier> {
+	let mut historic = Historic::<Test>::iter_keys().collect::<Vec<_>>();
+	historic.sort();
+	historic
 }
 
 impl crate::Config for Test {
