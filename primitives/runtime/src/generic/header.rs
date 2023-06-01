@@ -22,7 +22,7 @@ use crate::{
 	generic::Digest,
 	scale_info::TypeInfo,
 	traits::{
-		self, AtLeast32BitUnsigned, Hash as HashT, HashOutput, MaybeDisplay, MaybeFromStr,
+		self, AtLeast32BitUnsigned, Hash as HashT, MaybeDisplay, MaybeFromStr,
 		MaybeSerializeDeserialize, Member,
 	},
 };
@@ -89,7 +89,6 @@ where
 		+ Into<U256>
 		+ TryFrom<U256>,
 	Hash: HashT,
-	Hash::Output: HashOutput,
 {
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;
@@ -155,7 +154,6 @@ where
 		+ Into<U256>
 		+ TryFrom<U256>,
 	Hash: HashT,
-	Hash::Output: HashOutput,
 {
 	/// Convenience helper for computing the hash of the header without having
 	/// to import the trait.
