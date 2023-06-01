@@ -1,0 +1,5 @@
+error: Duplicate #[pallet::constant] attribute not allowed.
+ --> tests/pallet_ui/trait_item_duplicate_constant_attr.rs:9:4
+  |
+9 |         #[pallet::constant]
+  |          ^^^^^^^^^^^^^^^^^^

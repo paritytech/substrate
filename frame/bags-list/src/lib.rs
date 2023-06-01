@@ -59,6 +59,9 @@ use frame_system::ensure_signed;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded, StaticLookup};
 use sp_std::prelude::*;
 
+#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
+use sp_runtime::TryRuntimeError;
+
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
 
@@ -267,7 +270,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
+		fn try_state(_: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 			<Self as SortedListProvider<T::AccountId>>::try_state()
 		}
 	}
@@ -275,7 +278,7 @@ pub mod pallet {
 
 #[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn do_try_state() -> Result<(), &'static str> {
+	pub fn do_try_state() -> Result<(), TryRuntimeError> {
 		List::<T, I>::do_try_state()
 	}
 }
@@ -355,7 +358,7 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn try_state() -> Result<(), &'static str> {
+	fn try_state() -> Result<(), TryRuntimeError> {
 		Self::do_try_state()
 	}
 
@@ -397,7 +400,7 @@ impl<T: Config<I>, I: 'static> ScoreProvider<T::AccountId> for Pallet<T, I> {
 		Node::<T, I>::get(id).map(|node| node.score()).unwrap_or_default()
 	}
 
-	frame_election_provider_support::runtime_benchmarks_or_fuzz_enabled! {
+	frame_election_provider_support::runtime_benchmarks_fuzz_or_std_enabled! {
 		fn set_score_of(id: &T::AccountId, new_score: T::Score) {
 			ListNodes::<T, I>::mutate(id, |maybe_node| {
 				if let Some(node) = maybe_node.as_mut() {

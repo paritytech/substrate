@@ -18,7 +18,6 @@
 //! Primitives for the runtime modules.
 
 use crate::{
-	codec::{Codec, Decode, Encode, MaxEncodedLen},
 	generic::Digest,
 	scale_info::{MetaType, StaticTypeInfo, TypeInfo},
 	transaction_validity::{
@@ -27,8 +26,9 @@ use crate::{
 	},
 	DispatchResult,
 };
+use codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_application_crypto::AppCrypto;
 pub use sp_arithmetic::traits::{
@@ -530,6 +530,15 @@ impl<A, B: Default> Convert<A, B> for () {
 	}
 }
 
+/// Adapter which turns a `Get` implementation into a `Convert` implementation which always returns
+/// in the same value no matter the input.
+pub struct ConvertToValue<T>(sp_std::marker::PhantomData<T>);
+impl<X, Y, T: Get<Y>> Convert<X, Y> for ConvertToValue<T> {
+	fn convert(_: X) -> Y {
+		T::get()
+	}
+}
+
 /// A structure that performs identity conversion.
 pub struct Identity;
 impl<T> Convert<T, T> for Identity {
@@ -694,6 +703,7 @@ pub trait Hash:
 		+ Default
 		+ Encode
 		+ Decode
+		+ EncodeLike
 		+ MaxEncodedLen
 		+ TypeInfo;
 
@@ -716,7 +726,7 @@ pub trait Hash:
 
 /// Blake2-256 Hash implementation.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
 impl Hasher for BlakeTwo256 {
@@ -743,7 +753,7 @@ impl Hash for BlakeTwo256 {
 
 /// Keccak-256 Hash implementation.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Keccak256;
 
 impl Hasher for Keccak256 {
@@ -824,11 +834,13 @@ sp_core::impl_maybe_marker!(
 
 	/// A type that implements Hash when in std environment.
 	trait MaybeHash: sp_std::hash::Hash;
+);
 
-	/// A type that implements Serialize when in std environment.
+sp_core::impl_maybe_marker_std_or_serde!(
+	/// A type that implements Serialize when in std environment or serde feature is activated.
 	trait MaybeSerialize: Serialize;
 
-	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
+	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment or serde feature is activated.
 	trait MaybeSerializeDeserialize: DeserializeOwned, Serialize;
 );
 

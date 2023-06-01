@@ -127,6 +127,10 @@ pub struct Limits {
 
 	/// The maximum size of a storage value and event payload in bytes.
 	pub payload_len: u32,
+
+	/// The maximum node runtime memory. This is for integrity checks only and does not affect the
+	/// real setting.
+	pub runtime_memory: u32,
 }
 
 impl Limits {
@@ -255,6 +259,9 @@ pub struct HostFnWeights<T: Config> {
 
 	/// Weight of calling `seal_caller_is_origin`.
 	pub caller_is_origin: Weight,
+
+	/// Weight of calling `seal_caller_is_root`.
+	pub caller_is_root: Weight,
 
 	/// Weight of calling `seal_address`.
 	pub address: Weight,
@@ -479,6 +486,7 @@ impl Default for Limits {
 			br_table_size: 256,
 			subject_len: 32,
 			payload_len: 16 * 1024,
+			runtime_memory: 1024 * 1024 * 128,
 		}
 	}
 }
@@ -552,6 +560,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			code_hash: cost!(seal_code_hash),
 			own_code_hash: cost!(seal_own_code_hash),
 			caller_is_origin: cost!(seal_caller_is_origin),
+			caller_is_root: cost!(seal_caller_is_root),
 			address: cost!(seal_address),
 			gas_left: cost!(seal_gas_left),
 			balance: cost!(seal_balance),

@@ -25,7 +25,7 @@ use crate::{
 	wasm::{
 		runtime::AllowDeprecatedInterface, Determinism, Environment, OwnerInfo, PrefabWasmModule,
 	},
-	AccountIdOf, CodeVec, Config, Error, Schedule,
+	AccountIdOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
 };
 use codec::{Encode, MaxEncodedLen};
 use sp_runtime::{traits::Hash, DispatchError};
@@ -379,7 +379,7 @@ where
 	})
 	.validate_all(original_code)
 	.map_err(|err| {
-		log::debug!(target: "runtime::contracts", "{}", err);
+		log::debug!(target: LOG_TARGET, "{}", err);
 		(Error::<T>::CodeRejected.into(), "validation of new code failed")
 	})?;
 
@@ -403,7 +403,7 @@ where
 		Ok((code, memory_limits))
 	})()
 	.map_err(|msg: &str| {
-		log::debug!(target: "runtime::contracts", "new code rejected: {}", msg);
+		log::debug!(target: LOG_TARGET, "new code rejected: {}", msg);
 		(Error::<T>::CodeRejected.into(), msg)
 	})?;
 
@@ -426,7 +426,7 @@ where
 			},
 		)
 		.map_err(|err| {
-			log::debug!(target: "runtime::contracts", "{}", err);
+			log::debug!(target: LOG_TARGET, "{}", err);
 			(Error::<T>::CodeRejected.into(), "new code rejected after instrumentation")
 		})?;
 	}
@@ -518,7 +518,7 @@ where
 		InstrumentReason::Reinstrument,
 	)
 	.map_err(|(err, msg)| {
-		log::error!(target: "runtime::contracts", "CodeRejected during reinstrument: {}", msg);
+		log::error!(target: LOG_TARGET, "CodeRejected during reinstrument: {}", msg);
 		err
 	})
 	.map(|(code, _)| code)

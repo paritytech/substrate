@@ -609,7 +609,7 @@ frame_benchmarking::benchmarks! {
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond, None);
 		BondedPools::<T>::mutate(&1, |maybe_pool| {
 			// Force the pool into an invalid state
-			maybe_pool.as_mut().map(|mut pool| pool.points = min_create_bond * 10u32.into());
+			maybe_pool.as_mut().map(|pool| pool.points = min_create_bond * 10u32.into());
 		});
 
 		let caller = account("caller", 0, USER_SEED);
@@ -684,12 +684,12 @@ frame_benchmarking::benchmarks! {
 			.collect();
 
 		assert_ok!(T::Staking::nominate(&pool_account, validators));
-		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_some());
+		assert!(T::Staking::nominations(&Pools::<T>::create_bonded_account(1)).is_some());
 
 		whitelist_account!(depositor);
 	}:_(RuntimeOrigin::Signed(depositor.clone()), 1)
 	verify {
-		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_none());
+		assert!(T::Staking::nominations(&Pools::<T>::create_bonded_account(1)).is_none());
 	}
 
 	set_commission {

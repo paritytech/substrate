@@ -20,22 +20,21 @@ use crate::{
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	event::DhtEvent,
 	peer_info,
+	peerset::PeersetHandle,
 	protocol::{CustomMessageOutcome, NotificationsSink, Protocol},
 	request_responses::{self, IfDisconnected, ProtocolConfig, RequestFailure},
 	types::ProtocolName,
+	ReputationChange,
 };
 
 use bytes::Bytes;
 use futures::channel::oneshot;
 use libp2p::{
-	core::{Multiaddr, PeerId, PublicKey},
-	identify::Info as IdentifyInfo,
-	kad::record,
-	swarm::NetworkBehaviour,
+	core::Multiaddr, identify::Info as IdentifyInfo, identity::PublicKey, kad::RecordKey,
+	swarm::NetworkBehaviour, PeerId,
 };
 
 use sc_network_common::role::{ObservedRole, Roles};
-use sc_peerset::{PeersetHandle, ReputationChange};
 use sp_runtime::traits::Block as BlockT;
 use std::{collections::HashSet, time::Duration};
 
@@ -256,13 +255,13 @@ impl<B: BlockT> Behaviour<B> {
 
 	/// Start querying a record from the DHT. Will later produce either a `ValueFound` or a
 	/// `ValueNotFound` event.
-	pub fn get_value(&mut self, key: record::Key) {
+	pub fn get_value(&mut self, key: RecordKey) {
 		self.discovery.get_value(key);
 	}
 
 	/// Starts putting a record into DHT. Will later produce either a `ValuePut` or a
 	/// `ValuePutFailed` event.
-	pub fn put_value(&mut self, key: record::Key, value: Vec<u8>) {
+	pub fn put_value(&mut self, key: RecordKey, value: Vec<u8>) {
 		self.discovery.put_value(key, value);
 	}
 }

@@ -182,7 +182,6 @@ fn bench_execute_block(c: &mut Criterion) {
 	let mut group = c.benchmark_group("execute blocks");
 	let execution_methods = vec![
 		ExecutionMethod::Native,
-		ExecutionMethod::Wasm(WasmExecutionMethod::Interpreted),
 		ExecutionMethod::Wasm(WasmExecutionMethod::Compiled {
 			instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
 		}),
