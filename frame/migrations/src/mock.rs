@@ -21,7 +21,10 @@
 use crate::{Config, Historic};
 use codec::{Decode, Encode};
 use core::cell::RefCell;
+#[use_attr]
+use frame_support::derive_impl;
 use frame_support::{
+	macro_magic::use_attr,
 	migrations::*,
 	traits::{ConstU16, ConstU64, OnFinalize, OnInitialize},
 	weights::{Weight, WeightMeter},
@@ -48,31 +51,14 @@ frame_support::construct_runtime!(
 	}
 );
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type BlockWeights = ();
-	type BlockLength = ();
-	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
-	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
-	type BlockHashCount = ConstU64<250>;
-	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ConstU16<42>;
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -195,7 +181,7 @@ pub fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) 
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
-pub fn run_to_block(n: u64) {
+pub fn run_to_block(n: u32) {
 	while System::block_number() < n {
 		if System::block_number() > 1 {
 			Migrations::on_finalize(System::block_number());
