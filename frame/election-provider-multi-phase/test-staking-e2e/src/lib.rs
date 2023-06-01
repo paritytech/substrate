@@ -84,6 +84,33 @@ fn block_progression_works() {
 }
 
 #[test]
+fn offchainify_works() {
+	let staking_builder = StakingExtBuilder::default();
+	let epm_builder = EpmExtBuilder::default();
+	let (mut ext, pool_state, offchain_state) = ExtBuilder::default()
+		.epm(epm_builder)
+		.staking(staking_builder)
+		.build_offchainify();
+
+	ext.execute_with(|| {
+		println!("Initial offchain_state (@ {:?}): {:?}", offchain_state, System::block_number());
+
+		for _ in 0..25 {
+			roll_one(true);
+			println!("offchain_state (@ {:?})\n {:?}", offchain_state, System::block_number());
+			println!("pool_state: \n{:?}", pool_state.read().transactions);
+			match pallet_election_provider_multi_phase::QueuedSolution::<Runtime>::get() {
+				Some(solution) => println!(">>>>> queued solution with score {:?}", solution.score),
+				None => println!("No solution queued"),
+			};
+
+			println!("EVENTS: {:?}", epm_events());
+			println!("\n\n")
+		}
+	})
+}
+
+#[test]
 /// Replicates the Kusama incident of 8th Dec 2022 and its resolution through the governance
 /// fallback.
 ///

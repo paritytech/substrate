@@ -27,6 +27,10 @@ use frame_system::EnsureRoot;
 use sp_core::{ConstU32, Get, H256};
 use sp_npos_elections::{ElectionScore, VoteWeight};
 use sp_runtime::{
+	offchain::{
+		testing::{OffchainState, PoolState, TestOffchainExt, TestTransactionPoolExt},
+		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
+	},
 	testing,
 	traits::{IdentityLookup, Zero},
 	transaction_validity, PerU16, Perbill,
@@ -43,6 +47,8 @@ use pallet_election_provider_multi_phase::{
 	unsigned::MinerConfig, ElectionCompute, QueuedSolution, SolutionAccuracyOf,
 };
 use pallet_staking::StakerStatus;
+use parking_lot::RwLock;
+use std::sync::Arc;
 
 use crate::{log, log_current_time};
 
@@ -487,17 +493,18 @@ impl Default for ExtBuilder {
 }
 
 impl ExtBuilder {
-	pub fn build(self) -> sp_io::TestExternalities {
+	pub fn build(&self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
-		let _ =
-			pallet_balances::GenesisConfig::<Runtime> { balances: self.balances_builder.balances }
-				.assimilate_storage(&mut storage);
+		let _ = pallet_balances::GenesisConfig::<Runtime> {
+			balances: self.balances_builder.balances.clone(),
+		}
+		.assimilate_storage(&mut storage);
 
 		let mut stakers = self.staking_builder.stakers.clone();
-		self.staking_builder.status.into_iter().for_each(|(stash, status)| {
+		self.staking_builder.status.clone().into_iter().for_each(|(stash, status)| {
 			let (_, _, _, ref mut prev_status) = stakers
 				.iter_mut()
 				.find(|s| s.0 == stash)
@@ -505,7 +512,7 @@ impl ExtBuilder {
 			*prev_status = status;
 		});
 		// replaced any of the stakes if needed.
-		self.staking_builder.stakes.into_iter().for_each(|(stash, stake)| {
+		self.staking_builder.stakes.clone().into_iter().for_each(|(stash, stake)| {
 			let (_, _, ref mut prev_stake, _) = stakers
 				.iter_mut()
 				.find(|s| s.0 == stash)
@@ -546,6 +553,7 @@ impl ExtBuilder {
 
 		ext
 	}
+
 	pub fn staking(mut self, builder: StakingExtBuilder) -> Self {
 		self.staking_builder = builder;
 		self
@@ -561,8 +569,33 @@ impl ExtBuilder {
 		self
 	}
 
+	pub fn build_offchainify(
+		self,
+	) -> (sp_io::TestExternalities, Arc<RwLock<PoolState>>, Arc<RwLock<OffchainState>>) {
+		// add offchain and pool externality extensions.
+		let mut ext = self.build();
+		let (offchain, offchain_state) = TestOffchainExt::new();
+		let (pool, pool_state) = TestTransactionPoolExt::new();
+
+		ext.register_extension(OffchainDbExt::new(offchain.clone()));
+		ext.register_extension(OffchainWorkerExt::new(offchain));
+		ext.register_extension(TransactionPoolExt::new(pool));
+
+		(ext, pool_state, offchain_state)
+	}
+
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
-		self.build().execute_with(test)
+		let mut ext = self.build();
+		ext.execute_with(test);
+
+		#[cfg(feature = "try-runtime")]
+		ext.execute_with(|| {
+			let bm = System::block_number();
+
+			assert_ok!(<MultiPhase as Hooks<u64>>::try_state(bn));
+			assert_ok!(<Staking as Hooks<u64>>::try_state(bn));
+			assert_ok!(<Session as Hooks<u64>>::try_state(bn));
+		});
 	}
 }
 
@@ -584,6 +617,7 @@ pub fn roll_to(n: BlockNumber, delay_solution: bool) {
 			});
 		}
 		ElectionProviderMultiPhase::on_initialize(b);
+		ElectionProviderMultiPhase::offchain_worker(b);
 
 		Staking::on_initialize(b);
 		if b != n {
@@ -592,6 +626,11 @@ pub fn roll_to(n: BlockNumber, delay_solution: bool) {
 
 		log_current_time();
 	}
+}
+
+pub fn roll_one(delay_solution: bool) {
+	let bn = System::block_number().saturating_add(1);
+	roll_to(bn, delay_solution);
 }
 
 /// Progresses from the current block number (whatever that may be) to the block where the session
@@ -787,5 +826,19 @@ pub(crate) fn staking_events() -> Vec<pallet_staking::Event<Runtime>> {
 		.into_iter()
 		.map(|r| r.event)
 		.filter_map(|e| if let RuntimeEvent::Staking(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>()
+}
+
+pub(crate) fn epm_events() -> Vec<pallet_election_provider_multi_phase::Event<Runtime>> {
+	System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| {
+			if let RuntimeEvent::ElectionProviderMultiPhase(inner) = e {
+				Some(inner)
+			} else {
+				None
+			}
+		})
 		.collect::<Vec<_>>()
 }
