@@ -17,8 +17,10 @@
 
 #![cfg(test)]
 
-use crate::{mock::*, Event, Executed};
+use crate::{mock::*, mock::MockedMigrationKind::*, Event, Historic};
 use frame_support::traits::OnRuntimeUpgrade;
+use sp_core::H256;
+use frame_system::EventRecord;
 
 /// Example output:
 ///
@@ -35,16 +37,92 @@ use frame_support::traits::OnRuntimeUpgrade;
 /// ```
 #[test]
 fn basic_works() {
-	sp_tracing::try_init_simple();
-
 	new_test_ext().execute_with(|| {
+		MIGRATIONS.with(|migrations| {
+			*migrations.borrow_mut() = vec![
+				(SucceedAfter, 0),
+				(SucceedAfter, 1),
+				(SucceedAfter, 2),
+			];
+		});
+
 		System::set_block_number(1);
 		Migrations::on_runtime_upgrade();
 
 		run_to_block(10);
 
-		assert_last_event::<Test>(Event::UpgradeCompleted { migrations: 4 }.into());
-		// Just three, since one was added twice.
-		assert_eq!(Executed::<Test>::iter().count(), 3);
+		// Just three, since two were added twice.
+		assert_eq!(Historic::<Test>::iter().count(), 3);
+		dbg!(System::events());
+		assert_eq!(System::events(), vec![
+			Event::UpgradeStarted.into_record(),
+
+			Event::MigrationCompleted { index: 0, took: 0 }.into_record(),
+
+			Event::MigrationAdvanced { index: 1, step: 0 }.into_record(),
+			Event::MigrationCompleted { index: 1, took: 1 }.into_record(),
+			
+			Event::MigrationAdvanced { index: 2, step: 0 }.into_record(),
+			Event::MigrationAdvanced { index: 2, step: 1 }.into_record(),
+			Event::MigrationCompleted { index: 2, took: 2 }.into_record(),
+			
+			Event::UpgradeCompleted { migrations: 3 }.into_record(),
+		]);
 	});
+}
+
+#[test]
+fn historic_skipping_works() {
+	new_test_ext().execute_with(|| {
+		MIGRATIONS.with(|migrations| {
+			*migrations.borrow_mut() = vec![
+				(SucceedAfter, 0),
+				(SucceedAfter, 0), // Will be skipped
+				(SucceedAfter, 1),
+				(SucceedAfter, 2),
+				(SucceedAfter, 1), // Will be skipped
+			];
+		});
+
+		System::set_block_number(1);
+		Migrations::on_runtime_upgrade();
+
+		run_to_block(10);
+
+		// Just three, since two were added twice.
+		assert_eq!(Historic::<Test>::iter().count(), 3);
+		assert_eq!(System::events(), vec![
+			Event::UpgradeStarted.into_record(),
+
+			Event::MigrationCompleted { index: 0, took: 0 }.into_record(),
+			
+			Event::MigrationSkippedHistoric { index: 1 }.into_record(),
+			
+			Event::MigrationAdvanced { index: 2, step: 0 }.into_record(),
+			Event::MigrationCompleted { index: 2, took: 1 }.into_record(),
+			
+			Event::MigrationAdvanced { index: 3, step: 0 }.into_record(),
+			Event::MigrationAdvanced { index: 3, step: 1 }.into_record(),
+			Event::MigrationCompleted { index: 3, took: 2 }.into_record(),
+
+			Event::MigrationSkippedHistoric { index: 4 }.into_record(),
+			
+			Event::UpgradeCompleted { migrations: 5 }.into_record(),
+		]);
+	});
+}
+
+trait IntoRecord {
+	fn into_record(self) -> EventRecord<<Test as frame_system::Config>::RuntimeEvent, H256>;
+}
+
+impl IntoRecord for Event<Test> {
+	fn into_record(self) -> EventRecord<<Test as frame_system::Config>::RuntimeEvent, H256> {
+		let re: <Test as frame_system::Config>::RuntimeEvent = self.into();
+		EventRecord {
+			phase: frame_system::Phase::Initialization,
+			event: re,
+			topics: vec![],
+		}
+	}
 }

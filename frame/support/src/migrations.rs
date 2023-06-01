@@ -21,10 +21,9 @@ use crate::{
 	storage::transactional::with_transaction_opaque_err,
 	traits::{GetStorageVersion, NoStorageVersionSet, PalletInfoAccess, StorageVersion},
 	weights::{RuntimeDbWeight, Weight, WeightMeter},
-	BoundedVec,
 };
 use impl_trait_for_tuples::impl_for_tuples;
-use sp_core::{ConstU32, Get};
+use sp_core::{Get};
 use sp_io::{hashing::twox_128, storage::clear_prefix, KillStorageResult};
 use sp_std::marker::PhantomData;
 #[cfg(feature = "try-runtime")]
@@ -214,9 +213,24 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 
 /// A migration that can proceed in multiple steps.
 pub trait SteppedMigration {
+	/// The cursor type that stores the progress (aka. state) of this migration.
 	type Cursor: codec::FullCodec + codec::MaxEncodedLen;
 
-	fn id(&self) -> BoundedVec<u8, ConstU32<32>>;
+	/// The unique identifier type of this migration.
+	type Identifier: codec::FullCodec + codec::MaxEncodedLen;
+
+	/// The unique identifier of this migration.
+	///
+	/// If two migrations have the same identifier, then they are assumed to be identical.
+	fn id(&self) -> Self::Identifier;
+
+	/// The maximum number of steps that this migration can take at most.
+	///
+	/// This can be used to enforce progress and prevent migrations to be stuck forever. A migration
+	/// that exceeds its max steps is treated as failed. `None` means that there is no limit.
+	fn max_steps(&self) -> Option<u32> {
+		None
+	}
 
 	/// Try to migrate as much as possible with the given weight.
 	///
@@ -261,6 +275,8 @@ pub enum SteppedMigrationError {
 	/// This can happen if the storage is corrupted or an assumption got invalidated while the
 	/// migration was running.
 	Failed,
+	/// The migration took longer that its [`SteppedMigration::max_steps`].
+	Timeout,
 }
 
 pub trait ExtrinsicSuspenderQuery {

@@ -19,6 +19,8 @@
 
 //use crate::GetMigrations;
 use crate::Config;
+use core::cell::RefCell;
+use sp_core::Get;
 use codec::{Decode, Encode};
 use frame_support::{
 	migrations::*,
@@ -74,7 +76,7 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
 pub enum MockedMigrationKind {
 	SucceedAfter,
@@ -86,13 +88,10 @@ pub struct MockedMigrate(MockedMigrationKind, u32);
 
 impl SteppedMigration for MockedMigrate {
 	type Cursor = BoundedVec<u8, ConstU32<1024>>;
+	type Identifier = BoundedVec<u8, ConstU32<32>>;
 
-	fn id(&self) -> BoundedVec<u8, ConstU32<32>> {
-		format!("MockedMigrate({:?}, {})", self.0, self.1)
-			.as_bytes()
-			.to_vec()
-			.try_into()
-			.unwrap()
+	fn id(&self) -> Self::Identifier {
+		mocked_id(self.0, self.1)
 	}
 
 	fn step(
@@ -122,25 +121,38 @@ impl SteppedMigration for MockedMigrate {
 }
 
 type MockedCursor = BoundedVec<u8, ConstU32<1024>>;
+type MockedIdentifier = BoundedVec<u8, ConstU32<32>>;
 
 frame_support::parameter_types! {
 	pub const ServiceWeight: Weight = Weight::MAX;
-	/// Stepped migrations need to be allocated as objects.
-	///
-	/// This is different from the normal compile-time tuple config, but allows them to carry
-	/// configuration.
-	pub SteppedMigrations: Vec<Box<dyn SteppedMigration<Cursor=MockedCursor>>> = vec![
-		Box::new(MockedMigrate(SucceedAfter, 0)),
-		Box::new(MockedMigrate(SucceedAfter, 0)),
-		Box::new(MockedMigrate(SucceedAfter, 1)),
-		Box::new(MockedMigrate(SucceedAfter, 2)),
-	];
+}
+
+thread_local! {
+	pub static MIGRATIONS: RefCell<Vec<(MockedMigrationKind, u32)>> = RefCell::new(vec![]);
+}
+
+pub struct MigrationsStorage;
+impl Get<Vec<Box<dyn SteppedMigration<Cursor=MockedCursor, Identifier=MockedIdentifier>>>> for MigrationsStorage {
+	fn get() -> Vec<Box<dyn SteppedMigration<Cursor=MockedCursor, Identifier=MockedIdentifier>>> {
+		MIGRATIONS.with(|m|
+			m.borrow().clone().into_iter().map(|(k, v)| Box::new(MockedMigrate(k, v)) as Box<dyn SteppedMigration<Cursor=MockedCursor, Identifier=MockedIdentifier>>).collect()
+		)
+	}
+}
+
+fn mocked_id(kind: MockedMigrationKind, steps: u32) -> MockedIdentifier {
+	format!("MockedMigrate({:?}, {})", kind, steps)
+		.as_bytes()
+		.to_vec()
+		.try_into()
+		.unwrap()
 }
 
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Migrations = SteppedMigrations;
+	type Migrations = MigrationsStorage;
 	type Cursor = MockedCursor;
+	type Identifier = MockedIdentifier;
 	type ServiceWeight = ServiceWeight;
 	type WeightInfo = ();
 }

@@ -30,20 +30,36 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	defensive,
 	migrations::*,
-	traits::Get,
+	traits::{Get},
 	weights::{Weight, WeightMeter},
 };
+use frame_system::Pallet as System;
 use sp_runtime::Saturating;
 
 const LOG_TARGET: &'static str = "runtime::migrations";
 
 /// Points to the next migration to execute.
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
-pub enum MigrationCursor<Cursor> {
+pub enum MigrationCursor<Cursor, BlockNumber> {
 	/// Points to the currently active migration and its cursor.
-	Active(u32, Option<Cursor>),
+	Active(ActiveCursor<Cursor, BlockNumber>),
 	/// Migration got stuck and cannot proceed.
 	Stuck,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
+pub struct ActiveCursor<Cursor, BlockNumber> {
+	index: u32,
+	inner_cursor: Option<Cursor>,
+	started_at: BlockNumber,
+}
+
+impl<Cursor, BlockNumber> ActiveCursor<Cursor, BlockNumber> {
+	pub(crate) fn advance(&mut self, current_block: BlockNumber) {
+		self.index.saturating_inc();
+		self.inner_cursor = None;
+		self.started_at = current_block;
+	}
 }
 
 #[frame_support::pallet]
@@ -64,10 +80,15 @@ pub mod pallet {
 		///
 		/// Should only be updated in a runtime-upgrade once all the old ones have completed. (Check
 		/// `Cursor` for `None`).
-		type Migrations: Get<Vec<Box<dyn SteppedMigration<Cursor = Self::Cursor>>>>;
+		type Migrations: Get<
+			Vec<Box<dyn SteppedMigration<Cursor = Self::Cursor, Identifier = Self::Identifier>>>,
+		>;
 
 		/// The cursor type that is shared across all migrations.
 		type Cursor: codec::FullCodec + codec::MaxEncodedLen + scale_info::TypeInfo + Parameter;
+
+		/// The identifier type that is shared across all migrations.
+		type Identifier: codec::FullCodec + codec::MaxEncodedLen + scale_info::TypeInfo;
 
 		/// The weight to spend each block to execute migrations.
 		type ServiceWeight: Get<Weight>;
@@ -80,15 +101,15 @@ pub mod pallet {
 	///
 	/// `None` indicates that no migration process is running.
 	#[pallet::storage]
-	pub type Cursor<T: Config> = StorageValue<_, MigrationCursor<T::Cursor>, OptionQuery>;
+	pub type Cursor<T: Config> =
+		StorageValue<_, MigrationCursor<T::Cursor, T::BlockNumber>, OptionQuery>;
 
 	/// Set of all successfully executed migrations.
 	///
 	/// This is used as blacklist, to not re-execute migrations that have not been removed from the
-	/// codebase yet.
+	/// codebase yet. Governance can regularly clear this out via `clear_historic`.
 	#[pallet::storage]
-	pub type Executed<T> =
-		StorageMap<_, Twox64Concat, BoundedVec<u8, ConstU32<32>>, (), OptionQuery>;
+	pub type Historic<T: Config> = StorageMap<_, Twox64Concat, T::Identifier, (), OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -104,13 +125,15 @@ pub mod pallet {
 		/// Migration `index` was skipped, since it already executed in the past.
 		MigrationSkippedHistoric { index: u32 },
 		/// Migration `index` made progress.
-		MigrationAdvanced { index: u32 },
+		MigrationAdvanced { index: u32, step: T::BlockNumber },
 		/// Migration `index` completed.
-		MigrationCompleted { index: u32 },
+		MigrationCompleted { index: u32, took: T::BlockNumber },
 		/// Migration `index` failed.
 		///
 		/// This implies that the whole upgrade failed and governance intervention is required.
-		MigrationFailed { index: u32 },
+		MigrationFailed { index: u32, took: T::BlockNumber },
+		/// The list of historical migrations has been cleared.
+		HistoricCleared,
 	}
 
 	#[pallet::hooks]
@@ -124,7 +147,11 @@ pub mod pallet {
 			}
 
 			if T::Migrations::get().len() > 0 {
-				Cursor::<T>::set(Some(MigrationCursor::Active(0, None)));
+				Cursor::<T>::set(Some(MigrationCursor::Active(ActiveCursor {
+					index: 0,
+					inner_cursor: None,
+					started_at: System::<T>::block_number().saturating_add(1u32.into()),
+				})));
 				Self::deposit_event(Event::UpgradeStarted);
 			}
 
@@ -134,12 +161,12 @@ pub mod pallet {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let mut meter = WeightMeter::from_limit(T::ServiceWeight::get());
 
-			let (mut index, mut cursor) = match Cursor::<T>::get() {
+			let mut cursor = match Cursor::<T>::get() {
 				None => {
 					log::debug!(target: LOG_TARGET, "[Block {n:?}] Waiting for cursor to become `Some`.");
 					return meter.consumed
 				},
-				Some(MigrationCursor::Active(index, cursor)) => (index, cursor),
+				Some(MigrationCursor::Active(cursor)) => cursor,
 				Some(MigrationCursor::Stuck) => {
 					defensive!("Migration stuck. Governance intervention required.");
 					return meter.consumed
@@ -148,41 +175,45 @@ pub mod pallet {
 			debug_assert!(<Self as ExtrinsicSuspenderQuery>::is_suspended());
 
 			let migrations = T::Migrations::get();
-			for step in 0.. {
-				let Some(migration) = migrations.get(index as usize) else {
+			for iteration in 0.. {
+				let Some(migration) = migrations.get(cursor.index as usize) else {
 					Self::deposit_event(Event::UpgradeCompleted { migrations: migrations.len() as u32 });
 					Cursor::<T>::kill();
 					return meter.consumed;
 				};
-				if Executed::<T>::contains_key(&migration.id()) {
-					Self::deposit_event(Event::MigrationSkippedHistoric { index });
-					index.saturating_inc();
-					cursor = None;
+				if Historic::<T>::contains_key(&migration.id()) {
+					Self::deposit_event(Event::MigrationSkippedHistoric {
+						index: cursor.index,
+					});
+					cursor.advance(System::<T>::block_number());
 					continue
 				}
 
-				match migration.transactional_step(cursor, &mut meter) {
+				let took = System::<T>::block_number().saturating_sub(cursor.started_at);
+				match migration.transactional_step(cursor.inner_cursor.clone(), &mut meter) {
 					Ok(Some(next_cursor)) => {
-						Self::deposit_event(Event::MigrationAdvanced { index });
-						cursor = Some(next_cursor);
+						Self::deposit_event(Event::MigrationAdvanced { index: cursor.index, step: took });
+						cursor.inner_cursor = Some(next_cursor);
 						// A migration has to make maximal progress per step, we therefore break.
 						break
 					},
 					Ok(None) => {
-						Self::deposit_event(Event::MigrationCompleted { index });
-						Executed::<T>::insert(&migration.id(), ());
-						index.saturating_inc();
-						cursor = None;
+						Self::deposit_event(Event::MigrationCompleted {
+							index: cursor.index,
+							took,
+						});
+						Historic::<T>::insert(&migration.id(), ());
+						cursor.advance(System::<T>::block_number());
 					},
 					Err(SteppedMigrationError::InsufficientWeight { required }) => {
-						if step == 0 || required.any_gt(meter.limit) {
+						if iteration == 0 || required.any_gt(meter.limit) {
 							Cursor::<T>::set(Some(MigrationCursor::Stuck));
 							Self::deposit_event(Event::UpgradeFailed);
 						} // else: Hope that it gets better next time.
 						return meter.consumed
 					},
-					Err(SteppedMigrationError::Failed) => {
-						Self::deposit_event(Event::MigrationFailed { index });
+					Err(SteppedMigrationError::Failed | SteppedMigrationError::Timeout) => {
+						Self::deposit_event(Event::MigrationFailed { index: cursor.index, took });
 						Self::deposit_event(Event::UpgradeFailed);
 						Cursor::<T>::set(Some(MigrationCursor::Stuck));
 						return meter.consumed
@@ -190,7 +221,7 @@ pub mod pallet {
 				}
 			}
 
-			Cursor::<T>::set(Some(MigrationCursor::Active(index, cursor)));
+			Cursor::<T>::set(Some(MigrationCursor::Active(cursor)));
 
 			meter.consumed
 		}
@@ -205,11 +236,22 @@ pub mod pallet {
 		#[pallet::weight((0, DispatchClass::Mandatory))]
 		pub fn force_set_cursor(
 			origin: OriginFor<T>,
-			cursor: Option<MigrationCursor<T::Cursor>>,
+			cursor: Option<MigrationCursor<T::Cursor, T::BlockNumber>>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
 			Cursor::<T>::set(cursor);
+
+			Ok(())
+		}
+
+		#[pallet::call_index(1)]
+		#[pallet::weight(0)]
+		pub fn clear_historic(origin: OriginFor<T>) -> DispatchResult {
+			ensure_root(origin)?;
+
+			Historic::<T>::clear(0, None);
+			Self::deposit_event(Event::HistoricCleared);
 
 			Ok(())
 		}
