@@ -20,7 +20,7 @@
 use codec::{Decode, Encode};
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_runtime::RuntimeDebug;
-use sp_std::prelude::*;
+use sp_std::{ops::Add, prelude::*};
 
 /// Provides information about the pallet itself and its setup in the runtime.
 ///
@@ -229,6 +229,14 @@ impl PartialEq<u16> for StorageVersion {
 impl PartialOrd<u16> for StorageVersion {
 	fn partial_cmp(&self, other: &u16) -> Option<sp_std::cmp::Ordering> {
 		Some(self.0.cmp(other))
+	}
+}
+
+impl Add<u16> for StorageVersion {
+	type Output = StorageVersion;
+
+	fn add(self, rhs: u16) -> Self::Output {
+		Self::new(self.0 + rhs)
 	}
 }
 

@@ -19,9 +19,9 @@ scale-info = { version = "2.5.0", default-features = false, features = ["derive"
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
-sp-io = { version = "8.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-staking = { default-features = false, path = "../../primitives/staking" }
 frame-election-provider-support = { default-features = false, path = "../election-provider-support" }
 
@@ -31,9 +31,9 @@ docify = "0.1.13"
 
 [dev-dependencies]
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
-sp-core = { version = "8.0.0", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
-sp-tracing = { version = "7.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
 pallet-staking = { path = "../staking" }
 pallet-balances = { path = "../balances" }
 pallet-timestamp = { path = "../timestamp" }

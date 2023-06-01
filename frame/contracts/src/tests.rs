@@ -28,7 +28,8 @@ use crate::{
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, CollectEvents, Config, ContractInfo, ContractInfoOf, DebugInfo,
-	DefaultAddressGenerator, DeletionQueueCounter, Error, Origin, Pallet, Schedule,
+	DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress, Origin, Pallet,
+	Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -39,7 +40,7 @@ use frame_support::{
 	storage::child,
 	traits::{
 		ConstU32, ConstU64, Contains, Currency, ExistenceRequirement, LockableCurrency, OnIdle,
-		OnInitialize, WithdrawReasons,
+		OnInitialize, StorageVersion, WithdrawReasons,
 	},
 	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
@@ -438,10 +439,11 @@ pub const GAS_LIMIT: Weight = Weight::from_parts(100_000_000_000, 3 * 1024 * 102
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
+	storage_version: Option<StorageVersion>,
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self { existential_deposit: ExistentialDeposit::get() }
+		Self { existential_deposit: ExistentialDeposit::get(), storage_version: None }
 	}
 }
 impl ExtBuilder {
@@ -451,6 +453,10 @@ impl ExtBuilder {
 	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
+	}
+	pub fn set_storage_version(mut self, version: u16) -> Self {
+		self.storage_version = Some(StorageVersion::new(version));
+		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		use env_logger::{Builder, Env};
@@ -463,7 +469,15 @@ impl ExtBuilder {
 			.unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
 		ext.register_extension(KeystoreExt::new(MemoryKeystore::new()));
-		ext.execute_with(|| System::set_block_number(1));
+		ext.execute_with(|| {
+			use frame_support::traits::OnGenesis;
+
+			Pallet::<Test>::on_genesis();
+			if let Some(storage_version) = self.storage_version {
+				storage_version.put::<Pallet<Test>>();
+			}
+			System::set_block_number(1)
+		});
 		ext
 	}
 }
@@ -540,6 +554,62 @@ fn calling_plain_account_fails() {
 					pays_fee: Default::default(),
 				},
 			})
+		);
+	});
+}
+
+#[test]
+fn migration_in_progress_works() {
+	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		MigrationInProgress::<Test>::set(Some(Default::default()));
+
+		assert_err!(
+			Contracts::upload_code(
+				RuntimeOrigin::signed(ALICE),
+				vec![],
+				None,
+				Determinism::Enforced
+			),
+			Error::<Test>::MigrationInProgress,
+		);
+		assert_err!(
+			Contracts::remove_code(RuntimeOrigin::signed(ALICE), code_hash),
+			Error::<Test>::MigrationInProgress,
+		);
+		assert_err!(
+			Contracts::set_code(RuntimeOrigin::signed(ALICE), BOB.clone(), code_hash),
+			Error::<Test>::MigrationInProgress,
+		);
+		assert_err_ignore_postinfo!(
+			Contracts::call(RuntimeOrigin::signed(ALICE), BOB, 0, GAS_LIMIT, None, vec![],),
+			Error::<Test>::MigrationInProgress,
+		);
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate_with_code(
+				RuntimeOrigin::signed(ALICE),
+				100_000,
+				GAS_LIMIT,
+				None,
+				wasm,
+				vec![],
+				vec![],
+			),
+			Error::<Test>::MigrationInProgress,
+		);
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate(
+				RuntimeOrigin::signed(ALICE),
+				100_000,
+				GAS_LIMIT,
+				None,
+				code_hash,
+				vec![],
+				vec![],
+			),
+			Error::<Test>::MigrationInProgress,
 		);
 	});
 }
