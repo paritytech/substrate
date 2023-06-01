@@ -59,4 +59,3 @@ std = [
     "sp-ark-ed-on-bls12-377/std",
     "sp-ark-ed-on-bls12-381-bandersnatch/std",
 ]
-ec-utils-experimental = []

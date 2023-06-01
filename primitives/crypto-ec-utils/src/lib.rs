@@ -21,24 +21,16 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "ec-utils-experimental")]
 pub mod bls12_377;
-#[cfg(feature = "ec-utils-experimental")]
 pub mod bls12_381;
-#[cfg(feature = "ec-utils-experimental")]
 pub mod bw6_761;
-#[cfg(feature = "ec-utils-experimental")]
 pub mod ed_on_bls12_377;
-#[cfg(feature = "ec-utils-experimental")]
 pub mod ed_on_bls12_381_bandersnatch;
-#[cfg(feature = "ec-utils-experimental")]
 mod utils;
 
-#[cfg(feature = "ec-utils-experimental")]
 use sp_runtime_interface::runtime_interface;
 
 /// Interfaces for working with elliptic curves related types from within the runtime.
-#[cfg(feature = "ec-utils-experimental")]
 #[runtime_interface]
 pub trait EllipticCurves {
 	/// Compute a multi Miller loop on bls12_381
