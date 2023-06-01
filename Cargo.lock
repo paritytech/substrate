@@ -5605,7 +5605,7 @@ dependencies = [
 name = "node-template"
 version = "4.0.0-dev"
 dependencies = [
- "clap 4.2.7",
+ "clap 4.3.0",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-system",
