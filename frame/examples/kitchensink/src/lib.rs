@@ -167,7 +167,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			unimplemented!()
+			
 		}
 	}
 
@@ -223,7 +223,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		fn integrity_test() {
-			unimplemented!()
+			
 		}
 
 		fn offchain_worker(_n: T::BlockNumber) {
