@@ -411,7 +411,7 @@ pub mod pallet {
 		/// authorized OCWs. Anyone could have signed those payloads, even malicious actors trying
 		/// to "impersonate" an OCW.
 		///
-		/// There are NO implicit security assumptions about here!
+		/// There are NO implicit security assumptions here!
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			// Firstly let's check that we call the right function.
 			if let Call::pong_unsigned_with_signed_payload {
