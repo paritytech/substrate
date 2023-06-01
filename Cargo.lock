@@ -6160,6 +6160,7 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
+ "serde",
  "sp-consensus-beefy",
  "sp-core",
  "sp-io",

@@ -42,6 +42,7 @@ std = [
 	"pallet-authorship/std",
 	"pallet-session/std",
 	"scale-info/std",
+	"serde/std",
 	"sp-consensus-beefy/std",
 	"sp-runtime/std",
 	"sp-session/std",
