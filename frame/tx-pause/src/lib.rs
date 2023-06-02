@@ -102,7 +102,7 @@ pub mod pallet {
 		/// The call is unpaused.
 		IsUnpaused,
 
-		/// The call is listed as safe and cannot be paused.
+		/// The call is whitelisted and cannot be paused.
 		Unpausable,
 
 		// The pallet or call does not exist in the runtime.
