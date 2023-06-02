@@ -36,9 +36,9 @@ sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-core = { version = "21.0.0", path = "../../primitives/core" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
-sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
-sp-externalities = { version = "0.13.0", path = "../../primitives/externalities" }
+sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
+sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
+sp-externalities = { version = "0.19.0", path = "../../primitives/externalities" }
 log = "0.4.17"
 
 [dev-dependencies]

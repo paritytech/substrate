@@ -226,38 +226,18 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 	Ok(quote!(
 		pub struct RuntimeApi {}
 		#crate_::std_enabled! {
-		/// Implements all runtime apis for the client side.
-		pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static> {
-			call: &'static C,
-			commit_on_success: std::cell::RefCell<bool>,
-			changes: std::cell::RefCell<#crate_::OverlayedChanges>,
-			storage_transaction_cache: std::cell::RefCell<
-				#crate_::StorageTransactionCache<Block, C::StateBackend>
-			>,
-			recorder: std::option::Option<#crate_::ProofRecorder<Block>>,
-			call_context: #crate_::CallContext,
-			extensions: std::cell::RefCell<#crate_::Extensions>,
-			extensions_generated_for: std::cell::RefCell<std::option::Option<Block::Hash>>,
-		}
-
-		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> #crate_::ApiExt<Block> for
-			RuntimeApiImpl<Block, C>
-		{
-			type StateBackend = C::StateBackend;
-
-			fn execute_in_transaction<F: FnOnce(&Self) -> #crate_::TransactionOutcome<R>, R>(
-				&self,
-				call: F,
-			) -> R where Self: Sized {
-				self.start_transaction();
-
-				*std::cell::RefCell::borrow_mut(&self.commit_on_success) = false;
-				let res = call(self);
-				*std::cell::RefCell::borrow_mut(&self.commit_on_success) = true;
-
-				self.commit_or_rollback(std::matches!(res, #crate_::TransactionOutcome::Commit(_)));
-
-				res.into_inner()
+			/// Implements all runtime apis for the client side.
+			pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static> {
+				call: &'static C,
+				commit_on_success: std::cell::RefCell<bool>,
+				changes: std::cell::RefCell<#crate_::OverlayedChanges>,
+				storage_transaction_cache: std::cell::RefCell<
+					#crate_::StorageTransactionCache<Block, C::StateBackend>
+				>,
+				recorder: std::option::Option<#crate_::ProofRecorder<Block>>,
+				call_context: #crate_::CallContext,
+				extensions: std::cell::RefCell<#crate_::Extensions>,
+				extensions_generated_for: std::cell::RefCell<std::option::Option<Block::Hash>>,
 			}
 
 			impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> #crate_::ApiExt<Block> for
@@ -341,16 +321,15 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 							state_version,
 						)
 					}
-			}
 
-			fn set_call_context(&mut self, call_context: #crate_::CallContext) {
-				self.call_context = call_context;
-			}
+				fn set_call_context(&mut self, call_context: #crate_::CallContext) {
+					self.call_context = call_context;
+				}
 
-			fn register_extension<E: #crate_::Extension>(&mut self, extension: E) {
-				std::cell::RefCell::borrow_mut(&self.extensions).register(extension);
+				fn register_extension<E: #crate_::Extension>(&mut self, extension: E) {
+					std::cell::RefCell::borrow_mut(&self.extensions).register(extension);
+				}
 			}
-		}
 
 			impl<Block: #crate_::BlockT, C> #crate_::ConstructRuntimeApi<Block, C>
 				for RuntimeApi
@@ -359,19 +338,20 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			{
 				type RuntimeApi = RuntimeApiImpl<Block, C>;
 
-			fn construct_runtime_api<'a>(
-				call: &'a C,
-			) -> #crate_::ApiRef<'a, Self::RuntimeApi> {
-				RuntimeApiImpl {
-					call: unsafe { std::mem::transmute(call) },
-					commit_on_success: true.into(),
-					changes: std::default::Default::default(),
-					recorder: std::default::Default::default(),
-					storage_transaction_cache: std::default::Default::default(),
-					call_context: #crate_::CallContext::Offchain,
-					extensions: std::default::Default::default(),
-					extensions_generated_for: std::default::Default::default(),
-				}.into()
+				fn construct_runtime_api<'a>(
+					call: &'a C,
+				) -> #crate_::ApiRef<'a, Self::RuntimeApi> {
+					RuntimeApiImpl {
+						call: unsafe { std::mem::transmute(call) },
+						commit_on_success: true.into(),
+						changes: std::default::Default::default(),
+						recorder: std::default::Default::default(),
+						storage_transaction_cache: std::default::Default::default(),
+						call_context: #crate_::CallContext::Offchain,
+						extensions: std::default::Default::default(),
+						extensions_generated_for: std::default::Default::default(),
+					}.into()
+				}
 			}
 
 			impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> RuntimeApiImpl<Block, C> {
