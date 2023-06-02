@@ -361,7 +361,7 @@ pub mod pallet {
 					T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(1));
 				let asset_2 =
 					T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(2));
-				assert!(asset_1 != asset_2, "unfortunatly decoded to be the same asset.");
+				assert!(asset_1 != asset_2, "must return different assets for different ids.");
 				let pool_account_1 = Self::get_pool_account(&(native.clone(), asset_1));
 				let pool_account_2 = Self::get_pool_account(&(native, asset_2));
 				assert!(sp_std::mem::size_of::<T::AccountId>() >= sp_std::mem::size_of::<u128>());
