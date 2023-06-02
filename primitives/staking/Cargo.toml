@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-serde = { version = "1.0.163", optional = true }
+serde = { version = "1.0.163", default-features = false, features = ["derive", "alloc"], optional = true }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 sp-core = { version = "21.0.0", default-features = false, path = "../core" }
@@ -23,7 +23,7 @@ sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 [features]
 default = ["std"]
 std = [
-	"serde",
+	"serde/std",
 	"codec/std",
 	"scale-info/std",
 	"sp-core/std",
