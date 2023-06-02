@@ -23,6 +23,7 @@ use frame_support::{
 	},
 	dispatch_context::with_context,
 	pallet_prelude::{StorageInfoTrait, ValueQuery},
+	parameter_types,
 	storage::unhashed,
 	traits::{
 		ConstU32, GetCallIndex, GetCallName, GetStorageVersion, OnFinalize, OnGenesis,
@@ -36,6 +37,11 @@ use sp_io::{
 	TestExternalities,
 };
 use sp_runtime::{DispatchError, ModuleError};
+
+parameter_types! {
+	/// Used to control if the storage version should be updated.
+	storage UpdateStorageVersion: bool = false;
+}
 
 /// Latest stable metadata version used for testing.
 const LATEST_METADATA_VERSION: u32 = 14;
@@ -500,9 +506,11 @@ pub mod pallet {
 // and that a pallet with the attribute without_storage_info is correctly handled.
 #[frame_support::pallet]
 pub mod pallet2 {
-	use super::{SomeAssociation1, SomeType1};
+	use super::{SomeAssociation1, SomeType1, UpdateStorageVersion};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+
+	pub(crate) const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config
@@ -513,6 +521,7 @@ pub mod pallet2 {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -530,6 +539,11 @@ pub mod pallet2 {
 		}
 		fn on_runtime_upgrade() -> Weight {
 			Self::deposit_event(Event::Something(31));
+
+			if UpdateStorageVersion::get() {
+				Self::current_storage_version().put::<Self>();
+			}
+
 			Weight::zero()
 		}
 	}
@@ -683,7 +697,8 @@ impl pallet5::Config for Runtime {
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
+pub type UncheckedExtrinsic =
+	sp_runtime::testing::TestXt<RuntimeCall, frame_system::CheckNonZeroSender<Runtime>>;
 
 frame_support::construct_runtime!(
 	pub struct Runtime where
@@ -812,7 +827,7 @@ fn inherent_expand() {
 	let inherents = InherentData::new().create_extrinsics();
 
 	let expected = vec![UncheckedExtrinsic {
-		function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+		call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 		signature: None,
 	}];
 	assert_eq!(expected, inherents);
@@ -827,11 +842,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+				call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
+				call: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
 				signature: None,
 			},
 		],
@@ -849,11 +864,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+				call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 0, bar: 0 }),
+				call: RuntimeCall::Example(pallet::Call::foo { foo: 0, bar: 0 }),
 				signature: None,
 			},
 		],
@@ -870,7 +885,7 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+			call: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 			signature: None,
 		}],
 	);
@@ -888,8 +903,8 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
-			signature: Some((1, (), ())),
+			call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+			signature: Some((1, Default::default())),
 		}],
 	);
 
@@ -907,11 +922,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				call: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+				call: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 		],
@@ -929,15 +944,15 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				call: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+				call: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+				call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 		],
@@ -955,15 +970,15 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				call: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
-				signature: Some((1, (), ())),
+				call: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
+				signature: Some((1, Default::default())),
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+				call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 		],
@@ -1278,7 +1293,7 @@ fn migrate_from_pallet_version_to_storage_version() {
 		assert!(sp_io::storage::get(&pallet_version_key(System::name())).is_none());
 
 		assert_eq!(Example::on_chain_storage_version(), pallet::STORAGE_VERSION);
-		assert_eq!(Example2::on_chain_storage_version(), StorageVersion::new(0));
+		assert_eq!(Example2::on_chain_storage_version(), pallet2::STORAGE_VERSION);
 		assert_eq!(System::on_chain_storage_version(), StorageVersion::new(0));
 	});
 }
@@ -2038,6 +2053,100 @@ fn test_storage_alias() {
 			pallet2::SomeCountedStorageMap::<Runtime>::storage_info()
 		);
 	})
+}
+
+#[cfg(feature = "try-runtime")]
+#[test]
+fn post_runtime_upgrade_detects_storage_version_issues() {
+	use frame_support::traits::UpgradeCheckSelect;
+
+	struct CustomUpgrade;
+
+	impl OnRuntimeUpgrade for CustomUpgrade {
+		fn on_runtime_upgrade() -> Weight {
+			Example2::current_storage_version().put::<Example2>();
+
+			Default::default()
+		}
+	}
+
+	struct CustomUpgradePallet4;
+
+	impl OnRuntimeUpgrade for CustomUpgradePallet4 {
+		fn on_runtime_upgrade() -> Weight {
+			StorageVersion::new(100).put::<Example4>();
+
+			Default::default()
+		}
+	}
+
+	type Executive = frame_executive::Executive<
+		Runtime,
+		Block,
+		frame_system::ChainContext<Runtime>,
+		Runtime,
+		AllPalletsWithSystem,
+	>;
+
+	type ExecutiveWithUpgrade = frame_executive::Executive<
+		Runtime,
+		Block,
+		frame_system::ChainContext<Runtime>,
+		Runtime,
+		AllPalletsWithSystem,
+		CustomUpgrade,
+	>;
+
+	type ExecutiveWithUpgradePallet4 = frame_executive::Executive<
+		Runtime,
+		Block,
+		frame_system::ChainContext<Runtime>,
+		Runtime,
+		AllPalletsWithSystem,
+		CustomUpgradePallet4,
+	>;
+
+	TestExternalities::default().execute_with(|| {
+		// Call `on_genesis` to put the storage version of `Example` into the storage.
+		Example::on_genesis();
+		// The version isn't changed, we should detect it.
+		assert!(
+			Executive::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost).unwrap_err() ==
+				"On chain and current storage version do not match. Missing runtime upgrade?"
+					.into()
+		);
+	});
+
+	TestExternalities::default().execute_with(|| {
+		// Call `on_genesis` to put the storage version of `Example` into the storage.
+		Example::on_genesis();
+		// We set the new storage version in the pallet and that should be detected.
+		UpdateStorageVersion::set(&true);
+		Executive::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost).unwrap();
+	});
+
+	TestExternalities::default().execute_with(|| {
+		// Call `on_genesis` to put the storage version of `Example` into the storage.
+		Example::on_genesis();
+		// We set the new storage version in the custom upgrade and that should be detected.
+		ExecutiveWithUpgrade::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost).unwrap();
+	});
+
+	TestExternalities::default().execute_with(|| {
+		// Call `on_genesis` to put the storage version of `Example` into the storage.
+		Example::on_genesis();
+		// We need to set the correct storage version for `Example2`
+		UpdateStorageVersion::set(&true);
+
+		// `CustomUpgradePallet4` will set a storage version for `Example4` while this doesn't has
+		// any storage version "enabled".
+		assert!(
+			ExecutiveWithUpgradePallet4::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost)
+				.unwrap_err() == "On chain storage version set, while the pallet \
+				doesn't have the `#[pallet::storage_version(VERSION)]` attribute."
+				.into()
+		);
+	});
 }
 
 #[test]

@@ -303,6 +303,15 @@ pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
 	fn translate<O: Decode, F: FnMut(K, O) -> Option<V>>(f: F);
+
+	/// Translate the next entry following `previous_key` by a function `f`.
+	/// By returning `None` from `f` for an element, you'll remove it from the map.
+	///
+	/// Returns the next key to iterate from in lexicographical order of the encoded key.
+	fn translate_next<O: Decode, F: FnMut(K, O) -> Option<V>>(
+		previous_key: Option<Vec<u8>>,
+		f: F,
+	) -> Option<Vec<u8>>;
 }
 
 /// A strongly-typed double map in storage whose secondary keys and values can be iterated over.

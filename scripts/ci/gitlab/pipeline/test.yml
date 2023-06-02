@@ -88,13 +88,17 @@ cargo-check-benches:
     - !reference [.job-switcher, before_script]
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
-    # merges in the master branch on PRs
+    # merges in the master branch on PRs. skip if base is not master
     - 'if [ $CI_COMMIT_REF_NAME != "master" ]; then
-      BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq -r .base.ref);
-      printf "Merging base branch %s\n" "${BASE:=master}";
-      git config user.email "ci@gitlab.parity.io";
-      git fetch origin "refs/heads/${BASE}";
-      git merge --verbose --no-edit FETCH_HEAD;
+        BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq -r .base.ref);
+        printf "Merging base branch %s\n" "${BASE:=master}";
+        if [ $BASE != "master" ]; then
+          echo "$BASE is not master, skipping merge";
+        else
+          git config user.email "ci@gitlab.parity.io";
+          git fetch origin "refs/heads/${BASE}";
+          git merge --verbose --no-edit FETCH_HEAD;
+        fi
       fi'
   parallel: 2
   script:
@@ -115,8 +119,6 @@ cargo-check-benches:
       | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json
       ;;
       esac
-  tags:
-    - linux-docker-benches
 
 node-bench-regression-guard:
   # it's not belong to `build` semantically, but dag jobs can't depend on each other
@@ -214,7 +216,6 @@ test-linux-stable:
     - rusty-cachier snapshot create
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     # tests are partitioned by nextest and executed in parallel on $CI_NODE_TOTAL runners
-    # node-cli is excluded until https://github.com/paritytech/substrate/issues/11321 fixed
     - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
     - time cargo nextest run --workspace
       --locked
@@ -222,10 +223,23 @@ test-linux-stable:
       --verbose
       --features runtime-benchmarks
       --manifest-path ./bin/node/cli/Cargo.toml
-      --exclude node-cli
       --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
     # we need to update cache only from one job
     - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
+    # Upload tests results to Elasticsearch
+    - echo "Upload test results to Elasticsearch"
+    - cat target/nextest/default/junit.xml | xq . > target/nextest/default/junit.json
+    - "curl -v -XPOST --http1.1
+      -u ${ELASTIC_USERNAME}:${ELASTIC_PASSWORD}
+      https://elasticsearch.parity-build.parity.io/unit-tests/_doc/${CI_JOB_ID}
+      -H 'Content-Type: application/json'
+      -d @target/nextest/default/junit.json"
+  artifacts:
+    when: always
+    paths:
+      - target/nextest/default/junit.xml
+    reports:
+      junit: target/nextest/default/junit.xml
 
 test-frame-support:
   stage: test
@@ -244,8 +258,8 @@ test-frame-support:
   script:
     - rusty-cachier snapshot create
     - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
-    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet
-    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet
+    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime --manifest-path ./frame/support/test/Cargo.toml
+    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs,try-runtime --manifest-path ./frame/support/test/Cargo.toml
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
     - rusty-cachier cache upload

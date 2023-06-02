@@ -34,11 +34,17 @@ pub mod weights;
 use blake2::{Blake2b512, Digest};
 use frame_support::{pallet_prelude::*, weights::WeightMeter};
 use frame_system::pallet_prelude::*;
+use sp_io::hashing::twox_256;
 use sp_runtime::{traits::Zero, Perbill};
 use sp_std::{vec, vec::Vec};
 
 pub use pallet::*;
 pub use weights::WeightInfo;
+
+/// The size of each value in the `TrashData` storage in bytes.
+pub const VALUE_SIZE: usize = 1024;
+/// Max number of entries for `TrashData` storage item
+pub const MAX_TRASH_DATA_ENTRIES: u32 = 65_000;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -47,6 +53,9 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+		/// The admin origin that can set computational limits and initialize the pallet.
+		type AdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Weight information for this pallet.
 		type WeightInfo: WeightInfo;
@@ -58,11 +67,11 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event {
-		/// The pallet has been (re)initialized by root.
+		/// The pallet has been (re)initialized.
 		PalletInitialized { reinit: bool },
-		/// The computation limit has been updated by root.
+		/// The computation limit has been updated.
 		ComputationLimitSet { compute: Perbill },
-		/// The storage limit has been updated by root.
+		/// The storage limit has been updated.
 		StorageLimitSet { storage: Perbill },
 	}
 
@@ -96,14 +105,50 @@ pub mod pallet {
 	pub(super) type TrashData<T: Config> = StorageMap<
 		Hasher = Twox64Concat,
 		Key = u32,
-		Value = [u8; 1024],
+		Value = [u8; VALUE_SIZE],
 		QueryKind = OptionQuery,
-		MaxValues = ConstU32<65_000>,
+		MaxValues = ConstU32<MAX_TRASH_DATA_ENTRIES>,
 	>;
 
 	/// The current number of entries in `TrashData`.
 	#[pallet::storage]
 	pub(crate) type TrashDataCount<T: Config> = StorageValue<_, u32, ValueQuery>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig {
+		pub compute: Perbill,
+		pub storage: Perbill,
+		pub trash_data_count: u32,
+	}
+
+	impl Default for GenesisConfig {
+		fn default() -> Self {
+			Self {
+				compute: Default::default(),
+				storage: Default::default(),
+				trash_data_count: Default::default(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		fn build(&self) {
+			assert!(
+				self.trash_data_count <= MAX_TRASH_DATA_ENTRIES,
+				"number of TrashData entries cannot be bigger than {:?}",
+				MAX_TRASH_DATA_ENTRIES
+			);
+
+			(0..self.trash_data_count)
+				.for_each(|i| TrashData::<T>::insert(i, Pallet::<T>::gen_value(i)));
+
+			TrashDataCount::<T>::set(self.trash_data_count);
+
+			<Compute<T>>::put(self.compute);
+			<Storage<T>>::put(self.storage);
+		}
+	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -143,7 +188,11 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Initializes the pallet by writing into `TrashData`.
 		///
-		/// Only callable by Root. A good default for `trash_count` is `5_000`.
+		/// `current_count` is the current number of elements in `TrashData`. This can be set to
+		/// `None` when the pallet is first initialized.
+		///
+		/// Only callable by Root or `AdminOrigin`. A good default for `new_count` is
+		/// `5_000`.
 		#[pallet::call_index(0)]
 		#[pallet::weight(
 			T::WeightInfo::initialize_pallet_grow(witness_count.unwrap_or_default())
@@ -154,7 +203,7 @@ pub mod pallet {
 			new_count: u32,
 			witness_count: Option<u32>,
 		) -> DispatchResult {
-			ensure_root(origin)?;
+			T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
 
 			let current_count = TrashDataCount::<T>::get();
 			ensure!(
@@ -163,7 +212,8 @@ pub mod pallet {
 			);
 
 			if new_count > current_count {
-				(current_count..new_count).for_each(|i| TrashData::<T>::insert(i, [i as u8; 1024]));
+				(current_count..new_count)
+					.for_each(|i| TrashData::<T>::insert(i, Self::gen_value(i)));
 			} else {
 				(new_count..current_count).for_each(TrashData::<T>::remove);
 			}
@@ -173,28 +223,33 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set the `Compute` storage value that determines how much of the
-		/// block's weight `ref_time` to use during `on_idle`.
+		/// Set how much of the remaining `ref_time` weight should be consumed by `on_idle`.
 		///
-		/// Only callable by Root.
+		/// Only callable by Root or `AdminOrigin`.
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::set_compute())]
 		pub fn set_compute(origin: OriginFor<T>, compute: Perbill) -> DispatchResult {
-			ensure_root(origin)?;
+			T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
+
 			Compute::<T>::set(compute);
 
 			Self::deposit_event(Event::ComputationLimitSet { compute });
 			Ok(())
 		}
 
-		/// Set the `Storage` storage value that determines the PoV size usage
-		/// for each block.
+		/// Set how much of the remaining `proof_size` weight should be consumed by `on_idle`.
+		//
+		/// 100% means that all remaining `proof_size` will be consumed. The PoV benchmarking
+		/// results that are used here are likely an over-estimation. 100% intended consumption will
+		/// therefore translate to less than 100% actual consumption. In the future, this could be
+		/// counter-acted by allowing the glutton to specify over-unity consumption ratios.
 		///
-		/// Only callable by Root.
+		/// Only callable by Root or `AdminOrigin`.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::set_storage())]
 		pub fn set_storage(origin: OriginFor<T>, storage: Perbill) -> DispatchResult {
-			ensure_root(origin)?;
+			T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
+
 			Storage::<T>::set(storage);
 
 			Self::deposit_event(Event::StorageLimitSet { storage });
@@ -251,7 +306,7 @@ pub mod pallet {
 			// compiler does not know that (hopefully).
 			debug_assert!(clobber.len() == 64);
 			if clobber.len() == 65 {
-				TrashData::<T>::insert(0, [clobber[0] as u8; 1024]);
+				TrashData::<T>::insert(0, [clobber[0] as u8; VALUE_SIZE]);
 			}
 		}
 
@@ -287,6 +342,18 @@ pub mod pallet {
 				Some(0) | None => Err(()),
 				Some(i) => Ok(i as u32),
 			}
+		}
+
+		/// Generate a pseudo-random deterministic value from a `seed`.
+		pub(crate) fn gen_value(seed: u32) -> [u8; VALUE_SIZE] {
+			let mut ret = [0u8; VALUE_SIZE];
+
+			for i in 0u32..(VALUE_SIZE as u32 / 32) {
+				let hash = (seed, i).using_encoded(twox_256);
+				ret[i as usize * 32..(i + 1) as usize * 32].copy_from_slice(&hash);
+			}
+
+			ret
 		}
 	}
 }

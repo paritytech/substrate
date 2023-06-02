@@ -68,8 +68,6 @@ mod mock_democracy {
 
 		#[pallet::call]
 		impl<T: Config> Pallet<T> {
-			#[pallet::call_index(0)]
-			#[pallet::weight(0)]
 			pub fn external_propose_majority(origin: OriginFor<T>) -> DispatchResult {
 				T::ExternalMajorityOrigin::ensure_origin(origin)?;
 				Self::deposit_event(Event::<T>::ExternalProposed);
@@ -179,7 +177,7 @@ impl ExtBuilder {
 	}
 
 	pub fn build(self) -> sp_io::TestExternalities {
-		let mut ext: sp_io::TestExternalities = GenesisConfig {
+		let mut ext: sp_io::TestExternalities = RuntimeGenesisConfig {
 			collective: pallet_collective::GenesisConfig {
 				members: self.collective_members,
 				phantom: Default::default(),
