@@ -89,7 +89,7 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
+	type RuntimeHoldReason = ();
 	type MaxHolds = ();
 }
 
@@ -372,7 +372,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 #[cfg(feature = "runtime-benchmarks")]
 pub fn new_bench_ext() -> sp_io::TestExternalities {
-	GenesisConfig::default().build_storage().unwrap().into()
+	RuntimeGenesisConfig::default().build_storage().unwrap().into()
 }
 
 pub fn test_cid() -> Cid {

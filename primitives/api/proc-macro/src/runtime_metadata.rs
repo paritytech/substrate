@@ -162,15 +162,18 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait) -> TokenStream2 {
 		ty.default = None;
 	}
 
-	let where_clause = where_clause
-		.iter()
-		.map(|ty| quote!(#ty: #crate_::scale_info::TypeInfo + 'static));
+	where_clause
+		.into_iter()
+		.map(|ty| parse_quote!(#ty: #crate_::scale_info::TypeInfo + 'static))
+		.for_each(|w| generics.make_where_clause().predicates.push(w));
+
+	let (impl_generics, _, where_clause) = generics.split_for_impl();
 
 	quote!(
 		#( #attrs )*
 		#[inline(always)]
-		pub fn runtime_metadata #generics () -> #crate_::metadata_ir::RuntimeApiMetadataIR
-		where #( #where_clause, )*
+		pub fn runtime_metadata #impl_generics () -> #crate_::metadata_ir::RuntimeApiMetadataIR
+		#where_clause
 		{
 			#crate_::metadata_ir::RuntimeApiMetadataIR {
 				name: #trait_name,

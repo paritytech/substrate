@@ -148,7 +148,7 @@ const MAX_BLOCK_ANNOUNCE_SIZE: u64 = 1024 * 1024;
 pub(crate) const MAX_BLOCKS_IN_RESPONSE: usize = 128;
 
 mod rep {
-	use sc_peerset::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 	/// Reputation change when a peer sent us a message that led to a
 	/// database read error.
 	pub const BLOCKCHAIN_READ_ERROR: Rep = Rep::new(-(1 << 16), "DB Error");

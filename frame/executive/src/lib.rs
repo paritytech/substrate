@@ -886,7 +886,7 @@ mod tests {
 		type WeightInfo = ();
 		type FreezeIdentifier = ();
 		type MaxFreezes = ConstU32<1>;
-		type HoldIdentifier = ();
+		type RuntimeHoldReason = ();
 		type MaxHolds = ConstU32<1>;
 	}
 

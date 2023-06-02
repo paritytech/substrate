@@ -20,7 +20,6 @@
 use super::*;
 use crate as pallet_nft_fractionalization;
 
-use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
@@ -28,7 +27,6 @@ use frame_support::{
 };
 use frame_system::EnsureSigned;
 use pallet_nfts::PalletFeatures;
-use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -83,13 +81,6 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
-#[derive(
-	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, Debug, TypeInfo,
-)]
-pub enum HoldIdentifier {
-	NftFractionalization,
-}
-
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
@@ -100,7 +91,7 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ConstU32<50>;
 	type ReserveIdentifier = [u8; 8];
-	type HoldIdentifier = HoldIdentifier;
+	type RuntimeHoldReason = RuntimeHoldReason;
 	type MaxHolds = ConstU32<1>;
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
@@ -169,7 +160,6 @@ parameter_types! {
 	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
 	pub NewAssetSymbol: BoundedVec<u8, StringLimit> = (*b"FRAC").to_vec().try_into().unwrap();
 	pub NewAssetName: BoundedVec<u8, StringLimit> = (*b"Frac").to_vec().try_into().unwrap();
-	pub const HoldReason: HoldIdentifier = HoldIdentifier::NftFractionalization;
 }
 
 impl Config for Test {
@@ -189,7 +179,7 @@ impl Config for Test {
 	type StringLimit = StringLimit;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();
-	type HoldReason = HoldReason;
+	type RuntimeHoldReason = RuntimeHoldReason;
 }
 
 // Build genesis storage according to the mock runtime.

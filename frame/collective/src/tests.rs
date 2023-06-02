@@ -177,7 +177,7 @@ impl ExtBuilder {
 	}
 
 	pub fn build(self) -> sp_io::TestExternalities {
-		let mut ext: sp_io::TestExternalities = GenesisConfig {
+		let mut ext: sp_io::TestExternalities = RuntimeGenesisConfig {
 			collective: pallet_collective::GenesisConfig {
 				members: self.collective_members,
 				phantom: Default::default(),

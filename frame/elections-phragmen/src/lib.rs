@@ -743,7 +743,10 @@ pub mod pallet {
 					Members::<T>::mutate(|members| {
 						match members.binary_search_by(|m| m.who.cmp(member)) {
 							Ok(_) => {
-								panic!("Duplicate member in elections-phragmen genesis: {}", member)
+								panic!(
+									"Duplicate member in elections-phragmen genesis: {:?}",
+									member
+								)
 							},
 							Err(pos) => members.insert(
 								pos,
@@ -1352,7 +1355,7 @@ mod tests {
 		type WeightInfo = ();
 		type FreezeIdentifier = ();
 		type MaxFreezes = ();
-		type HoldIdentifier = ();
+		type RuntimeHoldReason = ();
 		type MaxHolds = ();
 	}
 
@@ -1500,7 +1503,7 @@ mod tests {
 			MEMBERS.with(|m| {
 				*m.borrow_mut() = self.genesis_members.iter().map(|(m, _)| *m).collect::<Vec<_>>()
 			});
-			let mut ext: sp_io::TestExternalities = GenesisConfig {
+			let mut ext: sp_io::TestExternalities = RuntimeGenesisConfig {
 				balances: pallet_balances::GenesisConfig::<Test> {
 					balances: vec![
 						(1, 10 * self.balance_factor),
