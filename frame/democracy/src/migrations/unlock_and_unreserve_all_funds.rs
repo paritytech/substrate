@@ -229,7 +229,7 @@ where
 	}
 }
 
-#[cfg(test)]
+#[cfg(all(feature = "try-runtime", test))]
 mod test {
 	use super::*;
 	use crate::{
@@ -280,13 +280,10 @@ mod test {
 			);
 
 			// Run the migration.
-
-			// TODO: decide how to add pre/post checks based on the outcome of
-			// https://github.com/paritytech/substrate/issues/14264
-			// let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
-			// 	.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
+			let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
+				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
 			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
-			// assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
+			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
 
 			// Assert the reserved balance was reduced by the expected amount.
 			assert_eq!(
@@ -337,12 +334,10 @@ mod test {
 			);
 
 			// Run the migration.
-			// TODO: decide how to add pre/post checks based on the outcome of
-			// https://github.com/paritytech/substrate/issues/14264
-			// let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
-			// 	.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
+			let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
+				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
 			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
-			// assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
+			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
 
 			// Assert the voter lock was removed
 			assert_eq!(
