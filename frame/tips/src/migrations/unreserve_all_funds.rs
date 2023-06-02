@@ -131,8 +131,8 @@ where
 		}
 
 		RocksDbWeight::get()
-			.reads_writes(account_deposits.len() as u64, account_deposits.len() as u64) +
-			initial_reads
+			.reads_writes(account_deposits.len() as u64, account_deposits.len() as u64)
+			.saturating_add(initial_reads)
 	}
 
 	/// Verifies that the account reserved balances were reduced by the actual expected amounts.
