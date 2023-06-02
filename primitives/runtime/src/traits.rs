@@ -540,7 +540,7 @@ pub trait Convert<A, B> {
 ///
 /// In case an `Error` is returned, it must always be the operand which is returned.
 pub trait TryConvert<A, B> {
-	/// Make conversion.
+	/// Attempt the conversion and return the input value in the error case.
 	fn try_convert(a: A) -> Result<B, A>;
 }
 
