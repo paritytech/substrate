@@ -123,7 +123,6 @@ fn historic_skipping_works() {
 }
 
 /// When another upgrade happens while a migration is still running, it should stuck the chain.
-// FAIL-CI we could still check the unique id and only fail if it changed...
 #[test]
 fn upgrade_fails_when_migration_active() {
 	test_closure(|| {

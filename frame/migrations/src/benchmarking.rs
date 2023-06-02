@@ -60,16 +60,6 @@ mod benches {
 	}
 
 	#[benchmark]
-	fn load_migrations() {
-		Pallet::<T>::on_initialize();
-
-		#[block]
-		{
-			Pallet::<T>::on_initialize(1u32.into());
-		}
-	}
-
-	#[benchmark]
 	fn on_init_loop() {
 		System::<T>::set_block_number(1u32.into());
 		Pallet::<T>::on_runtime_upgrade();
@@ -87,6 +77,16 @@ mod benches {
 
 		#[extrinsic_call]
 		_(RawOrigin::Root, Some(cursor::<T>()));
+	}
+
+	#[benchmark]
+	fn clear_historic(n: Linear<0, 1000>) {
+		//for i in 0..n { // TODO
+		//	Historic::<T>::insert(i.into(), ());
+		//}
+
+		#[extrinsic_call]
+		_(RawOrigin::Root, None, None);
 	}
 
 	fn cursor<T: Config>() -> MigrationCursor<T::Cursor, T::BlockNumber> {

@@ -292,18 +292,14 @@ impl ExtrinsicSuspenderQuery for () {
 /// Notification handler for status updates regarding runtime upgrades.
 pub trait UpgradeStatusHandler {
 	/// Notifies of the start of a runtime upgrade.
-	///
-	/// Can be used to pause XCM etc.
 	fn started() {}
 
 	/// Notifies of the completion of a runtime upgrade.
-	///
-	/// Can be used to resume XCM etc.
 	fn completed() {}
 
 	/// Infallibly handle a failed runtime upgrade.
 	///
-	/// Gets optionally passed in the index of the migration that caused the failure.
+	/// Gets passed in the optional index of the migration that caused the failure.
 	fn failed(migration: Option<u32>) -> FailedUpgradeHandling;
 }
 
