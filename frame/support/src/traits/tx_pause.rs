@@ -15,59 +15,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Traits that can be used to pause calls.
+//! Types to pause calls in the runtime.
 
-pub trait SafeMode {
-	type BlockNumber;
-
-	/// Whether the safe mode is entered.
-	fn is_entered() -> bool {
-		Self::remaining().is_some()
-	}
-
-	/// How many more blocks the safe mode will stay entered.
-	///
-	/// If this returns `0` then the safe mode will exit in the next block.
-	fn remaining() -> Option<Self::BlockNumber>;
-
-	fn enter(duration: Self::BlockNumber) -> Result<(), SafeModeError>;
-
-	fn extend(duration: Self::BlockNumber) -> Result<(), SafeModeError>;
-
-	fn exit() -> Result<(), SafeModeError>;
-}
-
-pub enum SafeModeError {
-	/// The safe mode is already entered.
-	AlreadyEntered,
-	/// The safe mode is already exited.
-	AlreadyExited,
-	Unknown,
-}
-
+/// Can pause specific transactions from being processed.
+///
+/// Note that paused transactions will not be queued for later execution. Instead they will be
+/// dropped.
 pub trait TransactionPause {
 	/// How to unambiguously identify a call.
 	///
 	/// For example `(pallet_index, call_index)`.
 	type CallIdentifier;
 
+	/// Whether this call is paused.
 	fn is_paused(call: Self::CallIdentifier) -> bool;
 
+	/// Whether this call can be paused.
+	///
+	/// This should hold for the current block and may change in the future.
 	fn can_pause(call: Self::CallIdentifier) -> bool;
 
+	/// Pause this call immediately.
+	///
+	/// This takes effect in the same block and must succeed if `can_pause` returns `true`.
 	fn pause(call: Self::CallIdentifier) -> Result<(), TransactionPauseError>;
 
+	/// Unpause this call immediately.
+	///
+	/// This takes effect in the same block and must succeed if `is_paused` returns `true`. This
+	/// invariant is important to not have un-resumable calls.
 	fn unpause(call: Self::CallIdentifier) -> Result<(), TransactionPauseError>;
 }
 
+/// The error type for [`TransactionPause`].
 pub enum TransactionPauseError {
-	/// The call could not be found in the runtime. This is a permanent error.
+	/// The call could not be found in the runtime.
+	///
+	/// This is a permanent error but could change after a runtime upgrade.
 	NotFound,
-	/// Call cannot be paused. This may or may not resolve in the future.
+	/// Call cannot be paused.
+	///
+	/// This may or may not resolve in a future block.
 	Unpausable,
 	/// Call is already paused.
 	AlreadyPaused,
 	/// Call is already unpaused.
 	AlreadyUnpaused,
+	/// Unknown error.
 	Unknown,
 }
