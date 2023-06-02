@@ -988,7 +988,8 @@ pub trait Extrinsic: Sized {
 	}
 }
 
-/// Something that acts like a [`SignaturePayload`](Extrinsic::SignaturePayload) of an [`Extrinsic`].
+/// Something that acts like a [`SignaturePayload`](Extrinsic::SignaturePayload) of an
+/// [`Extrinsic`].
 pub trait SignaturePayload {
 	/// The type of the address that signed the extrinsic.
 	///
