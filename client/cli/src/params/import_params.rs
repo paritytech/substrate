@@ -100,6 +100,8 @@ impl ImportParams {
 
 	/// Get the WASM execution method from the parameters
 	pub fn wasm_method(&self) -> sc_service::config::WasmExecutionMethod {
+		self.execution_strategies.check_usage_and_print_deprecation_warning();
+
 		crate::execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy)
 	}
 
@@ -151,4 +153,24 @@ pub struct ExecutionStrategiesParams {
 		]
 	)]
 	pub execution: Option<ExecutionStrategy>,
+}
+
+impl ExecutionStrategiesParams {
+	/// Check if one of the parameters is still passed and print a warning if so.
+	fn check_usage_and_print_deprecation_warning(&self) {
+		for (param, name) in [
+			(&self.execution_syncing, "execution-syncing"),
+			(&self.execution_import_block, "execution-import-block"),
+			(&self.execution_block_construction, "execution-block-construction"),
+			(&self.execution_offchain_worker, "execution-offchain-worker"),
+			(&self.execution_other, "execution-other"),
+			(&self.execution, "execution"),
+		] {
+			if param.is_some() {
+				eprintln!(
+					"CLI parameter `--{name}` is deprecated and will be removed in the future!"
+				);
+			}
+		}
+	}
 }
